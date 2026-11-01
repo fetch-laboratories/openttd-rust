@@ -109,7 +109,6 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.president_windows = Identity_president_windows,
 	.colour_windows = Identity_colour_windows,
 	.object_colours = Identity_object_colours,
-	.dirty = FleetGroupServices().screen_dirty,
 	.reset_colourmap = Identity_reset_colourmap,
 	.engine = GetRustEngineCapabilitiesServices().engine,
 	.engine_type = GetRustEngineCapabilitiesServices().kind,

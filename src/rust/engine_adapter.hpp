@@ -184,7 +184,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.company_roadtypes = RustCompanyRoadTypes,
 		.company_engine_count = Engine_company_engine_count,
 		.block_preview = Engine_block_preview,
-		.current_company = RustCurrentCompanyID,
 		.local_company = RustLocalCompanyID,
 		.toolbar_enable = Engine_toolbar_enable,
 		.toolbar_release = Engine_toolbar_release,
@@ -194,7 +193,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.available_event = Engine_available_event,
 		.available_news = Engine_available_news,
 		.no_engines = Engine_no_engines,
-		.screen_dirty = RustScreenDirty,
 		.utf8_length = GetRustSharedServices().utf8_length,
 	};
 	return services;

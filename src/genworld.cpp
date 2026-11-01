@@ -147,7 +147,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.busy = [](bool value) noexcept { SetMouseCursorBusy(value); },
 		.close_progress = []() noexcept { CloseWindowByClass(WC_MODAL_PROGRESS); },
 		.show_error = []() noexcept { ShowFirstError(); },
-		.dirty = RustScreenDirty,
 		.set_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { RustSetGeneratingWorldProgress(p, total); }); },
 		.increase_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p) noexcept { return RunGenerationProgress(f, [=] { RustIncreaseGeneratingWorldProgress(p); }); },
 		.freeform = OpenTTDFreeformEdges,

@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Real resolver facades and native associations, without an external GRF program. */
+#include "saveload-codec-console.hpp"
 #include "newgrf_town.h"
 #include "newgrf_industries.h"
 #include "newgrf_airport.h"
@@ -193,8 +194,12 @@ static bool StorageScenario(std::span<std::string_view> args)
 	if (args[1] == "storage-load") {
 		Require(PersistentStorage::GetNumItems() == 0);
 		auto file = FileHandle::Open(args[2], "rb"); Require(file.has_value());
+#ifdef WITH_RUST
+		ConsoleOpenReader(std::make_shared<FileReader>(std::move(*file))); _sl_version = args[3] == "legacy16" ? SLV_EXTEND_RAILTYPES : SAVEGAME_VERSION;
+#else
 		_sl.reader = std::make_unique<ReadBuffer>(std::make_shared<FileReader>(std::move(*file)));
 		_sl.action = SLA_LOAD; _sl_version = args[3] == "legacy16" ? SLV_EXTEND_RAILTYPES : SAVEGAME_VERSION; _next_offs = 0;
+#endif
 		bool failed = false;
 		try { SlLoadChunk(*SlFindChunkHandler('PSAC')); } catch (const std::exception &) { failed = true; }
 		if (args[3] == "header") {

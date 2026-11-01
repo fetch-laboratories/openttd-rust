@@ -50,7 +50,6 @@ struct OpenTTDEngineLoadingServices {
 	void (*set_old_refittable)(const OpenTTDEngine *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_old_refittable);
 	OpenTTDEngineCargoClass (*cargo_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_next);
 	uint8_t (*cargo_map)(const GRFFile *, CargoType) noexcept OPENTTD_SERVICE_DEFAULT(cargo_map);
-	uint8_t (*file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_version);
 	size_t (*cargo_list_size)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_list_size);
 	void (*unknown_refit)(uint32_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_refit);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);

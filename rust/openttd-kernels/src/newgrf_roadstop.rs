@@ -75,8 +75,6 @@ pub struct Services {
     pub index: unsafe extern "C" fn(u32) -> u32,
     pub is_station: unsafe extern "C" fn(*mut BaseStation) -> bool,
     pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
-    pub nearby: unsafe extern "C" fn(u8, u32) -> u32,
-    pub nearby_info: unsafe extern "C" fn(u32, bool) -> u32,
     pub owner: unsafe extern "C" fn(*mut BaseStation) -> u8,
     pub random_bits: unsafe extern "C" fn(*const BaseStation) -> u16,
     pub resize: unsafe extern "C" fn(*mut BaseStation, usize) -> (),
@@ -99,7 +97,6 @@ pub struct Services {
     pub spec_local_id: unsafe extern "C" fn(*const RoadSpec) -> u16,
     pub spec_triggers: unsafe extern "C" fn(*const RoadSpec) -> SpecTriggers,
     pub station_id: unsafe extern "C" fn(*mut BaseStation) -> u16,
-    pub terrain: unsafe extern "C" fn(u32) -> u32,
     pub tile: unsafe extern "C" fn(*mut BaseStation, usize) -> u32,
     pub tile_count: unsafe extern "C" fn(*mut BaseStation) -> usize,
     pub tile_random: unsafe extern "C" fn(*const BaseStation, u32) -> u8,
@@ -215,7 +212,7 @@ unsafe fn variable(
             return if c.tile == INVALID_TILE {
                 0
             } else {
-                (u32::from((shared.tile_slope)(c.tile)) << 8) | unsafe { (s.terrain)(c.tile) }
+                (u32::from((shared.tile_slope)(c.tile)) << 8) | (shared.terrain_type)(c.tile)
             };
         }
         0x43 | 0x44 => {
@@ -289,7 +286,7 @@ unsafe fn variable(
             let tile = if parameter == 0 {
                 c.tile
             } else {
-                unsafe { (s.nearby)(parameter as u8, c.tile) }
+                (shared.nearby_tile)(parameter as u8, c.tile)
             };
             return if (shared.is_any_road_stop)(tile)
                 && (shared.station_index)(tile) == unsafe { (s.station_id)(c.station) }
@@ -306,15 +303,15 @@ unsafe fn variable(
             let tile = if parameter == 0 {
                 c.tile
             } else {
-                unsafe { (s.nearby)(parameter as u8, c.tile) }
+                (shared.nearby_tile)(parameter as u8, c.tile)
             };
-            return unsafe { (s.nearby_info)(tile, (s.version)(ro) >= 8) };
+            return (shared.nearby_tile_information)(tile, unsafe { (s.version)(ro) } >= 8);
         }
         0x68 | 0x6a | 0x6b => {
             if c.tile == INVALID_TILE {
                 return u32::MAX;
             }
-            let tile = unsafe { (s.nearby)(parameter as u8, c.tile) };
+            let tile = (shared.nearby_tile)(parameter as u8, c.tile);
             if !(shared.is_any_road_stop)(tile) {
                 return u32::MAX;
             }
@@ -763,7 +760,7 @@ crate::abi::layouts! {
     "OpenTTDRoadStopSpecVacancy" ["station_service"] => SpecVacancy { spec, grfid, };
     "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, badges, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, nearby, nearby_info, owner, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, terrain, tile, tile_count, tile_random, town, town_tile, version, waiting, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, badges, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, owner, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, tile, tile_count, tile_random, town, town_tile, version, waiting, };
 }
 
 /// Class index limit from `newgrf_roadstop.h`.

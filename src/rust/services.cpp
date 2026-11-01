@@ -189,7 +189,7 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 }
 
 
-static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
+static void DestroySnowLine(SnowLine *record) noexcept { delete record; }
 
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
 
@@ -424,7 +424,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.service_at_helipad = SharedServiceAtHelipad,
 	.set_tropic_zone = SharedSetTropicZone,
 
-	.snow_line = SharedSnowLine,
+	.snow_line_support = { .height = &_settings_game.game_creation.snow_line_height, .destroy = DestroySnowLine },
 	.station_index = MapSvcStationIndex,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
 	.kdtree_partition = RustKdtreePartition,
@@ -477,6 +477,11 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.for_each_station = SharedForEachStation,
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
+	.nearby_tile = RustSignedNearbyTile,
+	.nearby_tile_information = RustNearbyTileInformation,
+	.screen_dirty = RustScreenDirty,
+	.terrain_type = RustTerrainType,
+	.grf_file_version = RustGRFFileVersion,
 	.show_error = RustShowErrorMessage,
 	.not_reached = RustNotReached,
 };
@@ -622,6 +627,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDSnowLineSupport.hpp"
 #include "abi-visit-OpenTTDPbsServices.hpp"
 #include "abi-visit-OpenTTDLiveGraphServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
@@ -639,6 +645,7 @@ bool CheckAbi_services()
 		AbiServicesComplete(GetRustCommandCostServices()) &&
 		AbiServicesComplete(GetRustSharedServices()) &&
 		AbiServicesComplete(GetRustSharedServices().clear_square_services) &&
+		AbiServicesComplete(GetRustSharedServices().snow_line_support) &&
 		AbiServicesComplete(GetRustWaterRestorationServices());
 }
 

@@ -230,7 +230,6 @@ pub struct TreeServices {
     pub tree_observation: extern "C" fn(u32) -> TreeObservation,
     pub tree_count: extern "C" fn(u32) -> u32,
     pub clear_observation: extern "C" fn(u32) -> ClearObservation,
-    pub snow_line: extern "C" fn() -> u8,
     pub sin: extern "C" fn(f32) -> f32,
     pub cos: extern "C" fn(f32) -> f32,
     pub make_tree: extern "C" fn(u32, u8, u32, u8, u8, u32),
@@ -318,7 +317,30 @@ struct Trees<'a> {
 }
 impl Trees<'_> {
     fn plant_observation(&self, tile: u32) -> PlantObservation {
-        (self.t.plant_observation)(tile)
+        self.map
+            .and_then(|m| {
+                let mut p = PlantObservation {
+                    tile_type: crate::tile_map::get_tile_type(m, tile)?,
+                    zone: crate::tile_map::get_tropic_zone(m, tile)?,
+                    ..PlantObservation::default()
+                };
+                if p.tile_type == MP_CLEAR {
+                    p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
+                    p.ground = crate::clear_map::get_clear_ground(m, tile)?;
+                    p.density = crate::clear_map::get_clear_density(m, tile)?;
+                    p.snow = crate::clear_map::is_snow_tile(m, tile)?;
+                } else if p.tile_type == MP_WATER {
+                    p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
+                    p.coast = crate::water_map::is_coast(m, tile)? && {
+                        let width = self.s.map().size_x();
+                        !crate::slope_func::is_slope_with_one_corner_raised(
+                            crate::tile_map::get_tile_slope(m, tile, width, m.count() / width)?,
+                        )
+                    };
+                }
+                Some(p)
+            })
+            .unwrap_or_else(|| (self.t.plant_observation)(tile))
     }
     /// One field read at its original observation point. Without the audited map, or when a
     /// native assertion fails, the record accessor reads it; its first read asserts the same.
@@ -527,7 +549,7 @@ impl Trees<'_> {
         }
         let ht = (self.s.tile_z)(tile);
         let mut j = (self.s.tile_z)(tile).wrapping_mul(2);
-        if g.climate == ARCTIC && ht > i32::from((self.t.snow_line)()) {
+        if g.climate == ARCTIC && ht > i32::from(crate::snow_line::get(self.s)) {
             j = j.wrapping_mul(3);
         }
         if g.height_limit > MAP_HEIGHT_LIMIT_ORIGINAL {
@@ -652,7 +674,7 @@ impl Trees<'_> {
                 crate::tile_map::get_tile_z(map, tile, s.size_x, map.count() / s.size_x)
             })
             .unwrap_or_else(|| (self.s.tile_z)(tile))
-            .wrapping_sub(i32::from((self.t.snow_line)()))
+            .wrapping_sub(i32::from(crate::snow_line::get(self.s)))
             .wrapping_add(1);
         if k < 0 {
             match self.ground(tile) {
@@ -1093,35 +1115,78 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
     trees.place(tile, p, r, keep_density, climate);
 }
 
-/// `PlantTreesOnTile` on a tile suitable for trees.
+/// `PlaceTreeGroupAroundTile`, called by the native scenario-editor brush.
 /// # Safety
-/// Tables are live and immutable; game thread only. Services are `noexcept`.
+/// Tables and canonical map remain live under the game-state mutex; no reset or yield.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_plant(
+pub unsafe extern "C" fn openttd_rust_trees_place_group(
     tile: u32,
     tree: u8,
+    radius: u32,
     count: u32,
-    growth: u8,
-    services: *const TreeServices,
-    shared: *const Services,
-) {
-    // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    let trees = unsafe { trees(services, shared) };
-    let p = trees.plant_observation(tile);
-    trees.plant(tile, p, tree, count, growth);
-}
-
-/// `CanPlantTreesOnTile`.
-/// # Safety
-/// The table is live and immutable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_can_plant(
-    tile: u32,
-    allow_desert: bool,
-    services: *const TreeServices,
-) -> bool {
-    // SAFETY: The contract above keeps the table live and immutable for the call.
-    (unsafe { &*services }.plant_observation)(tile).suitable(allow_desert)
+    set_zone: bool,
+    services: &TreeServices,
+    shared: &Services,
+    environment: &crate::services::EnvironmentServices,
+    random: &crate::genworld::WorldServices,
+) -> u32 {
+    let world = crate::map_func::World::new(shared);
+    world.check((environment.editor)());
+    world.check(tree < TREE_TOYLAND + crate::tree_map::TREE_COUNT_TOYLAND);
+    let owner = Trees {
+        t: services,
+        s: shared,
+        map: Some(&world.types),
+    };
+    let map = world.dimensions;
+    let size_y = world.size_y();
+    let freeform = (environment.freeform_edges)();
+    let mut planted = 0_u32;
+    for _ in 0..count {
+        let coordinate = || {
+            let rand = (random.interactive_random)();
+            let dist = (rand & 255) + ((rand >> 8) & 255) + ((rand >> 16) & 255) + (rand >> 24);
+            // C++ promotes dist to uint for multiplication/division and offset subtraction.
+            (dist.wrapping_mul(radius) / 512)
+                .wrapping_sub(radius)
+                .cast_signed()
+        };
+        let x = coordinate();
+        let y = coordinate();
+        let target = map.tile_add_wrap(tile, x, y, size_y, freeform);
+        if target == INVALID_TILE {
+            continue;
+        }
+        if world.kind(target) == MP_TREES
+            && world.asserted(|m| crate::tree_map::get_tree_count(m, target)) < 4
+        {
+            (services.add_count)(target, 1);
+            (services.set_growth)(target, GROWING1);
+            owner.dirty(target);
+            planted = planted.wrapping_add(1);
+        } else if owner
+            .plant_observation(target)
+            .suitable(tree == TREE_CACTUS)
+        {
+            let observation = owner.plant_observation(target);
+            owner.plant(target, observation, tree, 0, GROWN);
+            owner.dirty(target);
+            planted = planted.wrapping_add(1);
+        }
+    }
+    if set_zone && is_rainforest_tree(tree) {
+        // The native TileArea(tile) constructor starts with zero extents.
+        let mut area = crate::tilearea::TileArea { tile, w: 0, h: 0 };
+        area.expand(radius.cast_signed(), map, size_y);
+        for target in area.tiles(map) {
+            if world.kind(target) != crate::tile_type::MP_VOID
+                && map.distance_square(tile, target) < radius.wrapping_mul(radius)
+            {
+                (shared.set_tropic_zone)(target, ZONE_RAINFOREST);
+            }
+        }
+    }
+    planted
 }
 
 /// `CmdPlantTree`. The context is passed back to its command services only.
@@ -1219,7 +1284,7 @@ crate::abi::layouts! {
         tree_observation,
         tree_count,
         clear_observation,
-        snow_line,
+
         sin,
         cos,
         make_tree,
@@ -1309,7 +1374,6 @@ mod tests {
         Progress,
         Total(u32),
         TileZ,
-        Snow,
         Plant,
         Tree,
         Count,
@@ -1372,6 +1436,10 @@ mod tests {
     fn shared() -> Services {
         crate::map_func::fixture::set(water_map(), 6);
         Services {
+            snow_line_support: crate::snow_line::Support {
+                height: &4,
+                ..crate::services::fixture(std::ptr::null_mut(), random, industry).snow_line_support
+            },
             tile_z,
             mark_dirty: dirty,
             set_tropic_zone: set_zone,
@@ -1409,10 +1477,6 @@ mod tests {
             count: u32::from(w.tree.count),
             species: w.tree.species,
         })
-    }
-    extern "C" fn snow_line() -> u8 {
-        log(Event::Snow);
-        4
     }
     extern "C" fn trig(value: f32) -> f32 {
         value
@@ -1595,7 +1659,7 @@ mod tests {
         tree_observation,
         tree_count,
         clear_observation,
-        snow_line,
+
         sin: trig,
         cos: trig,
         make_tree,
@@ -1794,7 +1858,7 @@ mod tests {
     }
 
     #[test]
-    fn arctic_loop_reads_height_and_snow_line_once() {
+    fn arctic_loop_uses_configured_snow_line() {
         reset(World {
             tree: TreeObservation {
                 ground: GROUND_SNOW_DESERT,
@@ -1820,7 +1884,6 @@ mod tests {
             [
                 Event::Tree,
                 Event::TileZ,
-                Event::Snow,
                 Event::Tree,
                 Event::Tree,
                 Event::Draw,

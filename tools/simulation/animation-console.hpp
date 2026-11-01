@@ -13,6 +13,7 @@
 #ifdef WITH_RUST
 #include "rust/animation_ffi.h"
 #include "rust/animation_save.hpp"
+#include "saveload-codec-console.hpp"
 #else
 extern std::vector<TileIndex> _animated_tiles;
 #endif
@@ -69,9 +70,11 @@ extern "C" bool __wrap__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7Typed
 	AnimationTrace(changed ? "setter-changed" : "setter-unchanged");
 	return changed;
 }
+static void (*landscape_dirty_observer)(TileIndex) = nullptr;
 extern "C" void __real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex, int, int);
 extern "C" void __wrap__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex t, int b, int h)
 {
+	if (landscape_dirty_observer != nullptr) landscape_dirty_observer(t);
 	AnimationTrace("dirty");
 	__real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(t, b, h);
 }
@@ -93,15 +96,32 @@ struct AnimationInput : LoadFilter {
 		return length;
 	}
 };
+#ifdef WITH_RUST
+struct AnimationOutput : SaveFilter {
+	std::vector<uint8_t> bytes;
+	AnimationOutput() : SaveFilter(nullptr) {}
+	void Write(uint8_t *buf, size_t length) override { this->bytes.insert(this->bytes.end(), buf, buf + length); }
+	void Finish() override {}
+};
+#endif
 static void AnimationLoadProbe(std::string_view kind)
 {
 	const auto &handler = *std::ranges::find_if(ChunkHandlers(), [](const ChunkHandler &ch) { return ch.id == 'ANIT'; });
 	RestoreAnimationQueue({TileIndex{333}, TileIndex{444}, TileIndex{555}});
+#ifdef WITH_RUST
+	ConsoleResetCodec(SLA_SAVE); _sl_version = SAVEGAME_VERSION;
+	openttd_rust_saveload_dumper_open();
+	SlSaveChunk(handler);
+	AnimationOutput output;
+	SlRaise(openttd_rust_saveload_flush(&_sl_services, &output));
+	std::vector<uint8_t> bytes(output.bytes.begin() + 4, output.bytes.end());
+#else
 	_sl = {}; _sl.action = SLA_SAVE; _sl_version = SAVEGAME_VERSION;
 	_sl.dumper = std::make_unique<MemoryDumper>();
 	SlSaveChunk(handler);
 	const auto size = _sl.dumper->GetSize();
 	std::vector<uint8_t> bytes(_sl.dumper->blocks[0].get() + 4, _sl.dumper->blocks[0].get() + size);
+#endif
 	if (kind == "header") bytes = {CH_TABLE, 2, 0xFF}; // Invalid table field type, before vector decoding.
 	if (kind == "partial") bytes.resize(bytes.size() - 5); // Two values decoded, third default-constructed.
 	if (kind == "excess") { bytes.back() = 2; bytes.push_back(0); bytes.push_back(0); }
@@ -111,9 +131,13 @@ static void AnimationLoadProbe(std::string_view kind)
 	}
 	RestoreAnimationQueue({TileIndex{11}, TileIndex{22}});
 	if (AnimationQueue().size() != 2) std::abort();
-	_sl = {}; _sl.action = SLA_LOAD; _next_offs = 0;
 	_sl_version = kind == "fixed" ? static_cast<SaveLoadVersion>(79) : kind == "riff" ? SLV_80 : SAVEGAME_VERSION;
+#ifdef WITH_RUST
+	ConsoleOpenReader(std::make_shared<AnimationInput>(std::move(bytes)));
+#else
+	_sl = {}; _sl.action = SLA_LOAD; _next_offs = 0;
 	_sl.reader = std::make_unique<ReadBuffer>(std::make_shared<AnimationInput>(std::move(bytes)));
+#endif
 #ifdef WITH_RUST
 	RustAnimationSave outer(false); // Load's nested staging must restore this exact active pointer on unwind.
 #endif
@@ -123,8 +147,13 @@ static void AnimationLoadProbe(std::string_view kind)
 #ifdef WITH_RUST
 	restored = RustAnimationSave::active == &outer.tiles;
 #endif
-	if (!restored || AnimationQueue().empty() || caught != (kind != "valid" && kind != "fixed") || (caught && _sl.action != SLA_NULL)) std::abort();
-	fmt::print(stderr, "OBJECT animation-load {} {} {} {} {} {}", kind, caught, _sl.action == SLA_NULL, restored, _sl.error_str, _sl.extra_msg);
+#ifdef WITH_RUST
+	const auto action = _codec.action;
+#else
+	const auto action = _sl.action;
+#endif
+	if (!restored || AnimationQueue().empty() || caught != (kind != "valid" && kind != "fixed") || (caught && action != SLA_NULL)) std::abort();
+	fmt::print(stderr, "OBJECT animation-load {} {} {} {} {} {}", kind, caught, action == SLA_NULL, restored, _sl.error_str, _sl.extra_msg);
 	for (TileIndex tile : AnimationQueue()) fmt::print(stderr, " {}", tile.base());
 	fmt::print(stderr, "\nOBJECT animation-load-complete {}\n", kind);
 	std::fflush(stderr);

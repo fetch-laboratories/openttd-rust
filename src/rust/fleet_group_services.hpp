@@ -10,6 +10,7 @@
 #include "company_services.h"
 #include "company_identity_services.h"
 #include "presentation_services.h"
+#include "services_autoreplace.h"
 
 struct FleetVehicleListContext { VehicleList list; const VehicleListIdentifier &vli; };
 /* Fleet shared-world services. No selected group algorithm remains here.
@@ -31,7 +32,6 @@ static void * FleetGroup_stats(uint8_t company, uint16_t id, uint8_t type) noexc
 static void * FleetGroup_head(uint8_t company) noexcept { return Company::Get(CompanyID(company))->renewal_head.state; }
 static void * FleetGroup_renew_state(void *shell) noexcept { return static_cast<EngineRenew *>(shell)->state.state; }
 static void * FleetGroup_next_renew(uint32_t from) noexcept { for (EngineRenew *er : EngineRenew::Iterate(from)) { if (er->index.base() >= from) return er; } return nullptr; }
-static uint32_t FleetGroup_renew_id(void *shell) noexcept { return static_cast<EngineRenew *>(shell)->index.base(); }
 static bool FleetGroup_buildable_type(uint8_t type) noexcept { return IsCompanyBuildableVehicleType(static_cast<VehicleType>(type)); }
 static bool FleetGroup_can_allocate() noexcept { return Group::CanAllocateItem(); }
 static uint16_t FleetGroup_allocate(uint8_t owner, uint8_t type) noexcept { return (new Group(CompanyID(owner), static_cast<VehicleType>(type)))->index.base(); }
@@ -88,7 +88,7 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.head = FleetGroup_head,
 		.renew_state = FleetGroup_renew_state,
 		.next_renew = FleetGroup_next_renew,
-		.renew_id = FleetGroup_renew_id,
+		.renew_id = RustEngineRenewIndex<void *>,
 		.engine_type = RustIndexedEngineRead<uint8_t, RustEngineType>,
 		.current_company = RustCurrentCompanyID,
 		.buildable_type = FleetGroup_buildable_type,
@@ -115,7 +115,7 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.vehicle_dirty = FleetGroup_vehicle_dirty,
 		.depot_dirty = RustVehicleDirtyDepotOpaque,
 		.close_replace = FleetGroup_close_replace,
-		.screen_dirty = RustScreenDirty,
+		.shared = &GetRustSharedServices(),
 		.list_generate = FleetGroup_list_generate,
 		.list_size = FleetGroup_list_size,
 		.list_at = FleetGroup_list_at,

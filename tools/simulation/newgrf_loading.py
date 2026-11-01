@@ -1,5 +1,6 @@
 """Real file-loaded NewGRF interpreter, failure and reset/reload comparisons."""
 
+import calendar
 import json
 import shlex
 import struct
@@ -77,6 +78,20 @@ def action2(feature, setid, ranges, default=0x7FFF, kind=0x81, variable=0x0C):
 
 def fixtures(folder, version):
     folder.mkdir(parents=True, exist_ok=True)
+    seasonal = bytes(
+        (month * 37 + day * 11) % 256 for month in range(12) for day in range(32)
+    )
+    for name, identifier, table in (
+        ("snow", b"SN17", seasonal),
+        ("snow-duplicate", b"SN18", bytes([17]) * 384),
+    ):
+        action8 = (
+            bytes((8, 7 if version == 1 else 8))
+            + identifier
+            + b"Snow fixture\0Seasonal\0"
+        )
+        action0 = bytes((0, 8, 1, 1, 0, 0x10)) + table
+        (folder / f"{name}.grf").write_bytes(grf([action8, action0], version))
     main = [
         info(b"R471"),
         param(0, 77),
@@ -298,6 +313,7 @@ def adapter(build, folder, env):
         ADAPTER,
         "newgrf_loading",
         replace_objects=("/newgrf/newgrf_act2.cpp.o",),
+        native_test_support=True,
     )
 
 
@@ -336,6 +352,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         env,
     )
     for role, run in captures.items():
+        seasonal_observations(
+            run["log"], ("first", "reset", "reconstructed", "reload"), 8
+        )
         if (
             run["exit"]
             or not saves[role].is_file()
@@ -358,6 +377,62 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
         console=["loading_scenario inspect", "unpause"],
     )
+
+
+def seasonal_scaled(raw: int, version: int, limit: int) -> int:
+    """Independent fixture expectation for the documented Action0 byte encoding."""
+    if raw == 255 or (version < 8 and raw >= 128):
+        return 255
+    return raw * (1 + limit) // (128 if version < 8 else 256)
+
+
+def seasonal_observations(
+    log: list[str], phases: tuple[str, ...], version: int
+) -> list[str]:
+    """Validate complete calendar matrices and every transient field before comparison."""
+    observations = [line for line in log if line.startswith("LOADING snow ")]
+    keys = [
+        (phase, year, month, day)
+        for phase in phases
+        for year in (1999, 2000, 2001, 2100)
+        for month in range(12)
+        for day in range(1, calendar.monthrange(year, month + 1)[1] + 1)
+    ]
+    if len(observations) != len(keys):
+        raise RuntimeError("seasonal snow matrix missing, truncated or duplicated")
+    previous_rng: dict[str, tuple[int, ...]] = {}
+    for line, (phase, year, month, day) in zip(observations, keys, strict=True):
+        fields = line.split()
+        if len(fields) != 17 or fields[2:6] != [phase, str(year), str(month), str(day)]:
+            raise RuntimeError("seasonal snow observation key or payload malformed")
+        if fields[6] != str(phase != "reset").lower():
+            raise RuntimeError("seasonal snow install/reset state differs")
+        value, highest, lowest, grf_version, limit, static, *rng = map(int, fields[7:])
+        if grf_version != (0 if phase == "reset" else version):
+            raise RuntimeError("seasonal snow fixture version missing")
+
+        table = [
+            seasonal_scaled((m * 37 + d * 11) % 256, version, limit)
+            for m in range(12)
+            for d in range(32)
+        ]
+        expected = (
+            (static, static, static)
+            if phase == "reset"
+            else (
+                seasonal_scaled((month * 37 + day * 11) % 256, version, limit),
+                max(table),
+                min(table),
+            )
+        )
+        if (value, highest, lowest) != expected or not all(
+            0 <= v <= 0xFFFFFFFF for v in rng
+        ):
+            raise RuntimeError("seasonal snow value/extrema/RNG payload differs")
+        seed = tuple(rng)
+        if previous_rng.setdefault(phase, seed) != seed:
+            raise RuntimeError("seasonal snow observations consumed random draws")
+    return observations
 
 
 def townname_observations(log: list[str], phases: tuple[str, ...]) -> list[str]:
@@ -444,13 +519,21 @@ def check(scenario, run, mode, role, result):
     phases = (
         ("inspect",) if scenario["newgrf_loading"] == "reload" else ("first", "reload")
     )
-    names = townname_observations(run["log"], phases)
+    snow_phases = (
+        ("inspect",)
+        if scenario["newgrf_loading"] == "reload"
+        else ("first", "reset", "reconstructed", "reload")
+    )
+    snow = seasonal_observations(
+        run["log"], snow_phases, 7 if scenario["newgrf_loading"] == "v1" else 8
+    )
+    names = townname_observations(run["log"], phases) + snow
     # Generated name bytes and style lookups are not saved; compare them across roles.
     key = (scenario["name"], mode)
     if role == "reference":
         TOWN_NAMES[key] = names
     elif TOWN_NAMES.pop(key, None) != names:
-        raise RuntimeError("file-loaded GRF town names differ")
+        raise RuntimeError("file-loaded GRF town names or seasonal snow differ")
 
 
 def install(scenario, run_dir):

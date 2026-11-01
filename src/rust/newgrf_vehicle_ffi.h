@@ -47,8 +47,6 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*cargo_classes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
 	uint8_t (*cargo_translation)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
-	uint8_t (*grf_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
-	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	bool (*valid_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_company);
 	const Livery *(*livery)(uint16_t, uint8_t, uint16_t, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(livery);
 	uint32_t (*company_info)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company_info);
@@ -130,7 +128,6 @@ struct OpenTTDVehicleResolverServices {
 	const OpenTTDAircraftLeaves * (*aircraft_leaves)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft_leaves);
 	const OpenTTDGroundPhysicsServices * (*ground)() noexcept OPENTTD_SERVICE_DEFAULT(ground);
 	const OpenTTDCargoStorageServices * (*cargo_services)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_services);
-	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 };
 const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept;
 extern "C" {

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstddef>
 struct Object;
+struct OpenTTDSharedServices;
 struct ObjectSpec;
 struct Town;
 struct GRFFile;
@@ -32,7 +33,7 @@ struct OpenTTDObjectResolverServices {
 	const GRFFile *(*file)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(file);
 	const SpriteGroup *(*root)(const ObjectSpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);
 	uint16_t (*local_id)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(local_id);
-	uint8_t (*version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(version);
+	const OpenTTDSharedServices *shared;
 	uint8_t (*views)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(views);
 	OpenTTDObjectEligibility (*eligibility)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(eligibility);
 	int32_t (*introduction)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(introduction);

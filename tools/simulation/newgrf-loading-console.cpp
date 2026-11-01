@@ -6,6 +6,11 @@
 #include "newgrf_station.h"
 #include "station_cmd.h"
 #include "landscape.h"
+#include "timer/timer_game_calendar.h"
+#ifdef WITH_RUST
+#include "tests/world_generation_probe.hpp"
+#include "rust/services_ffi.h"
+#endif
 #include "tile_map.h"
 #include "vehicle_base.h"
 #include "industry_cmd.h"
@@ -278,14 +283,41 @@ static void Action2Consumers()
 		Require(built, "action2-industry-command");
 	}
 }
+static uint8_t SeasonalHighest()
+{
+#ifdef WITH_RUST
+	return openttd_test_snow_line_highest(&GetRustSharedServices());
+#else
+	return HighestSnowLine();
+#endif
+}
+static void SeasonalSnow(const char *phase, bool loaded)
+{
+	AutoRestoreBackup date(TimerGameCalendar::date, TimerGameCalendar::date);
+	auto *file = GetFileByGRFID(ID("SN17"));
+	Require(IsSnowLineSet() == loaded, "seasonal-state");
+	for (int year : {1999, 2000, 2001, 2100}) {
+		auto first = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year}, 0, 1);
+		auto end = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year + 1}, 0, 1);
+		for (auto date = first; date < end; ++date) {
+			TimerGameCalendar::date = date;
+			auto ymd = TimerGameCalendar::ConvertDateToYMD(date);
+			fmt::print(stderr, "LOADING snow {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}\n", phase, year, ymd.month, ymd.day, IsSnowLineSet(), GetSnowLine(), SeasonalHighest(), LowestSnowLine(), file == nullptr ? 0 : file->grf_version, _settings_game.construction.map_height_limit, _settings_game.game_creation.snow_line_height, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
+		}
+	}
+}
 static bool LoadingScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
-	if (args[1] == "inspect") { Inspect(true); GrfTownNames("inspect", false); return true; }
+	if (args[1] == "inspect") {
+		/* Interactive RNG is unsaved; observe it from a deterministic reload command seed. */
+		_interactive_random.SetSeed(0x61700001);
+		Inspect(true); GrfTownNames("inspect", false); SeasonalSnow("inspect", true); return true;
+	}
 	if (args.size() < 3) return false;
 	SetRandomSeed(0x47100001);
 	_grfconfig.clear();
-	for (const char *name : {"main", "graph-broken", "broken", "victim", "fatal", "before", "after", "names-a", "names-bad", "names-b", "names-short"}) {
+	for (const char *name : {"main", "graph-broken", "broken", "victim", "fatal", "before", "after", "names-a", "names-bad", "names-b", "names-short", "snow", "snow-duplicate"}) {
 		auto c = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		Require(FillGRFDetails(*c, false, NO_DIRECTORY), "file-scan");
 		c->flags.Reset(GRFConfigFlag::InitOnly);
@@ -296,11 +328,17 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	_grfconfig.push_back(std::move(missing));
 	_settings_game.vehicle.dynamic_engines = false;
 	ReloadNewGRFData();
+	SeasonalSnow("first", true);
+	ResetNewGRFData();
+	SeasonalSnow("reset", false);
+	ReloadNewGRFData();
+	SeasonalSnow("reconstructed", true);
 	Inspect(false);
 	GrfTownNames("first", true);
 	ReloadNewGRFData();
 	Inspect(false);
 	GrfTownNames("reload", true);
+	SeasonalSnow("reload", true);
 	GrfTownNameTowns();
 	EngineID id = GetNewEngineID(GetFileByGRFID(ID("R471")), VEH_ROAD, 0);
 	bool built = false;

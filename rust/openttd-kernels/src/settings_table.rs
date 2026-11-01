@@ -460,7 +460,7 @@ fn update_freeform_edges(s: &Services, new_value: i32) {
             set_tile_type(&w, map.tile_xy(0, i), MP_WATER, freeform);
         }
     }
-    (s.company.mark_whole_screen_dirty)();
+    (s.company.shared.screen_dirty)();
 }
 
 fn check_dynamic_engines(s: &Services) -> bool {
@@ -499,7 +499,7 @@ fn station_catchment_changed(s: &Services) {
     crate::station::recompute_catchment_for_all(&unsafe {
         crate::station::Ctx::new((s.shared.station_catchment)())
     });
-    (s.company.mark_whole_screen_dirty)();
+    (s.company.shared.screen_dirty)();
 }
 
 fn change_timekeeping_units(s: &Services) {

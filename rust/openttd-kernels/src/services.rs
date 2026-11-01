@@ -374,9 +374,8 @@ pub struct Services {
     pub service_at_helipad: extern "C" fn() -> bool,
     /// `SetTropicZone`.
     pub set_tropic_zone: extern "C" fn(u32, u8),
-    /// Shared live slope observation.
-    /// Current snow line used by town, industry and trees.
-    pub snow_line: extern "C" fn() -> u8,
+    /// Native record deletion and canonical configured height address.
+    pub snow_line_support: crate::snow_line::Support,
     /// `GetStationIndex`.
     pub station_index: extern "C" fn(u32) -> u16,
     /// Canonical shared `docking_tile` service.
@@ -482,6 +481,16 @@ pub struct Services {
     pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
     pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
+    /// `GetNearbyTile` with signed offsets.
+    pub nearby_tile: extern "C" fn(u8, u32) -> u32,
+    /// `GetNearbyTileInformation`.
+    pub nearby_tile_information: extern "C" fn(u32, bool) -> u32,
+    /// `MarkWholeScreenDirty`.
+    pub screen_dirty: extern "C" fn(),
+    /// `GetTerrainType`.
+    pub terrain_type: extern "C" fn(u32) -> u32,
+    /// `GRFFile::grf_version` of a non-null file.
+    pub grf_file_version: extern "C" fn(*const c_void) -> u8,
     /// `ShowErrorMessage` with two string IDs at `WL_ERROR`.
     pub show_error: extern "C" fn(u32, u32),
     /// Native `NOT_REACHED`.
@@ -758,7 +767,7 @@ crate::abi::layouts! {
         pbs_services,
         service_at_helipad,
         set_tropic_zone,
-        snow_line,
+        snow_line_support,
         station_index,
         road_commands,
         kdtree_partition,
@@ -809,6 +818,11 @@ crate::abi::layouts! {
         for_each_station,
         road_stop_type,
         road_stops,
+        nearby_tile,
+        nearby_tile_information,
+        screen_dirty,
+        terrain_type,
+        grf_file_version,
         show_error,
         not_reached,
     };
@@ -835,6 +849,9 @@ pub fn fixture(
     random: extern "C" fn(*mut c_void) -> u32,
     industry: extern "C" fn(i32, i32, *mut u32) -> u32,
 ) -> Services {
+    unsafe extern "C" fn unused_snow_line_destroy(_: *mut crate::snow_line::SnowLine) {
+        unreachable!()
+    }
     extern "C" fn zero_byte() -> u8 {
         0
     }
@@ -912,7 +929,24 @@ pub fn fixture(
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
+    extern "C" fn unexpected_nearby(_: u8, _: u32) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_information(_: u32, _: bool) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_terrain(_: u32) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_version(_: *const c_void) -> u8 {
+        std::process::abort()
+    }
     Services {
+        grf_file_version: unexpected_version,
+        nearby_tile: unexpected_nearby,
+        nearby_tile_information: unexpected_information,
+        screen_dirty: unexpected_path,
+        terrain_type: unexpected_terrain,
         show_error: unexpected_error,
         not_reached: unexpected_path,
         movement: std::ptr::null(),
@@ -981,7 +1015,10 @@ pub fn fixture(
         pbs_services: train_safe,
         service_at_helipad: flag0,
         set_tropic_zone: zone,
-        snow_line: zero_byte,
+        snow_line_support: crate::snow_line::Support {
+            height: &0,
+            destroy: unused_snow_line_destroy,
+        },
         station_index: short,
         road_commands: fixture_road_commands,
         kdtree_partition: fixture_kdtree_partition,

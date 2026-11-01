@@ -28,7 +28,7 @@ pub struct Services {
     empty_string: u32,
     cargo: *const crate::newgrf_act3::Services,
     reader: *const crate::newgrf_bytereader::Services,
-    file_version: unsafe extern "C" fn(*const c_void) -> u8,
+    shared: *const crate::services::Services,
     station_resize: unsafe extern "C" fn(*mut c_void, u32) -> (),
     station_count: unsafe extern "C" fn(*const c_void) -> usize,
     station_get: unsafe extern "C" fn(*mut c_void, u32) -> *mut RailSpec,
@@ -113,7 +113,7 @@ pub struct Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, file_version, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
+    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_badges, station_cargo_triggers, station_frames, station_status, station_speed, station_triggers, station_callback_mask, station_flags, station_has_file, station_set_group, station_set_file, station_set_local, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_badges, road_cargo_triggers, road_frames, road_status, road_speed, road_triggers, road_callback_mask, road_flags, road_has_file, road_set_group, road_set_file, road_set_local, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
 }
 
 unsafe fn station_change(
@@ -285,7 +285,7 @@ unsafe fn station_change(
                 }
                 0x12 => {
                     let value = reader.dword()?;
-                    let cargo = if (s.file_version)(file) >= 7 {
+                    let cargo = if ((*s.shared).grf_file_version)(file) >= 7 {
                         crate::engine_loading::openttd_rust_engine_translate_refit(value, file)
                     } else {
                         u64::from(value)

@@ -72,7 +72,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.window_tick = []() noexcept { CallWindowGameTickEvent(); },
 		.check_caches = []() noexcept { CheckCaches(); },
 		.reset_engine_overrides = []() noexcept { EngineOverrideManager::ResetToCurrentNewGRFConfig(); },
-		.dirty = RustScreenDirty,
 		.reload_config = []() noexcept { return _settings_client.network.reload_cfg; },
 		.reset_grf = [](bool value) noexcept { ResetGRFConfig(value); },
 		.autosave_frequency = [](bool reset) noexcept { ChangeAutosaveFrequency(reset); },

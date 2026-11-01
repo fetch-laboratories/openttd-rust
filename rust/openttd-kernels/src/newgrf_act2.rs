@@ -195,7 +195,8 @@ pub unsafe extern "C" fn openttd_rust_action2_reset(final_reset: bool) {
 unsafe fn callback(s: &Services, l: &LoadingServices, mut value: u16) -> Handle {
     unsafe {
         let file = (*loading::openttd_rust_grf_execution()).grffile;
-        if ((*l.global).file_version)(file) < 8 && gb(u32::from(value), 8, 8) == 0xFF {
+        if ((*(*l.global).shared).grf_file_version)(file) < 8 && gb(u32::from(value), 8, 8) == 0xFF
+        {
             value &= !0xFF00;
         } else {
             value &= !0x8000;

@@ -705,12 +705,10 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
 pub struct Leaves {
     pub map_log_x: extern "C" fn() -> u32,
     pub growth_rate: extern "C" fn() -> u8,
-    pub snow_line: extern "C" fn() -> u8,
     pub environment: crate::services::EnvironmentServices,
     pub generating_world: extern "C" fn() -> bool,
     pub allow_crossings: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
-    pub highest_snow_line: extern "C" fn() -> u8,
     pub allow_roads: extern "C" fn() -> bool,
     pub road_flags: extern "C" fn(u8) -> u8,
     pub house_availability: extern "C" fn(u16) -> HouseAvailability,
@@ -724,7 +722,6 @@ pub struct Leaves {
     pub dirty_authority: extern "C" fn(u32),
     pub dirty_town: extern "C" fn(u32),
     pub terraform_price: extern "C" fn() -> i64,
-    pub clean_road_bits: extern "C" fn(u32, u32) -> u32,
     pub set_road_town: extern "C" fn(u32, u32),
     pub exchange_company: extern "C" fn(u32) -> u32,
     pub house_class: extern "C" fn(u16) -> u16,
@@ -992,7 +989,7 @@ impl Engine<'_> {
                 match self.goals()[i] {
                     0xffff_fffe => {
                         if (self.services.tile_height)(self.position())
-                            >= u32::from((self.leaves.snow_line)())
+                            >= u32::from(crate::snow_line::get(self.services))
                             && self.old_received(i) == 0
                             && self.population() > 90
                         {
@@ -1544,7 +1541,14 @@ impl Engine<'_> {
         if (self.services.has_water_ground)(at) {
             return 1;
         }
-        bits = (self.leaves.clean_road_bits)(at, bits);
+        bits = u32::from(
+            crate::road_cleanup::clean_up_road_bits(
+                self.services,
+                at,
+                crate::services::RoadBits(bits as u8),
+            )
+            .0,
+        );
         if bits == 0 {
             return 1;
         }
@@ -1939,7 +1943,7 @@ impl Engine<'_> {
         let climate = match (self.leaves.climate)() {
             0 => 12,
             1 => {
-                if maxz > i32::from((self.leaves.highest_snow_line)()) {
+                if maxz > i32::from(crate::snow_line::highest(self.services)) {
                     11
                 } else {
                     13
@@ -2527,12 +2531,12 @@ crate::abi::layouts! {
     "OpenTTDTownLeaves" ["probe"] => crate::town::Leaves {
         map_log_x,
         growth_rate,
-        snow_line,
+
         environment,
         generating_world,
         allow_crossings,
         climate,
-        highest_snow_line,
+
         allow_roads,
         road_flags,
         house_availability,
@@ -2546,7 +2550,6 @@ crate::abi::layouts! {
         dirty_authority,
         dirty_town,
         terraform_price,
-        clean_road_bits,
         set_road_town,
         exchange_company,
         house_class,

@@ -224,7 +224,6 @@ pub struct Services {
     pub company_roadtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_engine_count: unsafe extern "C" fn(u8, u16) -> c_uint,
     pub block_preview: unsafe extern "C" fn(u8),
-    pub current_company: unsafe extern "C" fn() -> u8,
     pub local_company: unsafe extern "C" fn() -> u8,
     pub toolbar_enable: unsafe extern "C" fn(VehicleType),
     pub toolbar_release: unsafe extern "C" fn(VehicleType),
@@ -234,7 +233,6 @@ pub struct Services {
     pub available_event: unsafe extern "C" fn(u16),
     pub available_news: unsafe extern "C" fn(u16),
     pub no_engines: unsafe extern "C" fn(i32),
-    pub screen_dirty: unsafe extern "C" fn(),
     pub utf8_length: unsafe extern "C" fn(*const u8, usize) -> usize,
 }
 
@@ -1024,7 +1022,7 @@ pub unsafe extern "C" fn openttd_rust_engine_visibility(
 ) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
-    let company = unsafe { call!(s, current_company) };
+    let company = unsafe { call!(&*s.shared, current_company) };
     if e.shell.is_null() || company >= 15 || !unsafe { buildable(s, e, e.kind, company) } {
         return 1;
     }
@@ -1054,7 +1052,7 @@ pub unsafe extern "C" fn openttd_rust_engine_want_preview(
 ) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
-    let company = unsafe { call!(s, current_company) };
+    let company = unsafe { call!(&*s.shared, current_company) };
     if e.shell.is_null()
         || read_field!(e.state, flags) & EXCLUSIVE == 0
         || read_field!(e.state, preview_company) != company
@@ -1078,7 +1076,7 @@ pub unsafe extern "C" fn openttd_rust_engine_control(
 ) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     let s = unsafe { &*s };
-    if unsafe { call!(s, current_company) } != OWNER_DEITY
+    if unsafe { call!(&*s.shared, current_company) } != OWNER_DEITY
         || e.shell.is_null()
         || !unsafe { call!(s, company_valid, company) }
     {
@@ -1132,7 +1130,7 @@ pub unsafe extern "C" fn openttd_rust_engine_rename(
         crate::witness::hit(crate::witness::ENGINE_RENAME);
         unsafe {
             openttd_rust_engine_set_name(e.state, name);
-            call!(s, screen_dirty);
+            call!(&*s.shared, screen_dirty);
         }
     }
     0
@@ -1303,7 +1301,6 @@ crate::abi::layouts! {
         company_roadtypes,
         company_engine_count,
         block_preview,
-        current_company,
         local_company,
         toolbar_enable,
         toolbar_release,
@@ -1313,7 +1310,6 @@ crate::abi::layouts! {
         available_event,
         available_news,
         no_engines,
-        screen_dirty,
         utf8_length,
     };
 }

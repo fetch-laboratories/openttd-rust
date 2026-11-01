@@ -80,6 +80,7 @@ def scenario_modules():
         community_ai,
         companies,
         disasters,
+        drawing,
         economy,
         effects,
         engines,
@@ -134,6 +135,7 @@ def scenario_modules():
         cargo_storage,
         orders,
         vehicles,
+        drawing,
     )
 
 
@@ -162,6 +164,8 @@ class Corrupt(Exception):
 class Reader:
     def __init__(self, data, pos=0, end=None):
         self.data, self.pos, self.end = data, pos, len(data) if end is None else end
+        # Gammas whose bytes are not SlWriteSimpleGamma's minimal form for their value.
+        self.noncanonical = 0
 
     def take(self, count):
         if self.pos + count > self.end:
@@ -175,18 +179,22 @@ class Reader:
 
     def gamma(self):
         """Saveload SlReadSimpleGamma: 1 to 5 bytes, big endian, prefix coded."""
+        start = self.pos
         first = self.byte()
         if first < 0x80:
-            return first
-        if first < 0xC0:
-            return ((first & 0x3F) << 8) | self.byte()
-        if first < 0xE0:
-            return ((first & 0x1F) << 16) | int.from_bytes(self.take(2), "big")
-        if first < 0xF0:
-            return ((first & 0x0F) << 24) | int.from_bytes(self.take(3), "big")
-        if first < 0xF8:
-            return int.from_bytes(self.take(4), "big")
-        raise Corrupt("invalid gamma")
+            value = first
+        elif first < 0xC0:
+            value = ((first & 0x3F) << 8) | self.byte()
+        elif first < 0xE0:
+            value = ((first & 0x1F) << 16) | int.from_bytes(self.take(2), "big")
+        elif first < 0xF0:
+            value = ((first & 0x0F) << 24) | int.from_bytes(self.take(3), "big")
+        elif first < 0xF8:
+            value = int.from_bytes(self.take(4), "big")
+        else:
+            raise Corrupt("invalid gamma")
+        self.noncanonical += self.data[start : self.pos] != gamma(value)
+        return value
 
 
 # SLE_FILE_* types: (struct format, size); 10 is STRING, 11 is STRUCT.
@@ -263,13 +271,16 @@ def parse_save(data, name="save"):
         mode = reader.byte()
         kind = mode & 0x0F
         chunk = {"kind": kind, "elements": [], "header": None}
+        before = reader.noncanonical
         if kind == 0:  # CH_RIFF
             length = int.from_bytes(reader.take(3), "big") + ((mode >> 4) << 24)
             chunk["raw"] = reader.take(length)
         else:
             if kind in (3, 4):  # CH_TABLE, CH_SPARSE_TABLE
                 length = reader.gamma() - 1
-                chunk["header"] = read_header(Reader(reader.take(length)))
+                header = Reader(reader.take(length))
+                chunk["header"] = read_header(header)
+                reader.noncanonical += header.noncanonical
             index = 0
             while True:
                 length = reader.gamma()
@@ -278,12 +289,16 @@ def parse_save(data, name="save"):
                 element = Reader(reader.take(length - 1))
                 if kind in (2, 4):  # sparse: index precedes the element body
                     index = element.gamma()
+                    reader.noncanonical += element.noncanonical
                 # SlIterateArray skips empty non-sparse slots; a sparse element
                 # always counts because its length includes the index.
                 if kind in (2, 4) or element.pos < len(element.data):
                     chunk["elements"].append((index, element.data[element.pos :]))
                 index += 1
         chunk["span"] = (chunk_start, reader.pos)
+        # Chunk, header, element and sparse-index lengths decode to integers, so a
+        # non-minimal gamma would otherwise compare equal.
+        chunk["noncanonical"] = reader.noncanonical - before
         chunks[cid.decode("latin-1")] = chunk
 
 
@@ -317,6 +332,8 @@ def compare_chunk(cid, ref, cand, stats):
     if ref["kind"] != cand["kind"]:
         yield ("", "chunk type", ref["kind"], cand["kind"])
         return
+    if ref["noncanonical"] != cand["noncanonical"]:
+        yield ("", "gamma encoding", ref["noncanonical"], cand["noncanonical"])
     if ref["kind"] == 0:
         a, b = ref["raw"], cand["raw"]
         stats["elements"] += 1
@@ -348,6 +365,10 @@ def compare_chunk(cid, ref, cand, stats):
         if fields_a is None or fields_b is None:
             # Undecodable element: masks cannot apply, so any difference counts.
             yield (str(index), "bytes", a.hex()[:64], b.hex()[:64])
+            continue
+        if fields_a == fields_b:
+            # Equal fields from different bytes differ only in gamma encoding.
+            yield (str(index), "encoding", a.hex()[:64], b.hex()[:64])
             continue
         for path in sorted(set(fields_a) | set(fields_b)):
             va, vb = fields_a.get(path), fields_b.get(path)
@@ -571,7 +592,7 @@ def prepare_game(
         *game,
         "-snull",
         "-mnull",
-        f"-vnull:ticks={scenario['ticks']}",
+        scenario.get("video", f"-vnull:ticks={scenario['ticks']}"),
         *(["-d", "desync=3"] if desync else []),
     ]
     env = dict(
@@ -1296,7 +1317,7 @@ def main():
     parser.add_argument(
         "--instructions",
         action="store_true",
-        help="profile six speed scenarios; no wall-speed samples",
+        help="profile the speed scenarios; no wall-speed samples",
     )
     parser.add_argument(
         "--benchmark",
@@ -1333,9 +1354,9 @@ def main():
         )
     every = scenario_list(args.soak)
     if args.instructions:
-        from .instructions import SPEED_BUDGETS
+        from .instructions import PROFILED
 
-        every = [s for s in every if s["name"] in SPEED_BUDGETS]
+        every = [s for s in every if s["name"] in PROFILED]
     # An exact scenario name selects only that scenario; anything else is a substring filter.
     unmatched = [
         name for name in args.names if not any(name in s["name"] for s in every)

@@ -309,7 +309,7 @@ pub struct GroupServices {
     pub(crate) vehicle_dirty: unsafe extern "C" fn(u32),
     pub(crate) depot_dirty: unsafe extern "C" fn(*mut ()),
     pub(crate) close_replace: unsafe extern "C" fn(u8),
-    pub(crate) screen_dirty: unsafe extern "C" fn(),
+    pub(crate) shared: *const crate::services::Services,
     pub(crate) list_generate: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) list_size: unsafe extern "C" fn(*mut ()) -> usize,
     pub(crate) list_at: unsafe extern "C" fn(*mut (), usize) -> *mut (),
@@ -760,7 +760,7 @@ unsafe fn alter_group(
                 }
                 unsafe {
                     propagate_livery(w, id, true);
-                    (w.screen_dirty)();
+                    ((*w.shared).screen_dirty)();
                 }
             }
         }
@@ -1118,7 +1118,7 @@ unsafe fn set_livery(w: &GroupServices, flags: u32, id: u16, primary: bool, mut 
         }
         unsafe {
             propagate_livery(w, id, true);
-            (w.screen_dirty)();
+            ((*w.shared).screen_dirty)();
         }
     }
     OK
@@ -1731,7 +1731,7 @@ crate::abi::layouts! {
         vehicle_dirty,
         depot_dirty,
         close_replace,
-        screen_dirty,
+        shared,
         list_generate,
         list_size,
         list_at,

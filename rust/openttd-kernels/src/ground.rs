@@ -53,6 +53,49 @@ pub(crate) fn check_build_above_clear(out: crate::services::Cost<'_>) {
     out.zero();
 }
 
+/// `ClearTile_Clear`, with the native result retaining sequential `AddCost` saturation.
+pub(crate) fn clear_tile(out: crate::services::Cost<'_>, tile: u32, flags: u16, s: &Services) {
+    use crate::economy_type::{PR_CLEAR_FIELDS, PR_CLEAR_GRASS, PR_CLEAR_ROCKS, PR_CLEAR_ROUGH};
+    const PRICES: [usize; 6] = [
+        PR_CLEAR_GRASS,
+        PR_CLEAR_ROUGH,
+        PR_CLEAR_ROCKS,
+        PR_CLEAR_FIELDS,
+        PR_CLEAR_ROUGH,
+        PR_CLEAR_ROUGH,
+    ];
+    out.set(0);
+    let world = crate::map_func::World::new(s);
+    let ground = world.asserted(|m| crate::clear_map::get_clear_ground(m, tile));
+    let density = world.asserted(|m| crate::clear_map::get_clear_density(m, tile));
+    if world.asserted(|m| crate::clear_map::is_snow_tile(m, tile)) {
+        out.add_money(crate::company::price(PRICES[usize::from(ground)]));
+        // Money subtraction saturates before conversion to int64 for std::abs.
+        let snow = crate::company::price(PR_CLEAR_ROUGH)
+            .saturating_sub(crate::company::price(PR_CLEAR_GRASS))
+            .wrapping_abs();
+        out.add_money(snow);
+    } else if ground != crate::clear_map::CLEAR_GRASS || density != 0 {
+        out.add_money(crate::company::price(PRICES[usize::from(ground)]));
+    }
+    if flags & crate::command_type::DoCommandFlag::EXECUTE != 0 {
+        clear_square(tile, s);
+    }
+}
+
+/// # Safety
+/// Result storage and immutable services remain live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_clear_tile(
+    out: *mut crate::services::CommandCost,
+    tile: u32,
+    flags: u16,
+    costs: &crate::services::CommandCostServices,
+    s: &Services,
+) {
+    clear_tile(crate::services::Cost(out, costs), tile, flags, s);
+}
+
 /// Complete original `DoClearSquare` control. Native leaves cannot throw and no
 /// owner borrow survives their invocation; world access is serialized.
 pub(crate) fn clear_square(tile: u32, s: &Services) {
@@ -255,7 +298,7 @@ pub(crate) unsafe fn clear_tile_loop(
     if climate == 1 {
         let k = crate::tile_map::get_tile_z(map, tile, size_x, map.count() / size_x)
             .unwrap_or_else(|| (s.tile_z)(tile))
-            - i32::from((s.snow_line)())
+            - i32::from(crate::snow_line::get(s))
             + 1;
         if !crate::clear_map::is_snow_tile(map, tile).unwrap_or_else(|| (c.snow)(tile)) {
             if k >= 0 {
@@ -501,7 +544,7 @@ pub(crate) unsafe fn rail_tile_loop(
         } else if ground.slope.0 != 0 {
             ground.z += 1;
         }
-        let snow = i32::from((s.snow_line)());
+        let snow = i32::from(crate::snow_line::get(s));
         if ground.z > snow {
             new = Some(if half && ground.z - snow == 1 { 14 } else { 12 });
         }
@@ -569,7 +612,7 @@ pub(crate) unsafe fn tunnel_tile_loop(
     let (t, s) = unsafe { (&*tunnel, &*shared) };
     if climate == 1 {
         let ground = (t.snow)(tile);
-        let snow = ground.z > i32::from((s.snow_line)());
+        let snow = ground.z > i32::from(crate::snow_line::get(s));
         if ground.snow != snow {
             (t.set_snow_or_desert)(tile, !ground.snow);
             hit(Witness::TunnelGround);
@@ -609,7 +652,6 @@ pub struct RoadServices {
     pub work_counter: extern "C" fn(u32) -> u32,
     pub set_work_counter: extern "C" fn(u32, u32),
     pub all_bits: extern "C" fn(u32) -> RoadBits,
-    pub cleanup: extern "C" fn(u32, RoadBits) -> RoadBits,
     pub town: *const crate::town::Leaves,
     pub set_road_type: extern "C" fn(u32, RoadType),
 }
@@ -635,7 +677,7 @@ pub(crate) unsafe fn road_tile_loop(
     if climate == 1 {
         let flat = crate::movement::foundation_slope(s, tile).slope.0 == 0;
         let ground = (r.snow)(tile, flat);
-        if ground.snow != (ground.z > i32::from((s.snow_line)())) {
+        if ground.snow != (ground.z > i32::from(crate::snow_line::get(s))) {
             (r.toggle_snow_or_desert)(tile);
             (s.mark_dirty)(tile);
         }
@@ -733,7 +775,7 @@ pub(crate) unsafe fn road_tile_loop(
         hit(Witness::RoadWorkEnd);
         if rebuild {
             let old = RoadBits((s.road_bits)(tile, 0, false));
-            let new = (r.cleanup)(tile, old);
+            let new = crate::road_cleanup::clean_up_road_bits(s, tile, old);
             if old != new {
                 // SAFETY: the outer tile-loop entry owns both native result slots.
                 unsafe {
@@ -893,7 +935,6 @@ crate::abi::layouts! {
         work_counter,
         set_work_counter,
         all_bits,
-        cleanup,
         town,
         set_road_type,
     };

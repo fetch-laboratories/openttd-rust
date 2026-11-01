@@ -38,6 +38,7 @@ struct TownProtocolWorld {
 	uint16_t house_class = 0;
 	uint32_t clears = 0, animations = 0, roads = 0, landscape_clears = 0, house_count = 1;
 	std::vector<std::array<uint32_t, 4>> writes;
+	const OpenTTDSharedServices *shared = nullptr;
 };
 static inline TownProtocolWorld *town_protocol_world;
 static inline uint64_t TownProtocolLeaf(uint32_t op, uint32_t id, uint32_t a, uint32_t b, uint32_t c) noexcept
@@ -57,12 +58,10 @@ static inline uint32_t TownProtocolIndustry(int32_t, int32_t, uint32_t *) noexce
 
 static inline uint32_t TownProtocol_map_log_x() noexcept { town_protocol_world->map_reads++; return 6; }
 static inline uint8_t TownProtocol_growth_rate() noexcept { return 2; }
-static inline uint8_t TownProtocol_snow_line() noexcept { return 0; }
 static inline bool TownProtocol_editor() noexcept { return false; }
 static inline bool TownProtocol_generating_world() noexcept { return false; }
 static inline bool TownProtocol_allow_crossings() noexcept { return false; }
 static inline uint8_t TownProtocol_climate() noexcept { return 0; }
-static inline uint8_t TownProtocol_highest_snow_line() noexcept { return 0; }
 static inline bool TownProtocol_allow_roads() noexcept { return false; }
 static inline uint8_t TownProtocol_road_flags(uint8_t) noexcept { return 0; }
 static inline OpenTTDTownHouseAvailability TownProtocol_house_availability(uint16_t) noexcept { return {.zones = 0xFFFF, .override_id = UINT16_MAX, .class_id = town_protocol_world->house_class, .probability = 1, .enabled = true}; }
@@ -73,7 +72,6 @@ static inline uint8_t TownProtocol_house_extra_flags(uint16_t) noexcept { return
 static inline OpenTTDTownRoadChoice TownProtocol_road_info(uint8_t) noexcept { return {}; }
 static inline void TownProtocol_dirty_town(uint32_t town) noexcept { TownProtocolLeaf(1, town, 0, 0, 0); }
 static inline int64_t TownProtocol_terraform_price() noexcept { return TownProtocolLeaf(5, 0, 0, 0, 0); }
-static inline uint32_t TownProtocol_clean_road_bits(uint32_t tile, uint32_t bits) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(6, tile, bits, 0, 0)); }
 static inline void TownProtocol_set_road_town(uint32_t tile, uint32_t town) noexcept { TownProtocolLeaf(7, tile, town, 0, 0); }
 static inline uint32_t TownProtocol_exchange_company(uint32_t company) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(8, 0, company, 0, 0)); }
 static inline uint16_t TownProtocol_house_class(uint16_t id) noexcept { return id == 2 ? 0 : town_protocol_world->house_class; }
@@ -163,12 +161,10 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 	return {
 		.map_log_x = TownProtocol_map_log_x,
 		.growth_rate = TownProtocol_growth_rate,
-		.snow_line = TownProtocol_snow_line,
 		.environment = {.editor = TownProtocol_editor, .freeform_edges = TownProtocol_editor},
 		.generating_world = TownProtocol_generating_world,
 		.allow_crossings = TownProtocol_allow_crossings,
 		.climate = TownProtocol_climate,
-		.highest_snow_line = TownProtocol_highest_snow_line,
 		.allow_roads = TownProtocol_allow_roads,
 		.road_flags = TownProtocol_road_flags,
 		.house_availability = TownProtocol_house_availability,
@@ -183,7 +179,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.dirty_town = TownProtocol_dirty_town,
 
 		.terraform_price = TownProtocol_terraform_price,
-		.clean_road_bits = TownProtocol_clean_road_bits,
 		.set_road_town = TownProtocol_set_road_town,
 		.exchange_company = TownProtocol_exchange_company,
 		.house_class = TownProtocol_house_class,
@@ -272,7 +267,14 @@ template <typename Check> void CheckTownProtocol(Check check)
 		t.owners = &owners;
 		return t;
 	}();
-	town_protocol_landscape.shared = &services; town_protocol_landscape.costs = &town_protocol_costs;
+	/* Rust owns MP_CLEAR clearing, which never fails and bypasses the native
+	 * proc above. The landscape command alone sees this ground as a kind still
+	 * dispatched to that proc; the town owner keeps reading the live services. */
+	w.shared = &services;
+	static OpenTTDSharedServices landscape_world{};
+	landscape_world = services;
+	landscape_world.tile_type = [](uint32_t tile) noexcept -> uint8_t { uint8_t type = town_protocol_world->shared->tile_type(tile); return type == MP_CLEAR ? MP_TUNNELBRIDGE : type; };
+	town_protocol_landscape.shared = &landscape_world; town_protocol_landscape.costs = &town_protocol_costs;
 	town_protocol_landscape.commands = &town_protocol_commands; town_protocol_landscape.tile_procs = &tiles;
 	const OpenTTDHouseAnimation animation_house{
 		.callback = [](uint16_t, uint32_t, uint32_t, const HouseSpec *, Town *, uint32_t, uint64_t) noexcept -> uint16_t { town_protocol_world->animations++; return UINT16_MAX; },

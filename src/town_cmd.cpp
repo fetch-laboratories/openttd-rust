@@ -353,10 +353,6 @@ static int64_t RustTown_terraform_price() noexcept
 {
 	return _price[PR_TERRAFORM];
 }
-static uint32_t RustTown_clean_road_bits(uint32_t tile, uint32_t bits) noexcept
-{
-	return RustCleanRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits));
-}
 static void RustTown_set_road_town(uint32_t tile, uint32_t town) noexcept
 {
 	RustSetRoadOwner(tile, RTT_ROAD, OWNER_TOWN.base()); RustSetTownIndex(tile, static_cast<uint16_t>(town));
@@ -529,12 +525,10 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 	static const OpenTTDTownLeaves services{
 		.map_log_x = OpenTTDMapLogX,
 		.growth_rate = RustTown_growth_rate,
-		.snow_line = GetRustSharedServices().snow_line,
 		.environment = GetRustEnvironmentServices(),
 		.generating_world = GetRustSharedServices().clear_square_services.generating_world,
 		.allow_crossings = RustTown_allow_crossings,
 		.climate = OpenTTDLandscapeValue,
-		.highest_snow_line = OpenTTDHighestSnowLine,
 		.allow_roads = RustAllowTownRoads,
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,
@@ -549,7 +543,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.dirty_town = RustTown_dirty_town,
 
 		.terraform_price = RustTown_terraform_price,
-		.clean_road_bits = RustTown_clean_road_bits,
 		.set_road_town = RustTown_set_road_town,
 		.exchange_company = RustTown_exchange_company,
 		.house_class = RustTownHouseClass,
@@ -867,7 +860,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
 		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
 		.delete_inspect = OpenTTDDeleteTownInspect,
-		.dirty_screen = RustScreenDirty,
 #ifdef WITH_ASSERT
 		.assertions = true,
 #else

@@ -15,6 +15,7 @@
 #include <memory>
 #include <type_traits>
 #include "station_ffi.h"
+#include "snow_line_ffi.h"
 
 enum class LandscapeType : uint8_t;
 enum class StationType : uint8_t;
@@ -83,6 +84,7 @@ struct OpenTTDClearSquareServices {
 struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDPbsServices;
 struct OpenTTDMovementServices;
+struct GRFFile;
 struct OpenTTDSharedServices {
 	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
@@ -147,7 +149,7 @@ struct OpenTTDSharedServices {
 	const OpenTTDPbsServices *(*pbs_services)(const OpenTTDSharedServices *) noexcept OPENTTD_SERVICE_DEFAULT(pbs_services);
 	bool (*service_at_helipad)() noexcept OPENTTD_SERVICE_DEFAULT(service_at_helipad);
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
-	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
+	OpenTTDSnowLineSupport snow_line_support;
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	size_t (*kdtree_partition)(OpenTTDKdtreeKey *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(kdtree_partition);
@@ -199,6 +201,11 @@ struct OpenTTDSharedServices {
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
 	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
+	uint32_t (*nearby_tile)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile);
+	uint32_t (*nearby_tile_information)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile_information);
+	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
+	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
+	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
 	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
 	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 };
@@ -296,6 +303,7 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 }
 inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept = OpenTTDAbortService<uint32_t (*)(int32_t, int32_t, uint32_t *) noexcept>::Call) noexcept
 {
+	static const uint8_t snow_line_height = 0;
 	return {
 		.clear_square_services = {},
 		.context = context,
@@ -303,6 +311,7 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.industry = industry,
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
+		.snow_line_support = { .height = &snow_line_height },
 		.recession = OpenTTDFixtureMapService<bool>,
 		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
 		.town_count = OpenTTDFixtureMapService<size_t>,

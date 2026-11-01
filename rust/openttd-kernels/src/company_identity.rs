@@ -81,7 +81,6 @@ pub struct Services {
     pub president_windows: extern "C" fn() -> (),
     pub colour_windows: extern "C" fn() -> (),
     pub object_colours: extern "C" fn(*mut OpenTTDCompany) -> (),
-    pub dirty: extern "C" fn() -> (),
     pub reset_colourmap: extern "C" fn() -> (),
     pub engine: extern "C" fn(EngineID) -> *const OpenTTDEngine,
     pub engine_type: extern "C" fn(*const OpenTTDEngine) -> VehicleType,
@@ -265,7 +264,7 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
     }
     (s.set_name_id)(c, str);
     (s.set_name_parts)(c, parts);
-    (s.dirty)();
+    (s.shared.screen_dirty)();
     (s.company_renamed)(c, names.slot);
     if (s.is_ai)(c) {
         (s.launch_news)(c, t.cast_mut());
@@ -364,7 +363,7 @@ pub extern "C" fn openttd_rust_company_manager_face(
         unsafe {
             (s.faces.bits)(face).write(bits);
         }
-        (s.dirty)();
+        (s.shared.screen_dirty)();
     }
     true
 }
@@ -440,7 +439,7 @@ pub extern "C" fn openttd_rust_company_colour(
             }
         }
         (s.reset_colourmap)();
-        (s.dirty)();
+        (s.shared.screen_dirty)();
         (s.colour_windows)();
         let mut from = 0;
         while let Some(v) = (s.shared.vehicle_next)(from) {
@@ -488,7 +487,7 @@ fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
         } else {
             (s.set_name)(c, text);
         }
-        (s.dirty)();
+        (s.shared.screen_dirty)();
         (s.admin_update)(id);
         let mut slot = NameStorage::new();
         let mut names = Names::new(s, &mut slot);
@@ -678,5 +677,5 @@ crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, dirty, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, vehicle_owner, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, vehicle_owner, };
 }

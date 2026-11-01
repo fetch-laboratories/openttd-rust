@@ -38,7 +38,6 @@ const OpenTTDGenericServices &GetRustGenericServices() noexcept
 {
 	static const OpenTTDGenericServices services{
 		.shared = &GetRustSharedServices(),
-		.version = RustGRFFileVersion,
 		.cargo_map = RustGRFCargoMap,
 		.cargo_bitnum = RustCargoBitnum,
 		.industry_substitute = RustIndustrySubstitute,
@@ -46,7 +45,6 @@ const OpenTTDGenericServices &GetRustGenericServices() noexcept
 		.common = &GetRustSpriteGroupServices(),
 		.enabled = RustAmbientSoundEnabled,
 		.ambient = OpenTTDAmbientSound,
-		.terrain = RustTerrainType,
 		.water_class = RustWaterClass,
 		.sound = RustGRFPlayTileSound,
 		.unsupported = [](uint8_t feature) noexcept { GrfMsg(5, "AddGenericCallback: Unsupported feature 0x{:02X}", feature); },

@@ -231,7 +231,7 @@ type File = *const c_void;
 #[repr(C)]
 pub struct Services {
     identity: &'static crate::company_identity::Services,
-    shared: *const Shared,
+    pub(crate) shared: *const Shared,
     resolver: *const crate::newgrf_vehicle::Services,
     next: extern "C" fn(u32) -> EngineRef,
     resolve: extern "C" fn(u16) -> EngineRef,
@@ -262,7 +262,6 @@ pub struct Services {
     set_old_refittable: extern "C" fn(E, bool),
     cargo_next: extern "C" fn(u32) -> CargoClass,
     cargo_map: extern "C" fn(File, u8) -> u8,
-    pub(crate) file_version: extern "C" fn(File) -> u8,
     cargo_list_size: extern "C" fn(File) -> usize,
     pub(crate) unknown_refit: extern "C" fn(u32, u16, u16),
     climate: extern "C" fn() -> u8,
@@ -460,7 +459,6 @@ crate::abi::layouts! {
         set_old_refittable,
         cargo_next,
         cargo_map,
-        file_version,
         cargo_list_size,
         unknown_refit,
         climate,
@@ -759,7 +757,10 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
             } else {
                 default_file
             };
-            if !file.is_null() && (s.file_version)(file) >= 8 && (s.cargo_list_size)(file) != 0 {
+            if !file.is_null()
+                && (unsafe { &*s.shared }.grf_file_version)(file) >= 8
+                && (s.cargo_list_size)(file) != 0
+            {
                 let mut best_local_slot = u8::MAX;
                 for cargo in 0..NUM_CARGO {
                     if input.mask & (1_u64 << cargo) == 0 {

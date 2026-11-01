@@ -31,21 +31,20 @@ PBS_TRIGGER_WRAPPER(_Z27TriggerStationRandomisationP11BaseStationN10StrongType7T
 PBS_TRIGGER_WRAPPER(_Z23TriggerStationAnimationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE23StationAnimationTriggerh, StationAnimationTrigger, 1)
 #else
 /* PBS calls the Rust owners directly. Observe their entries for both the unchanged
- * body's native facade and the Rust caller, forwarding every typed argument. */
+ * body's native facade and the Rust caller, forwarding every typed argument. These
+ * strong definitions replace the weakened Rust symbols; see console_adapter.py. */
 extern "C" decltype(openttd_rust_station_randomisation) __real_openttd_rust_station_randomisation;
-extern "C" void __wrap_openttd_rust_station_randomisation(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo)
+extern "C" void openttd_rust_station_randomisation(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo)
 {
 	if (_pbs_trace != nullptr) _pbs_trace->emplace_back(0, tile, st->index.base());
 	__real_openttd_rust_station_randomisation(st, tile, trigger, cargo);
 }
-static_assert(std::is_same_v<decltype(__wrap_openttd_rust_station_randomisation), decltype(openttd_rust_station_randomisation)>);
 extern "C" decltype(openttd_rust_trigger_station) __real_openttd_rust_trigger_station;
-extern "C" void __wrap_openttd_rust_trigger_station(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo)
+extern "C" void openttd_rust_trigger_station(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo)
 {
 	if (_pbs_trace != nullptr) _pbs_trace->emplace_back(1, tile, st->index.base());
 	__real_openttd_rust_trigger_station(st, tile, trigger, cargo);
 }
-static_assert(std::is_same_v<decltype(__wrap_openttd_rust_trigger_station), decltype(openttd_rust_trigger_station)>);
 #endif
 #undef PBS_TRIGGER_WRAPPER
 static TrackBits PbsTrainTrack(Train *v) {

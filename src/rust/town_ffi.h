@@ -55,12 +55,10 @@ struct OpenTTDTownAuthorityServices {
 struct OpenTTDTownLeaves {
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
 	uint8_t (*growth_rate)() noexcept OPENTTD_SERVICE_DEFAULT(growth_rate);
-	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	OpenTTDEnvironmentServices environment;
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 	bool (*allow_crossings)() noexcept OPENTTD_SERVICE_DEFAULT(allow_crossings);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
-	uint8_t (*highest_snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(highest_snow_line);
 	bool (*allow_roads)() noexcept OPENTTD_SERVICE_DEFAULT(allow_roads);
 	uint8_t (*road_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
 	OpenTTDTownHouseAvailability (*house_availability)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_availability);
@@ -74,7 +72,6 @@ struct OpenTTDTownLeaves {
 	void (*dirty_authority)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dirty_authority);
 	void (*dirty_town)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(dirty_town);
 	int64_t (*terraform_price)() noexcept OPENTTD_SERVICE_DEFAULT(terraform_price);
-	uint32_t (*clean_road_bits)(uint32_t tile, uint32_t bits) noexcept OPENTTD_SERVICE_DEFAULT(clean_road_bits);
 	void (*set_road_town)(uint32_t tile, uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(set_road_town);
 	uint32_t (*exchange_company)(uint32_t company) noexcept OPENTTD_SERVICE_DEFAULT(exchange_company);
 	uint16_t (*house_class)(uint16_t house) noexcept OPENTTD_SERVICE_DEFAULT(house_class);

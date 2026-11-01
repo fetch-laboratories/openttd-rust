@@ -35,7 +35,6 @@ inline bool OpenTTDGeneratingWorld() noexcept { return _generating_world; }
 inline LandscapeType OpenTTDLandscape() noexcept { return _settings_game.game_creation.landscape; }
 /* One byte conversion at the FFI boundary; the native service keeps its enum. */
 inline uint8_t OpenTTDLandscapeValue() noexcept { return to_underlying(OpenTTDLandscape()); }
-inline uint8_t OpenTTDHighestSnowLine() noexcept { return HighestSnowLine(); }
 struct OpenTTDTownState;
 struct OpenTTDTownRef;
 struct OpenTTDTownHandle;
