@@ -8,9 +8,7 @@
 /** @file station_sl.cpp Code handling saving and loading of stations. */
 
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include "../rust/station_association_ffi.h"
-#endif
 
 #include "saveload.h"
 #include "compat/station_sl_compat.h"
@@ -22,22 +20,18 @@
 #include "../newgrf_station.h"
 #include "../newgrf_roadstop.h"
 #include "../timer/timer_game_calendar.h"
-#ifdef WITH_RUST
 #include "../rust/station_queue_save.hpp"
-#endif
 
 #include "table/strings.h"
 
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 static SaveLoad StationLoadingVehicles(SaveLoadVersion from, SaveLoadVersion to)
 {
 	return {"loading_vehicles", SL_REFLIST, REF_VEHICLE, 0, from, to, [](void *object, size_t) -> void * {
 		return RustStationLoadingQueueSaveScope::Address(static_cast<Station *>(object)->loading_vehicles);
 	}, 0, nullptr};
 }
-#endif
 
 /**
  * Update the buoy orders to be waypoint orders.
@@ -127,18 +121,7 @@ void AfterLoadStations()
 {
 	/* Update the speclists of all stations to point to the currently loaded custom stations. */
 	for (BaseStation *st : BaseStation::Iterate()) {
-#ifdef WITH_RUST
 		openttd_rust_station_spec_rebind(&GetStationAssociationServices(), st);
-#else
-		for (auto &sm : GetStationSpecList<StationSpec>(st)) {
-			if (sm.grfid == 0) continue;
-			sm.spec = StationClass::GetByGrf(sm.grfid, sm.localidx);
-		}
-		for (auto &sm : GetStationSpecList<RoadStopSpec>(st)) {
-			if (sm.grfid == 0) continue;
-			sm.spec = RoadStopClass::GetByGrf(sm.grfid, sm.localidx);
-		}
-#endif
 
 		if (Station::IsExpected(st)) {
 			Station *sta = Station::From(st);
@@ -162,21 +145,7 @@ void AfterLoadStations()
  */
 void AfterLoadRoadStops()
 {
-#ifdef WITH_RUST
 	openttd_rust_road_stop_after_load(&GetRustSharedServices());
-#else
-	/* First construct the drive through entries */
-	for (RoadStop *rs : RoadStop::Iterate()) {
-		if (IsDriveThroughStopTile(rs->xy)) rs->MakeDriveThrough();
-	}
-	/* And then rebuild the data in those entries */
-	for (RoadStop *rs : RoadStop::Iterate()) {
-		if (!rs->status.Test(RoadStop::RoadStopStatusFlag::BaseEntry)) continue;
-
-		rs->GetEntry(DIAGDIR_NE).Rebuild(rs);
-		rs->GetEntry(DIAGDIR_NW).Rebuild(rs);
-	}
-#endif
 }
 
 static const SaveLoad _roadstop_desc[] = {
@@ -213,12 +182,8 @@ static OldPersistentStorage _old_st_persistent_storage;
  */
 static void SwapPackets(GoodsEntry *ge)
 {
-#ifdef WITH_RUST
 	auto snapshot = ge->GetOrCreateData().cargo.Packets();
 	StationCargoPacketMap &ge_packets = const_cast<StationCargoPacketMap &>(*snapshot);
-#else
-	StationCargoPacketMap &ge_packets = const_cast<StationCargoPacketMap &>(*ge->GetOrCreateData().cargo.Packets());
-#endif
 
 	if (_packets.empty()) {
 		std::map<StationID, std::list<CargoPacket *> >::iterator it(ge_packets.find(StationID::Invalid()));
@@ -231,9 +196,7 @@ static void SwapPackets(GoodsEntry *ge)
 		assert(ge_packets[StationID::Invalid()].empty());
 		ge_packets[StationID::Invalid()].swap(_packets);
 	}
-#ifdef WITH_RUST
 	ge->GetData().cargo.ImportPackets(ge_packets);
-#endif
 }
 
 template <typename T>
@@ -288,22 +251,14 @@ public:
 		if (num_dests == 0) return;
 
 		GoodsEntry::GoodsEntryData &data = ge->GetOrCreateData();
-#ifdef WITH_RUST
 		auto packets = std::make_unique<StationCargoPacketMap>(*data.cargo.Packets());
-#endif
 		StationCargoPair pair;
 		for (uint j = 0; j < num_dests; ++j) {
 			SlObject(&pair, this->GetLoadDescription());
-#ifdef WITH_RUST
 			(*packets)[pair.first].swap(pair.second);
-#else
-			const_cast<StationCargoPacketMap &>(*(data.cargo.Packets()))[pair.first].swap(pair.second);
-#endif
 			assert(pair.second.empty());
 		}
-#ifdef WITH_RUST
 		data.cargo.ImportPackets(*packets);
-#endif
 	}
 
 	void FixPointers(GoodsEntry *ge) const override
@@ -314,9 +269,7 @@ public:
 		for (StationCargoPacketMap::ConstMapIterator it = packets->begin(); it != packets->end(); ++it) {
 			SlObject(const_cast<StationCargoPair *>(&(*it)), this->GetDescription());
 		}
-#ifdef WITH_RUST
 		ge->GetData().cargo.ImportPackets(*packets);
-#endif
 	}
 };
 
@@ -367,19 +320,13 @@ public:
 		GoodsEntry::GoodsEntryData &data = ge->GetOrCreateData();
 		FlowSaveLoad flow{};
 		FlowStat *fs = nullptr;
-#ifdef WITH_RUST
 		FlowStatMap::iterator current_flow;
-#endif
 		StationID prev_source = StationID::Invalid();
 		for (uint32_t j = 0; j < num_flows; ++j) {
 			SlObject(&flow, this->GetLoadDescription());
 			if (fs == nullptr || prev_source != flow.source) {
-#ifdef WITH_RUST
 				current_flow = data.flows.emplace(flow.source, FlowStat(flow.via, flow.share, flow.restricted)).first;
 				fs = &current_flow->second;
-#else
-				fs = &(data.flows.emplace(flow.source, FlowStat(flow.via, flow.share, flow.restricted))).first->second;
-#endif
 			} else {
 				fs->AppendShare(flow.via, flow.share, flow.restricted);
 			}
@@ -461,11 +408,7 @@ public:
 			GoodsEntry &ge = *it;
 			SlObject(&ge, this->GetLoadDescription());
 			if (!IsSavegameVersionBefore(SLV_181) && SlStationGoods::cargo_reserved_count != 0) {
-#ifdef WITH_RUST
 				ge.GetOrCreateData().cargo.SetReservedCount(SlStationGoods::cargo_reserved_count);
-#else
-				ge.GetOrCreateData().cargo.reserved_count = SlStationGoods::cargo_reserved_count;
-#endif
 			}
 			if (IsSavegameVersionBefore(SLV_183)) {
 				SwapPackets(&ge);
@@ -550,11 +493,7 @@ static const SaveLoad _old_station_desc[] = {
 	SLE_CONDVARNAME(Station, waiting_random_triggers, "waiting_triggers", SLE_UINT8, SLV_27, SL_MAX_VERSION),
 	SLEG_CONDVAR("num_specs", SlStationSpecList<StationSpec>::last_num_specs, SLE_UINT8, SLV_27, SL_MAX_VERSION),
 
-#ifdef WITH_RUST
 	StationLoadingVehicles(SLV_57, SL_MAX_VERSION),
-#else
-	SLE_CONDREFLIST(Station, loading_vehicles,       REF_VEHICLE,                SLV_57, SL_MAX_VERSION),
-#endif
 
 	SLEG_STRUCTLIST("goods", SlStationGoods),
 	SLEG_CONDSTRUCTLIST("speclist", SlStationSpecList<StationSpec>, SLV_27, SL_MAX_VERSION),
@@ -576,9 +515,7 @@ struct STNSChunkHandler : ChunkHandler {
 			Station *st = new (StationID(index)) Station();
 
 			_waiting_acceptance = 0;
-#ifdef WITH_RUST
 			RustStationLoadingQueueSaveScope loading(&st->loading_vehicles, true);
-#endif
 			SlObject(st, slt);
 		}
 	}
@@ -591,9 +528,7 @@ struct STNSChunkHandler : ChunkHandler {
 		if (!IsSavegameVersionBefore(SLV_123)) return;
 
 		for (Station *st : Station::Iterate()) {
-#ifdef WITH_RUST
 			RustStationLoadingQueueSaveScope loading(&st->loading_vehicles, true);
-#endif
 			SlObject(st, _old_station_desc);
 		}
 	}
@@ -685,11 +620,7 @@ public:
 		    SLE_VAR(Station, time_since_unload,          SLE_UINT8),
 		    SLE_VAR(Station, last_vehicle_type,          SLE_UINT8),
 		    SLE_VAR(Station, had_vehicle_of_type,        SLE_UINT8),
-#ifdef WITH_RUST
 		StationLoadingVehicles(SL_MIN_VERSION, SL_MAX_VERSION),
-#else
-		SLE_REFLIST(Station, loading_vehicles,           REF_VEHICLE),
-#endif
 		SLE_CONDVAR(Station, always_accepted,            SLE_FILE_U32 | SLE_VAR_U64, SLV_127, SLV_EXTEND_CARGOTYPES),
 		SLE_CONDVAR(Station, always_accepted,            SLE_UINT64,                 SLV_EXTEND_CARGOTYPES, SL_MAX_VERSION),
 		SLEG_CONDSTRUCTLIST("speclist", SlRoadStopTileData,                          SLV_NEWGRF_ROAD_STOPS, SLV_ROAD_STOP_TILE_DATA),
@@ -770,9 +701,7 @@ struct STNNChunkHandler : ChunkHandler {
 		/* Write the stations */
 		for (BaseStation *st : BaseStation::Iterate()) {
 			SlSetArrayIndex(st->index);
-#ifdef WITH_RUST
 			RustStationLoadingQueueSaveScope loading(st->facilities.Test(StationFacility::Waypoint) ? nullptr : &static_cast<Station *>(st)->loading_vehicles, false);
-#endif
 			SlObject(st, _station_desc);
 		}
 	}
@@ -789,9 +718,7 @@ struct STNNChunkHandler : ChunkHandler {
 			bool waypoint = static_cast<StationFacilities>(SlReadByte()).Test(StationFacility::Waypoint);
 
 			BaseStation *bst = waypoint ? (BaseStation *)new (StationID(index)) Waypoint() : new (StationID(index)) Station();
-#ifdef WITH_RUST
 			RustStationLoadingQueueSaveScope loading(waypoint ? nullptr : &static_cast<Station *>(bst)->loading_vehicles, true);
-#endif
 			SlObject(bst, slt);
 		}
 	}
@@ -804,9 +731,7 @@ struct STNNChunkHandler : ChunkHandler {
 		if (IsSavegameVersionBefore(SLV_123)) return;
 
 		for (BaseStation *bst : BaseStation::Iterate()) {
-#ifdef WITH_RUST
 			RustStationLoadingQueueSaveScope loading(bst->facilities.Test(StationFacility::Waypoint) ? nullptr : &static_cast<Station *>(bst)->loading_vehicles, true);
-#endif
 			SlObject(bst, _station_desc);
 		}
 	}

@@ -11,24 +11,19 @@
 #include "../roadveh.h"
 #include "../train.h"
 #include "../settings_type.h"
-#ifdef WITH_RUST
 #include "../rust/services_road.h"
 #include "../rust/vehicle_services.h"
 #include "abi_layout.hpp"
 #include "../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleResolverServices.hpp"
-#endif
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 /* The road corpus has no tram/articulated turning witness. Keep the unchanged
  * original movement tables solely in this fixture to check every reachable table
  * entry; this does not establish controller equivalence for those vehicles. */
 namespace {
 struct RoadDriveEntry { uint8_t x, y; };
-#undef WITH_RUST
-#include "../table/roadveh_movement.h"
-#define WITH_RUST
+#include "reference-roadveh_movement.h"
 static const std::pair<const RoadDriveEntry *, size_t> source_rows[] = {
 	{_roadveh_drive_data_0, std::size(_roadveh_drive_data_0)},
 	{_roadveh_drive_data_1, std::size(_roadveh_drive_data_1)},
@@ -189,9 +184,7 @@ TEST_CASE("Road vehicles - canonical path, nested save staging and indexed pool 
 	CHECK(loaded->PathSize() == 0);
 	_vehicle_pool.CleanPool();
 }
-#endif
 
-#ifdef WITH_RUST
 namespace {
 OpenTTDRoadSpeedPart speed_parts[2];
 int bridge_reads;
@@ -357,4 +350,3 @@ TEST_CASE("Road visual eligibility precedes maximum-speed lookup")
 	}
 	_settings_game.vehicle.smoke_amount = saved_smoke; _vehicle_pool.CleanPool();
 }
-#endif

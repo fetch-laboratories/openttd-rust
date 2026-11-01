@@ -7,6 +7,9 @@
 
 /** @file towns-console.cpp Identical founding/house commands and otherwise unreachable name/cancellation inputs. */
 #include "stdafx.h"
+#ifdef WITH_RUST
+#include "tests/station_spatial_fixture.hpp"
+#endif
 #include "console_internal.h"
 #include "company_base.h"
 #include "company_func.h"
@@ -444,7 +447,13 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	Cost("expand-random", CmdExpandTown(DoCommandFlag::Execute, id, 0, TownExpandMode::Roads));
 	owner.Change(company->index);
 	if (!Station::CanAllocateItem()) std::abort();
-	Station *station = new Station(town->xy); _station_kdtree.Insert(station->index); station->town = town; station->owner = company->index;
+	Station *station = new Station(town->xy);
+#ifdef WITH_RUST
+	openttd_test_station_insert(&GetRustSharedServices(), station);
+#else
+	_station_kdtree.Insert(station->index);
+#endif
+	station->town = town; station->owner = company->index;
 	TownActionMoney(town, company, other);
 	TownStatueSearch(town, company);
 	fmt::print(stderr, "TOWN action-mask {} {}\n", GetMaskOfTownActions(company->index, town).base(), GetMaskOfTownActions(COMPANY_SPECTATOR, town).base());
@@ -460,7 +469,13 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (size_t i = 1; i < stations.size(); ++i) {
 		if (!Station::CanAllocateItem()) std::abort();
 		stations[i] = new Station(i < 2 ? town->xy : neighbour->xy);
-		_station_kdtree.Insert(stations[i]->index);
+
+#ifdef WITH_RUST
+	openttd_test_station_insert(&GetRustSharedServices(), stations[i]);
+#else
+	_station_kdtree.Insert(stations[i]->index);
+#endif
+
 		stations[i]->town = i < 2 ? town : neighbour;
 		stations[i]->owner = i % 2 == 0 ? company->index : other->index;
 	}
@@ -540,7 +555,13 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "TOWN oilrig-refusal {} {}\n", oilrig_refusal.Failed(), Industry::IsValidID(oilrig));
 	for (TileIndex part : Industry::Get(oilrig)->location) if (IsTileType(part, MP_INDUSTRY)) { Cost("delete-oilrig-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, part)); break; }
 	if (!Station::CanAllocateItem()) std::abort();
-	Station *veto = new Station(target->xy); _station_kdtree.Insert(veto->index); veto->town = target; veto->owner = company->index;
+	Station *veto = new Station(target->xy);
+#ifdef WITH_RUST
+	openttd_test_station_insert(&GetRustSharedServices(), veto);
+#else
+	_station_kdtree.Insert(veto->index);
+#endif
+	veto->town = target; veto->owner = company->index;
 	Cost("delete-station-veto", CmdDeleteTown(DoCommandFlag::Execute, removed));
 	delete veto;
 	if (!Waypoint::CanAllocateItem()) std::abort();

@@ -156,9 +156,6 @@ RoadTypes AddDateIntroducedRoadTypes(RoadTypes current, TimerGameCalendar::Date 
 void UpdateLevelCrossing(TileIndex tile, bool sound = true, bool force_bar = false);
 void MarkDirtyAdjacentLevelCrossingTiles(TileIndex tile, Axis road_axis);
 void UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval(TileIndex tile, Axis road_axis);
-#ifndef WITH_RUST
-void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count);
-#endif
 
 struct TileInfo;
 enum class Roadside : uint8_t;

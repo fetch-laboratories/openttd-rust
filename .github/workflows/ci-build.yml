@@ -134,7 +134,6 @@ jobs:
 
     with:
       checkout-ref: ${{ inputs.checkout-ref }}
-      rust: true
       arch: ${{ matrix.arch }}
       full_arch: ${{ matrix.full_arch }}
       semantic-subset: ${{ needs.platform-reference.result == 'success' && matrix.name == 'arm64 - Release' }}
@@ -154,7 +153,6 @@ jobs:
 
     with:
       checkout-ref: ${{ inputs.checkout-ref }}
-      rust: true
       arch: ${{ matrix.arch }}
       semantic-subset: ${{ needs.platform-reference.result == 'success' && matrix.arch == 'x64' }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}

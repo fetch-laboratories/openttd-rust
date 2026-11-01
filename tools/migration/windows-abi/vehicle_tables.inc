@@ -85,7 +85,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, base_viewport);
 		VEHICLE_UNUSED(vehicle, property);
 		VEHICLE_UNUSED(vehicle, callback);
-		VEHICLE_UNUSED(vehicle, unknown_callback_result);
+		VEHICLE_UNUSED(vehicle, set_max_age);
 		VEHICLE_UNUSED(vehicle, length_changed);
 		VEHICLE_UNUSED(vehicle, play_vehicle_sound);
 		VEHICLE_UNUSED(vehicle, play_sound);
@@ -124,7 +124,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, link_tile);
 		VEHICLE_UNUSED(leaves, after_enter_tile);
 		VEHICLE_UNUSED(leaves, candidate);
-		VEHICLE_UNUSED(leaves, has_road);
 		VEHICLE_UNUSED(leaves, any_road_bits);
 		VEHICLE_UNUSED(leaves, is_road_depot_tile);
 		VEHICLE_UNUSED(leaves, depot_direction);
@@ -140,7 +139,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, tram_build_read);
 		VEHICLE_UNUSED(vehicle, previous_tile);
 		VEHICLE_UNUSED(leaves, disconnect);
-		VEHICLE_UNUSED(leaves, stop_read);
 		VEHICLE_UNUSED(leaves, should_stop);
 		VEHICLE_UNUSED(leaves, arrival_read);
 		VEHICLE_UNUSED(leaves, arrival_news);
@@ -159,8 +157,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, default_max_speed);
 		VEHICLE_UNUSED(leaves, cargo_age_default);
 		VEHICLE_UNUSED(vehicle, write_max_speed);
-		VEHICLE_UNUSED(leaves, cost_read);
-		VEHICLE_UNUSED(leaves, price);
 		VEHICLE_UNUSED(leaves, pay_running);
 		VEHICLE_UNUSED(leaves, service_read);
 		VEHICLE_UNUSED(leaves, turn_read);

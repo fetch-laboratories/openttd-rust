@@ -2,7 +2,6 @@
 /** @file newgrf_loading.cpp Canonical loading aliases across serialized game threads. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../newgrf/newgrf_internal.h"
 #include "../rust/newgrf_loading_ffi.h"
 #include "../rust/newgrf_act2_ffi.h"
@@ -40,8 +39,6 @@ TEST_CASE("Rust NewGRF loading - canonical aliases cross serialized threads")
 	CHECK(aliases);
 	CHECK(observed);
 }
-#endif
-#ifdef WITH_RUST
 #include "../rust/newgrf_bytereader_services.h"
 
 TEST_CASE("Rust Action2 callback interner crosses serialized threads")
@@ -83,4 +80,3 @@ TEST_CASE("Rust Action2 callback interner crosses serialized threads")
 	if (second != first) delete second;
 	*state = saved;
 }
-#endif

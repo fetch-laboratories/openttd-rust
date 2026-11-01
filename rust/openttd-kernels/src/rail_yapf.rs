@@ -168,7 +168,6 @@ pub struct Step {
 pub struct Leaves {
     pub train: unsafe extern "C" fn(*mut c_void) -> Train,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
-    pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
     pub debug: unsafe extern "C" fn(*mut c_void, u8, *const u32, u32),
@@ -519,21 +518,19 @@ impl Search {
             v,
             compatible,
             no90 == 0,
-            mask,
         );
         let mut followed = state.follow(shared, tile, td);
-        let mut out = state.output();
         if followed && mask {
-            followed = crate::follow_track::mask_reserved_tracks(self.pbs(), &mut out);
+            followed = crate::follow_track::mask_reserved_tracks(self.pbs(), &mut state);
         }
         let step = FollowStep {
-            tile: out.new_tile,
-            skipped: out.skipped,
-            dirs: out.dirs,
+            tile: state.new_tile.0,
+            skipped: state.tiles_skipped,
+            dirs: state.new_td_bits,
             followed: u8::from(followed),
-            error: out.error,
-            station: out.station,
-            exitdir: out.exitdir,
+            error: state.err,
+            station: u8::from(state.is_station),
+            exitdir: state.exitdir,
         };
         let speed = Speed {
             min_speed: 0,
@@ -550,6 +547,9 @@ impl Search {
             max_speed: speed.max_speed,
         }
     }
+    fn world(&self) -> crate::map_func::World<'_> {
+        crate::map_func::World::new(unsafe { &*self.input.shared })
+    }
     fn pbs(&self) -> crate::pbs::Pbs<'_> {
         crate::pbs::Pbs::acquire(unsafe { &*self.input.shared })
     }
@@ -562,11 +562,7 @@ impl Search {
         pbs.free(pbs.handle(self.input.vehicle), tile, td, forbid != 0)
     }
     fn platform_length(&self, tile: u32, dir: u8) -> u32 {
-        crate::follow_track::platform_length(
-            &crate::map_func::World::new(unsafe { &*self.input.shared }),
-            tile,
-            dir,
-        )
+        crate::follow_track::platform_length(&self.world(), tile, dir)
     }
     fn set_destination(&mut self) {
         if self.input.kind == 3 {
@@ -1364,7 +1360,7 @@ impl Reservation {
         if info.flags & RAIL_STATION != 0 {
             let start = tile;
             while (tile != fail || td != self.fail_td)
-                && unsafe { (search.leaves.compatible_station)(tile, start) != 0 }
+                && search.world().compatible_station(tile, start)
             {
                 (search.pbs().0.set_station)(tile, false);
                 tile = offset(tile, exit(td ^ 8), search.input.map_x);
@@ -1457,7 +1453,7 @@ impl Reservation {
                         (search.pbs().0.set_station)(platform_tile, true);
                         search.mark_dirty(platform_tile);
                         platform_tile = offset(platform_tile, exit(td ^ 8), search.input.map_x);
-                        if unsafe { (search.leaves.compatible_station)(platform_tile, tile) == 0 }
+                        if !search.world().compatible_station(platform_tile, tile)
                             || platform_tile == self.origin
                         {
                             self.resume_callback = true;
@@ -1798,7 +1794,6 @@ crate::abi::layouts! {
     "OpenTTDRailLeaves" ["probe"] => Leaves {
         train,
         tile,
-        compatible_station,
         closest_station,
         output,
         debug,

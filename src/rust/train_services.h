@@ -162,16 +162,8 @@ static void TrainConsistWindows(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	RustVehicleDetailsDirty(RustVehicle(v)); InvalidateWindowData(WC_VEHICLE_REFIT, v->index, VIWD_CONSIST_CHANGED); InvalidateWindowData(WC_VEHICLE_ORDERS, v->index, VIWD_CONSIST_CHANGED); InvalidateNewGRFInspectWindow(GSF_TRAINS, v->index); InvalidateWindowData(WC_VEHICLE_VIEW, v->index, VIWD_CONSIST_CHANGED);
 }
-static uint64_t TrainCostClass(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return static_cast<uint32_t>(EngineOf(RustVehicleGetEngine(RustVehicle(v)))->VehInfo<RailVehicleInfo>().running_cost_class);
-}
-static uint64_t TrainCostDefault(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return EngineOf(RustVehicleGetEngine(RustVehicle(v)))->VehInfo<RailVehicleInfo>().running_cost;
-}
+
+
 static uint64_t TrainCostDivisor(OpenTTDTrainHandle) noexcept
 {
 	return CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS;
@@ -190,11 +182,6 @@ static void TrainCrashNews(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	AddTileNewsItem(GetEncodedString(STR_NEWS_TRAIN_CRASH, static_cast<uint>(a)), NewsType::Accident, v->tile);
-}
-static void TrainCrashRating(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	OpenTTDModifyStationRatingAround(v->tile.base(), v->owner.base(), -160, 30);
 }
 static void TrainCrashSound(OpenTTDTrainHandle id) noexcept
 {
@@ -287,10 +274,7 @@ static void TrainHideFill(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	RustVehicleHideFilling(RustVehicle(v));
 }
-static uint64_t TrainInvalidPrice(OpenTTDTrainHandle) noexcept
-{
-	return static_cast<uint32_t>(INVALID_PRICE);
-}
+
 static uint64_t TrainIsBridge(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsBridgeTile(TileIndex(a));
@@ -367,12 +351,7 @@ static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return RustEngineWagonPower(v->engine_type.base());
 }
-static uint64_t TrainPrice(OpenTTDTrainHandle id, uint32_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	const Engine *e = EngineOf(RustVehicleGetEngine(RustVehicle(v)));
-	return static_cast<uint64_t>(GetPrice(e->VehInfo<RailVehicleInfo>().running_cost_class, static_cast<uint>(a), RustEngineGRF(e)));
-}
+
 
 static uint64_t TrainRailvehWagon(OpenTTDTrainHandle id) noexcept
 {

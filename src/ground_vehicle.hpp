@@ -16,9 +16,7 @@
 #include "window_func.h"
 
 #include "widgets/vehicle_widget.h"
-#ifdef WITH_RUST
 #include "rust/ground_vehicle_ffi.h"
-#endif
 
 /** What is the status of our acceleration? */
 enum AccelStatus : uint8_t {
@@ -53,7 +51,6 @@ struct GroundVehicleCache {
 	auto operator<=>(const GroundVehicleCache &) const = default;
 };
 
-#ifdef WITH_RUST
 /** One canonical Rust allocation, shared by stable native reference aliases.
  * Construction (including indexed loading) and destruction follow the shell.
  * SaveLoad and legacy loaders address gv_flags through the alias, unchanged. */
@@ -67,7 +64,6 @@ struct GroundStateOwner {
 	GroundStateOwner &operator=(const GroundStateOwner &) = delete;
 	~GroundStateOwner() { openttd_rust_ground_destroy(this->state); }
 };
-#endif
 
 /** Ground vehicle flags. */
 enum GroundVehicleFlags : uint8_t {
@@ -99,14 +95,9 @@ enum GroundVehicleFlags : uint8_t {
  */
 template <class T, VehicleType Type>
 struct GroundVehicle : public SpecializedVehicle<T, Type> {
-#ifdef WITH_RUST
 	GroundStateOwner rust_ground;
 	GroundVehicleCache &gcache = this->rust_ground.state->cache;
 	uint16_t &gv_flags = this->rust_ground.state->flags;
-#else
-	GroundVehicleCache gcache{}; ///< Cache of often calculated values.
-	uint16_t gv_flags = 0; ///< @see GroundVehicleFlags.
-#endif
 
 	typedef GroundVehicle<T, Type> GroundVehicleBase; ///< Our type
 
@@ -127,38 +118,13 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	uint Crash(bool flooded) override
 	{
-#ifdef WITH_RUST
 		return openttd_rust_ground_crash(&GetRustGroundPhysicsServices(), this, flooded);
-#else
-		/* Crashed vehicles aren't going up or down */
-		for (T *v = T::From(this); v != nullptr; v = v->Next()) {
-			ClrBit(v->gv_flags, GVF_GOINGUP_BIT);
-			ClrBit(v->gv_flags, GVF_GOINGDOWN_BIT);
-		}
-		return this->Vehicle::Crash(flooded);
-#endif
 	}
 
 	/**
 	 * Calculates the total slope resistance for this vehicle.
 	 * @return Slope resistance.
 	 */
-#ifndef WITH_RUST
-	inline int64_t GetSlopeResistance() const
-	{
-		int64_t incl = 0;
-
-		for (const T *u = T::From(this); u != nullptr; u = u->Next()) {
-			if (HasBit(u->gv_flags, GVF_GOINGUP_BIT)) {
-				incl += u->gcache.cached_slope_resistance;
-			} else if (HasBit(u->gv_flags, GVF_GOINGDOWN_BIT)) {
-				incl -= u->gcache.cached_slope_resistance;
-			}
-		}
-
-		return incl;
-	}
-#endif
 
 	/**
 	 * Updates vehicle's Z position and inclination.
@@ -166,26 +132,6 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * @pre The vehicle has to be at (or near to) a border of the tile,
 	 *      directed towards tile centre
 	 */
-#ifndef WITH_RUST
-	inline void UpdateZPositionAndInclination()
-	{
-		this->z_pos = GetSlopePixelZ(this->x_pos, this->y_pos, true);
-		ClrBit(this->gv_flags, GVF_GOINGUP_BIT);
-		ClrBit(this->gv_flags, GVF_GOINGDOWN_BIT);
-
-		if (T::From(this)->TileMayHaveSlopedTrack()) {
-			/* To check whether the current tile is sloped, and in which
-			 * direction it is sloped, we get the 'z' at the center of
-			 * the tile (middle_z) and the edge of the tile (old_z),
-			 * which we then can compare. */
-			int middle_z = GetSlopePixelZ((this->x_pos & ~TILE_UNIT_MASK) | (TILE_SIZE / 2), (this->y_pos & ~TILE_UNIT_MASK) | (TILE_SIZE / 2), true);
-
-			if (middle_z != this->z_pos) {
-				SetBit(this->gv_flags, (middle_z > this->z_pos) ? GVF_GOINGUP_BIT : GVF_GOINGDOWN_BIT);
-			}
-		}
-	}
-#endif
 
 	/**
 	 * Updates vehicle's Z position.
@@ -193,72 +139,6 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * The faster code is used for trains and road vehicles unless they are
 	 * reversing on a sloped tile.
 	 */
-#ifndef WITH_RUST
-	inline void UpdateZPosition()
-	{
-#if 0
-		/* The following code does this: */
-
-		if (HasBit(this->gv_flags, GVF_GOINGUP_BIT)) {
-			switch (this->direction) {
-				case DIR_NE:
-					this->z_pos += (this->x_pos & 1) ^ 1; break;
-				case DIR_SW:
-					this->z_pos += (this->x_pos & 1); break;
-				case DIR_NW:
-					this->z_pos += (this->y_pos & 1) ^ 1; break;
-				case DIR_SE:
-					this->z_pos += (this->y_pos & 1); break;
-				default: break;
-			}
-		} else if (HasBit(this->gv_flags, GVF_GOINGDOWN_BIT)) {
-			switch (this->direction) {
-				case DIR_NE:
-					this->z_pos -= (this->x_pos & 1) ^ 1; break;
-				case DIR_SW:
-					this->z_pos -= (this->x_pos & 1); break;
-				case DIR_NW:
-					this->z_pos -= (this->y_pos & 1) ^ 1; break;
-				case DIR_SE:
-					this->z_pos -= (this->y_pos & 1); break;
-				default: break;
-			}
-		}
-
-		/* But gcc 4.4.5 isn't able to nicely optimise it, and the resulting
-		 * code is full of conditional jumps. */
-#endif
-
-		/* Vehicle's Z position can change only if it has GVF_GOINGUP_BIT or GVF_GOINGDOWN_BIT set.
-		 * Furthermore, if this function is called once every time the vehicle's position changes,
-		 * we know the Z position changes by +/-1 at certain moments - when x_pos, y_pos is odd/even,
-		 * depending on orientation of the slope and vehicle's direction */
-
-		if (HasBit(this->gv_flags, GVF_GOINGUP_BIT) || HasBit(this->gv_flags, GVF_GOINGDOWN_BIT)) {
-			if (T::From(this)->HasToUseGetSlopePixelZ()) {
-				/* In some cases, we have to use GetSlopePixelZ() */
-				this->z_pos = GetSlopePixelZ(this->x_pos, this->y_pos, true);
-				return;
-			}
-			/* DirToDiagDir() is a simple right shift */
-			DiagDirection dir = DirToDiagDir(this->direction);
-			/* Read variables, so the compiler knows the access doesn't trap */
-			int8_t x_pos = this->x_pos;
-			int8_t y_pos = this->y_pos;
-			/* DiagDirToAxis() is a simple mask */
-			int8_t d = DiagDirToAxis(dir) == AXIS_X ? x_pos : y_pos;
-			/* We need only the least significant bit */
-			d &= 1;
-			d ^= (int8_t)(dir == DIAGDIR_NW || dir == DIAGDIR_NE);
-			/* Subtraction instead of addition because we are testing for GVF_GOINGUP_BIT.
-			 * GVF_GOINGUP_BIT is used because it's bit 0, so simple AND can be used,
-			 * without any shift */
-			this->z_pos += HasBit(this->gv_flags, GVF_GOINGUP_BIT) ? d : -d;
-		}
-
-		assert(this->z_pos == GetSlopePixelZ(this->x_pos, this->y_pos, true));
-	}
-#endif
 
 	/**
 	 * Checks if the vehicle is in a slope and sets the required flags in that case.
@@ -266,21 +146,6 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * @param update_delta Indicates to also update the delta.
 	 * @return Old height of the vehicle.
 	 */
-#ifndef WITH_RUST
-	inline int UpdateInclination(bool new_tile, bool update_delta)
-	{
-		int old_z = this->z_pos;
-
-		if (new_tile) {
-			this->UpdateZPositionAndInclination();
-		} else {
-			this->UpdateZPosition();
-		}
-
-		this->UpdateViewport(true, update_delta);
-		return old_z;
-	}
-#endif
 
 	/**
 	 * Set front engine state.
@@ -377,15 +242,6 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * Also mark the widget dirty when that is needed, i.e. when
 	 * the speed of this vehicle has changed.
 	 */
-#ifndef WITH_RUST
-	inline void SetLastSpeed()
-	{
-		if (this->cur_speed != this->gcache.last_speed) {
-			SetWindowWidgetDirty(WC_VEHICLE_VIEW, this->index, WID_VV_START_STOP);
-			this->gcache.last_speed = this->cur_speed;
-		}
-	}
-#endif
 
 protected:
 	/**
@@ -401,33 +257,6 @@ protected:
 	 * @param max_speed The maximum speed here, in vehicle specific units.
 	 * @return Distance to drive.
 	 */
-#ifndef WITH_RUST
-	inline uint DoUpdateSpeed(uint accel, int min_speed, int max_speed)
-	{
-		uint spd = this->subspeed + accel;
-		this->subspeed = (uint8_t)spd;
-
-		/* When we are going faster than the maximum speed, reduce the speed
-		 * somewhat gradually. But never lower than the maximum speed. */
-		int tempmax = max_speed;
-		if (this->cur_speed > max_speed) {
-			tempmax = std::max(this->cur_speed - (this->cur_speed / 10) - 1, max_speed);
-		}
-
-		/* Enforce a maximum and minimum speed. Normally we would use something like
-		 * Clamp for this, but in this case min_speed might be below the maximum speed
-		 * threshold for some reason. That makes acceleration fail and assertions
-		 * happen in Clamp. So make it explicit that min_speed overrules the maximum
-		 * speed by explicit ordering of min and max. */
-		this->cur_speed = spd = std::max(std::min(this->cur_speed + ((int)spd >> 8), tempmax), min_speed);
-
-		int scaled_spd = this->GetAdvanceSpeed(spd);
-
-		scaled_spd += this->progress;
-		this->progress = 0; // set later in *Handler or *Controller
-		return scaled_spd;
-	}
-#endif
 };
 
 #endif /* GROUND_VEHICLE_HPP */

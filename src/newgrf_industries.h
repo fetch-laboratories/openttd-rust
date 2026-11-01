@@ -11,21 +11,11 @@
 #define NEWGRF_INDUSTRIES_H
 
 #include "newgrf_town.h"
-#ifdef WITH_RUST
 #include "rust/industry_resolver_ffi.h"
-#endif
 
 /** Resolver for industry scopes. */
 struct IndustriesScopeResolver : public ScopeResolver {
-#ifdef WITH_RUST
 	OpenTTDIndustryResolverContext context; ///< Rust-owned invocation state, on the native stack.
-#else
-	TileIndex tile;     ///< Tile owned by the industry.
-	Industry *industry; ///< %Industry being resolved.
-	IndustryType type;  ///< Type of the industry.
-	uint32_t random_bits; ///< Random bits of the new industry.
-
-#endif
 	/**
 	 * Scope resolver for industries.
 	 * @param ro Surrounding resolver.
@@ -35,13 +25,7 @@ struct IndustriesScopeResolver : public ScopeResolver {
 	 * @param random_bits Random bits of the new industry.
 	 */
 	IndustriesScopeResolver(ResolverObject &ro, TileIndex tile, Industry *industry, IndustryType type, uint32_t random_bits = 0)
-#ifdef WITH_RUST
 		;
-#else
-		: ScopeResolver(ro), tile(tile), industry(industry), type(type), random_bits(random_bits)
-	{
-	}
-#endif
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const override;
@@ -59,25 +43,7 @@ struct IndustriesResolverObject : public ResolverObject {
 
 	TownScopeResolver *GetTown();
 
-#ifdef WITH_RUST
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override;
-#else
-	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
-	{
-		switch (scope) {
-			case VSG_SCOPE_SELF: return &industries_scope;
-			case VSG_SCOPE_PARENT: {
-				TownScopeResolver *tsr = this->GetTown();
-				if (tsr != nullptr) return tsr;
-			}
-			[[fallthrough]];
-
-			default:
-				return ResolverObject::GetScope(scope, relative);
-		}
-	}
-
-#endif
 
 	GrfSpecFeature GetFeature() const override;
 	uint32_t GetDebugID() const override;
@@ -103,21 +69,12 @@ enum IndustryAvailabilityCallType : uint8_t {
 
 /* in newgrf_industry.cpp */
 uint16_t GetIndustryCallback(CallbackID callback, uint32_t param1, uint32_t param2, Industry *industry, IndustryType type, TileIndex tile, std::span<int32_t> regs100 = {});
-#ifndef WITH_RUST
-uint32_t GetIndustryIDAtOffset(TileIndex new_tile, const Industry *i, uint32_t cur_grfid);
-#endif
 void IndustryProductionCallback(Industry *ind, int reason);
 CommandCost CheckIfCallBackAllowsCreation(TileIndex tile, IndustryType type, size_t layout, uint32_t seed, uint16_t initial_random_bits, Owner founder, IndustryAvailabilityCallType creation_type);
 uint32_t GetIndustryProbabilityCallback(IndustryType type, IndustryAvailabilityCallType creation_type, uint32_t default_prob);
 bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type);
 
-#ifndef WITH_RUST
-IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id);
-#endif
 
 /* in newgrf_industrytiles.cpp*/
-#ifndef WITH_RUST
-uint32_t GetNearbyIndustryTileInformation(uint8_t parameter, TileIndex tile, IndustryID index, bool signed_offsets, bool grf_version8);
-#endif
 
 #endif /* NEWGRF_INDUSTRIES_H */

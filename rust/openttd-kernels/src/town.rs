@@ -719,15 +719,6 @@ pub struct Leaves {
     pub house_callbacks: extern "C" fn(u16) -> u16,
     pub road_info: extern "C" fn(u8) -> RoadChoice,
     pub resolve_owner: extern "C" fn(u32) -> *mut State,
-    pub stations: extern "C" fn(
-        u32,
-        u32,
-        *mut c_void,
-        extern "C" fn(*mut c_void, *const crate::station::Station, u32),
-    ),
-    pub station_activity_owner:
-        extern "C" fn(*const crate::station::Station) -> *const crate::station_service::Service,
-    pub station_owner: extern "C" fn(*const crate::station::Station) -> u8,
     pub dirty_authority: extern "C" fn(u32),
     pub dirty_town: extern "C" fn(u32),
     pub terraform_price: extern "C" fn() -> i64,
@@ -940,40 +931,19 @@ impl Engine<'_> {
         self.landscape(tile, 0, false, execute, true).success
     }
     fn count_stations(&self, _town: u32) -> u32 {
-        struct StationCount<'a> {
-            engine: Engine<'a>,
-            center: u32,
-            radius: u32,
-            count: u32,
-        }
-        extern "C" fn visit(ctx: *mut c_void, station: *const crate::station::Station, xy: u32) {
-            // SAFETY: Synchronous non-reentrant visitor; context lives on this stack.
-            let count = unsafe { &mut *ctx.cast::<StationCount>() };
-            if count.engine.distance(xy, count.center) <= count.radius {
-                // SAFETY: Synchronous radius visitor supplies a live station owner.
-                let activity = unsafe {
-                    crate::station_service::activity((count.engine.leaves.station_activity_owner)(
-                        station,
-                    ))
-                };
-                if activity.time_since_load <= 20 || activity.time_since_unload <= 20 {
-                    count.count = count.count.wrapping_add(1);
-                }
-            }
-        }
         let center = self.position();
         let radius = self.radius()[0];
-        let mut count = StationCount {
-            engine: {
-                let _ = self.map();
-                self.clone()
-            },
-            center,
-            radius,
-            count: 0,
-        };
-        (self.leaves.stations)(center, radius / 2, (&raw mut count).cast(), visit);
-        count.count
+        let c = unsafe { &*(self.services.station_catchment)() };
+        let mut count = 0_u32;
+        crate::station::spatial::radius(self.services, center, radius / 2, |st| {
+            if self.distance((c.location)(st), center) <= radius {
+                let activity = unsafe { crate::station_service::activity((c.owner)(st)) };
+                if activity.time_since_load <= 20 || activity.time_since_unload <= 20 {
+                    count = count.wrapping_add(1);
+                }
+            }
+        });
+        count
     }
     fn update_rate(&self, town: u32) {
         if self.flags() & 8 != 0 {
@@ -2287,43 +2257,6 @@ impl Engine<'_> {
         }
     }
     fn update_rating(&self, town: u32) {
-        struct RatingContext<'a> {
-            engine: Engine<'a>,
-            center: u32,
-            radius: u32,
-        }
-        extern "C" fn visit(
-            context: *mut c_void,
-            station: *const crate::station::Station,
-            xy: u32,
-        ) {
-            // SAFETY: Synchronous stack visitor; no reference survives reentry.
-            let context = unsafe { &*context.cast::<RatingContext>() };
-            let engine = context.engine.clone();
-            let center = context.center;
-            let radius = context.radius;
-            if engine.distance(xy, center) > radius {
-                return;
-            }
-            // SAFETY: Synchronous radius visitor supplies a live station owner.
-            let activity = unsafe {
-                crate::station_service::activity((engine.leaves.station_activity_owner)(station))
-            };
-            let active = activity.time_since_load <= 20 || activity.time_since_unload <= 20;
-            let owner = (engine.leaves.station_owner)(station);
-            if !(engine.services.company_valid)(owner) {
-                return;
-            }
-            // SAFETY: Valid company index and immediate write after all services.
-            unsafe {
-                let rating = &mut (*engine.owner).simulation.ratings[usize::from(owner)];
-                *rating = if active {
-                    (i32::from(*rating) + 12).min(i32::from(i16::MAX)) as i16
-                } else {
-                    (i32::from(*rating) - 15).max(i32::from(i16::MIN)) as i16
-                };
-            }
-        }
         let mut company = (self.services.next_company)(0);
         while company != u8::MAX {
             // SAFETY: Immediate field update; borrow ends before pool traversal.
@@ -2337,15 +2270,28 @@ impl Engine<'_> {
         }
         let center = self.position();
         let radius = self.radius()[0];
-        let mut context = RatingContext {
-            engine: {
-                let _ = self.map();
-                self.clone()
-            },
-            center,
-            radius,
-        };
-        (self.leaves.stations)(center, radius / 2, (&raw mut context).cast(), visit);
+        let c = unsafe { &*(self.services.station_catchment)() };
+        crate::station::spatial::radius(self.services, center, radius / 2, |st| {
+            if self.distance((c.location)(st), center) > radius {
+                return;
+            }
+            let activity = unsafe { crate::station_service::activity((c.owner)(st)) };
+            let active = activity.time_since_load <= 20 || activity.time_since_unload <= 20;
+            let commands = unsafe { &*(self.services.station_commands)() };
+            let world = unsafe { &*commands.station };
+            let owner = (world.station_owner)(st);
+            if !(self.services.company_valid)(owner) {
+                return;
+            }
+            unsafe {
+                let rating = &mut (*self.owner).simulation.ratings[usize::from(owner)];
+                *rating = if active {
+                    (i32::from(*rating) + 12).min(i32::from(i16::MAX)) as i16
+                } else {
+                    (i32::from(*rating) - 15).max(i32::from(i16::MIN)) as i16
+                };
+            }
+        });
         // SAFETY: All station visitors returned; no callback spans clamping.
         unsafe {
             for rating in &mut (*self.owner).simulation.ratings {
@@ -2370,6 +2316,19 @@ pub(crate) unsafe fn openttd_rust_town_monthly_all(
         (owner.leaves.dirty_town)(town);
         town = (engine.leaves.next_town)(town + 1);
     }
+}
+/// Native fixture observes the real station-count and monthly-rating consumers.
+#[cfg(feature = "native-test-support")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_town_stations(
+    leaves: *const Leaves,
+    services: *const Services,
+    town: u32,
+) -> u32 {
+    let e = engine(leaves, services).bind(town);
+    let count = e.count_stations(town);
+    e.update_rating(town);
+    count
 }
 #[derive(Default)]
 struct RatingTest {
@@ -2582,9 +2541,6 @@ crate::abi::layouts! {
         house_callbacks,
         road_info,
         resolve_owner,
-        stations,
-        station_activity_owner,
-        station_owner,
         dirty_authority,
         dirty_town,
         terraform_price,

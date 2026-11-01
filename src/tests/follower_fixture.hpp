@@ -23,6 +23,8 @@ struct FollowerFixture {
 	OpenTTDSharedServices shared{};
 	OpenTTDMovementServices movement{};
 	OpenTTDVehicleServices vehicle{};
+	OpenTTDOrdersLeaves orders{};
+	OpenTTDVehicleOrderState order_state{};
 	OpenTTDGroundPhysicsServices physics{};
 	OpenTTDTrainServices train{};
 	OpenTTDRailMapServices rail{};
@@ -52,7 +54,9 @@ struct FollowerFixture {
 		movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 		movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };
 		movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 0; };
-		movement.order_speed = [](OpenTTDVehicle *) noexcept -> uint16_t { return 40; };
+		order_state.current.max_speed = 40;
+		orders.vehicle = [](void *) noexcept { return &active->order_state; };
+		movement.orders = &orders;
 		movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
 		movement.water_type = [](uint32_t t) noexcept { return static_cast<WaterTileType>(active->tiles.base[t].m5 >> 4); };
 		movement.tile_flat = [](uint32_t) noexcept { return true; };
@@ -69,7 +73,6 @@ struct FollowerFixture {
 		pbs.rail90 = [](uint8_t, uint8_t, bool def) noexcept { return def; };
 		pbs.all_compatible = [](uint64_t types) noexcept { return types; };
 		pbs.compatible = [](uint8_t type) noexcept -> uint64_t { return uint64_t{1} << type; };
-		pbs.tile_rail_type = [](uint32_t t) noexcept { return static_cast<RailType>(active->tiles.extended[t].m8 & 63); };
 		pbs.show_reservation = []() noexcept { return false; };
 		openttd_rust_train_state_set_compatible_railtypes(state.get(), 1);
 		openttd_rust_train_state_set_railtypes(state.get(), 1);

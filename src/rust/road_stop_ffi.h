@@ -36,6 +36,7 @@ struct OpenTTDRoadStopServices {
 	const OpenTTDGroundServices *ground;
 	RoadStop *(*primary)(uint32_t, RoadStopType) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	RoadStop *(*head)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(head);
+	bool (*is_bus)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_bus);
 	RoadStop *(*next)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	uint32_t (*tile)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDRoadStopState *(*state)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(state);
@@ -50,7 +51,6 @@ extern "C" {
  * take live serialized owners; panics abort and no exception crosses. */
 OpenTTDRoadStopState *openttd_rust_road_stop_new();
 void openttd_rust_road_stop_destroy(OpenTTDRoadStopState *);
-bool openttd_rust_road_stop_enter(const OpenTTDSharedServices *, uint32_t, OpenTTDVehicle *, OpenTTDRoadState *);
 void openttd_rust_road_stop_leave(const OpenTTDSharedServices *, OpenTTDVehicle *, OpenTTDRoadState *);
 void openttd_rust_road_stop_check_integrity(const OpenTTDSharedServices *, uint32_t, OpenTTDRoadStopState *, uint8_t);
 void openttd_rust_road_stop_after_load(const OpenTTDSharedServices *);

@@ -135,55 +135,87 @@ use crate::pbs::Pbs;
 use crate::services::Services;
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
 
+/// Follower fields the native evidence adapters print and compare after each call.
+#[repr(C)]
+pub struct FollowerOutput {
+    pub followed: bool,
+    pub old_tile: u32,
+    pub new_tile: u32,
+    pub tiles_skipped: i32,
+    pub new_td_bits: u16,
+    pub old_td: u8,
+    pub exitdir: u8,
+    pub is_tunnel: bool,
+    pub is_bridge: bool,
+    pub is_station: bool,
+    pub err: u8,
+}
+fn follower_output(state: &State, followed: bool) -> FollowerOutput {
+    FollowerOutput {
+        followed,
+        old_tile: state.old_tile.0,
+        new_tile: state.new_tile.0,
+        tiles_skipped: state.tiles_skipped,
+        new_td_bits: state.new_td_bits,
+        old_td: state.old_td,
+        exitdir: state.exitdir,
+        is_tunnel: state.is_tunnel,
+        is_bridge: state.is_bridge,
+        is_station: state.is_station,
+        err: state.err,
+    }
+}
+/// A boxed production follower; `openttd_test_follower_delete` frees it.
 /// # Safety
-/// The output is writable; services and optional native vehicle remain live and serialized.
+/// Services and optional native vehicle remain live and serialized.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_follower_init(
-    out: *mut State,
+pub unsafe extern "C" fn openttd_test_follower_new(
     s: *const Services,
     mode: u8,
     v: *mut OpenTTDVehicle,
     owner: u8,
     types: u64,
     allow90: bool,
-    masking: bool,
     from_vehicle: bool,
-) {
+) -> *mut State {
     let s = unsafe { &*s };
     let v = std::ptr::NonNull::new(v).map(VehicleRef);
-    let state = if from_vehicle {
-        State::vehicle(s, mode, v, types, allow90, masking)
+    Box::into_raw(Box::new(if from_vehicle {
+        State::vehicle(s, mode, v, types, allow90)
     } else {
-        State::new(s, mode, v, owner, types, allow90, masking)
-    };
-    unsafe {
-        out.write(state);
-    }
+        State::new(s, mode, v, owner, types, allow90)
+    }))
 }
 /// # Safety
-/// The stack follower and shared game world remain live and serialized throughout the call.
+/// `state` came from `openttd_test_follower_new` and is not used afterwards.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_delete(state: *mut State) {
+    drop(unsafe { Box::from_raw(state) });
+}
+/// # Safety
+/// The follower and shared game world remain live and serialized throughout the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_follower_follow(
     s: *const Services,
     state: *mut State,
     tile: u32,
     td: u8,
-) -> bool {
-    unsafe { (&mut *state).follow(&*s, tile, td) }
-}
-/// # Safety
-/// Same stack follower and serialized world contract as Follow.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_follower_mask(s: *const Services, state: *mut State) -> bool {
-    let s = unsafe { &*s };
+) -> FollowerOutput {
     let state = unsafe { &mut *state };
-    if !state.masking {
-        return true;
-    }
-    let mut out = state.output();
-    let result = mask_reserved_tracks(Pbs::acquire(s), &mut out);
-    state.restore(out);
-    result
+    let followed = state.follow(unsafe { &*s }, tile, td);
+    follower_output(state, followed)
+}
+/// The production `MaskReservedTracks` step after a successful follow.
+/// # Safety
+/// Same follower and serialized world contract as Follow.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_follower_mask(
+    s: *const Services,
+    state: *mut State,
+) -> FollowerOutput {
+    let state = unsafe { &mut *state };
+    let masked = mask_reserved_tracks(Pbs::acquire(unsafe { &*s }), state);
+    follower_output(state, masked)
 }
 /// # Safety
 /// Shared services and optional vehicle stay live under the game-state mutex.
@@ -319,4 +351,129 @@ pub extern "C" fn openttd_test_map_surrounded_by_water(s: &crate::services::Serv
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_snow_line_highest(s: &crate::services::Services) -> u8 {
     crate::snow_line::highest(s)
+}
+
+/// # Safety
+/// Every station, road vehicle and service table is live and serialized throughout these probes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_insert(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+) {
+    crate::station::spatial::insert(unsafe { &*s }, st);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_move_sign(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+    tile: u32,
+) {
+    crate::station::spatial::move_sign(unsafe { &*s }, st, tile);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_radius(
+    s: *const Services,
+    center: u32,
+    distance: u32,
+    context: *mut std::ffi::c_void,
+    visit: extern "C" fn(*mut std::ffi::c_void, *mut crate::station::BaseStation),
+) {
+    crate::station::spatial::radius(unsafe { &*s }, center, distance, |st| visit(context, st));
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_rating_around(
+    s: *const Services,
+    tile: u32,
+    owner: u8,
+    amount: i32,
+    radius: u32,
+) {
+    crate::station::spatial::modify_rating_around(unsafe { &*s }, tile, owner, amount, radius);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_modify_rating(
+    st: *mut crate::station_service::Service,
+    amount: i32,
+) {
+    unsafe {
+        crate::station_service::modify_rating(st, amount);
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_primary_stop(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+    vehicle: VehicleRef,
+) -> *mut crate::road_stop::Stop {
+    crate::road_stop::primary_for_vehicle(unsafe { &*s }, st, vehicle)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_next_stop(
+    s: *const Services,
+    stop: *const crate::road_stop::Stop,
+    vehicle: VehicleRef,
+) -> *mut crate::road_stop::Stop {
+    crate::road_stop::next_for_vehicle(unsafe { &*s }, stop, vehicle)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_rail_area(
+    s: *const Services,
+    st: *mut crate::station::BaseStation,
+    tile: u32,
+    area: u8,
+) -> crate::tilearea::TileArea {
+    crate::newgrf_station::rail_tile_area(unsafe { &*s }, st, tile, area)
+}
+
+/// Fixed build/mutation observations against the original native template.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_tree_sequence(
+    s: *const Services,
+    context: *mut std::ffi::c_void,
+    visit: extern "C" fn(*mut std::ffi::c_void, u32, u16),
+) {
+    let s = unsafe { &*s };
+    let xy = |id: u16, dim: usize| if dim == 0 { id % 3 } else { id % 5 };
+    let split = |keys: &mut [crate::kdtree::SplitKey<u16>]| crate::kdtree::native_split(s, keys);
+    let mut tree = crate::kdtree::Kdtree::new();
+    let observe = |tree: &crate::kdtree::Kdtree<u16>, phase| {
+        tree.contained([0, 0], [10, 10], &xy, |id| visit(context, phase, id));
+        tree.contained([1, 1], [2, 4], &xy, |id| visit(context, phase + 100, id));
+        if tree.count() != 0 {
+            visit(context, phase + 200, tree.nearest([1, 2], &xy));
+        }
+    };
+    tree.build(0..20, &xy, &split);
+    observe(&tree, 0);
+    let mut first = Vec::new();
+    tree.contained([0, 0], [10, 10], &xy, |id| first.push(id));
+    for (phase, id) in [(1, first[0]), (2, first[1])] {
+        tree.remove(id, &xy, &split);
+        observe(&tree, phase);
+    }
+    for id in 20..40 {
+        tree.insert(id, &xy, &split);
+        observe(&tree, u32::from(id));
+    }
+    for (phase, id) in [(40, 20), (41, 30), (42, 39)] {
+        tree.remove(id, &xy, &split);
+        observe(&tree, phase);
+    }
+    tree.build([], &xy, &split);
+    observe(&tree, 43);
+    tree.insert(12, &xy, &split);
+    observe(&tree, 44);
+}
+
+/// Exercise the production pending-replacement drain with native fixture tables.
+/// # Safety
+/// Live serialized service tables and caller-owned cost, as in the scheduler.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_fleet_pending_drain(
+    pending: *const crate::fleet::pending::Services,
+    transaction: *const crate::fleet::transactions::Services,
+    group: *const crate::fleet::GroupServices,
+    cost: *mut (),
+) {
+    unsafe { crate::fleet::pending::drain(pending, transaction, group, cost) }
 }

@@ -9,7 +9,6 @@
 #include "../stdafx.h"
 #include "fixture_map.hpp"
 #include "../3rdparty/catch2/catch.hpp"
-#ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
 #include "../rust/movement_ffi.h"
 #include "../rust/landscape_command_ffi.h"
@@ -27,6 +26,10 @@
 #include "../landscape.h"
 #include "../timer/timer_game_calendar.h"
 #include "../rust/snow_line_ffi.h"
+#include "../clear_map.h"
+#include "../strings_func.h"
+#include "../table/strings.h"
+#include "../rust/command_services.h"
 #include "../heightmap.h"
 #include "../road_type.h"
 #include "../station_type.h"
@@ -34,10 +37,8 @@
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"
 #include "world_generation_probe.hpp"
-#endif
 #include "../safeguards.h"
 
-#ifdef WITH_RUST
 static uint snow_line_deleted;
 TEST_CASE("Rust snow-line owner preserves native allocation, dates and serialized threads")
 {
@@ -219,6 +220,25 @@ TEST_CASE("Rust production pixel entries observe live native corners and realloc
 	Map::Allocate(64, 64);
 }
 
+TEST_CASE("Clear-ground production entry keeps native zero-cost metadata")
+{
+	for (const uint width : {64U, 128U}) {
+		Map::Allocate(width, 64);
+		const TileIndex tile = TileXY(1, 1);
+		MakeClear(tile, CLEAR_GRASS, 0);
+		CommandCost cost(STR_ERROR_OWNED_BY, STR_ERROR_OWNED_BY);
+		cost.SetErrorOwner(CompanyID{3});
+		cost.SetEncodedMessage(GetEncodedString(STR_ERROR_OWNED_BY, STR_COMPANY_SOMEONE, std::monostate{}));
+		openttd_rust_clear_tile(RustCommandCost(&cost), tile.base(), 0, &GetRustCommandCostServices(), &GetRustSharedServices());
+		CHECK(cost.Succeeded()); CHECK(cost.GetCost() == 0);
+		CHECK(cost.GetExpensesType() == EXPENSES_CONSTRUCTION);
+		CHECK(cost.GetErrorMessage() == INVALID_STRING_ID); CHECK(cost.GetExtraErrorMessage() == INVALID_STRING_ID);
+		CHECK(cost.GetErrorOwner() == CompanyID::Invalid()); CHECK(cost.GetEncodedMessage().empty());
+		CHECK(GetClearDensity(tile) == 0);
+	}
+	Map::Allocate(64, 64);
+}
+
 TEST_CASE("Rust ground enum and consumed-record native calls")
 {
 	CHECK(GroundProbe::Run());
@@ -291,9 +311,7 @@ TEST_CASE("Rust shared tile-type out-of-range preserves callback policy")
 	CHECK(calls == 3);
 	CHECK(observed == 0);
 }
-#endif
 
-#ifdef WITH_RUST
 TEST_CASE("Rust generation sea identity preserves native flattening iteration")
 {
 	RustGenerationSeaSet boundary;
@@ -313,9 +331,7 @@ TEST_CASE("Rust generation sea identity preserves native flattening iteration")
 		boundary.Destroy();
 	}
 }
-#endif
 
-#ifdef WITH_RUST
 TEST_CASE("Rust world generation shares native lvalues across serialized threads")
 {
 	bool *address = &_generating_world;
@@ -350,4 +366,3 @@ TEST_CASE("Rust world generation replaces transient callbacks before invoking th
 	CHECK(world_callback_value == 2);
 	CHECK(_switch_mode == SM_EDITOR);
 }
-#endif

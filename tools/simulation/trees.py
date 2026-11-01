@@ -400,3 +400,82 @@ AI_FOLDER = "tree-scenario-ai"
 
 def uses_ai(scenario):
     return scenario.get("trees") == "commands"
+
+
+def check_editor_groups(lines: list[str]) -> None:
+    """Require full native-result, dirty-point, tile and both-stream observations."""
+    observations = [line.split() for line in lines if line.startswith("GROUNDTREE ")]
+    widths = {
+        "cost": 16,
+        "group": 10,
+        "clear": 11,
+        "neighbor": 11,
+        "group-tile": 11,
+        "dirty": 11,
+        "group-rng": 7,
+        "clear-rng": 7,
+        "checkpoint": 7,
+        "boundary": 5,
+        "complete": 4,
+    }
+    if any(len(row) != widths.get(row[1], 0) for row in observations):
+        raise RuntimeError("incomplete clear-ground/editor observation fields")
+    costs = [row for row in observations if row[1] == "cost"]
+    groups = [line.split() for line in lines if line.startswith("GROUNDTREE group ")]
+    if (
+        [int(row[2]) for row in costs] != list(range(2880))
+        or [int(row[2]) for row in groups] != list(range(56))
+        or "GROUNDTREE complete 2880 56" not in lines
+        or sum(line.startswith("GROUNDTREE clear ") for line in lines) != 2880
+        or sum(line.startswith("GROUNDTREE neighbor ") for line in lines) != 2880
+        or sum(line.startswith("GROUNDTREE group-rng ") for line in lines) != 56
+        or sum(row[1] == "clear-rng" for row in observations) != 1
+        or sum(row[1] == "checkpoint" for row in observations) != 1
+        or sum(row[1] == "dirty" for row in observations)
+        != 960 + sum(int(row[9]) for row in groups)
+    ):
+        raise RuntimeError("missing clear-ground/editor group observations")
+    random_rows = [row for row in observations if row[1] == "group-rng"]
+    # The fixture's edge center is TileXY(1, 1), independently of brush output.
+    width = int(random_rows[28][2]) - 1
+    group_tiles: list[list[int]] = [[] for _ in groups]
+    group = -1
+    for row in observations:
+        if row[1] == "group":
+            group = int(row[2])
+        elif row[1] == "group-tile":
+            if group < 0:
+                raise RuntimeError("editor tile observation precedes its group")
+            group_tiles[group].append(int(row[2]))
+    for index, row in enumerate(random_rows):
+        y, x = divmod(int(row[2]), width)
+        # TileArea(center) starts with zero extents. Expand(6) therefore ends
+        # just before center + 6; the native constructor does not cover a tile.
+        # The interior anchor leaves enough room at the south/east edges.
+        expected_tiles = [
+            yy * width + xx
+            for yy in range(max(0, y - 6), y + 6)
+            for xx in range(max(0, x - 6), x + 6)
+        ]
+        if group_tiles[index] != expected_tiles:
+            raise RuntimeError(f"missing editor group tile observations: {index}")
+    for row in costs:
+        if row[9] != "true" or row[11:] != ["0", "65535", "65535", "255", "true"]:
+            raise RuntimeError(f"clear-ground native result metadata differs: {row}")
+    for row in groups:
+        mode, planted = int(row[5]), int(row[9])
+        expected = {0: 0, 1: 2, 2: 0, 3: 4, 4: 0, 5: 0, 8: 0, 9: 0, 10: 0, 12: 0}
+        if mode in expected and planted != expected[mode]:
+            raise RuntimeError(f"editor group branch not reached: {row}")
+        if mode in (6, 7, 11) and planted == 0:
+            raise RuntimeError(f"editor group planting missing: {row}")
+    boundaries = [
+        line.split() for line in lines if line.startswith("GROUNDTREE boundary ")
+    ]
+    if [int(row[2]) for row in boundaries] != [
+        block + mode for block in (0, 14, 28, 42) for mode in (8, 9, 12)
+    ] or any(
+        row[3:] != (["0", "0"] if int(row[2]) % 14 == 12 else ["2", "0"])
+        for row in boundaries
+    ):
+        raise RuntimeError("missing strict rainforest boundaries/type interval")

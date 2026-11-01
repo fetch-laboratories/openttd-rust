@@ -12,9 +12,7 @@
 
 #include "town_type.h"
 #include "newgrf_spritegroup.h"
-#ifdef WITH_RUST
 #include "rust/house_resolver_ffi.h"
-#endif
 
 /**
  * Scope resolver for a town.
@@ -23,12 +21,7 @@
  *       and to check the town's persistent storage.
  */
 struct TownScopeResolver : public ScopeResolver {
-#ifdef WITH_RUST
 	OpenTTDTownScope context;
-#else
-	Town *t;       ///< %Town of the scope.
-	bool readonly; ///< When set, persistent storage of the town is read-only,
-#endif
 
 	/**
 	 * Resolver of a town scope.
@@ -50,14 +43,7 @@ struct TownResolverObject : public ResolverObject {
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
-#ifdef WITH_RUST
 		return openttd_rust_town_scope(this, &this->town_scope, scope, relative);
-#else
-		switch (scope) {
-			case VSG_SCOPE_SELF: return &town_scope;
-			default: return ResolverObject::GetScope(scope, relative);
-		}
-#endif
 	}
 };
 

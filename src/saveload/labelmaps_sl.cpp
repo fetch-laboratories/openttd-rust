@@ -18,16 +18,10 @@
 #include "../newgrf_railtype.h"
 #include "../newgrf_roadtype.h"
 
-#ifdef WITH_RUST
 #include "../rust/type_registry_ffi.h"
-#endif
 
 #include "../safeguards.h"
 
-#ifndef WITH_RUST
-extern std::vector<LabelObject<RailTypeLabel>> _railtype_list;
-extern std::vector<LabelObject<RoadTypeLabel>> _roadtype_list;
-#endif
 
 /** Perform rail type and road type conversion if necessary. */
 void AfterLoadLabelMaps()
@@ -64,22 +58,14 @@ struct RAILChunkHandler : ChunkHandler {
 		const std::vector<SaveLoad> slt = SlCompatTableHeader(description, _label_object_sl_compat);
 
 
-#ifdef WITH_RUST
 		openttd_rust_rail_saved_reserve();
-#else
-		_railtype_list.reserve(RAILTYPE_END);
-#endif
 
 		LabelObject<RailTypeLabel> lo;
 
 		while (SlIterateArray() != -1) {
 			SlObject(&lo, slt);
 
-#ifdef WITH_RUST
 		openttd_rust_rail_saved_append(lo.label, 0);
-#else
-		_railtype_list.push_back(lo);
-#endif
 		}
 	}
 };
@@ -112,22 +98,14 @@ struct ROTTChunkHandler : ChunkHandler {
 		const std::vector<SaveLoad> slt = SlCompatTableHeader(description, _label_object_sl_compat);
 
 
-#ifdef WITH_RUST
 		openttd_rust_road_saved_reserve();
-#else
-		_roadtype_list.reserve(ROADTYPE_END);
-#endif
 
 		LabelObject<RoadTypeLabel> lo;
 
 		while (SlIterateArray() != -1) {
 			SlObject(&lo, slt);
 
-#ifdef WITH_RUST
 		openttd_rust_road_saved_append(lo.label, lo.subtype);
-#else
-		_roadtype_list.push_back(lo);
-#endif
 		}
 	}
 };
@@ -141,4 +119,3 @@ static const ChunkHandlerRef labelmaps_chunk_handlers[] = {
 };
 
 extern const ChunkHandlerTable _labelmaps_chunk_handlers(labelmaps_chunk_handlers);
-

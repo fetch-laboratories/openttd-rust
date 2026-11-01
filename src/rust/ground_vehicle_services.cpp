@@ -7,7 +7,6 @@
 
 /** @file ground_vehicle_services.cpp Native property, storage and shared-world leaves. */
 #include "../stdafx.h"
-#ifdef WITH_RUST
 #include "../train.h"
 #include "../roadveh.h"
 #include "../depot_map.h"
@@ -86,4 +85,3 @@ static_assert(to_underlying(VehicleRailFlag::PoweredWagon) == 3 && to_underlying
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDGroundPhysicsServices.hpp"
 bool CheckAbi_ground_physics() { return AbiServicesComplete(GetRustGroundPhysicsServices()); }
-#endif /* WITH_RUST */

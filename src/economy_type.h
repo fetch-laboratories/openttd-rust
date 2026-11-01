@@ -47,10 +47,6 @@ struct Economy {
 	uint8_t interest_rate;                   ///< Interest
 	uint8_t infl_amount;                     ///< inflation amount
 	uint8_t infl_amount_pr;                  ///< inflation rate for payment rates
-#ifndef WITH_RUST
-	uint32_t industry_daily_change_counter; ///< Bits 31-16 are number of industry to be performed, 15-0 are fractional collected daily
-	uint32_t industry_daily_increment;      ///< The value which will increment industry_daily_change_counter. Computed value. NOSAVE
-#endif
 	uint64_t inflation_prices;              ///< Cumulated inflation of prices since game start; 16 bit fractional part
 	uint64_t inflation_payment;             ///< Cumulated inflation of cargo payment since game start; 16 bit fractional part
 

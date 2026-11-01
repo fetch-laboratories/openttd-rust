@@ -11,9 +11,7 @@
 #define NEWGRF_CLASS_H
 
 #include "strings_type.h"
-#ifdef WITH_RUST
 #include "rust/newgrf_class_ffi.h"
-#endif
 
 /* Base for each type of NewGRF spec to be used with NewGRFClass. */
 template <typename Tindex>
@@ -27,7 +25,6 @@ struct NewGRFSpecBase {
  */
 template <typename Tspec, typename Tindex, Tindex Tmax>
 class NewGRFClass {
-#ifdef WITH_RUST
 public:
 	uint32_t global_id;
 	StringID name;
@@ -52,68 +49,6 @@ public:
 	static uint GetUIClassCount() { return Ops::ui_count(); }
 	static NewGRFClass *Get(Tindex class_index) { assert(static_cast<size_t>(class_index) < Ops::count()); return static_cast<NewGRFClass *>(Ops::classes()) + class_index; }
 	static const Tspec *GetByGrf(uint32_t grfid, uint16_t local_id) { return Ops::by_grf(grfid, local_id); }
-#else
-private:
-	/* Tspec must be of NewGRFSpecBase<Tindex>. */
-	static_assert(std::is_base_of_v<NewGRFSpecBase<Tindex>, Tspec>);
-
-	uint ui_count = 0; ///< Number of specs in this class potentially available to the user.
-	Tindex index = static_cast<Tindex>(0); ///< Index of class within the list of classes.
-	std::vector<Tspec *> spec; ///< List of specifications.
-
-	/**
-	 * The actual classes.
-	 * @note This may be reallocated during initialization so pointers may be invalidated.
-	 */
-	static inline std::vector<NewGRFClass<Tspec, Tindex, Tmax>> classes;
-
-	/** Initialise the defaults. */
-	static void InsertDefaults();
-
-public:
-	using spec_type = Tspec;
-	using index_type = Tindex;
-
-	uint32_t global_id; ///< Global ID for class, e.g. 'DFLT', 'WAYP', etc.
-	StringID name;    ///< Name of this class.
-
-	/* Public constructor as emplace_back needs access. */
-	NewGRFClass(uint32_t global_id, StringID name) : global_id(global_id), name(name) { }
-
-	/**
-	 * Get read-only span of specs of this class.
-	 * @return Read-only span of specs.
-	 */
-	std::span<Tspec * const> Specs() const { return this->spec; }
-
-	/**
-	 * Get read-only span of all classes of this type.
-	 * @return Read-only span of classes.
-	 */
-	static std::span<NewGRFClass<Tspec, Tindex, Tmax> const> Classes() { return NewGRFClass::classes; }
-
-	void Insert(Tspec *spec);
-
-	Tindex Index() const { return this->index; }
-	/** Get the number of allocated specs within the class. */
-	uint GetSpecCount() const { return static_cast<uint>(this->spec.size()); }
-	/** Get the number of potentially user-available specs within the class. */
-	uint GetUISpecCount() const { return this->ui_count; }
-
-	const Tspec *GetSpec(uint index) const;
-
-	/** Check whether the spec will be available to the user at some point in time. */
-	bool IsUIAvailable(uint index) const;
-
-	static void Reset();
-	static Tindex Allocate(uint32_t global_id);
-	static void Assign(Tspec *spec);
-	static uint GetClassCount();
-	static uint GetUIClassCount();
-	static NewGRFClass *Get(Tindex class_index);
-
-	static const Tspec *GetByGrf(uint32_t grfid, uint16_t local_id);
-#endif
 };
 
 #endif /* NEWGRF_CLASS_H */

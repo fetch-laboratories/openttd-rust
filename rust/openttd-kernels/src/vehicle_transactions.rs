@@ -448,7 +448,7 @@ pub struct CommonServices {
     pub train_power: extern "C" fn(*mut ()) -> u32,
     pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
     pub grf_version: extern "C" fn(*mut ()) -> u8,
-    pub grf_string: extern "C" fn(*mut (), u32) -> u32,
+    pub grf_string: extern "C" fn(u32, u32) -> u32,
     pub waiting_news: extern "C" fn(u32),
     pub flip_stopped: extern "C" fn(*mut ()),
     pub startstop_ui: extern "C" fn(*mut ()),
@@ -566,17 +566,16 @@ pub(crate) unsafe fn startstop(
         if callback != crate::vehicle::CALLBACK_FAILED {
             if (s.grf_version)(v) < 8 {
                 if callback < 0x400 && callback & 0xff != 0xff {
-                    error =
-                        (s.grf_string)(v, s.strings.grf_text.0.wrapping_add(u32::from(callback)));
+                    error = s.grf_text(v, s.strings.grf_text.0.wrapping_add(u32::from(callback)));
                 }
             } else if callback < 0x400 {
-                error = (s.grf_string)(v, s.strings.grf_text.0.wrapping_add(u32::from(callback)));
+                error = s.grf_text(v, s.strings.grf_text.0.wrapping_add(u32::from(callback)));
             } else {
                 match callback {
                     0x400 => (),
                     0x40f => {
                         // The original reads register 100 only for this result.
-                        error = (s.grf_string)(v, unsafe { register100.assume_init() } as u32);
+                        error = s.grf_text(v, unsafe { register100.assume_init() } as u32);
                     }
                     _ => error = s.strings.incompatible_rail,
                 }
@@ -659,6 +658,15 @@ crate::abi::layouts! {
         shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
         interval_percent, interval_clamp, set_interval, unique_name, max_name,
     };
+}
+
+impl CommonServices {
+    fn grf_text(&self, v: *mut (), string: u32) -> u32 {
+        let cap = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
+        let e = (self.vehicles.engine)(unsafe { vehicle_ref(v) }).0.as_ptr();
+        let grfid = unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(cap, e) };
+        (self.grf_string)(grfid, string)
+    }
 }
 
 impl TransactionServices {

@@ -11,10 +11,8 @@
 #define VEHICLE_BASE_H
 
 #include "sprite.h"
-#ifdef WITH_RUST
 #include "rust/vehicle_ffi.h"
 #include "rust/newgrf_vehicle_ffi.h"
-#endif
 #include "track_type.h"
 #include "command_type.h"
 #include "order_base.h"
@@ -68,7 +66,6 @@ struct NewGRFCache {
 	auto operator<=>(const NewGRFCache &) const = default;
 };
 
-#ifdef WITH_RUST
 /** Exactly one Rust allocation per shell, including indexed load construction.
  * Stable native aliases address the canonical bytes; cachecheck copies are
  * diagnostic values only. Pool cleanup/destruction releases the same owner. */
@@ -79,7 +76,6 @@ struct VehicleGRFCacheOwner {
 	VehicleGRFCacheOwner &operator=(const VehicleGRFCacheOwner &) = delete;
 	~VehicleGRFCacheOwner() { openttd_rust_vehicle_grf_cache_delete(this->state); }
 };
-#endif
 
 /** Models for spawning visual effects. */
 enum VisualEffectSpawnModel : uint8_t {
@@ -110,7 +106,6 @@ struct VehicleCache {
 	uint16_t cached_max_speed = 0; ///< Maximum speed of the consist (minimum of the max speed of all vehicles in the consist).
 	uint16_t cached_cargo_age_period = 0; ///< Number of ticks before carried cargo is aged.
 
-#ifdef WITH_RUST
 private:
 	uint8_t copied_vis_effect = 0;
 public:
@@ -129,10 +124,6 @@ public:
 	{
 		return this->cached_max_speed == other.cached_max_speed && this->cached_cargo_age_period == other.cached_cargo_age_period && this->cached_vis_effect == other.cached_vis_effect;
 	}
-#else
-	uint8_t cached_vis_effect = 0;  ///< Visual effect to show (see #VisualEffect)
-	auto operator<=>(const VehicleCache &) const = default;
-#endif
 };
 
 /** Sprite sequence for a vehicle part. */
@@ -247,15 +238,9 @@ private:
 	Vehicle *previous = nullptr; ///< NOSAVE: pointer to the previous vehicle in the chain
 	Vehicle *first = nullptr; ///< NOSAVE: pointer to the first vehicle in the chain
 
-#ifdef WITH_RUST
 	std::unique_ptr<OpenTTDVehicleOrderState, decltype(&openttd_rust_vehicle_orders_delete)> rust_order_state{openttd_rust_vehicle_orders_new(), openttd_rust_vehicle_orders_delete};
 	Vehicle *&next_shared = *new (std::addressof(this->rust_order_state->next_shared)) Vehicle *{nullptr};
 	Vehicle *&previous_shared = *new (std::addressof(this->rust_order_state->previous_shared)) Vehicle *{nullptr};
-#else
-	Vehicle *next_shared = nullptr; ///< pointer to the next vehicle that shares the order
-	Vehicle *previous_shared = nullptr; ///< NOSAVE: pointer to the previous vehicle in the shared order chain
-
-#endif
 
 public:
 	friend void FixOldVehicles(LoadgameState &ls);
@@ -286,13 +271,7 @@ public:
 	Vehicle *hash_viewport_next = nullptr; ///< NOSAVE: Next vehicle in the visual location hash.
 	Vehicle **hash_viewport_prev = nullptr; ///< NOSAVE: Previous vehicle in the visual location hash.
 
-#ifdef WITH_RUST
 	OpenTTDVehicleTileLinks tile_links; ///< NOSAVE: Canonical Rust tile-index links.
-#else
-	Vehicle *hash_tile_next = nullptr; ///< NOSAVE: Next vehicle in the tile location hash.
-	Vehicle **hash_tile_prev = nullptr; ///< NOSAVE: Previous vehicle in the tile location hash.
-	Vehicle **hash_tile_current = nullptr; ///< NOSAVE: Cache of the current hash chain.
-#endif
 
 	SpriteID colourmap{}; ///< NOSAVE: cached colour mapping
 
@@ -356,34 +335,16 @@ public:
 
 	VehStates vehstatus{}; ///< Status
 	uint8_t subtype = 0; ///< subtype (Filled with values from #AircraftSubType/#DisasterSubType/#EffectVehicleType/#GroundVehicleSubtypeFlags)
-#ifdef WITH_RUST
 	/* Order construction also starts DestinationID's lifetime and all original
 	 * defaults, before controllers or loaders can obtain the facade reference. */
 	Order &current_order = *new (std::addressof(this->rust_order_state->current)) Order{};
 	OrderList *&orders = *new (std::addressof(this->rust_order_state->orders)) OrderList *{nullptr};
 	uint32_t old_orders = 0; ///< Legacy load staging, committed by AfterLoadVehicles.
 	OpenTTDVehicleOrderState *GetRustOrderState() const { return this->rust_order_state.get(); }
-#else
-	Order current_order{}; ///< The current order (+ status, like: loading)
 
-	union {
-		OrderList *orders = nullptr; ///< Pointer to the order list for this vehicle
-		uint32_t old_orders; ///< Only used during conversion of old save games
-	};
-
-#endif
-
-#ifdef WITH_RUST
 	VehicleGRFCacheOwner rust_grf_cache;
 	NewGRFCache &grf_cache = *this->rust_grf_cache.state;
-#else
-	NewGRFCache grf_cache{}; ///< Cache of often used calculated NewGRF values
-#endif
-#ifdef WITH_RUST
 	VehicleCache vcache{*openttd_rust_vehicle_visual_cache(this->rust_grf_cache.state)};
-#else
-	VehicleCache vcache{}; ///< Cache of often used vehicle values.
-#endif
 
 	GroupID group_id = GroupID::Invalid(); ///< Index of group Pool array
 
@@ -404,9 +365,6 @@ public:
 	/** We want to 'destruct' the right class. */
 	virtual ~Vehicle();
 
-#ifndef WITH_RUST
-	void BeginLoading();
-#endif
 	void CancelReservation(StationID next, Station *st);
 	void LeaveStation();
 
@@ -418,9 +376,6 @@ public:
 
 	void DeleteUnreachedImplicitOrders();
 
-#ifndef WITH_RUST
-	void HandleLoading(bool mode = false);
-#endif
 
 	/**
 	 * Marks the vehicles to be redrawn and updates cached variables
@@ -520,11 +475,7 @@ public:
 	 */
 	inline void InvalidateNewGRFCache()
 	{
-#ifdef WITH_RUST
 		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this, false);
-#else
-		this->grf_cache.cache_valid = 0;
-#endif
 	}
 
 	/**
@@ -533,13 +484,7 @@ public:
 	 */
 	inline void InvalidateNewGRFCacheOfChain()
 	{
-#ifdef WITH_RUST
 		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this, true);
-#else
-		for (Vehicle *u = this; u != nullptr; u = u->Next()) {
-			u->InvalidateNewGRFCache();
-		}
-#endif
 	}
 
 	/**
@@ -799,9 +744,6 @@ public:
 		this->orders->GetNextStoppingStation(next_station, this);
 	}
 
-#ifndef WITH_RUST
-	void ResetRefitCaps();
-#endif
 
 	void ReleaseUnitNumber();
 
@@ -893,19 +835,7 @@ private:
 	 */
 	void SkipToNextRealOrderIndex()
 	{
-#ifdef WITH_RUST
 	openttd_rust_skip_real(this, &GetRustOrdersLeaves());
-#else
-		if (this->GetNumManualOrders() > 0) {
-			/* Advance to next real order */
-			do {
-				this->cur_real_order_index++;
-				if (this->cur_real_order_index >= this->GetNumOrders()) this->cur_real_order_index = 0;
-			} while (this->GetOrder(this->cur_real_order_index)->IsType(OT_IMPLICIT));
-		} else {
-			this->cur_real_order_index = 0;
-		}
-#endif
 }
 
 public:
@@ -916,24 +846,7 @@ public:
 	 */
 	void IncrementImplicitOrderIndex()
 	{
-#ifdef WITH_RUST
 	openttd_rust_increment_implicit(this, &GetRustOrdersLeaves());
-#else
-		if (this->cur_implicit_order_index == this->cur_real_order_index) {
-			/* Increment real order index as well */
-			this->SkipToNextRealOrderIndex();
-		}
-
-		assert(this->cur_real_order_index == 0 || this->cur_real_order_index < this->GetNumOrders());
-
-		/* Advance to next implicit order */
-		do {
-			this->cur_implicit_order_index++;
-			if (this->cur_implicit_order_index >= this->GetNumOrders()) this->cur_implicit_order_index = 0;
-		} while (this->cur_implicit_order_index != this->cur_real_order_index && !this->GetOrder(this->cur_implicit_order_index)->IsType(OT_IMPLICIT));
-
-		InvalidateVehicleOrder(this, 0);
-#endif
 }
 
 	/**
@@ -944,18 +857,7 @@ public:
 	 */
 	void IncrementRealOrderIndex()
 	{
-#ifdef WITH_RUST
 	openttd_rust_increment_real(this, &GetRustOrdersLeaves());
-#else
-		if (this->cur_implicit_order_index == this->cur_real_order_index) {
-			/* Increment both real and implicit order */
-			this->IncrementImplicitOrderIndex();
-		} else {
-			/* Increment real order only */
-			this->SkipToNextRealOrderIndex();
-			InvalidateVehicleOrder(this, 0);
-		}
-#endif
 }
 
 	/**
@@ -963,22 +865,7 @@ public:
 	 */
 	void UpdateRealOrderIndex()
 	{
-#ifdef WITH_RUST
 	openttd_rust_update_real(this, &GetRustOrdersLeaves());
-#else
-		/* Make sure the index is valid */
-		if (this->cur_real_order_index >= this->GetNumOrders()) this->cur_real_order_index = 0;
-
-		if (this->GetNumManualOrders() > 0) {
-			/* Advance to next real order */
-			while (this->GetOrder(this->cur_real_order_index)->IsType(OT_IMPLICIT)) {
-				this->cur_real_order_index++;
-				if (this->cur_real_order_index >= this->GetNumOrders()) this->cur_real_order_index = 0;
-			}
-		} else {
-			this->cur_real_order_index = 0;
-		}
-#endif
 }
 
 	/**

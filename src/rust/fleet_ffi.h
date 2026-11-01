@@ -150,13 +150,14 @@ struct OpenTTDFleetTransactionServices {
 	uint32_t too_long_replacement;
 	uint32_t nothing;
 };
+struct OpenTTDCompanyIdentityServices;
 struct OpenTTDFleetPendingServices {
 	void (*set_current)(uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(set_current);
 	void (*restart)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(restart);
 	int32_t (*x)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(x);
 	int32_t (*y)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(y);
 	int32_t (*z)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(z);
-	uint32_t (*reserve)(uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(reserve);
+	const OpenTTDCompanyIdentityServices *company;
 	void (*subtract)(int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(subtract);
 	void (*command)(void *out, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(command);
 	void (*animation)(int32_t x, int32_t y, int32_t z, int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(animation);
@@ -221,6 +222,5 @@ void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, con
 uint32_t openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint16_t, uint16_t, bool);
 void openttd_rust_fleet_pending_clear();
 void openttd_rust_fleet_pending_add(uint32_t, bool);
-void openttd_rust_fleet_pending_drain(const OpenTTDFleetPendingServices *, const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, void *);
 }
 #endif /* RUST_FLEET_FFI_H */

@@ -280,13 +280,10 @@ struct OpenTTDTrainServices {
 	uint64_t (*choose_track)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(choose_track);
 	void (*clear_reservation)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_reservation);
 	void (*consist_windows)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(consist_windows);
-	uint64_t (*cost_class)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cost_class);
-	uint64_t (*cost_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cost_default);
 	uint64_t (*cost_divisor)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cost_divisor);
 	uint64_t (*count_chain)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(count_chain);
 	void (*crash_event)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_event);
 	void (*crash_news)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
-	void (*crash_rating)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(crash_rating);
 	void (*crash_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(crash_sound);
 	uint64_t (*crossing_barred)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_barred);
 	uint64_t (*crossing_rail_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_rail_axis);
@@ -318,7 +315,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*has_signal_td)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal_td);
 	void (*hide_fill)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(hide_fill);
 	void (*invalidate_grf)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
-	uint64_t (*invalid_price)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(invalid_price);
 	uint64_t (*is_bridge)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
 	uint64_t (*is_crossing)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_crossing);
 	uint64_t (*is_depot)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_depot);
@@ -343,7 +339,6 @@ struct OpenTTDTrainServices {
 	void (*pay_running)(OpenTTDTrainHandle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
 	uint64_t (*pbs_signal_type)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pbs_signal_type);
 	uint64_t (*pow_wag_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pow_wag_power);
-	uint64_t (*price)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price);
 	uint64_t (*railveh_wagon)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(railveh_wagon);
 	uint64_t (*rail_tilt)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(rail_tilt);
 	uint64_t (*rail_type)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);

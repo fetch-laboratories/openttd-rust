@@ -188,6 +188,7 @@ impl<'a> World<'a> {
         // result slots used by this tile kind. Other cases do not read the slots.
         unsafe {
             match kind {
+                MP_CLEAR => crate::ground::clear_tile(out, tile, flags, self.s),
                 MP_RAILWAY => crate::rail_cmd::openttd_rust_rail_clear_tile(
                     owners.rail,
                     out.0,

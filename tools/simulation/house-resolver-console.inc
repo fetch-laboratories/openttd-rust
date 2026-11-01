@@ -1,6 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Real Action2 programs through house callbacks, plus native state inputs absent
  * from external-GRF-free saves. Every transient spec/group is restored. */
+#ifdef WITH_RUST
+#include "tests/station_spatial_fixture.hpp"
+#endif
 #include "newgrf_house.h"
 #include "newgrf_town.h"
 #include "station_map.h"
@@ -128,7 +131,13 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 		require(Station::CanAllocateItem());
 		Tile raw(near);
 		saved.push_back({near, raw.type(), raw.height(), raw.m1(), raw.m3(), raw.m4(), raw.m5(), raw.m6(), raw.m7(), raw.m2(), raw.m8()});
-		Station *station = new Station(near); _station_kdtree.Insert(station->index); station->town = town; station->owner = OWNER_NONE;
+		Station *station = new Station(near);
+#ifdef WITH_RUST
+	openttd_test_station_insert(&GetRustSharedServices(), station);
+#else
+	_station_kdtree.Insert(station->index);
+#endif
+	station->town = town; station->owner = OWNER_NONE;
 		station->goods[cargo].status = GoodsEntry::States{states[stations.size()]};
 		station->rect.BeforeAddTile(near, StationRect::ADD_FORCE);
 		MakeRailStation(near, OWNER_NONE, station->index, AXIS_X, 0, RAILTYPE_RAIL);

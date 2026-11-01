@@ -321,15 +321,6 @@ pub struct PathRead {
     pub dest: u32,
     pub owner: u8,
     pub articulated: bool,
-    pub bus: bool,
-}
-
-/// Road stop arrival and departure inputs.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct StopRead {
-    pub owner: u8,
-    pub bus: bool,
 }
 
 /// `RoadVehCheckOvertake` inputs of either vehicle.
@@ -367,7 +358,6 @@ pub struct DepotResult {
 #[derive(Clone, Copy)]
 pub struct ArrivalRead {
     pub had_vehicle_of_type: u8,
-    pub bus: bool,
 }
 
 #[repr(C)]
@@ -375,14 +365,6 @@ pub struct ArrivalRead {
 pub struct SoundRead {
     pub sound: u16,
     pub tick: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct CostRead {
-    pub engine: crate::vehicle::EngineRef,
-    pub cost_class: u8,
-    pub cost_factor: u8,
 }
 
 #[repr(C)]
@@ -428,7 +410,6 @@ pub struct Leaves {
     pub link: extern "C" fn(VehicleRef) -> Link,
     pub link_tile: extern "C" fn(VehicleRef) -> LinkTile,
     pub after_enter_tile: extern "C" fn(VehicleRef, u8) -> Entered,
-    pub has_road: extern "C" fn(VehicleRef, u32) -> bool,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
@@ -444,7 +425,6 @@ pub struct Leaves {
     pub tram_build_read:
         extern "C" fn(VehicleRef, *mut crate::road_cmd::CommandSlot) -> TramBuildRead,
     pub disconnect: extern "C" fn(),
-    pub stop_read: extern "C" fn(VehicleRef) -> StopRead,
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
     pub arrival_read: extern "C" fn(VehicleRef, u16) -> ArrivalRead,
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
@@ -457,8 +437,6 @@ pub struct Leaves {
     pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
     pub default_max_speed: extern "C" fn(VehicleRef) -> u16,
     pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
-    pub cost_read: extern "C" fn(VehicleRef) -> CostRead,
-    pub price: extern "C" fn(crate::vehicle::EngineRef, u32) -> i64,
     pub pay_running: extern "C" fn(VehicleRef, i64),
     pub service_read: extern "C" fn(VehicleRef) -> ServiceRead,
     pub turn_read: extern "C" fn(VehicleRef) -> TurnRead,
@@ -666,6 +644,11 @@ impl Game<'_> {
     fn random(&self) -> u32 {
         service!(self.ss.random)(self.ss.context)
     }
+    fn has_road(&self, vehicle: VehicleRef, tile: u32) -> bool {
+        let types = (self.movement.get().road_compatible)(vehicle);
+        let world = crate::map_func::World::new(self.ss);
+        crate::road_map::has_tile_any_road_type(&world, tile, types)
+    }
     fn tile_xy(&self, tile: u32, pos: (u8, u8)) -> (i32, i32) {
         (
             (self.map.tile_x(tile) * 16 + u32::from(pos.0)) as i32,
@@ -791,7 +774,7 @@ impl Game<'_> {
     }
     /// `CheckRoadBlockedForOvertaking`.
     fn overtake_blocked(&self, v: Part, u: VehicleRef, tile: u32, trackdir: u8) -> bool {
-        if !service!(self.l.has_road)(v.v, tile) {
+        if !self.has_road(v.v, tile) {
             return true;
         }
         let ts = self.movement.road_tracks(v.v, tile);
@@ -989,6 +972,16 @@ impl Game<'_> {
                 if hit {
                     let victims = self.crash(v, false);
                     service!(self.l.crash_news)(v.v, victims);
+                    crate::station::spatial::modify_rating_around(
+                        self.ss,
+                        (self.vs.tile)(v.v),
+                        (self.vs.owner)(v.v),
+                        -160,
+                        22,
+                    );
+                    if (self.ss.disaster_sound)() {
+                        (self.vs.play_sound)(v.v, crate::sound_type::SND_12_EXPLOSION);
+                    }
                     return true;
                 }
             }
@@ -1068,11 +1061,8 @@ impl Game<'_> {
                     i32::from(CALLBACK_FAILED),
                 ) as u16;
                 if value != CALLBACK_FAILED && value >= u16::from(VEHICLE_LENGTH) {
-                    service!(self.vs.unknown_callback_result)(
-                        engine.engine,
-                        CBID_VEHICLE_LENGTH,
-                        value,
-                    );
+                    self.vs
+                        .unknown_callback_result(engine.engine, CBID_VEHICLE_LENGTH, value);
                 }
                 value
             } else {
@@ -1119,6 +1109,7 @@ impl Game<'_> {
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
         let p = service!(self.l.path_read)(v.v);
+        let bus = crate::road_stop::is_bus(self.ss, v.v);
         let kind = service!(self.ss.tile_type)(tile);
         if kind == MP_ROAD {
             if service!(self.l.is_road_depot_tile)(tile)
@@ -1133,15 +1124,11 @@ impl Game<'_> {
                 || p.articulated
             {
                 trackdirs = 0;
-            } else if service!(self.ss.road_stop_type)(tile).0 != u8::from(!p.bus)
+            } else if service!(self.ss.road_stop_type)(tile).0 != u8::from(!bus)
                 || (!self.queue
                     && !crate::road_stop::has_free_bay(
-                        crate::road_stop::get_by_tile(
-                            self.ss,
-                            tile,
-                            RoadStopType(u8::from(!p.bus)),
-                        )
-                        .1,
+                        crate::road_stop::get_by_tile(self.ss, tile, RoadStopType(u8::from(!bus)))
+                            .1,
                     ))
             {
                 trackdirs = 0;
@@ -1322,9 +1309,10 @@ impl Game<'_> {
     /// `RoadVehArrivesAt`, `BeginLoading` and the road stop arrival triggers.
     fn arrive_load(&self, v: Part, s: &Step, station: u16) {
         let r = service!(self.l.arrival_read)(v.v, station);
-        let bit = if r.bus { HVOT_BUS } else { HVOT_TRUCK };
+        let bus = crate::road_stop::is_bus(self.ss, v.v);
+        let bit = if bus { HVOT_BUS } else { HVOT_TRUCK };
         if r.had_vehicle_of_type & bit == 0 {
-            let headline = if r.bus { 0 } else { 2 } + u8::from(s.tram);
+            let headline = if bus { 0 } else { 2 } + u8::from(s.tram);
             service!(self.l.arrival_news)(v.v, station, bit, headline);
         }
         crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
@@ -1337,10 +1325,11 @@ impl Game<'_> {
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
-        let r = service!(self.l.stop_read)(v.v);
+        let owner = service!(self.vs.owner)(v.v);
+        let bus = crate::road_stop::is_bus(self.ss, v.v);
         service!(self.l.should_stop)(v.v, tile)
-            && r.owner == service!(self.ss.tile_owner)(tile)
-            && service!(self.ss.road_stop_type)(tile).0 == u8::from(!r.bus)
+            && owner == service!(self.ss.tile_owner)(tile)
+            && service!(self.ss.road_stop_type)(tile).0 == u8::from(!bus)
     }
     /// `IndividualRoadVehicleController`; `s` is a fresh observation of `v`.
     fn individual(
@@ -1404,7 +1393,7 @@ impl Game<'_> {
         if rd.0 & 128 != 0 {
             let mut tile = self.map.add_diag(s.tile, entry);
             let mut dir = if s.front {
-                if service!(self.l.has_road)(v.v, tile) {
+                if self.has_road(v.v, tile) {
                     self.path(v, s, tile, entry)
                 } else {
                     REVERSE[usize::from(entry)]
@@ -1433,7 +1422,7 @@ impl Game<'_> {
                             || (s.front
                                 && service!(self.ss.is_normal_road_tile)(tile)
                                 && !service!(self.ss.has_road_works)(tile)
-                                && service!(self.l.has_road)(v.v, tile)
+                                && self.has_road(v.v, tile)
                                 && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
                         if !big {
                             if !s.front
@@ -1590,10 +1579,11 @@ impl Game<'_> {
                     && in_range(v.state(), DT_STOP, DT_STOP + 16)
                     && service!(self.l.should_stop)(v.v, s.tile)
                 {
-                    let r = service!(self.l.stop_read)(v.v);
-                    if r.owner == service!(self.ss.tile_owner)(s.tile)
+                    let owner = service!(self.vs.owner)(v.v);
+                    let bus = crate::road_stop::is_bus(self.ss, v.v);
+                    if owner == service!(self.ss.tile_owner)(s.tile)
                         && service!(self.vs.order_type)(v.v) != OT_LEAVESTATION
-                        && service!(self.ss.road_stop_type)(s.tile).0 == u8::from(!r.bus)
+                        && service!(self.ss.road_stop_type)(s.tile).0 == u8::from(!bus)
                     {
                         let station = service!(self.ss.station_index)(s.tile);
                         service!(self.vs.write_last_station)(v.v, station);
@@ -1629,7 +1619,7 @@ impl Game<'_> {
                 if service!(self.l.is_drive_through)(s.tile) {
                     let next = self.map.add_dir(s.tile, s.direction);
                     if crate::road_stop::continuation(self.ss, s.tile, next)
-                        && service!(self.l.has_road)(v.v, next)
+                        && self.has_road(v.v, next)
                     {
                         v.set(FRAME, u16::from(frame) + 1);
                         self.move_to(v, ground, s, (x, y), true, false);
@@ -1874,16 +1864,21 @@ impl Game<'_> {
     }
     /// `RoadVehicle::GetRunningCost`.
     fn running_cost(&self, v: Part) -> i64 {
-        let r = service!(self.l.cost_read)(v.v);
-        if r.cost_class == INVALID_PRICE {
+        let cap = unsafe { (&*(self.vs.newgrf)()).capabilities };
+        let e = (self.vs.engine)(v.v).0.as_ptr();
+        if (cap.road_price)(e) == INVALID_PRICE {
             return 0;
         }
-        let factor =
-            service!(self.vs.property)((self.vs.newgrf)(), v.v, 9, i32::from(r.cost_factor)) as u32;
+        let factor = service!(self.vs.property)(
+            (self.vs.newgrf)(),
+            v.v,
+            crate::newgrf_properties::PROP_ROADVEH_RUNNING_COST_FACTOR,
+            i32::from((cap.road_running)(e)),
+        ) as u32;
         if factor == 0 {
             return 0;
         }
-        service!(self.l.price)(r.engine, factor)
+        crate::engine_capabilities::price(cap, e, u32::from((cap.road_price)(e)), factor, 0)
     }
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {
@@ -2349,11 +2344,6 @@ crate::abi::layouts! {
         dest,
         owner,
         articulated,
-        bus,
-    };
-    "OpenTTDRoadStopRead" ["probe"] => StopRead {
-        owner,
-        bus,
     };
     "OpenTTDRoadOvertakeRead" ["probe"] => OvertakeRead {
         tile,
@@ -2375,7 +2365,6 @@ crate::abi::layouts! {
     };
     "OpenTTDRoadArrivalRead" ["probe"] => ArrivalRead {
         had_vehicle_of_type,
-        bus,
     };
     "OpenTTDRoadSoundRead" ["probe"] => SoundRead {
         sound,
@@ -2389,11 +2378,6 @@ crate::abi::layouts! {
     "OpenTTDRoadLinkTile" ["probe"] => LinkTile {
         link,
         tile,
-    };
-    "OpenTTDRoadCostRead" ["probe"] => CostRead {
-        engine,
-        cost_class,
-        cost_factor,
     };
     "OpenTTDRoadServiceRead" ["probe"] => ServiceRead {
         tile,
@@ -2427,7 +2411,6 @@ crate::abi::layouts! {
         link,
         link_tile,
         after_enter_tile,
-        has_road,
         any_road_bits,
         is_road_depot_tile,
         depot_direction,
@@ -2442,7 +2425,6 @@ crate::abi::layouts! {
         find_depot,
         tram_build_read,
         disconnect,
-        stop_read,
         should_stop,
         arrival_read,
         arrival_news,
@@ -2454,8 +2436,6 @@ crate::abi::layouts! {
         shorten_factor,
         default_max_speed,
         cargo_age_default,
-        cost_read,
-        price,
         pay_running,
         service_read,
         turn_read,

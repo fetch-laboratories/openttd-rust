@@ -41,28 +41,5 @@ int DivideApprox(int a, int b)
  */
 uint32_t IntSqrt(uint32_t num)
 {
-#ifdef WITH_RUST
 	return openttd_rust_int_sqrt(num);
-#else
-	uint32_t res = 0;
-	uint32_t bit = 1UL << 30; // Second to top bit number.
-
-	/* 'bit' starts at the highest power of four <= the argument. */
-	while (bit > num) bit >>= 2;
-
-	while (bit != 0) {
-		if (num >= res + bit) {
-			num -= res + bit;
-			res = (res >> 1) + bit;
-		} else {
-			res >>= 1;
-		}
-		bit >>= 2;
-	}
-
-	/* Arithmetic rounding to nearest integer. */
-	if (num > res) res++;
-
-	return res;
-#endif
 }

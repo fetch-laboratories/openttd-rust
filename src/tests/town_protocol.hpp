@@ -38,6 +38,7 @@ struct TownProtocolWorld {
 	uint16_t house_class = 0;
 	uint32_t clears = 0, animations = 0, roads = 0, landscape_clears = 0, house_count = 1;
 	std::vector<std::array<uint32_t, 4>> writes;
+	const OpenTTDSharedServices *shared = nullptr;
 };
 static inline TownProtocolWorld *town_protocol_world;
 static inline uint64_t TownProtocolLeaf(uint32_t op, uint32_t id, uint32_t a, uint32_t b, uint32_t c) noexcept
@@ -52,9 +53,6 @@ static inline uint64_t TownProtocolLeaf(uint32_t op, uint32_t id, uint32_t a, ui
 	return 0;
 }
 static inline OpenTTDTownState *TownProtocolResolveOwner(uint32_t) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; }
-static inline void TownProtocolStations(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept {}
-static inline const OpenTTDStationService *TownProtocolStationActivityOwner(const OpenTTDStation *) noexcept { return nullptr; }
-static inline uint8_t TownProtocolStationOwner(const OpenTTDStation *) noexcept { return UINT8_MAX; }
 static inline uint32_t TownProtocolRandom(void *) noexcept { town_protocol_world->draws++; return 0xABCDEF01; }
 static inline uint32_t TownProtocolIndustry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 
@@ -178,9 +176,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.house_callbacks = TownProtocol_house_callbacks,
 		.road_info = TownProtocol_road_info,
 		.resolve_owner = TownProtocolResolveOwner,
-		.stations = TownProtocolStations,
-		.station_activity_owner = TownProtocolStationActivityOwner,
-		.station_owner = TownProtocolStationOwner,
 		.dirty_authority = TownProtocol_dirty_town,
 		.dirty_town = TownProtocol_dirty_town,
 
@@ -274,7 +269,14 @@ template <typename Check> void CheckTownProtocol(Check check)
 		t.owners = &owners;
 		return t;
 	}();
-	town_protocol_landscape.shared = &services; town_protocol_landscape.costs = &town_protocol_costs;
+	/* Rust owns MP_CLEAR clearing, which never fails and bypasses the native
+	 * proc above. The landscape command alone sees this ground as a kind still
+	 * dispatched to that proc; the town owner keeps reading the live services. */
+	w.shared = &services;
+	static OpenTTDSharedServices landscape_world{};
+	landscape_world = services;
+	landscape_world.tile_type = [](uint32_t tile) noexcept -> uint8_t { uint8_t type = town_protocol_world->shared->tile_type(tile); return type == MP_CLEAR ? MP_TUNNELBRIDGE : type; };
+	town_protocol_landscape.shared = &landscape_world; town_protocol_landscape.costs = &town_protocol_costs;
 	town_protocol_landscape.commands = &town_protocol_commands; town_protocol_landscape.tile_procs = &tiles;
 	const OpenTTDHouseAnimation animation_house{
 		.callback = [](uint16_t, uint32_t, uint32_t, const HouseSpec *, Town *, uint32_t, uint64_t) noexcept -> uint16_t { town_protocol_world->animations++; return UINT16_MAX; },

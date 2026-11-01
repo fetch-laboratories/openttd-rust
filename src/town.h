@@ -17,10 +17,8 @@
 #include "subsidy_type.h"
 #include "newgrf_storage.h"
 #include "cargotype.h"
-#ifdef WITH_RUST
 #include "rust/town_owner.hpp"
 #include "rust/station_catchment_ffi.h"
-#endif
 
 template <typename T>
 struct BuildingCounts {
@@ -51,7 +49,6 @@ enum class TownFlag : uint8_t {
 
 using TownFlags = EnumBitSet<TownFlag, uint8_t>;
 
-#ifdef WITH_RUST
 /** Trivial native object over the Rust allocation. Its fields have canonical
  * Rust storage; references below preserve native readers and save adapters. */
 struct TownSimulationFields {
@@ -82,9 +79,7 @@ CHECK_TOWN_FIELD(noise_reached); CHECK_TOWN_FIELD(time_until_rebuild); CHECK_TOW
 CHECK_TOWN_FIELD(unwanted); CHECK_TOWN_FIELD(exclusivity); CHECK_TOWN_FIELD(exclusive_counter); CHECK_TOWN_FIELD(larger_town); CHECK_TOWN_FIELD(layout);
 CHECK_TOWN_FIELD(townnamegrfid); CHECK_TOWN_FIELD(townnametype); CHECK_TOWN_FIELD(townnameparts);
 #undef CHECK_TOWN_FIELD
-#endif
 
-#ifdef WITH_RUST
 struct TownGrowthFields {
 	uint16_t counter = 0, rate = 0;
 	uint8_t funding = 0, road = 0;
@@ -95,7 +90,6 @@ static_assert(alignof(TownGrowthFields) == alignof(OpenTTDTownGrowthFields));
 #define CHECK_TOWN_GROWTH_FIELD(field) static_assert(offsetof(TownGrowthFields, field) == offsetof(OpenTTDTownGrowthFields, field))
 CHECK_TOWN_GROWTH_FIELD(counter); CHECK_TOWN_GROWTH_FIELD(rate); CHECK_TOWN_GROWTH_FIELD(funding); CHECK_TOWN_GROWTH_FIELD(road); CHECK_TOWN_GROWTH_FIELD(flags);
 #undef CHECK_TOWN_GROWTH_FIELD
-#endif
 
 /** Data structure with cached data of towns. */
 struct TownCache {
@@ -109,7 +103,6 @@ struct TownCache {
 	auto operator<=>(const TownCache &) const = default;
 };
 
-#ifdef WITH_RUST
 /** Cache facade preserves canonical scalar addresses; only the presentation and
  * nearby-station caches remain native. Debug cache snapshots copy their values. */
 struct RustTownCache {
@@ -129,84 +122,35 @@ struct RustTownCache {
 	bool operator==(const TownCache &other) const { return this->Snapshot() == other; }
 	friend bool operator==(const TownCache &other, const RustTownCache &cache) { return cache == other; }
 };
-#endif
 
 /** Town data structure. */
 struct Town : TownPool::PoolItem<&_town_pool> {
-#ifdef WITH_RUST
 	RustTownOwner growth_owner{openttd_rust_town_new()};
 	TownGrowthFields &growth = *new (openttd_rust_town_growth(growth_owner.get())) TownGrowthFields();
 	TownSimulationFields &simulation = *new (openttd_rust_town_simulation(growth_owner.get())) TownSimulationFields();
 	TileIndex &xy = simulation.xy;
 	RustTownCache cache{simulation, growth_owner.get()};
-#else
-	TileIndex xy = INVALID_TILE; ///< town center tile
-
-	TownCache cache{}; ///< Container for all cacheable data.
-#endif
 
 	/* Town name */
-#ifdef WITH_RUST
 	uint32_t &townnamegrfid = simulation.townnamegrfid;
 	uint16_t &townnametype = simulation.townnametype;
 	uint32_t &townnameparts = simulation.townnameparts;
-#else
-	uint32_t townnamegrfid = 0;
-	uint16_t townnametype = 0;
-	uint32_t townnameparts = 0;
-#endif
-#ifdef WITH_RUST
 	mutable std::string custom_name_cache{}; ///< Presentation only: preserves custom-name reference identity.
 	RustTownName name{growth_owner.get(), custom_name_cache};
-#else
-	std::string name{}; ///< Custom town name. If empty, the town was not renamed and uses the generated name.
-#endif
 	mutable std::string cached_name{}; ///< NOSAVE: Cache of the resolved name of the town, if not using a custom town name
 
-#ifdef WITH_RUST
 	TownFlags &flags = growth.flags;
-#else
-	TownFlags flags{}; ///< See #TownFlags.
-#endif
 
-#ifdef WITH_RUST
 	uint16_t &noise_reached = simulation.noise_reached;
-#else
-	uint16_t noise_reached = 0; ///< level of noise that all the airports are generating
-#endif
 
-#ifdef WITH_RUST
 	CompanyMask &statues = simulation.statues;
-#else
-	CompanyMask statues{}; ///< which companies have a statue?
-#endif
 
 	/* Company ratings. */
-#ifdef WITH_RUST
 	CompanyMask &have_ratings = simulation.have_ratings;
-#else
-	CompanyMask have_ratings{}; ///< which companies have a rating
-#endif
-#ifdef WITH_RUST
 	TypedIndexContainer<std::array<uint8_t, MAX_COMPANIES>, CompanyID> &unwanted = simulation.unwanted;
-#else
-	TypedIndexContainer<std::array<uint8_t, MAX_COMPANIES>, CompanyID> unwanted{}; ///< how many months companies aren't wanted by towns (bribe)
-#endif
-#ifdef WITH_RUST
 	CompanyID &exclusivity = simulation.exclusivity;
-#else
-	CompanyID exclusivity = CompanyID::Invalid(); ///< which company has exclusivity
-#endif
-#ifdef WITH_RUST
 	uint8_t &exclusive_counter = simulation.exclusive_counter;
-#else
-	uint8_t exclusive_counter = 0; ///< months till the exclusivity expires
-#endif
-#ifdef WITH_RUST
 	TypedIndexContainer<std::array<int16_t, MAX_COMPANIES>, CompanyID> &ratings = simulation.ratings;
-#else
-	TypedIndexContainer<std::array<int16_t, MAX_COMPANIES>, CompanyID> ratings{};  ///< ratings of each company for this town
-#endif
 
 	struct SuppliedHistory {
 		uint32_t production = 0; ///< Total produced
@@ -214,12 +158,7 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 
 		uint8_t PctTransported() const
 		{
-#ifdef WITH_RUST
 			return openttd_rust_town_percent_transported(reinterpret_cast<const OpenTTDTownSuppliedHistory *>(this));
-#else
-			if (this->production == 0) return 0;
-			return ClampTo<uint8_t>(this->transported * 256 / this->production);
-#endif
 		}
 	};
 
@@ -231,7 +170,6 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 		SuppliedCargo(CargoType cargo) : cargo(cargo) {}
 	};
 
-#ifdef WITH_RUST
 	static_assert(sizeof(SuppliedHistory) == sizeof(OpenTTDTownSuppliedHistory));
 	static_assert(alignof(SuppliedHistory) == alignof(OpenTTDTownSuppliedHistory));
 	static_assert(offsetof(SuppliedHistory, production) == offsetof(OpenTTDTownSuppliedHistory, production));
@@ -241,32 +179,12 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	static_assert(offsetof(SuppliedCargo, cargo) == offsetof(OpenTTDTownSupplied, cargo));
 	static_assert(offsetof(SuppliedCargo, history) == offsetof(OpenTTDTownSupplied, history));
 	using SuppliedCargoes = RustTownSupplied<SuppliedCargo>;
-#else
-	using SuppliedCargoes = std::vector<SuppliedCargo>;
-#endif
 
-#ifdef WITH_RUST
 	SuppliedCargoes supplied{growth_owner.get()};
-#else
-	SuppliedCargoes supplied{}; ///< Cargo statistics about supplied cargo.
-#endif
-#ifdef WITH_RUST
 	std::array<TransportedCargoStat<uint16_t>, NUM_TAE> &received = simulation.received;
-#else
-	std::array<TransportedCargoStat<uint16_t>, NUM_TAE> received{}; ///< Cargo statistics about received cargotypes.
-#endif
-#ifdef WITH_RUST
 	std::array<uint32_t, NUM_TAE> &goal = simulation.goal;
-#else
-	std::array<uint32_t, NUM_TAE> goal{}; ///< Amount of cargo required for the town to grow.
-#endif
-#ifdef WITH_RUST
 	ValidHistoryMask &valid_history = simulation.valid_history;
-#else
-	ValidHistoryMask valid_history = 0; ///< Mask of valid history records.
-#endif
 
-#ifdef WITH_RUST
 	bool HasText() const { return openttd_rust_town_text(this->growth_owner.get()).size != 0; }
 	EncodedString GetText() const
 	{
@@ -275,39 +193,20 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	}
 	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
 	void SetText(const EncodedString &value) { openttd_rust_town_set_text(this->growth_owner.get(), TextView(value)); }
-#else
-	bool HasText() const { return !this->text.empty(); }
-	EncodedString GetText() const { return this->text; }
-	EncodedString text{}; ///< General text with additional information.
-#endif
 
 	inline SuppliedCargo &GetOrCreateCargoSupplied(CargoType cargo)
 	{
-#ifdef WITH_RUST
 		assert(IsValidCargoType(cargo));
 		auto result = openttd_rust_town_supplied_entry(this->growth_owner.get(), cargo);
 		auto *entry = reinterpret_cast<SuppliedCargo *>(result.entry);
 		if (result.created) new (entry) SuppliedCargo(cargo);
 		return *entry;
-#else
-		assert(IsValidCargoType(cargo));
-		auto it = std::ranges::lower_bound(this->supplied, cargo, std::less{}, &SuppliedCargo::cargo);
-		if (it == std::end(this->supplied) || it->cargo != cargo) it = this->supplied.emplace(it, cargo);
-		return *it;
-#endif
 	}
 
 	inline SuppliedCargoes::const_iterator GetCargoSupplied(CargoType cargo) const
 	{
-#ifdef WITH_RUST
 		if (!IsValidCargoType(cargo)) return std::end(this->supplied);
 		return this->supplied.data() + openttd_rust_town_supplied_find(this->growth_owner.get(), cargo);
-#else
-		if (!IsValidCargoType(cargo)) return std::end(this->supplied);
-		auto it = std::ranges::lower_bound(this->supplied, cargo, std::less{}, &SuppliedCargo::cargo);
-		if (it == std::end(this->supplied) || it->cargo != cargo) return std::end(supplied);
-		return it;
-#endif
 	}
 
 	inline uint8_t GetPercentTransported(CargoType cargo_type) const
@@ -318,42 +217,17 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 		return it->history[LAST_MONTH].PctTransported();
 	}
 
-#ifdef WITH_RUST
 	RustStationList<Station> stations_near{openttd_rust_town_stations_near(growth_owner.get())};
-#else
-	StationList stations_near{}; ///< NOSAVE: List of nearby stations.
-#endif
 
-#ifdef WITH_RUST
 	uint16_t &time_until_rebuild = simulation.time_until_rebuild;
-#else
-	uint16_t time_until_rebuild = 0; ///< time until we rebuild a house
-#endif
 
-#ifdef WITH_RUST
 	uint16_t &grow_counter = growth.counter;
 	uint16_t &growth_rate = growth.rate;
 	uint8_t &fund_buildings_months = growth.funding;
 	uint8_t &road_build_months = growth.road;
-#else
-	uint16_t grow_counter = 0; ///< counter to count when to grow, value is smaller than or equal to growth_rate
-	uint16_t growth_rate = 0; ///< town growth rate
 
-	uint8_t fund_buildings_months = 0; ///< fund buildings program in action?
-	uint8_t road_build_months = 0; ///< fund road reconstruction in action?
-
-#endif
-
-#ifdef WITH_RUST
 	bool &larger_town = simulation.larger_town;
-#else
-	bool larger_town = false; ///< if this is a larger town and should grow more quickly
-#endif
-#ifdef WITH_RUST
 	TownLayout &layout = simulation.layout;
-#else
-	TownLayout layout{}; ///< town specific road layout
-#endif
 
 	bool show_zone = false; ///< NOSAVE: mark town to show the local authority zone in the viewports
 
@@ -364,27 +238,16 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	 * @param tile center tile of the town
 	 */
 	Town(TileIndex tile = INVALID_TILE)
-#ifdef WITH_RUST
 	{ this->xy = tile; }
-#else
-	: xy(tile) { }
-#endif
 
 	TownCache CopyTownCache() const
 	{
-#ifdef WITH_RUST
 		return this->cache.Snapshot();
-#else
-		return this->cache;
-#endif
 	}
 
 	/** Destroy the town. */
 	~Town();
 
-#ifndef WITH_RUST
-	void InitializeLayout(TownLayout layout);
-#endif
 
 	/**
 	 * Calculate the max town noise.
@@ -404,14 +267,10 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 
 	inline const std::string &GetCachedName() const
 	{
-#ifdef WITH_RUST
 		const auto custom_name = this->name.View();
 		if (!custom_name.empty()) {
 			return this->custom_name_cache;
 		}
-#else
-		if (!this->name.empty()) return this->name;
-#endif
 		if (this->cached_name.empty()) this->FillCachedName();
 		return this->cached_name;
 	}
@@ -464,15 +323,9 @@ enum TownDirectoryInvalidateWindowData {
 CommandCost CheckforTownRating(DoCommandFlags flags, Town *t, TownRatingCheckType type);
 
 
-#ifndef WITH_RUST
-TileIndexDiff GetHouseNorthPart(HouseID &house);
-#endif
 
 Town *CalcClosestTownFromTile(TileIndex tile, uint threshold = UINT_MAX);
 
-#ifndef WITH_RUST
-void ResetHouses();
-#endif
 
 /** Town actions of a company. */
 enum class TownAction : uint8_t {
@@ -490,9 +343,6 @@ using TownActions = EnumBitSet<TownAction, uint8_t>;
 
 DECLARE_INCREMENT_DECREMENT_OPERATORS(TownAction);
 
-#ifndef WITH_RUST
-void ClearTownHouse(Town *t, TileIndex tile);
-#endif
 void UpdateTownMaxPass(Town *t);
 void UpdateTownRadius(Town *t);
 CommandCost CheckIfAuthorityAllowsNewStation(TileIndex tile, DoCommandFlags flags);

@@ -52,7 +52,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.refit_cargo = VehicleRefitCargo,
 		.engine_kind = RustEngineType,
 		.rail_kind = Engine_rail_kind,
-		.price_shift = RustEnginePriceShift,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.refit_engine = VehicleRefitEngine,
 		.cargo_kind = VehicleRefitCargoKind,

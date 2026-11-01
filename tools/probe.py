@@ -1,8 +1,8 @@
 """Shared driver for pinned-reference comparisons and gap probes.
 
-A comparison builds one fixture three ways: against the unchanged pinned
-sources, against the candidate with WITH_RUST and the build-rust archive, and
-against the candidate's portable C++ path. It then requires identical output.
+A comparison builds one fixture two ways: against the unchanged pinned
+sources, and against the candidate with WITH_RUST and the build-rust archive.
+It then requires identical output.
 """
 
 import difflib
@@ -14,7 +14,7 @@ import migration
 ROOT = migration.ROOT
 BUILD = ROOT / "build-rust"
 REFERENCE = migration.REFERENCE.resolve()
-LABELS = (("reference", REFERENCE), ("candidate", ROOT), ("candidate-cpp", ROOT))
+LABELS = (("reference", REFERENCE), ("candidate", ROOT))
 ENV = migration.environment()
 
 

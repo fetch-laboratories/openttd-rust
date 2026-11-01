@@ -1,6 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file newgrf_loading_services.inc Typed native loading services. */
-#ifdef WITH_RUST
 #include "newgrf_loading_ffi.h"
 #include "newgrf_act2_ffi.h"
 #include "industry_definition_ffi.h"
@@ -239,4 +238,3 @@ bool CheckAbi_grf_loading()
 	const auto &s = GetRustGrfLoadingServices();
 	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.houses) && AbiServicesComplete(*s.airports) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
 }
-#endif

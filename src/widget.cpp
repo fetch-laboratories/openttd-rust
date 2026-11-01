@@ -25,9 +25,7 @@
 #include "table/strings.h"
 #include "table/string_colours.h"
 
-#ifdef WITH_RUST
 #include "rust/widget_parser_ffi.h"
-#endif
 
 #include "safeguards.h"
 
@@ -3158,11 +3156,7 @@ bool NWidgetLeaf::ButtonHit(const Point &pt)
  */
 [[maybe_unused]] static bool IsAttributeWidgetPartType(WidgetType tp)
 {
-#ifdef WITH_RUST
 	return (openttd_rust_widget_part_classify(tp) & 1) != 0;
-#else
-	return tp > WPT_ATTRIBUTE_BEGIN && tp < WPT_ATTRIBUTE_END;
-#endif
 }
 
 /**
@@ -3331,29 +3325,6 @@ static std::unique_ptr<NWidgetBase> MakeNWidget(const NWidgetPart &nwid)
  * @param[out] fill_dest Fill the composed widget with child widgets.
  * @return Iterator to remaining nested widget parts.
  */
-#ifndef WITH_RUST
-static std::span<const NWidgetPart>::iterator MakeNWidget(std::span<const NWidgetPart>::iterator nwid_begin, std::span<const NWidgetPart>::iterator nwid_end, std::unique_ptr<NWidgetBase> &dest, bool &fill_dest)
-{
-	dest = nullptr;
-
-	if (IsAttributeWidgetPartType(nwid_begin->type)) [[unlikely]] throw std::runtime_error("Expected non-attribute NWidgetPart type");
-	if (nwid_begin->type == WPT_ENDCONTAINER) return nwid_begin;
-
-	fill_dest = IsContainerWidgetType(nwid_begin->type);
-	dest = MakeNWidget(*nwid_begin);
-	if (dest == nullptr) return nwid_begin;
-
-	++nwid_begin;
-
-	/* Once a widget is created, we're now looking for attributes. */
-	while (nwid_begin != nwid_end && IsAttributeWidgetPartType(nwid_begin->type)) {
-		ApplyNWidgetPartAttribute(*nwid_begin, dest.get());
-		++nwid_begin;
-	}
-
-	return nwid_begin;
-}
-#endif /* !WITH_RUST */
 
 /**
  * Test if WidgetType is a container widget.
@@ -3362,12 +3333,7 @@ static std::span<const NWidgetPart>::iterator MakeNWidget(std::span<const NWidge
  */
 bool IsContainerWidgetType(WidgetType tp)
 {
-#ifdef WITH_RUST
 	return (openttd_rust_widget_part_classify(tp) & 2) != 0;
-#else
-	return tp == NWID_HORIZONTAL || tp == NWID_HORIZONTAL_LTR || tp == NWID_VERTICAL || tp == NWID_MATRIX
-		|| tp == WWT_PANEL || tp == WWT_FRAME || tp == WWT_INSET || tp == NWID_SELECTION || tp == NWID_LAYER;
-#endif
 }
 
 /**
@@ -3377,44 +3343,6 @@ bool IsContainerWidgetType(WidgetType tp)
  * @param parent Pointer or container to use for storing the child widgets (*parent == nullptr or *parent == container or background widget).
  * @return Iterator to remaining nested widget parts.
  */
-#ifndef WITH_RUST
-static std::span<const NWidgetPart>::iterator MakeWidgetTree(std::span<const NWidgetPart>::iterator nwid_begin, std::span<const NWidgetPart>::iterator nwid_end, std::unique_ptr<NWidgetBase> &parent)
-{
-	/* If *parent == nullptr, only the first widget is read and returned. Otherwise, *parent must point to either
-	 * a #NWidgetContainer or a #NWidgetBackground object, and parts are added as much as possible. */
-	NWidgetContainer *nwid_cont = dynamic_cast<NWidgetContainer *>(parent.get());
-	NWidgetBackground *nwid_parent = dynamic_cast<NWidgetBackground *>(parent.get());
-	assert(parent == nullptr || (nwid_cont != nullptr && nwid_parent == nullptr) || (nwid_cont == nullptr && nwid_parent != nullptr));
-
-	while (nwid_begin != nwid_end) {
-		std::unique_ptr<NWidgetBase> sub_widget = nullptr;
-		bool fill_sub = false;
-		nwid_begin = MakeNWidget(nwid_begin, nwid_end, sub_widget, fill_sub);
-
-		/* Break out of loop when end reached */
-		if (sub_widget == nullptr) break;
-
-		/* If sub-widget is a container, recursively fill that container. */
-		if (fill_sub && IsContainerWidgetType(sub_widget->type)) {
-			nwid_begin = MakeWidgetTree(nwid_begin, nwid_end, sub_widget);
-		}
-
-		/* Add sub_widget to parent container if available, otherwise return the widget to the caller. */
-		if (nwid_cont != nullptr) nwid_cont->Add(std::move(sub_widget));
-		if (nwid_parent != nullptr) nwid_parent->Add(std::move(sub_widget));
-		if (nwid_cont == nullptr && nwid_parent == nullptr) {
-			parent = std::move(sub_widget);
-			return nwid_begin;
-		}
-	}
-
-	if (nwid_begin == nwid_end) return nwid_begin; // Reached the end of the array of parts?
-
-	assert(nwid_begin < nwid_end);
-	assert(nwid_begin->type == WPT_ENDCONTAINER);
-	return std::next(nwid_begin); // *nwid_begin is also 'used'
-}
-#else
 
 static_assert(sizeof(WidgetType) == 1);
 static_assert(WWT_PANEL == 1 && WWT_INSET == 2 && WWT_FRAME == 13);
@@ -3535,7 +3463,6 @@ std::unique_ptr<NWidgetBase> RunWidgetParser(std::span<const NWidgetPart> parts,
 }
 
 } // namespace
-#endif /* WITH_RUST */
 
 /**
  * Construct a nested widget tree from an array of parts.
@@ -3546,16 +3473,7 @@ std::unique_ptr<NWidgetBase> RunWidgetParser(std::span<const NWidgetPart> parts,
  */
 std::unique_ptr<NWidgetBase> MakeNWidgets(std::span<const NWidgetPart> nwid_parts, std::unique_ptr<NWidgetBase> &&container)
 {
-#ifdef WITH_RUST
 	return RunWidgetParser(nwid_parts, container, nullptr);
-#else
-	if (container == nullptr) container = std::make_unique<NWidgetVertical>();
-	[[maybe_unused]] auto nwid_part = MakeWidgetTree(std::begin(nwid_parts), std::end(nwid_parts), container);
-#ifdef WITH_ASSERT
-	if (nwid_part != std::end(nwid_parts)) [[unlikely]] throw std::runtime_error("Did not consume all NWidgetParts");
-#endif
-	return std::move(container);
-#endif
 }
 
 /**
@@ -3569,41 +3487,10 @@ std::unique_ptr<NWidgetBase> MakeNWidgets(std::span<const NWidgetPart> nwid_part
  */
 std::unique_ptr<NWidgetBase> MakeWindowNWidgetTree(std::span<const NWidgetPart> nwid_parts, NWidgetStacked **shade_select)
 {
-#ifdef WITH_RUST
 	/* Preserve the unconditional entry write before any new control allocations. */
 	*shade_select = nullptr;
 	std::unique_ptr<NWidgetBase> first;
 	return RunWidgetParser(nwid_parts, first, shade_select);
-#else
-	auto nwid_begin = std::begin(nwid_parts);
-	auto nwid_end = std::end(nwid_parts);
-
-	*shade_select = nullptr;
-
-	/* Read the first widget recursively from the array. */
-	std::unique_ptr<NWidgetBase> nwid = nullptr;
-	nwid_begin = MakeWidgetTree(nwid_begin, nwid_end, nwid);
-	assert(nwid != nullptr);
-
-	NWidgetHorizontal *hor_cont = dynamic_cast<NWidgetHorizontal *>(nwid.get());
-
-	auto root = std::make_unique<NWidgetVertical>();
-	root->Add(std::move(nwid));
-	if (nwid_begin == nwid_end) return root; // There is no body at all.
-
-	if (hor_cont != nullptr && hor_cont->GetWidgetOfType(WWT_CAPTION) != nullptr && hor_cont->GetWidgetOfType(WWT_SHADEBOX) != nullptr) {
-		/* If the first widget has a title bar and a shade box, silently add a shade selection widget in the tree. */
-		auto shade_stack = std::make_unique<NWidgetStacked>(INVALID_WIDGET);
-		*shade_select = shade_stack.get();
-		/* Load the remaining parts into the shade stack. */
-		shade_stack->Add(MakeNWidgets({nwid_begin, nwid_end}, std::make_unique<NWidgetVertical>()));
-		root->Add(std::move(shade_stack));
-		return root;
-	}
-
-	/* Load the remaining parts into 'root'. */
-	return MakeNWidgets({nwid_begin, nwid_end}, std::move(root));
-#endif
 }
 
 /**

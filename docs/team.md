@@ -16,7 +16,7 @@ Readers: Root and user-invoked skills that spawn agents.
 - Spawn a fresh agent named for each task; its name is its attribution. Do not reassign a finished agent to unrelated work. Close it when its task ends.
 - Each review round, including re-review, gets a fresh reviewer who reads the PR's earlier attributed review reports.
 - At the host slot limit, root works its own queue (integration, spot-checking fix commits, roadmap) until a slot frees. Do not archive threads or edit host databases to free slots.
-- A long-job brief states the background rule in [AGENTS.md](../AGENTS.md). A subagent whose only remaining work is waiting reports and stops. In Claude Code use Bash `run_in_background`; a T3 child also passes the task ID to `t3_background_wait`. Run `python3 tools/ci.py wait` likewise; on timeout it prints its resume command.
+- A long-job brief links the [background rule](../AGENTS.md#every-agent). Root never runs a child's jobs for it. When a child ends its turn on a running job without naming its session or task ID, root checks at once that the job exists and resumes the child if it does not. A subagent waiting only on CI or another task reports and stops.
 
 ## Claude Code root
 

@@ -19,55 +19,18 @@
 #include "table/strings.h"
 #include "table/cargo_const.h"
 
-#ifdef WITH_RUST
 #include "rust/cargo_registry_ffi.h"
 #include "rust/services_cargo.h"
 #include "newgrf.h"
 #include "newgrf_spritegroup.h"
 #include "rust/newgrf_spritegroup_ffi.h"
-#endif
 
 #include "safeguards.h"
 
 CargoSpec CargoSpec::array[NUM_CARGO];
-#ifdef WITH_RUST
 std::array<std::span<const CargoSpec *>, NUM_TPE> CargoSpec::town_production_cargoes{};
 CargoTypes &_cargo_mask = *openttd_rust_cargo_mask();
 CargoTypes &_standard_cargo_mask = *openttd_rust_standard_cargo_mask();
-#else
-std::array<std::vector<const CargoSpec *>, NUM_TPE> CargoSpec::town_production_cargoes{};
-
-/**
- * Bitmask of cargo types available. This includes phony cargoes like regearing cargoes.
- * Initialized during a call to #SetupCargoForClimate.
- */
-CargoTypes _cargo_mask;
-
-/**
- * Bitmask of real cargo types available. Phony cargoes like regearing cargoes are excluded.
- */
-CargoTypes _standard_cargo_mask;
-
-/**
- * List of default cargo labels, used when setting up cargo types for default vehicles.
- * This is done by label so that a cargo label can be redefined in a different slot.
- */
-static std::vector<CargoLabel> _default_cargo_labels;
-
-/**
- * Default cargo translation for up to version 7 NewGRFs.
- * This maps the original 12 cargo slots to their original label. If a climate dependent cargo is not present it will
- * map to CT_INVALID. For default cargoes this ends up as a 1:1 mapping via climate slot -> label -> cargo type.
- */
-static std::array<CargoLabel, 12> _climate_dependent_cargo_labels;
-
-/**
- * Default cargo translation for version 8+ NewGRFs.
- * This maps the 32 "bitnum" cargo slots to their original label. If a bitnum is not present it will
- * map to CT_INVALID.
- */
-static std::array<CargoLabel, 32> _climate_independent_cargo_labels;
-#endif
 
 /**
  * Set up the default cargo types for the given landscape type.
@@ -75,53 +38,7 @@ static std::array<CargoLabel, 32> _climate_independent_cargo_labels;
  */
 void SetupCargoForClimate(LandscapeType l)
 {
-#ifdef WITH_RUST
 	openttd_rust_cargo_setup(&GetRustCargoRegistryServices(), to_underlying(l));
-#else
-	assert(to_underlying(l) < std::size(_default_climate_cargo));
-
-	_cargo_mask = 0;
-	_default_cargo_labels.clear();
-	_climate_dependent_cargo_labels.fill(CT_INVALID);
-	_climate_independent_cargo_labels.fill(CT_INVALID);
-
-	/* Copy from default cargo by label or index. */
-	auto insert = std::begin(CargoSpec::array);
-	for (const auto &cl : _default_climate_cargo[to_underlying(l)]) {
-
-		struct visitor {
-			const CargoSpec &operator()(const int &index)
-			{
-				/* Copy the default cargo by index. */
-				return _default_cargo[index];
-			}
-			const CargoSpec &operator()(const CargoLabel &label)
-			{
-				/* Search for label in default cargo types and copy if found. */
-				auto found = std::ranges::find(_default_cargo, label, &CargoSpec::label);
-				if (found != std::end(_default_cargo)) return *found;
-
-				/* Index or label is invalid, this should not happen. */
-				NOT_REACHED();
-			}
-		};
-
-		*insert = std::visit(visitor{}, cl);
-
-		if (insert->IsValid()) {
-			SetBit(_cargo_mask, insert->Index());
-			_default_cargo_labels.push_back(insert->label);
-			_climate_dependent_cargo_labels[insert->Index()] = insert->label;
-			_climate_independent_cargo_labels[insert->bitnum] = insert->label;
-		}
-		++insert;
-	}
-
-	/* Reset and disable remaining cargo types. */
-	std::fill(insert, std::end(CargoSpec::array), CargoSpec{});
-
-	BuildCargoLabelMap();
-#endif
 }
 
 /**
@@ -130,12 +47,8 @@ void SetupCargoForClimate(LandscapeType l)
  */
 std::span<const CargoLabel> GetClimateDependentCargoTranslationTable()
 {
-#ifdef WITH_RUST
 	auto labels = openttd_rust_cargo_climate_labels();
 	return {reinterpret_cast<const CargoLabel *>(labels.data), labels.size};
-#else
-	return _climate_dependent_cargo_labels;
-#endif
 }
 
 /**
@@ -144,12 +57,8 @@ std::span<const CargoLabel> GetClimateDependentCargoTranslationTable()
  */
 std::span<const CargoLabel> GetClimateIndependentCargoTranslationTable()
 {
-#ifdef WITH_RUST
 	auto labels = openttd_rust_cargo_bitnum_labels();
 	return {reinterpret_cast<const CargoLabel *>(labels.data), labels.size};
-#else
-	return _climate_independent_cargo_labels;
-#endif
 }
 
 /**
@@ -159,19 +68,7 @@ std::span<const CargoLabel> GetClimateIndependentCargoTranslationTable()
  */
 void BuildCargoLabelMap()
 {
-#ifdef WITH_RUST
 	openttd_rust_cargo_labels_rebuild();
-#else
-	CargoSpec::label_map.clear();
-	for (const CargoSpec &cs : CargoSpec::array) {
-		/* During initialization, CargoSpec can be marked valid before the label has been set. */
-		if (!cs.IsValid() || cs.label == CargoLabel{} || cs.label == CT_INVALID) continue;
-		/* Label already exists, don't add again. */
-		if (CargoSpec::label_map.count(cs.label) != 0) continue;
-
-		CargoSpec::label_map.emplace(cs.label, cs.Index());
-	}
-#endif
 }
 
 /**
@@ -181,15 +78,7 @@ void BuildCargoLabelMap()
  */
 bool IsDefaultCargo(CargoType cargo_type)
 {
-#ifdef WITH_RUST
 	return openttd_rust_cargo_is_default(cargo_type);
-#else
-	auto cs = CargoSpec::Get(cargo_type);
-	if (!cs->IsValid()) return false;
-
-	CargoLabel label = cs->label;
-	return std::any_of(std::begin(_default_cargo_labels), std::end(_default_cargo_labels), [&label](const CargoLabel &cl) { return cl == label; });
-#endif
 }
 
 /**
@@ -222,13 +111,8 @@ SpriteID CargoSpec::GetCargoIcon() const
 	return sprite;
 }
 
-#ifdef WITH_RUST
 std::span<uint8_t, NUM_CARGO> _sorted_cargo_types{openttd_rust_cargo_reverse(), NUM_CARGO};
 std::span<const CargoSpec *> _sorted_cargo_specs;
-#else
-std::array<uint8_t, NUM_CARGO> _sorted_cargo_types; ///< Sort order of cargoes by cargo type.
-std::vector<const CargoSpec *> _sorted_cargo_specs;   ///< Cargo specifications sorted alphabetically by name.
-#endif
 std::span<const CargoSpec *> _sorted_standard_cargo_specs; ///< Standard cargo specifications sorted alphabetically by name.
 
 /** Sort cargo specifications by their name. */
@@ -263,38 +147,7 @@ static bool CargoSpecClassSorter(const CargoSpec * const &a, const CargoSpec * c
 /** Initialize the list of sorted cargo specifications. */
 void InitializeSortedCargoSpecs()
 {
-#ifdef WITH_RUST
 	openttd_rust_cargo_sort(&GetRustCargoRegistryServices());
-#else
-	for (auto &tpc : CargoSpec::town_production_cargoes) tpc.clear();
-	_sorted_cargo_specs.clear();
-	/* Add each cargo spec to the list, and determine the largest cargo icon size. */
-	for (const CargoSpec *cargo : CargoSpec::Iterate()) {
-		_sorted_cargo_specs.push_back(cargo);
-	}
-
-	/* Sort cargo specifications by cargo class and name. */
-	std::sort(_sorted_cargo_specs.begin(), _sorted_cargo_specs.end(), &CargoSpecClassSorter);
-
-	/* Populate */
-	for (auto it = std::begin(_sorted_cargo_specs); it != std::end(_sorted_cargo_specs); ++it) {
-		_sorted_cargo_types[(*it)->Index()] = static_cast<uint8_t>(it - std::begin(_sorted_cargo_specs));
-	}
-
-	/* Count the number of standard cargos and fill the mask. */
-	_standard_cargo_mask = 0;
-	uint8_t nb_standard_cargo = 0;
-	for (const auto &cargo : _sorted_cargo_specs) {
-		assert(cargo->town_production_effect != INVALID_TPE);
-		CargoSpec::town_production_cargoes[cargo->town_production_effect].push_back(cargo);
-		if (cargo->classes.Test(CargoClass::Special)) break;
-		nb_standard_cargo++;
-		SetBit(_standard_cargo_mask, cargo->Index());
-	}
-
-	/* _sorted_standard_cargo_specs is a subset of _sorted_cargo_specs. */
-	_sorted_standard_cargo_specs = { _sorted_cargo_specs.data(), nb_standard_cargo };
-#endif
 }
 
 uint64_t CargoSpec::WeightOfNUnitsInTrain(uint32_t n) const
@@ -337,7 +190,6 @@ std::optional<std::string> BuildCargoAcceptanceString(const CargoArray &acceptan
 	return std::nullopt;
 }
 
-#ifdef WITH_RUST
 extern uint16_t CargoCallbackFrame(const OpenTTDCargoInvocation *, int32_t *, size_t) noexcept;
 extern uint32_t CargoSpriteFrame(const OpenTTDCargoInvocation *) noexcept;
 const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
@@ -393,10 +245,7 @@ const OpenTTDCargoRegistryServices &GetRustCargoRegistryServices() noexcept
 	};
 	return services;
 }
-#endif
 
-#ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoRegistryServices.hpp"
 bool CheckAbi_cargo_registry() { return AbiServicesComplete(GetRustCargoRegistryServices()); }
-#endif

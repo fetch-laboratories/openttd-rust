@@ -9,7 +9,7 @@ For agents writing or reviewing port code, tests and Python tools.
 | Owner | Rust state that holds a component's data and runs its control flow. It may be one allocation per vehicle or a process-wide static. |
 | Shell | A C++ object that holds a Rust owner and keeps its pool identity, fields not yet moved to Rust and save aliases. It is usually a pool item such as `Vehicle`, `Station` or `Town`. |
 | Canonical state | The single authoritative copy of a datum, in Rust or C++. Canonical native state stays in C++, as with the map arrays. Read and write it in place without a mirror. |
-| Facade | A C++ function or method that keeps the original signature and forwards to Rust under `WITH_RUST`. |
+| Facade | A C++ function or method that keeps the original signature and forwards to Rust. |
 | Leaf | A typed `noexcept` C++ service that Rust calls for a shared operation or a field of a record still stored in C++. Shared operations include `Random`, sound and viewport. A leaf returns without reentering its calling owner. |
 | Service table | A C++ struct of typed leaf function pointers, such as `OpenTTDTreeServices`. C++ uses designated initializers; Rust borrows the table for a call. Each field names one service, never an opcode. |
 | Witness | A named branch counter in `witness.rs`. A scenario that sets `witnesses` requires each listed counter to be nonzero. |
@@ -17,14 +17,14 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Ownership ports
 
 - Prefer ports where Rust owns state and control flow. C++ keeps a thin facade and calls for shared operations (`Random`, allocation, progress, sound) and fields of records still stored in C++.
-- The Rust build does not compile the original body. Until #581, keep it in the `#else` of `#ifdef WITH_RUST` or under `#ifndef WITH_RUST`. The #581 sweep deletes these bodies. Later ports delete the bodies they replace. The pinned reference remains for review.
+- Delete replaced C++ bodies; every fork build requires Rust. Keep no `WITH_RUST` conditionals in `src/`; quick CI rejects them. The pinned reference remains for review. Drafts adopting #581 rerun the [recorded sweep](rust-migration.md#rust-only-source-sweep) over every touched `src/` file, including cleanly merged files.
 - Do not extract an algorithmic fragment while C++ keeps its state and loop unless the roadmap names it as a stepping stone.
 
 ## Storage ports
 
 - The rewrite retires object classes and map accessors in headers (user, 2026-10-28). Once control flow is in Rust, move records to Rust: pool objects (vehicles first, #563; then stations, orders, towns, industries, companies and the rest), then map arrays.
 - Define each moved record once in Rust with a C-compatible layout. Generate its C++ declaration and check the layout at build. `tools/port-metrics.py` counts the declaration as compiled C++ glue. Both languages access fields in place.
-- Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers.
+- Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers, together with their rows in the rebound-callee and shared-accessor baselines, and report the rows removed in the PR.
 
 ## Fidelity
 
@@ -66,6 +66,7 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Evidence
 
 - Game-logic ports require the semantic simulation harness (`python3 tools/migration.py simulate`, #72) and existing tests. Integrate a new port only after harness scenarios exercise its component. Fidelity fixes to existing ports, such as #75, do not wait for that. Phases 3 to 6 reuse the harness where it observes output, such as saves, script commands and multiplayer sessions.
+- A native C++ fixture is compiled C++ that must retire later. Add one only for boundary behavior that harness scenarios and Rust tests cannot observe, and name that behavior in the PR.
 - Extend harness scenarios instead of writing a comparison tool for each component. Put harness tooling for a port in its component's scenario module. Tooling is code to maintain: keep it proportionate to the C++ the port retires. Compare against unchanged reference bodies only for a concrete gap the harness cannot reach, named in the PR.
 - Any check cited by a doc or PR, such as a branch witness or reference probe, runs in default CI and fails when missing; an opt-in profile or `__main__`-only probe is not evidence.
 - Compare semantic state: screenshots alone and compressed-save byte equality cannot establish equivalent simulation. Screenshots and screen recordings attached to a PR can evidence graphical work (user, 2026-10-28). Retain small failures and explain discrepancies before accepting changes. Test success establishes covered behavior, not complete game equivalence.

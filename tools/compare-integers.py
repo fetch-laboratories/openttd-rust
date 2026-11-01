@@ -106,7 +106,7 @@ def compare_builders(env, binaries):
     ]
     (OUT / "builder-corpus.txt").write_bytes(b"".join(records))
     streams = {}
-    for name in ("reference", "candidate", "candidate-cpp"):
+    for name in ("reference", "candidate"):
         command = [str(binaries[name, False]), "--builder"]
         result = subprocess.run(
             command,
@@ -120,7 +120,7 @@ def compare_builders(env, binaries):
         streams[name] = result.stdout.splitlines()
     expected = streams["reference"]
     assert len(expected) == len(corpus) + 13, "Builder probe inventory changed"
-    for name in ("candidate", "candidate-cpp"):
+    for name in ("candidate",):
         failures = [
             (
                 index,
@@ -194,7 +194,7 @@ def compare_consumers(env, binaries):
     ]
     (OUT / "consumer-corpus.txt").write_bytes(b"".join(records))
     streams = []
-    for name in ("reference", "candidate", "candidate-cpp"):
+    for name in ("reference", "candidate"):
         result = subprocess.run(
             [str(binaries[name, False]), "--consumer"],
             input=b"".join(records),
@@ -206,7 +206,7 @@ def compare_consumers(env, binaries):
         (OUT / f"{name}-consumer.txt").write_bytes(result.stdout)
         assert len(result.stdout.splitlines()) == len(records)
         streams.append(result.stdout)
-    assert streams[0] == streams[1] == streams[2], (
+    assert streams[0] == streams[1], (
         "Consumer byte/cursor/diagnostic mismatch; retained streams in evidence"
     )
     fatal_cases = 0
@@ -324,7 +324,7 @@ def main():
     env = probe.ENV
     binaries = {}
     for name, source in probe.LABELS:
-        for fatal in (False,) if name == "candidate-cpp" else (False, True):
+        for fatal in (False, True):
             binary = OUT / (name + ("-fatal" if fatal else ""))
             command = [
                 probe.compiler(TOOLS),

@@ -317,7 +317,30 @@ struct Trees<'a> {
 }
 impl Trees<'_> {
     fn plant_observation(&self, tile: u32) -> PlantObservation {
-        (self.t.plant_observation)(tile)
+        self.map
+            .and_then(|m| {
+                let mut p = PlantObservation {
+                    tile_type: crate::tile_map::get_tile_type(m, tile)?,
+                    zone: crate::tile_map::get_tropic_zone(m, tile)?,
+                    ..PlantObservation::default()
+                };
+                if p.tile_type == MP_CLEAR {
+                    p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
+                    p.ground = crate::clear_map::get_clear_ground(m, tile)?;
+                    p.density = crate::clear_map::get_clear_density(m, tile)?;
+                    p.snow = crate::clear_map::is_snow_tile(m, tile)?;
+                } else if p.tile_type == MP_WATER {
+                    p.bridge = crate::bridge_map::is_bridge_above(m, tile)?;
+                    p.coast = crate::water_map::is_coast(m, tile)? && {
+                        let width = self.s.map().size_x();
+                        !crate::slope_func::is_slope_with_one_corner_raised(
+                            crate::tile_map::get_tile_slope(m, tile, width, m.count() / width)?,
+                        )
+                    };
+                }
+                Some(p)
+            })
+            .unwrap_or_else(|| (self.t.plant_observation)(tile))
     }
     /// One field read at its original observation point. Without the audited map, or when a
     /// native assertion fails, the record accessor reads it; its first read asserts the same.
@@ -1092,35 +1115,78 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
     trees.place(tile, p, r, keep_density, climate);
 }
 
-/// `PlantTreesOnTile` on a tile suitable for trees.
+/// `PlaceTreeGroupAroundTile`, called by the native scenario-editor brush.
 /// # Safety
-/// Tables are live and immutable; game thread only. Services are `noexcept`.
+/// Tables and canonical map remain live under the game-state mutex; no reset or yield.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_plant(
+pub unsafe extern "C" fn openttd_rust_trees_place_group(
     tile: u32,
     tree: u8,
+    radius: u32,
     count: u32,
-    growth: u8,
-    services: *const TreeServices,
-    shared: *const Services,
-) {
-    // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    let trees = unsafe { trees(services, shared) };
-    let p = trees.plant_observation(tile);
-    trees.plant(tile, p, tree, count, growth);
-}
-
-/// `CanPlantTreesOnTile`.
-/// # Safety
-/// The table is live and immutable.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_can_plant(
-    tile: u32,
-    allow_desert: bool,
-    services: *const TreeServices,
-) -> bool {
-    // SAFETY: The contract above keeps the table live and immutable for the call.
-    (unsafe { &*services }.plant_observation)(tile).suitable(allow_desert)
+    set_zone: bool,
+    services: &TreeServices,
+    shared: &Services,
+    environment: &crate::services::EnvironmentServices,
+    random: &crate::genworld::WorldServices,
+) -> u32 {
+    let world = crate::map_func::World::new(shared);
+    world.check((environment.editor)());
+    world.check(tree < TREE_TOYLAND + crate::tree_map::TREE_COUNT_TOYLAND);
+    let owner = Trees {
+        t: services,
+        s: shared,
+        map: Some(&world.types),
+    };
+    let map = world.dimensions;
+    let size_y = world.size_y();
+    let freeform = (environment.freeform_edges)();
+    let mut planted = 0_u32;
+    for _ in 0..count {
+        let coordinate = || {
+            let rand = (random.interactive_random)();
+            let dist = (rand & 255) + ((rand >> 8) & 255) + ((rand >> 16) & 255) + (rand >> 24);
+            // C++ promotes dist to uint for multiplication/division and offset subtraction.
+            (dist.wrapping_mul(radius) / 512)
+                .wrapping_sub(radius)
+                .cast_signed()
+        };
+        let x = coordinate();
+        let y = coordinate();
+        let target = map.tile_add_wrap(tile, x, y, size_y, freeform);
+        if target == INVALID_TILE {
+            continue;
+        }
+        if world.kind(target) == MP_TREES
+            && world.asserted(|m| crate::tree_map::get_tree_count(m, target)) < 4
+        {
+            (services.add_count)(target, 1);
+            (services.set_growth)(target, GROWING1);
+            owner.dirty(target);
+            planted = planted.wrapping_add(1);
+        } else if owner
+            .plant_observation(target)
+            .suitable(tree == TREE_CACTUS)
+        {
+            let observation = owner.plant_observation(target);
+            owner.plant(target, observation, tree, 0, GROWN);
+            owner.dirty(target);
+            planted = planted.wrapping_add(1);
+        }
+    }
+    if set_zone && is_rainforest_tree(tree) {
+        // The native TileArea(tile) constructor starts with zero extents.
+        let mut area = crate::tilearea::TileArea { tile, w: 0, h: 0 };
+        area.expand(radius.cast_signed(), map, size_y);
+        for target in area.tiles(map) {
+            if world.kind(target) != crate::tile_type::MP_VOID
+                && map.distance_square(tile, target) < radius.wrapping_mul(radius)
+            {
+                (shared.set_tropic_zone)(target, ZONE_RAINFOREST);
+            }
+        }
+    }
+    planted
 }
 
 /// `CmdPlantTree`. The context is passed back to its command services only.

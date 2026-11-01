@@ -231,7 +231,6 @@ pub struct Leaves {
     pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
     pub truncate_cargo: unsafe extern "C" fn(Vehicle),
     pub crash_news: unsafe extern "C" fn(Vehicle, u16, u32),
-    pub station_rating: unsafe extern "C" fn(u32, u8, i32, u32),
     pub landing_rating: unsafe extern "C" fn(u16, u8),
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
@@ -240,7 +239,6 @@ pub struct Leaves {
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
     pub delete_range_news: unsafe extern "C" fn(Vehicle),
     pub service_order: unsafe extern "C" fn(Vehicle, u16),
-    pub running_cost: unsafe extern "C" fn(Vehicle) -> i64,
     pub subtract_cost: unsafe extern "C" fn(Vehicle, i64),
     pub dirty_lists: unsafe extern "C" fn(Vehicle),
     pub next_stopping_station: unsafe extern "C" fn(Vehicle) -> u16,
@@ -251,7 +249,6 @@ pub struct Leaves {
     pub invalid_scheme: unsafe extern "C" fn(Vehicle),
     pub unreachable: unsafe extern "C" fn(Vehicle),
     pub cargo_age_default: unsafe extern "C" fn(Vehicle) -> u16,
-    pub range_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
     pub vehicle_crash: unsafe extern "C" fn(Vehicle, bool) -> u32,
@@ -523,7 +520,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
         speed_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
         cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, i32::from(unsafe { (self.leaves.cargo_age_default)(v) })) as u32;
-        range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, i32::from(unsafe { (self.leaves.range_default)(v) })) as u32;
+        range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, i32::from(unsafe { ((&*(self.vs.newgrf)()).capabilities.aircraft_range)((self.vs.engine)(v.base()).0.as_ptr()) })) as u32;
         start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);
         rotor_image_if_changed(self; v: Vehicle) => unsafe { (self.leaves.rotor_image_if_changed)(v) };
         vehicle_crash(self; v: Vehicle, flooded: i64) => unsafe { (self.leaves.vehicle_crash)(v, flooded != 0) };
@@ -603,7 +600,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         service_order(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.service_order)(vehicle, station as u16) };
         dummy_order(self; vehicle: Vehicle) -> () => (self.vs.make_dummy)(vehicle.base());
         check_orders(self; vehicle: Vehicle) -> () => (self.vs.check_orders_only)(vehicle.base());
-        running_cost(self; vehicle: Vehicle) -> i64 => unsafe { (self.leaves.running_cost)(vehicle) };
+        running_cost(self; vehicle: Vehicle) -> i64 => unsafe { self.vs.running_cost(vehicle.base()) };
         subtract_cost(self; vehicle: Vehicle, cost: i64) -> () => unsafe { (self.leaves.subtract_cost)(vehicle, cost) };
         dirty_lists(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.dirty_lists)(vehicle) };
         remove_depot_orders(self; station_id: i64) -> () => unsafe { (self.leaves.remove_depot_orders)(station_id as u16) };
@@ -663,14 +660,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             result
         }
     }
-    fn station_rating(&self, tile: i64, owner: i64, amount: i64, radius: i64) {
-        Self::service_witness("station_rating", 0);
-        // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
-        unsafe {
-            (self.leaves.station_rating)(tile as u32, owner as u8, amount as i32, radius as u32);
-        }
-    }
-
     fn status(&self, id: Vehicle, mask: i64, on: bool) {
         let old = self.vehicle_status(id);
         self.set_vehicle_status(id, if on { old | mask } else { old & !mask });
@@ -1489,7 +1478,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             self.x(id).clamp(0, self.map_max_x() * 16),
             self.y(id).clamp(0, self.map_max_y() * 16),
         );
-        self.station_rating(i64::from(tile), self.owner(id), -160, 30);
+        crate::station::spatial::modify_rating_around(
+            unsafe { &*self.leaves.shared },
+            tile,
+            self.owner(id) as u8,
+            -160,
+            30,
+        );
         if self.disaster_sound() != 0 {
             self.play_sound(id, EXPLOSION_SOUND);
         }
@@ -2627,7 +2622,6 @@ crate::abi::layouts! {
         copy_sprite,
         truncate_cargo,
         crash_news,
-        station_rating,
         landing_rating,
         dirty_depot,
         first_arrival,
@@ -2636,7 +2630,6 @@ crate::abi::layouts! {
         destination_too_far,
         delete_range_news,
         service_order,
-        running_cost,
         subtract_cost,
         dirty_lists,
         next_stopping_station,
@@ -2647,7 +2640,6 @@ crate::abi::layouts! {
         invalid_scheme,
         unreachable,
         cargo_age_default,
-        range_default,
         rotor_image_if_changed,
         update_rotor_image,
         vehicle_crash,

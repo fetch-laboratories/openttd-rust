@@ -5,6 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
+#include "company_identity_ffi.h"
 #include "company_services.h"
 #include "presentation_services.h"
 
@@ -12,7 +13,6 @@
  * and presentation encoding stay on the native caller stack. Vehicle, owner,
  * locality and CommandCost reads reuse the group and transaction tables. */
 static void FleetPending_restart(void *shell) noexcept { static_cast<Vehicle *>(shell)->vehstatus.Reset(VehState::Stopped); }
-static uint32_t FleetPending_reserve(uint8_t company) noexcept { return RustCompanyRenewReserve(Company::Get(CompanyID(company))); }
 static void FleetPending_subtract(int64_t amount) noexcept { SubtractMoneyFromCompany(CommandCost(EXPENSES_NEW_VEHICLES, Money(amount))); }
 static void FleetPending_command(void *out, uint32_t id) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, VehicleID(id)); }
 static void FleetPending_length_news(uint32_t id) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT, VehicleID(id)), VehicleID(id)); }
@@ -23,7 +23,7 @@ static const OpenTTDFleetPendingServices _fleet_pending_services{
 	.x = RustOpaqueVehicleRead<int32_t, RustVehicleX>,
 	.y = RustOpaqueVehicleRead<int32_t, RustVehicleY>,
 	.z = RustOpaqueVehicleRead<int32_t, RustVehicleZ>,
-	.reserve = FleetPending_reserve,
+	.company = &GetRustCompanyIdentityServices(),
 	.subtract = FleetPending_subtract,
 	.command = FleetPending_command,
 	.animation = RustCostOrIncomeAnimation,

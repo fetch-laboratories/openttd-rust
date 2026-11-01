@@ -58,6 +58,8 @@ enum TreeGround : uint8_t;
 enum Foundation : uint8_t;
 enum Slope : uint8_t;
 enum DiagDirection : uint8_t;
+/** Pool ID and its coordinate on the dimension being split. */
+struct OpenTTDKdtreeKey { uint16_t coordinate; uint16_t id; };
 struct OpenTTDCalendarYMD { int32_t year; uint8_t month, day; };
 struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
@@ -149,6 +151,7 @@ struct OpenTTDSharedServices {
 	OpenTTDSnowLineSupport snow_line_support;
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
+	size_t (*kdtree_partition)(OpenTTDKdtreeKey *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(kdtree_partition);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
 	const OpenTTDStationCatchmentServices *(*station_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(station_catchment);
 	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);

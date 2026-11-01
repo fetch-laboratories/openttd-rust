@@ -96,13 +96,13 @@ struct OpenTTDTreeServices {
 };
 
 OpenTTDTreeGenerateSettings TreeGenerateSettings() noexcept;
+struct OpenTTDWorldServices;
 extern "C" {
 /* Plain synchronous entries; original game preconditions apply. Panics abort. */
+uint32_t openttd_rust_trees_place_group(uint32_t tile, uint8_t type, uint32_t radius, uint32_t count, bool set_zone, const OpenTTDTreeServices *, const OpenTTDSharedServices *, const OpenTTDEnvironmentServices *, const OpenTTDWorldServices *);
 bool openttd_rust_trees_generate(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 bool openttd_rust_trees_place_randomly(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 void openttd_rust_trees_place(uint32_t tile, uint32_t r, bool keep_density, uint8_t climate, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
-void openttd_rust_trees_plant(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
-bool openttd_rust_trees_can_plant(uint32_t tile, bool allow_desert, const OpenTTDTreeServices *);
 OpenTTDTreeCommandResult openttd_rust_trees_cmd_plant(OpenTTDTreeCommand *, uint32_t tile, uint32_t start, uint8_t tree, bool diagonal, OpenTTDTreeCommandSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *, OpenTTDCommandCost *, const OpenTTDCommandServices *, uint16_t);
 int64_t openttd_rust_trees_clear_tile(uint32_t tile, uint16_t flags, int64_t price, bool company_valid, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 /* Stable Rust-owned byte; game-thread initialization/ticks and serial save/load access only.

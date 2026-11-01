@@ -15,9 +15,7 @@
 #include "../../string_func.h"
 #include "../../3rdparty/nlohmann/json.hpp"
 
-#ifdef WITH_RUST
 #include "../admin_conversion.hpp"
-#endif
 
 #include "../../safeguards.h"
 
@@ -34,94 +32,7 @@
  */
 bool ScriptAdminMakeJSON(nlohmann::json &json, HSQUIRRELVM vm, SQInteger index, int depth = 0)
 {
-#ifdef WITH_RUST
 	return ScriptAdminConvertToJSON(json, vm, index, depth);
-#else
-	if (depth == SQUIRREL_MAX_DEPTH) {
-		ScriptLog::Error("Send parameters can only be nested to 25 deep. No data sent."); // SQUIRREL_MAX_DEPTH = 25
-		return false;
-	}
-
-	switch (sq_gettype(vm, index)) {
-		case OT_INTEGER: {
-			SQInteger res;
-			sq_getinteger(vm, index, &res);
-
-			json = res;
-			return true;
-		}
-
-		case OT_STRING: {
-			std::string_view view;
-			sq_getstring(vm, index, view);
-
-			json = view;
-			return true;
-		}
-
-		case OT_ARRAY: {
-			json = nlohmann::json::array();
-
-			sq_pushnull(vm);
-			while (SQ_SUCCEEDED(sq_next(vm, index - 1))) {
-				nlohmann::json tmp;
-
-				bool res = ScriptAdminMakeJSON(tmp, vm, -1, depth + 1);
-				sq_pop(vm, 2);
-				if (!res) {
-					sq_pop(vm, 1);
-					return false;
-				}
-
-				json.push_back(tmp);
-			}
-			sq_pop(vm, 1);
-			return true;
-		}
-
-		case OT_TABLE: {
-			json = nlohmann::json::object();
-
-			sq_pushnull(vm);
-			while (SQ_SUCCEEDED(sq_next(vm, index - 1))) {
-				sq_tostring(vm, -2);
-				std::string_view view;
-				sq_getstring(vm, -1, view);
-				std::string key{view};
-				sq_pop(vm, 1);
-
-				nlohmann::json value;
-				bool res = ScriptAdminMakeJSON(value, vm, -1, depth + 1);
-				sq_pop(vm, 2);
-				if (!res) {
-					sq_pop(vm, 1);
-					return false;
-				}
-
-				json[std::move(key)] = std::move(value);
-			}
-			sq_pop(vm, 1);
-			return true;
-		}
-
-		case OT_BOOL: {
-			SQBool res;
-			sq_getbool(vm, index, &res);
-
-			json = res ? true : false;
-			return true;
-		}
-
-		case OT_NULL: {
-			json = nullptr;
-			return true;
-		}
-
-		default:
-			ScriptLog::Error("You tried to send an unsupported type. No data sent.");
-			return false;
-	}
-#endif
 }
 
 /* static */ SQInteger ScriptAdmin::Send(HSQUIRRELVM vm)

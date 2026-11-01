@@ -216,11 +216,7 @@ struct ORDRChunkHandler : ChunkHandler {
 
 template <typename T>
 class SlOrders : public
-#ifdef WITH_RUST
 	DefaultSaveLoadHandler<SlOrders<T>, T>
-#else
-	VectorSaveLoadHandler<SlOrders<T>, T, Order>
-#endif
 {
 public:
 	static inline const SaveLoad description[] = {
@@ -234,7 +230,6 @@ public:
 	};
 	static inline const SaveLoadCompatTable compat_description = {};
 
-#ifdef WITH_RUST
 	void Save(T *container) const override
 	{
 		SlSetStructListLength(container->orders.size());
@@ -250,9 +245,6 @@ public:
 			SlObject(&order, this->GetLoadDescription());
 		}
 	}
-#else
-	std::vector<Order> &GetVector(T *container) const override { return container->orders; }
-#endif
 
 	void LoadCheck(T *container) const override { this->Load(container); }
 };
