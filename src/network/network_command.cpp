@@ -215,11 +215,9 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 			 * past the command we need to execute. */
 			FatalError("[net] Trying to execute a packet in the past!");
 		},
-		.frame_counter = []() noexcept { return _frame_counter; },
-		.frame_counter_max = []() noexcept { return _frame_counter_max; },
 		.next_client = [](size_t from, OpenTTDNetworkCommandClient *client) noexcept {
 			for (NetworkClientSocket *cs : NetworkClientSocket::Iterate(from)) {
-				*client = {cs, cs->index.base(), &cs->incoming_queue, &cs->outgoing_queue, static_cast<uint8_t>(cs->status)};
+				*client = {cs, static_cast<NetworkGameSocketHandler *>(cs), cs->index.base(), &cs->incoming_queue, &cs->outgoing_queue, cs, cs->last_packet.time_since_epoch().count(), static_cast<uint8_t>(cs->status)};
 				return true;
 			}
 			return false;
@@ -251,14 +249,6 @@ void NetworkSyncCommandQueue(NetworkClientSocket *cs)
 	openttd_rust_network_sync_command_queue(&cs->outgoing_queue);
 }
 
-/**
- * Execute all commands on the local command queue that ought to be executed this frame.
- */
-void NetworkExecuteLocalCommandQueue()
-{
-	assert(IsLocalCompany());
-	openttd_rust_network_execute_local_command_queue(&GetRustNetworkCommandServices());
-}
 
 /**
  * Free the local command queues.
@@ -266,12 +256,6 @@ void NetworkExecuteLocalCommandQueue()
 void NetworkFreeLocalCommandQueue()
 {
 	openttd_rust_network_free_local_command_queue();
-}
-
-/** Distribute the commands of ourself and the clients. */
-void NetworkDistributeCommands()
-{
-	openttd_rust_network_distribute_commands(&GetRustNetworkCommandServices());
 }
 
 /**
@@ -282,6 +266,7 @@ void NetworkHandleCommandQueue(NetworkClientSocket *cs)
 {
 	openttd_rust_network_handle_command_queue(&GetRustNetworkCommandServices(), cs, &cs->outgoing_queue);
 }
+
 
 /**
  * Receives a command from the network.

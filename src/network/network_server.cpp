@@ -614,40 +614,13 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendJoin(ClientID client_id)
 /** Tell the client that they may run to a particular frame. */
 NetworkRecvStatus ServerNetworkGameSocketHandler::SendFrame()
 {
-	auto p = std::make_unique<Packet>(this, PACKET_SERVER_FRAME);
-	p->Send_uint32(_frame_counter);
-	p->Send_uint32(_frame_counter_max);
-#ifdef ENABLE_NETWORK_SYNC_EVERY_FRAME
-	p->Send_uint32(_sync_seed_1);
-#ifdef NETWORK_SEND_DOUBLE_SEED
-	p->Send_uint32(_sync_seed_2);
-#endif
-#endif
-
-	/* If token equals 0, we need to make a new token and send that. */
-	if (this->last_token == 0) {
-		this->last_token = InteractiveRandomRange(UINT8_MAX - 1) + 1;
-		p->Send_uint8(this->last_token);
-	}
-
-	this->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_frame(&GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this), this));
 }
 
 /** Request the client to sync. */
 NetworkRecvStatus ServerNetworkGameSocketHandler::SendSync()
 {
-	Debug(net, 9, "client[{}] SendSync(), frame_counter={}, sync_seed_1={}", this->client_id, _frame_counter, _sync_seed_1);
-
-	auto p = std::make_unique<Packet>(this, PACKET_SERVER_SYNC);
-	p->Send_uint32(_frame_counter);
-	p->Send_uint32(_sync_seed_1);
-
-#ifdef NETWORK_SEND_DOUBLE_SEED
-	p->Send_uint32(_sync_seed_2);
-#endif
-	this->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_send_sync(&GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
 }
 
 /**
@@ -1191,50 +1164,8 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_QUIT(Packet &)
 
 NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_ACK(Packet &p)
 {
-	if (this->status < STATUS_AUTHORIZED) {
-		/* Illegal call, return error and ignore the packet */
-		return this->SendError(NETWORK_ERROR_NOT_AUTHORIZED);
-	}
-
-	uint32_t frame = p.Recv_uint32();
-
-	Debug(net, 9, "client[{}] Receive_CLIENT_ACK(): frame={}", this->client_id, frame);
-
-	/* The client is trying to catch up with the server */
-	if (this->status == STATUS_PRE_ACTIVE) {
-		/* The client is not yet caught up? */
-		if (frame + Ticks::DAY_TICKS < _frame_counter) return NETWORK_RECV_STATUS_OKAY;
-
-		/* Now it is! Unpause the game */
-		Debug(net, 9, "client[{}] status = ACTIVE", this->client_id);
-		this->status = STATUS_ACTIVE;
-		this->last_token_frame = _frame_counter;
-
-		/* Execute script for, e.g. MOTD */
-		IConsoleCmdExec("exec scripts/on_server_connect.scr 0");
-	}
-
-	/* Get, and validate the token. */
-	uint8_t token = p.Recv_uint8();
-	if (token == this->last_token) {
-		/* We differentiate between last_token_frame and last_frame so the lag
-		 * test uses the actual lag of the client instead of the lag for getting
-		 * the token back and forth; after all, the token is only sent every
-		 * time we receive a PACKET_CLIENT_ACK, after which we will send a new
-		 * token to the client. If the lag would be one day, then we would not
-		 * be sending the new token soon enough for the new daily scheduled
-		 * PACKET_CLIENT_ACK. This would then register the lag of the client as
-		 * two days, even when it's only a single day. */
-		this->last_token_frame = _frame_counter;
-		/* Request a new token. */
-		this->last_token = 0;
-	}
-
-	/* The client received the frame, make note of it */
-	this->last_frame = frame;
-	/* With those 2 values we can calculate the lag realtime */
-	this->last_frame_server = _frame_counter;
-	return NETWORK_RECV_STATUS_OKAY;
+	static_assert(sizeof(this->status) == sizeof(uint8_t));
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_receive_ack(&GetRustNetworkFrameServices(), this, static_cast<NetworkGameSocketHandler *>(this), reinterpret_cast<uint8_t *>(&this->status), this, &p));
 }
 
 
@@ -1659,148 +1590,6 @@ bool NetworkServerChangeClientName(ClientID client_id, const std::string &new_na
 
 	NetworkUpdateClientInfo(client_id);
 	return true;
-}
-
-/**
- * Handle the command-queue of a socket.
- * @param cs The socket to handle the queue for.
- */
-
-/**
- * This is called every tick if this is a _network_server
- * @param send_frame Whether to send the frame to the clients.
- */
-void NetworkServer_Tick(bool send_frame)
-{
-#ifndef ENABLE_NETWORK_SYNC_EVERY_FRAME
-	bool send_sync = false;
-#endif
-
-#ifndef ENABLE_NETWORK_SYNC_EVERY_FRAME
-	if (_frame_counter >= _last_sync_frame + _settings_client.network.sync_freq) {
-		_last_sync_frame = _frame_counter;
-		send_sync = true;
-	}
-#endif
-
-	/* Now we are done with the frame, inform the clients that they can
-	 *  do their frame! */
-	for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		/* We allow a number of bytes per frame, but only to the burst amount
-		 * to be available for packet receiving at any particular time. */
-		cs->receive_limit = std::min<size_t>(cs->receive_limit + _settings_client.network.bytes_per_frame,
-				_settings_client.network.bytes_per_frame_burst);
-
-		/* Check if the speed of the client is what we can expect from a client */
-		uint lag = NetworkCalculateLag(cs);
-		switch (cs->status) {
-			case NetworkClientSocket::STATUS_ACTIVE:
-				if (lag > _settings_client.network.max_lag_time) {
-					/* Client did still not report in within the specified limit. */
-
-					if (cs->last_packet + std::chrono::milliseconds(lag * MILLISECONDS_PER_TICK) > std::chrono::steady_clock::now()) {
-						/* A packet was received in the last three game days, so the client is likely lagging behind. */
-						IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because the client's game state is more than {} ticks behind.", cs->client_id, cs->GetClientIP(), lag);
-					} else {
-						/* No packet was received in the last three game days; sounds like a lost connection. */
-						IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because the client did not respond for more than {} ticks.", cs->client_id, cs->GetClientIP(), lag);
-					}
-					cs->SendError(NETWORK_ERROR_TIMEOUT_COMPUTER);
-					continue;
-				}
-
-				/* Report once per time we detect the lag, and only when we
-				 * received a packet in the last 2 seconds. If we
-				 * did not receive a packet, then the client is not just
-				 * slow, but the connection is likely severed. Mentioning
-				 * frame_freq is not useful in this case. */
-				if (lag > (uint)Ticks::DAY_TICKS && cs->lag_test == 0 && cs->last_packet + std::chrono::seconds(2) > std::chrono::steady_clock::now()) {
-					IConsolePrint(CC_WARNING, "[{}] Client #{} is slow, try increasing [network.]frame_freq to a higher value!", _frame_counter, cs->client_id);
-					cs->lag_test = 1;
-				}
-
-				if (cs->last_frame_server - cs->last_token_frame >= _settings_client.network.max_lag_time) {
-					/* This is a bad client! It didn't send the right token back within time. */
-					IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it fails to send valid acks.", cs->client_id, cs->GetClientIP());
-					cs->SendError(NETWORK_ERROR_TIMEOUT_COMPUTER);
-					continue;
-				}
-				break;
-
-			case NetworkClientSocket::STATUS_INACTIVE:
-			case NetworkClientSocket::STATUS_IDENTIFY:
-			case NetworkClientSocket::STATUS_NEWGRFS_CHECK:
-			case NetworkClientSocket::STATUS_AUTHORIZED:
-				/* NewGRF check and authorized states should be handled almost instantly.
-				 * So give them some lee-way, likewise for the query with inactive. */
-				if (lag > _settings_client.network.max_init_time) {
-					IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to start the joining process.", cs->client_id, cs->GetClientIP(), _settings_client.network.max_init_time);
-					cs->SendError(NETWORK_ERROR_TIMEOUT_COMPUTER);
-					continue;
-				}
-				break;
-
-			case NetworkClientSocket::STATUS_MAP_WAIT:
-				/* Send every two seconds a packet to the client, to make sure
-				 * it knows the server is still there; just someone else is
-				 * still receiving the map. */
-				if (std::chrono::steady_clock::now() > cs->last_packet + std::chrono::seconds(2)) {
-					cs->SendWait();
-					/* We need to reset the timer, as otherwise we will be
-					 * spamming the client. Strictly speaking this variable
-					 * tracks when we last received a packet from the client,
-					 * but as it is waiting, it will not send us any till we
-					 * start sending them data. */
-					cs->last_packet = std::chrono::steady_clock::now();
-				}
-				break;
-
-			case NetworkClientSocket::STATUS_MAP:
-				/* Downloading the map... this is the amount of time since starting the saving. */
-				if (lag > _settings_client.network.max_download_time) {
-					IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to download the map.", cs->client_id, cs->GetClientIP(), _settings_client.network.max_download_time);
-					cs->SendError(NETWORK_ERROR_TIMEOUT_MAP);
-					continue;
-				}
-				break;
-
-			case NetworkClientSocket::STATUS_DONE_MAP:
-			case NetworkClientSocket::STATUS_PRE_ACTIVE:
-				/* The map has been sent, so this is for loading the map and syncing up. */
-				if (lag > _settings_client.network.max_join_time) {
-					IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to join.", cs->client_id, cs->GetClientIP(), _settings_client.network.max_join_time);
-					cs->SendError(NETWORK_ERROR_TIMEOUT_JOIN);
-					continue;
-				}
-				break;
-
-			case NetworkClientSocket::STATUS_AUTH_GAME:
-				/* These don't block? */
-				if (lag > _settings_client.network.max_password_time) {
-					IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to enter the password.", cs->client_id, cs->GetClientIP(), _settings_client.network.max_password_time);
-					cs->SendError(NETWORK_ERROR_TIMEOUT_PASSWORD);
-					continue;
-				}
-				break;
-
-			case NetworkClientSocket::STATUS_END:
-				/* Bad server/code. */
-				NOT_REACHED();
-		}
-
-		if (cs->status >= NetworkClientSocket::STATUS_PRE_ACTIVE) {
-			/* Check if we can send command, and if we have anything in the queue */
-			NetworkHandleCommandQueue(cs);
-
-			/* Send an updated _frame_counter_max to the client */
-			if (send_frame) cs->SendFrame();
-
-#ifndef ENABLE_NETWORK_SYNC_EVERY_FRAME
-			/* Send a sync-check packet */
-			if (send_sync) cs->SendSync();
-#endif
-		}
-	}
 }
 
 /** Helper function to restart the map. */

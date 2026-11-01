@@ -26,6 +26,15 @@ inline bool RustDisastersEnabled() noexcept { return _settings_game.difficulty.d
 inline bool RustDisasterSound() noexcept { return _settings_client.sound.disaster; }
 inline uint16_t RustCommandsPerFrame() noexcept { return _settings_client.network.commands_per_frame; }
 inline uint16_t RustCommandsPerFrameServer() noexcept { return _settings_client.network.commands_per_frame_server; }
+inline uint16_t RustNetworkBytesPerFrame() noexcept { return _settings_client.network.bytes_per_frame; }
+inline uint16_t RustNetworkBytesPerFrameBurst() noexcept { return _settings_client.network.bytes_per_frame_burst; }
+inline uint8_t RustNetworkFrameFreq() noexcept { return _settings_client.network.frame_freq; }
+inline uint16_t RustNetworkMaxDownloadTime() noexcept { return _settings_client.network.max_download_time; }
+inline uint16_t RustNetworkMaxInitTime() noexcept { return _settings_client.network.max_init_time; }
+inline uint16_t RustNetworkMaxJoinTime() noexcept { return _settings_client.network.max_join_time; }
+inline uint16_t RustNetworkMaxLagTime() noexcept { return _settings_client.network.max_lag_time; }
+inline uint16_t RustNetworkMaxPasswordTime() noexcept { return _settings_client.network.max_password_time; }
+inline uint16_t RustNetworkSyncFreq() noexcept { return _settings_client.network.sync_freq; }
 inline bool RustNeverExpireAirports() noexcept { return _settings_game.station.never_expire_airports; }
 inline bool RustNeverExpireVehicles() noexcept { return _settings_game.vehicle.never_expire_vehicles; }
 inline uint16_t RustTrainLimit() noexcept { return _settings_game.vehicle.max_trains; }

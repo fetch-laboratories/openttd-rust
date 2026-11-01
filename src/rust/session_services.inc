@@ -5,6 +5,7 @@
 #include "services_station.h"
 #include "services_industry.h"
 #include "town_services.h"
+#include "network_frame_ffi.h"
 #include "abi-visit-OpenTTDSessionServices.hpp"
 static void RustSessionRealtime()
 {
@@ -26,6 +27,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 	static const OpenTTDSessionServices services{
 		.clock = &GetRustClockServices(),
 		.company = &GetRustCompanyServices(),
+		.network = &GetRustNetworkFrameServices(),
 		.shared = &GetRustSharedServices(),
 		.schedule = &LinkGraphSchedule::services,
 		.world = []() noexcept { return &GetRustWorldServices(); },
@@ -107,7 +109,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.game_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { Game::GameLoop(); }); },
 		.ai_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { AI::GameLoop(); }); },
 		.startup_company = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { DoStartupNewCompany(false); }); },
-		.network_loop = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkGameLoop(); }); },
 		.network_reconnect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkClientConnectGame(_settings_client.network.last_joined, COMPANY_SPECTATOR); }); },
 		.state_frame_begin = [](OpenTTDSessionFrameStorage *storage) noexcept { return new (storage) OpenTTDSessionFrame; },
 		.state_frame_end = [](OpenTTDSessionFrame *parent, OpenTTDSessionFrame *f) noexcept { parent->exception = f->exception; std::destroy_at(f); return !parent->exception; },

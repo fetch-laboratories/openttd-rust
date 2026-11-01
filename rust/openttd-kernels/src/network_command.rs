@@ -119,13 +119,18 @@ impl CommandQueue {
     }
 }
 
-/// One `NetworkClientSocket` resolved once per visit; queues live in the socket shell.
+/// One `NetworkClientSocket` resolved once per visit; queues and the sync record live in the
+/// socket shell. `game` is the same socket as a `NetworkGameSocketHandler *`, and `last_packet`
+/// its steady-clock time in nanoseconds when visited.
 #[repr(C)]
 pub struct Client {
     pub socket: *mut c_void,
+    pub game: *mut c_void,
     pub index: usize,
     pub incoming: *mut CommandQueue,
     pub outgoing: *mut CommandQueue,
+    pub sync: *mut crate::network_frame::SocketSync,
+    pub last_packet: i64,
     pub status: u8,
 }
 
@@ -141,8 +146,6 @@ pub struct Services {
     pub commands_per_frame_server: extern "C" fn() -> u16,
     pub execute: extern "C" fn(*const CommandPacket),
     pub execute_past: extern "C" fn(),
-    pub frame_counter: extern "C" fn() -> u32,
-    pub frame_counter_max: extern "C" fn() -> u32,
     pub next_client: extern "C" fn(usize, *mut Client) -> bool,
     pub server_send: extern "C" fn(*mut c_void, *const CommandPacket),
 }
@@ -150,12 +153,15 @@ pub struct Services {
 static WAIT: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
 static EXECUTION: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
 
-fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {
+pub(crate) fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {
     let mut client = Client {
         socket: null_mut(),
+        game: null_mut(),
         index: 0,
         incoming: null_mut(),
         outgoing: null_mut(),
+        sync: null_mut(),
+        last_packet: 0,
         status: 0,
     };
     (s.next_client)(*cursor, &raw mut client).then(|| {
@@ -191,7 +197,7 @@ pub extern "C" fn openttd_rust_network_send_command(
     };
     if (s.company.network_server)() {
         // Delay the server's own commands one tick, as clients' commands are.
-        c.frame = (s.frame_counter_max)().wrapping_add(1);
+        c.frame = crate::network_frame::frame_counter_max().wrapping_add(1);
         c.my_cmd = true;
         unsafe { CommandQueue::edit(WAIT.get(), |queue| queue.push(c)) };
         return;
@@ -217,10 +223,8 @@ pub unsafe extern "C" fn openttd_rust_network_sync_command_queue(outgoing: *mut 
     }
 }
 
-/// `NetworkExecuteLocalCommandQueue`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_execute_local_command_queue(s: &Services) {
-    // The facade asserts `IsLocalCompany()` first.
+/// `NetworkExecuteLocalCommandQueue`; the caller asserts `IsLocalCompany()` first.
+pub(crate) fn execute_local_command_queue(s: &Services) {
     let company = s.company;
     let queue = if (company.network_server)() {
         EXECUTION.get()
@@ -233,10 +237,10 @@ pub extern "C" fn openttd_rust_network_execute_local_command_queue(s: &Services)
         while executed < (*queue).size {
             let cp = (*queue).data.add(executed);
             // The queue is in frame order.
-            if (s.frame_counter)() < (*cp).frame {
+            if crate::network_frame::frame_counter() < (*cp).frame {
                 break;
             }
-            if (s.frame_counter)() > (*cp).frame {
+            if crate::network_frame::frame_counter() > (*cp).frame {
                 (s.execute_past)();
             }
             (company.finance.set_current_company)((*cp).company);
@@ -262,7 +266,7 @@ pub extern "C" fn openttd_rust_network_free_local_command_queue() {
 unsafe fn distribute_packet(s: &Services, cp: *mut CommandPacket, owner: *const c_void) {
     unsafe {
         let callback = (*cp).callback;
-        (*cp).frame = (s.frame_counter_max)().wrapping_add(1);
+        (*cp).frame = crate::network_frame::frame_counter_max().wrapping_add(1);
         let mut cursor = 0;
         while let Some(client) = next_client(s, &mut cursor) {
             if client.status >= STATUS_MAP {
@@ -311,8 +315,7 @@ unsafe fn distribute_queue(s: &Services, queue: *mut CommandQueue, owner: *const
 }
 
 /// `NetworkDistributeCommands`: the server's commands first, then each client's.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_distribute_commands(s: &Services) {
+pub(crate) fn distribute_commands(s: &Services) {
     unsafe { distribute_queue(s, WAIT.get(), std::ptr::null()) };
     let mut cursor = 0;
     while let Some(client) = next_client(s, &mut cursor) {
@@ -413,11 +416,14 @@ crate::abi::layouts! {
         size,
     };
     "OpenTTDNetworkCommandClient" ["probe"] => Client {
+        game,
         incoming,
         index,
+        last_packet,
         outgoing,
         socket,
         status,
+        sync,
     };
     "OpenTTDNetworkCommandServices" ["probe"] => Services {
         admin_log,
@@ -429,8 +435,6 @@ crate::abi::layouts! {
         company,
         execute,
         execute_past,
-        frame_counter,
-        frame_counter_max,
         next_client,
         server_send,
     };

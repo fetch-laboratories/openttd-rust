@@ -28,7 +28,8 @@ static std::vector<std::unique_ptr<NetworkGameSocketHandler>> _deferred_deletion
  * @param s The socket to connect with.
  */
 NetworkGameSocketHandler::NetworkGameSocketHandler(SOCKET s) : NetworkTCPSocketHandler(s),
-		last_frame(_frame_counter), last_frame_server(_frame_counter), last_packet(std::chrono::steady_clock::now()) {}
+		OpenTTDNetworkSocketSync{.receive_limit = 0, .last_frame = _frame_counter, .last_frame_server = _frame_counter, .last_token_frame = 0, .lag_test = 0, .last_token = 0, .token = 0},
+		last_packet(std::chrono::steady_clock::now()) {}
 
 /**
  * Functions to help ReceivePacket/SendPacket a bit

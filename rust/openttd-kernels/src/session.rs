@@ -50,6 +50,7 @@ pub struct SecondaryColour {
 pub struct Services {
     pub clock: *const crate::timer_game_common::ClockServices,
     pub company: *const crate::company::Services,
+    pub network: *const crate::network_frame::Services,
     pub shared: *const crate::services::Services,
     pub schedule: *const crate::linkgraph_schedule::Services,
     pub world: extern "C" fn() -> *const crate::genworld::WorldServices,
@@ -131,7 +132,6 @@ pub struct Services {
     pub game_script: extern "C" fn(*mut Frame) -> bool,
     pub ai_script: extern "C" fn(*mut Frame) -> bool,
     pub startup_company: extern "C" fn(*mut Frame) -> bool,
-    pub network_loop: extern "C" fn(*mut Frame) -> bool,
     pub network_reconnect: extern "C" fn(*mut Frame) -> bool,
     pub state_frame_begin: extern "C" fn(*mut FrameStorage) -> *mut Frame,
     pub state_frame_end: extern "C" fn(*mut Frame, *mut Frame) -> bool,
@@ -785,7 +785,8 @@ impl Session<'_> {
         }
         (s.remote_messages)();
         if (s.networking)() && !(s.modal)() {
-            complete((s.network_loop)(self.frame))?;
+            // SAFETY: The native table outlives the session.
+            crate::network_frame::game_loop(s, unsafe { &*s.network }, self.frame)?;
         } else {
             if (s.reconnect_due)() {
                 complete((s.network_reconnect)(self.frame))?;
@@ -869,6 +870,7 @@ crate::abi::layouts! {
     "OpenTTDSessionServices" ["session"] => Services{
         clock,
         company,
+        network,
         shared,
         schedule,
         world,
@@ -950,7 +952,6 @@ crate::abi::layouts! {
         game_script,
         ai_script,
         startup_company,
-        network_loop,
         network_reconnect,
         state_frame_begin,
         state_frame_end,

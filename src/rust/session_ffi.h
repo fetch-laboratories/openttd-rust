@@ -12,6 +12,7 @@
 struct NewGRFScanCallback;
 struct OpenTTDSessionFrame;
 struct OpenTTDSessionLoad;
+struct OpenTTDNetworkFrameServices;
 /* Native objects are placement-constructed here; Rust never interprets the bytes. */
 struct alignas(16) OpenTTDSessionFrameStorage { std::byte storage[4096]; };
 struct alignas(16) OpenTTDWorldFrameStorage { std::byte storage[8192]; };
@@ -22,6 +23,7 @@ struct OpenTTDSessionSecondaryColour { Colours colour; bool used; };
 struct OpenTTDSessionServices {
 	const OpenTTDClockServices *clock;
 	const OpenTTDCompanyServices *company;
+	const OpenTTDNetworkFrameServices *network;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDScheduleServices *schedule;
 	const OpenTTDWorldServices *(*world)() noexcept OPENTTD_SERVICE_DEFAULT(world);
@@ -103,7 +105,6 @@ struct OpenTTDSessionServices {
 	bool (*game_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(game_script);
 	bool (*ai_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(ai_script);
 	bool (*startup_company)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(startup_company);
-	bool (*network_loop)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_loop);
 	bool (*network_reconnect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_reconnect);
 	OpenTTDSessionFrame *(*state_frame_begin)(OpenTTDSessionFrameStorage *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_begin);
 	bool (*state_frame_end)(OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_end);

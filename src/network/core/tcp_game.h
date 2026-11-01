@@ -18,6 +18,7 @@
 #include "../../command_type.h"
 #include "../../company_type.h"
 #include "../../rust/network_command_ffi.h"
+#include "../../rust/network_frame_ffi.h"
 #include <chrono>
 
 /**
@@ -187,8 +188,8 @@ public:
 	void Push(CommandPacket &&cp) { openttd_rust_command_queue_push(this, &cp); }
 };
 
-/** Base socket handler for all TCP sockets */
-class NetworkGameSocketHandler : public NetworkTCPSocketHandler {
+/** Base socket handler for all TCP sockets; frame and lag fields are the Rust sync record. */
+class NetworkGameSocketHandler : public NetworkTCPSocketHandler, public OpenTTDNetworkSocketSync {
 /* TODO: rewrite into a proper class */
 private:
 	NetworkClientInfo *info = nullptr; ///< Client info related to this socket
@@ -534,8 +535,6 @@ protected:
 	NetworkGameSocketHandler(SOCKET s);
 public:
 	ClientID client_id = INVALID_CLIENT_ID; ///< Client identifier
-	uint32_t last_frame = 0; ///< Last frame we have executed
-	uint32_t last_frame_server = 0; ///< Last frame the server has executed
 	CommandQueue incoming_queue; ///< The command-queue awaiting handling
 	std::chrono::steady_clock::time_point last_packet{}; ///< Time we received the last frame.
 

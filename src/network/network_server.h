@@ -64,12 +64,8 @@ public:
 		STATUS_END,           ///< Must ALWAYS be on the end of this list!! (period).
 	};
 
-	uint8_t lag_test = 0; ///< Byte used for lag-testing the client
-	uint8_t last_token = 0; ///< The last random token we did send to verify the client is listening
-	uint32_t last_token_frame = 0; ///< The last frame we received the right token
 	ClientStatus status = STATUS_INACTIVE; ///< Status of this client
 	CommandQueue outgoing_queue{}; ///< The command-queue awaiting delivery; conceptually more a bucket to gather commands in, after which the whole bucket is sent to the client.
-	size_t receive_limit = 0; ///< Amount of bytes that we can receive at this moment
 
 	std::shared_ptr<struct PacketWriter> savegame = nullptr; ///< Writer used to write the savegame.
 	NetworkAddress client_address{}; ///< IP-address of the client (so they can be banned)
@@ -121,7 +117,6 @@ public:
 	static ServerNetworkGameSocketHandler *GetByClientID(ClientID client_id);
 };
 
-void NetworkServer_Tick(bool send_frame);
 void ChangeNetworkRestartTime(bool reset);
 
 #endif /* NETWORK_SERVER_H */

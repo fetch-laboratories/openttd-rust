@@ -217,57 +217,9 @@ void ClientNetworkGameSocketHandler::ClientError(NetworkRecvStatus res)
 	if (my_client != nullptr) my_client->CheckConnection();
 }
 
-/**
- * Actual game loop for the client.
- * @return Whether everything went okay, or not.
- */
-/* static */ bool ClientNetworkGameSocketHandler::GameLoop()
-{
-	_frame_counter++;
-
-	NetworkExecuteLocalCommandQueue();
-
-	StateGameLoop();
-
-	/* Check if we are in sync! */
-	if (_sync_frame != 0) {
-		if (_sync_frame == _frame_counter) {
-#ifdef NETWORK_SEND_DOUBLE_SEED
-			if (_sync_seed_1 != _random.state[0] || _sync_seed_2 != _random.state[1]) {
-#else
-			if (_sync_seed_1 != _random.state[0]) {
-#endif
-				ShowNetworkError(STR_NETWORK_ERROR_DESYNC);
-				Debug(desync, 1, "sync_err: {:08x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract);
-				Debug(net, 0, "Sync error detected");
-				my_client->ClientError(NETWORK_RECV_STATUS_DESYNC);
-				return false;
-			}
-
-			/* If this is the first time we have a sync-frame, we
-			 *   need to let the server know that we are ready and at the same
-			 *   frame as it is.. so we can start playing! */
-			if (_network_first_time) {
-				_network_first_time = false;
-				SendAck();
-			}
-
-			_sync_frame = 0;
-		} else if (_sync_frame < _frame_counter) {
-			Debug(net, 1, "Missed frame for sync-test: {} / {}", _sync_frame, _frame_counter);
-			_sync_frame = 0;
-		}
-	}
-
-	return true;
-}
-
 
 /** Our client's connection. */
 ClientNetworkGameSocketHandler * ClientNetworkGameSocketHandler::my_client = nullptr;
-
-/** Last frame we performed an ack. */
-static uint32_t last_ack_frame;
 
 /** Maximum number of companies of the currently joined server. */
 static uint8_t _network_server_max_companies;
@@ -358,19 +310,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendMapOk()
 	my_client->status = STATUS_ACTIVE;
 
 	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_MAP_OK);
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
-}
-
-/** Send an acknowledgement from the server's ticks. */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendAck()
-{
-	Debug(net, 9, "Client::SendAck()");
-
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_ACK);
-
-	p->Send_uint32(_frame_counter);
-	p->Send_uint8 (my_client->token);
 	my_client->SendPacket(std::move(p));
 	return NETWORK_RECV_STATUS_OKAY;
 }
@@ -862,52 +801,12 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DONE(Packet
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_FRAME(Packet &p)
 {
-	if (this->status != STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	_frame_counter_server = p.Recv_uint32();
-	_frame_counter_max = p.Recv_uint32();
-#ifdef ENABLE_NETWORK_SYNC_EVERY_FRAME
-	/* Test if the server supports this option
-	 *  and if we are at the frame the server is */
-#ifdef NETWORK_SEND_DOUBLE_SEED
-	if (p.CanReadFromPacket(sizeof(uint32_t) + sizeof(uint32_t))) {
-#else
-	if (p.CanReadFromPacket(sizeof(uint32_t))) {
-#endif
-		_sync_frame = _frame_counter_server;
-		_sync_seed_1 = p.Recv_uint32();
-#ifdef NETWORK_SEND_DOUBLE_SEED
-		_sync_seed_2 = p.Recv_uint32();
-#endif
-	}
-#endif
-	/* Receive the token. */
-	if (p.CanReadFromPacket(sizeof(uint8_t))) this->token = p.Recv_uint8();
-
-	/* Let the server know that we received this frame correctly
-	 *  We do this only once per day, to save some bandwidth ;) */
-	if (!_network_first_time && last_ack_frame < _frame_counter) {
-		last_ack_frame = _frame_counter + Ticks::DAY_TICKS;
-		Debug(net, 7, "Sent ACK at {}", _frame_counter);
-		SendAck();
-	}
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_receive_frame(&GetRustNetworkFrameServices(), this->status, this, &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_SYNC(Packet &p)
 {
-	if (this->status != STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-
-	_sync_frame = p.Recv_uint32();
-	_sync_seed_1 = p.Recv_uint32();
-#ifdef NETWORK_SEND_DOUBLE_SEED
-	_sync_seed_2 = p.Recv_uint32();
-#endif
-
-	Debug(net, 9, "Client::Receive_SERVER_SYNC(): sync_frame={}, sync_seed_1={}", _sync_frame, _sync_seed_1);
-
-	return NETWORK_RECV_STATUS_OKAY;
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_receive_sync(&GetRustNetworkFrameServices(), this->status, &p));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_COMMAND(Packet &p)
@@ -1187,9 +1086,7 @@ void ClientNetworkGameSocketHandler::CheckConnection()
 void NetworkClient_Connected()
 {
 	/* Set the frame-counter to 0 so nothing happens till we are ready */
-	_frame_counter = 0;
-	_frame_counter_server = 0;
-	last_ack_frame = 0;
+	openttd_rust_network_client_connected();
 
 	Debug(net, 9, "Client::NetworkClient_Connected()");
 

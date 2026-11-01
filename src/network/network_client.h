@@ -18,7 +18,6 @@ private:
 	std::unique_ptr<class NetworkAuthenticationClientHandler> authentication_handler = nullptr; ///< The handler for the authentication.
 	std::string connection_string; ///< Address we are connected to.
 	std::shared_ptr<struct PacketReader> savegame = nullptr; ///< Packet reader for reading the savegame.
-	uint8_t token = 0; ///< The token we need to send back to the server to prove we're the right client.
 
 	/** Status of the connection with the server. */
 	enum ServerStatus : uint8_t {
@@ -38,6 +37,7 @@ private:
 
 protected:
 	friend const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;
+	friend const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 	friend void NetworkClose(bool close_admins);
 	static ClientNetworkGameSocketHandler *my_client; ///< This is us!
 
@@ -84,7 +84,6 @@ public:
 	static NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 	static NetworkRecvStatus SendError(NetworkErrorCode errorno);
 	static NetworkRecvStatus SendQuit();
-	static NetworkRecvStatus SendAck();
 
 	static NetworkRecvStatus SendAuthResponse();
 
@@ -97,7 +96,6 @@ public:
 
 	static void Send();
 	static bool Receive();
-	static bool GameLoop();
 };
 
 /** Helper to make the code look somewhat nicer. */

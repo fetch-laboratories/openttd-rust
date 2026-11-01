@@ -5,6 +5,7 @@
 #include "service_defaults.hpp"
 #include "byte_span_ffi.h"
 struct OpenTTDCompanyServices;
+struct OpenTTDNetworkSocketSync;
 /** Raw parts of a Rust byte vector; zeroes when never allocated. Only Rust allocates or frees it. */
 struct OpenTTDCommandData {
 	uint8_t *data;
@@ -30,9 +31,12 @@ struct OpenTTDCommandQueue {
 /** One client socket and its in-place queues, valid until the socket is deleted. */
 struct OpenTTDNetworkCommandClient {
 	void *socket;
+	void *game; ///< The same socket as a NetworkGameSocketHandler.
 	size_t index;
 	OpenTTDCommandQueue *incoming;
 	OpenTTDCommandQueue *outgoing;
+	OpenTTDNetworkSocketSync *sync;
+	int64_t last_packet; ///< Steady-clock nanoseconds when visited.
 	uint8_t status;
 };
 /** Native leaves of the command queues; packet pointers are valid only during the call. */
@@ -46,8 +50,6 @@ struct OpenTTDNetworkCommandServices {
 	uint16_t (*commands_per_frame_server)() noexcept OPENTTD_SERVICE_DEFAULT(commands_per_frame_server);
 	void (*execute)(const OpenTTDCommandPacket *) noexcept OPENTTD_SERVICE_DEFAULT(execute);
 	void (*execute_past)() noexcept OPENTTD_SERVICE_DEFAULT(execute_past);
-	uint32_t (*frame_counter)() noexcept OPENTTD_SERVICE_DEFAULT(frame_counter);
-	uint32_t (*frame_counter_max)() noexcept OPENTTD_SERVICE_DEFAULT(frame_counter_max);
 	bool (*next_client)(size_t, OpenTTDNetworkCommandClient *) noexcept OPENTTD_SERVICE_DEFAULT(next_client);
 	void (*server_send)(void *, const OpenTTDCommandPacket *) noexcept OPENTTD_SERVICE_DEFAULT(server_send);
 };
@@ -55,9 +57,7 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;
 extern "C" {
 void openttd_rust_network_send_command(const OpenTTDNetworkCommandServices *, uint8_t cmd, uint32_t err_msg, const void *callback, uint8_t company, OpenTTDByteSpan data);
 void openttd_rust_network_sync_command_queue(OpenTTDCommandQueue *outgoing);
-void openttd_rust_network_execute_local_command_queue(const OpenTTDNetworkCommandServices *);
 void openttd_rust_network_free_local_command_queue();
-void openttd_rust_network_distribute_commands(const OpenTTDNetworkCommandServices *);
 void openttd_rust_network_handle_command_queue(const OpenTTDNetworkCommandServices *, void *socket, OpenTTDCommandQueue *outgoing);
 void openttd_rust_command_data_grow(OpenTTDCommandData *);
 void openttd_rust_command_data_free(OpenTTDCommandData *);
