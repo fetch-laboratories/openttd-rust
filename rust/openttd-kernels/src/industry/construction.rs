@@ -55,7 +55,6 @@ pub struct ConstructionServices {
     pub callback: unsafe extern "C" fn(*mut c_void, u16, u32, u32) -> u16,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
     pub grf_version: unsafe extern "C" fn(*const SpecHandle) -> u8,
-    pub cargo_file: unsafe extern "C" fn(*const SpecHandle) -> *const std::ffi::c_void,
     pub layout_size: unsafe extern "C" fn(*const LayoutHandle) -> usize,
     pub layout_tile: unsafe extern "C" fn(*const LayoutHandle, usize) -> LayoutTile,
     pub water_class: unsafe extern "C" fn(u32) -> u8,
@@ -136,6 +135,7 @@ fn populate(
         false
     });
 }
+#[allow(clippy::too_many_arguments)]
 fn cargo_callbacks(
     industry: *mut c_void,
     owner: *mut Industry,
@@ -144,6 +144,7 @@ fn cargo_callbacks(
     output: bool,
     g: &GenerationServices,
     c: &ConstructionServices,
+    shared: &crate::services::Services,
 ) {
     let callback = if output {
         OUTPUT_CARGO_TYPES
@@ -174,13 +175,11 @@ fn cargo_callbacks(
             unsafe { (c.callback_error)(spec, callback, res) };
             break;
         }
-        let cargo = unsafe {
-            crate::cargo_registry::openttd_rust_cargo_translate(
-                res as u8,
-                (c.cargo_file)(spec),
-                false,
-            )
-        };
+        let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+            res as u8,
+            (shared.specs().industry().file)(spec),
+            false,
+        );
         if !valid(cargo) && !unlimited {
             unsafe {
                 if output {
@@ -407,10 +406,10 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     if callbacks & (1 << 12) != 0 {
-        cargo_callbacks(industry, owner, spec, &lists, false, g, c);
+        cargo_callbacks(industry, owner, spec, &lists, false, g, c, s.shared());
     }
     if callbacks & (1 << 13) != 0 {
-        cargo_callbacks(industry, owner, spec, &lists, true, g, c);
+        cargo_callbacks(industry, owner, spec, &lists, true, g, c, s.shared());
     }
     let count = unsafe { (c.layout_size)(r.layout) };
     for n in 0..count {
