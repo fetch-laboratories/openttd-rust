@@ -33,9 +33,7 @@ HEAVY = set(
 
 
 def speed_scenarios():
-    return [
-        s for s in core.scenario_list(False) if s["name"] in instructions.SPEED_BUDGETS
-    ]
+    return [s for s in core.scenario_list(False) if s["name"] in instructions.PROFILED]
 
 
 def prepare(out, profile, migration):

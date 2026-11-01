@@ -213,6 +213,83 @@ class PortMetricsTests(unittest.TestCase):
         self.assertIn("Code: whole-fork retired 3 / 4 (75.00%)", output.getvalue())
         self.assertIn("All lines: whole-fork retired 4 / 5 (80.00%)", output.getvalue())
 
+    def test_functions_attribute_remaining_lines(self) -> None:
+        body = (
+            "Foo::Foo() : a{1} {}\n"
+            "/** Ported. */\nint Ported(int x)\n{\n\tint y = x;\n\treturn y;\n}\n\n"
+            "int Facade(int x)\n{\n\treturn x * 2;\n}\n\n"
+            "namespace {\nint Untouched()\n{\n\treturn '}';\n}\n}\n"
+            "static const int _table[] = { 1, 2 };\n"
+            "Bar::Bar() :\n\ta{1}\n{\n\tRemoved();\n}\n\n"
+            "int InlineClose()\n{\n\tRemoved();\n\treturn []() { return 1; }(); }\n\n"
+            "int InlineOpen() { Kept();\n\tRemoved();\n}\n"
+        )
+        self.write("src/town_cmd.cpp", body)
+        METRICS.BASELINE = self.commit()
+        self.write(
+            "src/town_cmd.cpp",
+            body.replace("\tint y = x;\n", "#ifndef WITH_RUST\n\tint y = x;\n#endif\n")
+            .replace("x * 2", "RustFacade(x)")
+            .replace("Removed();", "RustBody();"),
+        )
+        head = self.commit()
+        output = io.StringIO()
+        argv = ["port-metrics.py", "--functions", "Simulation logic", "--json"]
+        with (
+            mock.patch("sys.argv", [*argv, "--head", head]),
+            contextlib.redirect_stdout(output),
+        ):
+            METRICS.main()
+        result = json.loads(output.getvalue())
+        self.assertEqual(
+            [
+                (r["function"], r["line"], r["remaining"], r["facade"])
+                for r in result["functions"]
+            ],
+            [
+                ("Foo::Foo", 1, 1, False),
+                ("Ported", 3, 4, False),
+                ("Facade", 9, 3, True),
+                ("Untouched", 15, 4, False),
+                ("Bar::Bar", 21, 4, False),
+                ("InlineClose", 27, 3, False),
+                ("InlineOpen", 32, 2, False),
+                ("(file scope)", 14, 3, False),
+            ],
+        )
+        self.assertEqual(
+            sum(row["remaining"] for row in result["functions"]),
+            result["areas"]["Simulation logic"]["remaining"],
+        )
+
+    def test_function_spans_separate_arguments_and_data(self) -> None:
+        for text, expected in (
+            (
+                "int Callback(std::span<int> regs = {})\n{\n\treturn 1;\n}\n",
+                [("Callback", 1, 2, 4)],
+            ),
+            (
+                "struct Owner {\npublic:\nOwner() : a{1} {}\n"
+                "protected:\nvoid Protected() {}\nprivate:\nvoid Private() {}\n};\n",
+                [("Owner", 3, 3, 3), ("Protected", 5, 5, 5), ("Private", 7, 7, 7)],
+            ),
+            (
+                "const Descriptor desc{\n\t[]() { Kept(); },\n};\n",
+                [],
+            ),
+            (
+                'namespace n {\nextern "C" {\nint Function() {}\n}\n}\n',
+                [("Function", 3, 3, 3)],
+            ),
+            (
+                "DEF_CMD_TRAIT(CMD_FIRST, First, {})\n"
+                "DEF_CMD_TRAIT(CMD_SECOND, Second, {})\n\nvoid Function() {}\n",
+                [("Function", 4, 4, 4)],
+            ),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(METRICS.spans(text, "src/town_cmd.cpp"), expected)
+
     def test_boundary_counts_private_callbacks_and_exports(self) -> None:
         (self.root / "rust").mkdir()
         self.write(
