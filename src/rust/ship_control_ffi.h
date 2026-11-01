@@ -17,6 +17,7 @@ struct OpenTTDVehicleServices;
 #include <cstdint>
 #include <cstddef>
 struct OpenTTDShipState;
+struct OrthogonalTileArea;
 struct OpenTTDShipDepot { uint32_t id, tile, owner, ship; };
 struct OpenTTDShipPosition { int32_t x, y; uint32_t old_tile, new_tile; };
 struct OpenTTDShipReverseResult { bool reverse; uint8_t trackdir; };
@@ -49,7 +50,7 @@ struct OpenTTDShipLeaves {
 	uint32_t (*industry_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_station);
 	bool (*oilrig)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(oilrig);
 	uint32_t (*station_xy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_xy);
-	bool (*station_contains)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_contains);
+	const OrthogonalTileArea *(*station_docking_area)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_docking_area);
 	bool (*station_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_dock);
 	uint32_t (*station_visits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_visits);
 	void (*visit_set)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visit_set);
