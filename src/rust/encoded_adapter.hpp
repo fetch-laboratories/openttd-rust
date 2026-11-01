@@ -65,20 +65,21 @@ inline void LogRustEncodedError(std::string &&message)
 #endif
 }
 
-/** Replay offsets in original input, then copy immutable Rust bytes into a C++ owner. */
-inline std::string CopyRustEncoded(const RustEncodedOwner &owner, std::string_view input = {})
+/** Replay one integer diagnostic against its original input. */
+inline void LogRustEncodedDiagnostic(const OpenTTDRustEncodedDiagnostic &diagnostic, std::string_view input)
 {
-	auto view = openttd_rust_encoded_view(owner.get());
-	for (size_t i = 0; i < view.diagnostic_count; ++i) {
-		auto diagnostic = openttd_rust_encoded_diagnostic(owner.get(), i);
-		auto part = input.substr(diagnostic.offset, diagnostic.length);
-		if (diagnostic.kind == 3) {
-			LogRustEncodedError(fmt::format("Integer out of range: '{}'", part));
-		} else {
-			LogRustEncodedError(fmt::format("{}: '{}'+'{}'", diagnostic.kind == 2 ? "Integer out of range" : "Cannot parse integer",
-				part, input.substr(diagnostic.offset + diagnostic.length, diagnostic.tail_length)));
-		}
+	auto part = input.substr(diagnostic.offset, diagnostic.length);
+	if (diagnostic.kind == 3) {
+		LogRustEncodedError(fmt::format("Integer out of range: '{}'", part));
+	} else {
+		LogRustEncodedError(fmt::format("{}: '{}'+'{}'", diagnostic.kind == 2 ? "Integer out of range" : "Cannot parse integer",
+			part, input.substr(diagnostic.offset + diagnostic.length, diagnostic.tail_length)));
 	}
+}
+
+/** Preserve the native assertion policy for an encoded result. */
+inline void AssertRustEncoded([[maybe_unused]] const OpenTTDRustEncodedView &view, [[maybe_unused]] std::string_view input)
+{
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 	if (view.assertion_kind == 1) {
 		StringConsumer record(input.substr(view.assertion_offset, view.assertion_length));
@@ -92,6 +93,16 @@ inline std::string CopyRustEncoded(const RustEncodedOwner &owner, std::string_vi
 		assert(len == 0 || (c != SCC_ENCODED && c != SCC_ENCODED_INTERNAL && c != SCC_RECORD_SEPARATOR));
 	}
 #endif
+}
+
+/** Replay offsets in original input, then copy immutable Rust bytes into a C++ owner. */
+inline std::string CopyRustEncoded(const RustEncodedOwner &owner, std::string_view input = {})
+{
+	auto view = openttd_rust_encoded_view(owner.get());
+	for (size_t i = 0; i < view.diagnostic_count; ++i) {
+		LogRustEncodedDiagnostic(openttd_rust_encoded_diagnostic(owner.get(), i), input);
+	}
+	AssertRustEncoded(view, input);
 	if (view.length == 0) return {};
 	return {reinterpret_cast<const char *>(view.bytes), view.length};
 }

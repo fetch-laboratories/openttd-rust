@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
@@ -32,6 +33,42 @@ simulate.scenario_modules()
 
 
 class SimulationDeterminismTests(unittest.TestCase):
+    def test_save_comparison_distinguishes_non_minimal_gamma(self) -> None:
+        g = simulate.gamma
+        header = b"\x0a" + g(1) + b"s" + b"\x00"  # One SLE_FILE_STRING field "s".
+
+        def save(element_length, body):
+            chunk = b"TEST\x03" + g(len(header) + 1) + header
+            return b"OTTN\0\0\0\0" + chunk + element_length + body + b"\x00" * 5
+
+        body = g(2) + b"ab"
+        minimal = simulate.parse_save(save(g(len(body) + 1), body))["TEST"]
+        for name, element_length, element, expected in (
+            (
+                "element length",
+                b"\x80" + g(len(body) + 1),
+                body,
+                ("", "gamma encoding", 0, 1),
+            ),
+            (
+                "string length",
+                g(len(body) + 2),
+                b"\x80\x02ab",
+                ("0", "encoding", "026162", "80026162"),
+            ),
+        ):
+            candidate = simulate.parse_save(save(element_length, element))["TEST"]
+            stats = {"elements": 0, "masked": {}}
+            with self.subTest(name):
+                self.assertEqual(
+                    list(simulate.compare_chunk("TEST", minimal, candidate, stats)),
+                    [expected],
+                )
+        stats = {"elements": 0, "masked": {}}
+        self.assertEqual(
+            list(simulate.compare_chunk("TEST", minimal, minimal, stats)), []
+        )
+
     def test_station_spatial_requires_complete_unique_rows(self) -> None:
         for reload in (False, True):
             phases = (
@@ -352,6 +389,31 @@ class SimulationDeterminismTests(unittest.TestCase):
 
 
 class SimulationRuntimeTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "linux", "ELF archive interposition")
+    def test_interposition_reaches_callers_in_the_same_object(self) -> None:
+        from simulation.console_adapter import interposed_archive
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "owner.c").write_text(
+                "int callee(void) { return 1; }\n"
+                "int caller(void) { return callee(); }\n"
+            )
+            (root / "console.c").write_text(
+                "int __real_callee(void);\n"
+                "int caller(void);\n"
+                "int callee(void) { return 10 + __real_callee(); }\n"
+                "int main(void) { return caller() == 11 ? 0 : 1; }\n"
+            )
+            run = partial(subprocess.run, cwd=root, check=True)
+            run(["cc", "-c", "-O2", "-fPIC", "-ffunction-sections", "owner.c"])
+            run(["ar", "rc", "libowner.a", "owner.o"])
+            archive = interposed_archive(
+                root / "libowner.a", root, ("callee",), dict(os.environ)
+            )
+            run(["cc", "console.c", str(archive), "-o", "console"])
+            self.assertEqual(subprocess.run([root / "console"]).returncode, 0)
+
     def exercise(
         self,
         *,

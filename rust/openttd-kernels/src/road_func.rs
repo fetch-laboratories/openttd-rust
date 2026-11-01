@@ -13,3 +13,11 @@ pub fn diag_dir_to_road_bits(dir: u8, check: impl Fn(bool) + Copy) -> u8 {
     }
     (u32::from(crate::road_type::ROAD_NW).wrapping_shl(u32::from(3 ^ dir)) & 0xff) as u8
 }
+
+/// `MirrorRoadBits`, retaining `IsValidRoadBits`'s precondition.
+pub fn mirror_road_bits(bits: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if bits >= crate::road_type::ROAD_END {
+        check(false);
+    }
+    (bits & 3) << 2 | (bits >> 2) & 3
+}

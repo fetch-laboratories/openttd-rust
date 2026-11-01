@@ -14,6 +14,13 @@
 #include "pathfinder/pathfinder_func.h"
 #include "road.h"
 #include "newgrf_roadstop.h"
+#include "tree_map.h"
+#include "tunnel_map.h"
+#include "road_internal.h"
+#ifdef WITH_RUST
+#include "rust/services_ffi.h"
+extern "C" uint32_t openttd_test_clean_up_road_bits(const OpenTTDSharedServices *, uint32_t, uint32_t);
+#endif
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
 #ifdef WITH_RUST
 extern RoadTypes &_roadtypes_road;
@@ -32,6 +39,102 @@ extern RoadTypes _roadtypes_road;
 #include "vehicle_cmd.h"
 #include "water_cmd.h"
 extern const TileTypeProcs _tile_type_road_procs;
+/* The pinned original bodies are the oracle in both builds. */
+namespace RoadCleanupProbe {
+#include "road-cleanup-original.hpp"
+static uint32_t Candidate(TileIndex tile, uint32_t bits)
+{
+#ifdef WITH_RUST
+	return openttd_test_clean_up_road_bits(&GetRustSharedServices(), tile.base(), bits);
+#else
+	return ::CleanUpRoadBits(tile, static_cast<RoadBits>(bits));
+#endif
+}
+static void Run(TileIndex center)
+{
+	AutoRestoreBackup<Randomizer> interactive(_interactive_random, _interactive_random);
+	_interactive_random.SetSeed(619);
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	/* Restore all fixture fields before returning to simulation; no pool entry is
+	 * allocated or dereferenced by the tile-only connectivity helpers. */
+	auto capture = [](Tile t) { return std::array<uint16_t, 10>{t.type(), t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()}; };
+	auto restore = [](Tile t, const std::array<uint16_t, 10> &v) { t.type() = v[0]; t.height() = v[1]; t.m1() = v[2]; t.m2() = v[3]; t.m3() = v[4]; t.m4() = v[5]; t.m5() = v[6]; t.m6() = v[7]; t.m7() = v[8]; t.m8() = v[9]; };
+	std::vector<std::tuple<TileIndex, std::array<uint16_t, 10>>> saved;
+	for (int y = -2; y <= 3; ++y) for (int x = -2; x <= 3; ++x) {
+		TileIndex tile = center + TileDiffXY(x, y);
+		saved.emplace_back(tile, capture(tile));
+	}
+	uint count = 0;
+	auto compare = [&](TileIndex tile, uint32_t plan) {
+		const uint32_t expected = RoadCleanupProbe::CleanUpRoadBits(tile, static_cast<RoadBits>(plan));
+		const uint32_t actual = Candidate(tile, plan);
+		if (actual != expected) {
+			fmt::print(stderr, "ROADCMD cleanup-failure {} {} {} {}\n", tile.base(), plan, expected, actual);
+			SignalFixtureAbort(__LINE__);
+		}
+		++count;
+	};
+	for (DiagDirection dir = DIAGDIR_BEGIN; dir < DIAGDIR_END; ++dir) {
+		TileIndex at = ::TileAddByDiagDir(center, dir);
+		for (uint kind = 0; kind < 34; ++kind) for (uint orientation = 0; orientation < 4; ++orientation) {
+			for (int y = -1; y <= 2; ++y) for (int x = -1; x <= 2; ++x) { TileIndex t = center + TileDiffXY(x, y); MakeClear(t, CLEAR_GRASS, 3); SetTileHeight(t, 2); }
+			auto d = static_cast<DiagDirection>(orientation);
+			auto axis = DiagDirToAxis(d);
+			switch (kind) {
+				case 0: break;
+				case 1: MakeTree(at, TREE_TEMPERATE, 0, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3); break;
+				case 2: MakeRailNormal(at, OWNER_NONE, TRACK_BIT_UPPER, RAILTYPE_RAIL); break;
+				case 3: MakeSea(at); break;
+				case 4: MakeShore(at); break;
+				case 5: MakeRiver(at, 0); break;
+				case 6: MakeCanal(at, OWNER_NONE, 0); break;
+				case 7: MakeLockTile(at, OWNER_NONE, LockPart::Middle, d, WaterClass::Canal); break;
+				case 8: MakeRoadNormal(at, DiagDirToRoadBits(d), ROADTYPE_ROAD, INVALID_ROADTYPE, TownID::Invalid(), OWNER_NONE, OWNER_NONE); break;
+				case 9: MakeRoadNormal(at, ROAD_NONE, INVALID_ROADTYPE, ROADTYPE_TRAM, TownID::Invalid(), OWNER_NONE, OWNER_NONE); break;
+				case 10: MakeRoadDepot(at, OWNER_NONE, DepotID(0), d, ROADTYPE_ROAD); break;
+				case 11: MakeRoadDepot(at, OWNER_NONE, DepotID(0), d, ROADTYPE_TRAM); break;
+				case 12: MakeRoadCrossing(at, OWNER_NONE, OWNER_NONE, OWNER_NONE, axis, RAILTYPE_RAIL, ROADTYPE_ROAD, ROADTYPE_TRAM, TownID::Invalid()); break;
+				case 13: MakeRoadStop(at, OWNER_NONE, StationID(0), RoadStopType::Bus, ROADTYPE_ROAD, INVALID_ROADTYPE, d); break;
+				case 14: MakeRoadStop(at, OWNER_NONE, StationID(0), RoadStopType::Truck, INVALID_ROADTYPE, ROADTYPE_TRAM, d); break;
+				case 15: MakeDriveThroughRoadStop(at, OWNER_NONE, OWNER_NONE, OWNER_NONE, StationID(0), StationType::Bus, ROADTYPE_ROAD, ROADTYPE_TRAM, axis); break;
+				case 16: MakeRailStation(at, OWNER_NONE, StationID(0), axis, 0, RAILTYPE_RAIL); break;
+				case 17: MakeRoadTunnel(at, OWNER_NONE, d, ROADTYPE_ROAD, ROADTYPE_TRAM); break;
+				case 18: MakeRoadBridgeRamp(at, OWNER_NONE, OWNER_NONE, OWNER_NONE, 0, d, INVALID_ROADTYPE, ROADTYPE_TRAM); break;
+				case 19: MakeRailTunnel(at, OWNER_NONE, d, RAILTYPE_RAIL); break;
+				case 20: MakeRailNormal(at, OWNER_NONE, AxisToTrackBits(axis), RAILTYPE_RAIL); break;
+				case 21: MakeRailNormal(at, OWNER_NONE, TRACK_BIT_X | TRACK_BIT_Y, RAILTYPE_RAIL); break;
+				case 22: MakeRailNormal(at, OWNER_NONE, AxisToTrackBits(axis), RAILTYPE_RAIL); SetHasSignals(at, true); break;
+				case 23: MakeRailDepot(at, OWNER_NONE, DepotID(0), d, RAILTYPE_RAIL); break;
+				case 28: SetTileType(at, MP_HOUSE); break;
+				case 29: SetTileType(at, MP_INDUSTRY); break;
+				case 30: SetTileType(at, MP_OBJECT); break;
+				case 31: MakeRoadDepot(at, OWNER_NONE, DepotID(0), d, ROADTYPE_ROAD); SetRoadType(at, RTT_ROAD, INVALID_ROADTYPE); break;
+				case 32: MakeRoadStop(at, OWNER_NONE, StationID(0), RoadStopType::Bus, INVALID_ROADTYPE, INVALID_ROADTYPE, d); break;
+				case 33: MakeRoadTunnel(at, OWNER_NONE, d, INVALID_ROADTYPE, INVALID_ROADTYPE); break;
+				default: MakeRailNormal(at, OWNER_NONE, AxisToTrackBits(axis), RAILTYPE_RAIL); break;
+			}
+			if (kind >= 24 && kind < 28) {
+				Slope slope = static_cast<Slope>(std::array<uint, 4>{SLOPE_N, SLOPE_NE, SLOPE_NWS, SLOPE_STEEP_N}[kind - 24]);
+				SetTileHeight(at, 2 + ((slope & SLOPE_N) != 0) + (slope == SLOPE_STEEP_N));
+				SetTileHeight(at + TileDiffXY(1, 0), 2 + ((slope & SLOPE_W) != 0));
+				SetTileHeight(at + TileDiffXY(0, 1), 2 + ((slope & SLOPE_E) != 0));
+				SetTileHeight(at + TileDiffXY(1, 1), 2 + ((slope & SLOPE_S) != 0));
+			}
+			for (uint plan = 0; plan <= UINT8_MAX; ++plan) compare(center, plan);
+			for (uint32_t plan : {256U, 0x8000000FU, UINT32_MAX}) compare(center, plan);
+		}
+		fmt::print(stderr, "ROADCMD cleanup-matrix {} {}\n", static_cast<uint>(dir), count);
+	}
+	for (TileIndex tile : {INVALID_TILE, TileIndex{Map::Size()}, TileXY(Map::MaxX(), 2), TileXY(2, Map::MaxY()), TileXY(1, 1), TileXY(Map::MaxX() - 1, Map::MaxY() - 1)}) for (uint plan = 0; plan <= UINT8_MAX; ++plan) compare(tile, plan);
+	for (auto [tile, state] : saved) restore(tile, state);
+	SaveRandomSeeds(&after);
+	const bool same = before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1];
+	fmt::print(stderr, "ROADCMD cleanup-done {} {} {} {} {} {}\n", count, same, after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	if (!same) SignalFixtureAbort(__LINE__);
+}
+} // namespace RoadCleanupProbe
+
 static void RoadPrint(std::string_view name, const CommandCost &cost, Money extra = 0)
 {
 	fmt::print(stderr, "ROADCMD {} {} {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), static_cast<int>(cost.GetExpensesType()), extra);
@@ -258,6 +361,7 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	CompanyID other = RailCompany();
 	SavedRandomSeeds before, after;
 	SaveRandomSeeds(&before);
+	RoadCleanupProbe::Run(t(18, 15));
 	RoadRun<CMD_BUILD_ROAD>("zero", t(2, 2), ROAD_NONE, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
 	RoadPrint("protocol-outside", RoadBuild({}, TileIndex{Map::Size()}, ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
 	RoadPrint("protocol-void", RoadBuild({}, TileXY(Map::MaxX(), 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));

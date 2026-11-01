@@ -652,7 +652,6 @@ pub struct RoadServices {
     pub work_counter: extern "C" fn(u32) -> u32,
     pub set_work_counter: extern "C" fn(u32, u32),
     pub all_bits: extern "C" fn(u32) -> RoadBits,
-    pub cleanup: extern "C" fn(u32, RoadBits) -> RoadBits,
     pub town: *const crate::town::Leaves,
     pub set_road_type: extern "C" fn(u32, RoadType),
 }
@@ -776,7 +775,7 @@ pub(crate) unsafe fn road_tile_loop(
         hit(Witness::RoadWorkEnd);
         if rebuild {
             let old = RoadBits((s.road_bits)(tile, 0, false));
-            let new = (r.cleanup)(tile, old);
+            let new = crate::road_cleanup::clean_up_road_bits(s, tile, old);
             if old != new {
                 // SAFETY: the outer tile-loop entry owns both native result slots.
                 unsafe {
@@ -936,7 +935,6 @@ crate::abi::layouts! {
         work_counter,
         set_work_counter,
         all_bits,
-        cleanup,
         town,
         set_road_type,
     };

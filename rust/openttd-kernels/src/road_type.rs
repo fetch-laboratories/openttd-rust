@@ -38,3 +38,9 @@ pub const ROADTYPE_BEGIN: u8 = 0;
 pub const RTT_ROAD: crate::services::RoadTramType = crate::services::RoadTramType(false);
 /// `RTT_TRAM`.
 pub const RTT_TRAM: crate::services::RoadTramType = crate::services::RoadTramType(true);
+
+/// `ROAD_NONE`.
+pub const ROAD_NONE: u8 = 0;
+
+/// `ROAD_END`.
+pub const ROAD_END: u8 = (ROAD_X | ROAD_Y) + 1;

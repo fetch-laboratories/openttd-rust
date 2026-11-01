@@ -353,6 +353,26 @@ pub extern "C" fn openttd_test_snow_line_highest(s: &crate::services::Services) 
     crate::snow_line::highest(s)
 }
 
+/// Planned-road evidence enters the production Rust owner without a native facade.
+/// # Safety
+/// Shared services and canonical map statics are live for this serialized entry.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_truncation)] // Native uint32 town plans narrow to RoadBits.
+pub unsafe extern "C" fn openttd_test_clean_up_road_bits(
+    shared: *const crate::services::Services,
+    tile: u32,
+    bits: u32,
+) -> u32 {
+    u32::from(
+        crate::road_cleanup::clean_up_road_bits(
+            unsafe { &*shared },
+            tile,
+            crate::services::RoadBits(bits as u8),
+        )
+        .0,
+    )
+}
+
 /// # Safety
 /// Every station, road vehicle and service table is live and serialized throughout these probes.
 #[unsafe(no_mangle)]

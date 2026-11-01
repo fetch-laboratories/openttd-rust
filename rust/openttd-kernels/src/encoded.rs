@@ -99,6 +99,10 @@ impl Output {
         }
     }
 
+    pub(super) fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+
     pub(super) fn diagnostic(&self, index: usize) -> Diagnostic {
         self.diagnostics[index]
     }
