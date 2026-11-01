@@ -61,7 +61,6 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.storage = &GetRustStorageServices(),
 		.larger_towns = OpenTTDLargerTowns,
 
-		.file = RustResolverGRFFile,
 
 		.stage = [](uint32_t tile) noexcept { return GetHouseBuildingStage(TileIndex{tile}); },
 		.age = RustHouseAge,

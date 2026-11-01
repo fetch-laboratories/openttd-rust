@@ -596,7 +596,7 @@ pub unsafe extern "C" fn openttd_rust_engine_grfid(s: &Services, e: E) -> u32 {
     if file.is_null() {
         0
     } else {
-        unsafe { ((*((s.loading)())).file_id)(file) }
+        unsafe { ((*(*((s.loading)())).shared).grf_file_id)(file) }
     }
 }
 /// `Engine::GetLifeLengthInDays`; calendar Year and Date arithmetic is signed int32.

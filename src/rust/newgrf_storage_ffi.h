@@ -20,8 +20,8 @@ struct OpenTTDIndustryStorage { OpenTTDStorage256 *owner; bool valid; };
  * return before SlObject/SlError; no Rust frame spans native file errors.
  * Services cannot yield or throw. No owner borrow survives a service call. */
 struct OpenTTDStorageServices {
+	const OpenTTDSharedServices *shared;
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
-	uint32_t (*grfid)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	OpenTTDIndustryStorage (*industry)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry);
 	OpenTTDStorage256 *(*create_industry)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(create_industry);
 	OpenTTDStorage256 *(*airport)(Station *) noexcept OPENTTD_SERVICE_DEFAULT(airport);

@@ -236,7 +236,6 @@ pub struct Services {
     next: extern "C" fn(u32) -> EngineRef,
     resolve: extern "C" fn(u16) -> EngineRef,
     dynamic: extern "C" fn() -> bool,
-    pub(crate) file_id: extern "C" fn(File) -> u32,
     find_file: extern "C" fn(u32) -> *mut c_void,
     engine_file: extern "C" fn(E) -> File,
     has_file: extern "C" fn(E) -> bool,
@@ -261,7 +260,6 @@ pub struct Services {
     old_refittable: extern "C" fn(E) -> bool,
     set_old_refittable: extern "C" fn(E, bool),
     cargo_next: extern "C" fn(u32) -> CargoClass,
-    cargo_map: extern "C" fn(File, u8) -> u8,
     cargo_list_size: extern "C" fn(File) -> usize,
     pub(crate) unknown_refit: extern "C" fn(u32, u16, u16),
     climate: extern "C" fn() -> u8,
@@ -295,7 +293,7 @@ fn scope(s: &Services, file: File, dynamic: bool) -> u32 {
     if !dynamic {
         return INVALID_GRFID;
     }
-    let id = (s.file_id)(file);
+    let id = (unsafe { &*s.shared }.grf_file_id)(file);
     unsafe { &*OVERRIDES.get() }.get(&id).copied().unwrap_or(id)
 }
 #[unsafe(no_mangle)]
@@ -333,7 +331,7 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
     let dynamic = (s.dynamic)();
     let scope = scope(s, file, dynamic);
     if dynamic {
-        let file_id = (s.file_id)(file);
+        let file_id = (unsafe { &*s.shared }.grf_file_id)(file);
         if unsafe { &*OVERRIDES.get() }.contains_key(&file_id) {
             (s.mapping_log)(file_id, scope, !(s.find_file)(scope).is_null());
         }
@@ -351,7 +349,7 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
         let engine = (s.resolve)(id);
         if !(s.has_file)(engine.shell) {
             (s.set_file)(engine.shell, file);
-            (s.replaced_log)(id, (s.file_id)(file), kind, local);
+            (s.replaced_log)(id, (unsafe { &*s.shared }.grf_file_id)(file), kind, local);
         }
         return engine.shell;
     }
@@ -384,7 +382,12 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
             initialize_rail_labels(s, engine);
         }
     }
-    (s.created_log)(engine.id, (s.file_id)(file), kind, local);
+    (s.created_log)(
+        engine.id,
+        (unsafe { &*s.shared }.grf_file_id)(file),
+        kind,
+        local,
+    );
     engine.shell
 }
 #[unsafe(no_mangle)]
@@ -433,7 +436,6 @@ crate::abi::layouts! {
         next,
         resolve,
         dynamic,
-        file_id,
         find_file,
         engine_file,
         has_file,
@@ -458,7 +460,6 @@ crate::abi::layouts! {
         old_refittable,
         set_old_refittable,
         cargo_next,
-        cargo_map,
         cargo_list_size,
         unknown_refit,
         climate,
@@ -706,7 +707,7 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                     break;
                 }
                 cargo_from = u32::from(cs.cargo) + 1;
-                let local_slot = (s.cargo_map)(file, cs.cargo);
+                let local_slot = (unsafe { &*s.shared }.grf_cargo_map)(file, cs.cargo);
                 let callback = unsafe {
                     crate::newgrf_vehicle::openttd_rust_vehicle_callback(
                         &*s.resolver,
@@ -732,7 +733,11 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                         (s.set_refit)(e.shell, input.mask);
                     }
                     _ => {
-                        (s.unknown_refit)((s.file_id)(file), CBID_VEHICLE_CUSTOM_REFIT.0, callback);
+                        (s.unknown_refit)(
+                            (unsafe { &*s.shared }.grf_file_id)(file),
+                            CBID_VEHICLE_CUSTOM_REFIT.0,
+                            callback,
+                        );
                     }
                 }
             }
@@ -766,7 +771,7 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
                     if input.mask & (1_u64 << cargo) == 0 {
                         continue;
                     }
-                    let local = (s.cargo_map)(file, cargo);
+                    let local = (unsafe { &*s.shared }.grf_cargo_map)(file, cargo);
                     if local < best_local_slot {
                         best_local_slot = local;
                         input.cargo = cargo;
@@ -816,7 +821,7 @@ pub unsafe extern "C" fn openttd_rust_engine_set_override(s: &Services, source: 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_current_override(s: &Services, file: File) -> File {
     let target = unsafe { &*OVERRIDES.get() }
-        .get(&(s.file_id)(file))
+        .get(&(unsafe { &*s.shared }.grf_file_id)(file))
         .copied();
     target.map_or(ptr::null(), |target| (s.find_file)(target).cast_const())
 }
