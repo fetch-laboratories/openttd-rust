@@ -29,11 +29,8 @@ struct OpenTTDCommandServices {
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDRailMapServices *rail_map;
 	const OpenTTDSignalServices *signals;
-	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
-	void (*storage_discard)(void *) noexcept OPENTTD_SERVICE_DEFAULT(storage_discard);
 	bool (*shift_pressed)() noexcept OPENTTD_SERVICE_DEFAULT(shift_pressed);
 	uint8_t (*pause_level)() noexcept OPENTTD_SERVICE_DEFAULT(pause_level);
-	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
 	void (*last_build_coordinate)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(last_build_coordinate);
 	uint32_t not_enough_cash;
 	void (*paused_error)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(paused_error);

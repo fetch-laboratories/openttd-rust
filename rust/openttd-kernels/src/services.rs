@@ -160,16 +160,10 @@ pub struct CommandServices {
     pub rail_map: &'static RailMapServices,
     /// Native signal leaves of the signal buffer owner.
     pub signals: &'static crate::signal::SignalServices,
-    /// Native `assert` policy.
-    pub assert_condition: extern "C" fn(bool),
-    /// Persistent storage backup release on leaving test mode.
-    pub storage_discard: extern "C" fn(*mut std::ffi::c_void),
     /// `_shift_pressed`.
     pub shift_pressed: extern "C" fn() -> bool,
     /// `_settings_game.construction.command_pause_level`.
     pub pause_level: extern "C" fn() -> u8,
-    /// `_debug_desync_level`.
-    pub desync_level: extern "C" fn() -> i32,
     /// `Company::GetIfValid(company)->last_build_coordinate = tile`.
     pub last_build_coordinate: extern "C" fn(u8, u32),
     /// `STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY`.
@@ -420,6 +414,8 @@ pub struct Services {
     pub station_serve_neutral: extern "C" fn() -> bool,
     /// Canonical shared `station_type` service.
     pub station_type: extern "C" fn(u32) -> StationType,
+    /// Persistent storage backup release on leaving command or test mode.
+    pub storage_discard: extern "C" fn(*mut std::ffi::c_void),
     /// Canonical shared `tile_animation_add` service.
 
     /// Canonical shared `tile_animation_delete` service.
@@ -706,11 +702,8 @@ crate::abi::layouts! {
         cost,
         rail_map,
         signals,
-        assert_condition,
-        storage_discard,
         shift_pressed,
         pause_level,
-        desync_level,
         last_build_coordinate,
         not_enough_cash,
         paused_error,
@@ -826,6 +819,7 @@ crate::abi::layouts! {
         station_gfx,
         station_serve_neutral,
         station_type,
+        storage_discard,
 
         tile_animation_set_frame,
         town_next_id,
@@ -1077,6 +1071,7 @@ pub fn fixture(
         station_gfx: byte,
         station_serve_neutral: flag0,
         station_type: fixture_station_type,
+        storage_discard: fixture_storage_discard,
 
         tile_animation_set_frame: zone,
         town_next_id: word,
@@ -1504,6 +1499,8 @@ extern "C" fn fixture_road_stop_type(_: u32) -> RoadStopType {
 extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices {
     panic!("unused road stop table")
 }
+#[cfg(test)]
+extern "C" fn fixture_storage_discard(_: *mut std::ffi::c_void) {}
 #[cfg(test)]
 extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")

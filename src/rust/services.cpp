@@ -76,6 +76,12 @@
 #include "tile_type_access.hpp"
 #include "../effectvehicle_func.h"
 #include "clock_ffi.h"
+#include "../error.h"
+#include "../gfx_func.h"
+#include "../gui.h"
+#include "../texteff.hpp"
+#include "newgrf_storage_ffi.h"
+#include "signal_ffi.h"
 #include "../safeguards.h"
 static_assert(VE_OFFSET_START == 0);
 static_assert(VE_OFFSET_CENTRE == 8);
@@ -145,6 +151,57 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
 		.expense = CostExpense, .make_error = CostMakeError,
 		.encode_owned_by = CostEncodeOwnedBy, .error_owner = CostErrorOwner,
+	};
+	return services;
+}
+
+/* Command lifecycle leaves: settings, input and presentation only. None reenters a
+ * command; allocation or error-formatting failure terminates under noexcept. */
+static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
+static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
+{
+	NativeCost(cost)->MakeError(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
+	if (RustIsLocalCompany()) NativeCost(cost)->SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
+}
+static bool CommandShiftPressed() noexcept { return _shift_pressed; }
+static uint8_t CommandPauseLevel() noexcept { return to_underlying(_settings_game.construction.command_pause_level); }
+static void CommandLastBuild(uint8_t company, uint32_t tile) noexcept
+{
+	Company *c = Company::GetIfValid(CompanyID(company));
+	if (c != nullptr) c->last_build_coordinate = TileIndex{tile};
+}
+static void CommandPausedError(uint32_t err_message, int32_t x, int32_t y) noexcept
+{
+	ShowErrorMessage(GetEncodedString(err_message), GetEncodedString(STR_ERROR_NOT_ALLOWED_WHILE_PAUSED), WL_INFO, x, y);
+}
+static void CommandErrorMessage(uint32_t err_message, int32_t x, int32_t y, const OpenTTDCommandCost *res) noexcept
+{
+	ShowErrorMessage(GetEncodedString(err_message), x, y, *const_cast<CommandCost *>(NativeCost(res)));
+}
+static void CommandEstimate(int64_t cost, int32_t x, int32_t y) noexcept { ShowEstimatedCostOrIncome(cost, x, y); }
+static void CommandCostAnimation(int32_t x, int32_t y, int64_t cost) noexcept { ShowCostOrIncomeAnimation(x, y, GetSlopePixelZ(x, y), cost); }
+
+const OpenTTDCommandServices &GetRustCommandServices() noexcept
+{
+	static const OpenTTDCommandServices services{
+		.finance = &GetRustCompanyFinanceServices(),
+		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
+		.infrastructure_dirty = RustInfrastructureDirty,
+		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
+		.company = []() noexcept { return &GetRustCompanyServices(); },
+		.occupancy = GetRustOccupancyCommands,
+		.shared = &GetRustSharedServices(),
+		.cost = &GetRustCommandCostServices(),
+		.rail_map = &GetRustRailMapServices(),
+		.signals = &GetRustSignalServices(),
+		.shift_pressed = CommandShiftPressed,
+		.pause_level = CommandPauseLevel,
+		.last_build_coordinate = CommandLastBuild,
+		.not_enough_cash = STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY,
+		.paused_error = CommandPausedError,
+		.error_message = CommandErrorMessage,
+		.estimate = CommandEstimate,
+		.cost_animation = CommandCostAnimation,
 	};
 	return services;
 }
@@ -415,6 +472,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.station_gfx = [](uint32_t tile) noexcept { return GetStationGfx(TileIndex{tile}); },
 	.station_serve_neutral = RustServeNeutralIndustries,
 	.station_type = [](uint32_t tile) noexcept { return GetStationType(TileIndex{tile}); },
+	.storage_discard = RustStorageDiscard,
 
 	.tile_animation_set_frame = OpenTTDSetAnimationFrame,
 	.town_next_id = OpenTTDNextTownID,

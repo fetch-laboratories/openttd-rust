@@ -607,7 +607,7 @@ impl Session<'_> {
                 mode,
                 false,
                 (*world.landscape).assert_condition,
-                world.storage_discard,
+                (*(*world.landscape).shared).storage_discard,
             );
         }
     }

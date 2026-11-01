@@ -178,7 +178,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.restore_company = [](OpenTTDWorldFrame *f) noexcept { f->company->Restore(); },
 		.callback = [](OpenTTDWorldFrame *f, GWDoneProc *proc) noexcept { return WorldException(f, [=] { proc(); }); },
 		.exception_kind = WorldExceptionKind,
-		.storage_discard = RustStorageDiscard,
 		.dedicated = RustNetworkDedicated,
 		.exit_game = RustExitGame,
 		.set_exit = RustSetExitGame,

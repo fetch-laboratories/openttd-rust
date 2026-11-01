@@ -78,6 +78,7 @@ template <Commands TCmd, typename T, bool THasTile> struct CommandHelper;
 class CommandHelperBase {
 protected:
 	static void LogCommandExecution(Commands cmd, StringID err_message, const CommandDataBuffer &args, bool failed);
+	static bool DesyncLogging();
 	[[noreturn]] static void AbandonExecution(std::exception_ptr exception, std::source_location location = std::source_location::current());
 };
 
@@ -154,6 +155,8 @@ private:
 
 	static void Log(OpenTTDCommandFrame *base, bool failed) noexcept
 	{
+		/* Debug(desync, 1) prints nothing below level 1; skip serializing then. */
+		if (!DesyncLogging()) return;
 		auto &f = *static_cast<ExecuteFrame *>(base);
 		LogCommandExecution(Tcmd, f.err_message, EndianBufferWriter<CommandDataBuffer>::FromValue(*f.args), failed);
 	}

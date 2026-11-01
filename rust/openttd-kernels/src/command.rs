@@ -264,8 +264,8 @@ fn storage_mode(s: &CommandServices, mode: u8) {
         crate::newgrf_storage::openttd_rust_storage_switch_mode(
             mode,
             false,
-            s.assert_condition,
-            s.storage_discard,
+            s.signals.assert_condition,
+            s.shared.storage_discard,
         );
     }
 }
@@ -331,7 +331,7 @@ unsafe fn execute(
         )
     };
     let counter = Nesting::new();
-    (s.assert_condition)(counter.0);
+    (s.signals.assert_condition)(counter.0);
     if cmd_flags & CommandFlag::CLIENT_ID != 0 {
         // SAFETY: live frame for the call.
         unsafe { assert_client_ids(frame) };
@@ -363,7 +363,7 @@ unsafe fn execute(
 
     storage_mode(s, PSM_LEAVE_TESTMODE);
     crate::town::openttd_rust_town_rating_test(false);
-    (s.assert_condition)(if exec_as_spectator {
+    (s.signals.assert_condition)(if exec_as_spectator {
         (finance.current_company)() == COMPANY_SPECTATOR
     } else {
         (finance.current_company)() == original
@@ -390,17 +390,15 @@ unsafe fn execute(
         before(s, true, false);
         storage_mode(s, PSM_ENTER_COMMAND);
     }
-    let desync_log = (s.desync_level)() >= 1;
     if send_net {
         // SAFETY: live frame.
         unsafe { send(frame, (finance.current_company)()) };
         (finance.set_current_company)(original);
         return EMPTY;
     }
-    if desync_log {
-        // SAFETY: live frame.
-        unsafe { log(frame, false) };
-    }
+    // The log step applies `Debug(desync, 1)`'s level filter, the original condition here.
+    // SAFETY: live frame.
+    unsafe { log(frame, false) };
     // SAFETY: live frame; no Rust borrow spans the native procedure.
     if !unsafe { run(frame, flags | DoCommandFlag::EXECUTE, EXEC) } {
         return abandon(s, original);
@@ -415,7 +413,7 @@ unsafe fn execute(
         // SAFETY: the company table is immutable for the process lifetime.
         (finance.set_current_company)((unsafe { &*(s.company)() }.local_company)());
     } else {
-        (s.assert_condition)(if exec_as_spectator {
+        (s.signals.assert_condition)(if exec_as_spectator {
             (finance.current_company)() == COMPANY_SPECTATOR
         } else {
             (finance.current_company)() == original
@@ -424,7 +422,7 @@ unsafe fn execute(
     }
 
     if !test_and_exec_can_differ {
-        (s.assert_condition)(
+        (s.signals.assert_condition)(
             (c.money)(test) == (c.money)(exec) && (c.success)(test) == (c.success)(exec),
         );
     } else if !(c.success)(exec) {

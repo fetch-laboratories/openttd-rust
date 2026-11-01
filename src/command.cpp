@@ -62,16 +62,6 @@
 #include "table/strings.h"
 
 #include "rust/command_services_ffi.h"
-#include "rust/command_cost_services.h"
-#include "rust/company_adapter.h"
-#include "rust/company_services.h"
-#include "rust/environment_services.h"
-#include "rust/landscape_command_ffi.h"
-#include "rust/newgrf_storage_ffi.h"
-#include "rust/services_assert.h"
-#include "rust/services_ffi.h"
-#include "rust/signal_ffi.h"
-#include "rust/vehicle_ffi.h"
 
 #include "safeguards.h"
 
@@ -162,65 +152,17 @@ void CommandHelperBase::LogCommandExecution(Commands cmd, StringID err_message, 
 	Debug(desync, 1, "{}: {:08x}; {:02x}; {:02x}; {:08x}; {:08x}; {} ({})", failed ? "cmdf" : "cmd", (uint32_t)TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, _current_company, cmd, err_message, FormatArrayAsHex(args), GetCommandName(cmd));
 }
 
+/** Whether a desync log line would be printed. */
+bool CommandHelperBase::DesyncLogging()
+{
+	return _debug_desync_level >= 1;
+}
+
 /** `Backup<CompanyID>` destruction while a command procedure's exception unwinds `Execute`. */
 void CommandHelperBase::AbandonExecution(std::exception_ptr exception, std::source_location location)
 {
 	Debug(misc, 0, "{}:{}: Backed-up value was not restored!", location.file_name(), location.line());
 	std::rethrow_exception(exception);
-}
-
-/* Lifecycle leaves: settings, input and presentation only. None reenters a command. */
-static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
-static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
-{
-	CommandCost &native = *reinterpret_cast<CommandCost *>(cost);
-	native.MakeError(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
-	if (IsLocalCompany()) native.SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
-}
-static bool CommandShiftPressed() noexcept { return _shift_pressed; }
-static uint8_t CommandPauseLevel() noexcept { return to_underlying(_settings_game.construction.command_pause_level); }
-static void CommandLastBuild(uint8_t company, uint32_t tile) noexcept
-{
-	Company *c = Company::GetIfValid(CompanyID(company));
-	if (c != nullptr) c->last_build_coordinate = TileIndex{tile};
-}
-static void CommandPausedError(uint32_t err_message, int32_t x, int32_t y) noexcept
-{
-	ShowErrorMessage(GetEncodedString(err_message), GetEncodedString(STR_ERROR_NOT_ALLOWED_WHILE_PAUSED), WL_INFO, x, y);
-}
-static void CommandErrorMessage(uint32_t err_message, int32_t x, int32_t y, const OpenTTDCommandCost *res) noexcept
-{
-	ShowErrorMessage(GetEncodedString(err_message), x, y, *const_cast<CommandCost *>(reinterpret_cast<const CommandCost *>(res)));
-}
-static void CommandEstimate(int64_t cost, int32_t x, int32_t y) noexcept { ShowEstimatedCostOrIncome(cost, x, y); }
-static void CommandCostAnimation(int32_t x, int32_t y, int64_t cost) noexcept { ShowCostOrIncomeAnimation(x, y, GetSlopePixelZ(x, y), cost); }
-
-const OpenTTDCommandServices &GetRustCommandServices() noexcept
-{
-	static const OpenTTDCommandServices services{
-		.finance = &GetRustCompanyFinanceServices(),
-		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
-		.infrastructure_dirty = RustInfrastructureDirty,
-		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
-		.company = []() noexcept { return &GetRustCompanyServices(); },
-		.occupancy = GetRustOccupancyCommands,
-		.shared = &GetRustSharedServices(),
-		.cost = &GetRustCommandCostServices(),
-		.rail_map = &GetRustRailMapServices(),
-		.signals = &GetRustSignalServices(),
-		.assert_condition = RustAssertCondition,
-		.storage_discard = RustStorageDiscard,
-		.shift_pressed = CommandShiftPressed,
-		.pause_level = CommandPauseLevel,
-		.desync_level = RustDesyncLevel,
-		.last_build_coordinate = CommandLastBuild,
-		.not_enough_cash = STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY,
-		.paused_error = CommandPausedError,
-		.error_message = CommandErrorMessage,
-		.estimate = CommandEstimate,
-		.cost_animation = CommandCostAnimation,
-	};
-	return services;
 }
 
 /**
