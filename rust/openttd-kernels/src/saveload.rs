@@ -1827,7 +1827,6 @@ mod tests {
     /// Native failures return to the facade before any read or further string operation.
     #[test]
     fn native_string_failures_return_to_the_facade() {
-        let _lock = CODEC_TEST.lock().unwrap();
         extern "C" fn fail_resize(_: *mut c_void, _: usize, _: *mut *mut u8) -> bool {
             false
         }
@@ -1847,6 +1846,12 @@ mod tests {
         ) -> bool {
             false
         }
+        extern "C" fn mutable_data(ptr: *const c_void, length: *mut usize) -> *const u8 {
+            // SAFETY: This case supplies a live one-byte array and the codec supplies length.
+            unsafe { *length = 1 };
+            ptr.cast()
+        }
+        let _lock = CODEC_TEST.lock().unwrap();
         let services = OpenTTDSaveLoadServices {
             copy_from_old_name: fail_name,
             string_data: encoded_data,
@@ -1869,20 +1874,15 @@ mod tests {
             }),
             Err(SL_STATUS_NATIVE)
         );
-        extern "C" fn mutable_data(ptr: *const c_void, length: *mut usize) -> *const u8 {
-            // SAFETY: This case supplies a live one-byte array and the codec supplies length.
-            unsafe { *length = 1 };
-            ptr.cast()
-        }
         let services = OpenTTDSaveLoadServices {
             string_data: mutable_data,
             ..services
         };
-        let mut text = [b'x'];
+        let mut text = *b"x";
         assert_eq!(
             make_valid(&services, text.as_mut_ptr().cast(), 0),
             Err(SL_STATUS_NATIVE)
         );
-        assert_eq!(text, [b'x']);
+        assert_eq!(&text, b"x");
     }
 }
