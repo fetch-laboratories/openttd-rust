@@ -1895,11 +1895,11 @@ mod tests {
             ..COMMAND
         };
         let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 1, 1, 20, true, &s, 0, |tile| {
+            t.plant_command(std::ptr::null_mut(), 2, 1, 20, true, &s, 0, |tile| {
                 landscape_clear(std::ptr::null_mut(), tile)
             })
         });
-        assert_eq!((result.status, result.message, result.cost), (0, 0, 15));
+        assert_eq!((result.status, result.message, result.cost), (0, 0, 30));
         assert_eq!(
             events(),
             [
@@ -1910,9 +1910,16 @@ mod tests {
                 Event::Dirty,
                 Event::Debit,
                 Event::Zone(ZONE_RAINFOREST),
+                Event::Plant,
+                Event::Plant,
+                Event::Write("make_tree"),
+                Event::Dirty,
+                Event::Debit,
+                Event::Zone(ZONE_RAINFOREST),
             ]
         );
-        assert_eq!(WORLD.with_borrow(|w| w.visited.clone()), [1, 1]);
+        // The diagonal from corner 2 to corner 1 starts at 2; the orthogonal area would start at 1.
+        assert_eq!(WORLD.with_borrow(|w| w.visited.clone()), [2, 2, 1, 1]);
         assert_eq!(WORLD.with_borrow(|w| w.tree.growth), GROWN);
     }
 
