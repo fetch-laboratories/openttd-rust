@@ -145,92 +145,59 @@ Root's first actions from this chart. They override the plan-after47 input's
    record fields, which go when phase-2 owners move those records, so do not
    tidy them first. Each stocktake records the baseline sizes.
 
-## Twenty-fifth steering review (2026-10-31: the long-job relay, repeated sweep proofs and evidence that names nothing)
+## Twenty-sixth steering review (2026-11-01: held phase-1 and phase-2 owners passed over)
 
 Agent: /root (Claude Code steering review) | Model: claude-opus-5-5 | Reasoning effort: not reported to the agent by host.
 
-**What was audited.** Six independent read-only audits ran, with no project builds or games. The steering checked every claim acted on below against the source.
-- Fidelity, line by line against the pinned original:
-  - #607, the sweep, which integrates next;
-  - #588: #578's goals, story pages and league tables, and #580's clock batch;
-  - #594's setting transitions;
-  - #593's heightmap and town-data import.
-- Targeted: the shared k-d tree (#608 integrated, #612 in draft), and the process cost of integrations 39 to 47.
+**What was audited.** Four independent read-only audits ran, with no builds or games. The steering checked every claim acted on below against the source.
+- Fidelity, line by line against the pinned original: #627's save/load codec slices 1 to 3a; #620, #616 and #618; #612 and #624.
+- Targeted: readiness of the held owners #570, #559 and #69, and of #628 and #573's remaining slices.
 
-**No reachable divergence on main.**
-- Random draws, widths, saturation and side-effect order match in every audited body.
-- #608's Rust town tree visits in a different order from the native tree. Every town consumer calls only `nearest`, which ignores order.
-- One case is compiler-dependent and goes to #156 with the coverage gaps: the counter-clockwise town-data float conversion, which is undefined behavior in the original.
+**No reachable divergence in #612, #616, #618, #620 or #624.**
+- Random draws, widths, wrapping and side-effect order match. #612's partition bounce is gone: `RustKdtreePartition` is a stateless `nth_element` over keys Rust fills first.
+- #612 reads each k-d tree coordinate through two C++ calls (`station/spatial.rs:12`), about four per visited node. The station pool owner removes them (work order 4).
+- #616 and #620 added Rust map readers beside the native `bridge_above` and `rail_tile_type` services they duplicate. #565 item 2 deletes the services.
 
-**1. Root relayed its children's long jobs.**
-- Codex children briefed before 10:31 were woken by their own `exec_command` jobs: 49 completions, including industry601's verify and metric runs.
-- From 10:41, root's briefs told children to hand long jobs to root. The reason was one child's claim that Codex children get no wakeup.
-- Root then ran about 43 of its children's jobs; 21 of them exited nonzero. Each took at least two root turns, about 86 of its 370 messages.
-- station602 sat idle for 71 minutes across seven relays.
-- Root cause: AGENTS.md named only Claude Code's mechanism.
+**1. The held owners were passed over.** This is the user's focus.
+- The 10-31 session scope said "Leave #616, #618, #620, #559, #69 and #570 untouched" because they did not fit that usage window. It did not say why.
+- When the user widened the budget, root kept the hold "since you didn't lift that". It filled the room with #621, #622, then phase-3 #573 and #574 (`97c01a0df8`).
+- The 11-01 wrap-up integrated #616, #618 and #620. Its work order then ranked "Continue the started owners" (#622's later batch, #573's slices 3b and 4, #628) above #559, #69 and #570. That contradicts [selection](planning.md#selection) (earliest phase first, user 2026-10-28) and the navigation's "Start #570 when PR-B integrates".
+- Cost: #570, phase 2's only ready owner, had no branch for about 25 hours after #607 integrated, across eight integrations. Phase 3 gained #627's 603 retired save/load lines. #628 holds a slot at slice 1 of 5, blocked on #629.
+- Root cause: no rule said that a session hold expires with its session, or that a started owner's next slice is new work.
 
-**2. #607 repeated a full proof at every base update and never reached Full.**
-- On 10-31 it had six base merges. Each resolved conflicts, reswept, replayed 1,810 paths and re-proved eight deviations. Five also recounted metrics, and three compiled or reran tests.
-- The workflow's condition needs only a rerun of the sweep.
-- The audit found that the saved head matches a clean re-sweep of its merge base, and base has since moved only in docs. One docs-only merge and a bootstrap Full integrate it.
+**2. The held owners' briefs are stale.**
+- #570's issue and design put the vehicle reference adapters in `saveload.cpp`; #627 moved reference conversion to `saveload.rs`.
+- #573's slice 3b changes the `SaveLoad` base and the `saveload.h` macros that #570's vehicle descriptors use, so the two cannot run together.
+- #559's body still carries the 23rd review's exclusion and the portable bodies #607 removed. #628 already calls a native `IsCommandAllowedWhilePaused` leaf that #559 would port.
+- #69 is still labelled `paused` and cites removed bases and a C++ fallback. #522 already owns bitmap storage.
 
-**3. Evidence plans listed coverage matrices instead of naming what existing checks miss.**
-- [Cost decisions](planning.md#cost-decisions) require the naming.
-- #613's plan listed every vehicle kind, climate and factor extreme. It estimated 60 to 120 tooling lines and ended at 352.
-- Integrations 39 to 47 added 1,858 tooling lines and about 315 fixture lines for 1,241 lines retired.
-- #612's visit-order check compares the same `nth_element` on both sides, so it matches by construction.
-- Root accepted each plan at its first checkpoint.
+Apply these corrections through the work order:
 
-**4. Design faults the reviews missed.**
-- #612's partition calls Rust on every comparison, and that Rust code calls C++ for station coordinates (PR comment).
-- #578's story-page deletion bounces from Rust through the C++ destructor back into Rust (#199).
-- World generation keeps per-tile height, inner-tile and void services. #593 and #594 touched that code and left them (#565 item 2).
-- #593 added carriers, each serving one call site, for libpng, nlohmann and BMP data. About 45 of its 278 "retired" lines survive as that glue.
+1. **Session holds expire with their session** ([selection](planning.md#selection)). A hold does not lower rank and the roadmap does not carry it. When the user widens a session's budget, root names the held items that now fit and asks whether they are released before starting later-phase work.
+2. **Only finishing an open branch outranks new work** ([selection](planning.md#selection)). A started owner's next slice or follow-up PR is a new selection and ranks by phase.
+3. **#570 first, then #69 and #559, then #629** (work order 1 to 3). Root rewrites #69's and #559's bodies before their briefs. #573's next PR waits for #570, and #565 item 2 waits for #570 to leave `movement.rs`.
 
-**5. Roadmap commits moved base 24 times in ten hours.**
-- Root committed 24 roadmap updates to base, besides the pause, after almost every integration and selection.
-- Each push moved base under PRs in final validation. The nine integrated PRs needed 23 base merges between them, and three of the four Full failures came from combining with base.
+Template watch: #627's per-container typed leaves for STL containers are a phase-3 necessity. They do not justify per-field leaves in phase-2 records, which #570 defines once in Rust.
 
-Apply these corrections through the work order below:
+No user direction is reversed. The 10-31 hold and burn approvals were session-scoped and have expired. The restart prompt is unchanged.
 
-1. **Long jobs** ([AGENTS.md](../AGENTS.md#every-agent), [team](team.md#spawning)). In Codex, root or child, an agent starts a long job with `exec_command` and ends its turn. No agent detaches a job or hands one to root, and root's briefs drop the relay.
-2. **#607 first, in one base update** (PR comment, work order 1).
-   - Merge the docs-only base under review condition (a), let the cheap checks pass, run the bootstrap Full, and merge.
-   - If `src/` moves first, regenerate it with the recorded sweep and the stored deviation patch instead of resolving conflicts.
-   - A base update that meets a review condition needs only CI ([review](workflow.md#review)).
-3. **Evidence names its behavior, checked at review** ([review](workflow.md#review)).
-   - For each new scenario, fixture or checker, the reviewer names the behavior that existing checks cannot distinguish. An item with none is deleted.
-   - Provisional. Basis: 1.5 tooling lines per retired line in integrations 39 to 47.
-4. **Fault routing.** Fix #612's bounce before it integrates. #199 and #565 carry the integrated faults, and #156 the gaps.
-5. **Roadmap commits only at stocktakes, course changes and wind-down** (`/start-development`, work loop step 2). Selections and integrations go on their issues and PRs, and resume also reads each open PR's status comment.
-
-Template watch:
-- Phase 2's station-pool and map ports do not carry #612's raw visit-order evidence. They change neither the tree nor its split.
-- Phase-3 readers that use libraries staying native, such as zlib, LZMA or sockets, should not repeat #593's carriers, each serving one call site.
-
-No user direction is reversed. The restart prompt changed: work loop step 2, and resume step 5.
-
-| Twenty-fourth correction | Verdict and cost/result |
+| Twenty-fifth correction | Verdict and cost/result |
 | --- | --- |
-| 1. Finish the five drafts with the audit fixes | Applied: #578 integrated in #588 (31), then #579 (32), #576 (38) and #568 (39). #568 took 63 hours from issue to merge, with nine base merges. Its review missed #578's story-page bounce, now on #199. |
-| 2. #581 in three PRs | PR-A (#583, 33) and PR-E (#591, 35, on emsdk 4.0.23) applied. PR-B (#607) slipped: started on 10-31, then six base merges, each with a full proof, and no Full (finding 2). |
-| 3. The map view costs a load | Applied in #606 (46): one `World` type, loads and native assertions, with production net glue -4 and fixtures +16. Item 2's deletions (-300 to -600) have not started; generation's services joined its scope. |
-| 4. #582 tooling batch | Applied (#590, 34). The rebound baseline fell only from 585 to 581 rows, and #612's review still fixed a duplicate binding. Housekeeping's cwd fix works (T3 worktrees fell from 82 to 41 GB), but finished review and merged checkouts stay locked. |
-| 5. #199 batch after #582 | Slipped: #603 is reviewed and validated but waits behind base and #607. |
-| 6. Speed after integration 30 | Applied and effective: profile 30 found Grok +13.7% and Opus +12.0%, and #606's repairs brought them to 1.387x and 1.394x at profile 46. |
+| 1. Agents run their own long jobs | Applied, and harmful in part. After it, 8 of 11 child turns that claimed a running job had started none. That cost about an hour on 11-01 and lost #623's and #625's reviews on 10-31. Root traced it at the user's request and fixed it in `ae3fd45dff`: a job ID before ending a turn, short checks in the foreground, and root checks children that name none. Keep. |
+| 2. #607 first, in one base update | Applied: integration 48 (`92ef07aac4`) in the scoped session, with no further proof. |
+| 3. Evidence names its behavior | No measurable effect. Integrations 50, 52, 54 and 56 added about 1,230 tooling lines for about 825 retired, about 1.5 per line. #627 ran at 0.4. The small owners carry the ratio: #612 594 for 90, #616 196 for 52, #618 200 for 34. Keep it provisional; phase 1's close stops the small owners. |
+| 4. Fault routing | Applied: #612's bounce was fixed before integration (`37a10145c6`), and the audit confirms it. |
+| 5. Roadmap commits only at stocktakes, course changes and wind-down | Applied: 9 roadmap commits for integrations 48 to 56, 1.0 per integration against 2.7. |
 
-| Change since the twenty-fourth review | Verdict and next observation |
+| Change since the twenty-fifth review | Verdict and next observation |
 | --- | --- |
-| Opus writes code at medium effort (user, 2026-10-30) | Applied in the Claude Code root sessions; the Codex root used gpt-6.1-sol high. No defect traced to it. |
-| Deep checks only on the user's request (user, 2026-10-31) | Applied: the killed rotation was not restarted, and its two worktrees (63 GB) were removed at the user's direction. |
-| Guidance routed from AGENTS.md to task docs (#597, user-directed) | Applied. Its background rule, which named Claude Code only, is finding 1. |
-| Navigation of 2026-10-31 (three commits) | Untested; no root session since. Watch whether #607 lands before other `src/` changes, whether #566 starts, whether phase 1 closes with #559 and #69 and no new owners, and whether stocktakes record the compiled-C++ rate. |
+| Job-ID rule and root check (`ae3fd45dff`, user-directed investigation) | Applied in the wrap-up. Watch for child turns ending without a named job. |
+| Navigation of 2026-10-31 | #607 landed first and #566 integrated in #623. Phase 1 gained no new owner, but #559 and #69 did not start (finding 1). Stocktakes record the compiled-C++ rate: -518 lines in 0.98 days to stocktake 56. |
 
 New since this review, for the next steer to judge:
-- Whether Codex children run their own long jobs, and how many root turns each integration takes.
-- Whether #607 integrates after one base update.
-- Tooling and fixture lines per retired line, against 1.5 for integrations 39 to 47, and whether a defect is ever found only by evidence the review rule would delete.
-- Roadmap pushes per integration, against about 2.7 for integrations 39 to 47.
+- Whether #570 starts in the first session, and whether #69 and #559 start after their rewrites.
+- Whether a later slice of #573 or #628 takes a slot while a phase-1 or phase-2 owner is ready.
+- Compiled C++ per day once #570 runs, against -518 per day.
 
 ## Earlier steering, still in force
 
@@ -251,9 +218,14 @@ them. Six branches, batched maintenance, fixing reviews, strict exact-combinatio
 Full, bounded rollback and action-based wind-down remain. A historical mention
 is not placement; CI-found behavior fixes get a scoped review; deep checks run
 only on the user's request; active speed dependencies are preserved. The parked
-NewGRF corpus stays excluded with the return condition below. AGENTS.md and its
-routing table carry the rules; issue and PR bodies carry current actions and
-evidence.
+NewGRF corpus stays excluded with the return condition below. Every agent runs
+its own long jobs and ends a turn only on a named job ID, and root checks any
+child that ends a turn without one. A base update that meets a review condition
+needs only CI. Each new scenario, fixture or checker names the behavior existing
+checks cannot distinguish; this rule is provisional, on a basis of 1.5 tooling
+lines per retired line. Roadmap commits happen only at stocktakes, course
+changes and wind-down. AGENTS.md and its routing table carry the rules; issue
+and PR bodies carry current actions and evidence.
 
 ## Recent completed work
 
@@ -294,30 +266,34 @@ Rust / tooling / original C++ retired / net glue.
 
 One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and the disjoint-service rule; finishing review and integration
-comes first. A lower rank can run while a higher one waits. Scopes live in issues.
+of an open branch comes first. A started owner's next slice is a new selection
+and ranks by phase ([selection](planning.md#selection)). A lower rank can run
+while a higher one waits. Scopes live in issues.
 
-First, **the wrap-up course (user, 2026-11-01) is complete.** It integrated #616 (52), #630 (53), #618 (54), #624 (55) and #631 (56). #628 (#574) is the only open branch and stays held: it has one of five slices and needs #629 for its per-slice check. Forward work resumes from item 1 below when the user directs it, within the six-branch limit.
-- #607 integrated as 48. Every draft adopting it reruns the recorded sweep over the `src/` files it touches ([sweep](rust-migration.md#rust-only-source-sweep)).
+The 10-31 session hold on #559, #69 and #570 has expired, and the wrap-up course
+(user, 2026-11-01) is complete. Forward work resumes here.
 
-1. **Continue the started owners**, in readiness order. No reviewed draft gains scope, but a fix the audits found is not new scope.
-   - #622's later batch: the shared typed `RustSpec*` table (root's answers on #624), then `RustGRFFileID`, `RustGRFCargoMap`, `RustGRFFileAtOrNull` and the `RustResolverGRF*` callees, and extending `tools/rebound-callees.py` to `.inc` service tables.
-   - #573's later PR: slices 3b and 4 from #627's status comment, the corrupt-input and LoadCheck probes, and the native `CopyFromOldName` helper.
-   - #628 (#574 network protocol) continues from slice 2 after #629.
-
-   Then come **#559**, command invocation, and **#69**, tile areas: phase 1's last owners. No further phase-1 owner is planned. Every other remaining non-drawing body moves with the phase-2 owner of its file, including plan-after47's link-graph job lifecycle, elrail transition and land count; #621 lists them.
-2. **#570 shared vehicle records starts now that #607 and #623 have integrated.**
+1. **#570 shared vehicle records starts in the first free slot.** It is phase 2's first owner. It has been ready since #607 (48) and #623 (53) integrated.
+   - Its brief names `rust/openttd-kernels/src/saveload.rs` as the home of reference conversion since #627; the issue and design still say `saveload.cpp`.
    - #570 follows the [world-state design](design/world-state.md). It deletes the replaced readers, the direct Tick bounces and their baseline rows, and makes `tools/port-metrics.py` count the C++ declarations it generates. Estimated net glue is -500 to -1,100; its 0.86% instruction credit is a model.
    - Then, one at a time in the shared vehicle files: #598 vehicle routing decisions, then #599 vehicle base lifecycle. Remeasure #599's inventory after #570. The airport automata follow #570's declaration generator.
+2. **#69 tile areas and #559 command invocation start in the next free slots.** They are phase 1's last owners. Root rewrites each issue body before its brief:
+   - #69: drop the `paused` label and the C++ fallback and #65/#62 bases that #607 and later work removed. Bitmap storage is already Rust-owned (#522). Scope `tilearea.cpp` (177) including its diagonal areas, and the `tilearea_type.h` bodies. `script_tilelist.cpp` stays with phase 3. The inline iterators in C++ loops must not become one crossing per tile.
+   - #559: replace the 23rd review's exclusion text. Its planned 320 to 420 retired lines against 500 to 900 net glue get the necessary-cost or bounded-repair decision at the first boundary checkpoint ([cost decisions](planning.md#cost-decisions)). #628 already calls a native `IsCommandAllowedWhilePaused` leaf from Rust; #559 owns it once and #628 adopts that owner.
+
+   No further phase-1 owner is planned. Every other remaining non-drawing body moves with the phase-2 owner of its file, including plan-after47's link-graph job lifecycle, elrail transition and land count; #621 lists them.
 3. **One maintenance batch at a time** (one reviewer, one Full):
-   - #622 is in #624. The operation families measure 281 rebound entries over 92 callees, not 332. Estimated net glue -200 to -500.
-   - #565 item 2: delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body). Production net glue -300 to -600.
-   - #199's open items: the `CargoFlow` bounce, #578's story-page bounce, #580's date parameters and the sweep's stale comments.
-   - #629: isolate the multiplayer comparison from other loopback connections on port 41051. It fails on base too, and #628 needs it as its per-slice check.
-   - Later: #604 shared settings access, after #607 and #570's generator; then #168/#199/#500 completed-job publication and #501 probe typing.
-4. **The next phase-2 pool after #570 integrates**, in the order of "Phases": stations and road stops (1,604 storage lines, about 600 callback slots); towns and industries (1,295, about 344); companies, groups, engines, link graph and the smaller pools (952, about 286); orders and order lists (390, about 111); then the map (3,988) with the rail, road, water, tunnel, landscape and tile bodies. Each pool gets an issue and a design section when selected. It moves its coupled save adapters with each record, generates native declarations, verifies the layout, and deletes the displaced readers, services and their baseline rows.
+   - #629 first: isolate the multiplayer comparison from other loopback connections on port 41051. It fails on base too, and #628 needs it as its per-slice check.
+   - #622's later batch: the shared typed `RustSpec*` table (root's answers on #624), then `RustGRFFileID`, `RustGRFCargoMap`, `RustGRFFileAtOrNull` and the `RustResolverGRF*` callees, and extending `tools/rebound-callees.py` to `.inc` service tables.
+   - #199's open items, disjoint from #570: the `CargoFlow` bounce, #578's story-page bounce, #580's date parameters and the sweep's stale comments.
+   - #565 item 2, after #570 integrates, because both change `movement.rs`. Delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body). Production net glue -300 to -600. It also deletes the native `bridge_above` and `rail_tile_type` services that #616 and #620 duplicated with Rust map readers (`road_cmd.rs:932`, `road_cmd.rs:1443`, `station_cmd.rs:447`).
+   - Later: #604 shared settings access, after #570's generator; then #168/#199/#500 completed-job publication and #501 probe typing.
+4. **The next phase-2 pool after #570 integrates**, in the order of "Phases": stations and road stops (1,604 storage lines, about 600 callback slots; it removes #612's two C++ calls per k-d tree coordinate read in `station/spatial.rs:12`); towns and industries (1,295, about 344); companies, groups, engines, link graph and the smaller pools (952, about 286); orders and order lists (390, about 111); then the map (3,988) with the rail, road, water, tunnel, landscape and tile bodies. Each pool gets an issue and a design section when selected. It moves its coupled save adapters with each record, generates native declarations, verifies the layout, and deletes the displaced readers, services and their baseline rows.
 5. **Phase 3 fills every other free slot:**
-   - #573 (in #627) and #574 are started; #575 script host, commands and events comes next, with its unsaved-output evidence;
-   - then #497 with its engine and feature binding payloads, and #498 with its ObjectSpec payloads.
+   - #628 (#574 network protocol) resumes from slice 2 once #629 integrates. Read its status comment first.
+   - #575 script host, commands and events, with its unsaved-output evidence.
+   - #573's next PR, after #570 integrates: slice 3b changes the `SaveLoad` base and the `saveload.h` macros that #570's vehicle descriptors use. Then slice 4, the corrupt-input and LoadCheck probes, and the native `CopyFromOldName` helper, as #627's status comment lists.
+   - Then #497 with its engine and feature binding payloads, and #498 with its ObjectSpec payloads.
 
    Size each owner to repay its review and Full ([selection](planning.md#selection)). Plan no Squirrel port.
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
@@ -340,7 +316,7 @@ Code is `2d2cd78f53`. `CI_ON_DEMAND` is `true`. No agent is running. Read #628's
 
 | Issue / PR | State at this commit | Next action | Checkout |
 | --- | --- | --- | --- |
-| #574 / #628 | Slice 1 of 5 at `77c0b8295e`, held | Slice 2 after #629, when the user resumes forward work | `t3-1e4ffc20` |
+| #574 / #628 | Slice 1 of 5 at `77c0b8295e`, held | Slice 2 after #629 integrates (work order 3 and 5) | `t3-1e4ffc20` |
 
 Since 2026-11-01, AGENTS.md requires a named job ID before an agent ends its turn on a background job, and short checks run in the foreground. Codex children had been ending turns on jobs they never started (`ae3fd45dff`).
 

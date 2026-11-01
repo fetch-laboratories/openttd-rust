@@ -27,6 +27,8 @@ Readers: Root and agents selecting or planning work.
 - Size each owner to repay its fixed issue, review and exact-head Full cost. Fold an item too small for that into an owner of the same phase that shares its files or data, rather than queueing it alone.
 - Keep one roadmap work order for ports, maintenance, testing and housekeeping. Upstream unit-test coverage alone does not select a component; never fall back to utility kernels or `deferred-improvement` issues.
 - Select concurrent owners with disjoint unintegrated services. An owner needing a service another draft is building starts after that service integrates.
+- Only finishing an open branch (review, fixes, base update, integration) ranks ahead of new work. The next slice or follow-up PR of a started owner is a new selection. It ranks by phase like any other item.
+- A user's hold in a session scope ("leave X untouched") binds that session only. It does not lower the held items' rank, and the roadmap does not carry it. If the user widens that session's budget, name the held items that now fit. Ask whether they are released before you start work from a later phase.
 
 ## Issue placement and deferral
 
