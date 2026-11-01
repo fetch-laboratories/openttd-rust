@@ -51,6 +51,8 @@
 #include "saveload_internal.h"
 #include "saveload_filter.h"
 #include "../rust/encoded_adapter.hpp"
+#include "../rust/saveload_ffi.h"
+#include "../rust/services_saveload.h"
 
 #include <atomic>
 #ifdef __EMSCRIPTEN__
@@ -99,115 +101,16 @@ enum NeedLength : uint8_t {
 	NL_CALCLENGTH = 2, ///< need to calculate the length
 };
 
-/** Save in chunks of 128 KiB. */
+/** Compression filter buffers use the codec's chunks of 128 KiB. */
 static const size_t MEMORY_CHUNK_SIZE = 128 * 1024;
-
-/** A buffer for reading (and buffering) savegame data. */
-struct ReadBuffer {
-	uint8_t buf[MEMORY_CHUNK_SIZE]; ///< Buffer we're going to read from.
-	uint8_t *bufp = nullptr; ///< Location we're at reading the buffer.
-	uint8_t *bufe = nullptr; ///< End of the buffer we can read from.
-	std::shared_ptr<LoadFilter> reader{}; ///< The filter used to actually read.
-	size_t read = 0; ///< The amount of read bytes so far from the filter.
-
-	/**
-	 * Initialise our variables.
-	 * @param reader The filter to actually read data.
-	 */
-	ReadBuffer(std::shared_ptr<LoadFilter> reader) : reader(std::move(reader))
-	{
-	}
-
-	inline uint8_t ReadByte()
-	{
-		if (this->bufp == this->bufe) {
-			size_t len = this->reader->Read(this->buf, lengthof(this->buf));
-			if (len == 0) SlErrorCorrupt("Unexpected end of chunk");
-
-			this->read += len;
-			this->bufp = this->buf;
-			this->bufe = this->buf + len;
-		}
-
-		return *this->bufp++;
-	}
-
-	/**
-	 * Get the size of the memory dump made so far.
-	 * @return The size.
-	 */
-	size_t GetSize() const
-	{
-		return this->read - (this->bufe - this->bufp);
-	}
-};
-
-
-/** Container for dumping the savegame (quickly) to memory. */
-struct MemoryDumper {
-	std::vector<std::unique_ptr<uint8_t[]>> blocks{}; ///< Buffer with blocks of allocated memory.
-	uint8_t *buf = nullptr; ///< Buffer we're going to write to.
-	uint8_t *bufe = nullptr; ///< End of the buffer we write to.
-
-	/**
-	 * Write a single byte into the dumper.
-	 * @param b The byte to write.
-	 */
-	inline void WriteByte(uint8_t b)
-	{
-		/* Are we at the end of this chunk? */
-		if (this->buf == this->bufe) {
-			this->buf = this->blocks.emplace_back(std::make_unique<uint8_t[]>(MEMORY_CHUNK_SIZE)).get();
-			this->bufe = this->buf + MEMORY_CHUNK_SIZE;
-		}
-
-		*this->buf++ = b;
-	}
-
-	/**
-	 * Flush this dumper into a writer.
-	 * @param writer The filter we want to use.
-	 */
-	void Flush(std::shared_ptr<SaveFilter> writer)
-	{
-		uint i = 0;
-		size_t t = this->GetSize();
-
-		while (t > 0) {
-			size_t to_write = std::min(MEMORY_CHUNK_SIZE, t);
-
-			writer->Write(this->blocks[i++].get(), to_write);
-			t -= to_write;
-		}
-
-		writer->Finish();
-	}
-
-	/**
-	 * Get the size of the memory dump made so far.
-	 * @return The size.
-	 */
-	size_t GetSize() const
-	{
-		return this->blocks.size() * MEMORY_CHUNK_SIZE - (this->bufe - this->buf);
-	}
-};
 
 /** The saveload struct, containing reader-writer functions, buffer, version, etc. */
 struct SaveLoadParams {
-	SaveLoadAction action;               ///< are we doing a save or a load atm.
-	NeedLength need_length;              ///< working in NeedLength (Autolength) mode?
-	uint8_t block_mode;                     ///< ???
 	bool error;                          ///< did an error occur or not
 
-	size_t obj_len;                      ///< the length of the current object we are busy with
-	int array_index, last_array_index;   ///< in the case of an array, the current and last positions
-	bool expect_table_header;            ///< In the case of a table, if the header is saved/loaded.
-
-	std::unique_ptr<MemoryDumper> dumper; ///< Memory dumper to write the savegame to.
 	std::shared_ptr<SaveFilter> sf; ///< Filter to write the savegame to.
 
-	std::unique_ptr<ReadBuffer> reader; ///< Savegame reading buffer.
+	std::shared_ptr<LoadFilter> read_filter; ///< The filter the Rust read buffer reads from.
 	std::shared_ptr<LoadFilter> lf; ///< Filter to read the savegame from.
 
 	StringID error_str;                  ///< the translatable error message to show
@@ -217,6 +120,80 @@ struct SaveLoadParams {
 };
 
 static SaveLoadParams _sl; ///< Parameters used for/at saveload.
+
+/** Codec action, length, array, block and header state and buffer cursors, owned by Rust. */
+static OpenTTDRustSaveLoadCodec &_codec = [] () -> OpenTTDRustSaveLoadCodec & {
+	static_assert(sizeof(SaveLoadVersion) == sizeof(uint16_t) && SLV_4 == 4 && SLV_69 == 69 && SLV_169 == 169 && SLV_SAVELOAD_LIST_LENGTH == 293 && SLV_ENCODED_STRING_FORMAT == 350 && SLV_FIX_SCC_ENCODED_NEGATIVE == 353);
+	static_assert(SLF_ALLOW_CONTROL == 1 << 8 && SLF_ALLOW_NEWLINE == 1 << 9 && SLF_REPLACE_TABCRLF == 1 << 10);
+	static_assert(REF_VEHICLE == 1 && REF_LINK_GRAPH_JOB == 11 && sizeof(size_t) == sizeof(void *));
+	OpenTTDRustSaveLoadCodec &codec = *openttd_rust_saveload_codec();
+	codec.version = reinterpret_cast<const uint16_t *>(&_sl_version);
+	codec.minor_version = &_sl_minor_version;
+	return codec;
+}();
+/** Exception caught by a native filter frame under a Rust codec entry, until rethrown. */
+static std::exception_ptr _sl_native_exception;
+
+/** Store the exception of a native operation called from the Rust codec. */
+template <typename F>
+static bool SlNativeFrame(F &&operation) noexcept
+{
+	try { operation(); }
+	catch (...) { _sl_native_exception = std::current_exception(); return false; }
+	return true;
+}
+
+static const OpenTTDSaveLoadServices _sl_services = {
+	.shared = &GetRustSharedServices(),
+	.native_assert = []([[maybe_unused]] bool ok) noexcept { assert(ok); },
+	.debug_iterate_error = []() noexcept { Debug(sl, 0, "SlIterateArray error"); },
+	.read = [](void *filter, uint8_t *buf, size_t len, size_t *read) noexcept { return SlNativeFrame([&] { *read = static_cast<LoadFilter *>(filter)->Read(buf, len); }); },
+	.write = [](void *filter, const uint8_t *buf, size_t len) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Write(const_cast<uint8_t *>(buf), len); }); },
+	.finish = [](void *filter) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Finish(); }); },
+	.remap_old_string = [](uint32_t id) noexcept -> uint32_t { return RemapOldStringID(static_cast<uint16_t>(id)); },
+	.copy_from_old_name = [](void *ptr, uint32_t id) noexcept { return SlNativeFrame([&] { *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(id); }); },
+	.cargo_packet_get = &RustSaveReferenceGet<CargoPacket>,
+	.cargo_packet_index = &RustSaveReferenceIndex<CargoPacket>,
+	.engine_renew_get = &RustSaveReferenceGet<EngineRenew>,
+	.engine_renew_index = &RustSaveReferenceIndex<EngineRenew>,
+	.link_graph_get = &RustSaveReferenceGet<LinkGraph>,
+	.link_graph_index = &RustSaveReferenceIndex<LinkGraph>,
+	.link_graph_job_get = &RustSaveReferenceGet<LinkGraphJob>,
+	.link_graph_job_index = &RustSaveReferenceIndex<LinkGraphJob>,
+	.order_list_get = &RustSaveReferenceGet<OrderList>,
+	.order_list_index = &RustSaveReferenceIndex<OrderList>,
+	.persistent_storage_get = &RustSaveReferenceGet<PersistentStorage>,
+	.persistent_storage_index = &RustSaveReferenceIndex<PersistentStorage>,
+	.road_stop_get = &RustSaveReferenceGet<RoadStop>,
+	.road_stop_index = &RustSaveReferenceIndex<RoadStop>,
+	.station_get = &RustSaveReferenceGet<Station>,
+	.station_index = &RustSaveReferenceIndex<Station>,
+	.town_get = &RustSaveReferenceGet<Town>,
+	.town_index = &RustSaveReferenceIndex<Town>,
+	.vehicle_get = &RustSaveReferenceGet<Vehicle>,
+	.vehicle_index = &RustSaveReferenceIndex<Vehicle>,
+	.string_data = [](const void *ptr, size_t *length) noexcept {
+		const std::string &str = *static_cast<const std::string *>(ptr);
+		*length = str.size();
+		return reinterpret_cast<const uint8_t *>(str.data());
+	},
+	.string_resize = [](void *ptr, size_t length, uint8_t **data) noexcept {
+		return SlNativeFrame([&] {
+			std::string &str = *static_cast<std::string *>(ptr);
+			str.resize(length);
+			*data = reinterpret_cast<uint8_t *>(str.data());
+		});
+	},
+	.apply_encoded = [](void *ptr, const OpenTTDRustEncodedView *view, const OpenTTDRustEncodedDiagnostic *diagnostics) noexcept {
+		return SlNativeFrame([&] {
+			std::string &str = *static_cast<std::string *>(ptr);
+			for (size_t i = 0; i < view->diagnostic_count; ++i) LogRustEncodedDiagnostic(diagnostics[i], str);
+			AssertRustEncoded(*view, str);
+			str = view->length == 0 ? std::string{} : std::string(reinterpret_cast<const char *>(view->bytes), view->length);
+		});
+	},
+	.autolength = [](const void *proc, int32_t arg) noexcept { return SlNativeFrame([&] { reinterpret_cast<AutolengthProc *>(const_cast<void *>(proc))(arg); }); },
+};
 
 static const std::vector<ChunkHandlerRef> &ChunkHandlers()
 {
@@ -314,7 +291,7 @@ static const std::vector<ChunkHandlerRef> &ChunkHandlers()
 /** Null all pointers (convert index -> nullptr) */
 static void SlNullPointers()
 {
-	_sl.action = SLA_NULL;
+	_codec.action = SLA_NULL;
 
 	/* We don't want any savegame conversion code to run
 	 * during NULLing; especially those that try to get
@@ -326,7 +303,7 @@ static void SlNullPointers()
 		ch.FixPointers();
 	}
 
-	assert(_sl.action == SLA_NULL);
+	assert(_codec.action == SLA_NULL);
 }
 
 /**
@@ -340,7 +317,7 @@ static void SlNullPointers()
 [[noreturn]] void SlError(StringID string, const std::string &extra_msg)
 {
 	/* Distinguish between loading into _load_check_data vs. normal save/load. */
-	if (_sl.action == SLA_LOAD_CHECK) {
+	if (_codec.action == SLA_LOAD_CHECK) {
 		_load_check_data.error = string;
 		_load_check_data.error_msg = extra_msg;
 	} else {
@@ -352,7 +329,7 @@ static void SlNullPointers()
 	 * the pointers are actually filled with indices, which means that
 	 * when we access them during cleaning the pool dereferences of
 	 * those indices will be made with segmentation faults as result. */
-	if (_sl.action == SLA_LOAD || _sl.action == SLA_PTRS) SlNullPointers();
+	if (_codec.action == SLA_LOAD || _codec.action == SLA_PTRS) SlNullPointers();
 
 	/* Logging could be active. */
 	_gamelog.StopAnyAction();
@@ -370,6 +347,23 @@ static void SlNullPointers()
 [[noreturn]] void SlErrorCorrupt(const std::string &msg)
 {
 	SlError(STR_GAME_SAVELOAD_ERROR_BROKEN_SAVEGAME, msg);
+}
+
+/**
+ * Raise the failure of a Rust codec entry once its frames have returned.
+ * @param status The entry's status.
+ */
+static void SlRaise(OpenTTDRustSaveLoadStatus status)
+{
+	switch (status) {
+		case OPENTTD_RUST_SL_OK: return;
+		case OPENTTD_RUST_SL_CORRUPT: {
+			size_t length;
+			const uint8_t *message = openttd_rust_saveload_error_message(&length);
+			SlErrorCorrupt(std::string(reinterpret_cast<const char *>(message), length));
+		}
+		default: std::rethrow_exception(std::exchange(_sl_native_exception, nullptr));
+	}
 }
 
 
@@ -410,7 +404,8 @@ void ProcessAsyncSaveFinish()
  */
 uint8_t SlReadByte()
 {
-	return _sl.reader->ReadByte();
+	if (_codec.read_cursor == _codec.read_end) SlRaise(openttd_rust_saveload_fill(&_sl_services));
+	return *_codec.read_cursor++;
 }
 
 /**
@@ -419,125 +414,47 @@ uint8_t SlReadByte()
  */
 void SlWriteByte(uint8_t b)
 {
-	_sl.dumper->WriteByte(b);
+	if (_codec.write_cursor == _codec.write_end) openttd_rust_saveload_grow();
+	*_codec.write_cursor++ = b;
 }
 
 static inline int SlReadUint16()
 {
-	int x = SlReadByte() << 8;
-	return x | SlReadByte();
+	uint16_t x;
+	SlRaise(openttd_rust_saveload_read_uint16(&_sl_services, &x));
+	return x;
 }
 
 static inline uint32_t SlReadUint32()
 {
-	uint32_t x = SlReadUint16() << 16;
-	return x | SlReadUint16();
-}
-
-static inline uint64_t SlReadUint64()
-{
-	uint32_t x = SlReadUint32();
-	uint32_t y = SlReadUint32();
-	return (uint64_t)x << 32 | y;
-}
-
-static inline void SlWriteUint16(uint16_t v)
-{
-	SlWriteByte(GB(v, 8, 8));
-	SlWriteByte(GB(v, 0, 8));
+	uint32_t x;
+	SlRaise(openttd_rust_saveload_read_uint32(&_sl_services, &x));
+	return x;
 }
 
 static inline void SlWriteUint32(uint32_t v)
 {
-	SlWriteUint16(GB(v, 16, 16));
-	SlWriteUint16(GB(v,  0, 16));
+	openttd_rust_saveload_write_uint32(v);
 }
 
-static inline void SlWriteUint64(uint64_t x)
-{
-	SlWriteUint32((uint32_t)(x >> 32));
-	SlWriteUint32((uint32_t)x);
-}
-
-/**
- * Read in the header descriptor of an object or an array.
- * If the highest bit is set (7), then the index is bigger than 127
- * elements, so use the next byte to read in the real value.
- * The actual value is then both bytes added with the first shifted
- * 8 bits to the left, and dropping the highest bit (which only indicated a big index).
- * x = ((x & 0x7F) << 8) + SlReadByte();
- * @return Return the value of the index
- */
+/** Read a gamma-encoded index or length. */
 static uint SlReadSimpleGamma()
 {
-	uint i = SlReadByte();
-	if (HasBit(i, 7)) {
-		i &= ~0x80;
-		if (HasBit(i, 6)) {
-			i &= ~0x40;
-			if (HasBit(i, 5)) {
-				i &= ~0x20;
-				if (HasBit(i, 4)) {
-					i &= ~0x10;
-					if (HasBit(i, 3)) {
-						SlErrorCorrupt("Unsupported gamma");
-					}
-					i = SlReadByte(); // 32 bits only.
-				}
-				i = (i << 8) | SlReadByte();
-			}
-			i = (i << 8) | SlReadByte();
-		}
-		i = (i << 8) | SlReadByte();
-	}
+	uint32_t i;
+	SlRaise(openttd_rust_saveload_read_gamma(&_sl_services, &i));
 	return i;
 }
 
-/**
- * Write the header descriptor of an object or an array.
- * If the element is bigger than 127, use 2 bytes for saving
- * and use the highest byte of the first written one as a notice
- * that the length consists of 2 bytes, etc.. like this:
- * 0xxxxxxx
- * 10xxxxxx xxxxxxxx
- * 110xxxxx xxxxxxxx xxxxxxxx
- * 1110xxxx xxxxxxxx xxxxxxxx xxxxxxxx
- * 11110--- xxxxxxxx xxxxxxxx xxxxxxxx xxxxxxxx
- * We could extend the scheme ad infinum to support arbitrarily
- * large chunks, but as sizeof(size_t) == 4 is still very common
- * we don't support anything above 32 bits. That's why in the last
- * case the 3 most significant bits are unused.
- * @param i Index being written
- */
-
+/** Write a gamma-encoded index or length. */
 static void SlWriteSimpleGamma(size_t i)
 {
-	if (i >= (1 << 7)) {
-		if (i >= (1 << 14)) {
-			if (i >= (1 << 21)) {
-				if (i >= (1 << 28)) {
-					assert(i <= UINT32_MAX); // We can only support 32 bits for now.
-					SlWriteByte((uint8_t)(0xF0));
-					SlWriteByte((uint8_t)(i >> 24));
-				} else {
-					SlWriteByte((uint8_t)(0xE0 | (i >> 24)));
-				}
-				SlWriteByte((uint8_t)(i >> 16));
-			} else {
-				SlWriteByte((uint8_t)(0xC0 | (i >> 16)));
-			}
-			SlWriteByte((uint8_t)(i >> 8));
-		} else {
-			SlWriteByte((uint8_t)(0x80 | (i >> 8)));
-		}
-	}
-	SlWriteByte((uint8_t)i);
+	openttd_rust_saveload_write_gamma(&_sl_services, i);
 }
 
 /** Return how many bytes used to encode a gamma value */
 static inline uint SlGetGammaLength(size_t i)
 {
-	return 1 + (i >= (1 << 7)) + (i >= (1 << 14)) + (i >= (1 << 21)) + (i >= (1 << 28));
+	return openttd_rust_saveload_gamma_length(i);
 }
 
 static inline uint SlReadSparseIndex()
@@ -600,76 +517,27 @@ static uint8_t GetSavegameFileType(const SaveLoad &sld)
 
 /**
  * Return the size in bytes of a certain type of normal/atomic variable
- * as it appears in memory. See VarTypes
- * @param conv VarType type of variable that is used for calculating the size
- * @return Return the size of this type in bytes
- */
-static inline uint SlCalcConvMemLen(VarType conv)
-{
-	switch (GetVarMemType(conv)) {
-		case SLE_VAR_BL: return sizeof(bool);
-		case SLE_VAR_I8: return sizeof(int8_t);
-		case SLE_VAR_U8: return sizeof(uint8_t);
-		case SLE_VAR_I16: return sizeof(int16_t);
-		case SLE_VAR_U16: return sizeof(uint16_t);
-		case SLE_VAR_I32: return sizeof(int32_t);
-		case SLE_VAR_U32: return sizeof(uint32_t);
-		case SLE_VAR_I64: return sizeof(int64_t);
-		case SLE_VAR_U64: return sizeof(uint64_t);
-		case SLE_VAR_NULL: return 0;
-
-		case SLE_VAR_STR:
-		case SLE_VAR_STRQ:
-			return SlReadArrayLength();
-
-		case SLE_VAR_NAME:
-		default:
-			NOT_REACHED();
-	}
-}
-
-/**
- * Return the size in bytes of a certain type of normal/atomic variable
  * as it appears in a saved game. See VarTypes
  * @param conv VarType type of variable that is used for calculating the size
  * @return Return the size of this type in bytes
  */
 static inline uint8_t SlCalcConvFileLen(VarType conv)
 {
-	switch (GetVarFileType(conv)) {
-		case SLE_FILE_END: return 0;
-		case SLE_FILE_I8: return sizeof(int8_t);
-		case SLE_FILE_U8: return sizeof(uint8_t);
-		case SLE_FILE_I16: return sizeof(int16_t);
-		case SLE_FILE_U16: return sizeof(uint16_t);
-		case SLE_FILE_I32: return sizeof(int32_t);
-		case SLE_FILE_U32: return sizeof(uint32_t);
-		case SLE_FILE_I64: return sizeof(int64_t);
-		case SLE_FILE_U64: return sizeof(uint64_t);
-		case SLE_FILE_STRINGID: return sizeof(uint16_t);
-
-		case SLE_FILE_STRING:
-			return SlReadArrayLength();
-
-		case SLE_FILE_STRUCT:
-		default:
-			NOT_REACHED();
-	}
+	uint8_t length;
+	SlRaise(openttd_rust_saveload_conv_file_len(&_sl_services, conv, &length));
+	return length;
 }
 
 /** Return the size in bytes of a reference (pointer) */
 static inline size_t SlCalcRefLen()
 {
-	return IsSavegameVersionBefore(SLV_69) ? 2 : 4;
+	return openttd_rust_saveload_ref_len();
 }
 
 void SlSetArrayIndex(uint index)
 {
-	_sl.need_length = NL_WANTLENGTH;
-	_sl.array_index = index;
+	openttd_rust_saveload_set_array_index(index);
 }
-
-static size_t _next_offs;
 
 /**
  * Iterate through the elements of an array and read the whole thing
@@ -677,41 +545,9 @@ static size_t _next_offs;
  */
 int SlIterateArray()
 {
-	/* After reading in the whole array inside the loop
-	 * we must have read in all the data, so we must be at end of current block. */
-	if (_next_offs != 0 && _sl.reader->GetSize() != _next_offs) {
-		SlErrorCorruptFmt("Invalid chunk size iterating array - expected to be at position {}, actually at {}", _next_offs, _sl.reader->GetSize());
-	}
-
-	for (;;) {
-		uint length = SlReadArrayLength();
-		if (length == 0) {
-			assert(!_sl.expect_table_header);
-			_next_offs = 0;
-			return -1;
-		}
-
-		_sl.obj_len = --length;
-		_next_offs = _sl.reader->GetSize() + length;
-
-		if (_sl.expect_table_header) {
-			_sl.expect_table_header = false;
-			return INT32_MAX;
-		}
-
-		int index;
-		switch (_sl.block_mode) {
-			case CH_SPARSE_TABLE:
-			case CH_SPARSE_ARRAY: index = (int)SlReadSparseIndex(); break;
-			case CH_TABLE:
-			case CH_ARRAY:        index = _sl.array_index++; break;
-			default:
-				Debug(sl, 0, "SlIterateArray error");
-				return -1; // error
-		}
-
-		if (length != 0) return index;
-	}
+	int32_t index;
+	SlRaise(openttd_rust_saveload_iterate_array(&_sl_services, &index));
+	return index;
 }
 
 /**
@@ -719,9 +555,7 @@ int SlIterateArray()
  */
 void SlSkipArray()
 {
-	while (SlIterateArray() != -1) {
-		SlSkipBytes(_next_offs - _sl.reader->GetSize());
-	}
+	SlRaise(openttd_rust_saveload_skip_array(&_sl_services));
 }
 
 /**
@@ -731,76 +565,13 @@ void SlSkipArray()
  */
 void SlSetLength(size_t length)
 {
-	assert(_sl.action == SLA_SAVE);
-
-	switch (_sl.need_length) {
-		case NL_WANTLENGTH:
-			_sl.need_length = NL_NONE;
-			if ((_sl.block_mode == CH_TABLE || _sl.block_mode == CH_SPARSE_TABLE) && _sl.expect_table_header) {
-				_sl.expect_table_header = false;
-				SlWriteArrayLength(length + 1);
-				break;
-			}
-
-			switch (_sl.block_mode) {
-				case CH_RIFF:
-					/* Ugly encoding of >16M RIFF chunks
-					 * The lower 24 bits are normal
-					 * The uppermost 4 bits are bits 24:27 */
-					assert(length < (1 << 28));
-					SlWriteUint32((uint32_t)((length & 0xFFFFFF) | ((length >> 24) << 28)));
-					break;
-				case CH_TABLE:
-				case CH_ARRAY:
-					assert(_sl.last_array_index <= _sl.array_index);
-					while (++_sl.last_array_index <= _sl.array_index) {
-						SlWriteArrayLength(1);
-					}
-					SlWriteArrayLength(length + 1);
-					break;
-				case CH_SPARSE_TABLE:
-				case CH_SPARSE_ARRAY:
-					SlWriteArrayLength(length + 1 + SlGetArrayLength(_sl.array_index)); // Also include length of sparse index.
-					SlWriteSparseIndex(_sl.array_index);
-					break;
-				default: NOT_REACHED();
-			}
-			break;
-
-		case NL_CALCLENGTH:
-			_sl.obj_len += (int)length;
-			break;
-
-		default: NOT_REACHED();
-	}
-}
-
-/**
- * Save/Load bytes. These do not need to be converted to Little/Big Endian
- * so directly write them or read them to/from file
- * @param ptr The source or destination of the object being manipulated
- * @param length number of bytes this fast CopyBytes lasts
- */
-static void SlCopyBytes(void *ptr, size_t length)
-{
-	uint8_t *p = (uint8_t *)ptr;
-
-	switch (_sl.action) {
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD:
-			for (; length != 0; length--) *p++ = SlReadByte();
-			break;
-		case SLA_SAVE:
-			for (; length != 0; length--) SlWriteByte(*p++);
-			break;
-		default: NOT_REACHED();
-	}
+	openttd_rust_saveload_set_length(&_sl_services, length);
 }
 
 /** Get the length of the current object */
 size_t SlGetFieldLength()
 {
-	return _sl.obj_len;
+	return _codec.obj_len;
 }
 
 /**
@@ -812,19 +583,7 @@ size_t SlGetFieldLength()
  */
 int64_t ReadValue(const void *ptr, VarType conv)
 {
-	switch (GetVarMemType(conv)) {
-		case SLE_VAR_BL:  return (*(const bool *)ptr != 0);
-		case SLE_VAR_I8:  return *(const int8_t  *)ptr;
-		case SLE_VAR_U8:  return *(const uint8_t  *)ptr;
-		case SLE_VAR_I16: return *(const int16_t *)ptr;
-		case SLE_VAR_U16: return *(const uint16_t*)ptr;
-		case SLE_VAR_I32: return *(const int32_t *)ptr;
-		case SLE_VAR_U32: return *(const uint32_t*)ptr;
-		case SLE_VAR_I64: return *(const int64_t *)ptr;
-		case SLE_VAR_U64: return *(const uint64_t*)ptr;
-		case SLE_VAR_NULL:return 0;
-		default: NOT_REACHED();
-	}
+	return openttd_rust_saveload_read_value(&_sl_services, ptr, conv);
 }
 
 /**
@@ -836,76 +595,17 @@ int64_t ReadValue(const void *ptr, VarType conv)
  */
 void WriteValue(void *ptr, VarType conv, int64_t val)
 {
-	switch (GetVarMemType(conv)) {
-		case SLE_VAR_BL:  *(bool  *)ptr = (val != 0);  break;
-		case SLE_VAR_I8:  *(int8_t  *)ptr = val; break;
-		case SLE_VAR_U8:  *(uint8_t  *)ptr = val; break;
-		case SLE_VAR_I16: *(int16_t *)ptr = val; break;
-		case SLE_VAR_U16: *(uint16_t*)ptr = val; break;
-		case SLE_VAR_I32: *(int32_t *)ptr = val; break;
-		case SLE_VAR_U32: *(uint32_t*)ptr = val; break;
-		case SLE_VAR_I64: *(int64_t *)ptr = val; break;
-		case SLE_VAR_U64: *(uint64_t*)ptr = val; break;
-		case SLE_VAR_NAME: *reinterpret_cast<std::string *>(ptr) = CopyFromOldName(val); break;
-		case SLE_VAR_NULL: break;
-		default: NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_write_value(&_sl_services, ptr, conv, val));
 }
 
 /**
  * Handle all conversion and typechecking of variables here.
- * In the case of saving, read in the actual value from the struct
- * and then write them to file, endian safely. Loading a value
- * goes exactly the opposite way
  * @param ptr The object being filled/read
  * @param conv VarType type of the current element of the struct
  */
 static void SlSaveLoadConv(void *ptr, VarType conv)
 {
-	switch (_sl.action) {
-		case SLA_SAVE: {
-			int64_t x = ReadValue(ptr, conv);
-
-			/* Write the value to the file and check if its value is in the desired range */
-			switch (GetVarFileType(conv)) {
-				case SLE_FILE_I8: assert(x >= -128 && x <= 127);     SlWriteByte(x);break;
-				case SLE_FILE_U8: assert(x >= 0 && x <= 255);        SlWriteByte(x);break;
-				case SLE_FILE_I16:assert(x >= -32768 && x <= 32767); SlWriteUint16(x);break;
-				case SLE_FILE_STRINGID:
-				case SLE_FILE_U16:assert(x >= 0 && x <= 65535);      SlWriteUint16(x);break;
-				case SLE_FILE_I32:
-				case SLE_FILE_U32:                                   SlWriteUint32((uint32_t)x);break;
-				case SLE_FILE_I64:
-				case SLE_FILE_U64:                                   SlWriteUint64(x);break;
-				default: NOT_REACHED();
-			}
-			break;
-		}
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD: {
-			int64_t x;
-			/* Read a value from the file */
-			switch (GetVarFileType(conv)) {
-				case SLE_FILE_I8:  x = (int8_t  )SlReadByte();   break;
-				case SLE_FILE_U8:  x = (uint8_t  )SlReadByte();   break;
-				case SLE_FILE_I16: x = (int16_t )SlReadUint16(); break;
-				case SLE_FILE_U16: x = (uint16_t)SlReadUint16(); break;
-				case SLE_FILE_I32: x = (int32_t )SlReadUint32(); break;
-				case SLE_FILE_U32: x = (uint32_t)SlReadUint32(); break;
-				case SLE_FILE_I64: x = (int64_t )SlReadUint64(); break;
-				case SLE_FILE_U64: x = (uint64_t)SlReadUint64(); break;
-				case SLE_FILE_STRINGID: x = RemapOldStringID((uint16_t)SlReadUint16()); break;
-				default: NOT_REACHED();
-			}
-
-			/* Write The value to the struct. These ARE endian safe. */
-			WriteValue(ptr, conv, x);
-			break;
-		}
-		case SLA_PTRS: break;
-		case SLA_NULL: break;
-		default: NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_conv(&_sl_services, ptr, conv));
 }
 
 /**
@@ -917,12 +617,8 @@ static void SlSaveLoadConv(void *ptr, VarType conv)
  */
 static inline size_t SlCalcStdStringLen(const void *ptr)
 {
-	const std::string *str = reinterpret_cast<const std::string *>(ptr);
-
-	size_t len = str->length();
-	return len + SlGetArrayLength(len); // also include the length of the index
+	return openttd_rust_saveload_std_string_len(&_sl_services, ptr);
 }
-
 
 /**
  * Scan the string for old values of SCC_ENCODED and fix it to it's new, value.
@@ -957,8 +653,7 @@ void FixSCCEncodedNegative(std::string &str)
  */
 void SlReadString(std::string &str, size_t length)
 {
-	str.resize(length);
-	SlCopyBytes(str.data(), length);
+	SlRaise(openttd_rust_saveload_read_string(&_sl_services, &str, length));
 }
 
 /**
@@ -968,94 +663,7 @@ void SlReadString(std::string &str, size_t length)
  */
 static void SlStdString(void *ptr, VarType conv)
 {
-	std::string *str = reinterpret_cast<std::string *>(ptr);
-
-	switch (_sl.action) {
-		case SLA_SAVE: {
-			size_t len = str->length();
-			SlWriteArrayLength(len);
-			SlCopyBytes(const_cast<void *>(static_cast<const void *>(str->data())), len);
-			break;
-		}
-
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD: {
-			size_t len = SlReadArrayLength();
-			if (GetVarMemType(conv) == SLE_VAR_NULL) {
-				SlSkipBytes(len);
-				return;
-			}
-
-			SlReadString(*str, len);
-
-			StringValidationSettings settings = StringValidationSetting::ReplaceWithQuestionMark;
-			if ((conv & SLF_ALLOW_CONTROL) != 0) {
-				settings.Set(StringValidationSetting::AllowControlCode);
-				if (IsSavegameVersionBefore(SLV_ENCODED_STRING_FORMAT)) FixSCCEncoded(*str, IsSavegameVersionBefore(SLV_169));
-				if (IsSavegameVersionBefore(SLV_FIX_SCC_ENCODED_NEGATIVE)) FixSCCEncodedNegative(*str);
-			}
-			if ((conv & SLF_ALLOW_NEWLINE) != 0) {
-				settings.Set(StringValidationSetting::AllowNewline);
-			}
-			if ((conv & SLF_REPLACE_TABCRLF) != 0) {
-				settings.Set(StringValidationSetting::ReplaceTabCrNlWithSpace);
-			}
-			StrMakeValidInPlace(*str, settings);
-		}
-
-		case SLA_PTRS: break;
-		case SLA_NULL: break;
-		default: NOT_REACHED();
-	}
-}
-
-/**
- * Internal function to save/Load a list of SL_VARs.
- * SlCopy() and SlArray() are very similar, with the exception of the header.
- * This function represents the common part.
- * @param object The object being manipulated.
- * @param length The length of the object in elements
- * @param conv VarType type of the items.
- */
-static void SlCopyInternal(void *object, size_t length, VarType conv)
-{
-	if (GetVarMemType(conv) == SLE_VAR_NULL) {
-		assert(_sl.action != SLA_SAVE); // Use SL_NULL if you want to write null-bytes
-		SlSkipBytes(length * SlCalcConvFileLen(conv));
-		return;
-	}
-
-	/* NOTICE - handle some buggy stuff, in really old versions everything was saved
-	 * as a byte-type. So detect this, and adjust object size accordingly */
-	if (_sl.action != SLA_SAVE && _sl_version == 0) {
-		/* all objects except difficulty settings */
-		if (conv == SLE_INT16 || conv == SLE_UINT16 || conv == SLE_STRINGID ||
-				conv == SLE_INT32 || conv == SLE_UINT32) {
-			SlCopyBytes(object, length * SlCalcConvFileLen(conv));
-			return;
-		}
-		/* used for conversion of Money 32bit->64bit */
-		if (conv == (SLE_FILE_I32 | SLE_VAR_I64)) {
-			for (uint i = 0; i < length; i++) {
-				((int64_t*)object)[i] = (int32_t)std::byteswap(SlReadUint32());
-			}
-			return;
-		}
-	}
-
-	/* If the size of elements is 1 byte both in file and memory, no special
-	 * conversion is needed, use specialized copy-copy function to speed up things */
-	if (conv == SLE_INT8 || conv == SLE_UINT8) {
-		SlCopyBytes(object, length);
-	} else {
-		uint8_t *a = (uint8_t*)object;
-		uint8_t mem_size = SlCalcConvMemLen(conv);
-
-		for (; length != 0; length --) {
-			SlSaveLoadConv(a, conv);
-			a += mem_size; // get size
-		}
-	}
+	SlRaise(openttd_rust_saveload_std_string(&_sl_services, ptr, conv));
 }
 
 /**
@@ -1068,16 +676,7 @@ static void SlCopyInternal(void *object, size_t length, VarType conv)
  */
 void SlCopy(void *object, size_t length, VarType conv)
 {
-	if (_sl.action == SLA_PTRS || _sl.action == SLA_NULL) return;
-
-	/* Automatically calculate the length? */
-	if (_sl.need_length != NL_NONE) {
-		SlSetLength(length * SlCalcConvFileLen(conv));
-		/* Determine length only? */
-		if (_sl.need_length == NL_CALCLENGTH) return;
-	}
-
-	SlCopyInternal(object, length, conv);
+	SlRaise(openttd_rust_saveload_copy(&_sl_services, object, length, conv));
 }
 
 /**
@@ -1087,7 +686,9 @@ void SlCopy(void *object, size_t length, VarType conv)
  */
 static inline size_t SlCalcArrayLen(size_t length, VarType conv)
 {
-	return SlCalcConvFileLen(conv) * length + SlGetArrayLength(length);
+	size_t result;
+	SlRaise(openttd_rust_saveload_array_len(&_sl_services, length, conv, &result));
+	return result;
 }
 
 /**
@@ -1098,145 +699,7 @@ static inline size_t SlCalcArrayLen(size_t length, VarType conv)
  */
 static void SlArray(void *array, size_t length, VarType conv)
 {
-	switch (_sl.action) {
-		case SLA_SAVE:
-			SlWriteArrayLength(length);
-			SlCopyInternal(array, length, conv);
-			return;
-
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD: {
-			if (!IsSavegameVersionBefore(SLV_SAVELOAD_LIST_LENGTH)) {
-				size_t sv_length = SlReadArrayLength();
-				if (GetVarMemType(conv) == SLE_VAR_NULL) {
-					/* We don't know this field, so we assume the length in the savegame is correct. */
-					length = sv_length;
-				} else if (sv_length != length) {
-					/* If the SLE_ARR changes size, a savegame bump is required
-					 * and the developer should have written conversion lines.
-					 * Error out to make this more visible. */
-					SlErrorCorrupt("Fixed-length array is of wrong length");
-				}
-			}
-
-			SlCopyInternal(array, length, conv);
-			return;
-		}
-
-		case SLA_PTRS:
-		case SLA_NULL:
-			return;
-
-		default:
-			NOT_REACHED();
-	}
-}
-
-/**
- * Pointers cannot be saved to a savegame, so this functions gets
- * the index of the item, and if not available, it hussles with
- * pointers (looks really bad :()
- * Remember that a nullptr item has value 0, and all
- * indices have +1, so vehicle 0 is saved as index 1.
- * @param obj The object that we want to get the index of
- * @param rt SLRefType type of the object the index is being sought of
- * @return Return the pointer converted to an index of the type pointed to
- */
-static size_t ReferenceToInt(const void *obj, SLRefType rt)
-{
-	assert(_sl.action == SLA_SAVE);
-
-	if (obj == nullptr) return 0;
-
-	switch (rt) {
-		case REF_VEHICLE_OLD: // Old vehicles we save as new ones
-		case REF_VEHICLE:   return ((const  Vehicle*)obj)->index + 1;
-		case REF_STATION:   return ((const  Station*)obj)->index + 1;
-		case REF_TOWN:      return ((const     Town*)obj)->index + 1;
-		case REF_ROADSTOPS: return ((const RoadStop*)obj)->index + 1;
-		case REF_ENGINE_RENEWS:  return ((const       EngineRenew*)obj)->index + 1;
-		case REF_CARGO_PACKET:   return ((const       CargoPacket*)obj)->index + 1;
-		case REF_ORDERLIST:      return ((const         OrderList*)obj)->index + 1;
-		case REF_STORAGE:        return ((const PersistentStorage*)obj)->index + 1;
-		case REF_LINK_GRAPH:     return ((const         LinkGraph*)obj)->index + 1;
-		case REF_LINK_GRAPH_JOB: return ((const      LinkGraphJob*)obj)->index + 1;
-		default: NOT_REACHED();
-	}
-}
-
-/**
- * Pointers cannot be loaded from a savegame, so this function
- * gets the index from the savegame and returns the appropriate
- * pointer from the already loaded base.
- * Remember that an index of 0 is a nullptr pointer so all indices
- * are +1 so vehicle 0 is saved as 1.
- * @param index The index that is being converted to a pointer
- * @param rt SLRefType type of the object the pointer is sought of
- * @return Return the index converted to a pointer of any type
- */
-static void *IntToReference(size_t index, SLRefType rt)
-{
-	static_assert(sizeof(size_t) <= sizeof(void *));
-
-	assert(_sl.action == SLA_PTRS);
-
-	/* After version 4.3 REF_VEHICLE_OLD is saved as REF_VEHICLE,
-	 * and should be loaded like that */
-	if (rt == REF_VEHICLE_OLD && !IsSavegameVersionBefore(SLV_4, 4)) {
-		rt = REF_VEHICLE;
-	}
-
-	/* No need to look up nullptr pointers, just return immediately */
-	if (index == (rt == REF_VEHICLE_OLD ? 0xFFFF : 0)) return nullptr;
-
-	/* Correct index. Old vehicles were saved differently:
-	 * invalid vehicle was 0xFFFF, now we use 0x0000 for everything invalid. */
-	if (rt != REF_VEHICLE_OLD) index--;
-
-	switch (rt) {
-		case REF_ORDERLIST:
-			if (OrderList::IsValidID(index)) return OrderList::Get(index);
-			SlErrorCorrupt("Referencing invalid OrderList");
-
-		case REF_VEHICLE_OLD:
-		case REF_VEHICLE:
-			if (Vehicle::IsValidID(index)) return Vehicle::Get(index);
-			SlErrorCorrupt("Referencing invalid Vehicle");
-
-		case REF_STATION:
-			if (Station::IsValidID(index)) return Station::Get(index);
-			SlErrorCorrupt("Referencing invalid Station");
-
-		case REF_TOWN:
-			if (Town::IsValidID(index)) return Town::Get(index);
-			SlErrorCorrupt("Referencing invalid Town");
-
-		case REF_ROADSTOPS:
-			if (RoadStop::IsValidID(index)) return RoadStop::Get(index);
-			SlErrorCorrupt("Referencing invalid RoadStop");
-
-		case REF_ENGINE_RENEWS:
-			if (EngineRenew::IsValidID(index)) return EngineRenew::Get(index);
-			SlErrorCorrupt("Referencing invalid EngineRenew");
-
-		case REF_CARGO_PACKET:
-			if (CargoPacket::IsValidID(index)) return CargoPacket::Get(index);
-			SlErrorCorrupt("Referencing invalid CargoPacket");
-
-		case REF_STORAGE:
-			if (PersistentStorage::IsValidID(index)) return PersistentStorage::Get(index);
-			SlErrorCorrupt("Referencing invalid PersistentStorage");
-
-		case REF_LINK_GRAPH:
-			if (LinkGraph::IsValidID(index)) return LinkGraph::Get(index);
-			SlErrorCorrupt("Referencing invalid LinkGraph");
-
-		case REF_LINK_GRAPH_JOB:
-			if (LinkGraphJob::IsValidID(index)) return LinkGraphJob::Get(index);
-			SlErrorCorrupt("Referencing invalid LinkGraphJob");
-
-		default: NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_array(&_sl_services, array, length, conv));
 }
 
 /**
@@ -1246,22 +709,7 @@ static void *IntToReference(size_t index, SLRefType rt)
  */
 void SlSaveLoadRef(void *ptr, VarType conv)
 {
-	switch (_sl.action) {
-		case SLA_SAVE:
-			SlWriteUint32((uint32_t)ReferenceToInt(*(void **)ptr, (SLRefType)conv));
-			break;
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD:
-			*(size_t *)ptr = IsSavegameVersionBefore(SLV_69) ? SlReadUint16() : SlReadUint32();
-			break;
-		case SLA_PTRS:
-			*(void **)ptr = IntToReference(*(size_t *)ptr, (SLRefType)conv);
-			break;
-		case SLA_NULL:
-			*(void **)ptr = nullptr;
-			break;
-		default: NOT_REACHED();
-	}
+	SlRaise(openttd_rust_saveload_ref(&_sl_services, ptr, conv));
 }
 
 /**
@@ -1311,7 +759,7 @@ public:
 
 		SlStorageT *list = static_cast<SlStorageT *>(storage);
 
-		switch (_sl.action) {
+		switch (_codec.action) {
 			case SLA_SAVE:
 				SlWriteArrayLength(list->size());
 
@@ -1376,10 +824,10 @@ static inline size_t SlCalcRefListLen(const void *list, VarType conv)
 static void SlRefList(void *list, VarType conv)
 {
 	/* Automatically calculate the length? */
-	if (_sl.need_length != NL_NONE) {
+	if (_codec.need_length != NL_NONE) {
 		SlSetLength(SlCalcRefListLen(list, conv));
 		/* Determine length only? */
-		if (_sl.need_length == NL_CALCLENGTH) return;
+		if (_codec.need_length == NL_CALCLENGTH) return;
 	}
 
 	SlStorageHelper<std::list, void *>::SlSaveLoad(list, conv, SL_REF);
@@ -1403,10 +851,10 @@ static size_t SlCalcRefVectorLen(const void *vector, VarType conv)
 static void SlRefVector(void *vector, VarType conv)
 {
 	/* Automatically calculate the length? */
-	if (_sl.need_length != NL_NONE) {
+	if (_codec.need_length != NL_NONE) {
 		SlSetLength(SlCalcRefVectorLen(vector, conv));
 		/* Determine length only? */
-		if (_sl.need_length == NL_CALCLENGTH) return;
+		if (_codec.need_length == NL_CALCLENGTH) return;
 	}
 
 	SlStorageHelper<std::vector, void *>::SlSaveLoad(vector, conv, SL_REF);
@@ -1462,7 +910,7 @@ static void SlDeque(void *deque, VarType conv)
 			 * these may not be directly stored in another length-prefixed container type.
 			 * This is permitted for load-related actions, because invalid fields of this type are present
 			 * from SLV_COMPANY_ALLOW_LIST up to SLV_COMPANY_ALLOW_LIST_V2. */
-			assert(_sl.action != SLA_SAVE);
+			assert(_codec.action != SLA_SAVE);
 			SlStorageHelper<std::deque, std::string>::SlSaveLoad(deque, conv, SL_STDSTR);
 			break;
 
@@ -1520,7 +968,7 @@ static void SlVector(void *vector, VarType conv)
 			 * these may not be directly stored in another length-prefixed container type.
 			 * This is permitted for load-related actions, because invalid fields of this type are present
 			 * from SLV_COMPANY_ALLOW_LIST up to SLV_COMPANY_ALLOW_LIST_V2. */
-			assert(_sl.action != SLA_SAVE);
+			assert(_codec.action != SLA_SAVE);
 			SlStorageHelper<std::vector, std::string>::SlSaveLoad(vector, conv, SL_STDSTR);
 			break;
 
@@ -1581,7 +1029,7 @@ size_t SlCalcObjLength(const void *object, const SaveLoadTable &slt)
 
 size_t SlCalcObjMemberLength(const void *object, const SaveLoad &sld)
 {
-	assert(_sl.action == SLA_SAVE);
+	assert(_codec.action == SLA_SAVE);
 
 	if (!SlIsObjectValidInSavegame(sld)) return 0;
 
@@ -1599,20 +1047,20 @@ size_t SlCalcObjMemberLength(const void *object, const SaveLoad &sld)
 
 		case SL_STRUCT:
 		case SL_STRUCTLIST: {
-			NeedLength old_need_length = _sl.need_length;
-			size_t old_obj_len = _sl.obj_len;
+			uint8_t old_need_length = _codec.need_length;
+			size_t old_obj_len = _codec.obj_len;
 
-			_sl.need_length = NL_CALCLENGTH;
-			_sl.obj_len = 0;
+			_codec.need_length = NL_CALCLENGTH;
+			_codec.obj_len = 0;
 
 			/* Pretend that we are saving to collect the object size. Other
 			 * means are difficult, as we don't know the length of the list we
 			 * are about to store. */
 			sld.handler->Save(const_cast<void *>(object));
-			size_t length = _sl.obj_len;
+			size_t length = _codec.obj_len;
 
-			_sl.obj_len = old_obj_len;
-			_sl.need_length = old_need_length;
+			_codec.obj_len = old_obj_len;
+			_codec.need_length = old_need_length;
 
 			if (sld.cmd == SL_STRUCT) {
 				length += SlGetArrayLength(1);
@@ -1662,7 +1110,7 @@ static bool SlObjectMember(void *object, const SaveLoad &sld)
 		case SL_SAVEBYTE: {
 			void *ptr = GetVariableAddress(object, sld);
 
-			switch (_sl.action) {
+			switch (_codec.action) {
 				case SLA_SAVE: SlWriteByte(*(uint8_t *)ptr); break;
 				case SLA_LOAD_CHECK:
 				case SLA_LOAD:
@@ -1676,7 +1124,7 @@ static bool SlObjectMember(void *object, const SaveLoad &sld)
 		case SL_NULL: {
 			assert(GetVarMemType(sld.conv) == SLE_VAR_NULL);
 
-			switch (_sl.action) {
+			switch (_codec.action) {
 				case SLA_LOAD_CHECK:
 				case SLA_LOAD: SlSkipBytes(SlCalcConvFileLen(sld.conv) * sld.length); break;
 				case SLA_SAVE: for (int i = 0; i < SlCalcConvFileLen(sld.conv) * sld.length; i++) SlWriteByte(0); break;
@@ -1689,7 +1137,7 @@ static bool SlObjectMember(void *object, const SaveLoad &sld)
 
 		case SL_STRUCT:
 		case SL_STRUCTLIST:
-			switch (_sl.action) {
+			switch (_codec.action) {
 				case SLA_SAVE: {
 					if (sld.cmd == SL_STRUCT) {
 						/* Store in the savegame if this struct was written or not. */
@@ -1735,13 +1183,7 @@ static bool SlObjectMember(void *object, const SaveLoad &sld)
  */
 void SlSetStructListLength(size_t length)
 {
-	/* Automatically calculate the length? */
-	if (_sl.need_length != NL_NONE) {
-		SlSetLength(SlGetArrayLength(length));
-		if (_sl.need_length == NL_CALCLENGTH) return;
-	}
-
-	SlWriteArrayLength(length);
+	openttd_rust_saveload_set_struct_list_length(&_sl_services, length);
 }
 
 /**
@@ -1751,9 +1193,8 @@ void SlSetStructListLength(size_t length)
  */
 size_t SlGetStructListLength(size_t limit)
 {
-	size_t length = SlReadArrayLength();
-	if (length > limit) SlErrorCorrupt("List exceeds storage size");
-
+	size_t length;
+	SlRaise(openttd_rust_saveload_get_struct_list_length(&_sl_services, limit, &length));
 	return length;
 }
 
@@ -1765,9 +1206,9 @@ size_t SlGetStructListLength(size_t limit)
 void SlObject(void *object, const SaveLoadTable &slt)
 {
 	/* Automatically calculate the length? */
-	if (_sl.need_length != NL_NONE) {
+	if (_codec.need_length != NL_NONE) {
 		SlSetLength(SlCalcObjLength(object, slt));
-		if (_sl.need_length == NL_CALCLENGTH) return;
+		if (_codec.need_length == NL_CALCLENGTH) return;
 	}
 
 	for (auto &sld : slt) {
@@ -1818,9 +1259,9 @@ class SlSkipHandler : public SaveLoadHandler {
 std::vector<SaveLoad> SlTableHeader(const SaveLoadTable &slt)
 {
 	/* You can only use SlTableHeader if you are a CH_TABLE. */
-	assert(_sl.block_mode == CH_TABLE || _sl.block_mode == CH_SPARSE_TABLE);
+	assert(_codec.block_mode == CH_TABLE || _codec.block_mode == CH_SPARSE_TABLE);
 
-	switch (_sl.action) {
+	switch (_codec.action) {
 		case SLA_LOAD_CHECK:
 		case SLA_LOAD: {
 			std::vector<SaveLoad> saveloads;
@@ -1846,7 +1287,7 @@ std::vector<SaveLoad> SlTableHeader(const SaveLoadTable &slt)
 				auto sld_it = key_lookup.find(key);
 				if (sld_it == key_lookup.end()) {
 					/* SLA_LOADCHECK triggers this debug statement a lot and is perfectly normal. */
-					Debug(sl, _sl.action == SLA_LOAD ? 2 : 6, "Field '{}' of type 0x{:02x} not found, skipping", key, type);
+					Debug(sl, _codec.action == SLA_LOAD ? 2 : 6, "Field '{}' of type 0x{:02x} not found, skipping", key, type);
 
 					std::shared_ptr<SaveLoadHandler> handler = nullptr;
 					SaveLoadType saveload_type;
@@ -1896,9 +1337,9 @@ std::vector<SaveLoad> SlTableHeader(const SaveLoadTable &slt)
 
 		case SLA_SAVE: {
 			/* Automatically calculate the length? */
-			if (_sl.need_length != NL_NONE) {
+			if (_codec.need_length != NL_NONE) {
 				SlSetLength(SlCalcTableHeader(slt));
-				if (_sl.need_length == NL_CALCLENGTH) break;
+				if (_codec.need_length == NL_CALCLENGTH) break;
 			}
 
 			for (auto &sld : slt) {
@@ -1922,12 +1363,12 @@ std::vector<SaveLoad> SlTableHeader(const SaveLoadTable &slt)
 				if (!SlIsObjectValidInSavegame(sld)) continue;
 				if (sld.cmd == SL_STRUCTLIST || sld.cmd == SL_STRUCT) {
 					/* SlCalcTableHeader already looks in sub-lists, so avoid the length being added twice. */
-					NeedLength old_need_length = _sl.need_length;
-					_sl.need_length = NL_NONE;
+					uint8_t old_need_length = _codec.need_length;
+					_codec.need_length = NL_NONE;
 
 					SlTableHeader(sld.handler->GetDescription());
 
-					_sl.need_length = old_need_length;
+					_codec.need_length = old_need_length;
 				}
 			}
 
@@ -1955,9 +1396,9 @@ std::vector<SaveLoad> SlTableHeader(const SaveLoadTable &slt)
  */
 std::vector<SaveLoad> SlCompatTableHeader(const SaveLoadTable &slt, const SaveLoadCompatTable &slct)
 {
-	assert(_sl.action == SLA_LOAD || _sl.action == SLA_LOAD_CHECK);
+	assert(_codec.action == SLA_LOAD || _codec.action == SLA_LOAD_CHECK);
 	/* CH_TABLE / CH_SPARSE_TABLE always have a header. */
-	if (_sl.block_mode == CH_TABLE || _sl.block_mode == CH_SPARSE_TABLE) return SlTableHeader(slt);
+	if (_codec.block_mode == CH_TABLE || _codec.block_mode == CH_SPARSE_TABLE) return SlTableHeader(slt);
 
 	std::vector<SaveLoad> saveloads;
 
@@ -2019,31 +1460,12 @@ void SlGlobList(const SaveLoadTable &slt)
  */
 void SlAutolength(AutolengthProc *proc, int arg)
 {
-	assert(_sl.action == SLA_SAVE);
-
-	/* Tell it to calculate the length */
-	_sl.need_length = NL_CALCLENGTH;
-	_sl.obj_len = 0;
-	proc(arg);
-
-	/* Setup length */
-	_sl.need_length = NL_WANTLENGTH;
-	SlSetLength(_sl.obj_len);
-
-	size_t start_pos = _sl.dumper->GetSize();
-	size_t expected_offs = start_pos + _sl.obj_len;
-
-	/* And write the stuff */
-	proc(arg);
-
-	if (expected_offs != _sl.dumper->GetSize()) {
-		SlErrorCorruptFmt("Invalid chunk size when writing autolength block, expected {}, got {}", _sl.obj_len, _sl.dumper->GetSize() - start_pos);
-	}
+	SlRaise(openttd_rust_saveload_autolength(&_sl_services, reinterpret_cast<const void *>(proc), arg));
 }
 
 void ChunkHandler::LoadCheck(size_t len) const
 {
-	switch (_sl.block_mode) {
+	switch (_codec.block_mode) {
 		case CH_TABLE:
 		case CH_SPARSE_TABLE:
 			SlTableHeader({});
@@ -2068,39 +1490,39 @@ static void SlLoadChunk(const ChunkHandler &ch)
 {
 	uint8_t m = SlReadByte();
 
-	_sl.block_mode = m & CH_TYPE_MASK;
-	_sl.obj_len = 0;
-	_sl.expect_table_header = (_sl.block_mode == CH_TABLE || _sl.block_mode == CH_SPARSE_TABLE);
+	_codec.block_mode = m & CH_TYPE_MASK;
+	_codec.obj_len = 0;
+	_codec.expect_table_header = (_codec.block_mode == CH_TABLE || _codec.block_mode == CH_SPARSE_TABLE);
 
 	/* The header should always be at the start. Read the length; the
 	 * Load() should as first action process the header. */
-	if (_sl.expect_table_header) {
+	if (_codec.expect_table_header) {
 		if (SlIterateArray() != INT32_MAX) SlErrorCorrupt("Table chunk without header");
 	}
 
-	switch (_sl.block_mode) {
+	switch (_codec.block_mode) {
 		case CH_TABLE:
 		case CH_ARRAY:
-			_sl.array_index = 0;
+			_codec.array_index = 0;
 			ch.Load();
-			if (_next_offs != 0) SlErrorCorrupt("Invalid array length");
+			if (_codec.next_offs != 0) SlErrorCorrupt("Invalid array length");
 			break;
 		case CH_SPARSE_TABLE:
 		case CH_SPARSE_ARRAY:
 			ch.Load();
-			if (_next_offs != 0) SlErrorCorrupt("Invalid array length");
+			if (_codec.next_offs != 0) SlErrorCorrupt("Invalid array length");
 			break;
 		case CH_RIFF: {
 			/* Read length */
 			size_t len = (SlReadByte() << 16) | ((m >> 4) << 24);
 			len += SlReadUint16();
-			_sl.obj_len = len;
-			size_t start_pos = _sl.reader->GetSize();
+			_codec.obj_len = len;
+			size_t start_pos = openttd_rust_saveload_read_size();
 			size_t endoffs = start_pos + len;
 			ch.Load();
 
-			if (_sl.reader->GetSize() != endoffs) {
-				SlErrorCorruptFmt("Invalid chunk size in RIFF in {} - expected {}, got {}", ch.GetName(), len, _sl.reader->GetSize() - start_pos);
+			if (openttd_rust_saveload_read_size() != endoffs) {
+				SlErrorCorruptFmt("Invalid chunk size in RIFF in {} - expected {}, got {}", ch.GetName(), len, openttd_rust_saveload_read_size() - start_pos);
 			}
 			break;
 		}
@@ -2109,7 +1531,7 @@ static void SlLoadChunk(const ChunkHandler &ch)
 			break;
 	}
 
-	if (_sl.expect_table_header) SlErrorCorrupt("Table chunk without header");
+	if (_codec.expect_table_header) SlErrorCorrupt("Table chunk without header");
 }
 
 /**
@@ -2121,20 +1543,20 @@ static void SlLoadCheckChunk(const ChunkHandler &ch)
 {
 	uint8_t m = SlReadByte();
 
-	_sl.block_mode = m & CH_TYPE_MASK;
-	_sl.obj_len = 0;
-	_sl.expect_table_header = (_sl.block_mode == CH_TABLE || _sl.block_mode == CH_SPARSE_TABLE);
+	_codec.block_mode = m & CH_TYPE_MASK;
+	_codec.obj_len = 0;
+	_codec.expect_table_header = (_codec.block_mode == CH_TABLE || _codec.block_mode == CH_SPARSE_TABLE);
 
 	/* The header should always be at the start. Read the length; the
 	 * LoadCheck() should as first action process the header. */
-	if (_sl.expect_table_header) {
+	if (_codec.expect_table_header) {
 		if (SlIterateArray() != INT32_MAX) SlErrorCorrupt("Table chunk without header");
 	}
 
-	switch (_sl.block_mode) {
+	switch (_codec.block_mode) {
 		case CH_TABLE:
 		case CH_ARRAY:
-			_sl.array_index = 0;
+			_codec.array_index = 0;
 			ch.LoadCheck();
 			break;
 		case CH_SPARSE_TABLE:
@@ -2145,13 +1567,13 @@ static void SlLoadCheckChunk(const ChunkHandler &ch)
 			/* Read length */
 			size_t len = (SlReadByte() << 16) | ((m >> 4) << 24);
 			len += SlReadUint16();
-			_sl.obj_len = len;
-			size_t start_pos = _sl.reader->GetSize();
+			_codec.obj_len = len;
+			size_t start_pos = openttd_rust_saveload_read_size();
 			size_t endoffs = start_pos + len;
 			ch.LoadCheck(len);
 
-			if (_sl.reader->GetSize() != endoffs) {
-				SlErrorCorruptFmt("Invalid chunk size in RIFF in {} - expected {}, got {}", ch.GetName(), len, _sl.reader->GetSize() - start_pos);
+			if (openttd_rust_saveload_read_size() != endoffs) {
+				SlErrorCorruptFmt("Invalid chunk size in RIFF in {} - expected {}, got {}", ch.GetName(), len, openttd_rust_saveload_read_size() - start_pos);
 			}
 			break;
 		}
@@ -2160,7 +1582,7 @@ static void SlLoadCheckChunk(const ChunkHandler &ch)
 			break;
 	}
 
-	if (_sl.expect_table_header) SlErrorCorrupt("Table chunk without header");
+	if (_codec.expect_table_header) SlErrorCorrupt("Table chunk without header");
 }
 
 /**
@@ -2175,32 +1597,32 @@ static void SlSaveChunk(const ChunkHandler &ch)
 	SlWriteUint32(ch.id);
 	Debug(sl, 2, "Saving chunk {}", ch.GetName());
 
-	_sl.block_mode = ch.type;
-	_sl.expect_table_header = (_sl.block_mode == CH_TABLE || _sl.block_mode == CH_SPARSE_TABLE);
+	_codec.block_mode = ch.type;
+	_codec.expect_table_header = (_codec.block_mode == CH_TABLE || _codec.block_mode == CH_SPARSE_TABLE);
 
-	_sl.need_length = (_sl.expect_table_header || _sl.block_mode == CH_RIFF) ? NL_WANTLENGTH : NL_NONE;
+	_codec.need_length = (_codec.expect_table_header || _codec.block_mode == CH_RIFF) ? NL_WANTLENGTH : NL_NONE;
 
-	switch (_sl.block_mode) {
+	switch (_codec.block_mode) {
 		case CH_RIFF:
 			ch.Save();
 			break;
 		case CH_TABLE:
 		case CH_ARRAY:
-			_sl.last_array_index = 0;
-			SlWriteByte(_sl.block_mode);
+			_codec.last_array_index = 0;
+			SlWriteByte(_codec.block_mode);
 			ch.Save();
 			SlWriteArrayLength(0); // Terminate arrays
 			break;
 		case CH_SPARSE_TABLE:
 		case CH_SPARSE_ARRAY:
-			SlWriteByte(_sl.block_mode);
+			SlWriteByte(_codec.block_mode);
 			ch.Save();
 			SlWriteArrayLength(0); // Terminate arrays
 			break;
 		default: NOT_REACHED();
 	}
 
-	if (_sl.expect_table_header) SlErrorCorrupt("Table chunk without header");
+	if (_codec.expect_table_header) SlErrorCorrupt("Table chunk without header");
 }
 
 /** Save all chunks */
@@ -2259,14 +1681,14 @@ static void SlLoadCheckChunks()
 /** Fix all pointers (convert index -> pointer) */
 static void SlFixPointers()
 {
-	_sl.action = SLA_PTRS;
+	_codec.action = SLA_PTRS;
 
 	for (const ChunkHandler &ch : ChunkHandlers()) {
 		Debug(sl, 3, "Fixing pointers for {}", ch.GetName());
 		ch.FixPointers();
 	}
 
-	assert(_sl.action == SLA_PTRS);
+	assert(_codec.action == SLA_PTRS);
 }
 
 
@@ -2848,9 +2270,10 @@ static void ResetSaveloadData()
  */
 static inline void ClearSaveLoadState()
 {
-	_sl.dumper = nullptr;
+	openttd_rust_saveload_dumper_close();
 	_sl.sf = nullptr;
-	_sl.reader = nullptr;
+	openttd_rust_saveload_reader_close();
+	_sl.read_filter = nullptr;
 	_sl.lf = nullptr;
 }
 
@@ -2885,7 +2308,7 @@ void SetSaveLoadError(StringID str)
 /** Return the appropriate initial string for an error depending on whether we are saving or loading. */
 EncodedString GetSaveLoadErrorType()
 {
-	return GetEncodedString(_sl.action == SLA_SAVE ? STR_ERROR_GAME_SAVE_FAILED : STR_ERROR_GAME_LOAD_FAILED);
+	return GetEncodedString(_codec.action == SLA_SAVE ? STR_ERROR_GAME_SAVE_FAILED : STR_ERROR_GAME_LOAD_FAILED);
 }
 
 /** Return the description of the error. **/
@@ -2915,7 +2338,7 @@ static SaveOrLoadResult SaveFileToDisk(bool threaded)
 		_sl.sf->Write((uint8_t*)hdr, sizeof(hdr));
 
 		_sl.sf = fmt.init_write(_sl.sf, compression);
-		_sl.dumper->Flush(_sl.sf);
+		SlRaise(openttd_rust_saveload_flush(&_sl_services, _sl.sf.get()));
 
 		ClearSaveLoadState();
 
@@ -2966,7 +2389,7 @@ static SaveOrLoadResult DoSave(std::shared_ptr<SaveFilter> writer, bool threaded
 {
 	assert(!_sl.saveinprogress);
 
-	_sl.dumper = std::make_unique<MemoryDumper>();
+	openttd_rust_saveload_dumper_open();
 	_sl.sf = std::move(writer);
 
 	_sl_version = SAVEGAME_VERSION;
@@ -2997,7 +2420,7 @@ static SaveOrLoadResult DoSave(std::shared_ptr<SaveFilter> writer, bool threaded
 SaveOrLoadResult SaveWithFilter(std::shared_ptr<SaveFilter> writer, bool threaded)
 {
 	try {
-		_sl.action = SLA_SAVE;
+		_codec.action = SLA_SAVE;
 		return DoSave(std::move(writer), threaded);
 	} catch (...) {
 		ClearSaveLoadState();
@@ -3077,8 +2500,9 @@ static SaveOrLoadResult DoLoad(std::shared_ptr<LoadFilter> reader, bool load_che
 	}
 
 	_sl.lf = fmt->init_load(_sl.lf);
-	_sl.reader = std::make_unique<ReadBuffer>(_sl.lf);
-	_next_offs = 0;
+	_sl.read_filter = _sl.lf;
+	openttd_rust_saveload_reader_open(_sl.read_filter.get());
+	_codec.next_offs = 0;
 
 	if (!load_check) {
 		ResetSaveloadData();
@@ -3157,7 +2581,7 @@ static SaveOrLoadResult DoLoad(std::shared_ptr<LoadFilter> reader, bool load_che
 SaveOrLoadResult LoadWithFilter(std::shared_ptr<LoadFilter> reader)
 {
 	try {
-		_sl.action = SLA_LOAD;
+		_codec.action = SLA_LOAD;
 		return DoLoad(std::move(reader), false);
 	} catch (...) {
 		ClearSaveLoadState();
@@ -3212,15 +2636,15 @@ SaveOrLoadResult SaveOrLoad(std::string_view filename, SaveLoadOperation fop, De
 		assert(dft == DFT_GAME_FILE);
 		switch (fop) {
 			case SLO_CHECK:
-				_sl.action = SLA_LOAD_CHECK;
+				_codec.action = SLA_LOAD_CHECK;
 				break;
 
 			case SLO_LOAD:
-				_sl.action = SLA_LOAD;
+				_codec.action = SLA_LOAD;
 				break;
 
 			case SLO_SAVE:
-				_sl.action = SLA_SAVE;
+				_codec.action = SLA_SAVE;
 				break;
 
 			default: NOT_REACHED();

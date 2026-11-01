@@ -7,6 +7,9 @@
 
 /** @file objects-console.cpp Identical inputs to unchanged original and Rust-backed bodies. */
 #include "saveload/saveload.cpp" // Unchanged native reader/dispatcher; relink replaces this object.
+#include "genworld.h"
+void ObjectProbeSetProgress(GenWorldProgress, uint);
+void ObjectProbeIncreaseProgress(GenWorldProgress);
 #define SetGeneratingWorldProgress ObjectProbeSetProgress
 #define IncreaseGeneratingWorldProgress ObjectProbeIncreaseProgress
 #include "object_cmd.cpp"
@@ -31,8 +34,6 @@ static HiddenObjectArea HideObjectForTunnel(TileIndex t) {
 static void RestoreObjectFirstTile(HiddenObjectArea h) { _cleared_object_areas[h.index].first_tile = TileIndex(h.first_tile); }
 static bool IsObjectIndirectlyCleared(TileIndex t) { auto *p = FindClearedObject(t); return p != nullptr && p->first_tile != t; }
 #endif
-void SetGeneratingWorldProgress(GenWorldProgress, uint);
-void IncreaseGeneratingWorldProgress(GenWorldProgress);
 static int cancellation = -1;
 void ObjectProbeSetProgress(GenWorldProgress kind, uint total)
 {

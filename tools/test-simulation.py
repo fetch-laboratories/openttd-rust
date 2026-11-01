@@ -32,6 +32,42 @@ simulate.scenario_modules()
 
 
 class SimulationDeterminismTests(unittest.TestCase):
+    def test_save_comparison_distinguishes_non_minimal_gamma(self) -> None:
+        g = simulate.gamma
+        header = b"\x0a" + g(1) + b"s" + b"\x00"  # One SLE_FILE_STRING field "s".
+
+        def save(element_length, body):
+            chunk = b"TEST\x03" + g(len(header) + 1) + header
+            return b"OTTN\0\0\0\0" + chunk + element_length + body + b"\x00" * 5
+
+        body = g(2) + b"ab"
+        minimal = simulate.parse_save(save(g(len(body) + 1), body))["TEST"]
+        for name, element_length, element, expected in (
+            (
+                "element length",
+                b"\x80" + g(len(body) + 1),
+                body,
+                ("", "gamma encoding", 0, 1),
+            ),
+            (
+                "string length",
+                g(len(body) + 2),
+                b"\x80\x02ab",
+                ("0", "encoding", "026162", "80026162"),
+            ),
+        ):
+            candidate = simulate.parse_save(save(element_length, element))["TEST"]
+            stats = {"elements": 0, "masked": {}}
+            with self.subTest(name):
+                self.assertEqual(
+                    list(simulate.compare_chunk("TEST", minimal, candidate, stats)),
+                    [expected],
+                )
+        stats = {"elements": 0, "masked": {}}
+        self.assertEqual(
+            list(simulate.compare_chunk("TEST", minimal, minimal, stats)), []
+        )
+
     def test_station_spatial_requires_complete_unique_rows(self) -> None:
         for reload in (False, True):
             phases = (
