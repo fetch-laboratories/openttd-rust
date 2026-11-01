@@ -4,35 +4,33 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-10-31, after integration 50)
+## Where the fork stands (2026-11-01, after integration 52)
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-- Code is `b34535f99c` (integration 51). This session integrated #607 (48), #603 (49), #612 (50) and #626 (51). There were no rollbacks.
-- The stocktake at `ec11d2ba4d` (integration 49) uses `python3 tools/port-metrics.py --whole-fork` (status comment on #3). Changes are since `2a89fb023f`.
-  - Retired: 52,370 of 284,355 original code lines (18.42%, -812).
-  - Compiled C++: 265,276 (93.29%, +30).
-  - Glue 33,291 (-782), with 1,375 exports (-2) and 4,199 callback slots (-7).
-  - Rust 124,133 (-92) and tooling 51,405 (+95).
-  - Simulation-source retirement: 39,855 of 61,148 (65.18%).
-- #607 accounts for -812 retired, -813 glue and -1 compiled C++. That is the diff-matching re-baseline predicted on its PR, not a regression. Later stocktakes start from `92ef07aac4`.
-- #603 retired nothing and raised compiled C++ by 31: fixtures +63, boundary layer -26. So compiled C++ rose 30 since integration 47 instead of falling.
-- #612 (50), not in the stocktake, retired 90 lines with net glue -46.
-- Baselines at `ec11d2ba4d`: 572 rebound-callee rows (-9, all from #603), 127 shared-accessor rows (-1) and 55 orphan exports.
-- Speed: profile 49 ran on merged `ec11d2ba4d` with #626's fix. After #607, every profile failed the anchor-identity guard. The hashed candidate `CMakeCache.txt` lost `OPTION_RUST` and gained three Git entries, and #626 (integration 51) normalizes them. Every candidate Ir stays below its anchor, so every projection equals profile 46's. The largest rise is TGP at +0.20%, and no pass is due. The next profile is due after 52.
+- Code is `1daa611627` (integration 52, #616). The 10-31 session integrated #607 (48), #603 (49), #612 (50) and #626 (51), and this session #616 (52). There were no rollbacks.
+- The stocktake at `1daa611627` uses `python3 tools/port-metrics.py --whole-fork`. Changes are since `ec11d2ba4d` (integration 49), 0.86 days earlier.
+  - Retired: 52,512 of 284,355 original code lines (18.47%, +142).
+  - Compiled C++: 265,110 (93.23%, -166, about -190 per day).
+  - Glue 33,267 (-24), with 1,375 exports (0) and 4,185 callback slots (-14).
+  - Rust 124,609 (+476) and tooling 52,228 (+823).
+  - Simulation-source retirement: 39,994 of 61,148 (65.41%).
+- Compiled C++ falls again after rising 30 lines over integrations 48 and 49. #612 retired 90 lines with net glue -46, and #616 retired 52 with +17 (-1 production, +18 native fixture). Tooling rose 823 lines for 142 retired, 594 of them from #612.
+- Baselines at `1daa611627`: 567 rebound-callee rows (-5), 127 shared-accessor rows (0) and 55 orphan exports (0).
+- Speed: profile 52 ran on merged `1daa611627`, and all six scenarios are equal. Every candidate Ir stays below its anchor, so every projection equals profile 46's. The largest rise since profile 49 is Grok at +0.13%, and no pass is due. The next profile is due after 54.
 
-| Scenario | Candidate Ir, profile 49 | Projection | Carried three-pass record |
+| Scenario | Candidate Ir, profile 52 | Projection | Carried three-pass record |
 | --- | ---: | ---: | ---: |
-| TGP | 2,721,085,336 | 1.111722x | 1.154106x |
-| Grok | 26,887,758,498 | 1.387147x | 1.385653x |
-| Opus | 28,289,683,248 | 1.393949x | 1.394556x |
-| P1996 | 4,537,359,346 | 1.336551x | 1.337764x |
-| P2000 | 7,386,811,216 | 1.400577x | 1.401446x |
-| P2016 | 13,373,195,254 | 1.522911x | 1.481910x |
+| TGP | 2,722,383,676 | 1.111722x | 1.154106x |
+| Grok | 26,923,738,750 | 1.387147x | 1.385653x |
+| Opus | 28,318,254,794 | 1.393949x | 1.394556x |
+| P1996 | 4,540,142,456 | 1.336551x | 1.337764x |
+| P2000 | 7,388,515,004 | 1.400577x | 1.401446x |
+| P2016 | 13,365,318,590 | 1.522911x | 1.481910x |
 
 - The integration-50 platform cadence (run 41242566571) passed on every platform. The next is due after 55.
 - Coverage is unchanged: #156 holds the gaps, and #503 comes last.
-- Unintegrated branches: #616, #618, #620, #623, #624, #625, #627 and #628, two above the six-branch limit. The 10-31 session lifted the limit by the user's direction to use an expiring window. The wrap-up course in the work order brings the count back down (user, 2026-11-01).
+- Unintegrated branches: #618, #620, #623, #624, #625, #627 and #628, one above the six-branch limit. The 10-31 session lifted the limit by the user's direction to use an expiring window. The wrap-up course in the work order brings the count back down (user, 2026-11-01).
 
 ## Phases
 
@@ -286,6 +284,7 @@ Rust / tooling / original C++ retired / net glue.
 | 49 | #199 batch: #569's map, movement and follower copies / #603 | `ec11d2ba4d` | 202 / 3 / 0 / +31 |
 | 50 | #602 station spatial queries and rail trigger areas / #612 | `55e1c2c850` | 638 / 594 / 90 / -46 |
 | 51 | Anchored instruction identity after the Rust-only build / #626 | `b34535f99c` | 0 / 56 / 0 / 0 |
+| 52 | #615 clear-ground clearing and editor tree groups / #616 | `1daa611627` | 131 / 196 / 52 / +17 |
 
 ## Work order
 
@@ -295,7 +294,6 @@ comes first. A lower rank can run while a higher one waits. Scopes live in issue
 
 First, **the wrap-up course (user, 2026-11-01).** Bring the count to four or five unintegrated branches, so one or two of the six slots stay open. Start no branch unless an in-flight item needs one to finish; an integration PR that assembles reviewed heads is such a branch. Finish in readiness order:
 - #625 (#621) and #623 (#566): each review stopped before publishing its findings, so each gets a fresh fixing review. They touch disjoint `tools/` files, so they share one integration PR and one Full if both are ready together.
-- #616 (#615): base update with the #607 sweep, then repair the Full failure at `src/tests/town_growth.cpp:20`. The repair gets a scoped review, then Full.
 - #618 (#617): fresh full fixing review, base update with the sweep, then Full.
 - #624 (#622): integrates with its five converted families (net glue -54, rebound rows 567 to 528). The `RustSpec*` table and the remaining callees stay on #622 for a later batch.
 - #627 (#573): fix the string-codec bounce and route each moved `NOT_REACHED` through the native fatal service (root's decisions on the PR). Then review by function group and Full at the slice-3a boundary. Slices 3b and 4 continue in a later PR under #573.
@@ -303,7 +301,6 @@ First, **the wrap-up course (user, 2026-11-01).** Bring the count to four or fiv
 - #607 integrated as 48. Every draft adopting it reruns the recorded sweep over the `src/` files it touches ([sweep](rust-migration.md#rust-only-source-sweep)).
 
 1. **Finish the open drafts**, in readiness order. No reviewed draft gains scope, but a fix the audits found is not new scope.
-   - #616 (#615 clear ground and editor tree groups): repair the Full failure at `src/tests/town_growth.cpp:20`, which comes from combining with integration 47. A behavior fix gets a scoped review. Then base update and Full.
    - #618 (#617 snow line and water borders): fresh full fixing review, then base update and Full.
    - #620 (#619 road bits and crossings): continue the implementation after the wrap-up.
    - #623 (#566 drawing workload): finish its independent review, which includes keeping the drawing row free of a speed ceiling (root's answers on the PR). Then Full and merge. It must integrate before #570.
@@ -329,7 +326,7 @@ First, **the wrap-up course (user, 2026-11-01).** Bring the count to four or fiv
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
 
 Recurring:
-- After every second integration (next after 52), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip with the pinned `LD_LIBRARY_PATH` from [speed](speed.md#instruction-projections).
+- After every second integration (next after 54), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip with the pinned `LD_LIBRARY_PATH` from [speed](speed.md#instruction-projections).
 - Run the platform cadence after every fifth integration (integration 50 is running; next after 55). Fix a red cadence before further integrations.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
@@ -340,19 +337,18 @@ Excluded, with return conditions checked by this review:
 - #64 and #68 become maintained Rust crates that reproduce the game's observable cryptography. They return when phase 3's network ports reach authentication, or with phase 6, whichever comes first.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-11-01, wrap-up start)
+## Resume checkpoint (2026-11-01, wrap-up after integration 52)
 
-Code is `b34535f99c`. `CI_ON_DEMAND` is `true`. No agent from the 10-31 session is still running. Read each open PR's status comment before resuming. Each active branch's T3 worktree is under `/home/fetch/.t3/worktrees/openttd-rust/`.
+Code is `1daa611627`. `CI_ON_DEMAND` is `true`. Fresh reviews of #625, #623, #618, #624 and #627 are under way; each records its state on its PR. Read each open PR's status comment before resuming. Each active branch's T3 worktree is under `/home/fetch/.t3/worktrees/openttd-rust/`.
 
 | Issue / PR | State at this commit | Next action | Checkout |
 | --- | --- | --- | --- |
-| #621 / #625 | Implementation done at `e0e2b0868e`. Review625 stopped with unpublished, uncommitted facade-mark fixes, so it counts as no review | Fresh fixing review, then integration with #623, Full and merge | `t3-a5baa928` |
-| #566 / #623 | Implementation done at `f438461750`. Review623 stopped with an unpublished, uncommitted fix that removes the speed budget for drawing | Fresh fixing review, then integration with #625, Full and merge | `t3-8aec009e` |
-| #615 / #616 | Reviewed. Full failed at `b4021e34a1` (`town_growth.cpp:20`) | Base update with the sweep, repair, scoped review, Full | `t3-68700e40` |
-| #617 / #618 | Validated locally at `45e1350c79` | Fresh full fixing review, base update with the sweep, Full | `t3-0d996c45` |
-| #622 / #624 | Five families at `55c7afe82e`; local checks pass | Review by family group, Full, merge; the remaining scope stays on #622 | `t3-b2cef9d7` |
-| #573 / #627 | Slices 1 to 3a at `7f1ff9271a` | The two decided fixes, review by function group, Full | `t3-fdca1ad8` |
+| #621 / #625 | Implementation done at `e0e2b0868e`; the 10-31 review stopped unpublished | Review625 (fresh) under way; then integration with #623, Full and merge | `t3-a5baa928` |
+| #566 / #623 | Implementation done at `f438461750`; the 10-31 review stopped unpublished | Review623 (fresh) under way; then integration with #625, Full and merge | `t3-8aec009e` |
+| #617 / #618 | Validated locally at `45e1350c79` | Review618 under way; then base update with the sweep, Full | `t3-0d996c45` |
+| #622 / #624 | Five families at `55c7afe82e`; local checks pass | Review624 under way; then base update, Full, merge. The remaining scope stays on #622 | `t3-b2cef9d7` |
+| #573 / #627 | Slices 1 to 3a with both decided fixes at `0a1a885583` (fix627) | Review627 under way; then base update, Full, merge | `t3-fdca1ad8` |
 | #619 / #620 | Uncompiled checkpoint at `1afd6fe028` | Hold; continue the implementation when forward work resumes | `t3-90e92030` |
 | #574 / #628 | Slice 1 of 5 at `77c0b8295e` | Hold; slice 2 after #629 when forward work resumes | `t3-1e4ffc20` |
 
-Keep unchanged: `t3-d392cf16` and `t3-67d3ed30` (the stopped #625 and #623 reviews' uncommitted fixes) until the fresh reviews publish, `t3-120ef117` (old #603), `t3-431c84b4` (cancelled #565 source with 58 dirty entries), `t3-d78d5f8b` (native fixture evidence), `.local/reference/openttd` at `14ec60f248` and the instruction-profile worktrees under the main checkout's `.local/worktrees/`. The merged #603, #607, #612 and #626 checkouts and the finished review checkouts are T3-locked. Housekeeping keeps them until T3 releases them.
+Keep unchanged: `t3-d392cf16` and `t3-67d3ed30` (the stopped #625 and #623 reviews' uncommitted fixes) until the fresh reviews publish, `t3-120ef117` (old #603), `t3-431c84b4` (cancelled #565 source with 58 dirty entries), `t3-d78d5f8b` (native fixture evidence), `.local/reference/openttd` at `14ec60f248` and the instruction-profile worktrees under the main checkout's `.local/worktrees/`. The merged #603, #607, #612, #616 and #626 checkouts and the finished review checkouts are T3-locked. Housekeeping keeps them until T3 releases them.
