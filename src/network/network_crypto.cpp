@@ -104,6 +104,7 @@ public:
 	/* C++ allocation succeeds before this initializer allocates the Rust owner. */
 	X25519EncryptionHandler(const OpenTTDAuthSession *session, uint8_t side) : context(openttd_rust_auth_stream_new(session, side)) {}
 	~X25519EncryptionHandler() = default;
+	OpenTTDAuthStream *GetRustStream() const noexcept override { return this->context.get(); }
 	size_t MACSize() const override { return X25519_MAC_SIZE; }
 	bool Decrypt(std::span<std::uint8_t> mac, std::span<std::uint8_t> message) override
 	{

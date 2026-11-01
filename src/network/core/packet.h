@@ -49,8 +49,6 @@ private:
 	/** The current read/write position in the packet */
 	OpenTTDPacketState state;
 
-	/** Socket we're associated with. */
-	NetworkSocketHandler *cs;
 
 	PacketSize Position() const
 	{
@@ -61,14 +59,32 @@ public:
 	Packet(NetworkSocketHandler *cs, size_t limit, size_t initial_read_size = EncodedLengthOfPacketSize());
 	Packet(NetworkSocketHandler *cs, PacketType type, size_t limit = COMPAT_MTU);
 
-	Packet(const Packet &other) : cs(other.cs) { openttd_rust_packet_clone(&this->state, &other.state); }
+	Packet(const Packet &other) { openttd_rust_packet_clone(&this->state, &other.state); }
 	Packet &operator=(const Packet &other)
 	{
 		openttd_rust_packet_assign(&this->state, &other.state);
-		this->cs = other.cs;
+		return *this;
+	}
+	Packet(Packet &&other) noexcept : state(other.state)
+	{
+		other.state.data = nullptr;
+		other.state.size = other.state.capacity = 0;
+	}
+	Packet &operator=(Packet &&other) noexcept
+	{
+		openttd_rust_packet_destroy(&this->state);
+		if (this != &other) this->state = other.state;
+		other.state.data = nullptr;
+		other.state.size = other.state.capacity = 0;
 		return *this;
 	}
 	~Packet() { openttd_rust_packet_destroy(&this->state); }
+
+	/** Shared services for direct Rust packet operations. */
+	static const OpenTTDPacketServices &Services();
+	OpenTTDPacketState *Record() { return &this->state; }
+	/** Adopt a Rust-created packet without constructing or encoding it again. */
+	explicit Packet(OpenTTDPacketState &source) : state(std::exchange(source, {})) {}
 
 	/* Sending/writing of packets */
 	void PrepareToSend();
@@ -116,7 +132,7 @@ public:
 	template <typename F>
 	ssize_t TransferOutWithLimit(F transfer_function, size_t limit)
 	{
-		size_t amount = openttd_rust_packet_transfer_amount(&this->state, this->Size(), limit);
+		size_t amount = openttd_rust_packet_transfer_amount(&this->state, limit);
 		if (amount == 0) return 0;
 
 		assert(this->Position() < this->state.size);
@@ -169,7 +185,7 @@ public:
 	template <typename F>
 	ssize_t TransferIn(F transfer_function)
 	{
-		size_t amount = openttd_rust_packet_transfer_amount(&this->state, this->Size(), std::numeric_limits<size_t>::max());
+		size_t amount = openttd_rust_packet_transfer_amount(&this->state, std::numeric_limits<size_t>::max());
 		if (amount == 0) return 0;
 
 		assert(this->Position() < this->state.size);
@@ -181,5 +197,9 @@ public:
 		return bytes;
 	}
 };
+
+static_assert(std::is_standard_layout_v<Packet>);
+static_assert(sizeof(Packet) == sizeof(OpenTTDPacketState));
+static_assert(alignof(Packet) == alignof(OpenTTDPacketState));
 
 #endif /* NETWORK_CORE_PACKET_H */

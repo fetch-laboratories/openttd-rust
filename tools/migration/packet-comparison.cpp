@@ -99,6 +99,32 @@ int main()
 		Socket socket; Packet packet(&socket, PacketType{0}, limit); std::array<uint8_t, 8> bytes{1,2,3,4,5,6,7,8};
 		auto suffix = packet.Send_bytes(bytes); std::printf("send-bytes %zu %zu %td\n", limit, suffix.size(), suffix.data() - bytes.data()); State("send-bytes-state", packet, socket);
 	}
+	/* Truncation can split UTF-8; drain the terminator before reading the next field. */
+	for (std::string_view input : {"a\xC3\xA9z", "a\xFFz", "a\nb\r\nc\t"}) {
+		for (size_t length : {size_t{2}, size_t{3}, size_t{4}, size_t{20}}) {
+			for (StringValidationSettings settings : {StringValidationSetting::ReplaceWithQuestionMark, StringValidationSetting::AllowNewline, StringValidationSetting::ReplaceTabCrNlWithSpace}) {
+				Socket socket; Packet packet(&socket, PacketType{1}, 100);
+				packet.Send_string(input); packet.Send_uint8(0xED); packet.PrepareToSend(); (void)packet.PrepareToRead(); packet.Recv_uint8();
+				auto text = packet.Recv_string(length, settings);
+				std::printf("string %zu %u ", length, settings.base()); Bytes({reinterpret_cast<const uint8_t *>(text.data()), text.size()});
+				auto next = packet.Recv_uint8();
+				std::printf("%u %d %zu\n", next, socket.HasClientQuit(), packet.RemainingBytesToTransfer());
+			}
+		}
+	}
+	{
+		Socket socket; std::array<uint8_t, 4> bytes{4, 0, 'x', 'y'}; auto packet = Read(socket, bytes);
+		auto text = packet.Recv_string(20);
+		std::printf("unterminated-string "); Bytes({reinterpret_cast<const uint8_t *>(text.data()), text.size()});
+		std::printf("%d %zu\n", socket.HasClientQuit(), packet.RemainingBytesToTransfer());
+	}
+	{
+		Socket socket; Packet source(&socket, PacketType{7}, 100); source.Send_uint32(0xABCDEF01); (void)source.PrepareToRead(); source.Recv_uint8();
+		Packet moved(std::move(source));
+		std::printf("move-source %zu %d %zu\n", source.Size(), source.HasPacketSizeData(), source.RemainingBytesToTransfer());
+		Packet assigned(&socket, PacketType{0}, 100); assigned = std::move(moved);
+		std::printf("move-result %u %zu %d %zu\n", assigned.Recv_uint32(), moved.Size(), moved.HasPacketSizeData(), moved.RemainingBytesToTransfer());
+	}
 	/* TCP header-first / UDP full initial storage, rejected framing. */
 	for (size_t initial : {size_t{2}, size_t{8}}) for (uint16_t size : {uint16_t{0}, uint16_t{2}, uint16_t{3}, uint16_t{8}, uint16_t{9}}) {
 		Socket socket; Packet packet(&socket, size_t{8}, initial);

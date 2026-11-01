@@ -48,6 +48,8 @@ public:
 	void CloseSocket();
 
 	virtual void SendPacket(std::unique_ptr<Packet> &&packet);
+	/** Enqueue a packet already framed by the direct Rust packet owner. */
+	void SendPreparedPacket(OpenTTDPacketState &packet) { this->packet_queue.push_back(std::make_unique<Packet>(packet)); }
 	SendPacketsState SendPackets(bool closing_down = false);
 
 	virtual std::unique_ptr<Packet> ReceivePacket();
