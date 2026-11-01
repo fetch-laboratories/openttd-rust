@@ -457,16 +457,6 @@ static inline uint SlGetGammaLength(size_t i)
 	return openttd_rust_saveload_gamma_length(i);
 }
 
-static inline uint SlReadSparseIndex()
-{
-	return SlReadSimpleGamma();
-}
-
-static inline void SlWriteSparseIndex(uint index)
-{
-	SlWriteSimpleGamma(index);
-}
-
 static inline uint SlReadArrayLength()
 {
 	return SlReadSimpleGamma();
