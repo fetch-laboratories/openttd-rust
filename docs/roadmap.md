@@ -260,6 +260,8 @@ Rust / tooling / original C++ retired / net glue.
 | 54 | #617 snow-line state and map-edge water scans / #618 | `b29e8036f5` | 159 / 200 / 34 / +61 |
 | 55 | #622 batch: five shared-operation families / #624 | `181a962caa` | see #624 / rebound rows 567 to 523 |
 | 56 | #573 save/load codec slices 1 to 3a (#627) and #619 road-bit cleanup (#620) / #631 | `2d2cd78f53` | see stocktake 56: save/load retired +603 |
+| 57 | #629 multiplayer comparison isolated from host loopback probes / #632 | `46a2f240d7` | 0 / 8 / 0 / 0 |
+| 58 | #622 later batch: shared NewGRF spec and GRF-file bindings / #639 | `83c62ef441` | net glue -34 / rebound rows 523 to 420 |
 
 ## Work order
 
@@ -281,11 +283,10 @@ The 10-31 session hold on #559, #69 and #570 has expired, and the wrap-up course
 
    No further phase-1 owner is planned. Every other remaining non-drawing body moves with the phase-2 owner of its file, including plan-after47's link-graph job lifecycle, elrail transition and land count; #621 lists them.
 3. **One maintenance batch at a time** (one reviewer, one Full):
-   - #629 first: isolate the multiplayer comparison from other loopback connections on port 41051. It fails on base too, and #628 needs it as its per-slice check. As a fix a draft needs, it may go alone, so #622's later batch runs beside it.
-   - #622's later batch: the shared typed `RustSpec*` table (root's answers on #624), then `RustGRFFileID`, `RustGRFCargoMap`, `RustGRFFileAtOrNull` and the `RustResolverGRF*` callees, and extending `tools/rebound-callees.py` to `.inc` service tables.
+   - #641 shared Rust packet owner (root's shared-service PR), in the first free slot: #628 and #64 call C++ `Packet` methods that bounce back into `packet.rs`, and both must adopt #641 before they integrate.
    - #199's open items, disjoint from #570: the `CargoFlow` bounce, #578's story-page bounce, #580's date parameters and the sweep's stale comments.
    - #565 item 2, after #570 integrates, because both change `movement.rs`. Delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body). Production net glue -300 to -600. It also deletes the native `bridge_above` and `rail_tile_type` services that #616 and #620 duplicated with Rust map readers (`road_cmd.rs:932`, `road_cmd.rs:1443`, `station_cmd.rs:447`).
-   - Later: #604 shared settings access, after #570's generator; then #168/#199/#500 completed-job publication and #501 probe typing.
+   - Later: #604 shared settings access, after #570's generator, now also extending `tools/rebound-callees.py` to `.inc` tables (51 rows, moved from #639 by root decision on #622); then #168/#199/#500 completed-job publication and #501 probe typing.
 4. **The next phase-2 pools after #570 integrates** (ranked by plan-after56, 2026-11-01). Each needs #570's generator, save descriptors and record lookup:
    - #634 stations and road stops: 450 to 650 retired, -300 to -800 net glue, about 110 to 160 station-field slots. It removes the per-station `SharedForEachStation` bounce and #612's two C++ calls per k-d tree coordinate (`station/spatial.rs:12`).
    - #635 towns, industries and subsidies: 350 to 550 retired, -150 to -450 net glue, about 40 to 70 field slots. Disjoint from #634; the two may run together.
@@ -311,13 +312,18 @@ Excluded, with return conditions checked by this review:
 - #64 and #68 become maintained Rust crates that reproduce the game's observable cryptography. They return when phase 3's network ports reach authentication, or with phase 6, whichever comes first.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-11-01, wrap-up complete after integration 56)
+## Resume checkpoint (2026-11-01 22:20Z, Claude session limit)
 
-Code is `2d2cd78f53`. `CI_ON_DEMAND` is `true`. No agent is running. Read #628's status comment before resuming it.
+Code is `83c62ef441` (integration 58). `CI_ON_DEMAND` is `true`. Stocktake 58 and profile 58 are due first on resume. Claude agents paused at pushed checkpoints for the session limit (resets 02:10Z); each PR's status comment holds its next action. Codex agents keep running.
 
-| Issue / PR | State at this commit | Next action | Checkout |
+| Issue / PR | State | Next action | Agent |
 | --- | --- | --- | --- |
-| #574 / #628 | Slice 1 of 5 at `77c0b8295e`, held | Slice 2 after #629 integrates (work order 3 and 5) | `t3-1e4ffc20` |
+| #570 / #636 | Checkpoint 1 builds; 235 of 235 CTests; focused set rerun result in the status comment | Fix any failures it lists, then ground and train records, then checkpoint 2 (deletes readers; net glue must turn negative) | Opus, paused |
+| #69 / #633 | Round-2 review at `346169fe0f`: 7 unfixed findings ([report](https://github.com/fetch-laboratories/openttd-rust/pull/633#issuecomment-6564617420)) | Opus fixes them (user: Opus, not Codex, for #633 repairs), then fresh review and Full | Opus |
+| #559 / #640 | Hop removed (`6684c7946c`); 10 of 11 scenarios equal; `commands-play-1` town ratings wrong (test depth goes negative on the first `rail.build`) | Find the unmatched decrement, then the issue's evidence cases | Opus, paused |
+| #574 / #628 | Slices 1-2 reviewed, open findings wait for #641 and #570's generator; slice 3 in progress | Slice 3 to review | Codex /root/network_slice3, running |
+| #64 / #642 | Crates pinned (`605dd16abd`); nothing compiled yet; #68 folded in | Compose crates, known-answer tests from Monocypher, port `network_crypto.cpp`; adopt #641 | Opus, paused |
+| #641 | Issue only | Start in the free slot | Not started |
 
 Since 2026-11-01, AGENTS.md requires a named job ID before an agent ends its turn on a background job, and short checks run in the foreground. Codex children had been ending turns on jobs they never started (`ae3fd45dff`).
 
