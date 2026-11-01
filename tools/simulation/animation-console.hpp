@@ -107,6 +107,8 @@ static void AnimationResetCodec(uint8_t action)
 	openttd_rust_saveload_dumper_close();
 	openttd_rust_saveload_reader_close();
 	_codec = {};
+	_codec.version = reinterpret_cast<const uint16_t *>(&_sl_version);
+	_codec.minor_version = &_sl_minor_version;
 	_codec.action = action;
 }
 #endif
