@@ -3,6 +3,7 @@
 #ifndef RUST_NETWORK_CONNECTION_FFI_H
 #define RUST_NETWORK_CONNECTION_FFI_H
 #include "network_frame_ffi.h"
+struct OpenTTDGrfLoadingServices;
 struct OpenTTDNetworkConnectionServices {
 	void (*admin_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(admin_error);
 	void (*admin_joined)(void *) noexcept OPENTTD_SERVICE_DEFAULT(admin_joined);
@@ -46,8 +47,7 @@ struct OpenTTDNetworkConnectionServices {
 	uint32_t (*error_message)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
 	void (*error_unjoined)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_unjoined);
 	void * (*game)(void *) noexcept OPENTTD_SERVICE_DEFAULT(game);
-	bool (*grfs_empty)() noexcept OPENTTD_SERVICE_DEFAULT(grfs_empty);
-	void * (*grfs_packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(grfs_packet);
+	const OpenTTDGrfLoadingServices *grf;
 	void * (*info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(info);
 	int32_t (*join_date)(void *) noexcept OPENTTD_SERVICE_DEFAULT(join_date);
 	void (*joined)(void *) noexcept OPENTTD_SERVICE_DEFAULT(joined);
@@ -81,10 +81,10 @@ uint8_t openttd_rust_network_receive_newgrfs_checked(const OpenTTDNetworkConnect
 uint8_t openttd_rust_network_receive_getmap(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_receive_map_ok(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_receive_game_info(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket);
-uint8_t openttd_rust_network_receive_join(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *packet, void *text, OpenTTDNetworkActionsStorage *);
-uint8_t openttd_rust_network_receive_identify(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *packet, void *text, OpenTTDNetworkActionsStorage *);
+uint8_t openttd_rust_network_receive_join(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, OpenTTDPacketState *packet, void *text, OpenTTDNetworkActionsStorage *);
+uint8_t openttd_rust_network_receive_identify(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, OpenTTDPacketState *packet, void *text, OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_send_error(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, uint8_t error, OpenTTDByteSpan reason, OpenTTDNetworkActionsStorage *);
-uint8_t openttd_rust_network_receive_error(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, void *packet, OpenTTDNetworkActionsStorage *);
+uint8_t openttd_rust_network_receive_error(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, OpenTTDPacketState *packet, OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_receive_quit(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void *socket, OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_server_close(const OpenTTDNetworkConnectionServices *, const OpenTTDNetworkFrameServices *, void * socket, uint8_t result, OpenTTDNetworkActionsStorage *);
 }

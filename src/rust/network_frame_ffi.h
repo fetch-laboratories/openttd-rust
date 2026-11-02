@@ -3,6 +3,7 @@
 #ifndef RUST_NETWORK_FRAME_FFI_H
 #define RUST_NETWORK_FRAME_FFI_H
 #include "service_defaults.hpp"
+#include "packet_ffi.h"
 #include "network_command_ffi.h"
 struct OpenTTDSessionFrame;
 struct OpenTTDNetworkConnectionServices;
@@ -43,22 +44,15 @@ struct OpenTTDNetworkFrameServices {
 	uint16_t (*max_password_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_password_time);
 	int64_t (*now)() noexcept OPENTTD_SERVICE_DEFAULT(now);
 	bool (*on_server_connect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(on_server_connect);
-	bool (*packet_can_read)(void *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_can_read);
-	void *(*packet_new)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_new);
-	void (*packet_recv_string)(void *, void *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_string);
-	uint32_t (*packet_recv_uint32)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_uint32);
-	uint8_t (*packet_recv_uint8)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_uint8);
-	void (*packet_send)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_send);
-	void (*packet_send_string)(void *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(packet_send_string);
-	void (*packet_send_uint32)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_send_uint32);
-	void (*packet_send_uint8)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_send_uint8);
+	const OpenTTDPacketServices *packet;
+	void (*packet_enqueue)(void *, OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(packet_enqueue);
+	NetworkSocketHandler *(*packet_socket)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_socket);
 	const uint32_t *random;
 	bool (*receive)(OpenTTDSessionFrame *, bool *) noexcept OPENTTD_SERVICE_DEFAULT(receive);
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
 	bool (*send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(send);
 	void (*socket_close)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_close);
 	void (*socket_defer_deletion)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_defer_deletion);
-	bool (*socket_has_quit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_has_quit);
 	int64_t (*socket_last_packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_last_packet);
 	void (*socket_mark_closed)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_mark_closed);
 	bool (*socket_pending_deletion)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_pending_deletion);
@@ -67,6 +61,8 @@ struct OpenTTDNetworkFrameServices {
 	bool (*socket_valid)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_valid);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);
 	void (*sync_log)() noexcept OPENTTD_SERVICE_DEFAULT(sync_log);
+	void (*text_append)(void *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(text_append);
+	void (*text_reset)(void *) noexcept OPENTTD_SERVICE_DEFAULT(text_reset);
 };
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 void RustNetworkCompleteActions(OpenTTDSessionFrame *);
@@ -76,9 +72,9 @@ void *openttd_rust_network_actions_save(OpenTTDNetworkActionsStorage *);
 void openttd_rust_network_actions_resume(OpenTTDNetworkActionsStorage *);
 OpenTTDNetworkFrameState *openttd_rust_network_frame_storage();
 uint32_t openttd_rust_network_calculate_lag(const OpenTTDNetworkFrameServices *, const OpenTTDNetworkSocketSync *sync);
-uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, void *packet, OpenTTDSessionFrame *, OpenTTDNetworkActionsStorage *);
-uint8_t openttd_rust_network_receive_frame(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDNetworkSocketSync *sync, void *packet);
-uint8_t openttd_rust_network_receive_sync(const OpenTTDNetworkFrameServices *, uint8_t status, void *packet);
+uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, OpenTTDPacketState *packet, OpenTTDSessionFrame *, OpenTTDNetworkActionsStorage *);
+uint8_t openttd_rust_network_receive_frame(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDNetworkSocketSync *sync, OpenTTDPacketState *packet);
+uint8_t openttd_rust_network_receive_sync(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDPacketState *packet);
 }
 /** The Rust frame state. */
 inline OpenTTDNetworkFrameState &GetRustNetworkFrameState() noexcept

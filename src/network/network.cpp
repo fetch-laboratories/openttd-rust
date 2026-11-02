@@ -39,6 +39,7 @@
 #include "../misc_cmd.h"
 #include "../core/string_builder.hpp"
 #include "../rust/session_native.hpp"
+#include "../rust/string_services.h"
 #include "../rust/settings_services.h"
 #ifdef DEBUG_DUMP_COMMANDS
 #	include "../fileio_func.h"
@@ -1003,22 +1004,15 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.now = []() noexcept -> int64_t { return std::chrono::steady_clock::now().time_since_epoch().count(); },
 		/* Execute script for, e.g. MOTD */
 		.on_server_connect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_server_connect.scr 0"); }); },
-		.packet_can_read = [](void *p, size_t size) noexcept { return static_cast<Packet *>(p)->CanReadFromPacket(size); },
-		.packet_new = [](void *game, uint8_t type) noexcept -> void * { return new Packet(static_cast<NetworkGameSocketHandler *>(game), static_cast<PacketType>(type)); },
-		.packet_recv_string = [](void *packet, void *text, size_t limit) noexcept { *static_cast<std::string *>(text) = static_cast<Packet *>(packet)->Recv_string(limit); },
-		.packet_recv_uint32 = [](void *p) noexcept { return static_cast<Packet *>(p)->Recv_uint32(); },
-		.packet_recv_uint8 = [](void *p) noexcept { return static_cast<Packet *>(p)->Recv_uint8(); },
-		.packet_send = [](void *game, void *p) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPacket(std::unique_ptr<Packet>(static_cast<Packet *>(p))); },
-		.packet_send_string = [](void *packet, OpenTTDByteSpan text) noexcept { static_cast<Packet *>(packet)->Send_string(std::string_view(reinterpret_cast<const char *>(text.data), text.size)); },
-		.packet_send_uint32 = [](void *p, uint32_t value) noexcept { static_cast<Packet *>(p)->Send_uint32(value); },
-		.packet_send_uint8 = [](void *p, uint8_t value) noexcept { static_cast<Packet *>(p)->Send_uint8(value); },
+		.packet = &Packet::Services(),
+		.packet_enqueue = [](void *game, OpenTTDPacketState *p) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPreparedPacket(*p); },
+		.packet_socket = [](void *game) noexcept -> NetworkSocketHandler * { return static_cast<NetworkGameSocketHandler *>(game); },
 		.random = _random.state,
 		.receive = [](OpenTTDSessionFrame *f, bool *received) noexcept { return SessionException(f, [=] { *received = NetworkReceive(); }); },
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
 		.send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkSend(); }); },
 		.socket_close = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->NetworkGameSocketHandler::CloseConnection(); },
 		.socket_defer_deletion = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->DeferDeletion(); },
-		.socket_has_quit = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->HasClientQuit(); },
 		.socket_last_packet = [](void *game) noexcept -> int64_t { return static_cast<NetworkGameSocketHandler *>(game)->last_packet.time_since_epoch().count(); },
 		.socket_mark_closed = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->MarkClosed(); },
 		.socket_pending_deletion = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->IsPendingDeletion(); },
@@ -1027,6 +1021,8 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.socket_valid = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->sock != INVALID_SOCKET; },
 		.sync_freq = RustNetworkSyncFreq,
 		.sync_log = []() noexcept { NetworkSyncLog(); },
+		.text_append = RustStringAppend,
+		.text_reset = [](void *text) noexcept { *static_cast<std::string *>(text) = {}; },
 	};
 	return services;
 }

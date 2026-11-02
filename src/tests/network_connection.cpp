@@ -23,6 +23,7 @@ TEST_CASE("Network admission - each NewGRF checksum starts empty")
 
 	class Socket : public NetworkSocketHandler {} socket;
 	Packet source(&socket, PacketType{});
+	source.Send_uint8(2);
 	source.Send_uint32(0);
 	for (uint i = 0; i < MD5_HASH_BYTES; ++i) source.Send_uint8(42);
 	source.Send_uint32(0); // The second identifier has no checksum bytes.
@@ -37,11 +38,13 @@ TEST_CASE("Network admission - each NewGRF checksum starts empty")
 	REQUIRE(packet.PrepareToRead());
 	packet.Recv_uint8(); // Packet type.
 
-	GRFIdentifier identifier;
-	const auto &services = GetRustNetworkClientServices();
-	CHECK(services.check_grf(&packet, &identifier));
-	CHECK_FALSE(services.check_grf(&packet, &identifier));
-	CHECK(identifier.md5sum == MD5Hash{});
+	auto services = GetRustNetworkClientServices();
+	services.status = [](void *game) noexcept { return static_cast<uint8_t *>(game); };
+	services.debug_grfs = [](uint32_t) noexcept {};
+	services.show_newgrf_mismatch = []() noexcept {};
+	uint8_t status = 3; // Client STATUS_ENCRYPTED.
+	CHECK(openttd_rust_network_client_receive_grfs(&services, &GetRustNetworkFrameServices(), &status, packet.Record()) == NETWORK_RECV_STATUS_NEWGRF_MISMATCH);
+	CHECK(packet.Record()->position == packet.Size());
 }
 
 static uint8_t map_status;
@@ -75,7 +78,11 @@ TEST_CASE("Network map load - recorded exception stops cleanup and reaches nativ
 TEST_CASE("Network ack - console exception stops before token consumption")
 {
 	OpenTTDNetworkFrameServices network{};
-	network.packet_recv_uint32 = [](void *) noexcept { return GetRustNetworkFrameState().frame_counter; };
+	network.packet = &Packet::Services();
+	class Socket : public NetworkSocketHandler {} socket;
+	Packet packet(&socket, PacketType{});
+	packet.Send_uint32(GetRustNetworkFrameState().frame_counter);
+	packet.Record()->position = Packet::EncodedLengthOfPacketSize() + Packet::EncodedLengthOfPacketType();
 	network.debug_receive_ack = [](void *, uint32_t) noexcept {};
 	network.debug_active = [](void *) noexcept {};
 	network.on_server_connect = [](OpenTTDSessionFrame *frame) noexcept {
@@ -86,7 +93,7 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 	sync.last_frame = 123;
 	sync.last_frame_server = 456;
 	OpenTTDSessionFrame frame;
-	CHECK(openttd_rust_network_receive_ack(&network, nullptr, nullptr, &status, &sync, nullptr, &frame, &frame.network_actions) == 0);
+	CHECK(openttd_rust_network_receive_ack(&network, nullptr, nullptr, &status, &sync, packet.Record(), &frame, &frame.network_actions) == 0);
 	CHECK(status == 9); // Server STATUS_ACTIVE.
 	CHECK(sync.last_token_frame == GetRustNetworkFrameState().frame_counter);
 	CHECK(sync.last_frame == 123);
@@ -144,13 +151,13 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	network.connection = &connection;
 	network.socket_pending_deletion = [](void *) noexcept { return false; };
 	network.socket_valid = [](void *) noexcept { return true; };
-	network.socket_has_quit = [](void *) noexcept { return false; };
 	network.socket_send_packets = [](void *socket, bool) noexcept { MapEvent(9, socket); };
 	network.socket_defer_deletion = [](void *socket) noexcept { MapEvent(10, socket); };
-	network.packet_new = [](void *socket, uint8_t) noexcept { return socket; };
-	network.packet_send_uint32 = [](void *, uint32_t) noexcept {};
-	network.packet_send_uint8 = [](void *, uint8_t) noexcept {};
-	network.packet_send = [](void *, void *) noexcept {};
+	auto packet_services = Packet::Services();
+	packet_services.has_quit = [](const NetworkSocketHandler *) noexcept { return false; };
+	network.packet = &packet_services;
+	network.packet_socket = [](void *) noexcept -> NetworkSocketHandler * { return nullptr; };
+	network.packet_enqueue = [](void *, OpenTTDPacketState *state) noexcept { Packet packet(*state); };
 	OpenTTDSessionFrame frame;
 	CHECK(openttd_rust_network_server_close(&connection, &network, &map_clients[0], NETWORK_RECV_STATUS_CLIENT_QUIT, &frame.network_actions) == NETWORK_RECV_STATUS_CLIENT_QUIT);
 	CHECK(on == 4);

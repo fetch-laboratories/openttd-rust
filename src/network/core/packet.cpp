@@ -15,6 +15,8 @@
 #include "../../rust/services_assert.h"
 #include "abi-visit-OpenTTDPacketServices.hpp"
 
+#include "../../rust/string_services.h"
+
 #include "../../safeguards.h"
 
 /**
@@ -330,9 +332,7 @@ size_t Packet::Recv_bytes(std::span<uint8_t> destination)
 std::string Packet::Recv_string(size_t length, StringValidationSettings settings)
 {
 	std::string result;
-	openttd_rust_packet_recv_string(&this->state, &Services(), RustAssertCondition, length, settings.base(), &result, [](void *output, const uint8_t *data, size_t size) noexcept {
-		static_cast<std::string *>(output)->append(reinterpret_cast<const char *>(data), size);
-	});
+	openttd_rust_packet_recv_string(&this->state, &Services(), RustAssertCondition, length, settings.base(), &result, RustStringAppend);
 	return result;
 }
 

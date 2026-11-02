@@ -10,3 +10,8 @@ pub const NETWORK_CLIENT_NAME_LENGTH: usize = 25;
 
 /// Chat string capacity, including its NUL.
 pub const NETWORK_CHAT_LENGTH: usize = 900;
+
+/// `COMPAT_MTU`.
+pub const COMPAT_MTU: usize = 1460;
+/// `TCP_MTU`.
+pub const TCP_MTU: usize = 32767;

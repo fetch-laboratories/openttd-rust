@@ -40,6 +40,7 @@
 #include "table/strings.h"
 
 #include "../rust/company_services.h"
+#include "../rust/newgrf_loading_ffi.h"
 #include "../rust/settings_services.h"
 #include "../rust/session_native.hpp"
 
@@ -509,7 +510,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_JOIN(Packet &p)
 {
 	std::string text;
 	OpenTTDSessionFrame frame;
-	auto result = openttd_rust_network_receive_join(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, &p, &text, &frame.network_actions);
+	auto result = openttd_rust_network_receive_join(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, p.Record(), &text, &frame.network_actions);
 	frame.Rethrow();
 	return static_cast<NetworkRecvStatus>(result);
 }
@@ -518,7 +519,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_IDENTIFY(Packet
 {
 	std::string text;
 	OpenTTDSessionFrame frame;
-	auto result = openttd_rust_network_receive_identify(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, &p, &text, &frame.network_actions);
+	auto result = openttd_rust_network_receive_identify(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, p.Record(), &text, &frame.network_actions);
 	frame.Rethrow();
 	return static_cast<NetworkRecvStatus>(result);
 }
@@ -681,7 +682,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND(Packet 
 NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_ERROR(Packet &p)
 {
 	OpenTTDSessionFrame frame;
-	auto result = openttd_rust_network_receive_error(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, &p, &frame.network_actions);
+	auto result = openttd_rust_network_receive_error(&GetRustNetworkConnectionServices(), &GetRustNetworkFrameServices(), this, p.Record(), &frame.network_actions);
 	frame.Rethrow();
 	return static_cast<NetworkRecvStatus>(result);
 }
@@ -698,7 +699,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_ACK(Packet &p)
 {
 	static_assert(sizeof(this->status) == sizeof(uint8_t));
 	OpenTTDSessionFrame frame;
-	auto result = openttd_rust_network_receive_ack(&GetRustNetworkFrameServices(), this, static_cast<NetworkGameSocketHandler *>(this), reinterpret_cast<uint8_t *>(&this->status), this, &p, &frame, &frame.network_actions);
+	auto result = openttd_rust_network_receive_ack(&GetRustNetworkFrameServices(), this, static_cast<NetworkGameSocketHandler *>(this), reinterpret_cast<uint8_t *>(&this->status), this, p.Record(), &frame, &frame.network_actions);
 	frame.Rethrow();
 	return static_cast<NetworkRecvStatus>(result);
 }
@@ -1563,16 +1564,7 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.error_message = [](uint8_t error) noexcept -> uint32_t { return GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error)); },
 		.error_unjoined = [](void *socket, uint32_t strid) noexcept { Debug(net, 1, "Client {} made an error and has been disconnected: {}", static_cast<NetworkClientSocket *>(socket)->client_id, GetString(strid)); },
 		.game = [](void *socket) noexcept -> void * { return static_cast<NetworkGameSocketHandler *>(static_cast<NetworkClientSocket *>(socket)); },
-		.grfs_empty = []() noexcept -> bool { return _grfconfig.empty(); },
-		.grfs_packet = [](void *socket) noexcept -> void * {
-			auto *p = new Packet(static_cast<NetworkClientSocket *>(socket), PACKET_SERVER_CHECK_NEWGRFS, TCP_MTU);
-			uint grf_count = std::ranges::count_if(_grfconfig, [](const auto &c){ return !c->flags.Test(GRFConfigFlag::Static); });
-			p->Send_uint8(grf_count);
-			for (const auto &c : _grfconfig) {
-				if (!c->flags.Test(GRFConfigFlag::Static)) SerializeGRFIdentifier(*p, c->ident);
-			}
-			return p;
-		},
+		.grf = &GetRustGrfLoadingServices(),
 		.info = [](void *socket) noexcept -> void * { return static_cast<NetworkClientSocket *>(socket)->GetInfo(); },
 		.join_date = [](void *socket) noexcept -> int32_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->join_date.base(); },
 		.joined = [](void *socket) noexcept {

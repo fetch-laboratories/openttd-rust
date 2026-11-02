@@ -17,6 +17,7 @@ use crate::network_type::{
     NETWORK_ERROR_TIMEOUT_MAP, NETWORK_ERROR_TIMEOUT_PASSWORD,
     NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY,
 };
+use crate::packet::{self, State as PacketState};
 use crate::raw_field::{read_field, write_field};
 use crate::session::Frame;
 use crate::timer_game_tick::DAY_TICKS;
@@ -114,15 +115,9 @@ pub struct Services {
     /// Steady-clock nanoseconds since its epoch.
     pub now: extern "C" fn() -> i64,
     pub on_server_connect: extern "C" fn(*mut Frame) -> bool,
-    pub packet_can_read: extern "C" fn(*mut c_void, usize) -> bool,
-    pub packet_new: extern "C" fn(*mut c_void, u8) -> *mut c_void,
-    pub packet_recv_string: extern "C" fn(*mut c_void, *mut c_void, usize),
-    pub packet_recv_uint32: extern "C" fn(*mut c_void) -> u32,
-    pub packet_recv_uint8: extern "C" fn(*mut c_void) -> u8,
-    pub packet_send: extern "C" fn(*mut c_void, *mut c_void),
-    pub packet_send_string: extern "C" fn(*mut c_void, crate::services::ByteSpan),
-    pub packet_send_uint32: extern "C" fn(*mut c_void, u32),
-    pub packet_send_uint8: extern "C" fn(*mut c_void, u8),
+    pub packet: &'static packet::Services,
+    pub packet_enqueue: extern "C" fn(*mut c_void, *mut PacketState),
+    pub packet_socket: extern "C" fn(*mut c_void) -> *mut packet::NetworkSocketHandler,
     /// `_random.state`, read in place.
     pub random: *const u32,
     /// `NetworkReceive`; records an exception in the session frame.
@@ -133,7 +128,6 @@ pub struct Services {
     pub send: extern "C" fn(*mut Frame) -> bool,
     pub socket_close: extern "C" fn(*mut c_void),
     pub socket_defer_deletion: extern "C" fn(*mut c_void),
-    pub socket_has_quit: extern "C" fn(*mut c_void) -> bool,
     pub socket_last_packet: extern "C" fn(*mut c_void) -> i64,
     pub socket_mark_closed: extern "C" fn(*mut c_void),
     pub socket_pending_deletion: extern "C" fn(*mut c_void) -> bool,
@@ -143,6 +137,60 @@ pub struct Services {
     pub sync_freq: extern "C" fn() -> u16,
     /// The server's daily `sync:` desync log line.
     pub sync_log: extern "C" fn(),
+    pub text_append: extern "C" fn(*mut c_void, *const u8, usize),
+    pub text_reset: extern "C" fn(*mut c_void),
+}
+
+pub(crate) fn socket_has_quit(s: &Services, game: *mut c_void) -> bool {
+    unsafe { (s.packet.has_quit)((s.packet_socket)(game)) }
+}
+pub(crate) fn packet_check(s: &Services) -> extern "C" fn(bool) {
+    crate::movement::table(s.command.company.shared).native_assert
+}
+pub(crate) fn packet_new(s: &Services, game: *mut c_void, kind: u8) -> PacketState {
+    unsafe {
+        packet::new_outgoing(
+            (s.packet_socket)(game),
+            s.packet,
+            packet_check(s),
+            kind,
+            crate::network_config::COMPAT_MTU,
+        )
+    }
+}
+pub(crate) fn packet_send(s: &Services, game: *mut c_void, p: &mut PacketState) {
+    unsafe {
+        packet::prepare_to_send(p, s.packet, packet_check(s));
+    }
+    (s.packet_enqueue)(game, p);
+}
+pub(crate) fn packet_send_string(
+    s: &Services,
+    p: &mut PacketState,
+    text: crate::services::ByteSpan,
+) {
+    let bytes = unsafe { crate::utf8::borrow(text.data, text.size) };
+    p.send_string(bytes, packet_check(s));
+}
+pub(crate) fn packet_recv_string(
+    s: &Services,
+    p: *mut PacketState,
+    text: *mut c_void,
+    length: usize,
+) {
+    (s.text_reset)(text);
+    unsafe {
+        packet::recv_string_into(
+            p,
+            s.packet,
+            packet_check(s),
+            length,
+            crate::string_type::REPLACE_WITH_QUESTION_MARK,
+            |bytes| {
+                (s.text_append)(text, bytes.as_ptr(), bytes.len());
+            },
+        );
+    }
 }
 
 static STATE: GameState<NetworkFrameState> = GameState::new(NetworkFrameState {
@@ -214,28 +262,28 @@ pub unsafe extern "C" fn openttd_rust_network_calculate_lag(
 /// # Safety
 /// `game` is a live server-side socket and `sync` its record.
 pub(crate) unsafe fn send_frame(s: &Services, game: *mut c_void, sync: *mut SocketSync) -> u8 {
-    let p = (s.packet_new)(game, PACKET_SERVER_FRAME);
-    (s.packet_send_uint32)(p, frame_counter());
-    (s.packet_send_uint32)(p, frame_counter_max());
+    let mut p = packet_new(s, game, PACKET_SERVER_FRAME);
+    p.send_uint32(frame_counter(), packet_check(s));
+    p.send_uint32(frame_counter_max(), packet_check(s));
     // A zero token asks for a new one.
     if read_field!(sync, last_token) == 0 {
         // The uint8_t store truncates, as the original's.
         #[allow(clippy::cast_possible_truncation)]
         let token = ((s.interactive_random_range)(u32::from(u8::MAX - 1)) + 1) as u8;
         write_field!(sync, last_token, token);
-        (s.packet_send_uint8)(p, read_field!(sync, last_token));
+        p.send_uint8(read_field!(sync, last_token), packet_check(s));
     }
-    (s.packet_send)(game, p);
+    packet_send(s, game, &mut p);
     NETWORK_RECV_STATUS_OKAY
 }
 
 /// `ServerNetworkGameSocketHandler::SendSync`.
 pub(crate) fn send_sync(s: &Services, game: *mut c_void) -> u8 {
     (s.debug_send_sync)(game, frame_counter(), state!(sync_seed_1));
-    let p = (s.packet_new)(game, PACKET_SERVER_SYNC);
-    (s.packet_send_uint32)(p, frame_counter());
-    (s.packet_send_uint32)(p, state!(sync_seed_1));
-    (s.packet_send)(game, p);
+    let mut p = packet_new(s, game, PACKET_SERVER_SYNC);
+    p.send_uint32(frame_counter(), packet_check(s));
+    p.send_uint32(state!(sync_seed_1), packet_check(s));
+    packet_send(s, game, &mut p);
     NETWORK_RECV_STATUS_OKAY
 }
 
@@ -251,7 +299,7 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
     game: *mut c_void,
     status: *mut u8,
     sync: *mut SocketSync,
-    p: *mut c_void,
+    p: *mut PacketState,
     session_frame: *mut Frame,
     work: Actions,
 ) -> u8 {
@@ -260,7 +308,7 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
     if unsafe { *status } < AUTHORIZED {
         return send_error(s, socket, NETWORK_ERROR_NOT_AUTHORIZED, work);
     }
-    let frame = (s.packet_recv_uint32)(p);
+    let frame = unsafe { packet::recv_uint32(p, s.packet) };
     (s.debug_receive_ack)(game, frame);
     // The client is catching up with the server.
     if unsafe { *status } == PRE_ACTIVE {
@@ -274,7 +322,7 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
             return NETWORK_RECV_STATUS_OKAY;
         }
     }
-    let token = (s.packet_recv_uint8)(p);
+    let token = unsafe { packet::recv_uint8(p, s.packet) };
     if token == read_field!(sync, last_token) {
         // The lag test measures the client, not the token round trip, which follows each ACK.
         write_field!(sync, last_token_frame, frame_counter());
@@ -289,11 +337,11 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
 fn send_ack(s: &Services) {
     (s.debug_send_ack)();
     let game = (s.client_game)();
-    let p = (s.packet_new)(game, PACKET_CLIENT_ACK);
-    (s.packet_send_uint32)(p, frame_counter());
+    let mut p = packet_new(s, game, PACKET_CLIENT_ACK);
+    p.send_uint32(frame_counter(), packet_check(s));
     let sync = (s.client_sync)();
-    (s.packet_send_uint8)(p, read_field!(sync, token));
-    (s.packet_send)(game, p);
+    p.send_uint8(read_field!(sync, token), packet_check(s));
+    packet_send(s, game, &mut p);
 }
 
 /// `ClientNetworkGameSocketHandler::Receive_SERVER_FRAME`.
@@ -305,15 +353,15 @@ pub unsafe extern "C" fn openttd_rust_network_receive_frame(
     s: &Services,
     status: u8,
     sync: *mut SocketSync,
-    p: *mut c_void,
+    p: *mut PacketState,
 ) -> u8 {
     if status != CLIENT_STATUS_ACTIVE {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    state!(frame_counter_server = (s.packet_recv_uint32)(p));
-    state!(frame_counter_max = (s.packet_recv_uint32)(p));
-    if (s.packet_can_read)(p, 1) {
-        write_field!(sync, token, (s.packet_recv_uint8)(p));
+    state!(frame_counter_server = unsafe { packet::recv_uint32(p, s.packet) });
+    state!(frame_counter_max = unsafe { packet::recv_uint32(p, s.packet) });
+    if unsafe { packet::can_read(p, s.packet, 1, false) } {
+        write_field!(sync, token, unsafe { packet::recv_uint8(p, s.packet) });
     }
     // Acknowledge once per day to save bandwidth.
     if !state!(network_first_time) && state!(last_ack_frame) < frame_counter() {
@@ -329,13 +377,13 @@ pub unsafe extern "C" fn openttd_rust_network_receive_frame(
 pub extern "C" fn openttd_rust_network_receive_sync(
     s: &Services,
     status: u8,
-    p: *mut c_void,
+    p: *mut PacketState,
 ) -> u8 {
     if status != CLIENT_STATUS_ACTIVE {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    state!(sync_frame = (s.packet_recv_uint32)(p));
-    state!(sync_seed_1 = (s.packet_recv_uint32)(p));
+    state!(sync_frame = unsafe { packet::recv_uint32(p, s.packet) });
+    state!(sync_seed_1 = unsafe { packet::recv_uint32(p, s.packet) });
     (s.debug_receive_sync)(state!(sync_frame), state!(sync_seed_1));
     NETWORK_RECV_STATUS_OKAY
 }
@@ -651,22 +699,15 @@ crate::abi::layouts! {
         max_password_time,
         now,
         on_server_connect,
-        packet_can_read,
-        packet_new,
-        packet_recv_string,
-        packet_recv_uint32,
-        packet_recv_uint8,
-        packet_send,
-        packet_send_string,
-        packet_send_uint32,
-        packet_send_uint8,
+        packet,
+        packet_enqueue,
+        packet_socket,
         random,
         receive,
         replay_commands,
         send,
         socket_close,
         socket_defer_deletion,
-        socket_has_quit,
         socket_last_packet,
         socket_mark_closed,
         socket_pending_deletion,
@@ -675,5 +716,7 @@ crate::abi::layouts! {
         socket_valid,
         sync_freq,
         sync_log,
+        text_append,
+        text_reset,
     };
 }

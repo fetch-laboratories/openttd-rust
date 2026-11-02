@@ -132,6 +132,7 @@ mod station_lifecycle;
 mod station_map;
 mod station_service;
 mod station_type;
+mod string_type;
 mod string_validation;
 mod strings_type;
 mod tgp;
@@ -1228,6 +1229,7 @@ mod story_type;
 mod void_map;
 mod window_type;
 
+mod md5;
 mod network_action;
 mod network_client;
 mod network_command;
