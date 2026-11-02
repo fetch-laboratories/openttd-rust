@@ -50,48 +50,6 @@ struct OpenTTDVehiclePreviousTile {
 	uint32_t tile;
 	bool exists;
 };
-struct OpenTTDVehicleCoordinates {
-	int32_t x;
-	int32_t y;
-	int32_t z;
-};
-struct OpenTTDVehicleXY {
-	int32_t x;
-	int32_t y;
-};
-struct OpenTTDVehicleSpeedInputs {
-	uint16_t speed;
-	uint16_t max_speed;
-	uint8_t acceleration;
-	uint8_t status;
-	uint8_t subspeed;
-};
-struct OpenTTDVehicleDirectionProgress {
-	uint8_t direction;
-	uint8_t progress;
-};
-struct OpenTTDVehicleTickStatus {
-	uint8_t tick;
-	uint8_t status;
-};
-struct OpenTTDVehicleDayCost {
-	int64_t profit;
-	uint8_t running;
-};
-/** Read-only named scalar addresses, valid only while the synchronous caller
- * preserves this shell. No Vehicle layout or native reference is exposed. */
-struct OpenTTDVehiclePositionObservations {
-	const uint8_t *subtype;
-	const int32_t *z;
-};
-struct OpenTTDVehicleMovementObservations {
-	OpenTTDVehiclePositionObservations position;
-	const int32_t *x;
-	const int32_t *y;
-	const uint16_t *speed;
-	const uint8_t *direction;
-};
-struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
 struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDVehicleVisits;
@@ -135,17 +93,9 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *write_calendar_service)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_calendar_service);
 	void (OPENTTD_RUST_CALL *write_breakdowns)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_breakdowns);
 	void (OPENTTD_RUST_CALL *write_reliability)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_reliability);
-	OpenTTDVehicleCoordinates (OPENTTD_RUST_CALL *coordinates)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(coordinates);
-	OpenTTDVehicleXY (OPENTTD_RUST_CALL *xy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(xy);
-	OpenTTDVehicleSpeedInputs (OPENTTD_RUST_CALL *speed_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_inputs);
-	OpenTTDVehicleDirectionProgress (OPENTTD_RUST_CALL *direction_progress)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(direction_progress);
-	OpenTTDVehicleTickStatus (OPENTTD_RUST_CALL *tick_status)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick_status);
-	OpenTTDVehicleDayCost (OPENTTD_RUST_CALL *day_cost)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_cost);
+	int64_t (OPENTTD_RUST_CALL *profit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit);
 	void (OPENTTD_RUST_CALL *make_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(make_dummy);
 	void (OPENTTD_RUST_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
-	OpenTTDVehicleAltitudeInputs (OPENTTD_RUST_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(altitude_inputs);
-	OpenTTDVehiclePositionObservations (OPENTTD_RUST_CALL *position_observations)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(position_observations);
-	OpenTTDVehicleMovementObservations (OPENTTD_RUST_CALL *movement_observations)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(movement_observations);
 	const OpenTTDVehicleMaintenanceServices *maintenance;
 	const OpenTTDVehicleVisits *(*visits)() noexcept OPENTTD_SERVICE_DEFAULT(visits);
 	const OpenTTDOrdersLeaves *(*orders)() noexcept OPENTTD_SERVICE_DEFAULT(orders);

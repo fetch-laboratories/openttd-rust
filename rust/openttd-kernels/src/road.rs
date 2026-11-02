@@ -964,8 +964,9 @@ impl Game<'_> {
         loop {
             if part.state() != RVSB_WORMHOLE && u.crossing {
                 let z = u.z;
-                let xy = (self.vs.xy)(v.v);
-                let hit = self.vs.any_near(xy.x, xy.y, 4, |t| {
+                let x = v.v.x();
+                let y = v.v.y();
+                let hit = self.vs.any_near(x, y, 4, |t| {
                     t.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
                         && (t).z().wrapping_sub(z).wrapping_abs() <= 6
                 });

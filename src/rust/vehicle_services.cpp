@@ -185,54 +185,9 @@ static void OPENTTD_RUST_CALL VehicleSvcWriteEconomyService(OpenTTDVehicle *v, i
 static void OPENTTD_RUST_CALL VehicleSvcWriteCalendarService(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->date_of_last_service_newgrf = TimerGameCalendar::Date{value}; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteBreakdowns(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->breakdowns_since_last_service = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteReliability(OpenTTDVehicle *v, uint16_t value) noexcept { VehicleOf(v)->reliability = value; }
-static OpenTTDVehicleCoordinates OPENTTD_RUST_CALL VehicleSvcCoordinates(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u)};
-}
-static OpenTTDVehicleXY OPENTTD_RUST_CALL VehicleSvcXy(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.x = RustVehicleX(u), .y = RustVehicleY(u)};
-}
-static OpenTTDVehicleSpeedInputs OPENTTD_RUST_CALL VehicleSvcSpeedInputs(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.speed = RustVehicleSpeed(u), .max_speed = RustVehicleMaxSpeed(u), .acceleration = RustVehicleAcceleration(u), .status = RustVehicleStatus(u), .subspeed = RustVehicleSubspeed(u)};
-}
-static OpenTTDVehicleDirectionProgress OPENTTD_RUST_CALL VehicleSvcDirectionProgress(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.direction = RustVehicleDirection(u), .progress = RustVehicleProgress(u)};
-}
-static OpenTTDVehicleTickStatus OPENTTD_RUST_CALL VehicleSvcTickStatus(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.tick = RustVehicleTick(u), .status = RustVehicleStatus(u)};
-}
-static OpenTTDVehicleDayCost OPENTTD_RUST_CALL VehicleSvcDayCost(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.profit = RustVehicleProfit(u), .running = RustVehicleRunning(u)};
-}
+static int64_t OPENTTD_RUST_CALL VehicleSvcProfit(OpenTTDVehicle *v) noexcept { return RustVehicleProfit(VehicleOf(v)); }
 static void OPENTTD_RUST_CALL VehicleSvcMakeDummy(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.MakeDummy(); }
 
-static OpenTTDVehiclePositionObservations OPENTTD_RUST_CALL VehicleSvcPositionObservations(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.subtype = RustVehicleSubtypeAddress(v), .z = RustVehicleZAddress(v)};
-}
-static OpenTTDVehicleMovementObservations OPENTTD_RUST_CALL VehicleSvcMovementObservations(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.position = {.subtype = RustVehicleSubtypeAddress(v), .z = RustVehicleZAddress(v)},
-		.x = RustVehicleXAddress(v), .y = RustVehicleYAddress(v), .speed = RustVehicleSpeedAddress(v), .direction = RustVehicleDirectionAddress(v)};
-}
-static OpenTTDVehicleAltitudeInputs OPENTTD_RUST_CALL VehicleSvcAltitudeInputs(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.max_speed = RustVehicleMaxSpeed(u), .direction = RustVehicleDirection(u)};
-}
 
 const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 {
@@ -290,17 +245,9 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_calendar_service = VehicleSvcWriteCalendarService,
 	.write_breakdowns = VehicleSvcWriteBreakdowns,
 	.write_reliability = VehicleSvcWriteReliability,
-	.coordinates = VehicleSvcCoordinates,
-	.xy = VehicleSvcXy,
-	.speed_inputs = VehicleSvcSpeedInputs,
-	.direction_progress = VehicleSvcDirectionProgress,
-	.tick_status = VehicleSvcTickStatus,
-	.day_cost = VehicleSvcDayCost,
+	.profit = VehicleSvcProfit,
 	.make_dummy = VehicleSvcMakeDummy,
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
-	.altitude_inputs = VehicleSvcAltitudeInputs,
-	.position_observations = VehicleSvcPositionObservations,
-	.movement_observations = VehicleSvcMovementObservations,
 	.maintenance = &_rust_vehicle_maintenance_services,
 	.visits = RustVehicleVisits,
 	.orders = VehicleOrders,

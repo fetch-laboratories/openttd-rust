@@ -58,10 +58,6 @@ struct Fixture {
 	OpenTTDVehicle record{}, shadow{};
 	Aircraft aircraft;
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
-	int32_t x = 0, y = 0, z = 1;
-	uint16_t speed = 0;
-	uint8_t subtype = 2;
-	uint8_t direction{};
 	uint64_t blocks = 0;
 	std::array<unsigned, 4> messages{};
 	OpenTTDVehicleTileLinks links[2];
@@ -101,11 +97,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.station_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 	leaves.geometry = [](const OpenTTDStation *s) noexcept { auto tile = reinterpret_cast<const Station *>(s)->airport.tile; return OpenTTDAircraftGeometry{tile, 0, 7, 7, true}; };
-	vehicle.position_observations = [](OpenTTDVehicle *) noexcept { return OpenTTDVehiclePositionObservations{.subtype = &fixture->subtype, .z = &fixture->z}; };
-	vehicle.movement_observations = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMovementObservations{.position = {.subtype = &fixture->subtype, .z = &fixture->z},
-			.x = &fixture->x, .y = &fixture->y, .speed = &fixture->speed, .direction = &fixture->direction};
-	};
 	AircraftTestAirportServices().dummy_fta = reinterpret_cast<const AirportFTAClass *>(&fixture->blocks);
 	leaves.airport_elements = [](const void *) noexcept { return uint8_t{1}; };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{0, 0, 16, 0}; };
@@ -120,7 +111,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.plane_speed = []() noexcept { return uint8_t{1}; };
 
-	vehicle.altitude_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleAltitudeInputs{100, 0}; };
 	movement.shared = &shared;
 	shared.movement = &movement;
 	shared.tile_type = [](uint32_t) noexcept { return uint8_t{0}; }; // Flat clear ground.
@@ -141,10 +131,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.block_node = [](const void *) noexcept { return OpenTTDAircraftBlockNode{uint64_t{1} << 30, 0, 0}; };
 	leaves.route_node = [](const void *) noexcept { return OpenTTDAircraftRouteNode{nullptr, 0, 0}; };
 	leaves.block_choice = [](const void *) noexcept { return OpenTTDAircraftBlockChoice{nullptr, uint64_t{1} << 30, 0}; };
-	vehicle.xy = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleXY{0, 0}; };
-	vehicle.coordinates = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleCoordinates{0, 0, 1}; };
-	vehicle.speed_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleSpeedInputs{0, 100, 8, 0, 0}; };
-	vehicle.direction_progress = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleDirectionProgress{0, 0}; };
 	leaves.layout_blocks = [](const void *, uint8_t) noexcept { return uint64_t{1} << 30; };
 	leaves.layout_heading = leaves.layout_next_position = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	leaves.layout_next = [](const void *, uint8_t) noexcept -> const void * { return nullptr; };

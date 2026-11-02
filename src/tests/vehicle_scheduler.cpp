@@ -118,43 +118,27 @@ TEST_CASE("Base vehicle scheduler - consumed boundary layouts")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-scheduler.inc"
 }
-TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity")
+TEST_CASE("Vehicle records - distinct native shells and inline scalar aliases")
 {
 	REQUIRE(Vehicle::CanAllocateItem());
 	auto *v = new Vehicle(VEH_ROAD);
 	const auto &services = GetRustVehicleServices();
-	CHECK(static_cast<void *>(RustVehicle(v)) != static_cast<void *>(v));
-	CHECK(RustVehicle(v) == &v->Record());
-	CHECK(VehicleOf(RustVehicle(v)) == v);
-	CHECK(services.record_from_shell(v) == RustVehicle(v));
+	auto *record = RustVehicle(v);
+	CHECK(static_cast<void *>(record) != static_cast<void *>(v));
+	CHECK(record == &v->Record());
+	CHECK(VehicleOf(record) == v);
+	CHECK(services.record_from_shell(v) == record);
 	CHECK(RustVehicle(nullptr) == nullptr);
 	CHECK(VehicleOf(static_cast<OpenTTDVehicle *>(nullptr)) == nullptr);
-	{
-		const auto movement = services.movement_observations(RustVehicle(v));
-		const auto position = services.position_observations(RustVehicle(v));
-		static_assert(std::is_same_v<decltype(movement.x), const decltype(v->Record().x_pos) *>);
-		static_assert(std::is_same_v<decltype(movement.y), const decltype(v->Record().y_pos) *>);
-		static_assert(std::is_same_v<decltype(position.z), const decltype(v->Record().z_pos) *>);
-		static_assert(std::is_same_v<decltype(movement.speed), const decltype(v->Record().cur_speed) *>);
-		static_assert(std::is_same_v<decltype(movement.direction), const uint8_t *>);
-		static_assert(sizeof(Direction) == sizeof(uint8_t));
-		CHECK(movement.x == &v->Record().x_pos);
-		CHECK(movement.y == &v->Record().y_pos);
-		CHECK(movement.speed == &v->Record().cur_speed);
-		CHECK(movement.direction == &v->Record().direction);
-		CHECK(movement.position.subtype == &v->Record().subtype);
-		CHECK(movement.position.z == &v->Record().z_pos);
-		CHECK(position.z == movement.position.z);
-		CHECK(position.subtype == movement.position.subtype);
-		v->Record().x_pos = -31; v->Record().y_pos = 49; v->Record().z_pos = 77;
-		v->Record().cur_speed = 123;
-		v->Record().direction = DIR_SW;
-		CHECK(*movement.x == -31);
-		CHECK(*movement.y == 49);
-		CHECK(*position.z == 77);
-		CHECK(*movement.speed == 123);
-		CHECK(*movement.direction == DIR_SW);
-	} // End descriptors before destruction, not after ID reuse.
+	record->x_pos = -31; record->y_pos = 49; record->z_pos = 77;
+	record->cur_speed = 123; record->direction = DIR_SW;
+	CHECK(v->Record().x_pos == -31);
+	CHECK(v->Record().y_pos == 49);
+	CHECK(v->Record().z_pos == 77);
+	CHECK(v->Record().cur_speed == 123);
+	CHECK(v->GetDirection() == DIR_SW);
+	v->SetDirection(DIR_NE);
+	CHECK(record->direction == DIR_NE);
 	delete v;
 }
 /* Base Vehicle::Tick survives without a controller, so the Tick facade fills

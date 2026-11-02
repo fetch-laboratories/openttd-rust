@@ -320,6 +320,9 @@ impl crate::vehicle::VehicleRef {
         crate::raw_field::read_field!(self.0.as_ptr(), running_ticks)
     }
 
+    pub(crate) fn acceleration(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), acceleration)
+    }
     pub(crate) fn max_speed(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), cached_max_speed)
     }

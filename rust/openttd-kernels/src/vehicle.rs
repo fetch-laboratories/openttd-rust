@@ -135,72 +135,6 @@ pub struct PreviousTile {
     pub exists: bool,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Coordinates {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct XY {
-    pub x: i32,
-    pub y: i32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct SpeedInputs {
-    pub speed: u16,
-    pub max_speed: u16,
-    pub acceleration: u8,
-    pub status: u8,
-    pub subspeed: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct DirectionProgress {
-    pub direction: u8,
-    pub progress: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TickStatus {
-    pub tick: u8,
-    pub status: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct DayCost {
-    pub profit: i64,
-    pub running: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct AltitudeInputs {
-    pub max_speed: u16,
-    pub direction: u8,
-}
-
-/// Native Direction's complete uint8 domain, without a Rust enum validity rule.
-#[repr(transparent)]
-pub struct Direction(pub u8);
-/// Stack-only descriptors of actual named members, never a Vehicle layout.
-#[repr(C)]
-pub struct PositionObservations {
-    pub subtype: *const u8,
-    pub z: *const i32,
-}
-#[repr(C)]
-pub struct MovementObservations {
-    pub position: PositionObservations,
-    pub x: *const i32,
-    pub y: *const i32,
-    pub speed: *const u16,
-    pub direction: *const Direction,
-}
-
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
@@ -256,17 +190,9 @@ pub struct VehicleServices {
     pub write_calendar_service: extern "C" fn(VehicleRef, i32),
     pub write_breakdowns: extern "C" fn(VehicleRef, u8),
     pub write_reliability: extern "C" fn(VehicleRef, u16),
-    pub coordinates: extern "C" fn(VehicleRef) -> Coordinates,
-    pub xy: extern "C" fn(VehicleRef) -> XY,
-    pub speed_inputs: extern "C" fn(VehicleRef) -> SpeedInputs,
-    pub direction_progress: extern "C" fn(VehicleRef) -> DirectionProgress,
-    pub tick_status: extern "C" fn(VehicleRef) -> TickStatus,
-    pub day_cost: extern "C" fn(VehicleRef) -> DayCost,
+    pub profit: extern "C" fn(VehicleRef) -> i64,
     pub make_dummy: extern "C" fn(VehicleRef),
     pub check_orders_only: extern "C" fn(VehicleRef),
-    pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,
-    pub position_observations: extern "C" fn(VehicleRef) -> PositionObservations,
-    pub movement_observations: extern "C" fn(VehicleRef) -> MovementObservations,
     pub maintenance: *const maintenance::Services,
     /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
     pub visits: extern "C" fn() -> *const visits::Services,
@@ -439,17 +365,9 @@ crate::abi::layouts! {
         write_calendar_service,
         write_breakdowns,
         write_reliability,
-        coordinates,
-        xy,
-        speed_inputs,
-        direction_progress,
-        tick_status,
-        day_cost,
+        profit,
         make_dummy,
         check_orders_only,
-        altitude_inputs,
-        position_observations,
-        movement_observations,
         maintenance,
         visits,
         orders,
@@ -481,48 +399,6 @@ crate::abi::layouts! {
     "OpenTTDEngineForLength" ["probe"] => EngineForLength {
         engine,
         grf_version,
-    };
-    "OpenTTDVehicleCoordinates" ["probe"] => Coordinates {
-        x,
-        y,
-        z,
-    };
-    "OpenTTDVehicleXY" ["probe"] => XY {
-        x,
-        y,
-    };
-    "OpenTTDVehicleSpeedInputs" ["probe"] => SpeedInputs {
-        speed,
-        max_speed,
-        acceleration,
-        status,
-        subspeed,
-    };
-    "OpenTTDVehicleDirectionProgress" ["probe"] => DirectionProgress {
-        direction,
-        progress,
-    };
-    "OpenTTDVehicleTickStatus" ["probe"] => TickStatus {
-        tick,
-        status,
-    };
-    "OpenTTDVehicleDayCost" ["probe"] => DayCost {
-        profit,
-        running,
-    };
-    "OpenTTDVehiclePositionObservations" ["probe"] => PositionObservations {
-        z,
-    } width z: *const i32;
-    "OpenTTDVehicleMovementObservations" ["probe"] => MovementObservations {
-        position,
-        x,
-        y,
-        speed,
-        direction,
-    } width direction: *const crate::vehicle::Direction;
-    "OpenTTDVehicleAltitudeInputs" ["probe"] => AltitudeInputs {
-        max_speed,
-        direction,
     };
     "OrderType" ["maintenance"] => OrderType {
     };

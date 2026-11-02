@@ -1195,8 +1195,8 @@ unsafe fn variable(
                 if (handle(u)).status() & crate::vehicle_base::VS_HIDDEN != 0 {
                     result |= 0x80;
                 }
-                let a = (s.vehicle.coordinates)(h);
-                let b = (s.vehicle.coordinates)(handle(u));
+                let a = (h.x(), h.y(), h.z());
+                let b = (handle(u).x(), handle(u).y(), handle(u).z());
                 let difference = |a: i32, b: i32| {
                     (if prev {
                         b.wrapping_sub(a)
@@ -1206,9 +1206,9 @@ unsafe fn variable(
                         & 0xff
                 };
                 return result
-                    | difference(a.x, b.x) << 8
-                    | difference(a.y, b.y) << 16
-                    | difference(a.z, b.z) << 24;
+                    | difference(a.0, b.0) << 8
+                    | difference(a.1, b.1) << 16
+                    | difference(a.2, b.2) << 24;
             }
             0x63 => match kind() {
                 0 => {

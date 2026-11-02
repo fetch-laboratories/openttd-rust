@@ -601,23 +601,20 @@ pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
     // All flags are cleared before base Crash makes its original random draw.
     (s.base_crash)(v, flooded)
 }
-fn update_z_inclination(
-    s: &Services,
-    movement: &crate::movement::CachedTable<'_>,
-    v: VehicleRef,
-    o: Owner,
-) {
-    let xy = (s.vehicle.xy)(v);
-    let z = movement.get().pixel_z_at(xy.x, xy.y, true);
+fn update_z_inclination(movement: &crate::movement::CachedTable<'_>, v: VehicleRef, o: Owner) {
+    let x = v.x();
+    let y = v.y();
+    let z = movement.get().pixel_z_at(x, y, true);
     (v).write_z(z);
     unsafe {
         (*o.state).flags &= !SLOPE_FLAGS;
     }
     if sloped_track_owned(movement, v, o) {
-        let xy = (s.vehicle.xy)(v);
+        let x = v.x();
+        let y = v.y();
         let middle = movement.get().pixel_z_at(
-            (xy.x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
-            (xy.y & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
+            (x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
+            (y & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             true,
         );
         let z = (v).z();
@@ -636,8 +633,9 @@ fn update_z_inclination(
 fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: VehicleRef, o: Owner) {
     if unsafe { (*o.state).flags } & SLOPE_FLAGS != 0 {
         if !o.rail() && reversing(s, v) {
-            let xy = (s.vehicle.xy)(v);
-            let z = movement.get().pixel_z_at(xy.x, xy.y, true);
+            let x = v.x();
+            let y = v.y();
+            let z = movement.get().pixel_z_at(x, y, true);
             (v).write_z(z);
             return;
         }
@@ -650,16 +648,17 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
                 assert!(ok);
             }
         });
-        let xy = (s.vehicle.xy)(v);
+        let x = v.x();
+        let y = v.y();
         let mut d = (if diag_dir_to_axis(dir, |ok| {
             if s.assertions {
                 assert!(ok);
             }
         }) == 0
         {
-            xy.x as i8
+            x as i8
         } else {
-            xy.y as i8
+            y as i8
         }) & 1;
         d ^= i8::from(dir == DIAGDIR_NW || dir == DIAGDIR_NE);
         let z = (v).z();
@@ -672,8 +671,9 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
     }
     if s.assertions {
         let z = (v).z();
-        let xy = (s.vehicle.xy)(v);
-        assert_eq!(z, movement.get().pixel_z_at(xy.x, xy.y, true));
+        let x = v.x();
+        let y = v.y();
+        assert_eq!(z, movement.get().pixel_z_at(x, y, true));
     }
 }
 pub(crate) fn inclination(
@@ -695,7 +695,7 @@ pub(crate) fn inclination_owned(
 ) -> i32 {
     let old_z = (v).z();
     if new_tile {
-        update_z_inclination(s, movement, v, o);
+        update_z_inclination(movement, v, o);
     } else {
         update_z(s, movement, v, o);
     }

@@ -253,9 +253,6 @@ impl<'a> World<'a> {
         (v.shell()).write_tick(tick);
         tick
     }
-    fn xy(&self, v: Vehicle) -> crate::vehicle::XY {
-        (self.v.xy)(v.shell())
-    }
     fn slope(&self, x: i32, y: i32) -> i32 {
         crate::movement::pixel_z(self.shared, x, y, false)
     }
@@ -438,16 +435,16 @@ impl<'a> World<'a> {
                 (self.s.airport_blocks)(station, false);
                 (self.s.zeppelin_cleared)(tile, station);
             }
-            let p = self.xy(v);
-            self.update_position(v, p.x, p.y, self.flight(v));
+            let p = (v.shell().x(), v.shell().y());
+            self.update_position(v, p.0, p.1, self.flight(v));
             return self.delete(v);
         }
-        let p = self.xy(v);
-        let mut z = self.slope(p.x, p.y);
+        let p = (v.shell().x(), v.shell().y());
+        let mut z = self.slope(p.0, p.1);
         if z < (v.shell()).z() {
             z = (v.shell()).z().wrapping_sub(1);
         }
-        self.update_position(v, p.x, p.y, z);
+        self.update_position(v, p.0, p.1, z);
         let age = self.increment_age(v);
         if age == 1 {
             Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
@@ -484,8 +481,8 @@ impl<'a> World<'a> {
             let dest = Self::dest(v);
             let x = (map.tile_x(dest) * TILE_SIZE) as i32;
             let y = (map.tile_y(dest) * TILE_SIZE) as i32;
-            let p = self.xy(v);
-            if distance(x, y, p.x, p.y) >= TILE_SIZE as i32 {
+            let p = (v.shell().x(), v.shell().y());
+            if distance(x, y, p.0, p.1) >= TILE_SIZE as i32 {
                 (v.shell()).write_direction((self.s.toward)(v.shell(), x, y));
                 self.move_flight(v);
                 return true;
@@ -535,16 +532,16 @@ impl<'a> World<'a> {
             return true;
         }
         let target = (self.s.road_target)(Self::dest(v));
-        let t = (self.v.xy)(target.shell());
-        let p = self.xy(v);
-        let dist = distance(p.x, p.y, t.x, t.y) as u32;
+        let t = (target.shell().x(), target.shell().y());
+        let p = (v.shell().x(), v.shell().y());
+        let dist = distance(p.0, p.1, t.0, t.1) as u32;
         if dist < TILE_SIZE
             && (target.shell()).status() & VS_HIDDEN == 0
             && (self.s.breakdown_counter)(target.shell()) == 0
         {
             (self.s.write_breakdown)(target.shell(), 3, 140);
         }
-        (v.shell()).write_direction((self.s.toward)(v.shell(), t.x, t.y));
+        (v.shell()).write_direction((self.s.toward)(v.shell(), t.0, t.1));
         let gp = (self.v.new_position)(v.shell());
         let mut z = (v.shell()).z();
         if dist <= TILE_SIZE && z > (target.shell()).z() {
@@ -629,13 +626,13 @@ impl<'a> World<'a> {
                 }
             }
         } else if v.state() == 0 {
-            let p = self.xy(v);
+            let p = (v.shell().x(), v.shell().y());
             let x =
-                p.x.wrapping_add(if leave_top { -15 } else { 15 } * TILE_SIZE as i32);
+                p.0.wrapping_add(if leave_top { -15 } else { 15 } * TILE_SIZE as i32);
             if x as u32 > self.map().max_x() * TILE_SIZE - 1 {
                 return true;
             }
-            let tile = self.map().tile_virt_xy(x as u32, p.y as u32);
+            let tile = self.map().tile_virt_xy(x as u32, p.1 as u32);
             if (self.shared.tile_type)(tile) != MP_INDUSTRY {
                 return true;
             }
@@ -685,8 +682,8 @@ impl<'a> World<'a> {
             let map = self.map();
             let x = (map.tile_x(dest) * TILE_SIZE + TILE_SIZE / 2) as i32;
             let y = (map.tile_y(dest) * TILE_SIZE + TILE_SIZE / 2) as i32;
-            let p = self.xy(v);
-            if distance(p.x, p.y, x, y) >= 8 {
+            let p = (v.shell().x(), v.shell().y());
+            if distance(p.0, p.1, x, y) >= 8 {
                 (v.shell()).write_direction((self.s.toward)(v.shell(), x, y));
                 self.move_flight(v);
                 return true;
@@ -694,10 +691,10 @@ impl<'a> World<'a> {
             if !(self.shared.tile_valid)(Self::dest(v)) {
                 return self.delete(v);
             }
-            let p = (self.v.coordinates)(v.shell());
-            let z = self.slope(p.x, p.y);
-            if z < p.z {
-                self.update_position(v, p.x, p.y, p.z.wrapping_sub(1));
+            let p = (v.shell().x(), v.shell().y());
+            let z = self.slope(p.0, p.1);
+            if z < v.shell().z() {
+                self.update_position(v, p.0, p.1, v.shell().z().wrapping_sub(1));
                 return true;
             }
             v.set_state(2);
@@ -708,9 +705,9 @@ impl<'a> World<'a> {
                     break;
                 }
                 if (self.s.ground)(target.shell()) {
-                    let t = self.xy(target);
-                    let p = self.xy(v);
-                    if distance(t.x, t.y, p.x, p.y) <= 12 * TILE_SIZE as i32 {
+                    let t = (target.shell().x(), target.shell().y());
+                    let p = (v.shell().x(), v.shell().y());
+                    if distance(t.0, t.1, p.0, p.1) <= 12 * TILE_SIZE as i32 {
                         (self.s.write_breakdown)(target.shell(), 5, 0xF0);
                     }
                 }
@@ -742,10 +739,10 @@ impl<'a> World<'a> {
         } else if v.state() == 0 {
             let map = self.map();
             let dest = Self::dest(v);
-            let p = self.xy(v);
+            let p = (v.shell().x(), v.shell().y());
             let x = (map.tile_x(dest) * TILE_SIZE) as i32;
             let y = (map.tile_y(dest) * TILE_SIZE) as i32;
-            if distance(x, y, p.x, p.y) >= TILE_SIZE as i32 {
+            if distance(x, y, p.0, p.1) >= TILE_SIZE as i32 {
                 (v.shell()).write_direction((self.s.toward)(v.shell(), x, y));
                 self.move_flight(v);
                 return true;
@@ -815,10 +812,10 @@ impl<'a> World<'a> {
             self.delete(target);
             for _ in 0..80 {
                 let r = self.random();
-                let p = self.xy(v);
+                let p = (v.shell().x(), v.shell().y());
                 crate::effect::openttd_rust_effect_create_above(
-                    (r & 63).wrapping_add(p.x as u32).wrapping_sub(32) as i32,
-                    ((r >> 5) & 63).wrapping_add(p.y as u32).wrapping_sub(32) as i32,
+                    (r & 63).wrapping_add(p.0 as u32).wrapping_sub(32) as i32,
+                    ((r >> 5) & 63).wrapping_add(p.1 as u32).wrapping_sub(32) as i32,
                     0,
                     crate::effectvehicle_func::EV_EXPLOSION_SMALL,
                 );

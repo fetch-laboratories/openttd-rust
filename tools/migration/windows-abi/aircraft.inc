@@ -123,10 +123,8 @@ static void AircraftDirectBoundary()
 	shared.map = &disaster_map.statics;
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
-	vehicle.xy = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleXY{0, 0}; };
 
-	vehicle.altitude_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleAltitudeInputs{1, 4}; };
-	p.record.subtype = 0; p.record.type = 4; p.record.direction = 4; p.record.z_pos = 0;
+	p.record.subtype = 0; p.record.type = 4; p.record.direction = 4; p.record.z_pos = 0; p.record.cached_max_speed = 1;
 	uint8_t disaster_flags = 0;
 	int32_t min = 0, max = 0;
 	OpenTTDAircraftVehicle disaster{&p.record, nullptr, 81};
@@ -156,7 +154,6 @@ static void AircraftPhaseBoundary()
 	p.vehicle = {&p.record, state.get(), 17};
 
 	p.record.tick_counter = 7;
-	v.tick_status = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleTickStatus{7, 0}; };
 	leaves.next = [](OpenTTDAircraftVehicle u) noexcept {
 		if (u.id == 18) { aircraft_probe.order_time = 40; aircraft_probe.rotor_reads++; }
 		u.id++; u.handle = &aircraft_probe.shadow; aircraft_probe.shadow.vehstatus = 1; return u;
@@ -180,12 +177,6 @@ static void AircraftPhaseBoundary()
 	 * read. Their mutation yields exactly one move; a stale snapshot yields none. */
 
 	p.record.subtype = 2;
-	v.movement_observations = [](OpenTTDVehicle *shell) noexcept {
-		auto &p = aircraft_probe;
-		CHECK(shell == p.vehicle.handle);
-		return OpenTTDVehicleMovementObservations{.position = {.subtype = &p.record.subtype, .z = &p.record.z_pos},
-			.x = &p.record.x_pos, .y = &p.record.y_pos, .speed = &p.record.cur_speed, .direction = &p.record.direction};
-	};
 	p.order_owner->vehicle->current = openttd_rust_order_vector_data(p.order_owner->vector.get())[0];
 	v.order_type = [](OpenTTDVehicle *) noexcept { return uint8_t{1}; };
 	p.vehicle.state->state = 14; p.vehicle.state->targetairport = 7;
@@ -193,14 +184,12 @@ static void AircraftPhaseBoundary()
 	leaves.geometry = [](const OpenTTDStation *) noexcept { return OpenTTDAircraftGeometry{0, 0, 8, 8, true}; };
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{16, 0, 16, 0}; };
-	v.xy = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleXY{aircraft_probe.record.x_pos, aircraft_probe.record.y_pos}; };
 	static OpenTTDFixtureMap map{6, 4096};
 	s.map = &map.statics;
 	s.map_max_x = s.map_max_y = []() noexcept { return uint32_t{63}; };
 	s.plane_speed = []() noexcept { return uint8_t{1}; };
-	v.speed_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleSpeedInputs{0, 100, 8, 0, 0}; };
+	p.record.acceleration = 8; p.record.cached_max_speed = 100;
 	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.record.direction = DIR_NE; aircraft_probe.record.progress = 255; };
-	v.direction_progress = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.record.progress == 255); return OpenTTDVehicleDirectionProgress{aircraft_probe.record.direction, aircraft_probe.record.progress}; };
 	leaves.direction_towards = [](OpenTTDAircraftVehicle, int32_t, int32_t) noexcept { return uint8_t{1}; };
 	v.new_position = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleNewPosition{aircraft_probe.record.x_pos + 1, aircraft_probe.record.y_pos, 0}; };
 	/* Both callbacks mutate canonical inputs. Subtype must be loaded after
@@ -222,10 +211,6 @@ static void AircraftPhaseBoundary()
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.record.x_pos == 1 && p.record.y_pos == 0 && p.record.progress == 1);
 	p.record.subtype = 2; p.record.z_pos = 1;
-	v.position_observations = [](OpenTTDVehicle *shell) noexcept {
-		CHECK(shell == aircraft_probe.vehicle.handle);
-		return OpenTTDVehiclePositionObservations{.subtype = &aircraft_probe.record.subtype, .z = &aircraft_probe.record.z_pos};
-	};
 	openttd_rust_aircraft_position(&leaves, p.vehicle, 1, 0, 1);
 	CHECK(p.moves == 2 && p.record.z_pos == 25);
 	openttd_rust_occupancy_update(&v, p.vehicle.handle, true);

@@ -27,7 +27,6 @@ struct RoadTestTables {
 		ground.physics = &physics;
 		physics.vehicle = &physics_vehicle;
 
-		VEHICLE_UNUSED(vehicle, altitude_inputs);
 
 		VEHICLE_UNUSED(vehicle, check_orders_only);
 		VEHICLE_UNUSED(vehicle, order_time);
@@ -37,12 +36,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, write_calendar_service);
 		VEHICLE_UNUSED(vehicle, write_breakdowns);
 		VEHICLE_UNUSED(vehicle, write_reliability);
-		VEHICLE_UNUSED(vehicle, coordinates);
-		VEHICLE_UNUSED(vehicle, xy);
-		VEHICLE_UNUSED(vehicle, speed_inputs);
-		VEHICLE_UNUSED(vehicle, direction_progress);
-		VEHICLE_UNUSED(vehicle, tick_status);
-		VEHICLE_UNUSED(vehicle, day_cost);
+		VEHICLE_UNUSED(vehicle, profit);
 		VEHICLE_UNUSED(vehicle, make_dummy);
 		VEHICLE_UNUSED(vehicle, order_type);
 		VEHICLE_UNUSED(vehicle, order_destination);
