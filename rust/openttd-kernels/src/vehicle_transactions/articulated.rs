@@ -15,8 +15,8 @@ pub struct Services {
     pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub pool_available: extern "C" fn(usize) -> bool,
     pub prepare_previous: extern "C" fn(*mut ()) -> *mut (),
-    pub new_train: extern "C" fn(*mut ()) -> *mut (),
-    pub new_road: extern "C" fn(*mut ()) -> *mut (),
+    pub new_train: extern "C" fn() -> *mut (),
+    pub new_road: extern "C" fn() -> *mut (),
     pub road_length: extern "C" fn(*mut ()),
     pub copy_roadtype: extern "C" fn(*mut (), *mut ()),
     pub train_info: extern "C" fn(*const OpenTTDEngine, bool) -> Part,
@@ -83,7 +83,12 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         let e = (r.engine)(engine);
         let v = match kind {
             VehicleType::TRAIN => {
-                let v = (s.new_train)(previous);
+                let v = (s.new_train)();
+                // SAFETY: New and previous shells are live through assembly.
+                unsafe {
+                    c.vehicles.set_next_shell(previous.cast(), v.cast());
+                    (*(c.vehicles.record_from_shell)(v.cast())).subtype = 0;
+                }
                 let front = (r.train_handle)(first.cast());
                 let train = (r.train_handle)(v.cast());
                 train.set_track(u64::from(front.track()));
@@ -91,7 +96,12 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                 v
             }
             VehicleType::ROAD => {
-                let v = (s.new_road)(previous);
+                let v = (s.new_road)();
+                // SAFETY: New and previous shells are live through assembly.
+                unsafe {
+                    c.vehicles.set_next_shell(previous.cast(), v.cast());
+                    (*(c.vehicles.record_from_shell)(v.cast())).subtype = 0;
+                }
                 (s.road_length)(cache);
                 unsafe { crate::road::set_depot_state((r.road_state)(v.cast())) };
                 (s.copy_roadtype)(v, first);

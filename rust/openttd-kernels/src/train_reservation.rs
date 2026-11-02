@@ -1483,6 +1483,8 @@ pub(crate) mod tests {
     }
     fn vehicle_table() -> crate::vehicle::VehicleServices {
         crate::vehicle::VehicleServices {
+            record_from_shell: unused(),
+            assert_next: unused(),
             tile_links: unused(),
             occupancy_update: unused(),
             occupancy_near: unused(),
@@ -1521,7 +1523,6 @@ pub(crate) mod tests {
             write_progress: unused(),
             write_max_speed: unused(),
             previous_tile: unused(),
-            detach_last: unused(),
             next: unused(),
             engine_id: unused(),
             engine: unused(),

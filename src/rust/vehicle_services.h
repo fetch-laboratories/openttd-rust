@@ -100,10 +100,7 @@ inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { 
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
 inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
-inline void RustVehicleSetNext(Vehicle *v, Vehicle *next) noexcept { v->SetNext(next); }
-inline void RustTypedVehicleSetNext(OpenTTDVehicle *v, OpenTTDVehicle *next) noexcept { RustVehicleSetNext(VehicleOf(v), VehicleOf(next)); }
 inline uint8_t RustVehicleDirectionTowards(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept { return GetDirectionTowards(VehicleOf(v), x, y); }
-inline void RustOpaqueVehicleSetNext(void *v, void *next) noexcept { RustTypedVehicleSetNext(RustVehicle(static_cast<Vehicle *>(v)), RustVehicle(static_cast<Vehicle *>(next))); }
 inline Vehicle *RustVehicleLastEnginePart(Vehicle *v) noexcept { return v->GetLastEnginePart(); }
 inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcept { v->SetServiceInterval(interval); }
 inline void RustVehicleSetServiceIntervalIsPercent(Vehicle *v, bool percent) noexcept { v->SetServiceIntervalIsPercent(percent); }

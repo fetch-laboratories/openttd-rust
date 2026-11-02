@@ -68,8 +68,8 @@ struct OpenTTDVehicleArticulatedServices {
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	void *(*prepare_previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_previous);
-	void *(*new_train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_train);
-	void *(*new_road)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_road);
+	void *(*new_train)() noexcept OPENTTD_SERVICE_DEFAULT(new_train);
+	void *(*new_road)() noexcept OPENTTD_SERVICE_DEFAULT(new_road);
 	void (*road_length)(void *) noexcept OPENTTD_SERVICE_DEFAULT(road_length);
 	void (*copy_roadtype)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(copy_roadtype);
 	OpenTTDArticulatedPart (*train_info)(const OpenTTDEngine *, bool) noexcept OPENTTD_SERVICE_DEFAULT(train_info);
@@ -125,7 +125,6 @@ struct OpenTTDRailConstructionServices {
 	void (*set_subtype)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_subtype);
 	void *(*previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
 	void *(*last)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last);
-	void (*set_next)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(set_next);
 	void *(*next_vehicle)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	void *(*last_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last_engine_part);
 	const OpenTTDGroundServices *ground;

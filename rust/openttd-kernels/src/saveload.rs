@@ -973,7 +973,11 @@ fn int_to_reference(
     // Record references follow the vehicle encoding, then resolve to the shell's record.
     let record = matches!(rt, REF_VEHICLE_RECORD | REF_VEHICLE_RECORD_OLD);
     if record {
-        rt = if rt == REF_VEHICLE_RECORD { REF_VEHICLE } else { REF_VEHICLE_OLD };
+        rt = if rt == REF_VEHICLE_RECORD {
+            REF_VEHICLE
+        } else {
+            REF_VEHICLE_OLD
+        };
     }
 
     // From 4.4, REF_VEHICLE_OLD is saved as REF_VEHICLE.

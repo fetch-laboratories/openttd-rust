@@ -200,12 +200,6 @@ static OpenTTDVehiclePreviousTile OPENTTD_RUST_CALL VehicleSvcPreviousTile(OpenT
 	const Vehicle *previous = RustVehiclePrevious(VehicleOf(v));
 	return {.tile = previous == nullptr ? 0 : RustVehicleTile(previous), .exists = previous != nullptr};
 }
-/** `DeleteLastRoadVeh` before the road stop check: unlink the last part and copy the station. */
-static void OPENTTD_RUST_CALL VehicleSvcDetachLast(OpenTTDVehicle *previous, OpenTTDVehicle *last, OpenTTDVehicle *first) noexcept
-{
-	RustVehicleSetNext(VehicleOf(previous), nullptr);
-	VehicleOf(last)->SetLastStationVisited(VehicleOf(first)->GetLastStationVisited());
-}
 static void OPENTTD_RUST_CALL VehicleSvcWriteMaxSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->Record().cached_max_speed = speed; }
 
 static uint8_t OPENTTD_RUST_CALL VehicleSvcProgress(OpenTTDVehicle *v) noexcept { return RustVehicleProgress(VehicleOf(v)); }
@@ -320,7 +314,12 @@ static OpenTTDOccupancyNearObservation OPENTTD_RUST_CALL VehicleSvcOccupancyNear
 	return {.links = RustVehicleTileLinks(v), .xy = {.x = RustVehicleX(v), .y = RustVehicleY(v)}};
 }
 
+static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return shell == nullptr ? nullptr : static_cast<Vehicle *>(shell)->record; }
+static void VehicleRecordAssertNext(OpenTTDVehicle *v, OpenTTDVehicle *next) noexcept { assert(v != next); }
+
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
+	.assert_next = VehicleRecordAssertNext,
+	.record_from_shell = VehicleRecordFromShell,
 	.tile_links = VehicleSvcTileLinks,
 	.occupancy_update = VehicleSvcOccupancyUpdate,
 	.occupancy_near = VehicleSvcOccupancyNear,
@@ -363,7 +362,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_progress = VehicleSvcWriteProgress,
 	.write_max_speed = VehicleSvcWriteMaxSpeed,
 	.previous_tile = VehicleSvcPreviousTile,
-	.detach_last = VehicleSvcDetachLast,
 	.next = VehicleSvcNext,
 	.engine_id = VehicleSvcEngineID,
 	.engine = RustVehicleGetEngine,

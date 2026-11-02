@@ -1131,7 +1131,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.running_windows = TrainRunningWindows,
 		.servint = TrainServint,
 		.set_depot_res = OpenTTDLegacyMapQuery<void, RustSetDepotReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.set_next = TrainVehiclePair<RustVehicleSetNext>,
 
 		.set_signal_state = OpenTTDLegacyMapQuery<void, RustRailSetSignalState, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
 		.set_tunnel_res = OpenTTDLegacyMapQuery<void, RustSetTunnelBridgeReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,

@@ -107,6 +107,8 @@ struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
+	void (*assert_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(assert_next);
+	OpenTTDVehicle *(*record_from_shell)(void *) noexcept OPENTTD_SERVICE_DEFAULT(record_from_shell);
 	OpenTTDVehicleTileLinks *(OPENTTD_RUST_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
 	OpenTTDOccupancyUpdateObservation (OPENTTD_RUST_CALL *occupancy_update)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(occupancy_update);
 	OpenTTDOccupancyNearObservation (OPENTTD_RUST_CALL *occupancy_near)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(occupancy_near);
@@ -145,7 +147,6 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *write_progress)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_progress);
 	void (OPENTTD_RUST_CALL *write_max_speed)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_max_speed);
 	OpenTTDVehiclePreviousTile (OPENTTD_RUST_CALL *previous_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous_tile);
-	void (OPENTTD_RUST_CALL *detach_last)(OpenTTDVehicle *, OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(detach_last);
 	OpenTTDVehicle *(OPENTTD_RUST_CALL *next)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	uint16_t (OPENTTD_RUST_CALL *engine_id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
 	const OpenTTDEngine *(OPENTTD_RUST_CALL *engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);

@@ -56,7 +56,6 @@ struct OpenTTDDisasterServices {
 	void (OPENTTD_RUST_CALL *write_first_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_sprite);
 	void (OPENTTD_RUST_CALL *write_subtype)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_subtype);
 	void (OPENTTD_RUST_CALL *write_owner)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_owner);
-	void (OPENTTD_RUST_CALL *set_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(set_next);
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *next_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_part);
 	void (OPENTTD_RUST_CALL *update_delta)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	uint8_t (OPENTTD_RUST_CALL *toward)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(toward);

@@ -179,6 +179,9 @@ pub struct MovementObservations {
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
+    pub assert_next: extern "C" fn(*mut OpenTTDVehicle, *mut OpenTTDVehicle),
+    /// Resolve a legacy opaque native shell to its canonical record.
+    pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
     pub occupancy_update: extern "C" fn(VehicleRef) -> occupancy::UpdateObservation,
     pub occupancy_near: extern "C" fn(VehicleRef) -> occupancy::NearObservation,
@@ -232,7 +235,6 @@ pub struct VehicleServices {
     pub write_progress: extern "C" fn(VehicleRef, u8),
     pub write_max_speed: extern "C" fn(VehicleRef, u16),
     pub previous_tile: extern "C" fn(VehicleRef) -> PreviousTile,
-    pub detach_last: extern "C" fn(VehicleRef, VehicleRef, VehicleRef),
     pub next: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub engine_id: extern "C" fn(VehicleRef) -> u16,
     /// Only the current engine, for callers that do not consume its GRF version.
@@ -297,6 +299,24 @@ pub struct VehicleServices {
 // The visit table and its entries are native-supplied static Rust functions.
 #[allow(unsafe_code)]
 impl VehicleServices {
+    /// `Vehicle::SetNext` for legacy native shell contexts.
+    ///
+    /// # Safety
+    /// `shell` and non-null `next` and their linked records remain live.
+    pub(crate) unsafe fn set_next_shell(
+        &self,
+        shell: *mut std::ffi::c_void,
+        next: *mut std::ffi::c_void,
+    ) {
+        let record = (self.record_from_shell)(shell);
+        let next = (self.record_from_shell)(next);
+        if record == next {
+            (self.assert_next)(record, next);
+        }
+        // SAFETY: The caller preserves the records and native assertion policy.
+        unsafe { crate::vehicle_base::set_next(record, next) };
+    }
+
     /// The static station/depot visit table.
     pub(crate) fn visits(&self) -> &'static visits::Services {
         // SAFETY: the getter returns the immutable process-wide visit table.
@@ -388,6 +408,8 @@ crate::abi::layouts! {
         tile,
     };
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
+        assert_next,
+        record_from_shell,
         tile_links,
         occupancy_update,
         occupancy_near,
@@ -426,7 +448,6 @@ crate::abi::layouts! {
         write_progress,
         write_max_speed,
         previous_tile,
-        detach_last,
         next,
         engine_id,
         engine,

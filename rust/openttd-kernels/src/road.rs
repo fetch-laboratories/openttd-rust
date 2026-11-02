@@ -1027,7 +1027,13 @@ impl Game<'_> {
                 let r = service!(self.l.link)(part.v);
                 next = Part::link(r.next, r.next_state);
             }
-            service!(self.vs.detach_last)(previous.v, last.v, v.v);
+            // SAFETY: The crash chain stays live through unlinking and station copy.
+            unsafe {
+                self.vs
+                    .set_next_shell(previous.v.0.as_ptr().cast(), std::ptr::null_mut());
+            };
+            let station = service!(self.vs.last_station)(v.v);
+            service!(self.vs.write_last_station)(last.v, station);
             if in_range(last.state(), STOP, STOP + 16) {
                 // SAFETY: Live last part owner; no owner access spans the stop update.
                 unsafe {

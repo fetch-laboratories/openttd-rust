@@ -151,7 +151,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.write_first_sprite = RustVehicleInvoke<RustWriteVehicleFirstSprite, SpriteID>,
 		.write_subtype = RustVehicleInvoke<RustVehicleSetSubtype, uint8_t>,
 		.write_owner = RustVehicleSetOwner,
-		.set_next = RustTypedVehicleSetNext,
 		.next_part = DisasterNextPart,
 		.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
 		.toward = RustVehicleDirectionTowards,

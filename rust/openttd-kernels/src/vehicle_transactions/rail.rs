@@ -38,7 +38,6 @@ pub struct Services {
     pub set_subtype: extern "C" fn(*mut (), u8),
     pub previous: extern "C" fn(*mut ()) -> *mut (),
     pub last: extern "C" fn(*mut ()) -> *mut (),
-    pub set_next: extern "C" fn(*mut (), *mut ()),
     pub next_vehicle: extern "C" fn(*mut ()) -> *mut (),
     pub last_engine_part: extern "C" fn(*mut ()) -> *mut (),
     pub ground: &'static crate::vehicle::GroundServices,
@@ -115,7 +114,8 @@ impl Ctx {
         unsafe { (self.w.first)(v) }
     }
     fn set_next(self, v: *mut (), next: *mut ()) {
-        (self.s.set_next)(v, next);
+        // SAFETY: The transaction retains both shells until explicit deletion.
+        unsafe { self.c.vehicles.set_next_shell(v.cast(), next.cast()) };
     }
     fn id(self, v: *mut ()) -> u32 {
         unsafe { (self.g.vehicle_id)(v) }
@@ -953,7 +953,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
         cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, engine_dates, new_rear, link_multihead, subtype,
-        set_subtype, previous, last, set_next, next_vehicle, last_engine_part, ground, first_engine,
+        set_subtype, previous, last, next_vehicle, last_engine_part, ground, first_engine,
         invalidate_grf, train_limit, unit,
         use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };

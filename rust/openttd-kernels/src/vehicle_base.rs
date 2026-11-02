@@ -212,6 +212,15 @@ pub unsafe extern "C" fn openttd_rust_vehicle_set_next(
     this: *mut VehicleRecord,
     next: *mut VehicleRecord,
 ) {
+    // SAFETY: The native facade checks the original self-link precondition.
+    unsafe { set_next(this, next) };
+}
+
+/// Complete `Vehicle::SetNext` after the native self-link assertion.
+///
+/// # Safety
+/// Both records and all reachable links are live in the serialized game state.
+pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord) {
     // SAFETY: The caller guarantees every linked record is live; raw field
     // accesses retain no reference and no callback runs.
     unsafe {
@@ -236,6 +245,51 @@ pub unsafe extern "C" fn openttd_rust_vehicle_set_next(
             while !v.is_null() {
                 (*v).first = first;
                 v = (*v).next;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod record_tests {
+    use super::*;
+
+    #[test]
+    fn set_next_detaches_old_suffix_and_new_predecessor() {
+        let records: Vec<_> = (0..5)
+            .map(|_| openttd_rust_vehicle_record_new(std::ptr::null_mut(), VehicleType::TRAIN))
+            .collect();
+        let [head, old, tail, other, attached] = records[..] else {
+            unreachable!()
+        };
+        // SAFETY: These private allocations stay live through all chain operations.
+        unsafe {
+            set_next(head, old);
+            set_next(old, tail);
+            set_next(other, attached);
+            set_next(head, attached);
+            assert_eq!((*head).next, attached);
+            assert_eq!((*attached).previous, head);
+            assert_eq!((*attached).first, head);
+            assert!((*other).next.is_null());
+            assert!((*old).previous.is_null());
+            assert_eq!((*old).first, old);
+            assert_eq!((*tail).first, old);
+            assert_eq!((*tail).previous, old);
+
+            set_next(head, tail);
+            assert!((*old).next.is_null());
+            assert_eq!((*tail).previous, head);
+            assert_eq!((*tail).first, head);
+            assert!((*attached).previous.is_null());
+            assert_eq!((*attached).first, attached);
+
+            set_next(head, std::ptr::null_mut());
+            assert!((*head).next.is_null());
+            assert!((*tail).previous.is_null());
+            assert_eq!((*tail).first, tail);
+            for record in records {
+                openttd_rust_vehicle_record_delete(record);
             }
         }
     }

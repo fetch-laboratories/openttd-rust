@@ -555,7 +555,6 @@ pub struct Leaves {
     pub running_windows: extern "C" fn(Handle),
     pub servint: extern "C" fn(Handle) -> u64,
     pub set_depot_res: extern "C" fn(Handle, u32, u8),
-    pub set_next: extern "C" fn(Handle, Handle),
     pub set_signal_state: extern "C" fn(Handle, u32, u8, u8),
     pub set_tunnel_res: extern "C" fn(Handle, u32, u8),
     pub show_reservation: extern "C" fn(Handle) -> u64,
@@ -2177,7 +2176,8 @@ impl Game<'_> {
             last = id;
             id = (self.leaves.read_next)(id);
         }
-        (self.leaves.set_next)(last, Handle::NONE);
+        // SAFETY: The crash chain remains live until the following delete.
+        unsafe { self.vs().set_next_shell(last.shell, std::ptr::null_mut()) };
         if first != id {
             self.consist_changed(first, 3);
             if first.track() == DEPOT {
@@ -3370,7 +3370,6 @@ crate::abi::layouts! {
         running_windows,
         servint,
         set_depot_res,
-        set_next,
         set_signal_state,
         set_tunnel_res,
         show_reservation,

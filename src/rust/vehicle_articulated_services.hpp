@@ -2,7 +2,7 @@
 /** @file vehicle_articulated_services.hpp Native specification, pool and shell leaves. */
 #include "services_road.h"
 static void *VehicleArticPreparePrevious(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); auto *cache = v->GetGroundVehicleCache(); RustGroundSetFirstEngine(cache, v->GetEngineType()); return cache; }
-template <class T> static void *VehicleArticNew(void *previous) noexcept { T *v = new T(); RustVehicleSetNext(static_cast<Vehicle *>(previous), v); RustVehicleSetSubtype(v, 0); return v; }
+template <class T> static void *VehicleArticNew() noexcept { return new T(); }
 static void VehicleArticRoadLength(void *cache) noexcept { static_cast<GroundVehicleCache *>(cache)->cached_veh_length = VEHICLE_LENGTH; }
 static void VehicleArticCopyRoadtype(void *shell, void *head) noexcept { RoadVehicle *v = static_cast<RoadVehicle *>(shell); const auto *first = static_cast<const RoadVehicle *>(head); v->roadtype = RustRoadVehicleType(first); v->compatible_roadtypes = first->compatible_roadtypes; }
 template <class T, auto Capacity> static OpenTTDArticulatedPart VehicleArticInfo(const OpenTTDEngine *engine, bool carry) noexcept { const auto &info = EngineOf(engine)->VehInfo<T>(); return {.image = info.image_index, .capacity = static_cast<uint16_t>(carry ? Capacity(engine) : 0)}; }

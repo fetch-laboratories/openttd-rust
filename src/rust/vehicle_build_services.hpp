@@ -64,9 +64,8 @@ static void VehicleConstructAircraftProperties(void *aircraft, void *shadow, con
 	RustVehicleSetSubtype(v, subtype);
 	RustVehicleSetSubtype(u, AIR_SHADOW);
 	v->vehicle_flags = {};
-	RustVehicleSetNext(v, u);
 }
-static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noexcept
+static void VehicleConstructRotor(void *rotor, void *aircraft, void *) noexcept
 {
 	Aircraft *w = static_cast<Aircraft *>(rotor);
 	const Aircraft *v = static_cast<Aircraft *>(aircraft);
@@ -80,7 +79,6 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 	RustWriteVehicleSprite(w, 0xFF);
 	RustVehicleSetSubtype(w, AIR_ROTOR);
 	RustWriteVehicleSpriteSequence(w, SPR_ROTOR_STOPPED);
-	RustVehicleSetNext(static_cast<Vehicle *>(shadow), w);
 }
 static void VehicleConstructRoadCapacity(void *front, void *part, uint16_t capacity) noexcept
 {

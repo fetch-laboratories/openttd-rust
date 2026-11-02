@@ -171,7 +171,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.set_subtype = RustOpaqueVehicleInvoke<RustVehicleSetSubtype, uint8_t>,
 		.previous = RustOpaqueVehicleRead<void *, RustVehiclePrevious>,
 		.last = RustOpaqueVehicleRead<void *, RustVehicleLast<Vehicle>>,
-		.set_next = RustOpaqueVehicleSetNext,
 		.next_vehicle = RustOpaqueVehicleRead<void *, RustVehicleNextVehicle<Vehicle>>,
 		.last_engine_part = RustOpaqueVehicleRead<void *, RustVehicleLastEnginePart>,
 		.ground = &GetRustGroundServices<Train>(),

@@ -131,6 +131,7 @@ pub(crate) unsafe fn road(
 /// Original `CmdBuildAircraft`, including its shadow and helicopter rotor.
 /// # Safety
 /// As `road`; the station of a hangar tile is live for the whole call.
+#[allow(clippy::too_many_lines)]
 pub(crate) unsafe fn aircraft(
     s: &build::Services,
     out: *mut CommandCost,
@@ -183,6 +184,7 @@ pub(crate) unsafe fn aircraft(
         AIR_HELICOPTER
     };
     (k.aircraft_properties)(v, u, e, subtype);
+    unsafe { c.vehicles.set_next_shell(v.cast(), u.cast()) };
     let hv = (r.aircraft_handle)(v.cast());
     let hu = (r.aircraft_handle)(u.cast());
     unsafe {
@@ -228,6 +230,7 @@ pub(crate) unsafe fn aircraft(
         crate::witness::hit(crate::witness::VT_ROTOR);
         let w = (k.new_aircraft)();
         (k.rotor)(w, v, u);
+        unsafe { c.vehicles.set_next_shell(u.cast(), w.cast()) };
         (a.random_bits)(w, b.shared.random() as u16);
         let hw = (r.aircraft_handle)(w.cast());
         // SAFETY: As above, for the new rotor's private owner.

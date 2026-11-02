@@ -153,7 +153,6 @@ pub struct Services {
     pub write_first_sprite: extern "C" fn(VehicleRef, u32),
     pub write_subtype: extern "C" fn(VehicleRef, u8),
     pub write_owner: extern "C" fn(VehicleRef, u8),
-    pub set_next: extern "C" fn(VehicleRef, VehicleRef),
     pub next_part: extern "C" fn(VehicleRef) -> Vehicle,
     pub update_delta: extern "C" fn(VehicleRef),
     pub toward: extern "C" fn(VehicleRef, i32, i32) -> u8,
@@ -737,7 +736,10 @@ impl<'a> World<'a> {
                 ST_BIG_UFO_DESTROYER_SHADOW,
                 INVALID_VEHICLE,
             );
-            (self.s.set_next)(destroyer.shell(), shadow.shell());
+            // SAFETY: Both newly allocated disaster shells remain live.
+            unsafe {
+                (*self.s.vehicles).set_next_shell(destroyer.handle.cast(), shadow.handle.cast());
+            };
         } else if v.state() == 0 {
             let map = self.map();
             let dest = self.dest(v);
@@ -946,7 +948,8 @@ impl<'a> World<'a> {
                     );
                 }
                 let shadow = (self.s.create)(x, y, dir, subtype + 1, INVALID_VEHICLE);
-                (self.s.set_next)(v.shell(), shadow.shell());
+                // SAFETY: Both newly allocated disaster shells remain live.
+                unsafe { (*self.s.vehicles).set_next_shell(v.handle.cast(), shadow.handle.cast()) };
             }
             2 | 3 => {
                 let mut found: *mut c_void = std::ptr::null_mut();
@@ -986,10 +989,15 @@ impl<'a> World<'a> {
                 };
                 let v = (self.s.create)(x, y, dir, subtype, INVALID_VEHICLE);
                 let shadow = (self.s.create)(x, y, dir, subtype + 1, INVALID_VEHICLE);
-                (self.s.set_next)(v.shell(), shadow.shell());
+                // SAFETY: Both newly allocated disaster shells remain live.
+                unsafe { (*self.s.vehicles).set_next_shell(v.handle.cast(), shadow.handle.cast()) };
                 if kind == 3 {
                     let rotor = (self.s.create)(x, y, dir, ST_HELICOPTER_ROTORS, INVALID_VEHICLE);
-                    (self.s.set_next)(shadow.shell(), rotor.shell());
+                    // SAFETY: Both newly allocated disaster shells remain live.
+                    unsafe {
+                        (*self.s.vehicles)
+                            .set_next_shell(shadow.handle.cast(), rotor.handle.cast());
+                    };
                 }
             }
             5 | 6 => {
@@ -1247,7 +1255,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, first_sprite, write_first_sprite, write_subtype, write_owner, set_next, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, front, road_disaster, breakdown_counter, write_road_disaster, write_breakdown, next_vehicle, ground, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, first_sprite, write_first_sprite, write_subtype, write_owner, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, front, road_disaster, breakdown_counter, write_road_disaster, write_breakdown, next_vehicle, ground, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
 }
 
 #[cfg(test)]
