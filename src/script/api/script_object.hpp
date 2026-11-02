@@ -105,13 +105,13 @@ public:
 	 * Store the latest result of a DoCommand per company.
 	 * @param res The result of the last command.
 	 */
-	static void SetLastCommandRes(bool res);
+	static void SetLastCommandRes(bool res) { GetStorage().last_command_res = res; }
 
 	/**
 	 * Store the extra data return by the last DoCommand.
 	 * @param data Extra data return by the command.
 	 */
-	static void SetLastCommandResData(CommandDataBuffer data);
+	static void SetLastCommandResData(CommandDataBuffer data) { openttd_rust_script_set_result(&GetStorage(), data.data(), data.size()); }
 
 	/**
 	 * Get the currently active instance.
@@ -182,138 +182,138 @@ protected:
 	/**
 	 * Sets the DoCommand costs counter to a value.
 	 */
-	static void SetDoCommandCosts(Money value);
+	static void SetDoCommandCosts(Money value) { GetStorage().costs = value.base(); }
 
 	/**
 	 * Increase the current value of the DoCommand costs counter.
 	 */
-	static void IncreaseDoCommandCosts(Money value);
+	static void IncreaseDoCommandCosts(Money value) { GetStorage().costs = (Money(GetStorage().costs) + value).base(); }
 
 	/**
 	 * Get the current DoCommand costs counter.
 	 */
-	static Money GetDoCommandCosts();
+	static Money GetDoCommandCosts() { return GetStorage().costs; }
 
 	/**
 	 * Set the DoCommand last error.
 	 */
-	static void SetLastError(ScriptErrorType last_error);
+	static void SetLastError(ScriptErrorType last_error) { GetStorage().last_error = last_error; }
 
 	/**
 	 * Get the DoCommand last error.
 	 */
-	static ScriptErrorType GetLastError();
+	static ScriptErrorType GetLastError() { return GetStorage().last_error; }
 
 	/**
 	 * Set the road type.
 	 */
-	static void SetRoadType(RoadType road_type);
+	static void SetRoadType(RoadType road_type) { GetStorage().road_type = road_type; }
 
 	/**
 	 * Get the road type.
 	 */
-	static RoadType GetRoadType();
+	static RoadType GetRoadType() { return static_cast<RoadType>(GetStorage().road_type); }
 
 	/**
 	 * Set the rail type.
 	 */
-	static void SetRailType(RailType rail_type);
+	static void SetRailType(RailType rail_type) { GetStorage().rail_type = rail_type; }
 
 	/**
 	 * Get the rail type.
 	 */
-	static RailType GetRailType();
+	static RailType GetRailType() { return static_cast<RailType>(GetStorage().rail_type); }
 
 	/**
 	 * Set the current mode of your script to this proc.
 	 */
-	static void SetDoCommandMode(OpenTTDScriptMode mode, ScriptObject *instance);
+	static void SetDoCommandMode(OpenTTDScriptMode mode, ScriptObject *instance) { GetStorage().mode = mode; GetStorage().mode_instance = instance; }
 
 	/**
 	 * Get the current mode your script is currently under.
 	 */
-	static OpenTTDScriptMode GetDoCommandMode();
+	static OpenTTDScriptMode GetDoCommandMode() { return OpenTTDScriptMode{GetStorage().mode}; }
 
 	/**
 	 * Get the instance of the current mode your script is currently under.
 	 */
-	static ScriptObject *GetDoCommandModeInstance();
+	static ScriptObject *GetDoCommandModeInstance() { return GetStorage().mode_instance; }
 
 	/**
 	 * Set the current async mode of your script to this proc.
 	 */
-	static void SetDoCommandAsyncMode(OpenTTDScriptMode mode, ScriptObject *instance);
+	static void SetDoCommandAsyncMode(OpenTTDScriptMode mode, ScriptObject *instance) { GetStorage().async_mode = mode; GetStorage().async_mode_instance = instance; }
 
 	/**
 	 * Get the current async mode your script is currently under.
 	 */
-	static OpenTTDScriptMode GetDoCommandAsyncMode();
+	static OpenTTDScriptMode GetDoCommandAsyncMode() { return OpenTTDScriptMode{GetStorage().async_mode}; }
 
 	/**
 	 * Get the instance of the current async mode your script is currently under.
 	 */
-	static ScriptObject *GetDoCommandAsyncModeInstance();
+	static ScriptObject *GetDoCommandAsyncModeInstance() { return GetStorage().async_mode_instance; }
 
 	/**
 	 * Set the delay of the DoCommand.
 	 */
-	static void SetDoCommandDelay(uint ticks);
+	static void SetDoCommandDelay(uint ticks) { assert(ticks > 0); GetStorage().delay = ticks; }
 
 	/**
 	 * Get the delay of the DoCommand.
 	 */
-	static uint GetDoCommandDelay();
+	static uint GetDoCommandDelay() { return GetStorage().delay; }
 
 	/**
 	 * Get the latest result of a DoCommand.
 	 */
-	static bool GetLastCommandRes();
+	static bool GetLastCommandRes() { return GetStorage().last_command_res; }
 
 	/**
 	 * Get the extra return data from the last DoCommand.
 	 */
-	static std::span<const uint8_t> GetLastCommandResData();
+	static std::span<const uint8_t> GetLastCommandResData() { return {GetStorage().last_cmd_ret, GetStorage().last_cmd_ret_size}; }
 
 	/**
 	 * Set the current company to execute commands for or request
 	 *  information about.
 	 * @param company The new company.
 	 */
-	static void SetCompany(::CompanyID company);
+	static void SetCompany(::CompanyID company) { openttd_rust_script_set_company(&GetStorage(), &GetRustScriptHostServices(), company.base()); }
 
 	/**
 	 * Get the current company we are executing commands for or
 	 *  requesting information about.
 	 * @return The current company.
 	 */
-	static ::CompanyID GetCompany();
+	static ::CompanyID GetCompany() { return ::CompanyID(GetStorage().company); }
 
 	/**
 	 * Get the root company, the company that the script really
 	 *  runs under / for.
 	 * @return The root company.
 	 */
-	static ::CompanyID GetRootCompany();
+	static ::CompanyID GetRootCompany() { return ::CompanyID(GetStorage().root_company); }
 
 	/**
 	 * Set the cost of the last command.
 	 */
-	static void SetLastCost(Money last_cost);
+	static void SetLastCost(Money last_cost) { GetStorage().last_cost = last_cost.base(); }
 
 	/**
 	 * Get the cost of the last command.
 	 */
-	static Money GetLastCost();
+	static Money GetLastCost() { return GetStorage().last_cost; }
 
 	/**
 	 * Set a variable that can be used by callback functions to pass information.
 	 */
-	static void SetCallbackVariable(int index, int value);
+	static void SetCallbackVariable(int index, int value) { openttd_rust_script_set_callback_value(&GetStorage(), index, value); }
 
 	/**
 	 * Get the variable that is used by callback functions to pass information.
 	 */
-	static int GetCallbackVariable(int index);
+	static int GetCallbackVariable(int index) { return GetStorage().callback_value[index]; }
 
 	/**
 	 * Can we suspend the script at this moment?
@@ -323,7 +323,7 @@ protected:
 	/**
 	 * Get the host state of the active instance.
 	 */
-	static OpenTTDScriptHost &GetStorage();
+	static OpenTTDScriptHost &GetStorage() { assert(GetRustScriptContext().active != nullptr); return *GetRustScriptContext().active; }
 
 	/**
 	 * Get the reference to the log message storage.
