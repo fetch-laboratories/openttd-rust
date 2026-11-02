@@ -164,7 +164,7 @@ static void SessionLiveSettings()
 	SessionSetting("station.modified_catchment", !_settings_game.station.modified_catchment);
 	SessionSetting("construction.extra_tree_placement", _settings_game.construction.extra_tree_placement == 2 ? 3 : 2);
 	SessionSetting("economy.industry_cargo_scale", _settings_game.economy.industry_cargo_scale == 100 ? 200 : 100);
-	SetSettingValue("sound.ambient", !_settings_client.sound.ambient);
+	SetSettingValue(GetSettingFromName("sound.ambient")->AsIntSetting(), !_settings_client.sound.ambient);
 	const uint8_t road_side = vehicle.road_side;
 	SessionSetting("vehicle.road_side", 1 - road_side);
 	SessionCheck("settings-road-side-refused", vehicle.road_side == road_side);
