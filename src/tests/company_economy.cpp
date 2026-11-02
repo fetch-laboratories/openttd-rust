@@ -23,6 +23,7 @@
 #include <thread>
 #include "../rust/tile_owner_services.h"
 #include "../rust/command_services.h"
+#include "../rust/command_post_ffi.h"
 #include "../core/backup_type.hpp"
 #include "../strings_func.h"
 #include "../table/strings.h"
@@ -167,6 +168,11 @@ static uint8_t fixture_current;
 static std::vector<std::string> fixture_trace;
 static OpenTTDCompanyFinanceServices fixture_finance;
 static OpenTTDCompanyServices fixture_services;
+static OpenTTDSharedServices fixture_shared;
+static OpenTTDCommandPostServices fixture_post;
+static OpenTTDCommandServices fixture_command;
+static OpenTTDNetworkCommandServices fixture_network_command;
+static OpenTTDCompanyServices fixture_network_company;
 static OpenTTDCompanyIdentityServices fixture_identity;
 static OpenTTDSharedServices fixture_identity_shared;
 static OpenTTDFaceServices fixture_faces;
@@ -187,7 +193,7 @@ static void FixtureAdminUpdate(uint8_t id) noexcept { fixture_trace.push_back(fm
 static void FixturePostDelete(uint8_t id) noexcept
 {
 	fixture_trace.push_back(fmt::format("post {}", id));
-	if (!fixture_networking) fixture_companies[id].reset(); // actual singleplayer Post deletes synchronously
+	fixture_companies[id].reset();
 }
 static uint32_t FixtureRandomNext(uint32_t) noexcept { return 0; }
 static void FixtureTimeout(uint32_t ticks) noexcept { fixture_trace.push_back(fmt::format("timeout {}", ticks)); }
@@ -213,7 +219,28 @@ static void FixtureReset(bool networking, bool server)
 	fixture_services.finance = &fixture_finance;
 	fixture_services.company_next = FixtureNext;
 	fixture_services.local_company = FixtureLocal; fixture_services.network_server = FixtureServer;
-	fixture_services.post_company_delete = FixturePostDelete;
+	fixture_shared = GetRustSharedServices();
+	fixture_services.shared = &fixture_shared;
+	fixture_post = GetRustCommandPostServices();
+	fixture_shared.command_post = []() noexcept -> const OpenTTDCommandPostServices & { return fixture_post; };
+	fixture_command = GetRustCommandServices();
+	fixture_command.finance = &fixture_finance;
+	fixture_command.shared = &fixture_shared;
+	fixture_command.company = []() noexcept { return &fixture_services; };
+	fixture_command.shift_pressed = []() noexcept { return false; };
+	fixture_post.command = []() noexcept -> const OpenTTDCommandServices & { return fixture_command; };
+	fixture_post.desync_logging = []() noexcept { return false; };
+	/* Observe the production send decision using a mock transport sink. */
+	fixture_network_company = fixture_services;
+	fixture_network_company.network_server = []() noexcept { return false; };
+	fixture_network_command = GetRustNetworkCommandServices();
+	fixture_network_command.company = &fixture_network_company;
+	fixture_network_command.client_send = [](const OpenTTDCommandPacket *) noexcept {};
+	fixture_post.network = []() noexcept -> const OpenTTDNetworkCommandServices & { return fixture_network_command; };
+	fixture_post.pack_control = [](uint8_t action, uint8_t target, uint8_t reason, uint32_t client) noexcept {
+		fixture_trace.push_back(fmt::format("post {}", target));
+		return GetRustCommandPostServices().pack_control(action, target, reason, client);
+	};
 	fixture_services.script_random_next = FixtureRandomNext; fixture_services.reset_competitor_timeout = FixtureTimeout;
 	fixture_services.can_allocate_company = FixtureCanAllocate;
 	fixture_services.allocate_company = FixtureAllocate;
@@ -245,6 +272,13 @@ static void FixtureReset(bool networking, bool server)
 	fixture_services.identity = &fixture_identity;
 	fixture_services.company_league_dirty = FixtureVoid; fixture_services.company_ctrl_windows = FixtureVoid;
 	fixture_services.assert_new_ai_slot = FixtureNoop; fixture_services.network_company_new = FixtureNetworkNew;
+	fixture_services.company_count = []() noexcept -> size_t { return std::count_if(fixture_companies.begin(), fixture_companies.end(), [](const auto &p) { return p != nullptr; }); };
+	fixture_services.company_bankrupt_news = FixtureNoop;
+	fixture_services.remove_engine_replacements = FixtureNoop;
+	fixture_services.map_size = []() noexcept -> uint32_t { return 0; };
+	fixture_services.delete_company = FixturePostDelete;
+	fixture_services.company_removed = [](uint8_t, uint8_t) noexcept {};
+	fixture_shared.screen_dirty = FixtureVoid;
 }
 /* The default maps do not load unclassified NewGRF road masks or extreme prices. */
 TEST_CASE("Commands - road price saturation, rounding and independent type masks")
