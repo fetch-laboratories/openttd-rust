@@ -39,6 +39,7 @@ pub(crate) enum Resume {
     LoopState,
     LoopEnd,
     FrameSend,
+    SendClients(usize),
     ServerTick(usize, bool, bool),
 }
 
@@ -219,7 +220,10 @@ impl Actions {
                 }
                 Resume::LoopEnd => crate::session::resume_loop_end(session.unwrap()),
                 Resume::FrameSend => {
-                    let _ = crate::network_frame::send(network, frame);
+                    let _ = crate::network_frame::send(network, frame, self);
+                }
+                Resume::SendClients(cursor) => {
+                    crate::network_socket::send_clients(network, cursor, self);
                 }
                 Resume::ServerTick(cursor, send_frame, send_sync) => {
                     crate::network_frame::server_tick_clients(

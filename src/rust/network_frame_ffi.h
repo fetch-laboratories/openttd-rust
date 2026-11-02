@@ -13,6 +13,7 @@ struct OpenTTDNetworkLifecycleServices;
 #include "abi-record-probe.h"
 /** Native leaves of the frame protocol: `game` is a NetworkGameSocketHandler, `socket` a NetworkClientSocket, packets are owned until sent. */
 struct OpenTTDNetworkFrameServices {
+	bool (*admins_send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(admins_send);
 	uint16_t (*bytes_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame);
 	uint16_t (*bytes_per_frame_burst)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame_burst);
 	const OpenTTDNetworkClientServices *client;
@@ -50,7 +51,6 @@ struct OpenTTDNetworkFrameServices {
 	const uint32_t *random;
 	bool (*receive)(OpenTTDSessionFrame *, bool *) noexcept OPENTTD_SERVICE_DEFAULT(receive);
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
-	bool (*send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(send);
 	void (*show_lost_connection)() noexcept OPENTTD_SERVICE_DEFAULT(show_lost_connection);
 	void (*socket_delete)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_delete);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);

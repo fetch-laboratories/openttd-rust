@@ -87,7 +87,6 @@ public:
 	NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 	NetworkRecvStatus SendConfigUpdate();
 
-	static void Send();
 	static void AcceptConnection(SOCKET s, const NetworkAddress &address);
 	static bool AllowConnection();
 

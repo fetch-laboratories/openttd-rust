@@ -688,8 +688,7 @@ pub extern "C" fn openttd_rust_network_client_error(
 
 const SECOND: i64 = 1_000_000_000;
 static LAST_LAG: crate::game_state::GameState<i64> = crate::game_state::GameState::new(0);
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_check_connection(
+pub(crate) fn check_connection(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,

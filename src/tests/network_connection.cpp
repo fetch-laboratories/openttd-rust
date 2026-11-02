@@ -115,12 +115,15 @@ struct MapClient {
 };
 static std::array<MapClient, 4> map_clients;
 static std::vector<std::pair<int, int>> map_events;
+static Packet *map_done;
 static int MapIndex(void *socket) { return static_cast<MapClient *>(socket) - map_clients.data(); }
 static void MapEvent(int event, void *socket) { map_events.emplace_back(event, MapIndex(socket)); }
 TEST_CASE("Network map save - native actions preserve nested waits and close tail order")
 {
 	map_clients = {};
 	map_events.clear();
+	Packet done(nullptr, static_cast<PacketType>(23)); // SERVER_MAP_DONE.
+	map_done = &done;
 	for (auto &client : map_clients) {
 		client.record.game = &client;
 		client.record.tcp = reinterpret_cast<NetworkTCPSocketHandler *>(&client);
@@ -151,7 +154,10 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	connection.debug_closed = [](void *) noexcept {};
 	connection.map_create = [](void *socket) noexcept { MapEvent(2, socket); };
 	connection.map_destroy = [](void *socket) noexcept { MapEvent(1, socket); };
-	connection.map_transfer = [](void *socket) noexcept { MapEvent(4, socket); return MapIndex(socket) == 1; };
+	connection.map_begin = [](void *socket) noexcept { MapEvent(4, socket); return reinterpret_cast<PacketWriter *>(socket); };
+	connection.map_end = [](PacketWriter *) noexcept {};
+	connection.map_enqueue = [](PacketWriter *) noexcept {};
+	connection.map_front = [](PacketWriter *writer) noexcept -> Packet * { return MapIndex(writer) == 1 ? map_done : nullptr; };
 	connection.admin_error = [](void *socket, uint8_t) noexcept { MapEvent(8, socket); };
 	uint8_t on = 4, connected = 4;
 	connection.clients_on = &on;
@@ -162,6 +168,7 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	OpenTTDNetworkTcpServices tcp{};
 	tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
 	tcp.writable = [](const NetworkTCPSocketHandler *socket) noexcept { MapEvent(9, const_cast<void *>(static_cast<const void *>(socket))); return true; };
+	tcp.packet_record = [](Packet *packet) noexcept { return packet->Record(); };
 	tcp.send_front = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return nullptr; };
 	network.tcp = &tcp;
 	network.socket_delete = [](void *socket) noexcept { MapEvent(10, socket); };

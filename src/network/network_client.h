@@ -69,7 +69,6 @@ protected:
 	NetworkRecvStatus Receive_SERVER_CONFIG_UPDATE(Packet &p) override;
 
 	static NetworkRecvStatus SendIdentify();
-	void CheckConnection();
 public:
 	ClientNetworkGameSocketHandler(SOCKET s, std::string_view connection_string);
 	~ClientNetworkGameSocketHandler();
@@ -88,7 +87,6 @@ public:
 
 	static bool IsConnected();
 
-	static void Send();
 	static bool Receive();
 };
 

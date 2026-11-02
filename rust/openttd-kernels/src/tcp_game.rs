@@ -4,6 +4,7 @@
 pub const PACKET_SERVER_WELCOME: u8 = 16;
 pub const PACKET_SERVER_WAIT: u8 = 19;
 pub const PACKET_SERVER_MAP_BEGIN: u8 = 20;
+pub const PACKET_SERVER_MAP_DONE: u8 = 23;
 pub const PACKET_SERVER_JOIN: u8 = 25;
 pub const PACKET_SERVER_ERROR: u8 = 3;
 pub const PACKET_SERVER_ERROR_QUIT: u8 = 43;

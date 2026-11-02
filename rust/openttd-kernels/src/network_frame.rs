@@ -82,6 +82,7 @@ crate::abi::shared_records! {
 /// `NetworkClientSocket *`, and packets are `Packet *` owned until `packet_send`.
 #[repr(C)]
 pub struct Services {
+    pub admins_send: extern "C" fn(*mut Frame) -> bool,
     pub bytes_per_frame: extern "C" fn() -> u16,
     pub bytes_per_frame_burst: extern "C" fn() -> u16,
     pub client: &'static crate::network_client::Services,
@@ -124,8 +125,6 @@ pub struct Services {
     pub receive: extern "C" fn(*mut Frame, *mut bool) -> bool,
     /// The developer-only `DEBUG_DUMP_COMMANDS` replay.
     pub replay_commands: extern "C" fn(),
-    /// `NetworkSend`; records an exception in the session frame.
-    pub send: extern "C" fn(*mut Frame) -> bool,
     pub show_lost_connection: extern "C" fn(),
     pub socket_delete: extern "C" fn(*mut c_void),
     pub sync_freq: extern "C" fn() -> u16,
@@ -653,16 +652,17 @@ pub(crate) fn game_loop(
     } else if frame_counter_max() > frame_counter() && !client_game_loop(session, s, frame)? {
         return Ok(());
     }
-    send(s, frame)
+    send(s, frame, work)
 }
 
-pub(crate) fn send(s: &Services, frame: *mut Frame) -> Result<(), ()> {
-    if (s.send)(frame) { Ok(()) } else { Err(()) }
+pub(crate) fn send(s: &Services, frame: *mut Frame, work: Actions) -> Result<(), ()> {
+    socket::send_all(s, frame, work)
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkFrameServices" ["probe"] => Services {
+        admins_send,
         bytes_per_frame,
         bytes_per_frame_burst,
         client,
@@ -700,7 +700,6 @@ crate::abi::layouts! {
         random,
         receive,
         replay_commands,
-        send,
         show_lost_connection,
         socket_delete,
         sync_freq,

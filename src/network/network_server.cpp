@@ -120,29 +120,6 @@ struct PacketWriter : SaveFilter {
 		WaitTillSaved();
 	}
 
-	/**
-	 * Transfer all packets from here to the network's queue while holding
-	 * the lock on our mutex.
-	 * @return True iff the last packet of the map has been sent.
-	 */
-	bool TransferToNetworkQueue()
-	{
-		/* Unsafe check for the queue being empty or not. */
-		if (this->packets.empty()) return false;
-
-		std::lock_guard<std::mutex> lock(this->mutex);
-
-		while (!this->packets.empty()) {
-			bool last_packet = this->packets.front()->GetPacketType() == PACKET_SERVER_MAP_DONE;
-			this->cs->SendPacket(std::move(this->packets.front()));
-			this->packets.pop_front();
-
-			if (last_packet) return true;
-		}
-
-		return false;
-	}
-
 	void Write(uint8_t *buf, size_t size) override
 	{
 		std::lock_guard<std::mutex> lock(this->mutex);
@@ -259,20 +236,6 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::CloseConnection(NetworkRecvSta
 	assert(!accept || ServerNetworkGameSocketHandler::CanAllocateItem());
 	return accept;
 }
-
-/** Send the packets for the server sockets. */
-/* static */ void ServerNetworkGameSocketHandler::Send()
-{
-	for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		if (cs->writable) {
-			if (cs->SendPackets() != SPS_CLOSED && cs->status == STATUS_MAP) {
-				/* This client is in the middle of a map-send, call the function for that */
-				cs->SendMap();
-			}
-		}
-	}
-}
-
 
 /***********
  * Sending functions
@@ -1576,9 +1539,18 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			Debug(net, 3, "[{}] Client #{} ({}) joined as {}", ServerNetworkGameSocketHandler::GetName(), cs->client_id, cs->GetClientIP(), client_name);
 		},
 		.lost_connection_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_ERROR_CLIENT_CONNECTION_LOST); },
+		.map_begin = [](void *socket) noexcept -> PacketWriter * {
+			auto *writer = static_cast<NetworkClientSocket *>(socket)->savegame.get();
+			/* TransferToNetworkQueue checks emptiness before locking. */
+			if (writer->packets.empty()) return nullptr;
+			writer->mutex.lock();
+			return writer;
+		},
 		.map_create = [](void *socket) noexcept { WaitTillSaved(); static_cast<NetworkClientSocket *>(socket)->savegame = std::make_shared<PacketWriter>(static_cast<NetworkClientSocket *>(socket)); },
 		.map_destroy = [](void *socket) noexcept { auto *cs = static_cast<NetworkClientSocket *>(socket); cs->savegame->Destroy(); cs->savegame = nullptr; },
-		.map_transfer = [](void *socket) noexcept -> bool { return static_cast<NetworkClientSocket *>(socket)->savegame->TransferToNetworkQueue(); },
+		.map_end = [](PacketWriter *writer) noexcept { writer->mutex.unlock(); },
+		.map_enqueue = [](PacketWriter *writer) noexcept { writer->cs->EnqueuePreparedPacket(std::move(writer->packets.front())); writer->packets.pop_front(); },
+		.map_front = [](PacketWriter *writer) noexcept -> Packet * { return writer->packets.empty() ? nullptr : writer->packets.front().get(); },
 		.max_clients = RustNetworkMaxClients,
 		.max_companies = RustNetworkMaxCompanies,
 		.min_active_clients = RustNetworkMinActiveClients,

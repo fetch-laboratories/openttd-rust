@@ -759,18 +759,6 @@ static bool NetworkReceive()
 	return result;
 }
 
-/* This sends all buffered commands (if possible) */
-static void NetworkSend()
-{
-	if (_network_server) {
-		ServerNetworkAdminSocketHandler::Send();
-		ServerNetworkGameSocketHandler::Send();
-	} else {
-		ClientNetworkGameSocketHandler::Send();
-	}
-	NetworkGameSocketHandler::ProcessDeferredDeletions();
-}
-
 /**
  * We have to do some (simple) background stuff that runs normally,
  * even when we are not in multiplayer. For example stuff needed
@@ -948,6 +936,7 @@ static_assert(NETWORK_RECV_STATUS_OKAY == 0 && NETWORK_RECV_STATUS_MALFORMED_PAC
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 {
 	static const OpenTTDNetworkFrameServices services{
+		.admins_send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { ServerNetworkAdminSocketHandler::Send(); }); },
 		.bytes_per_frame = RustNetworkBytesPerFrame,
 		.bytes_per_frame_burst = RustNetworkBytesPerFrameBurst,
 		.client = &GetRustNetworkClientServices(),
@@ -1010,7 +999,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.random = _random.state,
 		.receive = [](OpenTTDSessionFrame *f, bool *received) noexcept { return SessionException(f, [=] { *received = NetworkReceive(); }); },
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
-		.send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkSend(); }); },
 		.show_lost_connection = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_LOSTCONNECTION), {}, WL_CRITICAL); },
 		.socket_delete = RustDeleteNetworkSocket,
 		.sync_freq = RustNetworkSyncFreq,

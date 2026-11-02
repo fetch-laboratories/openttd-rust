@@ -178,3 +178,57 @@ pub extern "C" fn openttd_rust_network_deferred_shutdown(delete: extern "C" fn(*
     delete_deferred(delete);
     unsafe { *DEFERRED.get() = Vec::new() };
 }
+
+/// `NetworkSend`: admin protocol first, then game sockets and deferred destruction.
+pub(crate) fn send_all(
+    s: &Services,
+    frame: *mut crate::session::Frame,
+    work: Actions,
+) -> Result<(), ()> {
+    if (s.command.company.network_server)() {
+        if !(s.admins_send)(frame) {
+            return Err(());
+        }
+        send_clients(s, 0, work);
+        if work.pending() {
+            return Err(());
+        }
+    } else {
+        send(s, (s.client_game)(), work);
+        let client = (s.client_game)();
+        if !client.is_null() {
+            crate::network_client::check_connection(s.client, s, client, work);
+        }
+        process_deferred(s);
+    }
+    Ok(())
+}
+
+/// `ServerNetworkGameSocketHandler::Send`, with pool iteration resumed after map saves.
+pub(crate) fn send_clients(s: &Services, mut cursor: usize, work: Actions) {
+    while let Some(client) = crate::network_command::next_client(s.command, &mut cursor) {
+        if !(s.tcp.writable)(tcp(client.socket)) {
+            continue;
+        }
+        let sent = send(s, client.socket, work);
+        if work.pending() {
+            work.push(crate::network_action::Resume::SendClients(cursor));
+            return;
+        }
+        if sent != crate::network_tcp::Send::Closed
+            && status(client.socket) == crate::network_frame::server_status::MAP
+        {
+            crate::network_connection::openttd_rust_network_send_map(
+                s.connection,
+                s,
+                client.socket,
+                work,
+            );
+            if work.pending() {
+                work.push(crate::network_action::Resume::SendClients(cursor));
+                return;
+            }
+        }
+    }
+    process_deferred(s);
+}

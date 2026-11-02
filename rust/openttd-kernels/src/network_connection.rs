@@ -32,6 +32,10 @@ use crate::tcp_game::{
 };
 use std::ffi::c_void;
 
+pub struct PacketWriter {
+    _private: [u8; 0],
+}
+
 #[repr(C)]
 pub struct Services {
     pub admin_error: extern "C" fn(*mut c_void, u8),
@@ -80,9 +84,12 @@ pub struct Services {
     pub join_date: extern "C" fn(*mut c_void) -> i32,
     pub joined: extern "C" fn(*mut c_void),
     pub lost_connection_announcement: extern "C" fn(*mut c_void),
+    pub map_begin: extern "C" fn(*mut c_void) -> *mut PacketWriter,
     pub map_create: extern "C" fn(*mut c_void),
     pub map_destroy: extern "C" fn(*mut c_void),
-    pub map_transfer: extern "C" fn(*mut c_void) -> bool,
+    pub map_end: extern "C" fn(*mut PacketWriter),
+    pub map_enqueue: extern "C" fn(*mut PacketWriter),
+    pub map_front: extern "C" fn(*mut PacketWriter) -> *mut crate::network_tcp::Packet,
     pub max_clients: extern "C" fn() -> u8,
     pub max_companies: extern "C" fn() -> u8,
     pub min_active_clients: extern "C" fn() -> u8,
@@ -148,9 +155,12 @@ crate::abi::layouts! {
         join_date,
         joined,
         lost_connection_announcement,
+        map_begin,
         map_create,
         map_destroy,
-        map_transfer,
+        map_end,
+        map_enqueue,
+        map_front,
         max_clients,
         max_companies,
         min_active_clients,
@@ -376,9 +386,40 @@ pub extern "C" fn openttd_rust_network_send_map(
     NETWORK_RECV_STATUS_OKAY
 }
 
+/// `PacketWriter::TransferToNetworkQueue`; its native mutex remains locked until `map_end`.
+fn transfer_to_network_queue(
+    s: &Services,
+    f: &FrameServices,
+    socket: *mut socket::GameSocket,
+) -> bool {
+    let writer = (s.map_begin)(socket::server(socket));
+    if writer.is_null() {
+        return false;
+    }
+    let mut last = false;
+    loop {
+        let packet = (s.map_front)(writer);
+        if packet.is_null() {
+            break;
+        }
+        let record = (f.tcp.packet_record)(packet);
+        last = unsafe { packet::get_type(record, f.packet, packet_check(f)) }
+            == crate::tcp_game::PACKET_SERVER_MAP_DONE;
+        unsafe {
+            packet::prepare_to_send(record, f.packet, packet_check(f));
+        }
+        (s.map_enqueue)(writer);
+        if last {
+            break;
+        }
+    }
+    (s.map_end)(writer);
+    last
+}
+
 pub(crate) fn map_transfer(f: &FrameServices, socket: *mut socket::GameSocket, work: Actions) {
     let s = f.connection;
-    if status(s, socket) == MAP && (s.map_transfer)(socket::server(socket)) {
+    if status(s, socket) == MAP && transfer_to_network_queue(s, f, socket) {
         (s.debug_map_last)(socket::server(socket));
         (s.map_destroy)(socket::server(socket));
         (s.debug_done_map)(socket::server(socket));

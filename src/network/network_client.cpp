@@ -140,14 +140,6 @@ void ClientNetworkGameSocketHandler::ClientError(NetworkRecvStatus res)
 	return _networking;
 }
 
-/** Send the packets of this socket handler. */
-/* static */ void ClientNetworkGameSocketHandler::Send()
-{
-	my_client->SendPackets();
-	if (my_client != nullptr) my_client->CheckConnection();
-}
-
-
 /** Our client's connection. */
 ClientNetworkGameSocketHandler * ClientNetworkGameSocketHandler::my_client = nullptr;
 
@@ -639,17 +631,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE(P
 
 	return NETWORK_RECV_STATUS_OKAY;
 }
-
-/**
- * Check the connection's state, i.e. is the connection still up?
- */
-void ClientNetworkGameSocketHandler::CheckConnection()
-{
-	OpenTTDSessionFrame frame;
-	openttd_rust_network_client_check_connection(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), &frame.network_actions);
-	frame.Rethrow();
-}
-
 
 /** Is called after a client is connected to the server */
 void NetworkClient_Connected()
