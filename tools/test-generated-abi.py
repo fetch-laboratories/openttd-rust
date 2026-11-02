@@ -31,7 +31,28 @@ class GeneratedAbiTests(unittest.TestCase):
         fragments = GENERATOR["generate"]()
         generated = layouts(fragments)
         records = list(GENERATOR["declarations"]())
-        self.assertEqual(set(generated), {name for name, *_ in records})
+        shared = GENERATOR["shared_records"]()
+        self.assertEqual(
+            set(generated),
+            {name for name, *_ in records} | {record.cpp for record in shared},
+        )
+        for name, group, _, fields in shared:
+            with self.subTest(record=name):
+                self.assertEqual(
+                    generated[name],
+                    (
+                        f"abi-layout-{group}.inc",
+                        [f"sizeof({name})", f"alignof({name})"]
+                        + [
+                            item
+                            for field, _ in fields
+                            for item in (
+                                f"offsetof({name}, {field})",
+                                f"sizeof({name}::{field})",
+                            )
+                        ],
+                    ),
+                )
         for name, group, _, fields, width, _ in records:
             with self.subTest(name=name):
                 path, items = generated[name]

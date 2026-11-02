@@ -249,6 +249,8 @@ def tunnel_reference_gap(out, archive=None):
         "-O2",
         "-I",
         str(out),
+        "-I",
+        str(build / "generated-abi"),
         str(fixture),
         str(archive),
         *configuration["native_libraries"],
