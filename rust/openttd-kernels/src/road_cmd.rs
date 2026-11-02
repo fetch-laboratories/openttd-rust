@@ -22,8 +22,8 @@ use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
 use crate::rail_cmd::{
-    CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR,
-    RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
+    CROSSING_SLOPES, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR, RailCommandServices,
+    TUNNELBRIDGE_TRACKBIT_FACTOR,
 };
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Foundation, Map, RailMapServices, Services,
@@ -84,7 +84,6 @@ impl CommandContext {
 #[repr(C)]
 pub struct ConversionScratch {
     pub frame: *mut ConvertFrame,
-    pub area: *mut Area,
     pub error: *mut CommandCost,
     pub ret: *mut CommandCost,
 }
@@ -301,7 +300,6 @@ impl<'a> Ctx<'a> {
             let scratch = unsafe { (self.s.conversion_scratch)(nested) };
             self.convert(
                 scratch.frame,
-                scratch.area,
                 cost,
                 self.c(scratch.error),
                 self.c(scratch.ret),
@@ -1736,7 +1734,6 @@ impl<'a> Ctx<'a> {
     fn convert(
         &self,
         frame: *mut ConvertFrame,
-        area: *mut Area,
         cost: Cost<'_>,
         error: Cost<'_>,
         ret: Cost<'_>,
@@ -1759,11 +1756,17 @@ impl<'a> Ctx<'a> {
             self.s.strings.no_suitable_road
         });
         let mut found = false;
-        unsafe {
-            (self.r.area_begin)(area, start, end, diagonal);
-        }
+        let check = |ok| crate::movement::native_assert(self.shared, ok);
+        let mut iter = crate::tilearea::TileIterator::create(
+            self.map,
+            self.size(),
+            start,
+            end,
+            diagonal,
+            check,
+        );
         loop {
-            let tile = unsafe { (self.r.area_tile)(area) };
+            let tile = iter.tile();
             if tile == u32::MAX {
                 break;
             }
@@ -1771,9 +1774,7 @@ impl<'a> Ctx<'a> {
             self.convert_tile(
                 frame, cost, error, ret, flags, tile, start, end, to, rtt, diagonal, &mut found,
             );
-            unsafe {
-                (self.r.area_next)(area);
-            }
+            iter.advance(self.map, self.size(), check);
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
             unsafe {
@@ -1889,7 +1890,17 @@ impl<'a> Ctx<'a> {
             }
         } else {
             let other = (self.rail.other_tunnel_bridge_end)(tile);
-            if other < tile && (self.r.area_contains)(start, end, diagonal, other) {
+            if other < tile
+                && crate::tilearea::corners_contain(
+                    self.map,
+                    self.size(),
+                    start,
+                    end,
+                    diagonal,
+                    other,
+                    |ok| crate::movement::native_assert(self.shared, ok),
+                )
+            {
                 return;
             }
             if !(self.shared.road_powered)(from, to) {
@@ -2179,7 +2190,6 @@ pub unsafe extern "C" fn openttd_rust_road_terraform(
 pub unsafe extern "C" fn openttd_rust_road_convert(
     services: *const RoadCommandServices,
     frame: *mut ConvertFrame,
-    area: *mut Area,
     out: *mut CommandCost,
     error: *mut CommandCost,
     ret: *mut CommandCost,
@@ -2192,7 +2202,6 @@ pub unsafe extern "C" fn openttd_rust_road_convert(
     let c = entry_ctx!(services);
     c.convert(
         frame,
-        area,
         c.c(out),
         c.c(error),
         c.c(ret),
@@ -2289,7 +2298,6 @@ crate::abi::layouts! {
     };
     "OpenTTDRoadConversionScratch" ["probe"] => ConversionScratch {
         frame,
-        area,
         error,
         ret,
     };

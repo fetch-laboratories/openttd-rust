@@ -30,7 +30,39 @@ macro_rules! layouts {
 }
 pub(crate) use layouts;
 
-/// Look up `name` in every module that invokes `layouts!`; `build.rs` lists them.
+/// Records both languages access in place. `tools/generate-abi.py` emits each C++
+/// declaration from this field list; the layout lists size, alignment, then each
+/// field's offset and size. Field types are primitives, transparent newtypes of
+/// primitives, or raw pointers.
+#[allow(unused_macros)] // Test-only users are feature-gated.
+macro_rules! shared_records {
+    (fn $function:ident; $( $(#[$meta:meta])* $cpp:literal [$group:literal] => pub struct $name:ident {
+        $($(#[$field_meta:meta])* pub $field:ident : $type:ty),* $(,)?
+    } )*) => {
+        $(
+            $(#[$meta])*
+            #[repr(C)]
+            pub struct $name {
+                $($(#[$field_meta])* pub $field: $type,)*
+            }
+        )*
+        pub(crate) fn $function(name: &str, item: usize) -> usize {
+            match name {
+                $($cpp => [
+                    std::mem::size_of::<$name>(),
+                    std::mem::align_of::<$name>(),
+                    $(std::mem::offset_of!($name, $field), std::mem::size_of::<$type>(),)*
+                ].get(item).copied().unwrap_or(usize::MAX),)*
+                _ => usize::MAX,
+            }
+        }
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use shared_records;
+
+/// Look up `name` in every module that invokes `layouts!` or `shared_records!`;
+/// `build.rs` lists them.
 pub fn layout(name: &str, item: usize) -> usize {
     for layout in include!(concat!(env!("OUT_DIR"), "/abi_layouts.rs")) {
         let value = layout(name, item);

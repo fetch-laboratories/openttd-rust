@@ -9,7 +9,6 @@
 #ifndef RUST_ROAD_COMMAND_SERVICES_H
 #define RUST_ROAD_COMMAND_SERVICES_H
 #include "road_command_ffi.h"
-#include "rail_command_services.h"
 #include "command_cost_services.h"
 #include "../roadveh.h"
 #include <memory>
@@ -17,7 +16,6 @@
 struct OpenTTDRoadConvertFrame { std::vector<OpenTTDVehicle *> affected; };
 struct RoadConversionScratch {
 	OpenTTDRoadConvertFrame frame;
-	OpenTTDRailConvertFrame area;
 	CommandCost error, ret;
 };
 /* No world layout enters Rust. This caller-owned stack slot supplies only the

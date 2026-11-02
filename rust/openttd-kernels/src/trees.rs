@@ -213,7 +213,7 @@ pub struct LandscapeClear {
     pub failed: bool,
 }
 
-/// Opaque C++ command context (flags, company, tile iterator, nested result).
+/// Opaque C++ command context (flags, company, nested result).
 #[repr(C)]
 pub struct Command {
     _private: [u8; 0],
@@ -241,9 +241,7 @@ pub struct TreeServices {
     pub progress: extern "C" fn() -> bool,
     pub progress_total: extern "C" fn(u32) -> bool,
     pub town_rating: extern "C" fn(u16, u32, bool),
-    pub command_begin: extern "C" fn(*mut Command, u32, u32, bool) -> i32,
-    pub command_tile: extern "C" fn(*mut Command) -> u32,
-    pub command_next: extern "C" fn(*mut Command) -> u32,
+    pub command_begin: extern "C" fn(*mut Command) -> i32,
     pub command_debit: extern "C" fn(*mut Command),
 }
 
@@ -920,8 +918,12 @@ impl Trees<'_> {
             return ERROR;
         }
 
-        let mut limit = (self.t.command_begin)(ctx, tile, start, diagonal);
-        let mut current = (self.t.command_tile)(ctx);
+        let mut limit = (self.t.command_begin)(ctx);
+        let map = self.s.map();
+        let check = |ok| crate::movement::native_assert(self.s, ok);
+        let mut iter =
+            crate::tilearea::TileIterator::create(map, s.size, tile, start, diagonal, check);
+        let mut current = iter.tile();
         while current != INVALID_TILE {
             let p = self.plant_observation(current);
             'tile: {
@@ -1020,7 +1022,8 @@ impl Trees<'_> {
                     };
                 }
             }
-            current = (self.t.command_next)(ctx);
+            iter.advance(map, s.size, check);
+            current = iter.tile();
         }
         CommandResult {
             cost,
@@ -1297,8 +1300,6 @@ crate::abi::layouts! {
         progress_total,
         town_rating,
         command_begin,
-        command_tile,
-        command_next,
         command_debit,
     };
     "OpenTTDTreePlantObservation" ["probe"] => PlantObservation {
@@ -1383,8 +1384,7 @@ mod tests {
         Zone(u8),
         Sound(u16),
         Rating(bool),
-        Begin(u32, u32, bool),
-        Next,
+        Begin,
         Debit,
         Clear,
     }
@@ -1398,9 +1398,8 @@ mod tests {
         abort_at: Option<usize>,
         progress: usize,
         limit: i32,
-        length: u32,
-        iterator: u32,
         clear_failed: bool,
+        visited: Vec<u32>,
     }
     thread_local! {
         static WORLD: RefCell<World> = RefCell::new(World::default());
@@ -1459,8 +1458,9 @@ mod tests {
         }
     }
 
-    extern "C" fn plant_observation(_: u32) -> PlantObservation {
+    extern "C" fn plant_observation(tile: u32) -> PlantObservation {
         log(Event::Plant);
+        WORLD.with_borrow_mut(|w| w.visited.push(tile));
         WORLD.with_borrow(|w| w.plant)
     }
     extern "C" fn tree_observation(_: u32) -> TreeObservation {
@@ -1623,23 +1623,9 @@ mod tests {
     extern "C" fn rating(_: u16, _: u32, up: bool) {
         log(Event::Rating(up));
     }
-    extern "C" fn begin(_: *mut Command, end: u32, start: u32, diagonal: bool) -> i32 {
-        log(Event::Begin(end, start, diagonal));
+    extern "C" fn begin(_: *mut Command) -> i32 {
+        log(Event::Begin);
         WORLD.with_borrow(|w| w.limit)
-    }
-    extern "C" fn command_tile(_: *mut Command) -> u32 {
-        WORLD.with_borrow(|w| {
-            if w.iterator < w.length {
-                1
-            } else {
-                INVALID_TILE
-            }
-        })
-    }
-    extern "C" fn command_next(ctx: *mut Command) -> u32 {
-        log(Event::Next);
-        WORLD.with_borrow_mut(|w| w.iterator += 1);
-        command_tile(ctx)
     }
     extern "C" fn debit(_: *mut Command) {
         log(Event::Debit);
@@ -1672,8 +1658,6 @@ mod tests {
         progress_total,
         town_rating: rating,
         command_begin: begin,
-        command_tile,
-        command_next,
         command_debit: debit,
     };
     fn with<R>(f: impl FnOnce(&Trees) -> R) -> R {
@@ -1903,7 +1887,6 @@ mod tests {
                 ..CLEAR_TILE
             },
             limit: i32::MAX,
-            length: 1,
             ..World::default()
         });
         let s = CommandSettings {
@@ -1916,20 +1899,27 @@ mod tests {
                 landscape_clear(std::ptr::null_mut(), tile)
             })
         });
-        assert_eq!((result.status, result.message, result.cost), (0, 0, 15));
+        assert_eq!((result.status, result.message, result.cost), (0, 0, 30));
         assert_eq!(
             events(),
             [
-                Event::Begin(2, 1, true),
+                Event::Begin,
                 Event::Plant,
                 Event::Plant,
                 Event::Write("make_tree"),
                 Event::Dirty,
                 Event::Debit,
                 Event::Zone(ZONE_RAINFOREST),
-                Event::Next
+                Event::Plant,
+                Event::Plant,
+                Event::Write("make_tree"),
+                Event::Dirty,
+                Event::Debit,
+                Event::Zone(ZONE_RAINFOREST),
             ]
         );
+        // The diagonal from corner 2 to corner 1 starts at 2; the orthogonal area would start at 1.
+        assert_eq!(WORLD.with_borrow(|w| w.visited.clone()), [2, 2, 1, 1]);
         assert_eq!(WORLD.with_borrow(|w| w.tree.growth), GROWN);
     }
 
@@ -1938,11 +1928,10 @@ mod tests {
         reset(World {
             plant: CLEAR_TILE,
             limit: i32::MAX,
-            length: 1,
             ..World::default()
         });
         let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 2, 1, 20, false, &COMMAND, 0, |tile| {
+            t.plant_command(std::ptr::null_mut(), 1, 1, 20, false, &COMMAND, 0, |tile| {
                 landscape_clear(std::ptr::null_mut(), tile)
             })
         });
@@ -1966,7 +1955,7 @@ mod tests {
             ..COMMAND
         };
         let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 2, 1, 20, false, &s, 0, |tile| {
+            t.plant_command(std::ptr::null_mut(), 1, 1, 20, false, &s, 0, |tile| {
                 landscape_clear(std::ptr::null_mut(), tile)
             })
         });
@@ -1978,13 +1967,12 @@ mod tests {
         reset(World {
             plant: CLEAR_TILE,
             limit: 1,
-            length: 5,
             ..World::default()
         });
         let result = with(|t| {
             t.plant_command(
                 std::ptr::null_mut(),
-                2,
+                5,
                 1,
                 255,
                 false,
@@ -1994,15 +1982,8 @@ mod tests {
             )
         });
         assert_eq!((result.status, result.cost, result.message), (0, 0, 2));
-        assert_eq!(
-            events(),
-            [
-                Event::Begin(2, 1, false),
-                Event::Plant,
-                Event::Next,
-                Event::Plant
-            ]
-        );
+        assert_eq!(events(), [Event::Begin, Event::Plant, Event::Plant]);
+        assert_eq!(WORLD.with_borrow(|w| w.visited.clone()), [1, 2]);
     }
 
     #[test]
@@ -2013,12 +1994,11 @@ mod tests {
                 ..CLEAR_TILE
             },
             limit: i32::MAX,
-            length: 1,
             clear_failed: true,
             ..World::default()
         });
         let result = with(|t| {
-            t.plant_command(std::ptr::null_mut(), 2, 1, 3, false, &COMMAND, 0, |tile| {
+            t.plant_command(std::ptr::null_mut(), 1, 1, 3, false, &COMMAND, 0, |tile| {
                 landscape_clear(std::ptr::null_mut(), tile)
             })
         });
@@ -2029,13 +2009,12 @@ mod tests {
                 ..CLEAR_TILE
             },
             limit: i32::MAX,
-            length: 1,
             ..World::default()
         });
         let result = with(|t| {
             t.plant_command(
                 std::ptr::null_mut(),
-                2,
+                1,
                 1,
                 255,
                 false,
@@ -2048,7 +2027,7 @@ mod tests {
         assert_eq!(
             events(),
             [
-                Event::Begin(2, 1, false),
+                Event::Begin,
                 Event::Plant,
                 Event::Clear,
                 Event::Rating(true),
@@ -2057,7 +2036,6 @@ mod tests {
                 Event::Write("make_tree"),
                 Event::Dirty,
                 Event::Debit,
-                Event::Next
             ]
         );
         // The fresh record saw the cleared grass ground.
@@ -2078,7 +2056,6 @@ mod tests {
                     ..TreeObservation::default()
                 },
                 limit: i32::MAX,
-                length: 3,
                 ..World::default()
             });
             let s = CommandSettings {
@@ -2087,7 +2064,7 @@ mod tests {
                 ..COMMAND
             };
             let result = with(|t| {
-                t.plant_command(std::ptr::null_mut(), 2, 1, 255, false, &s, 0, |tile| {
+                t.plant_command(std::ptr::null_mut(), 3, 1, 255, false, &s, 0, |tile| {
                     landscape_clear(std::ptr::null_mut(), tile)
                 })
             });

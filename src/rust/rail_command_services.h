@@ -5,13 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file rail_command_services.h Native conversion cursor shared by command owners. */
+/** @file rail_command_services.h Native affected-train list of a rail conversion. */
 #ifndef RUST_RAIL_COMMAND_SERVICES_H
 #define RUST_RAIL_COMMAND_SERVICES_H
-#include "../tilearea_type.h"
 #include "../train.h"
 struct OpenTTDRailConvertFrame {
-	std::unique_ptr<TileIterator> iter;
 	std::vector<Train *> affected;
 };
 #endif /* RUST_RAIL_COMMAND_SERVICES_H */
