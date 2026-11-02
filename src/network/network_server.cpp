@@ -42,6 +42,7 @@
 #include "../rust/company_services.h"
 #include "../rust/newgrf_loading_ffi.h"
 #include "../rust/settings_services.h"
+#include "../rust/network_auth_ffi.h"
 #include "../rust/session_native.hpp"
 
 #include "../safeguards.h"
@@ -288,46 +289,6 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendError(NetworkErrorCode err
 }
 
 
-/** Request the game password. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendAuthRequest()
-{
-	Debug(net, 9, "client[{}] SendAuthRequest()", this->client_id);
-
-	/* Invalid packet when status is anything but STATUS_INACTIVE or STATUS_AUTH_GAME. */
-	if (this->status != STATUS_INACTIVE && status != STATUS_AUTH_GAME) return this->CloseConnection(NETWORK_RECV_STATUS_MALFORMED_PACKET);
-
-	Debug(net, 9, "client[{}] status = AUTH_GAME", this->client_id);
-	this->status = STATUS_AUTH_GAME;
-
-	/* Reset 'lag' counters */
-	this->last_frame = this->last_frame_server = _frame_counter;
-
-	if (this->authentication_handler == nullptr) {
-		this->authentication_handler = NetworkAuthenticationServerHandler::Create(&_password_provider, &_authorized_key_handler);
-	}
-
-	auto p = std::make_unique<Packet>(this, PACKET_SERVER_AUTH_REQUEST);
-	this->authentication_handler->SendRequest(*p);
-
-	this->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
-}
-
-/** Notify the client that the authentication has completed and tell that for the remainder of this socket encryption is enabled. */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendEnableEncryption()
-{
-	Debug(net, 9, "client[{}] SendEnableEncryption()", this->client_id);
-
-	/* Invalid packet when status is anything but STATUS_AUTH_GAME. */
-	if (this->status != STATUS_AUTH_GAME) return this->CloseConnection(NETWORK_RECV_STATUS_MALFORMED_PACKET);
-
-	auto p = std::make_unique<Packet>(this, PACKET_SERVER_ENABLE_ENCRYPTION);
-	this->authentication_handler->SendEnableEncryption(*p);
-	this->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
-}
-
-
 /** This sends the map to the client */
 NetworkRecvStatus ServerNetworkGameSocketHandler::SendMap()
 {
@@ -489,55 +450,12 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_IDENTIFY(Packet
 	return static_cast<NetworkRecvStatus>(result);
 }
 
-static NetworkErrorCode GetErrorForAuthenticationMethod(NetworkAuthenticationMethod method)
-{
-	switch (method) {
-		case NetworkAuthenticationMethod::X25519_PAKE:
-			return NETWORK_ERROR_WRONG_PASSWORD;
-		case NetworkAuthenticationMethod::X25519_AuthorizedKey:
-			return NETWORK_ERROR_NOT_ON_ALLOW_LIST;
-
-		default:
-			NOT_REACHED();
-	}
-}
-
 NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_AUTH_RESPONSE(Packet &p)
 {
-	if (this->status != STATUS_AUTH_GAME) {
-		return this->SendError(NETWORK_ERROR_NOT_EXPECTED);
-	}
-
-	Debug(net, 9, "client[{}] Receive_CLIENT_AUTH_RESPONSE()", this->client_id);
-
-	auto authentication_method = this->authentication_handler->GetAuthenticationMethod();
-	switch (this->authentication_handler->ReceiveResponse(p)) {
-		case NetworkAuthenticationServerHandler::ResponseResult::Authenticated:
-			break;
-
-		case NetworkAuthenticationServerHandler::ResponseResult::RetryNextMethod:
-			return this->SendAuthRequest();
-
-		case NetworkAuthenticationServerHandler::ResponseResult::NotAuthenticated:
-		default:
-			return this->SendError(GetErrorForAuthenticationMethod(authentication_method));
-	}
-
-	NetworkRecvStatus status = this->SendEnableEncryption();
-	if (status != NETWORK_RECV_STATUS_OKAY) return status;
-
-	this->peer_public_key = this->authentication_handler->GetPeerPublicKey();
-	this->receive_encryption_handler = this->authentication_handler->CreateClientToServerEncryptionHandler();
-	this->send_encryption_handler = this->authentication_handler->CreateServerToClientEncryptionHandler();
-	this->authentication_handler = nullptr;
-
-	Debug(net, 9, "client[{}] status = IDENTIFY", this->client_id);
-	this->status = STATUS_IDENTIFY;
-
-	/* Reset 'lag' counters */
-	this->last_frame = this->last_frame_server = _frame_counter;
-
-	return NETWORK_RECV_STATUS_OKAY;
+	OpenTTDSessionFrame frame;
+	auto result = openttd_rust_network_auth_receive_response(&GetRustNetworkFrameServices(), this, p.Record(), &frame.network_actions);
+	frame.Rethrow();
+	return static_cast<NetworkRecvStatus>(result);
 }
 
 NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_GETMAP(Packet &)
@@ -1482,7 +1400,8 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			ci->public_key = cs->peer_public_key;
 			Debug(desync, 1, "client: {:08x}; {:02x}; {:02x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract, ci->client_playas, ci->index);
 		},
-		.auth_request = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->SendAuthRequest(); },
+		.auth = [](void *socket) noexcept -> const NetworkAuthenticationHandler * { return static_cast<NetworkClientSocket *>(socket)->authentication_handler.get(); },
+		.auth_create = [](void *socket) noexcept { static_cast<NetworkClientSocket *>(socket)->authentication_handler = NetworkAuthenticationServerHandler::Create(&_password_provider, &_authorized_key_handler); },
 		.client_company = [](void *socket) noexcept -> uint8_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->client_playas.base(); },
 		.client_error_announcement = [](void *socket, uint8_t error) noexcept {
 			std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
@@ -1494,11 +1413,15 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.clients_connected = &_network_clients_connected,
 		.clients_on = &_network_game_info.clients_on,
 		.company_allows_client = [](uint8_t company, void *socket) noexcept { return RustCompanyAllowsPublicKey(company, static_cast<NetworkClientSocket *>(socket)->GetPeerPublicKey()); },
+		.debug_auth_game = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = AUTH_GAME", static_cast<NetworkClientSocket *>(socket)->client_id); },
+		.debug_auth_response = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_AUTH_RESPONSE()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_authorized = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = AUTHORIZED", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_closed = [](void *socket) noexcept { Debug(net, 3, "[{}] Client #{} closed connection", ServerNetworkGameSocketHandler::GetName(), static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_done_map = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = DONE_MAP", static_cast<NetworkClientSocket *>(socket)->client_id); },
+		.debug_enable_encryption = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendEnableEncryption()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_game_info = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_GAME_INFO()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_getmap = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_GETMAP()", static_cast<NetworkClientSocket *>(socket)->client_id); },
+		.debug_identified = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = IDENTIFY", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_identify = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_IDENTIFY()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_join = [](void *socket, void *revision, uint32_t version) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_JOIN(): client_revision={}, newgrf_version={}", static_cast<NetworkClientSocket *>(socket)->client_id, *static_cast<std::string *>(revision), version); },
 		.debug_map = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = MAP", static_cast<NetworkClientSocket *>(socket)->client_id); },
@@ -1513,6 +1436,7 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.debug_pre_active = [](void *socket) noexcept { Debug(net, 9, "client[{}] status = PRE_ACTIVE", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_receive_error = [](void *socket, uint8_t error) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_ERROR(): errorno={}", static_cast<NetworkClientSocket *>(socket)->client_id, error); },
 		.debug_receive_quit = [](void *socket) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_QUIT()", static_cast<NetworkClientSocket *>(socket)->client_id); },
+		.debug_send_auth_request = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendAuthRequest()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_send_error = [](void *socket, uint8_t error) noexcept { Debug(net, 9, "client[{}] SendError(): error={}", static_cast<NetworkClientSocket *>(socket)->client_id, error); },
 		.debug_send_error_quit = [](void *socket, uint32_t client_id, uint8_t error) noexcept { Debug(net, 9, "client[{}] SendErrorQuit(): client_id={}, errorno={}", static_cast<NetworkClientSocket *>(socket)->client_id, client_id, error); },
 		.debug_send_join = [](void *socket, uint32_t client_id) noexcept { Debug(net, 9, "client[{}] SendJoin(): client_id={}", static_cast<NetworkClientSocket *>(socket)->client_id, client_id); },
@@ -1521,6 +1445,13 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.debug_send_shutdown = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendShutdown()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_send_wait = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendWait()", static_cast<NetworkClientSocket *>(socket)->client_id); },
 		.debug_send_welcome = [](void *socket) noexcept { Debug(net, 9, "client[{}] SendWelcome()", static_cast<NetworkClientSocket *>(socket)->client_id); },
+		.enable_encryption = [](void *socket, const uint8_t *peer, OpenTTDAuthStream *receive, OpenTTDAuthStream *send) noexcept {
+			auto *cs = static_cast<NetworkClientSocket *>(socket);
+			cs->peer_public_key = FormatNetworkPublicKey(peer);
+			cs->receive_encryption_handler = MakeNetworkEncryptionHandler(receive);
+			cs->send_encryption_handler = MakeNetworkEncryptionHandler(send);
+			cs->authentication_handler = nullptr;
+		},
 		.error_announcement = [](void *socket, uint32_t strid, OpenTTDByteSpan reason, bool kicked) noexcept {
 			std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
 			Debug(net, 1, "'{}' made an error and has been disconnected: {}", client_name, GetString(strid));

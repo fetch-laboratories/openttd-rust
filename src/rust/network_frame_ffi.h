@@ -6,6 +6,8 @@
 #include "packet_ffi.h"
 #include "network_command_ffi.h"
 struct OpenTTDSessionFrame;
+struct OpenTTDAuthHandler;
+class NetworkAuthenticationHandler;
 struct OpenTTDNetworkTcpServices;
 struct OpenTTDNetworkConnectionServices;
 struct OpenTTDNetworkClientServices;
@@ -14,6 +16,7 @@ struct OpenTTDNetworkLifecycleServices;
 /** Native leaves of the frame protocol: `game` is a NetworkGameSocketHandler, `socket` a NetworkClientSocket, packets are owned until sent. */
 struct OpenTTDNetworkFrameServices {
 	bool (*admins_send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(admins_send);
+	OpenTTDAuthHandler *(*auth_owner)(const NetworkAuthenticationHandler *) noexcept OPENTTD_SERVICE_DEFAULT(auth_owner);
 	uint16_t (*bytes_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame);
 	uint16_t (*bytes_per_frame_burst)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame_burst);
 	const OpenTTDNetworkClientServices *client;

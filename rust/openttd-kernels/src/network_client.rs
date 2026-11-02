@@ -28,12 +28,19 @@ use crate::tcp_game::{
 use std::ffi::c_void;
 #[repr(C)]
 pub struct Services {
+    pub auth:
+        extern "C" fn(*mut c_void) -> *const crate::network_crypto::NetworkAuthenticationHandler,
+    pub auth_create: extern "C" fn(*mut c_void),
     pub check_grf: extern "C" fn(u32, *const u8) -> bool,
     pub client_list_changed: extern "C" fn(),
     pub client_name: extern "C" fn() -> crate::services::ByteSpan,
+    pub debug_auth_game: extern "C" fn(),
+    pub debug_auth_request: extern "C" fn(),
     pub debug_banned: extern "C" fn(),
     pub debug_close: extern "C" fn(*mut c_void),
     pub debug_connected: extern "C" fn(),
+    pub debug_enable_encryption: extern "C" fn(),
+    pub debug_encrypted: extern "C" fn(),
     pub debug_error: extern "C" fn(u8),
     pub debug_error_quit: extern "C" fn(u32),
     pub debug_full: extern "C" fn(),
@@ -49,6 +56,7 @@ pub struct Services {
     pub debug_map_size: extern "C" fn(u32),
     pub debug_newgame: extern "C" fn(),
     pub debug_quit: extern "C" fn(u32),
+    pub debug_send_auth_response: extern "C" fn(),
     pub debug_send_error: extern "C" fn(u8),
     pub debug_send_getmap: extern "C" fn(),
     pub debug_send_grfs_ok: extern "C" fn(),
@@ -67,6 +75,8 @@ pub struct Services {
     pub delete_info: extern "C" fn(*mut c_void),
     pub dirty_join: extern "C" fn(),
     pub emergency_save: extern "C" fn(),
+    pub enable_encryption:
+        extern "C" fn(*mut c_void, *mut crate::auth::Stream, *mut crate::auth::Stream),
     pub enter_multiplayer: extern "C" fn(),
     pub join: extern "C" fn(*mut c_void),
     pub join_bytes: *mut u32,
@@ -101,12 +111,18 @@ pub struct Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkClientServices" ["probe"] => Services {
+        auth,
+        auth_create,
         check_grf,
         client_list_changed,
         client_name,
+        debug_auth_game,
+        debug_auth_request,
         debug_banned,
         debug_close,
         debug_connected,
+        debug_enable_encryption,
+        debug_encrypted,
         debug_error,
         debug_error_quit,
         debug_full,
@@ -122,6 +138,7 @@ crate::abi::layouts! {
         debug_map_size,
         debug_newgame,
         debug_quit,
+        debug_send_auth_response,
         debug_send_error,
         debug_send_getmap,
         debug_send_grfs_ok,
@@ -140,6 +157,7 @@ crate::abi::layouts! {
         delete_info,
         dirty_join,
         emergency_save,
+        enable_encryption,
         enter_multiplayer,
         join,
         join_bytes,
@@ -176,6 +194,7 @@ crate::abi::layouts! {
 /// `ClientNetworkGameSocketHandler::ServerStatus`.
 pub(crate) mod status {
     pub const JOIN: u8 = 1;
+    pub const AUTH_GAME: u8 = 2;
     pub const ENCRYPTED: u8 = 3;
     pub const AUTHORIZED: u8 = 5;
     pub const MAP_WAIT: u8 = 6;

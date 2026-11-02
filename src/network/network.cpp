@@ -22,6 +22,7 @@
 #include "network_gamelist.h"
 #include "network_base.h"
 #include "network_coordinator.h"
+#include "network_crypto.h"
 #include "core/udp.h"
 #include "core/host.h"
 #include "network_gui.h"
@@ -937,6 +938,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 {
 	static const OpenTTDNetworkFrameServices services{
 		.admins_send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { ServerNetworkAdminSocketHandler::Send(); }); },
+		.auth_owner = [](const NetworkAuthenticationHandler *owner) noexcept { return owner->GetRustHandler(); },
 		.bytes_per_frame = RustNetworkBytesPerFrame,
 		.bytes_per_frame_burst = RustNetworkBytesPerFrameBurst,
 		.client = &GetRustNetworkClientServices(),

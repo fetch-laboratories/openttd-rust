@@ -3,6 +3,8 @@
 #ifndef RUST_NETWORK_CONNECTION_FFI_H
 #define RUST_NETWORK_CONNECTION_FFI_H
 #include "network_frame_ffi.h"
+#include "auth_ffi.h"
+class NetworkAuthenticationHandler;
 struct OpenTTDGrfLoadingServices;
 struct Packet;
 struct PacketWriter;
@@ -11,18 +13,23 @@ struct OpenTTDNetworkConnectionServices {
 	void (*admin_joined)(void *) noexcept OPENTTD_SERVICE_DEFAULT(admin_joined);
 	void (*admin_quit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(admin_quit);
 	void (*allocate_info)(void *, void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate_info);
-	uint8_t (*auth_request)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth_request);
+	const NetworkAuthenticationHandler *(*auth)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth);
+	void (*auth_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth_create);
 	uint8_t (*client_company)(void *) noexcept OPENTTD_SERVICE_DEFAULT(client_company);
 	void (*client_error_announcement)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(client_error_announcement);
 	uint32_t (*client_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(client_id);
 	uint8_t *clients_connected;
 	uint8_t *clients_on;
 	bool (*company_allows_client)(uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(company_allows_client);
+	void (*debug_auth_game)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_auth_game);
+	void (*debug_auth_response)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_auth_response);
 	void (*debug_authorized)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_authorized);
 	void (*debug_closed)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_closed);
 	void (*debug_done_map)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_done_map);
+	void (*debug_enable_encryption)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_enable_encryption);
 	void (*debug_game_info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_game_info);
 	void (*debug_getmap)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_getmap);
+	void (*debug_identified)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_identified);
 	void (*debug_identify)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_identify);
 	void (*debug_join)(void *, void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_join);
 	void (*debug_map)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_map);
@@ -37,6 +44,7 @@ struct OpenTTDNetworkConnectionServices {
 	void (*debug_pre_active)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_pre_active);
 	void (*debug_receive_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_receive_error);
 	void (*debug_receive_quit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_receive_quit);
+	void (*debug_send_auth_request)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_auth_request);
 	void (*debug_send_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_error);
 	void (*debug_send_error_quit)(void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_error_quit);
 	void (*debug_send_join)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_join);
@@ -45,6 +53,7 @@ struct OpenTTDNetworkConnectionServices {
 	void (*debug_send_shutdown)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_shutdown);
 	void (*debug_send_wait)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_wait);
 	void (*debug_send_welcome)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_welcome);
+	void (*enable_encryption)(void *, const uint8_t *, OpenTTDAuthStream *, OpenTTDAuthStream *) noexcept OPENTTD_SERVICE_DEFAULT(enable_encryption);
 	void (*error_announcement)(void *, uint32_t, OpenTTDByteSpan, bool) noexcept OPENTTD_SERVICE_DEFAULT(error_announcement);
 	uint32_t (*error_message)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
 	void (*error_unjoined)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_unjoined);

@@ -31,6 +31,7 @@ protected:
 	RustAuthenticationClientHandler(const X25519SecretKey &secret, uint8_t method, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password = {});
 public:
 	RustAuthenticationClientHandler(const X25519SecretKey &secret, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password);
+	OpenTTDAuthHandler *GetRustHandler() const noexcept override { return this->handler.get(); }
 	RequestResult ReceiveRequest(Packet &p) override;
 	bool SendResponse(Packet &p) override;
 	std::string_view GetName() const override;
@@ -46,6 +47,7 @@ protected:
 	RustAuthenticationServerHandler(const X25519SecretKey &secret, uint8_t method, const NetworkAuthenticationPasswordProvider *password = nullptr, const NetworkAuthenticationAuthorizedKeyHandler *authorized = nullptr);
 public:
 	RustAuthenticationServerHandler(const NetworkAuthenticationPasswordProvider *password, const NetworkAuthenticationAuthorizedKeyHandler *authorized, NetworkAuthenticationMethodMask mask);
+	OpenTTDAuthHandler *GetRustHandler() const noexcept override { return this->handler.get(); }
 	void SendRequest(Packet &p) override;
 	ResponseResult ReceiveResponse(Packet &p) override;
 	std::string_view GetName() const override;

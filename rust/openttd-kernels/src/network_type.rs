@@ -47,3 +47,6 @@ pub const CLIENT_ID_SERVER: u32 = 1;
 
 /// Coordinator-local server visibility.
 pub const SERVER_GAME_TYPE_LOCAL: u8 = 0;
+
+pub const NETWORK_ERROR_WRONG_PASSWORD: u8 = 10;
+pub const NETWORK_ERROR_NOT_ON_ALLOW_LIST: u8 = 21;

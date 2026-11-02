@@ -83,6 +83,9 @@ crate::abi::shared_records! {
 #[repr(C)]
 pub struct Services {
     pub admins_send: extern "C" fn(*mut Frame) -> bool,
+    pub auth_owner: extern "C" fn(
+        *const crate::network_crypto::NetworkAuthenticationHandler,
+    ) -> *mut crate::auth::Handler,
     pub bytes_per_frame: extern "C" fn() -> u16,
     pub bytes_per_frame_burst: extern "C" fn() -> u16,
     pub client: &'static crate::network_client::Services,
@@ -663,6 +666,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkFrameServices" ["probe"] => Services {
         admins_send,
+        auth_owner,
         bytes_per_frame,
         bytes_per_frame_burst,
         client,

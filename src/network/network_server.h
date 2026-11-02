@@ -44,8 +44,6 @@ protected:
 	NetworkRecvStatus Receive_CLIENT_MOVE(Packet &p) override;
 
 	NetworkRecvStatus SendGameInfo();
-	NetworkRecvStatus SendAuthRequest();
-	NetworkRecvStatus SendEnableEncryption();
 
 public:
 	/** Status of a client */

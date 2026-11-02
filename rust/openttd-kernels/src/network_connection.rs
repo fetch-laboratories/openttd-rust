@@ -42,18 +42,24 @@ pub struct Services {
     pub admin_joined: extern "C" fn(*mut c_void),
     pub admin_quit: extern "C" fn(*mut c_void),
     pub allocate_info: extern "C" fn(*mut c_void, *mut c_void, u8),
-    pub auth_request: extern "C" fn(*mut c_void) -> u8,
+    pub auth:
+        extern "C" fn(*mut c_void) -> *const crate::network_crypto::NetworkAuthenticationHandler,
+    pub auth_create: extern "C" fn(*mut c_void),
     pub client_company: extern "C" fn(*mut c_void) -> u8,
     pub client_error_announcement: extern "C" fn(*mut c_void, u8),
     pub client_id: extern "C" fn(*mut c_void) -> u32,
     pub clients_connected: *mut u8,
     pub clients_on: *mut u8,
     pub company_allows_client: extern "C" fn(u8, *mut c_void) -> bool,
+    pub debug_auth_game: extern "C" fn(*mut c_void),
+    pub debug_auth_response: extern "C" fn(*mut c_void),
     pub debug_authorized: extern "C" fn(*mut c_void),
     pub debug_closed: extern "C" fn(*mut c_void),
     pub debug_done_map: extern "C" fn(*mut c_void),
+    pub debug_enable_encryption: extern "C" fn(*mut c_void),
     pub debug_game_info: extern "C" fn(*mut c_void),
     pub debug_getmap: extern "C" fn(*mut c_void),
+    pub debug_identified: extern "C" fn(*mut c_void),
     pub debug_identify: extern "C" fn(*mut c_void),
     pub debug_join: extern "C" fn(*mut c_void, *mut c_void, u32),
     pub debug_map: extern "C" fn(*mut c_void),
@@ -68,6 +74,7 @@ pub struct Services {
     pub debug_pre_active: extern "C" fn(*mut c_void),
     pub debug_receive_error: extern "C" fn(*mut c_void, u8),
     pub debug_receive_quit: extern "C" fn(*mut c_void),
+    pub debug_send_auth_request: extern "C" fn(*mut c_void),
     pub debug_send_error: extern "C" fn(*mut c_void, u8),
     pub debug_send_error_quit: extern "C" fn(*mut c_void, u32, u8),
     pub debug_send_join: extern "C" fn(*mut c_void, u32),
@@ -76,6 +83,8 @@ pub struct Services {
     pub debug_send_shutdown: extern "C" fn(*mut c_void),
     pub debug_send_wait: extern "C" fn(*mut c_void),
     pub debug_send_welcome: extern "C" fn(*mut c_void),
+    pub enable_encryption:
+        extern "C" fn(*mut c_void, *const u8, *mut crate::auth::Stream, *mut crate::auth::Stream),
     pub error_announcement: extern "C" fn(*mut c_void, u32, crate::services::ByteSpan, bool),
     pub error_message: extern "C" fn(u8) -> u32,
     pub error_unjoined: extern "C" fn(*mut c_void, u32),
@@ -113,18 +122,23 @@ crate::abi::layouts! {
         admin_joined,
         admin_quit,
         allocate_info,
-        auth_request,
+        auth,
+        auth_create,
         client_company,
         client_error_announcement,
         client_id,
         clients_connected,
         clients_on,
         company_allows_client,
+        debug_auth_game,
+        debug_auth_response,
         debug_authorized,
         debug_closed,
         debug_done_map,
+        debug_enable_encryption,
         debug_game_info,
         debug_getmap,
+        debug_identified,
         debug_identify,
         debug_join,
         debug_map,
@@ -139,6 +153,7 @@ crate::abi::layouts! {
         debug_pre_active,
         debug_receive_error,
         debug_receive_quit,
+        debug_send_auth_request,
         debug_send_error,
         debug_send_error_quit,
         debug_send_join,
@@ -147,6 +162,7 @@ crate::abi::layouts! {
         debug_send_shutdown,
         debug_send_wait,
         debug_send_welcome,
+        enable_encryption,
         error_announcement,
         error_message,
         error_unjoined,
@@ -185,7 +201,7 @@ fn status(_s: &Services, socket: *mut socket::GameSocket) -> u8 {
 fn set_status(_s: &Services, socket: *mut socket::GameSocket, value: u8) {
     crate::raw_field::write_field!(socket, status, value);
 }
-fn reset_lag(_s: &Services, socket: *mut socket::GameSocket) {
+pub(crate) fn reset_lag(_s: &Services, socket: *mut socket::GameSocket) {
     let sync = socket::sync(socket);
     write_field!(sync, last_frame, crate::network_frame::frame_counter());
     write_field!(
@@ -609,7 +625,7 @@ pub extern "C" fn openttd_rust_network_receive_join(
     if !(s.revision_compatible)(text) || (s.newgrf_version)() != version {
         return send_error(s, f, socket, NETWORK_ERROR_WRONG_REVISION, EMPTY_TEXT, work);
     }
-    (s.auth_request)(socket::server(socket))
+    crate::network_auth::send_request(f, socket, work)
 }
 
 #[unsafe(no_mangle)]

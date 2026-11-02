@@ -1224,9 +1224,11 @@ mod window_type;
 
 mod md5;
 mod network_action;
+mod network_auth;
 mod network_client;
 mod network_command;
 mod network_connection;
+mod network_crypto;
 mod network_frame;
 mod network_internal;
 mod network_lifecycle;

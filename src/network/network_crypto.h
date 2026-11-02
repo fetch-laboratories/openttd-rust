@@ -38,6 +38,7 @@
 /**
  * Base class for handling the encryption (or decryption) of a network connection.
  */
+struct OpenTTDAuthHandler;
 struct OpenTTDAuthStream;
 
 class NetworkEncryptionHandler {
@@ -68,6 +69,9 @@ public:
 	virtual void Encrypt(std::span<std::uint8_t> mac, std::span<std::uint8_t> message) = 0;
 };
 
+
+std::string FormatNetworkPublicKey(const uint8_t *key);
+std::unique_ptr<NetworkEncryptionHandler> MakeNetworkEncryptionHandler(OpenTTDAuthStream *stream);
 
 /**
  * Callback interface for requests for passwords in the context of network authentication.
@@ -196,6 +200,7 @@ using NetworkAuthenticationMethodMask = EnumBitSet<NetworkAuthenticationMethod, 
  */
 class NetworkAuthenticationHandler {
 public:
+	virtual OpenTTDAuthHandler *GetRustHandler() const noexcept = 0;
 	virtual ~NetworkAuthenticationHandler() = default;
 
 	/**

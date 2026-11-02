@@ -1,0 +1,195 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+//! Game authentication transitions call the integrated authentication and packet owners.
+//! Native shells keep provider/password lifetimes and adopt streams after key exchange.
+//! Handler metadata is resolved once per entry; no borrow crosses a provider/UI callback.
+#![allow(unsafe_code, missing_docs)]
+use crate::auth;
+use crate::network_action::Actions;
+use crate::network_client::status as client;
+use crate::network_frame::{
+    Services, packet_check, packet_new, packet_send, server_status as server,
+};
+use crate::network_socket::{self as socket, GameSocket};
+use crate::network_type::{
+    NETWORK_ERROR_NOT_EXPECTED, NETWORK_ERROR_NOT_ON_ALLOW_LIST, NETWORK_ERROR_WRONG_PASSWORD,
+    NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY,
+};
+use crate::packet::State;
+use crate::raw_field::write_field;
+use crate::tcp_game::{
+    PACKET_CLIENT_AUTH_RESPONSE, PACKET_SERVER_AUTH_REQUEST, PACKET_SERVER_ENABLE_ENCRYPTION,
+};
+
+pub(crate) fn send_request(f: &Services, game: *mut GameSocket, work: Actions) -> u8 {
+    let s = f.connection;
+    let native = socket::server(game);
+    (s.debug_send_auth_request)(native);
+    if !matches!(socket::status(game), server::INACTIVE | server::AUTH_GAME) {
+        return socket::specialized_close(f, game, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
+    }
+    (s.debug_auth_game)(native);
+    write_field!(game, status, server::AUTH_GAME);
+    crate::network_connection::reset_lag(s, game);
+    if (s.auth)(native).is_null() {
+        (s.auth_create)(native);
+    }
+    let owner = (f.auth_owner)((s.auth)(native));
+    let mut p = packet_new(f, game, PACKET_SERVER_AUTH_REQUEST);
+    unsafe {
+        auth::openttd_rust_auth_handler_send_request(owner, &raw mut p, packet_check(f));
+    }
+    packet_send(f, game, &mut p);
+    NETWORK_RECV_STATUS_OKAY
+}
+
+pub(crate) fn send_response(f: &Services) -> u8 {
+    let s = f.client;
+    (s.debug_send_auth_response)();
+    let game = (f.client_game)();
+    let owner = (f.auth_owner)((s.auth)(socket::shell(game)));
+    let mut p = packet_new(f, game, PACKET_CLIENT_AUTH_RESPONSE);
+    unsafe {
+        auth::openttd_rust_auth_handler_send_response(owner, &raw mut p);
+    }
+    packet_send(f, game, &mut p);
+    NETWORK_RECV_STATUS_OKAY
+}
+
+pub(crate) fn receive_request(f: &Services, game: *mut GameSocket, p: *mut State) -> u8 {
+    let s = f.client;
+    if !matches!(socket::status(game), client::JOIN | client::AUTH_GAME) {
+        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+    (s.debug_auth_game)();
+    write_field!(game, status, client::AUTH_GAME);
+    (s.debug_auth_request)();
+    let native = socket::shell(game);
+    if (s.auth)(native).is_null() {
+        (s.auth_create)(native);
+    }
+    let owner = (f.auth_owner)((s.auth)(native));
+    match unsafe { auth::openttd_rust_auth_handler_receive_request(owner, p) } {
+        crate::network_crypto::REQUEST_READY => send_response(f),
+        crate::network_crypto::REQUEST_AWAIT_INPUT => NETWORK_RECV_STATUS_OKAY,
+        _ => NETWORK_RECV_STATUS_MALFORMED_PACKET,
+    }
+}
+
+pub(crate) fn receive_enable(f: &Services, game: *mut GameSocket, p: *mut State) -> u8 {
+    let s = f.client;
+    if socket::status(game) != client::AUTH_GAME {
+        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+    let native = socket::shell(game);
+    let handler = (s.auth)(native);
+    if handler.is_null() {
+        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+    let owner = (f.auth_owner)(handler);
+    (s.debug_enable_encryption)();
+    if unsafe { auth::openttd_rust_auth_handler_receive_enable(owner, p) } == 0 {
+        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+    let receive = unsafe { auth::openttd_rust_auth_stream_new(owner, 1) };
+    let send = unsafe { auth::openttd_rust_auth_stream_new(owner, 0) };
+    (s.enable_encryption)(native, receive, send);
+    (s.debug_encrypted)();
+    write_field!(game, status, client::ENCRYPTED);
+    crate::network_client::openttd_rust_network_client_send_identify(s, f)
+}
+
+pub(crate) fn receive_response(
+    f: &Services,
+    game: *mut GameSocket,
+    p: *mut State,
+    work: Actions,
+) -> u8 {
+    let s = f.connection;
+    if socket::status(game) != server::AUTH_GAME {
+        return crate::network_connection::send_error(
+            s,
+            f,
+            game,
+            NETWORK_ERROR_NOT_EXPECTED,
+            crate::network_connection::EMPTY_TEXT,
+            work,
+        );
+    }
+    let native = socket::server(game);
+    (s.debug_auth_response)(native);
+    let owner = (f.auth_owner)((s.auth)(native));
+    let method = unsafe { auth::openttd_rust_auth_handler_method(owner) };
+    match unsafe { auth::openttd_rust_auth_handler_receive_response(owner, p) } {
+        crate::network_crypto::RESPONSE_AUTHENTICATED => (),
+        crate::network_crypto::RESPONSE_RETRY => return send_request(f, game, work),
+        _ => {
+            let error = match method {
+                crate::network_crypto::METHOD_PAKE => NETWORK_ERROR_WRONG_PASSWORD,
+                crate::network_crypto::METHOD_AUTHORIZED_KEY => NETWORK_ERROR_NOT_ON_ALLOW_LIST,
+                _ => unreachable!(),
+            };
+            return crate::network_connection::send_error(
+                s,
+                f,
+                game,
+                error,
+                crate::network_connection::EMPTY_TEXT,
+                work,
+            );
+        }
+    }
+    (s.debug_enable_encryption)(native);
+    if socket::status(game) != server::AUTH_GAME {
+        return socket::specialized_close(f, game, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
+    }
+    let mut p = packet_new(f, game, PACKET_SERVER_ENABLE_ENCRYPTION);
+    unsafe {
+        auth::openttd_rust_auth_handler_send_enable(owner, &raw mut p);
+    }
+    packet_send(f, game, &mut p);
+    let peer = unsafe { auth::openttd_rust_auth_handler_peer(owner) };
+    let receive = unsafe { auth::openttd_rust_auth_stream_new(owner, 0) };
+    let send = unsafe { auth::openttd_rust_auth_stream_new(owner, 1) };
+    (s.enable_encryption)(native, peer, receive, send);
+    (s.debug_identified)(native);
+    write_field!(game, status, server::IDENTIFY);
+    crate::network_connection::reset_lag(s, game);
+    NETWORK_RECV_STATUS_OKAY
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_network_auth_send_response(f: &Services) -> u8 {
+    send_response(f)
+}
+/// # Safety
+/// The game socket and incoming packet are live for the handler entry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_auth_receive_request(
+    f: &Services,
+    game: *mut GameSocket,
+    p: *mut State,
+) -> u8 {
+    receive_request(f, game, p)
+}
+/// # Safety
+/// Same live socket/packet contract as `receive_request`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_auth_receive_enable(
+    f: &Services,
+    game: *mut GameSocket,
+    p: *mut State,
+) -> u8 {
+    receive_enable(f, game, p)
+}
+/// # Safety
+/// Same live socket/packet contract; the action driver outlives any requested map save.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_auth_receive_response(
+    f: &Services,
+    game: *mut GameSocket,
+    p: *mut State,
+    work: Actions,
+) -> u8 {
+    work.network(f);
+    receive_response(f, game, p, work)
+}
