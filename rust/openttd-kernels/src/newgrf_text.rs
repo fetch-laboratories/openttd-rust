@@ -13,6 +13,7 @@
     clippy::wildcard_imports,
     clippy::match_same_arms
 )]
+pub(crate) mod actions;
 mod translation;
 use crate::control_codes::SCC_NEWGRF_PRINT_WORD_STRING_ID;
 use crate::game_state::GameState;

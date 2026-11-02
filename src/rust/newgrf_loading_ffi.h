@@ -70,6 +70,8 @@ struct OpenTTDGrfLoadingServices {
 	GRFError *(*error)(GRFConfig *, uint32_t, StringID, bool) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	void (*error_name)(GRFError *, const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(error_name);
 	void (*error_property)(GRFError *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_property);
+	void (*error_after_translated_file)(GRFError *) noexcept OPENTTD_SERVICE_DEFAULT(error_after_translated_file);
+	StringID load_after;
 	bool (*networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
 	uint8_t (*read_byte)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_byte);
 	uint16_t (*read_word)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_word);
@@ -106,7 +108,6 @@ struct OpenTTDGrfLoadingServices {
 	bool (*grf_sound)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_sound);
 	bool (*skip_act12)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act12);
 	bool (*load_font_glyph)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(load_font_glyph);
-	bool (*translate_grf_strings)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(translate_grf_strings);
 	bool (*static_grf_info)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(static_grf_info);
 	bool (*never_expire_airports)() noexcept OPENTTD_SERVICE_DEFAULT(never_expire_airports);
 	uint16_t (*max_bridge_length)() noexcept OPENTTD_SERVICE_DEFAULT(max_bridge_length);

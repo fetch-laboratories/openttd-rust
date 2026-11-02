@@ -35,7 +35,6 @@ add_files(
     newgrf_act10.cpp
     newgrf_act11.cpp
     newgrf_act12.cpp
-    newgrf_act13.cpp
     newgrf_act14.cpp
     newgrf_bytereader.cpp
     newgrf_bytereader.h
