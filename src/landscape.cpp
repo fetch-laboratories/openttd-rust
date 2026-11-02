@@ -61,7 +61,6 @@
 #include "rust/landscape_command_ffi.h"
 #include "rust/settings_services.h"
 #include "tunnel_map.h"
-#include "rust/water_area_services.h"
 #include "rust/town_founding_ffi.h"
 #include "rust/command_services.h"
 #include "rust/environment_services.h"
@@ -651,8 +650,7 @@ CommandCost CmdLandscapeClear(DoCommandFlags flags, TileIndex tile)
 std::tuple<CommandCost, Money> CmdClearArea(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, bool diagonal)
 {
 	CommandCost result, last, ret;
-	OpenTTDWaterArea area;
-	Money extra(openttd_rust_landscape_clear_area(&GetRustLandscapeCommandServices(), RustCommandCost(&result), RustCommandCost(&last), RustCommandCost(&ret), tile.base(), start_tile.base(), diagonal, flags.base(), &area));
+	Money extra(openttd_rust_landscape_clear_area(&GetRustLandscapeCommandServices(), RustCommandCost(&result), RustCommandCost(&last), RustCommandCost(&ret), tile.base(), start_tile.base(), diagonal, flags.base()));
 	return {std::move(result), extra};
 }
 

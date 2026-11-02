@@ -18,7 +18,13 @@ fn collect(dir: &Path, module: &str, found: &mut Vec<String>) -> io::Result<()> 
         };
         if path.is_dir() {
             collect(&path, &name, found)?;
-        } else if path.extension().is_some_and(|ext| ext == "rs") && !["lib", "abi"].contains(&stem) {
+        } else if path.extension().is_some_and(|ext| ext == "rs") && !["lib", "abi"].contains(&stem)
+        {
+            if name == "native_test_support"
+                && env::var_os("CARGO_FEATURE_NATIVE_TEST_SUPPORT").is_none()
+            {
+                continue;
+            }
             let source = fs::read_to_string(&path)?.replace("\r\n", "\n");
             for (marker, function) in [
                 ("layouts! {\n    fn abi_layout;", "abi_layout"),

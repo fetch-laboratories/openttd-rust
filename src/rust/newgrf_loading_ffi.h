@@ -53,7 +53,6 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDAction2Services *action2;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
-	uint32_t (*file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(file_id);
 	uint32_t (*config_id)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_id);
 	GRFStatus (*config_status)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_status);
 	uint8_t (*config_flags)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_flags);

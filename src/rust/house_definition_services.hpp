@@ -44,7 +44,6 @@ inline const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexce
 		.map_string = [](const HouseSpec *spec, uint16_t id) noexcept { AddStringForMapping(GRFStringID{id}, &MutableHouse(spec)->building_name); },
 		.set_animation = [](const HouseSpec *spec, uint8_t frames, AnimationStatus status) noexcept { RustSpecAnimationFrames(MutableHouse(spec), frames); RustSpecAnimationStatus(MutableHouse(spec), static_cast<uint8_t>(status)); },
 		.badges = [](const HouseSpec *spec) noexcept { return RustSpecBadgeList(MutableHouse(spec)); },
-		.file_id = RustGRFFileID,
 		.resize_specs = [](size_t count) noexcept { HouseSpec::Specs().resize(count); },
 		.move_spec = [](const HouseSpec *spec, uint16_t id) noexcept { HouseSpec::Specs()[id] = std::move(*MutableHouse(spec)); },
 		.set_override = [](const HouseSpec *spec, uint16_t id) noexcept { RustSpecSetOverride(MutableHouse(spec), id); },

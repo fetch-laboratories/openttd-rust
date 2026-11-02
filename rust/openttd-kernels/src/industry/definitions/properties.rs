@@ -247,7 +247,7 @@ unsafe fn tiles(
                 if spec.is_null() {
                     spec = unsafe { (p.create_tile)(c.file, id as u16, substitute) };
                     unsafe {
-                        (s.set_tile_enabled)(spec, true);
+                        (s.shared().specs().industry_tile().substitute().set_enabled)(spec, true);
                         (p.clear_animation)(spec);
                         (p.tile_identity)(spec, c.file, id as u16, substitute);
                         super::allocate_tile(id as u16, c.grfid, u16::from(substitute));
@@ -291,16 +291,16 @@ unsafe fn tiles(
             0x0e => unsafe {
                 (p.set_tile_callbacks)(spec, r.byte()?);
             },
-            0x0f => unsafe {
-                (p.set_animation_frames)(spec, r.byte()?);
-                (p.set_animation_status)(spec, r.byte()?);
-            },
-            0x10 => unsafe {
-                (p.set_animation_speed)(spec, r.byte()?);
-            },
-            0x11 => unsafe {
-                (p.set_animation_triggers)(spec, r.byte()?);
-            },
+            0x0f => {
+                (s.shared().specs().industry_tile().animation().frames)(spec, r.byte()?);
+                (s.shared().specs().industry_tile().animation().status)(spec, r.byte()?);
+            }
+            0x10 => {
+                (s.shared().specs().industry_tile().animation().speed)(spec, r.byte()?);
+            }
+            0x11 => {
+                (s.shared().specs().industry_tile().animation().triggers)(spec, r.byte()?);
+            }
             0x12 => unsafe {
                 (p.set_tile_flags)(spec, r.byte()?);
             },
@@ -340,7 +340,7 @@ unsafe fn tiles(
                 }
             }
             0x14 => {
-                let destination = unsafe { (p.tile_badges)(spec) };
+                let destination = (s.shared().specs().industry_tile().badge_list)(spec);
                 unsafe { r.badges(newgrf::GSF_INDUSTRYTILES, destination) }?;
             }
             _ => result = UNKNOWN,
@@ -381,7 +381,10 @@ unsafe fn industries(
                 let substitute = r.byte()?;
                 if substitute == 0xff {
                     unsafe {
-                        (s.set_enabled)((s.industry)(id as u16), false);
+                        (s.shared().specs().industry().substitute().set_enabled)(
+                            (s.industry)(id as u16),
+                            false,
+                        );
                     }
                     continue;
                 }
@@ -394,7 +397,7 @@ unsafe fn industries(
                 if spec.is_null() {
                     spec = unsafe { (p.create_industry)(c.file, id as u16, substitute) };
                     unsafe {
-                        (s.set_enabled)(spec, true);
+                        (s.shared().specs().industry().substitute().set_enabled)(spec, true);
                         (p.industry_identity)(spec, c.file, id as u16, substitute);
                         (p.clear_placement_check)(spec);
                     }
@@ -409,7 +412,10 @@ unsafe fn industries(
                     continue;
                 }
                 unsafe {
-                    (s.set_override)(spec, u16::from(override_id));
+                    (s.shared().specs().industry().substitute().set_override)(
+                        spec,
+                        u16::from(override_id),
+                    );
                     override_manager::openttd_rust_override_add(
                         override_manager::industry(),
                         id as u16,
@@ -645,7 +651,7 @@ unsafe fn industries(
                 }
             }
             0x29 => {
-                let destination = unsafe { (p.industry_badges)(spec) };
+                let destination = (s.shared().specs().industry().badge_list)(spec);
                 unsafe { r.badges(newgrf::GSF_INDUSTRIES, destination) }?;
             }
             _ => result = UNKNOWN,

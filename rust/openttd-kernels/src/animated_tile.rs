@@ -72,10 +72,6 @@ pub struct Services {
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
     pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
     pub airport_spec_triggers: extern "C" fn(*const AirportSpec) -> u8,
-    pub rail_cargo: extern "C" fn(*const RailSpec, u8) -> u8,
-    pub road_cargo: extern "C" fn(*const RoadSpec, u8) -> u8,
-    pub airport_cargo: extern "C" fn(*const AirportSpec, u8) -> u8,
-    pub airport_grf: extern "C" fn(*const AirportSpec) -> bool,
     pub airport_area: extern "C" fn(*mut Station) -> TileArea,
     pub airport_belongs: extern "C" fn(*const Station, u32) -> bool,
     pub road_count: extern "C" fn(*mut BaseStation) -> usize,
@@ -379,7 +375,7 @@ pub extern "C" fn openttd_rust_trigger_station(
         let spec = (a.rail_spec)(t);
         if !spec.is_null() && (a.rail_spec_triggers)(spec) & (1 << trigger) != 0 {
             let extra = if cargo < NUM_CARGO {
-                (u16::from((a.rail_cargo)(spec, cargo)) << 8) as u8
+                (u16::from((a.shared().specs().station().cargo_map)(spec, cargo)) << 8) as u8
             } else {
                 0
             };
@@ -414,7 +410,7 @@ pub extern "C" fn openttd_rust_trigger_roadstop(
             unsafe { crate::newgrf_roadstop::openttd_rust_roadstop_spec(t, a.roadstop_resolver) };
         if !spec.is_null() && (a.road_spec_triggers)(spec) & (1 << trigger) != 0 {
             let extra = if cargo < NUM_CARGO {
-                (u16::from((a.road_cargo)(spec, cargo)) << 8) as u8
+                (u16::from((a.shared().specs().road_stop().cargo_map)(spec, cargo)) << 8) as u8
             } else {
                 0
             };
@@ -489,11 +485,11 @@ pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, ca
             return;
         }
         let spec = crate::newgrf_airport::tile_spec_by_tile(t, unsafe { &*a.airport_runtime });
-        if !(a.airport_grf)(spec) {
+        if !(a.shared().specs().airport_tile().has_file)(spec) {
             return;
         }
         let extra = if cargo < NUM_CARGO {
-            (u16::from((a.airport_cargo)(spec, cargo)) << 8) as u8
+            (u16::from((a.shared().specs().airport_tile().cargo_map)(spec, cargo)) << 8) as u8
         } else {
             0
         };
@@ -534,10 +530,6 @@ crate::abi::layouts! {
         rail_spec_triggers,
         road_spec_triggers,
         airport_spec_triggers,
-        rail_cargo,
-        road_cargo,
-        airport_cargo,
-        airport_grf,
         airport_area,
         airport_belongs,
         road_count,

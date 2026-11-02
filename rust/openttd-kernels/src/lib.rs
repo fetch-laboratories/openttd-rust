@@ -82,6 +82,7 @@ mod newgrf_generic;
 mod newgrf_loading;
 mod newgrf_properties;
 mod newgrf_sound;
+mod newgrf_specs;
 mod newgrf_spritegroup;
 mod settings_type;
 

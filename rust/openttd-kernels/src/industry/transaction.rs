@@ -46,7 +46,6 @@ pub struct LocationResult {
 }
 #[repr(C)]
 pub struct TransactionServices {
-    pub enabled: unsafe extern "C" fn(*const SpecHandle) -> bool,
     pub layout_count: unsafe extern "C" fn(*const SpecHandle) -> usize,
     pub layout: unsafe extern "C" fn(*const SpecHandle, usize) -> *const LayoutHandle,
     pub raw_setting: unsafe extern "C" fn() -> u8,
@@ -817,7 +816,9 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         return;
     }
     let spec = unsafe { (e.g.spec)(kind) };
-    if !unsafe { (e.x.enabled)(spec) } || unsafe { (e.x.layout_count)(spec) } == 0 {
+    if !(e.s.shared().specs().industry().substitute().enabled)(spec)
+        || unsafe { (e.x.layout_count)(spec) } == 0
+    {
         e.fail(0xffff);
         return;
     }

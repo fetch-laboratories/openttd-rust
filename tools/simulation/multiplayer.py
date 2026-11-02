@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import threading
@@ -172,8 +173,12 @@ def session(
     started = time.monotonic()
     result = Session(server_role, str(folder))
     envs = {}
-    # Sessions serialize under the deep lock; a bind failure remains a retained failure.
-    port = 41051
+    # The T3 host probes every 127.0.0.1 listener with HTTP and TLS (#629); the
+    # kernel's free port keeps concurrent runs apart. A bind failure remains retained.
+    host = "127.0.0.2"
+    with socket.socket() as probe:
+        probe.bind((host, 0))
+        port = probe.getsockname()[1]
     for side, role in (
         ("server", server_role),
         ("client", "candidate" if server_role == "reference" else "reference"),
@@ -197,7 +202,7 @@ def session(
             run,
         )
         with (run / "openttd.cfg").open("a") as config:
-            config.write("\n[server_bind_addresses]\n127.0.0.1 = \n")
+            config.write(f"\n[server_bind_addresses]\n{host} = \n")
         scripts = run / "scripts"
         scripts.mkdir()
         start = "script console.log\nschedule on-next-calendar-month scripts/stop.scr\n"
@@ -211,7 +216,7 @@ def session(
             if side == "server"
             else [
                 "-n",
-                f"127.0.0.1:{port}#255",
+                f"{host}:{port}#255",
                 "-vsdl",
                 "-b32bpp-anim",
                 "-r",

@@ -265,8 +265,8 @@ pub struct IndustryStorage {
 }
 #[repr(C)]
 pub struct Services {
+    shared: *const crate::services::Services,
     check: Check,
-    grfid: extern "C" fn(*const c_void) -> u32,
     industry: extern "C" fn(*mut c_void) -> IndustryStorage,
     create_industry: extern "C" fn(*mut c_void) -> *mut Payload<256>,
     pub(crate) airport: extern "C" fn(*mut c_void) -> *mut Payload<256>,
@@ -275,6 +275,12 @@ pub struct Services {
     town_storage: extern "C" fn(*const c_void, usize) -> StorageReference,
     create_town: extern "C" fn(*mut c_void, u32) -> *mut Payload<256>,
     append_town: extern "C" fn(*mut c_void, *mut c_void),
+}
+impl Services {
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: `GetRustStorageServices` points at the process-lifetime shared table.
+        unsafe { &*self.shared }
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_industry(
@@ -314,7 +320,11 @@ pub unsafe extern "C" fn openttd_rust_storage_airport(
         if value == 0 {
             return;
         }
-        let grfid = if grf.is_null() { 0 } else { (s.grfid)(grf) };
+        let grfid = if grf.is_null() {
+            0
+        } else {
+            (s.shared().grf_file_id)(grf)
+        };
         owner = (s.create_airport)(station, grfid);
     }
     unsafe {
@@ -347,9 +357,9 @@ pub unsafe extern "C" fn openttd_rust_storage_town(
     }
     let mut grfid = unsafe { openttd_rust_storage_temp_get(0x100) } as u32;
     if grfid == u32::MAX {
-        grfid = (s.grfid)(grf);
+        grfid = (s.shared().grf_file_id)(grf);
     }
-    if grfid != (s.grfid)(grf) {
+    if grfid != (s.shared().grf_file_id)(grf) {
         return;
     }
     let owner = town_find(s, town, grfid);
@@ -376,7 +386,7 @@ pub unsafe extern "C" fn openttd_rust_storage_town_get(
         if grf.is_null() {
             return 0;
         }
-        grfid = (s.grfid)(grf);
+        grfid = (s.shared().grf_file_id)(grf);
     }
     let owner = town_find(s, town, grfid);
     if owner.is_null() {
@@ -388,7 +398,7 @@ pub unsafe extern "C" fn openttd_rust_storage_town_get(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStorageServices" ["storage"] => Services {
-        check, grfid, industry, create_industry, airport, create_airport,
+        shared, check, industry, create_industry, airport, create_airport,
         town_count, town_storage, create_town, append_town,
     };
     "OpenTTDStorageReference" ["storage"] => StorageReference { owner, grfid };

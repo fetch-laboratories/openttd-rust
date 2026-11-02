@@ -49,7 +49,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*industry_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_station);
 	bool (*oilrig)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(oilrig);
 	uint32_t (*station_xy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_xy);
-	bool (*station_contains)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_contains);
 	bool (*station_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_dock);
 	uint32_t (*station_visits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_visits);
 	void (*visit_set)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visit_set);

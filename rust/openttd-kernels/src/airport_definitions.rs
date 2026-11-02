@@ -16,8 +16,7 @@ use crate::airport::{
     INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AIRPORTTILE_OFFSET, NUM_AIRPORTS,
     NUM_AIRPORTS_PER_GRF, NUM_AIRPORTTILES, NUM_AIRPORTTILES_PER_GRF,
 };
-use crate::newgrf_bytereader::{BadgeList, ByteReader, ReadError, Reader};
-use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
+use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::override_manager::{self, Manager};
 use crate::{animated_tile::AirportSpec as TileSpec, station_cmd::AirportSpec};
@@ -34,32 +33,17 @@ struct Layout {
 #[repr(C)]
 pub struct Services {
     reader: *const crate::newgrf_bytereader::Services,
-    file: unsafe extern "C" fn(usize) -> *mut c_void,
-    file_id: unsafe extern "C" fn(*const c_void) -> u32,
+    shared: *const crate::services::Services,
     airport_count: unsafe extern "C" fn(*const c_void) -> usize,
     airport_resize: unsafe extern "C" fn(*mut c_void, usize) -> (),
     airport_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut AirportSpec,
     airport_new: unsafe extern "C" fn(*mut c_void, usize, *const AirportSpec) -> *mut AirportSpec,
-    airport_enabled: unsafe extern "C" fn(*const AirportSpec) -> bool,
-    airport_set_enabled: unsafe extern "C" fn(*mut AirportSpec, bool) -> (),
-    airport_identity: unsafe extern "C" fn(*const AirportSpec) -> Identity,
-    airport_set_local: unsafe extern "C" fn(*mut AirportSpec, u16) -> (),
     airport_set_substitute: unsafe extern "C" fn(*mut AirportSpec, u16) -> (),
-    airport_set_file: unsafe extern "C" fn(*mut AirportSpec, *const c_void) -> (),
-    airport_set_override: unsafe extern "C" fn(*mut AirportSpec, u16) -> (),
-    airport_badges: unsafe extern "C" fn(*mut AirportSpec) -> *mut BadgeList,
     tile_count: unsafe extern "C" fn(*const c_void) -> usize,
     tile_resize: unsafe extern "C" fn(*mut c_void, usize) -> (),
     tile_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut TileSpec,
     tile_new: unsafe extern "C" fn(*mut c_void, usize, *const TileSpec) -> *mut TileSpec,
-    tile_enabled: unsafe extern "C" fn(*const TileSpec) -> bool,
-    tile_set_enabled: unsafe extern "C" fn(*mut TileSpec, bool) -> (),
-    tile_identity: unsafe extern "C" fn(*const TileSpec) -> Identity,
-    tile_set_local: unsafe extern "C" fn(*mut TileSpec, u16) -> (),
     tile_set_substitute: unsafe extern "C" fn(*mut TileSpec, u16) -> (),
-    tile_set_file: unsafe extern "C" fn(*mut TileSpec, *const c_void) -> (),
-    tile_set_override: unsafe extern "C" fn(*mut TileSpec, u16) -> (),
-    tile_badges: unsafe extern "C" fn(*mut TileSpec) -> *mut BadgeList,
     airport_base: unsafe extern "C" fn(u16) -> *mut AirportSpec,
     tile_base: unsafe extern "C" fn(u8) -> *mut TileSpec,
     airport_default: unsafe extern "C" fn(u16) -> (),
@@ -81,10 +65,6 @@ pub struct Services {
     airport_name: unsafe extern "C" fn(*mut AirportSpec, u16) -> (),
     tile_clear_animation: unsafe extern "C" fn(*mut TileSpec) -> (),
     tile_callbacks: unsafe extern "C" fn(*mut TileSpec, u8) -> (),
-    tile_frames: unsafe extern "C" fn(*mut TileSpec, u8) -> (),
-    tile_status: unsafe extern "C" fn(*mut TileSpec, u8) -> (),
-    tile_speed: unsafe extern "C" fn(*mut TileSpec, u8) -> (),
-    tile_triggers: unsafe extern "C" fn(*mut TileSpec, u8) -> (),
     layouts_resize: unsafe extern "C" fn(*mut AirportSpec, usize) -> (),
     layout_assign:
         unsafe extern "C" fn(*mut AirportSpec, usize, u8, *const LayoutTile, usize) -> (),
@@ -100,10 +80,16 @@ pub struct Services {
     tile_override_invalid: unsafe extern "C" fn(u8, u32) -> (),
     tile_full: unsafe extern "C" fn() -> (),
 }
+impl Services {
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: `GetAirportDefinitionServices` points at the process-lifetime shared table.
+        unsafe { &*self.shared }
+    }
+}
 crate::abi::layouts! {
     fn abi_layout;
     "AirportTileTable" ["probe"] => LayoutTile { ti, gfx };
-    "OpenTTDAirportDefinitionServices" ["probe"] => Services { reader, file, file_id, airport_count, airport_resize, airport_get, airport_new, airport_enabled, airport_set_enabled, airport_identity, airport_set_local, airport_set_substitute, airport_set_file, airport_set_override, airport_badges, tile_count, tile_resize, tile_get, tile_new, tile_enabled, tile_set_enabled, tile_identity, tile_set_local, tile_set_substitute, tile_set_file, tile_set_override, tile_badges, airport_base, tile_base, airport_default, airport_clear, tile_default, tile_clear, airport_publish, tile_publish, airport_file_clear, airport_file_shrink, tile_file_clear, tile_file_shrink, airport_min_year, airport_max_year, airport_ttdp_type, airport_catchment, airport_noise, airport_maintenance, airport_name, tile_clear_animation, tile_callbacks, tile_frames, tile_status, tile_speed, tile_triggers, layouts_resize, layout_assign, dimensions, airport_invalid, airport_undefined, airport_substitute_invalid, layout_tile_undefined, airport_full, tile_invalid, tile_undefined, tile_substitute_invalid, tile_override_invalid, tile_full };
+    "OpenTTDAirportDefinitionServices" ["probe"] => Services { reader, shared, airport_count, airport_resize, airport_get, airport_new, airport_set_substitute, tile_count, tile_resize, tile_get, tile_new, tile_set_substitute, airport_base, tile_base, airport_default, airport_clear, tile_default, tile_clear, airport_publish, tile_publish, airport_file_clear, airport_file_shrink, tile_file_clear, tile_file_shrink, airport_min_year, airport_max_year, airport_ttdp_type, airport_catchment, airport_noise, airport_maintenance, airport_name, tile_clear_animation, tile_callbacks, layouts_resize, layout_assign, dimensions, airport_invalid, airport_undefined, airport_substitute_invalid, layout_tile_undefined, airport_full, tile_invalid, tile_undefined, tile_substitute_invalid, tile_override_invalid, tile_full };
 }
 
 unsafe extern "C" fn airport_valid(_: *mut c_void, _: u16) -> bool {
@@ -161,7 +147,10 @@ unsafe fn airport_change(
                     let substitute = b.byte()?;
                     if substitute == 0xff {
                         // AirportChangeInfo disables the original slot, including custom IDs.
-                        (s.airport_set_enabled)((s.airport_base)(u16::from(id as u8)), false);
+                        (s.shared().specs().airport().substitute().set_enabled)(
+                            (s.airport_base)(u16::from(id as u8)),
+                            false,
+                        );
                         continue;
                     } else if substitute >= NEW_AIRPORT_OFFSET {
                         (s.airport_substitute_invalid)(substitute, id);
@@ -173,14 +162,14 @@ unsafe fn airport_change(
                             id as usize,
                             (s.airport_base)(u16::from(substitute)),
                         );
-                        (s.airport_set_enabled)(spec, true);
-                        (s.airport_set_local)(spec, id as u16);
+                        (s.shared().specs().airport().substitute().set_enabled)(spec, true);
+                        (s.shared().specs().airport().set_local_id)(spec, id as u16);
                         (s.airport_set_substitute)(spec, u16::from(substitute));
-                        (s.airport_set_file)(spec, file);
+                        (s.shared().specs().airport().set_file)(spec, file);
                         override_manager::openttd_rust_override_add(
                             override_manager::airport(),
                             id as u16,
-                            (s.file_id)(file),
+                            (s.shared().grf_file_id)(file),
                             u32::from(substitute),
                         );
                     }
@@ -206,7 +195,7 @@ unsafe fn airport_change(
                                 let mapped = override_manager::get(
                                     override_manager::airport_tile(),
                                     local,
-                                    (s.file_id)(file),
+                                    (s.shared().grf_file_id)(file),
                                 );
                                 if mapped == INVALID_AIRPORTTILE {
                                     (s.layout_tile_undefined)(local, id);
@@ -267,7 +256,10 @@ unsafe fn airport_change(
                 0x0f => (s.airport_noise)(spec, b.byte()?),
                 0x10 => (s.airport_name)(spec, b.word()?),
                 0x11 => (s.airport_maintenance)(spec, b.word()?),
-                0x12 => b.badges(crate::newgrf::GSF_AIRPORTS, (s.airport_badges)(spec))?,
+                0x12 => b.badges(
+                    crate::newgrf::GSF_AIRPORTS,
+                    (s.shared().specs().airport().badge_list)(spec),
+                )?,
                 _ => result = CIR_UNKNOWN as u8,
             }
         }
@@ -306,15 +298,15 @@ unsafe fn tile_change(
                     }
                     if spec.is_null() {
                         spec = (s.tile_new)(file, id as usize, (s.tile_base)(substitute));
-                        (s.tile_set_enabled)(spec, true);
+                        (s.shared().specs().airport_tile().substitute().set_enabled)(spec, true);
                         (s.tile_clear_animation)(spec);
-                        (s.tile_set_local)(spec, id as u16);
+                        (s.shared().specs().airport_tile().set_local_id)(spec, id as u16);
                         (s.tile_set_substitute)(spec, u16::from(substitute));
-                        (s.tile_set_file)(spec, file);
+                        (s.shared().specs().airport_tile().set_file)(spec, file);
                         allocate(
                             override_manager::airport_tile(),
                             id as u16,
-                            (s.file_id)(file),
+                            (s.shared().grf_file_id)(file),
                             u16::from(substitute),
                             true,
                         );
@@ -329,19 +321,22 @@ unsafe fn tile_change(
                     override_manager::openttd_rust_override_add(
                         override_manager::airport_tile(),
                         id as u16,
-                        (s.file_id)(file),
+                        (s.shared().grf_file_id)(file),
                         u32::from(override_id),
                     );
                 }
                 0x0e => (s.tile_callbacks)(spec, b.byte()?),
                 0x0f => {
-                    (s.tile_frames)(spec, b.byte()?);
-                    (s.tile_status)(spec, b.byte()?);
+                    (s.shared().specs().airport_tile().animation().frames)(spec, b.byte()?);
+                    (s.shared().specs().airport_tile().animation().status)(spec, b.byte()?);
                 }
-                0x10 => (s.tile_speed)(spec, b.byte()?),
-                0x11 => (s.tile_triggers)(spec, b.byte()?),
+                0x10 => (s.shared().specs().airport_tile().animation().speed)(spec, b.byte()?),
+                0x11 => (s.shared().specs().airport_tile().animation().triggers)(spec, b.byte()?),
                 // AirportTilesChangeInfo uses the tram feature for badge-seen bookkeeping.
-                0x12 => b.badges(crate::newgrf::GSF_TRAMTYPES, (s.tile_badges)(spec))?,
+                0x12 => b.badges(
+                    crate::newgrf::GSF_TRAMTYPES,
+                    (s.shared().specs().airport_tile().badge_list)(spec),
+                )?,
                 _ => result = CIR_UNKNOWN as u8,
             }
         }
@@ -402,10 +397,11 @@ pub unsafe fn reset_tiles(s: *const Services) {
     }
 }
 macro_rules! publisher {
-    ($entry:ident, $spec:ty, $tile:literal, $identity:ident, $publish:ident, $base:ident, $set_override:ident, $set_enabled:ident, $full:ident) => {
+    ($entry:ident, $spec:ty, $tile:literal, $specs:ident, $publish:ident, $base:ident, $full:ident) => {
         unsafe fn $entry(manager: *mut Manager, spec: *mut $spec, s: *const Services) {
             let s = unsafe { &*s };
-            let identity = unsafe { (s.$identity)(spec) };
+            let substitute = s.shared().specs().$specs().substitute();
+            let identity = (substitute.identity)(spec);
             let (invalid, offset) = unsafe { ((*manager).invalid, (*manager).offset) };
             // SetEntitySpec narrows AddEntityID before comparing with the wide invalid ID.
             let id = unsafe {
@@ -437,8 +433,8 @@ macro_rules! publisher {
                     continue;
                 }
                 unsafe {
-                    (s.$set_override)(overridden, u16::from(id));
-                    (s.$set_enabled)(overridden, false);
+                    (substitute.set_override)(overridden, u16::from(id));
+                    (substitute.set_enabled)(overridden, false);
                     (&mut (*manager).entities)[usize::from(i)] = invalid;
                     (&mut (*manager).grfids)[usize::from(i)] = 0;
                 }
@@ -450,36 +446,32 @@ publisher!(
     publish,
     AirportSpec,
     false,
-    airport_identity,
+    airport,
     airport_publish,
     airport_base,
-    airport_set_override,
-    airport_set_enabled,
     airport_full
 );
 publisher!(
     publish_tile,
     TileSpec,
     true,
-    tile_identity,
+    airport_tile,
     tile_publish,
     tile_base,
-    tile_set_override,
-    tile_set_enabled,
     tile_full
 );
 
 pub unsafe fn finalise(s: &Services) {
     let mut index = 0;
     loop {
-        let file = unsafe { (s.file)(index) };
+        let file = (s.shared().grf_file_at_or_null)(index);
         if file.is_null() {
             break;
         }
         let count = unsafe { (s.airport_count)(file) };
         for id in 0..count {
             let spec = unsafe { (s.airport_get)(file, id) };
-            if !spec.is_null() && unsafe { (s.airport_enabled)(spec) } {
+            if !spec.is_null() && (s.shared().specs().airport().substitute().enabled)(spec) {
                 unsafe {
                     publish(override_manager::airport(), spec, s);
                 }
@@ -488,7 +480,7 @@ pub unsafe fn finalise(s: &Services) {
         let count = unsafe { (s.tile_count)(file) };
         for id in 0..count {
             let spec = unsafe { (s.tile_get)(file, id) };
-            if !spec.is_null() && unsafe { (s.tile_enabled)(spec) } {
+            if !spec.is_null() && (s.shared().specs().airport_tile().substitute().enabled)(spec) {
                 unsafe {
                     publish_tile(override_manager::airport_tile(), spec, s);
                 }
@@ -507,7 +499,7 @@ pub unsafe fn bind(s: *const Services) {
     let s = unsafe { &*s };
     for id in 0..NUM_AIRPORTS {
         let spec = unsafe { (s.airport_base)(id) };
-        if unsafe { (s.airport_enabled)(spec) } {
+        if (s.shared().specs().airport().substitute().enabled)(spec) {
             unsafe {
                 crate::newgrf_class::airport::assign(spec);
             }
