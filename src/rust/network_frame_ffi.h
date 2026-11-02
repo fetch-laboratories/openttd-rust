@@ -14,8 +14,10 @@ struct OpenTTDNetworkConnectionServices;
 struct OpenTTDNetworkClientServices;
 struct OpenTTDNetworkLifecycleServices;
 #include "abi-record-probe.h"
+enum class OpenTTDNetworkPoll : uint8_t { Error, Ready, Exception };
 /** Native leaves of the frame protocol: `game` is a NetworkGameSocketHandler, `socket` a NetworkClientSocket, packets are owned until sent. */
 struct OpenTTDNetworkFrameServices {
+	bool (*admins_receive)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(admins_receive);
 	bool (*admins_send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(admins_send);
 	OpenTTDAuthHandler *(*auth_owner)(const NetworkAuthenticationHandler *) noexcept OPENTTD_SERVICE_DEFAULT(auth_owner);
 	uint16_t (*bytes_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame);
@@ -54,8 +56,10 @@ struct OpenTTDNetworkFrameServices {
 	void (*packet_enqueue)(void *, OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(packet_enqueue);
 	uint8_t (*query_close)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(query_close);
 	const uint32_t *random;
-	bool (*receive)(OpenTTDSessionFrame *, bool *) noexcept OPENTTD_SERVICE_DEFAULT(receive);
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
+	OpenTTDNetworkPoll (*server_poll)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll);
+	bool (*server_poll_client)(OpenTTDSessionFrame *, OpenTTDNetworkGameSocket *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll_client);
+	void (*server_poll_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll_end);
 	void (*show_lost_connection)() noexcept OPENTTD_SERVICE_DEFAULT(show_lost_connection);
 	void (*socket_delete)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_delete);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);

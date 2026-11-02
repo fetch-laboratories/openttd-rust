@@ -9,6 +9,7 @@ class NetworkError;
 struct Packet;
 struct OpenTTDNetworkTcpServices {
 	NetworkSocketHandler *(*base_socket)(NetworkTCPSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(base_socket);
+	bool (*can_send_receive)(NetworkTCPSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(can_send_receive);
 	NetworkError *(*error_begin)(OpenTTDTcpErrorStorage *) noexcept OPENTTD_SERVICE_DEFAULT(error_begin);
 	void (*error_end)(NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_end);
 	void (*error_receive)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_receive);

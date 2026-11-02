@@ -87,7 +87,6 @@ public:
 
 	static bool IsConnected();
 
-	static bool Receive();
 };
 
 /** Helper to make the code look somewhat nicer. */

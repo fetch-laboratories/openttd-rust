@@ -96,12 +96,11 @@ public:
 	}
 
 	/**
-	 * Handle the receiving of packets.
+	 * Build descriptor sets, select and accept ready listener sockets.
 	 * @return true if everything went okay.
 	 */
-	static bool Receive()
+	static bool PrepareReceive(fd_set &read_fd, fd_set &write_fd)
 	{
-		fd_set read_fd, write_fd;
 		struct timeval tv;
 
 		FD_ZERO(&read_fd);
@@ -125,6 +124,15 @@ public:
 		for (auto &s : sockets) {
 			if (FD_ISSET(s.first, &read_fd)) AcceptClient(s.first);
 		}
+
+		return true;
+	}
+
+	/** Handle the receiving of admin packets. */
+	static bool Receive()
+	{
+		fd_set read_fd, write_fd;
+		if (!PrepareReceive(read_fd, write_fd)) return false;
 
 		/* read stuff from clients */
 		for (Tsocket *cs : Tsocket::Iterate()) {

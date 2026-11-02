@@ -82,6 +82,7 @@ crate::abi::shared_records! {
 /// `NetworkClientSocket *`, and packets are `Packet *` owned until `packet_send`.
 #[repr(C)]
 pub struct Services {
+    pub admins_receive: extern "C" fn(*mut Frame) -> bool,
     pub admins_send: extern "C" fn(*mut Frame) -> bool,
     pub auth_owner: extern "C" fn(
         *const crate::network_crypto::NetworkAuthenticationHandler,
@@ -125,10 +126,11 @@ pub struct Services {
     pub query_close: extern "C" fn(*mut c_void, u8) -> u8,
     /// `_random.state`, read in place.
     pub random: *const u32,
-    /// `NetworkReceive`; records an exception in the session frame.
-    pub receive: extern "C" fn(*mut Frame, *mut bool) -> bool,
     /// The developer-only `DEBUG_DUMP_COMMANDS` replay.
     pub replay_commands: extern "C" fn(),
+    pub server_poll: extern "C" fn(*mut Frame) -> socket::Poll,
+    pub server_poll_client: extern "C" fn(*mut Frame, *mut socket::GameSocket) -> bool,
+    pub server_poll_end: extern "C" fn(*mut Frame),
     pub show_lost_connection: extern "C" fn(),
     pub socket_delete: extern "C" fn(*mut c_void),
     pub sync_freq: extern "C" fn() -> u16,
@@ -615,10 +617,21 @@ pub(crate) fn game_loop(
     if !(session.networking)() {
         return Ok(());
     }
-    let mut received = false;
-    if !(s.receive)(frame, &raw mut received) {
+    let result = socket::receive_all(session, s, frame, work);
+    if work.pending() {
+        work.push(Resume::FrameReceived);
         return Err(());
     }
+    game_loop_received(session, s, frame, result?, work)
+}
+
+pub(crate) fn game_loop_received(
+    session: &crate::session::Services,
+    s: &Services,
+    frame: *mut Frame,
+    received: bool,
+    work: Actions,
+) -> Result<(), ()> {
     if !received {
         return Ok(());
     }
@@ -666,6 +679,7 @@ pub(crate) fn send(s: &Services, frame: *mut Frame, work: Actions) -> Result<(),
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkFrameServices" ["probe"] => Services {
+        admins_receive,
         admins_send,
         auth_owner,
         bytes_per_frame,
@@ -704,8 +718,10 @@ crate::abi::layouts! {
         packet_enqueue,
         query_close,
         random,
-        receive,
         replay_commands,
+        server_poll,
+        server_poll_client,
+        server_poll_end,
         show_lost_connection,
         socket_delete,
         sync_freq,

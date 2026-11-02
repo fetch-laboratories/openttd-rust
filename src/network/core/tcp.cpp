@@ -135,6 +135,7 @@ const OpenTTDNetworkTcpServices &GetRustNetworkTcpServices() noexcept
 {
 	static const OpenTTDNetworkTcpServices services{
 		.base_socket = [](NetworkTCPSocketHandler *s) noexcept -> NetworkSocketHandler * { return s; },
+		.can_send_receive = [](NetworkTCPSocketHandler *s) noexcept { return s->CanSendReceive(); },
 		.error_begin = [](OpenTTDTcpErrorStorage *p) noexcept { return new (p) NetworkError(NetworkError::GetLast()); },
 		.error_end = [](NetworkError *error) noexcept { error->~NetworkError(); },
 		.error_receive = [](const NetworkError *error) noexcept { Debug(net, 0, "Recv failed: {}", error->AsString()); },

@@ -745,23 +745,6 @@ void NetworkUpdateServerGameType()
 }
 
 /**
- * Receives something from the network.
- * @return true if everything went fine, false when the connection got closed.
- */
-static bool NetworkReceive()
-{
-	bool result;
-	if (_network_server) {
-		ServerNetworkAdminSocketHandler::Receive();
-		result = ServerNetworkGameSocketHandler::Receive();
-	} else {
-		result = ClientNetworkGameSocketHandler::Receive();
-	}
-	NetworkGameSocketHandler::ProcessDeferredDeletions();
-	return result;
-}
-
-/**
  * We have to do some (simple) background stuff that runs normally,
  * even when we are not in multiplayer. For example stuff needed
  * for finding servers or downloading content.
@@ -938,6 +921,7 @@ static_assert(NETWORK_RECV_STATUS_OKAY == 0 && NETWORK_RECV_STATUS_MALFORMED_PAC
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 {
 	static const OpenTTDNetworkFrameServices services{
+		.admins_receive = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { ServerNetworkAdminSocketHandler::Receive(); }); },
 		.admins_send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { ServerNetworkAdminSocketHandler::Send(); }); },
 		.auth_owner = [](const NetworkAuthenticationHandler *owner) noexcept { return owner->GetRustHandler(); },
 		.bytes_per_frame = RustNetworkBytesPerFrame,
@@ -1001,8 +985,19 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.packet_enqueue = [](void *game, OpenTTDPacketState *p) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPreparedPacket(*p); },
 		.query_close = [](void *game, uint8_t result) noexcept -> uint8_t { return static_cast<NetworkGameSocketHandler *>(game)->CloseConnection(static_cast<NetworkRecvStatus>(result)); },
 		.random = _random.state,
-		.receive = [](OpenTTDSessionFrame *f, bool *received) noexcept { return SessionException(f, [=] { *received = NetworkReceive(); }); },
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
+		.server_poll = [](OpenTTDSessionFrame *f) noexcept {
+			bool ready = false;
+			if (!SessionException(f, [&] { auto &sets = f->socket_poll.emplace(); ready = NetworkClientSocket::PrepareReceive(sets.first, sets.second); })) return OpenTTDNetworkPoll::Exception;
+			return ready ? OpenTTDNetworkPoll::Ready : OpenTTDNetworkPoll::Error;
+		},
+		.server_poll_client = [](OpenTTDSessionFrame *f, OpenTTDNetworkGameSocket *game) noexcept {
+			auto *socket = static_cast<NetworkGameSocketHandler *>(game->game);
+			auto &sets = *f->socket_poll;
+			socket->writable = !!FD_ISSET(socket->sock, &sets.second);
+			return FD_ISSET(socket->sock, &sets.first) != 0;
+		},
+		.server_poll_end = [](OpenTTDSessionFrame *f) noexcept { f->socket_poll.reset(); },
 		.show_lost_connection = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_LOSTCONNECTION), {}, WL_CRITICAL); },
 		.socket_delete = RustDeleteNetworkSocket,
 		.sync_freq = RustNetworkSyncFreq,

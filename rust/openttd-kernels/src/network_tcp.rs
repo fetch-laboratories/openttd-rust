@@ -24,6 +24,7 @@ crate::abi::shared_records! {
 pub struct Services {
     pub base_socket:
         extern "C" fn(*mut NetworkTCPSocketHandler) -> *mut packet::NetworkSocketHandler,
+    pub can_send_receive: extern "C" fn(*mut NetworkTCPSocketHandler) -> bool,
     pub error_begin: extern "C" fn(*mut TcpErrorStorage) -> *mut NetworkError,
     pub error_end: extern "C" fn(*mut NetworkError),
     pub error_receive: extern "C" fn(*const NetworkError),
@@ -207,7 +208,7 @@ pub(crate) fn destroy_packet(s: &Services, packet: *mut Packet) {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkTcpServices" ["probe"] => Services {
-        base_socket, error_begin, error_end, error_receive, error_reset, error_send,
+        base_socket, can_send_receive, error_begin, error_end, error_receive, error_reset, error_send,
         error_would_block, invalid_packet, packet, packet_delete_shell, packet_record,
         receive_bytes, receive_create, receive_packet, receive_take, send_bytes, send_front,
         send_pop, valid, writable,

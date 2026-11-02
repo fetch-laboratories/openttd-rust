@@ -122,25 +122,6 @@ void ClientNetworkGameSocketHandler::ClientError(NetworkRecvStatus res)
 }
 
 
-/**
- * Check whether we received/can send some data from/to the server and
- * when that's the case handle it appropriately.
- * @return true when everything went okay.
- */
-/* static */ bool ClientNetworkGameSocketHandler::Receive()
-{
-	if (my_client->CanSendReceive()) {
-		NetworkRecvStatus res = my_client->ReceivePackets();
-		if (res != NETWORK_RECV_STATUS_OKAY) {
-			/* The client made an error of which we can not recover.
-			 * Close the connection and drop back to the main menu. */
-			my_client->ClientError(res);
-			return false;
-		}
-	}
-	return _networking;
-}
-
 /** Our client's connection. */
 ClientNetworkGameSocketHandler * ClientNetworkGameSocketHandler::my_client = nullptr;
 

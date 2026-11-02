@@ -38,6 +38,9 @@ pub(crate) enum Resume {
     LoopSwitch,
     LoopState,
     LoopEnd,
+    FrameReceived,
+    ReceiveClients(usize),
+    ClientReceived,
     FrameSend,
     SendClients(usize),
     ReceivedPacket(*mut crate::network_socket::GameSocket),
@@ -244,6 +247,27 @@ impl Actions {
                     let _ = crate::session::resume_loop_state(session.unwrap(), frame);
                 }
                 Resume::LoopEnd => crate::session::resume_loop_end(session.unwrap()),
+                Resume::FrameReceived => {
+                    let _ = crate::network_frame::game_loop_received(
+                        session.unwrap(),
+                        network,
+                        frame,
+                        self.result() != 0,
+                        self,
+                    );
+                }
+                Resume::ReceiveClients(cursor) => {
+                    let _ = crate::network_socket::receive_clients(
+                        session.unwrap(),
+                        network,
+                        frame,
+                        cursor,
+                        self,
+                    );
+                }
+                Resume::ClientReceived => {
+                    let _ = crate::network_socket::client_received(network, frame, self);
+                }
                 Resume::FrameSend => {
                     let _ = crate::network_frame::send(network, frame, self);
                 }

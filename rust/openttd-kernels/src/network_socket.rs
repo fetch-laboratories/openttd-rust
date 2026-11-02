@@ -232,3 +232,98 @@ pub(crate) fn send_clients(s: &Services, mut cursor: usize, work: Actions) {
     }
     process_deferred(s);
 }
+
+#[repr(u8)]
+#[expect(dead_code, reason = "Constructed by the native select callback.")]
+pub enum Poll {
+    Error,
+    Ready,
+    Exception,
+}
+
+/// `NetworkReceive`: admin protocol precedes game sockets, then deferred destruction.
+pub(crate) fn receive_all(
+    session: &crate::session::Services,
+    s: &Services,
+    frame: *mut crate::session::Frame,
+    work: Actions,
+) -> Result<bool, ()> {
+    work.bind(s, session, frame);
+    if (s.command.company.network_server)() {
+        if !(s.admins_receive)(frame) {
+            return Err(());
+        }
+        match (s.server_poll)(frame) {
+            Poll::Exception => return Err(()),
+            Poll::Error => return Ok(receive_finish(s, frame, true, false, work)),
+            Poll::Ready => (),
+        }
+        receive_clients(session, s, frame, 0, work)
+    } else {
+        let game = (s.client_game)();
+        if (s.tcp.can_send_receive)(tcp(game)) {
+            let result = crate::network_dispatch::receive_packets(session, s, game, frame, work);
+            if work.pending() {
+                work.push(crate::network_action::Resume::ClientReceived);
+                return Err(());
+            }
+            result?;
+            Ok(client_received(s, frame, work))
+        } else {
+            let networking = unsafe { s.connection.networking.read() };
+            Ok(receive_finish(s, frame, false, networking, work))
+        }
+    }
+}
+
+pub(crate) fn receive_clients(
+    session: &crate::session::Services,
+    s: &Services,
+    frame: *mut crate::session::Frame,
+    mut cursor: usize,
+    work: Actions,
+) -> Result<bool, ()> {
+    while let Some(client) = crate::network_command::next_client(s.command, &mut cursor) {
+        if !(s.server_poll_client)(frame, client.socket) {
+            continue;
+        }
+        let result =
+            crate::network_dispatch::receive_packets(session, s, client.socket, frame, work);
+        if work.pending() {
+            work.push(crate::network_action::Resume::ReceiveClients(cursor));
+            return Err(());
+        }
+        result?;
+    }
+    let networking = unsafe { s.connection.networking.read() };
+    Ok(receive_finish(s, frame, true, networking, work))
+}
+
+pub(crate) fn client_received(
+    s: &Services,
+    frame: *mut crate::session::Frame,
+    work: Actions,
+) -> bool {
+    let result = work.result();
+    if result != crate::network_type::NETWORK_RECV_STATUS_OKAY {
+        crate::network_client::client_error(s.client, s, (s.client_game)(), result);
+        return receive_finish(s, frame, false, false, work);
+    }
+    let networking = unsafe { s.connection.networking.read() };
+    receive_finish(s, frame, false, networking, work)
+}
+
+fn receive_finish(
+    s: &Services,
+    frame: *mut crate::session::Frame,
+    server: bool,
+    result: bool,
+    work: Actions,
+) -> bool {
+    if server {
+        (s.server_poll_end)(frame);
+    }
+    process_deferred(s);
+    work.set_result(u8::from(result));
+    result
+}
