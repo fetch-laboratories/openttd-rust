@@ -270,8 +270,14 @@ pub extern "C" fn openttd_rust_command_leave() {
 
 /// "Do not even think about executing out-of-bounds tile-commands."
 fn tile_rejected(shared: &crate::services::Services, tile: u32, all_tiles: bool) -> bool {
-    let size = ((shared.map_max_y)() + 1) << shared.map().log_x;
-    tile != 0 && (tile >= size || (!(shared.tile_valid)(tile) && !all_tiles))
+    if tile == 0 {
+        return false;
+    }
+    let world = crate::map_func::World::new(shared);
+    let size = world.types.count();
+    tile >= size
+        || (!crate::tile_map::is_valid_tile(&world.types, tile, size).expect("live map")
+            && !all_tiles)
 }
 
 /// Tile rejection of `Do` and `InternalPost`, before any nesting.
