@@ -46,11 +46,11 @@ pub struct Services {
     pub listen_admins: extern "C" fn(u16) -> bool,
     pub listen_clients: extern "C" fn(u16) -> bool,
     pub new_company: extern "C" fn(*const crate::company_type::OpenTTDCompany, *mut c_void),
-    pub on_dedicated: extern "C" fn(),
-    pub on_server: extern "C" fn(),
+    pub on_dedicated: extern "C" fn(*mut crate::session::Frame) -> bool,
+    pub on_server: extern "C" fn(*mut crate::session::Frame) -> bool,
     pub parse_connection: extern "C" fn(crate::services::ByteSpan, *mut u8, *mut c_void),
-    pub pre_dedicated: extern "C" fn(),
-    pub pre_server: extern "C" fn(),
+    pub pre_dedicated: extern "C" fn(*mut crate::session::Frame) -> bool,
+    pub pre_server: extern "C" fn(*mut crate::session::Frame) -> bool,
     pub remember_joined_server: extern "C" fn(ByteSpan),
     pub reset_restart_time: extern "C" fn(),
     pub server_game_type: extern "C" fn() -> u8,
@@ -238,13 +238,22 @@ fn init_game_info(s: &Services, f: &FrameServices, session: &SessionServices) {
     (s.set_server_info_key)(info);
 }
 
-pub(crate) fn server_start(s: &Services, f: &FrameServices, session: &SessionServices) -> bool {
+pub(crate) fn server_start(
+    s: &Services,
+    f: &FrameServices,
+    session: &SessionServices,
+    frame: *mut crate::session::Frame,
+) -> Result<bool, ()> {
     if !(session.network_available)() {
-        return false;
+        return Ok(false);
     }
-    (s.pre_server)();
+    if !(s.pre_server)(frame) {
+        return Err(());
+    }
     if (session.dedicated)() {
-        (s.pre_dedicated)();
+        if !(s.pre_dedicated)(frame) {
+            return Err(());
+        }
     }
     if (session.dedicated)() {
         (s.check_names)();
@@ -254,12 +263,12 @@ pub(crate) fn server_start(s: &Services, f: &FrameServices, session: &SessionSer
     (s.udp_initialize)();
     (s.debug_listen_clients)();
     if !(s.listen_clients)((s.server_port)()) {
-        return false;
+        return Ok(false);
     }
     if (s.admin_auth_configured)() {
         (s.debug_listen_admins)();
         if !(s.listen_admins)((s.admin_port)()) {
-            return false;
+            return Ok(false);
         }
     }
     (s.debug_listen_queries)();
@@ -277,11 +286,15 @@ pub(crate) fn server_start(s: &Services, f: &FrameServices, session: &SessionSer
     if (s.server_game_type)() != SERVER_GAME_TYPE_LOCAL {
         (s.coordinator_register)();
     }
-    (s.on_server)();
-    if (session.dedicated)() {
-        (s.on_dedicated)();
+    if !(s.on_server)(frame) {
+        return Err(());
     }
-    true
+    if (session.dedicated)() {
+        if !(s.on_dedicated)(frame) {
+            return Err(());
+        }
+    }
+    Ok(true)
 }
 
 pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionServices) {

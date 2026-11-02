@@ -69,3 +69,25 @@ TEST_CASE("Network map load - recorded exception stops cleanup and reaches nativ
 	CHECK(_game_mode == GM_NORMAL);
 	CHECK_THROWS_AS(frame.Rethrow(), int);
 }
+
+TEST_CASE("Network ack - console exception stops before token consumption")
+{
+	OpenTTDNetworkFrameServices network{};
+	network.packet_recv_uint32 = [](void *) noexcept { return GetRustNetworkFrameState().frame_counter; };
+	network.debug_receive_ack = [](void *, uint32_t) noexcept {};
+	network.debug_active = [](void *) noexcept {};
+	network.on_server_connect = [](OpenTTDSessionFrame *frame) noexcept {
+		return SessionException(frame, [] { throw 574; });
+	};
+	uint8_t status = 8; // Server STATUS_PRE_ACTIVE.
+	OpenTTDNetworkSocketSync sync{};
+	sync.last_frame = 123;
+	sync.last_frame_server = 456;
+	OpenTTDSessionFrame frame;
+	CHECK(openttd_rust_network_receive_ack(&network, nullptr, nullptr, &status, &sync, nullptr, &frame) == 0);
+	CHECK(status == 9); // Server STATUS_ACTIVE.
+	CHECK(sync.last_token_frame == GetRustNetworkFrameState().frame_counter);
+	CHECK(sync.last_frame == 123);
+	CHECK(sync.last_frame_server == 456);
+	CHECK_THROWS_AS(frame.Rethrow(), int);
+}

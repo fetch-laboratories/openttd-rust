@@ -113,7 +113,7 @@ pub struct Services {
     pub max_password_time: extern "C" fn() -> u16,
     /// Steady-clock nanoseconds since its epoch.
     pub now: extern "C" fn() -> i64,
-    pub on_server_connect: extern "C" fn(),
+    pub on_server_connect: extern "C" fn(*mut Frame) -> bool,
     pub packet_can_read: extern "C" fn(*mut c_void, usize) -> bool,
     pub packet_new: extern "C" fn(*mut c_void, u8) -> *mut c_void,
     pub packet_recv_string: extern "C" fn(*mut c_void, *mut c_void, usize),
@@ -252,6 +252,7 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
     status: *mut u8,
     sync: *mut SocketSync,
     p: *mut c_void,
+    session_frame: *mut Frame,
 ) -> u8 {
     // SAFETY: `status` is the socket's one-byte status field (see above).
     if unsafe { *status } < AUTHORIZED {
@@ -267,7 +268,9 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
         (s.debug_active)(game);
         unsafe { *status = ACTIVE };
         write_field!(sync, last_token_frame, frame_counter());
-        (s.on_server_connect)();
+        if !(s.on_server_connect)(session_frame) {
+            return NETWORK_RECV_STATUS_OKAY;
+        }
     }
     let token = (s.packet_recv_uint8)(p);
     if token == read_field!(sync, last_token) {

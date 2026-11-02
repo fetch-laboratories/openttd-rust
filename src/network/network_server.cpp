@@ -41,6 +41,7 @@
 
 #include "../rust/company_services.h"
 #include "../rust/settings_services.h"
+#include "../rust/session_native.hpp"
 
 #include "../safeguards.h"
 
@@ -666,7 +667,10 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_QUIT(Packet &)
 NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_ACK(Packet &p)
 {
 	static_assert(sizeof(this->status) == sizeof(uint8_t));
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_receive_ack(&GetRustNetworkFrameServices(), this, static_cast<NetworkGameSocketHandler *>(this), reinterpret_cast<uint8_t *>(&this->status), this, &p));
+	OpenTTDSessionFrame frame;
+	auto result = openttd_rust_network_receive_ack(&GetRustNetworkFrameServices(), this, static_cast<NetworkGameSocketHandler *>(this), reinterpret_cast<uint8_t *>(&this->status), this, &p, &frame);
+	frame.Rethrow();
+	return static_cast<NetworkRecvStatus>(result);
 }
 
 

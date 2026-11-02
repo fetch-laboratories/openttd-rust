@@ -997,7 +997,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.max_password_time = RustNetworkMaxPasswordTime,
 		.now = []() noexcept -> int64_t { return std::chrono::steady_clock::now().time_since_epoch().count(); },
 		/* Execute script for, e.g. MOTD */
-		.on_server_connect = []() noexcept { IConsoleCmdExec("exec scripts/on_server_connect.scr 0"); },
+		.on_server_connect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_server_connect.scr 0"); }); },
 		.packet_can_read = [](void *p, size_t size) noexcept { return static_cast<Packet *>(p)->CanReadFromPacket(size); },
 		.packet_new = [](void *game, uint8_t type) noexcept -> void * { return new Packet(static_cast<NetworkGameSocketHandler *>(game), static_cast<PacketType>(type)); },
 		.packet_recv_string = [](void *packet, void *text, size_t limit) noexcept { *static_cast<std::string *>(text) = static_cast<Packet *>(packet)->Recv_string(limit); },
@@ -1135,15 +1135,15 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 		.listen_admins = [](uint16_t port) noexcept -> bool { return ServerNetworkAdminSocketHandler::Listen(port); },
 		.listen_clients = [](uint16_t port) noexcept -> bool { return ServerNetworkGameSocketHandler::Listen(port); },
 		.new_company = [](const Company *company, void *info) noexcept { NetworkServerNewCompany(company, static_cast<NetworkClientInfo *>(info)); },
-		.on_dedicated = []() noexcept { IConsoleCmdExec("exec scripts/on_dedicated.scr 0"); },
-		.on_server = []() noexcept { IConsoleCmdExec("exec scripts/on_server.scr 0"); },
+		.on_dedicated = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_dedicated.scr 0"); }); },
+		.on_server = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_server.scr 0"); }); },
 		.parse_connection = [](OpenTTDByteSpan connection, uint8_t *company, void *resolved) noexcept {
 			CompanyID join_as(*company);
 			*static_cast<std::string *>(resolved) = ServerAddress::Parse(std::string_view(reinterpret_cast<const char *>(connection.data), connection.size), NETWORK_DEFAULT_PORT, &join_as).connection_string;
 			*company = join_as.base();
 		},
-		.pre_dedicated = []() noexcept { IConsoleCmdExec("exec scripts/pre_dedicated.scr 0"); },
-		.pre_server = []() noexcept { IConsoleCmdExec("exec scripts/pre_server.scr 0"); },
+		.pre_dedicated = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/pre_dedicated.scr 0"); }); },
+		.pre_server = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/pre_server.scr 0"); }); },
 		.remember_joined_server = RustNetworkSetLastJoined,
 		.reset_restart_time = []() noexcept { ChangeNetworkRestartTime(true); },
 		.server_game_type = RustNetworkServerGameType,

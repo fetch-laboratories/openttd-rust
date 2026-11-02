@@ -37,11 +37,11 @@ struct OpenTTDNetworkLifecycleServices {
 	bool (*listen_admins)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(listen_admins);
 	bool (*listen_clients)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(listen_clients);
 	void (*new_company)(const Company *, void *) noexcept OPENTTD_SERVICE_DEFAULT(new_company);
-	void (*on_dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(on_dedicated);
-	void (*on_server)() noexcept OPENTTD_SERVICE_DEFAULT(on_server);
+	bool (*on_dedicated)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(on_dedicated);
+	bool (*on_server)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(on_server);
 	void (*parse_connection)(OpenTTDByteSpan, uint8_t *, void *) noexcept OPENTTD_SERVICE_DEFAULT(parse_connection);
-	void (*pre_dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(pre_dedicated);
-	void (*pre_server)() noexcept OPENTTD_SERVICE_DEFAULT(pre_server);
+	bool (*pre_dedicated)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(pre_dedicated);
+	bool (*pre_server)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(pre_server);
 	void (*remember_joined_server)(OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(remember_joined_server);
 	void (*reset_restart_time)() noexcept OPENTTD_SERVICE_DEFAULT(reset_restart_time);
 	uint8_t (*server_game_type)() noexcept OPENTTD_SERVICE_DEFAULT(server_game_type);

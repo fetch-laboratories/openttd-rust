@@ -42,7 +42,7 @@ struct OpenTTDNetworkFrameServices {
 	uint16_t (*max_lag_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_lag_time);
 	uint16_t (*max_password_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_password_time);
 	int64_t (*now)() noexcept OPENTTD_SERVICE_DEFAULT(now);
-	void (*on_server_connect)() noexcept OPENTTD_SERVICE_DEFAULT(on_server_connect);
+	bool (*on_server_connect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(on_server_connect);
 	bool (*packet_can_read)(void *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_can_read);
 	void *(*packet_new)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_new);
 	void (*packet_recv_string)(void *, void *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(packet_recv_string);
@@ -72,7 +72,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 extern "C" {
 OpenTTDNetworkFrameState *openttd_rust_network_frame_storage();
 uint32_t openttd_rust_network_calculate_lag(const OpenTTDNetworkFrameServices *, const OpenTTDNetworkSocketSync *sync);
-uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, void *packet);
+uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, void *packet, OpenTTDSessionFrame *);
 uint8_t openttd_rust_network_receive_frame(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDNetworkSocketSync *sync, void *packet);
 uint8_t openttd_rust_network_receive_sync(const OpenTTDNetworkFrameServices *, uint8_t status, void *packet);
 }

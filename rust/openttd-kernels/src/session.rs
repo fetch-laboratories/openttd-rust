@@ -458,7 +458,8 @@ impl Session<'_> {
                         self.network().lifecycle,
                         self.network(),
                         s,
-                    );
+                        self.frame,
+                    )?;
                 } else {
                     (s.clear_server_requested)();
                 }
