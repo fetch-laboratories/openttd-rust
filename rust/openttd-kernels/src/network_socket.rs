@@ -58,3 +58,123 @@ pub(crate) fn last_packet(socket: *mut GameSocket) -> i64 {
 pub(crate) fn set_last_packet(socket: *mut GameSocket, time: i64) {
     write_field!(socket, last_packet_ns, time);
 }
+
+use crate::game_state::GameState;
+use crate::network_action::Actions;
+use crate::network_frame::Services;
+use crate::network_type::{NETWORK_RECV_STATUS_CLIENT_QUIT, NETWORK_RECV_STATUS_CONNECTION_LOST};
+
+static DEFERRED: GameState<Vec<*mut GameSocket>> = GameState::new(Vec::new());
+
+/// `DeferDeletion`: queue ownership before publishing the pending flag.
+pub(crate) fn defer(socket: *mut GameSocket) {
+    unsafe { (*DEFERRED.get()).push(socket) };
+    write_field!(socket, pending, true);
+}
+
+/// The native deleter may reenter Rust; no vector borrow crosses it. `clear` retains capacity.
+fn delete_deferred(delete: extern "C" fn(*mut c_void)) {
+    let count = unsafe { (*DEFERRED.get()).len() };
+    for index in 0..count {
+        let socket = unsafe { *(*DEFERRED.get()).as_ptr().add(index) };
+        delete(shell(socket));
+    }
+    unsafe { (*DEFERRED.get()).clear() };
+}
+
+pub(crate) fn process_deferred(s: &Services) {
+    delete_deferred(s.socket_delete);
+}
+
+pub(crate) fn specialized_close(
+    s: &Services,
+    socket: *mut GameSocket,
+    result: u8,
+    work: Actions,
+) -> u8 {
+    match read_field!(socket, role) {
+        0 => crate::network_client::openttd_rust_network_client_close(s.client, s, socket, result),
+        1 => crate::network_connection::openttd_rust_network_server_close(
+            s.connection,
+            s,
+            socket,
+            result,
+            work,
+        ),
+        _ => (s.query_close)(shell(socket), result),
+    }
+}
+
+/// `NetworkGameSocketHandler::CloseConnection(bool)`.
+pub(crate) fn close(s: &Services, socket: *mut GameSocket, work: Actions) -> u8 {
+    work.network(s);
+    let result =
+        if !(s.command.company.network_server)() && unsafe { s.connection.networking.read() } {
+            (s.client.emergency_save)();
+            crate::session::set_pending(crate::openttd::SwitchMode::MENU);
+            unsafe { s.connection.networking.write(false) };
+            (s.show_lost_connection)();
+            NETWORK_RECV_STATUS_CLIENT_QUIT
+        } else {
+            NETWORK_RECV_STATUS_CONNECTION_LOST
+        };
+    specialized_close(s, socket, result, work)
+}
+
+/// Direct common TCP send; virtual game close stays in this owner.
+pub(crate) fn send(
+    s: &Services,
+    socket: *mut GameSocket,
+    work: Actions,
+) -> crate::network_tcp::Send {
+    let result = unsafe {
+        crate::network_tcp::openttd_rust_tcp_send(
+            s.tcp,
+            tcp(socket),
+            false,
+            crate::network_frame::packet_check(s),
+        )
+    };
+    if result == crate::network_tcp::Send::Close {
+        close(s, socket, work);
+        return crate::network_tcp::Send::Closed;
+    }
+    result
+}
+
+pub(crate) fn send_closing(s: &Services, socket: *mut GameSocket) {
+    unsafe {
+        crate::network_tcp::openttd_rust_tcp_send(
+            s.tcp,
+            tcp(socket),
+            true,
+            crate::network_frame::packet_check(s),
+        )
+    };
+}
+
+/// # Safety
+/// `socket` is live through the native action driver's completion.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_game_close(
+    s: &Services,
+    socket: *mut GameSocket,
+    work: Actions,
+) -> u8 {
+    close(s, socket, work)
+}
+/// # Safety
+/// `socket` transfers ownership once, until the next deferred-deletion pass.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_defer(socket: *mut GameSocket) {
+    defer(socket);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_network_process_deferred(s: &Services) {
+    process_deferred(s);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_network_deferred_shutdown(delete: extern "C" fn(*mut c_void)) {
+    delete_deferred(delete);
+    unsafe { *DEFERRED.get() = Vec::new() };
+}

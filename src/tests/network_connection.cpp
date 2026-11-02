@@ -123,6 +123,7 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	map_events.clear();
 	for (auto &client : map_clients) {
 		client.record.game = &client;
+		client.record.tcp = reinterpret_cast<NetworkTCPSocketHandler *>(&client);
 		client.record.server = &client;
 		client.record.incoming = &client.incoming;
 		client.record.outgoing = &client.outgoing;
@@ -160,9 +161,10 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	network.connection = &connection;
 	OpenTTDNetworkTcpServices tcp{};
 	tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
+	tcp.writable = [](const NetworkTCPSocketHandler *socket) noexcept { MapEvent(9, const_cast<void *>(static_cast<const void *>(socket))); return true; };
+	tcp.send_front = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return nullptr; };
 	network.tcp = &tcp;
-	network.socket_send_packets = [](void *socket, bool) noexcept { MapEvent(9, socket); };
-	network.socket_defer_deletion = [](void *socket) noexcept { MapEvent(10, socket); };
+	network.socket_delete = [](void *socket) noexcept { MapEvent(10, socket); };
 	auto packet_services = Packet::Services();
 	packet_services.has_quit = [](const NetworkSocketHandler *) noexcept { return false; };
 	network.packet = &packet_services;
@@ -181,6 +183,11 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	CHECK(openttd_rust_network_actions_save(&frame.network_actions) == nullptr);
 	CHECK(on == 3);
 	CHECK(connected == 3);
+	CHECK(map_clients[0].record.pending);
+	CHECK(openttd_rust_network_server_close(&connection, &network, &map_clients[0].record, NETWORK_RECV_STATUS_CLIENT_QUIT, &frame.network_actions) == NETWORK_RECV_STATUS_CLIENT_QUIT);
+	CHECK(on == 3);
+	CHECK(connected == 3);
+	openttd_rust_network_process_deferred(&network);
 	const std::vector<std::pair<int, int>> expected{
 		{1, 0}, {2, 1}, {3, 1}, {4, 1}, {1, 1}, {2, 2}, {3, 2}, {4, 2},
 		{7, 3}, {7, 3}, {8, 0}, {9, 0}, {10, 0},

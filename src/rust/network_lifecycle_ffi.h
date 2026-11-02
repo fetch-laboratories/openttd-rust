@@ -28,7 +28,6 @@ struct OpenTTDNetworkLifecycleServices {
 	void (*debug_listen_admins)() noexcept OPENTTD_SERVICE_DEFAULT(debug_listen_admins);
 	void (*debug_listen_clients)() noexcept OPENTTD_SERVICE_DEFAULT(debug_listen_clients);
 	void (*debug_listen_queries)() noexcept OPENTTD_SERVICE_DEFAULT(debug_listen_queries);
-	void (*deferred_deletions)() noexcept OPENTTD_SERVICE_DEFAULT(deferred_deletions);
 	void (*fill_game_info)() noexcept OPENTTD_SERVICE_DEFAULT(fill_game_info);
 	void (*initialize_pools)(bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize_pools);
 	OpenTTDByteSpan (*join_connection)() noexcept OPENTTD_SERVICE_DEFAULT(join_connection);

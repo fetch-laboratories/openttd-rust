@@ -16,12 +16,20 @@
 #include "../../debug.h"
 #include "../../error.h"
 #include "../../strings_func.h"
+#include "../../rust/session_native.hpp"
 
 #include "table/strings.h"
 
 #include "../../safeguards.h"
 
-static std::vector<std::unique_ptr<NetworkGameSocketHandler>> _deferred_deletions;
+void RustDeleteNetworkSocket(void *game) noexcept
+{
+	delete static_cast<NetworkGameSocketHandler *>(game);
+}
+
+static struct DeferredNetworkSockets {
+	~DeferredNetworkSockets() { openttd_rust_network_deferred_shutdown(RustDeleteNetworkSocket); }
+} _deferred_network_sockets;
 
 /**
  * Create a new socket for the game connection.
@@ -41,19 +49,11 @@ static_assert(std::is_same_v<std::chrono::steady_clock::duration, std::chrono::n
  */
 NetworkRecvStatus NetworkGameSocketHandler::CloseConnection(bool)
 {
-	/* Clients drop back to the main menu */
-	if (!_network_server && _networking) {
-		ClientNetworkEmergencySave();
-		_switch_mode = SM_MENU;
-		_networking = false;
-		ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_LOSTCONNECTION), {}, WL_CRITICAL);
-
-		return this->CloseConnection(NETWORK_RECV_STATUS_CLIENT_QUIT);
-	}
-
-	return this->CloseConnection(NETWORK_RECV_STATUS_CONNECTION_LOST);
+	OpenTTDSessionFrame frame;
+	auto result = openttd_rust_network_game_close(&GetRustNetworkFrameServices(), this, &frame.network_actions);
+	frame.Rethrow();
+	return static_cast<NetworkRecvStatus>(result);
 }
-
 
 /**
  * Handle the given packet, i.e. pass it to the right parser receive command.
@@ -197,12 +197,10 @@ NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE(Packet 
 
 void NetworkGameSocketHandler::DeferDeletion()
 {
-	_deferred_deletions.emplace_back(this);
-	this->pending = true;
+	openttd_rust_network_defer(this);
 }
 
 /* static */ void NetworkGameSocketHandler::ProcessDeferredDeletions()
 {
-	/* Calls deleter on all items */
-	_deferred_deletions.clear();
+	openttd_rust_network_process_deferred(&GetRustNetworkFrameServices());
 }

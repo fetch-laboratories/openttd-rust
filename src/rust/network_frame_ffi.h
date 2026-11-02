@@ -46,13 +46,13 @@ struct OpenTTDNetworkFrameServices {
 	bool (*on_server_connect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(on_server_connect);
 	const OpenTTDPacketServices *packet;
 	void (*packet_enqueue)(void *, OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(packet_enqueue);
+	uint8_t (*query_close)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(query_close);
 	const uint32_t *random;
 	bool (*receive)(OpenTTDSessionFrame *, bool *) noexcept OPENTTD_SERVICE_DEFAULT(receive);
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
 	bool (*send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(send);
-	void (*socket_close)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_close);
-	void (*socket_defer_deletion)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_defer_deletion);
-	void (*socket_send_packets)(void *, bool) noexcept OPENTTD_SERVICE_DEFAULT(socket_send_packets);
+	void (*show_lost_connection)() noexcept OPENTTD_SERVICE_DEFAULT(show_lost_connection);
+	void (*socket_delete)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_delete);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);
 	void (*sync_log)() noexcept OPENTTD_SERVICE_DEFAULT(sync_log);
 	const OpenTTDNetworkTcpServices *tcp;
@@ -62,6 +62,11 @@ struct OpenTTDNetworkFrameServices {
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 void RustNetworkCompleteActions(OpenTTDSessionFrame *);
 extern "C" {
+uint8_t openttd_rust_network_game_close(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *, OpenTTDNetworkActionsStorage *);
+void openttd_rust_network_defer(OpenTTDNetworkGameSocket *);
+void openttd_rust_network_process_deferred(const OpenTTDNetworkFrameServices *);
+void RustDeleteNetworkSocket(void *) noexcept;
+void openttd_rust_network_deferred_shutdown(void (*)(void *) noexcept);
 void openttd_rust_network_actions_init(OpenTTDNetworkActionsStorage *);
 void *openttd_rust_network_actions_save(OpenTTDNetworkActionsStorage *);
 void openttd_rust_network_actions_resume(OpenTTDNetworkActionsStorage *);

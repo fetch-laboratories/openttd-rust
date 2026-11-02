@@ -23,6 +23,8 @@ pub(crate) enum Resume {
     Waits(usize),
     CloseTail(*mut crate::network_socket::GameSocket, u8),
     CloseClients(usize, bool),
+    DisconnectSend(usize, bool),
+    RebootSend(usize),
     DisconnectEnd,
     JoinEnd,
     ServerStart,
@@ -117,6 +119,7 @@ impl Actions {
             resume
         }
     }
+    #[allow(clippy::too_many_lines)] // One branch per native-frame continuation.
     unsafe fn resume(self) {
         unsafe {
             (*self.0).save = std::ptr::null_mut();
@@ -154,6 +157,22 @@ impl Actions {
                         self,
                     );
                 }
+                Resume::DisconnectSend(cursor, admins) => {
+                    crate::network_lifecycle::disconnect_send(
+                        network.lifecycle,
+                        network,
+                        admins,
+                        cursor,
+                        self,
+                    );
+                }
+                Resume::RebootSend(cursor) => crate::network_lifecycle::reboot_send(
+                    network.lifecycle,
+                    network,
+                    session.unwrap(),
+                    cursor,
+                    self,
+                ),
                 Resume::DisconnectEnd => {
                     crate::network_lifecycle::disconnect_end(network.lifecycle);
                 }

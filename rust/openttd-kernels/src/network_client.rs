@@ -618,10 +618,10 @@ fn close(s: &Services, f: &FrameServices, game: *mut socket::GameSocket, result:
     crate::movement::native_assert(f.command.company.shared, (f.tcp.valid)(socket::tcp(game)));
     if !crate::network_frame::socket_has_quit(f, game) {
         (s.debug_close)(socket::shell(game));
-        (f.socket_send_packets)(socket::shell(game), true);
+        socket::send_closing(f, game);
         (s.wait_for_quit_packets)();
     }
-    (f.socket_defer_deletion)(socket::shell(game));
+    socket::defer(game);
     result
 }
 
@@ -693,6 +693,7 @@ pub extern "C" fn openttd_rust_network_client_check_connection(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
+    work: crate::network_action::Actions,
 ) {
     if status(s, game) < status::AUTHORIZED {
         return;
@@ -702,7 +703,7 @@ pub extern "C" fn openttd_rust_network_client_check_connection(
         return;
     }
     if lag > 20 * SECOND {
-        (f.socket_close)(socket::shell(game));
+        socket::close(f, game, work);
         return;
     }
     if unsafe { LAST_LAG.get().read() } / SECOND == lag / SECOND {

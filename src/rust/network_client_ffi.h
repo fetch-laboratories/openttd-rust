@@ -96,7 +96,7 @@ uint8_t openttd_rust_network_client_receive_shutdown(const OpenTTDNetworkClientS
 uint8_t openttd_rust_network_client_receive_newgame(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *game);
 uint8_t openttd_rust_network_client_close(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *game, uint8_t result);
 void openttd_rust_network_client_error(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *game, uint8_t result);
-void openttd_rust_network_client_check_connection(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *game);
+void openttd_rust_network_client_check_connection(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *game, OpenTTDNetworkActionsStorage *);
 bool openttd_rust_network_client_is_connected(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
 void openttd_rust_network_client_connected(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
 }

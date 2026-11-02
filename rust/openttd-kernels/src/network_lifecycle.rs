@@ -39,7 +39,6 @@ pub struct Services {
     pub debug_listen_admins: extern "C" fn(),
     pub debug_listen_clients: extern "C" fn(),
     pub debug_listen_queries: extern "C" fn(),
-    pub deferred_deletions: extern "C" fn(),
     pub fill_game_info: extern "C" fn(),
     pub initialize_pools: extern "C" fn(bool),
     pub join_connection: extern "C" fn() -> crate::services::ByteSpan,
@@ -90,7 +89,6 @@ crate::abi::layouts! {
         debug_listen_admins,
         debug_listen_clients,
         debug_listen_queries,
-        deferred_deletions,
         fill_game_info,
         initialize_pools,
         join_connection,
@@ -171,7 +169,7 @@ fn close_client(s: &Services, f: &FrameServices) {
 }
 
 fn close_end(s: &Services, f: &FrameServices, close_admins: bool) {
-    (s.deferred_deletions)();
+    socket::process_deferred(f);
     (s.kill_connecters)();
     unsafe {
         f.connection.networking.write(false);
@@ -189,15 +187,34 @@ fn initialize(s: &Services, f: &FrameServices, close_admins: bool) {
 
 pub(crate) fn disconnect(s: &Services, f: &FrameServices, close_admins: bool, work: Actions) {
     if (f.command.company.network_server)() {
-        let mut cursor = 0;
-        while let Some(client) = next_client(f.command, &mut cursor) {
-            crate::network_connection::send_shutdown(f.connection, f, client.socket);
-            (f.socket_send_packets)(socket::shell(client.socket), false);
-        }
-        if close_admins {
-            (s.admins_shutdown)();
+        disconnect_send(s, f, close_admins, 0, work);
+    } else {
+        disconnect_close(s, f, close_admins, work);
+    }
+}
+
+pub(crate) fn disconnect_send(
+    s: &Services,
+    f: &FrameServices,
+    close_admins: bool,
+    mut cursor: usize,
+    work: Actions,
+) {
+    while let Some(client) = next_client(f.command, &mut cursor) {
+        crate::network_connection::send_shutdown(f.connection, f, client.socket);
+        socket::send(f, client.socket, work);
+        if work.pending() {
+            work.push(Resume::DisconnectSend(cursor, close_admins));
+            return;
         }
     }
+    if close_admins {
+        (s.admins_shutdown)();
+    }
+    disconnect_close(s, f, close_admins, work);
+}
+
+fn disconnect_close(s: &Services, f: &FrameServices, close_admins: bool, work: Actions) {
     (f.command.company.close_network_status)();
     close(s, f, close_admins, work);
     if work.pending() {
@@ -213,13 +230,28 @@ pub(crate) fn disconnect_end(s: &Services) {
 
 pub(crate) fn reboot(s: &Services, f: &FrameServices, session: &SessionServices, work: Actions) {
     if (f.command.company.network_server)() {
-        let mut cursor = 0;
-        while let Some(client) = next_client(f.command, &mut cursor) {
-            crate::network_connection::send_newgame(f.connection, f, client.socket);
-            (f.socket_send_packets)(socket::shell(client.socket), false);
-        }
-        (s.admins_newgame)();
+        reboot_send(s, f, session, 0, work);
+    } else {
+        close(s, f, !(session.dedicated)(), work);
     }
+}
+
+pub(crate) fn reboot_send(
+    s: &Services,
+    f: &FrameServices,
+    session: &SessionServices,
+    mut cursor: usize,
+    work: Actions,
+) {
+    while let Some(client) = next_client(f.command, &mut cursor) {
+        crate::network_connection::send_newgame(f.connection, f, client.socket);
+        socket::send(f, client.socket, work);
+        if work.pending() {
+            work.push(Resume::RebootSend(cursor));
+            return;
+        }
+    }
+    (s.admins_newgame)();
     close(s, f, !(session.dedicated)(), work);
 }
 

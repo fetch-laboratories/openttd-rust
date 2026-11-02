@@ -877,8 +877,8 @@ pub(crate) fn close_tail(
         s.clients_connected
             .write(s.clients_connected.read().wrapping_sub(1));
     };
-    (f.socket_send_packets)(socket::shell(socket), true);
-    (f.socket_defer_deletion)(socket::shell(socket));
+    socket::send_closing(f, socket);
+    socket::defer(socket);
     result
 }
 

@@ -117,6 +117,7 @@ pub struct Services {
     pub on_server_connect: extern "C" fn(*mut Frame) -> bool,
     pub packet: &'static packet::Services,
     pub packet_enqueue: extern "C" fn(*mut c_void, *mut PacketState),
+    pub query_close: extern "C" fn(*mut c_void, u8) -> u8,
     /// `_random.state`, read in place.
     pub random: *const u32,
     /// `NetworkReceive`; records an exception in the session frame.
@@ -125,9 +126,8 @@ pub struct Services {
     pub replay_commands: extern "C" fn(),
     /// `NetworkSend`; records an exception in the session frame.
     pub send: extern "C" fn(*mut Frame) -> bool,
-    pub socket_close: extern "C" fn(*mut c_void),
-    pub socket_defer_deletion: extern "C" fn(*mut c_void),
-    pub socket_send_packets: extern "C" fn(*mut c_void, bool),
+    pub show_lost_connection: extern "C" fn(),
+    pub socket_delete: extern "C" fn(*mut c_void),
     pub sync_freq: extern "C" fn() -> u16,
     /// The server's daily `sync:` desync log line.
     pub sync_log: extern "C" fn(),
@@ -696,13 +696,13 @@ crate::abi::layouts! {
         on_server_connect,
         packet,
         packet_enqueue,
+        query_close,
         random,
         receive,
         replay_commands,
         send,
-        socket_close,
-        socket_defer_deletion,
-        socket_send_packets,
+        show_lost_connection,
+        socket_delete,
         sync_freq,
         sync_log,
         tcp,

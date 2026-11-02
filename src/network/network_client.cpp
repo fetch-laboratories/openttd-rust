@@ -645,7 +645,9 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE(P
  */
 void ClientNetworkGameSocketHandler::CheckConnection()
 {
-	openttd_rust_network_client_check_connection(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this));
+	OpenTTDSessionFrame frame;
+	openttd_rust_network_client_check_connection(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), &frame.network_actions);
+	frame.Rethrow();
 }
 
 

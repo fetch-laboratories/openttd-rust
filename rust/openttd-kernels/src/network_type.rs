@@ -39,6 +39,8 @@ pub const NETWORK_RECV_STATUS_SAVEGAME: u8 = 3;
 pub const NETWORK_RECV_STATUS_SERVER_FULL: u8 = 7;
 pub const NETWORK_RECV_STATUS_SERVER_BANNED: u8 = 8;
 pub const NETWORK_RECV_STATUS_CLOSE_QUERY: u8 = 9;
+/// `core/core.h`: unexpected transport loss.
+pub const NETWORK_RECV_STATUS_CONNECTION_LOST: u8 = 10;
 
 /// Server identity.
 pub const CLIENT_ID_SERVER: u32 = 1;
