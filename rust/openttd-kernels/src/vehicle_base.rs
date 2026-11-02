@@ -391,6 +391,14 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn write_cargo_age(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cached_cargo_age_period, value);
     }
+    pub(crate) fn write_xy(self, x: i32, y: i32) {
+        self.write_x(x);
+        self.write_y(y);
+    }
+    pub(crate) fn write_coordinates(self, x: i32, y: i32, z: i32) {
+        self.write_xy(x, y);
+        self.write_z(z);
+    }
 }
 
 #[cfg(test)]

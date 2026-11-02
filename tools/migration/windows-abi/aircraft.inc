@@ -203,7 +203,6 @@ static void AircraftPhaseBoundary()
 	v.direction_progress = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.record.progress == 255); return OpenTTDVehicleDirectionProgress{aircraft_probe.record.direction, aircraft_probe.record.progress}; };
 	leaves.direction_towards = [](OpenTTDAircraftVehicle, int32_t, int32_t) noexcept { return uint8_t{1}; };
 	v.new_position = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleNewPosition{aircraft_probe.record.x_pos + 1, aircraft_probe.record.y_pos, 0}; };
-	v.write_coordinates = [](OpenTTDVehicle *, int32_t x, int32_t y, int32_t z) noexcept { CHECK(z == 1); aircraft_probe.record.x_pos = x; aircraft_probe.record.y_pos = y; aircraft_probe.record.z_pos = z; };
 	/* Both callbacks mutate canonical inputs. Subtype must be loaded after
 	 * UpdatePosition, then z after the rotor callback, rather than on acquisition. */
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; aircraft_probe.record.subtype = 0; aircraft_probe.record.z_pos = 17; };
@@ -219,7 +218,6 @@ static void AircraftPhaseBoundary()
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
-	v.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = aircraft_probe.vehicle_services.tile_links(shell), .tile = shell->tile}; };
 	v.map_log_x = []() noexcept { return uint32_t{6}; };
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.record.x_pos == 1 && p.record.y_pos == 0 && p.record.progress == 1);

@@ -318,7 +318,7 @@ impl<'a> World<'a> {
         (self.s.write_sprite)(v.shell(), image);
     }
     fn update_position(&self, v: Vehicle, x: i32, y: i32, z: i32) {
-        (self.v.write_coordinates)(v.shell(), x, y, z);
+        (v.shell()).write_coordinates(x, y, z);
         (v.shell()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
         self.update_image(v);
         self.viewport(v);
@@ -340,8 +340,7 @@ impl<'a> World<'a> {
             self.viewport(u);
             let rotor = (self.s.next_part)(u.shell());
             if !rotor.handle.is_null() {
-                (self.v.write_coordinates)(
-                    rotor.shell(),
+                rotor.shell().write_coordinates(
                     x,
                     y,
                     z.wrapping_add(crate::aircraft::ROTOR_Z_OFFSET),
@@ -1109,7 +1108,7 @@ impl<'a> World<'a> {
     }
     fn construct(&self, v: Vehicle, x: i32, y: i32, dir: u8, subtype: u8) {
         (v.shell()).write_status(VS_UNCLICKABLE);
-        (self.v.write_xy)(v.shell(), x, y);
+        (v.shell()).write_xy(x, y);
         let z = match subtype {
             ST_ZEPPELINER | ST_SMALL_UFO | ST_AIRPLANE | ST_HELICOPTER | ST_BIG_UFO
             | ST_BIG_UFO_DESTROYER => self.bounds(v),

@@ -1370,7 +1370,7 @@ impl Game<'_> {
                     return true;
                 }
             }
-            service!(self.vs.write_xy)(v.v, gp.x, gp.y);
+            service!(v.v).write_xy(gp.x, gp.y);
             // SAFETY: The live road shell survives the synchronous index update.
             unsafe {
                 crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
@@ -1850,7 +1850,9 @@ impl Game<'_> {
             unsafe { t.running.read() }
         };
         let order_time = unsafe { t.order_time.read() }.wrapping_add(1);
-        service!(self.vs.write_counters)(v.v, tick, running, order_time);
+        v.v.write_tick(tick);
+        v.v.write_running(running);
+        service!(self.vs.write_order_time)(v.v, order_time);
         // Reload after native writes; discard all places before controller callbacks.
         let status = unsafe { t.status.read() };
         self.controller(v, v.ground(t.movement.ground), status, tick)
@@ -1953,7 +1955,8 @@ impl Game<'_> {
             unsafe { self.vs.maintain(v.v, maintenance::check_vehicle_breakdown) };
         }
         self.service(v);
-        let running = service!(self.vs.check_orders)(v.v);
+        service!(self.vs.check_orders_only)(v.v);
+        let running = v.v.running();
         if running == 0 {
             return;
         }

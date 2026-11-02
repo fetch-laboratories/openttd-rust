@@ -26,12 +26,10 @@ struct RoadTestTables {
 		vehicle.maintenance = &_vehicle_maintenance_probe;
 		ground.physics = &physics;
 		physics.vehicle = &physics_vehicle;
-		VEHICLE_UNUSED(vehicle, write_counters);
 
 		VEHICLE_UNUSED(vehicle, altitude_inputs);
 
 		VEHICLE_UNUSED(vehicle, check_orders_only);
-		VEHICLE_UNUSED(vehicle, write_coordinates);
 		VEHICLE_UNUSED(vehicle, order_time);
 		VEHICLE_UNUSED(vehicle, write_order_time);
 		VEHICLE_UNUSED(vehicle, write_profit);
@@ -58,7 +56,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, enter_depot);
 		VEHICLE_UNUSED(vehicle, pathfinding_result);
 		VEHICLE_UNUSED(vehicle, new_position);
-		VEHICLE_UNUSED(vehicle, write_xy);
 		VEHICLE_UNUSED(vehicle, base_viewport);
 		VEHICLE_UNUSED(vehicle, property);
 		VEHICLE_UNUSED(vehicle, callback);
@@ -70,7 +67,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_dummy);
 		VEHICLE_UNUSED(vehicle, start_stop_dirty);
 		VEHICLE_UNUSED(vehicle, destroy);
-		VEHICLE_UNUSED(vehicle, check_orders);
 		VEHICLE_UNUSED(ground, update_viewport_then_next);
 		VEHICLE_UNUSED(ground, turn);
 		VEHICLE_UNUSED(ground, go_to_depot_service);

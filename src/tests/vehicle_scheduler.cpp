@@ -146,7 +146,7 @@ TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity"
 		CHECK(movement.position.z == &v->Record().z_pos);
 		CHECK(position.z == movement.position.z);
 		CHECK(position.subtype == movement.position.subtype);
-		services.write_coordinates(RustVehicle(v), -31, 49, 77);
+		v->Record().x_pos = -31; v->Record().y_pos = 49; v->Record().z_pos = 77;
 		v->Record().cur_speed = 123;
 		v->Record().direction = DIR_SW;
 		CHECK(*movement.x == -31);
@@ -479,21 +479,13 @@ TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors
 	const auto &s = GetRustVehicleServices();
 	CHECK(s.tile_links(RustVehicle(a)) == &a->tile_links);
 	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
-	const auto update = s.occupancy_update(RustVehicle(a));
-	CHECK(update.links == &a->tile_links);
-	CHECK(update.tile == a->GetTile().base());
 	a->Record().x_pos = 17; a->Record().y_pos = 29;
-	const auto near = s.occupancy_near(RustVehicle(a));
-	CHECK(near.links == &a->tile_links);
-	CHECK(near.xy.x == 17); CHECK(near.xy.y == 29);
 	CHECK(b->tile_links.next == RustVehicle(a));
 	CHECK(a->tile_links.prev == &b->tile_links.next);
 	auto it = VehiclesOnTile(a->GetTile()).begin(), copy = it;
-	// Removal must not read tile, dimensions or either normal observation.
+	// Removal does not resolve map dimensions.
 	auto removal = s;
 	removal.map_log_x = []() noexcept -> uint32_t { CHECK(false); return 0; };
-	removal.occupancy_update = [](OpenTTDVehicle *) noexcept -> OpenTTDOccupancyUpdateObservation { CHECK(false); return {}; };
-	removal.occupancy_near = [](OpenTTDVehicle *) noexcept -> OpenTTDOccupancyNearObservation { CHECK(false); return {}; };
 	openttd_rust_occupancy_update(&removal, RustVehicle(b), true);
 	CHECK(b->tile_links.current == nullptr);
 	CHECK(b->tile_links.next == RustVehicle(a)); // Source retains stale next.

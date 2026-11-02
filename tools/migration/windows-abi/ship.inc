@@ -135,7 +135,6 @@ static void ShipBoundary()
 	leaves.set_dest = [](uint32_t, uint32_t value) noexcept { ship_probe.dest = value; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
 	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
-	ship_vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = ship_vehicle.tile_links(shell), .tile = shell->tile}; };
 	ship_vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
 		CHECK(ship_probe.stage++ == 0);

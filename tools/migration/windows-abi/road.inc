@@ -77,13 +77,10 @@ static void RoadBoundary()
 	OpenTTDVehicle *v = RoadAbiHandle();
 
 	/* An articulated part only stores its counters. */
-	t.vehicle.write_counters = [](OpenTTDVehicle *u, uint8_t tick, uint8_t running, int32_t order_time) noexcept {
+	t.vehicle.write_order_time = [](OpenTTDVehicle *u, int32_t order_time) noexcept {
 		CHECK(u == RoadAbiHandle());
-		auto &p = *road_abi_probe;
-		p.tick = tick;
-		p.running = running;
-		p.order_time = order_time;
-		if (p.reset_status) p.status = 0;
+		road_abi_probe->order_time = order_time;
+		if (road_abi_probe->reset_status) road_abi_probe->status = 0;
 	};
 	const OpenTTDRoadTickRead part{.tick = 255, .front = false, .movement = {}, .order_time = nullptr, .running = nullptr, .status = nullptr};
 	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves, nullptr));
@@ -493,7 +490,7 @@ static void RoadServiceBoundary()
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.ground.go_to_depot_service = [](OpenTTDVehicle *, uint16_t depot) noexcept { CHECK(depot == 55); ++road_service_probe->depot_orders; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
-	t.vehicle.check_orders = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	t.vehicle.check_orders_only = [](OpenTTDVehicle *) noexcept {};
 	auto day = [&]() { openttd_rust_road_economy_day(RoadServiceHandle(0), probe.head, true, &t.leaves); };
 	for (bool moving : {true, false}) {
 		probe.speed = moving ? 5 : 0;

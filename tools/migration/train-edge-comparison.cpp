@@ -86,7 +86,7 @@ static OpenTTDTrainServices Leaves()
 	leaves.read_gv_flags = [](OpenTTDTrainHandle h) noexcept { return Part(h).gv_flags; };
 	leaves.read_after_swap = [](OpenTTDTrainHandle h) noexcept { const Train &v = Part(h); return OpenTTDTrainAfterSwapRead{v.tile, v.x_pos, v.y_pos}; };
 	leaves.read_articulated = [](OpenTTDTrainHandle h) noexcept { return uint8_t(Part(h).id % 2); };
-	leaves.write_tile = [](OpenTTDTrainHandle h, uint32_t value) noexcept { Part(h).tile = value; };
+	leaves.write_tile = [](OpenTTDTrainHandle h, uint32_t value) noexcept { Part(h).tile = value; Part(h).record.tile = value; };
 	leaves.write_x = [](OpenTTDTrainHandle h, int32_t value) noexcept { Part(h).x_pos = value; };
 	leaves.write_y = [](OpenTTDTrainHandle h, int32_t value) noexcept { Part(h).y_pos = value; };
 	leaves.write_z = [](OpenTTDTrainHandle h, int32_t value) noexcept { Part(h).z_pos = value; };
@@ -96,8 +96,7 @@ static OpenTTDTrainServices Leaves()
 	leaves.acc_model = [](OpenTTDTrainHandle) noexcept { return uint64_t(_settings_game.vehicle.train_acceleration_model); };
 	leaves.curve_advantage = [](OpenTTDTrainHandle) noexcept { return uint64_t(rail.curve_speed); };
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { auto &part = *reinterpret_cast<Train *>(v->shell); part.UpdatePosition(); return &part.links; };
-	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = reinterpret_cast<Train *>(shell->shell)->tile}; };
-	vehicle.record_from_shell = [](void *v) noexcept { auto *train = static_cast<Train *>(v); train->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(v); return &train->record; };
+	vehicle.record_from_shell = [](void *v) noexcept { auto *train = static_cast<Train *>(v); train->record.tile = train->tile; train->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(v); return &train->record; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{8}; };
 	leaves.vehicle = &vehicle;
 	leaves.viewport = [](OpenTTDTrainHandle h, uint8_t a, uint8_t b) noexcept { Part(h).UpdateViewport(a != 0, b != 0); };

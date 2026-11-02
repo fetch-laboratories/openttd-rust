@@ -59,16 +59,6 @@ struct OpenTTDVehicleXY {
 	int32_t x;
 	int32_t y;
 };
-/** Only fields consumed together by normal hash updates / near filtering.
- * Link fields are read in Rust at the source branches, never prefetched here. */
-struct OpenTTDOccupancyUpdateObservation {
-	OpenTTDVehicleTileLinks *links;
-	uint32_t tile;
-};
-struct OpenTTDOccupancyNearObservation {
-	OpenTTDVehicleTileLinks *links;
-	OpenTTDVehicleXY xy;
-};
 struct OpenTTDVehicleSpeedInputs {
 	uint16_t speed;
 	uint16_t max_speed;
@@ -109,19 +99,15 @@ struct OpenTTDVehicleServices {
 	void (*assert_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(assert_next);
 	OpenTTDVehicle *(*record_from_shell)(void *) noexcept OPENTTD_SERVICE_DEFAULT(record_from_shell);
 	OpenTTDVehicleTileLinks *(OPENTTD_RUST_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
-	OpenTTDOccupancyUpdateObservation (OPENTTD_RUST_CALL *occupancy_update)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(occupancy_update);
-	OpenTTDOccupancyNearObservation (OPENTTD_RUST_CALL *occupancy_near)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(occupancy_near);
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
 	bool assertions;
 	OpenTTDTrainHandle (*train_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_handle);
-	void (OPENTTD_RUST_CALL *write_counters)(OpenTTDVehicle *, uint8_t, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_counters);
 	bool (OPENTTD_RUST_CALL *waiting_for_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_for_unbunching);
 	void (OPENTTD_RUST_CALL *leave_unbunching_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunching_depot);
 	void (OPENTTD_RUST_CALL *reset_depot_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reset_depot_unbunching);
 	void (*enter_depot)(OpenTTDVehicle *, const OpenTTDVehicleVisits *) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
 	void (OPENTTD_RUST_CALL *pathfinding_result)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(pathfinding_result);
 	OpenTTDVehicleNewPosition (OPENTTD_RUST_CALL *new_position)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
-	void (OPENTTD_RUST_CALL *write_xy)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_xy);
 	void (OPENTTD_RUST_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	const OpenTTDVehicleResolverServices *(*newgrf)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf);
 	int32_t (OPENTTD_RUST_CALL *property)(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
@@ -134,7 +120,6 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *order_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_dummy);
 	void (OPENTTD_RUST_CALL *start_stop_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(start_stop_dirty);
 	void (OPENTTD_RUST_CALL *destroy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
-	uint8_t (OPENTTD_RUST_CALL *check_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders);
 	void (OPENTTD_RUST_CALL *set_dest_tile)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_dest_tile);
 	OpenTTDVehiclePreviousTile (OPENTTD_RUST_CALL *previous_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous_tile);
 	OpenTTDVehicle *(OPENTTD_RUST_CALL *next)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next);
@@ -158,7 +143,6 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicleDayCost (OPENTTD_RUST_CALL *day_cost)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_cost);
 	void (OPENTTD_RUST_CALL *make_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(make_dummy);
 	void (OPENTTD_RUST_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
-	void (OPENTTD_RUST_CALL *write_coordinates)(OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_coordinates);
 	OpenTTDVehicleAltitudeInputs (OPENTTD_RUST_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(altitude_inputs);
 	OpenTTDVehiclePositionObservations (OPENTTD_RUST_CALL *position_observations)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(position_observations);
 	OpenTTDVehicleMovementObservations (OPENTTD_RUST_CALL *movement_observations)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(movement_observations);

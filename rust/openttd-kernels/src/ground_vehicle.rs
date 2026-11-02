@@ -792,10 +792,9 @@ pub(crate) fn move_incline(
     new_tile: bool,
     delta: bool,
 ) -> Moved {
-    // Road supplies its synchronous no-reset/no-yield entry dimensions; write_xy
-    // is a scalar leaf. They are consumed before any inclination/viewport call.
+    // Road supplies dimensions for its synchronous no-reset/no-yield interval.
     let s = gs.physics;
-    (s.vehicle.write_xy)(v, pos.0, pos.1);
+    (v).write_xy(pos.0, pos.1);
     // SAFETY: Live shell; index writes end before inclination callbacks.
     unsafe {
         crate::vehicle::occupancy::update_position(s.vehicle, v, map);

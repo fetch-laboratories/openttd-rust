@@ -119,21 +119,7 @@ static_assert(PROP_AIRCRAFT_SPEED == 0x0C && CBID_VEHICLE_LENGTH == 0x11 && CBID
 static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_TOUCHDOWN == 5 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
-static void OPENTTD_RUST_CALL VehicleSvcWriteCounters(OpenTTDVehicle *v, uint8_t tick, uint8_t running, int32_t order_time) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	RustWriteVehicleTick(u, tick);
-	u->Record().running_ticks = running;
-	u->current_order_time = order_time;
-}
 static void OPENTTD_RUST_CALL VehicleSvcCheckOrdersOnly(OpenTTDVehicle *v) noexcept { CheckOrders(VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteCoordinates(OpenTTDVehicle *v, int32_t x, int32_t y, int32_t z) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	RustWriteVehicleX(u, x);
-	RustWriteVehicleY(u, y);
-	RustWriteVehicleZ(u, z);
-}
 static bool OPENTTD_RUST_CALL VehicleSvcWaitingForUnbunching(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsWaitingForUnbunching(); }
 static void OPENTTD_RUST_CALL VehicleSvcLeaveUnbunchingDepot(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveUnbunchingDepot(); }
 static void OPENTTD_RUST_CALL VehicleSvcResetDepotUnbunching(OpenTTDVehicle *v) noexcept { VehicleOf(v)->ResetDepotUnbunching(); }
@@ -142,13 +128,6 @@ static OpenTTDVehicleNewPosition OPENTTD_RUST_CALL VehicleSvcNewPosition(OpenTTD
 {
 	GetNewVehiclePosResult gp = GetNewVehiclePos(VehicleOf(v));
 	return {.x = gp.x, .y = gp.y, .tile = gp.new_tile.base()};
-}
-static void OPENTTD_RUST_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	RustWriteVehicleX(u, x);
-	RustWriteVehicleY(u, y);
-
 }
 static void OPENTTD_RUST_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
 uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_weight; }
@@ -170,12 +149,6 @@ static void OPENTTD_RUST_CALL VehicleSvcOrderDummy(OpenTTDVehicle *v) noexcept
 }
 static void OPENTTD_RUST_CALL VehicleSvcStartStopDirty(OpenTTDVehicle *v) noexcept { SetWindowWidgetDirty(WC_VEHICLE_VIEW, VehicleOf(v)->index, WID_VV_START_STOP); }
 static void OPENTTD_RUST_CALL VehicleSvcDestroy(OpenTTDVehicle *v) noexcept { delete VehicleOf(v); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcCheckOrders(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	CheckOrders(u);
-	return RustVehicleRunning(u);
-}
 /* Legacy orders context adapters; the native operations have shared definitions. */
 extern "C" uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept
 {
@@ -269,16 +242,6 @@ const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 static_assert(AIR_SHADOW == 4);
 
 static OpenTTDVehicleTileLinks *OPENTTD_RUST_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return RustVehicleTileLinks(VehicleOf(v)); }
-static OpenTTDOccupancyUpdateObservation OPENTTD_RUST_CALL VehicleSvcOccupancyUpdate(OpenTTDVehicle *shell) noexcept
-{
-	Vehicle *v = VehicleOf(shell);
-	return {.links = RustVehicleTileLinks(v), .tile = RustVehicleTile(v)};
-}
-static OpenTTDOccupancyNearObservation OPENTTD_RUST_CALL VehicleSvcOccupancyNear(OpenTTDVehicle *shell) noexcept
-{
-	Vehicle *v = VehicleOf(shell);
-	return {.links = RustVehicleTileLinks(v), .xy = {.x = RustVehicleX(v), .y = RustVehicleY(v)}};
-}
 
 static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return shell == nullptr ? nullptr : static_cast<Vehicle *>(shell)->record; }
 static void VehicleRecordAssertNext(OpenTTDVehicle *v, OpenTTDVehicle *next) noexcept { assert(v != next); }
@@ -287,8 +250,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.assert_next = VehicleRecordAssertNext,
 	.record_from_shell = VehicleRecordFromShell,
 	.tile_links = VehicleSvcTileLinks,
-	.occupancy_update = VehicleSvcOccupancyUpdate,
-	.occupancy_near = VehicleSvcOccupancyNear,
 	.map_log_x = OpenTTDMapLogX,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 	.assertions = true,
@@ -296,14 +257,12 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.assertions = false,
 #endif
 	.train_handle = RustVehicleTrain,
-	.write_counters = VehicleSvcWriteCounters,
 	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
 	.leave_unbunching_depot = VehicleSvcLeaveUnbunchingDepot,
 	.reset_depot_unbunching = VehicleSvcResetDepotUnbunching,
 	.enter_depot = openttd_rust_visit_enter_depot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,
-	.write_xy = VehicleSvcWriteXY,
 	.base_viewport = VehicleSvcBaseViewport,
 	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
 	.property = openttd_rust_vehicle_shell_property,
@@ -316,7 +275,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.order_dummy = VehicleSvcOrderDummy,
 	.start_stop_dirty = VehicleSvcStartStopDirty,
 	.destroy = VehicleSvcDestroy,
-	.check_orders = VehicleSvcCheckOrders,
 	.set_dest_tile = RustVehicleSetDestTile,
 	.previous_tile = VehicleSvcPreviousTile,
 	.next = VehicleSvcNext,
@@ -340,7 +298,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.day_cost = VehicleSvcDayCost,
 	.make_dummy = VehicleSvcMakeDummy,
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
-	.write_coordinates = VehicleSvcWriteCoordinates,
 	.altitude_inputs = VehicleSvcAltitudeInputs,
 	.position_observations = VehicleSvcPositionObservations,
 	.movement_observations = VehicleSvcMovementObservations,

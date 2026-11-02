@@ -129,7 +129,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
-	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = shell->tile}; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	vehicle.next = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicle * { return v == &fixture->record ? &fixture->shadow : nullptr; };
@@ -146,7 +145,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.coordinates = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleCoordinates{0, 0, 1}; };
 	vehicle.speed_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleSpeedInputs{0, 100, 8, 0, 0}; };
 	vehicle.direction_progress = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleDirectionProgress{0, 0}; };
-	vehicle.write_coordinates = [](OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept {};
 	leaves.layout_blocks = [](const void *, uint8_t) noexcept { return uint64_t{1} << 30; };
 	leaves.layout_heading = leaves.layout_next_position = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	leaves.layout_next = [](const void *, uint8_t) noexcept -> const void * { return nullptr; };

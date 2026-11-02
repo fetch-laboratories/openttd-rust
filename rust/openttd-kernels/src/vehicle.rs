@@ -208,13 +208,9 @@ pub struct VehicleServices {
     /// Resolve a legacy opaque native shell to its canonical record.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
-    pub occupancy_update: extern "C" fn(VehicleRef) -> occupancy::UpdateObservation,
-    pub occupancy_near: extern "C" fn(VehicleRef) -> occupancy::NearObservation,
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
-    /// Consecutive `tick_counter`, `running_ticks` and `current_order_time` stores.
-    pub write_counters: extern "C" fn(VehicleRef, u8, u8, i32),
     pub waiting_for_unbunching: extern "C" fn(VehicleRef) -> bool,
     pub leave_unbunching_depot: extern "C" fn(VehicleRef),
     pub reset_depot_unbunching: extern "C" fn(VehicleRef),
@@ -222,8 +218,6 @@ pub struct VehicleServices {
     pub enter_depot: unsafe extern "C" fn(VehicleRef, *const visits::Services),
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
     pub new_position: extern "C" fn(VehicleRef) -> NewPosition,
-    /// Store canonical native x/y. The Rust caller updates the tile index.
-    pub write_xy: extern "C" fn(VehicleRef, i32, i32),
     /// `Vehicle::UpdateViewport(true)`.
     pub base_viewport: extern "C" fn(VehicleRef),
     /// Immutable process-wide vehicle resolver services.
@@ -245,8 +239,6 @@ pub struct VehicleServices {
     pub start_stop_dirty: extern "C" fn(VehicleRef),
     /// `delete v`; the handle and its owner are dead afterwards.
     pub destroy: extern "C" fn(VehicleRef),
-    /// `CheckOrders(v)`, then observe `running_ticks`.
-    pub check_orders: extern "C" fn(VehicleRef) -> u8,
     /// Original virtual `SetDestTile`; may reenter the vehicle owner.
     pub set_dest_tile: extern "C" fn(VehicleRef, u32),
     pub previous_tile: extern "C" fn(VehicleRef) -> PreviousTile,
@@ -272,7 +264,6 @@ pub struct VehicleServices {
     pub day_cost: extern "C" fn(VehicleRef) -> DayCost,
     pub make_dummy: extern "C" fn(VehicleRef),
     pub check_orders_only: extern "C" fn(VehicleRef),
-    pub write_coordinates: extern "C" fn(VehicleRef, i32, i32, i32),
     pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,
     pub position_observations: extern "C" fn(VehicleRef) -> PositionObservations,
     pub movement_observations: extern "C" fn(VehicleRef) -> MovementObservations,
@@ -412,19 +403,15 @@ crate::abi::layouts! {
         assert_next,
         record_from_shell,
         tile_links,
-        occupancy_update,
-        occupancy_near,
         map_log_x,
         assertions,
         train_handle,
-        write_counters,
         waiting_for_unbunching,
         leave_unbunching_depot,
         reset_depot_unbunching,
         enter_depot,
         pathfinding_result,
         new_position,
-        write_xy,
         base_viewport,
         newgrf,
         property,
@@ -437,7 +424,6 @@ crate::abi::layouts! {
         order_dummy,
         start_stop_dirty,
         destroy,
-        check_orders,
         set_dest_tile,
         previous_tile,
         next,
@@ -461,7 +447,6 @@ crate::abi::layouts! {
         day_cost,
         make_dummy,
         check_orders_only,
-        write_coordinates,
         altitude_inputs,
         position_observations,
         movement_observations,

@@ -537,7 +537,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         layout_next_position(self; ap: *const c_void, pos: u8) -> u8 => unsafe { (self.leaves.layout_next_position)(ap, pos) };
         layout_next(self; ap: *const c_void, pos: u8) -> *const c_void => unsafe { (self.leaves.layout_next)(ap, pos) };
         layout_route(self; ap: *const c_void, pos: u8) -> LayoutRoute => unsafe { (self.leaves.layout_route)(ap, pos) };
-        write_coordinates(self; v: Vehicle, x: i64, y: i64, z: i64) -> () => (self.vs.write_coordinates)(v.base(), x as i32, y as i32, z as i32);
+        write_coordinates(self; v: Vehicle, x: i64, y: i64, z: i64) -> () => (v.base()).write_coordinates( x as i32, y as i32, z as i32);
         coordinates(self; v: Vehicle) -> Coordinates => (self.vs.coordinates)(v.base());
         xy(self; v: Vehicle) -> XY => (self.vs.xy)(v.base());
         speed_inputs(self; v: Vehicle) -> SpeedInputs => (self.vs.speed_inputs)(v.base());
@@ -580,7 +580,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         copy_sprite(self; vehicle: VehicleRef, source: VehicleRef) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
         position_next(self; vehicle: VehicleRef) -> Option<VehicleRef> => (self.vs.next)(vehicle);
         position_y(self; vehicle: VehicleRef) -> i32 => (vehicle).y();
-        position_coordinates(self; vehicle: VehicleRef, x: i64, y: i64, z: i64) -> () => (self.vs.write_coordinates)(vehicle, x as i32, y as i32, z as i32);
+        position_coordinates(self; vehicle: VehicleRef, x: i64, y: i64, z: i64) -> () => (vehicle).write_coordinates( x as i32, y as i32, z as i32);
         position_viewport(self; vehicle: VehicleRef) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle, self.map()); (self.vs.base_viewport)(vehicle); };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
         play_sound(self; vehicle: Vehicle, sound: i64) -> () => (self.vs.play_sound)(vehicle.base(), sound as u16);

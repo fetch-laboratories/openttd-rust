@@ -31,19 +31,6 @@ pub struct Links {
     pub prev: *mut Shell,
     pub current: *mut Shell,
 }
-/// Normal position update only; removal acquires links without reading tile.
-#[repr(C)]
-pub struct UpdateObservation {
-    pub links: *mut Links,
-    pub tile: u32,
-}
-/// Coordinates observed together for rectangle filtering. The link carrier is
-/// used only on a false match; its next field is not prefetched.
-#[repr(C)]
-pub struct NearObservation {
-    pub links: *mut Links,
-    pub xy: super::XY,
-}
 static BUCKETS: GameState<[Shell; TOTAL]> = GameState::new([ptr::null_mut(); TOTAL]);
 fn hash_1d(p: u32) -> u32 {
     crate::bitmath_func::gb(p, HASH_RES, HASH_BITS)
@@ -83,12 +70,11 @@ pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
     }
 }
 /// The caller's dimensions cover only a serialized synchronous no-reset/no-yield
-/// interval. No map storage is exposed. Links and tile are observed once here;
-/// the native observation and link accessors neither reenter nor mutate state.
+/// interval. No map storage is exposed. Links resolve once here; native link access neither reenters nor mutates state.
 #[inline]
 pub(crate) unsafe fn update_position(s: &VehicleServices, v: VehicleRef, map: Map) {
-    let o = (s.occupancy_update)(v);
-    unsafe { update_bucket(s, v, o.links, tile_bucket(map, o.tile)) };
+    let links = (s.tile_links)(v);
+    unsafe { update_bucket(s, v, links, tile_bucket(map, v.tile())) };
 }
 #[inline]
 unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, new: *mut Shell) {
@@ -271,19 +257,19 @@ impl Near {
     #[inline]
     unsafe fn filter(&mut self, s: &VehicleServices) {
         while let Some(v) = self.get() {
-            let o = (s.occupancy_near)(v);
+            let links = (s.tile_links)(v);
             if crate::geometry_type::rect_contains(
                 self.left,
                 self.top,
                 self.right,
                 self.bottom,
-                o.xy.x,
-                o.xy.y,
+                v.x(),
+                v.y(),
             ) {
                 break;
             }
             unsafe {
-                self.increment(o.links);
+                self.increment(links);
             }
         }
     }
@@ -324,8 +310,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, max_pixel_z, costs, vehicle_error, };
     "OpenTTDVehicleTileLinks" ["probe"] => Links { next, prev, current, };
-    "OpenTTDOccupancyUpdateObservation" ["probe"] => UpdateObservation { links, tile, };
-    "OpenTTDOccupancyNearObservation" ["probe"] => NearObservation { links, xy, };
     "OpenTTDVehicleOnTile" ["probe"] => OnTile { tile, current, };
     "OpenTTDVehicleNear" ["probe"] => Near { left, top, right, bottom, hxmin, hxmax, hymin, hymax, hx, hy, current, };
 }

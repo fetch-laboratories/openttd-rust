@@ -55,7 +55,6 @@ static void Disasters()
 	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 2);
 
 	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
-	vehicles.occupancy_update = [](OpenTTDVehicle *v) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = &reinterpret_cast<DisasterProbe *>(v->shell)->links, .tile = 0}; };
 	vehicles.map_log_x = []() noexcept { return 6U; };
 
 	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
