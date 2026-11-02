@@ -1540,7 +1540,6 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			return p;
 		},
 		.info = [](void *socket) noexcept -> void * { return static_cast<NetworkClientSocket *>(socket)->GetInfo(); },
-		.info_by_id = [](uint32_t client_id) noexcept -> void * { return NetworkClientInfo::GetByClientID(static_cast<ClientID>(client_id)); },
 		.join_date = [](void *socket) noexcept -> int32_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->join_date.base(); },
 		.joined = [](void *socket) noexcept {
 			auto *cs = static_cast<NetworkClientSocket *>(socket);

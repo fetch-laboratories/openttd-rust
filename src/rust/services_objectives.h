@@ -62,7 +62,6 @@ inline bool RustObjectives_page_cleaning() noexcept { return StoryPage::Cleaning
 inline bool RustObjectives_table_can_allocate() noexcept { return LeagueTable::CanAllocateItem(); }
 inline uint8_t RustObjectives_table_allocate(const EncodedString * title, const EncodedString * header, const EncodedString * footer) noexcept { return (new LeagueTable(*title, *header, *footer))->index.base(); }
 inline uint16_t RustObjectives_entry_allocate(uint8_t table, int64_t rating, uint8_t company, const EncodedString * text, const EncodedString * score, uint8_t type, uint32_t target) noexcept { return (new LeagueTableElement(LeagueTableID(table), rating, CompanyID(company), *text, *score, Link(LinkType(type), target)))->index.base(); }
-inline bool RustObjectives_client_valid(uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)) != nullptr; }
 inline bool RustObjectives_vehicle_valid(uint32_t id) noexcept { return Vehicle::IsValidID(VehicleID(id)); }
 inline bool RustObjectives_text_empty(const EncodedString * text) noexcept { return text->empty(); }
 inline void RustObjectives_text_assign(EncodedString * to, const EncodedString * text) noexcept { *to = *text; }
@@ -122,7 +121,6 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.table_allocate = RustObjectives_table_allocate,
 		.entry_allocate = RustObjectives_entry_allocate,
 		.orders = &GetRustOrdersLeaves(),
-		.client_valid = RustObjectives_client_valid,
 		.subsidy = &GetRustSubsidyServices(),
 		.road_commands = &GetRustRoadCommandServices(),
 		.vehicle_valid = RustObjectives_vehicle_valid,

@@ -487,6 +487,8 @@ pub struct Services {
     pub nearby_tile: extern "C" fn(u8, u32) -> u32,
     /// `GetNearbyTileInformation`.
     pub nearby_tile_information: extern "C" fn(u32, bool) -> u32,
+    /// Native client-info pool lookup; null when the ID is unknown.
+    pub network_client_info: extern "C" fn(u32) -> *mut c_void,
     /// `MarkWholeScreenDirty`.
     pub screen_dirty: extern "C" fn(),
     /// `GetTerrainType`.
@@ -846,6 +848,7 @@ crate::abi::layouts! {
         road_stops,
         nearby_tile,
         nearby_tile_information,
+        network_client_info,
         screen_dirty,
         terrain_type,
         grf_file_version,
@@ -962,6 +965,9 @@ pub fn fixture(
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
+    extern "C" fn unexpected_client_info(_: u32) -> *mut c_void {
+        std::process::abort()
+    }
     extern "C" fn unexpected_nearby(_: u8, _: u32) -> u32 {
         std::process::abort()
     }
@@ -997,6 +1003,7 @@ pub fn fixture(
         resolver_grf_version: unexpected_version,
         nearby_tile: unexpected_nearby,
         nearby_tile_information: unexpected_information,
+        network_client_info: unexpected_client_info,
         screen_dirty: unexpected_path,
         terrain_type: unexpected_terrain,
         show_error: unexpected_error,

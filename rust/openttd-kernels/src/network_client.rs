@@ -477,7 +477,7 @@ pub extern "C" fn openttd_rust_network_client_receive_error_quit(
     }
     let id = (f.packet_recv_uint32)(p);
     (s.debug_error_quit)(id);
-    let info = (f.connection.info_by_id)(id);
+    let info = (f.command.company.shared.network_client_info)(id);
     if !info.is_null() {
         (s.leave_error)(info, (f.packet_recv_uint8)(p));
         (s.delete_info)(info);
@@ -498,7 +498,7 @@ pub extern "C" fn openttd_rust_network_client_receive_quit(
     }
     let id = (f.packet_recv_uint32)(p);
     (s.debug_quit)(id);
-    let info = (f.connection.info_by_id)(id);
+    let info = (f.command.company.shared.network_client_info)(id);
     if info.is_null() {
         (s.unknown_quit)(id);
     } else {
@@ -521,7 +521,7 @@ pub extern "C" fn openttd_rust_network_client_receive_join(
     }
     let id = (f.packet_recv_uint32)(p);
     (s.debug_join)(id);
-    let info = (f.connection.info_by_id)(id);
+    let info = (f.command.company.shared.network_client_info)(id);
     if !info.is_null() {
         (s.join)(info);
     }

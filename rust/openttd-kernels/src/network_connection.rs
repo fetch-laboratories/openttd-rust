@@ -73,7 +73,6 @@ pub struct Services {
     pub grfs_empty: extern "C" fn() -> bool,
     pub grfs_packet: extern "C" fn(*mut c_void) -> *mut c_void,
     pub info: extern "C" fn(*mut c_void) -> *mut c_void,
-    pub info_by_id: extern "C" fn(u32) -> *mut c_void,
     pub join_date: extern "C" fn(*mut c_void) -> i32,
     pub joined: extern "C" fn(*mut c_void),
     pub lost_connection_announcement: extern "C" fn(*mut c_void),
@@ -148,7 +147,6 @@ crate::abi::layouts! {
         grfs_empty,
         grfs_packet,
         info,
-        info_by_id,
         join_date,
         joined,
         lost_connection_announcement,
@@ -261,7 +259,7 @@ pub(crate) fn send_welcome(s: &Services, f: &FrameServices, socket: *mut c_void)
     }
     (s.send_client_info)(
         socket,
-        (s.info_by_id)(crate::network_type::CLIENT_ID_SERVER),
+        (f.command.company.shared.network_client_info)(crate::network_type::CLIENT_ID_SERVER),
     )
 }
 

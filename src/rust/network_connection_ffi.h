@@ -49,7 +49,6 @@ struct OpenTTDNetworkConnectionServices {
 	bool (*grfs_empty)() noexcept OPENTTD_SERVICE_DEFAULT(grfs_empty);
 	void * (*grfs_packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(grfs_packet);
 	void * (*info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(info);
-	void * (*info_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(info_by_id);
 	int32_t (*join_date)(void *) noexcept OPENTTD_SERVICE_DEFAULT(join_date);
 	void (*joined)(void *) noexcept OPENTTD_SERVICE_DEFAULT(joined);
 	void (*lost_connection_announcement)(void *) noexcept OPENTTD_SERVICE_DEFAULT(lost_connection_announcement);

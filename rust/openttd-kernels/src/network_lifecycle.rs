@@ -300,7 +300,7 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
         } else {
             std::ptr::null_mut()
         };
-        let info = (f.connection.info_by_id)(CLIENT_ID_SERVER);
+        let info = (f.command.company.shared.network_client_info)(CLIENT_ID_SERVER);
         if !company.is_null() && !info.is_null() {
             (s.set_info_company)(info, (company_services.identity.company_id)(company).0);
             if (company_services.identity.name_id)(company)

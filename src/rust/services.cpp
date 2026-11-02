@@ -63,6 +63,7 @@
 #include "../linkgraph/linkgraphjob.h"
 #include "services_linkgraph.h"
 #include "../company_base.h"
+#include "../network/network_base.h"
 #include "../company_func.h"
 #include "../command_type.h"
 #include "../command_func.h"
@@ -481,6 +482,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 	.nearby_tile = RustSignedNearbyTile,
 	.nearby_tile_information = RustNearbyTileInformation,
+	.network_client_info = [](uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)); },
 	.screen_dirty = RustScreenDirty,
 	.terrain_type = RustTerrainType,
 	.grf_file_version = RustGRFFileVersion,
