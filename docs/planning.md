@@ -22,7 +22,7 @@ Readers: Root and agents selecting or planning work.
 
 - Fill a free slot with the highest-ranked ready item of the earliest phase with ready work. Later phases fill slots earlier phases leave free (user, 2026-10-28).
 - In phases 1 and 2, port support code only when a selected game component needs it. A port keeping data in C++ behind one setter per field is support code.
-- Phase 2 storage ownership ports take every slot ready phase 1 work leaves free, without another gate. Rank them by code retired, crossings removed and glue deleted.
+- Phase 2 storage ownership ports take every slot ready phase 1 work leaves free, without another gate. Rank them, and decide their cost, by compiled C++ removed (original plus glue), crossings removed and services deleted. A consumer line rewritten to reach a moved field counts as one original line retired and one glue line added, so it moves neither.
 - Rank by phase, then by what each item retires, protects or saves: C++ code and state still owned by C++, the speed profile's largest net costs, fidelity risk the harness cannot see, recurring costs such as CI time, and integrated design faults. Ease of scoping does not affect rank.
 - Size each owner to repay its fixed issue, review and exact-head Full cost. Fold an item too small for that into an owner of the same phase that shares its files or data, rather than queueing it alone.
 - Keep one roadmap work order for ports, maintenance, testing and housekeeping. Upstream unit-test coverage alone does not select a component; never fall back to utility kernels or `deferred-improvement` issues.
