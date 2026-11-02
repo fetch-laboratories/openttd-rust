@@ -290,19 +290,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::SendMap()
  * Send a command to the client to execute.
  * @param cp The command to send.
  */
-NetworkRecvStatus ServerNetworkGameSocketHandler::SendCommand(const OpenTTDCommandPacket &cp)
-{
-	Debug(net, 9, "client[{}] SendCommand(): cmd={}", this->client_id, cp.cmd);
 
-	auto p = std::make_unique<Packet>(this, PACKET_SERVER_COMMAND);
-
-	this->NetworkGameSocketHandler::SendCommand(*p, cp);
-	p->Send_uint32(cp.frame);
-	p->Send_bool  (cp.my_cmd);
-
-	this->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
-}
 
 /**
  * Send a chat message.
@@ -465,89 +453,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_MAP_OK(Packet &
  * The client has done a command and wants us to handle it
  * @param p the packet in which the command was sent
  */
-NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND(Packet &p)
-{
-	/* The client was never joined.. so this is impossible, right?
-	 *  Ignore the packet, give the client a warning, and close the connection */
-	if (this->status < STATUS_DONE_MAP || this->HasClientQuit()) {
-		return this->SendError(NETWORK_ERROR_NOT_EXPECTED);
-	}
 
-	if (this->incoming_queue.Count() >= _settings_client.network.max_commands_in_queue) {
-		return this->SendError(NETWORK_ERROR_TOO_MANY_COMMANDS);
-	}
-
-	Debug(net, 9, "client[{}] Receive_CLIENT_COMMAND()", this->client_id);
-
-	CommandPacket cp;
-	auto err = this->ReceiveCommand(p, cp);
-
-	if (this->HasClientQuit()) return NETWORK_RECV_STATUS_CLIENT_QUIT;
-
-	NetworkClientInfo *ci = this->GetInfo();
-
-	if (err.has_value()) {
-		IConsolePrint(CC_WARNING, "Dropping client #{} (IP: {}) due to {}.", ci->client_id, this->GetClientIP(), *err);
-		return this->SendError(NETWORK_ERROR_NOT_EXPECTED);
-	}
-
-	if (GetCommandFlags(cp.Cmd()).Test(CommandFlag::Server) && ci->client_id != CLIENT_ID_SERVER) {
-		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a server only command {}.", ci->client_id, this->GetClientIP(), cp.Cmd());
-		return this->SendError(NETWORK_ERROR_KICKED);
-	}
-
-	if (!GetCommandFlags(cp.Cmd()).Test(CommandFlag::Spectator) && !Company::IsValidID(cp.Company()) && ci->client_id != CLIENT_ID_SERVER) {
-		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.", ci->client_id, this->GetClientIP(), cp.Cmd());
-		return this->SendError(NETWORK_ERROR_KICKED);
-	}
-
-	/**
-	 * Only CMD_COMPANY_CTRL is always allowed, for the rest, playas needs
-	 * to match the company in the packet. If it doesn't, the client has done
-	 * something pretty naughty (or a bug), and will be kicked
-	 */
-	CompanyCtrlAction cca = cp.Cmd() == CMD_COMPANY_CTRL ? std::get<0>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_CTRL>::Args>(cp.Data())) : CCA_NEW;
-	if (!(cp.Cmd() == CMD_COMPANY_CTRL && cca == CCA_NEW && ci->client_playas == COMPANY_NEW_COMPANY) && ci->client_playas != cp.Company()) {
-		IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a command as another company {}.",
-		               ci->client_playas + 1, this->GetClientIP(), cp.Company() + 1);
-		return this->SendError(NETWORK_ERROR_COMPANY_MISMATCH);
-	}
-
-	if (cp.Cmd() == CMD_COMPANY_CTRL) {
-		if (cca != CCA_NEW || cp.Company() != COMPANY_SPECTATOR) {
-			return this->SendError(NETWORK_ERROR_CHEATER);
-		}
-
-		/* Check if we are full - else it's possible for spectators to send a CMD_COMPANY_CTRL and the company is created regardless of max_companies! */
-		if (Company::GetNumItems() >= _settings_client.network.max_companies) {
-			NetworkServerSendChat(NETWORK_ACTION_SERVER_MESSAGE, DESTTYPE_CLIENT, ci->client_id, "cannot create new company, server full", CLIENT_ID_SERVER);
-			return NETWORK_RECV_STATUS_OKAY;
-		}
-	}
-
-	if (cp.Cmd() == CMD_COMPANY_ALLOW_LIST_CTRL) {
-		/* Maybe the client just got moved before allowing? */
-		if (ci->client_id != CLIENT_ID_SERVER && ci->client_playas != cp.Company()) return NETWORK_RECV_STATUS_OKAY;
-
-		/* Only allow clients to add/remove currently joined clients. The server owner does not go via this method, so is allowed to do more. */
-		std::string public_key = std::get<1>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_ALLOW_LIST_CTRL>::Args>(cp.Data()));
-		bool found = false;
-		for (const NetworkClientInfo *info : NetworkClientInfo::Iterate()) {
-			if (info->public_key == public_key) {
-				found = true;
-				break;
-			}
-		}
-
-		/* Maybe the client just left? */
-		if (!found) return NETWORK_RECV_STATUS_OKAY;
-	}
-
-	if (GetCommandFlags(cp.Cmd()).Test(CommandFlag::ClientID)) NetworkReplaceCommandClientId(cp, this->client_id);
-
-	this->incoming_queue.Push(std::move(cp));
-	return NETWORK_RECV_STATUS_OKAY;
-}
 
 NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_ERROR(Packet &p)
 {

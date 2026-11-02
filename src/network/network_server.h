@@ -34,7 +34,6 @@ protected:
 	NetworkRecvStatus Receive_CLIENT_GETMAP(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_MAP_OK(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_ACK(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_COMMAND(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_CHAT(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_SET_NAME(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_QUIT(Packet &p) override;
@@ -81,7 +80,6 @@ public:
 	NetworkRecvStatus SendError(NetworkErrorCode error, std::string_view reason = {});
 	NetworkRecvStatus SendChat(NetworkAction action, ClientID client_id, bool self_send, std::string_view msg, int64_t data);
 	NetworkRecvStatus SendExternalChat(std::string_view source, TextColour colour, std::string_view user, std::string_view msg);
-	NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 	NetworkRecvStatus SendConfigUpdate();
 
 	static void AcceptConnection(SOCKET s, const NetworkAddress &address);

@@ -132,19 +132,45 @@ impl CommandQueue {
 }
 
 /// Native leaves for `network_command.cpp`; see `network_command_ffi.h`.
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DecodeError {
+    None,
+    InvalidCommand,
+    Offline,
+    InvalidCallback,
+}
 #[repr(C)]
 pub struct Services {
-    pub company: &'static crate::company::Services,
     pub admin_log: extern "C" fn(*const c_void, *const CommandPacket),
-    pub allowed_while_paused: extern "C" fn(u8) -> bool,
-    pub client_queue: extern "C" fn() -> *mut CommandQueue,
-    pub client_send: extern "C" fn(*const CommandPacket),
+    pub allow_list_key: extern "C" fn(ByteSpan, *mut c_void),
+    pub callback: extern "C" fn(usize) -> *const c_void,
+    pub callback_count: usize,
     pub commands_per_frame: extern "C" fn() -> u16,
     pub commands_per_frame_server: extern "C" fn() -> u16,
-    pub execute: extern "C" fn(*const CommandPacket),
+    pub company: &'static crate::company::Services,
+    pub console_bad_client: extern "C" fn(*mut c_void, DecodeError),
+    pub console_bad_server: extern "C" fn(DecodeError),
+    pub console_company_mismatch: extern "C" fn(*mut c_void, u8),
+    pub console_server_only: extern "C" fn(*mut c_void, u8),
+    pub console_spectator: extern "C" fn(*mut c_void, u8),
+    pub control_action: extern "C" fn(ByteSpan) -> u8,
+    pub debug_receive_client: extern "C" fn(*mut c_void),
+    pub debug_receive_server: extern "C" fn(u8, u32),
+    pub debug_send_client: extern "C" fn(u8),
+    pub debug_send_server: extern "C" fn(*mut c_void, u8),
+    pub debug_unknown_callback: extern "C" fn(u8),
+    pub execute: extern "C" fn(*const CommandPacket, usize),
     pub execute_past: extern "C" fn(),
+    pub has_unpack: extern "C" fn(u8, usize) -> bool,
+    pub info_key_equals: extern "C" fn(*mut c_void, *mut c_void) -> bool,
+    pub max_commands_in_queue: extern "C" fn() -> u16,
+    pub network: extern "C" fn() -> &'static crate::network_frame::Services,
     pub next_client: extern "C" fn(usize, *mut Client) -> bool,
-    pub server_send: extern "C" fn(*mut c_void, *const CommandPacket),
+    pub next_info: extern "C" fn(*mut u32) -> *mut c_void,
+    pub replace_client_id: extern "C" fn(u8, ByteSpan, u32) -> CommandData,
+    pub sanitize_strings: extern "C" fn(u8, ByteSpan) -> CommandData,
+    pub server_full: extern "C" fn(u32),
 }
 
 static WAIT: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
@@ -206,7 +232,7 @@ pub(crate) fn send_command(
     }
     // The client cannot tell which frame; it sends and forgets the packet.
     c.frame = 0;
-    (s.client_send)(&raw const c);
+    send_packet((s.network)(), ((s.network)().client_game)(), &c, false);
 }
 
 /// `NetworkSyncCommandQueue`: a joining client's save omits commands queued for execution.
@@ -230,7 +256,7 @@ pub(crate) fn execute_local_command_queue(s: &Services) {
     let queue = if (company.network_server)() {
         EXECUTION.get()
     } else {
-        (s.client_queue)()
+        socket::incoming(((s.network)().client_game)())
     };
     let mut executed = 0;
     // SAFETY: Execution never adds to or frees the queue it executes.
@@ -245,7 +271,7 @@ pub(crate) fn execute_local_command_queue(s: &Services) {
                 (s.execute_past)();
             }
             (company.finance.set_current_company)((*cp).company);
-            (s.execute)(cp);
+            (s.execute)(cp, callback_index(s, (*cp).callback));
             executed += 1;
         }
         CommandQueue::edit(queue, |queue| drop(queue.drain(..executed)));
@@ -307,7 +333,12 @@ unsafe fn distribute_queue(
     unsafe {
         while index < (*queue).size {
             let cp = (*queue).data.add(index);
-            if crate::session::pause() != 0 && !(s.allowed_while_paused)((*cp).cmd) {
+            if crate::session::pause() != 0
+                && crate::command::openttd_rust_command_allowed_while_paused(
+                    commands(s),
+                    (commands(s).command_type)((*cp).cmd),
+                ) == 0
+            {
                 index += 1;
                 continue;
             }
@@ -349,10 +380,258 @@ pub(crate) unsafe fn handle_command_queue(
 ) {
     unsafe {
         for index in 0..(*outgoing).size {
-            (s.server_send)(socket::server(socket), (*outgoing).data.add(index));
+            send_packet((s.network)(), socket, &*(*outgoing).data.add(index), true);
         }
         CommandQueue::edit(outgoing, Vec::clear);
     }
+}
+
+fn callback_index(s: &Services, callback: *const c_void) -> usize {
+    (0..s.callback_count)
+        .find(|&i| (s.callback)(i) == callback)
+        .unwrap_or(usize::MAX)
+}
+/// `IsNetworkRegisteredCallback` for the native command facade.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_network_registered_callback(
+    s: &Services,
+    callback: *const c_void,
+) -> u8 {
+    u8::from(callback_index(s, callback) != usize::MAX)
+}
+
+fn commands(s: &Services) -> &crate::services::CommandServices {
+    ((s.company.shared.command_post)().command)()
+}
+
+/// `NetworkGameSocketHandler::SendCommand` and the per-role command packet envelope.
+#[allow(clippy::cast_possible_truncation)] // Original u16 string ID and u8 callback encoding.
+fn send_packet(
+    f: &crate::network_frame::Services,
+    game: *mut socket::GameSocket,
+    cp: &CommandPacket,
+    server: bool,
+) {
+    use crate::network_frame::{packet_check, packet_new, packet_send};
+    let s = f.command;
+    let kind = if server {
+        (s.debug_send_server)(socket::server(game), cp.cmd);
+        crate::tcp_game::PACKET_SERVER_COMMAND
+    } else {
+        (s.debug_send_client)(cp.cmd);
+        crate::tcp_game::PACKET_CLIENT_COMMAND
+    };
+    let mut p = packet_new(f, game, kind);
+    let check = packet_check(f);
+    p.send_uint8(cp.company, check);
+    p.send_uint16(u16::from(cp.cmd), check);
+    p.send_uint16(cp.err_msg as u16, check);
+    p.send_buffer(cp.data.as_slice(), check);
+    let mut callback = callback_index(s, cp.callback);
+    if callback > usize::from(u8::MAX) || !(s.has_unpack)(cp.cmd, callback) {
+        (s.debug_unknown_callback)(cp.cmd);
+        callback = 0;
+    }
+    p.send_uint8(callback as u8, check);
+    if server {
+        p.send_uint32(cp.frame, check);
+        p.send_bool(cp.my_cmd, check);
+    }
+    packet_send(f, game, &mut p);
+}
+
+/// `ReceiveCommand`: the wire's u16 command narrows to the native enum's u8 first.
+#[allow(clippy::cast_possible_truncation)] // Native Commands narrows the wire u16 to u8.
+fn receive_packet(
+    f: &crate::network_frame::Services,
+    p: *mut crate::packet::State,
+    cp: &mut CommandPacket,
+) -> DecodeError {
+    use crate::packet;
+    let s = f.command;
+    let commands = commands(s);
+    unsafe {
+        cp.company = packet::recv_uint8(p, f.packet);
+        cp.cmd = packet::recv_uint16(p, f.packet) as u8;
+        if !(commands.command_valid)(cp.cmd) {
+            return DecodeError::InvalidCommand;
+        }
+        if (commands.command_flags)(cp.cmd) & crate::command_type::CommandFlag::OFFLINE != 0 {
+            return DecodeError::Offline;
+        }
+        cp.err_msg = u32::from(packet::recv_uint16(p, f.packet));
+        let size = packet::recv_buffer_size(p, f.packet);
+        let mut bytes = vec![0; size];
+        (*p).read_buffer_data(&mut bytes);
+        cp.data = (s.sanitize_strings)(
+            cp.cmd,
+            ByteSpan {
+                data: bytes.as_ptr(),
+                size,
+            },
+        );
+        drop(bytes);
+        let callback = usize::from(packet::recv_uint8(p, f.packet));
+        if callback >= s.callback_count || !(s.has_unpack)(cp.cmd, callback) {
+            return DecodeError::InvalidCallback;
+        }
+        cp.callback = (s.callback)(callback);
+    }
+    DecodeError::None
+}
+fn empty_packet() -> CommandPacket {
+    CommandPacket {
+        data: CommandData::EMPTY,
+        callback: std::ptr::null(),
+        frame: 0,
+        err_msg: 0,
+        company: crate::company_type::INVALID_OWNER,
+        cmd: 0,
+        my_cmd: false,
+    }
+}
+
+/// `ClientNetworkGameSocketHandler::Receive_SERVER_COMMAND`.
+pub(crate) fn receive_server(
+    f: &crate::network_frame::Services,
+    game: *mut socket::GameSocket,
+    p: *mut crate::packet::State,
+) -> u8 {
+    use crate::network_type::{NETWORK_RECV_STATUS_MALFORMED_PACKET, NETWORK_RECV_STATUS_OKAY};
+    if socket::status(game) != crate::network_client::status::ACTIVE {
+        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+    let mut cp = empty_packet();
+    let err = receive_packet(f, p, &mut cp);
+    cp.frame = unsafe { crate::packet::recv_uint32(p, f.packet) };
+    cp.my_cmd = unsafe { crate::packet::recv_bool(p, f.packet) };
+    (f.command.debug_receive_server)(cp.cmd, cp.frame);
+    if err != DecodeError::None {
+        (f.command.console_bad_server)(err);
+        return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+    }
+    unsafe {
+        CommandQueue::edit(socket::incoming(game), |q| q.push(cp));
+    }
+    NETWORK_RECV_STATUS_OKAY
+}
+
+/// `ServerNetworkGameSocketHandler::Receive_CLIENT_COMMAND` admission and quota.
+#[allow(clippy::too_many_lines)] // The original ordered command admission/error precedence.
+pub(crate) fn receive_client(
+    f: &crate::network_frame::Services,
+    game: *mut socket::GameSocket,
+    p: *mut crate::packet::State,
+    frame: *mut crate::session::Frame,
+    work: crate::network_action::Actions,
+) -> u8 {
+    use crate::command_type::{CMD_COMPANY_ALLOW_LIST_CTRL, CMD_COMPANY_CTRL, CommandFlag};
+    use crate::company_type::{COMPANY_NEW_COMPANY, COMPANY_SPECTATOR};
+    use crate::network_type::{
+        CLIENT_ID_SERVER, NETWORK_ERROR_CHEATER, NETWORK_ERROR_COMPANY_MISMATCH,
+        NETWORK_ERROR_KICKED, NETWORK_ERROR_NOT_EXPECTED, NETWORK_ERROR_TOO_MANY_COMMANDS,
+        NETWORK_RECV_STATUS_CLIENT_QUIT, NETWORK_RECV_STATUS_OKAY,
+    };
+    let fail = |error| {
+        crate::network_connection::send_error(
+            f.connection,
+            f,
+            game,
+            error,
+            ByteSpan {
+                data: std::ptr::null(),
+                size: 0,
+            },
+            work,
+        )
+    };
+    if socket::status(game) < crate::network_frame::server_status::DONE_MAP
+        || crate::network_frame::socket_has_quit(f, game)
+    {
+        return fail(NETWORK_ERROR_NOT_EXPECTED);
+    }
+    let s = f.command;
+    if unsafe { (*socket::incoming(game)).size } >= usize::from((s.max_commands_in_queue)()) {
+        return fail(NETWORK_ERROR_TOO_MANY_COMMANDS);
+    }
+    let shell = socket::server(game);
+    (s.debug_receive_client)(shell);
+    let mut cp = empty_packet();
+    let err = receive_packet(f, p, &mut cp);
+    if crate::network_frame::socket_has_quit(f, game) {
+        return NETWORK_RECV_STATUS_CLIENT_QUIT;
+    }
+    if err != DecodeError::None {
+        (s.console_bad_client)(shell, err);
+        return fail(NETWORK_ERROR_NOT_EXPECTED);
+    }
+    let commands = commands(s);
+    if (commands.command_flags)(cp.cmd) & CommandFlag::SERVER != 0
+        && (f.connection.client_id)(shell) != CLIENT_ID_SERVER
+    {
+        (s.console_server_only)(shell, cp.cmd);
+        return fail(NETWORK_ERROR_KICKED);
+    }
+    if (commands.command_flags)(cp.cmd) & CommandFlag::SPECTATOR == 0
+        && !(s.company.shared.company_valid)(cp.company)
+        && (f.connection.client_id)(shell) != CLIENT_ID_SERVER
+    {
+        (s.console_spectator)(shell, cp.cmd);
+        return fail(NETWORK_ERROR_KICKED);
+    }
+    let action = if cp.cmd == CMD_COMPANY_CTRL {
+        (s.control_action)(cp.data.span())
+    } else {
+        crate::company_type::CCA_NEW
+    };
+    if !(cp.cmd == CMD_COMPANY_CTRL
+        && action == crate::company_type::CCA_NEW
+        && (f.connection.client_company)(shell) == COMPANY_NEW_COMPANY)
+        && (f.connection.client_company)(shell) != cp.company
+    {
+        (s.console_company_mismatch)(shell, cp.company);
+        return fail(NETWORK_ERROR_COMPANY_MISMATCH);
+    }
+    if cp.cmd == CMD_COMPANY_CTRL {
+        if action != crate::company_type::CCA_NEW || cp.company != COMPANY_SPECTATOR {
+            return fail(NETWORK_ERROR_CHEATER);
+        }
+        if (s.company.company_count)() >= usize::from((f.connection.max_companies)()) {
+            (s.server_full)((f.connection.client_id)(shell));
+            return NETWORK_RECV_STATUS_OKAY;
+        }
+    }
+    if cp.cmd == CMD_COMPANY_ALLOW_LIST_CTRL {
+        if (f.connection.client_id)(shell) != CLIENT_ID_SERVER
+            && (f.connection.client_company)(shell) != cp.company
+        {
+            return NETWORK_RECV_STATUS_OKAY;
+        }
+        let text = (f.dispatch.text_begin)(frame);
+        (s.allow_list_key)(cp.data.span(), text);
+        let mut cursor = 0;
+        let found = loop {
+            let info = (s.next_info)(&raw mut cursor);
+            if info.is_null() {
+                break false;
+            }
+            if (s.info_key_equals)(info, text) {
+                break true;
+            }
+        };
+        // The original key temporary ends before client-ID replacement and queue insertion.
+        (f.dispatch.packet_end)(frame);
+        if !found {
+            return NETWORK_RECV_STATUS_OKAY;
+        }
+    }
+    if (commands.command_flags)(cp.cmd) & CommandFlag::CLIENT_ID != 0 {
+        cp.data = (s.replace_client_id)(cp.cmd, cp.data.span(), (f.connection.client_id)(shell));
+    }
+    unsafe {
+        CommandQueue::edit(socket::incoming(game), |q| q.push(cp));
+    }
+    NETWORK_RECV_STATUS_OKAY
 }
 
 /// Grows `data` by at least one byte, as `std::vector::push_back`.
@@ -412,16 +691,34 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkCommandServices" ["probe"] => Services {
         admin_log,
-        allowed_while_paused,
-        client_queue,
-        client_send,
+        allow_list_key,
+        callback,
+        callback_count,
         commands_per_frame,
         commands_per_frame_server,
         company,
+        console_bad_client,
+        console_bad_server,
+        console_company_mismatch,
+        console_server_only,
+        console_spectator,
+        control_action,
+        debug_receive_client,
+        debug_receive_server,
+        debug_send_client,
+        debug_send_server,
+        debug_unknown_callback,
         execute,
         execute_past,
+        has_unpack,
+        info_key_equals,
+        max_commands_in_queue,
+        network,
         next_client,
-        server_send,
+        next_info,
+        replace_client_id,
+        sanitize_strings,
+        server_full,
     };
 }
 

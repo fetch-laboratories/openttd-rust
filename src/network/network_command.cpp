@@ -52,6 +52,8 @@
 #include "../waypoint_cmd.h"
 #include "../script/script_cmd.h"
 #include "../rust/company_adapter.h"
+#include "../rust/command_services.h"
+#include "../console_func.h"
 #include "../rust/settings_services.h"
 
 #include "../safeguards.h"
@@ -122,7 +124,7 @@ static const auto _callback_table = MakeCallbackTable(std::make_index_sequence<_
  */
 bool IsNetworkRegisteredCallback(CommandCallback *callback)
 {
-	return std::ranges::find(_callback_table, callback) != _callback_table.end();
+	return openttd_rust_network_registered_callback(&GetRustNetworkCommandServices(), reinterpret_cast<const void *>(callback)) != 0;
 }
 
 template <typename T> struct CallbackArgsHelper;
@@ -136,12 +138,12 @@ struct CallbackArgsHelper<void(*const)(Commands, const CommandCost &, Targs...)>
 
 template <Commands Tcmd> static CommandData SanitizeCmdStrings(std::span<const uint8_t> data);
 template <Commands Tcmd, size_t cb> static void UnpackNetworkCommand(const OpenTTDCommandPacket &cp);
-template <Commands Tcmd> static void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id);
+template <Commands Tcmd> static CommandData NetworkReplaceCommandClientId(std::span<const uint8_t> data, ClientID client_id);
 using UnpackNetworkCommandProc = void (*)(const OpenTTDCommandPacket &);
 using UnpackDispatchT = std::array<UnpackNetworkCommandProc, _callback_tuple_size>;
 struct CommandDispatch {
 	CommandData(*Sanitize)(std::span<const uint8_t>);
-	void (*ReplaceClientId)(CommandPacket &, ClientID);
+	CommandData (*ReplaceClientId)(std::span<const uint8_t>, ClientID);
 	UnpackDispatchT Unpack;
 };
 
@@ -183,38 +185,63 @@ static constexpr auto _cmd_dispatch = MakeDispatchTable(std::make_integer_sequen
  * @param callback Address of callback to search for.
  * @return Callback index or std::numeric_limits<size_t>::max() if the function wasn't found in the callback list.
  */
-static size_t FindCallbackIndex(CommandCallback *callback)
-{
-	if (auto it = std::ranges::find(_callback_table, callback); it != std::end(_callback_table)) {
-		return static_cast<size_t>(std::distance(std::begin(_callback_table), it));
-	}
-
-	return std::numeric_limits<size_t>::max();
-}
 
 static_assert(NetworkClientSocket::STATUS_MAP == 6); // network_command.rs STATUS_MAP
 
+static std::string_view CommandDecodeMessage(OpenTTDNetworkCommandDecodeError error) noexcept
+{
+	static constexpr std::array<std::string_view, 4> messages{"", "invalid command", "single-player only command", "invalid callback"};
+	return messages[to_underlying(error)];
+}
+static OpenTTDCommandData TakeNetworkCommandData(CommandData &&data) noexcept
+{
+	return std::exchange(static_cast<OpenTTDCommandData &>(data), {});
+}
+static_assert(CMD_COMPANY_ALLOW_LIST_CTRL == 91);
+static_assert(to_underlying(CommandFlag::Offline) == 2);
 const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 {
 	static const OpenTTDNetworkCommandServices services{
-		.company = &GetRustCompanyServices(),
 		.admin_log = [](const void *owner, const OpenTTDCommandPacket *cp) noexcept { NetworkAdminCmdLogging(static_cast<const NetworkClientSocket *>(owner), *cp); },
-		.allowed_while_paused = [](uint8_t cmd) noexcept { return IsCommandAllowedWhilePaused(static_cast<Commands>(cmd)); },
-		.client_queue = []() noexcept -> OpenTTDCommandQueue * { return &ClientNetworkGameSocketHandler::my_client->incoming_queue; },
-		.client_send = [](const OpenTTDCommandPacket *cp) noexcept { MyClient::SendCommand(*cp); },
+		.allow_list_key = [](OpenTTDByteSpan data, void *text) noexcept { *static_cast<std::string *>(text) = std::get<1>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_ALLOW_LIST_CTRL>::Args>(std::span(data.data, data.size))); },
+		.callback = [](size_t index) noexcept { return reinterpret_cast<const void *>(_callback_table[index]); },
+		.callback_count = _callback_table.size(),
 		.commands_per_frame = RustCommandsPerFrame,
 		.commands_per_frame_server = RustCommandsPerFrameServer,
-		.execute = [](const OpenTTDCommandPacket *cp) noexcept {
-			size_t cb_index = FindCallbackIndex(reinterpret_cast<CommandCallback *>(const_cast<void *>(cp->callback)));
+		.company = &GetRustCompanyServices(),
+		.console_bad_client = [](void *owner, OpenTTDNetworkCommandDecodeError error) noexcept {
+			auto *cs = static_cast<NetworkClientSocket *>(owner);
+			IConsolePrint(CC_WARNING, "Dropping client #{} (IP: {}) due to {}.", cs->GetInfo()->client_id, cs->GetClientIP(), CommandDecodeMessage(error));
+		},
+		.console_bad_server = [](OpenTTDNetworkCommandDecodeError error) noexcept { IConsolePrint(CC_WARNING, "Dropping server connection due to {}.", CommandDecodeMessage(error)); },
+		.console_company_mismatch = [](void *owner, uint8_t company) noexcept {
+			auto *cs = static_cast<NetworkClientSocket *>(owner);
+			IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a command as another company {}.", cs->GetInfo()->client_playas + 1, cs->GetClientIP(), company + 1);
+		},
+		.console_server_only = [](void *owner, uint8_t cmd) noexcept {
+			auto *cs = static_cast<NetworkClientSocket *>(owner);
+			IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a server only command {}.", cs->GetInfo()->client_id, cs->GetClientIP(), static_cast<Commands>(cmd));
+		},
+		.console_spectator = [](void *owner, uint8_t cmd) noexcept {
+			auto *cs = static_cast<NetworkClientSocket *>(owner);
+			IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.", cs->GetInfo()->client_id, cs->GetClientIP(), static_cast<Commands>(cmd));
+		},
+		.control_action = [](OpenTTDByteSpan data) noexcept { return static_cast<uint8_t>(std::get<0>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_CTRL>::Args>(std::span(data.data, data.size)))); },
+		.debug_receive_client = [](void *owner) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_COMMAND()", static_cast<NetworkClientSocket *>(owner)->client_id); },
+		.debug_receive_server = [](uint8_t cmd, uint32_t frame) noexcept { Debug(net, 9, "Client::Receive_SERVER_COMMAND(): cmd={}, frame={}", cmd, frame); },
+		.debug_send_client = [](uint8_t cmd) noexcept { Debug(net, 9, "Client::SendCommand(): cmd={}", cmd); },
+		.debug_send_server = [](void *owner, uint8_t cmd) noexcept { Debug(net, 9, "client[{}] SendCommand(): cmd={}", static_cast<NetworkClientSocket *>(owner)->client_id, cmd); },
+		.debug_unknown_callback = [](uint8_t cmd) noexcept { Debug(net, 0, "Unknown callback for command; no callback sent (command: {})", cmd); },
+		.execute = [](const OpenTTDCommandPacket *cp, size_t cb_index) noexcept {
 			assert(cb_index < _callback_tuple_size);
 			assert(_cmd_dispatch[cp->cmd].Unpack[cb_index] != nullptr);
 			_cmd_dispatch[cp->cmd].Unpack[cb_index](*cp);
 		},
-		.execute_past = []() noexcept {
-			/* If we reach here, it means for whatever reason, we've already executed
-			 * past the command we need to execute. */
-			FatalError("[net] Trying to execute a packet in the past!");
-		},
+		.execute_past = []() noexcept { FatalError("[net] Trying to execute a packet in the past!"); },
+		.has_unpack = [](uint8_t cmd, size_t callback) noexcept { return _cmd_dispatch[cmd].Unpack[callback] != nullptr; },
+		.info_key_equals = [](void *info, void *text) noexcept { return static_cast<NetworkClientInfo *>(info)->public_key == *static_cast<std::string *>(text); },
+		.max_commands_in_queue = RustMaxCommandsInQueue,
+		.network = GetRustNetworkFrameServices,
 		.next_client = [](size_t from, OpenTTDNetworkCommandClient *client) noexcept {
 			for (NetworkClientSocket *cs : NetworkClientSocket::Iterate(from)) {
 				*client = {static_cast<OpenTTDNetworkGameSocket *>(cs), cs->index.base()};
@@ -222,7 +249,13 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 			}
 			return false;
 		},
-		.server_send = [](void *cs, const OpenTTDCommandPacket *cp) noexcept { static_cast<NetworkClientSocket *>(cs)->SendCommand(*cp); },
+		.next_info = [](uint32_t *from) noexcept -> void * {
+			for (NetworkClientInfo *info : NetworkClientInfo::Iterate(*from)) { *from = info->index.base() + 1; return info; }
+			return nullptr;
+		},
+		.replace_client_id = [](uint8_t cmd, OpenTTDByteSpan data, uint32_t client) noexcept { return TakeNetworkCommandData(_cmd_dispatch[cmd].ReplaceClientId(std::span(data.data, data.size), static_cast<ClientID>(client))); },
+		.sanitize_strings = [](uint8_t cmd, OpenTTDByteSpan data) noexcept { return TakeNetworkCommandData(_cmd_dispatch[cmd].Sanitize(std::span(data.data, data.size))); },
+		.server_full = [](uint32_t client) noexcept { NetworkServerSendChat(NETWORK_ACTION_SERVER_MESSAGE, DESTTYPE_CLIENT, static_cast<ClientID>(client), "cannot create new company, server full", CLIENT_ID_SERVER); },
 	};
 	return services;
 }
@@ -246,42 +279,14 @@ void NetworkSendCommand(Commands cmd, StringID err_message, CommandCallback *cal
  * @param cp the struct to write the data to.
  * @return An error message, or std::nullopt there has been no error.
  */
-std::optional<std::string_view> NetworkGameSocketHandler::ReceiveCommand(Packet &p, CommandPacket &cp)
-{
-	cp.company = p.Recv_uint8();
-	/* Commands has an 8-bit underlying type; the received value narrows before validation. */
-	cp.cmd     = static_cast<uint8_t>(p.Recv_uint16());
-	if (!IsValidCommand(cp.Cmd())) return "invalid command";
-	if (GetCommandFlags(cp.Cmd()).Test(CommandFlag::Offline)) return "single-player only command";
-	cp.err_msg = p.Recv_uint16();
-	cp.SetData(_cmd_dispatch[cp.cmd].Sanitize(p.Recv_buffer()));
 
-	uint8_t callback = p.Recv_uint8();
-	if (callback >= _callback_table.size() || _cmd_dispatch[cp.cmd].Unpack[callback] == nullptr) return "invalid callback";
-
-	cp.callback = reinterpret_cast<const void *>(_callback_table[callback]);
-	return std::nullopt;
-}
 
 /**
  * Sends a command over the network.
  * @param p the packet to send it in.
  * @param cp the packet to actually send.
  */
-void NetworkGameSocketHandler::SendCommand(Packet &p, const OpenTTDCommandPacket &cp)
-{
-	p.Send_uint8(cp.company);
-	p.Send_uint16(cp.cmd);
-	p.Send_uint16(cp.err_msg);
-	p.Send_buffer(CommandPacketData(cp));
 
-	size_t callback = FindCallbackIndex(reinterpret_cast<CommandCallback *>(const_cast<void *>(cp.callback)));
-	if (callback > UINT8_MAX || _cmd_dispatch[cp.cmd].Unpack[callback] == nullptr) {
-		Debug(net, 0, "Unknown callback for command; no callback sent (command: {})", cp.cmd);
-		callback = 0; // _callback_table[0] == nullptr
-	}
-	p.Send_uint8 ((uint8_t)callback);
-}
 
 /** Helper to process a single ClientID argument. */
 template <class T>
@@ -300,16 +305,16 @@ static inline void SetClientIds(Ttuple &values, ClientID client_id, std::index_s
 }
 
 template <Commands Tcmd>
-static void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id)
+static CommandData NetworkReplaceCommandClientId(std::span<const uint8_t> data, ClientID client_id)
 {
 	/* Unpack command parameters. */
-	auto params = EndianBufferReader::ToValue<typename CommandTraits<Tcmd>::Args>(cp.Data());
+	auto params = EndianBufferReader::ToValue<typename CommandTraits<Tcmd>::Args>(data);
 
 	/* Insert client id. */
 	SetClientIds(params, client_id, std::make_index_sequence<std::tuple_size_v<decltype(params)>>{});
 
 	/* Repack command parameters. */
-	cp.SetData(EndianBufferWriter<CommandData>::FromValue<decltype(params), CommandData>(params));
+	return EndianBufferWriter<CommandData>::FromValue<decltype(params), CommandData>(params);
 }
 
 /**
@@ -317,10 +322,7 @@ static void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id)
  * @param cp Command packet to modify.
  * @param client_id Client id to insert.
  */
-void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id)
-{
-	_cmd_dispatch[cp.cmd].ReplaceClientId(cp, client_id);
-}
+
 
 
 /** Validate a single string argument coming from network. */

@@ -313,9 +313,13 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 	enable.PrepareToSend(); REQUIRE(enable.PrepareToRead()); enable.Recv_uint8();
 	REQUIRE(client_auth.ReceiveEnableEncryption(enable));
 
-	struct Case { uint8_t type, status, role; bool quit, throws; uint8_t result, consumed, waiting, closes; int64_t timestamp; size_t limit, remaining; };
+	struct Case { uint8_t type, status, role; bool quit, throws; uint8_t result, consumed, waiting, closes; int64_t timestamp; size_t limit, remaining; uint16_t command = 71; uint8_t callback = 0; size_t queued = 0; };
 	const Case cases[]{
 		{PACKET_SERVER_WAIT, 6, 0, false, false, 0, 20, 42, 0, 321, 0, 0},
+		{PACKET_SERVER_COMMAND, 8, 0, false, false, 0, 34, 17, 0, 321, 0, 0, 327, 0, 1}, // command 327 narrows to CMD_PAUSE
+		{PACKET_SERVER_COMMAND, 0, 0, false, false, 5, 19, 17, 0, 321, 0, 0},
+		{PACKET_SERVER_COMMAND, 8, 0, false, false, 5, 27, 17, 0, 321, 0, 0, 255}, // invalid ID still consumes frame/my_cmd
+		{PACKET_SERVER_COMMAND, 8, 0, false, false, 5, 34, 17, 0, 321, 0, 0, 71, 255},
 		{PACKET_SERVER_WAIT, 0, 0, false, false, 5, 19, 17, 0, 321, 0, 0},
 		{255, 0, 2, false, false, 5, 19, 17, 1, 321, 0, 0},
 		{PACKET_SERVER_WAIT, 0, 2, true, false, 5, 18, 17, 1, 77, 0, 0},
@@ -342,7 +346,18 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		if (test.quit) receiver.MarkClosed();
 		dispatch_base = &receiver;
 		Packet source(&sender, test.type);
-		source.Send_uint8(42);
+		if (test.type == PACKET_SERVER_COMMAND) {
+			source.Send_uint8(255);
+			source.Send_uint16(test.command);
+			source.Send_uint16(0x1234);
+			const uint8_t args[]{0, 1}; // CMD_PAUSE(PauseMode::Normal, true)
+			source.Send_buffer(args);
+			source.Send_uint8(test.callback);
+			source.Send_uint32(UINT32_MAX);
+			source.Send_bool(true);
+		} else {
+			source.Send_uint8(42);
+		}
 		source.PrepareToSend();
 		tcp_input.assign(source.Record()->data, source.Record()->data + source.Size());
 		tcp_read_position = 0;
@@ -385,6 +400,7 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		company.network_server = []() noexcept { return false; };
 		auto command = GetRustNetworkCommandServices();
 		command.company = &company;
+		command.console_bad_server = [](OpenTTDNetworkCommandDecodeError) noexcept {};
 		OpenTTDNetworkConnectionServices connection{};
 		bool networking = false;
 		connection.networking = &networking;
@@ -406,6 +422,17 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		if (test.throws) { CHECK_THROWS_AS(frame.Rethrow(), int); } else { CHECK_NOTHROW(frame.Rethrow()); }
 		CHECK(openttd_rust_network_actions_result(&frame.network_actions) == test.result);
 		CHECK(dispatch_position == test.consumed);
+		CHECK(receiver.incoming_queue.Count() == test.queued);
+		if (test.queued != 0) {
+			const auto &cp = receiver.incoming_queue.data[0];
+			CHECK(cp.cmd == 71);
+			CHECK(cp.company == 255);
+			CHECK(cp.err_msg == 0x1234);
+			CHECK(cp.frame == UINT32_MAX);
+			CHECK(cp.my_cmd);
+			CHECK(cp.callback == nullptr);
+			CHECK(std::vector<uint8_t>(cp.data.data, cp.data.data + cp.data.size) == std::vector<uint8_t>{0, 1});
+		}
 		CHECK(waiting == test.waiting);
 		CHECK(dispatch_closes == test.closes);
 		CHECK(game.last_packet_ns == test.timestamp);

@@ -186,6 +186,9 @@ static void CommandEstimate(int64_t cost, int32_t x, int32_t y) noexcept { ShowE
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
+		.command_flags = [](uint8_t cmd) noexcept { return GetCommandFlags(static_cast<Commands>(cmd)).base(); },
+		.command_type = [](uint8_t cmd) noexcept { return GetCommandType(static_cast<Commands>(cmd)); },
+		.command_valid = [](uint8_t cmd) noexcept { return IsValidCommand(static_cast<Commands>(cmd)); },
 		.finance = &GetRustCompanyFinanceServices(),
 		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,

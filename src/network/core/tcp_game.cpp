@@ -136,11 +136,7 @@ const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept
 			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_CLIENT_CHAT(*packet); });
 			return result;
 		},
-		.client_command = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_CLIENT_COMMAND(*packet); });
-			return result;
-		},
+
 		.client_move = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
 			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
 			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_CLIENT_MOVE(*packet); });
@@ -176,11 +172,7 @@ const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept
 			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_CLIENT_INFO(*packet); });
 			return result;
 		},
-		.server_command = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_COMMAND(*packet); });
-			return result;
-		},
+
 		.server_config_update = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
 			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
 			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_CONFIG_UPDATE(*packet); });

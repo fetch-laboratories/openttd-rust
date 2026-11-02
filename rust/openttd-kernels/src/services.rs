@@ -138,6 +138,12 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
+    /// Shared command metadata from the native traits table.
+    pub command_flags: extern "C" fn(u8) -> u16,
+    /// Original command type for pause admission.
+    pub command_type: extern "C" fn(u8) -> u8,
+    /// Original command-range validation.
+    pub command_valid: extern "C" fn(u8) -> bool,
     /// Canonical native finance owner resolution and presentation leaves.
     pub finance: &'static crate::company::FinanceServices,
     /// Current infinite-money difficulty setting.
@@ -720,6 +726,7 @@ crate::abi::layouts! {
         wormhole_reserved,
     };
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
+        command_flags, command_type, command_valid,
         finance,
         infinite_money,
         money_error,

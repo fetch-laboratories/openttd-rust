@@ -24,6 +24,7 @@
 #include "../rust/tile_owner_services.h"
 #include "../rust/command_services.h"
 #include "../rust/command_post_ffi.h"
+#include "../rust/network_frame_ffi.h"
 #include "../core/backup_type.hpp"
 #include "../strings_func.h"
 #include "../table/strings.h"
@@ -172,6 +173,8 @@ static OpenTTDSharedServices fixture_shared;
 static OpenTTDCommandPostServices fixture_post;
 static OpenTTDCommandServices fixture_command;
 static OpenTTDNetworkCommandServices fixture_network_command;
+static OpenTTDNetworkFrameServices fixture_network_frame;
+static OpenTTDNetworkGameSocket fixture_network_socket;
 static OpenTTDCompanyServices fixture_network_company, fixture_post_company;
 static OpenTTDCompanyIdentityServices fixture_identity;
 static OpenTTDSharedServices fixture_identity_shared;
@@ -235,7 +238,11 @@ static void FixtureReset(bool networking, bool server)
 	fixture_network_company.network_server = []() noexcept { return false; };
 	fixture_network_command = GetRustNetworkCommandServices();
 	fixture_network_command.company = &fixture_network_company;
-	fixture_network_command.client_send = [](const OpenTTDCommandPacket *) noexcept {};
+	fixture_network_frame = GetRustNetworkFrameServices();
+	fixture_network_frame.command = &fixture_network_command;
+	fixture_network_frame.client_game = []() noexcept { return &fixture_network_socket; };
+	fixture_network_frame.packet_enqueue = [](void *, OpenTTDPacketState *) noexcept {};
+	fixture_network_command.network = []() noexcept -> const OpenTTDNetworkFrameServices & { return fixture_network_frame; };
 	fixture_post.network = []() noexcept -> const OpenTTDNetworkCommandServices & { return fixture_network_command; };
 	fixture_post.pack_control = [](uint8_t action, uint8_t target, uint8_t reason, uint32_t client) noexcept {
 		fixture_trace.push_back(fmt::format("post {}", target));

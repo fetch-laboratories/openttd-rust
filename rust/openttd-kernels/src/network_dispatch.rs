@@ -28,7 +28,6 @@ use crate::tcp_game::{
 #[repr(C)]
 pub struct Services {
     pub client_chat: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
-    pub client_command: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub client_move: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub client_rcon: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub client_set_name: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
@@ -40,7 +39,6 @@ pub struct Services {
     pub server_banned: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub server_chat: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub server_client_info: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
-    pub server_command: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub server_config_update: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub server_error: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub server_external_chat: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
@@ -90,7 +88,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_COMMAND => match read_field!(game, role) {
-            1 => (s.dispatch.client_command)(game, shell, frame),
+            1 => crate::network_command::receive_client(s, game, p, frame, work),
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_ERROR => match read_field!(game, role) {
@@ -207,7 +205,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_COMMAND => match read_field!(game, role) {
-            0 => (s.dispatch.server_command)(game, shell, frame),
+            0 => crate::network_command::receive_server(s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_CONFIG_UPDATE => match read_field!(game, role) {
@@ -456,7 +454,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkDispatchServices" ["probe"] => Services {
         client_chat,
-        client_command,
         client_move,
         client_rcon,
         client_set_name,
@@ -468,7 +465,6 @@ crate::abi::layouts! {
         server_banned,
         server_chat,
         server_client_info,
-        server_command,
         server_config_update,
         server_error,
         server_external_chat,

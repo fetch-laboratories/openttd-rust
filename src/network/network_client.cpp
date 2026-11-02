@@ -158,16 +158,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendAuthResponse()
  * Send a command to the server.
  * @param cp The command to send.
  */
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendCommand(const OpenTTDCommandPacket &cp)
-{
-	Debug(net, 9, "Client::SendCommand(): cmd={}", cp.cmd);
 
-	auto p = std::make_unique<Packet>(my_client, PACKET_CLIENT_COMMAND);
-	my_client->NetworkGameSocketHandler::SendCommand(*p, cp);
-
-	my_client->SendPacket(std::move(p));
-	return NETWORK_RECV_STATUS_OKAY;
-}
 
 /** Send a chat-packet over the network */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendChat(NetworkAction action, DestType type, int dest, std::string_view msg, int64_t data)
@@ -401,26 +392,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_SYNC(Packet &p)
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_receive_sync(&GetRustNetworkFrameServices(), this->status, p.Record()));
 }
 
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_COMMAND(Packet &p)
-{
-	if (this->status != STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 
-	CommandPacket cp;
-	auto err = this->ReceiveCommand(p, cp);
-	cp.frame    = p.Recv_uint32();
-	cp.my_cmd   = p.Recv_bool();
-
-	Debug(net, 9, "Client::Receive_SERVER_COMMAND(): cmd={}, frame={}", cp.cmd, cp.frame);
-
-	if (err.has_value()) {
-		IConsolePrint(CC_WARNING, "Dropping server connection due to {}.", *err);
-		return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-	}
-
-	this->incoming_queue.Push(std::move(cp));
-
-	return NETWORK_RECV_STATUS_OKAY;
-}
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CHAT(Packet &p)
 {

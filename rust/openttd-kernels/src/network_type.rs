@@ -53,3 +53,8 @@ pub const NETWORK_ERROR_NOT_ON_ALLOW_LIST: u8 = 21;
 
 /// `INVALID_CLIENT_ID`.
 pub const INVALID_CLIENT_ID: u32 = 0;
+
+/// Server command rejection codes from `network_type.h`.
+pub const NETWORK_ERROR_CHEATER: u8 = 13;
+/// `NETWORK_ERROR_TOO_MANY_COMMANDS`.
+pub const NETWORK_ERROR_TOO_MANY_COMMANDS: u8 = 15;

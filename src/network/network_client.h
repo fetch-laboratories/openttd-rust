@@ -56,7 +56,6 @@ protected:
 	NetworkRecvStatus Receive_SERVER_JOIN(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_FRAME(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_SYNC(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_COMMAND(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_CHAT(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_EXTERNAL_CHAT(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_QUIT(Packet &p) override;
@@ -76,7 +75,6 @@ public:
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
 	void ClientError(NetworkRecvStatus res);
 
-	static NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 
 	static NetworkRecvStatus SendAuthResponse();
 

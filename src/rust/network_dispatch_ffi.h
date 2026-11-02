@@ -8,7 +8,6 @@ struct OpenTTDSessionLoad;
 struct Packet;
 struct OpenTTDNetworkDispatchServices {
 	uint8_t (*client_chat)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_chat);
-	uint8_t (*client_command)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_command);
 	uint8_t (*client_move)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_move);
 	uint8_t (*client_rcon)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_rcon);
 	uint8_t (*client_set_name)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_set_name);
@@ -20,7 +19,6 @@ struct OpenTTDNetworkDispatchServices {
 	uint8_t (*server_banned)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_banned);
 	uint8_t (*server_chat)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_chat);
 	uint8_t (*server_client_info)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_client_info);
-	uint8_t (*server_command)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_command);
 	uint8_t (*server_config_update)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_config_update);
 	uint8_t (*server_error)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_error);
 	uint8_t (*server_external_chat)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_external_chat);

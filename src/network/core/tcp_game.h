@@ -566,8 +566,6 @@ public:
 
 	NetworkRecvStatus ReceivePackets();
 
-	std::optional<std::string_view> ReceiveCommand(Packet &p, CommandPacket &cp);
-	void SendCommand(Packet &p, const OpenTTDCommandPacket &cp);
 
 	bool IsPendingDeletion() const { return this->pending; }
 

@@ -10,6 +10,8 @@
 
 /// `Commands::CMD_COMPANY_CTRL`.
 pub const CMD_COMPANY_CTRL: u8 = 90;
+/// `Commands::CMD_COMPANY_ALLOW_LIST_CTRL`.
+pub const CMD_COMPANY_ALLOW_LIST_CTRL: u8 = 91;
 /// `Commands::CMD_PAUSE`.
 pub const CMD_PAUSE: u8 = 71;
 /// `Commands::CMD_SET_COMPANY_COLOUR`.
@@ -24,6 +26,8 @@ impl CommandFlag {
     pub const SERVER: u16 = 1 << 0;
     /// `CommandFlag::Spectator`.
     pub const SPECTATOR: u16 = 1 << 1;
+    /// `CommandFlag::Offline`.
+    pub const OFFLINE: u16 = 1 << 2;
     /// `CommandFlag::Auto`.
     pub const AUTO: u16 = 1 << 3;
     /// `CommandFlag::AllTiles`.

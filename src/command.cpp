@@ -140,6 +140,12 @@ std::string_view GetCommandName(Commands cmd)
 	return _command_proc_table[cmd].name;
 }
 
+uint8_t GetCommandType(Commands cmd) noexcept
+{
+	assert(IsValidCommand(cmd));
+	return to_underlying(_command_proc_table[cmd].type);
+}
+
 /**
  * Returns whether the command is allowed while the game is paused.
  * @param cmd The command to check.
@@ -148,7 +154,7 @@ std::string_view GetCommandName(Commands cmd)
 bool IsCommandAllowedWhilePaused(Commands cmd)
 {
 	assert(IsValidCommand(cmd));
-	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), to_underlying(_command_proc_table[cmd].type)) != 0;
+	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), GetCommandType(cmd)) != 0;
 }
 
 /** Helper to make a desync log for a command. */

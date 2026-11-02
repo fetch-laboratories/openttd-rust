@@ -88,7 +88,6 @@ void NetworkRebuildHostList();
 void UpdateNetworkGameWindow();
 
 /* From network_command.cpp */
-void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id);
 
 void ShowNetworkError(StringID error_string);
 void NetworkTextMessage(NetworkAction action, TextColour colour, bool self_send, std::string_view name, std::string_view str = {}, StringParameter &&data = {});
