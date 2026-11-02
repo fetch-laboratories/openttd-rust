@@ -9,6 +9,7 @@
 
 #include "../stdafx.h"
 #include "network_admin.h"
+#include "network_base.h"
 #include "network_client.h"
 #include "network_server.h"
 #include "../command_func.h"
