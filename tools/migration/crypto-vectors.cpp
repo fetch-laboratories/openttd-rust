@@ -5,7 +5,12 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file crypto-vectors.cpp Generate immutable Rust known answers from the pinned original. */
+/**
+ * @file crypto-vectors.cpp Generate immutable Rust known answers from the pinned original.
+ * With R=.local/reference/openttd/src: g++ -std=c++20 -I$R tools/migration/crypto-vectors.cpp
+ * $R/3rdparty/monocypher/monocypher.cpp $R/3rdparty/monocypher/monocypher-ed25519.cpp
+ * && ./a.out > rust/openttd-kernels/src/crypto/vectors.txt
+ */
 #include "3rdparty/monocypher/monocypher.h"
 #include "3rdparty/monocypher/monocypher-ed25519.h"
 #include <algorithm>
