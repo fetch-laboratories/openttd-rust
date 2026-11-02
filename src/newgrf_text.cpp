@@ -18,6 +18,7 @@
 #include "stdafx.h"
 
 #include "debug.h"
+#include "rust/newgrf_text_ffi.h"
 #include "newgrf.h"
 #include "strings_internal.h"
 #include "newgrf_storage.h"
@@ -35,6 +36,8 @@
 #include "table/control_codes.h"
 
 #include "safeguards.h"
+
+static_assert(TEXT_TAB_NEWGRF_START == 64 && TAB_SIZE_BITS == 11 && TAB_SIZE_NEWGRF == 524288);
 
 /**
  * Explains the newgrf shift bit positioning.
@@ -59,22 +62,6 @@ enum GRFExtendedLanguages : uint8_t {
 	GRFLX_UNSPECIFIED = 0x7F,
 };
 
-
-/**
- * Holder of the above structure.
- * Putting both grfid and stringid together allows us to avoid duplicates,
- * since it is NOT SUPPOSED to happen.
- */
-struct GRFTextEntry {
-	GRFTextList textholder;
-	StringID def_string;
-	uint32_t grfid;
-	GRFStringID stringid;
-};
-
-
-static TypedIndexContainer<std::vector<GRFTextEntry>, StringIndexInTab> _grf_text;
-static uint8_t _current_lang_id = GRFLX_ENGLISH;  ///< by default, english is used.
 
 /**
  * Get the mapping from the NewGRF supplied ID to OpenTTD's internal ID.
@@ -553,21 +540,12 @@ StringID AddGRFString(uint32_t grfid, GRFStringID stringid, uint8_t langid_to_ad
 		}
 	}
 
-	auto it = std::ranges::find_if(_grf_text, [&grfid, &stringid](const GRFTextEntry &grf_text) { return grf_text.grfid == grfid && grf_text.stringid == stringid; });
-	if (it == std::end(_grf_text)) {
-		/* Too many strings allocated, return empty. */
-		if (_grf_text.size() == TAB_SIZE_NEWGRF) return STR_EMPTY;
-
-		/* We didn't find our stringid and grfid in the list, allocate a new id. */
-		it = _grf_text.emplace(std::end(_grf_text));
-		it->grfid      = grfid;
-		it->stringid   = stringid;
-		it->def_string = def_string;
-	}
-	StringIndexInTab id(it - std::begin(_grf_text));
+	size_t index = openttd_rust_grf_text_prepare(grfid, stringid.base(), def_string);
+	if (index == SIZE_MAX) return STR_EMPTY;
+	StringIndexInTab id{static_cast<uint32_t>(index)};
 
 	std::string newtext = TranslateTTDPatchCodes(grfid, langid_to_add, allow_newlines, text_to_add);
-	AddGRFTextToList(it->textholder, langid_to_add, newtext);
+	openttd_rust_grf_text_publish(index, langid_to_add, reinterpret_cast<const uint8_t *>(newtext.data()), newtext.size());
 
 	GrfMsg(3, "Added 0x{:X} grfid {:08X} string 0x{:X} lang 0x{:X} string '{}' ({:X})", id, grfid, stringid, langid_to_add, newtext, MakeStringID(TEXT_TAB_NEWGRF_START, id));
 
@@ -579,13 +557,7 @@ StringID AddGRFString(uint32_t grfid, GRFStringID stringid, uint8_t langid_to_ad
  */
 StringID GetGRFStringID(uint32_t grfid, GRFStringID stringid)
 {
-	auto it = std::ranges::find_if(_grf_text, [&grfid, &stringid](const GRFTextEntry &grf_text) { return grf_text.grfid == grfid && grf_text.stringid == stringid; });
-	if (it != std::end(_grf_text)) {
-		StringIndexInTab id(it - std::begin(_grf_text));
-		return MakeStringID(TEXT_TAB_NEWGRF_START, id);
-	}
-
-	return STR_UNDEFINED;
+	return openttd_rust_grf_text_id(grfid, stringid.base(), STR_UNDEFINED);
 }
 
 
@@ -598,20 +570,8 @@ StringID GetGRFStringID(uint32_t grfid, GRFStringID stringid)
  */
 std::optional<std::string_view> GetGRFStringFromGRFText(const GRFTextList &text_list)
 {
-	std::optional<std::string_view> default_text;
-
-	/* Search the list of lang-strings of this stringid for current lang */
-	for (const auto &text : text_list) {
-		if (text.langid == _current_lang_id) return text.text;
-
-		/* If the current string is English or American, set it as the
-		 * fallback language if the specific language isn't available. */
-		if (text.langid == GRFLX_UNSPECIFIED || (!default_text.has_value() && (text.langid == GRFLX_ENGLISH || text.langid == GRFLX_AMERICAN))) {
-			default_text = text.text;
-		}
-	}
-
-	return default_text;
+	size_t index = openttd_rust_grf_text_select(&text_list, text_list.size(), [](const void *list, size_t index) noexcept { return (*static_cast<const GRFTextList *>(list))[index].langid; });
+	return index == SIZE_MAX ? std::nullopt : std::optional<std::string_view>{text_list[index].text};
 }
 
 /**
@@ -631,14 +591,9 @@ std::optional<std::string_view> GetGRFStringFromGRFText(const GRFTextWrapper &te
  */
 std::string_view GetGRFStringPtr(StringIndexInTab stringid)
 {
-	assert(stringid.base() < _grf_text.size());
-	assert(_grf_text[stringid].grfid != 0);
-
-	auto str = GetGRFStringFromGRFText(_grf_text[stringid].textholder);
-	if (str.has_value()) return *str;
-
-	/* Use the default string ID if the fallback string isn't available */
-	return GetStringPtr(_grf_text[stringid].def_string);
+	StringID fallback;
+	auto text = openttd_rust_grf_text_get(stringid.base(), &fallback);
+	return text.data != nullptr ? std::string_view{reinterpret_cast<const char *>(text.data), text.size} : GetStringPtr(fallback);
 }
 
 /**
@@ -651,21 +606,12 @@ std::string_view GetGRFStringPtr(StringIndexInTab stringid)
  */
 void SetCurrentGrfLangID(uint8_t language_id)
 {
-	_current_lang_id = language_id;
+	openttd_rust_grf_text_set_language(language_id);
 }
 
 bool CheckGrfLangID(uint8_t lang_id, uint8_t grf_version)
 {
-	if (grf_version < 7) {
-		switch (_current_lang_id) {
-			case GRFLX_GERMAN:  return (lang_id & GRFLB_GERMAN)  != 0;
-			case GRFLX_FRENCH:  return (lang_id & GRFLB_FRENCH)  != 0;
-			case GRFLX_SPANISH: return (lang_id & GRFLB_SPANISH) != 0;
-			default:            return (lang_id & (GRFLB_ENGLISH | GRFLB_AMERICAN)) != 0;
-		}
-	}
-
-	return (lang_id == _current_lang_id || lang_id == GRFLX_UNSPECIFIED);
+	return openttd_rust_grf_text_check_language(lang_id, grf_version) != 0;
 }
 
 /**
@@ -674,7 +620,7 @@ bool CheckGrfLangID(uint8_t lang_id, uint8_t grf_version)
  */
 void CleanUpStrings()
 {
-	_grf_text.clear();
+	openttd_rust_grf_text_cleanup();
 }
 
 struct TextRefStack {

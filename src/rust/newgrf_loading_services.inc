@@ -132,7 +132,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.init_file = [](const GRFConfig *c) noexcept { InitNewGRFFile(*c); },
 		.too_many = [](GRFConfig *c) noexcept { Debug(grf, 0, "'{}' is not loaded as the maximum number of non-static GRFs has been reached", c->filename); c->errors.emplace_back(STR_NEWGRF_ERROR_MSG_FATAL, 0, STR_NEWGRF_ERROR_TOO_MANY_NEWGRFS_LOADED); },
 		.clear_errors = [](GRFConfig *c) noexcept { c->errors.clear(); },
-		.cleanup_strings = []() noexcept { CleanUpStrings(); },
 		.reset_badges = []() noexcept { ResetBadges(); },
 		.reset_bridges = []() noexcept { ResetBridges(); },
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },

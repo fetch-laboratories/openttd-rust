@@ -148,7 +148,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*init_file)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(init_file);
 	void (*too_many)(GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(too_many);
 	void (*clear_errors)(GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(clear_errors);
-	void (*cleanup_strings)() noexcept OPENTTD_SERVICE_DEFAULT(cleanup_strings);
 	void (*reset_badges)() noexcept OPENTTD_SERVICE_DEFAULT(reset_badges);
 	void (*reset_bridges)() noexcept OPENTTD_SERVICE_DEFAULT(reset_bridges);
 	void (*reset_prices)() noexcept OPENTTD_SERVICE_DEFAULT(reset_prices);
