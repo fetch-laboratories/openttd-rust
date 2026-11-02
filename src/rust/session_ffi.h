@@ -132,7 +132,6 @@ struct OpenTTDSessionServices {
 	OpenTTDVehicleSchedulerTables (*vehicle_tables)(OpenTTDSessionFrame *, bool) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tables);
 	OpenTTDCommandCost * (*vehicle_cost)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cost);
 	void (*vehicle_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_end);
-	OpenTTDScheduleTime (*schedule_time)() noexcept OPENTTD_SERVICE_DEFAULT(schedule_time);
 	const OpenTTDTownLeaves *town;
 	const OpenTTDTreeServices *trees;
 	const OpenTTDStationServices *station;
@@ -157,7 +156,6 @@ OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDWorldFrameStorage *) noexcept;
 bool RustWorldFrameEnd(OpenTTDSessionFrame *, OpenTTDWorldFrame *, uint8_t) noexcept;
 OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept;
-OpenTTDScheduleTime RustScheduleTime() noexcept;
 extern "C" {
 bool openttd_rust_session_generate(const OpenTTDSessionServices *, OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool, GWDoneProc *const *);
 bool openttd_rust_session_intro(const OpenTTDSessionServices *, OpenTTDSessionFrame *, bool);

@@ -144,7 +144,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.vehicle_tables = [](OpenTTDSessionFrame *f, bool tick) noexcept { if (!tick) return RustVehicleSchedulerTables(); auto &costs = f->vehicle.emplace(); return RustVehicleSchedulerTables(RustCommandCost(&costs.refit), RustCommandCost(&costs.temporary)); },
 		.vehicle_cost = [](OpenTTDSessionFrame *f) noexcept { return RustCommandCost(&f->vehicle->replacement); },
 		.vehicle_end = [](OpenTTDSessionFrame *f) noexcept { f->vehicle.reset(); },
-		.schedule_time = RustScheduleTime,
 		.town = &GetRustTownServices(),
 		.trees = &GetRustTreeServices(),
 		.station = &GetRustStationServices(),

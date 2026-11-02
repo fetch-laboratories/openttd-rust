@@ -153,7 +153,6 @@ pub struct Services {
     pub vehicle_tables: extern "C" fn(*mut Frame, bool) -> crate::vehicle::scheduler::Tables,
     pub vehicle_cost: extern "C" fn(*mut Frame) -> *mut std::ffi::c_void,
     pub vehicle_end: extern "C" fn(*mut Frame),
-    pub schedule_time: extern "C" fn() -> crate::linkgraph_schedule::Time,
     pub town: *const crate::town::Leaves,
     pub trees: *const crate::trees::TreeServices,
     pub station: *const crate::station_service::World,
@@ -660,7 +659,7 @@ impl Session<'_> {
         }
         crate::linkgraph_schedule::tick(
             unsafe { &*s.schedule },
-            (s.schedule_time)(),
+            unsafe { &*s.shared },
             (s.networking)() && !(s.network_server)(),
             (s.schedule_measurement)(self.frame),
         );
@@ -673,7 +672,7 @@ impl Session<'_> {
             unsafe {
                 crate::linkgraph_schedule::pause(
                     &*s.schedule,
-                    (s.schedule_time)(),
+                    &*s.shared,
                     pause() & PauseMode::LINK_GRAPH.bit() != 0,
                     pause() == 0,
                 );
@@ -970,7 +969,6 @@ crate::abi::layouts! {
         vehicle_tables,
         vehicle_cost,
         vehicle_end,
-        schedule_time,
         town,
         trees,
         station,

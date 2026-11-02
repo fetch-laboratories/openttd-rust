@@ -132,7 +132,6 @@ static void Tick(int date, int fract, bool client = false)
 		static void *measurement; measurement = &m;
 		fixture.services.schedule = &services;
 		fixture.services.networking = []() noexcept { return _networking; };
-		fixture.services.schedule_time = []() noexcept { return OpenTTDScheduleTime{TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, 4}; };
 		fixture.services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept { return measurement; };
 		if (!fixture.Run()) std::abort();
 	}
@@ -150,7 +149,6 @@ static void Pause(int bits, bool load = false)
 			fixture.services.modal = []() noexcept { return true; };
 			fixture.services.paused_measurements = SessionFixture::Nothing;
 			fixture.services.scripts_enabled = []() noexcept { return false; };
-			fixture.services.schedule_time = []() noexcept { return OpenTTDScheduleTime{1, 19, 4}; };
 			PauseModes pause; if (bits & 1) pause.Set(PauseMode::LinkGraph); if (bits & 2) pause.Set(PauseMode::Normal);
 			if (!fixture.Run(GM_EDITOR, pause)) std::abort();
 		}

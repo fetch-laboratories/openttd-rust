@@ -14,13 +14,6 @@ struct Job {
     _opaque: [u8; 0],
 }
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub(crate) struct Time {
-    date: i32,
-    fract: u16,
-    interval: u16,
-}
-#[repr(C)]
 struct Queues {
     schedule: *const *mut Graph,
     schedule_len: usize,
@@ -51,7 +44,6 @@ pub(crate) struct Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, post_pause, begin_measurement };
-    "OpenTTDScheduleTime" ["linkgraph_schedule"] => Time { date, fract, interval };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -169,12 +161,17 @@ pub(crate) extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32
         (s.shift_job)(job, interval);
     }
 }
-pub(crate) fn tick(s: &Services, time: Time, client: bool, measurement: *mut c_void) {
-    if time.fract != SPAWN_JOIN_TICK {
+pub(crate) fn tick(
+    s: &Services,
+    shared: &crate::services::Services,
+    client: bool,
+    measurement: *mut c_void,
+) {
+    if crate::timer_game_common::economy_fraction() != SPAWN_JOIN_TICK {
         return;
     }
-    let interval = i32::from(time.interval) / SECONDS_PER_DAY;
-    let offset = time.date % interval;
+    let interval = i32::from(unsafe { shared.settings().recalc_interval.read() }) / SECONDS_PER_DAY;
+    let offset = crate::timer_game_common::economy_date().0 % interval;
     if offset == 0 {
         spawn_next(s);
     } else if offset == interval / 2 {
@@ -182,17 +179,23 @@ pub(crate) fn tick(s: &Services, time: Time, client: bool, measurement: *mut c_v
         join_next(s);
     }
 }
-pub(crate) fn pause(s: &Services, time: Time, paused: bool, unpaused: bool) {
+pub(crate) fn pause(
+    s: &Services,
+    shared: &crate::services::Services,
+    paused: bool,
+    unpaused: bool,
+) {
     if paused {
         if !unfinished(s) {
             (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, false);
         }
     } else if unpaused {
-        if time.fract != SPAWN_JOIN_TICK - 2 {
+        if crate::timer_game_common::economy_fraction() != SPAWN_JOIN_TICK - 2 {
             return;
         }
-        let interval = i32::from(time.interval) / SECONDS_PER_DAY;
-        if time.date % interval == interval / 2 && unfinished(s) {
+        let interval =
+            i32::from(unsafe { shared.settings().recalc_interval.read() }) / SECONDS_PER_DAY;
+        if crate::timer_game_common::economy_date().0 % interval == interval / 2 && unfinished(s) {
             (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, true);
             witness::hit(witness::SCHEDULE_PAUSE);
         }

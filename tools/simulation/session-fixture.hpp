@@ -18,6 +18,7 @@ struct SessionFixture {
 	OpenTTDConstructionLimits limits{};
 	OpenTTDSettingAddresses settings{};
 	uint8_t climate = 0, extra_tree_placement = 0;
+	uint16_t recalc_interval = 4;
 	OpenTTDSharedServices shared{};
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
@@ -55,6 +56,7 @@ struct SessionFixture {
 		active = this;
 		settings.construction_limits = &limits;
 		settings.climate = &climate;
+		settings.recalc_interval = &recalc_interval;
 		settings.extra_tree_placement = &extra_tree_placement;
 		shared.settings = &settings;
 		shared.map = &map.statics;
@@ -138,7 +140,6 @@ struct SessionFixture {
 			tick.editor = true;
 			return tick;
 		};
-		services.schedule_time = []() noexcept { return OpenTTDScheduleTime{0, 0, 4}; };
 		services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept -> void * { return nullptr; };
 		services.schedule_end = FrameNothing;
 		services.window_tick = Nothing;
