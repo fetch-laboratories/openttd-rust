@@ -27,19 +27,9 @@ protected:
 	std::unique_ptr<class NetworkAuthenticationServerHandler> authentication_handler = nullptr; ///< The handler for the authentication.
 	std::string peer_public_key{}; ///< The public key of our client.
 
-	NetworkRecvStatus Receive_CLIENT_JOIN(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_IDENTIFY(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_GAME_INFO(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_AUTH_RESPONSE(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_GETMAP(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_MAP_OK(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_ACK(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_CHAT(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_SET_NAME(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_QUIT(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_ERROR(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_RCON(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_NEWGRFS_CHECKED(Packet &p) override;
 	NetworkRecvStatus Receive_CLIENT_MOVE(Packet &p) override;
 
 	NetworkRecvStatus SendGameInfo();
@@ -72,7 +62,6 @@ public:
 	std::string GetClientName() const;
 
 
-	NetworkRecvStatus SendMap();
 	NetworkRecvStatus SendRConResult(uint16_t colour, std::string_view command);
 	NetworkRecvStatus SendMove(ClientID client_id, CompanyID company_id);
 

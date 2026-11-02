@@ -218,12 +218,7 @@ pub(crate) fn send_clients(s: &Services, mut cursor: usize, work: Actions) {
         if sent != crate::network_tcp::Send::Closed
             && status(client.socket) == crate::network_frame::server_status::MAP
         {
-            crate::network_connection::openttd_rust_network_send_map(
-                s.connection,
-                s,
-                client.socket,
-                work,
-            );
+            crate::network_connection::send_map(s.connection, s, client.socket, work);
             if work.pending() {
                 work.push(crate::network_action::Resume::SendClients(cursor));
                 return;

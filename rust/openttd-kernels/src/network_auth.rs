@@ -95,7 +95,7 @@ pub(crate) fn receive_enable(f: &Services, game: *mut GameSocket, p: *mut State)
     (s.enable_encryption)(native, receive, send);
     (s.debug_encrypted)();
     write_field!(game, status, client::ENCRYPTED);
-    crate::network_client::openttd_rust_network_client_send_identify(s, f)
+    crate::network_client::send_identify(s, f)
 }
 
 pub(crate) fn receive_response(
@@ -160,36 +160,4 @@ pub(crate) fn receive_response(
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_auth_send_response(f: &Services) -> u8 {
     send_response(f)
-}
-/// # Safety
-/// The game socket and incoming packet are live for the handler entry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_auth_receive_request(
-    f: &Services,
-    game: *mut GameSocket,
-    p: *mut State,
-) -> u8 {
-    receive_request(f, game, p)
-}
-/// # Safety
-/// Same live socket/packet contract as `receive_request`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_auth_receive_enable(
-    f: &Services,
-    game: *mut GameSocket,
-    p: *mut State,
-) -> u8 {
-    receive_enable(f, game, p)
-}
-/// # Safety
-/// Same live socket/packet contract; the action driver outlives any requested map save.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_auth_receive_response(
-    f: &Services,
-    game: *mut GameSocket,
-    p: *mut State,
-    work: Actions,
-) -> u8 {
-    work.network(f);
-    receive_response(f, game, p, work)
 }

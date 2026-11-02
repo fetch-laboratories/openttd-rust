@@ -83,9 +83,6 @@ void openttd_rust_network_actions_drop(OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_actions_result(const OpenTTDNetworkActionsStorage *);
 OpenTTDNetworkFrameState *openttd_rust_network_frame_storage();
 uint32_t openttd_rust_network_calculate_lag(const OpenTTDNetworkFrameServices *, const OpenTTDNetworkSocketSync *sync);
-uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *socket, OpenTTDPacketState *packet, OpenTTDSessionFrame *, OpenTTDNetworkActionsStorage *);
-uint8_t openttd_rust_network_receive_frame(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDNetworkSocketSync *sync, OpenTTDPacketState *packet);
-uint8_t openttd_rust_network_receive_sync(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDPacketState *packet);
 }
 /** The Rust frame state. */
 inline OpenTTDNetworkFrameState &GetRustNetworkFrameState() noexcept

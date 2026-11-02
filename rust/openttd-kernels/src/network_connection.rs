@@ -350,7 +350,7 @@ pub(crate) fn next_map(
     }
     if !best.is_null() {
         set_status(s, best, AUTHORIZED);
-        openttd_rust_network_send_map(s, f, best, work);
+        send_map(s, f, best, work);
         if work.pending() {
             work.push(Resume::Waits(1));
             return;
@@ -375,8 +375,7 @@ pub(crate) fn update_waiters(f: &FrameServices, count: usize) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_send_map(
+pub(crate) fn send_map(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -448,8 +447,7 @@ pub(crate) fn map_transfer(f: &FrameServices, socket: *mut socket::GameSocket, w
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_getmap(
+pub(crate) fn receive_getmap(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -468,11 +466,10 @@ pub extern "C" fn openttd_rust_network_receive_getmap(
             return send_wait(s, f, socket);
         }
     }
-    openttd_rust_network_send_map(s, f, socket, work)
+    send_map(s, f, socket, work)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_map_ok(
+pub(crate) fn receive_map_ok(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -565,8 +562,7 @@ pub(crate) fn send_newgrf_check(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_newgrfs_checked(
+pub(crate) fn receive_newgrfs_checked(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -580,8 +576,7 @@ pub extern "C" fn openttd_rust_network_receive_newgrfs_checked(
     send_welcome(s, f, socket, work)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_game_info(
+pub(crate) fn receive_game_info(
     s: &Services,
     _f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -607,8 +602,7 @@ pub extern "C" fn openttd_rust_network_next_client_id() -> u32 {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_join(
+pub(crate) fn receive_join(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -632,8 +626,7 @@ pub extern "C" fn openttd_rust_network_receive_join(
     crate::network_auth::send_request(f, socket, work)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_identify(
+pub(crate) fn receive_identify(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -828,8 +821,7 @@ pub(crate) fn send_newgame(s: &Services, f: &FrameServices, socket: *mut socket:
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_error(
+pub(crate) fn receive_error(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,
@@ -859,8 +851,7 @@ pub extern "C" fn openttd_rust_network_receive_error(
     close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT, work)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_quit(
+pub(crate) fn receive_quit(
     s: &Services,
     f: &FrameServices,
     socket: *mut socket::GameSocket,

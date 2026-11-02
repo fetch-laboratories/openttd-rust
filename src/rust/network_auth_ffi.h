@@ -5,8 +5,5 @@
 #include "network_frame_ffi.h"
 extern "C" {
 uint8_t openttd_rust_network_auth_send_response(const OpenTTDNetworkFrameServices *);
-uint8_t openttd_rust_network_auth_receive_request(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *, OpenTTDPacketState *);
-uint8_t openttd_rust_network_auth_receive_enable(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *, OpenTTDPacketState *);
-uint8_t openttd_rust_network_auth_receive_response(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *, OpenTTDPacketState *, OpenTTDNetworkActionsStorage *);
 }
 #endif

@@ -49,7 +49,6 @@ uint8_t openttd_rust_network_registered_callback(const OpenTTDNetworkCommandServ
 void openttd_rust_network_send_command(const OpenTTDNetworkCommandServices *, uint8_t cmd, uint32_t err_msg, const void *callback, uint8_t company, OpenTTDByteSpan data);
 void openttd_rust_command_data_grow(OpenTTDCommandData *);
 void openttd_rust_command_data_free(OpenTTDCommandData *);
-void openttd_rust_command_queue_push(OpenTTDCommandQueue *, OpenTTDCommandPacket *);
 void openttd_rust_command_queue_free(OpenTTDCommandQueue *);
 }
 #endif /* RUST_NETWORK_COMMAND_FFI_H */

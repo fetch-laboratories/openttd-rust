@@ -134,7 +134,6 @@ struct CallbackArgsHelper<void(*const)(Commands, const CommandCost &, Targs...)>
 	using Args = std::tuple<std::decay_t<Targs>...>;
 };
 
-
 /* Helpers to generate the command dispatch table from the command traits. */
 
 template <Commands Tcmd> static CommandData SanitizeCmdStrings(std::span<const uint8_t> data);
@@ -180,12 +179,6 @@ static constexpr auto _cmd_dispatch = MakeDispatchTable(std::make_integer_sequen
 #ifdef SILENCE_GCC_FUNCTION_POINTER_CAST
 #	pragma GCC diagnostic pop
 #endif
-
-/**
- * Find the callback index of a callback pointer.
- * @param callback Address of callback to search for.
- * @return Callback index or std::numeric_limits<size_t>::max() if the function wasn't found in the callback list.
- */
 
 static_assert(NetworkClientSocket::STATUS_MAP == 6); // network_command.rs STATUS_MAP
 
@@ -274,21 +267,6 @@ void NetworkSendCommand(Commands cmd, StringID err_message, CommandCallback *cal
 	openttd_rust_network_send_command(&GetRustNetworkCommandServices(), cmd, err_message, reinterpret_cast<const void *>(callback), company.base(), {cmd_data.data(), cmd_data.size()});
 }
 
-/**
- * Receives a command from the network.
- * @param p the packet to read from.
- * @param cp the struct to write the data to.
- * @return An error message, or std::nullopt there has been no error.
- */
-
-
-/**
- * Sends a command over the network.
- * @param p the packet to send it in.
- * @param cp the packet to actually send.
- */
-
-
 /** Helper to process a single ClientID argument. */
 template <class T>
 static inline void SetClientIdHelper(T &data, [[maybe_unused]] ClientID client_id)
@@ -317,14 +295,6 @@ static CommandData NetworkReplaceCommandClientId(std::span<const uint8_t> data, 
 	/* Repack command parameters. */
 	return EndianBufferWriter<CommandData>::FromValue<decltype(params), CommandData>(params);
 }
-
-/**
- * Insert a client ID into the command data in a command packet.
- * @param cp Command packet to modify.
- * @param client_id Client id to insert.
- */
-
-
 
 /** Validate a single string argument coming from network. */
 template <class T>

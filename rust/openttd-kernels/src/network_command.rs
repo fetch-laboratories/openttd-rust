@@ -654,29 +654,6 @@ pub unsafe extern "C" fn openttd_rust_command_data_free(data: *mut CommandData) 
     unsafe { drop((*data).take()) };
 }
 
-/// Moves `packet` to the back of `queue`, leaving its data empty.
-///
-/// # Safety
-/// Both are live; `packet` holds parts from this module or zeroes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_queue_push(
-    queue: *mut CommandQueue,
-    packet: *mut CommandPacket,
-) {
-    unsafe {
-        let c = CommandPacket {
-            data: CommandData::from_vec((*packet).data.take()),
-            callback: (*packet).callback,
-            frame: (*packet).frame,
-            err_msg: (*packet).err_msg,
-            company: (*packet).company,
-            cmd: (*packet).cmd,
-            my_cmd: (*packet).my_cmd,
-        };
-        CommandQueue::edit(queue, |queue| queue.push(c));
-    }
-}
-
 /// # Safety
 /// `queue` is live and holds parts from this module or zeroes; it is left empty.
 #[unsafe(no_mangle)]
@@ -741,10 +718,9 @@ mod tests {
     #[test]
     fn queue_parts_survive_edits_and_moves() {
         let mut queue = CommandQueue::EMPTY;
-        let mut moved = packet(7, &[1, 2, 3]);
+        let moved = packet(7, &[1, 2, 3]);
         unsafe {
-            openttd_rust_command_queue_push(&raw mut queue, &raw mut moved);
-            assert!(moved.data.data.is_null() && moved.data.size == 0);
+            CommandQueue::edit(&raw mut queue, |q| q.push(moved));
             CommandQueue::edit(&raw mut queue, |q| q.push(packet(8, &[])));
             assert_eq!(queue.size, 2);
             assert_eq!((*queue.data).data.as_slice(), &[1, 2, 3]);

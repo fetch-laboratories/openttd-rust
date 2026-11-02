@@ -57,7 +57,6 @@ struct PacketReader : LoadFilter {
 	{
 	}
 
-
 	size_t Read(uint8_t *rbuf, size_t size) override
 	{
 		/* Limit the amount to read to whatever we still have. */
@@ -77,7 +76,6 @@ struct PacketReader : LoadFilter {
 	}
 };
 
-
 /**
  * Create an emergency savegame when the network connection is lost.
  */
@@ -86,7 +84,6 @@ void ClientNetworkEmergencySave()
 	static FiosNumberedSaveName _netsave_ctr("netsave");
 	DoAutoOrNetsave(_netsave_ctr);
 }
-
 
 /**
  * Create a new socket for the client side of the game connection.
@@ -112,16 +109,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::CloseConnection(NetworkRecvSta
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_close(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), status));
 }
 
-/**
- * Handle an error coming from the client side.
- * @param res The "error" that happened.
- */
-void ClientNetworkGameSocketHandler::ClientError(NetworkRecvStatus res)
-{
-	openttd_rust_network_client_error(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), res);
-}
-
-
 /** Our client's connection. */
 ClientNetworkGameSocketHandler * ClientNetworkGameSocketHandler::my_client = nullptr;
 
@@ -133,17 +120,6 @@ std::string _network_server_name;
 /** Information about the game to join to. */
 NetworkJoinInfo _network_join;
 
-/***********
- * Sending functions
- ************/
-
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::SendIdentify()
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_send_identify(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices()));
-}
-
-
 /**
  * Set the game password as requested.
  * @param password The game password.
@@ -152,13 +128,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendAuthResponse()
 {
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_auth_send_response(&GetRustNetworkFrameServices()));
 }
-
-
-/**
- * Send a command to the server.
- * @param cp The command to send.
- */
-
 
 /** Send a chat-packet over the network */
 NetworkRecvStatus ClientNetworkGameSocketHandler::SendChat(NetworkAction action, DestType type, int dest, std::string_view msg, int64_t data)
@@ -177,7 +146,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendChat(NetworkAction action,
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
-
 /**
  * Tell the server that we like to change the name of the client.
  * @param name The new name.
@@ -192,7 +160,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::SendSetName(const std::string 
 	my_client->SendPacket(std::move(p));
 	return NETWORK_RECV_STATUS_OKAY;
 }
-
 
 /**
  * Send a console command.
@@ -233,22 +200,9 @@ bool ClientNetworkGameSocketHandler::IsConnected()
 	return openttd_rust_network_client_is_connected(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices());
 }
 
-
 /***********
  * Receiving functions
  ************/
-
-extern bool SafeLoad(const std::string &filename, SaveLoadOperation fop, DetailedFileType dft, GameMode newgm, Subdirectory subdir, std::shared_ptr<struct LoadFilter> lf);
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_FULL(Packet &)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_full(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this)));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_BANNED(Packet &)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_banned(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this)));
-}
 
 /* This packet contains info about the client (playas and name)
  *  as client we save this in NetworkClientInfo, linked via 'client_id'
@@ -314,17 +268,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CLIENT_INFO(Pac
 	return NETWORK_RECV_STATUS_OKAY;
 }
 
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_ERROR(Packet &p)
-{
-	std::string scratch;
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_error(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record(), &scratch));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CHECK_NEWGRFS(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_grfs(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
 class ClientGamePasswordRequestHandler : public NetworkAuthenticationPasswordRequestHandler {
 	virtual void SendResponse() override { MyClient::SendAuthResponse(); }
 	virtual void AskUserForPassword(std::shared_ptr<NetworkAuthenticationPasswordRequest> request) override
@@ -336,63 +279,6 @@ class ClientGamePasswordRequestHandler : public NetworkAuthenticationPasswordReq
 		}
 	}
 };
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_AUTH_REQUEST(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_auth_receive_request(&GetRustNetworkFrameServices(), this, p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_ENABLE_ENCRYPTION(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_auth_receive_enable(&GetRustNetworkFrameServices(), this, p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_WELCOME(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_welcome(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_WAIT(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_wait(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_BEGIN(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_begin(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_SIZE(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_size(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DATA(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_data(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DONE(Packet &)
-{
-	OpenTTDSessionFrame frame;
-	const std::string filename;
-	OpenTTDSessionLoad load{filename, SLO_LOAD, DFT_GAME_FILE, NO_DIRECTORY, {}};
-	auto result = openttd_rust_network_client_receive_map_done(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), static_cast<OpenTTDNetworkGameSocket *>(this), &frame, &load);
-	frame.Rethrow();
-	return static_cast<NetworkRecvStatus>(result);
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_FRAME(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_receive_frame(&GetRustNetworkFrameServices(), this->status, this, p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_SYNC(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_receive_sync(&GetRustNetworkFrameServices(), this->status, p.Record()));
-}
-
-
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CHAT(Packet &p)
 {
@@ -460,31 +346,6 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_EXTERNAL_CHAT(P
 	NetworkTextMessage(NETWORK_ACTION_EXTERNAL_CHAT, colour, false, user, msg, source);
 
 	return NETWORK_RECV_STATUS_OKAY;
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_ERROR_QUIT(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_error_quit(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_QUIT(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_quit(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_JOIN(Packet &p)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_join(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record()));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_SHUTDOWN(Packet &)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_shutdown(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this)));
-}
-
-NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_NEWGAME(Packet &)
-{
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_newgame(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this)));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_RCON(Packet &p)

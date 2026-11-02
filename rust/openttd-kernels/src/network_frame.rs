@@ -295,8 +295,7 @@ pub(crate) fn send_sync(s: &Services, game: *mut socket::GameSocket) -> u8 {
 ///
 /// # Safety
 /// `socket` is a live server-side record; `p` is the packet being handled.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_receive_ack(
+pub(crate) unsafe fn receive_ack(
     s: &Services,
     socket: *mut socket::GameSocket,
     p: *mut PacketState,
@@ -348,8 +347,7 @@ fn send_ack(s: &Services) {
 ///
 /// # Safety
 /// `sync` is the live client socket's record and `p` the packet being handled.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_receive_frame(
+pub(crate) unsafe fn receive_frame(
     s: &Services,
     status: u8,
     sync: *mut SocketSync,
@@ -373,12 +371,7 @@ pub unsafe extern "C" fn openttd_rust_network_receive_frame(
 }
 
 /// `ClientNetworkGameSocketHandler::Receive_SERVER_SYNC`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_receive_sync(
-    s: &Services,
-    status: u8,
-    p: *mut PacketState,
-) -> u8 {
+pub(crate) fn receive_sync(s: &Services, status: u8, p: *mut PacketState) -> u8 {
     if status != CLIENT_STATUS_ACTIVE {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }

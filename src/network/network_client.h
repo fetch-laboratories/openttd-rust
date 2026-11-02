@@ -41,39 +41,18 @@ protected:
 	friend const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 	static ClientNetworkGameSocketHandler *my_client; ///< This is us!
 
-	NetworkRecvStatus Receive_SERVER_FULL(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_BANNED(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_ERROR(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_CLIENT_INFO(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_AUTH_REQUEST(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_ENABLE_ENCRYPTION(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_WELCOME(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_WAIT(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_MAP_BEGIN(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_MAP_SIZE(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_MAP_DATA(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_MAP_DONE(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_JOIN(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_FRAME(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_SYNC(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_CHAT(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_EXTERNAL_CHAT(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_QUIT(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_ERROR_QUIT(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_SHUTDOWN(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_NEWGAME(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_RCON(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_CHECK_NEWGRFS(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_MOVE(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_CONFIG_UPDATE(Packet &p) override;
 
-	static NetworkRecvStatus SendIdentify();
 public:
 	ClientNetworkGameSocketHandler(SOCKET s, std::string_view connection_string);
 	~ClientNetworkGameSocketHandler();
 
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
-	void ClientError(NetworkRecvStatus res);
 
 
 	static NetworkRecvStatus SendAuthResponse();
@@ -89,6 +68,7 @@ public:
 
 /** Helper to make the code look somewhat nicer. */
 typedef ClientNetworkGameSocketHandler MyClient;
+
 
 void NetworkClient_Connected();
 

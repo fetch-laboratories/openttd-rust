@@ -15,6 +15,43 @@
 #include "../rust/company_services.h"
 #include "../rust/session_native.hpp"
 
+/* Tests supply transport bytes, while production framing, dispatch and cleanup run. */
+static std::span<const uint8_t> fixture_receive_wire;
+static NetworkSocketHandler *fixture_receive_base;
+static Packet *fixture_receive_pending;
+static uint fixture_receive_position;
+static uint8_t ReceiveFixturePacket(const OpenTTDSessionServices &session, OpenTTDNetworkFrameServices network, OpenTTDNetworkGameSocket &game, OpenTTDSessionFrame &frame, Packet &source)
+{
+	source.PrepareToSend();
+	fixture_receive_wire = {source.Record()->data, source.Size()};
+	fixture_receive_base = game.base;
+	fixture_receive_pending = nullptr;
+	fixture_receive_position = 0;
+	struct Pending { ~Pending() { delete std::exchange(fixture_receive_pending, nullptr); } } pending;
+	auto tcp = GetRustNetworkTcpServices();
+	tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
+	tcp.base_socket = [](NetworkTCPSocketHandler *) noexcept { return fixture_receive_base; };
+	tcp.receive_packet = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return fixture_receive_pending ? fixture_receive_pending->Record() : nullptr; };
+	tcp.receive_create = [](NetworkTCPSocketHandler *, OpenTTDPacketState *record) noexcept { fixture_receive_pending = new Packet(*record); return fixture_receive_pending->Record(); };
+	tcp.receive_bytes = [](NetworkTCPSocketHandler *, uint8_t *data, size_t size) noexcept -> intptr_t {
+		if (fixture_receive_wire.empty()) return -1;
+		size_t count = std::min(size, fixture_receive_wire.size());
+		std::copy_n(fixture_receive_wire.data(), count, data);
+		fixture_receive_wire = fixture_receive_wire.subspan(count);
+		return count;
+	};
+	tcp.receive_take = [](NetworkTCPSocketHandler *) noexcept { return std::exchange(fixture_receive_pending, nullptr); };
+	tcp.error_would_block = [](const NetworkError *) noexcept { return true; };
+	tcp.packet_record = [](Packet *packet) noexcept { fixture_receive_position = packet->Record()->position; return packet->Record(); };
+	network.tcp = &tcp;
+	network.packet = &Packet::Services();
+	if (network.command == nullptr) network.command = &GetRustNetworkCommandServices();
+	if (network.dispatch == nullptr) network.dispatch = &GetRustNetworkDispatchServices();
+	if (network.now == nullptr) network.now = []() noexcept -> int64_t { return 0; };
+	openttd_rust_network_receive_packets(&session, &network, &game, &frame, &frame.network_actions);
+	return openttd_rust_network_actions_result(&frame.network_actions);
+}
+
 TEST_CASE("Network admission - each NewGRF checksum starts empty")
 {
 	struct RestoreConfigs {
@@ -28,21 +65,11 @@ TEST_CASE("Network admission - each NewGRF checksum starts empty")
 	_all_grfs.push_back(std::move(config));
 
 	class Socket : public NetworkSocketHandler {} socket;
-	Packet source(&socket, PacketType{});
+	Packet source(&socket, PACKET_SERVER_CHECK_NEWGRFS);
 	source.Send_uint8(2);
 	source.Send_uint32(0);
 	for (uint i = 0; i < MD5_HASH_BYTES; ++i) source.Send_uint8(42);
 	source.Send_uint32(0); // The second identifier has no checksum bytes.
-	source.PrepareToSend();
-	Packet packet(&socket, COMPAT_MTU, source.Size());
-	packet.TransferIn([&](std::span<uint8_t> destination) {
-		return source.TransferOut([&](std::span<const uint8_t> bytes) {
-			std::ranges::copy(bytes, destination.begin());
-			return bytes.size();
-		});
-	});
-	REQUIRE(packet.PrepareToRead());
-	packet.Recv_uint8(); // Packet type.
 
 	auto services = GetRustNetworkClientServices();
 	services.debug_grfs = [](uint32_t) noexcept {};
@@ -50,8 +77,11 @@ TEST_CASE("Network admission - each NewGRF checksum starts empty")
 	OpenTTDNetworkGameSocket game{};
 	game.base = &socket;
 	game.status = 3; // Client STATUS_ENCRYPTED.
-	CHECK(openttd_rust_network_client_receive_grfs(&services, &GetRustNetworkFrameServices(), &game, packet.Record()) == NETWORK_RECV_STATUS_NEWGRF_MISMATCH);
-	CHECK(packet.Record()->position == packet.Size());
+	auto network = GetRustNetworkFrameServices();
+	network.client = &services;
+	OpenTTDSessionFrame frame;
+	CHECK(ReceiveFixturePacket(GetRustSessionServices(), network, game, frame, source) == NETWORK_RECV_STATUS_NEWGRF_MISMATCH);
+	CHECK(fixture_receive_position == source.Size());
 }
 
 TEST_CASE("Network map load - recorded exception stops cleanup and reaches native caller")
@@ -74,9 +104,11 @@ TEST_CASE("Network map load - recorded exception stops cleanup and reaches nativ
 	};
 	OpenTTDNetworkFrameServices network{};
 	OpenTTDSessionFrame frame;
-	const std::string filename;
-	OpenTTDSessionLoad load{filename, SLO_LOAD, DFT_GAME_FILE, NO_DIRECTORY, {}};
-	CHECK(openttd_rust_network_client_receive_map_done(&client, &network, &session, &game, &frame, &load) == 0);
+	network.client = &client;
+	NetworkSocketHandler socket;
+	game.base = &socket;
+	Packet source(&socket, PACKET_SERVER_MAP_DONE);
+	CHECK(ReceiveFixturePacket(session, network, game, frame, source) == 0);
 	CHECK(_game_mode == GM_NORMAL);
 	CHECK_THROWS_AS(frame.Rethrow(), int);
 }
@@ -86,9 +118,8 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 	OpenTTDNetworkFrameServices network{};
 	network.packet = &Packet::Services();
 	class Socket : public NetworkSocketHandler {} socket;
-	Packet packet(&socket, PacketType{});
+	Packet packet(&socket, PACKET_CLIENT_ACK);
 	packet.Send_uint32(GetRustNetworkFrameState().frame_counter);
-	packet.Record()->position = Packet::EncodedLengthOfPacketSize() + Packet::EncodedLengthOfPacketType();
 	network.debug_receive_ack = [](void *, uint32_t) noexcept {};
 	network.debug_active = [](void *) noexcept {};
 	network.on_server_connect = [](OpenTTDSessionFrame *frame) noexcept {
@@ -96,13 +127,16 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 	};
 	OpenTTDNetworkGameSocket game{};
 	game.status = 8; // Server STATUS_PRE_ACTIVE.
+	game.role = 1;
 	game.base = &socket;
 	OpenTTDNetworkSocketSync sync{};
 	game.sync = &sync;
+	sync.receive_limit = COMPAT_MTU;
 	sync.last_frame = 123;
 	sync.last_frame_server = 456;
 	OpenTTDSessionFrame frame;
-	CHECK(openttd_rust_network_receive_ack(&network, &game, packet.Record(), &frame, &frame.network_actions) == 0);
+	CHECK(ReceiveFixturePacket(GetRustSessionServices(), network, game, frame, packet) == 0);
+	CHECK(fixture_receive_position == 7); // The missing token was never consumed.
 	CHECK(game.status == 9); // Server STATUS_ACTIVE.
 	CHECK(sync.last_token_frame == GetRustNetworkFrameState().frame_counter);
 	CHECK(sync.last_frame == 123);

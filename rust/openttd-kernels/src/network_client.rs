@@ -233,8 +233,7 @@ pub(crate) fn send_join(s: &Services, f: &FrameServices) -> u8 {
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_send_identify(s: &Services, f: &FrameServices) -> u8 {
+pub(crate) fn send_identify(s: &Services, f: &FrameServices) -> u8 {
     (s.debug_send_identify)();
     let game = (f.client_game)();
     let mut p = packet_new(f, game, PACKET_CLIENT_IDENTIFY);
@@ -277,19 +276,13 @@ pub(crate) fn send_quit(s: &Services, f: &FrameServices) -> u8 {
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_QUIT)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_full(
-    s: &Services,
-    _f: &FrameServices,
-    _game: *mut socket::GameSocket,
-) -> u8 {
+pub(crate) fn receive_full(s: &Services, _f: &FrameServices, _game: *mut socket::GameSocket) -> u8 {
     (s.debug_full)();
     (s.show_full)();
     NETWORK_RECV_STATUS_SERVER_FULL
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_banned(
+pub(crate) fn receive_banned(
     s: &Services,
     _f: &FrameServices,
     _game: *mut socket::GameSocket,
@@ -299,8 +292,7 @@ pub extern "C" fn openttd_rust_network_client_receive_banned(
     NETWORK_RECV_STATUS_SERVER_BANNED
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_error(
+pub(crate) fn receive_error(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -321,8 +313,7 @@ pub extern "C" fn openttd_rust_network_client_receive_error(
     NETWORK_RECV_STATUS_SERVER_ERROR
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_grfs(
+pub(crate) fn receive_grfs(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -351,8 +342,7 @@ pub extern "C" fn openttd_rust_network_client_receive_grfs(
     result
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_welcome(
+pub(crate) fn receive_welcome(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -368,8 +358,7 @@ pub extern "C" fn openttd_rust_network_client_receive_welcome(
     send_getmap(s, f)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_wait(
+pub(crate) fn receive_wait(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -386,8 +375,7 @@ pub extern "C" fn openttd_rust_network_client_receive_wait(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_map_begin(
+pub(crate) fn receive_map_begin(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -414,8 +402,7 @@ pub extern "C" fn openttd_rust_network_client_receive_map_begin(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_map_size(
+pub(crate) fn receive_map_size(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -430,8 +417,7 @@ pub extern "C" fn openttd_rust_network_client_receive_map_size(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_map_data(
+pub(crate) fn receive_map_data(
     s: &Services,
     _f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -455,8 +441,7 @@ pub extern "C" fn openttd_rust_network_client_receive_map_data(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_map_done(
+pub(crate) fn receive_map_done(
     s: &Services,
     f: &FrameServices,
     session: &crate::session::Services,
@@ -529,8 +514,7 @@ pub(crate) fn map_loaded(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_error_quit(
+pub(crate) fn receive_error_quit(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -550,8 +534,7 @@ pub extern "C" fn openttd_rust_network_client_receive_error_quit(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_quit(
+pub(crate) fn receive_quit(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -573,8 +556,7 @@ pub extern "C" fn openttd_rust_network_client_receive_quit(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_join(
+pub(crate) fn receive_join(
     s: &Services,
     f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -593,8 +575,7 @@ pub extern "C" fn openttd_rust_network_client_receive_join(
     NETWORK_RECV_STATUS_OKAY
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_shutdown(
+pub(crate) fn receive_shutdown(
     s: &Services,
     _f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -609,8 +590,7 @@ pub extern "C" fn openttd_rust_network_client_receive_shutdown(
     NETWORK_RECV_STATUS_SERVER_ERROR
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_receive_newgame(
+pub(crate) fn receive_newgame(
     s: &Services,
     _f: &FrameServices,
     game: *mut socket::GameSocket,
@@ -693,16 +673,6 @@ pub(crate) fn client_error(
         crate::session::set_pending(SwitchMode::MENU);
     }
     unsafe { f.connection.networking.write(false) };
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_error(
-    s: &Services,
-    f: &FrameServices,
-    game: *mut socket::GameSocket,
-    result: u8,
-) {
-    client_error(s, f, game, result);
 }
 
 const SECOND: i64 = 1_000_000_000;

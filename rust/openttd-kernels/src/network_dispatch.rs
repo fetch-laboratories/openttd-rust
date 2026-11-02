@@ -74,9 +74,7 @@ fn handle(
     socket::set_last_packet(game, (s.now)());
     match kind {
         PACKET_CLIENT_ACK => match read_field!(game, role) {
-            1 => unsafe {
-                crate::network_frame::openttd_rust_network_receive_ack(s, game, p, frame, work)
-            },
+            1 => unsafe { crate::network_frame::receive_ack(s, game, p, frame, work) },
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_AUTH_RESPONSE => match read_field!(game, role) {
@@ -92,34 +90,19 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_ERROR => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_error(
-                s.connection,
-                s,
-                game,
-                p,
-                work,
-            ),
+            1 => crate::network_connection::receive_error(s.connection, s, game, p, work),
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_GAME_INFO => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_game_info(
-                s.connection,
-                s,
-                game,
-            ),
+            1 => crate::network_connection::receive_game_info(s.connection, s, game),
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_GETMAP => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_getmap(
-                s.connection,
-                s,
-                game,
-                work,
-            ),
+            1 => crate::network_connection::receive_getmap(s.connection, s, game, work),
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_IDENTIFY => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_identify(
+            1 => crate::network_connection::receive_identify(
                 s.connection,
                 s,
                 game,
@@ -130,7 +113,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_JOIN => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_join(
+            1 => crate::network_connection::receive_join(
                 s.connection,
                 s,
                 game,
@@ -141,12 +124,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_MAP_OK => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_map_ok(
-                s.connection,
-                s,
-                game,
-                work,
-            ),
+            1 => crate::network_connection::receive_map_ok(s.connection, s, game, work),
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_MOVE => match read_field!(game, role) {
@@ -154,21 +132,11 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_NEWGRFS_CHECKED => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_newgrfs_checked(
-                s.connection,
-                s,
-                game,
-                work,
-            ),
+            1 => crate::network_connection::receive_newgrfs_checked(s.connection, s, game, work),
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_QUIT => match read_field!(game, role) {
-            1 => crate::network_connection::openttd_rust_network_receive_quit(
-                s.connection,
-                s,
-                game,
-                work,
-            ),
+            1 => crate::network_connection::receive_quit(s.connection, s, game, work),
             _ => illegal(s, game, kind),
         },
         PACKET_CLIENT_RCON => match read_field!(game, role) {
@@ -184,9 +152,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_BANNED => match read_field!(game, role) {
-            0 => {
-                crate::network_client::openttd_rust_network_client_receive_banned(s.client, s, game)
-            }
+            0 => crate::network_client::receive_banned(s.client, s, game),
             2 => (s.dispatch.server_banned)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
@@ -195,9 +161,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_CHECK_NEWGRFS => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_grfs(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_grfs(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_CLIENT_INFO => match read_field!(game, role) {
@@ -217,7 +181,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_ERROR => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_error(
+            0 => crate::network_client::receive_error(
                 s.client,
                 s,
                 game,
@@ -228,9 +192,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_ERROR_QUIT => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_error_quit(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_error_quit(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_EXTERNAL_CHAT => match read_field!(game, role) {
@@ -239,17 +201,12 @@ fn handle(
         },
         PACKET_SERVER_FRAME => match read_field!(game, role) {
             0 => unsafe {
-                crate::network_frame::openttd_rust_network_receive_frame(
-                    s,
-                    socket::status(game),
-                    socket::sync(game),
-                    p,
-                )
+                crate::network_frame::receive_frame(s, socket::status(game), socket::sync(game), p)
             },
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_FULL => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_full(s.client, s, game),
+            0 => crate::network_client::receive_full(s.client, s, game),
             2 => (s.dispatch.server_full)(game, shell, frame),
             _ => illegal(s, game, kind),
         },
@@ -258,25 +215,19 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_JOIN => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_join(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_join(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_MAP_BEGIN => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_map_begin(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_map_begin(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_MAP_DATA => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_map_data(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_map_data(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_MAP_DONE => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_map_done(
+            0 => crate::network_client::receive_map_done(
                 s.client,
                 s,
                 session,
@@ -287,9 +238,7 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_MAP_SIZE => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_map_size(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_map_size(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_MOVE => match read_field!(game, role) {
@@ -297,15 +246,11 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_NEWGAME => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_newgame(
-                s.client, s, game,
-            ),
+            0 => crate::network_client::receive_newgame(s.client, s, game),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_QUIT => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_quit(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_quit(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_RCON => match read_field!(game, role) {
@@ -313,27 +258,19 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_SHUTDOWN => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_shutdown(
-                s.client, s, game,
-            ),
+            0 => crate::network_client::receive_shutdown(s.client, s, game),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_SYNC => match read_field!(game, role) {
-            0 => {
-                crate::network_frame::openttd_rust_network_receive_sync(s, socket::status(game), p)
-            }
+            0 => crate::network_frame::receive_sync(s, socket::status(game), p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_WAIT => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_wait(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_wait(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         PACKET_SERVER_WELCOME => match read_field!(game, role) {
-            0 => crate::network_client::openttd_rust_network_client_receive_welcome(
-                s.client, s, game, p,
-            ),
+            0 => crate::network_client::receive_welcome(s.client, s, game, p),
             _ => illegal(s, game, kind),
         },
         _ => {
