@@ -143,8 +143,8 @@ pub unsafe extern "C" fn openttd_rust_command_check_money(
     s: &CommandServices,
     c: &CommandCostServices,
     result: *mut CommandCost,
-) -> bool {
-    unsafe { check_money(s, c, result) }
+) -> u8 {
+    u8::from(unsafe { check_money(s, c, result) })
 }
 
 /// `RecursiveCommandCounter::_counter`, the process-wide command nesting depth.
@@ -637,8 +637,8 @@ pub(crate) unsafe fn with_cost<T>(
 /// # Safety
 /// The supplied table constructs/destroys native objects in the advertised storage.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_stack_probe(s: &CommandCostServices) -> bool {
-    unsafe {
+pub unsafe extern "C" fn openttd_rust_command_stack_probe(s: &CommandCostServices) -> u8 {
+    u8::from(unsafe {
         /* SAFETY: synchronous costs never escape or outlive this call. */
         with_cost(s, |outer| {
             with_cost(s, |inner| {
@@ -647,5 +647,5 @@ pub unsafe extern "C" fn openttd_rust_command_stack_probe(s: &CommandCostService
                 outer.0 != inner.0 && outer.ok() && inner.ok()
             })
         })
-    }
+    })
 }
