@@ -47,8 +47,6 @@ extern "C" {
 OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_handler_single_new(const OpenTTDAuthHandlerServices *, uint8_t, uint8_t, const uint8_t *, RustAuthenticationClientHandler *, const NetworkAuthenticationPasswordProvider *, const NetworkAuthenticationAuthorizedKeyHandler *);
 OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_client_new(const OpenTTDAuthHandlerServices *, const uint8_t *, RustAuthenticationClientHandler *);
 OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_server_new(const OpenTTDAuthHandlerServices *, const NetworkAuthenticationPasswordProvider *, const NetworkAuthenticationAuthorizedKeyHandler *, uint16_t);
-OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_handler_clone(const OpenTTDAuthHandler *);
-void OPENTTD_RUST_CALL openttd_rust_auth_handler_assign(OpenTTDAuthHandler *, const OpenTTDAuthHandler *);
 void OPENTTD_RUST_CALL openttd_rust_auth_handler_destroy(OpenTTDAuthHandler *);
 const uint8_t *OPENTTD_RUST_CALL openttd_rust_auth_handler_name(const OpenTTDAuthHandler *, size_t *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_auth_handler_method(const OpenTTDAuthHandler *);
@@ -61,8 +59,6 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_auth_handler_receive_response(OpenTTDAuth
 void OPENTTD_RUST_CALL openttd_rust_auth_handler_send_enable(OpenTTDAuthHandler *, OpenTTDPacketState *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_auth_handler_receive_enable(OpenTTDAuthHandler *, OpenTTDPacketState *);
 OpenTTDAuthStream *OPENTTD_RUST_CALL openttd_rust_auth_stream_new(const OpenTTDAuthHandler *, uint8_t);
-OpenTTDAuthStream *OPENTTD_RUST_CALL openttd_rust_auth_stream_clone(const OpenTTDAuthStream *);
-void OPENTTD_RUST_CALL openttd_rust_auth_stream_assign(OpenTTDAuthStream *, const OpenTTDAuthStream *);
 void OPENTTD_RUST_CALL openttd_rust_auth_stream_destroy(OpenTTDAuthStream *);
 void OPENTTD_RUST_CALL openttd_rust_auth_stream_encrypt(OpenTTDAuthStream *, uint8_t *, uint8_t *, size_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_auth_stream_decrypt(OpenTTDAuthStream *, const uint8_t *, uint8_t *, size_t);

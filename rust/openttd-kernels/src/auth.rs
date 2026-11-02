@@ -67,7 +67,6 @@ unsafe fn bytes_mut<'a>(data: *mut u8, length: usize) -> &'a mut [u8] {
     }
 }
 
-#[derive(Clone)]
 struct Session {
     secret: [u8; 32],
     public: [u8; 32],
@@ -87,7 +86,6 @@ impl Drop for Session {
     }
 }
 
-#[derive(Clone)]
 struct Single {
     session: Session,
     method: u8,
@@ -97,7 +95,6 @@ struct Single {
     authorized: *const NetworkAuthenticationAuthorizedKeyHandler,
 }
 
-#[derive(Clone)]
 #[allow(clippy::large_enum_variant)] // Each original single handler embeds fixed key and nonce state.
 enum Kind {
     Single(Single),
@@ -109,7 +106,6 @@ enum Kind {
         handlers: Vec<Handler>,
     },
 }
-#[derive(Clone)]
 pub(crate) struct Handler {
     services: *const Services,
     kind: Kind,
@@ -520,23 +516,6 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_server_new(
     }))
 }
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_clone(
-    owner: *const Handler,
-) -> *mut Handler {
-    Box::into_raw(Box::new(unsafe { (*owner).clone() }))
-}
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_assign(
-    dst: *mut Handler,
-    src: *const Handler,
-) {
-    if !ptr::eq(dst, src) {
-        unsafe {
-            (*dst).clone_from(&*src);
-        }
-    }
-}
-#[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_destroy(owner: *mut Handler) {
     unsafe {
         drop(Box::from_raw(owner));
@@ -644,44 +623,10 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_new(
     }
 }
 
-unsafe fn allocate<T>() -> *mut T {
-    let layout = std::alloc::Layout::new::<T>();
-    let result = unsafe { std::alloc::alloc_zeroed(layout) }.cast::<T>();
-    if result.is_null() {
-        std::alloc::handle_alloc_error(layout);
-    }
-    result
-}
-unsafe fn free<T>(owner: *mut T) {
-    unsafe {
-        ptr::drop_in_place(owner);
-        std::alloc::dealloc(owner.cast(), std::alloc::Layout::new::<T>());
-    }
-}
-
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_clone(src: *const Stream) -> *mut Stream {
-    unsafe {
-        let dst = allocate::<Stream>();
-        ptr::addr_of_mut!((*dst).context).write((*src).context.clone());
-        dst
-    }
-}
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_assign(
-    dst: *mut Stream,
-    src: *const Stream,
-) {
-    unsafe {
-        if !ptr::eq(dst, src) {
-            (*dst).context.clone_from(&(*src).context);
-        }
-    }
-}
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_destroy(owner: *mut Stream) {
     unsafe {
-        free(owner);
+        drop(Box::from_raw(owner));
     }
 }
 #[unsafe(no_mangle)]

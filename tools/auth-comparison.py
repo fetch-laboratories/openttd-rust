@@ -253,12 +253,6 @@ def scenario(
                             receiver.call(f"decrypt {ciphertext} {mac}").split()[0]
                             == "0"
                         )
-                sender.call("copy-stream")
-                first = sender.call("encrypt 010203")
-                sender.call("swap-stream")
-                assert sender.call("encrypt 010203") == first
-                sender.call("assign-stream")
-                sender.call("swap-stream")
         return transcript
     finally:
         server.close()

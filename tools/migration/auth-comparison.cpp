@@ -102,7 +102,7 @@ int main()
 	PasswordProvider provider;
 	AuthorizedKeys authorized;
 	std::shared_ptr<PasswordRequest> password;
-	std::unique_ptr<NetworkEncryptionHandler> stream, stream_copy;
+	std::unique_ptr<NetworkEncryptionHandler> stream;
 	std::string line;
 	while (std::getline(std::cin, line)) {
 		std::istringstream input(line);
@@ -110,7 +110,7 @@ int main()
 		input >> command >> a >> b >> c >> d;
 		try {
 			if (command == "server" || command == "client") {
-				stream.reset(); stream_copy.reset(); server.reset(); client.reset(); password.reset();
+				stream.reset(); server.reset(); client.reset(); password.reset();
 				random_sizes.clear(); logs = asks = replies = password_reads = authorized_checks = allowed_checks = 0; last_log.clear(); reentrant_response.clear();
 				if (command == "server") {
 					server_password = a == "none" ? "" : Text(a);
@@ -163,12 +163,6 @@ int main()
 				if (command == "encrypt") stream->Encrypt(mac, message);
 				else { auto raw_mac = Unhex(b); std::ranges::copy(raw_mac, mac.begin()); ok = stream->Decrypt(mac, message); }
 				std::cout << ok << ' ' << Hex(mac) << ' ' << Hex(message);
-			} else if (command == "copy-stream") {
-				stream_copy = std::make_unique<X25519EncryptionHandler>(*static_cast<X25519EncryptionHandler *>(stream.get())); std::cout << stream_copy->MACSize();
-			} else if (command == "assign-stream") {
-				*static_cast<X25519EncryptionHandler *>(stream_copy.get()) = *static_cast<X25519EncryptionHandler *>(stream.get()); std::cout << stream_copy->MACSize();
-			} else if (command == "swap-stream") {
-				stream.swap(stream_copy); std::cout << stream->MACSize();
 			} else throw std::runtime_error("unknown command");
 			std::cout << '\n' << std::flush;
 		} catch (const std::exception &error) { std::cout << "error " << error.what() << '\n' << std::flush; }
