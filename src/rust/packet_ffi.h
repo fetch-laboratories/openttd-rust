@@ -16,8 +16,6 @@
 class NetworkEncryptionHandler;
 struct OpenTTDAuthStream;
 struct OpenTTDPacketServices {
-	bool (*decrypt)(NetworkEncryptionHandler *, uint8_t *, size_t, uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(decrypt);
-	void (*encrypt)(NetworkEncryptionHandler *, uint8_t *, size_t, uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(encrypt);
 	bool (*has_quit)(const NetworkSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(has_quit);
 	size_t (*mac_size)(const NetworkEncryptionHandler *) noexcept OPENTTD_SERVICE_DEFAULT(mac_size);
 	void (*mark_closed)(NetworkSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(mark_closed);

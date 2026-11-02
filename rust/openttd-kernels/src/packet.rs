@@ -58,12 +58,6 @@ crate::abi::shared_records! {
 /// Shared native operations for records and virtual implementations still stored in C++.
 #[repr(C)]
 pub struct Services {
-    /// Invoke a native virtual decryption implementation that has no Rust owner.
-    pub decrypt:
-        unsafe extern "C" fn(*mut NetworkEncryptionHandler, *mut u8, usize, *mut u8, usize) -> bool,
-    /// Invoke a native virtual encryption implementation that has no Rust owner.
-    pub encrypt:
-        unsafe extern "C" fn(*mut NetworkEncryptionHandler, *mut u8, usize, *mut u8, usize),
     /// Query connection state before checking packet bounds.
     pub has_quit: unsafe extern "C" fn(*const NetworkSocketHandler) -> bool,
     /// Query the original virtual MAC size.
@@ -528,28 +522,22 @@ unsafe fn crypt(
         let mac = (*state).data.add(usize::from(position));
         let message = (*state).data.add(frame.message);
         let stream = (services.stream)(handler);
-        let valid = if !stream.is_null() {
-            if sending {
-                crate::auth::openttd_rust_auth_stream_encrypt(
-                    stream.cast(),
-                    mac,
-                    message,
-                    frame.payload,
-                );
-                true
-            } else {
-                crate::auth::openttd_rust_auth_stream_decrypt(
-                    stream.cast(),
-                    mac,
-                    message,
-                    frame.payload,
-                ) != 0
-            }
-        } else if sending {
-            (services.encrypt)(handler, mac, mac_size, message, frame.payload);
+        // Native virtual implementations execute on the caller's C++ frame.
+        let valid = if sending {
+            crate::auth::openttd_rust_auth_stream_encrypt(
+                stream.cast(),
+                mac,
+                message,
+                frame.payload,
+            );
             true
         } else {
-            (services.decrypt)(handler, mac, mac_size, message, frame.payload)
+            crate::auth::openttd_rust_auth_stream_decrypt(
+                stream.cast(),
+                mac,
+                message,
+                frame.payload,
+            ) != 0
         };
         if !sending {
             (&mut *state).finish_read(mac_size);
@@ -581,7 +569,8 @@ pub unsafe fn get_type(state: *const State, services: &Services, check: extern "
 
 /// Write framing, call the Rust encryption owner directly, then reset and shrink.
 /// # Safety
-/// State, socket and nonthrowing services are live. No state borrow spans a service call.
+/// State, socket and nonthrowing services are live. Handlers expose a live Rust stream.
+/// No state borrow spans a service call.
 pub unsafe fn prepare_to_send(state: *mut State, services: &Services, check: extern "C" fn(bool)) {
     unsafe {
         (&mut *state).begin_send(check);
@@ -1105,8 +1094,6 @@ pub unsafe extern "C" fn openttd_rust_packet_recv_uint64(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDPacketServices" ["packet"] => Services {
-        decrypt,
-        encrypt,
         has_quit,
         mac_size,
         mark_closed,

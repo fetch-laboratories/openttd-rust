@@ -348,8 +348,6 @@ size_t Packet::RemainingBytesToTransfer() const
 const OpenTTDPacketServices &Packet::Services()
 {
 	static const OpenTTDPacketServices services{
-		.decrypt = [](NetworkEncryptionHandler *handler, uint8_t *mac, size_t mac_size, uint8_t *message, size_t size) noexcept { return handler->Decrypt({mac, mac_size}, {message, size}); },
-		.encrypt = [](NetworkEncryptionHandler *handler, uint8_t *mac, size_t mac_size, uint8_t *message, size_t size) noexcept { handler->Encrypt({mac, mac_size}, {message, size}); },
 		.has_quit = [](const NetworkSocketHandler *socket) noexcept { return socket->HasClientQuit(); },
 		.mac_size = [](const NetworkEncryptionHandler *handler) noexcept { return handler->MACSize(); },
 		.mark_closed = [](NetworkSocketHandler *socket) noexcept { socket->NetworkSocketHandler::MarkClosed(); },
