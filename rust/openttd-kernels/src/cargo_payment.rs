@@ -326,12 +326,15 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
                     fields.visual_profit.saturating_neg(),
                 );
             } else {
-                ((*s.shared).cost_animation)(
-                    x_pos,
-                    y_pos,
-                    z_pos,
-                    fields.visual_profit.saturating_neg(),
-                );
+                // SAFETY: the caller supplies the immutable shared table for settlement.
+                unsafe {
+                    ((*s.shared).cost_animation)(
+                        x_pos,
+                        y_pos,
+                        z_pos,
+                        fields.visual_profit.saturating_neg(),
+                    );
+                }
             }
             (finance.set_current_company)(old_company.0);
         }
