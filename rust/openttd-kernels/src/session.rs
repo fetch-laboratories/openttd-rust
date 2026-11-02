@@ -106,8 +106,6 @@ pub struct Services {
     pub disable_elrails: extern "C" fn() -> bool,
     pub settings_elrail: extern "C" fn(bool),
     pub company_settings: extern "C" fn(),
-    pub company_colour: extern "C" fn(bool, u8),
-    pub post_pause: extern "C" fn(PauseMode, bool),
     pub reset_ai_config: extern "C" fn(CompanyID),
     pub reset_game_config: extern "C" fn(),
     pub publish_settings: extern "C" fn(),
@@ -353,7 +351,7 @@ impl Session<'_> {
         if !(s.has_gui)() {
             self.start_game(true)?;
             if (s.pause_on_newgame)() {
-                (s.post_pause)(PauseMode::NORMAL, true);
+                crate::command_post::pause(unsafe { &*s.shared }, PauseMode::NORMAL, true);
             }
             return Ok(());
         }
@@ -362,17 +360,17 @@ impl Session<'_> {
         // COLOUR_END selects the original random colour.
         let colour = (s.starting_colour)();
         if colour != COLOUR_END {
-            (s.company_colour)(true, colour);
+            crate::command_post::colour(unsafe { &*s.shared }, true, colour);
         }
         let secondary = (s.secondary_colour)();
         if secondary.colour != COLOUR_END && secondary.used {
-            (s.company_colour)(false, secondary.colour);
+            crate::command_post::colour(unsafe { &*s.shared }, false, secondary.colour);
         }
         self.start_game(false)?;
         (s.rail_gui)();
         (s.road_gui)();
         if (s.pause_on_newgame)() {
-            (s.post_pause)(PauseMode::NORMAL, true);
+            crate::command_post::pause(unsafe { &*s.shared }, PauseMode::NORMAL, true);
         }
         (s.check_engines)();
         (s.check_industries)();
@@ -559,7 +557,7 @@ impl Session<'_> {
                         self.start_scenario();
                     }
                     self.start_game((s.dedicated)())?;
-                    (s.post_pause)(PauseMode::SAVE_LOAD, false);
+                    crate::command_post::pause(unsafe { &*s.shared }, PauseMode::SAVE_LOAD, false);
                 } else {
                     (s.show_load_error)(true);
                 }
@@ -587,7 +585,7 @@ impl Session<'_> {
                     crate::company::set_local_company(unsafe { &*s.company }, CompanyID::NONE);
                     (s.generate_id)();
                     (s.newgame_year)(crate::timer_game_common::calendar_year().0);
-                    (s.post_pause)(PauseMode::SAVE_LOAD, false);
+                    crate::command_post::pause(unsafe { &*s.shared }, PauseMode::SAVE_LOAD, false);
                 } else {
                     (s.show_load_error)(true);
                 }
@@ -1057,8 +1055,6 @@ crate::abi::layouts! {
         disable_elrails,
         settings_elrail,
         company_settings,
-        company_colour,
-        post_pause,
         reset_ai_config,
         reset_game_config,
         publish_settings,

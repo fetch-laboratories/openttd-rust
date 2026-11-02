@@ -283,7 +283,6 @@ pub struct Services {
     pub company_vehicle_counts: extern "C" fn(u8) -> VehicleCounts,
     pub vehicle_limits: extern "C" fn() -> VehicleCounts,
     pub company_in_trouble: extern "C" fn(u8),
-    pub post_company_delete: extern "C" fn(u8),
     pub hq_location: extern "C" fn(u8) -> u32,
     pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
     pub performance_detail_dirty: extern "C" fn(),
@@ -951,7 +950,7 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
                 write_field!(p, asked, u16::MAX);
             } else if !networking || (s.network_server)() {
                 // Singleplayer executes the deletion synchronously; `p` is dead after it.
-                (s.post_company_delete)(id);
+                crate::command_post::delete_company(s.shared, id);
                 return;
             }
         }
@@ -1434,7 +1433,11 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     (f.set_current_company)(current);
     (s.shared.screen_dirty)();
 }
-fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control) -> bool {
+pub(crate) fn control(
+    s: &Services,
+    ownership: &crate::tile_owner::Context,
+    c: &mut Control,
+) -> bool {
     if c.stage == 0 {
         (s.company_league_dirty)();
         match c.action {
@@ -2205,7 +2208,6 @@ crate::abi::layouts! {
         company_vehicle_counts,
         vehicle_limits,
         company_in_trouble,
-        post_company_delete,
         hq_location,
         object_services,
         performance_detail_dirty,

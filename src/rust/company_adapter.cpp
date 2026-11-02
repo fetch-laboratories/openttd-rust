@@ -146,7 +146,6 @@ static void Co_company_in_trouble(uint8_t id) noexcept
 	AI::BroadcastNewEvent(new ScriptEventCompanyInTrouble(cid));
 	Game::NewEvent(new ScriptEventCompanyInTrouble(cid));
 }
-static void Co_post_company_delete(uint8_t id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_DELETE, CompanyID(id), CRR_BANKRUPT, INVALID_CLIENT_ID); }
 static void Co_performance_detail_dirty() noexcept { SetWindowDirty(WC_PERFORMANCE_DETAIL, 0); }
 static void Co_company_graphs_dirty() noexcept
 {
@@ -427,7 +426,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_in_trouble = Co_company_in_trouble,
-		.post_company_delete = Co_post_company_delete, .hq_location = RustCompanyHQ,
+		.hq_location = RustCompanyHQ,
 		.object_services = []() noexcept { return &GetRustObjectServices(); },
 		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
 		.company_infrastructure = Co_company_infrastructure,

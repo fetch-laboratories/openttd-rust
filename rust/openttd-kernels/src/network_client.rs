@@ -91,7 +91,6 @@ pub struct Services {
     pub map_exists: extern "C" fn(*mut c_void) -> bool,
     pub map_load_prepare: extern "C" fn(*mut c_void, *mut crate::session::Load),
     pub map_release: extern "C" fn(*mut c_void),
-    pub new_company: extern "C" fn(u32),
     pub own_client_id: *mut u32,
     pub reconnect: *mut u8,
     pub revision: extern "C" fn() -> crate::services::ByteSpan,
@@ -172,7 +171,6 @@ crate::abi::layouts! {
         map_exists,
         map_load_prepare,
         map_release,
-        new_company,
         own_client_id,
         reconnect,
         revision,
@@ -517,7 +515,9 @@ pub(crate) fn map_loaded(
             (s.debug_join_registering)();
             set_join_status(s, NETWORK_JOIN_STATUS_REGISTERING);
             (s.show_join_window)();
-            (s.new_company)(unsafe { s.own_client_id.read() });
+            crate::command_post::new_company(f.command.company.shared, unsafe {
+                s.own_client_id.read()
+            });
         }
     } else {
         crate::company::set_local_company(

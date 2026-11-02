@@ -228,7 +228,7 @@ pub(crate) fn check_pause_on_join(session: &crate::session::Services, f: &FrameS
         }
     }
     if joining != (pause & PauseMode::JOIN.bit() != 0) {
-        (session.post_pause)(PauseMode::JOIN, joining);
+        crate::command_post::pause(unsafe { &*session.shared }, PauseMode::JOIN, joining);
     }
 }
 
@@ -256,7 +256,11 @@ pub(crate) fn check_min_active_clients(session: &crate::session::Services, f: &F
     }
     let required = count < u32::from((s.min_active_clients)());
     if required != (pause & PauseMode::ACTIVE_CLIENTS.bit() != 0) {
-        (session.post_pause)(PauseMode::ACTIVE_CLIENTS, required);
+        crate::command_post::pause(
+            unsafe { &*session.shared },
+            PauseMode::ACTIVE_CLIENTS,
+            required,
+        );
     }
 }
 

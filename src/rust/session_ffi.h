@@ -79,8 +79,6 @@ struct OpenTTDSessionServices {
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	void (*settings_elrail)(bool) noexcept OPENTTD_SERVICE_DEFAULT(settings_elrail);
 	void (*company_settings)() noexcept OPENTTD_SERVICE_DEFAULT(company_settings);
-	void (*company_colour)(bool, Colours) noexcept OPENTTD_SERVICE_DEFAULT(company_colour);
-	void (*post_pause)(PauseMode, bool) noexcept OPENTTD_SERVICE_DEFAULT(post_pause);
 	void (*reset_ai_config)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_ai_config);
 	void (*reset_game_config)() noexcept OPENTTD_SERVICE_DEFAULT(reset_game_config);
 	void (*publish_settings)() noexcept OPENTTD_SERVICE_DEFAULT(publish_settings);

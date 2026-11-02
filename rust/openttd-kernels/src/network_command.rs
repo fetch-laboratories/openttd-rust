@@ -52,7 +52,7 @@ crate::abi::shared_records! {
 }
 
 impl CommandData {
-    const EMPTY: Self = Self {
+    pub(crate) const EMPTY: Self = Self {
         data: null_mut(),
         size: 0,
         capacity: 0,
@@ -75,7 +75,13 @@ impl CommandData {
             unsafe { Vec::from_raw_parts(parts.data, parts.size, parts.capacity) }
         }
     }
-    fn as_slice(&self) -> &[u8] {
+    pub(crate) fn span(&self) -> ByteSpan {
+        ByteSpan {
+            data: self.data,
+            size: self.size,
+        }
+    }
+    pub(crate) fn as_slice(&self) -> &[u8] {
         if self.data.is_null() {
             &[]
         } else {
@@ -99,7 +105,7 @@ impl Clone for CommandData {
 }
 
 impl CommandQueue {
-    const EMPTY: Self = Self {
+    pub(crate) const EMPTY: Self = Self {
         data: null_mut(),
         size: 0,
         capacity: 0,
@@ -158,6 +164,17 @@ pub(crate) fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {
 /// `NetworkSendCommand`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_send_command(
+    s: &Services,
+    cmd: u8,
+    err_msg: u32,
+    callback: *const c_void,
+    company: u8,
+    data: ByteSpan,
+) {
+    send_command(s, cmd, err_msg, callback, company, data);
+}
+
+pub(crate) fn send_command(
     s: &Services,
     cmd: u8,
     err_msg: u32,

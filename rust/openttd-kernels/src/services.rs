@@ -266,6 +266,8 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Typed Rust post lifecycles and native argument codecs.
+    pub command_post: extern "C" fn() -> &'static crate::command_post::Services,
     /// Complete synchronous movement owner; immutable process-lifetime table.
     pub movement: *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
@@ -767,6 +769,7 @@ crate::abi::layouts! {
         generating_world,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        command_post,
         movement,
         set_tile_owner,
         autoslope,
@@ -1030,7 +1033,11 @@ pub fn fixture(
     extern "C" fn unexpected_file(_: *const c_void) -> *const c_void {
         std::process::abort()
     }
+    extern "C" fn unexpected_post() -> &'static crate::command_post::Services {
+        std::process::abort()
+    }
     Services {
+        command_post: unexpected_post,
         grf_file_version: unexpected_version,
         grf_cargo_map: unexpected_cargo_map,
         grf_file_at_or_null: unexpected_file_at,

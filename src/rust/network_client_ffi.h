@@ -69,7 +69,6 @@ struct OpenTTDNetworkClientServices {
 	bool (*map_exists)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_exists);
 	void (*map_load_prepare)(void *, OpenTTDSessionLoad *) noexcept OPENTTD_SERVICE_DEFAULT(map_load_prepare);
 	void (*map_release)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_release);
-	void (*new_company)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_company);
 	uint32_t *own_client_id;
 	uint8_t *reconnect;
 	OpenTTDByteSpan (*revision)() noexcept OPENTTD_SERVICE_DEFAULT(revision);

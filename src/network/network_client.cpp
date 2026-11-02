@@ -841,7 +841,6 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 			load->filter = cs->savegame;
 		},
 		.map_release = [](void *game) noexcept { ClientFromGame(game)->savegame = nullptr; },
-		.new_company = [](uint32_t client_id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_NEW, CompanyID::Invalid(), CRR_NONE, static_cast<ClientID>(client_id)); },
 		.own_client_id = reinterpret_cast<uint32_t *>(&_network_own_client_id),
 		.reconnect = &_network_reconnect,
 		.revision = []() noexcept -> OpenTTDByteSpan { auto value = GetNetworkRevisionString(); return {reinterpret_cast<const uint8_t *>(value.data()), value.size()}; },

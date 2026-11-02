@@ -7,6 +7,7 @@
 
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
+#include "command_post_ffi.h"
 #include "../source_type.h"
 #include "../effectvehicle_func.h"
 #include "../airport.h"
@@ -393,6 +394,7 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,

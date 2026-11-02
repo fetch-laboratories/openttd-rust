@@ -82,8 +82,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.disable_elrails = RustDisableElrails,
 		.settings_elrail = [](bool value) noexcept { SettingsDisableElrail(value); },
 		.company_settings = []() noexcept { Company::Get(CompanyID::Begin())->settings = _settings_client.company; },
-		.company_colour = [](bool primary, Colours colour) noexcept { Command<CMD_SET_COMPANY_COLOUR>::Post(LS_DEFAULT, primary, colour); },
-		.post_pause = RustPostPause,
 		.reset_ai_config = [](uint8_t c) noexcept { _settings_game.script_config.ai[CompanyID(c)].reset(); },
 		.reset_game_config = []() noexcept { _settings_game.script_config.game.reset(); },
 		.publish_settings = []() noexcept { _settings_game = _settings_newgame; },

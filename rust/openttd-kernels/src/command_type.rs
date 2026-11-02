@@ -10,6 +10,12 @@
 
 /// `Commands::CMD_COMPANY_CTRL`.
 pub const CMD_COMPANY_CTRL: u8 = 90;
+/// `Commands::CMD_PAUSE`.
+pub const CMD_PAUSE: u8 = 71;
+/// `Commands::CMD_SET_COMPANY_COLOUR`.
+pub const CMD_SET_COMPANY_COLOUR: u8 = 54;
+/// `CommandType::CompanySetting`.
+pub const COMMAND_TYPE_COMPANY_SETTING: u8 = 6;
 
 /// `CommandFlag` values as `CommandFlags` bits.
 pub struct CommandFlag;
@@ -18,6 +24,14 @@ impl CommandFlag {
     pub const SERVER: u16 = 1 << 0;
     /// `CommandFlag::Spectator`.
     pub const SPECTATOR: u16 = 1 << 1;
+    /// `CommandFlag::Auto`.
+    pub const AUTO: u16 = 1 << 3;
+    /// `CommandFlag::AllTiles`.
+    pub const ALL_TILES: u16 = 1 << 4;
+    /// `CommandFlag::NoWater`.
+    pub const NO_WATER: u16 = 1 << 6;
+    /// `CommandFlag::ClientID`.
+    pub const CLIENT_ID: u16 = 1 << 7;
     /// `CommandFlag::NoTest`.
     pub const NO_TEST: u16 = 1 << 5;
     /// `CommandFlag::Deity`.
@@ -38,10 +52,12 @@ impl DoCommandFlag {
     /// `DoCommandFlag::Execute`.
     pub const EXECUTE: u16 = 1 << 0;
     /// `DoCommandFlag::Auto`.
+    /// `CommandFlag::Auto`.
     pub const AUTO: u16 = 1 << 1;
     /// `DoCommandFlag::QueryCost`.
     pub const QUERY_COST: u16 = 1 << 2;
     /// `DoCommandFlag::NoWater`.
+    /// `CommandFlag::NoWater`.
     pub const NO_WATER: u16 = 1 << 3;
     /// `DoCommandFlag::NoTestTownRating`.
     pub const NO_TEST_TOWN_RATING: u16 = 1 << 4;
@@ -52,6 +68,7 @@ impl DoCommandFlag {
     /// `DoCommandFlag::NoCargoCapacityCheck`.
     pub const NO_CARGO_CAPACITY_CHECK: u16 = 1 << 7;
     /// `DoCommandFlag::AllTiles`.
+    /// `CommandFlag::AllTiles`.
     pub const ALL_TILES: u16 = 1 << 8;
     /// `DoCommandFlag::NoModifyTownRating`.
     pub const NO_MODIFY_TOWN_RATING: u16 = 1 << 9;

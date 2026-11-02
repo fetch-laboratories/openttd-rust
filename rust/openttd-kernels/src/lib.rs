@@ -30,6 +30,8 @@ mod cargo_payment;
 mod cargomonitor;
 mod cargopacket;
 mod command;
+mod command_func;
+mod command_post;
 mod command_type;
 mod company;
 mod company_identity;

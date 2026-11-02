@@ -43,6 +43,7 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(vehicle_services) \
 	X(ground_physics) \
 	X(company_adapter) \
+	X(command_post) \
 	X(autoreplace_cmd) \
 	X(linkgraphjob) \
 	X(water_regions) \

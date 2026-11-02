@@ -29,6 +29,7 @@ struct Queues {
 }
 #[repr(C)]
 pub(crate) struct Services {
+    shared: &'static crate::services::Services,
     graph_owner: extern "C" fn(*mut Graph) -> *mut live::Graph,
     assert_graph: extern "C" fn(*const Graph),
     can_allocate: extern "C" fn() -> bool,
@@ -45,12 +46,11 @@ pub(crate) struct Services {
     next_graph: extern "C" fn(*mut u32) -> *mut Graph,
     next_job: extern "C" fn(*mut u32) -> *mut Job,
     shift_job: extern "C" fn(*mut Job, i32),
-    post_pause: extern "C" fn(crate::openttd::PauseMode, bool),
     begin_measurement: extern "C" fn(*mut c_void, bool),
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, post_pause, begin_measurement };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { shared, graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, begin_measurement };
     "OpenTTDScheduleTime" ["linkgraph_schedule"] => Time { date, fract, interval };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
@@ -185,7 +185,7 @@ pub(crate) fn tick(s: &Services, time: Time, client: bool, measurement: *mut c_v
 pub(crate) fn pause(s: &Services, time: Time, paused: bool, unpaused: bool) {
     if paused {
         if !unfinished(s) {
-            (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, false);
+            crate::command_post::pause(s.shared, crate::openttd::PauseMode::LINK_GRAPH, false);
         }
     } else if unpaused {
         if time.fract != SPAWN_JOIN_TICK - 2 {
@@ -193,7 +193,7 @@ pub(crate) fn pause(s: &Services, time: Time, paused: bool, unpaused: bool) {
         }
         let interval = i32::from(time.interval) / SECONDS_PER_DAY;
         if time.date % interval == interval / 2 && unfinished(s) {
-            (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, true);
+            crate::command_post::pause(s.shared, crate::openttd::PauseMode::LINK_GRAPH, true);
             witness::hit(witness::SCHEDULE_PAUSE);
         }
     }
