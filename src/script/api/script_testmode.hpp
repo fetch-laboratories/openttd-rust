@@ -24,14 +24,8 @@
  */
 class ScriptTestMode : public ScriptObject {
 private:
-	ScriptModeProc *last_mode;   ///< The previous mode we were in.
+	OpenTTDScriptMode last_mode; ///< The previous mode we were in.
 	ScriptObject *last_instance; ///< The previous instance of the mode.
-
-protected:
-	/**
-	 * The callback proc for Testing mode.
-	 */
-	static bool ModeProc();
 
 public:
 	/**

@@ -14,18 +14,11 @@
 
 #include "../../safeguards.h"
 
-bool ScriptExecMode::ModeProc()
-{
-	/* In execution mode we only return 'true', telling the DoCommand it
-	 *  should continue with the real execution of the command. */
-	return true;
-}
-
 ScriptExecMode::ScriptExecMode()
 {
 	this->last_mode     = this->GetDoCommandMode();
 	this->last_instance = this->GetDoCommandModeInstance();
-	this->SetDoCommandMode(&ScriptExecMode::ModeProc, this);
+	this->SetDoCommandMode(SCRIPT_MODE_EXEC, this);
 }
 
 void ScriptExecMode::FinalRelease()
