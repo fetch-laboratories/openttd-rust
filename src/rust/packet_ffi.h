@@ -13,7 +13,7 @@
 #include "call_ffi.h"
 #include "service_defaults.hpp"
 #include "abi-record-packet.h"
-struct NetworkEncryptionHandler;
+class NetworkEncryptionHandler;
 struct OpenTTDAuthStream;
 struct OpenTTDPacketServices {
 	bool (*decrypt)(NetworkEncryptionHandler *, uint8_t *, size_t, uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(decrypt);
