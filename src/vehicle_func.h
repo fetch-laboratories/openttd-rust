@@ -12,6 +12,7 @@
 
 #include "gfx_type.h"
 #include "rust/vehicle_ffi.h"
+#include "rust/vehicle_record_ffi.h"
 #include "direction_type.h"
 #include "timer/timer_game_economy.h"
 #include "command_type.h"
@@ -86,7 +87,7 @@ public:
 		}
 	private:
 		OpenTTDVehicleOnTile cursor;
-		Vehicle *Current() const { return reinterpret_cast<Vehicle *>(this->cursor.current); }
+		Vehicle *Current() const { return VehicleFromRecord(this->cursor.current); }
 		void Increment();
 		void SkipFalseMatches() {}
 	};
@@ -151,7 +152,7 @@ public:
 		}
 	private:
 		OpenTTDVehicleNear cursor;
-		Vehicle *Current() const { return reinterpret_cast<Vehicle *>(this->cursor.current); }
+		Vehicle *Current() const { return VehicleFromRecord(this->cursor.current); }
 		void Increment();
 		void SkipFalseMatches() {}
 	};

@@ -485,7 +485,7 @@ Trackdir RoadVehicle::GetVehicleTrackdir() const
 
 uint16_t RoadVehicle::GetMaxWeight() const
 {
-	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, true);
+	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this->record, true);
 }
 
 #include "rust/road_services.h"

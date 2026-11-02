@@ -25,7 +25,7 @@ enum RoadTramType : bool;
 enum RailType : uint8_t;
 enum RoadType : uint8_t;
 /** Invocation-local state; no owner/reference survives common Action2 evaluation. */
-struct OpenTTDVehicleScopeState { const Vehicle *v; uint16_t self_type; bool rotor_in_gui; };
+struct OpenTTDVehicleScopeState { const OpenTTDVehicle *v; uint16_t self_type; bool rotor_in_gui; };
 struct OpenTTDVehicleResolverState {
 	OpenTTDVehicleScopeState self_, parent, relative;
 	uint8_t cached_relative_count;
@@ -135,18 +135,18 @@ uint16_t openttd_rust_vehicle_shell_callback(const OpenTTDVehicleResolverService
 NewGRFCache *openttd_rust_vehicle_grf_cache_new();
 void openttd_rust_vehicle_grf_cache_delete(NewGRFCache *);
 uint8_t *openttd_rust_vehicle_visual_cache(NewGRFCache *);
-void openttd_rust_vehicle_grf_invalidate(const OpenTTDVehicleResolverServices *, const Vehicle *, bool);
-void openttd_rust_vehicle_grf_fill(const OpenTTDVehicleResolverServices *, const Vehicle *);
-void openttd_rust_vehicle_resolver_init(const OpenTTDVehicleResolverServices *, OpenTTDVehicleResolverState *, uint16_t, const Vehicle *, uint8_t, bool);
+void openttd_rust_vehicle_grf_invalidate(const OpenTTDVehicleResolverServices *, const OpenTTDVehicle *, bool);
+void openttd_rust_vehicle_grf_fill(const OpenTTDVehicleResolverServices *, const OpenTTDVehicle *);
+void openttd_rust_vehicle_resolver_init(const OpenTTDVehicleResolverServices *, OpenTTDVehicleResolverState *, uint16_t, const OpenTTDVehicle *, uint8_t, bool);
 uint8_t openttd_rust_vehicle_resolver_scope(const OpenTTDVehicleResolverServices *, OpenTTDVehicleResolverState *, const ResolverObject *, uint8_t, uint8_t);
-void openttd_rust_vehicle_scope_set(OpenTTDVehicleScopeState *, const Vehicle *);
+void openttd_rust_vehicle_scope_set(OpenTTDVehicleScopeState *, const OpenTTDVehicle *);
 uint32_t openttd_rust_vehicle_scope_variable(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleScopeState *, const ResolverObject *, const GRFFile *, uint16_t, uint8_t, uint32_t, bool *);
 uint32_t openttd_rust_vehicle_scope_random(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleScopeState *, bool);
 const SpriteGroup *openttd_rust_vehicle_resolve_real(const OpenTTDVehicleResolverServices *, const OpenTTDVehicleResolverState *, const RealSpriteGroup *);
 const SpriteGroup *openttd_rust_vehicle_wagon_override(const OpenTTDVehicleResolverServices *, uint16_t, uint8_t, uint16_t);
-uint16_t openttd_rust_vehicle_callback(const OpenTTDVehicleResolverServices *, uint16_t, uint32_t, uint32_t, uint16_t, const Vehicle *, const Vehicle *, bool, int32_t *, size_t);
-int32_t openttd_rust_vehicle_property(const OpenTTDVehicleResolverServices *, uint16_t, uint8_t, int32_t, const Vehicle *, bool);
-int8_t openttd_rust_vehicle_build_probability(const OpenTTDVehicleResolverServices *, const Vehicle *, uint16_t, uint8_t);
-void openttd_rust_vehicle_randomise(const OpenTTDVehicleResolverServices *, const Vehicle *, uint8_t);
+uint16_t openttd_rust_vehicle_callback(const OpenTTDVehicleResolverServices *, uint16_t, uint32_t, uint32_t, uint16_t, const OpenTTDVehicle *, const OpenTTDVehicle *, bool, int32_t *, size_t);
+int32_t openttd_rust_vehicle_property(const OpenTTDVehicleResolverServices *, uint16_t, uint8_t, int32_t, const OpenTTDVehicle *, bool);
+int8_t openttd_rust_vehicle_build_probability(const OpenTTDVehicleResolverServices *, const OpenTTDVehicle *, uint16_t, uint8_t);
+void openttd_rust_vehicle_randomise(const OpenTTDVehicleResolverServices *, const OpenTTDVehicle *, uint8_t);
 }
 #endif /* RUST_NEWGRF_VEHICLE_FFI_H */

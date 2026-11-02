@@ -66,7 +66,7 @@ int32_t openttd_rust_engine_life_days(const OpenTTDEngineCapabilitiesServices *,
 uint16_t openttd_rust_engine_range(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *);
 int64_t openttd_rust_engine_vehicle_running_cost(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *, OpenTTDVehicle *);
 bool openttd_rust_engine_can_carry(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *);
-uint32_t openttd_rust_engine_capacity(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *, const Vehicle *, uint16_t *);
+uint32_t openttd_rust_engine_capacity(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *, const OpenTTDVehicle *, uint16_t *);
 bool openttd_rust_engine_refittable(const OpenTTDEngineCapabilitiesServices *, uint16_t);
 bool openttd_rust_articulated_is(const OpenTTDEngineCapabilitiesServices *, uint16_t);
 uint32_t openttd_rust_articulated_count(const OpenTTDEngineCapabilitiesServices *, uint16_t, bool);
@@ -75,6 +75,6 @@ uint64_t openttd_rust_articulated_cargoes(const OpenTTDEngineCapabilitiesService
 bool openttd_rust_articulated_refittable(const OpenTTDEngineCapabilitiesServices *, uint16_t);
 void openttd_rust_articulated_refit_masks(const OpenTTDEngineCapabilitiesServices *, uint16_t, bool, uint64_t *, uint64_t *);
 uint64_t openttd_rust_articulated_refit_union(const OpenTTDEngineCapabilitiesServices *, uint16_t, bool);
-uint64_t openttd_rust_articulated_live_cargoes(const OpenTTDEngineCapabilitiesServices *, const Vehicle *, uint8_t *);
+uint64_t openttd_rust_articulated_live_cargoes(const OpenTTDEngineCapabilitiesServices *, const OpenTTDVehicle *, uint8_t *);
 }
 #endif

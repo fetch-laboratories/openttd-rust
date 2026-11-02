@@ -142,8 +142,8 @@ static void AircraftDirectBoundary()
 static void AircraftPhaseBoundary()
 {
 	auto &p = aircraft_probe;
-	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p = {};
+	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p.leaves = AircraftTestLeaves(p.vehicle_services, p.shared_services);
 	auto &v = p.vehicle_services;
 	auto &s = p.shared_services;

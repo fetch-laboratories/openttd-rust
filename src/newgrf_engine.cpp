@@ -27,6 +27,7 @@
 #include "ship.h"
 
 #include "rust/engine_loading_ffi.h"
+#include "rust/vehicle_services.h"
 
 #include "safeguards.h"
 
@@ -103,6 +104,8 @@ void SetEngineGRF(EngineID engine, const GRFFile *file)
  * @return Livery to use
  */
 
+void VehicleScopeResolver::SetVehicle(const Vehicle *v) { openttd_rust_vehicle_scope_set(&this->state, RustVehicle(v)); }
+
 /* virtual */ uint32_t VehicleScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
 	return openttd_rust_vehicle_scope_variable(&GetRustVehicleResolverServices(), &this->state, &this->ro, this->ro.grffile, this->ro.callback, variable, parameter, &available);
@@ -156,7 +159,7 @@ VehicleResolverObject::VehicleResolverObject(EngineID engine_type, const Vehicle
 	: SpecializedResolverObject<VehicleRandomTriggers>(GetEngineGrfFile(engine_type), callback, callback_param1, callback_param2),
 	state(this->owned_state), self_scope(*this, this->state.self_), parent_scope(*this, this->state.parent), relative_scope(*this, this->state.relative)
 {
-	openttd_rust_vehicle_resolver_init(&GetRustVehicleResolverServices(), &this->state, engine_type.base(), v, wagon_override, rotor_in_gui);
+	openttd_rust_vehicle_resolver_init(&GetRustVehicleResolverServices(), &this->state, engine_type.base(), RustVehicle(v), wagon_override, rotor_in_gui);
 	this->root_spritegroup = this->state.root;
 }
 
@@ -262,7 +265,7 @@ bool UsesWagonOverride(const Vehicle *v)
  */
 uint16_t GetVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> regs100)
 {
-	return openttd_rust_vehicle_callback(&GetRustVehicleResolverServices(), callback, param1, param2, engine.base(), v, nullptr, false, regs100.data(), regs100.size());
+	return openttd_rust_vehicle_callback(&GetRustVehicleResolverServices(), callback, param1, param2, engine.base(), RustVehicle(v), nullptr, false, regs100.data(), regs100.size());
 }
 
 /**
@@ -278,7 +281,7 @@ uint16_t GetVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param
  */
 uint16_t GetVehicleCallbackParent(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, const Vehicle *parent, std::span<int32_t> regs100)
 {
-	return openttd_rust_vehicle_callback(&GetRustVehicleResolverServices(), callback, param1, param2, engine.base(), v, parent, true, regs100.data(), regs100.size());
+	return openttd_rust_vehicle_callback(&GetRustVehicleResolverServices(), callback, param1, param2, engine.base(), RustVehicle(v), RustVehicle(parent), true, regs100.data(), regs100.size());
 }
 
 
@@ -291,7 +294,7 @@ int GetVehicleProperty(const Vehicle *v, PropertyID property, int orig_value, bo
 
 int GetEngineProperty(EngineID engine, PropertyID property, int orig_value, const Vehicle *v, bool is_signed)
 {
-	return openttd_rust_vehicle_property(&GetRustVehicleResolverServices(), engine.base(), property, orig_value, v, is_signed);
+	return openttd_rust_vehicle_property(&GetRustVehicleResolverServices(), engine.base(), property, orig_value, RustVehicle(v), is_signed);
 }
 
 /**
@@ -302,14 +305,14 @@ int GetEngineProperty(EngineID engine, PropertyID property, int orig_value, cons
  */
 std::optional<bool> TestVehicleBuildProbability(Vehicle *v, EngineID engine, BuildProbabilityType type)
 {
-	int8_t result = openttd_rust_vehicle_build_probability(&GetRustVehicleResolverServices(), v, engine.base(), to_underlying(type));
+	int8_t result = openttd_rust_vehicle_build_probability(&GetRustVehicleResolverServices(), RustVehicle(v), engine.base(), to_underlying(type));
 	return result < 0 ? std::nullopt : std::optional<bool>(result != 0);
 }
 
 
 void TriggerVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger)
 {
-	openttd_rust_vehicle_randomise(&GetRustVehicleResolverServices(), v, to_underlying(trigger));
+	openttd_rust_vehicle_randomise(&GetRustVehicleResolverServices(), RustVehicle(v), to_underlying(trigger));
 }
 
 /* Functions for changing the order of vehicle purchase lists */
@@ -348,7 +351,8 @@ void RustVehicleOrderSort(uint16_t *data, size_t size) noexcept
  */
 void FillNewGRFVehicleCache(const Vehicle *v)
 {
-	openttd_rust_vehicle_grf_fill(&GetRustVehicleResolverServices(), v);
+	openttd_rust_vehicle_grf_fill(&GetRustVehicleResolverServices(), RustVehicle(v));
 }
 
 #include "rust/vehicle_services_newgrf.h"
+

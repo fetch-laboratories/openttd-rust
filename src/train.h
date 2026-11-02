@@ -279,7 +279,7 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	 */
 	inline VehicleAccelerationModel GetAccelerationType() const
 	{
-		return openttd_rust_ground_acceleration_type(&GetRustGroundPhysicsServices(), this);
+		return openttd_rust_ground_acceleration_type(&GetRustGroundPhysicsServices(), this->record);
 	}
 
 protected: // These functions should not be called outside acceleration code.

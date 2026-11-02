@@ -39,6 +39,12 @@ const OpenTTDSharedServices *MovementWorld()
 {
 	static OpenTTDSharedServices world{};
 	static OpenTTDMovementServices movement{};
+	static OpenTTDVehicleServices vehicle{};
+	static OpenTTDVehicle record{};
+	vehicle.record_from_shell = [](void *shell) noexcept { record.shell = reinterpret_cast<OpenTTDVehicleShell *>(shell); return &record; };
+	vehicle.owner = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_ROAD; };
+	movement.vehicle = &vehicle;
 	static OpenTTDStationCatchmentServices stations{};
 	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
 	stations.station_if_valid = [](uint16_t) noexcept -> BaseStation * { return nullptr; };

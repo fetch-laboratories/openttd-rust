@@ -946,7 +946,7 @@ Trackdir Train::GetVehicleTrackdir() const
 
 uint16_t Train::GetMaxWeight() const
 {
-	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, true);
+	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this->record, true);
 }
 
 #include "rust/train_services.h"

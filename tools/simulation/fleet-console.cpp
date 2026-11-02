@@ -64,7 +64,7 @@ struct AttachmentObserver : SpriteGroup {
 	{
 		if (object.callback != CBID_TRAIN_ALLOW_WAGON_ATTACH) return {};
 		const auto &resolver = static_cast<const VehicleResolverObject &>(object);
-		const Train *self = Train::From(resolver.self_scope.v), *head = Train::From(resolver.parent_scope.v);
+		const Train *self = Train::From(FIXTURE_SCOPE_VEHICLE(resolver.self_scope)), *head = Train::From(FIXTURE_SCOPE_VEHICLE(resolver.parent_scope));
 		++this->calls;
 		this->valid &= self->Next() == nullptr && self->Previous() == nullptr && self->First() == self;
 		this->valid &= self->gcache.first_engine == EngineID::Invalid() && self->grf_cache.cache_valid == 0 && head->grf_cache.cache_valid == 0;
@@ -246,7 +246,7 @@ struct RefitCostObserver : SpriteGroup {
 	ResolverResult Resolve(ResolverObject &object) const override
 	{
 		if (object.callback == CBID_VEHICLE_REFIT_COST) {
-			if (static_cast<const VehicleResolverObject &>(object).self_scope.v == nullptr) ++this->null_calls;
+			if (FIXTURE_SCOPE_VEHICLE(static_cast<const VehicleResolverObject &>(object).self_scope) == nullptr) ++this->null_calls;
 			else ++this->live_calls;
 		}
 		return SpriteGroup::Resolve(this->program, object, false);
@@ -319,12 +319,12 @@ struct CapabilityObserver : SpriteGroup {
 	{
 		if (object.callback == CBID_VEHICLE_REFIT_CAPACITY) {
 			++refits;
-			const Vehicle *v = static_cast<VehicleResolverObject &>(object).self_scope.v;
+			const Vehicle *v = FIXTURE_SCOPE_VEHICLE(static_cast<VehicleResolverObject &>(object).self_scope);
 			if (inspect_mail && v != nullptr) { ++mail_calls; mail_valid &= FIXTURE_GET(v, Type, type) == VEH_AIRCRAFT && v->Next() != nullptr && FIXTURE_FIELD(v->Next(), cargo_cap) == 17; }
 		}
 		if (object.callback == CBID_VEHICLE_ARTIC_ENGINE) {
 			indices.push_back(object.callback_param1);
-			const Vehicle *v = static_cast<VehicleResolverObject &>(object).self_scope.v;
+			const Vehicle *v = FIXTURE_SCOPE_VEHICLE(static_cast<VehicleResolverObject &>(object).self_scope);
 			purchase &= v == nullptr;
 			if (v != nullptr) {
 				pooled &= Vehicle::GetIfValid(v->index) == v && FIXTURE_GET(v, Owner, owner) == _current_company;

@@ -460,7 +460,7 @@ public:
 	 */
 	inline void InvalidateNewGRFCache()
 	{
-		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this, false);
+		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this->record, false);
 	}
 
 	/**
@@ -469,7 +469,7 @@ public:
 	 */
 	inline void InvalidateNewGRFCacheOfChain()
 	{
-		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this, true);
+		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this->record, true);
 	}
 
 	/**
@@ -593,7 +593,7 @@ public:
 	 * @param record Live record, or nullptr.
 	 * @return The record's shell, or nullptr.
 	 */
-	static inline Vehicle *FromRecord(const OpenTTDVehicle *record) { return record == nullptr ? nullptr : reinterpret_cast<Vehicle *>(record->shell); }
+	static inline Vehicle *FromRecord(const OpenTTDVehicle *record) { return VehicleFromRecord(record); }
 
 	/**
 	 * Get the next vehicle of this vehicle.

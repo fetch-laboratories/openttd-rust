@@ -4,6 +4,9 @@
 #define RUST_VEHICLE_RECORD_FFI_H
 #include "call_ffi.h"
 #include "abi-record-vehicle.h"
+struct Vehicle;
+/** Canonical native identity of a live shared record; null stays null. */
+inline Vehicle *VehicleFromRecord(const OpenTTDVehicle *record) noexcept { return record == nullptr ? nullptr : reinterpret_cast<Vehicle *>(record->shell); }
 extern "C" {
 /* One record per shell, created before the shell's members and released after
  * its whole base destructor; first points to the record itself. */

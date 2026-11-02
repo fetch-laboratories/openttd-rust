@@ -118,7 +118,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	uint Crash(bool flooded) override
 	{
-		return openttd_rust_ground_crash(&GetRustGroundPhysicsServices(), this, flooded);
+		return openttd_rust_ground_crash(&GetRustGroundPhysicsServices(), this->record, flooded);
 	}
 
 	/**
