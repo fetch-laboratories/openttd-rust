@@ -159,7 +159,6 @@ pub struct Services {
     pub links: *const crate::station_service::Links,
     pub visits: *const crate::vehicle::visits::Services,
     pub industry_builder: extern "C" fn() -> *mut crate::industry::Builder,
-    pub company_tick: extern "C" fn() -> crate::company::Tick,
     pub post_ai: extern "C" fn(*mut Frame) -> bool,
     pub road_begin: extern "C" fn(*mut Frame) -> *const crate::road_cmd::CommandContext,
     pub road_end: extern "C" fn(*mut Frame),
@@ -652,7 +651,7 @@ impl Session<'_> {
             crate::industry::tick((s.industry_builder)(), world.industry);
         }
         (s.landscape_end)(self.frame);
-        let mut company = (s.company_tick)();
+        let mut company = crate::company::Tick::default();
         while unsafe { crate::company::on_tick(&*s.company, &mut company) } {
             complete((s.post_ai)(self.frame))?;
         }
@@ -974,7 +973,6 @@ crate::abi::layouts! {
         links,
         visits,
         industry_builder,
-        company_tick,
         post_ai,
         road_begin,
         road_end,

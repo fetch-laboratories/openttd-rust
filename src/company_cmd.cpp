@@ -399,18 +399,6 @@ bool CheckTakeoverVehicleLimit(CompanyID cbig, CompanyID csmall)
  * @param c the company that is going bankrupt.
  */
 
-OpenTTDCompanyTick RustCompanyTick() noexcept
-{
-	Company *c = Company::GetIfValid(_cur_company_tick_index);
-	return {
-		.finances = c == nullptr ? nullptr : &c->Finances(), .num_companies = Company::GetNumItems(),
-		.index = 0, .timeout = 0, .interval = _settings_game.difficulty.competitors_interval,
-		.editor = _game_mode == GM_EDITOR, .named = c != nullptr && c->name_1 != 0,
-		.competitor_due = _new_competitor_timeout.HasFired() && _game_mode != GM_MENU && AI::CanStartNew(),
-		.networking = _networking, .max_companies = _settings_client.network.max_companies,
-		.max_competitors = _settings_game.difficulty.max_no_competitors, .num_ais = 0, .stage = 0,
-	};
-}
 
 /** Called every tick for updating some company info. */
 

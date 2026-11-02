@@ -150,7 +150,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.links = &GetRustStationLinks(),
 		.visits = &GetRustVehicleVisits(),
 		.industry_builder = RustIndustryBuilderState,
-		.company_tick = RustCompanyTick,
 		.post_ai = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { Command<CMD_COMPANY_CTRL>::Post(CCA_NEW_AI, CompanyID::Invalid(), CRR_NONE, INVALID_CLIENT_ID); }); },
 		.road_begin = [](OpenTTDSessionFrame *f) noexcept -> const OpenTTDRoadCommandContext * { return &f->road.emplace().view; },
 		.road_end = [](OpenTTDSessionFrame *f) noexcept { f->road.reset(); },

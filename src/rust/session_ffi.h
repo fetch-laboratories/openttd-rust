@@ -138,7 +138,6 @@ struct OpenTTDSessionServices {
 	const OpenTTDStationLinks *links;
 	const OpenTTDVehicleVisits *visits;
 	OpenTTDIndustryBuilder *(*industry_builder)() noexcept OPENTTD_SERVICE_DEFAULT(industry_builder);
-	OpenTTDCompanyTick (*company_tick)() noexcept OPENTTD_SERVICE_DEFAULT(company_tick);
 	bool (*post_ai)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(post_ai);
 	const OpenTTDRoadCommandContext *(*road_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(road_begin);
 	void (*road_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(road_end);

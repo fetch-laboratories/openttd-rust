@@ -17,7 +17,8 @@ struct SessionFixture {
 	OpenTTDFixtureMap map{6};
 	OpenTTDConstructionLimits limits{};
 	OpenTTDSettingAddresses settings{};
-	uint8_t climate = 0, extra_tree_placement = 0;
+	uint8_t climate = 0, extra_tree_placement = 0, max_competitors = 0, max_companies = 15;
+	uint16_t competitor_interval = 0;
 	uint16_t recalc_interval = 4, industry_cargo_scale = 100;
 	bool ambient = false;
 	OpenTTDSharedServices shared{};
@@ -40,6 +41,7 @@ struct SessionFixture {
 	OpenTTDIndustryServices industries{};
 	OpenTTDWorldServices world{};
 	OpenTTDCompanyServices companies{};
+	OpenTTDCompanyFinanceServices finance{};
 	OpenTTDScheduleServices schedule{};
 	OpenTTDSessionServices services{};
 	OpenTTDIndustryBuilder *builder = openttd_rust_industry_builder_new();
@@ -57,6 +59,9 @@ struct SessionFixture {
 		active = this;
 		settings.construction_limits = &limits;
 		settings.climate = &climate;
+		settings.max_companies = &max_companies;
+		settings.max_competitors = &max_competitors;
+		settings.competitor_interval = &competitor_interval;
 		settings.ambient = &ambient;
 		settings.industry_cargo_scale = &industry_cargo_scale;
 		settings.recalc_interval = &recalc_interval;
@@ -86,6 +91,10 @@ struct SessionFixture {
 		tables.group = &group;
 		towns.environment.editor = []() noexcept { return true; };
 		stations.environment.editor = []() noexcept { return true; };
+		companies.shared = &shared;
+		companies.finance = &finance;
+		companies.competitor_fired = []() noexcept { return false; };
+		finance.company_finances = [](uint8_t) noexcept -> CompanyFinances * { return nullptr; };
 		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, UINT32_MAX}; };
 		industries.shared = &shared;
 		industries.next_tick = [](uint32_t) noexcept { return OpenTTDIndustryEntry{}; };
@@ -139,11 +148,6 @@ struct SessionFixture {
 		services.links = &links;
 		services.visits = &visits;
 		services.industry_builder = []() noexcept { return active->builder; };
-		services.company_tick = []() noexcept {
-			OpenTTDCompanyTick tick{};
-			tick.editor = true;
-			return tick;
-		};
 		services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept -> void * { return nullptr; };
 		services.schedule_end = FrameNothing;
 		services.window_tick = Nothing;

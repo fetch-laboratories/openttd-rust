@@ -11,6 +11,5 @@
 #include "../command_type.h"
 const OpenTTDCompanyFinanceServices &GetRustCompanyFinanceServices() noexcept;
 const OpenTTDCompanyServices &GetRustCompanyServices() noexcept;
-OpenTTDCompanyTick RustCompanyTick() noexcept;
 CommandCost RustCompanyCost(const OpenTTDCompanyCost &);
 #endif
