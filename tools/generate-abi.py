@@ -128,7 +128,9 @@ def shared_records(
             if tag is not None and (
                 not cpp_type.endswith(" *") or target not in opaque
             ):
-                raise ValueError(f"pointee tag requires an opaque pointer: {cpp}.{match[1]}")
+                raise ValueError(
+                    f"pointee tag requires an opaque pointer: {cpp}.{match[1]}"
+                )
             if cpp_type.endswith(" *") and target in opaque:
                 tag = tag or "struct"
                 if tag not in ("class", "struct"):
@@ -245,7 +247,10 @@ def generate(root: Path = ROOT) -> dict[str, str]:
         shared[group].append(record)
         values = [f"sizeof({name})", f"alignof({name})"]
         for field in fields:
-            values += [f"offsetof({name}, {field.name})", f"sizeof({name}::{field.name})"]
+            values += [
+                f"offsetof({name}, {field.name})",
+                f"sizeof({name}::{field.name})",
+            ]
         output[f"abi-layout-{group}.inc"].append(
             f'Layout("{name}", {{{", ".join(values)}}});'
         )
