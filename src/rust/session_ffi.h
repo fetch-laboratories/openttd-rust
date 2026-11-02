@@ -11,6 +11,7 @@
 #include "vehicle_visits_ffi.h"
 struct NewGRFScanCallback;
 struct OpenTTDSessionFrame;
+struct OpenTTDNetworkActionsStorage;
 struct OpenTTDSessionLoad;
 struct OpenTTDNetworkFrameServices;
 /* Native objects are placement-constructed here; Rust never interprets the bytes. */
@@ -112,6 +113,7 @@ struct OpenTTDSessionServices {
 	SaveOrLoadResult (*load)(OpenTTDSessionFrame *, OpenTTDSessionLoad *) noexcept OPENTTD_SERVICE_DEFAULT(load);
 	SaveOrLoadResult (*intro_load)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(intro_load);
 	SaveOrLoadResult (*save)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(save);
+	OpenTTDNetworkActionsStorage *(*network_actions)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_actions);
 	bool (*failed)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(failed);
 	OpenTTDConsoleException * (*console_exception)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(console_exception);
 	void (*state_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_begin);

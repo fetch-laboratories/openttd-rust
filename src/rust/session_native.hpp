@@ -3,6 +3,7 @@
 #ifndef RUST_SESSION_NATIVE_HPP
 #define RUST_SESSION_NATIVE_HPP
 #include "session_ffi.h"
+#include "network_frame_ffi.h"
 #include "landscape_generation_frame.hpp"
 #include "company_adapter.h"
 #include "company_services.h"
@@ -18,6 +19,9 @@ static_assert(FT_SAVEGAME == 1 && FT_SCENARIO == 2 && FT_HEIGHTMAP == 3 && SL_OK
 struct OpenTTDWorldSetupFrame { std::exception_ptr cancellation; };
 struct RustSessionVehicleCosts { CommandCost replacement, refit, temporary; };
 struct OpenTTDSessionFrame {
+	OpenTTDNetworkActionsStorage network_actions;
+	OpenTTDSessionFrame() { openttd_rust_network_actions_init(&this->network_actions); }
+	std::optional<std::pair<std::string, std::string>> reconnect;
 	std::exception_ptr exception;
 	std::optional<PerformanceMeasurer> framerate;
 	std::optional<Backup<CompanyID>> company;
@@ -28,7 +32,7 @@ struct OpenTTDSessionFrame {
 	std::optional<RustRoadCommandContext> road;
 	std::optional<PerformanceAccumulator> landscape;
 	std::optional<PerformanceMeasurer> schedule;
-	void Rethrow() const { if (this->exception) std::rethrow_exception(this->exception); }
+	void Rethrow() { RustNetworkCompleteActions(this); if (this->exception) std::rethrow_exception(this->exception); }
 };
 static_assert(sizeof(OpenTTDSessionFrame) <= sizeof(OpenTTDSessionFrameStorage));
 static_assert(alignof(OpenTTDSessionFrame) <= alignof(OpenTTDSessionFrameStorage));

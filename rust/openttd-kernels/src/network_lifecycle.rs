@@ -4,6 +4,7 @@
 //! All scalar pointers address canonical native fields. Reconnect constructs native strings in
 //! call-local u64 arrays whose size/alignment is checked natively; no state borrow spans a leaf.
 #![allow(unsafe_code, missing_docs)]
+use crate::network_action::{Actions, Resume};
 use crate::network_command::next_client;
 use crate::network_frame::Services as FrameServices;
 use crate::network_type::{
@@ -27,8 +28,8 @@ pub struct Services {
     pub close_admin_listeners: extern "C" fn(),
     pub close_client_listeners: extern "C" fn(),
     pub connect_debug: extern "C" fn(crate::services::ByteSpan),
-    pub connect_text_begin: extern "C" fn(*mut c_void) -> *mut c_void,
-    pub connect_text_end: extern "C" fn(*mut c_void),
+    pub connect_text_begin: extern "C" fn(*mut crate::session::Frame, bool) -> *mut c_void,
+    pub connect_text_end: extern "C" fn(*mut crate::session::Frame),
     pub coordinator_close_client: extern "C" fn(),
     pub coordinator_close_server: extern "C" fn(),
     pub coordinator_register: extern "C" fn(),
@@ -116,35 +117,59 @@ crate::abi::layouts! {
     };
 }
 
-pub(crate) fn close(s: &Services, f: &FrameServices, close_admins: bool) {
+pub(crate) fn close(s: &Services, f: &FrameServices, close_admins: bool, work: Actions) {
+    work.network(f);
     if (f.command.company.network_server)() {
         if close_admins {
             (s.admins_close)();
         }
-        let mut cursor = 0;
-        while let Some(client) = next_client(f.command, &mut cursor) {
-            crate::network_connection::openttd_rust_network_server_close(
-                f.connection,
-                f,
-                client.socket,
-                NETWORK_RECV_STATUS_CLIENT_QUIT,
-            );
-        }
-        (s.close_client_listeners)();
-        (s.close_admin_listeners)();
-        (s.coordinator_close_server)();
-    } else {
-        if !(f.client_game)().is_null() {
-            crate::network_client::send_quit(f.client, f);
-            crate::network_client::openttd_rust_network_client_close(
-                f.client,
-                f,
-                (f.client_game)(),
-                NETWORK_RECV_STATUS_CLIENT_QUIT,
-            );
-        }
-        (s.coordinator_close_client)();
+        close_clients(s, f, close_admins, 0, work);
+        return;
     }
+    close_client(s, f);
+    close_end(s, f, close_admins);
+}
+
+pub(crate) fn close_clients(
+    s: &Services,
+    f: &FrameServices,
+    close_admins: bool,
+    mut cursor: usize,
+    work: Actions,
+) {
+    while let Some(client) = next_client(f.command, &mut cursor) {
+        crate::network_connection::openttd_rust_network_server_close(
+            f.connection,
+            f,
+            client.socket,
+            NETWORK_RECV_STATUS_CLIENT_QUIT,
+            work,
+        );
+        if work.pending() {
+            work.push(Resume::CloseClients(cursor, close_admins));
+            return;
+        }
+    }
+    (s.close_client_listeners)();
+    (s.close_admin_listeners)();
+    (s.coordinator_close_server)();
+    close_end(s, f, close_admins);
+}
+
+fn close_client(s: &Services, f: &FrameServices) {
+    if !(f.client_game)().is_null() {
+        crate::network_client::send_quit(f.client, f);
+        crate::network_client::openttd_rust_network_client_close(
+            f.client,
+            f,
+            (f.client_game)(),
+            NETWORK_RECV_STATUS_CLIENT_QUIT,
+        );
+    }
+    (s.coordinator_close_client)();
+}
+
+fn close_end(s: &Services, f: &FrameServices, close_admins: bool) {
     (s.deferred_deletions)();
     (s.kill_connecters)();
     unsafe {
@@ -161,7 +186,7 @@ fn initialize(s: &Services, f: &FrameServices, close_admins: bool) {
     unsafe { f.client.reconnect.write(0) };
 }
 
-pub(crate) fn disconnect(s: &Services, f: &FrameServices, close_admins: bool) {
+pub(crate) fn disconnect(s: &Services, f: &FrameServices, close_admins: bool, work: Actions) {
     if (f.command.company.network_server)() {
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
@@ -173,11 +198,19 @@ pub(crate) fn disconnect(s: &Services, f: &FrameServices, close_admins: bool) {
         }
     }
     (f.command.company.close_network_status)();
-    close(s, f, close_admins);
+    close(s, f, close_admins, work);
+    if work.pending() {
+        work.push(Resume::DisconnectEnd);
+        return;
+    }
+    disconnect_end(s);
+}
+
+pub(crate) fn disconnect_end(s: &Services) {
     (s.udp_initialize)();
 }
 
-pub(crate) fn reboot(s: &Services, f: &FrameServices, session: &SessionServices) {
+pub(crate) fn reboot(s: &Services, f: &FrameServices, session: &SessionServices, work: Actions) {
     if (f.command.company.network_server)() {
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
@@ -186,11 +219,19 @@ pub(crate) fn reboot(s: &Services, f: &FrameServices, session: &SessionServices)
         }
         (s.admins_newgame)();
     }
-    close(s, f, !(session.dedicated)());
+    close(s, f, !(session.dedicated)(), work);
 }
 
-pub(crate) fn join_game(s: &Services, f: &FrameServices) {
-    disconnect(s, f, true);
+pub(crate) fn join_game(s: &Services, f: &FrameServices, work: Actions) {
+    disconnect(s, f, true, work);
+    if work.pending() {
+        work.push(Resume::JoinEnd);
+        return;
+    }
+    join_end(s, f);
+}
+
+pub(crate) fn join_end(s: &Services, f: &FrameServices) {
     initialize(s, f, true);
     (s.remember_joined_server)((s.join_connection)());
     (s.debug_connecting)();
@@ -203,6 +244,7 @@ pub(crate) fn join_game(s: &Services, f: &FrameServices) {
     (s.create_client_connecter)();
 }
 
+#[allow(clippy::too_many_arguments)]
 fn connect_game(
     s: &Services,
     f: &FrameServices,
@@ -211,6 +253,7 @@ fn connect_game(
     mut company: u8,
     password: *const c_void,
     resolved: *mut c_void,
+    work: Actions,
 ) -> bool {
     (s.connect_debug)(connection);
     (s.parse_connection)(connection, &raw mut company, resolved);
@@ -219,7 +262,7 @@ fn connect_game(
     }
     (s.set_join_info)(resolved, company, password);
     if crate::session::mode() == GameMode::MENU {
-        join_game(s, f);
+        join_game(s, f, work);
     } else {
         crate::session::set_pending(SwitchMode::JOIN_GAME);
     }
@@ -243,6 +286,7 @@ pub(crate) fn server_start(
     f: &FrameServices,
     session: &SessionServices,
     frame: *mut crate::session::Frame,
+    work: Actions,
 ) -> Result<bool, ()> {
     if !(session.network_available)() {
         return Ok(false);
@@ -256,7 +300,20 @@ pub(crate) fn server_start(
     if (session.dedicated)() {
         (s.check_names)();
     }
-    disconnect(s, f, false);
+    disconnect(s, f, false, work);
+    if work.pending() {
+        work.push(Resume::ServerStart);
+        return Err(());
+    }
+    server_start_after_close(s, f, session, frame)
+}
+
+pub(crate) fn server_start_after_close(
+    s: &Services,
+    f: &FrameServices,
+    session: &SessionServices,
+    frame: *mut crate::session::Frame,
+) -> Result<bool, ()> {
     initialize(s, f, false);
     (s.udp_initialize)();
     (s.debug_listen_clients)();
@@ -333,11 +390,15 @@ pub(crate) fn reconnect_due(f: &FrameServices) -> bool {
     next == 0
 }
 
-pub(crate) fn reconnect(s: &Services, f: &FrameServices, session: &SessionServices) {
-    let mut resolved_storage = [std::mem::MaybeUninit::<u64>::uninit(); 8];
-    let mut password_storage = [std::mem::MaybeUninit::<u64>::uninit(); 8];
-    let password = (s.connect_text_begin)(password_storage.as_mut_ptr().cast());
-    let resolved = (s.connect_text_begin)(resolved_storage.as_mut_ptr().cast());
+pub(crate) fn reconnect(
+    s: &Services,
+    f: &FrameServices,
+    session: &SessionServices,
+    frame: *mut crate::session::Frame,
+    work: Actions,
+) {
+    let password = (s.connect_text_begin)(frame, false);
+    let resolved = (s.connect_text_begin)(frame, true);
     connect_game(
         s,
         f,
@@ -346,9 +407,17 @@ pub(crate) fn reconnect(s: &Services, f: &FrameServices, session: &SessionServic
         crate::company_type::COMPANY_SPECTATOR,
         password,
         resolved,
+        work,
     );
-    (s.connect_text_end)(resolved);
-    (s.connect_text_end)(password);
+    if work.pending() {
+        work.push(Resume::ReconnectEnd);
+        return;
+    }
+    reconnect_end(s, frame);
+}
+
+pub(crate) fn reconnect_end(s: &Services, frame: *mut crate::session::Frame) {
+    (s.connect_text_end)(frame);
 }
 
 #[unsafe(no_mangle)]
@@ -364,8 +433,10 @@ pub extern "C" fn openttd_rust_network_disconnect(
     s: &Services,
     f: &FrameServices,
     close_admins: bool,
+    work: Actions,
 ) {
-    disconnect(s, f, close_admins);
+    work.network(f);
+    disconnect(s, f, close_admins, work);
 }
 
 #[unsafe(no_mangle)]
@@ -377,6 +448,10 @@ pub extern "C" fn openttd_rust_network_connect_game(
     company: u8,
     password: *const c_void,
     resolved: *mut c_void,
-) -> bool {
-    connect_game(s, f, session, connection, company, password, resolved)
+    work: Actions,
+) -> u8 {
+    work.network(f);
+    u8::from(connect_game(
+        s, f, session, connection, company, password, resolved, work,
+    ))
 }

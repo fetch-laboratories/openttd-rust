@@ -656,7 +656,10 @@ public:
 bool NetworkClientConnectGame(std::string_view connection_string, CompanyID default_company, const std::string &join_server_password)
 {
 	std::string resolved;
-	return openttd_rust_network_connect_game(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), {reinterpret_cast<const uint8_t *>(connection_string.data()), connection_string.size()}, default_company.base(), &join_server_password, &resolved);
+	OpenTTDSessionFrame frame;
+	auto result = openttd_rust_network_connect_game(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), {reinterpret_cast<const uint8_t *>(connection_string.data()), connection_string.size()}, default_company.base(), &join_server_password, &resolved, &frame.network_actions);
+	frame.Rethrow();
+	return result != 0;
 }
 
 
@@ -709,7 +712,9 @@ static void CheckClientAndServerName()
  */
 void NetworkDisconnect(bool close_admins)
 {
-	openttd_rust_network_disconnect(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), close_admins);
+	OpenTTDSessionFrame frame;
+	openttd_rust_network_disconnect(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), close_admins, &frame.network_actions);
+	frame.Rethrow();
 }
 
 /**
@@ -1112,12 +1117,11 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 		.close_admin_listeners = []() noexcept { ServerNetworkAdminSocketHandler::CloseListeners(); },
 		.close_client_listeners = []() noexcept { ServerNetworkGameSocketHandler::CloseListeners(); },
 		.connect_debug = [](OpenTTDByteSpan connection) noexcept { Debug(net, 9, "NetworkClientConnectGame(): connection_string={}", std::string_view(reinterpret_cast<const char *>(connection.data), connection.size)); },
-		.connect_text_begin = [](void *storage) noexcept -> void * {
-			static_assert(sizeof(std::string) <= 8 * sizeof(uint64_t));
-			static_assert(alignof(std::string) <= alignof(uint64_t));
-			return new (storage) std::string;
+		.connect_text_begin = [](OpenTTDSessionFrame *f, bool resolved) noexcept -> void * {
+			if (!f->reconnect) f->reconnect.emplace();
+			return resolved ? &f->reconnect->second : &f->reconnect->first;
 		},
-		.connect_text_end = [](void *text) noexcept { std::destroy_at<std::string>(static_cast<std::string *>(text)); },
+		.connect_text_end = [](OpenTTDSessionFrame *f) noexcept { f->reconnect.reset(); },
 		.coordinator_close_client = []() noexcept { _network_coordinator_client.CloseAllConnections(); },
 		.coordinator_close_server = []() noexcept { _network_coordinator_client.CloseConnection(); },
 		.coordinator_register = []() noexcept { _network_coordinator_client.Register(); },

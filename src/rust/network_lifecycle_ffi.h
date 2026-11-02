@@ -18,8 +18,8 @@ struct OpenTTDNetworkLifecycleServices {
 	void (*close_admin_listeners)() noexcept OPENTTD_SERVICE_DEFAULT(close_admin_listeners);
 	void (*close_client_listeners)() noexcept OPENTTD_SERVICE_DEFAULT(close_client_listeners);
 	void (*connect_debug)(OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(connect_debug);
-	void * (*connect_text_begin)(void *) noexcept OPENTTD_SERVICE_DEFAULT(connect_text_begin);
-	void (*connect_text_end)(void *) noexcept OPENTTD_SERVICE_DEFAULT(connect_text_end);
+	void * (*connect_text_begin)(OpenTTDSessionFrame *, bool) noexcept OPENTTD_SERVICE_DEFAULT(connect_text_begin);
+	void (*connect_text_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(connect_text_end);
 	void (*coordinator_close_client)() noexcept OPENTTD_SERVICE_DEFAULT(coordinator_close_client);
 	void (*coordinator_close_server)() noexcept OPENTTD_SERVICE_DEFAULT(coordinator_close_server);
 	void (*coordinator_register)() noexcept OPENTTD_SERVICE_DEFAULT(coordinator_register);
@@ -57,7 +57,7 @@ struct OpenTTDNetworkLifecycleServices {
 const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcept;
 extern "C" {
 void openttd_rust_network_initialize(const OpenTTDNetworkLifecycleServices *, const OpenTTDNetworkFrameServices *, bool close_admins);
-void openttd_rust_network_disconnect(const OpenTTDNetworkLifecycleServices *, const OpenTTDNetworkFrameServices *, bool close_admins);
-bool openttd_rust_network_connect_game(const OpenTTDNetworkLifecycleServices *, const OpenTTDNetworkFrameServices *, const OpenTTDSessionServices * session, OpenTTDByteSpan connection, uint8_t company, const void * password, void * resolved);
+void openttd_rust_network_disconnect(const OpenTTDNetworkLifecycleServices *, const OpenTTDNetworkFrameServices *, bool close_admins, OpenTTDNetworkActionsStorage *);
+uint8_t openttd_rust_network_connect_game(const OpenTTDNetworkLifecycleServices *, const OpenTTDNetworkFrameServices *, const OpenTTDSessionServices * session, OpenTTDByteSpan connection, uint8_t company, const void * password, void * resolved, OpenTTDNetworkActionsStorage *);
 }
 #endif /* RUST_NETWORK_LIFECYCLE_FFI_H */

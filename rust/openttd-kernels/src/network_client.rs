@@ -441,8 +441,26 @@ pub extern "C" fn openttd_rust_network_client_receive_map_done(
     let Ok(success) =
         crate::session::safe_load(session, frame, load, crate::openttd::GameMode::NORMAL)
     else {
-        return NETWORK_RECV_STATUS_OKAY;
+        let work = unsafe {
+            crate::network_action::Actions::from_storage((session.network_actions)(frame))
+        };
+        work.push(crate::network_action::Resume::MapLoaded(game));
+        return if work.pending() {
+            NETWORK_RECV_STATUS_SAVEGAME
+        } else {
+            NETWORK_RECV_STATUS_OKAY
+        };
     };
+    map_loaded(s, f, session, game, success)
+}
+
+pub(crate) fn map_loaded(
+    s: &Services,
+    f: &FrameServices,
+    session: &crate::session::Services,
+    game: *mut c_void,
+    success: bool,
+) -> u8 {
     (s.map_release)(game);
     (f.socket_set_last_packet_now)(game);
     if !success {

@@ -69,10 +69,14 @@ struct OpenTTDNetworkFrameServices {
 	void (*sync_log)() noexcept OPENTTD_SERVICE_DEFAULT(sync_log);
 };
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
+void RustNetworkCompleteActions(OpenTTDSessionFrame *);
 extern "C" {
+void openttd_rust_network_actions_init(OpenTTDNetworkActionsStorage *);
+void *openttd_rust_network_actions_save(OpenTTDNetworkActionsStorage *);
+void openttd_rust_network_actions_resume(OpenTTDNetworkActionsStorage *);
 OpenTTDNetworkFrameState *openttd_rust_network_frame_storage();
 uint32_t openttd_rust_network_calculate_lag(const OpenTTDNetworkFrameServices *, const OpenTTDNetworkSocketSync *sync);
-uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, void *packet, OpenTTDSessionFrame *);
+uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, void *packet, OpenTTDSessionFrame *, OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_receive_frame(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDNetworkSocketSync *sync, void *packet);
 uint8_t openttd_rust_network_receive_sync(const OpenTTDNetworkFrameServices *, uint8_t status, void *packet);
 }

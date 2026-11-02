@@ -1,0 +1,254 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+//! Call-local map-save actions. Native callers save after Rust returns, then resume the
+//! interrupted map, close, tick or session entry. No borrowed game state crosses a save.
+#![allow(unsafe_code, missing_docs)]
+use crate::network_frame::Services as Network;
+use crate::openttd::{GameMode, SwitchMode};
+use crate::session::{Frame, Services as Session};
+use std::ffi::c_void;
+
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Native stack capacity for the Rust continuation owner; its contents stay opaque.
+    "OpenTTDNetworkActionsStorage" ["probe"] => pub struct Storage {
+        pub words: [u64; 64],
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub(crate) enum Resume {
+    None,
+    MapTransfer(*mut c_void),
+    Waits(usize),
+    CloseTail(*mut c_void, u8),
+    CloseClients(usize, bool),
+    DisconnectEnd,
+    JoinEnd,
+    ServerStart,
+    ReconnectEnd,
+    SwitchNetwork(SwitchMode),
+    SwitchStartup(SwitchMode),
+    LoadRestore(GameMode),
+    JoiningSocial,
+    SwitchLoad(GameMode),
+    MapLoaded(*mut c_void),
+    LoopSwitch,
+    LoopState,
+    LoopEnd,
+    FrameSend,
+    ServerTick(usize, bool, bool),
+}
+
+// Coalesced waits and the fixed session caller chain use fewer than 16 slots.
+// Reentrant native entries have separate frames.
+struct Owner {
+    network: *const Network,
+    session: *const Session,
+    frame: *mut Frame,
+    save: *mut c_void,
+    queue: [Resume; 16],
+    len: usize,
+    insert: usize,
+}
+
+/// Call-local owner pointer; field borrows end before a native or Rust continuation call.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct Actions(*mut Owner);
+
+const _: () = assert!(std::mem::size_of::<Owner>() <= std::mem::size_of::<Storage>());
+const _: () = assert!(std::mem::align_of::<Owner>() <= std::mem::align_of::<Storage>());
+
+impl Actions {
+    pub(crate) unsafe fn from_storage(storage: *mut Storage) -> Self {
+        Self(storage.cast())
+    }
+    pub(crate) fn network(self, network: &Network) {
+        unsafe {
+            (*self.0).network = network;
+        }
+    }
+    pub(crate) fn bind(self, network: &Network, session: *const Session, frame: *mut Frame) {
+        unsafe {
+            (*self.0).network = network;
+            (*self.0).session = session;
+            (*self.0).frame = frame;
+        }
+    }
+    pub(crate) fn pending(self) -> bool {
+        unsafe { !(*self.0).save.is_null() }
+    }
+    pub(crate) fn save(self, socket: *mut c_void) {
+        unsafe {
+            (*self.0).save = socket;
+        }
+        self.push(Resume::MapTransfer(socket));
+    }
+    pub(crate) fn push(self, resume: Resume) {
+        if !self.pending() {
+            return;
+        }
+        unsafe {
+            let owner = &mut *self.0;
+            if let Resume::Waits(count) = resume
+                && let Some(Resume::Waits(previous)) = owner.queue.get_mut(owner.insert)
+            {
+                *previous += count;
+                owner.insert += 1;
+                return;
+            }
+            owner
+                .queue
+                .copy_within(owner.insert..owner.len, owner.insert + 1);
+            owner.queue[owner.insert] = resume;
+            owner.len += 1;
+            owner.insert += 1;
+        }
+    }
+    fn pop(self) -> Resume {
+        unsafe {
+            let owner = &mut *self.0;
+            let resume = owner.queue[0];
+            owner.len -= 1;
+            owner.queue.copy_within(1..=owner.len, 0);
+            owner.queue[owner.len] = Resume::None;
+            owner.insert = 0;
+            resume
+        }
+    }
+    unsafe fn resume(self) {
+        unsafe {
+            (*self.0).save = std::ptr::null_mut();
+        }
+        // SAFETY: Service tables and the native frame live until its action driver returns.
+        let (network, session, frame) = unsafe {
+            (
+                &*(*self.0).network,
+                (*self.0).session.as_ref(),
+                (*self.0).frame,
+            )
+        };
+        while unsafe { (*self.0).len } != 0 && !self.pending() {
+            let next = self.pop();
+            match next {
+                Resume::None => (),
+                Resume::MapTransfer(socket) => {
+                    crate::network_connection::map_transfer(network, socket, self);
+                }
+                Resume::Waits(count) => crate::network_connection::update_waiters(network, count),
+                Resume::CloseTail(socket, result) => {
+                    crate::network_connection::close_tail(
+                        network.connection,
+                        network,
+                        socket,
+                        result,
+                    );
+                }
+                Resume::CloseClients(cursor, admins) => {
+                    crate::network_lifecycle::close_clients(
+                        network.lifecycle,
+                        network,
+                        admins,
+                        cursor,
+                        self,
+                    );
+                }
+                Resume::DisconnectEnd => {
+                    crate::network_lifecycle::disconnect_end(network.lifecycle);
+                }
+                Resume::JoinEnd => crate::network_lifecycle::join_end(network.lifecycle, network),
+                Resume::ServerStart => {
+                    let _ = crate::network_lifecycle::server_start_after_close(
+                        network.lifecycle,
+                        network,
+                        session.unwrap(),
+                        frame,
+                    );
+                }
+                Resume::ReconnectEnd => {
+                    crate::network_lifecycle::reconnect_end(network.lifecycle, frame);
+                }
+                Resume::SwitchNetwork(mode) => {
+                    let _ =
+                        crate::session::resume_switch_network(session.unwrap(), frame, mode, self);
+                }
+                Resume::SwitchStartup(mode) => {
+                    let _ = crate::session::resume_switch_startup(session.unwrap(), frame, mode);
+                }
+                Resume::LoadRestore(mode) => {
+                    let _ = crate::session::resume_load_restore(session.unwrap(), frame, mode);
+                }
+                Resume::JoiningSocial => (session.unwrap().joining_social)(),
+                Resume::SwitchLoad(mode) => {
+                    crate::session::resume_switch_load(session.unwrap(), mode);
+                }
+                Resume::MapLoaded(game) => {
+                    crate::network_client::map_loaded(
+                        network.client,
+                        network,
+                        session.unwrap(),
+                        game,
+                        false,
+                    );
+                }
+                Resume::LoopSwitch => {
+                    let _ = crate::session::resume_loop_switch(session.unwrap(), frame, self);
+                }
+                Resume::LoopState => {
+                    let _ = crate::session::resume_loop_state(session.unwrap(), frame);
+                }
+                Resume::LoopEnd => crate::session::resume_loop_end(session.unwrap()),
+                Resume::FrameSend => {
+                    let _ = crate::network_frame::send(network, frame);
+                }
+                Resume::ServerTick(cursor, send_frame, send_sync) => {
+                    crate::network_frame::server_tick_clients(
+                        network, send_frame, send_sync, cursor, self,
+                    );
+                }
+            }
+            if let Some(session) = session
+                && (session.failed)(frame)
+            {
+                unsafe {
+                    (*self.0).len = 0;
+                }
+                unsafe {
+                    (*self.0).save = std::ptr::null_mut();
+                }
+            }
+        }
+    }
+}
+
+/// # Safety
+/// `storage` is aligned native stack capacity, unused until this initialization completes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_actions_init(storage: *mut Storage) {
+    unsafe {
+        storage.cast::<Owner>().write(Owner {
+            network: std::ptr::null(),
+            session: std::ptr::null(),
+            frame: std::ptr::null_mut(),
+            save: std::ptr::null_mut(),
+            queue: [Resume::None; 16],
+            len: 0,
+            insert: 0,
+        });
+    }
+}
+/// # Safety
+/// `storage` is a live initialized native frame's action owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_actions_save(storage: *mut Storage) -> *mut c_void {
+    unsafe { (*storage.cast::<Owner>()).save }
+}
+/// # Safety
+/// The requested native save completed and all entry arguments and services remain live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_actions_resume(storage: *mut Storage) {
+    unsafe {
+        Actions::from_storage(storage).resume();
+    }
+}

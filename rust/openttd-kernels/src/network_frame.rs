@@ -10,6 +10,7 @@
 
 use crate::game_state::GameState;
 use crate::gfx_type::MILLISECONDS_PER_TICK;
+use crate::network_action::{Actions, Resume};
 use crate::network_command::{Client, next_client};
 use crate::network_type::{
     NETWORK_ERROR_NOT_AUTHORIZED, NETWORK_ERROR_TIMEOUT_COMPUTER, NETWORK_ERROR_TIMEOUT_JOIN,
@@ -252,10 +253,12 @@ pub unsafe extern "C" fn openttd_rust_network_receive_ack(
     sync: *mut SocketSync,
     p: *mut c_void,
     session_frame: *mut Frame,
+    work: Actions,
 ) -> u8 {
+    work.network(s);
     // SAFETY: `status` is the socket's one-byte status field (see above).
     if unsafe { *status } < AUTHORIZED {
-        return send_error(s, socket, NETWORK_ERROR_NOT_AUTHORIZED);
+        return send_error(s, socket, NETWORK_ERROR_NOT_AUTHORIZED, work);
     }
     let frame = (s.packet_recv_uint32)(p);
     (s.debug_receive_ack)(game, frame);
@@ -409,24 +412,35 @@ fn client_game_loop(
     Ok(true)
 }
 
-fn send_error(s: &Services, socket: *mut c_void, error: u8) -> u8 {
+fn send_error(s: &Services, socket: *mut c_void, error: u8, work: Actions) -> u8 {
     crate::network_connection::send_error(
         s.connection,
         s,
         socket,
         error,
         crate::network_connection::EMPTY_TEXT,
+        work,
     )
 }
 
 /// `NetworkServer_Tick`.
-fn server_tick(s: &Services, send_frame: bool) {
+fn server_tick(s: &Services, send_frame: bool, work: Actions) {
     let mut send_sync = false;
     if frame_counter() >= state!(last_sync_frame).wrapping_add(u32::from((s.sync_freq)())) {
         state!(last_sync_frame = frame_counter());
         send_sync = true;
     }
-    let mut cursor = 0;
+    server_tick_clients(s, send_frame, send_sync, 0, work);
+}
+
+#[allow(clippy::too_many_lines)]
+pub(crate) fn server_tick_clients(
+    s: &Services,
+    send_frame: bool,
+    send_sync: bool,
+    mut cursor: usize,
+    work: Actions,
+) {
     while let Some(client) = next_client(s.command, &mut cursor) {
         let Client {
             socket,
@@ -452,7 +466,11 @@ fn server_tick(s: &Services, send_frame: bool) {
                     // A packet within the lag means a lagging client, else a lost connection.
                     let recent = within(lag.wrapping_mul(MILLISECONDS_PER_TICK));
                     (s.console_lagging)(socket, lag, recent);
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER, work);
+                    if work.pending() {
+                        work.push(Resume::ServerTick(cursor, send_frame, send_sync));
+                        return;
+                    }
                     continue;
                 }
                 // Warn once, and only while packets still arrive.
@@ -464,14 +482,22 @@ fn server_tick(s: &Services, send_frame: bool) {
                     .wrapping_sub(read_field!(sync, last_token_frame));
                 if token_age >= u32::from((s.max_lag_time)()) {
                     (s.console_bad_acks)(socket);
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER, work);
+                    if work.pending() {
+                        work.push(Resume::ServerTick(cursor, send_frame, send_sync));
+                        return;
+                    }
                     continue;
                 }
             }
             INACTIVE | IDENTIFY | NEWGRFS_CHECK | AUTHORIZED => {
                 if lag > u32::from((s.max_init_time)()) {
                     (s.console_init_timeout)(socket);
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_COMPUTER, work);
+                    if work.pending() {
+                        work.push(Resume::ServerTick(cursor, send_frame, send_sync));
+                        return;
+                    }
                     continue;
                 }
             }
@@ -485,21 +511,33 @@ fn server_tick(s: &Services, send_frame: bool) {
             MAP => {
                 if lag > u32::from((s.max_download_time)()) {
                     (s.console_download_timeout)(socket);
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_MAP);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_MAP, work);
+                    if work.pending() {
+                        work.push(Resume::ServerTick(cursor, send_frame, send_sync));
+                        return;
+                    }
                     continue;
                 }
             }
             DONE_MAP | PRE_ACTIVE => {
                 if lag > u32::from((s.max_join_time)()) {
                     (s.console_join_timeout)(socket);
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_JOIN);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_JOIN, work);
+                    if work.pending() {
+                        work.push(Resume::ServerTick(cursor, send_frame, send_sync));
+                        return;
+                    }
                     continue;
                 }
             }
             AUTH_GAME => {
                 if lag > u32::from((s.max_password_time)()) {
                     (s.console_password_timeout)(socket);
-                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_PASSWORD);
+                    send_error(s, socket, NETWORK_ERROR_TIMEOUT_PASSWORD, work);
+                    if work.pending() {
+                        work.push(Resume::ServerTick(cursor, send_frame, send_sync));
+                        return;
+                    }
                     continue;
                 }
             }
@@ -525,6 +563,7 @@ pub(crate) fn game_loop(
     session: &crate::session::Services,
     s: &Services,
     frame: *mut Frame,
+    work: Actions,
 ) -> Result<(), ()> {
     if !(session.networking)() {
         return Ok(());
@@ -555,7 +594,11 @@ pub(crate) fn game_loop(
         crate::network_command::execute_local_command_queue(s.command);
         state_loop(session, frame)?;
         state!(sync_seed_1 = random_state(s, 0));
-        server_tick(s, send_frame);
+        server_tick(s, send_frame, work);
+        if work.pending() {
+            work.push(Resume::FrameSend);
+            return Err(());
+        }
     } else if state!(frame_counter_server) > frame_counter() {
         // Catch up with the server; stop when things go bad.
         while state!(frame_counter_server) > frame_counter() {
@@ -566,6 +609,10 @@ pub(crate) fn game_loop(
     } else if frame_counter_max() > frame_counter() && !client_game_loop(session, s, frame)? {
         return Ok(());
     }
+    send(s, frame)
+}
+
+pub(crate) fn send(s: &Services, frame: *mut Frame) -> Result<(), ()> {
     if (s.send)(frame) { Ok(()) } else { Err(()) }
 }
 

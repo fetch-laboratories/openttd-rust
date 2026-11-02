@@ -116,6 +116,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.load = [](OpenTTDSessionFrame *f, OpenTTDSessionLoad *load) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = load == nullptr ? SaveOrLoad(_file_to_saveload.name, _file_to_saveload.file_op, _file_to_saveload.ftype.detailed, NO_DIRECTORY) : load->filter == nullptr ? SaveOrLoad(load->filename, load->operation, load->type, load->subdir) : LoadWithFilter(std::move(load->filter)); }); return result; },
 		.intro_load = [](OpenTTDSessionFrame *f) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = SaveOrLoad("opntitle.dat", SLO_LOAD, DFT_GAME_FILE, BASESET_DIR); }); return result; },
 		.save = [](OpenTTDSessionFrame *f) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = SaveOrLoad(_file_to_saveload.name, SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY); }); return result; },
+		.network_actions = [](OpenTTDSessionFrame *f) noexcept { return &f->network_actions; },
 		.failed = [](OpenTTDSessionFrame *f) noexcept { return f->exception != nullptr; },
 		.console_exception = [](OpenTTDSessionFrame *f) noexcept { return reinterpret_cast<OpenTTDConsoleException *>(&f->exception); },
 		.state_begin = [](OpenTTDSessionFrame *f) noexcept { f->framerate.emplace(PFE_GAMELOOP); PerformanceAccumulator::Reset(PFE_GL_LANDSCAPE); },

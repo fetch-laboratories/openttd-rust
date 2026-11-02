@@ -2,6 +2,7 @@
 //! Connection admission and map pacing. Socket and client-info pools and save filters stay
 //! native. Fields are accessed at their original observation points; no borrow survives a leaf.
 #![allow(unsafe_code, missing_docs)]
+use crate::network_action::{Actions, Resume};
 use crate::network_command::next_client;
 use crate::network_frame::{
     Services as FrameServices, SocketSync,
@@ -78,7 +79,6 @@ pub struct Services {
     pub lost_connection_announcement: extern "C" fn(*mut c_void),
     pub map_create: extern "C" fn(*mut c_void),
     pub map_destroy: extern "C" fn(*mut c_void),
-    pub map_save: extern "C" fn(*mut c_void),
     pub map_transfer: extern "C" fn(*mut c_void) -> bool,
     pub max_clients: extern "C" fn() -> u8,
     pub max_companies: extern "C" fn() -> u8,
@@ -152,7 +152,6 @@ crate::abi::layouts! {
         lost_connection_announcement,
         map_create,
         map_destroy,
-        map_save,
         map_transfer,
         max_clients,
         max_companies,
@@ -238,10 +237,15 @@ pub(crate) fn check_min_active_clients(session: &crate::session::Services, f: &F
     }
 }
 
-pub(crate) fn send_welcome(s: &Services, f: &FrameServices, socket: *mut c_void) -> u8 {
+pub(crate) fn send_welcome(
+    s: &Services,
+    f: &FrameServices,
+    socket: *mut c_void,
+    work: Actions,
+) -> u8 {
     (s.debug_send_welcome)(socket);
     if status(s, socket) != NEWGRFS_CHECK {
-        return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
     }
     (s.debug_authorized)(socket);
     set_status(s, socket, AUTHORIZED);
@@ -286,7 +290,13 @@ pub(crate) fn send_wait(s: &Services, f: &FrameServices, socket: *mut c_void) ->
     NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn next_map(s: &Services, f: &FrameServices, socket: *mut c_void, ignore: *mut c_void) {
+pub(crate) fn next_map(
+    s: &Services,
+    f: &FrameServices,
+    socket: *mut c_void,
+    ignore: *mut c_void,
+    work: Actions,
+) {
     (s.debug_next_map)(socket);
     let mut best: *mut c_void = std::ptr::null_mut();
     let mut cursor = 0;
@@ -305,11 +315,26 @@ pub(crate) fn next_map(s: &Services, f: &FrameServices, socket: *mut c_void, ign
     }
     if !best.is_null() {
         set_status(s, best, AUTHORIZED);
-        openttd_rust_network_send_map(s, f, best);
+        openttd_rust_network_send_map(s, f, best, work);
+        if work.pending() {
+            work.push(Resume::Waits(1));
+            return;
+        }
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             if client.status == MAP_WAIT {
                 send_wait(s, f, client.socket);
+            }
+        }
+    }
+}
+
+pub(crate) fn update_waiters(f: &FrameServices, count: usize) {
+    for _ in 0..count {
+        let mut cursor = 0;
+        while let Some(client) = next_client(f.command, &mut cursor) {
+            if client.status == MAP_WAIT {
+                send_wait(f.connection, f, client.socket);
             }
         }
     }
@@ -320,9 +345,11 @@ pub extern "C" fn openttd_rust_network_send_map(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     if status(s, socket) < AUTHORIZED {
-        return send_error(s, f, socket, NETWORK_ERROR_NOT_AUTHORIZED, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_NOT_AUTHORIZED, EMPTY_TEXT, work);
     }
     if status(s, socket) == AUTHORIZED {
         (s.debug_map_first)(socket);
@@ -337,16 +364,22 @@ pub extern "C" fn openttd_rust_network_send_map(
         (s.debug_map)(socket);
         set_status(s, socket, MAP);
         reset_lag(s, socket);
-        (s.map_save)(socket);
+        work.save(socket);
+        return NETWORK_RECV_STATUS_OKAY;
     }
+    map_transfer(f, socket, work);
+    NETWORK_RECV_STATUS_OKAY
+}
+
+pub(crate) fn map_transfer(f: &FrameServices, socket: *mut c_void, work: Actions) {
+    let s = f.connection;
     if status(s, socket) == MAP && (s.map_transfer)(socket) {
         (s.debug_map_last)(socket);
         (s.map_destroy)(socket);
         (s.debug_done_map)(socket);
         set_status(s, socket, DONE_MAP);
-        next_map(s, f, socket, std::ptr::null_mut());
+        next_map(s, f, socket, std::ptr::null_mut(), work);
     }
-    NETWORK_RECV_STATUS_OKAY
 }
 
 #[unsafe(no_mangle)]
@@ -354,9 +387,11 @@ pub extern "C" fn openttd_rust_network_receive_getmap(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     if status(s, socket) < AUTHORIZED || (f.socket_has_quit)((s.game)(socket)) {
-        return send_error(s, f, socket, NETWORK_ERROR_NOT_AUTHORIZED, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_NOT_AUTHORIZED, EMPTY_TEXT, work);
     }
     (s.debug_getmap)(socket);
     let mut cursor = 0;
@@ -367,7 +402,7 @@ pub extern "C" fn openttd_rust_network_receive_getmap(
             return send_wait(s, f, socket);
         }
     }
-    openttd_rust_network_send_map(s, f, socket)
+    openttd_rust_network_send_map(s, f, socket, work)
 }
 
 #[unsafe(no_mangle)]
@@ -375,7 +410,9 @@ pub extern "C" fn openttd_rust_network_receive_map_ok(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     if status(s, socket) == DONE_MAP && !(f.socket_has_quit)((s.game)(socket)) {
         (s.debug_map_ok)(socket);
         (s.joined)(socket);
@@ -401,18 +438,23 @@ pub extern "C" fn openttd_rust_network_receive_map_ok(
         (s.admin_joined)(socket);
         return (s.send_config)(socket);
     }
-    send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT)
+    send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT, work)
 }
 
-pub(crate) fn send_newgrf_check(s: &Services, f: &FrameServices, socket: *mut c_void) -> u8 {
+pub(crate) fn send_newgrf_check(
+    s: &Services,
+    f: &FrameServices,
+    socket: *mut c_void,
+    work: Actions,
+) -> u8 {
     (s.debug_newgrf_check)(socket);
     if status(s, socket) != IDENTIFY {
-        return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET);
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
     }
     (s.debug_newgrfs)(socket);
     set_status(s, socket, NEWGRFS_CHECK);
     if (s.grfs_empty)() {
-        return send_welcome(s, f, socket);
+        return send_welcome(s, f, socket, work);
     }
     let p = (s.grfs_packet)(socket);
     (f.packet_send)((s.game)(socket), p);
@@ -424,12 +466,14 @@ pub extern "C" fn openttd_rust_network_receive_newgrfs_checked(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     if status(s, socket) != NEWGRFS_CHECK {
-        return send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT, work);
     }
     (s.debug_newgrfs_checked)(socket);
-    send_welcome(s, f, socket)
+    send_welcome(s, f, socket, work)
 }
 
 #[unsafe(no_mangle)]
@@ -466,18 +510,20 @@ pub extern "C" fn openttd_rust_network_receive_join(
     socket: *mut c_void,
     p: *mut c_void,
     text: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     if status(s, socket) != INACTIVE {
-        return send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT, work);
     }
     if unsafe { s.clients_on.read() } >= (s.max_clients)() {
-        return send_error(s, f, socket, NETWORK_ERROR_FULL, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_FULL, EMPTY_TEXT, work);
     }
     (f.packet_recv_string)(p, text, crate::network_config::NETWORK_REVISION_LENGTH);
     let version = (f.packet_recv_uint32)(p);
     (s.debug_join)(socket, text, version);
     if !(s.revision_compatible)(text) || (s.newgrf_version)() != version {
-        return send_error(s, f, socket, NETWORK_ERROR_WRONG_REVISION, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_WRONG_REVISION, EMPTY_TEXT, work);
     }
     (s.auth_request)(socket)
 }
@@ -489,9 +535,11 @@ pub extern "C" fn openttd_rust_network_receive_identify(
     socket: *mut c_void,
     p: *mut c_void,
     name: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     if status(s, socket) != IDENTIFY {
-        return send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_NOT_EXPECTED, EMPTY_TEXT, work);
     }
     (s.debug_identify)(socket);
     (f.packet_recv_string)(p, name, crate::network_config::NETWORK_CLIENT_NAME_LENGTH);
@@ -502,13 +550,20 @@ pub extern "C" fn openttd_rust_network_receive_identify(
     match company {
         crate::company_type::COMPANY_NEW_COMPANY => {
             if (f.command.company.company_count)() >= usize::from((s.max_companies)()) {
-                return send_error(s, f, socket, NETWORK_ERROR_FULL, EMPTY_TEXT);
+                return send_error(s, f, socket, NETWORK_ERROR_FULL, EMPTY_TEXT, work);
             }
         }
         crate::company_type::COMPANY_SPECTATOR => {}
         _ => {
             if !(f.command.company.shared.company_human)(company) {
-                return send_error(s, f, socket, NETWORK_ERROR_COMPANY_MISMATCH, EMPTY_TEXT);
+                return send_error(
+                    s,
+                    f,
+                    socket,
+                    NETWORK_ERROR_COMPANY_MISMATCH,
+                    EMPTY_TEXT,
+                    work,
+                );
             }
             if !(s.company_allows_client)(company, socket) {
                 company = crate::company_type::COMPANY_SPECTATOR;
@@ -516,17 +571,24 @@ pub extern "C" fn openttd_rust_network_receive_identify(
         }
     }
     if !(s.valid_name)(name) {
-        return send_error(s, f, socket, NETWORK_ERROR_INVALID_CLIENT_NAME, EMPTY_TEXT);
+        return send_error(
+            s,
+            f,
+            socket,
+            NETWORK_ERROR_INVALID_CLIENT_NAME,
+            EMPTY_TEXT,
+            work,
+        );
     }
     if !(s.unique_name)(name) {
-        return send_error(s, f, socket, NETWORK_ERROR_NAME_IN_USE, EMPTY_TEXT);
+        return send_error(s, f, socket, NETWORK_ERROR_NAME_IN_USE, EMPTY_TEXT, work);
     }
     (s.allocate_info)(socket, name, company);
     let finances = (f.command.company.finance.company_finances)(company);
     if !finances.is_null() {
         write_field!(finances, empty, 0);
     }
-    send_newgrf_check(s, f, socket)
+    send_newgrf_check(s, f, socket, work)
 }
 
 pub(crate) fn send_error(
@@ -535,6 +597,7 @@ pub(crate) fn send_error(
     socket: *mut c_void,
     mut error: u8,
     reason: crate::services::ByteSpan,
+    work: Actions,
 ) -> u8 {
     (s.debug_send_error)(socket, error);
     let game = (s.game)(socket);
@@ -570,7 +633,7 @@ pub(crate) fn send_error(
     } else {
         (s.error_unjoined)(socket, strid);
     }
-    close_connection(s, f, socket, NETWORK_RECV_STATUS_SERVER_ERROR)
+    close_connection(s, f, socket, NETWORK_RECV_STATUS_SERVER_ERROR, work)
 }
 
 #[unsafe(no_mangle)]
@@ -580,8 +643,10 @@ pub extern "C" fn openttd_rust_network_send_error(
     socket: *mut c_void,
     error: u8,
     reason: crate::services::ByteSpan,
+    work: Actions,
 ) -> u8 {
-    send_error(s, f, socket, error, reason)
+    work.network(f);
+    send_error(s, f, socket, error, reason, work)
 }
 
 pub(crate) fn send_error_quit(
@@ -650,11 +715,13 @@ pub extern "C" fn openttd_rust_network_receive_error(
     f: &FrameServices,
     socket: *mut c_void,
     p: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     let error = (f.packet_recv_uint8)(p);
     (s.debug_receive_error)(socket, error);
     if status(s, socket) < DONE_MAP || (f.socket_has_quit)((s.game)(socket)) {
-        return close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT);
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT, work);
     }
     (s.client_error_announcement)(socket, error);
     let mut cursor = 0;
@@ -664,7 +731,7 @@ pub extern "C" fn openttd_rust_network_receive_error(
         }
     }
     (s.admin_error)(socket, error);
-    close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT)
+    close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT, work)
 }
 
 #[unsafe(no_mangle)]
@@ -672,9 +739,11 @@ pub extern "C" fn openttd_rust_network_receive_quit(
     s: &Services,
     f: &FrameServices,
     socket: *mut c_void,
+    work: Actions,
 ) -> u8 {
+    work.network(f);
     if status(s, socket) < DONE_MAP || (f.socket_has_quit)((s.game)(socket)) {
-        return close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT);
+        return close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT, work);
     }
     (s.debug_receive_quit)(socket);
     (s.quit_announcement)(socket);
@@ -685,10 +754,16 @@ pub extern "C" fn openttd_rust_network_receive_quit(
         }
     }
     (s.admin_quit)(socket);
-    close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT)
+    close_connection(s, f, socket, NETWORK_RECV_STATUS_CLIENT_QUIT, work)
 }
 
-fn close_connection(s: &Services, f: &FrameServices, socket: *mut c_void, result: u8) -> u8 {
+fn close_connection(
+    s: &Services,
+    f: &FrameServices,
+    socket: *mut c_void,
+    result: u8,
+    work: Actions,
+) -> u8 {
     crate::movement::native_assert(f.command.company.shared, result != NETWORK_RECV_STATUS_OKAY);
     if (f.socket_pending_deletion)((s.game)(socket)) || !(f.socket_valid)((s.game)(socket)) {
         return result;
@@ -714,8 +789,16 @@ fn close_connection(s: &Services, f: &FrameServices, socket: *mut c_void, result
     }
     if status(s, socket) == MAP {
         (s.map_destroy)(socket);
-        next_map(s, f, socket, socket);
+        next_map(s, f, socket, socket, work);
+        if work.pending() {
+            work.push(Resume::CloseTail(socket, result));
+            return result;
+        }
     }
+    close_tail(s, f, socket, result)
+}
+
+pub(crate) fn close_tail(s: &Services, f: &FrameServices, socket: *mut c_void, result: u8) -> u8 {
     (s.admin_error)(socket, NETWORK_ERROR_CONNECTION_LOST);
     (s.debug_closed)(socket);
     if status(s, socket) >= AUTHORIZED {
@@ -736,6 +819,8 @@ pub extern "C" fn openttd_rust_network_server_close(
     f: &FrameServices,
     socket: *mut c_void,
     result: u8,
+    work: Actions,
 ) -> u8 {
-    close_connection(s, f, socket, result)
+    work.network(f);
+    close_connection(s, f, socket, result, work)
 }

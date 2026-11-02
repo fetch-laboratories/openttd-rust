@@ -5,6 +5,8 @@
 #include "../network/core/packet.h"
 #include "../newgrf_config.h"
 #include "../rust/network_client_ffi.h"
+#include "../rust/network_connection_ffi.h"
+#include "../rust/company_services.h"
 #include "../rust/session_native.hpp"
 
 TEST_CASE("Network admission - each NewGRF checksum starts empty")
@@ -84,10 +86,88 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 	sync.last_frame = 123;
 	sync.last_frame_server = 456;
 	OpenTTDSessionFrame frame;
-	CHECK(openttd_rust_network_receive_ack(&network, nullptr, nullptr, &status, &sync, nullptr, &frame) == 0);
+	CHECK(openttd_rust_network_receive_ack(&network, nullptr, nullptr, &status, &sync, nullptr, &frame, &frame.network_actions) == 0);
 	CHECK(status == 9); // Server STATUS_ACTIVE.
 	CHECK(sync.last_token_frame == GetRustNetworkFrameState().frame_counter);
 	CHECK(sync.last_frame == 123);
 	CHECK(sync.last_frame_server == 456);
 	CHECK_THROWS_AS(frame.Rethrow(), int);
+}
+
+struct MapClient {
+	uint8_t status;
+	OpenTTDCommandQueue incoming{};
+	OpenTTDCommandQueue outgoing{};
+	OpenTTDNetworkSocketSync sync{};
+};
+static std::array<MapClient, 4> map_clients;
+static std::vector<std::pair<int, int>> map_events;
+static int MapIndex(void *socket) { return static_cast<MapClient *>(socket) - map_clients.data(); }
+static void MapEvent(int event, void *socket) { map_events.emplace_back(event, MapIndex(socket)); }
+TEST_CASE("Network map save - native actions preserve nested waits and close tail order")
+{
+	map_clients = {};
+	map_events.clear();
+	map_clients[0].status = 6; // Server STATUS_MAP.
+	for (int i = 1; i < 4; i++) map_clients[i].status = 5; // Server STATUS_MAP_WAIT.
+	OpenTTDNetworkCommandServices command{};
+	command.company = &GetRustCompanyServices();
+	command.next_client = [](size_t from, OpenTTDNetworkCommandClient *client) noexcept {
+		if (from >= map_clients.size()) return false;
+		auto *cs = &map_clients[from];
+		*client = {cs, cs, from, &cs->incoming, &cs->outgoing, &cs->sync, 0, cs->status};
+		return true;
+	};
+	OpenTTDNetworkConnectionServices connection{};
+	connection.game = [](void *socket) noexcept { return socket; };
+	connection.status = [](void *socket) noexcept { return &static_cast<MapClient *>(socket)->status; };
+	connection.sync = [](void *socket) noexcept { return &static_cast<MapClient *>(socket)->sync; };
+	connection.outgoing_queue = [](void *socket) noexcept { return &static_cast<MapClient *>(socket)->outgoing; };
+	connection.join_date = [](void *) noexcept { return 0; };
+	connection.client_id = [](void *socket) noexcept { return static_cast<uint32_t>(MapIndex(socket)); };
+	connection.debug_next_map = [](void *) noexcept {};
+	connection.debug_map_first = [](void *) noexcept {};
+	connection.debug_map = [](void *) noexcept {};
+	connection.debug_map_last = [](void *) noexcept {};
+	connection.debug_done_map = [](void *) noexcept {};
+	connection.debug_send_wait = [](void *socket) noexcept { MapEvent(7, socket); };
+	connection.debug_closed = [](void *) noexcept {};
+	connection.map_create = [](void *socket) noexcept { MapEvent(2, socket); };
+	connection.map_destroy = [](void *socket) noexcept { MapEvent(1, socket); };
+	connection.map_transfer = [](void *socket) noexcept { MapEvent(4, socket); return MapIndex(socket) == 1; };
+	connection.admin_error = [](void *socket, uint8_t) noexcept { MapEvent(8, socket); };
+	uint8_t on = 4, connected = 4;
+	connection.clients_on = &on;
+	connection.clients_connected = &connected;
+	OpenTTDNetworkFrameServices network{};
+	network.command = &command;
+	network.connection = &connection;
+	network.socket_pending_deletion = [](void *) noexcept { return false; };
+	network.socket_valid = [](void *) noexcept { return true; };
+	network.socket_has_quit = [](void *) noexcept { return false; };
+	network.socket_send_packets = [](void *socket, bool) noexcept { MapEvent(9, socket); };
+	network.socket_defer_deletion = [](void *socket) noexcept { MapEvent(10, socket); };
+	network.packet_new = [](void *socket, uint8_t) noexcept { return socket; };
+	network.packet_send_uint32 = [](void *, uint32_t) noexcept {};
+	network.packet_send_uint8 = [](void *, uint8_t) noexcept {};
+	network.packet_send = [](void *, void *) noexcept {};
+	OpenTTDSessionFrame frame;
+	CHECK(openttd_rust_network_server_close(&connection, &network, &map_clients[0], NETWORK_RECV_STATUS_CLIENT_QUIT, &frame.network_actions) == NETWORK_RECV_STATUS_CLIENT_QUIT);
+	CHECK(on == 4);
+	CHECK(connected == 4);
+	REQUIRE(openttd_rust_network_actions_save(&frame.network_actions) == &map_clients[1]);
+	MapEvent(3, &map_clients[1]); // The native caller saves before resuming Rust.
+	openttd_rust_network_actions_resume(&frame.network_actions);
+	CHECK(on == 4);
+	REQUIRE(openttd_rust_network_actions_save(&frame.network_actions) == &map_clients[2]);
+	MapEvent(3, &map_clients[2]);
+	openttd_rust_network_actions_resume(&frame.network_actions);
+	CHECK(openttd_rust_network_actions_save(&frame.network_actions) == nullptr);
+	CHECK(on == 3);
+	CHECK(connected == 3);
+	const std::vector<std::pair<int, int>> expected{
+		{1, 0}, {2, 1}, {3, 1}, {4, 1}, {1, 1}, {2, 2}, {3, 2}, {4, 2},
+		{7, 3}, {7, 3}, {8, 0}, {9, 0}, {10, 0},
+	};
+	CHECK(map_events == expected);
 }
