@@ -149,7 +149,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.station = &GetRustStationServices(),
 		.links = &GetRustStationLinks(),
 		.visits = &GetRustVehicleVisits(),
-		.industry_tick = RustIndustryTickRecord,
 		.industry_builder = RustIndustryBuilderState,
 		.company_tick = RustCompanyTick,
 		.post_ai = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { Command<CMD_COMPANY_CTRL>::Post(CCA_NEW_AI, CompanyID::Invalid(), CRR_NONE, INVALID_CLIENT_ID); }); },

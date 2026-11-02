@@ -158,7 +158,6 @@ pub struct Services {
     pub station: *const crate::station_service::World,
     pub links: *const crate::station_service::Links,
     pub visits: *const crate::vehicle::visits::Services,
-    pub industry_tick: extern "C" fn() -> crate::industry::TickRecord,
     pub industry_builder: extern "C" fn() -> *mut crate::industry::Builder,
     pub company_tick: extern "C" fn() -> crate::company::Tick,
     pub post_ai: extern "C" fn(*mut Frame) -> bool,
@@ -650,7 +649,7 @@ impl Session<'_> {
             crate::trees::tick(s.trees, s.shared);
             crate::station_service::tick(s.station, s.links, s.visits);
             let world = &*(s.world)();
-            crate::industry::tick((s.industry_builder)(), &(s.industry_tick)(), world.industry);
+            crate::industry::tick((s.industry_builder)(), world.industry);
         }
         (s.landscape_end)(self.frame);
         let mut company = (s.company_tick)();
@@ -974,7 +973,6 @@ crate::abi::layouts! {
         station,
         links,
         visits,
-        industry_tick,
         industry_builder,
         company_tick,
         post_ai,

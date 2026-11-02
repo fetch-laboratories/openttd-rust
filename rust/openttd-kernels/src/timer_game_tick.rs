@@ -5,3 +5,5 @@ pub const TOWN_GROWTH_TICKS: u16 = 70;
 pub const DAY_TICKS: i32 = 74;
 /// `Ticks::TICKS_PER_SECOND`.
 pub const TICKS_PER_SECOND: i32 = 37;
+/// `Ticks::INDUSTRY_PRODUCE_TICKS`.
+pub const INDUSTRY_PRODUCE_TICKS: u32 = 256;

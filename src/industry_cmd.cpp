@@ -412,18 +412,14 @@ void PlantRandomFarmField(const Industry *i)
  * @param i industry
  */
 
-OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept
-{
-	/* Values the original reads inline; none changes during the tick. */
-	return OpenTTDIndustryTickRecord{TimerGameTick::counter, {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)},
-		ScaleByInverseCargoScale(Ticks::INDUSTRY_PRODUCE_TICKS, false), _settings_client.sound.ambient, _game_mode == GM_EDITOR};
-}
 
 
 /**
  * Check the conditions of #CHECK_NOTHING (Always succeeds).
  * @return Succeeded or failed command.
  */
+
+static_assert(Ticks::INDUSTRY_PRODUCE_TICKS == 256);
 
 bool IsSlopeRefused(Slope current, Slope refused)
 {

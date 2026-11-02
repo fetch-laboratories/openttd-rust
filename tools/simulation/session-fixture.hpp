@@ -18,7 +18,8 @@ struct SessionFixture {
 	OpenTTDConstructionLimits limits{};
 	OpenTTDSettingAddresses settings{};
 	uint8_t climate = 0, extra_tree_placement = 0;
-	uint16_t recalc_interval = 4;
+	uint16_t recalc_interval = 4, industry_cargo_scale = 100;
+	bool ambient = false;
 	OpenTTDSharedServices shared{};
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
@@ -56,6 +57,8 @@ struct SessionFixture {
 		active = this;
 		settings.construction_limits = &limits;
 		settings.climate = &climate;
+		settings.ambient = &ambient;
+		settings.industry_cargo_scale = &industry_cargo_scale;
 		settings.recalc_interval = &recalc_interval;
 		settings.extra_tree_placement = &extra_tree_placement;
 		shared.settings = &settings;
@@ -84,6 +87,8 @@ struct SessionFixture {
 		towns.environment.editor = []() noexcept { return true; };
 		stations.environment.editor = []() noexcept { return true; };
 		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, UINT32_MAX}; };
+		industries.shared = &shared;
+		industries.next_tick = [](uint32_t) noexcept { return OpenTTDIndustryEntry{}; };
 		world.industry = &industries;
 		clock.shared = &shared;
 		clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
@@ -134,7 +139,6 @@ struct SessionFixture {
 		services.links = &links;
 		services.visits = &visits;
 		services.industry_builder = []() noexcept { return active->builder; };
-		services.industry_tick = []() noexcept { return OpenTTDIndustryTickRecord{.counter = 0, .map = {}, .interval = 0, .ambient = 0, .editor = 1}; };
 		services.company_tick = []() noexcept {
 			OpenTTDCompanyTick tick{};
 			tick.editor = true;
