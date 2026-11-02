@@ -258,6 +258,16 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn previous(self) -> Option<Self> {
         std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), previous)).map(Self)
     }
+    pub(crate) fn set_hidden(self, value: bool) {
+        self.write_status(if value {
+            self.status() | VS_HIDDEN
+        } else {
+            self.status() & !VS_HIDDEN
+        });
+    }
+    pub(crate) fn write_cargo_cap(self, value: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), cargo_cap, value);
+    }
     pub(crate) fn engine_id(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), engine_type).0
     }
