@@ -170,6 +170,7 @@ struct SessionFixture {
 		if (mode != GM_EDITOR) { TimerGameEconomy::date_fract = 0; TimerGameCalendar::date_fract = 0; }
 		const auto saved_cursor = *openttd_rust_tile_loop_cursor();
 		if (saved_cursor == 0) *openttd_rust_tile_loop_cursor() = 1;
+		const auto saved_company_tick = *openttd_rust_company_tick();
 		const auto saved_mode = _game_mode;
 		const auto saved_pause = _pause_mode;
 		_game_mode = mode;
@@ -184,6 +185,8 @@ struct SessionFixture {
 		_game_mode = saved_mode;
 		_pause_mode = saved_pause;
 		if (loop.services == &tiles || saved_cursor == 0) *openttd_rust_tile_loop_cursor() = saved_cursor;
+		/* The live-mode company tick advances the process-wide OnTick_Companies cursor even with the empty company table. */
+		if (services.company == &companies) *openttd_rust_company_tick() = saved_company_tick;
 		return result;
 	}
 };
