@@ -13,6 +13,14 @@ use std::{
 pub const PSM_ENTER_GAMELOOP: u8 = 0;
 /// Native `PSM_LEAVE_GAMELOOP`.
 pub const PSM_LEAVE_GAMELOOP: u8 = 1;
+/// Native `PSM_ENTER_COMMAND`.
+pub const PSM_ENTER_COMMAND: u8 = 2;
+/// Native `PSM_LEAVE_COMMAND`.
+pub const PSM_LEAVE_COMMAND: u8 = 3;
+/// Native `PSM_ENTER_TESTMODE`.
+pub const PSM_ENTER_TESTMODE: u8 = 4;
+/// Native `PSM_LEAVE_TESTMODE`.
+pub const PSM_LEAVE_TESTMODE: u8 = 5;
 
 type Check = extern "C" fn(bool);
 /// Stable allocation owned by one native shell; aliases point at `storage`.

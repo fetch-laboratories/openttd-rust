@@ -509,3 +509,22 @@ crate::abi::shared_records! {
         pub next: *const AbiRecordFixture,
     }
 }
+
+/// Native default test of distinct nested stack results and early return cleanup.
+/// # Safety
+/// The supplied table constructs/destroys native objects in the advertised storage.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_command_stack_probe(
+    s: &crate::services::CommandCostServices,
+) -> u8 {
+    u8::from(unsafe {
+        /* SAFETY: synchronous costs never escape or outlive this call. */
+        crate::command::with_cost(s, |outer| {
+            crate::command::with_cost(s, |inner| {
+                outer.zero();
+                inner.zero();
+                outer.0 != inner.0 && outer.ok() && inner.ok()
+            })
+        })
+    })
+}

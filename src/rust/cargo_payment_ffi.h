@@ -51,6 +51,7 @@ struct OpenTTDCargoPayment {
  * All table entries have the declared ABI.
  * Resolvers cannot run script VMs or mutate payment/destination storage; callbacks retain no pointers,
  * and unresolved front handles are not dereferenced before load fixup. */
+struct OpenTTDSharedServices;
 struct OpenTTDCargoServices {
 	void (OPENTTD_RUST_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	const OpenTTDCargoRegistryServices *registry;
@@ -70,7 +71,7 @@ struct OpenTTDCargoServices {
 	int32_t (OPENTTD_RUST_CALL *x)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(x);
 	int32_t (OPENTTD_RUST_CALL *y)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(y);
 	int32_t (OPENTTD_RUST_CALL *z)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(z);
-	void (OPENTTD_RUST_CALL *cost_animation)(int32_t, int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
+	const OpenTTDSharedServices *shared;
 	void (OPENTTD_RUST_CALL *feeder_animation)(int32_t, int32_t, int32_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(feeder_animation);
 	uint8_t (OPENTTD_RUST_CALL *subsidy_multiplier)() noexcept OPENTTD_SERVICE_DEFAULT(subsidy_multiplier);
 	uint8_t (OPENTTD_RUST_CALL *feeder_payment_share)() noexcept OPENTTD_SERVICE_DEFAULT(feeder_payment_share);

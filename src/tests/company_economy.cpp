@@ -285,20 +285,29 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 	command.infinite_money = OpenTTDCommandServices{}.infinite_money;
 	auto skipped = costs;
 	skipped.money = OpenTTDCommandCostServices{}.money;
+	command.cost = &skipped;
+	/* The Do steps: entry into test or execution, then reconciliation of that result. */
+	auto run = [&](CommandCost &result, DoCommandFlags flags, bool top, bool test) {
+		CHECK((openttd_rust_command_do_test(&command, false, test ? 0 : DoCommandFlags{DoCommandFlag::Execute}.base()) != 0) == test);
+		if (test) {
+			CHECK(openttd_rust_command_do_tested(&command, RustCommandCost(&result), flags.base(), top) == 0);
+		} else {
+			openttd_rust_command_do_executed(&command, RustCommandCost(&result), flags.base(), top);
+		}
+	};
 	for (bool test : {false, true}) {
 		CommandCost failed(STR_ERROR_INSUFFICIENT_FUNDS);
-		openttd_rust_command_before(&command, false, test);
-		openttd_rust_command_after(&command, &skipped, RustCommandCost(&failed), 0, true, test);
+		run(failed, {}, true, test);
 		CHECK(failed.Failed());
 		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Bankrupt}, DoCommandFlags{DoCommandFlag::QueryCost}}) {
 			bool top = flags.Any();
 			if (!test && flags.Test(DoCommandFlag::QueryCost)) continue;
 			CommandCost result(EXPENSES_CONSTRUCTION, Money(50));
-			openttd_rust_command_before(&command, false, test);
-			openttd_rust_command_after(&command, &skipped, RustCommandCost(&result), flags.base(), top, test);
+			run(result, flags, top, test);
 			CHECK(result.Succeeded());
 		}
 	}
+	command.cost = &costs;
 	for (int64_t amount : {-5, 0}) {
 		CommandCost result(EXPENSES_CONSTRUCTION, Money(amount));
 		CHECK(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&result)));
@@ -326,7 +335,7 @@ TEST_CASE("Commands - pre-post money short circuits and local error encoding")
 	openttd_rust_command_subtract_money(&command, &skipped, RustCommandCost(&zero));
 	for (auto [amount, expense] : {std::pair{5, EXPENSES_CONSTRUCTION}, std::pair{-3, EXPENSES_ROADVEH_REVENUE}, std::pair{2, EXPENSES_ROADVEH_RUN}}) {
 		CommandCost result(expense, Money(amount));
-		openttd_rust_command_after(&command, &costs, RustCommandCost(&result), 0, true, false);
+		run(result, {}, true, false);
 	}
 	const auto &finances = fixture_companies[0]->Finances();
 	CHECK(finances.money == Money(16));
