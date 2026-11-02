@@ -844,6 +844,7 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 	static const OpenTTDNetworkClientServices services{
 		.check_grf = [](void *packet, void *identifier) noexcept -> bool {
 			auto &c = *static_cast<GRFIdentifier *>(identifier);
+			c = GRFIdentifier{};
 			DeserializeGRFIdentifier(*static_cast<Packet *>(packet), c);
 			const GRFConfig *f = FindGRFConfig(c.grfid, FGCM_EXACT, &c.md5sum);
 			if (f != nullptr) return true;

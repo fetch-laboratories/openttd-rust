@@ -27,6 +27,7 @@ add_test_files(
     mock_spritecache.cpp
     mock_spritecache.h
     newgrf_bytereader.cpp
+    network_connection.cpp
     orders.cpp
     rail_yapf.cpp
     rail_yapf_protocol.hpp
