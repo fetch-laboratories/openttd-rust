@@ -31,6 +31,60 @@ jobs:
           const latest = combined.statuses.find(status => status.context === 'Full validation');
           // Never let a delayed invalidation overwrite a request started after this push.
           if (latest && latest.updated_at >= event.updated_at) return;
+          // Same non-Markdown inventory rule as the post-merge cache refresh in ci-policy.yml.
+          const entries = async sha => {
+            const {data} = await github.rest.git.getTree({...context.repo, tree_sha: sha, recursive: 'true'});
+            const modes = {'040000': 'tree', '100644': 'blob', '100755': 'blob', '120000': 'blob', '160000': 'commit'};
+            if (!data || data.sha !== sha || data.truncated !== false || !Array.isArray(data.tree) || !data.tree.length ||
+                data.tree.some(entry => !entry || typeof entry.path !== 'string' || entry.path.includes('\0') ||
+                  entry.path.split('/').some(part => !part || part === '.' || part === '..') ||
+                  typeof entry.sha !== 'string' || !/^[0-9a-f]{40}$/.test(entry.sha) ||
+                  typeof entry.mode !== 'string' || typeof entry.type !== 'string' || modes[entry.mode] !== entry.type) ||
+                new Set(data.tree.map(entry => entry.path)).size !== data.tree.length) return null;
+            return data.tree.filter(entry => entry.type !== 'tree' && !(entry.type === 'blob' && entry.path.endsWith('.md')))
+              .map(({path, mode, type, sha}) => [path, mode, type, sha]).sort((a, b) => a[0].localeCompare(b[0]));
+          };
+          // A push that keeps the previous head's Full-tested non-Markdown tree, such as a
+          // base update over docs-only commits, inherits that result instead of a new run.
+          const carried = async () => {
+            const before = context.payload.before;
+            if (context.payload.action !== 'synchronize' || !/^[0-9a-f]{40}$/.test(before || '')) return null;
+            // Strict protection merges only a head containing its base, so the head tree is the merged tree.
+            const {data: comparison} = await github.rest.repos.compareCommitsWithBasehead({
+              ...context.repo, basehead: `${pull.base.sha}...${head}`
+            });
+            if (comparison.behind_by !== 0) return null;
+            const {data: previous} = await github.rest.repos.getCombinedStatusForRef({...context.repo, ref: before});
+            const full = previous.statuses.find(status => status.context === 'Full validation');
+            const marker = previous.statuses.find(status => status.context === 'Validated tree');
+            const runPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/`;
+            const run = full?.target_url;
+            if (full?.state !== 'success' || marker?.state !== 'success' ||
+                typeof run !== 'string' || !run.startsWith(runPrefix) || !/^[1-9][0-9]*$/.test(run.slice(runPrefix.length)) ||
+                marker.target_url !== run || !/^[0-9a-f]{40}$/.test(marker.description)) return null;
+            const {data: pushed} = await github.rest.repos.getCommit({...context.repo, ref: head});
+            const [validated, current] = await Promise.all([entries(marker.description), entries(pushed.commit.tree.sha)]);
+            if (validated === null || current === null || JSON.stringify(validated) !== JSON.stringify(current)) return null;
+            return {run, tree: marker.description, before};
+          };
+          let carry = null;
+          try {
+            carry = await carried();
+          } catch (error) {
+            core.info(`Carry lookup failed, so the head needs its own run: ${error.message}`);
+          }
+          if (carry) {
+            core.info(`Non-Markdown tree matches ${carry.tree} from ${carry.before}; carry its Full validation`);
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: head, context: 'Full validation', state: 'success', target_url: carry.run,
+              description: `Carried from ${carry.before.slice(0, 10)}: non-Markdown tree unchanged`
+            });
+            await github.rest.repos.createCommitStatus({
+              ...context.repo, sha: head, context: 'Validated tree', state: 'success',
+              target_url: carry.run, description: carry.tree
+            });
+            return;
+          }
           await github.rest.repos.createCommitStatus({
             ...context.repo, sha: head, context: 'Full validation', state: 'pending',
             description: 'Request full CI for this PR head before merge'
