@@ -174,8 +174,6 @@ pub struct CommandServices {
     pub error_message: extern "C" fn(u32, i32, i32, *const CommandCost),
     /// `ShowEstimatedCostOrIncome`.
     pub estimate: extern "C" fn(i64, i32, i32),
-    /// `ShowCostOrIncomeAnimation` at the tile's slope height.
-    pub cost_animation: extern "C" fn(i32, i32, i64),
 }
 
 impl CommandServices {
@@ -290,6 +288,8 @@ pub struct Services {
     pub company_valid: extern "C" fn(u8) -> bool,
     /// Opaque context for test fixtures; production leaves ignore it.
     pub context: *mut c_void,
+    /// Canonical `ShowCostOrIncomeAnimation` presentation leaf.
+    pub cost_animation: extern "C" fn(i32, i32, i32, i64),
     /// Original `GetCrossingRoadBits`.
     pub crossing_road_bits: extern "C" fn(u32) -> RoadBits,
     /// Current native command actor, read at the original short-circuit point.
@@ -732,7 +732,6 @@ crate::abi::layouts! {
         paused_error,
         error_message,
         estimate,
-        cost_animation,
     };
     "OpenTTDCommandAdmission" ["probe"] => crate::command::Admission {
         rejected,
@@ -775,6 +774,7 @@ crate::abi::layouts! {
         clear_square_services,
         company_valid,
         context,
+        cost_animation,
         crossing_road_bits,
         current_company,
         depot_index,
@@ -1050,6 +1050,7 @@ pub fn fixture(
         },
         company_valid: unused_company_valid,
         context,
+        cost_animation: fixture_cost_animation,
         crossing_road_bits: fixture_crossing_road_bits,
         current_company: unused_current_company,
         depot_index: short,
@@ -1607,4 +1608,9 @@ extern "C" fn fixture_town_by_id(_: u32) -> *mut TownHandle {
 #[cfg(test)]
 extern "C" fn fixture_kdtree_partition(_: *mut crate::kdtree::SplitKey<u16>, _: usize) -> usize {
     unreachable!()
+}
+
+#[cfg(test)]
+extern "C" fn fixture_cost_animation(_: i32, _: i32, _: i32, _: i64) {
+    panic!("unused cost animation")
 }

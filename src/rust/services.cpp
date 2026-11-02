@@ -180,7 +180,6 @@ static void CommandErrorMessage(uint32_t err_message, int32_t x, int32_t y, cons
 	ShowErrorMessage(GetEncodedString(err_message), x, y, *const_cast<CommandCost *>(NativeCost(res)));
 }
 static void CommandEstimate(int64_t cost, int32_t x, int32_t y) noexcept { ShowEstimatedCostOrIncome(cost, x, y); }
-static void CommandCostAnimation(int32_t x, int32_t y, int64_t cost) noexcept { ShowCostOrIncomeAnimation(x, y, GetSlopePixelZ(x, y), cost); }
 
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
@@ -202,7 +201,6 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.paused_error = CommandPausedError,
 		.error_message = CommandErrorMessage,
 		.estimate = CommandEstimate,
-		.cost_animation = CommandCostAnimation,
 	};
 	return services;
 }
@@ -409,6 +407,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	},
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
+	.cost_animation = RustCostOrIncomeAnimation,
 	.crossing_road_bits = SharedCrossingRoadBits,
 	.current_company = RustCurrentCompanyID,
 	.depot_index = MapSvcDepotIndex,

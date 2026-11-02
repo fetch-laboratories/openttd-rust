@@ -36,7 +36,6 @@ struct OpenTTDCommandServices {
 	void (*paused_error)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(paused_error);
 	void (*error_message)(uint32_t, int32_t, int32_t, const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
 	void (*estimate)(int64_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(estimate);
-	void (*cost_animation)(int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
 };
 /** Decision of `Execute` after its test procedure; see `command.rs` `Tested`. */
 enum class OpenTTDCommandTested : uint8_t {
