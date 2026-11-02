@@ -210,6 +210,11 @@ pub struct WorldServices {
     pub save: extern "C" fn(*mut Frame) -> bool,
 }
 
+/// `_generating_world` at the caller's serialized observation point.
+pub(crate) fn generating() -> bool {
+    read_field!(INFO.get(), generating)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_generating_world() -> *mut bool {
     unsafe { std::ptr::addr_of_mut!((*INFO.get()).generating) }

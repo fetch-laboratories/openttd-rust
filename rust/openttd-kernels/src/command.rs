@@ -433,7 +433,7 @@ pub unsafe extern "C" fn openttd_rust_command_tested(
         || estimate_only
         || (!test_and_exec_can_differ && !unsafe { check_money(s, s.cost, result) })
     {
-        let generating = (s.shared.clear_square_services.generating_world)();
+        let generating = crate::genworld::generating();
         let logged = !(finance.networking)() || generating || network_command;
         return if logged {
             Tested::ExitLogged
@@ -442,7 +442,7 @@ pub unsafe extern "C" fn openttd_rust_command_tested(
         };
     }
     let send_net = (finance.networking)()
-        && !(s.shared.clear_square_services.generating_world)()
+        && !crate::genworld::generating()
         && !network_command;
     if send_net {
         return Tested::Send;
@@ -550,7 +550,7 @@ pub extern "C" fn openttd_rust_command_admit(
      * generation or the pause button. */
     let estimate_only = (s.shift_pressed)()
         && is_local_company(s)
-        && !(s.shared.clear_square_services.generating_world)()
+        && !crate::genworld::generating()
         && !network_command
         && cmd_flags & CommandFlag::NO_EST == 0;
     /* Only sending: no fancy things for success. */
