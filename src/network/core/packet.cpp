@@ -12,6 +12,7 @@
 #include "../../stdafx.h"
 #include "packet.h"
 #include "../../rust/service_table_check.hpp"
+#include "../../rust/services_assert.h"
 #include "abi-visit-OpenTTDPacketServices.hpp"
 
 #include "../../safeguards.h"
@@ -30,7 +31,7 @@
  */
 Packet::Packet(NetworkSocketHandler *cs, size_t limit, size_t initial_read_size)
 {
-	openttd_rust_packet_init_receive(&this->state, cs, limit, initial_read_size);
+	openttd_rust_packet_init_receive(&this->state, RustAssertCondition, cs, limit, initial_read_size);
 }
 
 /**
@@ -45,9 +46,9 @@ Packet::Packet(NetworkSocketHandler *cs, size_t limit, size_t initial_read_size)
 Packet::Packet(NetworkSocketHandler *cs, PacketType type, size_t limit)
 {
 	if (cs == nullptr || cs->send_encryption_handler == nullptr || cs->send_encryption_handler->GetRustStream() != nullptr) {
-		openttd_rust_packet_init_outgoing(&this->state, cs, &Services(), type, limit);
+		openttd_rust_packet_init_outgoing(&this->state, cs, &Services(), RustAssertCondition, type, limit);
 	} else {
-		openttd_rust_packet_init_send(&this->state, cs, type, limit, cs->send_encryption_handler->MACSize());
+		openttd_rust_packet_init_send(&this->state, RustAssertCondition, cs, type, limit, cs->send_encryption_handler->MACSize());
 	}
 }
 
@@ -58,11 +59,11 @@ void Packet::PrepareToSend()
 {
 	auto *cs = this->state.socket;
 	if (cs == nullptr || cs->send_encryption_handler == nullptr || cs->send_encryption_handler->GetRustStream() != nullptr) {
-		openttd_rust_packet_prepare_to_send(&this->state, &Services());
+		openttd_rust_packet_prepare_to_send(&this->state, &Services(), RustAssertCondition);
 		return;
 	}
 	/* Native virtual implementations can throw; their frame stays in C++. */
-	openttd_rust_packet_begin_send(&this->state);
+	openttd_rust_packet_begin_send(&this->state, RustAssertCondition);
 	size_t mac = cs->send_encryption_handler->MACSize();
 	OpenTTDPacketFrame frame;
 	openttd_rust_packet_frame(2, this->Size(), mac, &frame);
@@ -98,7 +99,7 @@ bool Packet::CanWriteToPacket(size_t bytes_to_write)
  */
 void Packet::Send_bool(bool data)
 {
-	openttd_rust_packet_send_bool(&this->state, data);
+	openttd_rust_packet_send_bool(&this->state, RustAssertCondition, data);
 }
 
 /**
@@ -107,7 +108,7 @@ void Packet::Send_bool(bool data)
  */
 void Packet::Send_uint8(uint8_t data)
 {
-	openttd_rust_packet_send_uint8(&this->state, data);
+	openttd_rust_packet_send_uint8(&this->state, RustAssertCondition, data);
 }
 
 /**
@@ -116,7 +117,7 @@ void Packet::Send_uint8(uint8_t data)
  */
 void Packet::Send_uint16(uint16_t data)
 {
-	openttd_rust_packet_send_uint16(&this->state, data);
+	openttd_rust_packet_send_uint16(&this->state, RustAssertCondition, data);
 }
 
 /**
@@ -125,7 +126,7 @@ void Packet::Send_uint16(uint16_t data)
  */
 void Packet::Send_uint32(uint32_t data)
 {
-	openttd_rust_packet_send_uint32(&this->state, data);
+	openttd_rust_packet_send_uint32(&this->state, RustAssertCondition, data);
 }
 
 /**
@@ -134,7 +135,7 @@ void Packet::Send_uint32(uint32_t data)
  */
 void Packet::Send_uint64(uint64_t data)
 {
-	openttd_rust_packet_send_uint64(&this->state, data);
+	openttd_rust_packet_send_uint64(&this->state, RustAssertCondition, data);
 }
 
 /**
@@ -144,7 +145,7 @@ void Packet::Send_uint64(uint64_t data)
  */
 void Packet::Send_string(std::string_view data)
 {
-	openttd_rust_packet_send_string(&this->state, reinterpret_cast<const uint8_t *>(data.data()), data.size());
+	openttd_rust_packet_send_string(&this->state, RustAssertCondition, reinterpret_cast<const uint8_t *>(data.data()), data.size());
 }
 
 /**
@@ -153,7 +154,7 @@ void Packet::Send_string(std::string_view data)
  */
 void Packet::Send_buffer(const std::vector<uint8_t> &data)
 {
-	openttd_rust_packet_send_buffer(&this->state, data.data(), data.size());
+	openttd_rust_packet_send_buffer(&this->state, RustAssertCondition, data.data(), data.size());
 }
 
 /**
@@ -244,7 +245,7 @@ PacketType Packet::GetPacketType() const
 {
 	auto *cs = this->state.socket;
 	assert(this->Size() >= EncodedLengthOfPacketSize() + EncodedLengthOfPacketType());
-	if (cs == nullptr || cs->send_encryption_handler == nullptr || cs->send_encryption_handler->GetRustStream() != nullptr) return openttd_rust_packet_get_type(&this->state, &Services());
+	if (cs == nullptr || cs->send_encryption_handler == nullptr || cs->send_encryption_handler->GetRustStream() != nullptr) return openttd_rust_packet_get_type(&this->state, &Services(), RustAssertCondition);
 	size_t mac = cs != nullptr && cs->send_encryption_handler != nullptr ? cs->send_encryption_handler->MACSize() : 0;
 	return openttd_rust_packet_packet_type(&this->state, mac);
 }
@@ -329,7 +330,7 @@ size_t Packet::Recv_bytes(std::span<uint8_t> destination)
 std::string Packet::Recv_string(size_t length, StringValidationSettings settings)
 {
 	std::string result;
-	openttd_rust_packet_recv_string(&this->state, &Services(), length, settings.base(), &result, [](void *output, const uint8_t *data, size_t size) noexcept {
+	openttd_rust_packet_recv_string(&this->state, &Services(), RustAssertCondition, length, settings.base(), &result, [](void *output, const uint8_t *data, size_t size) noexcept {
 		static_cast<std::string *>(output)->append(reinterpret_cast<const char *>(data), size);
 	});
 	return result;

@@ -30,6 +30,8 @@ def main():
                 probe.compiler(),
                 "-std=c++20",
                 f"-{mode}",
+                *(["-DNDEBUG"] if mode == "O2" else []),
+                "-Werror=mismatched-tags",
                 "-DUNIX",
                 "-DFMT_HEADER_ONLY",
                 "-ffunction-sections",

@@ -522,6 +522,8 @@ static void StationCargo()
 	std::printf("station_cargo scalar layout, uint32 wrapping, origin reset and finalization passed\n");
 }
 
+static void PacketAssert(bool condition) noexcept { CHECK(condition); }
+
 static void PacketState()
 {
 	static_assert(sizeof(intptr_t) == sizeof(size_t));
@@ -531,10 +533,10 @@ static void PacketState()
 		.mark_closed = [](NetworkSocketHandler *socket) noexcept { *reinterpret_cast<bool *>(socket) = true; },
 	};
 	OpenTTDPacketState state;
-	openttd_rust_packet_init_send(&state, reinterpret_cast<NetworkSocketHandler *>(&quit), 1, SIZE_MAX, 0);
-	openttd_rust_packet_send_uint16(&state, 0x0201);
-	openttd_rust_packet_send_uint32(&state, 0x06050403);
-	openttd_rust_packet_begin_send(&state);
+	openttd_rust_packet_init_send(&state, PacketAssert, reinterpret_cast<NetworkSocketHandler *>(&quit), 1, SIZE_MAX, 0);
+	openttd_rust_packet_send_uint16(&state, PacketAssert, 0x0201);
+	openttd_rust_packet_send_uint32(&state, PacketAssert, 0x06050403);
+	openttd_rust_packet_begin_send(&state, PacketAssert);
 	CHECK(state.data[0] == 9 && state.data[1] == 0 && state.limit == SIZE_MAX);
 	CHECK(openttd_rust_packet_parse_size(&state) && state.position == 2);
 	CHECK(openttd_rust_packet_recv_uint8(&state, &services) == 1);

@@ -9,6 +9,7 @@
 //!
 //! Calls are serialized. Native pointers identify live records; data spans expire before growth,
 //! destruction or a callback that may mutate the packet. No record or byte borrow spans a service.
+//! Assertion leaves follow native build policy and cannot mutate packet state.
 //! Panics and allocation failures abort; no C++ exception may cross a Rust frame.
 #![allow(unsafe_code)]
 
@@ -95,10 +96,13 @@ impl State {
 
     /// Receive storage for a stream header or an entire datagram.
     #[must_use]
-    /// # Panics
-    /// The receive socket is null.
-    pub fn new_receive(limit: usize, initial: usize, socket: *mut NetworkSocketHandler) -> Self {
-        assert!(!socket.is_null());
+    pub fn new_receive(
+        limit: usize,
+        initial: usize,
+        socket: *mut NetworkSocketHandler,
+        check: extern "C" fn(bool),
+    ) -> Self {
+        check(!socket.is_null());
         let mut result = Self::new(limit, socket);
         result.resize(initial);
         result
@@ -106,19 +110,18 @@ impl State {
 
     /// Outgoing framing after querying the send handler's MAC size.
     #[must_use]
-    /// # Panics
-    /// The framing reservation exceeds the packet limit.
     pub fn new_send(
         limit: usize,
         packet_type: u8,
         mac: usize,
         socket: *mut NetworkSocketHandler,
+        check: extern "C" fn(bool),
     ) -> Self {
         let mut result = Self::new(limit, socket);
         let initial = 2_usize.wrapping_add(mac);
-        assert!(result.can_write(initial));
+        check(result.can_write(initial));
         result.resize(initial);
-        result.send_uint8(packet_type);
+        result.send_uint8(packet_type, check);
         result
     }
 
@@ -171,47 +174,43 @@ impl State {
         self.edit_buffer(|bytes| bytes.extend_from_slice(input));
     }
 
-    fn send_integer<const N: usize>(&mut self, data: [u8; N]) {
-        assert!(self.can_write(N));
+    fn send_integer<const N: usize>(&mut self, data: [u8; N], check: extern "C" fn(bool)) {
+        check(self.can_write(N));
         self.append(&data);
     }
 
     /// Send a canonical boolean byte.
-    pub fn send_bool(&mut self, value: bool) {
-        self.send_uint8(u8::from(value));
+    pub fn send_bool(&mut self, value: bool, check: extern "C" fn(bool)) {
+        self.send_uint8(u8::from(value), check);
     }
     /// Send an unsigned byte.
-    pub fn send_uint8(&mut self, value: u8) {
-        self.send_integer(value.to_le_bytes());
+    pub fn send_uint8(&mut self, value: u8, check: extern "C" fn(bool)) {
+        self.send_integer(value.to_le_bytes(), check);
     }
     /// Send a little-endian 16-bit integer.
-    pub fn send_uint16(&mut self, value: u16) {
-        self.send_integer(value.to_le_bytes());
+    pub fn send_uint16(&mut self, value: u16, check: extern "C" fn(bool)) {
+        self.send_integer(value.to_le_bytes(), check);
     }
     /// Send a little-endian 32-bit integer.
-    pub fn send_uint32(&mut self, value: u32) {
-        self.send_integer(value.to_le_bytes());
+    pub fn send_uint32(&mut self, value: u32, check: extern "C" fn(bool)) {
+        self.send_integer(value.to_le_bytes(), check);
     }
     /// Send a little-endian 64-bit integer.
-    pub fn send_uint64(&mut self, value: u64) {
-        self.send_integer(value.to_le_bytes());
+    pub fn send_uint64(&mut self, value: u64, check: extern "C" fn(bool)) {
+        self.send_integer(value.to_le_bytes(), check);
     }
 
     /// Send the original bytes and a NUL terminator.
-    /// # Panics
-    /// The encoded string exceeds the packet limit.
-    pub fn send_string(&mut self, value: &[u8]) {
-        assert!(self.can_write(value.len().wrapping_add(1)));
+    pub fn send_string(&mut self, value: &[u8], check: extern "C" fn(bool)) {
+        check(self.can_write(value.len().wrapping_add(1)));
         self.append(value);
         self.append(&[0]);
     }
 
     /// Send a narrowed 16-bit size prefix followed by all input bytes.
-    /// # Panics
-    /// The encoded buffer exceeds the packet limit.
-    pub fn send_buffer(&mut self, value: &[u8]) {
-        assert!(self.can_write(value.len().wrapping_add(2)));
-        self.send_uint16(prefix(value.len()));
+    pub fn send_buffer(&mut self, value: &[u8], check: extern "C" fn(bool)) {
+        check(self.can_write(value.len().wrapping_add(2)));
+        self.send_uint16(prefix(value.len()), check);
         self.append(value);
     }
 
@@ -235,12 +234,10 @@ impl State {
     }
 
     /// Write the low 16 bits of size before any encryption-handler call.
-    /// # Panics
-    /// The size header is already written.
-    pub fn begin_send(&mut self) {
+    pub fn begin_send(&mut self, check: extern "C" fn(bool)) {
         // SAFETY: Sending requires the original two reserved header bytes.
         unsafe {
-            assert!(*self.data == 0 && *self.data.add(1) == 0);
+            check(*self.data == 0 && *self.data.add(1) == 0);
             let header = prefix(self.size).to_le_bytes();
             ptr::copy_nonoverlapping(header.as_ptr(), self.data, 2);
         }
@@ -448,22 +445,21 @@ fn validate_string(input: &[u8], settings: u8, mut append: impl FnMut(&[u8])) {
 /// Collect up to length - 1 bytes, consume through NUL, then use the shared sanitation owner.
 /// # Safety
 /// Same contract as `recv_uint8`. The output callback is nonthrowing and retains no byte pointer.
-/// # Panics
-/// The string length is less than two.
 pub unsafe fn recv_string_into(
     state: *mut State,
     services: &Services,
+    check: extern "C" fn(bool),
     mut length: usize,
     settings: u8,
     append: impl FnMut(&[u8]),
 ) {
-    assert!(length > 1);
+    check(length > 1);
     // Packet::Recv_string uses native small-string storage for short input.
     let mut inline = [0; 64];
     let mut inline_size = 0;
     let mut overflow = Vec::new();
     loop {
-        length -= 1;
+        length = length.wrapping_sub(1);
         if length == 0 {
             break;
         }
@@ -499,6 +495,7 @@ pub unsafe fn recv_string_into(
 pub unsafe fn new_outgoing(
     socket: *mut NetworkSocketHandler,
     services: &Services,
+    check: extern "C" fn(bool),
     packet_type: u8,
     limit: usize,
 ) -> State {
@@ -512,7 +509,7 @@ pub unsafe fn new_outgoing(
     } else {
         unsafe { (services.mac_size)(handler) }
     };
-    State::new_send(limit, packet_type, mac, socket)
+    State::new_send(limit, packet_type, mac, socket, check)
 }
 
 unsafe fn crypt(
@@ -564,11 +561,9 @@ unsafe fn crypt(
 /// Read the packet type after the original size assertion and send-handler query.
 /// # Safety
 /// Same live record and service contract as `prepare_to_send`.
-/// # Panics
-/// The packet has fewer than three bytes before querying its handler.
-pub unsafe fn get_type(state: *const State, services: &Services) -> u8 {
+pub unsafe fn get_type(state: *const State, services: &Services, check: extern "C" fn(bool)) -> u8 {
     unsafe {
-        assert!((*state).size >= 3);
+        check((*state).size >= 3);
         let socket = (*state).socket;
         let handler = if socket.is_null() {
             ptr::null_mut()
@@ -587,9 +582,9 @@ pub unsafe fn get_type(state: *const State, services: &Services) -> u8 {
 /// Write framing, call the Rust encryption owner directly, then reset and shrink.
 /// # Safety
 /// State, socket and nonthrowing services are live. No state borrow spans a service call.
-pub unsafe fn prepare_to_send(state: *mut State, services: &Services) {
+pub unsafe fn prepare_to_send(state: *mut State, services: &Services, check: extern "C" fn(bool)) {
     unsafe {
-        (&mut *state).begin_send();
+        (&mut *state).begin_send(check);
         let socket = (*state).socket;
         let handler = if socket.is_null() {
             ptr::null_mut()
@@ -631,8 +626,9 @@ pub unsafe fn prepare_to_read(state: *mut State, services: &Services) -> bool {
 pub unsafe extern "C" fn openttd_rust_packet_get_type(
     state: *const State,
     services: *const Services,
+    check: extern "C" fn(bool),
 ) -> u8 {
-    unsafe { get_type(state, &*services) }
+    unsafe { get_type(state, &*services, check) }
 }
 
 /// Native constructor using the same direct Rust entry as network callers.
@@ -643,11 +639,12 @@ pub unsafe extern "C" fn openttd_rust_packet_init_outgoing(
     state: *mut State,
     socket: *mut NetworkSocketHandler,
     services: *const Services,
+    check: extern "C" fn(bool),
     packet_type: u8,
     limit: usize,
 ) {
     unsafe {
-        state.write(new_outgoing(socket, &*services, packet_type, limit));
+        state.write(new_outgoing(socket, &*services, check, packet_type, limit));
     }
 }
 
@@ -657,12 +654,13 @@ pub unsafe extern "C" fn openttd_rust_packet_init_outgoing(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_packet_init_receive(
     state: *mut State,
+    check: extern "C" fn(bool),
     socket: *mut NetworkSocketHandler,
     limit: usize,
     initial: usize,
 ) {
     unsafe {
-        state.write(State::new_receive(limit, initial, socket));
+        state.write(State::new_receive(limit, initial, socket, check));
     }
 }
 
@@ -672,13 +670,14 @@ pub unsafe extern "C" fn openttd_rust_packet_init_receive(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_packet_init_send(
     state: *mut State,
+    check: extern "C" fn(bool),
     socket: *mut NetworkSocketHandler,
     packet_type: u8,
     limit: usize,
     mac: usize,
 ) {
     unsafe {
-        state.write(State::new_send(limit, packet_type, mac, socket));
+        state.write(State::new_send(limit, packet_type, mac, socket, check));
     }
 }
 
@@ -747,9 +746,12 @@ pub unsafe extern "C" fn openttd_rust_packet_parse_size(state: *mut State) -> bo
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_begin_send(state: *mut State) {
+pub unsafe extern "C" fn openttd_rust_packet_begin_send(
+    state: *mut State,
+    check: extern "C" fn(bool),
+) {
     unsafe {
-        (&mut *state).begin_send();
+        (&mut *state).begin_send(check);
     }
 }
 
@@ -837,9 +839,10 @@ pub unsafe extern "C" fn openttd_rust_packet_frame(
 pub unsafe extern "C" fn openttd_rust_packet_prepare_to_send(
     state: *mut State,
     services: *const Services,
+    check: extern "C" fn(bool),
 ) {
     unsafe {
-        prepare_to_send(state, &*services);
+        prepare_to_send(state, &*services, check);
     }
 }
 
@@ -913,11 +916,12 @@ pub unsafe extern "C" fn openttd_rust_packet_recv_bytes(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_packet_send_string(
     state: *mut State,
+    check: extern "C" fn(bool),
     input: *const u8,
     length: usize,
 ) {
     unsafe {
-        (&mut *state).send_string(crate::utf8::borrow(input, length));
+        (&mut *state).send_string(crate::utf8::borrow(input, length), check);
     }
 }
 
@@ -927,11 +931,12 @@ pub unsafe extern "C" fn openttd_rust_packet_send_string(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_packet_send_buffer(
     state: *mut State,
+    check: extern "C" fn(bool),
     input: *const u8,
     length: usize,
 ) {
     unsafe {
-        (&mut *state).send_buffer(crate::utf8::borrow(input, length));
+        (&mut *state).send_buffer(crate::utf8::borrow(input, length), check);
     }
 }
 
@@ -959,13 +964,14 @@ pub unsafe extern "C" fn openttd_rust_packet_send_bytes(
 pub unsafe extern "C" fn openttd_rust_packet_recv_string(
     state: *mut State,
     services: *const Services,
+    check: extern "C" fn(bool),
     length: usize,
     settings: u8,
     output: *mut std::ffi::c_void,
     append: unsafe extern "C" fn(*mut std::ffi::c_void, *const u8, usize),
 ) {
     unsafe {
-        recv_string_into(state, &*services, length, settings, |bytes| {
+        recv_string_into(state, &*services, check, length, settings, |bytes| {
             append(output, bytes.as_ptr(), bytes.len());
         });
     }
@@ -975,9 +981,13 @@ pub unsafe extern "C" fn openttd_rust_packet_recv_string(
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_send_bool(state: *mut State, value: bool) {
+pub unsafe extern "C" fn openttd_rust_packet_send_bool(
+    state: *mut State,
+    check: extern "C" fn(bool),
+    value: bool,
+) {
     unsafe {
-        (&mut *state).send_bool(value);
+        (&mut *state).send_bool(value, check);
     }
 }
 
@@ -985,9 +995,13 @@ pub unsafe extern "C" fn openttd_rust_packet_send_bool(state: *mut State, value:
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_send_uint8(state: *mut State, value: u8) {
+pub unsafe extern "C" fn openttd_rust_packet_send_uint8(
+    state: *mut State,
+    check: extern "C" fn(bool),
+    value: u8,
+) {
     unsafe {
-        (&mut *state).send_uint8(value);
+        (&mut *state).send_uint8(value, check);
     }
 }
 
@@ -995,9 +1009,13 @@ pub unsafe extern "C" fn openttd_rust_packet_send_uint8(state: *mut State, value
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_send_uint16(state: *mut State, value: u16) {
+pub unsafe extern "C" fn openttd_rust_packet_send_uint16(
+    state: *mut State,
+    check: extern "C" fn(bool),
+    value: u16,
+) {
     unsafe {
-        (&mut *state).send_uint16(value);
+        (&mut *state).send_uint16(value, check);
     }
 }
 
@@ -1005,9 +1023,13 @@ pub unsafe extern "C" fn openttd_rust_packet_send_uint16(state: *mut State, valu
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_send_uint32(state: *mut State, value: u32) {
+pub unsafe extern "C" fn openttd_rust_packet_send_uint32(
+    state: *mut State,
+    check: extern "C" fn(bool),
+    value: u32,
+) {
     unsafe {
-        (&mut *state).send_uint32(value);
+        (&mut *state).send_uint32(value, check);
     }
 }
 
@@ -1015,9 +1037,13 @@ pub unsafe extern "C" fn openttd_rust_packet_send_uint32(state: *mut State, valu
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_send_uint64(state: *mut State, value: u64) {
+pub unsafe extern "C" fn openttd_rust_packet_send_uint64(
+    state: *mut State,
+    check: extern "C" fn(bool),
+    value: u64,
+) {
     unsafe {
-        (&mut *state).send_uint64(value);
+        (&mut *state).send_uint64(value, check);
     }
 }
 

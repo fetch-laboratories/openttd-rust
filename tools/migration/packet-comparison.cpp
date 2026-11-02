@@ -200,5 +200,27 @@ int main()
 		std::printf("empty-source %zu %u\n", empty.Recv_bytes(destination), destination[0]);
 	}
 
+#if defined(NDEBUG) && !defined(WITH_ASSERT)
+	/* Release permits failed source assertions when the remaining operations are defined. */
+	{
+		Packet receive(nullptr, size_t{10}, size_t{2});
+		std::printf("asserts-off-null %zu\n", receive.Size());
+		Socket socket;
+		Packet packet(&socket, PacketType{7}, 1);
+		packet.Send_bool(true); packet.Send_uint8(0xAB); packet.Send_uint16(0x1234);
+		packet.Send_uint32(0x56789ABC); packet.Send_uint64(UINT64_C(0xFEDCBA9876543210));
+		packet.Send_string("release"); packet.Send_buffer({1, 2, 3});
+		packet.PrepareToSend(); packet.PrepareToSend();
+		State("asserts-off-writes", packet, socket);
+	}
+	for (size_t length : {size_t{0}, size_t{1}}) {
+		Socket socket; std::array<uint8_t, 6> wire{6, 0, 'a', 'b', 0, 'c'};
+		auto packet = Read(socket, wire);
+		auto text = packet.Recv_string(length);
+		std::printf("asserts-off-string %zu %s\n", length, text.c_str());
+		State("asserts-off-string-state", packet, socket);
+	}
+#endif
+
 	std::printf("packet companion passed\n");
 }
