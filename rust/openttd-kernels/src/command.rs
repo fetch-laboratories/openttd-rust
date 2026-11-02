@@ -20,11 +20,14 @@ use crate::command_type::{
 };
 use crate::company_type::{COMPANY_SPECTATOR, OWNER_DEITY};
 use crate::game_state::GameState;
+use crate::newgrf_storage::{
+    PSM_ENTER_COMMAND, PSM_ENTER_TESTMODE, PSM_LEAVE_COMMAND, PSM_LEAVE_TESTMODE,
+};
 use crate::openttd::{GameMode, PauseMode};
 use crate::services::{CommandCost, CommandCostServices, CommandServices};
 
-/// `INVALID_STRING_ID`, the message of `CMD_ERROR`.
-const INVALID_STRING_ID: u32 = 0xFFFF;
+use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::TILE_SIZE;
 
 pub(crate) fn before(_s: &CommandServices, top_level: bool, test: bool) {
     if top_level {
@@ -204,14 +207,6 @@ pub(crate) fn nested<T: Default>(
     }
     extra
 }
-
-/// `PSM_ENTER_COMMAND` to `PSM_LEAVE_TESTMODE`.
-const PSM_ENTER_COMMAND: u8 = 2;
-const PSM_LEAVE_COMMAND: u8 = 3;
-const PSM_ENTER_TESTMODE: u8 = 4;
-const PSM_LEAVE_TESTMODE: u8 = 5;
-/// `TILE_SIZE`.
-const TILE_SIZE: u32 = 16;
 
 fn storage_mode(s: &CommandServices, mode: u8) {
     // SAFETY: serialized persistent storage owner; the leaves never reenter it.
