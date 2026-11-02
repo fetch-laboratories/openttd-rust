@@ -214,8 +214,8 @@ See `src/3rdparty/catch2/LICENSE.txt` for the complete license text.
 The icu scriptrun implementation in `src/3rdparty/icu` is licensed under the Unicode license.
 See `src/3rdparty/icu/LICENSE` for the complete license text.
 
-The monocypher implementation in `src/3rdparty/monocypher` is licensed under the 2-clause BSD and CC-0 license.
-See `src/3rdparty/monocypher/LICENSE.md` for the complete license text.
+The maintained Rust cryptography crates are pinned in `Cargo.lock`.
+See `rust/THIRD_PARTY_NOTICES.txt` for their notices and the retained Monocypher construction attribution.
 
 The OpenTTD Social Integration API in `src/3rdparty/openttd_social_integration_api` is licensed under the MIT license.
 See `src/3rdparty/openttd_social_integration_api/LICENSE` for the complete license text.

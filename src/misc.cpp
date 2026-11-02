@@ -32,7 +32,7 @@
 #include "town_kdtree.h"
 #include "viewport_kdtree.h"
 #include "newgrf_profiling.h"
-#include "3rdparty/monocypher/monocypher.h"
+#include "rust/crypto_ffi.h"
 
 #include "rust/tile_loop_cursor.h"
 
@@ -73,11 +73,7 @@ std::string GenerateUid(std::string_view subject)
 	std::string coding_string = fmt::format("{}{}", current_time, subject);
 
 	std::array<uint8_t, 16> digest;
-	crypto_blake2b_ctx ctx;
-	crypto_blake2b_init(&ctx, digest.size());
-	crypto_blake2b_update(&ctx, random_bytes.data(), random_bytes.size());
-	crypto_blake2b_update(&ctx, reinterpret_cast<const uint8_t *>(coding_string.data()), coding_string.size());
-	crypto_blake2b_final(&ctx, digest.data());
+	openttd_rust_crypto_hash_uid(digest.data(), random_bytes.data(), reinterpret_cast<const uint8_t *>(coding_string.data()), coding_string.size());
 
 	return FormatArrayAsHex(digest);
 }
