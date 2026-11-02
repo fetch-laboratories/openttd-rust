@@ -294,20 +294,21 @@ static uint dispatch_creates, dispatch_deletes, dispatch_closes, dispatch_positi
 static bool dispatch_ended, dispatch_cleanup_order, dispatch_previous_live;
 TEST_CASE("Network game receive - encrypted dispatch preserves consumption and native unwind")
 {
+	NetworkSocketHandler handshake;
 	X25519SecretKey client_secret{}, server_secret{};
 	client_secret[0] = 1;
 	server_secret[0] = 2;
 	X25519KeyExchangeOnlyClientHandler client_auth(client_secret);
 	X25519KeyExchangeOnlyServerHandler server_auth(server_secret);
-	Packet request(nullptr, PacketType{});
+	Packet request(&handshake, PacketType{});
 	server_auth.SendRequest(request);
 	request.PrepareToSend(); REQUIRE(request.PrepareToRead()); request.Recv_uint8();
 	REQUIRE(client_auth.ReceiveRequest(request) == NetworkAuthenticationClientHandler::RequestResult::ReadyForResponse);
-	Packet response(nullptr, PacketType{});
+	Packet response(&handshake, PacketType{});
 	REQUIRE(client_auth.SendResponse(response));
 	response.PrepareToSend(); REQUIRE(response.PrepareToRead()); response.Recv_uint8();
 	REQUIRE(server_auth.ReceiveResponse(response) == NetworkAuthenticationServerHandler::ResponseResult::Authenticated);
-	Packet enable(nullptr, PacketType{});
+	Packet enable(&handshake, PacketType{});
 	server_auth.SendEnableEncryption(enable);
 	enable.PrepareToSend(); REQUIRE(enable.PrepareToRead()); enable.Recv_uint8();
 	REQUIRE(client_auth.ReceiveEnableEncryption(enable));
