@@ -21,6 +21,8 @@ struct RoadTestTables {
 	OpenTTDRoadLeaves leaves;
 	explicit RoadTestTables(const OpenTTDSharedServices *world) : shared(*world)
 	{
+		VEHICLE_UNUSED(vehicle, assert_next);
+		VEHICLE_UNUSED(vehicle, record_from_shell);
 		vehicle.maintenance = &_vehicle_maintenance_probe;
 		ground.physics = &physics;
 		physics.vehicle = &physics_vehicle;
@@ -146,7 +148,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, sound_read);
 		VEHICLE_UNUSED(leaves, depot_exit);
 		VEHICLE_UNUSED(leaves, crash_news);
-		VEHICLE_UNUSED(vehicle, detach_last);
 		VEHICLE_UNUSED(ground, cache_begin);
 		VEHICLE_UNUSED(vehicle, next);
 		VEHICLE_UNUSED(vehicle, engine_id);

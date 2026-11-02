@@ -421,9 +421,16 @@ static void RoadBoundary()
 	openttd_rust_road_set(probe.state, 0, 0);
 	openttd_rust_road_set(probe.state, 5, 2219);
 	t.leaves.link = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadLink { return {.next = nullptr, .next_state = nullptr, .next_ground = nullptr}; };
-	t.vehicle.detach_last = [](OpenTTDVehicle *previous, OpenTTDVehicle *last, OpenTTDVehicle *first) noexcept {
-		CHECK(previous == RoadAbiHandle() && last == previous && first == previous);
+	static OpenTTDVehicle crash_record{};
+	crash_record.first = &crash_record;
+	crash_record.last_station_visited = 5;
+	t.vehicle.record_from_shell = [](void *shell) noexcept -> OpenTTDVehicle * {
+		if (shell == nullptr) return nullptr;
+		CHECK(shell == RoadAbiHandle());
+		return &crash_record;
 	};
+	t.vehicle.last_station = [](OpenTTDVehicle *shell) noexcept -> uint16_t { CHECK(shell == RoadAbiHandle()); return crash_record.last_station_visited; };
+	t.vehicle.write_last_station = [](OpenTTDVehicle *shell, uint16_t station) noexcept { CHECK(shell == RoadAbiHandle() && station == 5); crash_record.last_station_visited = station; };
 	t.vehicle.destroy = [](OpenTTDVehicle *u) noexcept {
 		CHECK(u == RoadAbiHandle());
 		openttd_rust_road_destroy(road_abi_probe->state);
