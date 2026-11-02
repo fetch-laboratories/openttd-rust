@@ -39,7 +39,7 @@ INSTANTIATE_POOL_METHODS(StoryPage)
 
 StoryPage::~StoryPage()
 {
-	openttd_rust_story_page_destruct(&GetRustObjectivesServices(), this->index.base());
+	if (CleaningPool()) return;
 }
 
 /**

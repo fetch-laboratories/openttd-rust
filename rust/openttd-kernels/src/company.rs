@@ -1409,7 +1409,15 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     crate::cargomonitor::openttd_rust_monitor_clear_deliveries(old);
     each(
         |from| (s.story_page_next_owned)(old, from),
-        |id| (s.delete_story_page)(id),
+        |id| {
+            unsafe {
+                crate::objectives::delete_elements(
+                    (s.objectives)(),
+                    crate::story_type::StoryPageID(id as u16),
+                );
+            }
+            (s.delete_story_page)(id);
+        },
     );
     if new != INVALID_OWNER {
         (s.change_window_owner)(old, new);

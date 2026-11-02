@@ -53,7 +53,6 @@ struct OpenTTDObjectivesServices {
 	uint16_t (*element_allocate)(uint32_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(element_allocate);
 	StoryPageElement * (*element_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(element_next);
 	uint16_t (*element_id)(StoryPageElement *) noexcept OPENTTD_SERVICE_DEFAULT(element_id);
-	bool (*page_cleaning)() noexcept OPENTTD_SERVICE_DEFAULT(page_cleaning);
 	bool (*table_can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(table_can_allocate);
 	uint8_t (*table_allocate)(const EncodedString *, const EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(table_allocate);
 	uint16_t (*entry_allocate)(uint8_t, int64_t, uint8_t, const EncodedString *, const EncodedString *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);
@@ -99,7 +98,6 @@ bool openttd_rust_update_league_table_element_data(const OpenTTDObjectivesServic
 bool openttd_rust_update_league_table_element_score(const OpenTTDObjectivesServices *, uint16_t, uint16_t, int64_t, const EncodedString *);
 bool openttd_rust_remove_league_table_element(const OpenTTDObjectivesServices *, uint16_t, uint16_t);
 bool openttd_rust_valid_link(const OpenTTDObjectivesServices *, uint8_t, uint32_t);
-void openttd_rust_story_page_destruct(const OpenTTDObjectivesServices *, uint16_t);
 bool openttd_rust_story_button_validate_colour(uint32_t);
 bool openttd_rust_story_button_validate_flags(uint32_t);
 bool openttd_rust_story_button_validate_cursor(uint32_t);
