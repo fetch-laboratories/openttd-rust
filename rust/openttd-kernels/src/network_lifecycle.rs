@@ -250,10 +250,8 @@ pub(crate) fn server_start(
     if !(s.pre_server)(frame) {
         return Err(());
     }
-    if (session.dedicated)() {
-        if !(s.pre_dedicated)(frame) {
-            return Err(());
-        }
+    if (session.dedicated)() && !(s.pre_dedicated)(frame) {
+        return Err(());
     }
     if (session.dedicated)() {
         (s.check_names)();
@@ -289,10 +287,8 @@ pub(crate) fn server_start(
     if !(s.on_server)(frame) {
         return Err(());
     }
-    if (session.dedicated)() {
-        if !(s.on_dedicated)(frame) {
-            return Err(());
-        }
+    if (session.dedicated)() && !(s.on_dedicated)(frame) {
+        return Err(());
     }
     Ok(true)
 }
