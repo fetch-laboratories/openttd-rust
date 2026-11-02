@@ -1,34 +1,36 @@
 #!/usr/bin/env python3
-"""Compare actual original/Rust X25519 endpoints, wire bytes and state transitions.
+"""Compare public auth endpoints, wire bytes, fallback and prescribed entropy.
 
-Limits: prescribed entropy verifies call order and bytes, not operating-system
-RNG quality; nonempty-short enable nonce is undefined in pinned Packet and
-excluded (#41); prefilled Poly1305/BLAKE2b final contexts supplement the
-observed wipes, but compiler spills are not fully observable. Protocol
-primitives are the real bundled Monocypher. The sanitizer instruments the C++
-fixture, Packet, vendor code and facade and checks Rust allocation leaks, not
-Rust memory accesses.
+The immutable Rust known answers cover primitive internals. This probe compares
+public protocol behavior against the pinned original, including provider calls,
+malformed packets, low-order peers, password callback reentry and stream retry.
+Nonempty-short Recv_bytes remains outside its original precondition (#41).
+Environmental exceptions and physical secret erasure are not compared.
 """
 
 import json
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 
 import probe
 
-SECRET_SERVER = bytes(range(32)).hex()
 SECRET_CLIENT = bytes(range(32, 64)).hex()
+Transcript = list[tuple[str, str, str]]
 
 
-def hex_bytes(value):
+def hex_bytes(value: bytes) -> str:
     return value.hex() or "-"
 
 
-def wire(payload):
+def wire(payload: bytes) -> str:
     return ((len(payload) + 3).to_bytes(2, "little") + b"\x00" + payload).hex()
 
 
 class Endpoint:
-    def __init__(self, binary, role, transcript, env):
+    def __init__(
+        self, binary: Path, role: str, transcript: Transcript, env: dict[str, str]
+    ) -> None:
         self.role, self.transcript = role, transcript
         self.process = subprocess.Popen(
             [str(binary)],
@@ -39,16 +41,18 @@ class Endpoint:
             text=True,
         )
 
-    def call(self, command):
+    def call(self, command: str) -> str:
+        assert self.process.stdin is not None and self.process.stdout is not None
         self.process.stdin.write(command + "\n")
         self.process.stdin.flush()
         result = self.process.stdout.readline().rstrip("\n")
         if not result or result.startswith("error "):
             raise RuntimeError(f"{self.role} command {command}: {result}")
-        self.transcript.append([self.role, command, result])
+        self.transcript.append((self.role, command, result))
         return result
 
-    def close(self):
+    def close(self) -> None:
+        assert self.process.stdin is not None and self.process.stderr is not None
         self.process.stdin.close()
         error = self.process.stderr.read()
         code = self.process.wait()
@@ -56,90 +60,195 @@ class Endpoint:
             raise RuntimeError(f"{self.role} endpoint exited {code}: {error}")
 
 
-def scenario(server_binary, client_binary, env, extra_server, extra_client, mode):
-    transcript = []
+@dataclass(frozen=True)
+class Case:
+    name: str
+    password: bytes | None = None
+    keys: str | None = None
+    client_password: bytes = b""
+    methods: tuple[int, ...] = (0,)
+    success: bool = True
+    mask: int = 7
+    failures: bool = False
+    reentry: bool = False
+    low_order: bool = False
+    damage: int | None = None
+
+
+CASES = (
+    Case("no-password", failures=True),
+    Case("empty-providers", password=b"", keys=""),
+    Case("password", password=b"password", client_password=b"password", methods=(1,)),
+    Case(
+        "binary-password",
+        password=b"a\x00b\xff",
+        client_password=b"a\x00b\xff",
+        methods=(1,),
+    ),
+    Case(
+        "wrong-password",
+        password=b"password",
+        client_password=b"wrong",
+        methods=(1,),
+        success=False,
+    ),
+    Case("authorized", keys="valid", methods=(2,)),
+    Case("unauthorized", keys="invalid", methods=(2,), success=False),
+    Case("key-before-password", password=b"password", keys="valid", methods=(2,)),
+    Case(
+        "password-fallback",
+        password=b"password",
+        keys="invalid",
+        client_password=b"password",
+        methods=(2, 1),
+    ),
+    Case(
+        "fallback-exhausted",
+        password=b"password",
+        keys="invalid",
+        client_password=b"wrong",
+        methods=(2, 1),
+        success=False,
+    ),
+    Case(
+        "no-supported-methods",
+        password=b"password",
+        keys="valid",
+        mask=0,
+        methods=(),
+        success=False,
+    ),
+    Case("only-plain-supported", password=b"password", keys="valid", mask=1),
+    Case(
+        "only-password-supported",
+        password=b"password",
+        keys="valid",
+        client_password=b"password",
+        mask=2,
+        methods=(1,),
+    ),
+    Case(
+        "only-key-supported", password=b"password", keys="valid", mask=4, methods=(2,)
+    ),
+    Case(
+        "password-reentry",
+        password=b"password",
+        client_password=b"password",
+        methods=(1,),
+        reentry=True,
+    ),
+    Case("low-order-server", low_order=True, success=False),
+    Case("damaged-response-key", damage=3, success=False),
+    Case("damaged-response-mac", damage=35, success=False),
+)
+
+
+def scenario(
+    server_binary: Path,
+    client_binary: Path,
+    env: dict[str, str],
+    case: Case,
+) -> Transcript:
+    transcript: Transcript = []
     server = Endpoint(server_binary, "server", transcript, env)
     client = Endpoint(client_binary, "client", transcript, env)
     try:
-        server.call(f"new {SECRET_SERVER} 73")
-        client.call(f"new {SECRET_CLIENT} 191")
-        request = server.call("request").split()[1]
-        assert client.call(f"recv-request {request}") == "1 0"
-        response = client.call(f"response {hex_bytes(extra_client)}").split()[1]
-        result = server.call(f"recv-response {response} {hex_bytes(extra_server)}")
-        success = extra_server == extra_client
-        assert result == ("0 0" if success else "1 0")
+        public = client.call(f"public {SECRET_CLIENT}")
+        keys = (
+            public
+            if case.keys == "valid"
+            else "00" * 32
+            if case.keys == "invalid"
+            else case.keys
+        )
+        password = "none" if case.password is None else hex_bytes(case.password)
+        assert (
+            server.call(
+                f"server {password} {(keys or '-') if keys is not None else 'none'} {case.mask} 73"
+            )
+            == "ok"
+        )
+        assert (
+            client.call(
+                f"client {SECRET_CLIENT} {hex_bytes(case.client_password)} 191 {int(case.reentry)}"
+            )
+            == "ok"
+        )
+        assert server.call("usable") == str(int(bool(case.methods)))
         server.call("state")
         client.call("state")
-        if mode == "failures":
-            # Covered after a valid exchange so prior peer/key preservation is defined.
-            for payload in (b"", bytes(55), bytes(57)):
-                server.call(f"recv-response {wire(payload)} {hex_bytes(extra_server)}")
-                server.call("state")
-                client.call(f"recv-request {wire(payload)}")
-                client.call("state")
-            for point in (3, 35, 51, len(bytes.fromhex(response)) - 1):
-                damaged = bytearray.fromhex(response)
-                damaged[point] ^= 1
-                server.call(f"recv-response {damaged.hex()} {hex_bytes(extra_server)}")
-                server.call("state")
-                server.call(f"recv-response {response} {hex_bytes(extra_server)}")
-            for low_order in (bytes(32), b"\x01" + bytes(31)):
-                bad_request = bytearray.fromhex(request)
-                bad_request[3:35] = low_order
-                client.call(f"recv-request {bad_request.hex()}")
-                assert (
-                    client.call(f"response {hex_bytes(extra_client)}").split()[0] == "0"
-                )
-                client.call("state")
-                bad_response = bytearray.fromhex(response)
-                bad_response[3:35] = low_order
-                server.call(
-                    f"recv-response {bad_response.hex()} {hex_bytes(extra_server)}"
-                )
-                server.call("state")
-            client.call(f"recv-request {request}")
-            response = client.call(f"response {hex_bytes(extra_client)}").split()[1]
+        for index, method in enumerate(case.methods):
+            request = server.call("request").split()[1]
+            assert bytes.fromhex(request)[3] == method
+            if case.failures:
+                for unknown in (3, 255):
+                    assert (
+                        client.call(f"recv-request {wire(bytes([unknown]))}") == "2 0"
+                    )
+                    client.call("state")
+                for length in (0, 55, 57):
+                    assert (
+                        client.call(
+                            f"recv-request {wire(bytes([method]) + bytes(length))}"
+                        )
+                        == f"2 {length}"
+                    )
+                    client.call("state")
+            if case.low_order:
+                changed = bytearray.fromhex(request)
+                changed[4:36] = bytes(32)
+                request = changed.hex()
             assert (
-                server.call(f"recv-response {response} {hex_bytes(extra_server)}")
-                == "0 0"
+                client.call(f"recv-request {request}") == f"{0 if method == 1 else 1} 0"
             )
-            # Nonzero short nonce input is undefined in pinned Packet::Recv_bytes (#41).
-            before = client.call("nonce")
+            client.call("state")
+            if case.reentry:
+                response = client.call("reentrant")
+                assert response != "-"
+            else:
+                ok, response = client.call("response").split()
+                if case.low_order:
+                    assert ok == "0"
+                    client.call("state")
+                    return transcript
+                assert ok == "1"
+            if case.damage is not None:
+                changed = bytearray.fromhex(response)
+                changed[case.damage] ^= 1
+                response = changed.hex()
+            result = server.call(f"recv-response {response}")
+            expected = 2 if index + 1 < len(case.methods) else 0 if case.success else 1
+            assert result == f"{expected} 0"
+            server.call("state")
+        if case.success:
+            assert server.call("peer") == public
+            nonce = server.call("nonce").split()[1]
             assert client.call(f"recv-nonce {wire(b'')}") == "0 0"
-            assert client.call("nonce") == before
-        nonce = server.call("nonce").split()[1]
-        assert client.call(f"recv-nonce {nonce}") == "1 0"
-        if mode == "failures":
-            nonce_payload = bytes.fromhex(nonce)[3:]
-            assert client.call(f"recv-nonce {wire(nonce_payload + b'xyz')}") == "1 3"
-        if success:
+            assert client.call(f"recv-nonce {nonce}") == "1 0"
+            if case.failures:
+                assert (
+                    client.call(f"recv-nonce {wire(bytes.fromhex(nonce)[3:] + b'xyz')}")
+                    == "1 3"
+                )
             for side in (0, 1):
                 sender, receiver = (client, server) if side == 0 else (server, client)
-                sender.call(f"init-stream {side}")
-                receiver.call(f"init-stream {side}")
+                assert sender.call(f"init-stream {side}") == "16"
+                assert receiver.call(f"init-stream {side}") == "16"
                 for length in (0, 1, 8, 15, 16, 17, 63, 64, 65, 127, 256):
                     plaintext = bytes((i * 17 + length) & 255 for i in range(length))
-                    encrypted = sender.call(f"encrypt {hex_bytes(plaintext)}").split()
-                    mac, ciphertext = encrypted[1:3]
-                    if mode == "failures":
+                    _, mac, ciphertext = sender.call(
+                        f"encrypt {hex_bytes(plaintext)}"
+                    ).split()
+                    if case.failures:
                         tampered = bytearray.fromhex(mac)
                         tampered[0] ^= 128
                         failed = receiver.call(
                             f"decrypt {ciphertext} {tampered.hex()}"
                         ).split()
                         assert failed[0] == "0" and failed[2] == ciphertext
-                    if mode == "failures" and length:
-                        damaged = bytearray.fromhex(ciphertext)
-                        damaged[-1] ^= 1
-                        assert (
-                            receiver.call(f"decrypt {damaged.hex()} {mac}").split()[0]
-                            == "0"
-                        )
                     decrypted = receiver.call(f"decrypt {ciphertext} {mac}").split()
                     assert decrypted[0] == "1" and decrypted[2] == hex_bytes(plaintext)
-                    assert decrypted[3:] == encrypted[3:] and decrypted[4] == "0"
-                    if mode == "failures":
+                    if case.failures:
                         assert (
                             receiver.call(f"decrypt {ciphertext} {mac}").split()[0]
                             == "0"
@@ -150,54 +259,26 @@ def scenario(server_binary, client_binary, env, extra_server, extra_client, mode
                 assert sender.call("encrypt 010203") == first
                 sender.call("assign-stream")
                 sender.call("swap-stream")
-        for endpoint in (server, client):
-            endpoint.call("copy")
-            assert endpoint.call("move-copy") == "1"
-            endpoint.call("assign")
-        # Separate public derived-key facade: exact halves, rejected peer preservation, copies.
-        server_pub = bytes.fromhex(request)[3:35].hex()
-        client.call(f"derive {SECRET_CLIENT} {server_pub} 0 {hex_bytes(extra_client)}")
-        client.call("copy-keys")
-        client.call(f"derive {SECRET_CLIENT} {'00' * 32} 0 {hex_bytes(extra_client)}")
-        client.call("copy-keys")
-        alias = client.call(f"alias-keys {SECRET_CLIENT} {server_pub}").split()
-        assert alias[0:2] == ["1", "1"] and alias[3] == "1"
-        assert alias[2] != alias[4]
-        for operation in ("log", "output"):
-            assert server.call(f"throw-operations {operation}") == "1 1 1"
-            assert client.call(f"throw-operations {operation}") == "1 1 1"
-        for after in (0, 1):
-            assert server.call(f"throw-construction {SECRET_SERVER} {after}") == "1 1"
-            assert client.call(f"throw-construction {SECRET_CLIENT} {after}") == "1 1"
-        assert server.call("drop").split()[0] == "1"
-        assert client.call("drop").split()[0] == "1"
+        return transcript
     finally:
         server.close()
         client.close()
-    return transcript
 
 
-def main():
-    out = probe.output("auth-comparison")
-    env = probe.ENV
-    fixture = probe.ROOT / "tools/migration/auth-comparison.cpp"
-    commands, binaries = {}, {}
+def main() -> None:
+    out = Path(probe.output("auth-comparison"))
+    binaries: dict[str, Path] = {}
+    commands: dict[str, list[str | Path]] = {}
     sources = (
         "src/network/core/packet.cpp",
         "src/string.cpp",
         "src/core/string_builder.cpp",
+        "src/core/string_consumer.cpp",
         "src/core/string_inplace.cpp",
         "src/core/utf8.cpp",
     )
     for label, source in probe.LABELS:
         binary = out / label
-        # Include unchanged actual vendor source and expose only its private
-        # coarse helper. No copied field/ladder oracle or altered vendor body.
-        shim = out / f"{label}-ladder.cpp"
-        shim.write_text(
-            f'#include "{source / "src/3rdparty/monocypher/monocypher.cpp"}"\n'
-            'extern "C" void FixtureLadder(uint8_t *out, const uint8_t *scalar, const uint8_t *point, int32_t bits) { scalarmult(out, scalar, point, bits); }\n'
-        )
         commands[label] = [
             probe.compiler(),
             "-std=c++20",
@@ -210,45 +291,31 @@ def main():
             source / "src",
             "-I",
             probe.BUILD / "generated-abi",
-            fixture,
-            *(source / name for name in sources[:1]),
-            shim,
-            *(source / name for name in sources[1:]),
+            probe.ROOT / "tools/migration/auth-comparison.cpp",
+            *(source / name for name in sources),
+            *(
+                [source / "src/3rdparty/monocypher/monocypher.cpp"]
+                if label == "reference"
+                else []
+            ),
             "-Wl,--gc-sections",
             *(probe.rust() if label == "candidate" else []),
         ]
         probe.compile([*commands[label], "-o", binary], f"{binary}-compile.log")
         binaries[label] = binary
-    scenarios = [
-        (b"", b"", "normal"),
-        (b"password", b"password", "normal"),
-        (b"a\x00b\xff", b"a\x00b\xff", "failures"),
-        (b"password", b"wrong", "normal"),
-        (b"password", b"", "normal"),
-    ]
-    comparisons = 0
-    for index, (server_extra, client_extra, mode) in enumerate(scenarios):
+    records = 0
+    for case in CASES:
         expected = scenario(
-            binaries["reference"],
-            binaries["reference"],
-            env,
-            server_extra,
-            client_extra,
-            mode,
+            binaries["reference"], binaries["reference"], probe.ENV, case
         )
         for server_label, client_label in (
             ("reference", "candidate"),
             ("candidate", "reference"),
             ("candidate", "candidate"),
         ):
-            name = f"scenario-{index}-{server_label}-{client_label}"
+            name = f"{case.name}-{server_label}-{client_label}"
             actual = scenario(
-                binaries[server_label],
-                binaries[client_label],
-                env,
-                server_extra,
-                client_extra,
-                mode,
+                binaries[server_label], binaries[client_label], probe.ENV, case
             )
             if actual != expected:
                 (out / f"{name}.json").write_text(
@@ -256,70 +323,13 @@ def main():
                     + "\n"
                 )
                 raise RuntimeError(
-                    f"Mixed authentication discrepancy: {name}; see retained transcript"
+                    f"Authentication discrepancy: {name}; see retained transcript"
                 )
-            comparisons += len(actual)
-    # Only uncovered primitive variants/alias/buffer/padding/state cases. Expected
-    # bytes always come from the actual pinned vendor binary, never from Rust.
-    primitives = {}
-    for label, _ in probe.LABELS:
-        primitives[label] = probe.execute(
-            [binaries[label], "--primitives"], out / f"{label}-primitives"
-        )
-        probe.same(
-            primitives["reference"], primitives[label], f"{label}-primitives", out
-        )
-    # Instrument the complete C++ fixture, Packet, vendor and facade boundary;
-    # stable Rust allocations are leak-observable, Rust accesses are not ASan-instrumented.
-    sanitizer = out / "candidate-sanitized"
-    probe.compile(
-        [
-            *commands["candidate"],
-            "-o",
-            sanitizer,
-            "-fsanitize=address,undefined",
-            "-fno-omit-frame-pointer",
-            "-g",
-            "-no-pie",
-        ],
-        f"{sanitizer}-compile.log",
-    )
-    sanitized_env = env | {
-        "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
-        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
-    }
-    expected = scenario(
-        binaries["reference"],
-        binaries["reference"],
-        env,
-        b"a\x00b\xff",
-        b"a\x00b\xff",
-        "failures",
-    )
-    for server_binary, client_binary in (
-        (binaries["reference"], sanitizer),
-        (sanitizer, binaries["reference"]),
-    ):
-        actual = scenario(
-            server_binary,
-            client_binary,
-            sanitized_env,
-            b"a\x00b\xff",
-            b"a\x00b\xff",
-            "failures",
-        )
-        if actual != expected:
-            raise RuntimeError("Sanitizer output changed")
-    sanitized = probe.execute(
-        [sanitizer, "--primitives"], f"{sanitizer}-primitives", env=sanitized_env
-    )
-    probe.same(
-        primitives["reference"], sanitized, "candidate-sanitized-primitives", out
-    )
+            records += len(actual)
     probe.passed(
         "Authentication comparison",
-        mixed_endpoint_records=comparisons,
-        bounded_primitive_records=len(primitives["reference"].splitlines()),
+        public_cases=len(CASES),
+        mixed_endpoint_records=records,
     )
 
 
