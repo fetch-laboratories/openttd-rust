@@ -390,14 +390,15 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
         gib = 1024**3
         prefixes = "compiler-v1-linux compiler-v1-linux ccache-linux-v2-gcc"
         prefixes += " ccache-macos-v2-arm64 ccache-msvc-v1-x64"
+        prefixes += " ccache-emscripten-v1-4.0.23 ccache-emscripten-v1-4.0.23"
         caches = [
             {"id": i, "key": f"{prefix}-{str(i) * 40}", "created_at": f"2026-10-{i:02}"}
             | {"size_in_bytes": gib}
             for i, prefix in enumerate(prefixes.split(), start=1)
         ]
-        self.assertEqual(self.prune(caches), {"deleted": [1], "failures": []})
-        caches[-1]["size_in_bytes"] = 7 * gib
-        self.assertEqual(self.prune(caches), {"deleted": [1, 2, 3], "failures": []})
+        self.assertEqual(self.prune(caches), {"deleted": [1, 6], "failures": []})
+        caches[-1]["size_in_bytes"] = 5 * gib
+        self.assertEqual(self.prune(caches), {"deleted": [1, 2, 3, 6], "failures": []})
         # Unmanaged caches are never removed.
         unmanaged = {"id": 99, "key": "unmanaged", "created_at": "date"}
         result = self.prune([unmanaged | {"size_in_bytes": 9 * gib}])
@@ -452,7 +453,13 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(evaluate(jobs["macos"]["if"], **contexts), macos)
                 self.assertEqual(
                     evaluate(jobs["emscripten"]["if"], **contexts),
-                    bool(checkout and profile != "native" or heavy == "true"),
+                    # A covered push refreshes the Emscripten compiler cache.
+                    bool(
+                        checkout
+                        and profile != "native"
+                        or heavy == "true"
+                        or covered == "true"
+                    ),
                 )
 
     def test_semantic_subset_requires_the_protected_cadence(self) -> None:
@@ -491,7 +498,16 @@ class PolicyTests(unittest.TestCase):
     def test_platform_cache_refresh_is_only_a_covered_protected_push(self):
         build = workflow("ci-build.yml")["jobs"]
         protected = "refs/heads/rust-migration"
-        for name in ("linux", "windows"):
+        for name in ("emscripten", "linux", "windows"):
+            # A covered push runs the cached builds only to refresh their caches.
+            outputs = {"heavy": "false", "covered": "true"}
+            runs_covered = evaluate(
+                build[name]["if"],
+                inputs={"checkout-ref": "", "profile": ""},
+                needs={"policy": {"result": "success", "outputs": outputs}},
+                github={"event_name": "push"},
+            )
+            self.assertTrue(runs_covered, name)
             for checkout, event, ref, covered, expected in (
                 ("", "push", protected, "true", True),
                 ("merge", "push", protected, "true", False),
@@ -516,6 +532,7 @@ class PolicyTests(unittest.TestCase):
             "Retain native Windows Rust and test evidence",
         }
         for filename, name, skipped in (
+            ("ci-emscripten.yml", "emscripten", {"Test Rust ABI"}),
             ("ci-linux.yml", "linux", {"Test"}),
             ("ci-windows.yml", "windows", windows),
         ):
