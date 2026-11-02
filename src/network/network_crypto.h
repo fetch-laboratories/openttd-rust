@@ -38,9 +38,13 @@
 /**
  * Base class for handling the encryption (or decryption) of a network connection.
  */
+struct OpenTTDAuthStream;
+
 class NetworkEncryptionHandler {
 public:
 	virtual ~NetworkEncryptionHandler() = default;
+	/** Resolve stable Rust stream metadata without callbacks. Native handlers return null. */
+	virtual OpenTTDAuthStream *GetRustStream() const noexcept { return nullptr; }
 
 	/**
 	 * Get the size of the MAC (Message Authentication Code) used by the underlying encryption protocol.

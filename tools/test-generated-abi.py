@@ -45,10 +45,10 @@ class GeneratedAbiTests(unittest.TestCase):
                         [f"sizeof({name})", f"alignof({name})"]
                         + [
                             item
-                            for field, _ in fields
+                            for field in fields
                             for item in (
-                                f"offsetof({name}, {field})",
-                                f"sizeof({name}::{field})",
+                                f"offsetof({name}, {field.name})",
+                                f"sizeof({name}::{field.name})",
                             )
                         ],
                     ),

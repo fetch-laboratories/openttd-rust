@@ -96,6 +96,7 @@ static void Layout(const char *name, std::initializer_list<size_t> values)
 static void Layouts()
 {
 #include "abi-layout-probe.inc"
+#include "abi-layout-packet.inc"
 #include "abi-layout-record_test.inc"
 #include "abi-layout-grf_loading.inc"
 #include "abi-layout-act2.inc"
@@ -524,37 +525,35 @@ static void StationCargo()
 static void PacketState()
 {
 	static_assert(sizeof(intptr_t) == sizeof(size_t));
+	bool quit = false;
+	OpenTTDPacketServices services{
+		.has_quit = [](const NetworkSocketHandler *socket) noexcept { return *reinterpret_cast<const bool *>(socket); },
+		.mark_closed = [](NetworkSocketHandler *socket) noexcept { *reinterpret_cast<bool *>(socket) = true; },
+	};
 	OpenTTDPacketState state;
-	openttd_rust_packet_init(&state, SIZE_MAX);
-	CHECK(state.limit == SIZE_MAX && state.position == 0);
-	CHECK(openttd_rust_packet_can_write(&state, SIZE_MAX, 1) == 1);
-	CHECK(openttd_rust_packet_boolean(128) == 1 && openttd_rust_packet_boolean(0) == 0);
-	CHECK(openttd_rust_packet_buffer_size(SIZE_MAX) == 1 && openttd_rust_packet_prefix(65537) == 1);
-	std::array<uint8_t, 8> bytes{8, 0, 1, 2, 3, 4, 5, 6};
-	CHECK(openttd_rust_packet_parse_size(&state, bytes.data(), bytes.size()) == 8);
-	openttd_rust_packet_read_start(&state);
-	CHECK(openttd_rust_packet_has_size(&state) == 1 && openttd_rust_packet_can_read(&state, 8, 6) == 1);
-	CHECK(openttd_rust_packet_recv(&state, bytes.data(), bytes.size(), 2) == 0x0201 && state.position == 4);
-	uint16_t count = 1;
-	uint8_t byte = 0;
-	CHECK(openttd_rust_packet_buffer_next(&state, bytes.data(), bytes.size(), &count, &byte) == 1 && byte == 3 && state.position == 5);
-	CHECK(openttd_rust_packet_buffer_next(&state, bytes.data(), bytes.size(), &count, &byte) == 0 && count == UINT16_MAX);
-	CHECK(openttd_rust_packet_remaining(&state, 8) == 3 && openttd_rust_packet_transfer_amount(&state, 8, 2) == 2);
+	openttd_rust_packet_init_send(&state, reinterpret_cast<NetworkSocketHandler *>(&quit), 1, SIZE_MAX, 0);
+	openttd_rust_packet_send_uint16(&state, 0x0201);
+	openttd_rust_packet_send_uint32(&state, 0x06050403);
+	openttd_rust_packet_begin_send(&state);
+	CHECK(state.data[0] == 9 && state.data[1] == 0 && state.limit == SIZE_MAX);
+	CHECK(openttd_rust_packet_parse_size(&state) && state.position == 2);
+	CHECK(openttd_rust_packet_recv_uint8(&state, &services) == 1);
+	CHECK(openttd_rust_packet_recv_uint16(&state, &services) == 0x0201);
+	CHECK(openttd_rust_packet_transfer_amount(&state, 2) == 2);
 	openttd_rust_packet_transfer_commit(&state, -1);
 	CHECK(state.position == 5);
 	openttd_rust_packet_transfer_commit(&state, 65537);
 	CHECK(state.position == 6);
-	openttd_rust_packet_skip_mac(&state, 65537);
+	openttd_rust_packet_finish_read(&state, 65537);
 	CHECK(state.position == 7);
 	OpenTTDPacketFrame frame;
-	CHECK(openttd_rust_packet_frame(2, 8, 2, &frame) == 1 && frame.message == 4 && frame.payload == 4);
-	CHECK(openttd_rust_packet_frame(2, 4, 2, &frame) == 0);
-	CHECK(openttd_rust_packet_send_amount(&state, SIZE_MAX - 2, 4) == 2);
-	openttd_rust_packet_write_header(bytes.data(), bytes.size());
-	CHECK(bytes[0] == 8 && bytes[1] == 0);
-	openttd_rust_packet_send_reset(&state);
+	CHECK(openttd_rust_packet_frame(2, 8, 2, &frame) && frame.message == 4 && frame.payload == 4);
+	CHECK(!openttd_rust_packet_frame(2, 4, 2, &frame));
+	CHECK(!openttd_rust_packet_can_read(&state, &services, 3, true) && quit);
+	openttd_rust_packet_finish_send(&state);
 	CHECK(state.position == 0);
-	std::printf("packet scalar framing, binary reads and native cursor transitions passed\n");
+	openttd_rust_packet_destroy(&state);
+	std::printf("packet owned storage, typed binary reads and native cursor transitions passed\n");
 }
 
 static void StringValidation()
