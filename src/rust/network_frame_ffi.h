@@ -8,28 +8,7 @@ struct OpenTTDSessionFrame;
 struct OpenTTDNetworkConnectionServices;
 struct OpenTTDNetworkClientServices;
 struct OpenTTDNetworkLifecycleServices;
-/** The frame globals of the network game loop; C++ aliases each field in place. */
-struct OpenTTDNetworkFrameState {
-	uint32_t frame_counter_server;
-	uint32_t frame_counter_max;
-	uint32_t frame_counter;
-	uint32_t last_sync_frame;
-	uint32_t sync_seed_1;
-	uint32_t sync_seed_2;
-	uint32_t sync_frame;
-	uint32_t last_ack_frame;
-	bool network_first_time;
-};
-/** Frame and lag fields of a game socket, held in place as a base of the socket shell. */
-struct OpenTTDNetworkSocketSync {
-	size_t receive_limit; ///< Amount of bytes that we can receive at this moment
-	uint32_t last_frame; ///< Last frame we have executed
-	uint32_t last_frame_server; ///< Last frame the server has executed
-	uint32_t last_token_frame; ///< The last frame we received the right token
-	uint8_t lag_test; ///< Byte used for lag-testing the client
-	uint8_t last_token; ///< The last random token we did send to verify the client is listening
-	uint8_t token; ///< The token we need to send back to the server to prove we're the right client.
-};
+#include "abi-record-probe.h"
 /** Native leaves of the frame protocol: `game` is a NetworkGameSocketHandler, `socket` a NetworkClientSocket, packets are owned until sent. */
 struct OpenTTDNetworkFrameServices {
 	uint16_t (*bytes_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame);

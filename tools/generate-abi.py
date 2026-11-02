@@ -22,6 +22,7 @@ RECORD = re.compile(
 )
 PRIMITIVES = {
     "bool": "bool",
+    "c_void": "void",
     "usize": "std::size_t",
     "isize": "std::ptrdiff_t",
     "u8": "uint8_t",
@@ -101,6 +102,8 @@ def shared_records(
                 target = native(target)
             return f"{'const ' if pointer[1] == 'const' else ''}{target} *"
         rust = rust.split("::")[-1]
+        if rust in names:
+            return names[rust]
         seen = set()
         while rust in scalars and rust not in seen:
             seen.add(rust)
@@ -143,7 +146,22 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
         "#include <cstdint>",
     ]
     lines += [f"struct {name};" for name in opaque + sorted(defined)]
-    for cpp, _, _, fields in entries:
+    pending = list(entries)
+    emitted: set[str] = set()
+    ordered = []
+    while pending:
+        ready = [
+            record
+            for record in pending
+            if all(kind not in defined or kind in emitted for _, kind in record.fields)
+        ]
+        if not ready:
+            raise ValueError("cyclic embedded shared records")
+        for record in ready:
+            pending.remove(record)
+            emitted.add(record.cpp)
+            ordered.append(record)
+    for cpp, _, _, fields in ordered:
         lines.append(f"struct {cpp} {{")
         lines += [
             f"\t{kind}{'' if kind.endswith('*') else ' '}{name};"

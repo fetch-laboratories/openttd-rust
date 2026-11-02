@@ -6,39 +6,7 @@
 #include "byte_span_ffi.h"
 struct OpenTTDCompanyServices;
 struct OpenTTDNetworkSocketSync;
-/** Raw parts of a Rust byte vector; zeroes when never allocated. Only Rust allocates or frees it. */
-struct OpenTTDCommandData {
-	uint8_t *data;
-	size_t size;
-	size_t capacity;
-};
-/** A queued command; the callback is a `CommandCallback *` that only native leaves compare or call. */
-struct OpenTTDCommandPacket {
-	OpenTTDCommandData data;
-	const void *callback;
-	uint32_t frame;
-	uint32_t err_msg;
-	uint8_t company;
-	uint8_t cmd;
-	bool my_cmd;
-};
-/** Raw parts of a Rust packet vector; zeroes when never allocated. Only Rust allocates or frees it. */
-struct OpenTTDCommandQueue {
-	OpenTTDCommandPacket *data;
-	size_t size;
-	size_t capacity;
-};
-/** One client socket and its in-place queues, valid until the socket is deleted. */
-struct OpenTTDNetworkCommandClient {
-	void *socket;
-	void *game; ///< The same socket as a NetworkGameSocketHandler.
-	size_t index;
-	OpenTTDCommandQueue *incoming;
-	OpenTTDCommandQueue *outgoing;
-	OpenTTDNetworkSocketSync *sync;
-	int64_t last_packet; ///< Steady-clock nanoseconds when visited.
-	uint8_t status;
-};
+#include "abi-record-probe.h"
 /** Native leaves of the command queues; packet pointers are valid only during the call. */
 struct OpenTTDNetworkCommandServices {
 	const OpenTTDCompanyServices *company;

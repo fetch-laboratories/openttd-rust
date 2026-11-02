@@ -15,12 +15,45 @@ use std::ptr::null_mut;
 /// `NetworkClientSocket::STATUS_MAP`; `network_command.cpp` asserts the value.
 pub const STATUS_MAP: u8 = 6;
 
-/// `CommandDataBuffer` bytes as the raw parts of a Rust `Vec<u8>`; null when never allocated.
-#[repr(C)]
-pub struct CommandData {
-    pub data: *mut u8,
-    pub size: usize,
-    pub capacity: usize,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// `CommandDataBuffer` bytes as the raw parts of a Rust `Vec<u8>`; null when never allocated.
+    "OpenTTDCommandData" ["probe"] => pub struct CommandData {
+        pub data: *mut u8,
+        pub size: usize,
+        pub capacity: usize,
+    }
+    /// `CommandPacket`.
+    #[derive(Clone)]
+    "OpenTTDCommandPacket" ["probe"] => pub struct CommandPacket {
+        pub data: CommandData,
+        /// `CommandCallback *`, compared and called only by native leaves.
+        pub callback: *const c_void,
+        pub frame: u32,
+        pub err_msg: u32,
+        pub company: u8,
+        pub cmd: u8,
+        pub my_cmd: bool,
+    }
+    /// `CommandQueue` as the raw parts of a Rust `Vec<CommandPacket>`; null when never allocated.
+    "OpenTTDCommandQueue" ["probe"] => pub struct CommandQueue {
+        pub data: *mut CommandPacket,
+        pub size: usize,
+        pub capacity: usize,
+    }
+    /// One `NetworkClientSocket` resolved once per visit; queues and the sync record live in the
+    /// socket shell. `game` is the same socket as a `NetworkGameSocketHandler *`, and `last_packet`
+    /// its steady-clock time in nanoseconds when visited.
+    "OpenTTDNetworkCommandClient" ["probe"] => pub struct Client {
+        pub socket: *mut c_void,
+        pub game: *mut c_void,
+        pub index: usize,
+        pub incoming: *mut CommandQueue,
+        pub outgoing: *mut CommandQueue,
+        pub sync: *mut crate::network_frame::SocketSync,
+        pub last_packet: i64,
+        pub status: u8,
+    }
 }
 
 impl CommandData {
@@ -70,28 +103,6 @@ impl Clone for CommandData {
     }
 }
 
-/// `CommandPacket`.
-#[repr(C)]
-#[derive(Clone)]
-pub struct CommandPacket {
-    pub data: CommandData,
-    /// `CommandCallback *`, compared and called only by native leaves.
-    pub callback: *const c_void,
-    pub frame: u32,
-    pub err_msg: u32,
-    pub company: u8,
-    pub cmd: u8,
-    pub my_cmd: bool,
-}
-
-/// `CommandQueue` as the raw parts of a Rust `Vec<CommandPacket>`; null when never allocated.
-#[repr(C)]
-pub struct CommandQueue {
-    pub data: *mut CommandPacket,
-    pub size: usize,
-    pub capacity: usize,
-}
-
 impl CommandQueue {
     const EMPTY: Self = Self {
         data: null_mut(),
@@ -117,21 +128,6 @@ impl CommandQueue {
             result
         }
     }
-}
-
-/// One `NetworkClientSocket` resolved once per visit; queues and the sync record live in the
-/// socket shell. `game` is the same socket as a `NetworkGameSocketHandler *`, and `last_packet`
-/// its steady-clock time in nanoseconds when visited.
-#[repr(C)]
-pub struct Client {
-    pub socket: *mut c_void,
-    pub game: *mut c_void,
-    pub index: usize,
-    pub incoming: *mut CommandQueue,
-    pub outgoing: *mut CommandQueue,
-    pub sync: *mut crate::network_frame::SocketSync,
-    pub last_packet: i64,
-    pub status: u8,
 }
 
 /// Native leaves for `network_command.cpp`; see `network_command_ffi.h`.
@@ -393,35 +389,6 @@ pub unsafe extern "C" fn openttd_rust_command_queue_free(queue: *mut CommandQueu
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDCommandData" ["probe"] => CommandData {
-        capacity,
-        data,
-        size,
-    };
-    "OpenTTDCommandPacket" ["probe"] => CommandPacket {
-        callback,
-        cmd,
-        company,
-        data,
-        err_msg,
-        frame,
-        my_cmd,
-    };
-    "OpenTTDCommandQueue" ["probe"] => CommandQueue {
-        capacity,
-        data,
-        size,
-    };
-    "OpenTTDNetworkCommandClient" ["probe"] => Client {
-        game,
-        incoming,
-        index,
-        last_packet,
-        outgoing,
-        socket,
-        status,
-        sync,
-    };
     "OpenTTDNetworkCommandServices" ["probe"] => Services {
         admin_log,
         allowed_while_paused,

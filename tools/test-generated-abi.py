@@ -27,6 +27,37 @@ def layouts(fragments):
 
 
 class GeneratedAbiTests(unittest.TestCase):
+    def test_embedded_record_precedes_container_and_void_stays_opaque(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            (rust / "record.rs").write_text(
+                "shared_records! {\n    fn abi_record;\n"
+                '    "AContainer" ["test"] => pub struct Container {\n'
+                "        pub value: Value,\n        pub context: *mut c_void,\n"
+                "    }\n"
+                '    "ZValue" ["test"] => pub struct Value {\n'
+                "        pub number: u32,\n    }\n}\n"
+            )
+            header = "\n".join(
+                GENERATOR["record_header"]("test", GENERATOR["shared_records"](root))
+            )
+            self.assertIn("ZValue value;", header)
+            self.assertIn("void *context;", header)
+            self.assertNotIn("struct void;", header)
+            self.assertLess(
+                header.index("struct ZValue {"), header.index("struct AContainer {")
+            )
+            source = root / "record.cpp"
+            (root / "record.h").write_text(header)
+            source.write_text(
+                '#include "record.h"\nstatic_assert(sizeof(AContainer::value) == 4);\n'
+            )
+            subprocess.run(
+                ["c++", "-std=c++20", "-fsyntax-only", str(source)], check=True
+            )
+
     def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self):
         fragments = GENERATOR["generate"]()
         generated = layouts(fragments)

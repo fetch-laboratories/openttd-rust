@@ -44,36 +44,36 @@ pub mod server_status {
 }
 use crate::network_client::status::ACTIVE as CLIENT_STATUS_ACTIVE;
 
-/// The frame globals of `network.cpp` and `network_client.cpp`.
-#[repr(C)]
-pub struct State {
-    pub frame_counter_server: u32,
-    pub frame_counter_max: u32,
-    pub frame_counter: u32,
-    pub last_sync_frame: u32,
-    pub sync_seed_1: u32,
-    pub sync_seed_2: u32,
-    pub sync_frame: u32,
-    /// `network_client.cpp`'s `last_ack_frame`.
-    pub last_ack_frame: u32,
-    pub network_first_time: bool,
-}
-
-/// Frame and lag fields of a game socket; the server-side fields are unused by the client.
-#[repr(C)]
-pub struct SocketSync {
-    /// Server: bytes that may be received now.
-    pub receive_limit: usize,
-    pub last_frame: u32,
-    pub last_frame_server: u32,
-    /// Server: the last frame the right token came back.
-    pub last_token_frame: u32,
-    /// Server: whether the slow-client warning was printed.
-    pub lag_test: u8,
-    /// Server: the token sent and awaited; 0 requests a new one.
-    pub last_token: u8,
-    /// Client: the token to send back.
-    pub token: u8,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// The frame globals of `network.cpp` and `network_client.cpp`.
+    "OpenTTDNetworkFrameState" ["probe"] => pub struct State {
+        pub frame_counter_server: u32,
+        pub frame_counter_max: u32,
+        pub frame_counter: u32,
+        pub last_sync_frame: u32,
+        pub sync_seed_1: u32,
+        pub sync_seed_2: u32,
+        pub sync_frame: u32,
+        /// `network_client.cpp`'s `last_ack_frame`.
+        pub last_ack_frame: u32,
+        pub network_first_time: bool,
+    }
+    /// Frame and lag fields of a game socket; the server-side fields are unused by the client.
+    "OpenTTDNetworkSocketSync" ["probe"] => pub struct SocketSync {
+        /// Server: bytes that may be received now.
+        pub receive_limit: usize,
+        pub last_frame: u32,
+        pub last_frame_server: u32,
+        /// Server: the last frame the right token came back.
+        pub last_token_frame: u32,
+        /// Server: whether the slow-client warning was printed.
+        pub lag_test: u8,
+        /// Server: the token sent and awaited; 0 requests a new one.
+        pub last_token: u8,
+        /// Client: the token to send back.
+        pub token: u8,
+    }
 }
 
 /// Native leaves of the frame protocol; `game` is a `NetworkGameSocketHandler *`, `socket` a
@@ -569,26 +569,6 @@ pub(crate) fn game_loop(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDNetworkFrameState" ["probe"] => State {
-        frame_counter,
-        frame_counter_max,
-        frame_counter_server,
-        last_ack_frame,
-        last_sync_frame,
-        network_first_time,
-        sync_frame,
-        sync_seed_1,
-        sync_seed_2,
-    };
-    "OpenTTDNetworkSocketSync" ["probe"] => SocketSync {
-        lag_test,
-        last_frame,
-        last_frame_server,
-        last_token,
-        last_token_frame,
-        receive_limit,
-        token,
-    };
     "OpenTTDNetworkFrameServices" ["probe"] => Services {
         bytes_per_frame,
         bytes_per_frame_burst,
