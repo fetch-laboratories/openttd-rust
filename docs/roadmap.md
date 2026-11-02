@@ -4,11 +4,13 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-01, after integration 56)
+## Where the fork stands (2026-11-02, after integration 60)
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-- Code is `2d2cd78f53` (integration 56). This session integrated #616 (52), #625 with #623 through #630 (53), #618 (54), #624 (55), and #627 with #620 through #631 (56). There were no rollbacks.
+- Code is `b97004e599` (integration 60). The 11-01 evening session integrated #632 (57, #629), #639 (58, #622's later batch), #643 (59, the shared-record generator) and #633 (60, #69 tile areas: 197 original lines retired, net glue -27). There were no rollbacks.
+- The metrics below are still from stocktake 56. Stocktakes 58 and 60, profile 58 and the platform cadence due after 60 are owed and come first on resume.
+- Earlier on 11-01: #616 (52), #625 with #623 through #630 (53), #618 (54), #624 (55), and #627 with #620 through #631 (56).
 - The stocktake at `2d2cd78f53` uses `python3 tools/port-metrics.py --whole-fork`. Changes are since stocktake 54 at `b29e8036f5`.
   - Retired: 53,195 of 284,355 original code lines (18.71%, +649). Save/load retired 1,075 (+603).
   - Compiled C++: 264,758 (93.11%, -379). Since stocktake 49 at `ec11d2ba4d`, 0.98 days earlier, it fell 518 lines.
@@ -312,19 +314,22 @@ Excluded, with return conditions checked by this review:
 - #64 and #68 become maintained Rust crates that reproduce the game's observable cryptography. They return when phase 3's network ports reach authentication, or with phase 6, whichever comes first.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 
-## Resume checkpoint (2026-11-01 22:20Z, Claude session limit)
+## Resume checkpoint (2026-11-02 00:30Z)
 
-Code is `83c62ef441` (integration 58). `CI_ON_DEMAND` is `true`. Stocktake 58 and profile 58 are due first on resume. Claude agents paused at pushed checkpoints for the session limit (resets 02:10Z); each PR's status comment holds its next action. Codex agents keep running.
+Paused at the user's request: wind-down for the Claude session limit (85% at 00:24Z, reset 02:10Z). Code is `b97004e599` (integration 60). `CI_ON_DEMAND` is `true`. No PR has a passing exact-head Full. Each PR's status comment holds its next action.
 
-| Issue / PR | State | Next action | Agent |
+Due first on resume: stocktakes 58 and 60, profile 58 and the platform cadence after integration 60. CI - Build run 41366337314 on `b97004e599` was still running at wind-down; its result is unknown. Then place #644 (boundary `bool` returns) in the next maintenance batch.
+
+| Issue / PR | Head | Next action | Running job or CI |
 | --- | --- | --- | --- |
-| #570 / #636 | Checkpoint 1 builds; 235 of 235 CTests; focused set rerun result in the status comment | Fix any failures it lists, then ground and train records, then checkpoint 2 (deletes readers; net glue must turn negative) | Opus, paused |
-| #69 / #633 | Round-2 review at `346169fe0f`: 7 unfixed findings ([report](https://github.com/fetch-laboratories/openttd-rust/pull/633#issuecomment-6564617420)) | Opus fixes them (user: Opus, not Codex, for #633 repairs), then fresh review and Full | Opus |
-| #559 / #640 | Hop removed (`6684c7946c`); 10 of 11 scenarios equal; `commands-play-1` town ratings wrong (test depth goes negative on the first `rail.build`) | Find the unmatched decrement, then the issue's evidence cases | Opus, paused |
-| #574 / #628 | Slices 1-2 reviewed, open findings wait for #641 and #570's generator; slice 3 in progress | Slice 3 to review | Codex /root/network_slice3, running |
-| #64 / #642 | Crates pinned (`605dd16abd`); nothing compiled yet; #68 folded in | Compose crates, known-answer tests from Monocypher, port `network_crypto.cpp`; adopt #641 | Opus, paused |
-| #641 | Issue only | Start in the free slot | Not started |
+| #641 / #645 packet owner | `361d4b8764` or the later head its agent pushed for the mismatched-tags fix (see its status comment) | Reviewed with no findings. Finish the fix if the commit is incomplete: correct the class-key in `packet_ffi.h:16`, and make the generator emit the right class-key. Then Full at that head, then merge | Full run 41366354465 failed `platform / Check emscripten annotations` (10 `-Wmismatched-tags`); its other jobs were still running |
+| #574 / #628 network protocol | `542ce9d25d` | Slices 1-3 reviewed. A new round: merge the base with #645 and adopt direct packet access, convert the six hand-written records to the #643 generator, then slice 4. Three design faults block merging: the timeout close (slice 4), the new-company send and the map-load `SafeLoad` path (action protocol) | None |
+| #570 / #636 vehicle records | `9f8a43304a` | Checkpoint 1: 224 of 224 focused scenarios equal. Merge the base with #643 (take the generator from base), then ground and train records, then checkpoint 2, where net glue must turn negative | None |
+| #559 / #640 command invocation | `a3722bf6ab` | 235 of 235 CTests and 11 of 11 scenarios pass, including the `bool` fix. Add the issue's evidence cases, then review | None |
+| #64 / #642 crates and network authentication | `605dd16abd` | Crates pinned, nothing compiled. Compose the crates with known-answer tests from Monocypher and port `network_crypto.cpp`. Remove the inherited AEAD bounce (in #64's scope) and adopt #645 | None |
 
 Since 2026-11-01, AGENTS.md requires a named job ID before an agent ends its turn on a background job, and short checks run in the foreground. Codex children had been ending turns on jobs they never started (`ae3fd45dff`).
+
+PR worktrees: `t3-f71a5a22` (#645), `t3-5aa8a17f` and `t3-fc38354a` (#628), `t3-41b02f9e` (#636), `t3-6228b3b4` (#640) and `t3-552f048d` (#642).
 
 Keep unchanged: `t3-120ef117` (old #603), `t3-431c84b4` (cancelled #565 source with 58 dirty entries), `t3-d78d5f8b` (native fixture evidence), `.local/reference/openttd` at `14ec60f248` and the instruction-profile worktrees under the main checkout's `.local/worktrees/`. The merged #603, #607, #612, #616, #618, #626 and #630 checkouts and the finished review checkouts are T3-locked. Housekeeping keeps them until T3 releases them.
