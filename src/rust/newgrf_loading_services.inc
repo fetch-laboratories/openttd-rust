@@ -8,6 +8,7 @@
 #include "newgrf_global_ffi.h"
 #include "generic_ffi.h"
 #include "../string_func.h"
+#include "../strings_func.h"
 #include "services_newgrf.h"
 #include "cargo_registry_ffi.h"
 #include "settings_services.h"
