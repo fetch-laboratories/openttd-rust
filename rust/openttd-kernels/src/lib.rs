@@ -966,8 +966,6 @@ pub unsafe extern "C" fn openttd_rust_widget_parser_destroy(handle: *mut std::ff
 }
 
 mod crypto;
-#[allow(unsafe_code)]
-mod crypto_primitives;
 
 /// Select cargo traversal without borrowing world state; invalid tags return 255.
 #[allow(unsafe_code)]
@@ -1063,12 +1061,6 @@ pub unsafe extern "C" fn openttd_rust_cargo_finish(
         (&mut *state).finish(&mut *list.cast::<script_list::List>());
     }
 }
-
-#[allow(unsafe_code)]
-mod blake2b;
-
-#[allow(unsafe_code)]
-mod x25519;
 
 /// Scan one historical sanitation step without retaining bytes or doing output.
 ///

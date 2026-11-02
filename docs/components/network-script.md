@@ -2,12 +2,13 @@
 
 <!-- Add a new entry at the end of this file. -->
 
-## Authentication and streaming owners
+## Authentication and maintained cryptographic constructions
 
-- Rust owns: X25519 sessions, encryption contexts, and stable key/session and vendor-context storage.
-- C++ keeps: Bundled Monocypher algorithms; C++ supplies each vendor context's size/alignment and starts its trivial lifetime.
-- Checks: `python3 tools/auth-comparison.py`.
-- PRs: #43.
+- Rust owns: Single and combined authentication handlers, method selection and fallback, X25519 sessions, key derivation, packet encryption streams, UID/file hashing and plugin signature verification. Pinned maintained crates supply X25519, BLAKE2b, ChaCha20, Poly1305 and SHA-512; Rust composes Monocypher 4 incremental rekeying and cofactored Ed25519 verification.
+- C++ keeps: Native virtual facades, password/authorized-key providers and UI callbacks, file reads, UID clock/formatting and secret-key string validation. Packet operations use the integrated Rust packet owner directly.
+- Checks: Rust known-answer tests from the pinned original, `python3 tools/auth-comparison.py`, `python3 tools/packet-comparison.py` and mixed multiplayer modes.
+- Limits: Original packet short-source preconditions remain in #41. Cryptographic security and complete secret erasure are not established by these checks.
+- PRs: #43, #52, #57, #61, #642.
 
 ## Paired Script Admin conversion
 
@@ -33,21 +34,6 @@
 - Limits: Original failed-getter undefined values (#67), unrepresentable conversions, signed overflow and invalidated iterators remain outside defined behavior. The comparison fixture uses four typed items; only the game regressions cover production pools and the CPU limit.
 - PRs: #70.
 
-## ChaCha20, Poly1305 and AEAD primitives
-
-- Rust owns: Monocypher 4.0.2 ChaCha20, Poly1305 and AEAD primitives.
-- C++ keeps: C interfaces, context types and lifetime, wipe and verify leaves; other Monocypher algorithms.
-- Checks: `python3 tools/auth-comparison.py` and generated layout probes.
-- PRs: #52.
-
-## BLAKE2b family
-
-- Rust owns: BLAKE2b compression, initialization, buffering, digest serialization and context wiping.
-- C++ keeps: Public C functions, context lifetime and wipe leaf.
-- Checks: `python3 tools/auth-comparison.py`.
-- Limits: Keys of 65-128 bytes fit the original padded block and keep source behavior (the documented interface limit is 64); keys over 128 overrun original storage and have no reproduction guarantee.
-- PRs: #57.
-
 ## Packet storage, framing and serialization
 
 - Rust owns: Packet byte allocations, growth, copy and destruction, limit and cursor, typed binary and string send/receive, validation, length prefixes, framing and transfer planning/commit. The shared record is generated from Rust; native code reads its fields in place. Rust network callers use the typed packet API directly.
@@ -55,11 +41,3 @@
 - Checks: `python3 tools/auth-comparison.py`, scripted regressions and `python3 tools/packet-comparison.py`.
 - Limits: The original nonempty-short-source `Recv_bytes` precondition remains deferred in #41. Allocation failure is environmental.
 - PRs: #60, #645.
-
-## Normal X25519 and Montgomery ladder
-
-- Rust owns: `crypto_x25519`, `crypto_x25519_public_key`, `crypto_eddsa_trim_scalar`, the Montgomery ladder and private field operations.
-- C++ keeps: Public interfaces, shared-field helpers for untouched Edwards, conversions, Elligator and other families, wipe and verify leaves.
-- Checks: `python3 tools/auth-comparison.py`.
-- Limits: Shared-field helper duplication is unfinished migration; compiler spills/copies are not erased.
-- PRs: #61.
