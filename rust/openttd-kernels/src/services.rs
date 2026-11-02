@@ -286,6 +286,8 @@ pub struct Services {
     pub clear_square_services: ClearSquareServices,
     /// Whether this company pool ID is live.
     pub company_valid: extern "C" fn(u8) -> bool,
+    /// Canonical landscaping rates, embedded in native construction settings.
+    pub construction_limits: *const crate::settings_type::ConstructionLimits,
     /// Opaque context for test fixtures; production leaves ignore it.
     pub context: *mut c_void,
     /// Canonical `ShowCostOrIncomeAnimation` presentation leaf.
@@ -773,6 +775,7 @@ crate::abi::layouts! {
         build_on_slopes,
         clear_square_services,
         company_valid,
+        construction_limits,
         context,
         cost_animation,
         crossing_road_bits,
@@ -1049,6 +1052,7 @@ pub fn fixture(
             generating_world: flag0,
         },
         company_valid: unused_company_valid,
+        construction_limits: std::ptr::null(),
         context,
         cost_animation: fixture_cost_animation,
         crossing_road_bits: fixture_crossing_road_bits,

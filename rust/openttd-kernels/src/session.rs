@@ -165,7 +165,6 @@ pub struct Services {
     pub vehicle_tables: extern "C" fn(*mut Frame, bool) -> crate::vehicle::scheduler::Tables,
     pub vehicle_cost: extern "C" fn(*mut Frame) -> *mut std::ffi::c_void,
     pub vehicle_end: extern "C" fn(*mut Frame),
-    pub landscaping: extern "C" fn() -> crate::company::Landscaping,
     pub schedule_time: extern "C" fn() -> crate::linkgraph_schedule::Time,
     pub town: *const crate::town::Leaves,
     pub trees: *const crate::trees::TreeServices,
@@ -597,7 +596,7 @@ impl Session<'_> {
     fn landscaping(&self) {
         crate::company::update_landscaping_limits(
             unsafe { &*self.s.company },
-            &(self.s.landscaping)(),
+            unsafe { &*self.s.shared }.construction_limits,
         );
     }
     fn storage(&self, mode: u8) {
@@ -983,7 +982,6 @@ crate::abi::layouts! {
         vehicle_tables,
         vehicle_cost,
         vehicle_end,
-        landscaping,
         schedule_time,
         town,
         trees,

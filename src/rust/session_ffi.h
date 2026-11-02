@@ -136,7 +136,6 @@ struct OpenTTDSessionServices {
 	OpenTTDVehicleSchedulerTables (*vehicle_tables)(OpenTTDSessionFrame *, bool) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tables);
 	OpenTTDCommandCost * (*vehicle_cost)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cost);
 	void (*vehicle_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_end);
-	OpenTTDCompanyLandscaping (*landscaping)() noexcept OPENTTD_SERVICE_DEFAULT(landscaping);
 	OpenTTDScheduleTime (*schedule_time)() noexcept OPENTTD_SERVICE_DEFAULT(schedule_time);
 	const OpenTTDTownLeaves *town;
 	const OpenTTDTreeServices *trees;

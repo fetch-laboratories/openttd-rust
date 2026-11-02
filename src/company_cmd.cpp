@@ -80,7 +80,7 @@ Company::Company(StringID name_1, bool is_ai)
 {
 	this->name_1 = name_1;
 	this->is_ai = is_ai;
-	openttd_rust_company_initialize(&this->Finances(), static_cast<uint32_t>(_settings_game.construction.terraform_frame_burst), static_cast<uint32_t>(_settings_game.construction.clear_frame_burst), static_cast<uint32_t>(_settings_game.construction.tree_frame_burst), static_cast<uint32_t>(_settings_game.construction.build_object_frame_burst));
+	openttd_rust_company_initialize(&this->Finances(), static_cast<uint32_t>(_settings_game.construction.limits.terraform_frame_burst), static_cast<uint32_t>(_settings_game.construction.limits.clear_frame_burst), static_cast<uint32_t>(_settings_game.construction.limits.tree_frame_burst), static_cast<uint32_t>(_settings_game.construction.limits.build_object_frame_burst));
 
 	InvalidateWindowData(WC_PERFORMANCE_DETAIL, 0, CompanyID::Invalid());
 }
@@ -260,16 +260,6 @@ void SubtractMoneyFromCompanyFract(CompanyID company, const CommandCost &cst)
 }
 
 
-OpenTTDCompanyLandscaping RustLandscapingRates() noexcept
-{
-	const auto &cs = _settings_game.construction;
-	return {
-		.terraform_per_64k = cs.terraform_per_64k_frames, .clear_per_64k = cs.clear_per_64k_frames,
-		.tree_per_64k = cs.tree_per_64k_frames, .object_per_64k = cs.build_object_per_64k_frames,
-		.terraform_burst = cs.terraform_frame_burst, .clear_burst = cs.clear_frame_burst,
-		.tree_burst = cs.tree_frame_burst, .object_burst = cs.build_object_frame_burst,
-	};
-}
 
 /** Update the landscaping limits per company. */
 

@@ -2681,8 +2681,8 @@ bool AfterLoadGame()
 
 		/* Introduced terraform/clear limits. */
 		for (Company *c : Company::Iterate()) {
-			c->Finances().terraform_limit = _settings_game.construction.terraform_frame_burst << 16;
-			c->Finances().clear_limit     = _settings_game.construction.clear_frame_burst << 16;
+			c->Finances().terraform_limit = _settings_game.construction.limits.terraform_frame_burst << 16;
+			c->Finances().clear_limit     = _settings_game.construction.limits.clear_frame_burst << 16;
 		}
 	}
 
@@ -2938,7 +2938,7 @@ bool AfterLoadGame()
 
 	if (IsSavegameVersionBefore(SLV_175)) {
 		/* Introduced tree planting limit. */
-		for (Company *c : Company::Iterate()) c->Finances().tree_limit = _settings_game.construction.tree_frame_burst << 16;
+		for (Company *c : Company::Iterate()) c->Finances().tree_limit = _settings_game.construction.limits.tree_frame_burst << 16;
 	}
 
 	if (IsSavegameVersionBefore(SLV_177)) {

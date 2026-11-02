@@ -237,17 +237,6 @@ pub struct EconomySettings {
     pub construction_cost: u8,
     pub inflation: bool,
 }
-#[repr(C)]
-pub struct Landscaping {
-    pub terraform_per_64k: u32,
-    pub clear_per_64k: u32,
-    pub tree_per_64k: u32,
-    pub object_per_64k: u32,
-    pub terraform_burst: u16,
-    pub clear_burst: u16,
-    pub tree_burst: u16,
-    pub object_burst: u16,
-}
 /// Finance services used by hot money paths and financial commands.
 #[repr(C)]
 pub struct FinanceServices {
@@ -1763,7 +1752,10 @@ pub unsafe extern "C" fn openttd_rust_company_subtract_fraction(
     subtract_fraction(f, p, id, cost, usize::from(expense));
 }
 /// `UpdateLandscapingLimits`.
-pub(crate) fn update_landscaping_limits(s: &Services, r: &Landscaping) {
+pub(crate) fn update_landscaping_limits(
+    s: &Services,
+    r: *const crate::settings_type::ConstructionLimits,
+) {
     let next = |value: u32, per: u32, burst: u16| -> u32 {
         (u64::from(value) + u64::from(per)).min(u64::from(burst) << 16) as u32
     };
@@ -1773,24 +1765,36 @@ pub(crate) fn update_landscaping_limits(s: &Services, r: &Landscaping) {
             terraform,
             next(
                 read_field!(p, terraform),
-                r.terraform_per_64k,
-                r.terraform_burst
+                read_field!(r, terraform_per_64k_frames),
+                read_field!(r, terraform_frame_burst)
             )
         );
         write_field!(
             p,
             clear,
-            next(read_field!(p, clear), r.clear_per_64k, r.clear_burst)
+            next(
+                read_field!(p, clear),
+                read_field!(r, clear_per_64k_frames),
+                read_field!(r, clear_frame_burst)
+            )
         );
         write_field!(
             p,
             tree,
-            next(read_field!(p, tree), r.tree_per_64k, r.tree_burst)
+            next(
+                read_field!(p, tree),
+                read_field!(r, tree_per_64k_frames),
+                read_field!(r, tree_frame_burst)
+            )
         );
         write_field!(
             p,
             object,
-            next(read_field!(p, object), r.object_per_64k, r.object_burst)
+            next(
+                read_field!(p, object),
+                read_field!(r, build_object_per_64k_frames),
+                read_field!(r, build_object_frame_burst)
+            )
         );
     });
 }
@@ -2411,15 +2415,5 @@ crate::abi::layouts! {
         vehicle_costs,
         construction_cost,
         inflation,
-    };
-    "OpenTTDCompanyLandscaping" ["company_economy"] => Landscaping {
-        terraform_per_64k,
-        clear_per_64k,
-        tree_per_64k,
-        object_per_64k,
-        terraform_burst,
-        clear_burst,
-        tree_burst,
-        object_burst,
     };
 }

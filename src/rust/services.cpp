@@ -406,6 +406,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.generating_world = OpenTTDGeneratingWorld,
 	},
 	.company_valid = OpenTTDCompanyIsValid,
+	.construction_limits = &_settings_game.construction.limits,
 	.context = nullptr,
 	.cost_animation = RustCostOrIncomeAnimation,
 	.crossing_road_bits = SharedCrossingRoadBits,

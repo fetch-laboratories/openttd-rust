@@ -78,10 +78,6 @@ struct OpenTTDCompanyCompetitors {
 struct OpenTTDEconomyMonth { uint8_t month; bool infinite_money, maintenance, fluctuating; };
 struct OpenTTDCompanyYear { CompanyFinances *local_finances; uint8_t local; bool show_finances, new_year_sound; };
 struct OpenTTDEconomySettings { int32_t year; uint32_t max_loan; uint8_t initial_interest, vehicle_costs, construction_cost; bool inflation; };
-struct OpenTTDCompanyLandscaping {
-	uint32_t terraform_per_64k, clear_per_64k, tree_per_64k, object_per_64k;
-	uint16_t terraform_burst, clear_burst, tree_burst, object_burst;
-};
 /** Finance services used by money paths and financial commands. */
 struct OpenTTDCompanyFinanceServices {
 	uint8_t (OPENTTD_RUST_CALL *current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);

@@ -15,6 +15,7 @@ struct SessionFixture {
 	static inline SessionFixture *active = nullptr;
 	SessionFixture *previous = active;
 	OpenTTDFixtureMap map{6};
+	OpenTTDConstructionLimits limits{};
 	OpenTTDSharedServices shared{};
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
@@ -50,6 +51,7 @@ struct SessionFixture {
 	SessionFixture()
 	{
 		active = this;
+		shared.construction_limits = &limits;
 		shared.map = &map.statics;
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
 		tiles.shared = &shared;
@@ -135,7 +137,6 @@ struct SessionFixture {
 		services.schedule_time = []() noexcept { return OpenTTDScheduleTime{0, 0, 4}; };
 		services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept -> void * { return nullptr; };
 		services.schedule_end = FrameNothing;
-		services.landscaping = []() noexcept { return OpenTTDCompanyLandscaping{}; };
 		services.window_tick = Nothing;
 		services.news = Nothing;
 		services.assert_local_company = Nothing;

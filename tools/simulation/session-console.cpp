@@ -120,6 +120,36 @@ static void SessionSetting(std::string_view name, int32_t value)
 	}
 }
 /** Setting transitions in a loaded game with trains, road vehicles, ships, stations and link graphs. */
+static void SessionLandscapingRates()
+{
+	for (uint32_t round : {1U, 2U}) {
+		const uint32_t rate = round * 65536, burst = round + 1;
+		for (std::string_view field : {"terraform", "clear", "tree", "build_object"}) {
+			SessionSetting(fmt::format("construction.{}_per_64k_frames", field), rate);
+			SessionSetting(fmt::format("construction.{}_frame_burst", field), burst);
+		}
+		uint64_t expected = 0;
+		for (Company *c : Company::Iterate()) {
+#ifdef WITH_RUST
+			const auto &f = c->Finances();
+#else
+			const auto &f = *c;
+#endif
+			for (uint32_t value : {f.terraform_limit, f.clear_limit, f.tree_limit, f.build_object_limit}) expected += std::min<uint64_t>(uint64_t(value) + rate, uint64_t(burst) << 16);
+		}
+		StateGameLoop();
+		uint64_t observed = 0;
+		for (Company *c : Company::Iterate()) {
+#ifdef WITH_RUST
+			const auto &f = c->Finances();
+#else
+			const auto &f = *c;
+#endif
+			observed += uint64_t(f.terraform_limit) + f.clear_limit + f.tree_limit + f.build_object_limit;
+		}
+		SessionCheck("landscaping-live-rates", observed == expected);
+	}
+}
 static void SessionLiveSettings()
 {
 	auto &vehicle = _settings_game.vehicle;
@@ -245,6 +275,7 @@ static bool SessionScenario(std::span<std::string_view> args)
 	StateGameLoop(); SessionSave(folder, "paused");
 	_in_modal_progress = true; StateGameLoop(); SessionObserve("modal-paused");
 	_pause_mode = {}; StateGameLoop(); SessionObserve("modal"); _in_modal_progress = false;
+	_pause_mode = PauseMode::Normal; SessionLandscapingRates(); _pause_mode = {};
 	_settings_game.economy.minutes_per_calendar_year = 0;
 	StateGameLoop(); SessionSave(folder, "frozen-calendar");
 	_settings_game.economy.minutes_per_calendar_year = CalendarTime::DEF_MINUTES_PER_YEAR;

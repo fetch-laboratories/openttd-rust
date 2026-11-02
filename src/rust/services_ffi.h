@@ -87,6 +87,7 @@ struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDPbsServices;
 struct OpenTTDMovementServices;
 struct GRFFile;
+struct OpenTTDConstructionLimits;
 struct OpenTTDSharedServices {
 	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
@@ -98,6 +99,7 @@ struct OpenTTDSharedServices {
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
 	OpenTTDClearSquareServices clear_square_services;
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
+	const OpenTTDConstructionLimits *construction_limits = nullptr;
 	void *context;
 	void (*cost_animation)(int32_t, int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
 	RoadBits (*crossing_road_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_bits);
