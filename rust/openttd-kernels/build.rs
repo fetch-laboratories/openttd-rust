@@ -1,4 +1,4 @@
-//! List every module that invokes `layouts!`, so `abi::layout` needs no registry file.
+//! List every module that invokes `layouts!` or `shared_records!`, so `abi::layout` needs no registry file.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -18,14 +18,23 @@ fn collect(dir: &Path, module: &str, found: &mut Vec<String>) -> io::Result<()> 
         };
         if path.is_dir() {
             collect(&path, &name, found)?;
-        } else if path.extension().is_some_and(|ext| ext == "rs")
-            && !["lib", "abi"].contains(&stem)
-            && fs::read_to_string(&path)?
-                .replace("\r\n", "\n")
-                .contains("layouts! {\n    fn abi_layout;")
+        } else if path.extension().is_some_and(|ext| ext == "rs") && !["lib", "abi"].contains(&stem)
         {
-            println!("cargo:rerun-if-changed={}", path.display());
-            found.push(format!("crate::{name}::abi_layout"));
+            if name == "native_test_support"
+                && env::var_os("CARGO_FEATURE_NATIVE_TEST_SUPPORT").is_none()
+            {
+                continue;
+            }
+            let source = fs::read_to_string(&path)?.replace("\r\n", "\n");
+            for (marker, function) in [
+                ("layouts! {\n    fn abi_layout;", "abi_layout"),
+                ("shared_records! {\n    fn abi_record;", "abi_record"),
+            ] {
+                if source.contains(marker) {
+                    println!("cargo:rerun-if-changed={}", path.display());
+                    found.push(format!("crate::{name}::{function}"));
+                }
+            }
         }
     }
     Ok(())

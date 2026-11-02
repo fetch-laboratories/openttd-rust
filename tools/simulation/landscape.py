@@ -599,6 +599,7 @@ def scheduler_gap():
             "-std=c++20",
             "-O2",
             "-I" + str(root / "src"),
+            "-I" + str(root / "build-rust/generated-abi"),
             "-I" + str(out),
             str(root / "tools/simulation/landscape-loop-reference.cpp"),
             str(migration.rust_archive(root / "build-rust")),

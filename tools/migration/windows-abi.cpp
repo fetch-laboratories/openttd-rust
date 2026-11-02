@@ -96,6 +96,7 @@ static void Layout(const char *name, std::initializer_list<size_t> values)
 static void Layouts()
 {
 #include "abi-layout-probe.inc"
+#include "abi-layout-record_test.inc"
 #include "abi-layout-grf_loading.inc"
 #include "abi-layout-act2.inc"
 #include "abi-layout-linkgraph_schedule.inc"
@@ -105,6 +106,11 @@ static void Layouts()
 #include "abi-layout-genworld.inc"
 #include "abi-layout-session.inc"
 
+	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);
+	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::value), uint32_t>);
+	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::count), size_t>);
+	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::data), uint8_t *>);
+	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::next), const OpenTTDAbiRecordFixture *>);
 	CHECK(openttd_rust_abi_layout_named("unknown", 0) == SIZE_MAX);
 	CHECK(openttd_rust_abi_layout_named("OpenTTDTrainServices", SIZE_MAX) == SIZE_MAX);
 	static_assert(std::is_same_v<decltype(OpenTTDSignalContext::log_x), unsigned int>);

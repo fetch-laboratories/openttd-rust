@@ -92,6 +92,7 @@ def scheduler_reference(out):
         "-std=c++20",
         "-O2",
         "-I" + str(ROOT / "src"),
+        "-I" + str(build / "generated-abi"),
         "-I" + str(out),
         str(Path(__file__).with_name("linkgraph-schedule-reference.cpp")),
         str(migration.rust_archive(build)),

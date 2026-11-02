@@ -226,7 +226,7 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 			if (!IsWaterTile(t) || !IsDockingTile(t)) continue;
 			MakeWaterKeepingClass(t, GetTileOwner(t));
 			ChangeTileOwner(t, GetTileOwner(t), Owner(0));
-			fmt::print(stderr, "WATER-CMD docking {} {}\n", st->docking_station.Contains(t), IsDockingTile(t));
+			fmt::print(stderr, "WATER-CMD docking {}\n", IsDockingTile(t));
 			checked_docking = true; break;
 		}
 		if (checked_docking) break;

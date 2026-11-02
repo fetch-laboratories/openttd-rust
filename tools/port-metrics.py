@@ -6,6 +6,7 @@ lines), then physical-line totals for comparison with historical metrics.
 --whole-fork adds original/retired/remaining/glue by area, compiled C++ distance,
 whole-fork and simulation shares, and Rust exports/service callback slots.
 --functions [AREA ...] adds the remaining lines per file and top-level function.
+Glue includes the C++ record declarations tools/generate-abi.py generates.
 This is a source/guard inventory, not full preprocessing or behavioral coverage.
 
 Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
@@ -13,10 +14,15 @@ Both guard forms are understood: `#ifdef WITH_RUST ... #else <original>
 """
 
 import argparse
+import io
 import json
 import re
+import runpy
 import subprocess
+import tarfile
+import tempfile
 from collections.abc import Iterator, Sequence
+from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
@@ -418,6 +424,66 @@ def source_metrics(
     return result
 
 
+# Generated declarations are compiled glue in the boundary layer's area.
+GENERATED_AREA = "Boundary layer"
+
+
+@lru_cache(maxsize=8)
+def generated_records(rev: str) -> dict[str, str]:
+    """C++ record headers tools/generate-abi.py emits at `rev`."""
+    paths = ["rust/openttd-kernels/src", "tools/generate-abi.py"]
+    listed = git("ls-tree", "--name-only", rev, "--", *paths).split()
+    if len(listed) != len(paths):
+        return {}
+    archive = subprocess.check_output(["git", "archive", rev, "--", *paths], cwd=ROOT)
+    with tempfile.TemporaryDirectory() as directory:
+        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+            tar.extractall(directory, filter="data")
+        generator = runpy.run_path(str(Path(directory) / "tools/generate-abi.py"))
+        if "shared_records" not in generator:
+            return {}
+        fragments = generator["generate"](Path(directory))
+    return {
+        name: text for name, text in fragments.items() if name.startswith("abi-record-")
+    }
+
+
+def generated_glue(rev: str, all_lines: bool = False) -> int:
+    """Lines of generated C++ record declarations, including unchanged headers."""
+    return sum(
+        len(classify(text)) if all_lines else len(code_lines(text, name))
+        for name, text in generated_records(rev).items()
+    )
+
+
+def generated_glue_changes(base: str, head: str, all_lines: bool) -> tuple[int, int]:
+    """Count both sides of generated declaration edits, even when net size is zero."""
+    before, after = generated_records(base), generated_records(head)
+    added = removed = 0
+    for name in before.keys() | after.keys():
+        old, new = before.get(name, ""), after.get(name, "")
+        old_lines = (
+            set(range(1, len(classify(old)) + 1))
+            if all_lines
+            else code_lines(old, name)
+        )
+        new_lines = (
+            set(range(1, len(classify(new)) + 1))
+            if all_lines
+            else code_lines(new, name)
+        )
+        retained = sum(
+            a + n + 1 in old_lines and b + n + 1 in new_lines
+            for a, b, size in SequenceMatcher(
+                None, old.splitlines(), new.splitlines(), autojunk=False
+            ).get_matching_blocks()
+            for n in range(size)
+        )
+        added += len(new_lines) - retained
+        removed += len(old_lines) - retained
+    return added, removed
+
+
 def metrics(
     base: str,
     head: str = "HEAD",
@@ -433,9 +499,15 @@ def metrics(
         name: dict(original=0, retired=0, glue=0) for name in AREAS
     }
     after = source_metrics(BASELINE, head, after_glue, all_lines, areas, retired_lines)
+    generated_before = generated_glue(base, all_lines)
+    generated_after = generated_glue(head, all_lines)
+    after["glue"] += generated_after
+    areas[GENERATED_AREA]["glue"] += generated_after
     result["retired"] = after["retired"] - before["retired"]
-    result["net_glue"] = after["glue"] - before["glue"]
-    result["glue"], result["glue_removed"] = 0, 0
+    result["net_glue"] = after["glue"] - before["glue"] - generated_before
+    result["glue"], result["glue_removed"] = generated_glue_changes(
+        base, head, all_lines
+    )
     # Compare fork line identities, excluding restored original lines and
     # including unchanged fork lines whose WITH_RUST compilation state changes.
     for status, old, new in changes(base, head):
