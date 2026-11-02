@@ -255,7 +255,7 @@ def simulation_source(path: str) -> bool:
     )
 
 
-SOURCES = (".cpp", ".h", ".hpp", ".c", ".cc", ".mm")
+SOURCES = (".cpp", ".h", ".hpp", ".inc", ".c", ".cc", ".mm")
 AREAS = (
     "Simulation logic",
     "Simulation storage",
@@ -362,7 +362,7 @@ def source_metrics(
         "retired": 0,
         "simulation": 0,
     }
-    sources = (".cpp", ".h", ".hpp", ".c", ".cc", ".mm")
+    sources = SOURCES
     for status, old, new in changes(base, head):
         if not new.startswith(("rust/", "tools/")) and not (
             (old.startswith("src/") or new.startswith("src/")) and new.endswith(sources)
