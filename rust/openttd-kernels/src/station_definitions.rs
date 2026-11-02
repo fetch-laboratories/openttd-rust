@@ -31,7 +31,7 @@ pub struct Services {
     shared: *const crate::services::Services,
     station_resize: unsafe extern "C" fn(*mut c_void, u32) -> (),
     station_count: unsafe extern "C" fn(*const c_void) -> usize,
-    station_get: unsafe extern "C" fn(*mut c_void, u32) -> *mut RailSpec,
+    pub(crate) station_get: unsafe extern "C" fn(*mut c_void, u32) -> *mut RailSpec,
     station_new: unsafe extern "C" fn(*mut c_void, u32) -> *mut RailSpec,
     station_class: unsafe extern "C" fn(*mut RailSpec, u16) -> (),
     station_name: unsafe extern "C" fn(*mut RailSpec, u16) -> (),

@@ -4,6 +4,8 @@
 #define RUST_NEWGRF_LOADING_FFI_H
 #include "newgrf_global_ffi.h"
 #include "newgrf_text_ffi.h"
+#include "grf_bindings_ffi.h"
+#include "station_definitions_ffi.h"
 #include "newgrf_class_ffi.h"
 #include "../newgrf_config.h"
 #include "../road_type.h"
@@ -52,6 +54,8 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDTypeRegistryServices *types;
 	const OpenTTDAction2Services *action2;
 	const OpenTTDGrfTextServices *text;
+	const OpenTTDGrfBindingServices *bindings;
+	const OpenTTDStationDefinitionServices *stations;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
 	uint32_t (*config_id)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_id);
@@ -97,7 +101,6 @@ struct OpenTTDGrfLoadingServices {
 	bool (*skip_act1)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act1);
 	bool (*new_sprite_set)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(new_sprite_set);
 	bool (*feature_map_sprite_group)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_map_sprite_group);
-	bool (*feature_new_name)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_new_name);
 	bool (*skip_act5)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act5);
 	bool (*graphics_new)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(graphics_new);
 	bool (*skip_act_a)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act_a);

@@ -39,3 +39,9 @@ pub(crate) fn climate_mask(landscape: u8) -> u16 {
         _ => unreachable!("landscape"),
     }
 }
+
+/// Opaque native house specification, retained by the GRF/spec owner.
+#[repr(C)]
+pub struct HouseSpec {
+    _private: [u8; 0],
+}

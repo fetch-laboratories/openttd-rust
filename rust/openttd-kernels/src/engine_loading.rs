@@ -232,7 +232,7 @@ type File = *const c_void;
 pub struct Services {
     identity: &'static crate::company_identity::Services,
     pub(crate) shared: *const Shared,
-    resolver: *const crate::newgrf_vehicle::Services,
+    pub(crate) resolver: *const crate::newgrf_vehicle::Services,
     next: extern "C" fn(u32) -> EngineRef,
     resolve: extern "C" fn(u16) -> EngineRef,
     dynamic: extern "C" fn() -> bool,

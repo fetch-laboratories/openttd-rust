@@ -229,3 +229,6 @@ pub const GSF_ROADSTOPS: u8 = 20;
 
 /// `GSF_BADGES`.
 pub const GSF_BADGES: u8 = 21;
+
+/// `GSF_ORIGINAL_STRINGS`.
+pub const GSF_ORIGINAL_STRINGS: u8 = 0x48;

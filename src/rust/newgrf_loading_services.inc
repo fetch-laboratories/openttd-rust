@@ -37,6 +37,8 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.types = &GetRustTypeRegistryServices(),
 		.action2 = &GetRustAction2Services(),
 		.text = &GetRustGrfTextServices(),
+		.bindings = &GetRustGrfBindingServices(),
+		.stations = &GetStationDefinitionServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
 		.config_id = [](const GRFConfig *c) noexcept { return c->ident.grfid; },
@@ -82,7 +84,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.skip_act1 = ParseGrfAction<&GrfActionHandler<0x01>::FileScan>,
 		.new_sprite_set = ParseGrfAction<&GrfActionHandler<0x01>::Activation>,
 		.feature_map_sprite_group = ParseGrfAction<&GrfActionHandler<0x03>::Activation>,
-		.feature_new_name = ParseGrfAction<&GrfActionHandler<0x04>::Activation>,
 		.skip_act5 = ParseGrfAction<&GrfActionHandler<0x05>::FileScan>,
 		.graphics_new = ParseGrfAction<&GrfActionHandler<0x05>::Activation>,
 		.skip_act_a = ParseGrfAction<&GrfActionHandler<0x0A>::FileScan>,
@@ -221,7 +222,9 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	return services;
 }
 #include "abi-visit-OpenTTDAirportDefinitionServices.hpp"
+#include "abi-visit-OpenTTDGrfBindingServices.hpp"
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
+#include "abi-visit-OpenTTDGrfTextServices.hpp"
 #include "abi-visit-OpenTTDAction2Services.hpp"
 #include "abi-visit-OpenTTDHouseDefinitionServices.hpp"
 #include "abi-visit-OpenTTDStationClassServices.hpp"
@@ -231,5 +234,5 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 bool CheckAbi_grf_loading()
 {
 	const auto &s = GetRustGrfLoadingServices();
-	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.houses) && AbiServicesComplete(*s.airports) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
+	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.bindings) && AbiServicesComplete(*s.text) && AbiServicesComplete(*s.houses) && AbiServicesComplete(*s.airports) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
 }

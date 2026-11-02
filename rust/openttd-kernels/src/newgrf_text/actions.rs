@@ -70,3 +70,225 @@ pub(crate) unsafe fn translate_grf_strings(
         Ok(())
     }
 }
+
+#[repr(C)]
+pub struct BindingServices {
+    badge_name: unsafe extern "C" fn(*mut std::ffi::c_void, u16) -> *mut u32,
+    engine_string: unsafe extern "C" fn(*const crate::engine_type::OpenTTDEngine) -> *mut u32,
+    new_name: unsafe extern "C" fn(u16, *const u8, usize),
+}
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDGrfBindingServices" ["grf_loading"] => BindingServices { badge_name, engine_string, new_name };
+}
+
+pub(crate) unsafe fn feature_new_name(
+    s: &Services,
+    buf: &mut ByteReader,
+) -> Result<(), ReadBounds> {
+    use crate::newgrf::{GSF_AIRCRAFT, GSF_BADGES, GSF_END};
+    unsafe {
+        let file = loading::file();
+        let new_scheme = loading::file_version(s, file) >= 7;
+        let feature = buf.byte()?;
+        let text = &*s.text;
+        if feature >= GSF_END && feature != crate::newgrf::GSF_ORIGINAL_STRINGS {
+            text.log(
+                1,
+                format!("FeatureNewName: Unsupported feature 0x{feature:02X}, skipping").as_bytes(),
+            );
+            return Ok(());
+        }
+        let mut language = buf.byte()?;
+        let count = buf.byte()?;
+        let generic = language & 0x80 != 0;
+        let mut id = if generic {
+            buf.word()?
+        } else if feature <= GSF_AIRCRAFT || feature == GSF_BADGES {
+            buf.extended()?
+        } else {
+            u16::from(buf.byte()?)
+        };
+        language &= 0x7f;
+        let end = id.wrapping_add(u16::from(count));
+        text.log(6, format!("FeatureNewName: About to rename engines {id}..{end} (feature 0x{feature:02X}) in language 0x{language:02X}").as_bytes());
+        let overlay = if generic {
+            0
+        } else {
+            (u32::from(feature) + 1) << 16
+        };
+        let bindings = &*s.bindings;
+        let grfid = (s.shared().grf_file_id)(file);
+        while id < end && buf.remaining() != 0 {
+            let name = buf.string();
+            (bindings.new_name)(id, name.0, name.1);
+            if feature <= GSF_AIRCRAFT {
+                if generic {
+                    super::openttd_rust_grf_text_add(
+                        text,
+                        grfid,
+                        u32::from(id),
+                        language,
+                        new_scheme,
+                        true,
+                        name.0,
+                        name.1,
+                        s.undefined,
+                    );
+                } else {
+                    let engine = crate::engine_loading::openttd_rust_engine_definition(
+                        &*s.engine,
+                        file,
+                        feature,
+                        id,
+                        loading::is_static(s, loading::config()),
+                    );
+                    if !engine.is_null() {
+                        let index = ((*(*s.engine).resolver).capabilities.id)(engine);
+                        let string = (bindings.engine_string)(engine);
+                        let default = string.read();
+                        let translated = super::openttd_rust_grf_text_add(
+                            text,
+                            grfid,
+                            overlay | u32::from(index),
+                            language,
+                            new_scheme,
+                            false,
+                            name.0,
+                            name.1,
+                            default,
+                        );
+                        string.write(translated);
+                    }
+                }
+            } else if feature == GSF_BADGES {
+                if generic {
+                    super::openttd_rust_grf_text_add(
+                        text,
+                        grfid,
+                        u32::from(id),
+                        language,
+                        new_scheme,
+                        true,
+                        name.0,
+                        name.1,
+                        s.undefined,
+                    );
+                } else {
+                    let string = (bindings.badge_name)(file, id);
+                    if string.is_null() {
+                        text.log(
+                            1,
+                            format!(
+                                "FeatureNewName: Attempt to name undefined badge 0x{id:X}, ignoring"
+                            )
+                            .as_bytes(),
+                        );
+                    } else {
+                        let translated = super::openttd_rust_grf_text_add(
+                            text,
+                            grfid,
+                            overlay | u32::from(id),
+                            language,
+                            true,
+                            false,
+                            name.0,
+                            name.1,
+                            s.undefined,
+                        );
+                        string.write(translated);
+                    }
+                }
+            } else if (0xd000..0xd400).contains(&id) || id >= 0xd800 {
+                super::openttd_rust_grf_text_add(
+                    text,
+                    grfid,
+                    u32::from(id),
+                    language,
+                    new_scheme,
+                    true,
+                    name.0,
+                    name.1,
+                    s.undefined,
+                );
+            } else {
+                let local = u32::from(id & 0xff);
+                let mut class_spec = std::ptr::null_mut();
+                let specs = s.shared().specs();
+                let string = match id >> 8 {
+                    0xc4 | 0xc5 => {
+                        let spec = ((*s.stations).station_get)(file, local);
+                        if spec.is_null() {
+                            text.log(1, format!("FeatureNewName: Attempt to name undefined station 0x{local:X}, ignoring").as_bytes());
+                            std::ptr::null_mut()
+                        } else if id >> 8 == 0xc4 {
+                            class_spec = spec;
+                            std::ptr::null_mut()
+                        } else {
+                            (specs.station().name)(spec)
+                        }
+                    }
+                    0xc7 => {
+                        let owner = &*s.airports;
+                        let spec = if local as usize >= (owner.tile_count)(file) {
+                            std::ptr::null_mut()
+                        } else {
+                            (owner.tile_get)(file, local as usize)
+                        };
+                        if spec.is_null() {
+                            text.log(1, format!("FeatureNewName: Attempt to name undefined airport tile 0x{local:X}, ignoring").as_bytes());
+                            std::ptr::null_mut()
+                        } else {
+                            (specs.airport_tile().name)(spec)
+                        }
+                    }
+                    0xc9 => {
+                        let owner = &*s.houses;
+                        let spec = if local as usize >= (owner.local_count)(file) {
+                            std::ptr::null_mut()
+                        } else {
+                            (owner.local)(file, local as usize)
+                                .cast_mut()
+                                .cast::<crate::house::HouseSpec>()
+                        };
+                        if spec.is_null() {
+                            text.log(1, format!("FeatureNewName: Attempt to name undefined house 0x{local:X}, ignoring.").as_bytes());
+                            std::ptr::null_mut()
+                        } else {
+                            (specs.house().name)(spec)
+                        }
+                    }
+                    _ => {
+                        text.log(
+                            7,
+                            format!("FeatureNewName: Unsupported ID (0x{id:04X})").as_bytes(),
+                        );
+                        std::ptr::null_mut()
+                    }
+                };
+                if !class_spec.is_null() || !string.is_null() {
+                    let translated = super::openttd_rust_grf_text_add(
+                        text,
+                        grfid,
+                        u32::from(id),
+                        language,
+                        new_scheme,
+                        false,
+                        name.0,
+                        name.1,
+                        s.undefined,
+                    );
+                    if class_spec.is_null() {
+                        string.write(translated);
+                    } else {
+                        crate::newgrf_class::station::openttd_rust_station_class_set_name(
+                            class_spec, translated,
+                        );
+                    }
+                }
+            }
+            id = id.wrapping_add(1);
+        }
+        Ok(())
+    }
+}

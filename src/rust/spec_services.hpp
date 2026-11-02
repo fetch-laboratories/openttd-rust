@@ -22,6 +22,7 @@ inline constexpr OpenTTDSpecAnimationServices<Spec, Triggers> _rust_spec_animati
 template <typename Spec>
 inline constexpr OpenTTDStandardSpecServices<Spec> _rust_spec_standard{
 	.has_sprite_groups = RustSpecHasSpriteGroups<Spec>,
+	.set_sprite_group = RustSpecSetStandardSpriteGroup<Spec>,
 	.sprite_group = RustSpecSpriteGroup<Spec>,
 };
 template <typename Spec>
@@ -72,6 +73,7 @@ inline constexpr OpenTTDSpecServices<Spec, Triggers> _rust_spec_services{
 	.grfid = RustSpecGRFID<Spec>,
 	.has_file = RustSpecHasGRFFile<Spec>,
 	.local_id = RustSpecLocalID<Spec>,
+	.name = RustSpecName<Spec>,
 	.set_file = RustSpecSetGRFFile<Spec>,
 	.set_local_id = RustSpecSetLocalID<Spec>,
 	.standard = RustSpecStandardTable<Spec>(),
@@ -80,6 +82,7 @@ inline constexpr OpenTTDSpecServices<Spec, Triggers> _rust_spec_services{
 static constexpr OpenTTDNewGRFSpecs _rust_newgrf_specs{
 	.airport = &_rust_spec_services<AirportSpec, uint8_t>,
 	.airport_tile = &_rust_spec_services<AirportTileSpec, uint8_t>,
+	.house = &_rust_spec_services<HouseSpec, uint8_t>,
 	.industry = &_rust_spec_services<IndustrySpec, uint8_t>,
 	.industry_tile = &_rust_spec_services<IndustryTileSpec, uint8_t>,
 	.object = &_rust_spec_services<ObjectSpec, uint16_t>,
