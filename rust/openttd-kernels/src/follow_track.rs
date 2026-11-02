@@ -102,14 +102,9 @@ impl State {
     ) -> Self {
         let m = crate::movement::table(s);
         m.native_assert_call(
-            mode != RAIL
-                || v.is_some_and(|v| {
-                    (m.vehicle().vehicle_type)(v) == crate::vehicle_type::VEH_TRAIN
-                }),
+            mode != RAIL || v.is_some_and(|v| v.vehicle_type() == crate::vehicle_type::VEH_TRAIN),
         );
-        let owner = v.map_or(crate::company_type::INVALID_OWNER, |v| {
-            (m.vehicle().owner)(v)
-        });
+        let owner = v.map_or(crate::company_type::INVALID_OWNER, VehicleRef::owner);
         let types = if mode == RAIL && types == crate::rail_type::INVALID_RAILTYPES {
             (m.vehicle().train_handle)(v.unwrap().0.as_ptr()).get_compatible_railtypes()
         } else {

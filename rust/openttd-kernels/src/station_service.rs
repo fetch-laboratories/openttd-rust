@@ -1267,7 +1267,6 @@ pub struct Loading {
     pub(crate) cargo_stored: extern "C" fn(VehicleRef) -> CargoStored,
     pub(crate) cargo_reservation: extern "C" fn(VehicleRef) -> CargoReservation,
     pub(crate) cargo_capacity: extern "C" fn(VehicleRef) -> CargoCapacity,
-    pub(crate) vehicle_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) cargo_cap: extern "C" fn(VehicleRef) -> u16,
     pub(crate) stored_count: extern "C" fn(VehicleRef) -> u32,
@@ -1287,7 +1286,6 @@ pub struct Loading {
     pub(crate) cargo_multiplier: extern "C" fn(VehicleRef) -> u16,
     pub(crate) cached_total_length: extern "C" fn(VehicleRef) -> u16,
     pub(crate) full_load_order: extern "C" fn(VehicleRef) -> bool,
-    pub(crate) vehicle_owner: extern "C" fn(VehicleRef) -> u8,
     pub(crate) passenger_cargo: extern "C" fn(VehicleRef) -> bool,
     pub(crate) station_length_penalty: extern "C" fn() -> bool,
     pub(crate) current_company: extern "C" fn() -> u8,
@@ -1337,7 +1335,7 @@ fn parts(l: &Loading, v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool)
         if !action(part) {
             return false;
         }
-        if (l.vehicle_type)(part) == 0
+        if part.vehicle_type() == 0
             && (l.is_multiheaded)(part)
             && !action((l.other_multiheaded)(part))
         {
@@ -1349,7 +1347,7 @@ fn parts(l: &Loading, v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool)
             None
         };
     }
-    if (l.vehicle_type)(v) == 3 && (l.is_normal_aircraft)(v) {
+    if v.vehicle_type() == 3 && (l.is_normal_aircraft)(v) {
         return action(unsafe { (l.next_vehicle)(v).unwrap_unchecked() });
     }
     true
@@ -1362,12 +1360,12 @@ pub struct LoadingStation {
     pub(crate) base: *mut BaseStation,
     pub(crate) state: *mut Service,
 }
-fn may_load(st: LoadingStation, v: VehicleRef, w: &World, l: &Loading) -> bool {
+fn may_load(st: LoadingStation, v: VehicleRef, w: &World) -> bool {
     if (w.station_owner)(st.base) != 16 {
         return true;
     }
     let observed = (w.station_exclusivity)(st.base);
-    observed.counter == 0 || observed.exclusive == (l.vehicle_owner)(v)
+    observed.counter == 0 || observed.exclusive == v.owner()
 }
 fn reserve_consist(
     st: LoadingStation,
@@ -1384,7 +1382,7 @@ fn reserve_consist(
         let reserve_part = if (l.is_articulated_part)(v) {
             false
         } else {
-            let kind = (l.vehicle_type)(v);
+            let kind = v.vehicle_type();
             (kind != 0 || !(l.is_rear_dualheaded)(v))
                 && (kind != 3 || (l.is_normal_aircraft)(v))
                 && (must_reserve || control.refit_cargo == (l.cargo_type)(v))
@@ -1394,7 +1392,7 @@ fn reserve_consist(
                 let observed = (l.cargo_capacity)(part);
                 let cap = u32::from(observed.capacity);
                 let remaining = observed.remaining();
-                if cap > remaining && may_load(st, part, w, l) {
+                if cap > remaining && may_load(st, part, w) {
                     (l.reserve_cargo)(st.native, part, cap - remaining, next);
                 }
                 true
@@ -1417,7 +1415,7 @@ fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
     let observed = (l.load_engine)(v);
     let engine = observed.engine;
     let mut amount = u32::from(observed.amount);
-    let mail = (l.vehicle_type)(v) == 3 && !(l.is_normal_aircraft)(v);
+    let mail = v.vehicle_type() == 3 && !(l.is_normal_aircraft)(v);
     if mail {
         amount = amount.wrapping_add(3) / 4;
     }
@@ -1518,7 +1516,7 @@ fn refit_vehicle(
         return;
     }
     let old_company = (l.current_company)();
-    (l.set_current_company)((l.vehicle_owner)(v));
+    (l.set_current_company)(v.owner());
     let mut mask = (l.refit_mask)(v);
     parts(l, start, |part| {
         let observed = (l.cargo_reservation)(part);
@@ -1798,7 +1796,7 @@ unsafe fn load_vehicle(
                     (&raw mut (*ge).time_since_pickup).write(0);
                 }
                 if (observed.load_count > 0 || (w.available)(st.base, cargo) > 0)
-                    && may_load(st, v, w, l)
+                    && may_load(st, v, w)
                 {
                     if observed.stored == 0 {
                         unsafe {
@@ -2196,7 +2194,6 @@ crate::abi::layouts! {
         cargo_stored,
         cargo_reservation,
         cargo_capacity,
-        vehicle_type,
         cargo_type,
         cargo_cap,
         stored_count,
@@ -2216,7 +2213,6 @@ crate::abi::layouts! {
         cargo_multiplier,
         cached_total_length,
         full_load_order,
-        vehicle_owner,
         passenger_cargo,
         station_length_penalty,
         current_company,

@@ -97,7 +97,6 @@ pub struct Services {
     pub cargo_classes: extern "C" fn(u8) -> u16,
     pub vehicle_id: extern "C" fn(*mut OpenTTDVehicle) -> VehicleID,
     pub invalidate_vehicle: extern "C" fn(*mut OpenTTDVehicle) -> (),
-    pub vehicle_owner: extern "C" fn(*mut OpenTTDVehicle) -> CompanyID,
 }
 impl NameStorage {
     fn new() -> Self {
@@ -445,7 +444,7 @@ pub extern "C" fn openttd_rust_company_colour(
         while let Some(v) = (s.shared.vehicle_next)(from) {
             let shell = v.0.as_ptr();
             from = (s.vehicle_id)(shell).0 + 1;
-            if (s.vehicle_owner)(shell) == id {
+            if crate::company_type::CompanyID(v.owner()) == id {
                 (s.invalidate_vehicle)(shell);
             }
         }
@@ -677,5 +676,5 @@ crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, vehicle_owner, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, vehicle_first, articulated, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, };
 }

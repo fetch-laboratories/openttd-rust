@@ -301,7 +301,7 @@ impl Game<'_> {
         let owner = unsafe {
             let vehicle =
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(self.vehicle));
-            ((*self.leaves.vehicle).owner)(vehicle)
+            vehicle.owner()
         };
         crate::signal::count_context_owner_read();
         crate::signal::acquire_context(self.leaves.signal_context).add_side(tile, td, owner);
@@ -1533,7 +1533,6 @@ pub(crate) mod tests {
             write_max_speed: unused(),
             previous_tile: unused(),
             next: unused(),
-            engine_id: unused(),
             engine: unused(),
             engine_for_length: unused(),
             write_tick: unused(),
@@ -1545,17 +1544,14 @@ pub(crate) mod tests {
             order_type: unused(),
             order_destination: unused(),
             order_nonstop: unused(),
-            subtype: unused(),
             x: unused(),
             y: unused(),
             z: unused(),
             tick: unused(),
-            owner: unused(),
             speed: unused(),
             subspeed: unused(),
             running: unused(),
             order_time: unused(),
-            vehicle_type: unused(),
             write_x: unused(),
             write_y: unused(),
             write_z: unused(),
@@ -1626,6 +1622,7 @@ pub(crate) mod tests {
             }
         }
         fn handle(&mut self) -> Handle {
+            self.record.owner = crate::company_type::CompanyID(0);
             self.record.shell = std::ptr::from_mut(self).cast();
             Handle {
                 shell: std::ptr::from_mut(self).cast(),
@@ -1735,8 +1732,6 @@ pub(crate) mod tests {
                 world.base[index(ordinal) as usize].kind = crate::tile_type::MP_RAILWAY << 4;
                 world.base[index(ordinal) as usize].m5 = crate::track_type::TRACK_BIT_X;
             }
-            world.vehicle.owner = owner;
-            world.vehicle.vehicle_type = vehicle_kind;
             world.movement.vehicle = &raw const world.vehicle;
             world.movement.shared = &raw const world.shared;
             world.shared.movement = &raw const world.movement;
@@ -1814,12 +1809,6 @@ pub(crate) mod tests {
     }
     const fn ordinal(tile: u32) -> u32 {
         72 - tile
-    }
-    extern "C" fn owner(_: crate::vehicle::VehicleRef) -> u8 {
-        0
-    }
-    extern "C" fn vehicle_kind(_: crate::vehicle::VehicleRef) -> u8 {
-        crate::vehicle_type::VEH_TRAIN
     }
     fn pbs_table() -> PbsServices {
         PbsServices {

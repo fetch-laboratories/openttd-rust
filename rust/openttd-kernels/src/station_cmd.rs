@@ -2561,7 +2561,7 @@ impl Ctx<'_> {
             }
             // A live order list has a first shared vehicle, as in the original helper.
             let mut vehicle = unsafe { (self.links().order_vehicle)(list).unwrap_unchecked() };
-            if (self.vehicle().vehicle_type)(vehicle) != 1 {
+            if vehicle.vehicle_type() != 1 {
                 continue;
             }
             for index in 0..(self.links().order_count)(list) {
@@ -2634,7 +2634,7 @@ impl Ctx<'_> {
         } else if (self.shared.is_drive_through_stop)(tile) && flags & 32 != 0 {
             if flags & 1 != 0 {
                 self.vehicle().for_each_on_tile(tile, |vehicle| {
-                    if (self.vehicle().vehicle_type)(vehicle) == 1 {
+                    if vehicle.vehicle_type() == 1 {
                         let state = (self.s.road_vehicle_owner)(vehicle);
                         // SAFETY: Live road owner; no borrow crosses this access.
                         unsafe { crate::road::clear_removed_drive_stop(state) };
@@ -3206,7 +3206,7 @@ impl Ctx<'_> {
         while let Some(v) = (self.shared.vehicle_next)(from) {
             let identity = (self.s.aircraft_vehicle)(v);
             from = identity.id + 1;
-            if (self.vehicle().vehicle_type)(v) != 3 || (self.vehicle().subtype)(v) > 2 {
+            if v.vehicle_type() != 3 || v.subtype() > 2 {
                 continue;
             }
             let target = unsafe { (&raw const (*identity.state).targetairport).read() };
@@ -3665,9 +3665,7 @@ impl Ctx<'_> {
             while let Some(v) = (self.shared.vehicle_next)(from) {
                 let identity = (self.s.aircraft_vehicle)(v);
                 from = identity.id + 1;
-                if (self.vehicle().vehicle_type)(v) != 2
-                    || (self.vehicle().order_destination)(v) != id
-                {
+                if v.vehicle_type() != 2 || (self.vehicle().order_destination)(v) != id {
                     continue;
                 }
                 if (self.vehicle().order_type)(v) == 3 {
@@ -3793,7 +3791,7 @@ impl Ctx<'_> {
                 continue;
             }
             let v = unsafe { (self.links().order_vehicle)(list).unwrap_unchecked() };
-            if ((self.vehicle().owner)(v) == company) != include_company {
+            if (v.owner() == company) != include_company {
                 continue;
             }
             for index in 0..(self.links().order_count)(list) {

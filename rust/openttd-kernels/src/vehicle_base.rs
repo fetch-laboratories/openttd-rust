@@ -250,6 +250,22 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
     }
 }
 
+// VehicleRef's live-record contract permits field-sized raw reads between callbacks.
+impl crate::vehicle::VehicleRef {
+    pub(crate) fn engine_id(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), engine_type).0
+    }
+    pub(crate) fn owner(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), owner).0
+    }
+    pub(crate) fn subtype(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), subtype)
+    }
+    pub(crate) fn vehicle_type(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), r#type).0
+    }
+}
+
 #[cfg(test)]
 mod record_tests {
     use super::*;

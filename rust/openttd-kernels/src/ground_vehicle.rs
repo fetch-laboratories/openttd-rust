@@ -236,7 +236,7 @@ fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
     );
     if o.rail() {
         let mut p = p as u16;
-        if is_multiheaded((s.vehicle.subtype)(v)) {
+        if is_multiheaded(v.subtype()) {
             p /= 2;
         }
         p
@@ -283,7 +283,7 @@ fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
     } else {
         (s.cargo_weight)(r.cargo, count)
     } as u16;
-    if !is_articulated_part(true, (s.vehicle.subtype)(v)) {
+    if !is_articulated_part(true, v.subtype()) {
         let w = (s.vehicle.property)(
             (s.vehicle.newgrf)(),
             v,

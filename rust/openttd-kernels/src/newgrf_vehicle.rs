@@ -199,11 +199,11 @@ fn handle(v: V) -> VehicleRef {
 fn next(s: &Services, v: V) -> V {
     (s.vehicle.next)(handle(v)).map_or(null_mut(), |v| v.0.as_ptr())
 }
-fn engine(s: &Services, v: V) -> u16 {
-    (s.vehicle.engine_id)(handle(v))
+fn engine(v: V) -> u16 {
+    handle(v).engine_id()
 }
-fn ground(s: &Services, v: V) -> bool {
-    crate::vehicle_base::is_ground_vehicle((s.vehicle.vehicle_type)(handle(v)))
+fn ground(v: V) -> bool {
+    crate::vehicle_base::is_ground_vehicle(handle(v).vehicle_type())
 }
 // SAFETY throughout: the game-state mutex serializes shell/cache access. The
 // caller retains live shells and immutable services. Raw cache reads/writes are
@@ -217,12 +217,12 @@ unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
             }
             (s.livery)(id, company, crate::engine_type::INVALID_ENGINE, v)
         } else {
-            let first_engine = if ground(s, v) {
+            let first_engine = if ground(v) {
                 (s.first_engine)(v)
             } else {
                 crate::engine_type::INVALID_ENGINE
             };
-            (s.livery)(engine(s, v), (s.vehicle.owner)(handle(v)), first_engine, v)
+            (s.livery)(engine(v), handle(v).owner(), first_engine, v)
         }
     }
 }
@@ -233,12 +233,12 @@ unsafe fn position(s: &Services, v: V, consecutive: bool) -> u32 {
         let mut u = (s.first)(v);
         while u != v {
             before = before.wrapping_add(1);
-            if consecutive && engine(s, u) != engine(s, v) {
+            if consecutive && engine(u) != engine(v) {
                 before = 0;
             }
             u = next(s, u);
         }
-        while !next(s, u).is_null() && (!consecutive || engine(s, next(s, u)) == engine(s, v)) {
+        while !next(s, u).is_null() && (!consecutive || engine(next(s, u)) == engine(v)) {
             after = after.wrapping_add(1);
             u = next(s, u);
         }
@@ -280,7 +280,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut user_data = 0u8;
                     let mut u = v;
                     while !u.is_null() {
-                        if (s.vehicle.vehicle_type)(handle(v)) == 0 {
+                        if handle(v).vehicle_type() == 0 {
                             user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
                         }
                         if crate::engine_capabilities::openttd_rust_engine_can_carry(
@@ -315,7 +315,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                         | u32::from(first_max(&subtypes)) << 16
                         | u32::from(user_data) << 24
                 }
-                0x43 => (s.company_info)((s.vehicle.owner)(handle(v)), livery(s, engine(s, v), v)),
+                0x43 => (s.company_info)(handle(v).owner(), livery(s, engine(v), v)),
                 0x4d => {
                     let mut before = 0u8;
                     let mut after = 0u8;
@@ -455,12 +455,12 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
         if wagon == 3 {
             state.root = wagon_override(s, id, crate::newgrf_commons::SG_DEFAULT, id);
         } else {
-            if wagon != 0 && !v.is_null() && ground(s, v) {
-                crate::movement::native_assert(s.shared, engine(s, v) == id);
-                state.root = if wagon == 2 && (s.vehicle.vehicle_type)(handle(v)) == 0 {
+            if wagon != 0 && !v.is_null() && ground(v) {
+                crate::movement::native_assert(s.shared, engine(v) == id);
+                state.root = if wagon == 2 && handle(v).vehicle_type() == 0 {
                     (s.cached_override)(v)
                 } else {
-                    wagon_override(s, engine(s, v), (s.cargo_type)(v), (s.first_engine)(v))
+                    wagon_override(s, engine(v), (s.cargo_type)(v), (s.first_engine)(v))
                 };
             }
             if state.root.is_null() {
@@ -544,7 +544,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
                     let mut first: V = null_mut();
                     let mut u = (s.first)(self_v);
                     while u != self_v {
-                        if engine(s, u) != engine(s, self_v) {
+                        if engine(u) != engine(self_v) {
                             first = null_mut();
                         } else if first.is_null() {
                             first = u;
@@ -674,10 +674,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_build_probability(
 unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
     unsafe {
         crate::movement::native_assert(s.shared, !v.is_null());
-        let mut state = init(s, engine(s, v), v, 2, false);
+        let mut state = init(s, engine(v), v, 2, false);
         let waiting = (s.waiting)(v) | (1 << trigger);
         (s.write_waiting)(v, waiting);
-        let result = (s.resolve_random)(&raw mut state, engine(s, v), waiting);
+        let result = (s.resolve_random)(&raw mut state, engine(v), waiting);
         (s.write_waiting)(v, (s.waiting)(v) & !(result.used as u8));
         let random = s.shared.random() as u16; // Draw even if reseed is zero.
         let bits = (s.random_bits)(v);
@@ -731,7 +731,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_shell_property(
     property: u8,
     fallback: i32,
 ) -> i32 {
-    unsafe { openttd_rust_vehicle_property(s, engine(s, v), property, fallback, v, false) }
+    unsafe { openttd_rust_vehicle_property(s, engine(v), property, fallback, v, false) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
@@ -745,7 +745,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
             callback.0,
             0,
             0,
-            engine(s, v),
+            engine(v),
             v,
             null_mut(),
             false,
@@ -788,7 +788,7 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
 unsafe fn old_subtype(s: &Services, v: V, kind: u8) -> u32 {
     match kind {
         0 => {
-            let subtype = (s.vehicle.subtype)(handle(v));
+            let subtype = handle(v).subtype();
             if crate::ground_vehicle::is_engine(subtype) {
                 0
             } else if crate::ground_vehicle::is_free_wagon(subtype) {
@@ -798,8 +798,8 @@ unsafe fn old_subtype(s: &Services, v: V, kind: u8) -> u32 {
             }
         }
         1 | 2 => 0,
-        3 | 5 => u32::from((s.vehicle.subtype)(handle(v))),
-        4 => u32::from((s.vehicle.subtype)(handle(v))) << 1,
+        3 | 5 => u32::from(handle(v).subtype()),
+        4 => u32::from(handle(v).subtype()) << 1,
         _ => {
             crate::movement::native_assert(s.shared, false);
             unreachable!()
@@ -1028,7 +1028,7 @@ unsafe fn variable(
     };
     unsafe {
         let h = handle(v);
-        let kind = || (s.vehicle.vehicle_type)(h);
+        let kind = || h.vehicle_type();
         let check = |ok| crate::movement::native_assert(s.shared, ok);
         match variable {
             0x25 => {
@@ -1039,7 +1039,7 @@ unsafe fn variable(
             }
             0x40 | 0x41 | 0x42 | 0x43 | 0x4d => return cached_variable(s, v, variable, grf),
             0x44 => {
-                if kind() != 3 || !crate::aircraft::is_normal_aircraft((s.vehicle.subtype)(h)) {
+                if kind() != 3 || !crate::aircraft::is_normal_aircraft(h.subtype()) {
                     return u32::MAX;
                 }
                 let w = next(s, v);
@@ -1063,7 +1063,7 @@ unsafe fn variable(
                 return (altitude.min(i32::from(u8::MAX)) as u32) << 8 | u32::from(airport);
             }
             0x45 => {
-                if !ground(s, v) {
+                if !ground(v) {
                     return 0;
                 }
                 let p = (s.previous)(v);
@@ -1138,7 +1138,7 @@ unsafe fn variable(
                 return count;
             }
             0x61 => {
-                if ground(s, v)
+                if ground(v)
                     && parameter != 0x61
                     && [
                         CBID_NO_CALLBACK.0,
@@ -1175,7 +1175,7 @@ unsafe fn variable(
                 }
             }
             0x62 => {
-                if !ground(s, v) {
+                if !ground(v) {
                     return 0;
                 }
                 let u = (s.move_vehicle)(v, i32::from(parameter as i8));
@@ -1300,7 +1300,7 @@ unsafe fn variable(
                         t
                     };
                     let rt = ((&*(s.ground)()).rail_type)((s.vehicle.tile)(h));
-                    let powered = crate::ground_vehicle::is_engine((s.vehicle.subtype)(h)) || wagon;
+                    let powered = crate::ground_vehicle::is_engine(h.subtype()) || wagon;
                     let power = (s.powered_rail)(u.get_railtypes(), rt);
                     if powered {
                         flags |= if power { 1 << 5 } else { 1 << 6 };
@@ -1580,7 +1580,7 @@ pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
         let shell = v.0.as_ptr();
         let group = wagon_override(
             s,
-            (vs.engine_id)(v),
+            v.engine_id(),
             (s.cargo_type)(shell),
             (s.first_engine)(shell),
         );
@@ -1628,7 +1628,7 @@ pub(crate) unsafe fn signed_property(
     unsafe {
         openttd_rust_vehicle_property(
             &*(vs.newgrf)(),
-            (vs.engine_id)(v),
+            v.engine_id(),
             property,
             fallback,
             v.0.as_ptr(),
@@ -1642,7 +1642,7 @@ pub(crate) unsafe fn reverse_probability(vs: &VehicleServices, v: VehicleRef) ->
         openttd_rust_vehicle_build_probability(
             &*(vs.newgrf)(),
             v.0.as_ptr(),
-            (vs.engine_id)(v),
+            v.engine_id(),
             BUILD_PROBABILITY_REVERSED,
         ) >= 0
     }

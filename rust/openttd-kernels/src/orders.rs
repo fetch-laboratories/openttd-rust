@@ -1422,7 +1422,7 @@ impl Game {
         }
     }
     fn owner_check(self, v: *mut c_void, output: *mut c_void) -> bool {
-        let owner = (self.0.base.owner)(native_vehicle(v, self.0.base));
+        let owner = (native_vehicle(v, self.0.base)).owner();
         self.check_owner(u64::from(owner), output)
     }
     fn command_error(self, output: *mut c_void, error: u32) -> u32 {

@@ -558,7 +558,7 @@ pub(crate) unsafe fn startstop(
             crate::newgrf_vehicle::callback(
                 s.vehicles,
                 Some(vehicle_ref(v, s.vehicles)),
-                (s.vehicles.engine_id)(vehicle_ref(v, s.vehicles)),
+                (vehicle_ref(v, s.vehicles)).engine_id(),
                 crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
                 0,
                 std::ptr::null_mut(),

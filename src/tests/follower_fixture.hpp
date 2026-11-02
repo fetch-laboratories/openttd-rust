@@ -52,8 +52,7 @@ struct FollowerFixture {
 		movement.native_assert = [](bool okay) noexcept { if (!okay) std::abort(); };
 		movement.shared = &shared; movement.vehicle = &vehicle; movement.train = &train;
 		movement.rail_map = &rail; movement.rail = &ground;
-		vehicle.owner = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
-		vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_TRAIN; };
+
 		vehicle.train_handle = [](OpenTTDVehicle *v) noexcept -> OpenTTDTrainHandle { return {v->shell, active->state.get()}; };
 		movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 		movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };

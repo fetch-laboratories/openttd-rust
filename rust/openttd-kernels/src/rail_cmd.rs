@@ -374,7 +374,7 @@ impl<'a> Ctx<'a> {
     }
     unsafe fn collect_trains(&self, frame: *mut ConvertFrame, tile: u32) {
         self.vehicles().for_each_on_tile(tile, |v| {
-            if (self.vehicles().vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0 {
+            if v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0 {
                 unsafe {
                     (self.s.include_train)(frame, v);
                 }
@@ -2107,7 +2107,7 @@ impl<'a> Ctx<'a> {
                 && is_slope_with_one_corner_raised(tileh_old);
             if was_water
                 && self.vehicles().any_on_tile(tile, |v| {
-                    (self.vehicles().vehicle_type)(v) == crate::vehicle::VehicleType::SHIP.0
+                    v.vehicle_type() == crate::vehicle::VehicleType::SHIP.0
                 })
             {
                 return cost.error(self.s.strings.ship_in_way);

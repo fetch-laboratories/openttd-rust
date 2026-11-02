@@ -147,7 +147,6 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *write_max_speed)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_max_speed);
 	OpenTTDVehiclePreviousTile (OPENTTD_RUST_CALL *previous_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous_tile);
 	OpenTTDVehicle *(OPENTTD_RUST_CALL *next)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next);
-	uint16_t (OPENTTD_RUST_CALL *engine_id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
 	const OpenTTDEngine *(OPENTTD_RUST_CALL *engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	OpenTTDEngineForLength (OPENTTD_RUST_CALL *engine_for_length)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_for_length);
 	void (OPENTTD_RUST_CALL *write_tick)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_tick);
@@ -159,17 +158,14 @@ struct OpenTTDVehicleServices {
 	uint8_t (OPENTTD_RUST_CALL *order_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_type);
 	uint16_t (OPENTTD_RUST_CALL *order_destination)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_destination);
 	uint8_t (OPENTTD_RUST_CALL *order_nonstop)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_nonstop);
-	uint8_t (OPENTTD_RUST_CALL *subtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
 	int32_t (OPENTTD_RUST_CALL *x)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(x);
 	int32_t (OPENTTD_RUST_CALL *y)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(y);
 	int32_t (OPENTTD_RUST_CALL *z)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(z);
 	uint8_t (OPENTTD_RUST_CALL *tick)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick);
-	uint8_t (OPENTTD_RUST_CALL *owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	uint16_t (OPENTTD_RUST_CALL *speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed);
 	uint8_t (OPENTTD_RUST_CALL *subspeed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(subspeed);
 	uint8_t (OPENTTD_RUST_CALL *running)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(running);
 	int32_t (OPENTTD_RUST_CALL *order_time)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_time);
-	uint8_t (OPENTTD_RUST_CALL *vehicle_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_type);
 	void (OPENTTD_RUST_CALL *write_x)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_x);
 	void (OPENTTD_RUST_CALL *write_y)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_y);
 	void (OPENTTD_RUST_CALL *write_z)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_z);

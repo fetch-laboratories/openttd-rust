@@ -125,7 +125,6 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes,
 	.vehicle_id = RustVehicleRead<uint32_t, RustVehicleIndexOpaque>,
 	.invalidate_vehicle = RustVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
-	.vehicle_owner = GetRustVehicleServices().owner,
 	};
 	return services;
 }

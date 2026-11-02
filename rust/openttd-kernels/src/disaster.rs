@@ -301,7 +301,7 @@ impl<'a> World<'a> {
     fn update_image(&self, v: Vehicle) {
         let mut image = v.image();
         if image == 0 {
-            let subtype = (self.v.subtype)(v.shell());
+            let subtype = v.shell().subtype();
             let dir = (self.v.direction)(v.shell());
             image = match subtype {
                 ST_ZEPPELINER | ST_ZEPPELINER_SHADOW => SPR_BLIMP,
@@ -675,7 +675,7 @@ impl<'a> World<'a> {
     }
     fn valid_train(&self, v: Vehicle) -> bool {
         (self.s.front)(v.shell())
-            && (self.s.human)((self.v.owner)(v.shell()))
+            && (self.s.human)(v.shell().owner())
             && (self.shared.is_plain_rail)(self.tile(v))
             && (self.v.status)(v.shell()) & VS_CRASHED == 0
     }
@@ -886,7 +886,7 @@ impl<'a> World<'a> {
         true
     }
     fn tick_vehicle(&self, v: Vehicle) -> bool {
-        match (self.v.subtype)(v.shell()) {
+        match v.shell().subtype() {
             ST_ZEPPELINER => self.zeppelin(v),
             ST_SMALL_UFO => self.small_ufo(v),
             ST_AIRPLANE => self.aircraft(v, true),
@@ -1137,7 +1137,7 @@ impl<'a> World<'a> {
             if v.handle.is_null() {
                 break;
             }
-            let subtype = (self.v.subtype)(v.shell());
+            let subtype = v.shell().subtype();
             if (subtype == ST_AIRPLANE || subtype == ST_HELICOPTER)
                 && v.state() > 0
                 && self.dest(v) == u32::from(industry)

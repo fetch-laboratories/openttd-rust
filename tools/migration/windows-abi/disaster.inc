@@ -4,9 +4,11 @@
 #include "core/backup_type.hpp"
 
 struct DisasterProbe {
+	OpenTTDVehicle record{};
+	DisasterProbe() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); this->record.subtype = 13; this->record.type = VEH_DISASTER; }
 	uint32_t draws = 0, random = 0, viewports = 0, deletes = 0, clears = 0, signals = 0, news = 0, tile_types = 0;
 	int32_t age = 8880;
-	uint8_t tick = 255, subtype = 13, type = VEH_DISASTER, tile_type = 0, clear_owner = 0;
+	uint8_t tick = 255, tile_type = 0, clear_owner = 0;
 	std::vector<uint32_t> script{};
 	size_t scripted = 0;
 	OpenTTDVehicleTileLinks links{};
@@ -29,20 +31,20 @@ static void Disasters()
 	_disaster_probe = &probe;
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(&probe, DisasterProbeRandom, DisasterProbeIndustry);
 	OpenTTDVehicleServices vehicles{};
-	vehicles.subtype = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->subtype; };
-	vehicles.tick = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->tick; };
-	vehicles.write_tick = [](OpenTTDVehicle *v, uint8_t tick) noexcept { reinterpret_cast<DisasterProbe *>(v)->tick = tick; };
-	vehicles.destroy = [](OpenTTDVehicle *v) noexcept { reinterpret_cast<DisasterProbe *>(v)->deletes++; };
+
+	vehicles.tick = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v->shell)->tick; };
+	vehicles.write_tick = [](OpenTTDVehicle *v, uint8_t tick) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->tick = tick; };
+	vehicles.destroy = [](OpenTTDVehicle *v) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->deletes++; };
 	OpenTTDDisasterServices services{};
 	services.shared = &shared;
 	services.vehicles = &vehicles;
-	services.age = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->age; };
-	services.write_age = [](OpenTTDVehicle *v, int32_t age) noexcept { reinterpret_cast<DisasterProbe *>(v)->age = age; };
+	services.age = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v->shell)->age; };
+	services.write_age = [](OpenTTDVehicle *v, int32_t age) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->age = age; };
 	services.disasters_enabled = []() noexcept { return false; };
 	probe.services = &services;
 	StateOwner state(openttd_rust_disaster_state_create(1048575), openttd_rust_disaster_state_destroy);
 	probe.state = state.get();
-	const OpenTTDDisasterVehicle vehicle{.handle = reinterpret_cast<OpenTTDVehicle *>(&probe), .state = state.get(), .id = 17};
+	const OpenTTDDisasterVehicle vehicle{.handle = &probe.record, .state = state.get(), .id = 17};
 	auto *address = state.get(); state->state = 65535; state->flags = 0xAB; state->image_override = UINT32_MAX;
 	uint16_t *delay = openttd_rust_disaster_delay(); *delay = 0;
 	openttd_rust_clock_disaster_daily(&services, nullptr); CHECK(*delay == 65535 && probe.draws == 0);
@@ -54,16 +56,16 @@ static void Disasters()
 	CHECK(!openttd_rust_disaster_tick(&services, vehicle));
 	CHECK(probe.age == 8881 && probe.tick == 0 && probe.deletes == 1 && probe.draws == 2);
 
-	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v)->links; };
-	vehicles.occupancy_update = [](OpenTTDVehicle *v) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = &reinterpret_cast<DisasterProbe *>(v)->links, .tile = 0}; };
+	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
+	vehicles.occupancy_update = [](OpenTTDVehicle *v) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = &reinterpret_cast<DisasterProbe *>(v->shell)->links, .tile = 0}; };
 	vehicles.map_log_x = []() noexcept { return 6U; };
-	vehicles.vehicle_type = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->type; };
+
 	vehicles.z = [](OpenTTDVehicle *) noexcept { return int32_t{0}; };
 	vehicles.tile = [](OpenTTDVehicle *) noexcept { return 0U; };
-	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v); CHECK(p->links.current != nullptr); p->viewports++; };
+	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
 	services.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
 	services.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
-	probe.tick = 1; probe.subtype = 8;
+	probe.tick = 1; probe.record.subtype = 8;
 	CHECK(openttd_rust_disaster_tick(&services, vehicle));
 	CHECK(probe.tick == 2 && probe.viewports == 1 && probe.draws == 2 && probe.deletes == 1);
 
@@ -90,7 +92,7 @@ static void Disasters()
 	services.update_signals = []() noexcept { _disaster_probe->signals++; };
 	services.next_disaster = [](uint32_t from) noexcept {
 		auto *p = _disaster_probe;
-		return from <= 17 ? OpenTTDDisasterVehicle{.handle = reinterpret_cast<OpenTTDVehicle *>(p), .state = p->state, .id = 17} : OpenTTDDisasterVehicle{.handle = nullptr, .state = nullptr, .id = 1048575};
+		return from <= 17 ? OpenTTDDisasterVehicle{.handle = &p->record, .state = p->state, .id = 17} : OpenTTDDisasterVehicle{.handle = nullptr, .state = nullptr, .id = 1048575};
 	};
 	vehicles.dest_tile = [](OpenTTDVehicle *) noexcept { return 7U; };
 	/* A nested entry from the clear command, as an industry destructor releases its attackers. */
@@ -113,11 +115,11 @@ static void Disasters()
 		CHECK(probe.draws == 4 && probe.scripted == 4 && *delay == 730);
 		CHECK(_disaster_cost_calls == std::vector<int>({1, 2, 3, 4, 5}));
 	};
-	probe.type = VEH_TRAIN;
+	probe.record.type = VEH_TRAIN;
 	subside();
 	CHECK(probe.news == 1 && probe.tile_types == 0 && probe.clears == 0);
 	openttd_rust_occupancy_update(&vehicles, vehicle.handle, true);
-	probe.subtype = 4; state->state = 1;
+	probe.record.subtype = 4; state->state = 1;
 	probe.tile_type = MP_HOUSE;
 	subside();
 	CHECK(probe.news == 2 && probe.tile_types == 1 && probe.clears == 1 && probe.clear_owner == 0x10 && probe.signals == 0 && state->state == 3);

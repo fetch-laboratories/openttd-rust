@@ -1127,7 +1127,7 @@ impl MovementServices {
             if !(self.rail_station)(tile)
                 || !crate::vehicle_base::is_front_engine(
                     crate::vehicle_base::is_ground_vehicle(h.kind.0),
-                    (self.vehicle().subtype)(v),
+                    v.subtype(),
                 )
             {
                 return 0;
@@ -1176,7 +1176,7 @@ impl MovementServices {
                 && (self.road_vehicle().is_station_road_stop)(tile)
                 && crate::vehicle_base::is_front_engine(
                     crate::vehicle_base::is_ground_vehicle(h.kind.0),
-                    (self.vehicle().subtype)(v),
+                    v.subtype(),
                 )
             {
                 if unsafe { crate::road_stop::enter_by_tile(self.shared(), tile, v, h.road) } {
@@ -1238,7 +1238,7 @@ impl MovementServices {
                 if track != TRACK_BIT_WORMHOLE && dir == vdir {
                     if crate::vehicle_base::is_front_engine(
                         crate::vehicle_base::is_ground_vehicle(h.kind.0),
-                        (self.vehicle().subtype)(v),
+                        v.subtype(),
                     ) && frame == TUNNEL_SOUND_FRAME
                     {
                         w::hit(w::MOVE_TRAIN_TUNNEL_SOUND);

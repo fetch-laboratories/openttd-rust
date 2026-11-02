@@ -37,8 +37,9 @@ static void VehicleMaintenanceBoundary()
 	base.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
 	base.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); };
 	base.write_reliability = [](OpenTTDVehicle *, uint16_t reliability) noexcept { CHECK(reliability == 0x9876); };
-	uint8_t opaque;
-	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&opaque);
+	OpenTTDVehicle record{};
+	record.type = VEH_ROAD;
+	auto *shell = &record;
 	openttd_rust_vehicle_service_depot(shell, &base);
 	openttd_rust_vehicle_decrease_value(shell, &base);
 	CHECK(openttd_rust_vehicle_needs_renew(shell, &base, nullptr, false));
@@ -83,7 +84,7 @@ static void VehicleMaintenanceBoundary()
 	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities; transactions.commands = &commands;
 	maintenance.transaction = &transactions;
 	base.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
-	base.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_ROAD; };
+
 	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval {
 		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .reliability = 0, .percent = false, .wallclock = false, .no_service = true, .breakdowns = 0};
 	};

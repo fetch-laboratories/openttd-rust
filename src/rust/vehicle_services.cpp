@@ -211,7 +211,6 @@ static uint8_t OPENTTD_RUST_CALL VehicleSvcDirection(OpenTTDVehicle *v) noexcept
 static uint8_t OPENTTD_RUST_CALL VehicleSvcStatus(OpenTTDVehicle *v) noexcept { return RustVehicleStatus(VehicleOf(v)); }
 static uint32_t OPENTTD_RUST_CALL VehicleSvcTile(OpenTTDVehicle *v) noexcept { return RustVehicleTile(VehicleOf(v)); }
 static OpenTTDVehicle *OPENTTD_RUST_CALL VehicleSvcNext(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleNext(VehicleOf(v))); }
-static uint16_t OPENTTD_RUST_CALL VehicleSvcEngineID(OpenTTDVehicle *v) noexcept { return RustVehicleEngineID(VehicleOf(v)); }
 static OpenTTDEngineForLength OPENTTD_RUST_CALL VehicleSvcEngineForLength(OpenTTDVehicle *v) noexcept
 {
 	const Engine *e = EngineOf(RustVehicleGetEngine(v));
@@ -220,7 +219,6 @@ static OpenTTDEngineForLength OPENTTD_RUST_CALL VehicleSvcEngineForLength(OpenTT
 
 static void OPENTTD_RUST_CALL VehicleSvcWriteTick(OpenTTDVehicle *v, uint8_t tick) noexcept { RustWriteVehicleTick(VehicleOf(v), tick); }
 
-static uint8_t OPENTTD_RUST_CALL VehicleSvcSubtype(OpenTTDVehicle *v) noexcept { return RustVehicleSubtype(VehicleOf(v)); }
 static int32_t OPENTTD_RUST_CALL VehicleSvcX(OpenTTDVehicle *v) noexcept { return RustVehicleX(VehicleOf(v)); }
 static int32_t OPENTTD_RUST_CALL VehicleSvcY(OpenTTDVehicle *v) noexcept { return RustVehicleY(VehicleOf(v)); }
 static int32_t OPENTTD_RUST_CALL VehicleSvcZ(OpenTTDVehicle *v) noexcept { return RustVehicleZ(VehicleOf(v)); }
@@ -229,7 +227,6 @@ static uint16_t OPENTTD_RUST_CALL VehicleSvcSpeed(OpenTTDVehicle *v) noexcept { 
 static uint8_t OPENTTD_RUST_CALL VehicleSvcSubspeed(OpenTTDVehicle *v) noexcept { return RustVehicleSubspeed(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcRunning(OpenTTDVehicle *v) noexcept { return RustVehicleRunning(VehicleOf(v)); }
 static int32_t OPENTTD_RUST_CALL VehicleSvcOrderTime(OpenTTDVehicle *v) noexcept { return RustVehicleOrderTime(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcVehicleType(OpenTTDVehicle *v) noexcept { return static_cast<uint8_t>(RustVehicleVehicleType(VehicleOf(v))); }
 static void OPENTTD_RUST_CALL VehicleSvcWriteX(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleX(VehicleOf(v), value); }
 static void OPENTTD_RUST_CALL VehicleSvcWriteY(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleY(VehicleOf(v), value); }
 static void OPENTTD_RUST_CALL VehicleSvcWriteZ(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleZ(VehicleOf(v), value); }
@@ -363,7 +360,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_max_speed = VehicleSvcWriteMaxSpeed,
 	.previous_tile = VehicleSvcPreviousTile,
 	.next = VehicleSvcNext,
-	.engine_id = VehicleSvcEngineID,
 	.engine = RustVehicleGetEngine,
 	.engine_for_length = VehicleSvcEngineForLength,
 	.write_tick = VehicleSvcWriteTick,
@@ -375,17 +371,14 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.order_type = VehicleSvcOrderType,
 	.order_destination = VehicleSvcOrderDestination,
 	.order_nonstop = VehicleSvcOrderNonStop,
-	.subtype = VehicleSvcSubtype,
 	.x = VehicleSvcX,
 	.y = VehicleSvcY,
 	.z = VehicleSvcZ,
 	.tick = VehicleSvcTick,
-	.owner = RustVehicleOwnerOf,
 	.speed = VehicleSvcSpeed,
 	.subspeed = VehicleSvcSubspeed,
 	.running = VehicleSvcRunning,
 	.order_time = VehicleSvcOrderTime,
-	.vehicle_type = VehicleSvcVehicleType,
 	.write_x = VehicleSvcWriteX,
 	.write_y = VehicleSvcWriteY,
 	.write_z = VehicleSvcWriteZ,

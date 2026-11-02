@@ -224,7 +224,7 @@ const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {
     let mut regs = [0_i32; 4];
     let n = (s.vehicle.newgrf)();
-    let engine_id = (s.vehicle.engine_id)(v);
+    let engine_id = v.engine_id();
     let callback = unsafe {
         crate::newgrf_vehicle::openttd_rust_vehicle_callback(
             &*n,

@@ -69,7 +69,6 @@ struct OpenTTDCompanyIdentityServices {
 	uint16_t (OPENTTD_RUST_CALL *cargo_classes)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint32_t (OPENTTD_RUST_CALL *vehicle_id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
 	void (OPENTTD_RUST_CALL *invalidate_vehicle)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_vehicle);
-	uint8_t (OPENTTD_RUST_CALL *vehicle_owner)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_owner);
 };
 const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept;
 extern "C" {

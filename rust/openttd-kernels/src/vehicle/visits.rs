@@ -384,7 +384,7 @@ impl Refresher {
             index += 1;
 
             // Special case for aircraft with mail.
-            if (s.vehicles().vehicle_type)(v) == VehicleType::AIRCRAFT.0 {
+            if v.vehicle_type() == VehicleType::AIRCRAFT.0 {
                 let desc = self.refits[index];
                 witness::hit(witness::VISITS_AIRCRAFT_MAIL);
                 if mail_capacity < desc.remaining {
@@ -825,7 +825,7 @@ pub unsafe extern "C" fn openttd_rust_percent_filled(
 pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
     s.check(|| {
         (s.shared.tile_type)((s.vehicles().tile)(v)) == MP_STATION
-            || (s.vehicles().vehicle_type)(v) == VehicleType::SHIP.0
+            || v.vehicle_type() == VehicleType::SHIP.0
     });
     let front = (s.prediction)(v);
     witness::hit(witness::VISITS_BEGIN_LOADING);
@@ -900,7 +900,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     (s.hide_filling)(v);
     (s.set_occupancy)(v, percent_filled(v, None, s));
 
-    let kind = VehicleType((s.vehicles().vehicle_type)(v));
+    let kind = VehicleType(v.vehicle_type());
     if kind == VehicleType::TRAIN && (s.vehicles().status)(v) & VS_CRASHED == 0 {
         // Trigger station animation (trains only).
         let tile = (s.vehicles().tile)(v);
@@ -992,7 +992,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     witness::hit(witness::VISITS_DEPOT);
     let vs = s.vehicles();
     let m = s.maintenance();
-    let kind = VehicleType((vs.vehicle_type)(v));
+    let kind = VehicleType(v.vehicle_type());
     s.orders().dirty_vehicle_windows(v);
     match kind {
         VehicleType::TRAIN => {
@@ -1106,7 +1106,7 @@ fn depot_refit(v: VehicleRef, cargo: u8, s: &Services) {
         // SAFETY: `with_costs` supplies two live native stack costs for this scope.
         let costs = unsafe { &*frame.cast::<Costs>() };
         let company = (l.current_company)();
-        (l.set_current_company)((s.vehicles().owner)(v));
+        (l.set_current_company)(v.owner());
         // `Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, v->index, cargo, 0xFF, false, false, 0)`.
         crate::command::nested(
             base.commands,

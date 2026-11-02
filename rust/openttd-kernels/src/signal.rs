@@ -181,7 +181,7 @@ fn occupied(w: &World<'_>, tile: u32, bits: Option<u8>) -> bool {
     // SAFETY: Static services and live shells; signal scans do not delete vehicles.
     let vs = unsafe { &*w.native.vehicles };
     vs.any_on_tile(tile, |v| {
-        if (vs.vehicle_type)(v) != crate::vehicle::VehicleType::TRAIN.0 {
+        if v.vehicle_type() != crate::vehicle::VehicleType::TRAIN.0 {
             return false;
         }
         crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);

@@ -32,17 +32,14 @@ struct RoadTestTables {
 
 		VEHICLE_UNUSED(vehicle, check_orders_only);
 		VEHICLE_UNUSED(vehicle, write_coordinates);
-		VEHICLE_UNUSED(vehicle, subtype);
 		VEHICLE_UNUSED(vehicle, x);
 		VEHICLE_UNUSED(vehicle, y);
 		VEHICLE_UNUSED(vehicle, z);
 		VEHICLE_UNUSED(vehicle, tick);
-		VEHICLE_UNUSED(vehicle, owner);
 		VEHICLE_UNUSED(vehicle, speed);
 		VEHICLE_UNUSED(vehicle, subspeed);
 		VEHICLE_UNUSED(vehicle, running);
 		VEHICLE_UNUSED(vehicle, order_time);
-		VEHICLE_UNUSED(vehicle, vehicle_type);
 		VEHICLE_UNUSED(vehicle, write_x);
 		VEHICLE_UNUSED(vehicle, write_y);
 		VEHICLE_UNUSED(vehicle, write_z);
@@ -150,7 +147,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, crash_news);
 		VEHICLE_UNUSED(ground, cache_begin);
 		VEHICLE_UNUSED(vehicle, next);
-		VEHICLE_UNUSED(vehicle, engine_id);
 		VEHICLE_UNUSED(vehicle, engine);
 		VEHICLE_UNUSED(vehicle, engine_for_length);
 		VEHICLE_UNUSED(ground, cached_length);

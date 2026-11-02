@@ -358,10 +358,10 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     let z = (c.max_pixel_z)(tile);
     let mut it = unsafe { OnTile::new(s, tile) };
     while let Some(v) = it.get() {
-        let kind = (s.vehicle_type)(v);
+        let kind = v.vehicle_type();
         if kind != super::VehicleType::DISASTER.0
             && !(kind == super::VehicleType::AIRCRAFT.0
-                && (s.subtype)(v) == crate::aircraft::AIR_SHADOW)
+                && v.subtype() == crate::aircraft::AIR_SHADOW)
             && (s.z)(v) <= z
         {
             c.result(out, Some(kind));
@@ -394,7 +394,7 @@ pub(crate) unsafe fn wormhole_blocker(
     for tile in [tile, end] {
         let mut it = unsafe { OnTile::new(s, tile) };
         while let Some(v) = it.get() {
-            let kind = (s.vehicle_type)(v);
+            let kind = v.vehicle_type();
             if [
                 super::VehicleType::TRAIN.0,
                 super::VehicleType::ROAD.0,
@@ -422,7 +422,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_train(
     let s = c.vehicles;
     let mut it = unsafe { OnTile::new(s, tile) };
     while let Some(v) = it.get() {
-        if (s.vehicle_type)(v) == super::VehicleType::TRAIN.0 {
+        if v.vehicle_type() == super::VehicleType::TRAIN.0 {
             let track = (s.train_handle)(v.0.as_ptr()).track();
             if track == bits || crate::track_func::tracks_overlap(track | bits) {
                 c.result(out, Some(super::VehicleType::TRAIN.0));

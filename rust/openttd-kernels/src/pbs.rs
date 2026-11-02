@@ -426,7 +426,7 @@ impl<'a> Pbs<'a> {
         // SAFETY: the serialized query keeps shells and service tables live.
         let vs = unsafe { &*self.train().vehicle };
         vs.any_on_tile(tile, |v| {
-            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+            v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
                 && visit(
                     std::ptr::from_mut(&mut check).cast(),
                     (vs.train_handle)(v.0.as_ptr()),

@@ -57,6 +57,9 @@ static OpenTTDRoadMaxSpeedRead RoadAbiMaxSpeed()
 static void RoadBoundary()
 {
 	RoadAbiProbe probe;
+	road_abi_vehicle.type = VEH_ROAD; road_abi_vehicle.subtype = 1;
+	road_abi_second.type = VEH_ROAD; road_abi_second.subtype = 1;
+	road_abi_hidden.type = VEH_ROAD; road_abi_hidden.subtype = 1;
 	road_abi_probe = &probe;
 	EffectTestWorld world;
 	effect_test_world = &world;
@@ -88,7 +91,6 @@ static void RoadBoundary()
 	/* A direct callback changes canonical state before Rust reobserves it. */
 	t.physics.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundOwner { return {road_abi_probe->ground.state, {}, road_abi_probe->state, VEH_ROAD}; };
 	t.physics_vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
-	t.vehicle.subtype = [](OpenTTDVehicle *) noexcept -> uint8_t { return 1; };
 	probe.ground.state->flags = 3;
 	t.physics.base_crash = [](OpenTTDVehicle *u, bool flooded) noexcept -> uint32_t {
 		CHECK(u == RoadAbiHandle() && !flooded);
@@ -120,10 +122,6 @@ static void RoadBoundary()
 		CHECK(p.cargo_ages == (u == RoadAbiHandle() ? 1U : 2U));
 		return p.fallback_cache && u == RoadAbiHandle() ? reinterpret_cast<OpenTTDVehicle *>(&road_abi_second) : nullptr;
 	};
-	t.vehicle.engine_id = [](OpenTTDVehicle *u) noexcept -> uint16_t {
-		CHECK(u == RoadAbiHandle() && road_abi_probe->cargo_ages == 1);
-		return 9; // The first part's callbacks changed the head engine.
-	};
 	t.leaves.shorten_factor = [](const OpenTTDEngine *e) noexcept -> uint8_t {
 		CHECK(road_abi_probe->fallback_cache && e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_engine) && road_abi_probe->cache_properties == 1);
 		return 2; // Read through the engine captured before the property callback.
@@ -152,6 +150,7 @@ static void RoadBoundary()
 		++p.cache_properties;
 		if (p.fallback_cache) {
 			p.engine_replaced = true;
+			RoadAbiHandle()->engine_type = 9;
 			return property == 0x23 ? (u == RoadAbiHandle() ? 0xFFFF : 9) : 0;
 		}
 		const OpenTTDRoadMaxSpeedRead read = RoadAbiMaxSpeed();

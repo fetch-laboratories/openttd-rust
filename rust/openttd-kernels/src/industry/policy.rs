@@ -51,15 +51,13 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
     let mut from = 0;
     while let Some(v) = (shared.vehicle_next)(from) {
         from = unsafe { (grf.id)(v.0.as_ptr()) }.wrapping_add(1);
-        if (vehicles.owner)(v) != (subsidies.local_company)()
-            && !matches!(result, Servicing::Nobody)
-        {
+        if v.owner() != (subsidies.local_company)() && !matches!(result, Servicing::Nobody) {
             continue;
         }
         let mut accepts = false;
         let mut produces = false;
-        match (vehicles.vehicle_type)(v) {
-            VEH_TRAIN if crate::vehicle_base::is_front_engine(true, (vehicles.subtype)(v)) => {
+        match v.vehicle_type() {
+            VEH_TRAIN if crate::vehicle_base::is_front_engine(true, v.subtype()) => {
                 let mut part = Some(v);
                 while let Some(u) = part {
                     cargo_service(
@@ -106,7 +104,7 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
                         .iter()
                         .any(|entry| entry.station == station)
                 } {
-                    if (vehicles.owner)(v) == (subsidies.local_company)() {
+                    if v.owner() == (subsidies.local_company)() {
                         return Servicing::Company;
                     }
                     result = Servicing::Other;

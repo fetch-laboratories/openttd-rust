@@ -366,7 +366,7 @@ impl<'a> Ctx<'a> {
     unsafe fn collect_vehicles(&self, frame: *mut ConvertFrame, tile: u32) {
         let p = self.s.physics;
         p.vehicle.for_each_on_tile(tile, |v| {
-            if (p.vehicle.vehicle_type)(v) == crate::vehicle::VehicleType::ROAD.0 {
+            if v.vehicle_type() == crate::vehicle::VehicleType::ROAD.0 {
                 unsafe {
                     (self.s.include_vehicle)(frame, (p.first)(v));
                 }

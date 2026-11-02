@@ -678,14 +678,14 @@ impl<'a> Game<'a> {
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
         let vs = self.vs();
         vs.any_on_tile(tile, |v| {
-            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+            v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
                 && visitor((vs.train_handle)(v.0.as_ptr()))
         })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
         let vs = self.vs();
         vs.any_near(x, y, 7, |v| {
-            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+            v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
                 && visitor((vs.train_handle)(v.0.as_ptr()))
         })
     }
@@ -2138,7 +2138,7 @@ impl Game<'_> {
         crate::station::spatial::modify_rating_around(
             self.services,
             (self.vs().tile)(id.vehicle(self.vs())),
-            (self.vs().owner)(id.vehicle(self.vs())),
+            (id.vehicle(self.vs())).owner(),
             -160,
             30,
         );

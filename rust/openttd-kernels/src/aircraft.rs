@@ -468,14 +468,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     scalar_services! {
-        subtype(self; v: Vehicle) => (self.vs.subtype)(v.base());
+        subtype(self; v: Vehicle) => (v.base()).subtype();
         x(self; v: Vehicle) => (self.vs.x)(v.base());
         y(self; v: Vehicle) => (self.vs.y)(v.base());
         z(self; v: Vehicle) => (self.vs.z)(v.base());
         tile(self; v: Vehicle) => (self.vs.tile)(v.base());
         direction(self; v: Vehicle) => (self.vs.direction)(v.base());
         tick_counter(self; v: Vehicle) => (self.vs.tick)(v.base());
-        owner(self; v: Vehicle) => (self.vs.owner)(v.base());
+        owner(self; v: Vehicle) => (v.base()).owner();
         vehicle_status(self; v: Vehicle) => (self.vs.status)(v.base());
         current_speed(self; v: Vehicle) => (self.vs.speed)(v.base());
         subspeed(self; v: Vehicle) => (self.vs.subspeed)(v.base());
@@ -505,7 +505,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         engine_subtype(self; v: Vehicle) => unsafe { (self.leaves.engine_subtype)(v) };
         engine_sound(self; v: Vehicle) => unsafe { (self.leaves.engine_sound)(v) };
         engine_reliability(self; v: Vehicle) => (self.maintenance().engine_reliability)(v.base());
-        vehicle_type(self; v: Vehicle) => (self.vs.vehicle_type)(v.base());
+        vehicle_type(self; v: Vehicle) => (v.base()).vehicle_type();
         slope(self; x: i64, y: i64) => self.movement.get().pixel_z_at(x as i32,y as i32,false);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
         tile_height(self; tile: i64) => (self.ss.tile_height)(tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;

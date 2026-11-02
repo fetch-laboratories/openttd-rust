@@ -449,7 +449,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 			RustVehicleCargoOwner(v), RustVehicleCargoCap(handle), v->cargo_type
 		};
 	},
-	.vehicle_type = GetRustVehicleServices().vehicle_type,
 	.cargo_type = RustVehicleCargoType,
 	.cargo_cap = RustVehicleCargoCap,
 	.stored_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
@@ -500,7 +499,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.full_load_order = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->current_order.IsFullLoadOrder();
 	},
-	.vehicle_owner = RustVehicleOwnerOf,
 	.passenger_cargo = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle);
 		return IsCargoInClass(v->cargo_type, CargoClass::Passengers);

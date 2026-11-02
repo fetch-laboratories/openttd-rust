@@ -122,10 +122,9 @@ fn train_leaves(s: &Services) -> *const crate::train::Leaves {
 
 /// `Train::Iterate()` with `IsFrontEngine()` and `IsFreeWagon()` read at the source points.
 fn trains(s: &Services, mut each: impl FnMut(VehicleRef, u8)) {
-    let vs = vehicle_services(s);
     for v in vehicles(s) {
-        if (vs.vehicle_type)(v) == VEH_TRAIN {
-            each(v, (vs.subtype)(v));
+        if v.vehicle_type() == VEH_TRAIN {
+            each(v, v.subtype());
         }
     }
 }
@@ -324,11 +323,8 @@ fn train_slope_steepness_changed(s: &Services) {
 
 /// `RoadVehicle::Iterate()` front engines.
 fn road_front_engines(s: &Services, mut each: impl FnMut(VehicleRef)) {
-    let vs = vehicle_services(s);
     for v in vehicles(s) {
-        if (vs.vehicle_type)(v) == VEH_ROAD
-            && crate::vehicle_base::is_front_engine(true, (vs.subtype)(v))
-        {
+        if v.vehicle_type() == VEH_ROAD && crate::vehicle_base::is_front_engine(true, v.subtype()) {
             each(v);
         }
     }
@@ -365,9 +361,10 @@ fn difficulty_noise_change(s: &Services) {
 }
 
 fn check_road_side(s: &Services) -> bool {
-    let vs = vehicle_services(s);
     let allowed = menu()
-        || !crate::road_cmd::road_vehicles_are_built(vehicles(s).map(|v| (vs.vehicle_type)(v)));
+        || !crate::road_cmd::road_vehicles_are_built(
+            vehicles(s).map(crate::vehicle::VehicleRef::vehicle_type),
+        );
     if !allowed {
         hit(witness::SETTINGS_ROAD_SIDE_REFUSED);
     }
@@ -387,7 +384,7 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
     if new_value != 0 {
         let vs = vehicle_services(s);
         for v in vehicles(s) {
-            if (vs.vehicle_type)(v) != VEH_SHIP {
+            if v.vehicle_type() != VEH_SHIP {
                 continue;
             }
             let tile = (vs.tile)(v);

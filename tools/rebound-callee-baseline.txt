@@ -5,7 +5,6 @@ forwarded | src/economy.cpp | set_current_company = GetRustCompanyFinanceService
 forwarded | src/economy.cpp | set_speed = GetRustVehicleServices().write_speed
 forwarded | src/economy.cpp | status = GetRustVehicleServices().status
 forwarded | src/economy.cpp | vehicle_tile = GetRustVehicleServices().tile
-forwarded | src/economy.cpp | vehicle_type = GetRustVehicleServices().vehicle_type
 forwarded | src/industry_cmd.cpp | generating = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/industry_cmd.cpp | magic_bulldozer = GetRustTownAuthorityServices().bulldozer
 forwarded | src/industry_cmd.cpp | serve_neutral = GetRustSharedServices().station_serve_neutral
@@ -32,7 +31,6 @@ forwarded | src/rust/company_identity_adapter.cpp | engine_type = GetRustEngineC
 forwarded | src/rust/company_identity_adapter.cpp | random = GetRustTownNameServices().random_next
 forwarded | src/rust/company_identity_adapter.cpp | vehicle_cargo = GetRustEngineCapabilitiesServices().vehicle_cargo
 forwarded | src/rust/company_identity_adapter.cpp | vehicle_first = GetRustVehicleResolverServices().first
-forwarded | src/rust/company_identity_adapter.cpp | vehicle_owner = GetRustVehicleServices().owner
 forwarded | src/rust/engine_adapter.hpp | company_valid = GetRustSharedServices().company_valid
 forwarded | src/rust/engine_adapter.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/engine_capabilities_services.hpp | destroy_temporary = GetRustVehicleServices().destroy
@@ -383,9 +381,6 @@ rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
 rebound | RustVehicleNextArticulated | src/economy.cpp | next_articulated
 rebound | RustVehicleNextArticulated | src/rust/engine_capabilities_services.hpp | next_articulated
-rebound | RustVehicleOwnerOf | src/economy.cpp | vehicle_owner
-rebound | RustVehicleOwnerOf | src/economy.cpp | vehicle_owner | 2
-rebound | RustVehicleOwnerOf | src/rust/vehicle_services.cpp | owner
 rebound | RustVehicleSetOwner | src/rust/disaster_adapter.hpp | write_owner
 rebound | RustVehicleSetOwner | src/rust/engine_capabilities_services.hpp | set_owner
 rebound | RustVehicleTrain | src/rust/vehicle_refit_services.hpp | train_handle

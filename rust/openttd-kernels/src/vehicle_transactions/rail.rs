@@ -530,7 +530,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                 crate::newgrf_vehicle::callback(
                     x.c.vehicles,
                     Some(super::vehicle_ref(t, x.c.vehicles)),
-                    (x.c.vehicles.engine_id)(super::vehicle_ref(head, x.c.vehicles)),
+                    (super::vehicle_ref(head, x.c.vehicles)).engine_id(),
                     crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH.0,
                     0,
                     super::vehicle_ref(head, x.c.vehicles).0.as_ptr(),

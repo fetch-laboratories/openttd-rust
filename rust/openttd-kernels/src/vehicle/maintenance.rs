@@ -300,7 +300,7 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
         if unsafe { replacement_needed::<C>(unit, base, r.company, &mut needed, &mut pending) } {
             return false;
         }
-        current = if svc!(C, base.vehicle_type, unit) == VehicleType::TRAIN.0 {
+        current = if unit.vehicle_type() == VehicleType::TRAIN.0 {
             let t = unsafe { &*s.transaction };
             let next = unsafe { svc!(C, t.next_unit, unit.shell().cast()) };
             std::ptr::NonNull::new(next)
@@ -602,8 +602,7 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     }
     let g = unsafe { &*s.group };
     if !unsafe { svc!(C, g.primary, v.shell().cast()) }
-        && (svc!(C, base.vehicle_type, v) != VehicleType::TRAIN.0
-            || svc!(C, base.subtype, v) & 8 == 0)
+        && (v.vehicle_type() != VehicleType::TRAIN.0 || v.subtype() & 8 == 0)
     {
         return;
     }

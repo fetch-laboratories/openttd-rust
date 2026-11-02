@@ -785,7 +785,7 @@ impl Game<'_> {
             return true;
         }
         self.vs.any_on_tile(tile, |w| {
-            (self.vs.vehicle_type)(w) == crate::vehicle::VehicleType::ROAD.0
+            w.vehicle_type() == crate::vehicle::VehicleType::ROAD.0
                 && (self.gs.physics.first)(w) == w
                 && w != u
                 && w != v.v
@@ -942,7 +942,7 @@ impl Game<'_> {
     /// `RoadVehicle::Crash`.
     fn crash(&self, v: Part, flooded: bool) -> u32 {
         let mut victims = crate::ground_vehicle::crash(self.gs.physics, v.v, flooded);
-        if crate::vehicle_base::is_front_engine(true, service!(self.vs.subtype)(v.v)) {
+        if crate::vehicle_base::is_front_engine(true, service!(v.v).subtype()) {
             victims = victims.wrapping_add(1);
             if in_range(v.state(), DT_STOP, DT_STOP + 16) {
                 // SAFETY: Live front owner; no owner access spans the stop update.
@@ -966,7 +966,7 @@ impl Game<'_> {
                 let z = u.z;
                 let xy = (self.vs.xy)(v.v);
                 let hit = self.vs.any_near(xy.x, xy.y, 4, |t| {
-                    (self.vs.vehicle_type)(t) == crate::vehicle::VehicleType::TRAIN.0
+                    t.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
                         && (self.vs.z)(t).wrapping_sub(z).wrapping_abs() <= 6
                 });
                 if hit {
@@ -975,7 +975,7 @@ impl Game<'_> {
                     crate::station::spatial::modify_rating_around(
                         self.ss,
                         (self.vs.tile)(v.v),
-                        (self.vs.owner)(v.v),
+                        (v.v).owner(),
                         -160,
                         22,
                     );
@@ -1054,7 +1054,7 @@ impl Game<'_> {
             let first_engine = if u == v.v {
                 INVALID_ENGINE
             } else {
-                service!(self.vs.engine_id)(v.v)
+                service!(v.v).engine_id()
             };
             service!(self.gs.write_first_engine)(u, first_engine);
             let engine = service!(self.vs.engine_for_length)(u);
@@ -1331,7 +1331,7 @@ impl Game<'_> {
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
-        let owner = service!(self.vs.owner)(v.v);
+        let owner = service!(v.v).owner();
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         service!(self.l.should_stop)(v.v, tile)
             && owner == service!(self.ss.tile_owner)(tile)
@@ -1585,7 +1585,7 @@ impl Game<'_> {
                     && in_range(v.state(), DT_STOP, DT_STOP + 16)
                     && service!(self.l.should_stop)(v.v, s.tile)
                 {
-                    let owner = service!(self.vs.owner)(v.v);
+                    let owner = service!(v.v).owner();
                     let bus = crate::road_stop::is_bus(self.ss, v.v);
                     if owner == service!(self.ss.tile_owner)(s.tile)
                         && service!(self.vs.order_type)(v.v) != OT_LEAVESTATION
