@@ -394,7 +394,6 @@ static const OpenTTDStationLinks _rust_station_links = {
 	.order_vehicle = [](OpenTTDOrderList *handle) noexcept -> OpenTTDVehicle * {
 		return RustVehicle(static_cast<OrderList *>(handle)->GetFirstSharedVehicle());
 	},
-	.next_vehicle = GetRustVehicleServices().next,
 	.next_shared = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
 		return RustVehicle(VehicleOf(handle)->NextShared());
 	},

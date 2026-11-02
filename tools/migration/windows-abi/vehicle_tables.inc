@@ -61,7 +61,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_dummy);
 		VEHICLE_UNUSED(vehicle, start_stop_dirty);
 		VEHICLE_UNUSED(vehicle, destroy);
-		VEHICLE_UNUSED(ground, update_viewport_then_next);
+		VEHICLE_UNUSED(ground, update_viewport);
 		VEHICLE_UNUSED(ground, turn);
 		VEHICLE_UNUSED(ground, go_to_depot_service);
 		VEHICLE_UNUSED(ground, write_first_engine);
@@ -96,7 +96,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, choose_track);
 		VEHICLE_UNUSED(leaves, find_depot);
 		VEHICLE_UNUSED(leaves, tram_build_read);
-		VEHICLE_UNUSED(vehicle, previous_tile);
 		VEHICLE_UNUSED(leaves, disconnect);
 		VEHICLE_UNUSED(leaves, should_stop);
 		VEHICLE_UNUSED(leaves, arrival_read);
@@ -106,7 +105,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, depot_exit);
 		VEHICLE_UNUSED(leaves, crash_news);
 		VEHICLE_UNUSED(ground, cache_begin);
-		VEHICLE_UNUSED(vehicle, next);
 		VEHICLE_UNUSED(vehicle, engine);
 		VEHICLE_UNUSED(vehicle, engine_for_length);
 		VEHICLE_UNUSED(ground, cached_length);

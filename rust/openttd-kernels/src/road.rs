@@ -1013,7 +1013,7 @@ impl Game<'_> {
                     let random = self.random();
                     let direction = (part).direction();
                     service!(self.gs.turn)(part, (direction + DELTA[(random & 3) as usize]) & 7);
-                    u = service!(self.vs.next)(part);
+                    u = (part).next();
                 }
             }
         } else if counter >= 2220 && tick & 31 == 0 {
@@ -1095,7 +1095,7 @@ impl Game<'_> {
                 i32::from(period),
             );
             (u).write_cargo_age(age as u16);
-            let Some(next) = service!(self.vs.next)(u) else {
+            let Some(next) = (u).next() else {
                 break;
             };
             u = next;
@@ -1419,13 +1419,14 @@ impl Game<'_> {
                     v.set(OVERTAKING, 0);
                     if s.tram {
                         let needed: u8 = [2, 1, 8, 4][usize::from(((dir >> 2) & 2) | (dir & 1))];
-                        let previous = service!(self.vs.previous_tile)(v.v);
-                        let big = (previous.exists && previous.tile == tile)
-                            || (s.front
-                                && service!(self.ss.is_normal_road_tile)(tile)
-                                && !service!(self.ss.has_road_works)(tile)
-                                && self.has_road(v.v, tile)
-                                && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
+                        let big =
+                            v.v.previous()
+                                .is_some_and(|previous| previous.tile() == tile)
+                                || (s.front
+                                    && service!(self.ss.is_normal_road_tile)(tile)
+                                    && !service!(self.ss.has_road_works)(tile)
+                                    && self.has_road(v.v, tile)
+                                    && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
                         if !big {
                             if !s.front
                                 || !self.can_build_tram(v.v, tile, needed)
@@ -1803,30 +1804,14 @@ impl Game<'_> {
             }
         }
         crate::ground_vehicle::last_speed_owned(self.gs.physics, v.v, ground);
-        let status = (v.v).status();
-        let mut final_progress = None;
-        let mut next = if status & VS_HIDDEN == 0 {
-            let r = service!(self.gs.update_viewport_then_next)(v.v, v.v);
-            if r.next.is_none() {
-                final_progress = Some(r.final_progress);
+        let mut part = Some(v.v);
+        while let Some(u) = part {
+            if u.status() & VS_HIDDEN == 0 {
+                service!(self.gs.update_viewport)(u);
             }
-            r.next
-        } else {
-            service!(self.vs.next)(v.v)
-        };
-        while let Some(u) = next {
-            next = if (u).status() & VS_HIDDEN == 0 {
-                let r = service!(self.gs.update_viewport_then_next)(u, v.v);
-                if r.next.is_none() {
-                    final_progress = Some(r.final_progress);
-                }
-                r.next
-            } else {
-                service!(self.vs.next)(u)
-            };
+            part = u.next();
         }
-        // A hidden final part has no viewport observation; read progress now.
-        let progress = final_progress.unwrap_or_else(|| (v.v).progress());
+        let progress = v.v.progress();
         if progress == 0 {
             (v.v).write_progress(if blocked { adv - 1 } else { j } as u8);
         }
@@ -2024,7 +2009,7 @@ impl Game<'_> {
         if reversing(state) { state - 6 } else { state }
     }
     /// `RoadVehicle::HasToUseGetSlopePixelZ`.
-    fn slope_pixel(&self, v: VehicleRef, first: Part, direction: u8) -> bool {
+    fn slope_pixel(v: VehicleRef, first: Part, direction: u8) -> bool {
         let state = first.state();
         if state <= 15 && reversing(state) {
             return true;
@@ -2035,7 +2020,7 @@ impl Game<'_> {
                 return true;
             }
             // The walk reaches `v` before the chain ends, as in the original.
-            let Some(next) = service!(self.vs.next)(u) else {
+            let Some(next) = (u).next() else {
                 return false;
             };
             u = next;
@@ -2213,14 +2198,13 @@ pub unsafe extern "C" fn openttd_rust_road_trackdir(
 }
 /// # Safety
 /// As `openttd_rust_road_tick`; `first` is the live first part of `v`'s consist.
-pub unsafe extern "C" fn openttd_rust_road_slope_pixel(
+pub(crate) unsafe fn slope_pixel(
     v: VehicleRef,
     first: VehicleRef,
     first_state: *mut State,
     direction: u8,
-    leaves: *const Leaves,
 ) -> bool {
-    entry!(leaves, None).slope_pixel(v, Part::new(first, first_state), direction)
+    Game::slope_pixel(v, Part::new(first, first_state), direction)
 }
 /// Shared modern/legacy afterload road-stop frame query, retaining original indexes.
 #[unsafe(no_mangle)]

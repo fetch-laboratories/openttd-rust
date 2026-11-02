@@ -196,8 +196,8 @@ pub struct Services {
 fn handle(v: V) -> VehicleRef {
     VehicleRef(std::ptr::NonNull::new(v).unwrap())
 }
-fn next(s: &Services, v: V) -> V {
-    (s.vehicle.next)(handle(v)).map_or(null_mut(), |v| v.0.as_ptr())
+fn next(v: V) -> V {
+    (handle(v)).next().map_or(null_mut(), |v| v.0.as_ptr())
 }
 fn engine(v: V) -> u16 {
     handle(v).engine_id()
@@ -236,11 +236,11 @@ unsafe fn position(s: &Services, v: V, consecutive: bool) -> u32 {
             if consecutive && engine(u) != engine(v) {
                 before = 0;
             }
-            u = next(s, u);
+            u = next(u);
         }
-        while !next(s, u).is_null() && (!consecutive || engine(next(s, u)) == engine(v)) {
+        while !next(u).is_null() && (!consecutive || engine(next(u)) == engine(v)) {
             after = after.wrapping_add(1);
-            u = next(s, u);
+            u = next(u);
         }
         u32::from(before)
             | u32::from(after) << 8
@@ -292,7 +292,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                             cargoes[cargo_type as usize] =
                                 cargoes[cargo_type as usize].wrapping_add(1);
                         }
-                        u = next(s, u);
+                        u = next(u);
                     }
                     let cargo = first_max(&cargoes);
                     let mut subtypes = [0u8; 256];
@@ -308,7 +308,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                             let subtype = usize::from((s.cargo_subtype)(u));
                             subtypes[subtype] = subtypes[subtype].wrapping_add(1);
                         }
-                        u = next(s, u);
+                        u = next(u);
                     }
                     u32::from(classes)
                         | u32::from(cargo) << 8
@@ -327,7 +327,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     u = v;
                     while (s.has_articulated)(u) {
                         after = after.wrapping_add(1);
-                        u = next(s, u);
+                        u = next(u);
                     }
                     u32::from(before) | u32::from(after) << 8
                 }
@@ -388,7 +388,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_invalidate(s: &Services, mut v
             if !chain {
                 break;
             }
-            v = next(s, v);
+            v = next(v);
             if v.is_null() {
                 break;
             }
@@ -549,7 +549,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
                         } else if first.is_null() {
                             first = u;
                         }
-                        u = next(s, u);
+                        u = next(u);
                     }
                     if first.is_null() { self_v } else { first }
                 }
@@ -692,20 +692,20 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
                 randomise(s, (s.first)(v), Trigger::AnyNewCargo as u8, random, false);
             }
             1 => {
-                let u = next(s, v);
+                let u = next(v);
                 if !u.is_null() {
                     randomise(s, u, trigger, 0, true);
                 }
             }
             2 => {
-                let u = next(s, v);
+                let u = next(v);
                 if !u.is_null() {
                     randomise(s, u, trigger, if first { random } else { base }, false);
                 }
             }
             3 => {
                 crate::movement::native_assert(s.shared, !first);
-                let u = next(s, v);
+                let u = next(v);
                 if !u.is_null() {
                     randomise(s, u, trigger, base, false);
                 }
@@ -1040,7 +1040,7 @@ unsafe fn variable(
                 if kind() != 3 || !crate::aircraft::is_normal_aircraft(h.subtype()) {
                     return u32::MAX;
                 }
-                let w = next(s, v);
+                let w = next(v);
                 crate::movement::native_assert(s.shared, !w.is_null());
                 let altitude = (h)
                     .z()
@@ -1066,7 +1066,7 @@ unsafe fn variable(
                     return 0;
                 }
                 let p = (s.previous)(v);
-                let n = next(s, v);
+                let n = next(v);
                 let direction = (h).direction();
                 let f = if p.is_null() {
                     DIRDIFF_SAME
@@ -1132,7 +1132,7 @@ unsafe fn variable(
                     {
                         count = count.wrapping_add(1);
                     }
-                    u = next(s, u);
+                    u = next(u);
                 }
                 return count;
             }
@@ -1264,7 +1264,7 @@ unsafe fn variable(
                     if (s.engine_has_badge)((s.vehicle.engine)(handle(u)).0.as_ptr(), badge) {
                         count = count.wrapping_add(1);
                     }
-                    u = next(s, u);
+                    u = next(u);
                 }
                 return count;
             }
@@ -1424,7 +1424,7 @@ unsafe fn variable(
                 return value >> shift;
             }
             0xda => {
-                let n = next(s, v);
+                let n = next(v);
                 return if n.is_null() {
                     crate::fleet::INVALID_VEHICLE
                 } else {

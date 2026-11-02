@@ -414,7 +414,7 @@ fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
         if speed > 0 {
             max_track_speed = max_track_speed.min(speed);
         }
-        part = (s.vehicle.next)(u);
+        part = (u).next();
     }
     let drag = air_drag(s, v);
     let drag = if drag == 0 {
@@ -475,7 +475,7 @@ pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
             (*uo.state).cache.cached_slope_resistance =
                 current.wrapping_mul(steepness).wrapping_mul(100);
         }
-        part = (s.vehicle.next)(u);
+        part = (u).next();
     }
     unsafe {
         (*o.state).cache.cached_weight = total.max(1);
@@ -496,7 +496,7 @@ fn slope_resistance(s: &Services, v: VehicleRef, first: Owner) -> i64 {
             hit(witness::GROUND_DOWNHILL);
             incline -= i64::from(unsafe { (*o.state).cache.cached_slope_resistance });
         }
-        part = (s.vehicle.next)(u);
+        part = (u).next();
     }
     incline
 }
@@ -579,7 +579,7 @@ pub(crate) fn chain_in_depot(s: &Services, v: VehicleRef) -> bool {
         if !in_depot(if u == v { o } else { (s.resolve)(u) }) || (u).tile() != (v).tile() {
             return false;
         }
-        part = (s.vehicle.next)(u);
+        part = (u).next();
     }
     hit(witness::GROUND_DEPOT);
     true
@@ -591,7 +591,7 @@ pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
         unsafe {
             (*o.state).flags &= !SLOPE_FLAGS;
         }
-        part = (s.vehicle.next)(u);
+        part = (u).next();
     }
     hit(if flooded {
         witness::GROUND_FLOOD
@@ -820,7 +820,7 @@ fn reversing(s: &Services, v: VehicleRef) -> bool {
     let o = (s.resolve)(first);
     let direction = (v).direction();
     // SAFETY: the shared slope predicate gets live owners and immutable services.
-    unsafe { crate::road::openttd_rust_road_slope_pixel(v, first, o.road, direction, s.road) }
+    unsafe { crate::road::slope_pixel(v, first, o.road, direction) }
 }
 
 crate::abi::layouts! {

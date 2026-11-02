@@ -167,7 +167,6 @@ struct OpenTTDStationLinks {
 	size_t (*order_count)(OpenTTDOrderList *) noexcept OPENTTD_SERVICE_DEFAULT(order_count);
 	OpenTTDOrderDestination (*order_destination)(OpenTTDOrderList *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(order_destination);
 	OpenTTDVehicle * (*order_vehicle)(OpenTTDOrderList *) noexcept OPENTTD_SERVICE_DEFAULT(order_vehicle);
-	OpenTTDVehicle * (*next_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	OpenTTDVehicle * (*next_shared)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_shared);
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
@@ -225,7 +224,6 @@ struct OpenTTDStationLoading {
 	bool (*indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(indicator);
 	void (*show_indicator)(OpenTTDVehicle *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_indicator);
 	void (*set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
-	OpenTTDVehicle * (*next_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	OpenTTDVehicle * (*next_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_articulated);
 	OpenTTDVehicle * (*other_multiheaded)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(other_multiheaded);
 	OpenTTDVehicle * (*first_engine_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine_part);

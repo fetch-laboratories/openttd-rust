@@ -1043,7 +1043,7 @@ impl MovementServices {
                 ) as u8;
             if point == fract {
                 w::hit(w::MOVE_TRAIN_DEPOT_LEAVE_0 + usize::from(dir));
-                let next = (self.vehicle().next)(v);
+                let next = (v).next();
                 if let Some(next) = next {
                     Self::hidden(next, false);
                     let n = (self.resolve)(next);
@@ -1070,7 +1070,7 @@ impl MovementServices {
             }
             Self::hidden(v, true);
             (v).write_direction(reverse_dir(direction, |ok| (self.native_assert)(ok)));
-            if (self.vehicle().next)(v).is_none() {
+            if (v).next().is_none() {
                 self.vehicle().enter_depot((self.first)(v));
             }
             (v).write_tile(tile);
@@ -1092,7 +1092,7 @@ impl MovementServices {
                 }
                 Self::hidden(v, true);
                 (v).write_direction(reverse_dir((v).direction(), |ok| (self.native_assert)(ok)));
-                if (self.vehicle().next)(v).is_none() {
+                if (v).next().is_none() {
                     self.vehicle().enter_depot((self.first)(v));
                 }
                 (v).write_tile(tile);

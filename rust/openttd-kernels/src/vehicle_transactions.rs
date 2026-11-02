@@ -194,7 +194,9 @@ unsafe fn vehicle_set(
                 emit(unsafe { (s.groups.vehicle_id)((s.other_multihead)(v)) });
             }
             let handle = unsafe { vehicle_ref(v, s.vehicles) };
-            v = (s.vehicles.next)(handle).map_or(std::ptr::null_mut(), |v| v.shell().cast());
+            v = (handle)
+                .next()
+                .map_or(std::ptr::null_mut(), |v| v.shell().cast());
             if v.is_null() || !unsafe { (s.transactions.articulated)(v) } {
                 break;
             }

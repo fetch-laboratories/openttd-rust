@@ -442,7 +442,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                 sound = true;
             }
         }
-        current = (s.vehicle.next)(v);
+        current = (v).next();
     }
     if sound {
         (s.vehicle.play_vehicle_sound)(front, crate::newgrf_sound::VSE_VISUAL_EFFECT);

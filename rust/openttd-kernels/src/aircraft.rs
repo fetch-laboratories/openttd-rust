@@ -546,7 +546,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         update_position(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle.base(), self.map()); (self.leaves.viewport)(vehicle); };
         rotor_image(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.rotor_image)(vehicle) };
         copy_sprite(self; vehicle: VehicleRef, source: VehicleRef) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
-        position_next(self; vehicle: VehicleRef) -> Option<VehicleRef> => (self.vs.next)(vehicle);
+        position_next(self; vehicle: VehicleRef) -> Option<VehicleRef> => (vehicle).next();
         position_viewport(self; vehicle: VehicleRef) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle, self.map()); (self.vs.base_viewport)(vehicle); };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
         play_sound(self; vehicle: Vehicle, sound: i64) -> () => (self.vs.play_sound)(vehicle.base(), sound as u16);

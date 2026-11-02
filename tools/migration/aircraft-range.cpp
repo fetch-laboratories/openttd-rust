@@ -121,7 +121,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
-	vehicle.next = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicle * { return v == &fixture->record ? &fixture->shadow : nullptr; };
 	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = &fixture->shadow; return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };
 	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 
@@ -149,7 +148,7 @@ int main()
 		messages = {}; AircraftEventHandler(&f.aircraft, 0); auto expected = messages;
 		fixture = &f;
 		f.record.type = 3; f.record.subtype = 2; f.record.z_pos = 1; f.record.cached_max_speed = 100; f.record.vehstatus = f.aircraft.vehstatus.value;
-		f.shadow.type = 3; f.shadow.subtype = 4;
+		f.shadow.type = 3; f.shadow.subtype = 4; f.record.next = &f.shadow;
 		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f);
 		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();

@@ -161,16 +161,10 @@ extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcep
 }
 
 
-static OpenTTDVehiclePreviousTile OPENTTD_RUST_CALL VehicleSvcPreviousTile(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *previous = RustVehiclePrevious(VehicleOf(v));
-	return {.tile = previous == nullptr ? 0 : RustVehicleTile(previous), .exists = previous != nullptr};
-}
 
 static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderType(OpenTTDVehicle *v) noexcept { return RustVehicleOrderType(VehicleOf(v)); }
 static uint16_t OPENTTD_RUST_CALL VehicleSvcOrderDestination(OpenTTDVehicle *v) noexcept { return RustVehicleOrderDestination(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderNonStop(OpenTTDVehicle *v) noexcept { return RustVehicleOrderNonStop(VehicleOf(v)); }
-static OpenTTDVehicle *OPENTTD_RUST_CALL VehicleSvcNext(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleNext(VehicleOf(v))); }
 static OpenTTDEngineForLength OPENTTD_RUST_CALL VehicleSvcEngineForLength(OpenTTDVehicle *v) noexcept
 {
 	const Engine *e = EngineOf(RustVehicleGetEngine(v));
@@ -231,8 +225,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.start_stop_dirty = VehicleSvcStartStopDirty,
 	.destroy = VehicleSvcDestroy,
 	.set_dest_tile = RustVehicleSetDestTile,
-	.previous_tile = VehicleSvcPreviousTile,
-	.next = VehicleSvcNext,
 	.engine = RustVehicleGetEngine,
 	.engine_for_length = VehicleSvcEngineForLength,
 	.order_type = VehicleSvcOrderType,

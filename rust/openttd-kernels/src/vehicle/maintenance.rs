@@ -239,7 +239,7 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
         svc!(C, base.write_reliability, v, r.reliability);
         svc!(C, s.chance_write, v, chance);
         branch!(C, VEHICLE_MAINT_RESET);
-        let Some(next) = svc!(C, base.next, v) else {
+        let Some(next) = v.next() else {
             break;
         };
         if !svc!(C, s.has_engine, next) {

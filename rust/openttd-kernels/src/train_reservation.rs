@@ -1517,8 +1517,6 @@ pub(crate) mod tests {
             start_stop_dirty: unused(),
             destroy: unused(),
             set_dest_tile: unused(),
-            previous_tile: unused(),
-            next: unused(),
             engine: unused(),
             engine_for_length: unused(),
             order_type: unused(),

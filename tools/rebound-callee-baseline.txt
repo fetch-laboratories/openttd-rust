@@ -1,5 +1,4 @@
 forwarded | src/economy.cpp | current_company = GetRustCompanyFinanceServices().current_company
-forwarded | src/economy.cpp | next_vehicle = GetRustVehicleServices().next
 forwarded | src/economy.cpp | order_time = GetRustVehicleServices().order_time
 forwarded | src/economy.cpp | set_current_company = GetRustCompanyFinanceServices().set_current_company
 forwarded | src/industry_cmd.cpp | generating = GetRustSharedServices().clear_square_services.generating_world
@@ -40,7 +39,6 @@ forwarded | src/rust/ship_control_services.h | lock_middle = GetRustSharedServic
 forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRustWaterRestorationServices().infrastructure
 forwarded | src/rust/vehicle_properties_services.hpp | aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
 forwarded | src/rust/vehicle_properties_services.hpp | train_class = GetRustEngineCapabilitiesServices().train_class
-forwarded | src/station_cmd.cpp | next_vehicle = GetRustVehicleServices().next
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
 forwarded | src/townname.cpp | utf8_length = GetRustSharedServices().utf8_length

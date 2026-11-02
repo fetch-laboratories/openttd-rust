@@ -252,6 +252,12 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
 
 // VehicleRef's live-record contract permits field-sized raw reads between callbacks.
 impl crate::vehicle::VehicleRef {
+    pub(crate) fn next(self) -> Option<Self> {
+        std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), next)).map(Self)
+    }
+    pub(crate) fn previous(self) -> Option<Self> {
+        std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), previous)).map(Self)
+    }
     pub(crate) fn engine_id(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), engine_type).0
     }

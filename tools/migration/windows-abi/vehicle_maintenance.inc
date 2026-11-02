@@ -32,7 +32,6 @@ static void VehicleMaintenanceBoundary()
 	RoadTestTables tables(&shared);
 	auto &base = tables.vehicle;
 	base.maintenance = &maintenance;
-	base.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
 	base.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
 	base.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
 	base.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); };

@@ -969,7 +969,6 @@ pub struct Links {
     pub(crate) order_count: extern "C" fn(*mut NativeOrderList) -> usize,
     pub(crate) order_destination: extern "C" fn(*mut NativeOrderList, usize) -> OrderDestination,
     pub(crate) order_vehicle: extern "C" fn(*mut NativeOrderList) -> Option<VehicleRef>,
-    pub(crate) next_vehicle: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub(crate) next_shared: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub(crate) stopped_in_depot: extern "C" fn(VehicleRef) -> bool,
     pub(crate) last_service: extern "C" fn(VehicleRef) -> i32,
@@ -1022,7 +1021,7 @@ unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &
                     );
                 }
             }
-            current = (l.next_vehicle)(vehicle);
+            current = vehicle.next();
         }
         node = unsafe { openttd_rust_station_queue_next(state, node) };
     }
@@ -1302,7 +1301,6 @@ pub struct Loading {
     pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
     pub(crate) show_indicator: extern "C" fn(VehicleRef, u8, u32),
     pub(crate) set_current_company: extern "C" fn(u8),
-    pub(crate) next_vehicle: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub(crate) next_articulated: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub(crate) other_multiheaded: extern "C" fn(VehicleRef) -> VehicleRef,
     pub(crate) first_engine_part: extern "C" fn(VehicleRef) -> VehicleRef,
@@ -1345,7 +1343,7 @@ fn parts(l: &Loading, v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool)
         };
     }
     if v.vehicle_type() == 3 && (l.is_normal_aircraft)(v) {
-        return action(unsafe { (l.next_vehicle)(v).unwrap_unchecked() });
+        return action(unsafe { v.next().unwrap_unchecked() });
     }
     true
 }
@@ -1403,7 +1401,7 @@ fn reserve_consist(
             capleft[cargo] = capleft[cargo]
                 .wrapping_add(u32::from(observed.capacity).wrapping_sub(observed.remaining()));
         }
-        current = (l.next_vehicle)(v);
+        current = v.next();
     }
 }
 fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
@@ -1595,7 +1593,7 @@ pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
                         (l.set_cargo_unloading)(v, true);
                     }
                 }
-                current = (l.next_vehicle)(v);
+                current = v.next();
             }
         }
     };
@@ -1697,7 +1695,7 @@ unsafe fn load_vehicle(
             }
             let part = (l.part)(v);
             if part.capacity == 0 {
-                current = (l.next_vehicle)(v);
+                current = v.next();
                 continue;
             }
             artic_part = artic_part.wrapping_add(1);
@@ -1757,11 +1755,11 @@ unsafe fn load_vehicle(
                 } else {
                     (l.set_cargo_unloading)(v, false);
                 }
-                current = (l.next_vehicle)(v);
+                current = v.next();
                 continue;
             }
             if control.load_type == 4 || control.stop {
-                current = (l.next_vehicle)(v);
+                current = v.next();
                 continue;
             }
             let refitted = control.refit && artic_part == 1;
@@ -1840,7 +1838,7 @@ unsafe fn load_vehicle(
             } else {
                 cargo_not_full |= 1 << cargo;
             }
-            current = (l.next_vehicle)(v);
+            current = v.next();
         }
         if loaded_any || unloaded {
             if control.vehicle_type == 0 {
@@ -2167,7 +2165,6 @@ crate::abi::layouts! {
         order_count,
         order_destination,
         order_vehicle,
-        next_vehicle,
         next_shared,
         stopped_in_depot,
         last_service,
@@ -2222,7 +2219,6 @@ crate::abi::layouts! {
         indicator,
         show_indicator,
         set_current_company,
-        next_vehicle,
         next_articulated,
         other_multiheaded,
         first_engine_part,

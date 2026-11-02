@@ -558,7 +558,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		}
 	},
 	.set_current_company = GetRustCompanyFinanceServices().set_current_company,
-	.next_vehicle = GetRustVehicleServices().next,
 	.next_articulated = RustVehicleNextArticulated,
 	.other_multiheaded = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
 		Vehicle *v = VehicleOf(handle);

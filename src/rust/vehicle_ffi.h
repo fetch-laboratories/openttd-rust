@@ -46,10 +46,6 @@ struct OpenTTDVehicleNewPosition {
 	int32_t y;
 	uint32_t tile;
 };
-struct OpenTTDVehiclePreviousTile {
-	uint32_t tile;
-	bool exists;
-};
 struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDVehicleVisits;
@@ -79,8 +75,6 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *start_stop_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(start_stop_dirty);
 	void (OPENTTD_RUST_CALL *destroy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	void (OPENTTD_RUST_CALL *set_dest_tile)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_dest_tile);
-	OpenTTDVehiclePreviousTile (OPENTTD_RUST_CALL *previous_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous_tile);
-	OpenTTDVehicle *(OPENTTD_RUST_CALL *next)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	const OpenTTDEngine *(OPENTTD_RUST_CALL *engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	OpenTTDEngineForLength (OPENTTD_RUST_CALL *engine_for_length)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_for_length);
 	uint8_t (OPENTTD_RUST_CALL *order_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_type);
@@ -101,15 +95,11 @@ struct OpenTTDVehicleServices {
 	const OpenTTDOrdersLeaves *(*orders)() noexcept OPENTTD_SERVICE_DEFAULT(orders);
 	OpenTTDVehicle *(*ship_get)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_get);
 };
-struct OpenTTDGroundViewportNext {
-	OpenTTDVehicle *next;
-	uint8_t final_progress;
-};
 struct OpenTTDGroundPhysicsServices;
 struct OpenTTDGroundServices {
 	const OpenTTDGroundPhysicsServices *physics;
 	void (OPENTTD_RUST_CALL *cache_begin)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cache_begin);
-	OpenTTDGroundViewportNext (OPENTTD_RUST_CALL *update_viewport_then_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_viewport_then_next);
+	void (OPENTTD_RUST_CALL *update_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_viewport);
 	void (OPENTTD_RUST_CALL *turn)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(turn);
 	void (OPENTTD_RUST_CALL *go_to_depot_service)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(go_to_depot_service);
 	void (OPENTTD_RUST_CALL *write_first_engine)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_engine);

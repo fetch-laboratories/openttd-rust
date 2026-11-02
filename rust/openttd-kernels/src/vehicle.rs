@@ -127,14 +127,6 @@ pub struct Breakdown {
     pub status: u8,
 }
 
-/// Previous chain tile observed for the follower step.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct PreviousTile {
-    pub tile: u32,
-    pub exists: bool,
-}
-
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
@@ -175,8 +167,6 @@ pub struct VehicleServices {
     pub destroy: extern "C" fn(VehicleRef),
     /// Original virtual `SetDestTile`; may reenter the vehicle owner.
     pub set_dest_tile: extern "C" fn(VehicleRef, u32),
-    pub previous_tile: extern "C" fn(VehicleRef) -> PreviousTile,
-    pub next: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     /// Only the current engine, for callers that do not consume its GRF version.
     pub engine: extern "C" fn(VehicleRef) -> EngineRef,
     pub engine_for_length: extern "C" fn(VehicleRef) -> EngineForLength,
@@ -269,14 +259,6 @@ impl VehicleServices {
     }
 }
 
-/// Post-viewport link; progress is consumed only when this link ends the loop.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct ViewportNext {
-    pub next: Option<VehicleRef>,
-    pub final_progress: u8,
-}
-
 /// `GroundVehicle<T>` members, one C++ template instance per vehicle type.
 #[repr(C)]
 pub struct GroundServices {
@@ -284,7 +266,7 @@ pub struct GroundServices {
     /// Invalidate the chain `NewGRF` cache, then reset total length.
     pub cache_begin: extern "C" fn(VehicleRef),
     /// `UpdateViewport(force, delta)`.
-    pub update_viewport_then_next: extern "C" fn(VehicleRef, VehicleRef) -> ViewportNext,
+    pub update_viewport: extern "C" fn(VehicleRef),
     /// Store the direction, then `UpdateViewport(true, true)`.
     pub turn: extern "C" fn(VehicleRef, u8),
     /// Set `GVF_SUPPRESS_IMPLICIT_ORDERS`, then `MakeGoToDepot(depot, Service)`.
@@ -351,8 +333,6 @@ crate::abi::layouts! {
         start_stop_dirty,
         destroy,
         set_dest_tile,
-        previous_tile,
-        next,
         engine,
         engine_for_length,
         order_type,
@@ -379,7 +359,7 @@ crate::abi::layouts! {
 
     "OpenTTDGroundServices" ["probe"] => GroundServices {
         cache_begin,
-        update_viewport_then_next,
+        update_viewport,
         turn,
         go_to_depot_service,
         write_first_engine,
@@ -387,14 +367,6 @@ crate::abi::layouts! {
         cached_length,
         has_articulated,
         physics,
-    };
-    "OpenTTDVehiclePreviousTile" ["probe"] => PreviousTile {
-        tile,
-        exists,
-    };
-    "OpenTTDGroundViewportNext" ["probe"] => ViewportNext {
-        next,
-        final_progress,
     };
     "OpenTTDEngineForLength" ["probe"] => EngineForLength {
         engine,

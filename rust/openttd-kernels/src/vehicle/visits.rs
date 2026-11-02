@@ -275,7 +275,7 @@ fn increase_vehicle_stats(
                 s,
             );
         }
-        part = (s.vehicles().next)(v);
+        part = (v).next();
     }
 }
 
@@ -338,7 +338,7 @@ impl Refresher {
             let e = (r.vehicle_engine)(shell);
             if (r.refit_engine)(e).mask >> self.cargo & 1 == 0 {
                 index += 1;
-                part = (s.vehicles().next)(v);
+                part = (v).next();
                 continue;
             }
             any_refit = true;
@@ -395,7 +395,7 @@ impl Refresher {
                 self.refits[index].capacity = mail_capacity;
                 break; // aircraft have only one vehicle
             }
-            part = (s.vehicles().next)(v);
+            part = (v).next();
         }
         any_refit
     }
@@ -683,7 +683,7 @@ pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: b
             let total = refresher.capacity(c.cargo);
             *total = total.wrapping_add(u32::from(c.remaining));
         }
-        part = (s.vehicles().next)(u);
+        part = (u).next();
     }
 
     let flags = if refresher.prediction.last_loading != INVALID_STATION {
@@ -703,7 +703,7 @@ pub(crate) fn reset_refit_caps(front: VehicleRef, s: &Services) {
     while let Some(v) = part {
         let shell = v.0.as_ptr();
         (r.set_refit_cap)(shell, (r.cargo_cap)(shell));
-        part = (s.vehicles().next)(v);
+        part = (v).next();
     }
 }
 
@@ -741,7 +741,7 @@ pub(crate) fn cancel_reservation(front: VehicleRef, next: u16, st: *mut Station,
         }
         // SAFETY: as above.
         unsafe { crate::cargo_storage::openttd_rust_cargo_list_keep(cargo) };
-        part = (s.vehicles().next)(v);
+        part = (v).next();
     }
 }
 
@@ -778,7 +778,7 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
                 && o.flags(front) & VF_STOP_LOADING == 0;
             cars = cars.wrapping_add(1);
         }
-        part = (s.vehicles().next)(v);
+        part = (v).next();
     }
 
     if let Some(colour) = colour {

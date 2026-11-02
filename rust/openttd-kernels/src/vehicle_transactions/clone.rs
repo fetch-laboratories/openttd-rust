@@ -139,7 +139,8 @@ unsafe fn clone(
         let mut count = 0_i32;
         loop {
             count += 1;
-            v = (c.vehicles.next)(unsafe { vehicle_ref(v, c.vehicles) })
+            v = (unsafe { vehicle_ref(v, c.vehicles) })
+                .next()
                 .map_or(ptr::null_mut(), |v| v.shell().cast());
             if v.is_null() {
                 break;

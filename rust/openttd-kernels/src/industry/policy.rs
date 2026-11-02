@@ -68,7 +68,7 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
                         &mut accepts,
                         &mut produces,
                     );
-                    part = (vehicles.next)(u);
+                    part = (u).next();
                 }
             }
             VEH_ROAD | VEH_SHIP | VEH_AIRCRAFT => cargo_service(

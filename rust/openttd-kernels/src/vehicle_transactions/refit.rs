@@ -210,7 +210,8 @@ pub(super) unsafe fn get_cost(
     automatic
 }
 pub(super) unsafe fn next(s: &Services, v: *mut ()) -> *mut () {
-    (s.common.vehicles.next)(unsafe { vehicle_ref(v, s.common.vehicles) })
+    (unsafe { vehicle_ref(v, s.common.vehicles) })
+        .next()
         .map_or(ptr::null_mut(), |v| v.shell().cast())
 }
 unsafe fn truncate(s: &Services, v: *mut (), cap: u16) {

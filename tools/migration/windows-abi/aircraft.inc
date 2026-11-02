@@ -34,7 +34,7 @@ static void AircraftDirectBoundary()
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p.record.type = 3;
 	p.record.z_pos = 1;
-	p.shadow.type = 3; p.shadow.subtype = 4;
+	p.shadow.type = 3; p.shadow.subtype = 4; p.record.next = &p.shadow;
 	p.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.shadow);
 	p.leaves = AircraftTestLeaves(p.vehicle_services, p.shared_services);
 	CHECK(p.shared_services.is_water_tile != nullptr);
@@ -144,7 +144,7 @@ static void AircraftPhaseBoundary()
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p.record.type = 3;
 	p.record.z_pos = 1;
-	p.shadow.type = 3; p.shadow.subtype = 4;
+	p.shadow.type = 3; p.shadow.subtype = 4; p.record.next = &p.shadow;
 	p.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.shadow);
 	p.leaves = AircraftTestLeaves(p.vehicle_services, p.shared_services);
 	auto &v = p.vehicle_services;
@@ -197,7 +197,6 @@ static void AircraftPhaseBoundary()
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; aircraft_probe.record.subtype = 0; aircraft_probe.record.z_pos = 17; };
 	leaves.rotor_image = [](OpenTTDAircraftVehicle) noexcept { CHECK(aircraft_probe.record.z_pos == 17); aircraft_probe.record.z_pos = 25; };
 	p.shadow.y_pos = -3;
-	v.next = [](OpenTTDVehicle *u) noexcept -> OpenTTDVehicle * { return u == aircraft_probe.vehicle.handle ? &aircraft_probe.shadow : nullptr; };
 	static OpenTTDSharedServices movement_world{};
 	movement_world.map = &map.statics;
 	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };

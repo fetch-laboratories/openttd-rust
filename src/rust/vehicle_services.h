@@ -302,14 +302,9 @@ inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 }
 
 template <class T>
-inline OpenTTDGroundViewportNext OPENTTD_RUST_CALL GroundSvcUpdateViewportThenNext(OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept
+inline void OPENTTD_RUST_CALL GroundSvcUpdateViewport(OpenTTDVehicle *part) noexcept
 {
-	T *u = T::From(VehicleOf(part));
-	/* UpdateViewport may reenter Rust; no Rust borrow survives this call. */
-	RustVehicleUpdateViewport(u, false, false);
-	Vehicle *next = RustVehicleNext(u);
-	/* Only the final iteration consumes front progress, after every viewport. */
-	return {.next = RustVehicle(next), .final_progress = next == nullptr ? RustVehicleProgress(VehicleOf(front)) : uint8_t(0)};
+	RustVehicleUpdateViewport(T::From(VehicleOf(part)), false, false);
 }
 template <class T>
 inline void OPENTTD_RUST_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direction) noexcept
@@ -364,7 +359,7 @@ template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
 	.physics = &GetRustGroundPhysicsServices(),
 	.cache_begin = GroundSvcCacheBegin<T>,
-	.update_viewport_then_next = GroundSvcUpdateViewportThenNext<T>,
+	.update_viewport = GroundSvcUpdateViewport<T>,
 	.turn = GroundSvcTurn<T>,
 	.go_to_depot_service = GroundSvcGoToDepotService<T>,
 	.write_first_engine = GroundSvcWriteFirstEngine<T>,
