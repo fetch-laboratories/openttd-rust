@@ -10,6 +10,16 @@
 struct OpenTTDByteSpan { const uint8_t *data; size_t size; };
 #endif
 #include "language.h"
+#include "house.h"
+#include "newgrf_airport.h"
+#include "newgrf_airporttiles.h"
+#include "newgrf_badge.h"
+#include "newgrf_canal.h"
+#include "newgrf_generic.h"
+#include "newgrf_object.h"
+#include "newgrf_roadstop.h"
+#include "road.h"
+#include "rail.h"
 #include "newgrf_station.h"
 #include "station_cmd.h"
 #include "landscape.h"
@@ -102,6 +112,86 @@ static void GrfStrings(const char *phase)
 		Require(bounds->status == GCS_DISABLED && bounds->errors.size() == 1 && bounds->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, "text-read-bounds");
 		Require(GetGRFStringID(ID("TX52"), GRFStringID{0xD00A}) == STR_UNDEFINED && GetGRFStringID(ID("TX52"), GRFStringID{0xD00B}) != STR_UNDEFINED && GetGRFStringID(ID("TX52"), GRFStringID{0xFFFF}) == STR_UNDEFINED, "text-empty-and-wrapped");
 	}
+}
+
+/** Normalize deterministic fixture groups by their terminal callback result. */
+static int BindingResult(const SpriteGroup *group)
+{
+	if (group == nullptr) return -1;
+	if (const auto *callback = dynamic_cast<const CallbackResultSpriteGroup *>(group)) return callback->result;
+	const auto *deterministic = dynamic_cast<const DeterministicSpriteGroup *>(group);
+	Require(deterministic != nullptr && !deterministic->default_result.calculated_result, "binding-group-kind");
+	return BindingResult(deterministic->default_result.group);
+}
+/** Binding roots, feature flags and override order do not persist in saves. */
+static void GrfBindings(const char *phase)
+{
+	const GRFFile *file = GetFileByGRFID(ID("BD52"));
+	if (file == nullptr) return;
+	std::array<uint32_t, 4> rng{_random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]};
+	auto standard = [&](uint8_t feature, const auto *spec) {
+		const auto &p = spec->grf_prop;
+		int def = BindingResult(p.GetSpriteGroup(StandardSpriteGroup::Default)), purchase = BindingResult(p.GetSpriteGroup(StandardSpriteGroup::Purchase));
+		Require(p.grfid == file->grfid && p.local_id == 0 && def == 145 && purchase == 146, "binding-standard");
+		fmt::print(stderr, "LOADING binding {} standard {} {:08X} {} {} {}\n", phase, feature, p.grfid, p.local_id, def, purchase);
+	};
+	standard(7, HouseSpec::Get(_house_mngr.GetID(0, file->grfid)));
+	standard(9, GetIndustryTileSpec(_industile_mngr.GetID(0, file->grfid)));
+	standard(10, GetIndustrySpec(_industry_mngr.GetID(0, file->grfid)));
+	standard(13, AirportSpec::Get(static_cast<uint8_t>(_airport_mngr.GetID(0, file->grfid))));
+	standard(15, ObjectSpec::Get(_object_mngr.GetID(0, file->grfid)));
+	standard(17, AirportTileSpec::Get(_airporttile_mngr.GetID(0, file->grfid)));
+	auto cargo_groups = [&](uint8_t feature, const auto *spec) {
+		const auto &p = spec->grf_prop;
+		int def = BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT)), purchase = BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_PURCHASE));
+		int na = BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA));
+		Require(p.grfid == file->grfid && def == 145 && purchase == 146 && na == 146, "binding-station-first");
+		fmt::print(stderr, "LOADING binding {} station {} {:08X} {} {} {} {}\n", phase, feature, p.grfid, BindingResult(p.GetSpriteGroup(CT_PASSENGERS)), def, purchase, na);
+	};
+	cargo_groups(4, file->stations[0].get()); cargo_groups(20, file->roadstops[0].get());
+	for (uint16_t local : {0, 1, 2, 3, 27}) {
+		const Engine *engine = Engine::Get(GetNewEngineID(file, VEH_TRAIN, local));
+		const auto &p = engine->grf_prop;
+		fmt::print(stderr, "LOADING binding {} engine {} {} {:08X} {} {} {}\n", phase, local, engine->index, p.grfid, BindingResult(p.GetSpriteGroup(CT_PASSENGERS)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_PURCHASE)));
+		for (uint i = 0; i < engine->overrides.size(); i++) {
+			const auto &override = engine->overrides[i];
+			std::string ids;
+			for (EngineID id : override.engines) ids += fmt::format("{},", id.base());
+			fmt::print(stderr, "LOADING binding {} override {} {} {} {} {}\n", phase, local, i, override.cargo, BindingResult(override.group), ids);
+		}
+	}
+	EngineID wagon = GetNewEngineID(file, VEH_TRAIN, 27);
+	for (uint16_t local : {0, 1, 2, 3}) {
+		int result = BindingResult(GetWagonOverrideSpriteSet(wagon, local == 1 ? CargoGRFFileProps::SG_PURCHASE : CT_PASSENGERS, GetNewEngineID(file, VEH_TRAIN, local)));
+		Require(result == (local < 2 ? 146 : local == 2 ? 148 : 150), "binding-wagon-order");
+		fmt::print(stderr, "LOADING binding {} selected {} {}\n", phase, local, result);
+	}
+	auto leaf = [&](uint8_t feature, const GRFFile *owner, const SpriteGroup *group) {
+		Require(owner == file, "binding-leaf-owner");
+		fmt::print(stderr, "LOADING binding {} leaf {} {:08X} {}\n", phase, feature, owner->grfid, BindingResult(group));
+	};
+	leaf(5, _water_feature[0].grffile, _water_feature[0].group);
+	leaf(11, CargoSpec::Get(0)->grffile, CargoSpec::Get(0)->group);
+	const RailTypeInfo *rail = GetRailTypeInfo(file->railtype_map[0]);
+	leaf(16, rail->grffile[0], rail->group[0]);
+	for (uint8_t feature : {18, 19}) {
+		const RoadTypeInfo *road = GetRoadTypeInfo(feature == 18 ? file->roadtype_map[0] : file->tramtype_map[0]);
+		leaf(feature, road->grffile[0], road->group[0]);
+	}
+	const auto &badge = GetBadge(file->badge_map.at(0))->grf_prop;
+	Require(badge.grfid == file->grfid && BindingResult(badge.GetSpriteGroup(GSF_TRAINS)) == 146 && BindingResult(badge.GetSpriteGroup(GSF_DEFAULT)) == 145, "binding-badge");
+	fmt::print(stderr, "LOADING binding {} badge {} {}\n", phase, BindingResult(badge.GetSpriteGroup(GSF_TRAINS)), BindingResult(badge.GetSpriteGroup(GSF_DEFAULT)));
+	auto generic = GetAiPurchaseCallbackResult(GSF_ROADVEHICLES, CT_PASSENGERS, 0, IT_AI_UNKNOWN, IT_AI_TOWN, 1, AICE_ROAD_CHECK_ENGINE, 1, 1);
+	Require(generic.first != nullptr && generic.first->grfid == ID("BH52") && generic.second == 152, "binding-generic-order");
+	fmt::print(stderr, "LOADING binding {} generic {:08X} {}\n", phase, generic.first->grfid, generic.second);
+	for (const char *id : {"BE52", "BD52", "BG52", "BH52", "BP52", "BO52", "BQ52", "BR52"}) {
+		const GRFConfig *config = GetGRFConfig(ID(id));
+		const GRFFile *grf = GetFileByGRFID(ID(id));
+		Require(grf != nullptr && ((std::string_view(id) != "BG52" && std::string_view(id) != "BH52") || grf->grf_features.base() == 0), "binding-flags");
+		fmt::print(stderr, "LOADING binding {} flags {} {} {:X}\n", phase, id, config->status, grf->grf_features.base());
+	}
+	Require(rng == std::array<uint32_t, 4>{_random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]}, "binding-observer-rng");
+	fmt::print(stderr, "LOADING binding {} rng {} {} {} {}\n", phase, rng[0], rng[1], rng[2], rng[3]);
 }
 
 /** Generator lists, style lookups and generated name bytes of the ActionF fixtures. */
@@ -362,7 +452,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 		/* Interactive RNG is unsaved; observe it from a deterministic reload command seed. */
 		_interactive_random.SetSeed(0x61700001);
 		if (GetGRFConfig(ID("TX52")) != nullptr) { Require(ReadLanguagePack(GetLanguage(7)), "text-language-pack"); ReloadNewGRFData(); }
-		Inspect(true); GrfTownNames("inspect", false); GrfStrings("inspect"); SeasonalSnow("inspect", true); return true;
+		Inspect(true); GrfTownNames("inspect", false); GrfStrings("inspect"); GrfBindings("inspect"); SeasonalSnow("inspect", true); return true;
 	}
 	if (args.size() < 3) return false;
 	SetRandomSeed(0x47100001);
@@ -371,6 +461,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	if (strings) Require(ReadLanguagePack(GetLanguage(7)), "text-language-pack");
 	std::vector<const char *> files{"main", "graph-broken", "broken", "victim", "fatal", "before", "after", "names-a", "names-bad", "names-b", "names-short", "snow", "snow-duplicate"};
 	if (strings) files.insert(files.end(), {"translation-before", "text-modern", "text-old", "text-translate", "text-translate7", "translation-bounds"});
+	if (strings) { files.insert(files.begin(), "bindings-empty"); files.insert(files.end(), {"bindings-main", "bindings-partial-ids", "bindings-after-ids", "bindings-partial-group", "bindings-after-group", "bindings-generic-a", "bindings-generic-b"}); }
 	for (const char *name : files) {
 		auto c = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		Require(FillGRFDetails(*c, false, NO_DIRECTORY), "file-scan");
@@ -382,6 +473,7 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	_grfconfig.push_back(std::move(missing));
 	_settings_game.vehicle.dynamic_engines = false;
 	ReloadNewGRFData();
+	if (strings) Require(GetGRFConfig(ID("BE52"))->status == GCS_ACTIVATED, "binding-empty-predecessor");
 	SeasonalSnow("first", true);
 	ResetNewGRFData();
 	SeasonalSnow("reset", false);
@@ -390,10 +482,12 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	Inspect(false);
 	GrfTownNames("first", true);
 	GrfStrings("first");
+	GrfBindings("first");
 	ReloadNewGRFData();
 	Inspect(false);
 	GrfTownNames("reload", true);
 	GrfStrings("reload");
+	GrfBindings("reload");
 	SeasonalSnow("reload", true);
 	GrfTownNameTowns();
 	EngineID id = GetNewEngineID(GetFileByGRFID(ID("R471")), VEH_ROAD, 0);

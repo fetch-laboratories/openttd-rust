@@ -372,6 +372,7 @@ def prepare(
     fixtures(folder / "grfs", 1 if mode == "v1" else 2)
     if mode in ("bindings", "reload"):
         text_fixtures(folder / "grfs")
+        binding_fixtures(folder / "grfs")
     scenario = {**scenario, "loading_fixture_dir": str(folder / "grfs")}
     executables = prepared_console(
         "newgrf_loading", adapter, binaries, builds, folder, env
@@ -577,7 +578,12 @@ def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) ->
     text = text_observations(
         run["log"], phases, scenario["newgrf_loading"] in ("bindings", "reload")
     )
-    names = townname_observations(run["log"], phases) + snow + text
+    bindings = (
+        binding_observations(run["log"], phases)
+        if scenario["newgrf_loading"] in ("bindings", "reload")
+        else []
+    )
+    names = townname_observations(run["log"], phases) + snow + text + bindings
     # Generated name bytes and style lookups are not saved; compare them across roles.
     key = (scenario["name"], mode)
     if role == "reference":
@@ -604,10 +610,6 @@ def install(scenario: Scenario, run_dir: Path) -> None:
 
 def text_fixtures(folder: Path) -> None:
     """Saves and town-name samples cannot distinguish Action 4/13 table bytes or targets."""
-
-    def property_action(feature: int, local: int, prop: int, value: bytes) -> bytes:
-        encoded = bytes((local,)) if local < 255 else b"\xff" + struct.pack("<H", local)
-        return bytes((0, feature, 1, 1)) + encoded + bytes((prop,)) + value
 
     def name_action(
         feature: int,
@@ -639,16 +641,14 @@ def text_fixtures(folder: Path) -> None:
         (17, 8, b"\0"),
         (21, 8, b"badge/text52\0"),
     ):
-        modern.append(
-            property_action(feature, 256 if feature == 21 else 0, prop, value)
-        )
+        modern.append(grf_property(feature, 256 if feature == 21 else 0, prop, value))
     for prop, value in (
         (0x13, b"\x07m\0\x08f\0\0"),
         (0x14, b"\x09nom\0\x0agen\0\0"),
         (0x15, b"\x06"),
     ):
-        modern.append(property_action(8, 7, prop, value))
-    modern += [property_action(8, 96, 0x15, b"\x01")]
+        modern.append(grf_property(8, 7, prop, value))
+    modern += [grf_property(8, 96, 0x15, b"\x01")]
     for feature in (*range(22), 0x48):
         modern.append(
             name_action(feature, 1, 0xD800 + feature, (f"feature-{feature}".encode(),))
@@ -781,4 +781,228 @@ def text_observations(
                 raise RuntimeError("GRF text language state or old/new scheme differs")
         if f"LOADING text {phase} byte80 21" not in observations:
             raise RuntimeError("GRF text custom byte-80 translation missing")
+    return observations
+
+
+def grf_property(feature: int, local: int, prop: int, value: bytes) -> bytes:
+    """One Action 0 property, retaining extended local IDs."""
+    encoded = bytes((local,)) if local < 255 else b"\xff" + struct.pack("<H", local)
+    return bytes((0, feature, 1, 1)) + encoded + bytes((prop,)) + value
+
+
+def sprite_binding(
+    feature: int,
+    ids: Sequence[int],
+    cargos: Sequence[tuple[int, int]],
+    default: int,
+    override: bool = False,
+) -> bytes:
+    """Action 3 encoding; generic callbacks intentionally use the ignored cargo byte."""
+    encoded = b"".join(
+        bytes((local,)) if local < 255 else b"\xff" + struct.pack("<H", local)
+        for local in ids
+    )
+    return (
+        bytes((3, feature, len(ids) | (128 if override else 0)))
+        + encoded
+        + bytes((len(cargos),))
+        + b"".join(struct.pack("<BH", cargo, group) for cargo, group in cargos)
+        + struct.pack("<H", default)
+    )
+
+
+def binding_fixtures(folder: Path) -> None:
+    """Saves erase binding identity/order and partial parse history; earlier GRFs omit these handlers."""
+    main = [info(b"BD52"), action2(0, 210, [], 0x8091), action2(0, 211, [], 0x8092)]
+    main += [
+        sprite_binding(0, [0, 1], [(0, 210), (255, 211), (254, 256)], 210),
+        sprite_binding(0, [27], [(0, 211)], 211, True),
+        sprite_binding(0, [1], [], 211),
+        sprite_binding(0, [27], [(255, 210)], 210, True),
+    ]
+    for feature, value in (
+        (4, b"BS52"),
+        (7, b"\0"),
+        (9, b"\0"),
+        (10, b"\0"),
+        (13, b"\0"),
+        (15, b"BO52"),
+        (16, b"R052"),
+        (17, b"\0"),
+        (18, b"D052"),
+        (19, b"T052"),
+        (20, b"BR52"),
+        (21, b"badge/bindings52\0"),
+    ):
+        main.append(grf_property(feature, 0, 8, value))
+    for feature in (4, 5, 7, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20, 21):
+        main += [action2(feature, 210, [], 0x8091), action2(feature, 211, [], 0x8092)]
+        if feature in (4, 20):
+            cargos = [(0, 210), (254, 211), (255, 210), (254, 256)]
+        elif feature in (16, 18, 19, 21):
+            cargos = [(0, 210), (255, 211)]
+        else:
+            cargos = [(255, 210), (0, 211)]
+        main += [
+            sprite_binding(
+                feature,
+                [0, 255],
+                cargos,
+                211 if feature in (7, 9, 10, 13, 15, 17, 21) else 210,
+            ),
+            sprite_binding(
+                feature,
+                [0],
+                [(255 if feature not in (16, 18, 19, 21) else 0, 211)],
+                210 if feature in (7, 9, 10, 13, 15, 17, 21) else 211,
+            ),
+        ]
+    # Nonzero unsupported features are still marked; an out-of-range feature is not.
+    main += [bytes((3, 8, 1)), bytes((3, 254, 1))]
+    histories = [
+        ("bindings-partial-ids", [info(b"BP52"), bytes((3, 0, 2, 2))]),
+        (
+            "bindings-after-ids",
+            [
+                info(b"BO52"),
+                action2(0, 210, [], 0x8094),
+                sprite_binding(0, [27], [], 210, True),
+            ],
+        ),
+        (
+            "bindings-partial-group",
+            [
+                info(b"BQ52"),
+                action2(0, 210, [], 0x8095),
+                sprite_binding(0, [3], [(0, 210)], 210)[:-2],
+            ],
+        ),
+        (
+            "bindings-after-group",
+            [
+                info(b"BR52"),
+                action2(0, 210, [], 0x8096),
+                sprite_binding(0, [27], [], 210, True),
+            ],
+        ),
+    ]
+    for name, actions in [
+        ("bindings-empty", [info(b"BE52"), bytes((3, 0, 128))]),
+        ("bindings-main", main),
+        *histories,
+        (
+            "bindings-generic-a",
+            [info(b"BG52"), action2(1, 210, [], 0x8097), bytes((3, 1, 0, 123, 210, 0))],
+        ),
+        (
+            "bindings-generic-b",
+            [info(b"BH52"), action2(1, 210, [], 0x8098), bytes((3, 1, 0, 99, 210, 0))],
+        ),
+    ]:
+        (folder / f"{name}.grf").write_bytes(grf(actions, 2))
+
+
+def binding_observations(log: list[str], phases: tuple[str, ...]) -> list[str]:
+    """Reject missing handlers/order/flags before comparing normalized roots and RNG."""
+    observations = [line for line in log if line.startswith("LOADING binding ")]
+    expected = {("standard", str(feature)) for feature in (7, 9, 10, 13, 15, 17)}
+    expected |= {("station", str(feature)) for feature in (4, 20)}
+    expected |= {("engine", str(local)) for local in (0, 1, 2, 3, 27)}
+    expected |= {("override", str(index)) for index in range(6)}
+    expected |= {("selected", str(local)) for local in range(4)}
+    expected |= {("leaf", str(feature)) for feature in (5, 11, 16, 18, 19)}
+    expected |= {
+        ("flags", grfid)
+        for grfid in ("BE52", "BD52", "BG52", "BH52", "BP52", "BO52", "BQ52", "BR52")
+    }
+    expected |= {("badge", ""), ("generic", ""), ("rng", "")}
+    lengths = {
+        "standard": 9,
+        "station": 10,
+        "engine": 10,
+        "override": 9,
+        "selected": 6,
+        "leaf": 7,
+        "flags": 7,
+        "badge": 6,
+        "generic": 6,
+        "rng": 8,
+    }
+    overrides = [
+        (0, 146, "0,1,"),
+        (64, 146, "0,1,"),
+        (65, 145, "1,"),
+        (64, 145, "1,"),
+        (64, 148, "2,0,"),
+        (64, 150, "3,"),
+    ]
+    features = sum(
+        1 << feature
+        for feature in (0, 4, 5, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20, 21)
+    )
+    for phase in phases:
+        rows = [
+            line.split()
+            for line in observations
+            if line.startswith(f"LOADING binding {phase} ")
+        ]
+        keys: set[tuple[str, str]] = set()
+        for row in rows:
+            kind = row[3]
+            if kind not in lengths or len(row) != lengths[kind]:
+                raise RuntimeError("malformed binding observation")
+            key = (
+                kind,
+                row[5]
+                if kind == "override"
+                else ""
+                if kind in ("badge", "generic", "rng")
+                else row[4],
+            )
+            if key in keys:
+                raise RuntimeError("duplicate binding observation")
+            keys.add(key)
+            if kind == "override":
+                if (
+                    row[4] != "27"
+                    or (int(row[6]), int(row[7]), row[8]) != overrides[int(row[5])]
+                ):
+                    raise RuntimeError(
+                        "wagon override publication/history order differs"
+                    )
+            elif kind == "flags":
+                status = 1 if row[4] in ("BE52", "BP52", "BQ52") else 4
+                flags = (
+                    0
+                    if row[4] in ("BG52", "BH52")
+                    else features
+                    if row[4] == "BD52"
+                    else 1
+                )
+                if int(row[5]) != status or int(row[6], 16) != flags:
+                    raise RuntimeError(
+                        "generic/unsupported/partial feature flags differ"
+                    )
+            elif kind == "leaf" and int(row[6]) != 146:
+                raise RuntimeError("native binding leaf did not replace its group")
+            elif kind == "engine":
+                groups = {
+                    0: (145, 145, 146),
+                    1: (145, 146, 146),
+                    2: (-1, -1, -1),
+                    3: (149, -1, -1),
+                    27: (-1, -1, -1),
+                }
+                if tuple(map(int, row[7:])) != groups[int(row[4])]:
+                    raise RuntimeError(
+                        "engine cargo/default/purchase partial publication differs"
+                    )
+            elif kind == "rng" and not all(
+                0 <= int(value) <= 0xFFFFFFFF for value in row[4:]
+            ):
+                raise RuntimeError("binding RNG observation missing")
+        if keys != expected:
+            raise RuntimeError(
+                "binding handlers, override order or flags missing: " + phase
+            )
     return observations
