@@ -119,10 +119,10 @@ crate::abi::shared_records! {
 pub struct Services {
     /// Shared command, company and result services.
     pub command: &'static CommandServices,
-    /// `ScriptError::StringToError`.
-    pub string_to_error: extern "C" fn(u32) -> u32,
     /// `SimpleCountedObject::Release` of a queued event.
     pub release_event: unsafe extern "C" fn(*mut ScriptEvent),
+    /// `ScriptError::StringToError`.
+    pub string_to_error: extern "C" fn(u32) -> u32,
 }
 
 crate::abi::layouts! {
