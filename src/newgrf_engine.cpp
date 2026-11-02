@@ -355,4 +355,3 @@ void FillNewGRFVehicleCache(const Vehicle *v)
 }
 
 #include "rust/vehicle_services_newgrf.h"
-

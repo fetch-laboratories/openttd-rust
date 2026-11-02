@@ -591,7 +591,8 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
     if reset {
         let mut from = 0;
         loop {
-            let v = unsafe { (w.next_vehicle)(from) }.cast::<()>();
+            let v =
+                crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
             if v.is_null() {
                 break;
             }
@@ -854,7 +855,7 @@ unsafe fn update_afterload(w: &GroupServices) {
     }
     from = 0;
     loop {
-        let v = unsafe { (w.next_vehicle)(from) }.cast::<()>();
+        let v = crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
         if v.is_null() {
             break;
         }
@@ -907,7 +908,7 @@ unsafe fn update_profits(w: &GroupServices) {
     }
     from = 0;
     loop {
-        let v = unsafe { (w.next_vehicle)(from) }.cast::<()>();
+        let v = crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
         if v.is_null() {
             break;
         }
@@ -1042,7 +1043,8 @@ unsafe fn add_shared_group(w: &GroupServices, flags: u32, id: u16, kind: u8) -> 
     if flags & 1 != 0 {
         let mut from = 0;
         loop {
-            let v = unsafe { (w.next_vehicle)(from) }.cast::<()>();
+            let v =
+                crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
             if v.is_null() {
                 break;
             }
@@ -1076,7 +1078,8 @@ unsafe fn remove_vehicles_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
     if flags & 1 != 0 {
         let mut from = 0;
         loop {
-            let v = unsafe { (w.next_vehicle)(from) }.cast::<()>();
+            let v =
+                crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
             if v.is_null() {
                 break;
             }

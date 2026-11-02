@@ -59,6 +59,11 @@ impl VehicleRef {
         crate::raw_field::read_field!(self.0.as_ptr(), shell).cast()
     }
 
+    /// Convert a nullable canonical record to a legacy native context.
+    pub(crate) fn shell_from_record(record: *mut OpenTTDVehicle) -> *mut () {
+        NonNull::new(record).map_or(std::ptr::null_mut(), |record| Self(record).shell().cast())
+    }
+
     /// Resolve a legacy native shell under the caller's original lifetime rules.
     ///
     /// # Safety
