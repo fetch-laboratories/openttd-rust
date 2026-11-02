@@ -54,12 +54,16 @@ jobs:
               ...context.repo, basehead: `${pull.base.sha}...${head}`
             });
             if (comparison.behind_by !== 0) return null;
-            const {data: previous} = await github.rest.repos.getCombinedStatusForRef({...context.repo, ref: before});
-            const full = previous.statuses.find(status => status.context === 'Full validation');
-            const marker = previous.statuses.find(status => status.context === 'Validated tree');
+            // Combined statuses omit creators; preserve the gate's GitHub Actions source requirement.
+            const previous = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+              ...context.repo, ref: before, per_page: 100
+            });
+            const full = previous.find(status => status.context === 'Full validation');
+            const marker = previous.find(status => status.context === 'Validated tree');
             const runPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/`;
             const run = full?.target_url;
-            if (full?.state !== 'success' || marker?.state !== 'success' ||
+            if (![full, marker].every(status => status?.state === 'success' &&
+                  status.creator?.login === 'github-actions[bot]' && status.creator?.type === 'Bot') ||
                 typeof run !== 'string' || !run.startsWith(runPrefix) || !/^[1-9][0-9]*$/.test(run.slice(runPrefix.length)) ||
                 marker.target_url !== run || !/^[0-9a-f]{40}$/.test(marker.description)) return null;
             const {data: pushed} = await github.rest.repos.getCommit({...context.repo, ref: head});

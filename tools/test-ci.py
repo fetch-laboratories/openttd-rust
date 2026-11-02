@@ -23,6 +23,7 @@ MERGE = "d" * 40
 TREE = "f" * 40
 PREVIOUS = "9" * 40
 RUN = "https://github.com/example/fork/actions/runs/123"
+ACTIONS = {"login": "github-actions[bot]", "type": "Bot"}
 PULL = {
     "state": "open",
     "head": {"sha": HEAD},
@@ -130,14 +131,18 @@ const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root',
   serverUrl: 'https://github.com', runId: 123, payload: {json.dumps(payload)}}};
 const core = {{setFailed: value => failures.push(value), setOutput: (k,v) => outputs[k] = v,
   info: () => {{}}}};
-const github = {{rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}},
+const github = {{paginate: async (_method, args) => {{
+  if (args.ref !== {json.dumps(PREVIOUS)}) throw new Error('Unexpected status ref');
+  return {json.dumps(list(previous))};
+}}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}},
   git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
   repos: {{
   getCommit: async () => ({{data: {{commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
   getCollaboratorPermissionLevel: async () => ({{data: {{permission: 'write'}}}}),
   getCombinedStatusForRef: async args => ({{data: {{statuses: args.ref === {json.dumps(PREVIOUS)} ?
-    {json.dumps(list(previous))} : {json.dumps([latest] if latest else [])}}}}}),
+    {json.dumps(list(previous))}.map(({{creator, ...status}}) => status) : {json.dumps([latest] if latest else [])}}}}}),
   compareCommitsWithBasehead: {compare},
+  listCommitStatusesForRef: () => {{}},
   createCommitStatus: async value => statuses.push(value)
 }}}}}};
 Object.assign(process.env, {json.dumps(env or {})});
@@ -215,12 +220,18 @@ def tree(*entries, **fields):
 def validation(full="success", marker="success", run=RUN, marker_run=RUN, tree=TREE):
     """Full validation status and its Validated tree marker on a merged head."""
     return [
-        {"context": "Full validation", "state": full, "target_url": run},
+        {
+            "context": "Full validation",
+            "state": full,
+            "target_url": run,
+            "creator": ACTIONS,
+        },
         {
             "context": "Validated tree",
             "state": marker,
             "target_url": marker_run,
             "description": tree,
+            "creator": ACTIONS,
         },
     ]
 
@@ -412,6 +423,25 @@ class GateTests(unittest.TestCase):
         missing = "async () => { throw new Error('Not Found'); }"
         bad_runs = (None, "", "run", RUN + "/extra", RUN.replace("fork", "other"))
         cases = [("matching tree", {}, carried)]
+        for index in (0, 1):
+            for creator in (None, {}, {"login": "writer", "type": "User"}):
+                forged = validation(tree=BASE)
+                forged[index] = dict(forged[index], creator=creator)
+                cases.append(
+                    (
+                        f"untrusted status {index}: {creator}",
+                        {"previous": forged},
+                        pending,
+                    )
+                )
+                # A newer untrusted status must not expose an older trusted result.
+                cases.append(
+                    (
+                        f"untrusted over trusted {index}: {creator}",
+                        {"previous": [forged[index], *validation(tree=BASE)]},
+                        pending,
+                    )
+                )
         for label, change in (
             ("opened", {"payload": {"action": "opened", "before": PREVIOUS}}),
             ("reopened", {"payload": {"action": "reopened"}}),
@@ -932,7 +962,7 @@ class RequestTests(unittest.TestCase):
                 )
                 with (
                     patch.object(ci, "api", side_effect=pull_and_statuses([])),
-                    patch.object(ci, "gh") as gh,
+                    patch.object(ci, "gh", return_value=json.dumps([[]])) as gh,
                 ):
                     request_path = ci.request(args)
                 invocation = gh.call_args.args
@@ -947,12 +977,25 @@ class RequestTests(unittest.TestCase):
                 self.assertEqual(len(record["request"]), 32)
 
     def test_full_request_stops_on_a_head_that_already_passed(self):
-        passed = {"context": ci.CONTEXT, "state": "success", "target_url": RUN}
+        passed = {
+            "context": ci.CONTEXT,
+            "state": "success",
+            "target_url": RUN,
+            "creator": ACTIONS,
+        }
         for profile, statuses, bootstrap, dispatched in (
             ("full", [passed], False, False),
             ("full", [dict(passed, state="pending")], False, True),
             ("full", [dict(passed, state="failure")], False, True),
             ("full", [dict(passed, context="Validated tree")], False, True),
+            ("full", [dict(passed, creator=None)], False, True),
+            (
+                "full",
+                [dict(passed, creator={"login": "writer", "type": "User"})],
+                False,
+                True,
+            ),
+            ("full", [dict(passed, creator=None), passed], False, True),
             ("full", [passed], True, True),
             ("native", [passed], False, True),
         ):
@@ -967,14 +1010,20 @@ class RequestTests(unittest.TestCase):
                     bootstrap=bootstrap,
                     request_file=Path(directory) / "request.json",
                 )
-                variables = json.dumps([])
                 with (
                     patch.object(ci, "api", side_effect=pull_and_statuses(statuses)),
-                    patch.object(ci, "gh", return_value=variables) as gh,
+                    patch.object(
+                        ci,
+                        "gh",
+                        side_effect=lambda *args, statuses=statuses: json.dumps(
+                            [] if args[0] == "variable" else [statuses]
+                        ),
+                    ) as gh,
                     patch("builtins.print"),
                 ):
                     path = ci.request(args)
-                self.assertEqual(gh.called, dispatched)
+                writes = [call for call in gh.call_args_list if call.args[0] != "api"]
+                self.assertEqual(bool(writes), dispatched)
                 self.assertEqual(path is not None, dispatched)
 
     def test_run_discovery_uses_unique_request_identity(self):

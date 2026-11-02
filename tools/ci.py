@@ -52,9 +52,26 @@ def validate_pull(pull: dict, head: str | None = None) -> str:
 
 def passed_run(repository: str, head: str) -> str | None:
     """Return the run URL of a successful Full validation already on the head."""
-    combined = api(repository, f"commits/{head}/status")
-    full = [item for item in combined["statuses"] if item["context"] == CONTEXT]
-    return full[0]["target_url"] if full and full[0]["state"] == "success" else None
+    # Combined statuses omit creators; only the gate's GitHub Actions source qualifies.
+    pages = json.loads(
+        gh(
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{repository}/commits/{head}/statuses?per_page=100",
+        )
+    )
+    full = next(
+        (item for page in pages for item in page if item["context"] == CONTEXT), None
+    )
+    if full and full["state"] == "success":
+        creator = full.get("creator") or {}
+        if (
+            creator.get("login") == "github-actions[bot]"
+            and creator.get("type") == "Bot"
+        ):
+            return full["target_url"]
+    return None
 
 
 def find_run(record: dict, runs: list[dict]) -> dict | None:
