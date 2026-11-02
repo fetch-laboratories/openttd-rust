@@ -31,7 +31,7 @@ use crate::track_func::{
 use crate::binaryheap::BinaryHeap;
 use crate::node_hash::NodeMap;
 use crate::witness;
-use std::cell::UnsafeCell;
+use std::cell::{OnceCell, UnsafeCell};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::rc::Rc;
@@ -306,6 +306,7 @@ impl Node {
 }
 struct Search {
     input: Input,
+    vehicle: OnceCell<Option<crate::vehicle::VehicleRef>>,
     leaves: Leaves,
     train: Train,
     compatible: u64,
@@ -371,6 +372,7 @@ impl Search {
         let train = unsafe { (leaves.train)(input.context) };
         Self {
             input,
+            vehicle: OnceCell::new(),
             leaves,
             train,
             compatible: train.compatible,
@@ -510,8 +512,17 @@ impl Search {
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
         let shared = unsafe { &*self.input.shared };
-        let v = std::ptr::NonNull::new(self.input.vehicle.cast_mut().cast())
-            .map(crate::vehicle::VehicleRef);
+        let v = *self.vehicle.get_or_init(|| {
+            std::ptr::NonNull::new(self.input.vehicle.cast_mut()).map(|shell| {
+                // SAFETY: Native searches retain the same live train shell until return.
+                unsafe {
+                    crate::vehicle::VehicleRef::from_shell(
+                        shell.as_ptr().cast(),
+                        crate::movement::table(shared).vehicle(),
+                    )
+                }
+            })
+        });
         let mut state = crate::follow_track::State::vehicle(
             shared,
             crate::transport_type::TRANSPORT_RAIL,

@@ -349,8 +349,9 @@ impl Refresher {
             let temp = (r.cargo_kind)(shell);
             (r.set_cargo_kind)(shell, self.cargo, temp.subtype);
             // SAFETY: `shell` is a live vehicle; the callback reads both shells only.
-            let subtype =
-                unsafe { (r.common.transactions.subtype)(shell.cast(), shell.cast(), self.cargo) };
+            let subtype = unsafe {
+                (r.common.transactions.subtype)(v.shell().cast(), v.shell().cast(), self.cargo)
+            };
             (r.set_cargo_kind)(shell, self.cargo, subtype);
 
             let mut mail_capacity = 0_u16;

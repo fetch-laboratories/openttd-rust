@@ -24,8 +24,8 @@ use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::road::{PathElement, State};
 use crate::services::Services;
 use crate::track_type::INVALID_TRACKDIR;
+use crate::vehicle::OpenTTDVehicle;
 use std::cell::OnceCell;
-use std::ffi::c_void;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -81,8 +81,8 @@ pub struct Traversal {
 pub struct Leaves {
     /// Shared table for the road stop owner's cost observations.
     pub shared: *const Services,
-    pub tile: unsafe extern "C" fn(*const c_void, u32, u8, bool) -> Tile,
-    pub closest: unsafe extern "C" fn(*const c_void, u16, u8) -> u32,
+    pub tile: unsafe extern "C" fn(*const OpenTTDVehicle, u32, u8, bool) -> Tile,
+    pub closest: unsafe extern "C" fn(*const OpenTTDVehicle, u16, u8) -> u32,
 }
 #[repr(C)]
 pub struct Result {
@@ -147,7 +147,7 @@ struct Search<'a> {
     speeds: OnceCell<(i32, u16)>,
     input: Input,
     leaves: Leaves,
-    context: *const c_void,
+    context: *const OpenTTDVehicle,
     depot: bool,
     max_cost: i32,
     destination: u32,
@@ -169,7 +169,7 @@ impl Search<'_> {
     fn new(
         input: Input,
         leaves: Leaves,
-        context: *const c_void,
+        context: *const OpenTTDVehicle,
         depot: bool,
         max_cost: i32,
     ) -> Self {
@@ -188,7 +188,7 @@ impl Search<'_> {
     unsafe fn reused(
         input: Input,
         leaves: Leaves,
-        context: *const c_void,
+        context: *const OpenTTDVehicle,
         depot: bool,
         max_cost: i32,
     ) -> Self {
@@ -200,7 +200,7 @@ impl Search<'_> {
     fn with_scratch(
         input: Input,
         leaves: Leaves,
-        context: *const c_void,
+        context: *const OpenTTDVehicle,
         depot: bool,
         max_cost: i32,
         mut scratch: Scratch,
@@ -240,12 +240,9 @@ impl Search<'_> {
         // SAFETY: The context's road kind is invariant throughout this search.
         *self.tram.get_or_init(|| {
             // SAFETY: The native search retains the same live vehicle handle.
-            let vehicle = unsafe {
-                crate::vehicle::VehicleRef::from_shell(
-                    self.context.cast_mut(),
-                    self.movement.get().vehicle(),
-                )
-            };
+            let vehicle = crate::vehicle::VehicleRef(
+                std::ptr::NonNull::new(self.context.cast_mut()).unwrap(),
+            );
             (self.movement.get().road_kind)(vehicle).0
         })
     }
@@ -270,10 +267,7 @@ impl Search<'_> {
     }
     fn follow(&self, tile: u32, td: u8) -> Follow {
         let s = unsafe { &*self.leaves.shared };
-        let v = std::ptr::NonNull::new((self.movement.get().vehicle().record_from_shell)(
-            self.context.cast_mut(),
-        ))
-        .map(crate::vehicle::VehicleRef);
+        let v = std::ptr::NonNull::new(self.context.cast_mut()).map(crate::vehicle::VehicleRef);
         let mut state = *self.follower.get_or_init(|| {
             crate::follow_track::State::vehicle(
                 s,
@@ -454,9 +448,9 @@ impl Search<'_> {
             let next_z = center_z(f.tile);
             let shared = unsafe { &*self.leaves.shared };
             let movement = crate::movement::table(shared);
-            let vehicle = unsafe {
-                crate::vehicle::VehicleRef::from_shell(self.context.cast_mut(), movement.vehicle())
-            };
+            let vehicle = crate::vehicle::VehicleRef(
+                std::ptr::NonNull::new(self.context.cast_mut()).unwrap(),
+            );
             let (display_speed, order_speed) = *self.speeds.get_or_init(|| {
                 ((movement.train().physics.display_max_speed)(vehicle), {
                     // SAFETY: the movement table's orders leaves have process lifetime.
@@ -638,12 +632,9 @@ impl Search<'_> {
                 return self.arena[index].td;
             }
             // Native entries supply the canonical vehicle handle as their context.
-            let vehicle = unsafe {
-                crate::vehicle::VehicleRef::from_shell(
-                    self.context.cast_mut(),
-                    self.movement.get().vehicle(),
-                )
-            };
+            let vehicle = crate::vehicle::VehicleRef(
+                std::ptr::NonNull::new(self.context.cast_mut()).unwrap(),
+            );
             let stop = crate::road_stop::primary_for_vehicle(shared, st, vehicle);
             if stop.is_null() {
                 return self.arena[index].td;
@@ -708,7 +699,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
     state: *mut State,
     input: *const Input,
     leaves: *const Leaves,
-    context: *const c_void,
+    context: *const OpenTTDVehicle,
     tile: u32,
     entry: u8,
     dirs: u16,
@@ -751,7 +742,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
 pub unsafe extern "C" fn openttd_rust_road_yapf_depot(
     input: *const Input,
     leaves: *const Leaves,
-    context: *const c_void,
+    context: *const OpenTTDVehicle,
     max_cost: i32,
 ) -> Result {
     // SAFETY: Caller supplies live initialized immutable scalar descriptors.
