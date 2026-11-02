@@ -83,7 +83,6 @@ static void VehicleMaintenanceBoundary()
 	capabilities.price_shift = [](const OpenTTDEngine *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
 	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities; transactions.commands = &commands;
 	maintenance.transaction = &transactions;
-	base.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 
 	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval {
 		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .reliability = 0, .percent = false, .wallclock = false, .no_service = true, .breakdowns = 0};

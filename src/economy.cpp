@@ -474,7 +474,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *v = VehicleOf(handle); return v->orders != nullptr;
 	},
 	.load_unload_ticks = RustVehicleLoadUnloadTicks,
-	.status = GetRustVehicleServices().status,
 	.has_articulated_part = RustVehicleHasArticulated,
 	.is_articulated_part = RustVehicleRead<bool, RustVehicleArticulated>,
 	.is_rear_dualheaded = [](OpenTTDVehicle *handle) noexcept -> bool {
@@ -532,7 +531,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *front = VehicleOf(handle);
 		front->load_unload_ticks = value;
 	},
-	.set_speed = GetRustVehicleServices().write_speed,
 	.subtract_profit = [](OpenTTDVehicle *handle, int64_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		front->profit_this_year -= value;
@@ -623,7 +621,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		GoodsEntry &ge = static_cast<Station *>(station)->goods[cargo];
 		return ge.HasData() && ge.GetData().cargo.HasCargoFor(*static_cast<std::vector<StationID> *>(next_stations));
 	},
-	.vehicle_tile = GetRustVehicleServices().tile,
 	.station_cargo_total = [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t {
 		return static_cast<Station *>(station)->goods[cargo].GetData().cargo.TotalCount();
 	},

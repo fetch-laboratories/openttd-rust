@@ -200,7 +200,6 @@ struct OpenTTDStationLoading {
 	uint8_t (*unload_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unload_type);
 	bool (*has_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_orders);
 	uint16_t (*load_unload_ticks)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_unload_ticks);
-	uint8_t (*status)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(status);
 	bool (*has_articulated_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated_part);
 	bool (*is_articulated_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_articulated_part);
 	bool (*is_rear_dualheaded)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_rear_dualheaded);
@@ -220,7 +219,6 @@ struct OpenTTDStationLoading {
 	void (*set_loading_finished)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_finished);
 	void (*set_stop)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_stop);
 	void (*set_load_ticks)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_load_ticks);
-	void (*set_speed)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_speed);
 	void (*subtract_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_profit);
 	void (*unknown_load_result)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_load_result);
 	void (*vehicle_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);
@@ -242,7 +240,6 @@ struct OpenTTDStationLoading {
 	void (*deliver_to_transfer)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deliver_to_transfer);
 	void (*deliver_to_keep)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deliver_to_keep);
 	bool (*has_cargo_for)(OpenTTDStation *, uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(has_cargo_for);
-	uint32_t (*vehicle_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tile);
 	uint32_t (*station_cargo_total)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo_total);
 	OpenTTDNativeCargoPayment * (*get_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(get_payment);
 	OpenTTDNativeCargoPayment * (*create_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(create_payment);

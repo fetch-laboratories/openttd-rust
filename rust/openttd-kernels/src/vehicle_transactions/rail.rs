@@ -124,7 +124,7 @@ impl Ctx {
         unsafe { (self.g.vehicle_engine)(v) }
     }
     fn tile(self, v: *mut ()) -> u32 {
-        (self.c.vehicles.tile)(unsafe { super::vehicle_ref(v, self.c.vehicles) })
+        (unsafe { super::vehicle_ref(v, self.c.vehicles) }).tile()
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
         if self.w.assertions {

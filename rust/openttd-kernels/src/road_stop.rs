@@ -419,13 +419,8 @@ pub(crate) unsafe fn leave(
 /// `RoadStop::GetByTile(v->tile, GetRoadStopType(v->tile))->Leave(v)`.
 /// # Safety
 /// Live serialized road owner of the front vehicle `v`.
-pub(crate) unsafe fn leave_vehicle(
-    s: &Services,
-    vehicle: &VehicleServices,
-    v: VehicleRef,
-    road: *mut RoadState,
-) {
-    let tile = (vehicle.tile)(v);
+pub(crate) unsafe fn leave_vehicle(s: &Services, v: VehicleRef, road: *mut RoadState) {
+    let tile = v.tile();
     // SAFETY: Caller's contract.
     unsafe { leave(s, at(s, tile), tile, v, road) };
 }
@@ -718,7 +713,7 @@ pub unsafe extern "C" fn openttd_rust_road_stop_leave(
     // SAFETY: Caller's contract; the road stop table's vehicle table is static.
     unsafe {
         let s = &*s;
-        leave_vehicle(s, &*table(s).vehicle, v, road);
+        leave_vehicle(s, v, road);
     }
 }
 /// `rs->GetEntry(dir).CheckIntegrity(rs)`.

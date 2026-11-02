@@ -147,8 +147,8 @@ TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity"
 		CHECK(position.z == movement.position.z);
 		CHECK(position.subtype == movement.position.subtype);
 		services.write_coordinates(RustVehicle(v), -31, 49, 77);
-		services.write_speed(RustVehicle(v), 123);
-		services.write_direction(RustVehicle(v), DIR_SW);
+		v->Record().cur_speed = 123;
+		v->Record().direction = DIR_SW;
 		CHECK(*movement.x == -31);
 		CHECK(*movement.y == 49);
 		CHECK(*position.z == 77);

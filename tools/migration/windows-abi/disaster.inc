@@ -5,10 +5,10 @@
 
 struct DisasterProbe {
 	OpenTTDVehicle record{};
-	DisasterProbe() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); this->record.subtype = 13; this->record.type = VEH_DISASTER; }
+	DisasterProbe() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); this->record.tick_counter = 255; this->record.subtype = 13; this->record.type = VEH_DISASTER; }
 	uint32_t draws = 0, random = 0, viewports = 0, deletes = 0, clears = 0, signals = 0, news = 0, tile_types = 0;
 	int32_t age = 8880;
-	uint8_t tick = 255, tile_type = 0, clear_owner = 0;
+	uint8_t tile_type = 0, clear_owner = 0;
 	std::vector<uint32_t> script{};
 	size_t scripted = 0;
 	OpenTTDVehicleTileLinks links{};
@@ -32,8 +32,6 @@ static void Disasters()
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(&probe, DisasterProbeRandom, DisasterProbeIndustry);
 	OpenTTDVehicleServices vehicles{};
 
-	vehicles.tick = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v->shell)->tick; };
-	vehicles.write_tick = [](OpenTTDVehicle *v, uint8_t tick) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->tick = tick; };
 	vehicles.destroy = [](OpenTTDVehicle *v) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->deletes++; };
 	OpenTTDDisasterServices services{};
 	services.shared = &shared;
@@ -54,20 +52,18 @@ static void Disasters()
 	openttd_rust_disaster_startup(&services); CHECK(*delay == 730 && probe.draws == 2);
 	CHECK(delay == openttd_rust_disaster_delay() && state.get() == address && state->state == 65535 && state->flags == 0xAB && state->image_override == UINT32_MAX);
 	CHECK(!openttd_rust_disaster_tick(&services, vehicle));
-	CHECK(probe.age == 8881 && probe.tick == 0 && probe.deletes == 1 && probe.draws == 2);
+	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 2);
 
 	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
 	vehicles.occupancy_update = [](OpenTTDVehicle *v) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = &reinterpret_cast<DisasterProbe *>(v->shell)->links, .tile = 0}; };
 	vehicles.map_log_x = []() noexcept { return 6U; };
 
-	vehicles.z = [](OpenTTDVehicle *) noexcept { return int32_t{0}; };
-	vehicles.tile = [](OpenTTDVehicle *) noexcept { return 0U; };
 	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
 	services.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
 	services.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
-	probe.tick = 1; probe.record.subtype = 8;
+	probe.record.tick_counter = 1; probe.record.subtype = 8;
 	CHECK(openttd_rust_disaster_tick(&services, vehicle));
-	CHECK(probe.tick == 2 && probe.viewports == 1 && probe.draws == 2 && probe.deletes == 1);
+	CHECK(probe.record.tick_counter == 2 && probe.viewports == 1 && probe.draws == 2 && probe.deletes == 1);
 
 	/* Coal mine subsidence reaches DisasterClearSquare through the daily entry. */
 	OpenTTDCommandCostServices costs{};
@@ -94,7 +90,7 @@ static void Disasters()
 		auto *p = _disaster_probe;
 		return from <= 17 ? OpenTTDDisasterVehicle{.handle = &p->record, .state = p->state, .id = 17} : OpenTTDDisasterVehicle{.handle = nullptr, .state = nullptr, .id = 1048575};
 	};
-	vehicles.dest_tile = [](OpenTTDVehicle *) noexcept { return 7U; };
+	probe.record.dest_tile = 7;
 	/* A nested entry from the clear command, as an industry destructor releases its attackers. */
 	services.clear = [](uint32_t tile, uint8_t company) noexcept {
 		auto *p = _disaster_probe;

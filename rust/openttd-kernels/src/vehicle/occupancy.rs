@@ -167,7 +167,7 @@ impl OnTile {
         it
     }
     unsafe fn filter(&mut self, s: &VehicleServices) {
-        while !self.current.is_null() && (s.tile)(unsafe { handle(self.current) }) != self.tile {
+        while !self.current.is_null() && unsafe { handle(self.current) }.tile() != self.tile {
             crate::witness::hit(crate::witness::OCCUPANCY_ALIAS);
             self.current = unsafe { next(s, self.current) };
         }
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
         if kind != super::VehicleType::DISASTER.0
             && !(kind == super::VehicleType::AIRCRAFT.0
                 && v.subtype() == crate::aircraft::AIR_SHADOW)
-            && (s.z)(v) <= z
+            && v.z() <= z
         {
             c.result(out, Some(kind));
             return;

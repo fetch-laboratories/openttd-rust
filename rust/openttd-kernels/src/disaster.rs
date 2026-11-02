@@ -225,14 +225,14 @@ impl<'a> World<'a> {
     fn chance(&self, denominator: u32) -> bool {
         chance16_i(1, denominator, self.random())
     }
-    fn tile(&self, v: Vehicle) -> u32 {
-        (self.v.tile)(v.shell())
+    fn tile(v: Vehicle) -> u32 {
+        (v.shell()).tile()
     }
-    fn dest(&self, v: Vehicle) -> u32 {
-        (self.v.dest_tile)(v.shell())
+    fn dest(v: Vehicle) -> u32 {
+        (v.shell()).dest_tile()
     }
-    fn set_dest(&self, v: Vehicle, tile: u32) {
-        (self.v.write_dest)(v.shell(), tile);
+    fn set_dest(v: Vehicle, tile: u32) {
+        (v.shell()).write_dest(tile);
     }
     fn age(&self, v: Vehicle) -> i32 {
         (self.s.age)(v.shell())
@@ -245,12 +245,12 @@ impl<'a> World<'a> {
         self.set_age(v, age);
         age
     }
-    fn tick(&self, v: Vehicle) -> u8 {
-        (self.v.tick)(v.shell())
+    fn tick(v: Vehicle) -> u8 {
+        (v.shell()).tick()
     }
-    fn increment_tick(&self, v: Vehicle) -> u8 {
-        let tick = self.tick(v).wrapping_add(1);
-        (self.v.write_tick)(v.shell(), tick);
+    fn increment_tick(v: Vehicle) -> u8 {
+        let tick = Self::tick(v).wrapping_add(1);
+        (v.shell()).write_tick(tick);
         tick
     }
     fn xy(&self, v: Vehicle) -> crate::vehicle::XY {
@@ -302,7 +302,7 @@ impl<'a> World<'a> {
         let mut image = v.image();
         if image == 0 {
             let subtype = v.shell().subtype();
-            let dir = (self.v.direction)(v.shell());
+            let dir = (v.shell()).direction();
             image = match subtype {
                 ST_ZEPPELINER | ST_ZEPPELINER_SHADOW => SPR_BLIMP,
                 ST_SMALL_UFO | ST_SMALL_UFO_SHADOW => SPR_UFO_SMALL_SCOUT,
@@ -319,7 +319,7 @@ impl<'a> World<'a> {
     }
     fn update_position(&self, v: Vehicle, x: i32, y: i32, z: i32) {
         (self.v.write_coordinates)(v.shell(), x, y, z);
-        (self.v.write_tile)(v.shell(), self.map().tile_virt_xy(x as u32, y as u32));
+        (v.shell()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
         self.update_image(v);
         self.viewport(v);
         let u = (self.s.next_part)(v.shell());
@@ -328,14 +328,14 @@ impl<'a> World<'a> {
             let safe_y = y
                 .wrapping_sub(1)
                 .clamp(0, (self.shared.map_max_y)() as i32 * TILE_SIZE as i32);
-            (self.v.write_x)(u.shell(), x);
+            (u.shell()).write_x(x);
             let shadow_y = y
                 .wrapping_sub(1)
                 .wrapping_sub(z.wrapping_sub(self.slope(safe_x, safe_y)).max(0) >> 3);
-            (self.v.write_y)(u.shell(), shadow_y);
+            (u.shell()).write_y(shadow_y);
             let safe_y = shadow_y.clamp(0, (self.shared.map_max_y)() as i32 * TILE_SIZE as i32);
-            (self.v.write_z)(u.shell(), self.slope(safe_x, safe_y));
-            (self.v.write_direction)(u.shell(), (self.v.direction)(v.shell()));
+            (u.shell()).write_z(self.slope(safe_x, safe_y));
+            (u.shell()).write_direction((v.shell()).direction());
             self.update_image(u);
             self.viewport(u);
             let rotor = (self.s.next_part)(u.shell());
@@ -397,9 +397,9 @@ impl<'a> World<'a> {
         }
     }
     fn zeppelin(&self, v: Vehicle) -> bool {
-        self.increment_tick(v);
+        Self::increment_tick(v);
         if v.state() < 2 {
-            if self.tick(v) & 1 != 0 {
+            if Self::tick(v) & 1 != 0 {
                 return true;
             }
             self.move_flight(v);
@@ -408,24 +408,24 @@ impl<'a> World<'a> {
                     v.set_state(2);
                     self.set_age(v, 0);
                 }
-                if self.tick(v) & 7 == 0 {
+                if Self::tick(v) & 7 == 0 {
                     Self::effect_rel(v, 0, -17, 2, crate::effectvehicle_func::EV_CRASH_SMOKE);
                 }
             } else if v.state() == 0 {
-                let tile = self.tile(v);
+                let tile = Self::tile(v);
                 if (self.shared.tile_valid)(tile) && (self.s.airport_tile)(tile) {
                     v.set_state(1);
                     self.set_age(v, 0);
                     (self.s.zeppelin_news)(tile, (self.shared.station_index)(tile));
-                    (self.s.zeppelin_crashed)(self.tile(v));
+                    (self.s.zeppelin_crashed)(Self::tile(v));
                 }
             }
-            if (self.v.y)(v.shell()) >= ((self.size_y() + 9) * TILE_SIZE - 1) as i32 {
+            if (v.shell()).y() >= ((self.size_y() + 9) * TILE_SIZE - 1) as i32 {
                 return self.delete(v);
             }
             return true;
         }
-        let tile = self.tile(v);
+        let tile = Self::tile(v);
         if (self.shared.tile_valid)(tile) && (self.s.airport_tile)(tile) {
             (self.s.airport_blocks)((self.shared.station_index)(tile), true);
         }
@@ -433,7 +433,7 @@ impl<'a> World<'a> {
             if self.increment_age(v) <= 13320 {
                 return true;
             }
-            let tile = self.tile(v);
+            let tile = Self::tile(v);
             if (self.shared.tile_valid)(tile) && (self.s.airport_tile)(tile) {
                 let station = (self.shared.station_index)(tile);
                 (self.s.airport_blocks)(station, false);
@@ -445,8 +445,8 @@ impl<'a> World<'a> {
         }
         let p = self.xy(v);
         let mut z = self.slope(p.x, p.y);
-        if z < (self.v.z)(v.shell()) {
-            z = (self.v.z)(v.shell()).wrapping_sub(1);
+        if z < (v.shell()).z() {
+            z = (v.shell()).z().wrapping_sub(1);
         }
         self.update_position(v, p.x, p.y, z);
         let age = self.increment_age(v);
@@ -457,7 +457,7 @@ impl<'a> World<'a> {
         } else if age == 70 {
             v.set_image(SPR_BLIMP_CRASHED);
         } else if age <= 300 {
-            if self.tick(v) & 7 == 0 {
+            if Self::tick(v) & 7 == 0 {
                 let r = self.random();
                 Self::effect_rel(
                     v,
@@ -474,7 +474,7 @@ impl<'a> World<'a> {
         true
     }
     fn small_ufo(&self, v: Vehicle) -> bool {
-        let tick = self.increment_tick(v);
+        let tick = Self::increment_tick(v);
         v.set_image(if tick & 8 != 0 {
             SPR_UFO_SMALL_SCOUT_DARKER
         } else {
@@ -482,17 +482,17 @@ impl<'a> World<'a> {
         });
         if v.state() == 0 {
             let map = self.map();
-            let dest = self.dest(v);
+            let dest = Self::dest(v);
             let x = (map.tile_x(dest) * TILE_SIZE) as i32;
             let y = (map.tile_y(dest) * TILE_SIZE) as i32;
             let p = self.xy(v);
             if distance(x, y, p.x, p.y) >= TILE_SIZE as i32 {
-                (self.v.write_direction)(v.shell(), (self.s.toward)(v.shell(), x, y));
+                (v.shell()).write_direction((self.s.toward)(v.shell(), x, y));
                 self.move_flight(v);
                 return true;
             }
             if self.increment_age(v) < 6 {
-                self.set_dest(v, self.random_tile());
+                Self::set_dest(v, self.random_tile());
                 return true;
             }
             v.set_state(1);
@@ -525,7 +525,7 @@ impl<'a> World<'a> {
                         {
                             return self.delete(v);
                         }
-                        self.set_dest(v, target.id);
+                        Self::set_dest(v, target.id);
                         self.set_age(v, 0);
                         (self.s.write_road_disaster)(target.shell(), v.id);
                         break;
@@ -535,26 +535,26 @@ impl<'a> World<'a> {
             }
             return true;
         }
-        let target = (self.s.road_target)(self.dest(v));
+        let target = (self.s.road_target)(Self::dest(v));
         let t = (self.v.xy)(target.shell());
         let p = self.xy(v);
         let dist = distance(p.x, p.y, t.x, t.y) as u32;
         if dist < TILE_SIZE
-            && (self.v.status)(target.shell()) & VS_HIDDEN == 0
+            && (target.shell()).status() & VS_HIDDEN == 0
             && (self.s.breakdown_counter)(target.shell()) == 0
         {
             (self.s.write_breakdown)(target.shell(), 3, 140);
         }
-        (self.v.write_direction)(v.shell(), (self.s.toward)(v.shell(), t.x, t.y));
+        (v.shell()).write_direction((self.s.toward)(v.shell(), t.x, t.y));
         let gp = (self.v.new_position)(v.shell());
-        let mut z = (self.v.z)(v.shell());
-        if dist <= TILE_SIZE && z > (self.v.z)(target.shell()) {
+        let mut z = (v.shell()).z();
+        if dist <= TILE_SIZE && z > (target.shell()).z() {
             z = z.wrapping_sub(1);
         }
         self.update_position(v, gp.x, gp.y, z);
-        if z <= (self.v.z)(target.shell()) {
+        if z <= (target.shell()).z() {
             self.increment_age(v);
-            if (self.v.status)(target.shell()) & VS_HIDDEN == 0
+            if (target.shell()).status() & VS_HIDDEN == 0
                 && unsafe { crate::road::crashed_counter(target.state) } == 0
             {
                 let victims = unsafe {
@@ -566,7 +566,7 @@ impl<'a> World<'a> {
                     )
                 };
                 (self.s.write_road_disaster)(target.shell(), INVALID_VEHICLE);
-                (self.s.small_ufo_news)((self.v.tile)(target.shell()));
+                (self.s.small_ufo_news)((target.shell()).tile());
                 (self.s.road_crashed)(target.shell(), victims);
             }
         }
@@ -578,7 +578,7 @@ impl<'a> World<'a> {
         true
     }
     fn aircraft(&self, v: Vehicle, leave_top: bool) -> bool {
-        let tick = self.increment_tick(v);
+        let tick = Self::increment_tick(v);
         v.set_image(if v.state() == 1 && tick & 4 != 0 {
             if leave_top {
                 SPR_F_15_FIRING
@@ -596,8 +596,8 @@ impl<'a> World<'a> {
             return self.delete(v);
         }
         if v.state() == 2 {
-            if self.tick(v) & 3 == 0 {
-                let i = (self.s.industry)(self.dest(v));
+            if Self::tick(v) & 3 == 0 {
+                let i = (self.s.industry)(Self::dest(v));
                 let tile = (self.s.industry_tile)(i.industry);
                 let map = self.map();
                 let x = map.tile_x(tile) * TILE_SIZE;
@@ -617,7 +617,7 @@ impl<'a> World<'a> {
             if self.increment_age(v) == 112 {
                 v.set_state(2);
                 self.set_age(v, 0);
-                let i = (self.s.industry)(self.dest(v));
+                let i = (self.s.industry)(Self::dest(v));
                 self.destruct_industry(i.industry);
                 let location = (self.s.industry_location)(i.industry);
                 if leave_top {
@@ -641,7 +641,7 @@ impl<'a> World<'a> {
                 return true;
             }
             let industry = (self.s.industry_index)(tile);
-            self.set_dest(v, u32::from(industry));
+            Self::set_dest(v, u32::from(industry));
             let i = (self.s.industry)(u32::from(industry));
             if (self.s.industry_behaviour)(i.industry)
                 & if leave_top {
@@ -658,7 +658,7 @@ impl<'a> World<'a> {
         true
     }
     fn rotors(&self, v: Vehicle) -> bool {
-        if self.increment_tick(v) & 1 != 0 {
+        if Self::increment_tick(v) & 1 != 0 {
             return true;
         }
         let image = (self.s.first_sprite)(v.shell()).wrapping_add(1);
@@ -676,23 +676,23 @@ impl<'a> World<'a> {
     fn valid_train(&self, v: Vehicle) -> bool {
         (self.s.front)(v.shell())
             && (self.s.human)(v.shell().owner())
-            && (self.shared.is_plain_rail)(self.tile(v))
-            && (self.v.status)(v.shell()) & VS_CRASHED == 0
+            && (self.shared.is_plain_rail)(Self::tile(v))
+            && (v.shell()).status() & VS_CRASHED == 0
     }
     fn big_ufo(&self, v: Vehicle) -> bool {
-        self.increment_tick(v);
+        Self::increment_tick(v);
         if v.state() == 1 {
-            let dest = self.dest(v);
+            let dest = Self::dest(v);
             let map = self.map();
             let x = (map.tile_x(dest) * TILE_SIZE + TILE_SIZE / 2) as i32;
             let y = (map.tile_y(dest) * TILE_SIZE + TILE_SIZE / 2) as i32;
             let p = self.xy(v);
             if distance(p.x, p.y, x, y) >= 8 {
-                (self.v.write_direction)(v.shell(), (self.s.toward)(v.shell(), x, y));
+                (v.shell()).write_direction((self.s.toward)(v.shell(), x, y));
                 self.move_flight(v);
                 return true;
             }
-            if !(self.shared.tile_valid)(self.dest(v)) {
+            if !(self.shared.tile_valid)(Self::dest(v)) {
                 return self.delete(v);
             }
             let p = (self.v.coordinates)(v.shell());
@@ -717,21 +717,21 @@ impl<'a> World<'a> {
                 }
                 from = target.id + 1;
             }
-            let town = crate::town::spatial::closest(self.shared, self.dest(v), u32::MAX);
-            (self.s.big_ufo_news)(self.tile(v), (self.s.town_index)(town));
+            let town = crate::town::spatial::closest(self.shared, Self::dest(v), u32::MAX);
+            (self.s.big_ufo_news)(Self::tile(v), (self.s.town_index)(town));
             if !(self.s.can_allocate)(2) {
                 return self.delete(v);
             }
             let destroyer = (self.s.create)(
                 -6 * TILE_SIZE as i32,
-                (self.v.y)(v.shell()),
+                (v.shell()).y(),
                 DIR_SW,
                 ST_BIG_UFO_DESTROYER,
                 v.id,
             );
             let shadow = (self.s.create)(
                 -6 * TILE_SIZE as i32,
-                (self.v.y)(v.shell()),
+                (v.shell()).y(),
                 DIR_SW,
                 ST_BIG_UFO_DESTROYER_SHADOW,
                 INVALID_VEHICLE,
@@ -742,17 +742,17 @@ impl<'a> World<'a> {
             };
         } else if v.state() == 0 {
             let map = self.map();
-            let dest = self.dest(v);
+            let dest = Self::dest(v);
             let p = self.xy(v);
             let x = (map.tile_x(dest) * TILE_SIZE) as i32;
             let y = (map.tile_y(dest) * TILE_SIZE) as i32;
             if distance(x, y, p.x, p.y) >= TILE_SIZE as i32 {
-                (self.v.write_direction)(v.shell(), (self.s.toward)(v.shell(), x, y));
+                (v.shell()).write_direction((self.s.toward)(v.shell(), x, y));
                 self.move_flight(v);
                 return true;
             }
             if self.increment_age(v) < 6 {
-                self.set_dest(v, self.random_tile());
+                Self::set_dest(v, self.random_tile());
                 return true;
             }
             v.set_state(1);
@@ -782,7 +782,7 @@ impl<'a> World<'a> {
                     let old = n;
                     n = n.wrapping_sub(1);
                     if old == 0 {
-                        self.set_dest(v, self.tile(train));
+                        Self::set_dest(v, Self::tile(train));
                         self.set_age(v, 0);
                         break;
                     }
@@ -793,7 +793,7 @@ impl<'a> World<'a> {
         true
     }
     fn destroyer(&self, v: Vehicle) -> bool {
-        self.increment_tick(v);
+        Self::increment_tick(v);
         let gp = (self.v.new_position)(v.shell());
         self.update_position(v, gp.x, gp.y, self.flight(v));
         if gp.x > ((self.map().size_x() + 9) * TILE_SIZE - 1) as i32 {
@@ -801,7 +801,7 @@ impl<'a> World<'a> {
         }
         if v.state() == 0 {
             let target = (self.s.resolve)(unsafe { (*v.state).target });
-            if delta((self.v.x)(v.shell()), (self.v.x)(target.shell())) > TILE_SIZE as i32 {
+            if delta((v.shell()).x(), (target.shell()).x()) > TILE_SIZE as i32 {
                 return true;
             }
             v.set_state(1);
@@ -827,7 +827,7 @@ impl<'a> World<'a> {
             for dy in -3..3 {
                 for dx in -3..3 {
                     let tile = self.map().tile_add_wrap(
-                        self.tile(v),
+                        Self::tile(v),
                         dx,
                         dy,
                         self.size_y(),
@@ -842,16 +842,16 @@ impl<'a> World<'a> {
         true
     }
     fn submarine(&self, v: Vehicle) -> bool {
-        self.increment_tick(v);
+        Self::increment_tick(v);
         if self.increment_age(v) > 8880 {
             return self.delete(v);
         }
-        if self.tick(v) & 1 == 0 {
+        if Self::tick(v) & 1 == 0 {
             return true;
         }
-        let dir = (self.v.direction)(v.shell());
+        let dir = (v.shell()).direction();
         let tile = self.map().add_diag(
-            self.tile(v),
+            Self::tile(v),
             crate::direction_func::dir_to_diag_dir(dir, |valid| {
                 if self.v.assertions {
                     assert!(valid);
@@ -866,7 +866,7 @@ impl<'a> World<'a> {
             );
             if bits == u32::from(crate::track_type::TRACK_BIT_ALL) && !self.chance(90) {
                 let gp = (self.v.new_position)(v.shell());
-                self.update_position(v, gp.x, gp.y, (self.v.z)(v.shell()));
+                self.update_position(v, gp.x, gp.y, (v.shell()).z());
                 return true;
             }
         }
@@ -875,14 +875,15 @@ impl<'a> World<'a> {
         } else {
             DIRDIFF_90LEFT
         };
-        (self.v.write_direction)(
-            v.shell(),
-            crate::direction_func::change_dir((self.v.direction)(v.shell()), diff, |valid| {
+        (v.shell()).write_direction(crate::direction_func::change_dir(
+            (v.shell()).direction(),
+            diff,
+            |valid| {
                 if self.v.assertions {
                     assert!(valid);
                 }
-            }),
-        );
+            },
+        ));
         true
     }
     fn tick_vehicle(&self, v: Vehicle) -> bool {
@@ -941,7 +942,7 @@ impl<'a> World<'a> {
                 };
                 let v = (self.s.create)(x, y, dir, subtype, INVALID_VEHICLE);
                 if kind != 0 {
-                    self.set_dest(
+                    Self::set_dest(
                         v,
                         self.map()
                             .tile_xy(self.map().size_x() / 2, self.size_y() / 2),
@@ -1107,7 +1108,7 @@ impl<'a> World<'a> {
         }
     }
     fn construct(&self, v: Vehicle, x: i32, y: i32, dir: u8, subtype: u8) {
-        (self.v.write_status)(v.shell(), VS_UNCLICKABLE);
+        (v.shell()).write_status(VS_UNCLICKABLE);
         (self.v.write_xy)(v.shell(), x, y);
         let z = match subtype {
             ST_ZEPPELINER | ST_SMALL_UFO | ST_AIRPLANE | ST_HELICOPTER | ST_BIG_UFO
@@ -1115,13 +1116,13 @@ impl<'a> World<'a> {
             ST_HELICOPTER_ROTORS => self.bounds(v).wrapping_add(crate::aircraft::ROTOR_Z_OFFSET),
             ST_SMALL_SUBMARINE | ST_BIG_SUBMARINE => 0,
             _ => {
-                (self.v.write_status)(v.shell(), (self.v.status)(v.shell()) | VS_SHADOW);
+                (v.shell()).write_status((v.shell()).status() | VS_SHADOW);
                 0
             }
         };
-        (self.v.write_z)(v.shell(), z);
-        (self.v.write_direction)(v.shell(), dir);
-        (self.v.write_tile)(v.shell(), self.map().tile_virt_xy(x as u32, y as u32));
+        (v.shell()).write_z(z);
+        (v.shell()).write_direction(dir);
+        (v.shell()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
         (self.s.write_subtype)(v.shell(), subtype);
         (self.s.update_delta)(v.shell());
         (self.s.write_owner)(v.shell(), crate::company_type::OWNER_NONE);
@@ -1140,7 +1141,7 @@ impl<'a> World<'a> {
             let subtype = v.shell().subtype();
             if (subtype == ST_AIRPLANE || subtype == ST_HELICOPTER)
                 && v.state() > 0
-                && self.dest(v) == u32::from(industry)
+                && Self::dest(v) == u32::from(industry)
             {
                 v.set_state(3);
             }
@@ -1149,8 +1150,8 @@ impl<'a> World<'a> {
     }
     fn release_vehicle(&self, v: Vehicle) {
         v.set_state(0);
-        self.set_dest(v, self.random_tile());
-        (self.v.write_z)(v.shell(), self.bounds(v));
+        Self::set_dest(v, self.random_tile());
+        (v.shell()).write_z(self.bounds(v));
         self.set_age(v, 0);
     }
 }

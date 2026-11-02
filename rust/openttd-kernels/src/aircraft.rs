@@ -469,21 +469,21 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
 
     scalar_services! {
         subtype(self; v: Vehicle) => (v.base()).subtype();
-        x(self; v: Vehicle) => (self.vs.x)(v.base());
-        y(self; v: Vehicle) => (self.vs.y)(v.base());
-        z(self; v: Vehicle) => (self.vs.z)(v.base());
-        tile(self; v: Vehicle) => (self.vs.tile)(v.base());
-        direction(self; v: Vehicle) => (self.vs.direction)(v.base());
-        tick_counter(self; v: Vehicle) => (self.vs.tick)(v.base());
+        x(self; v: Vehicle) => (v.base()).x();
+        y(self; v: Vehicle) => (v.base()).y();
+        z(self; v: Vehicle) => (v.base()).z();
+        tile(self; v: Vehicle) => (v.base()).tile();
+        direction(self; v: Vehicle) => (v.base()).direction();
+        tick_counter(self; v: Vehicle) => (v.base()).tick();
         owner(self; v: Vehicle) => (v.base()).owner();
-        vehicle_status(self; v: Vehicle) => (self.vs.status)(v.base());
-        current_speed(self; v: Vehicle) => (self.vs.speed)(v.base());
-        subspeed(self; v: Vehicle) => (self.vs.subspeed)(v.base());
+        vehicle_status(self; v: Vehicle) => (v.base()).status();
+        current_speed(self; v: Vehicle) => (v.base()).speed();
+        subspeed(self; v: Vehicle) => (v.base()).subspeed();
         order_type(self; v: Vehicle) => (self.vs.order_type)(v.base());
         order_destination(self; v: Vehicle) => (self.vs.order_destination)(v.base());
-        running_ticks(self; v: Vehicle) => (self.vs.running)(v.base());
+        running_ticks(self; v: Vehicle) => (v.base()).running();
         order_time(self; v: Vehicle) => (self.vs.order_time)(v.base());
-        last_station(self; v: Vehicle) => (self.vs.last_station)(v.base());
+        last_station(self; v: Vehicle) => (v.base()).last_station();
         plane_speed(self; ) => (self.ss.plane_speed)();
         no_jetcrash(self; ) => (self.ss.no_jetcrash)();
         plane_crashes(self; ) => (self.ss.plane_crashes)();
@@ -529,7 +529,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     direct_services! {
         movement_observations(self; v: Vehicle) -> MovementObservations => (self.vs.movement_observations)(v.base());
         position_observations(self; v: Vehicle) -> PositionObservations => (self.vs.position_observations)(v.base());
-        maximum_speed(self; v: Vehicle) -> u16 => (self.vs.max_speed)(v.base());
+        maximum_speed(self; v: Vehicle) -> u16 => (v.base()).max_speed();
         altitude_inputs(self; v: Vehicle) -> AltitudeInputs => (self.vs.altitude_inputs)(v.base());
         geometry(self; s: *const Station) -> Geometry => unsafe { (self.leaves.geometry)(s) };
         layout_blocks(self; ap: *const c_void, pos: u8) -> u64 => unsafe { (self.leaves.layout_blocks)(ap, pos) };
@@ -545,29 +545,29 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         tick_status(self; v: Vehicle) -> TickStatus => (self.vs.tick_status)(v.base());
         day_cost(self; v: Vehicle) -> DayCost => (self.vs.day_cost)(v.base());
 
-        set_x(self; v: VehicleRef, value: i64) -> () => (self.vs.write_x)(v, value as i32);
-        set_y(self; v: VehicleRef, value: i64) -> () => (self.vs.write_y)(v, value as i32);
-        set_base_z(self; v: VehicleRef, value: i64) -> () => (self.vs.write_z)(v, value as i32);
-        set_z(self; v: Vehicle, value: i64) -> () => (self.vs.write_z)(v.base(), value as i32);
-        set_tile(self; v: Vehicle, value: i64) -> () => (self.vs.write_tile)(v.base(), value as u32);
-        set_direction(self; v: Vehicle, value: i64) -> () => (self.vs.write_direction)(v.base(), value as u8);
-        set_tick_counter(self; v: Vehicle, value: i64) -> () => (self.vs.write_tick)(v.base(), value as u8);
-        set_vehicle_status(self; v: Vehicle, value: i64) -> () => (self.vs.write_status)(v.base(), value as u8);
-        set_current_speed(self; v: Vehicle, value: i64) -> () => (self.vs.write_speed)(v.base(), value as u16);
-        set_subspeed(self; v: Vehicle, value: i64) -> () => (self.vs.write_subspeed)(v.base(), value as u8);
-        set_progress(self; v: Vehicle, value: i64) -> () => (self.vs.write_progress)(v.base(), value as u8);
-        set_maximum_speed(self; v: Vehicle, value: i64) -> () => (self.vs.write_max_speed)(v.base(), value as u16);
-        set_breakdown_counter(self; v: Vehicle, value: i64) -> () => (self.vs.write_breakdown_counter)(v.base(), value as u8);
-        set_running_ticks(self; v: Vehicle, value: i64) -> () => (self.vs.write_running)(v.base(), value as u8);
+        set_x(self; v: VehicleRef, value: i64) -> () => (v).write_x(value as i32);
+        set_y(self; v: VehicleRef, value: i64) -> () => (v).write_y(value as i32);
+        set_base_z(self; v: VehicleRef, value: i64) -> () => (v).write_z(value as i32);
+        set_z(self; v: Vehicle, value: i64) -> () => (v.base()).write_z(value as i32);
+        set_tile(self; v: Vehicle, value: i64) -> () => (v.base()).write_tile(value as u32);
+        set_direction(self; v: Vehicle, value: i64) -> () => (v.base()).write_direction(value as u8);
+        set_tick_counter(self; v: Vehicle, value: i64) -> () => (v.base()).write_tick(value as u8);
+        set_vehicle_status(self; v: Vehicle, value: i64) -> () => (v.base()).write_status(value as u8);
+        set_current_speed(self; v: Vehicle, value: i64) -> () => (v.base()).write_speed(value as u16);
+        set_subspeed(self; v: Vehicle, value: i64) -> () => (v.base()).write_subspeed(value as u8);
+        set_progress(self; v: Vehicle, value: i64) -> () => (v.base()).write_progress(value as u8);
+        set_maximum_speed(self; v: Vehicle, value: i64) -> () => (v.base()).write_max_speed(value as u16);
+        set_breakdown_counter(self; v: Vehicle, value: i64) -> () => (v.base()).write_breakdown_counter(value as u8);
+        set_running_ticks(self; v: Vehicle, value: i64) -> () => (v.base()).write_running(value as u8);
         set_order_time(self; v: Vehicle, value: i64) -> () => (self.vs.write_order_time)(v.base(), value as i32);
-        set_day_counter(self; v: Vehicle, value: i64) -> () => (self.vs.write_day)(v.base(), value as u8);
+        set_day_counter(self; v: Vehicle, value: i64) -> () => (v.base()).write_day(value as u8);
         set_profit(self; v: Vehicle, value: i64) -> () => (self.vs.write_profit)(v.base(), value as i64);
-        set_last_station(self; v: Vehicle, value: i64) -> () => (self.vs.write_last_station)(v.base(), value as u16);
+        set_last_station(self; v: Vehicle, value: i64) -> () => (v.base()).write_last_station(value as u16);
         set_economy_service(self; v: Vehicle, value: i64) -> () => (self.vs.write_economy_service)(v.base(), value as i32);
         set_calendar_service(self; v: Vehicle, value: i64) -> () => (self.vs.write_calendar_service)(v.base(), value as i32);
         set_breakdowns(self; v: Vehicle, value: i64) -> () => (self.vs.write_breakdowns)(v.base(), value as u8);
         set_reliability(self; v: Vehicle, value: i64) -> () => (self.vs.write_reliability)(v.base(), value as u16);
-        set_cargo_age(self; v: Vehicle, value: i64) -> () => (self.vs.write_cargo_age)(v.base(), value as u16);
+        set_cargo_age(self; v: Vehicle, value: i64) -> () => (v.base()).write_cargo_age(value as u16);
         airport_blocks(self; s: *const Station) -> *mut u64 => unsafe { (self.leaves.airport_blocks)(s) };
         node(self; airport: *const c_void, pos: u8) -> *const c_void => unsafe { (self.leaves.node)(airport, pos) };
         fta(self; node: *const c_void) -> Node => unsafe { (self.leaves.fta)(node) };
@@ -579,7 +579,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         rotor_image(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.rotor_image)(vehicle) };
         copy_sprite(self; vehicle: VehicleRef, source: VehicleRef) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
         position_next(self; vehicle: VehicleRef) -> Option<VehicleRef> => (self.vs.next)(vehicle);
-        position_y(self; vehicle: VehicleRef) -> i32 => (self.vs.y)(vehicle);
+        position_y(self; vehicle: VehicleRef) -> i32 => (vehicle).y();
         position_coordinates(self; vehicle: VehicleRef, x: i64, y: i64, z: i64) -> () => (self.vs.write_coordinates)(vehicle, x as i32, y as i32, z as i32);
         position_viewport(self; vehicle: VehicleRef) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle, self.map()); (self.vs.base_viewport)(vehicle); };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
@@ -730,7 +730,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         i64::from(result)
     }
     fn hangar_exit(&self, v: Vehicle) -> i64 {
-        let tile = (self.vs.tile)(v.base());
+        let tile = (v.base()).tile();
         let st = self.station(u32::from((self.ss.station_index)(tile)));
         let result = unsafe { (self.leaves.hangar_exit)(st, tile, self.airport_spec(st)) };
         Self::service_witness("hangar_exit", std::mem::size_of_val(&result));
@@ -2058,7 +2058,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             return;
         }
         unsafe { maintenance::economy_age_vehicle(id.base(), self.vs) };
-        let day = (self.vs.day)(id.base());
+        let day = (id.base()).day();
         Self::service_witness("day", 1);
         let day = day.wrapping_add(1);
         self.set_day_counter(id, i64::from(day));

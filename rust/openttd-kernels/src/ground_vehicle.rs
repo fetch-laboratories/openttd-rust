@@ -247,10 +247,7 @@ fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
 fn powered_part_owned(s: &Services, v: VehicleRef, o: Owner, head: VehicleRef) -> u16 {
     if o.powered_wagon() {
         let head = if head == v { o } else { (s.resolve)(head) };
-        if (s.powered)(
-            head.train.get_railtypes(),
-            (s.rail_type)((s.vehicle.tile)(v)),
-        ) {
+        if (s.powered)(head.train.get_railtypes(), (s.rail_type)((v).tile())) {
             // SAFETY: scalar load ends before the specification lookup.
             return (s.wagon_power)(unsafe { (*o.state).cache.first_engine });
         }
@@ -355,7 +352,7 @@ fn rolling_friction_for(o: Owner, roadtype: RoadType, speed: u16) -> u32 {
 }
 pub(crate) fn acceleration_type(s: &Services, v: VehicleRef) -> u8 {
     let o = (s.resolve)(v);
-    acceleration_type_for(s, o, if o.rail() { (s.vehicle.tile)(v) } else { 0 })
+    acceleration_type_for(s, o, if o.rail() { (v).tile() } else { 0 })
 }
 fn acceleration_type_for(s: &Services, o: Owner, tile: u32) -> u8 {
     if o.rail() {
@@ -366,13 +363,12 @@ fn acceleration_type_for(s: &Services, o: Owner, tile: u32) -> u8 {
 }
 fn max_track_speed_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
     if o.rail() {
-        (s.rail_speed)((s.rail_type)((s.vehicle.tile)(v)))
+        (s.rail_speed)((s.rail_type)((v).tile()))
     } else {
         (s.road_speed)(v)
     }
 }
 fn sloped_track_owned(
-    s: &Services,
     movement: &crate::movement::CachedTable<'_>,
     v: VehicleRef,
     o: Owner,
@@ -380,7 +376,7 @@ fn sloped_track_owned(
     let tracks = if o.rail() {
         o.train.track()
     } else {
-        track_status_to_track_bits(movement.road_tracks(v, (s.vehicle.tile)(v)))
+        track_status_to_track_bits(movement.road_tracks(v, (v).tile()))
     };
     tracks == TRACK_BIT_X || tracks == TRACK_BIT_Y
 }
@@ -400,7 +396,7 @@ fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
     let mut total_power = 0_u32;
     let mut max_te = 0_u32;
     let mut parts = 0_u32;
-    let mut max_track_speed = (s.vehicle.max_speed)(v);
+    let mut max_track_speed = (v).max_speed();
     let mut part = Some(v);
     while let Some(u) = part {
         let uo = if u == v { o } else { (s.resolve)(u) };
@@ -443,8 +439,8 @@ fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
         (*o.state).cache.cached_power != total_power || (*o.state).cache.cached_max_te != max_te
     } {
         if total_power == 0 {
-            let status = (s.vehicle.status)(v);
-            (s.vehicle.write_status)(v, status | VS_STOPPED);
+            let status = (v).status();
+            (v).write_status(status | VS_STOPPED);
         }
         unsafe {
             (*o.state).cache.cached_power = total_power;
@@ -575,14 +571,12 @@ pub(crate) fn acceleration_owned(s: &Services, v: VehicleRef, o: Owner) -> i32 {
 pub(crate) fn chain_in_depot(s: &Services, v: VehicleRef) -> bool {
     let first = (s.first)(v);
     let o = (s.resolve)(v);
-    if !(s.depot_tile)((s.vehicle.tile)(first), o.kind.0) || (s.vehicle.speed)(first) != 0 {
+    if !(s.depot_tile)((first).tile(), o.kind.0) || (first).speed() != 0 {
         return false;
     }
     let mut part = Some(first);
     while let Some(u) = part {
-        if !in_depot(if u == v { o } else { (s.resolve)(u) })
-            || (s.vehicle.tile)(u) != (s.vehicle.tile)(v)
-        {
+        if !in_depot(if u == v { o } else { (s.resolve)(u) }) || (u).tile() != (v).tile() {
             return false;
         }
         part = (s.vehicle.next)(u);
@@ -615,18 +609,18 @@ fn update_z_inclination(
 ) {
     let xy = (s.vehicle.xy)(v);
     let z = movement.get().pixel_z_at(xy.x, xy.y, true);
-    (s.vehicle.write_z)(v, z);
+    (v).write_z(z);
     unsafe {
         (*o.state).flags &= !SLOPE_FLAGS;
     }
-    if sloped_track_owned(s, movement, v, o) {
+    if sloped_track_owned(movement, v, o) {
         let xy = (s.vehicle.xy)(v);
         let middle = movement.get().pixel_z_at(
             (xy.x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             (xy.y & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             true,
         );
-        let z = (s.vehicle.z)(v);
+        let z = (v).z();
         if middle != z {
             unsafe {
                 (*o.state).flags |= 1
@@ -644,10 +638,10 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
         if !o.rail() && reversing(s, v) {
             let xy = (s.vehicle.xy)(v);
             let z = movement.get().pixel_z_at(xy.x, xy.y, true);
-            (s.vehicle.write_z)(v, z);
+            (v).write_z(z);
             return;
         }
-        let direction = (s.vehicle.direction)(v);
+        let direction = (v).direction();
         if s.assertions {
             assert!(direction < crate::direction_type::DIR_END);
         }
@@ -668,16 +662,16 @@ fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: Vehicl
             xy.y as i8
         }) & 1;
         d ^= i8::from(dir == DIAGDIR_NW || dir == DIAGDIR_NE);
-        let z = (s.vehicle.z)(v);
+        let z = (v).z();
         let delta = if unsafe { (*o.state).flags } & (1 << GVF_GOINGUP_BIT) != 0 {
             d
         } else {
             -d
         };
-        (s.vehicle.write_z)(v, z.wrapping_add(i32::from(delta)));
+        (v).write_z(z.wrapping_add(i32::from(delta)));
     }
     if s.assertions {
-        let z = (s.vehicle.z)(v);
+        let z = (v).z();
         let xy = (s.vehicle.xy)(v);
         assert_eq!(z, movement.get().pixel_z_at(xy.x, xy.y, true));
     }
@@ -699,7 +693,7 @@ pub(crate) fn inclination_owned(
     new_tile: bool,
     delta: bool,
 ) -> i32 {
-    let old_z = (s.vehicle.z)(v);
+    let old_z = (v).z();
     if new_tile {
         update_z_inclination(s, movement, v, o);
     } else {
@@ -713,10 +707,10 @@ pub(crate) fn last_speed(s: &Services, v: VehicleRef) {
     last_speed_owned(s, v, (s.resolve)(v));
 }
 pub(crate) fn last_speed_owned(s: &Services, v: VehicleRef, o: Owner) {
-    if (s.vehicle.speed)(v) != unsafe { (*o.state).cache.last_speed } {
+    if (v).speed() != unsafe { (*o.state).cache.last_speed } {
         (s.vehicle.start_stop_dirty)(v);
         unsafe {
-            (*o.state).cache.last_speed = (s.vehicle.speed)(v);
+            (*o.state).cache.last_speed = (v).speed();
         }
     }
 }
@@ -735,7 +729,7 @@ pub(crate) fn update_speed(
     hit(witness::GROUND_SPEED);
     let r = (s.speed_input)(v);
     let mut spd = u32::from(r.subspeed).wrapping_add(accel);
-    (s.vehicle.write_subspeed)(v, spd as u8);
+    (v).write_subspeed(spd as u8);
     let tempmax = if i32::from(r.speed) > max_speed {
         (i32::from(r.speed) - i32::from(r.speed / 10) - 1).max(max_speed)
     } else {
@@ -748,10 +742,10 @@ pub(crate) fn update_speed(
     // Native speed/subspeed stores and progress read/reset are scalar leaves;
     // none reenters or changes cur_speed after this store (vehicle_services.cpp).
     let stored_speed = spd as u16;
-    (s.vehicle.write_speed)(v, stored_speed);
+    (v).write_speed(stored_speed);
     let scaled = crate::vehicle::advance_speed(spd) as i32;
-    let scaled = scaled.wrapping_add(i32::from((s.vehicle.progress)(v)));
-    (s.vehicle.write_progress)(v, 0);
+    let scaled = scaled.wrapping_add(i32::from((v).progress()));
+    (v).write_progress(0);
     SpeedResult {
         distance: scaled as u32,
         stored_speed,
@@ -809,8 +803,8 @@ pub(crate) fn move_incline(
     let old_z = inclination_owned(s, movement, v, o, new_tile, delta);
     Moved {
         old_z,
-        z: (s.vehicle.z)(v),
-        cur_speed: (s.vehicle.speed)(v),
+        z: (v).z(),
+        cur_speed: (v).speed(),
         max_track_speed: unsafe { (*o.state).cache.cached_max_track_speed },
     }
 }
@@ -825,7 +819,7 @@ fn in_depot(o: Owner) -> bool {
 fn reversing(s: &Services, v: VehicleRef) -> bool {
     let first = (s.first)(v);
     let o = (s.resolve)(first);
-    let direction = (s.vehicle.direction)(v);
+    let direction = (v).direction();
     // SAFETY: the shared slope predicate gets live owners and immutable services.
     unsafe { crate::road::openttd_rust_road_slope_pixel(v, first, o.road, direction, s.road) }
 }

@@ -1005,16 +1005,13 @@ const ROAD_ENTER_DEPOT: [u8; 4] = [
 ];
 use crate::tunnelbridge::{TUNNEL_SOUND_FRAME, TUNNEL_VISIBILITY};
 impl MovementServices {
-    fn hidden(&self, v: VehicleRef, hidden: bool) {
-        let status = (self.vehicle().status)(v);
-        (self.vehicle().write_status)(
-            v,
-            if hidden {
-                status | crate::vehicle_base::VS_HIDDEN
-            } else {
-                status & !crate::vehicle_base::VS_HIDDEN
-            },
-        );
+    fn hidden(v: VehicleRef, hidden: bool) {
+        let status = (v).status();
+        (v).write_status(if hidden {
+            status | crate::vehicle_base::VS_HIDDEN
+        } else {
+            status & !crate::vehicle_base::VS_HIDDEN
+        });
     }
     // All owner accesses are scalar loads/stores and end before calling native.
     // Depot entry queues autoreplace later in the tick; it preserves this shell
@@ -1035,7 +1032,7 @@ impl MovementServices {
         if FRACT_BEHIND[usize::from(dir)] == fract {
             return CANNOT_ENTER;
         }
-        let direction = (self.vehicle().direction)(v);
+        let direction = (v).direction();
         if direction == diag_dir_to_dir(dir, |ok| (self.native_assert)(ok)) {
             let length = crate::train::next_offset(self.train(), self.shared(), h.train);
             let enter = FRACT_ENTER[usize::from(dir)];
@@ -1048,7 +1045,7 @@ impl MovementServices {
                 w::hit(w::MOVE_TRAIN_DEPOT_LEAVE_0 + usize::from(dir));
                 let next = (self.vehicle().next)(v);
                 if let Some(next) = next {
-                    self.hidden(next, false);
+                    Self::hidden(next, false);
                     let n = (self.resolve)(next);
                     unsafe {
                         crate::train_state::openttd_rust_train_state_set_track(
@@ -1071,15 +1068,12 @@ impl MovementServices {
                     TRACK_BIT_DEPOT,
                 );
             }
-            self.hidden(v, true);
-            (self.vehicle().write_direction)(
-                v,
-                reverse_dir(direction, |ok| (self.native_assert)(ok)),
-            );
+            Self::hidden(v, true);
+            (v).write_direction(reverse_dir(direction, |ok| (self.native_assert)(ok)));
             if (self.vehicle().next)(v).is_none() {
                 self.vehicle().enter_depot((self.first)(v));
             }
-            (self.vehicle().write_tile)(v, tile);
+            (v).write_tile(tile);
             (self.depot_invalidate)(v);
             return ENTERED_WORMHOLE;
         }
@@ -1096,15 +1090,12 @@ impl MovementServices {
                     w::hit(w::MOVE_ROAD_DEPOT_ENTER_0 + usize::from(dir));
                     crate::road::set_state(h.road, RVSB_IN_DEPOT);
                 }
-                self.hidden(v, true);
-                (self.vehicle().write_direction)(
-                    v,
-                    reverse_dir((self.vehicle().direction)(v), |ok| (self.native_assert)(ok)),
-                );
+                Self::hidden(v, true);
+                (v).write_direction(reverse_dir((v).direction(), |ok| (self.native_assert)(ok)));
                 if (self.vehicle().next)(v).is_none() {
                     self.vehicle().enter_depot((self.first)(v));
                 }
-                (self.vehicle().write_tile)(v, tile);
+                (v).write_tile(tile);
                 (self.depot_invalidate)(v);
                 return ENTERED_WORMHOLE;
             }
@@ -1141,7 +1132,7 @@ impl MovementServices {
             {
                 return 0;
             }
-            let dir = dir_to_diag_dir((self.vehicle().direction)(v), |ok| (self.native_assert)(ok));
+            let dir = dir_to_diag_dir((v).direction(), |ok| (self.native_assert)(ok));
             x &= 15;
             y &= 15;
             if diag_dir_to_axis(dir, |ok| (self.native_assert)(ok)) != AXIS_X {
@@ -1158,13 +1149,10 @@ impl MovementServices {
                 }
                 if x < stop {
                     w::hit(w::MOVE_STATION_SLOW);
-                    (self.vehicle().write_status)(
-                        v,
-                        (self.vehicle().status)(v) | crate::vehicle_base::VS_TRAIN_SLOWING,
-                    );
+                    (v).write_status((v).status() | crate::vehicle_base::VS_TRAIN_SLOWING);
                     let speed = ((stop - x) * 20 - 15).max(0) as u16;
-                    if speed < (self.vehicle().speed)(v) {
-                        (self.vehicle().write_speed)(v, speed);
+                    if speed < (v).speed() {
+                        (v).write_speed(speed);
                     }
                 }
             }
@@ -1193,7 +1181,7 @@ impl MovementServices {
         let p = (self.incline)(v);
         if p.flags & (1 << crate::ground_vehicle::GVF_GOINGUP_BIT) != 0 {
             w::hit(w::MOVE_BRIDGE_UP);
-            (self.vehicle().write_z)(v, p.z.wrapping_add(1));
+            (v).write_z(p.z.wrapping_add(1));
             (self.write_ground_flags)(v, p.flags & !(1 << crate::ground_vehicle::GVF_GOINGUP_BIT));
         } else {
             w::hit(w::MOVE_BRIDGE_DOWN);
@@ -1255,14 +1243,14 @@ impl MovementServices {
                     if frame == TUNNEL_VISIBILITY[usize::from(dir)] {
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER);
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER_0 + usize::from(dir));
-                        (self.vehicle().write_tile)(v, tile);
+                        (v).write_tile(tile);
                         unsafe {
                             crate::train_state::openttd_rust_train_state_set_track(
                                 h.train.owner,
                                 TRACK_BIT_WORMHOLE,
                             );
                         }
-                        self.hidden(v, true);
+                        Self::hidden(v, true);
                         return ENTERED_WORMHOLE;
                     }
                 }
@@ -1270,7 +1258,7 @@ impl MovementServices {
                     && frame == TILE_SIZE as u8 - TUNNEL_VISIBILITY[usize::from(dir)]
                     && z == 0
                 {
-                    (self.vehicle().write_tile)(v, tile);
+                    (v).write_tile(tile);
                     let track = diag_dir_to_diag_track_bits(vdir, |ok| (self.native_assert)(ok));
                     unsafe {
                         crate::train_state::openttd_rust_train_state_set_track(
@@ -1281,7 +1269,7 @@ impl MovementServices {
                     (self.native_assert)(track != 0);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir));
-                    self.hidden(v, false);
+                    Self::hidden(v, false);
                     return ENTERED_WORMHOLE;
                 }
             } else if h.kind.0 == VEH_ROAD {
@@ -1292,11 +1280,11 @@ impl MovementServices {
                             u32::from(frame)
                                 == u32::from(unsafe { crate::road::get_frame(h.road) }) + 1,
                         );
-                        (self.vehicle().write_tile)(v, tile);
+                        (v).write_tile(tile);
                         unsafe {
                             crate::road::set_state(h.road, RVSB_WORMHOLE);
                         }
-                        self.hidden(v, true);
+                        Self::hidden(v, true);
                         return ENTERED_WORMHOLE;
                     }
                     return 0;
@@ -1305,7 +1293,7 @@ impl MovementServices {
                     && frame == TILE_SIZE as u8 - TUNNEL_VISIBILITY[usize::from(dir)]
                     && z == 0
                 {
-                    (self.vehicle().write_tile)(v, tile);
+                    (v).write_tile(tile);
                     unsafe {
                         crate::road::set_state(
                             h.road,
@@ -1314,7 +1302,7 @@ impl MovementServices {
                         crate::road::set_frame(h.road, frame);
                     }
                     w::hit(w::MOVE_ROAD_TUNNEL_EXIT);
-                    self.hidden(v, false);
+                    Self::hidden(v, false);
                     return ENTERED_WORMHOLE;
                 }
             }
@@ -1328,7 +1316,7 @@ impl MovementServices {
                     speed = speed.wrapping_mul(2);
                 }
                 let first = (self.first_speed)(v);
-                (self.vehicle().write_speed)(first.first, first.speed.min(speed));
+                (first.first).write_speed(first.speed.min(speed));
             }
             if vdir == dir {
                 if frame != TILE_SIZE as u8 - 1 {
@@ -1366,7 +1354,7 @@ impl MovementServices {
                 }
                 return ENTERED_WORMHOLE;
             } else if vdir == reverse_diag_dir(dir, |ok| (self.native_assert)(ok)) {
-                (self.vehicle().write_tile)(v, tile);
+                (v).write_tile(tile);
                 match h.kind.0 {
                     VEH_TRAIN => {
                         if unsafe {
@@ -1522,7 +1510,7 @@ pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
 /// the source last-station scalar. No owner reference spans either native leaf.
 pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> bool {
     let s = table(shared);
-    let last = (s.vehicle().last_station)(v);
+    let last = (v).last_station();
     // SAFETY: Both native leaves resolve the same serialized surviving shell.
     // The Order is owned by Rust and its facade aliases this stable allocation.
     unsafe {

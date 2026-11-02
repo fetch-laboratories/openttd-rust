@@ -531,7 +531,7 @@ pub(crate) unsafe fn startstop(
         return;
     }
     let handle = unsafe { vehicle_ref(v, s.vehicles) };
-    let status = (s.vehicles.status)(handle);
+    let status = (handle).status();
     if status & crate::vehicle_base::VS_CRASHED != 0 {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
@@ -598,7 +598,7 @@ pub(crate) unsafe fn startstop(
         }
         (s.flip_stopped)(v);
         if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
-            (s.vehicles.write_speed)(handle, 0);
+            (handle).write_speed(0);
         }
         (s.vehicles.reset_depot_unbunching)(handle);
         // Native presentation may reenter owners; no Rust owner borrow spans it.

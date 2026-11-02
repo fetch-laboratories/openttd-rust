@@ -2,9 +2,6 @@ forwarded | src/economy.cpp | current_company = GetRustCompanyFinanceServices().
 forwarded | src/economy.cpp | next_vehicle = GetRustVehicleServices().next
 forwarded | src/economy.cpp | order_time = GetRustVehicleServices().order_time
 forwarded | src/economy.cpp | set_current_company = GetRustCompanyFinanceServices().set_current_company
-forwarded | src/economy.cpp | set_speed = GetRustVehicleServices().write_speed
-forwarded | src/economy.cpp | status = GetRustVehicleServices().status
-forwarded | src/economy.cpp | vehicle_tile = GetRustVehicleServices().tile
 forwarded | src/industry_cmd.cpp | generating = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/industry_cmd.cpp | magic_bulldozer = GetRustTownAuthorityServices().bulldozer
 forwarded | src/industry_cmd.cpp | serve_neutral = GetRustSharedServices().station_serve_neutral
@@ -375,8 +372,6 @@ rebound | RustVehicleHasArticulated | src/rust/engine_capabilities_services.hpp 
 rebound | RustVehicleHasArticulated | src/rust/vehicle_services_newgrf.h | has_articulated
 rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
-rebound | RustVehicleLastStationVisited | src/economy.cpp | last_station
-rebound | RustVehicleLastStationVisited | src/rust/vehicle_services.cpp | last_station
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
 rebound | RustVehicleNextArticulated | src/economy.cpp | next_articulated

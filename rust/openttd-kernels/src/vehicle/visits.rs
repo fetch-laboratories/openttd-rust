@@ -735,7 +735,7 @@ pub(crate) fn cancel_reservation(front: VehicleRef, next: u16, st: *mut Station,
                     std::ptr::null(),
                     0,
                     std::ptr::null_mut(),
-                    (s.vehicles().tile)(v),
+                    (v).tile(),
                 );
             }
         }
@@ -758,7 +758,7 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
     let is_loading = order.kind() == OT_LOADING;
 
     // The station may be null when the colour string is not wanted.
-    let st = s.station_if_valid((s.vehicles().last_station)(front));
+    let st = s.station_if_valid((front).last_station());
     s.check(|| colour.is_none() || (!st.is_null() && is_loading));
 
     let order_no_load = is_loading && order.load() == OLFB_NO_LOAD;
@@ -824,8 +824,7 @@ pub unsafe extern "C" fn openttd_rust_percent_filled(
 /// `Vehicle::BeginLoading`.
 pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
     s.check(|| {
-        (s.shared.tile_type)((s.vehicles().tile)(v)) == MP_STATION
-            || v.vehicle_type() == VehicleType::SHIP.0
+        (s.shared.tile_type)((v).tile()) == MP_STATION || v.vehicle_type() == VehicleType::SHIP.0
     });
     let front = (s.prediction)(v);
     witness::hit(witness::VISITS_BEGIN_LOADING);
@@ -851,7 +850,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
     prepare_unload(v, s.station, s.loading);
 
     (s.arrival_dirty)(v);
-    (s.vehicles().write_speed)(v, 0);
+    (v).write_speed(0);
     (s.maintenance().mark_dirty)(v);
 }
 
@@ -890,7 +889,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     }
 
     o.make_leave_station(v);
-    let st = (s.station.station)((s.vehicles().last_station)(v));
+    let st = (s.station.station)((v).last_station());
     cancel_reservation(v, INVALID_STATION, st.native, s);
     // SAFETY: the live station's queue owner; the vehicle shell is its key.
     unsafe {
@@ -901,9 +900,9 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     (s.set_occupancy)(v, percent_filled(v, None, s));
 
     let kind = VehicleType(v.vehicle_type());
-    if kind == VehicleType::TRAIN && (s.vehicles().status)(v) & VS_CRASHED == 0 {
+    if kind == VehicleType::TRAIN && (v).status() & VS_CRASHED == 0 {
         // Trigger station animation (trains only).
-        let tile = (s.vehicles().tile)(v);
+        let tile = (v).tile();
         if (s.shared.tile_type)(tile) == MP_STATION {
             crate::animated_tile::rail_event(
                 st.base,
@@ -915,9 +914,9 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
         let train = (s.refit.train_handle)(v.0.as_ptr());
         train.set_flags(train.get_flags() | VRF_LEAVING_STATION);
     }
-    if kind == VehicleType::ROAD && (s.vehicles().status)(v) & VS_CRASHED == 0 {
+    if kind == VehicleType::ROAD && (v).status() & VS_CRASHED == 0 {
         // Trigger road stop animation.
-        let tile = (s.vehicles().tile)(v);
+        let tile = (v).tile();
         if crate::map_func::World::new(s.shared).station_road_stop(tile) {
             crate::animated_tile::road_event(
                 st.base,
@@ -956,7 +955,7 @@ pub(crate) fn handle_loading(v: VehicleRef, mode: bool, s: &Services) {
             let order = o.get(v, o.implicit(v));
             if order.is_none_or(|order| {
                 (order.kind() != OT_IMPLICIT && order.kind() != OT_GOTO_STATION)
-                    || order.destination != (s.vehicles().last_station)(v)
+                    || order.destination != (v).last_station()
             }) {
                 return;
             }
@@ -970,17 +969,16 @@ pub(crate) fn handle_loading(v: VehicleRef, mode: bool, s: &Services) {
 
 /// `VehicleEnteredDepotThisTick`.
 fn entered_depot_this_tick(v: VehicleRef, s: &Services) {
-    let vs = s.vehicles();
     // Stop in the depot if the vehicle was in 'stopping' state.
     // SAFETY: the serial game thread's pending map; no access survives the call.
     unsafe {
         crate::fleet::pending::openttd_rust_fleet_pending_add(
             s.id(v),
-            (vs.status)(v) & VS_STOPPED == 0,
+            (v).status() & VS_STOPPED == 0,
         );
     }
     // Always stop, so no path out of the depot is reserved before autoreplace.
-    (vs.write_status)(v, (vs.status)(v) | VS_STOPPED);
+    (v).write_status((v).status() | VS_STOPPED);
 }
 
 /// `VehicleEnterDepot`.
@@ -1028,8 +1026,8 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     // when the last unit enters.
     (s.depot_windows)(v, kind != VehicleType::TRAIN);
 
-    (vs.write_status)(v, (vs.status)(v) | VS_HIDDEN);
-    (vs.write_speed)(v, 0);
+    (v).write_status((v).status() | VS_HIDDEN);
+    (v).write_speed(0);
 
     // SAFETY: a live shell and the static vehicle table; callbacks may reenter.
     unsafe { super::maintenance::openttd_rust_vehicle_service_depot(v, vs) };
@@ -1058,9 +1056,9 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     if current.depot_type() & ODTF_PART_OF_ORDERS != 0
         && real_order.is_some_and(|order| order.action() & ODATF_NEAREST_DEPOT == 0)
         && if kind == VehicleType::AIRCRAFT {
-            current.destination != (s.shared.station_index)((vs.tile)(v))
+            current.destination != (s.shared.station_index)((v).tile())
         } else {
-            (vs.dest_tile)(v) != (vs.tile)(v)
+            (v).dest_tile() != (v).tile()
         }
     {
         witness::hit(witness::VISITS_DEPOT_ELSEWHERE);

@@ -1661,7 +1661,7 @@ impl Game<'_> {
         crate::vehicle::visits::begin_loading(id.vehicle(self.vs()), self.vs().visits());
         crate::animated_tile::rail_event(
             crate::animated_tile::station_base(station),
-            (self.vs().tile)(id.vehicle(self.vs())),
+            (id.vehicle(self.vs())).tile(),
             crate::station_type::SAT_VEHICLE_ARRIVES,
             crate::station_type::SRT_VEHICLE_ARRIVES,
         );
@@ -2137,7 +2137,7 @@ impl Game<'_> {
         (self.leaves.crash_news)(id, victims);
         crate::station::spatial::modify_rating_around(
             self.services,
-            (self.vs().tile)(id.vehicle(self.vs())),
+            (id.vehicle(self.vs())).tile(),
             (id.vehicle(self.vs())).owner(),
             -160,
             30,

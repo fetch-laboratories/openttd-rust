@@ -125,7 +125,7 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
     let s = (w.build_services)();
     let b = s.refit.common.base;
     let v = unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) };
-    let tile = (s.refit.common.vehicles.tile)(v);
+    let tile = (v).tile();
     let result = crate::command::nested(
         b.commands,
         b.shared,

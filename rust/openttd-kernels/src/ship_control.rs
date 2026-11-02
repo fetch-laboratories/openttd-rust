@@ -502,7 +502,7 @@ impl Game<'_> {
         }
         if observed_dest == 0
             || self.vs().any_on_tile((self.leaves.tile)(id), |u| {
-                u.vehicle_type() == crate::vehicle::VehicleType::SHIP.0 && (self.vs().speed)(u) != 0
+                u.vehicle_type() == crate::vehicle::VehicleType::SHIP.0 && (u).speed() != 0
             })
         {
             return true;

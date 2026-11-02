@@ -12,18 +12,21 @@
 
 #include "vehicle_tables.inc"
 
+static OpenTTDVehicle road_abi_vehicle{};
 struct RoadAbiProbe {
 	OpenTTDRoadState *state = openttd_rust_road_new();
 	GroundStateOwner ground;
-	uint16_t speed = 0;
+	uint16_t &speed = road_abi_vehicle.cur_speed;
 	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> stop{openttd_rust_road_stop_new(), openttd_rust_road_stop_destroy};
 	OpenTTDRoadStopEntries entries{};
 	const OpenTTDRoadLeaves *leaves = nullptr;
 	OpenTTDRoadEntry entry{.ground = ground.state, .acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
-	uint32_t dest = 0, nested = 0, destroyed = 0, departures = 0, progress = 255;
-	uint8_t tick = 0, running = 0, status = 0;
+	uint32_t &dest = road_abi_vehicle.dest_tile;
+	uint8_t &progress = road_abi_vehicle.progress;
+	uint32_t nested = 0, destroyed = 0, departures = 0;
+	uint8_t &tick = road_abi_vehicle.tick_counter, &running = road_abi_vehicle.running_ticks, &status = road_abi_vehicle.vehstatus;
 	uint32_t cache_properties = 0, cargo_ages = 0, length_changes = 0, viewports = 0, turns = 0, next_reads = 0;
-	uint32_t progress_writes = 0, visual_stage = 0;
+	uint32_t visual_stage = 0;
 	uint16_t post_effect_max = 80;
 	bool visual_eligible = true, reset_status = false;
 	bool fallback_cache = false, engine_replaced = false;
@@ -33,7 +36,6 @@ struct RoadAbiProbe {
 static RoadAbiProbe *road_abi_probe;
 static OpenTTDVehicle road_abi_second{}, road_abi_hidden{};
 static int road_abi_engine, road_abi_new_engine;
-static OpenTTDVehicle road_abi_vehicle{};
 static OpenTTDVehicle *RoadAbiHandle() { road_abi_vehicle.shell = reinterpret_cast<OpenTTDVehicleShell *>(&road_abi_vehicle); return &road_abi_vehicle; }
 static int road_abi_stop; ///< Its address is the opaque road stop shell.
 /* The road controller calls the Rust road stop owner directly; these native
@@ -57,7 +59,7 @@ static OpenTTDRoadMaxSpeedRead RoadAbiMaxSpeed()
 static void RoadBoundary()
 {
 	RoadAbiProbe probe;
-	road_abi_vehicle.type = VEH_ROAD; road_abi_vehicle.subtype = 1;
+	road_abi_vehicle = {}; road_abi_vehicle.progress = 255; road_abi_vehicle.tile = 100; road_abi_vehicle.direction = 1; road_abi_vehicle.type = VEH_ROAD; road_abi_vehicle.subtype = 1;
 	road_abi_second.type = VEH_ROAD; road_abi_second.subtype = 1;
 	road_abi_hidden.type = VEH_ROAD; road_abi_hidden.subtype = 1;
 	road_abi_probe = &probe;
@@ -83,7 +85,6 @@ static void RoadBoundary()
 		p.order_time = order_time;
 		if (p.reset_status) p.status = 0;
 	};
-	t.vehicle.write_tick = [](OpenTTDVehicle *u, uint8_t tick) noexcept { CHECK(u == RoadAbiHandle()); road_abi_probe->tick = tick; };
 	const OpenTTDRoadTickRead part{.tick = 255, .front = false, .movement = {}, .order_time = nullptr, .running = nullptr, .status = nullptr};
 	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves, nullptr));
 	CHECK(probe.tick == 0 && probe.running == 0 && probe.order_time == 0 && world.draws == 0);
@@ -98,7 +99,6 @@ static void RoadBoundary()
 		CHECK(road_abi_probe->ground.state->flags == 0);
 		return 7;
 	};
-	t.vehicle.tile = [](OpenTTDVehicle *u) noexcept -> uint32_t { CHECK(u == RoadAbiHandle()); return 100; };
 	t.shared.road_stop_type = [](uint32_t tile) noexcept { CHECK(tile == 100); return RoadStopType::Bus; };
 	t.shared.road_stops = []() noexcept { return &road_abi_stops; };
 	t.shared.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
@@ -110,7 +110,6 @@ static void RoadBoundary()
 	/* Entries nested in a NewGRF property callback see and change the same owner. */
 	t.leaves.trackdir_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadTrackdirRead { return {.tile = 100, .direction = 1, .status = 0}; };
 	t.leaves.is_bay_stop = [](uint32_t) noexcept { return false; };
-	t.vehicle.write_dest = [](OpenTTDVehicle *, uint32_t tile) noexcept { road_abi_probe->dest = tile; };
 	t.ground.cache_begin = [](OpenTTDVehicle *) noexcept {};
 	t.vehicle.engine_for_length = [](OpenTTDVehicle *) noexcept -> OpenTTDEngineForLength {
 		auto &p = *road_abi_probe;
@@ -157,7 +156,7 @@ static void RoadBoundary()
 		CHECK(openttd_rust_road_max_speed(u, p.state, p.entry.acceleration_model, &read, p.leaves) == 80);
 		CHECK(openttd_rust_road_trackdir(u, p.state, p.leaves) == 0);
 		++p.nested;
-		openttd_rust_road_set_dest(u, p.state, 142 + p.nested, p.dest, p.leaves);
+		openttd_rust_road_set_dest(u, p.state, 142 + p.nested);
 		CHECK(openttd_rust_road_path_size(p.state) == 0);
 		openttd_rust_road_path_push(p.state, {10, 10815});
 		return property == 0x23 ? 0 : property == 0x15 ? 20 : fallback;
@@ -165,10 +164,9 @@ static void RoadBoundary()
 	t.ground.write_length = [](OpenTTDVehicle *u, uint8_t length, OpenTTDVehicle *, uint16_t total) noexcept {
 		CHECK(road_abi_probe->fallback_cache ? (u == RoadAbiHandle() ? length == 6 && total == 6 : length == 1 && total == 7) : length == 8 && total == 8);
 	};
-	t.leaves.cargo_age_default = [](OpenTTDVehicle *) noexcept { return uint16_t{0}; };
-	t.vehicle.write_cargo_age = [](OpenTTDVehicle *, uint16_t) noexcept { ++road_abi_probe->cargo_ages; };
-	t.vehicle.write_max_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == (road_abi_probe->fallback_cache ? 99 : 80)); };
+	t.leaves.cargo_age_default = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->cargo_ages; return uint16_t{0}; };
 	openttd_rust_road_update_cache(v, probe.state, false, &t.leaves);
+	CHECK(road_abi_vehicle.cached_max_speed == 80);
 	CHECK(probe.nested == 2 && probe.dest == 144 && openttd_rust_road_path_get(probe.state, 0).tile == 10815);
 
 	/* Failed/invalid properties consume late fallback reads and the post-callback link.
@@ -177,7 +175,7 @@ static void RoadBoundary()
 	probe.fallback_cache = true;
 	probe.cache_properties = probe.cargo_ages = 0;
 	openttd_rust_road_update_cache(v, probe.state, true, &t.leaves);
-	CHECK(probe.cargo_ages == 2 && probe.length_changes == 2);
+	CHECK(probe.cargo_ages == 2 && probe.length_changes == 2 && road_abi_vehicle.cached_max_speed == 99);
 
 	/* Running-cost property callbacks can replace the vehicle's engine. Price retains the original engine. */
 	probe.engine_replaced = false;
@@ -215,7 +213,6 @@ static void RoadBoundary()
 	t.shared.station_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == 100); return 55; };
 	t.leaves.is_drive_through = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	probe.stop->status = 0xFF; // Entering the bay frees its entrance.
-	t.vehicle.write_last_station = [](OpenTTDVehicle *, uint16_t station) noexcept { CHECK(station == 55); };
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.leaves.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
@@ -233,7 +230,6 @@ static void RoadBoundary()
 	t.shared.movement = &movement;
 	t.shared.map = &map.statics;
 	t.leaves.after_enter_tile = [](OpenTTDVehicle *, uint8_t flags) noexcept -> OpenTTDRoadEntered { CHECK(flags == 4); return {.tile = 100, .cur_speed = 0, .flags = flags, .direction = 1, .order_type = 0}; };
-	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
 	CHECK(openttd_rust_road_get(probe.state, 0) == 36 && probe.stop->status == 0x7F);
 	probe.stop->entries = nullptr;
@@ -252,7 +248,7 @@ static void RoadBoundary()
 		CHECK(destination == 100);
 		auto *u = static_cast<OpenTTDVehicle *>(shell);
 		auto &p = *road_abi_probe;
-		openttd_rust_road_set_dest(u, p.state, destination, p.dest, p.leaves);
+		openttd_rust_road_set_dest(u, p.state, destination);
 	};
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept { return road_orders->vehicle->current.type; };
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
@@ -275,7 +271,7 @@ static void RoadBoundary()
 		auto &p = *road_abi_probe;
 		CHECK(p.visual_stage == 1 && p.visual_eligible && event == VSE_VISUAL_EFFECT); p.visual_stage = 3;
 		openttd_rust_road_set(p.state, 3, 1);
-		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
+		openttd_rust_road_set_dest(u, p.state, 100);
 		p.post_effect_max = 40; ++p.nested; return false;
 	};
 	auto emission_shared = t.shared;
@@ -308,13 +304,7 @@ static void RoadBoundary()
 	t.physics.speed_input = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundSpeedInput { CHECK(road_abi_probe->visual_stage == 4); return {0, 0}; };
 	t.physics.acceleration_input = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundAccelerationInput { return {0, 0, 0, RoadType{0}}; };
 	probe.ground.state->cache.cached_weight = 1;
-	t.physics_vehicle.write_subspeed = [](OpenTTDVehicle *, uint8_t value) noexcept { CHECK(value == (road_abi_probe->entry.acceleration_model == 1 ? 2 : 0)); };
-	t.physics_vehicle.write_speed = [](OpenTTDVehicle *, uint16_t value) noexcept { CHECK(value == (road_abi_probe->entry.acceleration_model == 1 ? 4 : 2)); road_abi_probe->speed = value; };
-	t.physics_vehicle.speed = t.vehicle.speed = [](OpenTTDVehicle *) noexcept { return road_abi_probe->speed; };
-	t.physics_vehicle.progress = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
-	t.physics_vehicle.write_progress = [](OpenTTDVehicle *, uint8_t value) noexcept { CHECK(value == 0); road_abi_probe->progress = value; };
 	t.physics_vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
-	t.vehicle.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.ground.update_viewport_then_next = [](OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept -> OpenTTDGroundViewportNext {
 		CHECK(part == RoadAbiHandle() && front == part);
 		++road_abi_probe->viewports;
@@ -329,6 +319,7 @@ static void RoadBoundary()
 	probe.running = UINT8_MAX;
 	probe.status = 128;
 	probe.reset_status = true;
+	probe.progress = 0;
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	probe.reset_status = false;
 	CHECK(probe.tick == 0 && probe.status == 0);
@@ -347,6 +338,7 @@ static void RoadBoundary()
 	probe.status = 2;
 	probe.running = UINT8_MAX;
 	probe.order_time = INT32_MAX;
+	probe.progress = 0;
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	CHECK(probe.running == UINT8_MAX && probe.order_time == INT32_MIN && probe.status == 0);
 	_vehicle_maintenance_probe.breakdown_probe = breakdown_probe;
@@ -356,10 +348,9 @@ static void RoadBoundary()
 	probe.visual_eligible = false; probe.entry.acceleration_model = 1;
 	front.movement = probe.entry;
 	/* Hidden vehicles skip viewport callbacks, then use the direct canonical link. */
-	t.vehicle.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 1; };
+	probe.status = 1;
 	t.vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { CHECK(road_abi_probe->viewports == 1); ++road_abi_probe->next_reads; return nullptr; };
-	t.vehicle.progress = [](OpenTTDVehicle *) noexcept -> uint8_t { CHECK(road_abi_probe->viewports == 1 && road_abi_probe->next_reads == 2); return static_cast<uint8_t>(road_abi_probe->progress); };
-	t.vehicle.write_progress = [](OpenTTDVehicle *, uint8_t progress) noexcept { CHECK(progress == 3); road_abi_probe->progress = progress; };
+	probe.progress = 0;
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	CHECK(probe.viewports == 1 && probe.next_reads == 2 && probe.progress == 3);
 	probe.visual_eligible = true; probe.entry.acceleration_model = 0;
@@ -374,43 +365,28 @@ static void RoadBoundary()
 		CHECK((p.viewports == 0 && part == front) || (p.viewports == 1 && part == reinterpret_cast<OpenTTDVehicle *>(&road_abi_second)));
 		++p.viewports;
 		p.progress = part == front ? 7 : 0;
-		openttd_rust_road_set_dest(front, p.state, 200 + p.viewports, p.dest, p.leaves);
+		openttd_rust_road_set_dest(front, p.state, 200 + p.viewports);
 		++p.next_reads;
 		OpenTTDVehicle *next = part == front ? reinterpret_cast<OpenTTDVehicle *>(&road_abi_second) : p.hidden_viewport_tail ? reinterpret_cast<OpenTTDVehicle *>(&road_abi_hidden) : nullptr;
 		return {.next = next, .final_progress = next == nullptr ? uint8_t(p.progress) : uint8_t(99)};
-	};
-	t.vehicle.status = [](OpenTTDVehicle *part) noexcept -> uint8_t {
-		if (part == RoadAbiHandle()) return 0;
-		bool hidden = part == reinterpret_cast<OpenTTDVehicle *>(&road_abi_hidden);
-		CHECK(hidden ? road_abi_probe->hidden_viewport_tail && road_abi_probe->viewports == 2 : part == reinterpret_cast<OpenTTDVehicle *>(&road_abi_second) && road_abi_probe->viewports == 1);
-		return hidden ? 1 : 0;
 	};
 	t.vehicle.next = [](OpenTTDVehicle *part) noexcept -> OpenTTDVehicle * {
 		CHECK(part == reinterpret_cast<OpenTTDVehicle *>(&road_abi_hidden) && road_abi_probe->hidden_viewport_tail && road_abi_probe->viewports == 2);
 		++road_abi_probe->next_reads;
 		return nullptr;
 	};
-	t.vehicle.progress = [](OpenTTDVehicle *front) noexcept -> uint8_t {
-		CHECK(front == RoadAbiHandle() && road_abi_probe->hidden_viewport_tail && road_abi_probe->viewports == 2 && road_abi_probe->next_reads == 3);
-		return road_abi_probe->progress;
-	};
-	t.vehicle.write_progress = [](OpenTTDVehicle *front, uint8_t progress) noexcept {
-		auto &p = *road_abi_probe;
-		CHECK(front == RoadAbiHandle() && p.viewports == 2 && p.next_reads == (p.hidden_viewport_tail ? 3U : 2U) && progress == 1);
-		++p.progress_writes;
-		p.progress = progress;
-	};
 	for (bool hidden : {false, true}) {
 		probe.hidden_viewport_tail = hidden;
-		probe.viewports = probe.next_reads = probe.progress_writes = 0;
-		CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
-		CHECK(probe.viewports == 2 && probe.next_reads == (hidden ? 3U : 2U) && probe.progress_writes == 1 && probe.progress == 1 && probe.dest == 202);
+		probe.viewports = probe.next_reads = 0;
+		probe.status = 0; road_abi_hidden.vehstatus = 1;
+		probe.progress = 0;
+	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
+		CHECK(probe.viewports == 2 && probe.next_reads == (hidden ? 3U : 2U) && probe.progress == 1 && probe.dest == 202);
 	}
 
 	/* Crash animation reads the next link after the turn/viewport callback. */
 	openttd_rust_road_set(probe.state, 5, 0);
 	probe.status = 128;
-	t.vehicle.direction = [](OpenTTDVehicle *u) noexcept -> uint8_t { CHECK(u == RoadAbiHandle() && road_abi_probe->turns == 0); return 1; };
 	t.ground.turn = [](OpenTTDVehicle *u, uint8_t direction) noexcept { CHECK(u == RoadAbiHandle() && direction < 8); ++road_abi_probe->turns; };
 	t.vehicle.next = [](OpenTTDVehicle *u) noexcept -> OpenTTDVehicle * { CHECK(u == RoadAbiHandle() && road_abi_probe->turns == 1); return nullptr; };
 	const OpenTTDRoadTickRead animation{.tick = 7, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
@@ -429,8 +405,6 @@ static void RoadBoundary()
 		CHECK(shell == RoadAbiHandle());
 		return &crash_record;
 	};
-	t.vehicle.last_station = [](OpenTTDVehicle *shell) noexcept -> uint16_t { CHECK(shell == RoadAbiHandle()); return crash_record.last_station_visited; };
-	t.vehicle.write_last_station = [](OpenTTDVehicle *shell, uint16_t station) noexcept { CHECK(shell == RoadAbiHandle() && station == 5); crash_record.last_station_visited = station; };
 	t.vehicle.destroy = [](OpenTTDVehicle *u) noexcept {
 		CHECK(u == RoadAbiHandle());
 		openttd_rust_road_destroy(road_abi_probe->state);
@@ -452,7 +426,7 @@ static void RoadBoundary()
 struct RoadServiceProbe {
 	OpenTTDRoadState *head = openttd_rust_road_new();
 	OpenTTDRoadState *tail = openttd_rust_road_new();
-	uint32_t tile = 3091, dest = 0;
+	uint32_t tile = 3091;
 	uint16_t speed = 5;
 	bool depot_tile = true;
 	uint32_t depot_orders = 0, services = 0, searches = 0;
@@ -473,8 +447,6 @@ static void RoadServiceBoundary()
 	auto &maintenance = _vehicle_maintenance_probe;
 	maintenance.max_economy_date = OpenTTDEconomyDate{0};
 	maintenance.economy_age = [](OpenTTDVehicle *) noexcept { return OpenTTDEconomyDate{0}; };
-	t.vehicle.day = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
-	t.vehicle.write_day = [](OpenTTDVehicle *, uint8_t day) noexcept { CHECK(day == 1); };
 	maintenance.check_breakdown = [](OpenTTDVehicle *) noexcept {
 		OpenTTDVehicleMaintenanceCheckBreakdown r{};
 		r.no_service = true;
@@ -486,7 +458,6 @@ static void RoadServiceBoundary()
 		return r;
 	};
 	maintenance.automatic = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceAutomatic{}; };
-	t.vehicle.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	maintenance.interval = [](OpenTTDVehicle *) noexcept {
 		OpenTTDVehicleMaintenanceInterval r{};
 		r.now = OpenTTDEconomyDate{1};
@@ -521,19 +492,17 @@ static void RoadServiceBoundary()
 	t.shared.depot_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == road_service_probe->tile); return 55; };
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.ground.go_to_depot_service = [](OpenTTDVehicle *, uint16_t depot) noexcept { CHECK(depot == 55); ++road_service_probe->depot_orders; };
-	t.vehicle.dest_tile = [](OpenTTDVehicle *) noexcept -> uint32_t { return road_service_probe->dest; };
-	t.vehicle.write_dest = [](OpenTTDVehicle *, uint32_t tile) noexcept { CHECK(tile == road_service_probe->tile); road_service_probe->dest = tile; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.vehicle.check_orders = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	auto day = [&]() { openttd_rust_road_economy_day(RoadServiceHandle(0), probe.head, true, &t.leaves); };
 	for (bool moving : {true, false}) {
 		probe.speed = moving ? 5 : 0;
-		probe.dest = 42;
+		RoadServiceHandle(0)->dest_tile = 42;
 		openttd_rust_road_set(probe.head, 0, 254);
 		openttd_rust_road_set(probe.tail, 0, moving ? 254 : 1);
 		openttd_rust_road_path_push(probe.head, {10, 10815});
 		day();
-		CHECK(probe.dest == probe.tile && openttd_rust_road_path_size(probe.head) == 0);
+		CHECK(RoadServiceHandle(0)->dest_tile == probe.tile && openttd_rust_road_path_size(probe.head) == 0);
 	}
 	CHECK(probe.depot_orders == 2 && probe.services == 0 && world.draws == 0);
 	openttd_rust_road_set(probe.tail, 0, 254);

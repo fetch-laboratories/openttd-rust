@@ -461,7 +461,7 @@ bool RoadVehicle::Tick()
 
 void RoadVehicle::SetDestTile(TileIndex tile)
 {
-	openttd_rust_road_set_dest(RustVehicle(this), this->GetRustState(), tile.base(), this->GetDestTile().base(), &GetRoadLeaves());
+	openttd_rust_road_set_dest(RustVehicle(this), this->GetRustState(), tile.base());
 }
 
 

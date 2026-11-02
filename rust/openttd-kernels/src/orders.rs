@@ -4308,8 +4308,7 @@ impl Control {
         {
             return;
         }
-        if g.local_owner(v) == 0 || !(g.0.base.day)(native_vehicle(v, g.0.base)).is_multiple_of(20)
-        {
+        if g.local_owner(v) == 0 || !(native_vehicle(v, g.0.base)).day().is_multiple_of(20) {
             return;
         }
         let mut message = 0u32;

@@ -382,12 +382,11 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
     }
     let map = s.shared.map();
     if new_value != 0 {
-        let vs = vehicle_services(s);
         for v in vehicles(s) {
             if v.vehicle_type() != VEH_SHIP {
                 continue;
             }
-            let tile = (vs.tile)(v);
+            let tile = (v).tile();
             if map.tile_x(tile) == 0 || map.tile_y(tile) == 0 {
                 hit(witness::SETTINGS_EDGES_OCCUPIED);
                 return refuse(s, s.edges_not_empty);

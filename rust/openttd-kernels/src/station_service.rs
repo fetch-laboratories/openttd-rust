@@ -1277,7 +1277,6 @@ pub struct Loading {
     pub(crate) unload_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) has_orders: extern "C" fn(VehicleRef) -> bool,
     pub(crate) load_unload_ticks: extern "C" fn(VehicleRef) -> u16,
-    pub(crate) status: extern "C" fn(VehicleRef) -> u8,
     pub(crate) has_articulated_part: extern "C" fn(VehicleRef) -> bool,
     pub(crate) is_articulated_part: extern "C" fn(VehicleRef) -> bool,
     pub(crate) is_rear_dualheaded: extern "C" fn(VehicleRef) -> bool,
@@ -1297,7 +1296,6 @@ pub struct Loading {
     pub(crate) set_loading_finished: extern "C" fn(VehicleRef, bool),
     pub(crate) set_stop: extern "C" fn(VehicleRef, bool),
     pub(crate) set_load_ticks: extern "C" fn(VehicleRef, u16),
-    pub(crate) set_speed: extern "C" fn(VehicleRef, u16),
     pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
     pub(crate) unknown_load_result: extern "C" fn(VehicleRef, u16),
     pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
@@ -1320,7 +1318,6 @@ pub struct Loading {
     pub(crate) deliver_to_transfer: extern "C" fn(VehicleRef, u32),
     pub(crate) deliver_to_keep: extern "C" fn(VehicleRef, u32),
     pub(crate) has_cargo_for: extern "C" fn(*mut Station, u8, *mut c_void) -> bool,
-    pub(crate) vehicle_tile: extern "C" fn(VehicleRef) -> u32,
     pub(crate) station_cargo_total: extern "C" fn(*mut Station, u8) -> u32,
     pub(crate) get_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
     pub(crate) create_payment: extern "C" fn(VehicleRef) -> *mut NativePayment,
@@ -1581,10 +1578,7 @@ pub unsafe extern "C" fn openttd_rust_station_prepare(
 }
 /// `PrepareUnload`.
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
-    // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery.
-    let vehicle = unsafe { &*l.vehicle };
-    let st = (w.station)((vehicle.last_station)(front));
+    let st = (w.station)(front.last_station());
     unsafe {
         openttd_rust_station_queue_push(st.state, front.shell().cast());
     }
@@ -1618,7 +1612,7 @@ fn update_ticks(
 ) {
     if kind == 0 && (l.station_length_penalty)() {
         let cached_length = u32::from((l.cached_total_length)(front));
-        let tile = (l.vehicle_tile)(front);
+        let tile = front.tile();
         // SAFETY: The loading entry keeps the immutable shared services live.
         let world = crate::map_func::World::new(unsafe { &*w.shared });
         let length = crate::follow_track::platform_length_full(&world, st.base, tile);
@@ -1639,10 +1633,9 @@ unsafe fn load_vehicle(
     refit: &RefitContext,
     visits: &Visits,
 ) {
-    // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery.
+    // SAFETY: The immutable shared vehicle table outlives this entry.
     let vehicle = unsafe { &*l.vehicle };
-    let st = (w.station)((vehicle.last_station)(front));
+    let st = (w.station)(front.last_station());
     let mut body = |next| {
         let control = (l.control)(front);
         let auto = control.refit && control.refit_cargo == 253;
@@ -1674,7 +1667,7 @@ unsafe fn load_vehicle(
             return;
         }
         if control.vehicle_type == 0 && {
-            let tile = (l.vehicle_tile)(front);
+            let tile = front.tile();
             let shared = unsafe { &*w.shared };
             (shared.tile_type)(tile) != crate::vehicle::MP_STATION
                 || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
@@ -1694,7 +1687,7 @@ unsafe fn load_vehicle(
         let mut cargo_not_full = 0_u64;
         let mut cargo_full = 0_u64;
         let mut reservation_left = 0_u64;
-        (l.set_speed)(front, 0);
+        front.write_speed(0);
         let payment = (l.get_payment)(front);
         let mut artic_part = 0_u32;
         let mut current = Some(front);
@@ -1853,14 +1846,14 @@ unsafe fn load_vehicle(
             if control.vehicle_type == 0 {
                 crate::animated_tile::rail_event(
                     st.base,
-                    (visits.vehicles().tile)(front),
+                    (front).tile(),
                     crate::station_type::SAT_VEHICLE_LOADS,
                     crate::station_type::SRT_VEHICLE_LOADS,
                 );
             } else if control.vehicle_type == 1 {
                 crate::animated_tile::road_event(
                     st.base,
-                    (visits.vehicles().tile)(front),
+                    (front).tile(),
                     crate::station_type::SAT_VEHICLE_LOADS,
                     crate::station_type::SRT_VEHICLE_LOADS,
                 );
@@ -1975,7 +1968,7 @@ unsafe fn load_station_queue(
     while !node.is_null() {
         let v =
             unsafe { VehicleRef::from_shell(openttd_rust_station_queue_value(node), &*l.vehicle) };
-        if (l.status)(v) & (VS_STOPPED | VS_CRASHED) == 0 {
+        if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
             let ticks = (l.load_unload_ticks)(v).wrapping_sub(1);
             (l.set_load_ticks)(v, ticks);
             if ticks == 0 {
@@ -1991,7 +1984,7 @@ unsafe fn load_station_queue(
     while !node.is_null() {
         let v =
             unsafe { VehicleRef::from_shell(openttd_rust_station_queue_value(node), &*l.vehicle) };
-        if (l.status)(v) & (VS_STOPPED | VS_CRASHED) == 0 {
+        if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
                 load_vehicle(v, w, l, refit, visits);
             }
@@ -2204,7 +2197,6 @@ crate::abi::layouts! {
         unload_type,
         has_orders,
         load_unload_ticks,
-        status,
         has_articulated_part,
         is_articulated_part,
         is_rear_dualheaded,
@@ -2224,7 +2216,6 @@ crate::abi::layouts! {
         set_loading_finished,
         set_stop,
         set_load_ticks,
-        set_speed,
         subtract_profit,
         unknown_load_result,
         vehicle_dirty,
@@ -2246,7 +2237,6 @@ crate::abi::layouts! {
         deliver_to_transfer,
         deliver_to_keep,
         has_cargo_for,
-        vehicle_tile,
         station_cargo_total,
         get_payment,
         create_payment,

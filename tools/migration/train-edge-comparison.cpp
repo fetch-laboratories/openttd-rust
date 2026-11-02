@@ -95,9 +95,8 @@ static OpenTTDTrainServices Leaves()
 	leaves.write_status = [](OpenTTDTrainHandle h, uint8_t value) noexcept { Part(h).vehstatus.bits = value; };
 	leaves.acc_model = [](OpenTTDTrainHandle) noexcept { return uint64_t(_settings_game.vehicle.train_acceleration_model); };
 	leaves.curve_advantage = [](OpenTTDTrainHandle) noexcept { return uint64_t(rail.curve_speed); };
-	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<Train *>(v->shell)->links; };
-	vehicle.tile = [](OpenTTDVehicle *v) noexcept { auto &part = *reinterpret_cast<Train *>(v->shell); part.UpdatePosition(); return part.tile; };
-	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = vehicle.tile(shell)}; };
+	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { auto &part = *reinterpret_cast<Train *>(v->shell); part.UpdatePosition(); return &part.links; };
+	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = reinterpret_cast<Train *>(shell->shell)->tile}; };
 	vehicle.record_from_shell = [](void *v) noexcept { auto *train = static_cast<Train *>(v); train->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(v); return &train->record; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{8}; };
 	leaves.vehicle = &vehicle;

@@ -655,8 +655,8 @@ impl Game<'_> {
             (self.map.tile_y(tile) * 16 + u32::from(pos.1)) as i32,
         )
     }
-    fn set_speed(&self, v: Part, s: &mut Step, speed: u16) {
-        service!(self.vs.write_speed)(v.v, speed);
+    fn set_speed(v: Part, s: &mut Step, speed: u16) {
+        (v.v).write_speed(speed);
         s.cur_speed = speed;
     }
     fn observe(s: &mut Step, e: Entered) {
@@ -752,7 +752,7 @@ impl Game<'_> {
             false
         };
         if wormhole {
-            let tile = (self.vs.tile)(v.v);
+            let tile = (v.v).tile();
             self.vs.any_on_tile(tile, &mut offer);
             self.vs
                 .any_on_tile(service!(self.ss.other_tunnel_end)(tile), &mut offer);
@@ -886,10 +886,10 @@ impl Game<'_> {
     }
     /// Direction store with the original-acceleration curve slowdown.
     fn set_direction(&self, v: Part, s: &mut Step, dir: u8) {
-        service!(self.vs.write_direction)(v.v, dir);
+        (v.v).write_direction(dir);
         s.direction = dir;
         if self.original() {
-            self.set_speed(v, s, s.cur_speed - (s.cur_speed >> 2));
+            Self::set_speed(v, s, s.cur_speed - (s.cur_speed >> 2));
         }
     }
     /// x/y store, `UpdatePosition`, `UpdateInclination` and `RoadZPosAffectSpeed`.
@@ -920,11 +920,11 @@ impl Game<'_> {
             return;
         }
         if m.old_z < m.z {
-            self.set_speed(v, s, (u32::from(m.cur_speed) * 232 / 256) as u16);
+            Self::set_speed(v, s, (u32::from(m.cur_speed) * 232 / 256) as u16);
         } else {
             let speed = m.cur_speed.wrapping_add(2);
             if speed <= m.max_track_speed {
-                self.set_speed(v, s, speed);
+                Self::set_speed(v, s, speed);
             }
         }
     }
@@ -942,11 +942,11 @@ impl Game<'_> {
     /// `RoadVehicle::Crash`.
     fn crash(&self, v: Part, flooded: bool) -> u32 {
         let mut victims = crate::ground_vehicle::crash(self.gs.physics, v.v, flooded);
-        if crate::vehicle_base::is_front_engine(true, service!(v.v).subtype()) {
+        if crate::vehicle_base::is_front_engine(true, (v.v).subtype()) {
             victims = victims.wrapping_add(1);
             if in_range(v.state(), DT_STOP, DT_STOP + 16) {
                 // SAFETY: Live front owner; no owner access spans the stop update.
-                unsafe { crate::road_stop::leave_vehicle(self.ss, self.vs, v.v, v.s.as_ptr()) };
+                unsafe { crate::road_stop::leave_vehicle(self.ss, v.v, v.s.as_ptr()) };
             }
         }
         v.set(CRASHED, if flooded { 2000 } else { 1 });
@@ -967,14 +967,14 @@ impl Game<'_> {
                 let xy = (self.vs.xy)(v.v);
                 let hit = self.vs.any_near(xy.x, xy.y, 4, |t| {
                     t.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
-                        && (self.vs.z)(t).wrapping_sub(z).wrapping_abs() <= 6
+                        && (t).z().wrapping_sub(z).wrapping_abs() <= 6
                 });
                 if hit {
                     let victims = self.crash(v, false);
                     service!(self.l.crash_news)(v.v, victims);
                     crate::station::spatial::modify_rating_around(
                         self.ss,
-                        (self.vs.tile)(v.v),
+                        (v.v).tile(),
                         (v.v).owner(),
                         -160,
                         22,
@@ -1010,7 +1010,7 @@ impl Game<'_> {
                 let mut u = Some(v.v);
                 while let Some(part) = u {
                     let random = self.random();
-                    let direction = service!(self.vs.direction)(part);
+                    let direction = (part).direction();
                     service!(self.gs.turn)(part, (direction + DELTA[(random & 3) as usize]) & 7);
                     u = service!(self.vs.next)(part);
                 }
@@ -1032,12 +1032,12 @@ impl Game<'_> {
                 self.vs
                     .set_next_record(previous.v.0.as_ptr(), std::ptr::null_mut());
             };
-            let station = service!(self.vs.last_station)(v.v);
-            service!(self.vs.write_last_station)(last.v, station);
+            let station = (v.v).last_station();
+            (last.v).write_last_station(station);
             if in_range(last.state(), STOP, STOP + 16) {
                 // SAFETY: Live last part owner; no owner access spans the stop update.
                 unsafe {
-                    crate::road_stop::leave_vehicle(self.ss, self.vs, last.v, last.s.as_ptr());
+                    crate::road_stop::leave_vehicle(self.ss, last.v, last.s.as_ptr());
                 };
             }
             service!(self.vs.destroy)(last.v);
@@ -1054,7 +1054,7 @@ impl Game<'_> {
             let first_engine = if u == v.v {
                 INVALID_ENGINE
             } else {
-                service!(v.v).engine_id()
+                (v.v).engine_id()
             };
             service!(self.gs.write_first_engine)(u, first_engine);
             let engine = service!(self.vs.engine_for_length)(u);
@@ -1093,21 +1093,18 @@ impl Game<'_> {
                 crate::newgrf_properties::PROP_ROADVEH_CARGO_AGE_PERIOD,
                 i32::from(period),
             );
-            service!(self.vs.write_cargo_age)(u, age as u16);
+            (u).write_cargo_age(age as u16);
             let Some(next) = service!(self.vs.next)(u) else {
                 break;
             };
             u = next;
         }
         let speed = service!(self.vs.property)((self.vs.newgrf)(), v.v, 0x15, 0) as u32;
-        service!(self.vs.write_max_speed)(
-            v.v,
-            if speed != 0 {
-                speed.wrapping_mul(4)
-            } else {
-                u32::from(service!(self.l.default_max_speed)(v.v))
-            } as u16,
-        );
+        (v.v).write_max_speed(if speed != 0 {
+            speed.wrapping_mul(4)
+        } else {
+            u32::from(service!(self.l.default_max_speed)(v.v))
+        } as u16);
     }
     /// `RoadFindPathToDest`.
     fn path(&self, v: Part, s: &Step, tile: u32, entry: u8) -> u8 {
@@ -1232,16 +1229,14 @@ impl Game<'_> {
         }
         let dir = service!(self.l.depot_direction)(d.tile);
         let direction = dir * 2 + 1;
-        service!(self.vs.write_direction)(v.v, direction);
+        (v.v).write_direction(direction);
         let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir, |ok| {
             crate::movement::native_assert(self.ss, ok);
         });
         let rd = crate::road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
         let (x, y) = self.tile_xy(d.tile, (rd.0 & 15, rd.1 & 15));
         if first {
-            if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT
-                && d.tile == service!(self.vs.dest_tile)(v.v)
-            {
+            if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT && d.tile == (v.v).dest_tile() {
                 self.vs.enter_depot(v.v);
                 return true;
             }
@@ -1251,7 +1246,7 @@ impl Game<'_> {
             unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             service!(self.vs.leave_unbunching_depot)(v.v);
             self.start_sound(v);
-            service!(self.vs.write_speed)(v.v, 0);
+            (v.v).write_speed(0);
         }
         v.set(STATE, u16::from(tdir));
         v.set(FRAME, 6);
@@ -1273,7 +1268,7 @@ impl Game<'_> {
     }
     /// `FollowPreviousRoadVehicle`.
     fn follow(&self, v: Part, s: &Step, prev: Part, tile: u32, entry: u8, reversed: bool) -> u8 {
-        let prev_tile = service!(self.vs.tile)(prev.v);
+        let prev_tile = (prev.v).tile();
         if prev_tile == s.tile && !reversed {
             return REVERSE[usize::from(entry)];
         }
@@ -1324,14 +1319,14 @@ impl Game<'_> {
         crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
         crate::animated_tile::road_event(
             crate::animated_tile::station_base(station),
-            (self.vs.tile)(v.v),
+            (v.v).tile(),
             crate::station_type::SAT_VEHICLE_ARRIVES,
             crate::station_type::SRT_VEHICLE_ARRIVES,
         );
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
-        let owner = service!(v.v).owner();
+        let owner = (v.v).owner();
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         service!(self.l.should_stop)(v.v, tile)
             && owner == service!(self.ss.tile_owner)(tile)
@@ -1363,7 +1358,7 @@ impl Game<'_> {
             let gp = service!(self.vs.new_position)(v.v);
             if s.front {
                 if let Some(u) = self.close(v, s.z, gp.x, gp.y, s.direction, true) {
-                    self.set_speed(v, s, u.first_speed);
+                    Self::set_speed(v, s, u.first_speed);
                     return false;
                 }
             }
@@ -1380,7 +1375,7 @@ impl Game<'_> {
             unsafe {
                 crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
             }
-            let status = service!(self.vs.status)(v.v);
+            let status = (v.v).status();
             s.x = gp.x;
             s.y = gp.y;
             if status & VS_HIDDEN == 0 {
@@ -1414,7 +1409,7 @@ impl Game<'_> {
                 if !s.front {
                     service!(self.l.disconnect)();
                 }
-                self.set_speed(v, s, 0);
+                Self::set_speed(v, s, 0);
                 return false;
             }
             loop {
@@ -1439,14 +1434,14 @@ impl Game<'_> {
                                 tile = s.tile;
                                 start_frame = 16;
                             } else {
-                                self.set_speed(v, s, 0);
+                                Self::set_speed(v, s, 0);
                                 return false;
                             }
                         }
                     } else if service!(self.ss.is_normal_road_tile)(s.tile)
                         && service!(self.l.disallowed_directions)(s.tile) != 0
                     {
-                        self.set_speed(v, s, 0);
+                        Self::set_speed(v, s, 0);
                         return false;
                     } else {
                         tile = s.tile;
@@ -1461,7 +1456,7 @@ impl Game<'_> {
                 let new_dir = Self::sliding(s, x, y);
                 if s.front {
                     if let Some(u) = self.close(v, s.z, x, y, new_dir, true) {
-                        self.set_speed(v, s, u.first_speed);
+                        Self::set_speed(v, s, u.first_speed);
                         v.path_push(dir, tile);
                         return false;
                     }
@@ -1470,7 +1465,7 @@ impl Game<'_> {
                 Self::observe(s, e);
                 if e.flags & VETS_CANNOT_ENTER != 0 {
                     if service!(self.ss.tile_type)(tile) != MP_TUNNELBRIDGE {
-                        self.set_speed(v, s, 0);
+                        Self::set_speed(v, s, 0);
                         return false;
                     }
                     dir = REVERSE[usize::from(entry)];
@@ -1481,7 +1476,7 @@ impl Game<'_> {
                     && service!(self.ss.tile_type)(s.tile) == MP_STATION
                 {
                     if reversing(dir) && in_range(state, STOP, STOP + 16) {
-                        self.set_speed(v, s, 0);
+                        Self::set_speed(v, s, 0);
                         return false;
                     }
                     if service!(self.l.is_drive_through)(s.tile)
@@ -1492,7 +1487,7 @@ impl Game<'_> {
                     } else if service!(self.l.is_station_road_stop)(s.tile) {
                         // SAFETY: Live front owner; no owner access spans the stop update.
                         unsafe {
-                            crate::road_stop::leave_vehicle(self.ss, self.vs, v.v, v.s.as_ptr());
+                            crate::road_stop::leave_vehicle(self.ss, v.v, v.s.as_ptr());
                         };
                     }
                 }
@@ -1534,7 +1529,7 @@ impl Game<'_> {
                 })
             };
             if dir == INVALID_TRACKDIR {
-                self.set_speed(v, s, 0);
+                Self::set_speed(v, s, 0);
                 return false;
             }
             let pos = crate::road_data::entry(s.tram, self.side() + usize::from(dir), start_frame);
@@ -1542,7 +1537,7 @@ impl Game<'_> {
             let new_dir = Self::sliding(s, x, y);
             if s.front {
                 if let Some(u) = self.close(v, s.z, x, y, new_dir, true) {
-                    self.set_speed(v, s, u.first_speed);
+                    Self::set_speed(v, s, u.first_speed);
                     v.path_push(dir, s.tile);
                     return false;
                 }
@@ -1550,7 +1545,7 @@ impl Game<'_> {
             let e = self.movement_enter(v.v, s.tile, x, y);
             Self::observe(s, e);
             if e.flags & VETS_CANNOT_ENTER != 0 {
-                self.set_speed(v, s, 0);
+                Self::set_speed(v, s, 0);
                 return false;
             }
             v.set(STATE, u16::from(dir));
@@ -1579,20 +1574,20 @@ impl Game<'_> {
                     self.overtake(v, s, u, u.ground(c.first_ground));
                 }
                 if v.overtaking() == 0 {
-                    self.set_speed(v, s, c.first_speed);
+                    Self::set_speed(v, s, c.first_speed);
                 }
                 if s.cur_speed == 0
                     && in_range(v.state(), DT_STOP, DT_STOP + 16)
                     && service!(self.l.should_stop)(v.v, s.tile)
                 {
-                    let owner = service!(v.v).owner();
+                    let owner = (v.v).owner();
                     let bus = crate::road_stop::is_bus(self.ss, v.v);
                     if owner == service!(self.ss.tile_owner)(s.tile)
                         && service!(self.vs.order_type)(v.v) != OT_LEAVESTATION
                         && service!(self.ss.road_stop_type)(s.tile).0 == u8::from(!bus)
                     {
                         let station = service!(self.ss.station_index)(s.tile);
-                        service!(self.vs.write_last_station)(v.v, station);
+                        (v.v).write_last_station(station);
                         self.arrive_load(v, s, station);
                     }
                 }
@@ -1601,7 +1596,7 @@ impl Game<'_> {
         }
         if new_dir != s.direction {
             if self.original() {
-                self.set_speed(v, s, s.cur_speed - (s.cur_speed >> 2));
+                Self::set_speed(v, s, s.cur_speed - (s.cur_speed >> 2));
             }
             service!(self.gs.turn)(v.v, new_dir);
             s.direction = new_dir;
@@ -1634,7 +1629,7 @@ impl Game<'_> {
                 }
                 crate::road_stop::set_entrance_busy(rs, false);
                 v.set(STATE, u16::from(state | 4));
-                service!(self.vs.write_last_station)(v.v, station);
+                (v.v).write_last_station(station);
                 if service!(self.l.is_drive_through)(s.tile)
                     || (service!(self.vs.order_type)(v.v) == OT_GOTO_STATION
                         && service!(self.vs.order_destination)(v.v) == station)
@@ -1644,7 +1639,7 @@ impl Game<'_> {
                 }
             } else {
                 if crate::road_stop::is_entrance_busy(rs) {
-                    self.set_speed(v, s, 0);
+                    Self::set_speed(v, s, 0);
                     return false;
                 }
                 if service!(self.vs.order_type)(v.v) == OT_LEAVESTATION {
@@ -1660,7 +1655,7 @@ impl Game<'_> {
         let e = self.movement_enter(v.v, s.tile, x, y);
         Self::observe(s, e);
         if e.flags & VETS_CANNOT_ENTER != 0 {
-            self.set_speed(v, s, 0);
+            Self::set_speed(v, s, 0);
             return false;
         }
         if e.order_type == OT_LEAVESTATION && service!(self.l.is_drive_through)(s.tile) {
@@ -1807,7 +1802,7 @@ impl Game<'_> {
             }
         }
         crate::ground_vehicle::last_speed_owned(self.gs.physics, v.v, ground);
-        let status = service!(self.vs.status)(v.v);
+        let status = (v.v).status();
         let mut final_progress = None;
         let mut next = if status & VS_HIDDEN == 0 {
             let r = service!(self.gs.update_viewport_then_next)(v.v, v.v);
@@ -1819,7 +1814,7 @@ impl Game<'_> {
             service!(self.vs.next)(v.v)
         };
         while let Some(u) = next {
-            next = if service!(self.vs.status)(u) & VS_HIDDEN == 0 {
+            next = if (u).status() & VS_HIDDEN == 0 {
                 let r = service!(self.gs.update_viewport_then_next)(u, v.v);
                 if r.next.is_none() {
                     final_progress = Some(r.final_progress);
@@ -1830,9 +1825,9 @@ impl Game<'_> {
             };
         }
         // A hidden final part has no viewport observation; read progress now.
-        let progress = final_progress.unwrap_or_else(|| service!(self.vs.progress)(v.v));
+        let progress = final_progress.unwrap_or_else(|| (v.v).progress());
         if progress == 0 {
-            service!(self.vs.write_progress)(v.v, if blocked { adv - 1 } else { j } as u8);
+            (v.v).write_progress(if blocked { adv - 1 } else { j } as u8);
         }
         true
     }
@@ -1840,7 +1835,7 @@ impl Game<'_> {
     fn tick(&mut self, v: Part, t: &TickRead) -> bool {
         let tick = t.tick.wrapping_add(1);
         if !t.front {
-            service!(self.vs.write_tick)(v.v, tick);
+            (v.v).write_tick(tick);
             return true;
         }
         self.acceleration_model = t.movement.acceleration_model;
@@ -1861,12 +1856,12 @@ impl Game<'_> {
         self.controller(v, v.ground(t.movement.ground), status, tick)
     }
     /// `RoadVehicle::SetDestTile`.
-    fn set_dest(&self, v: Part, tile: u32, current: u32) {
-        if tile == current {
+    fn set_dest(v: Part, tile: u32) {
+        if tile == v.v.dest_tile() {
             return;
         }
         v.path_clear();
-        service!(self.vs.write_dest)(v.v, tile);
+        (v.v).write_dest(tile);
     }
     /// `RoadVehicle::GetRunningCost`.
     fn running_cost(&self, v: Part) -> i64 {
@@ -1943,14 +1938,14 @@ impl Game<'_> {
             return;
         }
         service!(self.gs.go_to_depot_service)(v.v, depot_id);
-        self.set_dest(v, depot.tile, service!(self.vs.dest_tile)(v.v));
+        Self::set_dest(v, depot.tile);
         service!(self.vs.start_stop_dirty)(v.v);
     }
     /// `RoadVehicle::OnNewEconomyDay`.
     fn economy_day(&self, v: Part) {
         unsafe { self.vs.maintain(v.v, maintenance::economy_age_vehicle) };
-        let day = service!(self.vs.day)(v.v).wrapping_add(1);
-        service!(self.vs.write_day)(v.v, day);
+        let day = (v.v).day().wrapping_add(1);
+        (v.v).write_day(day);
         if day & 7 == 0 {
             unsafe { self.vs.maintain(v.v, maintenance::decrease_vehicle_value) };
         }
@@ -2032,7 +2027,7 @@ impl Game<'_> {
         }
         let mut u = first.v;
         while u != v {
-            if direction != service!(self.vs.direction)(u) {
+            if direction != (u).direction() {
                 return true;
             }
             // The walk reaches `v` before the chain ends, as in the original.
@@ -2188,14 +2183,8 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
 /// # Safety
 /// As `openttd_rust_road_tick`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_set_dest(
-    v: VehicleRef,
-    state: *mut State,
-    tile: u32,
-    current: u32,
-    leaves: *const Leaves,
-) {
-    entry!(leaves, None).set_dest(Part::new(v, state), tile, current);
+pub unsafe extern "C" fn openttd_rust_road_set_dest(v: VehicleRef, state: *mut State, tile: u32) {
+    Game::set_dest(Part::new(v, state), tile);
 }
 /// # Safety
 /// As `openttd_rust_road_tick`.

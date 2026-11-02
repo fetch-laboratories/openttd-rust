@@ -233,7 +233,6 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	services.station = [](uint16_t) noexcept -> OpenTTDLoadingStation { return {reinterpret_cast<OpenTTDStation *>(_station_loading_probe), reinterpret_cast<OpenTTDBaseStation *>(_station_loading_probe), _station_loading_probe->owner}; };
 	services.owner = [](OpenTTDBaseStation *) noexcept { return _station_loading_probe->owner; };
 	OpenTTDVehicleServices vehicle{};
-	vehicle.last_station = [](OpenTTDVehicle *) noexcept -> uint16_t { return 0; };
 	OpenTTDStationLoading loading{};
 	loading.vehicle = &vehicle;
 	loading.cargo_cap = [](OpenTTDVehicle *) noexcept -> uint16_t { return 1; };

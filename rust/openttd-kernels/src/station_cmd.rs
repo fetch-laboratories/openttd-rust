@@ -1202,7 +1202,7 @@ impl Ctx<'_> {
         let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
         // SAFETY: The reached platform update always supplies a live train shell.
         let vehicle = handle.vehicle(self.vehicle());
-        let tile = (self.vehicle().tile)(vehicle);
+        let tile = (vehicle).tile();
         if self.rail_station(tile) {
             // SAFETY: The shell and canonical immutable tables remain live for this call.
             let trackdir = unsafe {
@@ -2570,9 +2570,7 @@ impl Ctx<'_> {
                     continue;
                 }
                 loop {
-                    if (self.vehicle().order_type)(vehicle) == 1
-                        && (self.vehicle().dest_tile)(vehicle) == tile
-                    {
+                    if (self.vehicle().order_type)(vehicle) == 1 && (vehicle).dest_tile() == tile {
                         let destination = (self.s.order_station_location)(vehicle, station);
                         (self.vehicle().set_dest_tile)(vehicle, destination);
                     }
@@ -3669,7 +3667,7 @@ impl Ctx<'_> {
                     continue;
                 }
                 if (self.vehicle().order_type)(v) == 3 {
-                    let tile = (self.vehicle().tile)(v);
+                    let tile = (v).tile();
                     if !((self.shared.docking_tile)(tile)
                         && unsafe {
                             crate::ship_control::openttd_rust_ship_is_destination(

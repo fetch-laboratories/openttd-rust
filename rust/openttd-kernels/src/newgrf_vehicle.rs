@@ -775,12 +775,10 @@ unsafe fn current_max_speed(s: &Services, v: V, kind: u8) -> i32 {
                 )
             }
             2 => crate::ship_control::current_max_speed(
-                (s.vehicle.max_speed)(handle(v)),
+                (handle(v)).max_speed(),
                 (s.order_max_speed)(v),
             ),
-            3 => {
-                crate::aircraft::speed_old_units(u32::from((s.vehicle.max_speed)(handle(v)))) as i32
-            }
+            3 => crate::aircraft::speed_old_units(u32::from((handle(v)).max_speed())) as i32,
             _ => 0,
         }
     }
@@ -952,7 +950,7 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
         let a = (s.aircraft)(v);
         match (*a).state {
             HANGAR => {
-                if (s.vehicle.speed)(handle(v)) > 0 {
+                if (handle(v)).speed() > 0 {
                     AMA_TTDP_LANDING_TO_HANGAR
                 } else {
                     AMA_TTDP_IN_HANGAR
@@ -1044,8 +1042,9 @@ unsafe fn variable(
                 }
                 let w = next(s, v);
                 crate::movement::native_assert(s.shared, !w.is_null());
-                let altitude = (s.vehicle.z)(h)
-                    .wrapping_sub((s.vehicle.z)(handle(w)))
+                let altitude = (h)
+                    .z()
+                    .wrapping_sub((handle(w)).z())
                     .clamp(0, i32::from(u16::MAX));
                 let st = (s.target_airport)(v);
                 let leaves = &*(s.aircraft_leaves)();
@@ -1068,16 +1067,16 @@ unsafe fn variable(
                 }
                 let p = (s.previous)(v);
                 let n = next(s, v);
-                let direction = (s.vehicle.direction)(h);
+                let direction = (h).direction();
                 let f = if p.is_null() {
                     DIRDIFF_SAME
                 } else {
-                    dir_difference((s.vehicle.direction)(handle(p)), direction, check)
+                    dir_difference((handle(p)).direction(), direction, check)
                 };
                 let b = if n.is_null() {
                     DIRDIFF_SAME
                 } else {
-                    dir_difference(direction, (s.vehicle.direction)(handle(n)), check)
+                    dir_difference(direction, (handle(n)).direction(), check)
                 };
                 let t = change_dir_diff(f, b);
                 let encode = |d| u32::from(if d > DIRDIFF_REVERSE { d | 8 } else { d });
@@ -1088,7 +1087,7 @@ unsafe fn variable(
             0x48 => return u32::from((s.engine_flags)((s.vehicle.engine)(h).0.as_ptr())),
             0x49 => return (s.build_year)(v) as u32,
             0x4a => {
-                let tile = (s.vehicle.tile)(h);
+                let tile = (h).tile();
                 match kind() {
                     0 => {
                         let rt = (s.tile_railtype)(tile);
@@ -1183,8 +1182,8 @@ unsafe fn variable(
                     return 0;
                 }
                 let prev = (parameter as i8) < 0;
-                let a = (s.vehicle.direction)(h);
-                let b = (s.vehicle.direction)(handle(u));
+                let a = (h).direction();
+                let b = (handle(u)).direction();
                 let mut result = u32::from(if prev {
                     dir_difference(b, a, check)
                 } else {
@@ -1193,7 +1192,7 @@ unsafe fn variable(
                 if result > u32::from(DIRDIFF_REVERSE) {
                     result |= 8;
                 }
-                if (s.vehicle.status)(handle(u)) & crate::vehicle_base::VS_HIDDEN != 0 {
+                if (handle(u)).status() & crate::vehicle_base::VS_HIDDEN != 0 {
                     result |= 0x80;
                 }
                 let a = (s.vehicle.coordinates)(h);
@@ -1219,7 +1218,7 @@ unsafe fn variable(
                     if param.0 == crate::rail_type::INVALID_RAILTYPE {
                         return 0;
                     }
-                    let tile = (s.tile_railtype)((s.vehicle.tile)(h));
+                    let tile = (s.tile_railtype)((h).tile());
                     if tile.0 == param.0 {
                         return 15;
                     }
@@ -1239,7 +1238,7 @@ unsafe fn variable(
                     if param.0 == crate::road_type::INVALID_ROADTYPE {
                         return 0;
                     }
-                    let tile = (s.tile_roadtype)((s.vehicle.tile)(h), rtt);
+                    let tile = (s.tile_roadtype)((h).tile(), rtt);
                     if tile.0 == param.0 {
                         return 15;
                     }
@@ -1271,19 +1270,11 @@ unsafe fn variable(
             }
             0x65 => match kind() {
                 0 => {
-                    return (s.rail_badge)(
-                        ro,
-                        ((&*(s.ground)()).rail_type)((s.vehicle.tile)(h)),
-                        parameter,
-                    );
+                    return (s.rail_badge)(ro, ((&*(s.ground)()).rail_type)((h).tile()), parameter);
                 }
                 1 => {
                     let rtt = crate::road::get_road_tram_type((s.roadtype)(v).0);
-                    return (s.road_badge)(
-                        ro,
-                        (s.tile_roadtype)((s.vehicle.tile)(h), rtt),
-                        parameter,
-                    );
+                    return (s.road_badge)(ro, (s.tile_roadtype)((h).tile(), rtt), parameter);
                 }
                 _ => return u32::MAX,
             },
@@ -1299,7 +1290,7 @@ unsafe fn variable(
                     } else {
                         t
                     };
-                    let rt = ((&*(s.ground)()).rail_type)((s.vehicle.tile)(h));
+                    let rt = ((&*(s.ground)()).rail_type)((h).tile());
                     let powered = crate::ground_vehicle::is_engine(h.subtype()) || wagon;
                     let power = (s.powered_rail)(u.get_railtypes(), rt);
                     if powered {
@@ -1351,33 +1342,29 @@ unsafe fn variable(
             }
             0x92 | 0x93 => return high(service_date((s.last_service)(v))),
             0x94 | 0x95 => return high(u32::from((s.service_interval)(v))),
-            0x96 => return u32::from((s.vehicle.last_station)(h)),
-            0x97 => return u32::from((s.vehicle.tick)(h)),
+            0x96 => return u32::from((h).last_station()),
+            0x97 => return u32::from((h).tick()),
             0x98 | 0x99 => {
-                let speed = u32::from((s.vehicle.max_speed)(h));
+                let speed = u32::from((h).max_speed());
                 return high(if kind() == 3 {
                     crate::aircraft::speed_old_units(speed)
                 } else {
                     speed
                 });
             }
-            0x9a | 0x9b => return high((s.vehicle.x)(h) as u32),
-            0x9c | 0x9d => return high((s.vehicle.y)(h) as u32),
-            0x9e => return (s.vehicle.z)(h) as u32,
+            0x9a | 0x9b => return high((h).x() as u32),
+            0x9c | 0x9d => return high((h).y() as u32),
+            0x9e => return (h).z() as u32,
             0x9f => {
-                return u32::from(if rotor {
-                    DIR_W
-                } else {
-                    (s.vehicle.direction)(h)
-                });
+                return u32::from(if rotor { DIR_W } else { (h).direction() });
             }
             0xa8 | 0xa9 | 0xb3 => return 0,
-            0xb2 => return u32::from((s.vehicle.status)(h)),
+            0xb2 => return u32::from((h).status()),
             0xb4 | 0xb5 => {
-                let speed = u32::from((s.vehicle.speed)(h));
+                let speed = u32::from((h).speed());
                 return high(if kind() == 3 { speed * 10 / 128 } else { speed });
             }
-            0xb6 => return u32::from((s.vehicle.subspeed)(h)),
+            0xb6 => return u32::from((h).subspeed()),
             0xb7 => return u32::from((s.acceleration)(v)),
             0xb9 => return u32::from((s.cargo_type)(v)),
             0xba | 0xbb => return high(u32::from((s.cargo_capacity)(v))),
@@ -1415,7 +1402,7 @@ unsafe fn variable(
                     },
                 );
             }
-            0xc9 => return u32::from((s.vehicle.day)(h)),
+            0xc9 => return u32::from((h).day()),
             0xca => return u32::from((s.breakdowns)(v)),
             0xcb => return u32::from((s.breakdown_counter)(v)),
             0xcc => return u32::from((s.breakdown_delay)(v)),

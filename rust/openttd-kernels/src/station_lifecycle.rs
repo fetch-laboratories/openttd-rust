@@ -518,8 +518,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let mut from = VehicleID(0);
     while let Some(v) = (s.shared.vehicle_next)(from.0) {
         from = VehicleID(unsafe { (resolver.id)(v.0.as_ptr()) }.wrapping_add(1));
-        if (vehicles.last_station)(v) == id.0 {
-            (vehicles.write_last_station)(v, INVALID_STATION);
+        if v.last_station() == id.0 {
+            v.write_last_station(INVALID_STATION);
         }
         if (s.last_loading)(v) == id {
             (visits.set_last_loading)(v, INVALID_STATION);
