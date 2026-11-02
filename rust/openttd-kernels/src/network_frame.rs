@@ -47,7 +47,7 @@ use crate::network_client::status::ACTIVE as CLIENT_STATUS_ACTIVE;
 crate::abi::shared_records! {
     fn abi_record;
     /// The frame globals of `network.cpp` and `network_client.cpp`.
-    "OpenTTDNetworkFrameState" ["probe"] => pub struct State {
+    "OpenTTDNetworkFrameState" ["probe"] => pub struct NetworkFrameState {
         pub frame_counter_server: u32,
         pub frame_counter_max: u32,
         pub frame_counter: u32,
@@ -145,7 +145,7 @@ pub struct Services {
     pub sync_log: extern "C" fn(),
 }
 
-static STATE: GameState<State> = GameState::new(State {
+static STATE: GameState<NetworkFrameState> = GameState::new(NetworkFrameState {
     frame_counter_server: 0,
     frame_counter_max: 0,
     frame_counter: 0,
@@ -158,7 +158,7 @@ static STATE: GameState<State> = GameState::new(State {
 });
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_frame_storage() -> *mut State {
+pub extern "C" fn openttd_rust_network_frame_storage() -> *mut NetworkFrameState {
     STATE.get()
 }
 

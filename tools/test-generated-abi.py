@@ -77,10 +77,10 @@ class GeneratedAbiTests(unittest.TestCase):
                         [f"sizeof({name})", f"alignof({name})"]
                         + [
                             item
-                            for field, _ in fields
+                            for field in fields
                             for item in (
-                                f"offsetof({name}, {field})",
-                                f"sizeof({name}::{field})",
+                                f"offsetof({name}, {field.name})",
+                                f"sizeof({name}::{field.name})",
                             )
                         ],
                     ),
@@ -127,6 +127,62 @@ class GeneratedAbiTests(unittest.TestCase):
                 {path.name: path.read_text() for path in Path(directory).iterdir()},
             )
         self.assertFalse(list((ROOT / "src").rglob("abi-layout-*.inc")))
+
+    def test_shared_record_opaque_pointer_class_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            source = rust / "probe.rs"
+            prefix = (
+                'layouts! { "Other" ["probe"] => Other {}; }\n'
+                "pub struct NativeClass { _private: [u8; 0] }\n"
+                "pub struct NativeStruct { _private: [u8; 0] }\n"
+                "shared_records! { fn abi_record;\n"
+                '"Probe" ["probe"] => pub struct Probe {\n'
+            )
+            source.write_text(
+                prefix
+                + "pub class_pointer: *mut NativeClass => class,\n"
+                + "pub const_class: *const NativeClass => class,\n"
+                + "pub struct_pointer: *mut NativeStruct => struct,\n"
+                + "pub default_struct: *const NativeStruct,\n    }\n}\n"
+            )
+            fragments = GENERATOR["generate"](root)
+            with self.subTest(behavior="native declarations agree with class keys"):
+                compiler = os.environ.get("CXX", "c++")
+                header = root / "abi-record-probe.h"
+                header.write_text(fragments[header.name])
+                subprocess.run(
+                    [
+                        compiler,
+                        "-std=c++20",
+                        "-Werror=mismatched-tags",
+                        "-x",
+                        "c++",
+                        "-fsyntax-only",
+                        "-",
+                    ],
+                    input=(
+                        f'#include "{header}"\n'
+                        "class NativeClass {};\nstruct NativeStruct {};\n"
+                        "static_assert(sizeof(Probe) == 4 * sizeof(void *));\n"
+                    ),
+                    text=True,
+                    check=True,
+                )
+            for fields, error in (
+                (
+                    "pub first: *mut NativeClass => class, pub second: *const NativeClass",
+                    "conflicting pointee tags",
+                ),
+                ("pub value: u8 => class", "pointee tag requires an opaque pointer"),
+                ("pub value: *mut NativeClass => union", "unsupported pointee tag"),
+            ):
+                with self.subTest(error=error):
+                    source.write_text(prefix + fields + "\n    }\n}\n")
+                    with self.assertRaisesRegex(ValueError, error):
+                        GENERATOR["generate"](root)
 
     def test_synthetic_tree_aliases_widths_and_callback_retirement(self):
         with tempfile.TemporaryDirectory() as directory:
