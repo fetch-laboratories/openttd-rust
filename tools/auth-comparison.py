@@ -208,6 +208,8 @@ def main():
             "-fdata-sections",
             "-I",
             source / "src",
+            "-I",
+            probe.BUILD / "generated-abi",
             fixture,
             *(source / name for name in sources[:1]),
             shim,
