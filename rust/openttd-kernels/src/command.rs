@@ -441,9 +441,7 @@ pub unsafe extern "C" fn openttd_rust_command_tested(
             Tested::Exit
         };
     }
-    let send_net = (finance.networking)()
-        && !crate::genworld::generating()
-        && !network_command;
+    let send_net = (finance.networking)() && !crate::genworld::generating() && !network_command;
     if send_net {
         return Tested::Send;
     }
