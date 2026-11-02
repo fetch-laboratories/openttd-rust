@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file auth_ffi.h Opaque authentication owners and primitive-only host operations. */
+/** @file auth_ffi.h Opaque authentication owners over Rust cryptographic primitives. */
 #ifndef OPENTTD_RUST_AUTH_FFI_H
 #define OPENTTD_RUST_AUTH_FFI_H
 #include "service_defaults.hpp"
@@ -19,31 +19,6 @@
 extern "C" {
 #endif
 
-/* All callbacks are nonthrowing, synchronous primitive operations. They retain
- * no input pointer and invoke no Packet, RNG, logger, allocator, or UI callback.
- * The host starts the actual trivial vendor-context lifetime in init/copy.
- * Layouts describe the host vendor types. */
-struct OpenTTDAuthPrimitives {
-	uint32_t version;
-	uint32_t reserved;
-	size_t aead_size;
-	size_t aead_alignment;
-	size_t hash_size;
-	size_t hash_alignment;
-	void (OPENTTD_RUST_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
-	void (OPENTTD_RUST_CALL *x25519)(uint8_t *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(x25519);
-	void (OPENTTD_RUST_CALL *public_key)(uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(public_key);
-	void (OPENTTD_RUST_CALL *hash_init)(void *, size_t) OPENTTD_SERVICE_DEFAULT(hash_init);
-	void (OPENTTD_RUST_CALL *hash_update)(void *, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(hash_update);
-	void (OPENTTD_RUST_CALL *hash_final)(void *, uint8_t *) OPENTTD_SERVICE_DEFAULT(hash_final);
-	void (OPENTTD_RUST_CALL *aead_init)(void *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(aead_init);
-	void (OPENTTD_RUST_CALL *aead_copy)(void *, const void *) OPENTTD_SERVICE_DEFAULT(aead_copy);
-	void (OPENTTD_RUST_CALL *aead_write)(void *, uint8_t *, uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_write);
-	int32_t (OPENTTD_RUST_CALL *aead_read)(void *, uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_read);
-	void (OPENTTD_RUST_CALL *lock)(uint8_t *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(lock);
-	int32_t (OPENTTD_RUST_CALL *unlock)(uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(unlock);
-};
-
 struct OpenTTDAuthKeys;
 struct OpenTTDAuthSession;
 struct OpenTTDAuthStream;
@@ -55,14 +30,14 @@ struct OpenTTDAuthStream;
  * messages; MAC and message regions are disjoint, and encryption is in place.
  * Calls are serialized; live initialized buffers have lengths <= PTRDIFF_MAX (NULL only if empty),
  * output excludes owner storage, and owner views cannot be accessed during mutation. */
-struct OpenTTDAuthKeys *OPENTTD_RUST_CALL openttd_rust_auth_keys_new(const struct OpenTTDAuthPrimitives *);
+struct OpenTTDAuthKeys *OPENTTD_RUST_CALL openttd_rust_auth_keys_new();
 struct OpenTTDAuthKeys *OPENTTD_RUST_CALL openttd_rust_auth_keys_clone(const struct OpenTTDAuthKeys *);
 void OPENTTD_RUST_CALL openttd_rust_auth_keys_assign(struct OpenTTDAuthKeys *, const struct OpenTTDAuthKeys *);
 void OPENTTD_RUST_CALL openttd_rust_auth_keys_destroy(struct OpenTTDAuthKeys *);
 const uint8_t *OPENTTD_RUST_CALL openttd_rust_auth_keys_data(const struct OpenTTDAuthKeys *, uint8_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_auth_keys_exchange(struct OpenTTDAuthKeys *, const uint8_t *, uint8_t, const uint8_t *, const uint8_t *, const uint8_t *, size_t);
 
-struct OpenTTDAuthSession *OPENTTD_RUST_CALL openttd_rust_auth_session_new(const struct OpenTTDAuthPrimitives *, const uint8_t *);
+struct OpenTTDAuthSession *OPENTTD_RUST_CALL openttd_rust_auth_session_new(const uint8_t *);
 struct OpenTTDAuthSession *OPENTTD_RUST_CALL openttd_rust_auth_session_clone(const struct OpenTTDAuthSession *);
 void OPENTTD_RUST_CALL openttd_rust_auth_session_assign(struct OpenTTDAuthSession *, const struct OpenTTDAuthSession *);
 void OPENTTD_RUST_CALL openttd_rust_auth_session_destroy(struct OpenTTDAuthSession *);
@@ -83,8 +58,5 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_auth_stream_decrypt(struct OpenTTDAuthStr
 
 #ifdef __cplusplus
 }
-static_assert(sizeof(OpenTTDAuthPrimitives) == 8 + 16 * sizeof(size_t));
-static_assert(offsetof(OpenTTDAuthPrimitives, wipe) == 8 + 4 * sizeof(size_t));
-static_assert(sizeof(int32_t) == sizeof(int));
 #endif
 #endif /* OPENTTD_RUST_AUTH_FFI_H */

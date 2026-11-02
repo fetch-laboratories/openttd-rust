@@ -965,7 +965,6 @@ pub unsafe extern "C" fn openttd_rust_widget_parser_destroy(handle: *mut std::ff
     drop(unsafe { Box::from_raw(handle.cast::<widget_parser::Engine>()) });
 }
 
-#[cfg(test)]
 mod crypto;
 #[allow(unsafe_code)]
 mod crypto_primitives;

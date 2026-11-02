@@ -184,3 +184,5 @@ pub(crate) fn ed25519_check(signature: &[u8; 64], public: &[u8; 32], message: &[
 
 #[cfg(test)]
 mod tests;
+
+mod ffi;

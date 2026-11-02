@@ -12,7 +12,7 @@
 #include "network_crypto_internal.h"
 #include "core/packet.h"
 
-#include "../3rdparty/monocypher/monocypher.h"
+#include "../rust/crypto_ffi.h"
 #include "../core/random_func.hpp"
 #include "../debug.h"
 #include "../string_func.h"
@@ -25,35 +25,10 @@
  */
 static void crypto_wipe(std::span<uint8_t> span)
 {
-	crypto_wipe(span.data(), span.size());
+	openttd_rust_crypto_wipe(span.data(), span.size());
 }
 
-/* These callbacks are primitive-only and cannot throw. They start the actual
- * trivial vendor object lifetime in Rust-allocated, correctly aligned storage.
- * The table keeps vendor symbols out of the Rust archive's other consumers. */
-static_assert(X25519_KEY_SIZE == 32 && X25519_NONCE_SIZE == 24 && X25519_MAC_SIZE == 16 && X25519_KEY_EXCHANGE_MESSAGE_SIZE == 8);
-static_assert(static_cast<uint8_t>(X25519KeyExchangeSide::CLIENT) == 0 && static_cast<uint8_t>(X25519KeyExchangeSide::SERVER) == 1);
-static const OpenTTDAuthPrimitives &GetAuthPrimitives()
-{
-	static const OpenTTDAuthPrimitives primitives = {
-		1, 0, sizeof(crypto_aead_ctx), alignof(crypto_aead_ctx), sizeof(crypto_blake2b_ctx), alignof(crypto_blake2b_ctx),
-		[](void *data, size_t size) noexcept { ::crypto_wipe(data, size); },
-		[](uint8_t *shared, const uint8_t *secret, const uint8_t *peer) noexcept { crypto_x25519(shared, secret, peer); },
-		[](uint8_t *public_key, const uint8_t *secret) noexcept { crypto_x25519_public_key(public_key, secret); },
-		[](void *context, size_t size) noexcept { crypto_blake2b_init(::new (context) crypto_blake2b_ctx, size); },
-		[](void *context, const uint8_t *data, size_t size) noexcept { crypto_blake2b_update(static_cast<crypto_blake2b_ctx *>(context), data, size); },
-		[](void *context, uint8_t *keys) noexcept { crypto_blake2b_final(static_cast<crypto_blake2b_ctx *>(context), keys); },
-		[](void *context, const uint8_t *key, const uint8_t *nonce) noexcept { crypto_aead_init_x(::new (context) crypto_aead_ctx, key, nonce); },
-		[](void *destination, const void *source) noexcept { ::new (destination) crypto_aead_ctx(*static_cast<const crypto_aead_ctx *>(source)); },
-		[](void *context, uint8_t *cipher, uint8_t *mac, const uint8_t *ad, size_t ad_size, const uint8_t *message, size_t size) noexcept { crypto_aead_write(static_cast<crypto_aead_ctx *>(context), cipher, mac, ad, ad_size, message, size); },
-		[](void *context, uint8_t *message, const uint8_t *mac, const uint8_t *ad, size_t ad_size, const uint8_t *cipher, size_t size) noexcept -> int32_t { return crypto_aead_read(static_cast<crypto_aead_ctx *>(context), message, mac, ad, ad_size, cipher, size); },
-		[](uint8_t *cipher, uint8_t *mac, const uint8_t *key, const uint8_t *nonce, const uint8_t *ad, size_t ad_size, const uint8_t *message, size_t size) noexcept { crypto_aead_lock(cipher, mac, key, nonce, ad, ad_size, message, size); },
-		[](uint8_t *message, const uint8_t *mac, const uint8_t *key, const uint8_t *nonce, const uint8_t *ad, size_t ad_size, const uint8_t *cipher, size_t size) noexcept -> int32_t { return crypto_aead_unlock(message, mac, key, nonce, ad, ad_size, cipher, size); },
-	};
-	return primitives;
-}
-
-X25519DerivedKeys::X25519DerivedKeys() : keys(openttd_rust_auth_keys_new(&GetAuthPrimitives())) {}
+X25519DerivedKeys::X25519DerivedKeys() : keys(openttd_rust_auth_keys_new()) {}
 
 /** Ensure the derived keys do not get leaked when we're done with it. */
 X25519DerivedKeys::~X25519DerivedKeys()
@@ -140,7 +115,7 @@ X25519Key::~X25519Key()
 X25519PublicKey X25519SecretKey::CreatePublicKey() const
 {
 	X25519PublicKey public_key;
-	crypto_x25519_public_key(public_key.data(), this->data());
+	openttd_rust_crypto_public_key(public_key.data(), this->data());
 	return public_key;
 }
 
@@ -166,7 +141,7 @@ X25519Nonce::~X25519Nonce()
  * @param secret_key The secret key to use for this handler. Defaults to secure random data.
  */
 X25519AuthenticationHandler::X25519AuthenticationHandler(const X25519SecretKey &secret_key) :
-	session(openttd_rust_auth_session_new(&GetAuthPrimitives(), secret_key.data()))
+	session(openttd_rust_auth_session_new(secret_key.data()))
 {
 	RandomBytesWithFallback(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 2), X25519_NONCE_SIZE));
 	RandomBytesWithFallback(std::span(openttd_rust_auth_session_mut_view(this->session.get(), 3), X25519_NONCE_SIZE));
@@ -476,8 +451,3 @@ std::unique_ptr<NetworkAuthenticationServerHandler> NetworkAuthenticationServerH
 	return handler;
 }
 
-#if defined(WITH_RUST_ABI_CHECKS)
-#include "../rust/service_table_check.hpp"
-#include "abi-visit-OpenTTDAuthPrimitives.hpp"
-bool CheckAbi_network_crypto() { return AbiServicesComplete(GetAuthPrimitives()); }
-#endif

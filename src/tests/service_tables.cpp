@@ -50,7 +50,6 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(yapf_road) \
 	X(yapf_ship) \
 	X(monocypher) \
-	X(network_crypto) \
 	X(packet) \
 	X(landscape) \
 	X(genworld) \

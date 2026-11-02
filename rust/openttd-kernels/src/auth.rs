@@ -5,110 +5,29 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Authentication owners around the bundled cryptographic primitives. The pointer contract is in
-//! `auth_ffi.h`. Owners and secret buffers are initialized in their final allocation, and
-//! cloning copies heap to heap, never through a secret-bearing Rust value.
-#![allow(unsafe_code)] // This module implements the documented raw-pointer owner ABI.
+//! Authentication session and encryption-stream owners. The pointer contract is
+//! in `auth_ffi.h`. Calls are serialized; no pointer is retained past its owner.
+//! Panics abort, and no C++ exception may cross an entry.
+#![allow(unsafe_code)]
 
+use crate::crypto::{self, Aead};
 use std::alloc::{Layout, alloc_zeroed, dealloc, handle_alloc_error};
-use std::ffi::c_void;
-use std::ptr::{self, NonNull};
+use std::ptr;
+use zeroize::{Zeroize, Zeroizing};
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub(crate) struct Primitives {
-    version: u32,
-    reserved: u32,
-    aead_size: usize,
-    aead_alignment: usize,
-    hash_size: usize,
-    hash_alignment: usize,
-    wipe: unsafe extern "C" fn(*mut c_void, usize),
-    x25519: unsafe extern "C" fn(*mut u8, *const u8, *const u8),
-    public_key: unsafe extern "C" fn(*mut u8, *const u8),
-    hash_init: unsafe extern "C" fn(*mut c_void, usize),
-    hash_update: unsafe extern "C" fn(*mut c_void, *const u8, usize),
-    hash_final: unsafe extern "C" fn(*mut c_void, *mut u8),
-    aead_init: unsafe extern "C" fn(*mut c_void, *const u8, *const u8),
-    aead_copy: unsafe extern "C" fn(*mut c_void, *const c_void),
-    aead_write:
-        unsafe extern "C" fn(*mut c_void, *mut u8, *mut u8, *const u8, usize, *const u8, usize),
-    aead_read: unsafe extern "C" fn(
-        *mut c_void,
-        *mut u8,
-        *const u8,
-        *const u8,
-        usize,
-        *const u8,
-        usize,
-    ) -> i32,
-    lock: unsafe extern "C" fn(
-        *mut u8,
-        *mut u8,
-        *const u8,
-        *const u8,
-        *const u8,
-        usize,
-        *const u8,
-        usize,
-    ),
-    unlock: unsafe extern "C" fn(
-        *mut u8,
-        *const u8,
-        *const u8,
-        *const u8,
-        *const u8,
-        usize,
-        *const u8,
-        usize,
-    ) -> i32,
-}
-
-const _: () = assert!(size_of::<Primitives>() == 8 + 16 * size_of::<usize>());
-
-impl Primitives {
-    unsafe fn read(src: *const Self) -> Self {
-        // SAFETY: The host supplies a complete valid function table for each owner.
-        let result = unsafe { *src };
-        assert_eq!(result.version, 1);
-        assert_eq!(result.reserved, 0);
-        assert!(result.aead_size > 0 && result.hash_size > 0);
-        result
+unsafe fn bytes<'a>(data: *const u8, length: usize) -> &'a [u8] {
+    if length == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(data, length) }
     }
 }
 
-struct Buffer {
-    data: NonNull<c_void>,
-    layout: Layout,
-    wipe: Option<unsafe extern "C" fn(*mut c_void, usize)>,
-}
-
-impl Buffer {
-    fn new(
-        size: usize,
-        alignment: usize,
-        wipe: Option<unsafe extern "C" fn(*mut c_void, usize)>,
-    ) -> Self {
-        let layout = Layout::from_size_align(size, alignment).expect("valid host context layout");
-        // SAFETY: Nonzero validated layout. Allocation never crosses allocator domains.
-        let raw = unsafe { alloc_zeroed(layout) };
-        let data = NonNull::new(raw.cast()).unwrap_or_else(|| handle_alloc_error(layout));
-        Self { data, layout, wipe }
-    }
-    fn ptr(&self) -> *mut c_void {
-        self.data.as_ptr()
-    }
-}
-
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        // SAFETY: This uniquely owned live allocation has the supplied host layout.
-        unsafe {
-            if let Some(wipe) = self.wipe {
-                wipe(self.ptr(), self.layout.size());
-            }
-            dealloc(self.ptr().cast(), self.layout);
-        }
+unsafe fn bytes_mut<'a>(data: *mut u8, length: usize) -> &'a mut [u8] {
+    if length == 0 {
+        &mut []
+    } else {
+        unsafe { std::slice::from_raw_parts_mut(data, length) }
     }
 }
 
@@ -130,9 +49,8 @@ unsafe fn free<T>(owner: *mut T) {
     }
 }
 
-#[allow(clippy::too_many_arguments)] // Match the fixed primitive/KDF inputs without copying secrets.
+#[allow(clippy::too_many_arguments)] // Preserve the fixed KDF inputs without a carrier.
 unsafe fn derive(
-    p: Primitives,
     keys: *mut u8,
     peer: *const u8,
     side: u8,
@@ -141,40 +59,30 @@ unsafe fn derive(
     extra: *const u8,
     length: usize,
 ) -> u8 {
-    assert!(side <= 1 && isize::try_from(length).is_ok());
-    let shared = Buffer::new(32, 1, Some(p.wipe));
-    // SAFETY: All fixed inputs/output and primitive context lifetimes follow the host contract.
-    unsafe {
-        (p.x25519)(shared.ptr().cast(), secret, peer);
-        if std::slice::from_raw_parts(shared.ptr().cast::<u8>(), 32)
-            .iter()
-            .all(|v| *v == 0)
-        {
-            return 0;
+    let mut output = Zeroizing::new([0; 64]);
+    // Extra may alias old keys, so finish all reads before replacing that storage.
+    let valid = unsafe {
+        crypto::derive(
+            &mut output,
+            &*secret.cast::<[u8; 32]>(),
+            &*public.cast::<[u8; 32]>(),
+            &*peer.cast::<[u8; 32]>(),
+            side == 1,
+            bytes(extra, length),
+        )
+    };
+    if valid {
+        unsafe {
+            ptr::copy_nonoverlapping(output.as_ptr(), keys, 64);
         }
-        // Vendor final wipes the hash context itself.
-        let hash = Buffer::new(p.hash_size, p.hash_alignment, None);
-        (p.hash_init)(hash.ptr(), 64);
-        (p.hash_update)(hash.ptr(), shared.ptr().cast(), 32);
-        let (server, client) = if side == 1 {
-            (public, peer)
-        } else {
-            (peer, public)
-        };
-        (p.hash_update)(hash.ptr(), server, 32);
-        (p.hash_update)(hash.ptr(), client, 32);
-        (p.hash_update)(hash.ptr(), extra, length);
-        (p.hash_final)(hash.ptr(), keys);
     }
-    1
+    u8::from(valid)
 }
 
 pub(crate) struct Keys {
-    primitives: Primitives,
     keys: [u8; 64],
 }
 pub(crate) struct Session {
-    primitives: Primitives,
     secret: [u8; 32],
     public: [u8; 32],
     exchange_nonce: [u8; 24],
@@ -183,43 +91,31 @@ pub(crate) struct Session {
     encryption_nonce: [u8; 24],
 }
 pub(crate) struct Stream {
-    primitives: Primitives,
-    context: Buffer,
+    context: Aead,
 }
 
 impl Drop for Keys {
     fn drop(&mut self) {
-        // SAFETY: Live uniquely owned key storage; vendor wipe uses volatile writes.
-        unsafe {
-            (self.primitives.wipe)(self.keys.as_mut_ptr().cast(), 64);
-        }
+        self.keys.zeroize();
     }
 }
 impl Drop for Session {
     fn drop(&mut self) {
-        // SAFETY: Wipe fields in original reverse member-destruction order.
-        unsafe {
-            let wipe = self.primitives.wipe;
-            wipe(self.encryption_nonce.as_mut_ptr().cast(), 24);
-            wipe(self.peer.as_mut_ptr().cast(), 32);
-            wipe(self.keys.as_mut_ptr().cast(), 64);
-            wipe(self.exchange_nonce.as_mut_ptr().cast(), 24);
-            wipe(self.public.as_mut_ptr().cast(), 32);
-            wipe(self.secret.as_mut_ptr().cast(), 32);
-        }
+        self.encryption_nonce.zeroize();
+        self.peer.zeroize();
+        self.keys.zeroize();
+        self.exchange_nonce.zeroize();
+        self.public.zeroize();
+        self.secret.zeroize();
     }
 }
 
 // All C exports below share the module/header safety contract. Their visibility
 // is crate-local; the exported symbols, not Rust types, are the public interface.
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_keys_new(p: *const Primitives) -> *mut Keys {
-    // SAFETY: Zeroed byte arrays plus initialized function metadata form a valid Keys.
-    unsafe {
-        let owner = allocate::<Keys>();
-        ptr::addr_of_mut!((*owner).primitives).write(Primitives::read(p));
-        owner
-    }
+pub(crate) unsafe extern "C" fn openttd_rust_auth_keys_new() -> *mut Keys {
+    // SAFETY: Zeroed byte arrays form valid key storage.
+    unsafe { allocate::<Keys>() }
 }
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_keys_clone(src: *const Keys) -> *mut Keys {
@@ -269,7 +165,6 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_keys_exchange(
 ) -> u8 {
     unsafe {
         derive(
-            (*owner).primitives,
             ptr::addr_of_mut!((*owner).keys).cast(),
             peer,
             side,
@@ -281,19 +176,11 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_keys_exchange(
     }
 }
 #[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_session_new(
-    p: *const Primitives,
-    secret: *const u8,
-) -> *mut Session {
+pub(crate) unsafe extern "C" fn openttd_rust_auth_session_new(secret: *const u8) -> *mut Session {
     unsafe {
         let owner = allocate::<Session>();
-        let primitives = Primitives::read(p);
-        ptr::addr_of_mut!((*owner).primitives).write(primitives);
         ptr::copy_nonoverlapping(secret, ptr::addr_of_mut!((*owner).secret).cast(), 32);
-        (primitives.public_key)(
-            ptr::addr_of_mut!((*owner).public).cast(),
-            ptr::addr_of!((*owner).secret).cast(),
-        );
+        ptr::addr_of_mut!((*owner).public).write(crypto::public_key(&(*owner).secret));
         owner
     }
 }
@@ -358,7 +245,6 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_session_exchange(
 ) -> u8 {
     unsafe {
         derive(
-            (*owner).primitives,
             ptr::addr_of_mut!((*owner).keys).cast(),
             ptr::addr_of!((*owner).peer).cast(),
             side,
@@ -376,16 +262,13 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_session_encrypt_response(
     mac: *mut u8,
 ) {
     unsafe {
-        ((*owner).primitives.lock)(
-            message,
-            mac,
-            ptr::addr_of!((*owner).keys).cast(),
-            ptr::addr_of!((*owner).exchange_nonce).cast(),
-            ptr::addr_of!((*owner).public).cast(),
-            32,
-            message,
-            8,
+        let session = &*owner;
+        let mut context = Aead::new(
+            session.keys[..32].try_into().unwrap(),
+            &session.exchange_nonce,
         );
+        let tag = context.write(std::slice::from_raw_parts_mut(message, 8), &session.public);
+        ptr::copy_nonoverlapping(tag.as_ptr(), mac, 16);
     }
 }
 #[unsafe(no_mangle)]
@@ -395,17 +278,17 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_session_decrypt_response(
     mac: *const u8,
 ) -> u8 {
     unsafe {
+        let session = &*owner;
         u8::from(
-            ((*owner).primitives.unlock)(
-                message,
-                mac,
-                ptr::addr_of!((*owner).keys).cast(),
-                ptr::addr_of!((*owner).exchange_nonce).cast(),
-                ptr::addr_of!((*owner).peer).cast(),
-                32,
-                message,
-                8,
-            ) == 0,
+            Aead::new(
+                session.keys[..32].try_into().unwrap(),
+                &session.exchange_nonce,
+            )
+            .read(
+                std::slice::from_raw_parts_mut(message, 8),
+                &*mac.cast::<[u8; 16]>(),
+                &session.peer,
+            ),
         )
     }
 }
@@ -416,30 +299,22 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_new(
 ) -> *mut Stream {
     assert!(side <= 1);
     unsafe {
-        let p = (*owner).primitives;
         let dst = allocate::<Stream>();
-        ptr::addr_of_mut!((*dst).primitives).write(p);
-        let context = Buffer::new(p.aead_size, p.aead_alignment, Some(p.wipe));
-        (p.aead_init)(
-            context.ptr(),
-            ptr::addr_of!((*owner).keys)
-                .cast::<u8>()
-                .add(usize::from(side) * 32),
-            ptr::addr_of!((*owner).encryption_nonce).cast(),
-        );
-        ptr::addr_of_mut!((*dst).context).write(context);
+        let session = &*owner;
+        ptr::addr_of_mut!((*dst).context).write(Aead::new(
+            session.keys[usize::from(side) * 32..usize::from(side) * 32 + 32]
+                .try_into()
+                .unwrap(),
+            &session.encryption_nonce,
+        ));
         dst
     }
 }
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_clone(src: *const Stream) -> *mut Stream {
     unsafe {
-        let p = (*src).primitives;
         let dst = allocate::<Stream>();
-        ptr::addr_of_mut!((*dst).primitives).write(p);
-        let context = Buffer::new(p.aead_size, p.aead_alignment, Some(p.wipe));
-        (p.aead_copy)(context.ptr(), (*src).context.ptr());
-        ptr::addr_of_mut!((*dst).context).write(context);
+        ptr::addr_of_mut!((*dst).context).write((*src).context.clone());
         dst
     }
 }
@@ -450,9 +325,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_assign(
 ) {
     unsafe {
         if !ptr::eq(dst, src) {
-            // Hosts always share one immutable primitive table/layout. Keep receiver storage stable.
-            assert_eq!((*dst).context.layout, (*src).context.layout);
-            ((*dst).primitives.aead_copy)((*dst).context.ptr(), (*src).context.ptr());
+            (*dst).context.clone_from(&(*src).context);
         }
     }
 }
@@ -471,15 +344,8 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_encrypt(
 ) {
     assert!(isize::try_from(length).is_ok());
     unsafe {
-        ((*owner).primitives.aead_write)(
-            (*owner).context.ptr(),
-            message,
-            mac,
-            ptr::null(),
-            0,
-            message,
-            length,
-        );
+        let tag = (*owner).context.write(bytes_mut(message, length), &[]);
+        ptr::copy_nonoverlapping(tag.as_ptr(), mac, 16);
     }
 }
 #[unsafe(no_mangle)]
@@ -492,39 +358,9 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_decrypt(
     assert!(isize::try_from(length).is_ok());
     unsafe {
         u8::from(
-            ((*owner).primitives.aead_read)(
-                (*owner).context.ptr(),
-                message,
-                mac,
-                ptr::null(),
-                0,
-                message,
-                length,
-            ) == 0,
+            (*owner)
+                .context
+                .read(bytes_mut(message, length), &*mac.cast::<[u8; 16]>(), &[]),
         )
     }
-}
-
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDAuthPrimitives" ["probe"] => Primitives {
-        version,
-        reserved,
-        aead_size,
-        aead_alignment,
-        hash_size,
-        hash_alignment,
-        wipe,
-        x25519,
-        public_key,
-        hash_init,
-        hash_update,
-        hash_final,
-        aead_init,
-        aead_copy,
-        aead_write,
-        aead_read,
-        lock,
-        unlock,
-    };
 }
