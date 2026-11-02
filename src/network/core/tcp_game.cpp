@@ -27,9 +27,10 @@ static std::vector<std::unique_ptr<NetworkGameSocketHandler>> _deferred_deletion
  * Create a new socket for the game connection.
  * @param s The socket to connect with.
  */
-NetworkGameSocketHandler::NetworkGameSocketHandler(SOCKET s) : NetworkTCPSocketHandler(s),
+NetworkGameSocketHandler::NetworkGameSocketHandler(SOCKET s, uint8_t role) : NetworkTCPSocketHandler(s),
 		OpenTTDNetworkSocketSync{.receive_limit = 0, .last_frame = _frame_counter, .last_frame_server = _frame_counter, .last_token_frame = 0, .lag_test = 0, .last_token = 0, .token = 0},
-		last_packet(std::chrono::steady_clock::now()) {}
+		OpenTTDNetworkGameSocket{.base = this, .game = this, .incoming = &this->incoming_queue, .last_packet_ns = std::chrono::steady_clock::now().time_since_epoch().count(), .outgoing = nullptr, .pending = false, .role = role, .server = nullptr, .status = 0, .sync = this, .tcp = this} {}
+static_assert(std::is_same_v<std::chrono::steady_clock::duration, std::chrono::nanoseconds>);
 
 /**
  * Functions to help ReceivePacket/SendPacket a bit
@@ -69,7 +70,7 @@ NetworkRecvStatus NetworkGameSocketHandler::HandlePacket(Packet &p)
 		return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 	}
 
-	this->last_packet = std::chrono::steady_clock::now();
+	this->last_packet_ns = std::chrono::steady_clock::now().time_since_epoch().count();
 
 	switch (type) {
 		case PACKET_SERVER_FULL:                  return this->Receive_SERVER_FULL(p);
@@ -197,7 +198,7 @@ NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE(Packet 
 void NetworkGameSocketHandler::DeferDeletion()
 {
 	_deferred_deletions.emplace_back(this);
-	this->is_pending_deletion = true;
+	this->pending = true;
 }
 
 /* static */ void NetworkGameSocketHandler::ProcessDeferredDeletions()

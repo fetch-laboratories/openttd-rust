@@ -6,6 +6,7 @@
 #include "packet_ffi.h"
 #include "network_command_ffi.h"
 struct OpenTTDSessionFrame;
+struct OpenTTDNetworkTcpServices;
 struct OpenTTDNetworkConnectionServices;
 struct OpenTTDNetworkClientServices;
 struct OpenTTDNetworkLifecycleServices;
@@ -16,8 +17,7 @@ struct OpenTTDNetworkFrameServices {
 	uint16_t (*bytes_per_frame_burst)() noexcept OPENTTD_SERVICE_DEFAULT(bytes_per_frame_burst);
 	const OpenTTDNetworkClientServices *client;
 	void (*client_desync)() noexcept OPENTTD_SERVICE_DEFAULT(client_desync);
-	void *(*client_game)() noexcept OPENTTD_SERVICE_DEFAULT(client_game);
-	OpenTTDNetworkSocketSync *(*client_sync)() noexcept OPENTTD_SERVICE_DEFAULT(client_sync);
+	OpenTTDNetworkGameSocket *(*client_game)() noexcept OPENTTD_SERVICE_DEFAULT(client_game);
 	const OpenTTDNetworkCommandServices *command;
 	const OpenTTDNetworkConnectionServices *connection;
 	void (*console_bad_acks)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_bad_acks);
@@ -46,21 +46,16 @@ struct OpenTTDNetworkFrameServices {
 	bool (*on_server_connect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(on_server_connect);
 	const OpenTTDPacketServices *packet;
 	void (*packet_enqueue)(void *, OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(packet_enqueue);
-	NetworkSocketHandler *(*packet_socket)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_socket);
 	const uint32_t *random;
 	bool (*receive)(OpenTTDSessionFrame *, bool *) noexcept OPENTTD_SERVICE_DEFAULT(receive);
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
 	bool (*send)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(send);
 	void (*socket_close)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_close);
 	void (*socket_defer_deletion)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_defer_deletion);
-	int64_t (*socket_last_packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_last_packet);
-	void (*socket_mark_closed)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_mark_closed);
-	bool (*socket_pending_deletion)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_pending_deletion);
 	void (*socket_send_packets)(void *, bool) noexcept OPENTTD_SERVICE_DEFAULT(socket_send_packets);
-	void (*socket_set_last_packet_now)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_set_last_packet_now);
-	bool (*socket_valid)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_valid);
 	uint16_t (*sync_freq)() noexcept OPENTTD_SERVICE_DEFAULT(sync_freq);
 	void (*sync_log)() noexcept OPENTTD_SERVICE_DEFAULT(sync_log);
+	const OpenTTDNetworkTcpServices *tcp;
 	void (*text_append)(void *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(text_append);
 	void (*text_reset)(void *) noexcept OPENTTD_SERVICE_DEFAULT(text_reset);
 };
@@ -72,7 +67,7 @@ void *openttd_rust_network_actions_save(OpenTTDNetworkActionsStorage *);
 void openttd_rust_network_actions_resume(OpenTTDNetworkActionsStorage *);
 OpenTTDNetworkFrameState *openttd_rust_network_frame_storage();
 uint32_t openttd_rust_network_calculate_lag(const OpenTTDNetworkFrameServices *, const OpenTTDNetworkSocketSync *sync);
-uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, void *socket, void *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, OpenTTDPacketState *packet, OpenTTDSessionFrame *, OpenTTDNetworkActionsStorage *);
+uint8_t openttd_rust_network_receive_ack(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *socket, OpenTTDNetworkGameSocket *game, uint8_t *status, OpenTTDNetworkSocketSync *sync, OpenTTDPacketState *packet, OpenTTDSessionFrame *, OpenTTDNetworkActionsStorage *);
 uint8_t openttd_rust_network_receive_frame(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDNetworkSocketSync *sync, OpenTTDPacketState *packet);
 uint8_t openttd_rust_network_receive_sync(const OpenTTDNetworkFrameServices *, uint8_t status, OpenTTDPacketState *packet);
 }

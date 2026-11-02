@@ -189,11 +189,10 @@ public:
 };
 
 /** Base socket handler for all TCP sockets; frame and lag fields are the Rust sync record. */
-class NetworkGameSocketHandler : public NetworkTCPSocketHandler, public OpenTTDNetworkSocketSync {
+class NetworkGameSocketHandler : public NetworkTCPSocketHandler, public OpenTTDNetworkSocketSync, public OpenTTDNetworkGameSocket {
 /* TODO: rewrite into a proper class */
 private:
 	NetworkClientInfo *info = nullptr; ///< Client info related to this socket
-	bool is_pending_deletion = false; ///< Whether this socket is pending deletion
 
 protected:
 	NetworkRecvStatus ReceiveInvalidPacket(PacketGameType type);
@@ -532,11 +531,11 @@ protected:
 
 	NetworkRecvStatus HandlePacket(Packet &p);
 
-	NetworkGameSocketHandler(SOCKET s);
+	NetworkGameSocketHandler(SOCKET s, uint8_t role = 2);
 public:
 	ClientID client_id = INVALID_CLIENT_ID; ///< Client identifier
 	CommandQueue incoming_queue; ///< The command-queue awaiting handling
-	std::chrono::steady_clock::time_point last_packet{}; ///< Time we received the last frame.
+	std::chrono::steady_clock::time_point LastPacket() const { return std::chrono::steady_clock::time_point{std::chrono::steady_clock::duration{this->last_packet_ns}}; }
 
 	NetworkRecvStatus CloseConnection(bool error = true) override;
 
@@ -571,7 +570,7 @@ public:
 	std::optional<std::string_view> ReceiveCommand(Packet &p, CommandPacket &cp);
 	void SendCommand(Packet &p, const OpenTTDCommandPacket &cp);
 
-	bool IsPendingDeletion() const { return this->is_pending_deletion; }
+	bool IsPendingDeletion() const { return this->pending; }
 
 	void DeferDeletion();
 	static void ProcessDeferredDeletions();

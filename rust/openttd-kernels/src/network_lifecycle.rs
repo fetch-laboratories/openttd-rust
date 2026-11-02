@@ -7,6 +7,7 @@
 use crate::network_action::{Actions, Resume};
 use crate::network_command::next_client;
 use crate::network_frame::Services as FrameServices;
+use crate::network_socket as socket;
 use crate::network_type::{
     CLIENT_ID_SERVER, NETWORK_RECV_STATUS_CLIENT_QUIT, SERVER_GAME_TYPE_LOCAL,
 };
@@ -191,7 +192,7 @@ pub(crate) fn disconnect(s: &Services, f: &FrameServices, close_admins: bool, wo
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             crate::network_connection::send_shutdown(f.connection, f, client.socket);
-            (f.socket_send_packets)(client.game, false);
+            (f.socket_send_packets)(socket::shell(client.socket), false);
         }
         if close_admins {
             (s.admins_shutdown)();
@@ -215,7 +216,7 @@ pub(crate) fn reboot(s: &Services, f: &FrameServices, session: &SessionServices,
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             crate::network_connection::send_newgame(f.connection, f, client.socket);
-            (f.socket_send_packets)(client.game, false);
+            (f.socket_send_packets)(socket::shell(client.socket), false);
         }
         (s.admins_newgame)();
     }

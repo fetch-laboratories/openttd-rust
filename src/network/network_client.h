@@ -34,7 +34,6 @@ private:
 		STATUS_END,           ///< Must ALWAYS be on the end of this list!! (period)
 	};
 
-	ServerStatus status = STATUS_INACTIVE; ///< Status of the connection with the server.
 
 protected:
 	friend const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;

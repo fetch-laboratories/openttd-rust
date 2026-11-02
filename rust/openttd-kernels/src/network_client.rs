@@ -10,6 +10,7 @@ use crate::network_internal::{
     NETWORK_JOIN_STATUS_AUTHORIZING, NETWORK_JOIN_STATUS_DOWNLOADING,
     NETWORK_JOIN_STATUS_PROCESSING, NETWORK_JOIN_STATUS_REGISTERING, NETWORK_JOIN_STATUS_WAITING,
 };
+use crate::network_socket as socket;
 use crate::network_type::{
     NETWORK_ERROR_DESYNC, NETWORK_ERROR_GENERAL, NETWORK_ERROR_KICKED,
     NETWORK_ERROR_NEWGRF_MISMATCH, NETWORK_ERROR_SAVEGAME_FAILED, NETWORK_RECV_STATUS_CLOSE_QUERY,
@@ -94,7 +95,6 @@ pub struct Services {
     pub show_savegame_error: extern "C" fn(),
     pub show_server_error: extern "C" fn(u8, *mut c_void),
     pub show_shutdown: extern "C" fn(),
-    pub status: extern "C" fn(*mut c_void) -> *mut u8,
     pub unknown_quit: extern "C" fn(u32),
     pub wait_for_quit_packets: extern "C" fn(),
 }
@@ -168,7 +168,6 @@ crate::abi::layouts! {
         show_savegame_error,
         show_server_error,
         show_shutdown,
-        status,
         unknown_quit,
         wait_for_quit_packets,
     };
@@ -184,11 +183,11 @@ pub(crate) mod status {
     pub const ACTIVE: u8 = 8;
 }
 
-fn status(s: &Services, game: *mut c_void) -> u8 {
-    unsafe { (s.status)(game).read() }
+fn status(_s: &Services, game: *mut socket::GameSocket) -> u8 {
+    socket::status(game)
 }
-fn set_status(s: &Services, game: *mut c_void, value: u8) {
-    unsafe { (s.status)(game).write(value) };
+fn set_status(_s: &Services, game: *mut socket::GameSocket, value: u8) {
+    crate::raw_field::write_field!(game, status, value);
 }
 fn join_company(s: &Services) -> u8 {
     unsafe { s.join_company.read() }
@@ -196,7 +195,7 @@ fn join_company(s: &Services) -> u8 {
 fn set_join_status(s: &Services, value: u8) {
     unsafe { s.join_status.write(value) };
 }
-fn empty_packet(f: &FrameServices, game: *mut c_void, kind: u8) -> u8 {
+fn empty_packet(f: &FrameServices, game: *mut socket::GameSocket, kind: u8) -> u8 {
     let mut p = packet_new(f, game, kind);
     packet_send(f, game, &mut p);
     NETWORK_RECV_STATUS_OKAY
@@ -287,7 +286,7 @@ pub extern "C" fn openttd_rust_network_client_receive_banned(
 pub extern "C" fn openttd_rust_network_client_receive_error(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
     text: *mut c_void,
 ) -> u8 {
@@ -309,7 +308,7 @@ pub extern "C" fn openttd_rust_network_client_receive_error(
 pub extern "C" fn openttd_rust_network_client_receive_grfs(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
     if status(s, game) != status::ENCRYPTED {
@@ -339,7 +338,7 @@ pub extern "C" fn openttd_rust_network_client_receive_grfs(
 pub extern "C" fn openttd_rust_network_client_receive_welcome(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
     if status(s, game) < status::ENCRYPTED || status(s, game) >= status::AUTHORIZED {
@@ -356,7 +355,7 @@ pub extern "C" fn openttd_rust_network_client_receive_welcome(
 pub extern "C" fn openttd_rust_network_client_receive_wait(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
     if status(s, game) != status::MAP_WAIT {
@@ -374,7 +373,7 @@ pub extern "C" fn openttd_rust_network_client_receive_wait(
 pub extern "C" fn openttd_rust_network_client_receive_map_begin(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
     if status(s, game) < status::AUTHORIZED || status(s, game) >= status::MAP {
@@ -382,10 +381,10 @@ pub extern "C" fn openttd_rust_network_client_receive_map_begin(
     }
     (s.debug_status_map)();
     set_status(s, game, status::MAP);
-    if (s.map_exists)(game) {
+    if (s.map_exists)(socket::shell(game)) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    (s.map_create)(game);
+    (s.map_create)(socket::shell(game));
     crate::network_frame::map_begin(unsafe { packet::recv_uint32(p, f.packet) });
     (s.debug_map_begin)(crate::network_frame::frame_counter());
     unsafe {
@@ -402,10 +401,10 @@ pub extern "C" fn openttd_rust_network_client_receive_map_begin(
 pub extern "C" fn openttd_rust_network_client_receive_map_size(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(game) {
+    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     unsafe { s.join_bytes_total.write(packet::recv_uint32(p, f.packet)) };
@@ -418,15 +417,18 @@ pub extern "C" fn openttd_rust_network_client_receive_map_size(
 pub extern "C" fn openttd_rust_network_client_receive_map_data(
     s: &Services,
     _f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(game) {
+    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let size = unsafe { (*p).remaining() };
     let data = unsafe { (*p).data.add(usize::from((*p).position)) };
-    let total = (s.map_append_data)(game, crate::services::ByteSpan { data, size });
+    let total = (s.map_append_data)(
+        socket::shell(game),
+        crate::services::ByteSpan { data, size },
+    );
     #[allow(clippy::cast_possible_wrap)]
     unsafe {
         (*p).transfer_commit(size as isize);
@@ -441,18 +443,18 @@ pub extern "C" fn openttd_rust_network_client_receive_map_done(
     s: &Services,
     f: &FrameServices,
     session: &crate::session::Services,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     frame: *mut crate::session::Frame,
     load: *mut crate::session::Load,
 ) -> u8 {
-    if status(s, game) != status::MAP || !(s.map_exists)(game) {
+    if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     (s.debug_map_done)();
     (s.debug_join_processing)();
     set_join_status(s, NETWORK_JOIN_STATUS_PROCESSING);
     (s.dirty_join)();
-    (s.map_load_prepare)(game, load);
+    (s.map_load_prepare)(socket::shell(game), load);
     let Ok(success) =
         crate::session::safe_load(session, frame, load, crate::openttd::GameMode::NORMAL)
     else {
@@ -473,11 +475,11 @@ pub(crate) fn map_loaded(
     s: &Services,
     f: &FrameServices,
     session: &crate::session::Services,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     success: bool,
 ) -> u8 {
-    (s.map_release)(game);
-    (f.socket_set_last_packet_now)(game);
+    (s.map_release)(socket::shell(game));
+    socket::set_last_packet(game, (f.now)());
     if !success {
         (s.show_savegame_error)();
         return NETWORK_RECV_STATUS_SAVEGAME;
@@ -512,7 +514,7 @@ pub(crate) fn map_loaded(
 pub extern "C" fn openttd_rust_network_client_receive_error_quit(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
     if status(s, game) < status::AUTHORIZED {
@@ -533,7 +535,7 @@ pub extern "C" fn openttd_rust_network_client_receive_error_quit(
 pub extern "C" fn openttd_rust_network_client_receive_quit(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
     if status(s, game) < status::AUTHORIZED {
@@ -556,7 +558,7 @@ pub extern "C" fn openttd_rust_network_client_receive_quit(
 pub extern "C" fn openttd_rust_network_client_receive_join(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
     if status(s, game) < status::AUTHORIZED {
@@ -576,7 +578,7 @@ pub extern "C" fn openttd_rust_network_client_receive_join(
 pub extern "C" fn openttd_rust_network_client_receive_shutdown(
     s: &Services,
     _f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
 ) -> u8 {
     (s.debug_shutdown)();
     if status(s, game) >= status::JOIN {
@@ -592,7 +594,7 @@ pub extern "C" fn openttd_rust_network_client_receive_shutdown(
 pub extern "C" fn openttd_rust_network_client_receive_newgame(
     s: &Services,
     _f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
 ) -> u8 {
     (s.debug_newgame)();
     if status(s, game) >= status::JOIN {
@@ -608,18 +610,18 @@ pub extern "C" fn openttd_rust_network_client_receive_newgame(
     NETWORK_RECV_STATUS_SERVER_ERROR
 }
 
-fn close(s: &Services, f: &FrameServices, game: *mut c_void, result: u8) -> u8 {
+fn close(s: &Services, f: &FrameServices, game: *mut socket::GameSocket, result: u8) -> u8 {
     crate::movement::native_assert(f.command.company.shared, result != NETWORK_RECV_STATUS_OKAY);
-    if (f.socket_pending_deletion)(game) {
+    if socket::pending(game) {
         return result;
     }
-    crate::movement::native_assert(f.command.company.shared, (f.socket_valid)(game));
+    crate::movement::native_assert(f.command.company.shared, (f.tcp.valid)(socket::tcp(game)));
     if !crate::network_frame::socket_has_quit(f, game) {
-        (s.debug_close)(game);
-        (f.socket_send_packets)(game, true);
+        (s.debug_close)(socket::shell(game));
+        (f.socket_send_packets)(socket::shell(game), true);
         (s.wait_for_quit_packets)();
     }
-    (f.socket_defer_deletion)(game);
+    (f.socket_defer_deletion)(socket::shell(game));
     result
 }
 
@@ -627,18 +629,23 @@ fn close(s: &Services, f: &FrameServices, game: *mut c_void, result: u8) -> u8 {
 pub extern "C" fn openttd_rust_network_client_close(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     result: u8,
 ) -> u8 {
     close(s, f, game, result)
 }
 
-pub(crate) fn client_error(s: &Services, f: &FrameServices, game: *mut c_void, result: u8) {
-    if (f.socket_pending_deletion)(game) {
+pub(crate) fn client_error(
+    s: &Services,
+    f: &FrameServices,
+    game: *mut socket::GameSocket,
+    result: u8,
+) {
+    if socket::pending(game) {
         return;
     }
     if result == NETWORK_RECV_STATUS_CLOSE_QUERY {
-        (f.socket_mark_closed)(game);
+        unsafe { (f.packet.mark_closed)(socket::base(game)) };
         close(s, f, game, result);
         unsafe { f.connection.networking.write(false) };
         (f.command.company.close_network_status)();
@@ -673,7 +680,7 @@ pub(crate) fn client_error(s: &Services, f: &FrameServices, game: *mut c_void, r
 pub extern "C" fn openttd_rust_network_client_error(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
     result: u8,
 ) {
     client_error(s, f, game, result);
@@ -685,17 +692,17 @@ static LAST_LAG: crate::game_state::GameState<i64> = crate::game_state::GameStat
 pub extern "C" fn openttd_rust_network_client_check_connection(
     s: &Services,
     f: &FrameServices,
-    game: *mut c_void,
+    game: *mut socket::GameSocket,
 ) {
     if status(s, game) < status::AUTHORIZED {
         return;
     }
-    let lag = (f.now)().wrapping_sub((f.socket_last_packet)(game));
+    let lag = (f.now)().wrapping_sub(socket::last_packet(game));
     if lag < 5 * SECOND {
         return;
     }
     if lag > 20 * SECOND {
-        (f.socket_close)(game);
+        (f.socket_close)(socket::shell(game));
         return;
     }
     if unsafe { LAST_LAG.get().read() } / SECOND == lag / SECOND {

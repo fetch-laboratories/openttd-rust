@@ -7,6 +7,7 @@
 #include "../rust/services_assert.h"
 #include "../newgrf_config.h"
 #include "../rust/network_client_ffi.h"
+#include "../rust/network_tcp_ffi.h"
 #include "../rust/network_connection_ffi.h"
 #include "../rust/company_services.h"
 #include "../rust/session_native.hpp"
@@ -41,21 +42,21 @@ TEST_CASE("Network admission - each NewGRF checksum starts empty")
 	packet.Recv_uint8(); // Packet type.
 
 	auto services = GetRustNetworkClientServices();
-	services.status = [](void *game) noexcept { return static_cast<uint8_t *>(game); };
 	services.debug_grfs = [](uint32_t) noexcept {};
 	services.show_newgrf_mismatch = []() noexcept {};
-	uint8_t status = 3; // Client STATUS_ENCRYPTED.
-	CHECK(openttd_rust_network_client_receive_grfs(&services, &GetRustNetworkFrameServices(), &status, packet.Record()) == NETWORK_RECV_STATUS_NEWGRF_MISMATCH);
+	OpenTTDNetworkGameSocket game{};
+	game.base = &socket;
+	game.status = 3; // Client STATUS_ENCRYPTED.
+	CHECK(openttd_rust_network_client_receive_grfs(&services, &GetRustNetworkFrameServices(), &game, packet.Record()) == NETWORK_RECV_STATUS_NEWGRF_MISMATCH);
 	CHECK(packet.Record()->position == packet.Size());
 }
 
-static uint8_t map_status;
 TEST_CASE("Network map load - recorded exception stops cleanup and reaches native caller")
 {
 	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
-	map_status = 7; // Client STATUS_MAP.
+	OpenTTDNetworkGameSocket game{};
+	game.status = 7; // Client STATUS_MAP.
 	OpenTTDNetworkClientServices client{};
-	client.status = [](void *) noexcept { return &map_status; };
 	client.map_exists = [](void *) noexcept { return true; };
 	client.debug_map_done = []() noexcept {};
 	client.debug_join_processing = []() noexcept {};
@@ -72,7 +73,7 @@ TEST_CASE("Network map load - recorded exception stops cleanup and reaches nativ
 	OpenTTDSessionFrame frame;
 	const std::string filename;
 	OpenTTDSessionLoad load{filename, SLO_LOAD, DFT_GAME_FILE, NO_DIRECTORY, {}};
-	CHECK(openttd_rust_network_client_receive_map_done(&client, &network, &session, nullptr, &frame, &load) == 0);
+	CHECK(openttd_rust_network_client_receive_map_done(&client, &network, &session, &game, &frame, &load) == 0);
 	CHECK(_game_mode == GM_NORMAL);
 	CHECK_THROWS_AS(frame.Rethrow(), int);
 }
@@ -104,7 +105,7 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 }
 
 struct MapClient {
-	uint8_t status;
+	OpenTTDNetworkGameSocket record{};
 	OpenTTDCommandQueue incoming{};
 	OpenTTDCommandQueue outgoing{};
 	OpenTTDNetworkSocketSync sync{};
@@ -117,21 +118,24 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 {
 	map_clients = {};
 	map_events.clear();
-	map_clients[0].status = 6; // Server STATUS_MAP.
-	for (int i = 1; i < 4; i++) map_clients[i].status = 5; // Server STATUS_MAP_WAIT.
+	for (auto &client : map_clients) {
+		client.record.game = &client;
+		client.record.server = &client;
+		client.record.incoming = &client.incoming;
+		client.record.outgoing = &client.outgoing;
+		client.record.sync = &client.sync;
+	}
+	map_clients[0].record.status = 6; // Server STATUS_MAP.
+	for (int i = 1; i < 4; i++) map_clients[i].record.status = 5; // Server STATUS_MAP_WAIT.
 	OpenTTDNetworkCommandServices command{};
 	command.company = &GetRustCompanyServices();
 	command.next_client = [](size_t from, OpenTTDNetworkCommandClient *client) noexcept {
 		if (from >= map_clients.size()) return false;
 		auto *cs = &map_clients[from];
-		*client = {cs, cs, from, &cs->incoming, &cs->outgoing, &cs->sync, 0, cs->status};
+		*client = {&cs->record, from};
 		return true;
 	};
 	OpenTTDNetworkConnectionServices connection{};
-	connection.game = [](void *socket) noexcept { return socket; };
-	connection.status = [](void *socket) noexcept { return &static_cast<MapClient *>(socket)->status; };
-	connection.sync = [](void *socket) noexcept { return &static_cast<MapClient *>(socket)->sync; };
-	connection.outgoing_queue = [](void *socket) noexcept { return &static_cast<MapClient *>(socket)->outgoing; };
 	connection.join_date = [](void *) noexcept { return 0; };
 	connection.client_id = [](void *socket) noexcept { return static_cast<uint32_t>(MapIndex(socket)); };
 	connection.debug_next_map = [](void *) noexcept {};
@@ -151,17 +155,17 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	OpenTTDNetworkFrameServices network{};
 	network.command = &command;
 	network.connection = &connection;
-	network.socket_pending_deletion = [](void *) noexcept { return false; };
-	network.socket_valid = [](void *) noexcept { return true; };
+	OpenTTDNetworkTcpServices tcp{};
+	tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
+	network.tcp = &tcp;
 	network.socket_send_packets = [](void *socket, bool) noexcept { MapEvent(9, socket); };
 	network.socket_defer_deletion = [](void *socket) noexcept { MapEvent(10, socket); };
 	auto packet_services = Packet::Services();
 	packet_services.has_quit = [](const NetworkSocketHandler *) noexcept { return false; };
 	network.packet = &packet_services;
-	network.packet_socket = [](void *) noexcept -> NetworkSocketHandler * { return nullptr; };
 	network.packet_enqueue = [](void *, OpenTTDPacketState *state) noexcept { Packet packet(*state); };
 	OpenTTDSessionFrame frame;
-	CHECK(openttd_rust_network_server_close(&connection, &network, &map_clients[0], NETWORK_RECV_STATUS_CLIENT_QUIT, &frame.network_actions) == NETWORK_RECV_STATUS_CLIENT_QUIT);
+	CHECK(openttd_rust_network_server_close(&connection, &network, &map_clients[0].record, NETWORK_RECV_STATUS_CLIENT_QUIT, &frame.network_actions) == NETWORK_RECV_STATUS_CLIENT_QUIT);
 	CHECK(on == 4);
 	CHECK(connected == 4);
 	REQUIRE(openttd_rust_network_actions_save(&frame.network_actions) == &map_clients[1]);

@@ -7,6 +7,7 @@
 #![allow(unsafe_code, missing_docs)]
 
 use crate::game_state::GameState;
+use crate::network_socket as socket;
 use crate::services::ByteSpan;
 use std::ffi::c_void;
 use std::mem::ManuallyDrop;
@@ -45,14 +46,8 @@ crate::abi::shared_records! {
     /// socket shell. `game` is the same socket as a `NetworkGameSocketHandler *`, and `last_packet`
     /// its steady-clock time in nanoseconds when visited.
     "OpenTTDNetworkCommandClient" ["probe"] => pub struct Client {
-        pub socket: *mut c_void,
-        pub game: *mut c_void,
+        pub socket: *mut socket::GameSocket,
         pub index: usize,
-        pub incoming: *mut CommandQueue,
-        pub outgoing: *mut CommandQueue,
-        pub sync: *mut crate::network_frame::SocketSync,
-        pub last_packet: i64,
-        pub status: u8,
     }
 }
 
@@ -152,13 +147,7 @@ static EXECUTION: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
 pub(crate) fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {
     let mut client = Client {
         socket: null_mut(),
-        game: null_mut(),
         index: 0,
-        incoming: null_mut(),
-        outgoing: null_mut(),
-        sync: null_mut(),
-        last_packet: 0,
-        status: 0,
     };
     (s.next_client)(*cursor, &raw mut client).then(|| {
         *cursor = client.index + 1;
@@ -257,18 +246,22 @@ pub(crate) fn free_local_command_queue() {
 }
 
 /// `DistributeCommandPacket`: callbacks go back only to the owning client.
-unsafe fn distribute_packet(s: &Services, cp: *mut CommandPacket, owner: *const c_void) {
+unsafe fn distribute_packet(
+    s: &Services,
+    cp: *mut CommandPacket,
+    owner: *const socket::GameSocket,
+) {
     unsafe {
         let callback = (*cp).callback;
         (*cp).frame = crate::network_frame::frame_counter_max().wrapping_add(1);
         let mut cursor = 0;
         while let Some(client) = next_client(s, &mut cursor) {
-            if client.status >= STATUS_MAP {
+            if socket::status(client.socket) >= STATUS_MAP {
                 let own = client.socket.cast_const() == owner;
                 (*cp).callback = if own { callback } else { std::ptr::null() };
                 (*cp).my_cmd = own;
                 let c = (*cp).clone();
-                CommandQueue::edit(client.outgoing, |queue| queue.push(c));
+                CommandQueue::edit(socket::outgoing(client.socket), |queue| queue.push(c));
             }
         }
         (*cp).callback = if owner.is_null() {
@@ -283,7 +276,11 @@ unsafe fn distribute_packet(s: &Services, cp: *mut CommandPacket, owner: *const 
 }
 
 /// `DistributeQueue`.
-unsafe fn distribute_queue(s: &Services, queue: *mut CommandQueue, owner: *const c_void) {
+unsafe fn distribute_queue(
+    s: &Services,
+    queue: *mut CommandQueue,
+    owner: *const socket::GameSocket,
+) {
     let mut to_go = i32::from((s.commands_per_frame)());
     if owner.is_null() {
         // The server uses `commands_per_frame_server` if higher.
@@ -302,7 +299,14 @@ unsafe fn distribute_queue(s: &Services, queue: *mut CommandQueue, owner: *const
                 break;
             }
             distribute_packet(s, cp, owner);
-            (s.admin_log)(owner, cp);
+            (s.admin_log)(
+                if owner.is_null() {
+                    std::ptr::null()
+                } else {
+                    socket::server(owner.cast_mut())
+                },
+                cp,
+            );
             CommandQueue::edit(queue, |queue| drop(queue.remove(index)));
         }
     }
@@ -313,7 +317,7 @@ pub(crate) fn distribute_commands(s: &Services) {
     unsafe { distribute_queue(s, WAIT.get(), std::ptr::null()) };
     let mut cursor = 0;
     while let Some(client) = next_client(s, &mut cursor) {
-        unsafe { distribute_queue(s, client.incoming, client.socket) };
+        unsafe { distribute_queue(s, socket::incoming(client.socket), client.socket) };
     }
 }
 
@@ -323,12 +327,12 @@ pub(crate) fn distribute_commands(s: &Services) {
 /// `outgoing` is the live queue of `socket`.
 pub(crate) unsafe fn handle_command_queue(
     s: &Services,
-    socket: *mut c_void,
+    socket: *mut socket::GameSocket,
     outgoing: *mut CommandQueue,
 ) {
     unsafe {
         for index in 0..(*outgoing).size {
-            (s.server_send)(socket, (*outgoing).data.add(index));
+            (s.server_send)(socket::server(socket), (*outgoing).data.add(index));
         }
         CommandQueue::edit(outgoing, Vec::clear);
     }

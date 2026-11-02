@@ -19,9 +19,9 @@ crate::abi::shared_records! {
 #[repr(C)]
 pub(crate) enum Resume {
     None,
-    MapTransfer(*mut c_void),
+    MapTransfer(*mut crate::network_socket::GameSocket),
     Waits(usize),
-    CloseTail(*mut c_void, u8),
+    CloseTail(*mut crate::network_socket::GameSocket, u8),
     CloseClients(usize, bool),
     DisconnectEnd,
     JoinEnd,
@@ -32,7 +32,7 @@ pub(crate) enum Resume {
     LoadRestore(GameMode),
     JoiningSocial,
     SwitchLoad(GameMode),
-    MapLoaded(*mut c_void),
+    MapLoaded(*mut crate::network_socket::GameSocket),
     LoopSwitch,
     LoopState,
     LoopEnd,
@@ -46,7 +46,7 @@ struct Owner {
     network: *const Network,
     session: *const Session,
     frame: *mut Frame,
-    save: *mut c_void,
+    save: *mut crate::network_socket::GameSocket,
     queue: [Resume; 16],
     len: usize,
     insert: usize,
@@ -79,7 +79,7 @@ impl Actions {
     pub(crate) fn pending(self) -> bool {
         unsafe { !(*self.0).save.is_null() }
     }
-    pub(crate) fn save(self, socket: *mut c_void) {
+    pub(crate) fn save(self, socket: *mut crate::network_socket::GameSocket) {
         unsafe {
             (*self.0).save = socket;
         }
@@ -242,7 +242,12 @@ pub unsafe extern "C" fn openttd_rust_network_actions_init(storage: *mut Storage
 /// `storage` is a live initialized native frame's action owner.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_actions_save(storage: *mut Storage) -> *mut c_void {
-    unsafe { (*storage.cast::<Owner>()).save }
+    let socket = unsafe { (*storage.cast::<Owner>()).save };
+    if socket.is_null() {
+        std::ptr::null_mut()
+    } else {
+        crate::network_socket::server(socket)
+    }
 }
 /// # Safety
 /// The requested native save completed and all entry arguments and services remain live.

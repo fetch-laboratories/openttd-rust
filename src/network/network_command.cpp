@@ -217,7 +217,7 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 		},
 		.next_client = [](size_t from, OpenTTDNetworkCommandClient *client) noexcept {
 			for (NetworkClientSocket *cs : NetworkClientSocket::Iterate(from)) {
-				*client = {cs, static_cast<NetworkGameSocketHandler *>(cs), cs->index.base(), &cs->incoming_queue, &cs->outgoing_queue, cs, cs->last_packet.time_since_epoch().count(), static_cast<uint8_t>(cs->status)};
+				*client = {static_cast<OpenTTDNetworkGameSocket *>(cs), cs->index.base()};
 				return true;
 			}
 			return false;

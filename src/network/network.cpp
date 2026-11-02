@@ -38,6 +38,7 @@
 #include "../error.h"
 #include "../misc_cmd.h"
 #include "../core/string_builder.hpp"
+#include "../rust/network_tcp_ffi.h"
 #include "../rust/session_native.hpp"
 #include "../rust/string_services.h"
 #include "../rust/settings_services.h"
@@ -955,8 +956,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 			Debug(desync, 1, "sync_err: {:08x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract);
 			Debug(net, 0, "Sync error detected");
 		},
-		.client_game = []() noexcept -> void * { return static_cast<NetworkGameSocketHandler *>(ClientNetworkGameSocketHandler::my_client); },
-		.client_sync = []() noexcept -> OpenTTDNetworkSocketSync * { return ClientNetworkGameSocketHandler::my_client; },
+		.client_game = []() noexcept -> OpenTTDNetworkGameSocket * { return ClientNetworkGameSocketHandler::my_client; },
 		.command = &GetRustNetworkCommandServices(),
 		.connection = &GetRustNetworkConnectionServices(),
 		.console_bad_acks = [](void *cs) noexcept {
@@ -1006,21 +1006,16 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.on_server_connect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_server_connect.scr 0"); }); },
 		.packet = &Packet::Services(),
 		.packet_enqueue = [](void *game, OpenTTDPacketState *p) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPreparedPacket(*p); },
-		.packet_socket = [](void *game) noexcept -> NetworkSocketHandler * { return static_cast<NetworkGameSocketHandler *>(game); },
 		.random = _random.state,
 		.receive = [](OpenTTDSessionFrame *f, bool *received) noexcept { return SessionException(f, [=] { *received = NetworkReceive(); }); },
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
 		.send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkSend(); }); },
 		.socket_close = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->NetworkGameSocketHandler::CloseConnection(); },
 		.socket_defer_deletion = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->DeferDeletion(); },
-		.socket_last_packet = [](void *game) noexcept -> int64_t { return static_cast<NetworkGameSocketHandler *>(game)->last_packet.time_since_epoch().count(); },
-		.socket_mark_closed = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->MarkClosed(); },
-		.socket_pending_deletion = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->IsPendingDeletion(); },
 		.socket_send_packets = [](void *game, bool closing) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPackets(closing); },
-		.socket_set_last_packet_now = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->last_packet = std::chrono::steady_clock::now(); },
-		.socket_valid = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->sock != INVALID_SOCKET; },
 		.sync_freq = RustNetworkSyncFreq,
 		.sync_log = []() noexcept { NetworkSyncLog(); },
+		.tcp = &GetRustNetworkTcpServices(),
 		.text_append = RustStringAppend,
 		.text_reset = [](void *text) noexcept { *static_cast<std::string *>(text) = {}; },
 	};
