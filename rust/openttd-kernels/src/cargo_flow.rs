@@ -847,8 +847,9 @@ mod tests {
                 (*world.live[0]).add(7, 106, 4, false);
                 (*world.live[0]).add(7, 107, 6, false);
             }
-            let snapshot = crate::linkgraph::live::openttd_rust_live_graph_new(0, 0);
+            let snapshot = crate::linkgraph::live::openttd_rust_live_graph_new(0);
             unsafe {
+                *crate::linkgraph::live::openttd_rust_live_graph_date(snapshot) = 0;
                 crate::linkgraph::live::openttd_rust_live_graph_init(snapshot, 3);
                 for node in 0..3 {
                     *crate::linkgraph::live::openttd_rust_live_node_fields(snapshot, node)

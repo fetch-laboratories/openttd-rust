@@ -39,7 +39,7 @@ class LinkGraph {
 public:
 	uint16_t index, size, tag; int32_t date = 100, node_date = 90;
 	OpenTTDLiveGraph *owner = nullptr;
-	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0, this->date); openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) *openttd_rust_live_node_fields(this->owner, i).last_update = this->node_date; } }
+	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0); *openttd_rust_live_graph_date(this->owner) = this->date; openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) *openttd_rust_live_node_fields(this->owner, i).last_update = this->node_date; } }
 	~LinkGraph() { if (this->owner) openttd_rust_live_graph_delete(this->owner); }
 	uint16_t Size() const { return this->size; }
 	static LinkGraph *Get(uint16_t id) { return graphs[id]; }
