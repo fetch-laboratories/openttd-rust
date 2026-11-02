@@ -201,19 +201,6 @@ ServerNetworkGameSocketHandler::~ServerNetworkGameSocketHandler()
 	InvalidateWindowData(WC_CLIENT_LIST, 0);
 }
 
-std::unique_ptr<Packet> ServerNetworkGameSocketHandler::ReceivePacket()
-{
-	/* Only allow receiving when we have some buffer free; this value
-	 * can go negative, but eventually it will become positive again. */
-	if (this->receive_limit <= 0) return nullptr;
-
-	/* We can receive a packet, so try that and if needed account for
-	 * the amount of received data. */
-	std::unique_ptr<Packet> p = this->NetworkTCPSocketHandler::ReceivePacket();
-	if (p != nullptr) this->receive_limit -= p->Size();
-	return p;
-}
-
 NetworkRecvStatus ServerNetworkGameSocketHandler::CloseConnection(NetworkRecvStatus status)
 {
 	OpenTTDSessionFrame frame;

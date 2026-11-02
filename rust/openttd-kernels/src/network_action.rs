@@ -40,6 +40,8 @@ pub(crate) enum Resume {
     LoopEnd,
     FrameSend,
     SendClients(usize),
+    ReceivedPacket(*mut crate::network_socket::GameSocket),
+    ReceiveEnd,
     ServerTick(usize, bool, bool),
 }
 
@@ -50,6 +52,8 @@ struct Owner {
     session: *const Session,
     frame: *mut Frame,
     save: *mut crate::network_socket::GameSocket,
+    packet: *mut crate::network_tcp::Packet,
+    result: u8,
     queue: [Resume; 16],
     len: usize,
     insert: usize,
@@ -66,6 +70,26 @@ const _: () = assert!(std::mem::align_of::<Owner>() <= std::mem::align_of::<Stor
 impl Actions {
     pub(crate) unsafe fn from_storage(storage: *mut Storage) -> Self {
         Self(storage.cast())
+    }
+    pub(crate) fn set_result(self, result: u8) {
+        unsafe {
+            (*self.0).result = result;
+        }
+    }
+    pub(crate) fn result(self) -> u8 {
+        unsafe { (*self.0).result }
+    }
+    pub(crate) fn hold_packet(self, packet: *mut crate::network_tcp::Packet) {
+        unsafe {
+            (*self.0).packet = packet;
+        }
+    }
+    pub(crate) fn drop_packet(self) {
+        let packet = unsafe { std::mem::replace(&mut (*self.0).packet, std::ptr::null_mut()) };
+        if !packet.is_null() {
+            let network = unsafe { &*(*self.0).network };
+            crate::network_tcp::destroy_packet(network.tcp, packet);
+        }
     }
     pub(crate) fn network(self, network: &Network) {
         unsafe {
@@ -204,13 +228,14 @@ impl Actions {
                     crate::session::resume_switch_load(session.unwrap(), mode);
                 }
                 Resume::MapLoaded(game) => {
-                    crate::network_client::map_loaded(
+                    let result = crate::network_client::map_loaded(
                         network.client,
                         network,
                         session.unwrap(),
                         game,
                         false,
                     );
+                    self.set_result(result);
                 }
                 Resume::LoopSwitch => {
                     let _ = crate::session::resume_loop_switch(session.unwrap(), frame, self);
@@ -222,6 +247,16 @@ impl Actions {
                 Resume::FrameSend => {
                     let _ = crate::network_frame::send(network, frame, self);
                 }
+                Resume::ReceivedPacket(game) => {
+                    let _ = crate::network_dispatch::received_packet(
+                        session.unwrap(),
+                        network,
+                        game,
+                        frame,
+                        self,
+                    );
+                }
+                Resume::ReceiveEnd => self.drop_packet(),
                 Resume::SendClients(cursor) => {
                     crate::network_socket::send_clients(network, cursor, self);
                 }
@@ -234,6 +269,10 @@ impl Actions {
             if let Some(session) = session
                 && (session.failed)(frame)
             {
+                if unsafe { !(*self.0).packet.is_null() } {
+                    (network.dispatch.packet_end)(frame);
+                    self.drop_packet();
+                }
                 unsafe {
                     (*self.0).len = 0;
                 }
@@ -255,6 +294,8 @@ pub unsafe extern "C" fn openttd_rust_network_actions_init(storage: *mut Storage
             session: std::ptr::null(),
             frame: std::ptr::null_mut(),
             save: std::ptr::null_mut(),
+            packet: std::ptr::null_mut(),
+            result: 0,
             queue: [Resume::None; 16],
             len: 0,
             insert: 0,
@@ -279,4 +320,19 @@ pub unsafe extern "C" fn openttd_rust_network_actions_resume(storage: *mut Stora
     unsafe {
         Actions::from_storage(storage).resume();
     }
+}
+
+/// # Safety
+/// The native frame owns initialized action storage and is ending its lifetime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_actions_drop(storage: *mut Storage) {
+    unsafe {
+        Actions::from_storage(storage).drop_packet();
+    }
+}
+/// # Safety
+/// `storage` is a live native frame's initialized action owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_actions_result(storage: *const Storage) -> u8 {
+    unsafe { (*storage.cast::<Owner>()).result }
 }

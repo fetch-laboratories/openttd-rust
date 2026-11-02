@@ -4,9 +4,12 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../network/core/packet.h"
 #include "../network/core/tcp.h"
+#include "../network/core/tcp_game.h"
+#include "../network/network_crypto_internal.h"
 #include "../rust/services_assert.h"
 #include "../newgrf_config.h"
 #include "../rust/network_client_ffi.h"
+#include "../rust/network_dispatch_ffi.h"
 #include "../rust/network_tcp_ffi.h"
 #include "../rust/network_connection_ffi.h"
 #include "../rust/company_services.h"
@@ -283,5 +286,131 @@ TEST_CASE("Network TCP - fragmented size headers resume and invalid sizes reques
 		tcp_input = wire; tcp_read_position = 0; tcp_read_limit = wire.size(); tcp_read_end = 0;
 		CHECK(openttd_rust_tcp_receive(&services, nullptr, RustAssertCondition) == OpenTTDTcpReceive::Close);
 		delete std::exchange(tcp_receive_packet, nullptr);
+	}
+}
+
+static NetworkSocketHandler *dispatch_base;
+static uint dispatch_creates, dispatch_deletes, dispatch_closes, dispatch_position;
+static bool dispatch_ended, dispatch_cleanup_order, dispatch_previous_live;
+TEST_CASE("Network game receive - encrypted dispatch preserves consumption and native unwind")
+{
+	X25519SecretKey client_secret{}, server_secret{};
+	client_secret[0] = 1;
+	server_secret[0] = 2;
+	X25519KeyExchangeOnlyClientHandler client_auth(client_secret);
+	X25519KeyExchangeOnlyServerHandler server_auth(server_secret);
+	Packet request(nullptr, PacketType{});
+	server_auth.SendRequest(request);
+	request.PrepareToSend(); REQUIRE(request.PrepareToRead()); request.Recv_uint8();
+	REQUIRE(client_auth.ReceiveRequest(request) == NetworkAuthenticationClientHandler::RequestResult::ReadyForResponse);
+	Packet response(nullptr, PacketType{});
+	REQUIRE(client_auth.SendResponse(response));
+	response.PrepareToSend(); REQUIRE(response.PrepareToRead()); response.Recv_uint8();
+	REQUIRE(server_auth.ReceiveResponse(response) == NetworkAuthenticationServerHandler::ResponseResult::Authenticated);
+	Packet enable(nullptr, PacketType{});
+	server_auth.SendEnableEncryption(enable);
+	enable.PrepareToSend(); REQUIRE(enable.PrepareToRead()); enable.Recv_uint8();
+	REQUIRE(client_auth.ReceiveEnableEncryption(enable));
+
+	struct Case { uint8_t type, status, role; bool quit, throws; uint8_t result, consumed, waiting, closes; int64_t timestamp; size_t limit, remaining; };
+	const Case cases[]{
+		{PACKET_SERVER_WAIT, 6, 0, false, false, 0, 20, 42, 0, 321, 0, 0},
+		{PACKET_SERVER_WAIT, 0, 0, false, false, 5, 19, 17, 0, 321, 0, 0},
+		{255, 0, 2, false, false, 5, 19, 17, 1, 321, 0, 0},
+		{PACKET_SERVER_WAIT, 0, 2, true, false, 5, 18, 17, 1, 77, 0, 0},
+		{PACKET_SERVER_RCON, 8, 0, false, true, 0, 19, 17, 0, 321, 0, 0},
+		{PACKET_SERVER_WAIT, 0, 1, false, false, 0, 0, 17, 0, 77, 0, 0},
+		{PACKET_SERVER_WAIT, 0, 1, false, false, 5, 19, 17, 0, 321, 1, std::numeric_limits<size_t>::max() - 18},
+	};
+	for (const auto &test : cases) {
+		CAPTURE(test.type, test.status, test.quit, test.throws);
+		class SendingSocket : public NetworkSocketHandler {
+		public:
+			void Send(std::unique_ptr<NetworkEncryptionHandler> handler) { this->send_encryption_handler = std::move(handler); }
+		} sender;
+		class ReceivingSocket : public NetworkGameSocketHandler {
+		public:
+			ReceivingSocket() : NetworkGameSocketHandler(INVALID_SOCKET, 0) {}
+			NetworkRecvStatus CloseConnection(NetworkRecvStatus result) override { return result; }
+			void Receive(std::unique_ptr<NetworkEncryptionHandler> handler) { this->receive_encryption_handler = std::move(handler); }
+		protected:
+			NetworkRecvStatus Receive_SERVER_RCON(Packet &) override { throw 574; }
+		} receiver;
+		sender.Send(server_auth.CreateServerToClientEncryptionHandler());
+		receiver.Receive(client_auth.CreateServerToClientEncryptionHandler());
+		if (test.quit) receiver.MarkClosed();
+		dispatch_base = &receiver;
+		Packet source(&sender, test.type);
+		source.Send_uint8(42);
+		source.PrepareToSend();
+		tcp_input.assign(source.Record()->data, source.Record()->data + source.Size());
+		tcp_read_position = 0;
+		tcp_receive_packet = nullptr;
+		dispatch_creates = dispatch_deletes = dispatch_closes = dispatch_position = 0;
+		dispatch_ended = dispatch_previous_live = false;
+		dispatch_cleanup_order = true;
+		struct PendingPacket { ~PendingPacket() { delete std::exchange(tcp_receive_packet, nullptr); } } pending;
+		auto tcp = GetRustNetworkTcpServices();
+		tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
+		tcp.base_socket = [](NetworkTCPSocketHandler *) noexcept { return dispatch_base; };
+		tcp.receive_packet = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return tcp_receive_packet ? tcp_receive_packet->Record() : nullptr; };
+		tcp.receive_create = [](NetworkTCPSocketHandler *, OpenTTDPacketState *record) noexcept {
+			if (++dispatch_creates == 2) dispatch_previous_live = dispatch_deletes == 0;
+			tcp_receive_packet = new Packet(*record);
+			return tcp_receive_packet->Record();
+		};
+		tcp.receive_bytes = [](NetworkTCPSocketHandler *, uint8_t *data, size_t size) noexcept -> intptr_t {
+			if (tcp_read_position == tcp_input.size()) return -1;
+			size_t count = std::min(size, tcp_input.size() - tcp_read_position);
+			std::copy_n(tcp_input.data() + tcp_read_position, count, data);
+			tcp_read_position += count;
+			return count;
+		};
+		tcp.receive_take = [](NetworkTCPSocketHandler *) noexcept { return std::exchange(tcp_receive_packet, nullptr); };
+		tcp.error_would_block = [](const NetworkError *) noexcept { return true; };
+		tcp.packet_record = [](Packet *packet) noexcept { dispatch_position = packet->Record()->position; return packet->Record(); };
+		tcp.packet_delete_shell = [](Packet *packet) noexcept { dispatch_deletes++; dispatch_cleanup_order &= dispatch_ended; Packet::DeleteShell(packet); };
+		auto dispatch = GetRustNetworkDispatchServices();
+		dispatch.illegal_packet = [](OpenTTDNetworkGameSocket *, uint8_t) noexcept {};
+		dispatch.invalid_packet = [](OpenTTDNetworkGameSocket *) noexcept {};
+		dispatch.invalid_type = [](OpenTTDNetworkGameSocket *, uint8_t) noexcept {};
+		dispatch.packet_end = [](OpenTTDSessionFrame *frame) noexcept { frame->packet_load.reset(); frame->packet_text.reset(); dispatch_ended = true; };
+		OpenTTDNetworkClientServices client{};
+		client.debug_wait = client.debug_join_waiting = client.dirty_join = []() noexcept {};
+		uint8_t join_status = 0, waiting = 17;
+		client.join_status = &join_status;
+		client.join_waiting = &waiting;
+		auto company = GetRustCompanyServices();
+		company.network_server = []() noexcept { return false; };
+		auto command = GetRustNetworkCommandServices();
+		command.company = &company;
+		OpenTTDNetworkConnectionServices connection{};
+		bool networking = false;
+		connection.networking = &networking;
+		auto network = GetRustNetworkFrameServices();
+		network.client = &client;
+		network.command = &command;
+		network.connection = &connection;
+		network.dispatch = &dispatch;
+		network.tcp = &tcp;
+		network.now = []() noexcept -> int64_t { return 321; };
+		network.query_close = [](void *, uint8_t result) noexcept { dispatch_closes++; return result; };
+		auto &game = static_cast<OpenTTDNetworkGameSocket &>(receiver);
+		game.status = test.status;
+		game.role = test.role;
+		game.last_packet_ns = 77;
+		game.sync->receive_limit = test.limit;
+		OpenTTDSessionFrame frame;
+		openttd_rust_network_receive_packets(&GetRustSessionServices(), &network, &game, &frame, &frame.network_actions);
+		if (test.throws) { CHECK_THROWS_AS(frame.Rethrow(), int); } else { CHECK_NOTHROW(frame.Rethrow()); }
+		CHECK(openttd_rust_network_actions_result(&frame.network_actions) == test.result);
+		CHECK(dispatch_position == test.consumed);
+		CHECK(waiting == test.waiting);
+		CHECK(dispatch_closes == test.closes);
+		CHECK(game.last_packet_ns == test.timestamp);
+		CHECK(dispatch_deletes == (test.consumed == 0 ? 0 : 1));
+		CHECK(game.sync->receive_limit == test.remaining);
+		CHECK(dispatch_cleanup_order);
+		if (test.result == 0 && !test.throws && test.consumed != 0) CHECK(dispatch_previous_live);
 	}
 }

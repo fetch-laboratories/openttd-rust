@@ -40,6 +40,7 @@
 #include "../misc_cmd.h"
 #include "../core/string_builder.hpp"
 #include "../rust/network_tcp_ffi.h"
+#include "../rust/network_dispatch_ffi.h"
 #include "../rust/session_native.hpp"
 #include "../rust/string_services.h"
 #include "../rust/settings_services.h"
@@ -984,6 +985,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.debug_receive_sync = [](uint32_t sync_frame, uint32_t seed) noexcept { Debug(net, 9, "Client::Receive_SERVER_SYNC(): sync_frame={}, sync_seed_1={}", sync_frame, seed); },
 		.debug_send_ack = []() noexcept { Debug(net, 9, "Client::SendAck()"); },
 		.debug_send_sync = [](void *game, uint32_t frame, uint32_t seed) noexcept { Debug(net, 9, "client[{}] SendSync(), frame_counter={}, sync_seed_1={}", static_cast<NetworkGameSocketHandler *>(game)->client_id, frame, seed); },
+		.dispatch = &GetRustNetworkDispatchServices(),
 		.frame_freq = RustNetworkFrameFreq,
 		.interactive_random_range = [](uint32_t limit) noexcept { return InteractiveRandomRange(limit); },
 		.lifecycle = &GetRustNetworkLifecycleServices(),

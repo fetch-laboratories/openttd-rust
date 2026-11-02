@@ -195,6 +195,15 @@ pub unsafe extern "C" fn openttd_rust_tcp_receive(
     unsafe { read_bytes(s, socket, p, check) }
 }
 
+/// Consume a native shell after dropping its canonical Rust packet allocation.
+pub(crate) fn destroy_packet(s: &Services, packet: *mut Packet) {
+    let record = (s.packet_record)(packet);
+    unsafe {
+        std::ptr::drop_in_place(record);
+    }
+    (s.packet_delete_shell)(packet);
+}
+
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkTcpServices" ["probe"] => Services {

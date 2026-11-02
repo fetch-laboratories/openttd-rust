@@ -192,6 +192,7 @@ public:
 class NetworkGameSocketHandler : public NetworkTCPSocketHandler, public OpenTTDNetworkSocketSync, public OpenTTDNetworkGameSocket {
 /* TODO: rewrite into a proper class */
 private:
+	friend const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept;
 	NetworkClientInfo *info = nullptr; ///< Client info related to this socket
 
 protected:
@@ -528,8 +529,6 @@ protected:
 	 * @param p The packet that was just received.
 	 */
 	virtual NetworkRecvStatus Receive_SERVER_CONFIG_UPDATE(Packet &p);
-
-	NetworkRecvStatus HandlePacket(Packet &p);
 
 	NetworkGameSocketHandler(SOCKET s, uint8_t role = 2);
 public:

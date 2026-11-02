@@ -283,7 +283,7 @@ pub(crate) fn send_quit(s: &Services, f: &FrameServices) -> u8 {
 pub extern "C" fn openttd_rust_network_client_receive_full(
     s: &Services,
     _f: &FrameServices,
-    _game: *mut c_void,
+    _game: *mut socket::GameSocket,
 ) -> u8 {
     (s.debug_full)();
     (s.show_full)();
@@ -294,7 +294,7 @@ pub extern "C" fn openttd_rust_network_client_receive_full(
 pub extern "C" fn openttd_rust_network_client_receive_banned(
     s: &Services,
     _f: &FrameServices,
-    _game: *mut c_void,
+    _game: *mut socket::GameSocket,
 ) -> u8 {
     (s.debug_banned)();
     (s.show_banned)();

@@ -18,9 +18,23 @@ static_assert(PauseMode::Normal == PauseMode(0) && PauseMode::SaveLoad == PauseM
 static_assert(FT_SAVEGAME == 1 && FT_SCENARIO == 2 && FT_HEIGHTMAP == 3 && SL_OK == 0 && SL_REINIT == 2 && COLOUR_END == 16);
 struct OpenTTDWorldSetupFrame { std::exception_ptr cancellation; };
 struct RustSessionVehicleCosts { CommandCost replacement, refit, temporary; };
+struct OpenTTDSessionLoad {
+	const std::string &filename;
+	SaveLoadOperation operation;
+	DetailedFileType type;
+	Subdirectory subdir;
+	std::shared_ptr<LoadFilter> filter;
+};
+struct RustNetworkPacketLoad {
+	const std::string filename;
+	OpenTTDSessionLoad args{filename, SLO_LOAD, DFT_GAME_FILE, NO_DIRECTORY, {}};
+};
 struct OpenTTDSessionFrame {
 	OpenTTDNetworkActionsStorage network_actions;
 	OpenTTDSessionFrame() { openttd_rust_network_actions_init(&this->network_actions); }
+	~OpenTTDSessionFrame() { this->packet_load.reset(); this->packet_text.reset(); openttd_rust_network_actions_drop(&this->network_actions); }
+	std::optional<RustNetworkPacketLoad> packet_load;
+	std::optional<std::string> packet_text;
 	std::optional<std::pair<std::string, std::string>> reconnect;
 	std::exception_ptr exception;
 	std::optional<PerformanceMeasurer> framerate;
@@ -36,13 +50,7 @@ struct OpenTTDSessionFrame {
 };
 static_assert(sizeof(OpenTTDSessionFrame) <= sizeof(OpenTTDSessionFrameStorage));
 static_assert(alignof(OpenTTDSessionFrame) <= alignof(OpenTTDSessionFrameStorage));
-struct OpenTTDSessionLoad {
-	const std::string &filename;
-	SaveLoadOperation operation;
-	DetailedFileType type;
-	Subdirectory subdir;
-	std::shared_ptr<LoadFilter> filter;
-};
+
 /* Script VMs, scheduled console commands, load/generation and networking can
  * unwind in ordinary play. Each named service records that exception here. */
 template <typename F>

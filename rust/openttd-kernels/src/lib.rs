@@ -1229,6 +1229,7 @@ mod network_client;
 mod network_command;
 mod network_connection;
 mod network_crypto;
+mod network_dispatch;
 mod network_frame;
 mod network_internal;
 mod network_lifecycle;
