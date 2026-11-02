@@ -64,8 +64,13 @@ pub struct Services {
     pub(crate) pay: extern "C" fn(*mut c_void, u8, u8, *const c_void, u32, u32) -> i64,
     pub(crate) origin: extern "C" fn(*mut c_void, u16, u32, u8),
     pub(crate) flow_map: extern "C" fn(*const c_void) -> *mut crate::cargo_flow::FlowMap,
-    pub(crate) random_draw: extern "C" fn() -> u32,
+    pub(crate) shared: *const crate::services::Services,
     pub(crate) packet_next: extern "C" fn(*mut c_void) -> *mut c_void,
+}
+impl Services {
+    fn random_draw(&self) -> u32 {
+        unsafe { &*self.shared }.random()
+    }
 }
 #[derive(Clone, Copy)]
 struct Node {
@@ -204,7 +209,7 @@ crate::abi::layouts! {
         pay,
         origin,
         flow_map,
-        random_draw,
+        shared,
         packet_next,
     };
     "OpenTTDCargoCapacityVehicle" ["probe"] => Vehicle {
@@ -446,8 +451,8 @@ unsafe fn forced_flow(
     next: NextHops,
 ) -> u16 {
     use crate::cargo_flow::{
-        openttd_rust_flow_change, openttd_rust_flow_clone, openttd_rust_flow_destroy,
-        openttd_rust_flow_read, openttd_rust_flow_via,
+        flow_via, openttd_rust_flow_change, openttd_rust_flow_clone, openttd_rust_flow_destroy,
+        openttd_rust_flow_read,
     };
     let map = (s.flow_map)(ge);
     let original = if map.is_null() {
@@ -475,7 +480,7 @@ unsafe fn forced_flow(
     let via = if unsafe { openttd_rust_flow_read(flow, 2, 0) } == 0 {
         INVALID
     } else {
-        unsafe { openttd_rust_flow_via(flow, 0, 0, 0, &raw mut restricted, s.random_draw) }
+        unsafe { flow_via(flow, 0, 0, 0, &raw mut restricted, || s.random_draw()) }
     };
     unsafe {
         openttd_rust_flow_destroy(flow);
@@ -953,27 +958,17 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
                 INVALID
             } else {
                 unsafe {
-                    crate::cargo_flow::openttd_rust_flow_via(
-                        flow,
-                        1,
-                        0,
-                        0,
-                        &raw mut restricted,
-                        s.random_draw,
-                    )
+                    crate::cargo_flow::flow_via(flow, 1, 0, 0, &raw mut restricted, || {
+                        s.random_draw()
+                    })
                 }
             };
             action = choose(observed, via, station, accepted != 0, next_slice);
             if restricted != 0 && action == TRANSFER {
                 via = unsafe {
-                    crate::cargo_flow::openttd_rust_flow_via(
-                        flow,
-                        0,
-                        0,
-                        0,
-                        &raw mut restricted,
-                        s.random_draw,
-                    )
+                    crate::cargo_flow::flow_via(flow, 0, 0, 0, &raw mut restricted, || {
+                        s.random_draw()
+                    })
                 };
                 action = choose(observed, via, station, accepted != 0, next_slice);
             }
@@ -1104,7 +1099,7 @@ unsafe fn action(
                         p.first_station,
                         avoid,
                         avoid2,
-                        s.random_draw,
+                        || s.random_draw(),
                     )
                 };
                 // Original mutates cp, even when cp_new is a partial split.
@@ -1148,7 +1143,7 @@ unsafe fn action(
                     p.first_station,
                     avoid,
                     avoid2,
-                    s.random_draw,
+                    || s.random_draw(),
                 )
             };
             if src != dst {
@@ -1755,8 +1750,14 @@ mod tests {
         }
         map
     }
-    extern "C" fn draw() -> u32 {
+    extern "C" fn draw(_: *mut c_void) -> u32 {
         0
+    }
+    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        0
+    }
+    thread_local! {
+        static SHARED: crate::services::Services = crate::services::fixture(std::ptr::null_mut(), draw, no_industry);
     }
     extern "C" fn next_packet(shell: *mut c_void) -> *mut c_void {
         POOL.with(|pool| {
@@ -1780,7 +1781,7 @@ mod tests {
             pay,
             origin,
             flow_map,
-            random_draw: draw,
+            shared: SHARED.with(std::ptr::from_ref),
             packet_next: next_packet,
         }
     }

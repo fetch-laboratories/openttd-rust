@@ -582,10 +582,11 @@ mod tests {
         fn run(&mut self, kind: VehicleType) {
             let handle = self.handle();
             self.post_type = kind;
+            let cargo_services = cargo_services();
             let services = PostTickServices {
                 cargo_owner,
                 sound,
-                cargo: &raw const CARGO_SERVICES,
+                cargo: &raw const cargo_services,
             };
             // Stands in for the native survival fill inside the Tick facade.
             let bundle = addresses(handle);
@@ -696,28 +697,28 @@ mod tests {
     extern "C" fn flow_map(_: *const c_void) -> *mut crate::cargo_flow::FlowMap {
         null_mut()
     }
-    extern "C" fn random_draw() -> u32 {
-        0
-    }
     extern "C" fn packet_next(_: *mut c_void) -> *mut c_void {
         null_mut()
     }
-    static CARGO_SERVICES: cargo_storage::Services = cargo_storage::Services {
-        can_allocate,
-        create,
-        packet,
-        destroy,
-        random,
-        coordinate,
-        pay,
-        origin,
-        flow_map,
-        random_draw,
-        packet_next,
-    };
+    fn cargo_services() -> cargo_storage::Services {
+        cargo_storage::Services {
+            can_allocate,
+            create,
+            packet,
+            destroy,
+            random,
+            coordinate,
+            pay,
+            origin,
+            flow_map,
+            shared: null(),
+            packet_next,
+        }
+    }
 
     #[test]
     fn cargo_short_circuit_wrap_clamp_and_period_reload() {
+        let cargo_services = cargo_services();
         let mut c = Cells::new();
         c.front_status = VS_CRASHED;
         c.hide_counter = true; // Source never accesses the counter when period=0.
@@ -742,7 +743,7 @@ mod tests {
         unsafe {
             cargo_storage::openttd_rust_cargo_list_append(
                 c.cargo,
-                &raw const CARGO_SERVICES,
+                &raw const cargo_services,
                 shell,
                 2, // Cargo keep action, as in the existing cargo-storage fixture.
             );
@@ -753,7 +754,7 @@ mod tests {
         assert_eq!(c.packet.periods_in_transit, 1);
         assert_eq!(c.events, ["post", "age-owner", "age-packet"]);
         unsafe {
-            cargo_storage::openttd_rust_cargo_list_destroy(c.cargo, &raw const CARGO_SERVICES);
+            cargo_storage::openttd_rust_cargo_list_destroy(c.cargo, &raw const cargo_services);
         };
     }
 

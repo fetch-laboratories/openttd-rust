@@ -200,9 +200,9 @@ impl Flow {
         excluded: u16,
         excluded2: u16,
         restricted: &mut u8,
-        random: extern "C" fn() -> u32,
+        mut random: impl FnMut() -> u32,
     ) -> u16 {
-        let range = |max: u32| crate::random_func::scale_to_limit(random(), max);
+        let mut range = |max: u32| crate::random_func::scale_to_limit(random(), max);
         if mode == 1 {
             assert!(!self.shares.is_empty());
             let draw = range(*self.shares.last_key_value().unwrap().0);
@@ -426,6 +426,19 @@ pub unsafe extern "C" fn openttd_rust_flow_share(ptr: *const Flow, key: u64, op:
         found: 1,
     })
 }
+/// Direct owner selection with the caller's shared RNG operation.
+/// # Safety
+/// The flow is live and serialized; random draws cannot mutate its storage.
+pub(crate) unsafe fn flow_via(
+    ptr: *const Flow,
+    mode: u8,
+    ex: u16,
+    ex2: u16,
+    restricted: *mut u8,
+    random: impl FnMut() -> u32,
+) -> u16 {
+    unsafe { (&*ptr).via(mode, ex, ex2, &mut *restricted, random) }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_flow_via(
     ptr: *const Flow,
@@ -436,7 +449,7 @@ pub unsafe extern "C" fn openttd_rust_flow_via(
     random: extern "C" fn() -> u32,
 ) -> u16 {
     // RNG mutates only the shared RNG, never this flow. No map borrow is retained.
-    unsafe { (&*ptr).via(mode, ex, ex2, &mut *restricted, random) }
+    unsafe { flow_via(ptr, mode, ex, ex2, restricted, || random()) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_flow_map_new() -> *mut FlowMap {
@@ -740,21 +753,24 @@ mod tests {
         flow.append(3, 30, false);
         DRAWS.with(|n| n.set(0));
         let mut restricted = 0;
-        assert_eq!(flow.via(2, 1, 2, &mut restricted, zero_random), 3);
+        assert_eq!(flow.via(2, 1, 2, &mut restricted, || zero_random()), 3);
         assert_eq!(DRAWS.with(Cell::get), 3);
         flow.change(3, i32::MIN);
         DRAWS.with(|n| n.set(0));
-        assert_eq!(flow.via(2, 1, 2, &mut restricted, zero_random), u16::MAX);
+        assert_eq!(
+            flow.via(2, 1, 2, &mut restricted, || zero_random()),
+            u16::MAX
+        );
         assert_eq!(DRAWS.with(Cell::get), 2);
         let restricted_flow = Flow::new(1, 5, true);
         DRAWS.with(|n| n.set(0));
         assert_eq!(
-            restricted_flow.via(0, 0, 0, &mut restricted, zero_random),
+            restricted_flow.via(0, 0, 0, &mut restricted, || zero_random()),
             u16::MAX
         );
         assert_eq!(DRAWS.with(Cell::get), 0);
         assert_eq!(
-            restricted_flow.via(1, 0, 0, &mut restricted, zero_random),
+            restricted_flow.via(1, 0, 0, &mut restricted, || zero_random()),
             1
         );
         assert_eq!(restricted, 1);

@@ -6,6 +6,7 @@
  */
 
 /** @file cargo_storage.hpp Pool services and native cargo ownership facade. */
+#include "services_ffi.h"
 static uint8_t CargoCanAllocate() noexcept { return CargoPacket::CanAllocateItem(); }
 static void *CargoCreate(const OpenTTDCargoPacketFields *fields) noexcept { return new CargoPacket(*fields); }
 static OpenTTDCargoPacket *CargoOwner(void *shell) noexcept { return static_cast<CargoPacket *>(shell)->RustOwner(); }
@@ -33,7 +34,6 @@ static OpenTTDCargoFlowMap *CargoFlowMap(const void *context) noexcept
 	const GoodsEntry *ge = static_cast<const GoodsEntry *>(context);
 	return ge->HasData() ? ge->GetData().flows.RustState() : nullptr;
 }
-static uint32_t CargoRandomDraw() noexcept { return Random(); }
 static void *CargoNextPacket(void *shell) noexcept
 {
 	auto range = CargoPacket::Iterate(shell == nullptr ? 0 : static_cast<CargoPacket *>(shell)->index.base() + 1);
@@ -50,7 +50,7 @@ static const OpenTTDCargoStorageServices _cargo_storage_services = {
 	.pay = CargoPay,
 	.origin = CargoOrigin,
 	.flow_map = CargoFlowMap,
-	.random_draw = CargoRandomDraw,
+	.shared = &_rust_shared_services,
 	.packet_next = CargoNextPacket,
 };
 
