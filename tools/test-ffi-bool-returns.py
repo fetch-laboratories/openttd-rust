@@ -41,6 +41,30 @@ unsafe extern "C" fn callback<T>(x: extern "C" fn(bool) -> bool) -> Result { x(t
             1,
         )
 
+    def test_equivalent_c_abi_and_return_type_spellings(self) -> None:
+        for abi in ('extern "C"', "extern"):
+            for result, failures in (("bool", 1), ("u8", 0)):
+                for spelling in (
+                    result,
+                    f"({result})",
+                    f"((::core::primitive::{result}))",
+                ):
+                    with self.subTest(abi=abi, spelling=spelling):
+                        source = f"{abi} fn entry() -> {spelling} {{ false.into() }}"
+                        self.assertEqual(len(self.check(source)), failures)
+
+    def test_parenthesized_aliases_and_renamed_imports(self) -> None:
+        for result, failures in (("bool", 1), ("u8", 0)):
+            for binding in (
+                f"type Truth = ((::core::primitive::{result}));",
+                f"use core::primitive::{result} as Truth;",
+            ):
+                with self.subTest(binding=binding):
+                    source = (
+                        binding + '\nextern "C" fn entry() -> Truth { false.into() }'
+                    )
+                    self.assertEqual(len(self.check(source)), failures)
+
     def test_declarations_parameters_out_pointers_and_comments_are_allowed(
         self,
     ) -> None:

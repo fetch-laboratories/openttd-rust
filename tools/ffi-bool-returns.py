@@ -9,9 +9,17 @@ from code_lines import without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
 IDENT = r"(?:r#)?[A-Za-z_]\w*"
-TYPE = rf"{IDENT}(?:::{IDENT})*"
-ENTRY = re.compile(rf'\bextern\s+"C"\s+fn\s+\$?({IDENT})\s*(?:<[^{{;]*?>\s*)?\(')
+PATH = rf"(?:::)?{IDENT}(?:\s*::\s*{IDENT})*"
+TYPE = rf"(?:\(\s*)*{PATH}(?:\s*\))*"
+C_FN = r'\bextern\s+(?:"C"\s+)?fn'
+ENTRY = re.compile(rf"{C_FN}\s+\$?({IDENT})\s*(?:<[^{{;]*?>\s*)?\(")
 ALIAS = re.compile(rf"\btype\s+({IDENT})\s*=\s*({TYPE})\s*;")
+IMPORT = re.compile(rf"\buse\s+({PATH})\s+as\s+({IDENT})\s*;")
+
+
+def type_name(spelling: str) -> str:
+    """Ignore path qualification and parentheses around a scalar type."""
+    return re.findall(IDENT, spelling)[-1]
 
 
 def closing(source: str, start: int, left: str, right: str) -> int:
@@ -45,10 +53,14 @@ def violations(files: dict[str, str]) -> list[str]:
     aliases = {"bool"}
     bindings = [
         binding for source in sources.values() for binding in ALIAS.findall(source)
+    ] + [
+        (name, target)
+        for source in sources.values()
+        for target, name in IMPORT.findall(source)
     ]
     while True:
         updated = aliases | {
-            name for name, target in bindings if target.split("::")[-1] in aliases
+            name for name, target in bindings if type_name(target) in aliases
         }
         if updated == aliases:
             break
@@ -63,16 +75,16 @@ def violations(files: dict[str, str]) -> list[str]:
             result = re.match(
                 rf"\s*->\s*({TYPE})\s*(?:where\b[^{{;]*)?\{{", source[end + 1 :]
             )
-            if result and result[1].split("::")[-1] in aliases:
+            if result and type_name(result[1]) in aliases:
                 line = source.count("\n", 0, entry.start()) + 1
                 hits.append(
                     f"{path}:{line}: extern C definition {entry[1]} returns {result[1]}"
                 )
         # A return type supplied to a C-entry macro must be checked at its invocation.
         # This also covers `=> bool` entry lists used by the ground-vehicle facade.
-        if re.search(r'extern\s+"C"\s+fn[^{};]*\$ret', source):
+        if re.search(rf"{C_FN}[^{{}};]*\$ret", source):
             for result in re.finditer(rf"(?:->|=>)\s*({TYPE})\s*(?:=>|[);])", source):
-                if result[1].split("::")[-1] in aliases and not any(
+                if type_name(result[1]) in aliases and not any(
                     start <= result.start() < end for start, end in tests
                 ):
                     line = source.count("\n", 0, result.start()) + 1
