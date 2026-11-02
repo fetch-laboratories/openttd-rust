@@ -545,13 +545,13 @@ pub unsafe extern "C" fn openttd_rust_subsidy_delete_with(s: *const Services, so
     unsafe { &*s }.delete_with(source);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_command(
+pub unsafe extern "C" fn openttd_rust_subsidy_command_abi(
     s: *const Services,
     flags: u16,
     cargo: u8,
     src: Source,
     dst: Source,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*s };
     if !(s.can_allocate)()
         || (s.shared().current_company)() != crate::company_type::OWNER_DEITY
@@ -560,25 +560,25 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command(
         || !(s.valid_source)(src)
         || !(s.valid_source)(dst)
     {
-        return false;
+        return u8::from(false);
     }
     if flags & crate::command_type::DoCommandFlag::EXECUTE != 0 {
         s.create(cargo, src, dst);
     }
-    true
+    u8::from(true)
 }
 pub(crate) unsafe fn openttd_rust_subsidy_monthly(s: *const Services, scratch: Cargo) {
     unsafe { &*s }.monthly(scratch);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_check(
+pub unsafe extern "C" fn openttd_rust_subsidy_check_abi(
     s: *const Services,
     cargo: u8,
     company: u8,
     src: Source,
     station: u16,
-) -> bool {
-    unsafe { &*s }.check(cargo, company, src, station)
+) -> u8 {
+    u8::from(unsafe { &*s }.check(cargo, company, src, station))
 }
 
 crate::abi::layouts! {

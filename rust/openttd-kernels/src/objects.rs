@@ -129,9 +129,9 @@ pub struct HiddenArea {
     pub first_tile: u32,
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_object_indirectly_cleared(tile: u32, log_x: u32) -> bool {
+pub extern "C" fn openttd_rust_object_indirectly_cleared_abi(tile: u32, log_x: u32) -> u8 {
     let i = openttd_rust_object_areas_find(tile, log_x);
-    i != usize::MAX && openttd_rust_object_areas_get(i).first_tile != tile
+    u8::from(i != usize::MAX && openttd_rust_object_areas_get(i).first_tile != tile)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_tunnel_hide(tile: u32, log_x: u32) -> HiddenArea {
@@ -2067,32 +2067,32 @@ fn available(s: &ObjectServices, spec: *const Spec) -> bool {
         || dates.end < dates.introduction.wrapping_add(365)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_enabled(
+pub unsafe extern "C" fn openttd_rust_object_enabled_abi(
     s: *const ObjectServices,
     spec: *const Spec,
-) -> bool {
-    enabled(unsafe { &*s }, spec)
+) -> u8 {
+    u8::from(enabled(unsafe { &*s }, spec))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_ever_available(
+pub unsafe extern "C" fn openttd_rust_object_ever_available_abi(
     s: *const ObjectServices,
     spec: *const Spec,
-) -> bool {
-    ever_available(unsafe { &*s }, spec)
+) -> u8 {
+    u8::from(ever_available(unsafe { &*s }, spec))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_was_available(
+pub unsafe extern "C" fn openttd_rust_object_was_available_abi(
     s: *const ObjectServices,
     spec: *const Spec,
-) -> bool {
-    was_available(unsafe { &*s }, spec)
+) -> u8 {
+    u8::from(was_available(unsafe { &*s }, spec))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_available(
+pub unsafe extern "C" fn openttd_rust_object_available_abi(
     s: *const ObjectServices,
     spec: *const Spec,
-) -> bool {
-    available(unsafe { &*s }, spec)
+) -> u8 {
+    u8::from(available(unsafe { &*s }, spec))
 }
 
 /// Synchronous `NewGRF` query/animation entries. Native records stay opaque.
@@ -2138,25 +2138,25 @@ pub unsafe extern "C" fn openttd_rust_object_random_bits(
 /// # Safety
 /// Same serialized live-table/object/spec contract as the variable entry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_trigger_tile(
+pub unsafe extern "C" fn openttd_rust_object_trigger_tile_abi(
     s: *const ObjectServices,
     obj: *mut Object,
     tile: u32,
     trigger: AnimationTrigger,
     spec: *const Spec,
-) -> bool {
-    unsafe { World::new::<false>(&*s).trigger_tile(obj, tile, trigger, spec) }
+) -> u8 {
+    u8::from(unsafe { World::new::<false>(&*s).trigger_tile(obj, tile, trigger, spec) })
 }
 /// # Safety
 /// Same serialized live-table/object/spec contract as the variable entry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_trigger(
+pub unsafe extern "C" fn openttd_rust_object_trigger_abi(
     s: *const ObjectServices,
     obj: *mut Object,
     trigger: AnimationTrigger,
     spec: *const Spec,
-) -> bool {
-    unsafe { World::new::<false>(&*s).trigger(obj, trigger, spec) }
+) -> u8 {
+    u8::from(unsafe { World::new::<false>(&*s).trigger(obj, trigger, spec) })
 }
 
 /// Synchronous object owner entry.
@@ -2313,19 +2313,19 @@ pub unsafe extern "C" fn openttd_rust_object_tile_loop(
 /// # Safety
 /// The module's export contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_generate(
+pub unsafe extern "C" fn openttd_rust_object_generate_abi(
     s: *const ObjectServices,
     out: *mut CommandCost,
     tmp: *mut CommandCost,
     aux: *mut CommandCost,
     frame: *mut GenerationFrame,
-) -> bool {
+) -> u8 {
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     let tmp = Cost(tmp, costs);
     let aux = Cost(aux, costs);
-    w.generate(frame, out, tmp, aux)
+    u8::from(w.generate(frame, out, tmp, aux))
 }
 
 /// `ChangeTileOwner_Object`, entered only from the shared ownership dispatcher.

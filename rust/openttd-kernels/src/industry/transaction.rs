@@ -972,8 +972,8 @@ pub unsafe extern "C" fn openttd_rust_industry_create(
 /// # Safety
 /// Actual native slope bytes; pure original slope-refusal policy, no callbacks.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_slope_refused(current: u8, refused: u8) -> bool {
-    slope_refused(current, refused)
+pub unsafe extern "C" fn openttd_rust_industry_slope_refused_abi(current: u8, refused: u8) -> u8 {
+    u8::from(slope_refused(current, refused))
 }
 
 /// # Safety

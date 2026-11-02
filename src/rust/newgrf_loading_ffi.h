@@ -27,8 +27,10 @@ struct OpenTTDGrfExecution {
 extern "C" {
 OpenTTDGrfExecution *openttd_rust_grf_execution();
 void openttd_rust_grf_add_sets(uint8_t, uint32_t, uint32_t, uint32_t, uint32_t);
-bool openttd_rust_grf_has_sets(uint8_t);
-bool openttd_rust_grf_has_set(uint8_t, uint32_t);
+uint8_t openttd_rust_grf_has_sets_abi(uint8_t);
+extern "C++" inline bool openttd_rust_grf_has_sets(uint8_t a0) { return openttd_rust_grf_has_sets_abi(a0) != 0; }
+uint8_t openttd_rust_grf_has_set_abi(uint8_t, uint32_t);
+extern "C++" inline bool openttd_rust_grf_has_set(uint8_t a0, uint32_t a1) { return openttd_rust_grf_has_set_abi(a0, a1) != 0; }
 uint32_t openttd_rust_grf_set_sprite(uint8_t, uint32_t);
 uint32_t openttd_rust_grf_set_size(uint8_t, uint32_t);
 }
@@ -240,7 +242,8 @@ void openttd_rust_grf_unsafe(const OpenTTDGrfLoadingServices *);
 GRFError *openttd_rust_grf_disable(const OpenTTDGrfLoadingServices *, StringID, GRFConfig *);
 void openttd_rust_grf_load(const OpenTTDGrfLoadingServices *, SpriteID, uint32_t);
 void openttd_rust_grf_reset(const OpenTTDGrfLoadingServices *);
-bool openttd_rust_grf_reserved_sprite(uint32_t, SpriteID, uint16_t);
+uint8_t openttd_rust_grf_reserved_sprite_abi(uint32_t, SpriteID, uint16_t);
+extern "C++" inline bool openttd_rust_grf_reserved_sprite(uint32_t a0, SpriteID a1, uint16_t a2) { return openttd_rust_grf_reserved_sprite_abi(a0, a1, a2) != 0; }
 void openttd_rust_grf_load_file(const OpenTTDGrfLoadingServices *, GRFConfig *, GrfLoadingStage, Subdirectory, void *);
 }
 const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept;

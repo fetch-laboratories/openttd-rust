@@ -733,13 +733,13 @@ pub(crate) unsafe fn tick(
 /// Industry, owner and services follow the tick contract; distribution can reenter
 /// industry access, so history/waiting writes occur before/after with raw fields.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_transport(
+pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     i: *mut c_void,
     owner: *mut Industry,
     minimal_cargo: u8,
     recession: bool,
     services: *const Services,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*services };
     let mut moved = false;
     let mut catchment = None;
@@ -783,7 +783,7 @@ pub unsafe extern "C" fn openttd_rust_industry_transport(
         }
         moved |= am != 0;
     }
-    moved
+    u8::from(moved)
 }
 fn recompute(i: *mut c_void, owner: *mut Industry, s: &Services) {
     let f = fields(owner);
@@ -1645,7 +1645,7 @@ pub(crate) unsafe fn trigger_delivery(
             services,
             resolver.lifecycle(),
         );
-        openttd_rust_industry_animate(
+        openttd_rust_industry_animate_abi(
             owner,
             id.0,
             crate::industry_type::ANIMATION_TRIGGER_CARGO_RECEIVED,

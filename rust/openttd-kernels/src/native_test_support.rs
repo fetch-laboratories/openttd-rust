@@ -42,7 +42,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     trees: *const crate::trees::TreeServices,
     tile: u32,
     mutate: extern "C" fn(u32),
-) -> bool {
+) -> u8 {
     let (s, c, trees) = unsafe { (&*shared, &*clear, &*trees) };
     let allocation = unsafe { (*statics).load().0 };
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         || get_tile_z(&map, tile, x, y) != Some((s.tile_z)(tile))
         || get_tropic_zone(&map, tile) != Some((s.tropic_zone)(tile))
     {
-        return false;
+        return u8::from(false);
     }
     match map.read(tile) {
         0 => {
@@ -67,7 +67,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                 || get_clear_density(&map, tile).map(u32::from) != Some((c.density)(tile))
                 || get_clear_counter(&map, tile).map(u32::from) != Some((c.counter)(tile))
             {
-                return false;
+                return u8::from(false);
             }
             if get_clear_ground(&map, tile) == Some(crate::clear_map::CLEAR_FIELDS) {
                 let fences = (c.fences)(tile);
@@ -84,14 +84,14 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                     || require_field(&map, tile).map(|fields| get_industry_index_of_field(&fields))
                         != Some(field.industry)
                 {
-                    return false;
+                    return u8::from(false);
                 }
             } else if allocation.assertions
                 && require_field(&map, tile)
                     .map(|fields| get_field_type(&fields))
                     .is_some()
             {
-                return false;
+                return u8::from(false);
             }
         }
         4 => {
@@ -105,7 +105,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                 || get_tree_count(&map, tile) != Some(tree.count)
                 || get_tree_growth(&map, tile) != Some(tree.growth)
             {
-                return false;
+                return u8::from(false);
             }
         }
         6 => {
@@ -115,19 +115,25 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                     != Some((water.non_flooding)(tile))
                 || crate::water_map::get_water_class(&map, tile) != Some((c.water_class)(tile).0)
             {
-                return false;
+                return u8::from(false);
             }
         }
         _ => {}
     }
     let kind = map.read(tile);
-    (!allocation.assertions || kind == 0 || crate::clear_map::is_snow_tile(&map, tile).is_none())
-        && (!allocation.assertions
-            || kind == 4
-            || crate::tree_map::get_tree_type(&map, tile).is_none())
-        && (!allocation.assertions || kind == 6 || crate::water_map::is_coast(&map, tile).is_none())
-        && (allocation.assertions || crate::clear_map::is_snow_tile(&map, tile).is_some())
-        && crate::movement::native_test_support::map_read_probe(allocation, s, tile, mutate)
+    u8::from(
+        (!allocation.assertions
+            || kind == 0
+            || crate::clear_map::is_snow_tile(&map, tile).is_none())
+            && (!allocation.assertions
+                || kind == 4
+                || crate::tree_map::get_tree_type(&map, tile).is_none())
+            && (!allocation.assertions
+                || kind == 6
+                || crate::water_map::is_coast(&map, tile).is_none())
+            && (allocation.assertions || crate::clear_map::is_snow_tile(&map, tile).is_some())
+            && crate::movement::native_test_support::map_read_probe(allocation, s, tile, mutate),
+    )
 }
 
 use crate::follow_track::{State, mask_reserved_tracks, speed_limit};
@@ -272,29 +278,29 @@ pub extern "C" fn openttd_test_world_abort_callback() -> Callback {
 /// # Safety
 /// Same contract as the production generation entry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_generate_landscape(
+pub unsafe extern "C" fn openttd_test_generate_landscape_abi(
     a: *const GenerationServices,
     frame: *mut GenerationFrame,
     input: *const HeightmapInput,
     g: Settings,
     mode: u8,
-) -> bool {
-    unsafe { crate::landscape_generation::generate_landscape(a, frame, input, g, mode) }
+) -> u8 {
+    u8::from(unsafe { crate::landscape_generation::generate_landscape(a, frame, input, g, mode) })
 }
 
 /// `LoadHeightmap`, which has no production caller beside `GenerateLandscape`.
 /// # Safety
 /// Same contract as the production generation entry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_load_heightmap(
+pub unsafe extern "C" fn openttd_test_load_heightmap_abi(
     a: *const GenerationServices,
     input: *const HeightmapInput,
     rotation: u8,
     freeform: bool,
     heightmap_height: u8,
     max_height: u8,
-) -> bool {
-    unsafe {
+) -> u8 {
+    u8::from(unsafe {
         crate::landscape_generation::load_heightmap(
             a,
             input,
@@ -303,7 +309,7 @@ pub unsafe extern "C" fn openttd_test_load_heightmap(
             heightmap_height,
             max_height,
         )
-    }
+    })
 }
 
 /// `FlatEmptyWorld`.
@@ -344,8 +350,8 @@ pub unsafe extern "C" fn openttd_test_town_data_target(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_test_map_surrounded_by_water(s: &crate::services::Services) -> bool {
-    crate::landscape::surrounded_by_water(s)
+pub extern "C" fn openttd_test_map_surrounded_by_water_abi(s: &crate::services::Services) -> u8 {
+    u8::from(crate::landscape::surrounded_by_water(s))
 }
 
 #[unsafe(no_mangle)]

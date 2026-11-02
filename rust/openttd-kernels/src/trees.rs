@@ -1078,26 +1078,26 @@ pub(crate) unsafe fn tick(
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_generate(
+pub unsafe extern "C" fn openttd_rust_trees_generate_abi(
     settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
-) -> bool {
+) -> u8 {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    unsafe { trees(services, shared) }.generate(&settings)
+    u8::from(unsafe { trees(services, shared) }.generate(&settings))
 }
 
 /// `PlaceTreesRandomly`; true when a progress service reported world-generation abort.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_place_randomly(
+pub unsafe extern "C" fn openttd_rust_trees_place_randomly_abi(
     settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
-) -> bool {
+) -> u8 {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    unsafe { trees(services, shared) }.place_randomly(&settings)
+    u8::from(unsafe { trees(services, shared) }.place_randomly(&settings))
 }
 
 /// `PlaceTree` on a tile suitable for trees.

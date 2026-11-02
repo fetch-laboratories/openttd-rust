@@ -97,7 +97,8 @@ void openttd_rust_town_rebuild_index(const OpenTTDSharedServices *);
 const OpenTTDTownHandle *openttd_rust_town_calc_closest(const OpenTTDSharedServices *, uint32_t, uint32_t);
 const OpenTTDTownHandle *openttd_rust_town_closest(const OpenTTDSharedServices *, uint32_t, uint32_t);
 void openttd_rust_town_update_max_pass(const OpenTTDTownLeaves *, OpenTTDTownState *);
-bool openttd_rust_town_check_road_types(const OpenTTDTownLeaves *);
+uint8_t openttd_rust_town_check_road_types_abi(const OpenTTDTownLeaves *);
+extern "C++" inline bool openttd_rust_town_check_road_types(const OpenTTDTownLeaves *a0) { return openttd_rust_town_check_road_types_abi(a0) != 0; }
 uint8_t openttd_rust_town_radius_group(const OpenTTDTownState *, const OpenTTDSharedServices *, uint32_t);
 uint8_t openttd_rust_town_first_cargo(uint8_t);
 uint16_t openttd_rust_town_climate_mask(uint8_t);
@@ -133,7 +134,8 @@ void openttd_rust_town_destroy(OpenTTDTownState *);
 OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
 void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
-bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t tile, uint32_t dir);
+uint8_t openttd_rust_town_tunnel_abi(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t tile, uint32_t dir);
+extern "C++" inline bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *a0, const OpenTTDSharedServices *a1, const OpenTTDRoadCommandContext *a2, uint32_t town a3, uint32_t tile a4, uint32_t dir a5) { return openttd_rust_town_tunnel_abi(a0, a1, a2, a3, a4, a5) != 0; }
 }
 const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif /* RUST_TOWN_FFI_H */

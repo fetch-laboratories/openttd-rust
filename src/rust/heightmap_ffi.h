@@ -38,5 +38,6 @@ struct OpenTTDHeightmapInput {
 	bool (*bmp_bitmap)(void *, OpenTTDHeightmapBmp *) noexcept OPENTTD_SERVICE_DEFAULT(bmp_bitmap);
 	void (*finish)(void *) noexcept OPENTTD_SERVICE_DEFAULT(finish);
 };
-extern "C" bool openttd_rust_heightmap_dimensions(const OpenTTDHeightmapInput *, uint32_t *, uint32_t *);
+extern "C" uint8_t openttd_rust_heightmap_dimensions_abi(const OpenTTDHeightmapInput *, uint32_t *, uint32_t *);
+extern "C++" inline bool openttd_rust_heightmap_dimensions(const OpenTTDHeightmapInput *a0, uint32_t *a1, uint32_t *a2) { return openttd_rust_heightmap_dimensions_abi(a0, a1, a2) != 0; }
 #endif /* RUST_HEIGHTMAP_FFI_H */

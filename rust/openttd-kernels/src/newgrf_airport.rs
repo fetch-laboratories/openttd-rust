@@ -216,20 +216,20 @@ pub unsafe extern "C" fn openttd_rust_airport_spec(
     get(kind, unsafe { &*s })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_available(
+pub unsafe extern "C" fn openttd_rust_airport_available_abi(
     spec: *const AirportSpec,
     s: *const Services,
-) -> bool {
-    available(spec, unsafe { &*s })
+) -> u8 {
+    u8::from(available(spec, unsafe { &*s }))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_in_bounds(
+pub unsafe extern "C" fn openttd_rust_airport_in_bounds_abi(
     spec: *const AirportSpec,
     layout: u8,
     tile: u32,
     s: *const Services,
-) -> bool {
-    in_bounds(spec, layout, tile, unsafe { &*s })
+) -> u8 {
+    u8::from(in_bounds(spec, layout, tile, unsafe { &*s }))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_init(
@@ -559,24 +559,28 @@ crate::abi::layouts! {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_can_engine_use_station(
+pub unsafe extern "C" fn openttd_rust_can_engine_use_station_abi(
     engine: u16,
     station: *const BaseStation,
     s: *const Services,
-) -> bool {
-    crate::vehicle_func::can_engine_use_station(engine, station, unsafe { &*s })
+) -> u8 {
+    u8::from(crate::vehicle_func::can_engine_use_station(
+        engine,
+        station,
+        unsafe { &*s },
+    ))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station(
+pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station_abi(
     vehicle: *const crate::vehicle::OpenTTDVehicle,
     station: *const BaseStation,
     s: *const Services,
-) -> bool {
-    unsafe { crate::vehicle_func::can_vehicle_use_station(vehicle, station, &*s) }
+) -> u8 {
+    u8::from(unsafe { crate::vehicle_func::can_vehicle_use_station(vehicle, station, &*s) })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_is_hangar(tile: u32, s: *const Services) -> bool {
-    crate::station_map::is_hangar(tile, unsafe { &*s })
+pub unsafe extern "C" fn openttd_rust_is_hangar_abi(tile: u32, s: *const Services) -> u8 {
+    u8::from(crate::station_map::is_hangar(tile, unsafe { &*s }))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_pos_on_build(tile: u32, s: *const Services) -> u8 {

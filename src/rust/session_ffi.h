@@ -166,14 +166,22 @@ OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept;
 OpenTTDScheduleTime RustScheduleTime() noexcept;
 extern "C" {
-bool openttd_rust_session_generate(const OpenTTDSessionServices *, OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool, GWDoneProc *const *);
-bool openttd_rust_session_intro(const OpenTTDSessionServices *, OpenTTDSessionFrame *, bool);
+uint8_t openttd_rust_session_generate_abi(const OpenTTDSessionServices *, OpenTTDSessionFrame *, GenWorldMode, uint32_t, uint32_t, bool, GWDoneProc *const *);
+extern "C++" inline bool openttd_rust_session_generate(const OpenTTDSessionServices *a0, OpenTTDSessionFrame *a1, GenWorldMode a2, uint32_t a3, uint32_t a4, bool a5, GWDoneProc *const *a6) { return openttd_rust_session_generate_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }
+uint8_t openttd_rust_session_intro_abi(const OpenTTDSessionServices *, OpenTTDSessionFrame *, bool);
+extern "C++" inline bool openttd_rust_session_intro(const OpenTTDSessionServices *a0, OpenTTDSessionFrame *a1, bool a2) { return openttd_rust_session_intro_abi(a0, a1, a2) != 0; }
 void openttd_rust_session_settings(const OpenTTDSessionServices *);
-bool openttd_rust_session_switch(const OpenTTDSessionServices *, OpenTTDSessionFrame *, SwitchMode);
-bool openttd_rust_session_safe_load(const OpenTTDSessionServices *, OpenTTDSessionFrame *, OpenTTDSessionLoad *, GameMode);
-bool openttd_rust_session_state_loop(const OpenTTDSessionServices *, OpenTTDSessionFrame *);
-bool openttd_rust_session_game_loop(const OpenTTDSessionServices *, OpenTTDSessionFrame *);
-bool openttd_rust_session_scan(NewGRFScanCallback *);
-bool openttd_rust_session_pause(const OpenTTDSessionServices *, PauseMode, bool, bool);
+uint8_t openttd_rust_session_switch_abi(const OpenTTDSessionServices *, OpenTTDSessionFrame *, SwitchMode);
+extern "C++" inline bool openttd_rust_session_switch(const OpenTTDSessionServices *a0, OpenTTDSessionFrame *a1, SwitchMode a2) { return openttd_rust_session_switch_abi(a0, a1, a2) != 0; }
+uint8_t openttd_rust_session_safe_load_abi(const OpenTTDSessionServices *, OpenTTDSessionFrame *, OpenTTDSessionLoad *, GameMode);
+extern "C++" inline bool openttd_rust_session_safe_load(const OpenTTDSessionServices *a0, OpenTTDSessionFrame *a1, OpenTTDSessionLoad *a2, GameMode a3) { return openttd_rust_session_safe_load_abi(a0, a1, a2, a3) != 0; }
+uint8_t openttd_rust_session_state_loop_abi(const OpenTTDSessionServices *, OpenTTDSessionFrame *);
+extern "C++" inline bool openttd_rust_session_state_loop(const OpenTTDSessionServices *a0, OpenTTDSessionFrame *a1) { return openttd_rust_session_state_loop_abi(a0, a1) != 0; }
+uint8_t openttd_rust_session_game_loop_abi(const OpenTTDSessionServices *, OpenTTDSessionFrame *);
+extern "C++" inline bool openttd_rust_session_game_loop(const OpenTTDSessionServices *a0, OpenTTDSessionFrame *a1) { return openttd_rust_session_game_loop_abi(a0, a1) != 0; }
+uint8_t openttd_rust_session_scan_abi(NewGRFScanCallback *);
+extern "C++" inline bool openttd_rust_session_scan(NewGRFScanCallback *a0) { return openttd_rust_session_scan_abi(a0) != 0; }
+uint8_t openttd_rust_session_pause_abi(const OpenTTDSessionServices *, PauseMode, bool, bool);
+extern "C++" inline bool openttd_rust_session_pause(const OpenTTDSessionServices *a0, PauseMode a1, bool a2, bool a3) { return openttd_rust_session_pause_abi(a0, a1, a2, a3) != 0; }
 }
 #endif

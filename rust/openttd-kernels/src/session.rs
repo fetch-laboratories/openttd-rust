@@ -224,23 +224,23 @@ pub(crate) fn set_pause(value: u8) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_session_scan(callback: *mut ScanCallback) -> bool {
+pub extern "C" fn openttd_rust_session_scan_abi(callback: *mut ScanCallback) -> u8 {
     if unsafe { *SCAN.get() } {
-        return false;
+        return u8::from(false);
     }
     unsafe {
         *SCAN.get() = true;
         *SCAN_CALLBACK.get() = callback;
     }
-    true
+    u8::from(true)
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_session_pause(
+pub extern "C" fn openttd_rust_session_pause_abi(
     s: &Services,
     mode: PauseMode,
     paused: bool,
     execute: bool,
-) -> bool {
+) -> u8 {
     match mode {
         PauseMode::SAVE_LOAD
         | PauseMode::ERROR
@@ -248,7 +248,7 @@ pub extern "C" fn openttd_rust_session_pause(
         | PauseMode::GAME_SCRIPT
         | PauseMode::LINK_GRAPH => {}
         PauseMode::JOIN | PauseMode::ACTIVE_CLIENTS if (s.networking)() => {}
-        _ => return false,
+        _ => return u8::from(false),
     }
     if execute {
         if mode == PauseMode::NORMAL && pause() & PauseMode::ERROR.bit() != 0 {
@@ -269,7 +269,7 @@ pub extern "C" fn openttd_rust_session_pause(
         }
         (s.pause_dirty)();
     }
-    true
+    u8::from(true)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_session_settings(s: &Services) {
@@ -790,7 +790,7 @@ impl Session<'_> {
             if (s.reconnect_due)() {
                 complete((s.network_reconnect)(self.frame))?;
             }
-            complete(unsafe { openttd_rust_session_state_loop(s, self.frame) })?;
+            complete(unsafe { openttd_rust_session_state_loop_abi(s, self.frame) != 0 })?;
         }
         if pause() == 0 && (s.full_animation)() {
             (s.palette)();
@@ -805,51 +805,56 @@ impl Session<'_> {
 /// # Safety
 /// Services and the stack native frame remain live through synchronous reentry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_session_intro(
+pub unsafe extern "C" fn openttd_rust_session_intro_abi(
     s: &Services,
     frame: *mut Frame,
     newgrfs: bool,
-) -> bool {
-    (Session { s, frame }).intro(newgrfs).is_ok()
+) -> u8 {
+    u8::from((Session { s, frame }).intro(newgrfs).is_ok())
 }
 /// # Safety
 /// `input` is null for the current file or a live native load argument object.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_session_safe_load(
+pub unsafe extern "C" fn openttd_rust_session_safe_load_abi(
     s: &Services,
     frame: *mut Frame,
     input: *mut Load,
     new_mode: GameMode,
-) -> bool {
-    (Session { s, frame })
-        .safe_load(input, new_mode)
-        .unwrap_or(false)
+) -> u8 {
+    u8::from(
+        (Session { s, frame })
+            .safe_load(input, new_mode)
+            .unwrap_or(false),
+    )
 }
 /// # Safety
 /// The native exception/resource frame is live, and no exception crosses Rust.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_session_switch(
+pub unsafe extern "C" fn openttd_rust_session_switch_abi(
     s: &Services,
     frame: *mut Frame,
     mode: SwitchMode,
-) -> bool {
-    (Session { s, frame }).switch(mode).is_ok()
+) -> u8 {
+    u8::from((Session { s, frame }).switch(mode).is_ok())
 }
 /// # Safety
 /// Native Backup<CompanyID> restores on frame destruction if a phase fails.
 #[unsafe(no_mangle)]
 #[inline(never)]
-pub unsafe extern "C" fn openttd_rust_session_state_loop(s: &Services, parent: *mut Frame) -> bool {
+pub unsafe extern "C" fn openttd_rust_session_state_loop_abi(
+    s: &Services,
+    parent: *mut Frame,
+) -> u8 {
     let mut storage = std::mem::MaybeUninit::<FrameStorage>::uninit();
     let frame = (s.state_frame_begin)(storage.as_mut_ptr());
     let result = (Session { s, frame }).state_loop().is_ok();
-    (s.state_frame_end)(parent, frame) && result
+    u8::from((s.state_frame_end)(parent, frame) && result)
 }
 /// # Safety
 /// Native frame is live through loading, network and callback reentry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_session_game_loop(s: &Services, frame: *mut Frame) -> bool {
-    (Session { s, frame }).game_loop().is_ok()
+pub unsafe extern "C" fn openttd_rust_session_game_loop_abi(s: &Services, frame: *mut Frame) -> u8 {
+    u8::from((Session { s, frame }).game_loop().is_ok())
 }
 
 pub(crate) fn new_game_done(s: &Services, frame: *mut Frame) -> bool {
@@ -1009,7 +1014,7 @@ crate::abi::layouts! {
 /// A nonnull callback pointer is readable at entry; its nullable value is copied
 /// before setup and never borrowed across generation or callback reentry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_session_generate(
+pub unsafe extern "C" fn openttd_rust_session_generate_abi(
     s: &Services,
     frame: *mut Frame,
     kind: crate::genworld::Mode,
@@ -1017,9 +1022,9 @@ pub unsafe extern "C" fn openttd_rust_session_generate(
     y: u32,
     reset: bool,
     callback: *const crate::genworld::Callback,
-) -> bool {
+) -> u8 {
     if !callback.is_null() {
         crate::genworld::set_native_callback(unsafe { callback.read() });
     }
-    (Session { s, frame }).generate(kind, x, y, reset).is_ok()
+    u8::from((Session { s, frame }).generate(kind, x, y, reset).is_ok())
 }

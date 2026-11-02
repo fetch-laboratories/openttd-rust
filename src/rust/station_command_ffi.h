@@ -250,11 +250,13 @@ void openttd_rust_station_build_dock(const OpenTTDStationCommandServices *, Open
 void openttd_rust_station_update_docking(const OpenTTDStationCommandServices *, BaseStation *);
 void openttd_rust_station_remove_docking_tile(const OpenTTDStationCommandServices *, uint32_t);
 void openttd_rust_station_clear_docking_neighbours(const OpenTTDStationCommandServices *, uint32_t);
-bool openttd_rust_station_possible_docking(const OpenTTDStationCommandServices *, uint32_t);
+uint8_t openttd_rust_station_possible_docking_abi(const OpenTTDStationCommandServices *, uint32_t);
+extern "C++" inline bool openttd_rust_station_possible_docking(const OpenTTDStationCommandServices *a0, uint32_t a1) { return openttd_rust_station_possible_docking_abi(a0, a1) != 0; }
 void openttd_rust_station_check_docking(const OpenTTDStationCommandServices *, uint32_t);
 void openttd_rust_station_build_oilrig(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t);
 void openttd_rust_station_delete_oilrig(const OpenTTDStationCommandServices *, uint32_t);
-bool openttd_rust_station_in_orders(const OpenTTDStationCommandServices *, uint16_t, bool, uint8_t);
+uint8_t openttd_rust_station_in_orders_abi(const OpenTTDStationCommandServices *, uint16_t, bool, uint8_t);
+extern "C++" inline bool openttd_rust_station_in_orders(const OpenTTDStationCommandServices *a0, uint16_t a1, bool a2, uint8_t a3) { return openttd_rust_station_in_orders_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_station_clear(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint16_t);
 void openttd_rust_station_terraform(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, uint16_t, int32_t, uint8_t);
 }

@@ -595,12 +595,12 @@ impl<'a> Invocation<'a> {
                 _ => {
                     let mut value = 0;
                     if variable < 0x40
-                        && crate::newgrf::openttd_rust_global_variable(
+                        && (crate::newgrf::openttd_rust_global_variable_abi(
                             &*self.s.global,
                             variable,
                             &raw mut value,
                             self.file,
-                        )
+                        ) != 0)
                     {
                         value
                     } else {

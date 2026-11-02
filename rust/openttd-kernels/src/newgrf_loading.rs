@@ -89,12 +89,12 @@ pub unsafe extern "C" fn openttd_rust_grf_add_sets(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_has_sets(feature: u8) -> bool {
-    unsafe { !(*STATE.get()).spritesets[usize::from(feature)].is_empty() }
+pub unsafe extern "C" fn openttd_rust_grf_has_sets_abi(feature: u8) -> u8 {
+    u8::from(unsafe { !(*STATE.get()).spritesets[usize::from(feature)].is_empty() })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_has_set(feature: u8, set: u32) -> bool {
-    unsafe { (*STATE.get()).spritesets[usize::from(feature)].contains_key(&set) }
+pub unsafe extern "C" fn openttd_rust_grf_has_set_abi(feature: u8, set: u32) -> u8 {
+    u8::from(unsafe { (*STATE.get()).spritesets[usize::from(feature)].contains_key(&set) })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_set_sprite(feature: u8, set: u32) -> u32 {
@@ -383,12 +383,12 @@ unsafe fn openttd_rust_grf_clear_grm_sprites() {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_reserved_sprite(
+pub unsafe extern "C" fn openttd_rust_grf_reserved_sprite_abi(
     grfid: u32,
     first: u32,
     count: u16,
-) -> bool {
-    unsafe {
+) -> u8 {
+    u8::from(unsafe {
         (*GRM_SPRITES.get())
             .iter()
             .any(|(&(id, _), &(sprite, num))| {
@@ -396,7 +396,7 @@ pub unsafe extern "C" fn openttd_rust_grf_reserved_sprite(
                     && sprite <= first
                     && sprite.wrapping_add(u32::from(num)) >= first.wrapping_add(u32::from(count))
             })
-    }
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_disable(
@@ -457,12 +457,13 @@ pub unsafe extern "C" fn openttd_rust_grf_unsafe(s: &Services) {
 unsafe fn openttd_rust_grf_param(s: &Services, param: u8, cond: *mut u32) -> u32 {
     unsafe {
         let mut value = 0;
-        if crate::newgrf::openttd_rust_global_variable(
+        if crate::newgrf::openttd_rust_global_variable_abi(
             &*s.global,
             param.wrapping_sub(0x80),
             &raw mut value,
             file(),
-        ) {
+        ) != 0
+        {
             return value;
         }
         match param {
@@ -1150,7 +1151,8 @@ unsafe fn dispatch(
             }
             (13, GLS_INIT | GLS_RESERVE | GLS_ACTIVATION) => return param_set(s, b),
             (2, GLS_ACTIVATION) => {
-                return if crate::newgrf_act2::openttd_rust_action2_parse(&*s.action2, s, b) {
+                return if crate::newgrf_act2::openttd_rust_action2_parse_abi(&*s.action2, s, b) != 0
+                {
                     Ok(())
                 } else {
                     Err(ReadBounds)

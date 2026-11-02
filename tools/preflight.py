@@ -91,6 +91,12 @@ def main() -> int:
                 cwd=migration.ROOT,
                 check=False,
             ).returncode
+        if code == 0:
+            code = subprocess.run(
+                [sys.executable, str(migration.ROOT / "tools/ffi-bool-returns.py")],
+                cwd=migration.ROOT,
+                check=False,
+            ).returncode
     except (
         OSError,
         ValueError,

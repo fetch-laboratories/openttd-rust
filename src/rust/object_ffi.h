@@ -127,13 +127,16 @@ struct OpenTTDObjectServices {
 extern "C" {
 uint32_t openttd_rust_object_random_bits(const OpenTTDObjectServices *, uint32_t);
 uint32_t openttd_rust_object_variable(const OpenTTDObjectServices *, const ResolverObject *, Object *, const ObjectSpec *, uint32_t, uint8_t, uint8_t, uint32_t, bool *);
-bool openttd_rust_object_trigger_tile(const OpenTTDObjectServices *, Object *, uint32_t, ObjectAnimationTrigger, const ObjectSpec *);
-bool openttd_rust_object_trigger(const OpenTTDObjectServices *, Object *, ObjectAnimationTrigger, const ObjectSpec *);
+uint8_t openttd_rust_object_trigger_tile_abi(const OpenTTDObjectServices *, Object *, uint32_t, ObjectAnimationTrigger, const ObjectSpec *);
+extern "C++" inline bool openttd_rust_object_trigger_tile(const OpenTTDObjectServices *a0, Object *a1, uint32_t a2, ObjectAnimationTrigger a3, const ObjectSpec *a4) { return openttd_rust_object_trigger_tile_abi(a0, a1, a2, a3, a4) != 0; }
+uint8_t openttd_rust_object_trigger_abi(const OpenTTDObjectServices *, Object *, ObjectAnimationTrigger, const ObjectSpec *);
+extern "C++" inline bool openttd_rust_object_trigger(const OpenTTDObjectServices *a0, Object *a1, ObjectAnimationTrigger a2, const ObjectSpec *a3) { return openttd_rust_object_trigger_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_object_counts_reset();
 void openttd_rust_object_count_increment(uint16_t);
 void openttd_rust_object_count_decrement(uint16_t);
 uint16_t openttd_rust_object_count(uint16_t);
-bool openttd_rust_object_indirectly_cleared(uint32_t, uint32_t);
+uint8_t openttd_rust_object_indirectly_cleared_abi(uint32_t, uint32_t);
+extern "C++" inline bool openttd_rust_object_indirectly_cleared(uint32_t a0, uint32_t a1) { return openttd_rust_object_indirectly_cleared_abi(a0, a1) != 0; }
 OpenTTDObjectHiddenArea openttd_rust_object_tunnel_hide(uint32_t, uint32_t);
 void openttd_rust_object_restore_first(OpenTTDObjectHiddenArea);
 void openttd_rust_object_build(const OpenTTDObjectServices * services, uint16_t kind, uint32_t tile, uint8_t owner, const Town * town, uint8_t view);
@@ -143,7 +146,8 @@ void openttd_rust_object_build_command(const OpenTTDObjectServices * services, O
 void openttd_rust_object_build_area(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * ret, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDCommandCost * last, uint16_t flags, uint32_t tile, uint32_t start, uint16_t kind, uint8_t view, bool diagonal);
 void openttd_rust_object_cargo(const OpenTTDObjectServices * services, uint32_t tile, uint32_t * cargo, uint64_t * accepted);
 void openttd_rust_object_tile_loop(const OpenTTDObjectServices * services, OpenTTDGroundCall * call, uint32_t tile);
-bool openttd_rust_object_generate(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDObjectGenerationFrame * frame);
+uint8_t openttd_rust_object_generate_abi(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDObjectGenerationFrame * frame);
+extern "C++" inline bool openttd_rust_object_generate(const OpenTTDObjectServices * services a0, OpenTTDCommandCost * out a1, OpenTTDCommandCost * tmp a2, OpenTTDCommandCost * aux a3, OpenTTDObjectGenerationFrame * frame a4) { return openttd_rust_object_generate_abi(a0, a1, a2, a3, a4) != 0; }
 void openttd_rust_object_terraform(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, uint32_t tile, uint16_t flags, int32_t z, Slope slope);
 void openttd_rust_object_build_above(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, uint32_t tile, uint16_t flags, int32_t height);
 }

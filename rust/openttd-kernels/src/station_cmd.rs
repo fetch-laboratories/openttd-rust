@@ -3676,12 +3676,12 @@ impl Ctx<'_> {
                     let tile = (self.vehicle().tile)(v);
                     if !((self.shared.docking_tile)(tile)
                         && unsafe {
-                            crate::ship_control::openttd_rust_ship_is_destination(
+                            crate::ship_control::openttd_rust_ship_is_destination_abi(
                                 tile,
                                 u32::from(id),
                                 self.s.ship,
                                 self.s.shared,
-                            )
+                            ) != 0
                         })
                     {
                         crate::vehicle::visits::leave_station(v, self.vehicle().visits());
@@ -3866,11 +3866,11 @@ pub(crate) unsafe fn check_possible_docking(s: *const CommandServicesTable, tile
 /// # Safety
 /// Tables and the original valid tile remain live for this call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_possible_docking(
+pub unsafe extern "C" fn openttd_rust_station_possible_docking_abi(
     s: *const CommandServicesTable,
     tile: u32,
-) -> bool {
-    unsafe { Ctx::new(s) }.possible_docking(tile)
+) -> u8 {
+    u8::from(unsafe { Ctx::new(s) }.possible_docking(tile))
 }
 /// # Safety
 /// Tables and serialized map/pools remain live for this call.
@@ -3904,13 +3904,13 @@ pub unsafe extern "C" fn openttd_rust_station_delete_oilrig(
 /// # Safety
 /// Tables and order/vehicle pools remain live under the game-state mutex.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_in_orders(
+pub unsafe extern "C" fn openttd_rust_station_in_orders_abi(
     s: *const CommandServicesTable,
     station: u16,
     include_company: bool,
     company: u8,
-) -> bool {
-    unsafe { Ctx::new(s) }.in_orders(station, include_company, company)
+) -> u8 {
+    u8::from(unsafe { Ctx::new(s) }.in_orders(station, include_company, company))
 }
 
 impl Ctx<'_> {

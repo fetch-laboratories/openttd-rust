@@ -671,7 +671,7 @@ fn finish(status: &Result<i32, ReadError>, result: *mut i32) -> bool {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_properties(
+pub unsafe extern "C" fn openttd_rust_industry_properties_abi(
     first: u32,
     last: u32,
     prop: i32,
@@ -682,16 +682,16 @@ pub unsafe extern "C" fn openttd_rust_industry_properties(
     p: *const Storage,
     loading: *const newgrf_loading::Services,
     result: *mut i32,
-) -> bool {
+) -> u8 {
     let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
-    finish(
+    u8::from(finish(
         &unsafe { industries(first..last, prop, c, &mut reader, s, p, loading) },
         result,
-    )
+    ))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_properties(
+pub unsafe extern "C" fn openttd_rust_industry_tile_properties_abi(
     first: u32,
     last: u32,
     prop: i32,
@@ -702,13 +702,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_properties(
     p: *const Storage,
     loading: *const newgrf_loading::Services,
     result: *mut i32,
-) -> bool {
+) -> u8 {
     let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
-    finish(
+    u8::from(finish(
         &unsafe { tiles(first..last, prop, c, &mut reader, s, p, loading) },
         result,
-    )
+    ))
 }
 
 crate::abi::layouts! {

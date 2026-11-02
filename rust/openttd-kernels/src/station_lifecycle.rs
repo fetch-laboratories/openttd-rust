@@ -340,7 +340,7 @@ pub(crate) unsafe fn tile_loop(
         .0
     {
         STATION_AIRPORT => {
-            crate::animated_tile::openttd_rust_trigger_airport_tile(
+            crate::animated_tile::openttd_rust_trigger_airport_tile_abi(
                 (crate::animated_tile::services().as_station)(st),
                 tile,
                 AAT_TILE_LOOP,

@@ -27,10 +27,12 @@ struct OpenTTDCommandServices {
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 extern "C" {
-bool openttd_rust_command_stack_probe(const OpenTTDCommandCostServices *);
+uint8_t openttd_rust_command_stack_probe_abi(const OpenTTDCommandCostServices *);
+extern "C++" inline bool openttd_rust_command_stack_probe(const OpenTTDCommandCostServices *a0) { return openttd_rust_command_stack_probe_abi(a0) != 0; }
 void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
 void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
-bool openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
+uint8_t openttd_rust_command_check_money_abi(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
+extern "C++" inline bool openttd_rust_command_check_money(const OpenTTDCommandServices *a0, const OpenTTDCommandCostServices *a1, OpenTTDCommandCost *a2) { return openttd_rust_command_check_money_abi(a0, a1, a2) != 0; }
 }
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

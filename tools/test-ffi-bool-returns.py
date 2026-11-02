@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""Distinguish unsafe C bool returns from byte returns and inbound declarations."""
+
+import importlib.util
+import unittest
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location(
+    "ffi_bool_returns", Path(__file__).with_name("ffi-bool-returns.py")
+)
+assert spec and spec.loader
+checker = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(checker)
+
+
+class BoolReturnTests(unittest.TestCase):
+    def check(self, source: str) -> list[str]:
+        return checker.violations({"entry.rs": source})
+
+    def test_bool_and_byte_definitions_are_distinguished(self) -> None:
+        for result, failures in (("bool", 1), ("u8", 0)):
+            with self.subTest(result=result):
+                source = f'pub unsafe extern "C" fn entry(x: bool) -> {result} {{ x.into() }}'
+                self.assertEqual(len(self.check(source)), failures)
+
+    def test_callbacks_alias_chains_and_nested_parameters(self) -> None:
+        source = """type Truth = bool;
+type Result = Truth;
+unsafe extern "C" fn callback<T>(x: extern "C" fn(bool) -> bool) -> Result { x(true) }
+"""
+        self.assertEqual(len(self.check(source)), 1)
+        self.assertEqual(
+            len(
+                checker.violations(
+                    {
+                        "types.rs": "type Truth = bool;",
+                        "entry.rs": 'extern "C" fn entry() -> types::Truth { true }',
+                    }
+                )
+            ),
+            1,
+        )
+
+    def test_declarations_parameters_out_pointers_and_comments_are_allowed(
+        self,
+    ) -> None:
+        self.assertEqual(
+            self.check("""unsafe extern "C" { fn imported() -> bool; }
+extern "C" fn store(input: bool, output: *mut bool) {}
+fn rust_bool() -> bool { true }
+// extern "C" fn comment() -> bool { false }
+const TEXT: &str = "extern \\"C\\" fn string() -> bool { false }";
+"""),
+            [],
+        )
+
+    def test_macro_definitions_and_return_type_arguments(self) -> None:
+        self.assertEqual(
+            len(
+                self.check("""macro_rules! entry {
+    ($name:ident) => { extern "C" fn $name() -> bool { false } };
+}""")
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(
+                self.check("""macro_rules! entry {
+    ($name:ident, $ret:ty) => { extern "C" fn $name() -> $ret { 0 } };
+}
+entry!(test => bool);
+""")
+            ),
+            1,
+        )
+
+    def test_rust_only_service_mocks_are_excluded(self) -> None:
+        self.assertEqual(
+            self.check("""#[cfg(test)]
+mod tests {
+    extern "C" fn mock() -> bool { true }
+}
+#[cfg(test)]
+extern "C" fn fixture() -> bool { true }
+"""),
+            [],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
