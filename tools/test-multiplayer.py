@@ -97,6 +97,27 @@ class MultiplayerTests(unittest.TestCase):
                 multiplayer.check(self.session, self.source)
             path.write_text(old)
 
+    def test_requested_authentication_method_must_be_observed(self) -> None:
+        for mode, method in (("password", "PAKE"), ("authorized-key", "AuthorizedKey")):
+            self.session.authentication = mode
+            with self.subTest(mode=mode), self.assertRaises(RuntimeError):
+                multiplayer.check(self.session, self.source)
+            for side, prefix, suffix in (
+                ("server", "Sending", "server"),
+                ("client", "Received", "client"),
+            ):
+                path = Path(self.session.directory) / side / "stderr.log"
+                original = SERVER if side == "server" else CLIENT
+                path.write_text(
+                    original
+                    + f"{prefix} X25519-{method}-{suffix} authentication request\n"
+                )
+            multiplayer.check(self.session, self.source)
+            for side, original in (("server", SERVER), ("client", CLIENT)):
+                (Path(self.session.directory) / side / "stderr.log").write_text(
+                    original
+                )
+
     def test_missing_save_phase_and_rng_progress_fail(self) -> None:
         path = Path(self.session.directory) / "client/save/stop.sav"
         path.unlink()

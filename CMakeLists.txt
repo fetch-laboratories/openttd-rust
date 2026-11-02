@@ -444,10 +444,8 @@ link_package(SSE)
 
 add_definitions_based_on_options()
 
-set_property(SOURCE src/3rdparty/monocypher/monocypher.cpp src/network/network_crypto.cpp APPEND PROPERTY COMPILE_DEFINITIONS WITH_RUST_ABI_CHECKS)
-
 if(BUILD_TESTING)
-    add_executable(openttd_rust_abi tools/migration/windows-abi.cpp src/3rdparty/monocypher/monocypher.cpp)
+    add_executable(openttd_rust_abi tools/migration/windows-abi.cpp)
     target_include_directories(openttd_rust_abi PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tools/migration")
     target_link_libraries(openttd_rust_abi PRIVATE openttd_rust_native_test_support)
     if(NOT MSVC AND NOT APPLE)
