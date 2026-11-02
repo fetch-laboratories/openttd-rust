@@ -150,7 +150,7 @@ int main()
 		fixture = &f;
 		f.record.type = 3; f.record.subtype = 2; f.record.z_pos = 1; f.record.cached_max_speed = 100; f.record.vehstatus = f.aircraft.vehstatus.value;
 		f.shadow.type = 3; f.shadow.subtype = 4;
-		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.record);
+		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f);
 		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();
 		openttd_rust_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);

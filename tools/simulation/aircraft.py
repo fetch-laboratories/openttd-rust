@@ -385,6 +385,8 @@ def finite_range_probe(folder, candidate_build, env):
         "-I",
         str(ROOT / "src"),
         "-I",
+        str(candidate_build / "generated-abi"),
+        "-I",
         str(folder),
         str(ROOT / "tools/migration/aircraft-range.cpp"),
         str(archive),
