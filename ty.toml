@@ -28,6 +28,7 @@ include = [
     "tools/preflight.py",
     "tools/test-preflight.py",
     "tools/simulation/commands.py",
+    "tools/simulation/script_host.py",
     "tools/simulation/community_ai.py",
     "tools/simulation/multiplayer.py",
     "tools/simulation/platform_subset.py",
