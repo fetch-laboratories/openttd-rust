@@ -33,6 +33,7 @@ Integrate finished work first, then start ready work.
 - Follow [selection](../../planning.md#selection), [integration](../../workflow.md#integration) and [team](../../team.md#spawning).
 - In Claude Code use T3 `delegate_task` with `isolation: "worktree"` for code-touching agents; see [Claude Code root](../../team.md#claude-code-root).
 - Run long jobs in the background and end the turn ([AGENTS.md](../../../AGENTS.md#every-agent)).
+- At each wake, resume any child whose named job ended without waking it ([team](../../team.md#spawning)).
 
 Done when finished work is handled and free slots have ready work.
 

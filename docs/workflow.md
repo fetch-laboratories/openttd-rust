@@ -32,7 +32,7 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 ## Checks
 
 - Iterate locally with the build, Cargo checks and simulation scenarios touched by the change. Do not run the full default local `simulate` suite (38 minutes locally); exact-head Full runs it in about 12. Add no second full local suite or pre-merge local build gate.
-- Ordinary PR pushes run cheap checks; do not use `[skip ci]` on code pushes. Use `python3 tools/ci.py request PR --profile rust|native|platform` for diagnostic subsets; request `platform` only for a suspected platform failure. Avoid docs pushes during final validation because they advance base.
+- Ordinary PR pushes run cheap checks; do not use `[skip ci]` on code pushes. Use `python3 tools/ci.py request PR --profile rust|native|platform` for diagnostic subsets; request `platform` only for a suspected platform failure or once before Full for a change to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `cmake/` (#642's new crate dependency turned the cadence red after integration). Avoid docs pushes during final validation because they advance base.
 - Before requesting Full for a PR removing a name, grep `tools/simulation/` and `src/tests/` for it: fixtures for scenarios not run locally compile only in Full.
 - See [continuous integration](rust-migration.md#continuous-integration) for Full jobs, platform cadence and `CI_MACOS_HEAVY`.
 

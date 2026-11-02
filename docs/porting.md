@@ -44,7 +44,7 @@ For agents writing or reviewing port code, tests and Python tools.
 - Give each service its own typed `noexcept` function, not an opcode switch or positional array. Return real types on both sides. Use designated initializers for tables.
 - Access map and shared-layout record fields by field-sized raw load or store at the original observation point. For a record still stored in C++, resolve its owner once per entry. Use its shared typed field accessors.
 - The following are design faults. Fix them before integration regardless of timing. Root grants no exceptions.
-  - A reader or carrier written for one call site.
+  - A reader or carrier written for one call site. Once #657's shared log helper integrates, this includes a service per `Debug` or `GrfMsg` message.
   - Allocation on a hot path or per call where the original has none.
   - Opcode dispatch or whole-record copies.
   - A Rust-to-C++-to-Rust bounce into code Rust owns.
