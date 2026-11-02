@@ -47,7 +47,7 @@ static uint8_t ReceiveFixturePacket(const OpenTTDSessionServices &session, OpenT
 	network.packet = &Packet::Services();
 	if (network.command == nullptr) network.command = &GetRustNetworkCommandServices();
 	if (network.dispatch == nullptr) network.dispatch = &GetRustNetworkDispatchServices();
-	if (network.now == nullptr) network.now = []() noexcept -> int64_t { return 0; };
+	network.now = []() noexcept -> int64_t { return 0; };
 	openttd_rust_network_receive_packets(&session, &network, &game, &frame, &frame.network_actions);
 	return openttd_rust_network_actions_result(&frame.network_actions);
 }
