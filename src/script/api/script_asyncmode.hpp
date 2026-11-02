@@ -25,12 +25,8 @@
  */
 class ScriptAsyncMode : public ScriptObject {
 private:
-	ScriptAsyncModeProc *last_mode; ///< The previous mode we were in.
+	OpenTTDScriptMode last_mode;    ///< The previous mode we were in.
 	ScriptObject *last_instance;    ///< The previous instance of the mode.
-
-protected:
-	static bool AsyncModeProc();
-	static bool NonAsyncModeProc();
 
 public:
 #ifndef DOXYGEN_API

@@ -206,7 +206,6 @@ public:
 private:
 	typedef std::map<std::string, std::string, CaseInsensitiveComparator> LoadedLibraryList; ///< The type for loaded libraries.
 
-	uint ticks;                       ///< The amount of ticks we're sleeping.
 	LoadedLibraryList loaded_library; ///< The libraries we loaded.
 	int loaded_library_count;         ///< The amount of libraries.
 };

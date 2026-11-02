@@ -153,8 +153,6 @@ rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes
 rebound | RustCompanyRailTypes | src/rust/engine_adapter.hpp | company_railtypes | 2
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes
 rebound | RustCompanyRoadTypes | src/rust/engine_adapter.hpp | company_roadtypes | 2
-rebound | RustCostOrIncomeAnimation | src/economy.cpp | cost_animation
-rebound | RustCostOrIncomeAnimation | src/rust/fleet_pending_services.hpp | animation
 rebound | RustCurrentCompanyID | src/rust/company_adapter.cpp | current_company
 rebound | RustCurrentCompanyID | src/rust/fleet_group_services.hpp | current_company
 rebound | RustCurrentCompanyID | src/rust/services.cpp | current_company

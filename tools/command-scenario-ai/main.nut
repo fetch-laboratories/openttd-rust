@@ -35,6 +35,16 @@ class MigrationCommands extends AIController {
 		}
 		if (base == -1) throw "No flat bootstrap patch";
 		local depot = base, stop = base + width, rail = base + 2 * width, earth = base + 3 * width;
+		if (COMMAND_MONEY) {
+			local before = AICompany.GetBankBalance(AICompany.COMPANY_SELF);
+			local estimate;
+			{ local test = AITestMode(); estimate = AIRoad.BuildRoadDepot(depot, depot + 1); }
+			local executed = AIRoad.BuildRoadDepot(depot, depot + 1);
+			local unchanged = before == AICompany.GetBankBalance(AICompany.COMPANY_SELF) && !AIRoad.IsRoadDepotTile(depot);
+			print("COMMAND-MONEY " + estimate + " " + executed + " " + unchanged + " " + AIError.GetLastErrorString());
+			if (!estimate || executed || !unchanged) throw "Estimate/money rejection failed";
+			while (true) this.Sleep(1000);
+		}
 		this.Setup(AIRoad.BuildRoadDepot(depot, depot + 1));
 		local engine = -1;
 		foreach (id, unused in AIEngineList(AIVehicle.VT_ROAD)) {

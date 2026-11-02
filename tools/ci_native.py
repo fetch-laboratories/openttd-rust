@@ -177,6 +177,7 @@ def pack(bundle, count):
         ROOT / "build-rust/CMakeCache.txt",
         ROOT / "build-rust/compile_commands.json",
         ROOT / "build-rust/generated",
+        ROOT / "build-rust/generated-abi",
         migration.rust_archive(ROOT / "build-rust"),
     ]
     with tarfile.open(
