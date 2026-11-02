@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compare bounded actual Packet framing, bytes and callback/allocation states.
+"""Compare bounded actual Packet framing, bytes and callback states.
 
 Limits: a bounded companion to the unchanged network tests and authentication
-corpus. Send_string/Recv_string collection and sanitation remain C++;
+corpus. Allocation failure is environmental and excluded;
 nonempty-short Recv_bytes is undefined upstream (#41) and excluded. No real
 transport delivery, sockets or allocator-wide equivalence.
 """
@@ -13,6 +13,7 @@ SOURCES = (
     "src/network/core/packet.cpp",
     "src/string.cpp",
     "src/core/string_builder.cpp",
+    "src/core/string_consumer.cpp",
     "src/core/string_inplace.cpp",
     "src/core/utf8.cpp",
 )
@@ -29,12 +30,16 @@ def main():
                 probe.compiler(),
                 "-std=c++20",
                 f"-{mode}",
+                *(["-DNDEBUG"] if mode == "O2" else []),
+                "-Werror=mismatched-tags",
                 "-DUNIX",
                 "-DFMT_HEADER_ONLY",
                 "-ffunction-sections",
                 "-fdata-sections",
                 "-I",
                 source / "src",
+                "-I",
+                probe.BUILD / "generated-abi",
                 fixture,
                 *(source / name for name in SOURCES),
                 "-Wl,--gc-sections",
