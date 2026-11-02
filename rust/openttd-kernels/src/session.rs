@@ -858,6 +858,15 @@ pub unsafe extern "C" fn openttd_rust_session_game_loop(s: &Services, frame: *mu
     (Session { s, frame }).game_loop().is_ok()
 }
 
+pub(crate) fn safe_load(
+    s: &Services,
+    frame: *mut Frame,
+    input: *mut Load,
+    new_mode: GameMode,
+) -> Result<bool, ()> {
+    (Session { s, frame }).safe_load(input, new_mode)
+}
+
 pub(crate) fn new_game_done(s: &Services, frame: *mut Frame) -> bool {
     (Session { s, frame }).new_game_done().is_ok()
 }

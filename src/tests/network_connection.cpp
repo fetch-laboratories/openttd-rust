@@ -5,6 +5,7 @@
 #include "../network/core/packet.h"
 #include "../newgrf_config.h"
 #include "../rust/network_client_ffi.h"
+#include "../rust/session_native.hpp"
 
 TEST_CASE("Network admission - each NewGRF checksum starts empty")
 {
@@ -39,4 +40,32 @@ TEST_CASE("Network admission - each NewGRF checksum starts empty")
 	CHECK(services.check_grf(&packet, &identifier));
 	CHECK_FALSE(services.check_grf(&packet, &identifier));
 	CHECK(identifier.md5sum == MD5Hash{});
+}
+
+static uint8_t map_status;
+TEST_CASE("Network map load - recorded exception stops cleanup and reaches native caller")
+{
+	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
+	map_status = 6; // Client STATUS_MAP.
+	OpenTTDNetworkClientServices client{};
+	client.status = [](void *) noexcept { return &map_status; };
+	client.map_exists = [](void *) noexcept { return true; };
+	client.debug_map_done = []() noexcept {};
+	client.debug_join_processing = []() noexcept {};
+	uint8_t join_status = 0;
+	client.join_status = &join_status;
+	client.dirty_join = []() noexcept {};
+	client.map_load_prepare = [](void *, OpenTTDSessionLoad *) noexcept {};
+	auto session = GetRustSessionServices();
+	session.load = [](OpenTTDSessionFrame *frame, OpenTTDSessionLoad *) noexcept {
+		SessionException(frame, [] { throw 574; });
+		return SL_ERROR;
+	};
+	OpenTTDNetworkFrameServices network{};
+	OpenTTDSessionFrame frame;
+	const std::string filename;
+	OpenTTDSessionLoad load{filename, SLO_LOAD, DFT_GAME_FILE, NO_DIRECTORY, {}};
+	CHECK(openttd_rust_network_client_receive_map_done(&client, &network, &session, nullptr, &frame, &load) == 0);
+	CHECK(_game_mode == GM_NORMAL);
+	CHECK_THROWS_AS(frame.Rethrow(), int);
 }

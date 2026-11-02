@@ -4,6 +4,7 @@
 #define RUST_NETWORK_CLIENT_FFI_H
 #include "network_frame_ffi.h"
 struct OpenTTDSessionServices;
+struct OpenTTDSessionLoad;
 struct OpenTTDNetworkClientServices {
 	bool (*check_grf)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(check_grf);
 	void (*client_list_changed)() noexcept OPENTTD_SERVICE_DEFAULT(client_list_changed);
@@ -56,7 +57,8 @@ struct OpenTTDNetworkClientServices {
 	uint32_t (*map_add_packet)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(map_add_packet);
 	void (*map_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_create);
 	bool (*map_exists)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_exists);
-	bool (*map_load)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_load);
+	void (*map_load_prepare)(void *, OpenTTDSessionLoad *) noexcept OPENTTD_SERVICE_DEFAULT(map_load_prepare);
+	void (*map_release)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_release);
 	void (*new_company)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_company);
 	uint32_t *own_client_id;
 	uint8_t *reconnect;
@@ -87,7 +89,7 @@ uint8_t openttd_rust_network_client_receive_wait(const OpenTTDNetworkClientServi
 uint8_t openttd_rust_network_client_receive_map_begin(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
 uint8_t openttd_rust_network_client_receive_map_size(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
 uint8_t openttd_rust_network_client_receive_map_data(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
-uint8_t openttd_rust_network_client_receive_map_done(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, const OpenTTDSessionServices *, void * game);
+uint8_t openttd_rust_network_client_receive_map_done(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, const OpenTTDSessionServices *, void * game, OpenTTDSessionFrame *, OpenTTDSessionLoad *);
 uint8_t openttd_rust_network_client_receive_error_quit(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
 uint8_t openttd_rust_network_client_receive_quit(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
 uint8_t openttd_rust_network_client_receive_join(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);

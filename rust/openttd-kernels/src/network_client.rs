@@ -74,7 +74,8 @@ pub struct Services {
     pub map_add_packet: extern "C" fn(*mut c_void, *mut c_void) -> u32,
     pub map_create: extern "C" fn(*mut c_void),
     pub map_exists: extern "C" fn(*mut c_void) -> bool,
-    pub map_load: extern "C" fn(*mut c_void) -> bool,
+    pub map_load_prepare: extern "C" fn(*mut c_void, *mut crate::session::Load),
+    pub map_release: extern "C" fn(*mut c_void),
     pub new_company: extern "C" fn(u32),
     pub own_client_id: *mut u32,
     pub reconnect: *mut u8,
@@ -147,7 +148,8 @@ crate::abi::layouts! {
         map_add_packet,
         map_create,
         map_exists,
-        map_load,
+        map_load_prepare,
+        map_release,
         new_company,
         own_client_id,
         reconnect,
@@ -425,6 +427,8 @@ pub extern "C" fn openttd_rust_network_client_receive_map_done(
     f: &FrameServices,
     session: &crate::session::Services,
     game: *mut c_void,
+    frame: *mut crate::session::Frame,
+    load: *mut crate::session::Load,
 ) -> u8 {
     if status(s, game) != status::MAP || !(s.map_exists)(game) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
@@ -433,7 +437,13 @@ pub extern "C" fn openttd_rust_network_client_receive_map_done(
     (s.debug_join_processing)();
     set_join_status(s, NETWORK_JOIN_STATUS_PROCESSING);
     (s.dirty_join)();
-    let success = (s.map_load)(game);
+    (s.map_load_prepare)(game, load);
+    let Ok(success) =
+        crate::session::safe_load(session, frame, load, crate::openttd::GameMode::NORMAL)
+    else {
+        return NETWORK_RECV_STATUS_OKAY;
+    };
+    (s.map_release)(game);
     (f.socket_set_last_packet_now)(game);
     if !success {
         (s.show_savegame_error)();

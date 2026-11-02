@@ -36,7 +36,7 @@
 #include "table/strings.h"
 
 #include "../rust/network_client_ffi.h"
-#include "../rust/session_ffi.h"
+#include "../rust/session_native.hpp"
 #include "../rust/settings_services.h"
 
 #include "../safeguards.h"
@@ -461,7 +461,12 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DATA(Packet
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DONE(Packet &)
 {
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_done(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), static_cast<NetworkGameSocketHandler *>(this)));
+	OpenTTDSessionFrame frame;
+	const std::string filename;
+	OpenTTDSessionLoad load{filename, SLO_LOAD, DFT_GAME_FILE, NO_DIRECTORY, {}};
+	auto result = openttd_rust_network_client_receive_map_done(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), static_cast<NetworkGameSocketHandler *>(this), &frame, &load);
+	frame.Rethrow();
+	return static_cast<NetworkRecvStatus>(result);
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_FRAME(Packet &p)
@@ -902,15 +907,14 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 		.map_add_packet = [](void *game, void *packet) noexcept -> uint32_t { auto *cs = ClientFromGame(game); cs->savegame->AddPacket(*static_cast<Packet *>(packet)); return static_cast<uint32_t>(cs->savegame->buffer.size()); },
 		.map_create = [](void *game) noexcept { ClientFromGame(game)->savegame = std::make_shared<PacketReader>(); },
 		.map_exists = [](void *game) noexcept -> bool { return ClientFromGame(game)->savegame != nullptr; },
-		.map_load = [](void *game) noexcept -> bool {
+		.map_load_prepare = [](void *game, OpenTTDSessionLoad *load) noexcept {
 			auto *cs = ClientFromGame(game);
 			cs->savegame->Reset();
 			ClearErrorMessages();
 			_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
-			bool success = SafeLoad({}, SLO_LOAD, DFT_GAME_FILE, GM_NORMAL, NO_DIRECTORY, cs->savegame);
-			cs->savegame = nullptr;
-			return success;
+			load->filter = cs->savegame;
 		},
+		.map_release = [](void *game) noexcept { ClientFromGame(game)->savegame = nullptr; },
 		.new_company = [](uint32_t client_id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_NEW, CompanyID::Invalid(), CRR_NONE, static_cast<ClientID>(client_id)); },
 		.own_client_id = reinterpret_cast<uint32_t *>(&_network_own_client_id),
 		.reconnect = &_network_reconnect,
