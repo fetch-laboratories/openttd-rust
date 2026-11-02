@@ -115,6 +115,11 @@ inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGR
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline Station *RustStationByTile(uint32_t tile) noexcept { return Station::GetByTile(TileIndex{tile}); }
+inline OrthogonalTileArea *RustStationStopArea(BaseStation *st, bool truck) noexcept { return truck ? &Station::From(st)->truck_station : &Station::From(st)->bus_station; }
+inline OrthogonalTileArea *RustStationAirportArea(BaseStation *st) noexcept { return &Station::From(st)->airport; }
+inline OrthogonalTileArea *RustStationShipArea(BaseStation *st) noexcept { return &Station::From(st)->ship_station; }
+inline OrthogonalTileArea *RustStationDockingArea(BaseStation *st) noexcept { return &Station::From(st)->docking_station; }
+inline OrthogonalTileArea *RustWaypointRoadArea(BaseStation *st) noexcept { return &Waypoint::From(st)->road_waypoint_area; }
 inline const OpenTTDStation *OpenTTDStationByTile(uint32_t tile) noexcept { return RustStation(RustStationByTile(tile)); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
@@ -173,7 +178,6 @@ inline void RustStationSetLocation(BaseStation *st, uint32_t tile) noexcept { st
 inline void RustWaypointSetRoad(BaseStation *st) noexcept { SetBit(Waypoint::From(st)->waypoint_flags, WPF_ROAD); }
 inline void RustWaypointDefaultName(BaseStation *st) noexcept { MakeDefaultName(Waypoint::From(st)); }
 inline void RustWaypointViewInvalidate(BaseStation *st) noexcept { InvalidateWindowData(WC_WAYPOINT_VIEW, st->index); }
-inline void RustWaypointRoadAreaAdd(BaseStation *st, uint32_t tile) noexcept { Waypoint::From(st)->road_waypoint_area.Add(TileIndex{tile}); }
 inline void RustMakeBuoy(uint32_t tile, uint16_t id, WaterClass water) noexcept { MakeBuoy(TileIndex{tile}, StationID(id), water); }
 inline void RustMakeRailWaypoint(uint32_t tile, uint8_t owner, uint16_t id, uint8_t axis, uint8_t gfx, RailType rt) noexcept { MakeRailWaypoint(TileIndex{tile}, Owner(owner), StationID(id), static_cast<Axis>(axis), gfx, rt); }
 /** Width/handle adapters for older typed service tables. */

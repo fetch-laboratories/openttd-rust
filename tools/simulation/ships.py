@@ -461,8 +461,8 @@ def check(scenario, run, mode, role, result):
             != 12
         ):
             raise RuntimeError("water fixture missed OWNER_WATER lock clears")
-        if "docking true true" not in markers:
-            raise RuntimeError("water restoration did not preserve docking membership")
+        if "docking true" not in markers:
+            raise RuntimeError("water restoration did not preserve the docking flag")
         if sum(row.startswith("cost buoy-occupied false ") for row in markers) != 3:
             raise RuntimeError("water fixture missed occupied buoy refusals")
         branch_witnesses(

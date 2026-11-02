@@ -647,7 +647,7 @@ impl Ctx<'_> {
             if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), true);
             }
-            (self.s.road_waypoint_area_add)(wp, tile);
+            self.area_add((self.s.road_waypoint_tile_area)(wp), tile);
             self.before_add_tile(ret, wp, tile, ADD_TRY);
             let update = |rt, company, count| unsafe {
                 crate::road_cmd::update_company_road_infrastructure(
