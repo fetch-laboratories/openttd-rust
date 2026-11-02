@@ -226,7 +226,7 @@ static void FixtureReset(bool networking, bool server)
 	fixture_command = GetRustCommandServices();
 	fixture_command.finance = &fixture_finance;
 	fixture_command.shared = &fixture_shared;
-	fixture_command.company = []() noexcept { return &fixture_services; };
+	fixture_command.company = []() noexcept -> const OpenTTDCompanyServices * { return &fixture_services; };
 	fixture_command.shift_pressed = []() noexcept { return false; };
 	fixture_post.command = []() noexcept -> const OpenTTDCommandServices & { return fixture_command; };
 	fixture_post.desync_logging = []() noexcept { return false; };
