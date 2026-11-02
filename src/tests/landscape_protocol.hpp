@@ -61,7 +61,7 @@ template<typename Check> void Run(Check check)
 	auto station = OpenTTDStationLifecycleServices{};
 	station.shared = &shared;
 	station.roadstop = &roadstops;
-	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
+	const OpenTTDIndustryTileServices object_tiles{.shared = nullptr, .on_water = ProbeObjectOnWater};
 	auto objects = OpenTTDObjectServices{};
 	objects.shared = &shared;
 	objects.industry_tiles = &object_tiles;
