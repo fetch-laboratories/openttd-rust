@@ -46,7 +46,7 @@ static uint8_t map_status;
 TEST_CASE("Network map load - recorded exception stops cleanup and reaches native caller")
 {
 	AutoRestoreBackup<GameMode> mode(_game_mode, GM_MENU);
-	map_status = 6; // Client STATUS_MAP.
+	map_status = 7; // Client STATUS_MAP.
 	OpenTTDNetworkClientServices client{};
 	client.status = [](void *) noexcept { return &map_status; };
 	client.map_exists = [](void *) noexcept { return true; };
