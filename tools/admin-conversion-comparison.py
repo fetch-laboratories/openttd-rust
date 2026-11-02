@@ -87,6 +87,8 @@ def main():
         "-I",
         str(ROOT / "build-rust/generated"),
         "-I",
+        str(ROOT / "build-rust/generated-abi"),
+        "-I",
         str(ROOT / "build-rust/generated/script/api"),
         *probe.target_flags(),
     ]
