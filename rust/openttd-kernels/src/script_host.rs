@@ -268,7 +268,7 @@ pub unsafe extern "C" fn openttd_rust_script_loop(host: *mut Host, s: &Services)
     }
     let company = h.company;
     let pending = !h.callback.is_null();
-    let pop = pending && std::mem::take(&mut h.is_save_data_on_stack);
+    let pop = pending && h.is_save_data_on_stack;
     (s.command.finance.set_current_company)(company);
     if pending {
         return if pop {
@@ -293,7 +293,7 @@ pub unsafe extern "C" fn openttd_rust_script_callback_done(host: *mut Host) -> S
     h.callback = std::ptr::null_mut();
     if !h.is_started {
         Step::Start
-    } else if std::mem::take(&mut h.is_save_data_on_stack) {
+    } else if h.is_save_data_on_stack {
         Step::PopResume
     } else {
         Step::Resume
@@ -587,4 +587,23 @@ pub unsafe extern "C" fn openttd_rust_script_event_pop(host: *mut Host) -> *mut 
 pub unsafe extern "C" fn openttd_rust_script_event_waiting(host: *mut Host) -> u8 {
     // SAFETY: caller contract.
     u8::from(!unsafe { owner(host) }.events.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_data_stays_marked_until_native_pop() {
+        let host = openttd_rust_script_host_new(std::ptr::null_mut());
+        // SAFETY: this test exclusively owns the host and queues no native events.
+        unsafe {
+            (*host).is_started = true;
+            (*host).is_save_data_on_stack = true;
+            assert_eq!(openttd_rust_script_callback_done(host), Step::PopResume);
+            // ScriptInstance::GameLoop clears this only after sq_poptop returns.
+            assert!((*host).is_save_data_on_stack);
+            drop(Box::from_raw(host.cast::<Owner>()));
+        }
+    }
 }

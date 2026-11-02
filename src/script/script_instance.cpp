@@ -210,7 +210,10 @@ void ScriptInstance::GameLoop()
 
 	/* If there is a callback to call, call that first */
 	if (step == OpenTTDScriptStep::Callback || step == OpenTTDScriptStep::PopCallback) {
-		if (step == OpenTTDScriptStep::PopCallback) sq_poptop(this->engine->GetVM());
+		if (step == OpenTTDScriptStep::PopCallback) {
+			sq_poptop(this->engine->GetVM());
+			this->host->is_save_data_on_stack = false;
+		}
 		try {
 			reinterpret_cast<Script_SuspendCallbackProc *>(this->host->callback)(*this);
 		} catch (Script_Suspend &e) {
@@ -253,7 +256,10 @@ void ScriptInstance::GameLoop()
 		this->host->is_started = true;
 		return;
 	}
-	if (step == OpenTTDScriptStep::PopResume) sq_poptop(this->engine->GetVM());
+	if (step == OpenTTDScriptStep::PopResume) {
+		sq_poptop(this->engine->GetVM());
+		this->host->is_save_data_on_stack = false;
+	}
 
 	/* Continue the VM */
 	try {
