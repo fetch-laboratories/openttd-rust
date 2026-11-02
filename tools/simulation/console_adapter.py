@@ -7,6 +7,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
+# Fork headers that adapters include reach generated shared records, including
+# when the adapter compiles against the reference build's flags.
+GENERATED_ABI = Path(__file__).resolve().parents[2] / "build-rust/generated-abi"
+
 
 def console_adapter(
     build: Path,
@@ -33,6 +37,7 @@ def console_adapter(
     compile_args[compile_args.index("-o") + 1] = str(folder / f"{kind}.o")
     compile_args[compile_args.index("-c") + 1] = str(source)
     compile_args += ["-I" + str(Path(entry["file"]).parent), "-I" + str(folder)]
+    compile_args.append("-I" + str(GENERATED_ABI))
     subprocess.run(compile_args, cwd=entry["directory"], env=env, check=True)
     target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
     command = subprocess.check_output(
