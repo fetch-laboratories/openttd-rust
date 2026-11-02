@@ -289,33 +289,29 @@ pub(crate) fn send_sync(s: &Services, game: *mut socket::GameSocket) -> u8 {
 /// `ServerNetworkGameSocketHandler::Receive_CLIENT_ACK`.
 ///
 /// # Safety
-/// `socket` is a live server-side socket, `game` the same socket, `status` its status field
-/// and `sync` its record; `p` is the packet being handled.
+/// `socket` is a live server-side record; `p` is the packet being handled.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_receive_ack(
     s: &Services,
     socket: *mut socket::GameSocket,
-    game: *mut socket::GameSocket,
-    status: *mut u8,
-    sync: *mut SocketSync,
     p: *mut PacketState,
     session_frame: *mut Frame,
     work: Actions,
 ) -> u8 {
     work.network(s);
-    // SAFETY: `status` is the socket's one-byte status field (see above).
-    if unsafe { *status } < AUTHORIZED {
+    let sync = socket::sync(socket);
+    if socket::status(socket) < AUTHORIZED {
         return send_error(s, socket, NETWORK_ERROR_NOT_AUTHORIZED, work);
     }
     let frame = unsafe { packet::recv_uint32(p, s.packet) };
-    (s.debug_receive_ack)(socket::shell(game), frame);
+    (s.debug_receive_ack)(socket::shell(socket), frame);
     // The client is catching up with the server.
-    if unsafe { *status } == PRE_ACTIVE {
+    if socket::status(socket) == PRE_ACTIVE {
         if frame.wrapping_add(DAY_TICKS as u32) < frame_counter() {
             return NETWORK_RECV_STATUS_OKAY;
         }
-        (s.debug_active)(socket::shell(game));
-        unsafe { *status = ACTIVE };
+        (s.debug_active)(socket::shell(socket));
+        write_field!(socket, status, ACTIVE);
         write_field!(sync, last_token_frame, frame_counter());
         if !(s.on_server_connect)(session_frame) {
             return NETWORK_RECV_STATUS_OKAY;

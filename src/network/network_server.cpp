@@ -701,7 +701,7 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::Receive_CLIENT_ACK(Packet &p)
 {
 	static_assert(sizeof(this->status) == sizeof(uint8_t));
 	OpenTTDSessionFrame frame;
-	auto result = openttd_rust_network_receive_ack(&GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), static_cast<OpenTTDNetworkGameSocket *>(this), reinterpret_cast<uint8_t *>(&this->status), this, p.Record(), &frame, &frame.network_actions);
+	auto result = openttd_rust_network_receive_ack(&GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), p.Record(), &frame, &frame.network_actions);
 	frame.Rethrow();
 	return static_cast<NetworkRecvStatus>(result);
 }

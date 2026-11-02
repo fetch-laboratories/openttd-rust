@@ -91,13 +91,16 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 	network.on_server_connect = [](OpenTTDSessionFrame *frame) noexcept {
 		return SessionException(frame, [] { throw 574; });
 	};
-	uint8_t status = 8; // Server STATUS_PRE_ACTIVE.
+	OpenTTDNetworkGameSocket game{};
+	game.status = 8; // Server STATUS_PRE_ACTIVE.
+	game.base = &socket;
 	OpenTTDNetworkSocketSync sync{};
+	game.sync = &sync;
 	sync.last_frame = 123;
 	sync.last_frame_server = 456;
 	OpenTTDSessionFrame frame;
-	CHECK(openttd_rust_network_receive_ack(&network, nullptr, nullptr, &status, &sync, packet.Record(), &frame, &frame.network_actions) == 0);
-	CHECK(status == 9); // Server STATUS_ACTIVE.
+	CHECK(openttd_rust_network_receive_ack(&network, &game, packet.Record(), &frame, &frame.network_actions) == 0);
+	CHECK(game.status == 9); // Server STATUS_ACTIVE.
 	CHECK(sync.last_token_frame == GetRustNetworkFrameState().frame_counter);
 	CHECK(sync.last_frame == 123);
 	CHECK(sync.last_frame_server == 456);
