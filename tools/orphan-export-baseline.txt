@@ -47,8 +47,6 @@ no production user | openttd_rust_town_global_id_counts_resize
 no production user | openttd_rust_town_id_counts_resize
 no production user | openttd_rust_town_rating
 no production user | openttd_rust_town_tunnel
-no production user | openttd_rust_train_state_set_cached_curve_speed_mod
-no production user | openttd_rust_train_state_set_cached_tilt
 no production user | openttd_rust_trees_clear_tile
 no production user | openttd_rust_trees_generate
 no production user | openttd_rust_vehicle_cursor_next

@@ -128,8 +128,8 @@ static void RailLinkMultihead(void *front, void *rear) noexcept
 {
 	Train *v = static_cast<Train *>(front);
 	Train *u = static_cast<Train *>(rear);
-	v->other_multiheaded_part = u;
-	u->other_multiheaded_part = v;
+	v->SetOtherMultiheadedPart(u);
+	u->SetOtherMultiheadedPart(v);
 }
 static void RailHeadWindows(void *shell) noexcept
 {

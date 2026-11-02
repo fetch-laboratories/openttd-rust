@@ -98,8 +98,9 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> rust_state{openttd_rust_train_state_new(), openttd_rust_train_state_destroy};
 	TrainSpriteCache tcache{};
 
-	/* Link between the two ends of a multiheaded engine */
-	Train *other_multiheaded_part = nullptr;
+	/** Native facade over the canonical NOSAVE multihead record link. */
+	Train *GetOtherMultiheadedPart() const { return static_cast<Train *>(VehicleFromRecord(this->rust_state->other_multiheaded_part)); }
+	void SetOtherMultiheadedPart(Train *part) { this->rust_state->other_multiheaded_part = part == nullptr ? nullptr : part->record; }
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
 	Train() : GroundVehicleBase() {}
@@ -110,85 +111,85 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 
 	VehicleRailFlags GetTrainFlags() const
 	{
-		return VehicleRailFlags(static_cast<uint16_t>(openttd_rust_train_state_get_flags(this->rust_state.get())));
+		return VehicleRailFlags(this->rust_state->flags);
 	}
 	void SetTrainFlags(VehicleRailFlags value)
 	{
-		openttd_rust_train_state_set_flags(this->rust_state.get(), value.base());
+		this->rust_state->flags = value.base();
 	}
 
 	uint16_t GetCrashAnimPos() const
 	{
-		return static_cast<uint16_t>(openttd_rust_train_state_get_crash_anim_pos(this->rust_state.get()));
+		return this->rust_state->crash_anim_pos;
 	}
 	void SetCrashAnimPos(uint16_t value)
 	{
-		openttd_rust_train_state_set_crash_anim_pos(this->rust_state.get(), value);
+		this->rust_state->crash_anim_pos = value;
 	}
 
 	uint16_t GetWaitCounter() const
 	{
-		return static_cast<uint16_t>(openttd_rust_train_state_get_wait_counter(this->rust_state.get()));
+		return this->rust_state->wait_counter;
 	}
 	void SetWaitCounter(uint16_t value)
 	{
-		openttd_rust_train_state_set_wait_counter(this->rust_state.get(), value);
+		this->rust_state->wait_counter = value;
 	}
 
 	RailTypes GetCompatibleRailTypes() const
 	{
-		return RailTypes(static_cast<uint64_t>(openttd_rust_train_state_get_compatible_railtypes(this->rust_state.get())));
+		return RailTypes(this->rust_state->compatible_railtypes);
 	}
 	void SetCompatibleRailTypes(RailTypes value)
 	{
-		openttd_rust_train_state_set_compatible_railtypes(this->rust_state.get(), value.base());
+		this->rust_state->compatible_railtypes = value.base();
 	}
 
 	RailTypes GetRailTypes() const
 	{
-		return RailTypes(static_cast<uint64_t>(openttd_rust_train_state_get_railtypes(this->rust_state.get())));
+		return RailTypes(this->rust_state->railtypes);
 	}
 	void SetRailTypes(RailTypes value)
 	{
-		openttd_rust_train_state_set_railtypes(this->rust_state.get(), value.base());
+		this->rust_state->railtypes = value.base();
 	}
 
 	TrackBits GetTrack() const
 	{
-		return static_cast<TrackBits>(openttd_rust_train_state_get_track(this->rust_state.get()));
+		return static_cast<TrackBits>(this->rust_state->track);
 	}
 	void SetTrack(TrackBits value)
 	{
-		openttd_rust_train_state_set_track(this->rust_state.get(), value);
+		this->rust_state->track = value;
 	}
 
 	TrainForceProceeding GetForceProceed() const
 	{
-		return static_cast<TrainForceProceeding>(openttd_rust_train_state_get_force_proceed(this->rust_state.get()));
+		return static_cast<TrainForceProceeding>(this->rust_state->force_proceed);
 	}
 	void SetForceProceed(TrainForceProceeding value)
 	{
-		openttd_rust_train_state_set_force_proceed(this->rust_state.get(), value);
+		this->rust_state->force_proceed = value;
 	}
 
 	bool GetCachedTilt() const
 	{
-		return static_cast<bool>(openttd_rust_train_state_get_cached_tilt(this->rust_state.get()));
+		return this->rust_state->cached_tilt;
 	}
 
 	uint8_t GetUserDefData() const
 	{
-		return static_cast<uint8_t>(openttd_rust_train_state_get_user_def_data(this->rust_state.get()));
+		return this->rust_state->user_def_data;
 	}
 
 	int16_t GetCachedCurveSpeedMod() const
 	{
-		return static_cast<int16_t>(static_cast<uint16_t>(openttd_rust_train_state_get_cached_curve_speed_mod(this->rust_state.get())));
+		return this->rust_state->cached_curve_speed_mod;
 	}
 
 	uint16_t GetCachedMaxCurveSpeed() const
 	{
-		return static_cast<uint16_t>(openttd_rust_train_state_get_cached_max_curve_speed(this->rust_state.get()));
+		return this->rust_state->cached_max_curve_speed;
 	}
 
 	void SetTrainFlag(VehicleRailFlag flag, bool value = true) { this->SetTrainFlags(this->GetTrainFlags().Set(flag, value)); }
@@ -364,42 +365,6 @@ protected: // These functions should not be called outside acceleration code.
 	 * have always the same direction as the track under them.
 	 * @return false
 	 */
-};
-
-/** Call-scoped scalar serialization staging. No Rust frame spans save/load or
- * reference fixups. Nested handlers restore the prior scope; partial loads
- * commit on unwind, matching direct mutation in the original field descriptors. */
-class TrainStateScope {
-	static inline TrainStateScope *active = nullptr;
-	TrainStateScope *previous;
-	Train *vehicle;
-	bool loading;
-	VehicleRailFlags flags;
-	uint16_t crash_anim_pos;
-	uint16_t wait_counter;
-	TrackBits track;
-	TrainForceProceeding force_proceed;
-public:
-	TrainStateScope(Train *v, bool loading) : previous(active), vehicle(v), loading(loading),
-		flags(v->GetTrainFlags()), crash_anim_pos(v->GetCrashAnimPos()),
-		wait_counter(v->GetWaitCounter()), track(v->GetTrack()),
-		force_proceed(v->GetForceProceed()) { active = this; }
-	~TrainStateScope()
-	{
-		if (this->loading) {
-			this->vehicle->SetTrainFlags(this->flags);
-			this->vehicle->SetCrashAnimPos(this->crash_anim_pos);
-			this->vehicle->SetWaitCounter(this->wait_counter);
-			this->vehicle->SetTrack(this->track);
-			this->vehicle->SetForceProceed(this->force_proceed);
-		}
-		active = this->previous;
-	}
-	static VehicleRailFlags &Flags() { return active->flags; }
-	static uint16_t &CrashAnimPos() { return active->crash_anim_pos; }
-	static uint16_t &WaitCounter() { return active->wait_counter; }
-	static TrackBits &Track() { return active->track; }
-	static TrainForceProceeding &ForceProceed() { return active->force_proceed; }
 };
 
 #endif /* TRAIN_H */

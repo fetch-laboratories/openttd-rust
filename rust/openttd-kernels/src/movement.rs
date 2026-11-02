@@ -1047,12 +1047,10 @@ impl MovementServices {
                 if let Some(next) = next {
                     Self::hidden(next, false);
                     let n = (self.resolve)(next);
-                    unsafe {
-                        crate::train_state::openttd_rust_train_state_set_track(
-                            n.train.owner,
-                            diag_dir_to_diag_track_bits(dir, |ok| (self.native_assert)(ok)),
-                        );
-                    }
+                    n.train
+                        .set_track(u64::from(diag_dir_to_diag_track_bits(dir, |ok| {
+                            (self.native_assert)(ok);
+                        })));
                 }
             }
         } else if FRACT_ENTER[usize::from(dir)] == fract {
@@ -1062,12 +1060,7 @@ impl MovementServices {
                     (self.native_assert)(ok);
                 }) == direction,
             );
-            unsafe {
-                crate::train_state::openttd_rust_train_state_set_track(
-                    h.train.owner,
-                    TRACK_BIT_DEPOT,
-                );
-            }
+            h.train.set_track(u64::from(TRACK_BIT_DEPOT));
             Self::hidden(v, true);
             (v).write_direction(reverse_dir(direction, |ok| (self.native_assert)(ok)));
             if (v).next().is_none() {
@@ -1220,9 +1213,7 @@ impl MovementServices {
         };
         if (self.is_tunnel)(tile) {
             if h.kind.0 == VEH_TRAIN {
-                let track = unsafe {
-                    crate::train_state::openttd_rust_train_state_get_track(h.train.owner)
-                };
+                let track = h.train.track();
                 if track != TRACK_BIT_WORMHOLE && dir == vdir {
                     if crate::vehicle_base::is_front_engine(
                         crate::vehicle_base::is_ground_vehicle(h.kind.0),
@@ -1244,12 +1235,7 @@ impl MovementServices {
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER);
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER_0 + usize::from(dir));
                         (v).write_tile(tile);
-                        unsafe {
-                            crate::train_state::openttd_rust_train_state_set_track(
-                                h.train.owner,
-                                TRACK_BIT_WORMHOLE,
-                            );
-                        }
+                        h.train.set_track(u64::from(TRACK_BIT_WORMHOLE));
                         Self::hidden(v, true);
                         return ENTERED_WORMHOLE;
                     }
@@ -1260,12 +1246,7 @@ impl MovementServices {
                 {
                     (v).write_tile(tile);
                     let track = diag_dir_to_diag_track_bits(vdir, |ok| (self.native_assert)(ok));
-                    unsafe {
-                        crate::train_state::openttd_rust_train_state_set_track(
-                            h.train.owner,
-                            track,
-                        );
-                    }
+                    h.train.set_track(u64::from(track));
                     (self.native_assert)(track != 0);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir));
@@ -1330,12 +1311,7 @@ impl MovementServices {
                 });
                 match h.kind.0 {
                     VEH_TRAIN => {
-                        unsafe {
-                            crate::train_state::openttd_rust_train_state_set_track(
-                                h.train.owner,
-                                TRACK_BIT_WORMHOLE,
-                            );
-                        }
+                        h.train.set_track(u64::from(TRACK_BIT_WORMHOLE));
                         self.prepare_bridge(v);
                     }
                     VEH_ROAD => {
@@ -1357,18 +1333,11 @@ impl MovementServices {
                 (v).write_tile(tile);
                 match h.kind.0 {
                     VEH_TRAIN => {
-                        if unsafe {
-                            crate::train_state::openttd_rust_train_state_get_track(h.train.owner)
-                        } == TRACK_BIT_WORMHOLE
-                        {
-                            unsafe {
-                                crate::train_state::openttd_rust_train_state_set_track(
-                                    h.train.owner,
-                                    diag_dir_to_diag_track_bits(vdir, |ok| {
-                                        (self.native_assert)(ok);
-                                    }),
-                                );
-                            }
+                        if h.train.track() == TRACK_BIT_WORMHOLE {
+                            h.train
+                                .set_track(u64::from(diag_dir_to_diag_track_bits(vdir, |ok| {
+                                    (self.native_assert)(ok);
+                                })));
                             w::hit(w::MOVE_TRAIN_BRIDGE_EXIT);
                             return ENTERED_WORMHOLE;
                         }

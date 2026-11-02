@@ -77,8 +77,8 @@ struct FollowerFixture {
 		pbs.all_compatible = [](uint64_t types) noexcept { return types; };
 		pbs.compatible = [](uint8_t type) noexcept -> uint64_t { return uint64_t{1} << type; };
 		pbs.show_reservation = []() noexcept { return false; };
-		openttd_rust_train_state_set_compatible_railtypes(state.get(), 1);
-		openttd_rust_train_state_set_railtypes(state.get(), 1);
+		(state.get())->compatible_railtypes = 1;
+		(state.get())->railtypes = 1;
 	}
 	void Tile(uint32_t t, uint8_t kind, uint8_t bits = 0) { tiles.base[t] = {}; tiles.extended[t] = {}; tiles.base[t].type = kind << 4; tiles.base[t].m5 = bits; }
 	OpenTTDVehicle *Vehicle() { return &record; }

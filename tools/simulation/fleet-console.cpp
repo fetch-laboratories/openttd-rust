@@ -67,7 +67,7 @@ struct AttachmentObserver : SpriteGroup {
 		const Train *self = Train::From(FIXTURE_SCOPE_VEHICLE(resolver.self_scope)), *head = Train::From(FIXTURE_SCOPE_VEHICLE(resolver.parent_scope));
 		++this->calls;
 		this->valid &= self->Next() == nullptr && self->Previous() == nullptr && self->First() == self;
-		this->valid &= self->gcache.first_engine == EngineID::Invalid() && self->grf_cache.cache_valid == 0 && head->grf_cache.cache_valid == 0;
+		this->valid &= EngineID(self->gcache.first_engine) == EngineID::Invalid() && self->grf_cache.cache_valid == 0 && head->grf_cache.cache_valid == 0;
 		bool available = true;
 		uint length = 0;
 		for (const Train *part = head; part != nullptr; part = part->Next()) ++length;
@@ -118,12 +118,12 @@ static void AttachmentCallbacks(Train *head)
 		grf.grf_version = c.version; result->result = c.result;
 		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
 			Train *wagon = head->GetNextVehicle();
-			EngineID first = wagon->gcache.first_engine;
+			EngineID first = EngineID(wagon->gcache.first_engine);
 			observer->calls = 0; observer->valid = true;
 			SavedRandomSeeds before, after; SaveRandomSeeds(&before);
 			CommandCost cost = Command<CMD_MOVE_RAIL_VEHICLE>::Do(flags, wagon->index, head->Last()->index, false);
 			SaveRandomSeeds(&after);
-			bool restored = wagon->First() == head && wagon->gcache.first_engine == first;
+			bool restored = wagon->First() == head && EngineID(wagon->gcache.first_engine) == first;
 			bool outcome = c.error == STR_NULL ? cost.Succeeded() : cost.Failed() && cost.GetErrorMessage() == c.error;
 			fmt::print(stderr, "FLEET attachment {} {} {} {} {} {} {} {}\n", c.version, c.result, flags.Test(DoCommandFlag::Execute), outcome, observer->calls, observer->valid, restored, SameRandom(before, after));
 		}
@@ -737,7 +737,7 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 static void ResolverOverrideOrder(Train *wagon)
 {
 	Engine *engine = Engine::Get(FIXTURE_GET(wagon, EngineType, engine_type));
-	if (wagon->gcache.first_engine == EngineID::Invalid() || !SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
+	if (EngineID(wagon->gcache.first_engine) == EngineID::Invalid() || !SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
 	Backup<decltype(engine->overrides)> overrides(engine->overrides);
 	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
 	Backup<CargoType> cargo(wagon->cargo_type);
@@ -752,7 +752,7 @@ static void ResolverOverrideOrder(Train *wagon)
 	auto *ordinary = new CallbackResultSpriteGroup(523);
 	engine->grf_prop.spritegroups.clear();
 	engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, ordinary);
-	std::array<EngineID, 2> matching{EngineID::Invalid(), wagon->gcache.first_engine};
+	std::array<EngineID, 2> matching{EngineID::Invalid(), EngineID(wagon->gcache.first_engine)};
 	std::array<EngineID, 1> rejected{EngineID::Invalid()};
 	for (uint test = 0; test < 6; ++test) {
 		engine->overrides.clear();
@@ -1494,7 +1494,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		dump("mh-wagon", m);
 		move("mh-split", DoCommandFlag::Execute, m, VehicleID::Invalid(), false);
 		const Train *mt = Train::Get(m);
-		bool paired = mt->Next() != nullptr && mt->Next() == mt->other_multiheaded_part && Train::Get(wm)->IsFreeWagon();
+		bool paired = mt->Next() != nullptr && mt->Next() == FIXTURE_GET(mt, OtherMultiheadedPart, other_multiheaded_part) && Train::Get(wm)->IsFreeWagon();
 		dump("mh", m);
 		dump("mh-free", wm);
 		/* Sales: a free wagon, a chain from a wagon, a front engine handing over its orders. */

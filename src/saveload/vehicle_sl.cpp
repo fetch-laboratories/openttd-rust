@@ -35,7 +35,7 @@
 void ConnectMultiheadedTrains()
 {
 	for (Train *v : Train::Iterate()) {
-		v->other_multiheaded_part = nullptr;
+		v->SetOtherMultiheadedPart(nullptr);
 	}
 
 	for (Train *v : Train::Iterate()) {
@@ -56,7 +56,7 @@ void ConnectMultiheadedTrains()
 			bool sequential_matching = v->IsFrontEngine();
 
 			for (Train *u = v; u != nullptr; u = u->GetNextVehicle()) {
-				if (u->other_multiheaded_part != nullptr) continue; // we already linked this one
+				if (u->GetOtherMultiheadedPart() != nullptr) continue; // we already linked this one
 
 				if (u->IsMultiheaded()) {
 					if (!u->IsEngine()) {
@@ -70,7 +70,7 @@ void ConnectMultiheadedTrains()
 					Train *w;
 					if (sequential_matching) {
 						for (w = u->GetNextVehicle(); w != nullptr; w = w->GetNextVehicle()) {
-							if (w->GetEngineType() != eid || w->other_multiheaded_part != nullptr || !w->IsMultiheaded()) continue;
+							if (w->GetEngineType() != eid || w->GetOtherMultiheadedPart() != nullptr || !w->IsMultiheaded()) continue;
 
 							/* we found a car to partner with this engine. Now we will make sure it face the right way */
 							if (w->IsEngine()) {
@@ -82,7 +82,7 @@ void ConnectMultiheadedTrains()
 					} else {
 						uint stack_pos = 0;
 						for (w = u->GetNextVehicle(); w != nullptr; w = w->GetNextVehicle()) {
-							if (w->GetEngineType() != eid || w->other_multiheaded_part != nullptr || !w->IsMultiheaded()) continue;
+							if (w->GetEngineType() != eid || w->GetOtherMultiheadedPart() != nullptr || !w->IsMultiheaded()) continue;
 
 							if (w->IsEngine()) {
 								stack_pos++;
@@ -94,8 +94,8 @@ void ConnectMultiheadedTrains()
 					}
 
 					if (w != nullptr) {
-						w->other_multiheaded_part = u;
-						u->other_multiheaded_part = w;
+						w->SetOtherMultiheadedPart(u);
+						u->SetOtherMultiheadedPart(w);
 					} else {
 						/* we got a front car and no rear cars. We will fake this one for forget that it should have been multiheaded */
 						u->ClearMultiheaded();
@@ -821,13 +821,13 @@ class SlVehicleTrain : public DefaultSaveLoadHandler<SlVehicleTrain, Vehicle> {
 public:
 	static inline const SaveLoad description[] = {
 		 SLEG_STRUCT("common", SlVehicleCommon),
-		     SLEG_VAR("crash_anim_pos", TrainStateScope::CrashAnimPos(), SLE_UINT16),
-		     SLEG_VAR("force_proceed", TrainStateScope::ForceProceed(), SLE_UINT8),
-		     SLEG_VAR("track", TrainStateScope::Track(), SLE_UINT8),
+		     SLE_VARNAME(Train, GetRustState()->crash_anim_pos, "crash_anim_pos", SLE_UINT16),
+		     SLE_VARNAME(Train, GetRustState()->force_proceed, "force_proceed", SLE_UINT8),
+		     SLE_VARNAME(Train, GetRustState()->track, "track", SLE_UINT8),
 
-		 SLEG_CONDVAR("flags", TrainStateScope::Flags(), SLE_FILE_U8  | SLE_VAR_U16,   SLV_2,  SLV_100),
-		 SLEG_CONDVAR("flags", TrainStateScope::Flags(), SLE_UINT16,                 SLV_100, SL_MAX_VERSION),
-		 SLEG_CONDVAR("wait_counter", TrainStateScope::WaitCounter(), SLE_UINT16,                 SLV_136, SL_MAX_VERSION),
+		 SLE_CONDVARNAME(Train, GetRustState()->flags, "flags", SLE_FILE_U8  | SLE_VAR_U16,   SLV_2,  SLV_100),
+		 SLE_CONDVARNAME(Train, GetRustState()->flags, "flags", SLE_UINT16,                 SLV_100, SL_MAX_VERSION),
+		 SLE_CONDVARNAME(Train, GetRustState()->wait_counter, "wait_counter", SLE_UINT16,                 SLV_136, SL_MAX_VERSION),
 		 SLE_CONDVAR(Train, gv_flags,            SLE_UINT16,                 SLV_139, SL_MAX_VERSION),
 	};
 	static inline const SaveLoadCompatTable compat_description = _vehicle_train_sl_compat;
@@ -835,21 +835,18 @@ public:
 	void Save(Vehicle *v) const override
 	{
 		if (v->GetType() != VEH_TRAIN) return;
-		TrainStateScope scope(Train::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
 
 	void Load(Vehicle *v) const override
 	{
 		if (v->GetType() != VEH_TRAIN) return;
-		TrainStateScope scope(Train::From(v), true);
 		SlObject(v, this->GetLoadDescription());
 	}
 
 	void FixPointers(Vehicle *v) const override
 	{
 		if (v->GetType() != VEH_TRAIN) return;
-		TrainStateScope scope(Train::From(v), false);
 		SlObject(v, this->GetDescription());
 	}
 };

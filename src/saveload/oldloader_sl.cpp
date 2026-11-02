@@ -1083,9 +1083,9 @@ static uint16_t _old_next_ptr;
 static typename VehicleID::BaseType _current_vehicle_id;
 
 static const OldChunks vehicle_train_chunk[] = {
-	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &TrainStateScope::Track(); }, nullptr },
-	{ OC_UINT8, 1, nullptr, [] (void *) -> void * { return &TrainStateScope::ForceProceed(); }, nullptr },
-	{ OC_UINT16, 1, nullptr, [] (void *) -> void * { return &TrainStateScope::CrashAnimPos(); }, nullptr },
+	{ OC_UINT8, 1, nullptr, [] (void *obj) -> void * { return &static_cast<Train *>(obj)->GetRustState()->track; }, nullptr },
+	{ OC_UINT8, 1, nullptr, [] (void *obj) -> void * { return &static_cast<Train *>(obj)->GetRustState()->force_proceed; }, nullptr },
+	{ OC_UINT16, 1, nullptr, [] (void *obj) -> void * { return &static_cast<Train *>(obj)->GetRustState()->crash_anim_pos; }, nullptr },
 	OCL_NULL( 1 ), // railtype
 
 	OCL_NULL( 5 ), ///< Junk
@@ -1162,7 +1162,6 @@ static bool LoadOldVehicleUnion(LoadgameState &ls, int)
 		switch (v->GetType()) {
 			default: SlErrorCorrupt("Invalid vehicle type");
 			case VEH_TRAIN: {
-				TrainStateScope scope(Train::From(v), true);
 				res = LoadChunk(ls, v, vehicle_train_chunk);
 				break;
 			}

@@ -132,9 +132,9 @@ static uint32_t Draw() { random_state = random_state * 1664525U + 1013904223U; r
 static void Sync()
 {
 	for (Train &v : trains) {
-		openttd_rust_train_state_set_track(v.state, v.track);
-		openttd_rust_train_state_set_cached_tilt(v.state, v.tcache.cached_tilt);
-		openttd_rust_train_state_set_cached_curve_speed_mod(v.state, static_cast<int16_t>(uint16_t(v.tcache.cached_curve_speed_mod)));
+		(v.state)->track = v.track;
+		(v.state)->cached_tilt = (v.tcache.cached_tilt) != 0;
+		(v.state)->cached_curve_speed_mod = static_cast<int16_t>(uint16_t(v.tcache.cached_curve_speed_mod));
 	}
 }
 static std::vector<uint64_t> State()
@@ -166,7 +166,7 @@ int main()
 		int l = int(Draw() % count), r = int(Draw() % count);
 		events.clear(); ReverseTrainSwapVeh(trains, l, r); auto expected = State();
 		std::copy(std::begin(original), std::end(original), std::begin(trains)); Sync(); events.clear(); RustReverse(l, r);
-		for (Train &v : trains) v.track = uint8_t(openttd_rust_train_state_get_track(v.state));
+		for (Train &v : trains) v.track = uint8_t((v.state)->track);
 		if (expected != State()) { std::fprintf(stderr, "reversal mismatch %u\n", trial); return 1; }
 		for (Train &v : trains) openttd_rust_occupancy_update(&vehicle, &v.record, true);
 	}

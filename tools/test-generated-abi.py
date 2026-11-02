@@ -105,9 +105,10 @@ class GeneratedAbiTests(unittest.TestCase):
                 'layouts! { "Dummy" ["nested"] => Dummy {}; }\n'
                 "shared_records! { fn abi_record;\n"
                 '"AParent" ["nested"] => pub struct Parent {\n'
-                "pub child: Child, pub tail: u16,\n    }\n"
+                "pub child: Child, pub tail: u16, pub link: *const External,\n    }\n"
                 '"ZChild" ["nested"] => pub struct Child {\n'
-                "pub field: u32,\n    }\n}\n"
+                "pub field: u32,\n    }\n"
+                '"External" ["external"] => pub struct External { pub value: u8, }\n}\n'
             )
             fragments = GENERATOR["generate"](root)
             header = root / "abi-record-nested.h"
@@ -125,6 +126,7 @@ class GeneratedAbiTests(unittest.TestCase):
                     f'#include "{header}"\n#include <type_traits>\n'
                     "static_assert(std::is_same_v<decltype(AParent::child), ZChild>);\n"
                     "static_assert(offsetof(AParent, tail) == sizeof(ZChild));\n"
+                    "static_assert(std::is_same_v<decltype(AParent::link), const External *>);\n"
                 ),
                 text=True,
                 check=True,

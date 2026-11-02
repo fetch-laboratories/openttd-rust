@@ -52,7 +52,7 @@ static void CargoCapacityRead(void *shell, OpenTTDCargoCapacityVehicle *out) noe
 }
 static void *CargoCapacityOtherMultiheadedPart(void *shell) noexcept
 {
-	return Train::From(static_cast<Vehicle *>(shell))->other_multiheaded_part;
+	return Train::From(static_cast<Vehicle *>(shell))->GetOtherMultiheadedPart();
 }
 const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
 {

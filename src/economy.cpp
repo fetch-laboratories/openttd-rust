@@ -561,7 +561,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.next_articulated = RustVehicleNextArticulated,
 	.other_multiheaded = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
 		Vehicle *v = VehicleOf(handle);
-		return RustVehicle(Train::From(v)->other_multiheaded_part);
+		return RustVehicle(Train::From(v)->GetOtherMultiheadedPart());
 	},
 	.first_engine_part = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
 		Vehicle *v = VehicleOf(handle); return RustVehicle(v->GetFirstEnginePart());

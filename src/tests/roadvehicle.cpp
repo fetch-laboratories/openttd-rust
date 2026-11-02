@@ -248,6 +248,29 @@ TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
 	check(new (VehicleID(37)) Train());
 	_vehicle_pool.CleanPool();
 }
+TEST_CASE("Train record - native fields, canonical multihead links and indexed reuse")
+{
+	REQUIRE(Vehicle::CanAllocateItem());
+	Train *front = new Train();
+	Train *rear = new (VehicleID(37)) Train();
+	CHECK(front->GetTrainFlags().base() == 0);
+	CHECK(front->GetOtherMultiheadedPart() == nullptr);
+	front->SetOtherMultiheadedPart(rear);
+	rear->SetOtherMultiheadedPart(front);
+	CHECK(front->GetRustState()->other_multiheaded_part == rear->record);
+	CHECK(rear->GetOtherMultiheadedPart() == front);
+	front->GetRustState()->flags = 0x8001;
+	front->GetRustState()->cached_curve_speed_mod = -32768;
+	CHECK(front->GetTrainFlags().base() == 0x8001);
+	CHECK(front->GetCachedCurveSpeedMod() == -32768);
+	front->SetCrashAnimPos(65535);
+	CHECK(front->GetRustState()->crash_anim_pos == 65535);
+	_vehicle_pool.CleanPool();
+	rear = new (VehicleID(37)) Train();
+	CHECK(rear->GetOtherMultiheadedPart() == nullptr);
+	CHECK(rear->GetRustState()->crash_anim_pos == 0);
+	_vehicle_pool.CleanPool();
+}
 TEST_CASE("Vehicle resolver - boundary layouts and complete service table")
 {
 	ABI_LAYOUT_CHECK;
