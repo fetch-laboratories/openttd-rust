@@ -50,7 +50,7 @@ crate::abi::shared_records! {
         /// Persistently narrowed read/transfer cursor.
         pub position: u16,
         /// Associated native socket; sending permits null.
-        pub socket: *mut NetworkSocketHandler,
+        pub socket: *mut NetworkSocketHandler => class,
     }
 }
 
