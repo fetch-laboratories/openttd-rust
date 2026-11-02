@@ -8,7 +8,7 @@ this roadmap over conflicting issues; it is the current state of umbrella issue
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
-- Code is `5e414c5a64` (integration 64). This session integrated #648 (61, the cadence fixture fix), #645 (62, #641's packet owner), #640 (63, #559's command invocation, phase 1's exit) and #642 (64, #64's maintained crates and Rust network authentication). There were no rollbacks.
+- Code is `6afdcbf390` (integration 65). The 11-02 session integrated #648 (61, the cadence fixture fix), #645 (62, #641's packet owner), #640 (63, #559's command invocation, phase 1's exit), #642 (64, #64's maintained crates and Rust network authentication) and #651 (65, #575's script host). There were no rollbacks.
 - Stocktake 64 ran `python3 tools/port-metrics.py --whole-fork` at `5e414c5a64`. Changes are since stocktake 62 at `bf2c4632a2`, 0.07 days earlier; stocktake 62 is in Git history (`f0cf0ede76`).
   - Retired: 55,822 of 284,355 original code lines (19.63%, +2,378). Vendored retired 2,317 (+1,890, Monocypher). Save/load retired 1,075 (0).
   - Compiled C++: 262,199 (92.21%, -2,331). Over stocktakes 60 to 64 (0.56 days) it fell 2,303 lines, about -4,100 per day; #642 supplied all of it.
@@ -28,9 +28,10 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 | P2000 | 7,400,813,786 | 1.400577x | 1.401446x |
 | P2016 | 13,400,911,478 | 1.522911x | 1.481910x |
 
-- The platform cadence after integration 60 failed on a Linux Clang warning from #639's new `shared` field (run 41436192681); #648 fixed it and the rerun (run 41441266701) passed. The next cadence is after integration 65.
+- The platform cadence after integration 60 failed on a Linux Clang warning from #639's new `shared` field (run 41436192681); #648 fixed it and the rerun (run 41441266701) passed.
+- **The platform cadence after integration 65 is red** (run 41466312349 at `6afdcbf390`, both attempts). macOS Debug (attempt 1) and macOS Release (attempt 2) fail `tools/check-rust-platform.py`: "rust-build.log: native libraries differ from the configure query"; the Windows and annotation failures cascade from it. Likely cause: #642's merge `5e414c5a64` (integration 64) added `libc` to `Cargo.lock` through `cpufeatures`, so the macOS Rust build now reports `-lc -lm -liconv -lSystem -lc -lm`, while the configure probe at `cmake/Rust.cmake` (around line 137) compiles a dependency-free staticlib. The job logs show the build's line; the probe's own line is only in `rust-native-libs.log`. #651's code merge follows `5e414c5a64`, so the bounded automatic rollback is unavailable. The repair is the first resume action; no integration happens before it.
 - Coverage: #156 holds the gaps, including #640's and #642's unreached branches, and #503 comes last.
-- Integration 65 (#651, #575's script host, `6afdcbf390`) followed the stocktake: 354 retired, net glue +220, compiled C++ -134.
+- Integration 65 (#651, #575's script host, `6afdcbf390`) followed stocktake 64: 354 retired, net glue +220, compiled C++ -134. Stocktake 66 has not run.
 - Unintegrated branches: five (#647, #636, #628, #649 and #655).
 
 ## Phases
@@ -302,18 +303,22 @@ Excluded, with return conditions checked by this review:
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 - #654 asks the user whether to reselect #507's corpus for the NewGRF loading ports; root recommends keeping it parked until the Action 0 owners.
 
-## Resume checkpoint (2026-11-02, after integration 65)
+## Resume checkpoint (2026-11-02, wind-down after integration 65)
 
-Root is active in Claude Code (`claude-opus-5-5`, xhigh). Code is `6afdcbf390` (integration 65). `CI_ON_DEMAND` is `true`. Implementers and reviewers mostly run on Codex `gpt-6.1-sol` high; Claude Opus takes work when the Claude five-hour window has room, so reviewer and implementer families differ where possible. Each PR's status comment holds its next action. The platform cadence after 65 (run 41466312349) is running. #654 awaits the user.
+Paused at the user's request: wind-down at 16:20Z. Code is `6afdcbf390` (integration 65). `CI_ON_DEMAND` is `true`. No open head has a requested or passing Full. Each PR's status comment holds its detail; #654 awaits the user. Agents were stopped or told to stop after recording state; no local job result below is known unless stated.
+
+Due first on resume, in order:
+1. **Repair the red platform cadence** (run 41466312349) before any integration. Confirm the cause from the macOS `rust-native-libs.log` (evidence artifact or a local configure for `aarch64-apple-darwin`), then make the configure probe and the build agree on native libraries now that `libc` is a dependency, in a small root PR with Full and a platform run. Rerun the cadence on the merged fix.
+2. Stocktake 66 (owed after integration 65's successor; take it at the next even integration), the quiet speed pass (recurring list) and the next planning round stay owed.
 
 | Issue / PR | Head | Next action | Running job or CI |
 | --- | --- | --- | --- |
-| #604, #199 / #649 settings access batch | `824303ba11` | Reviewed (/root/settings_review fixed the evidence guard). Base update over integration 65 (overlaps #651 in two files; a scoped review if a conflict needs more than both sides), Full, merge | None |
-| #644, #646 / #647 boundary `bool` returns and `expand` overflow | `0f1ee72286` | Finish review (audit rerun), root spot-check, base update over integrations 63 to 65 with a scoped review of the conflict resolution, then Full and merge | /root/bool_review |
-| #570 / #636 vehicle records | `8f8208f4d0` | Ground record moved; compiled C++ -359 so far. Next: the train record and the rest of the inventory, checkpoint 2, then review | /root/vehicle_records_cp2 |
-| #574 / #628 network protocol | `91dd2fdfed` | Close, send and receive bounces removed; #642 adopted. Next: command transport cleanup and the command-post bounce on #640, slice 4, then one round review | /root/network_round |
-| #652 / #655 GRF text and NewGRF Actions 3, 4 and 13 | `59e006df00` | Text table and language selection done. Next: translation, Actions 13, 4 and 3, the string-table dump and fixtures, then review by function group | /root/grf_text |
+| #644, #646 / #647 boundary `bool` returns and `expand` overflow | `9e0d5af362` | Base merge over integrations 61 to 65 done and validated (77 Cargo tests, 332 CTests, packet and auth comparisons, 16 simulations, cheap CI). /root/bool_review2 (Claude) was told to post its report and stop; it found gaps in the gate. Next: a fix round on its findings, a scoped re-review, Full, then merge after the cadence repair | Review report: check #647. No Full |
+| #604, #199 / #649 settings access batch | `ba07c85bb1` | Full at `20eaf59ebb` failed `native / build` (generated-ABI include; fixed in `c48cdcd89e` and `128c1b9c96`); Full at `128c1b9c96` failed six scenarios. Cause: `SessionFixture::Run` advanced the company tick cursor after `19520dd248` deleted the editor stub. Fixture fix `ba07c85bb1`: 4 of 6 scenarios equal; the family run (56 `landscape-*`, `stations-commands-*`, `stations-cargo-*` scenarios including both `-reload` variants) result unknown. Next: the family run (rerun if unknown), the fixture unit tests including the `company_economy` cursor check, a scoped review of the fix, Full at the exact head, merge | Quick checks green at `ba07c85bb1`. No Full |
+| #570 / #636 vehicle records | `6191d5f9b0` | Bounce removed, handle identity switched, ground and train records moved; build and 236 of 236 CTests passed; compiled C++ -377. Session 73637 left no result. Next: rerun the train-edge comparison and the 17 focused train and fleet scenarios, then finish checkpoint 2 (the remaining train, reservation, road and mixed-consumer per-field services and the design inventory), then review | None |
+| #574 / #628 network protocol | `2711496991` | All four steering faults fixed (close, send, receive and command-post bounces; #645, #640 and #642 adopted); 33 obsolete exports retired; fixture clock fix pushed. Validation session 51484 result unknown. Next: rerun the scoped validation at `2711496991`, finish slice 4 if incomplete, then one round review (Claude) | None |
+| #652 / #655 GRF text and NewGRF Actions 3, 4 and 13 | `54c44c68c5` | Text owner, translation and all three action handlers in; net glue +113 against the +50 estimate. Session 87540 failed 0 of 2: `newgrf-loading-bindings` and `-reload` do not compile the reference side of `tools/simulation/newgrf-loading-console.cpp` (a `CargoLabel` passed where `GetAiPurchaseCallbackResult` takes a `CargoType`). Next: fix that fixture, rerun the two scenarios, take metrics, then review by function group | None |
 
-PR worktrees: T3 task worktrees for each running agent, plus the earlier `t3-5aa8a17f` and `t3-fc38354a` (#628) and `t3-41b02f9e` (#636).
+PR worktrees (preserve): #647 `t3-c4634554`, `t3-17a0c009` and the cancelled reviewer's `t3-2efde48a`; #649 `t3-13298c8f`, `t3-6e7160e6` and `t3-b4561a0d`; #636 `t3-c67aada9` and `t3-41b02f9e`; #628 `t3-eb8e9c59`, `t3-1e4ffc20`, `t3-3208e14e`, `t3-5aa8a17f`, `t3-fc38354a` and `t3-e0d0c168`; #655 `t3-986b5854`. The merged and finished review checkouts are T3-locked; housekeeping keeps them until T3 releases them.
 
 Keep unchanged: `t3-120ef117` (old #603), `t3-431c84b4` (cancelled #565 source with 58 dirty entries), `t3-d78d5f8b` (native fixture evidence), `.local/reference/openttd` at `14ec60f248` and the instruction-profile worktrees under the main checkout's `.local/worktrees/`.
