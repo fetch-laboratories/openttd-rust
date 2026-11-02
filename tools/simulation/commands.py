@@ -62,6 +62,7 @@ def scenarios(soak: bool) -> list[Scenario]:
     cases.append(
         {
             "name": "commands-money",
+            "short_checkpoint": True,
             "kind": "save",
             "command_seed": 1,
             "command_money": True,
