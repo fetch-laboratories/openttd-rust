@@ -48,12 +48,13 @@
 - Limits: Keys of 65-128 bytes fit the original padded block and keep source behavior (the documented interface limit is 64); keys over 128 overrun original storage and have no reproduction guarantee.
 - PRs: #57.
 
-## Packet framing, binary serialization and transfer state
+## Packet storage, framing and serialization
 
-- Rust owns: Packet limit and cursor, binary encoding/decoding, length prefixes, framing and transfer planning/commit.
-- C++ keeps: Vector/string storage, socket policy, encryption/transfer callbacks and string/byte collection and sanitation.
+- Rust owns: Packet byte allocations, growth, copy and destruction, limit and cursor, typed binary and string send/receive, validation, length prefixes, framing and transfer planning/commit. The shared record is generated from Rust; native code reads its fields in place. Rust network callers use the typed packet API directly.
+- C++ keeps: The Packet facade, socket and queue shells, result string/vector allocations and callable transfer frames. Native virtual encryption implementations retain their exception frames; Rust streams are resolved through a native metadata accessor and called directly.
 - Checks: `python3 tools/auth-comparison.py`, scripted regressions and `python3 tools/packet-comparison.py`.
-- PRs: #60.
+- Limits: The original nonempty-short-source `Recv_bytes` precondition remains deferred in #41. Allocation failure is environmental.
+- PRs: #60, #645.
 
 ## Normal X25519 and Montgomery ladder
 
