@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deep-only mixed multiplayer, with a visibly fixture-matched candidate identity (#510)."""
+"""Opt-in mixed multiplayer auth modes with a visibly matched fixture identity (#510)."""
 
 import argparse
 import hashlib

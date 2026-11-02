@@ -6,8 +6,8 @@
 
 - Rust owns: Single and combined authentication handlers, method selection and fallback, X25519 sessions, key derivation, packet encryption streams, UID/file hashing and plugin signature verification. Pinned maintained crates supply X25519, BLAKE2b, ChaCha20, Poly1305 and SHA-512; Rust composes Monocypher 4 incremental rekeying and cofactored Ed25519 verification.
 - C++ keeps: Native virtual facades, password/authorized-key providers and UI callbacks, file reads, UID clock/formatting and secret-key string validation. Packet operations use the integrated Rust packet owner directly.
-- Checks: Rust known-answer tests from the pinned original, `python3 tools/auth-comparison.py`, `python3 tools/packet-comparison.py` and mixed multiplayer modes.
-- Limits: Original packet short-source preconditions remain in #41. Cryptographic security and complete secret erasure are not established by these checks.
+- Checks: Rust known-answer tests from the pinned original, `python3 tools/auth-comparison.py`, `python3 tools/packet-comparison.py`.
+- Limits: Mixed multiplayer modes are opt-in diagnostics; default public-endpoint comparisons cover the selected authentication paths. Live admin/RCON delivery and plugin-manifest file integration remain coverage gaps in #156. Original packet short-source preconditions remain in #41. Cryptographic security and complete secret erasure are not established by these checks.
 - PRs: #43, #52, #57, #61, #642.
 
 ## Paired Script Admin conversion
