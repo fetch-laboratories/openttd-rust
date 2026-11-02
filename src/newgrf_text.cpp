@@ -27,8 +27,6 @@
 #include "string_func.h"
 #include "timer/timer_game_calendar.h"
 #include "debug.h"
-#include "core/string_builder.hpp"
-#include "core/string_consumer.hpp"
 #include "language.h"
 #include <ranges>
 
@@ -37,31 +35,39 @@
 
 #include "safeguards.h"
 
+static_assert(SCC_BIGFONT == 0xE006 && SCC_BLACK == 0xE052 && SCC_BLUE == 0xE042 && SCC_BROWN == 0xE04D && SCC_BUS == 0xE2B6);
+static_assert(SCC_CHECKMARK == 0xE2AC && SCC_CITY == 0xE29C && SCC_CREAM == 0xE04C && SCC_CROSS == 0xE2AD && SCC_DKBLUE == 0xE051);
+static_assert(SCC_DKGREEN == 0xE04B && SCC_DOWN_ARROW == 0xE2AA && SCC_GENDER_INDEX == 0xE03E && SCC_GENDER_LIST == 0xE03D && SCC_GOLD == 0xE044);
+static_assert(SCC_GRAY == 0xE050 && SCC_GREEN == 0xE049 && SCC_LORRY == 0xE2B5 && SCC_LTBLUE == 0xE04F && SCC_LTBROWN == 0xE047);
+static_assert(SCC_NEWGRF_DISCARD_WORD == 0xE072 && SCC_NEWGRF_PRINT_BYTE_HEX == 0xE063 && SCC_NEWGRF_PRINT_DWORD_DATE_LONG == 0xE067 && SCC_NEWGRF_PRINT_DWORD_FORCE == 0xE070 && SCC_NEWGRF_PRINT_DWORD_HEX == 0xE065);
+static_assert(SCC_NEWGRF_PRINT_DWORD_SIGNED == 0xE056 && SCC_NEWGRF_PRINT_QWORD_CURRENCY == 0xE062 && SCC_NEWGRF_PRINT_QWORD_HEX == 0xE066 && SCC_NEWGRF_PRINT_WORD_DATE_LONG == 0xE05C && SCC_NEWGRF_PRINT_WORD_HEX == 0xE064);
+static_assert(SCC_NEWGRF_PRINT_WORD_STATION_NAME == 0xE061 && SCC_NEWGRF_PRINT_WORD_STRING_ID == 0xE05B && SCC_NEWGRF_PRINT_WORD_VOLUME_LONG == 0xE05F && SCC_NEWGRF_PRINT_WORD_WEIGHT_LONG == 0xE060 && SCC_NEWGRF_PUSH_WORD == 0xE071);
+static_assert(SCC_NEWGRF_ROTATE_TOP_4_WORDS == 0xE073 && SCC_NEWGRF_STRINL == 0xE074 && SCC_ORANGE == 0xE048 && SCC_PLANE == 0xE2B7 && SCC_PLURAL_LIST == 0xE03C);
+static_assert(SCC_POP_COLOUR == 0xE055 && SCC_PURPLE == 0xE046 && SCC_PUSH_COLOUR == 0xE054 && SCC_RED == 0xE045 && SCC_RIGHT_ARROW == 0xE2AF);
+static_assert(SCC_SET_CASE == 0xE040 && SCC_SHIP == 0xE2B8 && SCC_SILVER == 0xE043 && SCC_SMALL_DOWN_ARROW == 0xE2BD && SCC_SMALL_UP_ARROW == 0xE2BC);
+static_assert(SCC_SUPERSCRIPT_M1 == 0xE2B9 && SCC_SWITCH_CASE == 0xE041 && SCC_TINYFONT == 0xE005 && SCC_TOWN == 0xE29B && SCC_TRAIN == 0xE2B4);
+static_assert(SCC_UP_ARROW == 0xE2A0 && SCC_WHITE == 0xE04E && SCC_YELLOW == 0xE04A);
+
+const OpenTTDGrfTextServices &GetRustGrfTextServices() noexcept
+{
+	static const OpenTTDGrfTextServices services{
+		.added = [](uint32_t index, uint32_t grfid, uint32_t stringid, uint8_t lang, const uint8_t *text, size_t len, StringID id) noexcept { GrfMsg(3, "Added 0x{:X} grfid {:08X} string 0x{:X} lang 0x{:X} string '{}' ({:X})", index, grfid, stringid, lang, std::string_view{reinterpret_cast<const char *>(text), len}, id); },
+		.empty = STR_EMPTY,
+		.language_map = [](uint32_t grfid, uint8_t language) noexcept { return LanguageMap::GetLanguageMap(grfid, language); },
+		.map_string = [](uint32_t grfid, uint32_t stringid) noexcept { return MapGRFStringID(grfid, GRFStringID{stringid}); },
+		.mapping = [](const LanguageMap *lm, int32_t id, bool gender) noexcept { return lm->GetMapping(id, gender); },
+		.max_plural_forms = LANGUAGE_MAX_PLURAL_FORMS,
+		.message = [](int32_t level, const uint8_t *text, size_t len) noexcept { GrfMsg(level, "{}", std::string_view{reinterpret_cast<const char *>(text), len}); },
+		.num_cases = []() noexcept { return _current_language->num_cases; },
+		.num_genders = []() noexcept { return _current_language->num_genders; },
+		.plural_form = [](const LanguageMap *lm) noexcept { return lm->plural_form; },
+		.reverse_mapping = [](const LanguageMap *lm, int32_t id, bool gender) noexcept { return lm->GetReverseMapping(id, gender); },
+		.short_buffer = [](size_t count, size_t available) noexcept { DebugPrint("misc", 0, fmt::format("Source buffer too short: {} > {}", count, available)); },
+	};
+	return services;
+}
+
 static_assert(TEXT_TAB_NEWGRF_START == 64 && TAB_SIZE_BITS == 11 && TAB_SIZE_NEWGRF == 524288);
-
-/**
- * Explains the newgrf shift bit positioning.
- * the grf base will not be used in order to find the string, but rather for
- * jumping from standard langID scheme to the new one.
- */
-enum GRFBaseLanguages : uint8_t {
-	GRFLB_AMERICAN    = 0x01,
-	GRFLB_ENGLISH     = 0x02,
-	GRFLB_GERMAN      = 0x04,
-	GRFLB_FRENCH      = 0x08,
-	GRFLB_SPANISH     = 0x10,
-	GRFLB_GENERIC     = 0x80,
-};
-
-enum GRFExtendedLanguages : uint8_t {
-	GRFLX_AMERICAN    = 0x00,
-	GRFLX_ENGLISH     = 0x01,
-	GRFLX_GERMAN      = 0x02,
-	GRFLX_FRENCH      = 0x03,
-	GRFLX_SPANISH     = 0x04,
-	GRFLX_UNSPECIFIED = 0x7F,
-};
-
 
 /**
  * Get the mapping from the NewGRF supplied ID to OpenTTD's internal ID.
@@ -93,367 +99,11 @@ int LanguageMap::GetReverseMapping(int openttd_id, bool gender) const
 	return -1;
 }
 
-/** Helper structure for mapping choice lists. */
-struct UnmappedChoiceList {
-	/**
-	 * Initialise the mapping.
-	 * @param type   The type of mapping.
-	 * @param offset The offset to get the plural/gender from.
-	 */
-	UnmappedChoiceList(StringControlCode type, int offset) :
-		type(type), offset(offset)
-	{
-	}
-
-	StringControlCode type; ///< The type of choice list.
-	int offset;             ///< The offset for the plural/gender form.
-
-	/** Mapping of NewGRF supplied ID to the different strings in the choice list. */
-	std::map<int, std::string> strings;
-
-	/**
-	 * Flush this choice list into the destination string.
-	 * @param lm The current language mapping.
-	 * @param dest Target to write to.
-	 */
-	void Flush(const LanguageMap *lm, std::string &dest)
-	{
-		if (this->strings.find(0) == this->strings.end()) {
-			/* In case of a (broken) NewGRF without a default,
-			 * assume an empty string. */
-			GrfMsg(1, "choice list misses default value");
-			this->strings[0] = std::string();
-		}
-
-		StringBuilder builder(dest);
-
-		if (lm == nullptr) {
-			/* In case there is no mapping, just ignore everything but the default.
-			 * A probable cause for this happening is when the language file has
-			 * been removed by the user and as such no mapping could be made. */
-			builder += this->strings[0];
-			return;
-		}
-
-		builder.PutUtf8(this->type);
-
-		if (this->type == SCC_SWITCH_CASE) {
-			/*
-			 * Format for case switch:
-			 * <NUM CASES> <CASE1> <LEN1> <STRING1> <CASE2> <LEN2> <STRING2> <CASE3> <LEN3> <STRING3> <LENDEFAULT> <STRINGDEFAULT>
-			 * Each LEN is printed using 2 bytes in big endian order.
-			 */
-
-			/* "<NUM CASES>" */
-			int count = 0;
-			for (uint8_t i = 0; i < _current_language->num_cases; i++) {
-				/* Count the ones we have a mapped string for. */
-				if (this->strings.find(lm->GetReverseMapping(i, false)) != this->strings.end()) count++;
-			}
-			builder.PutUint8(count);
-
-			auto add_case = [&](std::string_view str) {
-				/* "<LENn>" */
-				uint16_t len = ClampTo<uint16_t>(str.size());
-				builder.PutUint16LE(len);
-
-				/* "<STRINGn>" */
-				builder += str.substr(0, len);
-			};
-
-			for (uint8_t i = 0; i < _current_language->num_cases; i++) {
-				/* Resolve the string we're looking for. */
-				int idx = lm->GetReverseMapping(i, false);
-				if (this->strings.find(idx) == this->strings.end()) continue;
-				auto &str = this->strings[idx];
-
-				/* "<CASEn>" */
-				builder.PutUint8(i + 1);
-
-				add_case(str);
-			}
-
-			/* "<STRINGDEFAULT>" */
-			add_case(this->strings[0]);
-		} else {
-			if (this->type == SCC_PLURAL_LIST) {
-				builder.PutUint8(lm->plural_form);
-			}
-
-			/*
-			 * Format for choice list:
-			 * <OFFSET> <NUM CHOICES> <LENs> <STRINGs>
-			 */
-
-			/* "<OFFSET>" */
-			builder.PutUint8(this->offset - 0x80);
-
-			/* "<NUM CHOICES>" */
-			int count = (this->type == SCC_GENDER_LIST ? _current_language->num_genders : LANGUAGE_MAX_PLURAL_FORMS);
-			builder.PutUint8(count);
-
-			/* "<LENs>" */
-			for (int i = 0; i < count; i++) {
-				int idx = (this->type == SCC_GENDER_LIST ? lm->GetReverseMapping(i, true) : i + 1);
-				const auto &str = this->strings[this->strings.find(idx) != this->strings.end() ? idx : 0];
-				size_t len = str.size();
-				if (len > UINT8_MAX) GrfMsg(1, "choice list string is too long");
-				builder.PutUint8(ClampTo<uint8_t>(len));
-			}
-
-			/* "<STRINGs>" */
-			for (int i = 0; i < count; i++) {
-				int idx = (this->type == SCC_GENDER_LIST ? lm->GetReverseMapping(i, true) : i + 1);
-				const auto &str = this->strings[this->strings.find(idx) != this->strings.end() ? idx : 0];
-				uint8_t len = ClampTo<uint8_t>(str.size());
-				builder += str.substr(0, len);
-			}
-		}
-	}
-};
-
-/**
- * Translate TTDPatch string codes into something OpenTTD can handle (better).
- * @param grfid          The (NewGRF) ID associated with this string
- * @param language_id    The (NewGRF) language ID associated with this string.
- * @param allow_newlines Whether newlines are allowed in the string or not.
- * @param str            The string to translate.
- * @param byte80         The control code to use as replacement for the 0x80-value.
- * @return The translated string.
- */
 std::string TranslateTTDPatchCodes(uint32_t grfid, uint8_t language_id, bool allow_newlines, std::string_view str, StringControlCode byte80)
 {
-	/* Empty input string? Nothing to do here. */
-	if (str.empty()) return {};
-
-	StringConsumer consumer(str);
-
-	/* Is this an unicode string? */
-	bool unicode = consumer.ReadUtf8If(NFO_UTF8_IDENTIFIER);
-
-	/* Helper variable for a possible (string) mapping of plural/gender and cases. */
-	std::optional<UnmappedChoiceList> mapping_pg, mapping_c;
-	std::optional<std::reference_wrapper<std::string>> dest_c;
-
-	std::string dest;
-	StringBuilder builder(dest);
-	while (consumer.AnyBytesLeft()) {
-		char32_t c;
-		if (auto u = unicode ? consumer.TryReadUtf8() : std::nullopt; u.has_value()) {
-			c = *u;
-			/* 'Magic' range of control codes. */
-			if (0xE000 <= c && c <= 0xE0FF) {
-				c -= 0xE000;
-			} else if (c >= 0x20) {
-				if (!IsValidChar(c, CS_ALPHANUMERAL)) c = '?';
-				builder.PutUtf8(c);
-				continue;
-			}
-		} else {
-			c = consumer.ReadUint8(); // read as unsigned, otherwise integer promotion breaks it
-		}
-		assert(c <= 0xFF);
-		if (c == '\0') break;
-
-		switch (c) {
-			case 0x01:
-				consumer.SkipUint8();
-				builder.PutChar(' ');
-				break;
-			case 0x0A: break;
-			case 0x0D:
-				if (allow_newlines) {
-					builder.PutChar(0x0A);
-				} else {
-					GrfMsg(1, "Detected newline in string that does not allow one");
-				}
-				break;
-			case 0x0E: builder.PutUtf8(SCC_TINYFONT); break;
-			case 0x0F: builder.PutUtf8(SCC_BIGFONT); break;
-			case 0x1F:
-				consumer.SkipUint8();
-				consumer.SkipUint8();
-				builder.PutChar(' ');
-				break;
-			case 0x7B:
-			case 0x7C:
-			case 0x7D:
-			case 0x7E:
-			case 0x7F: builder.PutUtf8(SCC_NEWGRF_PRINT_DWORD_SIGNED + c - 0x7B); break;
-			case 0x80: builder.PutUtf8(byte80); break;
-			case 0x81:
-			{
-				uint16_t string = consumer.ReadUint16LE();
-				builder.PutUtf8(SCC_NEWGRF_STRINL);
-				builder.PutUtf8(MapGRFStringID(grfid, GRFStringID{string}));
-				break;
-			}
-			case 0x82:
-			case 0x83:
-			case 0x84: builder.PutUtf8(SCC_NEWGRF_PRINT_WORD_DATE_LONG + c - 0x82); break;
-			case 0x85: builder.PutUtf8(SCC_NEWGRF_DISCARD_WORD);       break;
-			case 0x86: builder.PutUtf8(SCC_NEWGRF_ROTATE_TOP_4_WORDS); break;
-			case 0x87: builder.PutUtf8(SCC_NEWGRF_PRINT_WORD_VOLUME_LONG);  break;
-			case 0x88: builder.PutUtf8(SCC_BLUE);    break;
-			case 0x89: builder.PutUtf8(SCC_SILVER);  break;
-			case 0x8A: builder.PutUtf8(SCC_GOLD);    break;
-			case 0x8B: builder.PutUtf8(SCC_RED);     break;
-			case 0x8C: builder.PutUtf8(SCC_PURPLE);  break;
-			case 0x8D: builder.PutUtf8(SCC_LTBROWN); break;
-			case 0x8E: builder.PutUtf8(SCC_ORANGE);  break;
-			case 0x8F: builder.PutUtf8(SCC_GREEN);   break;
-			case 0x90: builder.PutUtf8(SCC_YELLOW);  break;
-			case 0x91: builder.PutUtf8(SCC_DKGREEN); break;
-			case 0x92: builder.PutUtf8(SCC_CREAM);   break;
-			case 0x93: builder.PutUtf8(SCC_BROWN);   break;
-			case 0x94: builder.PutUtf8(SCC_WHITE);   break;
-			case 0x95: builder.PutUtf8(SCC_LTBLUE);  break;
-			case 0x96: builder.PutUtf8(SCC_GRAY);    break;
-			case 0x97: builder.PutUtf8(SCC_DKBLUE);  break;
-			case 0x98: builder.PutUtf8(SCC_BLACK);   break;
-			case 0x9A:
-			{
-				uint8_t code = consumer.ReadUint8();
-				switch (code) {
-					case 0x00: goto string_end;
-					case 0x01: builder.PutUtf8(SCC_NEWGRF_PRINT_QWORD_CURRENCY); break;
-						/* 0x02: ignore next colour byte is not supported. It works on the final
-						 * string and as such hooks into the string drawing routine. At that
-						 * point many things already happened, such as splitting up of strings
-						 * when drawn over multiple lines or right-to-left translations, which
-						 * make the behaviour peculiar, e.g. only happening at specific width
-						 * of windows. Or we need to add another pass over the string to just
-						 * support this. As such it is not implemented in OpenTTD. */
-					case 0x03:
-					{
-						uint16_t tmp = consumer.ReadUint16LE();
-						builder.PutUtf8(SCC_NEWGRF_PUSH_WORD);
-						builder.PutUtf8(tmp);
-						break;
-					}
-					case 0x06: builder.PutUtf8(SCC_NEWGRF_PRINT_BYTE_HEX);          break;
-					case 0x07: builder.PutUtf8(SCC_NEWGRF_PRINT_WORD_HEX);          break;
-					case 0x08: builder.PutUtf8(SCC_NEWGRF_PRINT_DWORD_HEX);         break;
-					/* 0x09, 0x0A are TTDPatch internal use only string codes. */
-					case 0x0B: builder.PutUtf8(SCC_NEWGRF_PRINT_QWORD_HEX);         break;
-					case 0x0C: builder.PutUtf8(SCC_NEWGRF_PRINT_WORD_STATION_NAME); break;
-					case 0x0D: builder.PutUtf8(SCC_NEWGRF_PRINT_WORD_WEIGHT_LONG);  break;
-					case 0x0E:
-					case 0x0F:
-					{
-						const LanguageMap *lm = LanguageMap::GetLanguageMap(grfid, language_id);
-						int index = consumer.ReadUint8();
-						int mapped = lm != nullptr ? lm->GetMapping(index, code == 0x0E) : -1;
-						if (mapped >= 0) {
-							builder.PutUtf8(code == 0x0E ? SCC_GENDER_INDEX : SCC_SET_CASE);
-							builder.PutUtf8(code == 0x0E ? mapped : mapped + 1);
-						}
-						break;
-					}
-
-					case 0x10:
-					case 0x11:
-						if (!mapping_pg.has_value() && !mapping_c.has_value()) {
-							if (code == 0x10) consumer.SkipUint8(); // Skip the index
-							GrfMsg(1, "choice list {} marker found when not expected", code == 0x10 ? "next" : "default");
-							break;
-						} else {
-							auto &mapping = mapping_pg ? mapping_pg : mapping_c;
-							int index = (code == 0x10 ? consumer.ReadUint8() : 0);
-							if (mapping->strings.find(index) != mapping->strings.end()) {
-								GrfMsg(1, "duplicate choice list string, ignoring");
-							} else {
-								builder = StringBuilder(mapping->strings[index]);
-								if (!mapping_pg) dest_c = mapping->strings[index];
-							}
-						}
-						break;
-
-					case 0x12:
-						if (!mapping_pg.has_value() && !mapping_c.has_value()) {
-							GrfMsg(1, "choice list end marker found when not expected");
-						} else {
-							auto &mapping = mapping_pg ? mapping_pg : mapping_c;
-							auto &new_dest = mapping_pg && dest_c ? dest_c->get() : dest;
-							/* Now we can start flushing everything and clean everything up. */
-							mapping->Flush(LanguageMap::GetLanguageMap(grfid, language_id), new_dest);
-							if (!mapping_pg) dest_c.reset();
-							mapping.reset();
-
-							builder = StringBuilder(new_dest);
-						}
-						break;
-
-					case 0x13:
-					case 0x14:
-					case 0x15: {
-						auto &mapping = code == 0x14 ? mapping_c : mapping_pg;
-						/* Case mapping can have nested plural/gender mapping. Otherwise nesting is invalid. */
-						if (mapping.has_value() || mapping_pg.has_value()) {
-							GrfMsg(1, "choice lists can't be stacked, it's going to get messy now...");
-							if (code != 0x14) consumer.SkipUint8();
-						} else {
-							static const StringControlCode mp[] = { SCC_GENDER_LIST, SCC_SWITCH_CASE, SCC_PLURAL_LIST };
-							mapping.emplace(mp[code - 0x13], code == 0x14 ? 0 : consumer.ReadUint8());
-						}
-						break;
-					}
-
-					case 0x16:
-					case 0x17:
-					case 0x18:
-					case 0x19:
-					case 0x1A:
-					case 0x1B:
-					case 0x1C:
-					case 0x1D:
-					case 0x1E:
-						builder.PutUtf8(SCC_NEWGRF_PRINT_DWORD_DATE_LONG + code - 0x16);
-						break;
-
-					case 0x1F: builder.PutUtf8(SCC_PUSH_COLOUR); break;
-					case 0x20: builder.PutUtf8(SCC_POP_COLOUR);  break;
-
-					case 0x21: builder.PutUtf8(SCC_NEWGRF_PRINT_DWORD_FORCE); break;
-
-					default:
-						GrfMsg(1, "missing handler for extended format code");
-						break;
-				}
-				break;
-			}
-
-			case 0x9B: builder.PutUtf8(SCC_TOWN);             break;
-			case 0x9C: builder.PutUtf8(SCC_CITY);             break;
-			case 0x9E: builder.PutUtf8(0x20AC);               break; // Euro
-			case 0x9F: builder.PutUtf8(0x0178);               break; // Y with diaeresis
-			case 0xA0: builder.PutUtf8(SCC_UP_ARROW);         break;
-			case 0xAA: builder.PutUtf8(SCC_DOWN_ARROW);       break;
-			case 0xAC: builder.PutUtf8(SCC_CHECKMARK);        break;
-			case 0xAD: builder.PutUtf8(SCC_CROSS);            break;
-			case 0xAF: builder.PutUtf8(SCC_RIGHT_ARROW);      break;
-			case 0xB4: builder.PutUtf8(SCC_TRAIN);            break;
-			case 0xB5: builder.PutUtf8(SCC_LORRY);            break;
-			case 0xB6: builder.PutUtf8(SCC_BUS);              break;
-			case 0xB7: builder.PutUtf8(SCC_PLANE);            break;
-			case 0xB8: builder.PutUtf8(SCC_SHIP);             break;
-			case 0xB9: builder.PutUtf8(SCC_SUPERSCRIPT_M1);   break;
-			case 0xBC: builder.PutUtf8(SCC_SMALL_UP_ARROW);   break;
-			case 0xBD: builder.PutUtf8(SCC_SMALL_DOWN_ARROW); break;
-			default:
-				/* Validate any unhandled character */
-				if (!IsValidChar(c, CS_ALPHANUMERAL)) c = '?';
-				builder.PutUtf8(c);
-				break;
-		}
-	}
-
-string_end:
-	if (mapping_pg.has_value() || mapping_c.has_value()) {
-		GrfMsg(1, "choice list was incomplete, the whole list is ignored");
-	}
-
-	return dest;
+	std::string result;
+	openttd_rust_grf_text_translate(&GetRustGrfTextServices(), grfid, language_id, allow_newlines, reinterpret_cast<const uint8_t *>(str.data()), str.size(), byte80, &result, [](void *output, const uint8_t *data, size_t size) noexcept { static_cast<std::string *>(output)->assign(reinterpret_cast<const char *>(data), size); });
+	return result;
 }
 
 /**
@@ -514,7 +164,7 @@ void AddGRFTextToList(GRFTextWrapper &list, uint8_t langid, uint32_t grfid, bool
 void AddGRFTextToList(GRFTextWrapper &list, std::string_view text_to_add)
 {
 	if (list == nullptr) list = std::make_shared<GRFTextList>();
-	AddGRFTextToList(*list, GRFLX_UNSPECIFIED, text_to_add);
+	AddGRFTextToList(*list, 0x7F, text_to_add);
 }
 
 /**
@@ -522,34 +172,7 @@ void AddGRFTextToList(GRFTextWrapper &list, std::string_view text_to_add)
  */
 StringID AddGRFString(uint32_t grfid, GRFStringID stringid, uint8_t langid_to_add, bool new_scheme, bool allow_newlines, std::string_view text_to_add, StringID def_string)
 {
-	/* When working with the old language scheme (grf_version is less than 7) and
-	 * English or American is among the set bits, simply add it as English in
-	 * the new scheme, i.e. as langid = 1.
-	 * If English is set, it is pretty safe to assume the translations are not
-	 * actually translated.
-	 */
-	if (!new_scheme) {
-		if (langid_to_add & (GRFLB_AMERICAN | GRFLB_ENGLISH)) {
-			langid_to_add = GRFLX_ENGLISH;
-		} else {
-			StringID ret = STR_EMPTY;
-			if (langid_to_add & GRFLB_GERMAN)  ret = AddGRFString(grfid, stringid, GRFLX_GERMAN,  true, allow_newlines, text_to_add, def_string);
-			if (langid_to_add & GRFLB_FRENCH)  ret = AddGRFString(grfid, stringid, GRFLX_FRENCH,  true, allow_newlines, text_to_add, def_string);
-			if (langid_to_add & GRFLB_SPANISH) ret = AddGRFString(grfid, stringid, GRFLX_SPANISH, true, allow_newlines, text_to_add, def_string);
-			return ret;
-		}
-	}
-
-	size_t index = openttd_rust_grf_text_prepare(grfid, stringid.base(), def_string);
-	if (index == SIZE_MAX) return STR_EMPTY;
-	StringIndexInTab id{static_cast<uint32_t>(index)};
-
-	std::string newtext = TranslateTTDPatchCodes(grfid, langid_to_add, allow_newlines, text_to_add);
-	openttd_rust_grf_text_publish(index, langid_to_add, reinterpret_cast<const uint8_t *>(newtext.data()), newtext.size());
-
-	GrfMsg(3, "Added 0x{:X} grfid {:08X} string 0x{:X} lang 0x{:X} string '{}' ({:X})", id, grfid, stringid, langid_to_add, newtext, MakeStringID(TEXT_TAB_NEWGRF_START, id));
-
-	return MakeStringID(TEXT_TAB_NEWGRF_START, id);
+	return openttd_rust_grf_text_add(&GetRustGrfTextServices(), grfid, stringid.base(), langid_to_add, new_scheme, allow_newlines, reinterpret_cast<const uint8_t *>(text_to_add.data()), text_to_add.size(), def_string);
 }
 
 /**

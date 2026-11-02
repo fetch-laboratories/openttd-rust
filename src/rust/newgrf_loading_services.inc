@@ -35,6 +35,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.airports = &GetAirportDefinitionServices(),
 		.types = &GetRustTypeRegistryServices(),
 		.action2 = &GetRustAction2Services(),
+		.text = &GetRustGrfTextServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.parameter = RustGRFParameter,
 		.config_id = [](const GRFConfig *c) noexcept { return c->ident.grfid; },
@@ -205,12 +206,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.grm_feature = [](GrfSpecFeature feature) noexcept { GrfMsg(1, "ParamSet: GRM: Unsupported feature 0x{:X}", feature); },
 		.unimplemented_target = [](uint8_t target) noexcept { GrfMsg(7, "ParamSet: Skipping unimplemented target 0x{:02X}", target); },
 		.unknown_target = [](uint8_t target) noexcept { GrfMsg(7, "ParamSet: Skipping unknown target 0x{:02X}", target); },
-		.translate_text = [](uint32_t grfid, uint8_t lang, bool allow_newlines, const uint8_t *text, size_t len) noexcept -> OpenTTDByteSpan {
-			auto &result = *_cur_gps.translated_text;
-			result = TranslateTTDPatchCodes(grfid, lang, allow_newlines, {reinterpret_cast<const char *>(text), len});
-			return {reinterpret_cast<const uint8_t *>(result.data()), result.size()};
-		},
-		.add_string = [](uint32_t grfid, uint32_t stringid, uint8_t lang, bool new_scheme, bool allow_newlines, const uint8_t *text, size_t len, StringID def_string) noexcept { return AddGRFString(grfid, GRFStringID{stringid}, lang, new_scheme, allow_newlines, {reinterpret_cast<const char *>(text), len}, def_string); },
 		.undefined = STR_UNDEFINED,
 		.town_definition = [](uint8_t id) noexcept { GrfMsg(6, "FeatureTownName: definition 0x{:02X}", id); },
 		.town_lang = [](uint8_t lang, const uint8_t *name, size_t len) noexcept { GrfMsg(6, "FeatureTownName: lang 0x{:X} -> '{}'", lang, std::string_view{reinterpret_cast<const char *>(name), len}); },
