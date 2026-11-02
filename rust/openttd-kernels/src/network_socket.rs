@@ -109,7 +109,7 @@ pub(crate) fn specialized_close(
 pub(crate) fn close(s: &Services, socket: *mut GameSocket, work: Actions) -> u8 {
     work.network(s);
     let result =
-        if !(s.command.company.network_server)() && unsafe { s.connection.networking.read() } {
+        if !(s.command.company.network_server)() && (s.command.company.finance.networking)() {
             (s.client.emergency_save)();
             crate::session::set_pending(crate::openttd::SwitchMode::MENU);
             unsafe { s.connection.networking.write(false) };
@@ -270,7 +270,7 @@ pub(crate) fn receive_all(
             result?;
             Ok(client_received(s, frame, work))
         } else {
-            let networking = unsafe { s.connection.networking.read() };
+            let networking = (s.command.company.finance.networking)();
             Ok(receive_finish(s, frame, false, networking, work))
         }
     }
@@ -295,7 +295,7 @@ pub(crate) fn receive_clients(
         }
         result?;
     }
-    let networking = unsafe { s.connection.networking.read() };
+    let networking = (s.command.company.finance.networking)();
     Ok(receive_finish(s, frame, true, networking, work))
 }
 
@@ -309,7 +309,7 @@ pub(crate) fn client_received(
         crate::network_client::client_error(s.client, s, (s.client_game)(), result);
         return receive_finish(s, frame, false, false, work);
     }
-    let networking = unsafe { s.connection.networking.read() };
+    let networking = (s.command.company.finance.networking)();
     receive_finish(s, frame, false, networking, work)
 }
 
