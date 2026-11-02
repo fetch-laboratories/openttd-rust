@@ -96,6 +96,40 @@ class GeneratedAbiTests(unittest.TestCase):
             )
         self.assertFalse(list((ROOT / "src").rglob("abi-layout-*.inc")))
 
+    def test_nested_shared_record_is_complete_before_its_value_use(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            (rust / "records.rs").write_text(
+                'layouts! { "Dummy" ["nested"] => Dummy {}; }\n'
+                "shared_records! { fn abi_record;\n"
+                '"AParent" ["nested"] => pub struct Parent {\n'
+                "pub child: Child, pub tail: u16,\n    }\n"
+                '"ZChild" ["nested"] => pub struct Child {\n'
+                "pub field: u32,\n    }\n}\n"
+            )
+            fragments = GENERATOR["generate"](root)
+            header = root / "abi-record-nested.h"
+            header.write_text(fragments[header.name])
+            subprocess.run(
+                [
+                    os.environ.get("CXX", "c++"),
+                    "-std=c++20",
+                    "-x",
+                    "c++",
+                    "-fsyntax-only",
+                    "-",
+                ],
+                input=(
+                    f'#include "{header}"\n#include <type_traits>\n'
+                    "static_assert(std::is_same_v<decltype(AParent::child), ZChild>);\n"
+                    "static_assert(offsetof(AParent, tail) == sizeof(ZChild));\n"
+                ),
+                text=True,
+                check=True,
+            )
+
     def test_shared_record_opaque_pointer_class_keys(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

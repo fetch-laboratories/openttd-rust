@@ -102,6 +102,8 @@ def shared_records(
                 target = native(target)
             return f"{'const ' if pointer[1] == 'const' else ''}{target} *"
         rust = rust.split("::")[-1]
+        if rust in names:
+            return names[rust]
         seen = set()
         while rust in scalars and rust not in seen:
             seen.add(rust)
@@ -161,13 +163,27 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
     ]
     lines += [f"{tag} {name};" for name, tag in sorted(opaque.items())]
     lines += [f"struct {name};" for name in sorted(defined)]
-    for cpp, _, _, fields in entries:
-        lines.append(f"struct {cpp} {{")
-        lines += [
+    records = {record.cpp: record for record in entries}
+    emitted: set[str] = set()
+
+    def emit(record: SharedRecord, active: set[str]) -> None:
+        if record.cpp in emitted:
+            return
+        if record.cpp in active:
+            raise ValueError(f"recursive value record: {record.cpp}")
+        for field in record.fields:
+            if field.cpp_type in records:
+                emit(records[field.cpp_type], active | {record.cpp})
+        lines.append(f"struct {record.cpp} {{")
+        lines.extend(
             f"\t{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name};"
-            for field in fields
-        ]
+            for field in record.fields
+        )
         lines.append("};")
+        emitted.add(record.cpp)
+
+    for record in entries:
+        emit(record, set())
     return lines
 
 
