@@ -202,7 +202,7 @@ The steering checked every claim acted on below against the source and the CI lo
    - its four gate gaps are hypothetical forms; fix the first if it is cheap and list the rest as limits;
    - one fresh reviewer finishes checks 5 to 7.
 
-No user direction is reversed. The restart prompt gains one standing step (finding 1).
+No user direction is reversed. On 2026-11-02 the user reselected #507's NewGRF corpus, which #654 had asked about. The steering's first answer wrongly treated #526's GPL source work as a prerequisite; the resume plan on #507 already kept the sets uncommitted. [Evidence](porting.md#evidence) and `AGENTS.md` now state that rule, and #526 is closed. The restart prompt gains one standing step (finding 1).
 
 | Twenty-seventh correction | Verdict and cost/result |
 | --- | --- |
@@ -241,8 +241,8 @@ research. Testing is maintenance: scenarios arrive with the ports that need
 them. Six branches, batched maintenance, fixing reviews, strict exact-combination
 Full, bounded rollback and action-based wind-down remain. A historical mention
 is not placement; CI-found behavior fixes get a scoped review; deep checks run
-only on the user's request; active speed dependencies are preserved. The parked
-NewGRF corpus stays excluded with the return condition below. Every agent runs
+only on the user's request; active speed dependencies are preserved. Third-party
+test inputs stay out of Git and CI artifacts ([evidence](porting.md#evidence)). Every agent runs
 its own long jobs and ends a turn only on a named job ID; root checks any child
 that ends a turn without one, and any child idle on a job that has exited. A
 base update that meets a review condition needs only CI. Each new scenario,
@@ -286,15 +286,21 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
 2. **Integrate the reviewed maintenance in readiness order** (one reviewer and one Full each):
    - #649 (#604 settings access with #199's disjoint items): fixture unit tests, a scoped review of `ba07c85bb1`, Full and merge. Its `128c1b9c96` ends the generated-ABI include failures behind two of the 11-02 failed Fulls.
    - #647 (#644 `bool` returns with #646 `TileArea::expand`): the scoped round in the twenty-eighth steering comment on #647, then Full and merge. Its gate then rejects new `bool` returns.
-3. **#570 vehicle records (#636) to checkpoint 2**, then review and integration. It is phase 2's first owner and the template for every later pool.
+3. **#507 NewGRF corpus** (user reselected, 2026-11-02, closing #654; #526 closed as unneeded), in the first free slot. It is maintenance with one reviewer and one Full.
+   - Open a new PR from `rust-migration`. Reuse #525's scenario module (`tools/simulation/newgrf_sets.py`) and its scenario AI from `testing/corpus507-newgrf` at `ccc28e2ed0`, but not its committed `.grf` files or source archive.
+   - Pin the three OpenGFX+ sets (Trains 0.3.0, Road Vehicles 0.4.1, Industries 0.3.5) by name, version and SHA-256, and fetch them from the BaNaNaS CDN into ignored `.local/` storage ([evidence](porting.md#evidence)).
+   - Extending `tools.simulation.community_ai` and its cached manifest avoids a workflow change. Keep the sets out of every uploaded artifact.
+   - The default slice is `newgrf-sets-arctic` (about 7 s of game time); `newgrf-sets-arctic-long` runs in soak. The same-NewGRF larger save follows as a later #507 PR.
+   - Integrate it before #655 if it is ready first; #655 does not wait for it.
+4. **#570 vehicle records (#636) to checkpoint 2**, then review and integration. It is phase 2's first owner and the template for every later pool.
    - Before integration, apply the twenty-eighth steering comment on #636: `train::Handle` carries the record; delete every remaining per-field route for a field already in a Rust record (the comment's inventory); fix the `disaster.rs` `shell()` naming; run the scenarios at the head; update the PR body.
    - Expected compiled C++ at checkpoint 2 is about -900 to -1,250; judge it at review against that estimate.
    - Then #656, the fields still in the shell, alone or with #598 and #599 as decided at planning. Remeasure the inventory after #570.
-4. **Run the planning round from the Phases chart** in the first free agent slot. It needs no branch. Size phase 3's unowned 35,000 lines, rank by compiled C++ removed, and place #656, #657 and #658.
-5. **Maintenance batch: #657 and #658** (one reviewer, one Full), built by root from `rust-migration` once #647 and #649 have integrated. #657 deletes about 166 per-message log services, so it touches many service files. Open drafts adopt it at their next base update and do not build their own helper. #658 changes the compiled-C++ count; record that as a re-baseline at the next stocktake.
+5. **Run the planning round from the Phases chart** in the first free agent slot. It needs no branch. Size phase 3's unowned 35,000 lines, rank by compiled C++ removed, and place #656, #657 and #658.
+6. **Maintenance batch: #657 and #658** (one reviewer, one Full), built by root from `rust-migration` once #647 and #649 have integrated. #657 deletes about 166 per-message log services, so it touches many service files. Open drafts adopt it at their next base update and do not build their own helper. #658 changes the compiled-C++ count; record that as a re-baseline at the next stocktake.
    - #565 item 2, after #570 integrates, because both change `movement.rs`. Delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body), with #168's unfinished world-generation items. Production net glue -300 to -600. It also deletes the native `bridge_above` and `rail_tile_type` services that #616 and #620 duplicated with Rust map readers (`road_cmd.rs:932`, `road_cmd.rs:1443`, `station_cmd.rs:447`).
    - Later: #501 probe typing. #168/#199/#500's completed-job publication moves to the link-graph pool owner.
-6. **The next phase-2 pools after #570 integrates** (ranked by plan-after56, 2026-11-01; the planning round re-ranks them by compiled C++). Each needs #570's generator, save descriptors and record lookup.
+7. **The next phase-2 pools after #570 integrates** (ranked by plan-after56, 2026-11-01; the planning round re-ranks them by compiled C++). Each needs #570's generator, save descriptors and record lookup.
    - Before briefing #634 or #635, root decides from the merged-tip profile after #570, and from #566's drawing workload, whether later records sit beside their shells, as #570's do, or inside them. Use the dependent-load table and the profile checklist in the twenty-eighth steering comment on #636. If the cost is material, record the decision in the [world-state design](design/world-state.md) before the briefs.
    - #634 stations and road stops: 450 to 650 retired, -300 to -800 net glue, about 110 to 160 station-field slots. It removes the per-station `SharedForEachStation` bounce and #612's two C++ calls per k-d tree coordinate (`station/spatial.rs:12`).
    - #635 towns, industries and subsidies: 350 to 550 retired, -150 to -450 net glue, about 40 to 70 field slots. Disjoint from #634; the two may run together.
@@ -306,7 +312,7 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
      - #638 the smaller pools (615, with #498's ObjectSpec payloads);
      - the map (3,988 storage), with the rail, road, water, tunnel, landscape and tile bodies.
    - Pools without an issue get one and a design section when selected. Each moves its coupled save adapters with each record, generates native declarations, verifies the layout, and deletes the displaced readers, services and their baseline rows.
-7. **Phase 3 fills every other free slot:**
+8. **Phase 3 fills every other free slot:**
    - #628 (#574 network protocol): make the bounded cost repair in the twenty-eighth steering comment on #628 before review, beside slice 5. That means:
      - fix the `SendNet` and accept bounces;
      - move about 150 fixture lines to Rust tests;
@@ -319,7 +325,7 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
    - #653 industry and industry-tile specifications, after #647 and #649 integrate (both edit the industry files). Compiled C++ about -270 to -400; the spec records' vector fields are decided at its first checkpoint.
 
    Size each owner to repay its review and Full ([selection](planning.md#selection)). Plan no Squirrel port.
-8. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
+9. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
 
 Recurring:
 - After every second integration (next after 66), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip with the pinned `LD_LIBRARY_PATH` from [speed](speed.md#instruction-projections).
@@ -330,14 +336,12 @@ Recurring:
 - At each stocktake, root checks issue placement and exclusion conditions.
 
 Excluded, with return conditions checked by this review:
-- #507's NewGRF corpus (#525, #526) stays parked by the user (2026-10-28) until the user reselects it. #525's branch stays on origin.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
-- #654 asks the user whether to reselect #507's corpus for the NewGRF loading ports. Root recommends keeping it parked until the Action 0 owners; it still awaits the user.
 
 ## Resume checkpoint (2026-11-02, wind-down after integration 65)
 
-Paused at the user's request: wind-down at 16:20Z. Code is `6afdcbf390` (integration 65). `CI_ON_DEMAND` is `true`. No open head has a requested or passing Full. Each PR's status comment holds its detail; #654 awaits the user. Agents were stopped or told to stop after recording state; no local job result below is known unless stated.
+Paused at the user's request: wind-down at 16:20Z. Code is `6afdcbf390` (integration 65). `CI_ON_DEMAND` is `true`. No open head has a requested or passing Full. Each PR's status comment holds its detail. The user reselected #507's NewGRF corpus on 2026-11-02 (work order 3). Agents were stopped or told to stop after recording state; no local job result below is known unless stated.
 
 Due first on resume, in order:
 1. **Repair the red platform cadence** (run 41466312349) before any integration. Confirm the cause from the macOS `rust-native-libs.log` (evidence artifact or a local configure for `aarch64-apple-darwin`), then make the configure probe and the build agree on native libraries now that `libc` is a dependency, in a small root PR with Full and a platform run. Rerun the cadence on the merged fix.
