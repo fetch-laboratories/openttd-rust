@@ -253,6 +253,7 @@ static OpenTTDVehicleMovementObservations OPENTTD_RUST_CALL VehicleSvcMovementOb
 {
 	const Vehicle *v = VehicleOf(shell);
 	return {.position = {.subtype = RustVehicleSubtypeAddress(v), .z = RustVehicleZAddress(v)},
+		.x = RustVehicleXAddress(v), .y = RustVehicleYAddress(v), .speed = RustVehicleSpeedAddress(v), .direction = RustVehicleDirectionAddress(v)};
 }
 static OpenTTDVehicleAltitudeInputs OPENTTD_RUST_CALL VehicleSvcAltitudeInputs(OpenTTDVehicle *v) noexcept
 {
@@ -411,6 +412,7 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
 #else
 		.assertions = false,
 #endif
+		.tick = VehicleSchedulerTick,
 		.calendar_day = VehicleSchedulerCalendarDay,
 		.economy_day = VehicleSchedulerEconomyDay,
 		.day_callback_read = VehicleSchedulerDayCallbackRead,

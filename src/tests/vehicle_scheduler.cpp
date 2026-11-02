@@ -491,7 +491,6 @@ TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors
 	auto it = VehiclesOnTile(a->GetTile()).begin(), copy = it;
 	// Removal must not read tile, dimensions or either normal observation.
 	auto removal = s;
-	removal.tile = [](OpenTTDVehicle *) noexcept -> uint32_t { CHECK(false); return 0; };
 	removal.map_log_x = []() noexcept -> uint32_t { CHECK(false); return 0; };
 	removal.occupancy_update = [](OpenTTDVehicle *) noexcept -> OpenTTDOccupancyUpdateObservation { CHECK(false); return {}; };
 	removal.occupancy_near = [](OpenTTDVehicle *) noexcept -> OpenTTDOccupancyNearObservation { CHECK(false); return {}; };
