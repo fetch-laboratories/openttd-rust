@@ -40,112 +40,108 @@ Agent: /root (Claude Code navigation) | Model: claude-opus-5-5 | Reasoning effor
 
 The goal is a complete Rust rewrite ([goal and phases](planning.md#goal-and-phases)). Each free
 slot takes ready work from the earliest phase, and later phases fill the rest
-(user decision, 2026-10-28). Position at code `2a89fb023f` (integration 47) in
+(user decision, 2026-10-28). Position at code `6afdcbf390` (integration 65) in
 code lines from `python3 tools/port-metrics.py --whole-fork`, with the change
-since the previous navigation's inventory at `06a644505a` in parentheses.
-Source areas are an accounting classification: they do not move drawing or
-executable header logic into a different phase.
+since the previous navigation's position at `2a89fb023f` (integration 47) in
+parentheses. Source areas are an accounting classification: they do not move
+drawing or executable header logic into a different phase. "Retired" counts a
+rewritten consumer line as retired and its replacement as glue, so compiled C++
+(original plus glue) is the distance.
 
 | Area | Original | Retired | Left | Glue added | Compiled C++ |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Simulation logic | 47,424 | 37,571 (+1,827) | 9,853 | 6,974 (+276) | 16,827 (-1,551) |
-| Simulation storage | 13,724 | 2,717 (+74) | 11,007 | 1,335 (+23) | 12,342 (-51) |
-| NewGRF | 10,785 | 5,280 (+62) | 5,505 | 428 (+5) | 5,933 (-57) |
-| Save/load | 13,388 | 536 | 12,852 | 585 | 13,437 |
-| Script API | 14,908 | 878 | 14,030 | 453 | 14,483 |
-| Network | 12,713 | 211 | 12,502 | 182 | 12,684 |
-| Support | 21,617 | 982 (+317) | 20,635 | 513 (+89) | 21,148 (-228) |
+| Simulation logic | 47,424 | 37,640 (+69) | 9,784 | 6,460 (-514) | 16,244 (-583) |
+| Simulation storage | 13,724 | 2,767 (+50) | 10,957 | 1,313 (-22) | 12,270 (-72) |
+| NewGRF | 10,785 | 5,201 (-79) | 5,584 | 349 (-79) | 5,933 (0) |
+| Save/load | 13,388 | 1,075 (+539) | 12,313 | 727 (+142) | 13,040 (-397) |
+| Script API | 14,908 | 1,202 (+324) | 13,706 | 542 (+89) | 14,248 (-235) |
+| Network | 12,713 | 561 (+350) | 12,152 | 234 (+52) | 12,386 (-298) |
+| Support | 21,617 | 930 (-52) | 20,687 | 452 (-61) | 21,139 (-9) |
 | Graphics and viewport | 10,985 | 4 | 10,981 | 1 | 10,982 |
-| GUI | 52,179 | 117 | 52,062 | 165 | 52,227 |
+| GUI | 52,179 | 115 (-2) | 52,064 | 162 (-3) | 52,226 (-1) |
 | Platform | 11,941 | 0 | 11,941 | 2 | 11,943 |
 | Data tables | 17,295 | 4,364 | 12,931 | 0 | 12,931 |
-| Vendored | 55,148 | 522 | 54,626 | 163 | 54,789 |
-| Upstream tests | 2,248 | 0 | 2,248 | 5,118 (+435) | 7,366 (+435) |
-| Boundary layer | 0 | 0 | 0 | 18,154 (+657) | 18,154 (+657) |
-| **Whole fork** | **284,355** | **53,182 (18.70%, +2,280)** | **231,173** | **34,073 (+1,485)** | **265,246 (93.28%, -795)** |
+| Vendored | 55,148 | 2,317 (+1,795) | 52,831 | 0 (-163) | 52,831 (-1,958) |
+| Upstream tests | 2,248 | 0 | 2,248 | 5,292 (+174) | 7,540 (+174) |
+| Boundary layer | 0 | 0 | 0 | 18,352 (+198) | 18,352 (+198) |
+| **Whole fork** | **284,355** | **56,176 (19.76%, +2,994)** | **228,179** | **33,886 (-187)** | **262,065 (92.16%, -3,181)** |
 
-The boundary has 1,377 Rust exports (+80) and 4,206 callback slots (+132).
-Rust totals 124,225 code lines (+6,446) and tooling 51,310 (+3,636).
-Simulation-source retirement is 40,288 of 61,148 (65.89%). The duplicate
-baselines hold 581 rebound-callee rows (585 when the gate landed), 128
-shared-accessor rows (206 at the start) and 55 orphan exports (62).
+The boundary has 1,443 Rust exports (+66) and 4,064 callback slots (-142).
+Rust totals 127,673 code lines (+3,448) and tooling 53,611 (+2,301).
+Simulation-source retirement is 40,407 of 61,148 (66.08%, +119). The duplicate
+baselines at `5e414c5a64` hold 418 rebound-callee rows (581), 126
+shared-accessor rows (128) and 54 orphan exports (55). #607 (integration 48)
+re-baselined the count: its sweep removed 812 retired and 813 glue lines that
+`WITH_RUST` fallbacks had counted on both sides, leaving compiled C++ unchanged.
 
 | Period (steering and navigation commits) | Days | Retired | Per day | Compiled C++ change | Per day |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Fork start to 10-09 | 7.0 | 23,244 | 3,330 | -10,321 | -1,480 |
-| 10-09 to 10-21 | 12.1 | 8,971 | 740 | +1,408 | +120 |
-| 10-21 to 10-27 | 6.4 | 17,321 | 2,720 | -8,995 | -1,410 |
-| 10-27 to the first navigation (10-28) | 1.2 | 575 | 470 | +92 | +80 |
-| First to second navigation | 0.45 | 791 | 1,760 | -498 | -1,110 |
-| Second navigation to now | 2.4 | 2,280 | 950 | -795 | -330 |
-| **Whole history** | **29.6** | **53,182** | **1,800** | **-19,109** | **-650** |
+| Fork start (`6ced7c097e`, 10-02) to 10-27 | 24.7 | 49,536 | 2,010 | -17,908 | -730 |
+| 10-27 to the navigation at integration 47 (10-31) | 4.1 | 3,646 | 890 | -1,201 | -290 |
+| Navigation to the twenty-sixth steering (11-01) | 1.12 | 13 (825 without #607) | 10 (730) | -488 | -430 |
+| Twenty-sixth to twenty-seventh steering (11-02) | 0.59 | 197 | 330 | -256 | -430 |
+| Twenty-seventh steering to now | 0.22 | 2,784 | | -2,437 (-479 without #642's vendored swap) | |
+| **Since the last navigation** | **1.93** | **2,994** | **1,550** | **-3,181 (-1,223 without the swap)** | **-1,650 (-630)** |
+| **Whole history** | **30.75** | **56,176** | **1,830** | **-22,290** | **-730** |
 
-Days are calendar days, including pauses; root ran for about one day of the
-last 2.4. Three things set the last period's rate:
-- Retirement per integration fell from about 390 lines (integrations 29 to 32)
-  to about 140 (39 to 47), and the four drafts now open hold 34 to 88 each.
-- Glue rose 65% as fast as retirement: the boundary layer grew 657 lines and
-  native test fixtures 435. So compiled C++ fell 795 lines while 2,280 original
-  lines retired. Moving records in phase 2 deletes most per-field services,
-  and phase 2 has not started.
-- Tooling grew 1.6 lines per retired line.
+Days are calendar days. Integrations 48 to 65 landed in three root sessions
+(10-31 19:47Z to 21:33Z, 11-01 16:42Z to 11-02 00:17Z, 11-02 12:00Z to 14:52Z);
+the gaps were Claude session limits, user pauses and steering. What set the rate:
+- #642 replaced bundled Monocypher with maintained crates: 1,958 of the
+  3,181-line fall. Without it, compiled C++ fell 630 lines per day, twice the
+  previous period's 290 but under the whole-history 730. At that rate the
+  209,000 non-vendored compiled lines take about 330 days.
+- The other ownership ports moved compiled C++ between +28 (#645) and -224
+  (#633) each. Phase-3 owners delivered under their estimates: #575 planned
+  1,000 to 1,350 retired and delivered 354 with +220 net glue (compiled -134).
+- #570, phase 2's template, has not integrated: its checkpoint stands at
+  compiled C++ -377.
 
 Why the course changed:
-1. Phase 1's exit criterion and the planning trigger in `/start-development`
-   (fewer than three unstarted owners in the earliest unfinished phase) kept
-   every slot on phase 1 after its large owners ran out. Of the 9,853 lines left
-   in its bucket, about 4,700 are drawing and description (phase 5) and 510 are
-   startup (phase 4). About 1,700 are three- and four-line facade shells
-   (signature and braces) that retire with their C++ callers. About 2,250 are
-   other non-drawing bodies in about 200 functions across 51 files; the rest
-   are file-scope declarations (about 350), `command.cpp` (151, #559) and
-   `tilearea.cpp` (172, #69). #621 makes this inventory a tool. Planning cut
-   owners of 11 to 88 lines from that tail. Meanwhile phase-3 owners sized at
-   1,000 to 2,900 retired lines each (#573, #574, #575) have been queued since
-   10-29. Every owner pays
-   the same issue, review and exact-head Full cost. Phase 1 now closes with its
-   open drafts and the two excluded items whose return condition is its exit.
-   Its remaining bodies move with the phase-2 owner of their files.
-2. #581 PR-B (#607) was the previous navigation's first action and is phase 2's
-   only prerequisite, yet it is still a draft. Integration in readiness order
-   let eight integrations pass it on 10-31. Each moved base and forced a new
-   sweep and deviation proof, and the checkpoint then queued it behind #603 as
-   well. A sweep across `src/` now integrates before other `src/` changes
-   ([integration](workflow.md#integration)).
-3. #566's drawing evidence gates #570's integration, but the work order started
-   it only after PR-B, which it does not need. It starts now.
+1. Phase 2 could exit with C++ kept indefinitely. Its exit criterion here
+   required "no per-field service ... for moved data", and
+   [storage ports](porting.md#storage-ports) deleted only "replaced" services.
+   #563's design keeps "Money/date fields and unselected vehicle fields in the
+   shell" (`docs/design/world-state.md`, #563 records), yet Rust's maintenance
+   owner reads reliability, age, value, profit and breakdown fields through
+   `OpenTTDVehicleMaintenanceServices` and the shared vehicle table's
+   `write_profit`, `write_reliability` and service-date slots. No later phase
+   moves simulation fields, so those services and the shells would never
+   retire. A pool is now moved only when no Rust code reaches any of its
+   fields through a service, and #656 owns the vehicle remainder.
+2. Planning ranked and costed owners by retired lines everywhere except phase 2
+   ([selection](planning.md#selection)). Retired lines count rewritten lines
+   and ignore glue, so #575's +220 net glue never counted against it. Every
+   phase now ranks and decides cost by compiled C++ removed.
+3. The planning trigger in `/start-development` (step 3) counted unstarted
+   owners, including blocked ones. Phase 2's unstarted owners all wait for
+   #570, and phase 3's queued #653 and #573 slice 3b wait for drafts, so
+   planning would not run while no owner is ready and about 35,000 phase-3
+   lines have none. It now counts ready owners.
 
-| Phase | Left | Exit criterion | Status |
+| Phase | Left (code lines) | Exit criterion | Status |
 | --- | --- | --- | --- |
-| 1. Simulation logic | About 2,250 lines of non-drawing bodies in the logic bucket, plus #559's command invocation (`command.cpp`, 151) and #69's tile areas (`tilearea.cpp`, 172) | Its open drafts, #559 and #69 integrate. Every other remaining non-drawing body belongs to the phase-2 owner of its file | Exited at integration 63 (#640, #559), after #69 (60) and the earlier drafts. No further phase-1 owner is planned |
-| 2. Simulation storage | 11,007 in the storage bucket, plus the phase-1 bodies left in each pool's files | Every pool record and the map arrays are defined once in Rust, keep the original pool, lifetime and save behavior ([world-state design](design/world-state.md#transferring-shared-storage)), and are read in place by both languages. C++ calls Rust only for operations, and no per-field service or per-call-site reader remains for moved data. Each pool owner also ports the remaining non-drawing bodies in its files | PR-B (#607) first, then #570 with #566. Pools in order: vehicles (#570, then #598 and #599); stations and road stops; towns and industries; companies, groups, engines, link graph and the smaller pools; orders; then the map with the rail, road, water, tunnel, landscape and tile bodies |
-| 3. Simulation data readers | 41,096: save/load 12,852, script 13,099, network 9,640, NewGRF 5,505 | These run in Rust; the Squirrel VM may stay C++ until phase 6 | #573, #574 and #575 are queued; #497 and #498 are parked (work order 5). They take every slot phases 1 and 2 leave free |
-| 4. Support | 31,616 support and graphics lines, plus startup in `openttd.cpp` (510); data tables (12,931) retire with their consumers | Not planned yet | Not planned until it is the next phase (user direction, 2026-10-28) |
-| 5. Interface | 67,796 GUI and platform lines including script and network GUI, plus about 4,700 drawing and description lines in the logic bucket | Not planned yet | As above |
-| 6. Vendored | 54,626 | Not planned yet | As above |
+| 1. Simulation logic | Its bucket's 9,784: about 3,780 drawing and description (phase 5), 490 startup in `openttd.cpp` (phase 4), 1,975 facade shells that retire with their callers, 540 file scope and about 3,000 non-drawing bodies | Every remaining non-drawing body belongs to the phase-2 owner of its file | Exited at integration 63 (#640, #559) |
+| 2. Simulation storage | 10,957 in the storage bucket, the phase-1 bodies above, and the per-field services within the boundary layer's 18,352 glue lines and 4,064 callback slots | No Rust code reads or writes a pool or map field through a C++ service or per-call-site reader ([storage ports](porting.md#storage-ports)). Records and map arrays are defined once in Rust, keep the original pool, lifetime and save behavior ([world-state design](design/world-state.md#transferring-shared-storage)), and are read in place by both languages; C++ calls Rust only for operations. Fields only unported C++ touches stay in shells, each named with the phase that moves it. Each pool owner also ports the remaining non-drawing bodies in its files | Current. #570 (#636) is at checkpoint 2 (compiled C++ -377). Then #656, the remaining vehicle fields (it may join #598 and #599 as one owner); #634 with #635; orders; #637; companies and groups; link graph; #638; then the map with the rail, road, water, tunnel, landscape and tile bodies |
+| 3. Simulation data readers | 39,962: save/load 12,313, script 12,782, network 9,283, NewGRF 5,584. Script and network GUI (3,793) are phase 5 | These run in Rust. The Squirrel VM and the C++ binding shims it calls may stay until phase 6 | Next, beside phase 2. #575 integrated (65). Open owners cover about 5,000: #573, #574 (#628), #652 (#655) and #653. About 35,000 have none: `afterload.cpp` and the old loader, chunk handlers, script API classes, content, admin and coordinator protocols, network core, and NewGRF configuration and actions |
+| 4. Support | 45,100: support 20,687, graphics and viewport 10,981, startup 490, and data tables 12,931, which retire with their consumers | Not planned yet | Planned when phase 2 exits and phase 4 becomes the next phase (user direction, 2026-10-28) |
+| 5. Interface | 71,570: GUI 52,064, platform 11,941, script and network GUI 3,793, and about 3,780 drawing lines in the logic bucket | Not planned yet | As above |
+| 6. Vendored | 52,831. Only Squirrel (8,774) and md5, ICU and the social API (452) need a port or crate. nlohmann JSON (14,452), fmt (11,986), Catch2 (11,469) and the OpenGL headers (5,604) retire with their last C++ user | Not planned yet | As above |
 
 Upstream unit tests (2,248) and fixture glue retire with the code they test.
-Boundary-layer glue retires as its C++ callers do.
+Boundary-layer glue retires as its C++ callers do; phase 2 deletes its per-field part.
 
-Root's first actions from this chart. They override the plan-after47 input's
-#603-before-#607 order and its phase-1 rankings:
-1. #581 PR-B (#607) integrates before any other `src/` change, #603 included:
-   finish its current-base sweep, replay and deviation proof, then bootstrap
-   Full. Other drafts keep implementing and reviewing, then adopt it at their
-   base update. #621 changes only `tools/` and may integrate meanwhile.
-2. Start #566 in the next free slot. Start #570 when PR-B integrates.
-3. Finish #612, #616, #618 and #619, and select #559 and #69 as phase 1's last
-   owners. The plan-after47 phase-1 candidates (link-graph job lifecycle, elrail
-   transition, land count) join the phase-2 owners of their files.
-4. Fill every other free slot with phase 3 (#573, #574, #575; #497 and #498 are parked),
-   ranked under [selection](planning.md#selection).
-5. Size new owners to repay their review and Full ([selection](planning.md#selection)),
-   and record the compiled-C++ rate at each stocktake (`/start-development`, step 4).
-6. Collapse glue duplication where it lives longest: after PR-B, #622 takes
-   the NewGRF specification and shared-operation bindings, about 332 of the
-   526 rebound rows, which stay compiled until phases 3 to 5. The rest bind
-   record fields, which go when phase-2 owners move those records, so do not
-   tidy them first. Each stocktake records the baseline sizes.
+Root's first actions from this chart, after the resume checkpoint's cadence repair:
+1. Run a planning round now: the corrected trigger fires, because no phase-2 or
+   phase-3 owner is ready. Size phase 3's unowned 35,000 lines and rank owners
+   by compiled C++ removed ([selection](planning.md#selection)), leaving the
+   Squirrel VM and its binding shims. Place #656.
+2. Finish #570's checkpoint 2, then #656 (alone or with #598 and #599, decided
+   at planning). Every later pool owner's issue lists the shell fields Rust
+   still reaches through services and moves them, as #634 and #635 already do,
+   and names each field it leaves with the phase that moves it.
+3. Record each owner's compiled-C++ estimate in its issue and its actual change
+   at integration, and compare them at each stocktake.
 
 ## Twenty-seventh steering review (2026-11-02: a compiler defect at the boundary and the phase-2 template)
 

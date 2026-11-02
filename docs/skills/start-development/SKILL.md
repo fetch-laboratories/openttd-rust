@@ -50,7 +50,7 @@ Done when each finished change is integrated and cleaned up, or has its next act
 
 Plan when the queue or issue placement needs attention.
 
-- Trigger planning when the current and next phases together hold fewer than three unstarted ownership items, the next phase has none queued, or `issues.py` shows unplaced issues. A phase at its exit gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
+- Trigger planning when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or integration), the next phase has no ready owner, or `issues.py` shows unplaced issues. A phase at its exit gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
 - Spawn a fresh high-effort planning agent (Astra in Codex). Name no preferred candidate.
 - Have it size remaining code and rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection). Point it at the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md).
 - Never fall back to `deferred-improvement` issues. Have it reread `issues.py` and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral).

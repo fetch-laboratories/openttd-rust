@@ -23,6 +23,7 @@ For agents writing or reviewing port code, tests and Python tools.
 ## Storage ports
 
 - The rewrite retires object classes and map accessors in headers (user, 2026-10-28). Once control flow is in Rust, move records to Rust: pool objects (vehicles first, #563; then stations, orders, towns, industries, companies and the rest), then map arrays.
+- A pool's storage is moved when no Rust code reaches any of its fields through a C++ service. Move every field Rust reads or writes, across one or more owners. A field stays in its C++ shell only while no Rust code touches it, and moves with the owner of its last C++ consumer; the shell retires with its callers.
 - Define each moved record once in Rust with a C-compatible layout. Generate its C++ declaration and check the layout at build. `tools/port-metrics.py` counts the declaration as compiled C++ glue. Both languages access fields in place.
 - Unported C++ drawing, GUI, save/load, scripts and network use inline accessors over the shared layout, never a call per field. Only operations such as allocation, deletion, iteration with hooks and virtual behavior cross as calls. Delete replaced per-field services and reader carriers, together with their rows in the rebound-callee and shared-accessor baselines, and report the rows removed in the PR.
 
