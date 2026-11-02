@@ -21,6 +21,7 @@
 #include <map>
 #include "../safeguards.h"
 
+extern "C" uint8_t openttd_test_command_stack_probe(const OpenTTDCommandCostServices *);
 extern "C" void openttd_test_fleet_pending_drain(const OpenTTDFleetPendingServices *, const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, void *);
 TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 {
@@ -83,7 +84,7 @@ TEST_CASE("Command - opaque stack lifetime and moved encoded errors")
 		command_cost_stack.pop_back(); GetRustCommandCostServices().destroy(p);
 	};
 	command_cost_lifo = true;
-	CHECK(openttd_rust_command_stack_probe(&traced));
+	CHECK(openttd_test_command_stack_probe(&traced));
 	CHECK(command_cost_lifo);
 	CHECK(command_cost_stack.empty());
 	AutoRestoreBackup<CompanyID> company(_current_company, CompanyID(0)), local(_local_company, CompanyID(0));
