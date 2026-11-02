@@ -31,7 +31,7 @@ inline OpenTTDCargoServices CargoTestServices()
 		.x = [](OpenTTDVehicle *) noexcept -> int32_t { std::abort(); },
 		.y = [](OpenTTDVehicle *) noexcept -> int32_t { std::abort(); },
 		.z = [](OpenTTDVehicle *) noexcept -> int32_t { std::abort(); },
-		.cost_animation = [](int32_t, int32_t, int32_t, int64_t) noexcept { std::abort(); },
+		.shared = nullptr,
 		.feeder_animation = [](int32_t, int32_t, int32_t, int64_t, int64_t) noexcept { std::abort(); },
 		.subsidy_multiplier = []() noexcept -> uint8_t { std::abort(); },
 		.feeder_payment_share = []() noexcept -> uint8_t { std::abort(); },

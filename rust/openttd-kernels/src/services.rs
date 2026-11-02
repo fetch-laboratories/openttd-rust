@@ -138,10 +138,6 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
-    /// Enter native command nesting and report whether this entry is top-level.
-    pub enter: extern "C" fn() -> bool,
-    /// Leave exactly one command nesting level.
-    pub leave: extern "C" fn(),
     /// Canonical native finance owner resolution and presentation leaves.
     pub finance: &'static crate::company::FinanceServices,
     /// Current infinite-money difficulty setting.
@@ -156,6 +152,28 @@ pub struct CommandServices {
     pub company: extern "C" fn() -> *const crate::company::Services,
     /// Direct Rust occupancy owner, shared by every command.
     pub occupancy: extern "C" fn() -> *const crate::vehicle::occupancy::Commands,
+    /// Shared map, company and generation observations of the invocation lifecycle.
+    pub shared: &'static Services,
+    /// Native result storage of every invocation.
+    pub cost: &'static CommandCostServices,
+    /// Rail map table of the signal buffer owner for `UpdateSignalsInBuffer`.
+    pub rail_map: &'static RailMapServices,
+    /// Native signal leaves of the signal buffer owner.
+    pub signals: &'static crate::signal::SignalServices,
+    /// `_shift_pressed`.
+    pub shift_pressed: extern "C" fn() -> bool,
+    /// `_settings_game.construction.command_pause_level`.
+    pub pause_level: extern "C" fn() -> u8,
+    /// `Company::GetIfValid(company)->last_build_coordinate = tile`.
+    pub last_build_coordinate: extern "C" fn(u8, u32),
+    /// `STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY`.
+    pub not_enough_cash: u32,
+    /// `ShowErrorMessage` with `STR_ERROR_NOT_ALLOWED_WHILE_PAUSED` at pixel coordinates.
+    pub paused_error: extern "C" fn(u32, i32, i32),
+    /// `ShowErrorMessage` for a failed result at pixel coordinates.
+    pub error_message: extern "C" fn(u32, i32, i32, *const CommandCost),
+    /// `ShowEstimatedCostOrIncome`.
+    pub estimate: extern "C" fn(i64, i32, i32),
 }
 
 impl CommandServices {
@@ -270,6 +288,8 @@ pub struct Services {
     pub company_valid: extern "C" fn(u8) -> bool,
     /// Opaque context for test fixtures; production leaves ignore it.
     pub context: *mut c_void,
+    /// Canonical `ShowCostOrIncomeAnimation` presentation leaf.
+    pub cost_animation: extern "C" fn(i32, i32, i32, i64),
     /// Original `GetCrossingRoadBits`.
     pub crossing_road_bits: extern "C" fn(u32) -> RoadBits,
     /// Current native command actor, read at the original short-circuit point.
@@ -394,6 +414,8 @@ pub struct Services {
     pub station_serve_neutral: extern "C" fn() -> bool,
     /// Canonical shared `station_type` service.
     pub station_type: extern "C" fn(u32) -> StationType,
+    /// Persistent storage backup release on leaving command or test mode.
+    pub storage_discard: extern "C" fn(*mut std::ffi::c_void),
     /// Canonical shared `tile_animation_add` service.
 
     /// Canonical shared `tile_animation_delete` service.
@@ -692,8 +714,6 @@ crate::abi::layouts! {
         wormhole_reserved,
     };
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
-        enter,
-        leave,
         finance,
         infinite_money,
         money_error,
@@ -701,6 +721,22 @@ crate::abi::layouts! {
         landscape_commands,
         company,
         occupancy,
+        shared,
+        cost,
+        rail_map,
+        signals,
+        shift_pressed,
+        pause_level,
+        last_build_coordinate,
+        not_enough_cash,
+        paused_error,
+        error_message,
+        estimate,
+    };
+    "OpenTTDCommandAdmission" ["probe"] => crate::command::Admission {
+        rejected,
+        estimate_only,
+        only_sending,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
         construct,
@@ -738,6 +774,7 @@ crate::abi::layouts! {
         clear_square_services,
         company_valid,
         context,
+        cost_animation,
         crossing_road_bits,
         current_company,
         depot_index,
@@ -800,6 +837,7 @@ crate::abi::layouts! {
         station_gfx,
         station_serve_neutral,
         station_type,
+        storage_discard,
 
         tile_animation_set_frame,
         town_next_id,
@@ -1012,6 +1050,7 @@ pub fn fixture(
         },
         company_valid: unused_company_valid,
         context,
+        cost_animation: fixture_cost_animation,
         crossing_road_bits: fixture_crossing_road_bits,
         current_company: unused_current_company,
         depot_index: short,
@@ -1077,6 +1116,7 @@ pub fn fixture(
         station_gfx: byte,
         station_serve_neutral: flag0,
         station_type: fixture_station_type,
+        storage_discard: fixture_storage_discard,
 
         tile_animation_set_frame: zone,
         town_next_id: word,
@@ -1505,6 +1545,8 @@ extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices 
     panic!("unused road stop table")
 }
 #[cfg(test)]
+extern "C" fn fixture_storage_discard(_: *mut std::ffi::c_void) {}
+#[cfg(test)]
 extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")
 }
@@ -1566,4 +1608,9 @@ extern "C" fn fixture_town_by_id(_: u32) -> *mut TownHandle {
 #[cfg(test)]
 extern "C" fn fixture_kdtree_partition(_: *mut crate::kdtree::SplitKey<u16>, _: usize) -> usize {
     unreachable!()
+}
+
+#[cfg(test)]
+extern "C" fn fixture_cost_animation(_: i32, _: i32, _: i32, _: i64) {
+    panic!("unused cost animation")
 }
