@@ -341,7 +341,6 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 		.company = &GetRustCompanyIdentityServices(),
 		.subtract = unused,
 		.command = unused,
-		.animation = unused,
 		.length_news = unused,
 		.failed_news = unused,
 		.cash = 0,

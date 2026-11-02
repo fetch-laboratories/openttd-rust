@@ -87,7 +87,6 @@ struct OpenTTDWorldServices {
 	void (*restore_company)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(restore_company);
 	bool (*callback)(OpenTTDWorldFrame *, GWDoneProc *) noexcept OPENTTD_SERVICE_DEFAULT(callback);
 	uint8_t (*exception_kind)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(exception_kind);
-	void (*storage_discard)(void *) noexcept OPENTTD_SERVICE_DEFAULT(storage_discard);
 	bool (*dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(dedicated);
 	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
 	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);

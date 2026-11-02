@@ -99,6 +99,7 @@ struct OpenTTDSharedServices {
 	OpenTTDClearSquareServices clear_square_services;
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
+	void (*cost_animation)(int32_t, int32_t, int32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(cost_animation);
 	RoadBits (*crossing_road_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_bits);
 	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	uint16_t (*depot_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_index);
@@ -161,6 +162,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*station_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_gfx);
 	bool (*station_serve_neutral)() noexcept OPENTTD_SERVICE_DEFAULT(station_serve_neutral);
 	StationType (*station_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_type);
+	void (*storage_discard)(void *) noexcept OPENTTD_SERVICE_DEFAULT(storage_discard);
 
 	void (*tile_animation_set_frame)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_set_frame);
 	uint32_t (*town_next_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_next_id);
