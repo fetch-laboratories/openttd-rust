@@ -172,7 +172,7 @@ static OpenTTDSharedServices fixture_shared;
 static OpenTTDCommandPostServices fixture_post;
 static OpenTTDCommandServices fixture_command;
 static OpenTTDNetworkCommandServices fixture_network_command;
-static OpenTTDCompanyServices fixture_network_company;
+static OpenTTDCompanyServices fixture_network_company, fixture_post_company;
 static OpenTTDCompanyIdentityServices fixture_identity;
 static OpenTTDSharedServices fixture_identity_shared;
 static OpenTTDFaceServices fixture_faces;
@@ -226,7 +226,7 @@ static void FixtureReset(bool networking, bool server)
 	fixture_command = GetRustCommandServices();
 	fixture_command.finance = &fixture_finance;
 	fixture_command.shared = &fixture_shared;
-	fixture_command.company = []() noexcept -> const OpenTTDCompanyServices * { return &fixture_services; };
+	fixture_command.company = []() noexcept -> const OpenTTDCompanyServices * { return &fixture_post_company; };
 	fixture_command.shift_pressed = []() noexcept { return false; };
 	fixture_post.command = []() noexcept -> const OpenTTDCommandServices & { return fixture_command; };
 	fixture_post.desync_logging = []() noexcept { return false; };
@@ -279,6 +279,9 @@ static void FixtureReset(bool networking, bool server)
 	fixture_services.delete_company = FixturePostDelete;
 	fixture_services.company_removed = [](uint8_t, uint8_t) noexcept {};
 	fixture_shared.screen_dirty = FixtureVoid;
+	fixture_post_company = fixture_services;
+	/* Company-control completion restores this fixture's initial current company. */
+	fixture_post_company.local_company = []() noexcept -> uint8_t { return 18; };
 }
 /* The default maps do not load unclassified NewGRF road masks or extreme prices. */
 TEST_CASE("Commands - road price saturation, rounding and independent type masks")
