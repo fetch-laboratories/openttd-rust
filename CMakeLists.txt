@@ -449,7 +449,7 @@ set_property(SOURCE src/3rdparty/monocypher/monocypher.cpp src/network/network_c
 if(BUILD_TESTING)
     add_executable(openttd_rust_abi tools/migration/windows-abi.cpp src/3rdparty/monocypher/monocypher.cpp)
     target_include_directories(openttd_rust_abi PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tools/migration")
-    target_link_libraries(openttd_rust_abi PRIVATE openttd_rust)
+    target_link_libraries(openttd_rust_abi PRIVATE openttd_rust_native_test_support)
     if(NOT MSVC AND NOT APPLE)
         # GCC emits the original headers' unused non-inline static helpers at -O0, such as
         # ScaleByInverseCargoScale reading _settings_game, which this probe does not link.

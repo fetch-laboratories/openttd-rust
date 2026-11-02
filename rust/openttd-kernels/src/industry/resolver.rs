@@ -3,7 +3,7 @@
 //! ordered registries are read directly, and Action2, town and storage calls can reenter.
 use super::{
     Builder, ConstructionServices, GenerationServices, Industry, LifecycleServices, SpecHandle,
-    TileServices, TileSpec, TownHandle,
+    TileServices, TownHandle,
 };
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{
@@ -50,28 +50,13 @@ pub struct ResolverServices {
     pub lifecycle: *const LifecycleServices,
     pub tile: *const TileServices,
     pub get: unsafe extern "C" fn(u16) -> ResolverRef,
-    pub spec_grfid: unsafe extern "C" fn(*const SpecHandle) -> u32,
-    pub spec_local_id: unsafe extern "C" fn(*const SpecHandle) -> u16,
-    pub root: unsafe extern "C" fn(*const SpecHandle, bool) -> *const c_void,
-    pub tile_root: unsafe extern "C" fn(*const TileSpec, bool) -> *const c_void,
-    pub tile_local_id: unsafe extern "C" fn(*const TileSpec) -> u16,
-    pub tile_override: unsafe extern "C" fn(*const TileSpec) -> u16,
-    pub tile_grfid: unsafe extern "C" fn(*const TileSpec) -> u32,
-    pub tile_has_groups: unsafe extern "C" fn(*const TileSpec) -> bool,
-    pub tile_substitute: unsafe extern "C" fn(*const TileSpec) -> u16,
     pub clean_gfx: unsafe extern "C" fn(u32) -> u16,
     pub nearby: unsafe extern "C" fn(u8, u32, bool) -> u32,
     pub water_distance: unsafe extern "C" fn(u32, bool) -> u32,
     pub town_tile: unsafe extern "C" fn(*const crate::services::TownHandle) -> u32,
     pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub founder_info: unsafe extern "C" fn(u8) -> FounderInfo,
-    pub grfid: unsafe extern "C" fn(*const c_void) -> u32,
-    pub version: unsafe extern "C" fn(*const c_void) -> u8,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
-    pub cargo_file: unsafe extern "C" fn(*const c_void) -> *const std::ffi::c_void,
-    pub cargo_map: unsafe extern "C" fn(*const SpecHandle, u8) -> u8,
-    pub badges: unsafe extern "C" fn(*const c_void, *const SpecHandle, u32) -> u32,
-    pub tile_badges: unsafe extern "C" fn(*const c_void, *const TileSpec, u32) -> u32,
     pub storage_owner:
         unsafe extern "C" fn(*mut c_void) -> *mut crate::newgrf_storage::Payload<256>,
     pub unhandled: unsafe extern "C" fn(u8, bool, bool, u16),
@@ -80,7 +65,6 @@ pub struct ResolverServices {
     pub existing_town: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
     pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
     pub callback: unsafe extern "C" fn(u16, u32, u32, *mut c_void, u8, u32) -> u16,
-    pub boolean: unsafe extern "C" fn(*const SpecHandle, u16, u16) -> bool,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
 }
 impl ResolverServices {
@@ -132,25 +116,31 @@ fn id_at_offset(tile: u32, id: u16, grfid: u32, s: &ResolverServices) -> u32 {
     let gfx = unsafe { (s.clean_gfx)(tile) };
     let spec = unsafe { (s.tile().spec)(gfx) };
     if gfx < NEW_INDUSTRYTILEOFFSET {
-        let override_id = unsafe { (s.tile_override)(spec) };
+        let override_id = (s.shared().specs().industry_tile().substitute().override_id)(spec);
         if override_id == INVALID_INDUSTRYTILE {
             return 0xff00 | u32::from(gfx);
         }
         let other = unsafe { (s.tile().spec)(override_id) };
-        return if unsafe { (s.tile_grfid)(other) } == grfid {
-            u32::from(unsafe { (s.tile_local_id)(other) })
+        return if (s.shared().specs().industry_tile().grfid)(other) == grfid {
+            u32::from((s.shared().specs().industry_tile().local_id)(other))
         } else {
             0xfffe
         };
     }
-    if unsafe { (s.tile_has_groups)(spec) } {
-        if unsafe { (s.tile_grfid)(spec) } == grfid {
-            u32::from(unsafe { (s.tile_local_id)(spec) })
+    if (s
+        .shared()
+        .specs()
+        .industry_tile()
+        .standard()
+        .has_sprite_groups)(spec)
+    {
+        if (s.shared().specs().industry_tile().grfid)(spec) == grfid {
+            u32::from((s.shared().specs().industry_tile().local_id)(spec))
         } else {
             0xfffe
         }
     } else {
-        0xff00 | u32::from(unsafe { (s.tile_substitute)(spec) })
+        0xff00 | u32::from((s.shared().specs().industry_tile().substitute().substitute)(spec))
     }
 }
 fn nearby_information(
@@ -211,7 +201,9 @@ fn count_and_distance(
         parameter
     } else {
         if grfid == u32::MAX {
-            grfid = unsafe { (s.spec_grfid)(s.spec((*current.owner).metadata.kind)) };
+            grfid = unsafe {
+                (s.shared().specs().industry().grfid)(s.spec((*current.owner).metadata.kind))
+            };
         }
         parameter |= 0x80;
         map_type(parameter, grfid)
@@ -281,7 +273,7 @@ fn variable(
     if callback == CBID_INDUSTRY_LOCATION {
         witness::hit(witness::INDUSTRY_RESOLVER_LOCATION);
         match variable {
-            0x7a => return unsafe { (s.badges)(ro, s.spec(c.kind), parameter) },
+            0x7a => return (s.shared().specs().industry().badges)(ro, s.spec(c.kind), parameter),
             0x80 => return c.tile,
             0x81 => return (c.tile >> 8) & 255,
             0x82 => return town_id(c.town, s),
@@ -303,7 +295,7 @@ fn variable(
             }
             0x8a => {
                 return (s.shared().tile_z)(c.tile)
-                    .wrapping_mul(if unsafe { (s.version)(ro) } >= 8 {
+                    .wrapping_mul(if (s.shared().resolver_grf_version)(ro) >= 8 {
                         1
                     } else {
                         crate::tile_type::TILE_HEIGHT as i32
@@ -369,7 +361,7 @@ fn variable(
         0x60 => id_at_offset(
             unsafe { (s.nearby)(parameter as u8, (*i).metadata.tile, false) },
             c.id,
-            unsafe { (s.grfid)(ro) },
+            (s.shared().resolver_grf_file_id)(ro),
             s,
         ),
         0x61 if c.tile != INVALID_TILE => {
@@ -385,7 +377,7 @@ fn variable(
             c.tile,
             INVALID_INDUSTRY,
             false,
-            unsafe { (s.version)(ro) } >= 8,
+            (s.shared().resolver_grf_version)(ro) >= 8,
             s,
         ),
         0x63 if c.tile != INVALID_TILE => {
@@ -397,7 +389,7 @@ fn variable(
             }
         }
         0x64 if c.tile != INVALID_TILE => {
-            let kind = map_type(parameter as u8, unsafe { (s.spec_grfid)(spec) });
+            let kind = map_type(parameter as u8, (s.shared().specs().industry().grfid)(spec));
             if kind >= NUM_INDUSTRYTYPES {
                 u32::MAX
             } else {
@@ -424,13 +416,11 @@ fn variable(
             count_and_distance(parameter as u8, reg as u8, reg & 0x100 != 0, c, builder, s)
         }
         0x69..=0x6d | 0x70 | 0x71 => {
-            let cargo = unsafe {
-                crate::cargo_registry::openttd_rust_cargo_translate(
-                    parameter as u8,
-                    (s.cargo_file)(ro),
-                    false,
-                )
-            };
+            let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+                parameter as u8,
+                (s.shared().resolver_grf_file)(ro),
+                false,
+            );
             let Some(slot) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
                 return 0;
             };
@@ -446,13 +436,11 @@ fn variable(
             }
         }
         0x6e | 0x6f => {
-            let cargo = unsafe {
-                crate::cargo_registry::openttd_rust_cargo_translate(
-                    parameter as u8,
-                    (s.cargo_file)(ro),
-                    false,
-                )
-            };
+            let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
+                parameter as u8,
+                (s.shared().resolver_grf_file)(ro),
+                false,
+            );
             let Some(slot) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
                 return 0;
             };
@@ -463,7 +451,7 @@ fn variable(
                 u32::from(a.waiting)
             }
         }
-        0x7a => unsafe { (s.badges)(ro, s.spec(c.kind), parameter) },
+        0x7a => (s.shared().specs().industry().badges)(ro, s.spec(c.kind), parameter),
         0x7c => {
             // Resolve the native shell association once, then read the canonical
             // Rust payload directly. Temporary invalid-ID scopes can read PSA;
@@ -530,7 +518,7 @@ fn variable(
             (*super::get_produced(i, usize::from(variable - 0x9c))).history[usize::from(LAST_MONTH)]
                 .pct_transported()
         }),
-        0xa6 => u32::from(unsafe { (s.spec_local_id)(spec) }),
+        0xa6 => u32::from((s.shared().specs().industry().local_id)(spec)),
         0xa7 => u32::from(unsafe { (*i).metadata.founder }),
         0xa8 => u32::from(unsafe { (*i).metadata.random_colour }),
         0xa9 => unsafe { (*i).fields.last_prod_year }
@@ -589,7 +577,7 @@ fn tile_variable(
             c.tile,
             c.id,
             true,
-            unsafe { (s.version)(ro) } >= 8,
+            (s.shared().resolver_grf_version)(ro) >= 8,
             s,
         ),
         0x61 => {
@@ -605,12 +593,14 @@ fn tile_variable(
         0x62 => id_at_offset(
             unsafe { (s.nearby)(parameter as u8, c.tile, true) },
             c.id,
-            unsafe { (s.grfid)(ro) },
+            (s.shared().resolver_grf_file_id)(ro),
             s,
         ),
         0x7a => {
             let gfx = unsafe { (s.tile().gfx)(c.tile) };
-            unsafe { (s.tile_badges)(ro, (s.tile().spec)(gfx), parameter) }
+            unsafe {
+                (s.shared().specs().industry_tile().badges)(ro, (s.tile().spec)(gfx), parameter)
+            }
         }
         _ => unavailable(variable, available, true, false, 0, s),
     }
@@ -696,12 +686,10 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_root(
     witness::hit(witness::INDUSTRY_RESOLVER_ROOT);
     let c = unsafe { *c };
     let s = unsafe { &*s };
-    unsafe {
-        (s.root)(
-            s.spec(c.kind),
-            !c.owner.is_null() && c.id != INVALID_INDUSTRY,
-        )
-    }
+    (s.shared().specs().industry().standard().sprite_group)(
+        s.spec(c.kind),
+        !c.owner.is_null() && c.id != INVALID_INDUSTRY,
+    )
 }
 /// # Safety
 /// Original non-null industry and valid gfx preconditions; stable native group.
@@ -712,7 +700,14 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_root(
     s: *const ResolverServices,
 ) -> *const c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TILE_ROOT);
-    unsafe { ((*s).tile_root)(((*(*s).tile).spec)(gfx), (*c).id != INVALID_INDUSTRY) }
+    unsafe {
+        ((*s)
+            .shared()
+            .specs()
+            .industry_tile()
+            .standard()
+            .sprite_group)(((*(*s).tile).spec)(gfx), (*c).id != INVALID_INDUSTRY)
+    }
 }
 fn town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TOWN);
@@ -854,7 +849,7 @@ pub(crate) unsafe fn refuses(
     let kind = unsafe { (*owner).metadata.kind };
     let spec = s.spec(kind);
     if unsafe { (s.construction().callback_mask)(spec) } & INDUSTRY_REFUSE_CARGO != 0 {
-        let parameter = unsafe { (s.cargo_map)(spec, cargo) };
+        let parameter = (s.shared().specs().industry().cargo_map)(spec, cargo);
         let tile = unsafe { (*owner).metadata.tile };
         let result = unsafe {
             (s.callback)(
@@ -867,7 +862,11 @@ pub(crate) unsafe fn refuses(
             )
         };
         if result != CALLBACK_FAILED {
-            return !unsafe { (s.boolean)(spec, CBID_INDUSTRY_REFUSE_CARGO, result) };
+            return !(s.shared().specs().industry().boolean_callback)(
+                spec,
+                CBID_INDUSTRY_REFUSE_CARGO,
+                result,
+            );
         }
     }
     false
@@ -885,28 +884,13 @@ crate::abi::layouts! {
         lifecycle,
         tile,
         get,
-        spec_grfid,
-        spec_local_id,
-        root,
-        tile_root,
-        tile_local_id,
-        tile_override,
-        tile_grfid,
-        tile_has_groups,
-        tile_substitute,
         clean_gfx,
         nearby,
         water_distance,
         town_tile,
         town_id,
         founder_info,
-        grfid,
-        version,
         callback_id,
-        cargo_file,
-        cargo_map,
-        badges,
-        tile_badges,
         storage_owner,
         unhandled,
         pointer_magic,
@@ -914,6 +898,5 @@ crate::abi::layouts! {
         existing_town,
         make_town,
         callback,
-        boolean,
         callback_error,    };
 }

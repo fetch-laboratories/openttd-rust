@@ -121,27 +121,24 @@ impl<'a> World<'a> {
     }
     fn area<T>(
         &self,
-        area: *mut crate::water_cmd::Area,
         tile: u32,
         start: u32,
         diagonal: bool,
         mut visit: impl FnMut(u32) -> Option<T>,
     ) -> Option<T> {
-        let water = unsafe { &*self.a.water };
-        unsafe {
-            (water.area_begin)(area, tile, start, diagonal);
-        }
+        let check = |ok| crate::movement::native_assert(self.s, ok);
+        let mut iter = crate::tilearea::TileIterator::create(
+            self.map, self.size, tile, start, diagonal, check,
+        );
         loop {
-            let t = unsafe { (water.area_tile)(area) };
+            let t = iter.tile();
             if t == INVALID_TILE {
                 return None;
             }
             if let Some(result) = visit(t) {
                 return Some(result);
             }
-            unsafe {
-                (water.area_next)(area);
-            }
+            iter.advance(self.map, self.size, check);
         }
     }
     fn clear_tile(&self, out: Cost<'_>, tile: u32, flags: u16) {
@@ -407,7 +404,6 @@ impl<'a> World<'a> {
         start: u32,
         diagonal: bool,
         mut flags: u16,
-        area: *mut crate::water_cmd::Area,
     ) -> i64 {
         if start >= self.size {
             out.error(INVALID_STRING_ID);
@@ -422,7 +418,7 @@ impl<'a> World<'a> {
         if tile != start {
             flags |= F::FORCE_CLEAR_TILE;
         }
-        let extra = self.area(area, tile, start, diagonal, |t| {
+        let extra = self.area(tile, start, diagonal, |t| {
             self.clear_do(ret, t, flags & !F::EXECUTE);
             if !ret.ok() {
                 if success {
@@ -712,7 +708,6 @@ impl<'a> World<'a> {
         diagonal: bool,
         mode: u8,
         flags: u16,
-        area: *mut crate::water_cmd::Area,
     ) -> (i64, u32) {
         if start >= self.size {
             out.error(INVALID_STRING_ID);
@@ -751,7 +746,7 @@ impl<'a> World<'a> {
             return (0, INVALID_TILE);
         }
         let mut error = INVALID_TILE;
-        let extra = self.area(area, tile, start, diagonal, |t| {
+        let extra = self.area(tile, start, diagonal, |t| {
             let mut current = (self.s.tile_height)(t);
             while current != h {
                 error = self.terraform_do(ret, t, SLOPE_N, current <= h, flags & !F::EXECUTE);
@@ -837,7 +832,7 @@ pub unsafe extern "C" fn openttd_rust_landscape_clear(
     w.clear(w.cost(out), tile, flags);
 }
 /// # Safety
-/// The area and three distinct native costs belong to this synchronous call.
+/// The three distinct native costs belong to this synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_landscape_clear_area(
     a: &LandscapeServices,
@@ -848,7 +843,6 @@ pub unsafe extern "C" fn openttd_rust_landscape_clear_area(
     start: u32,
     diagonal: bool,
     flags: u16,
-    area: *mut crate::water_cmd::Area,
 ) -> i64 {
     let w = unsafe { World::new(a) };
     w.clear_area(
@@ -859,7 +853,6 @@ pub unsafe extern "C" fn openttd_rust_landscape_clear_area(
         start,
         diagonal,
         flags,
-        area,
     )
 }
 /// # Safety
@@ -877,7 +870,7 @@ pub unsafe extern "C" fn openttd_rust_landscape_terraform(
     w.terraform(w.cost(out), tile, slope, up, flags)
 }
 /// # Safety
-/// The area and three distinct native costs belong to this synchronous call.
+/// The three distinct native costs belong to this synchronous call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_landscape_level(
     a: &LandscapeServices,
@@ -889,7 +882,6 @@ pub unsafe extern "C" fn openttd_rust_landscape_level(
     diagonal: bool,
     mode: u8,
     flags: u16,
-    area: *mut crate::water_cmd::Area,
     extra: &mut i64,
 ) -> u32 {
     let w = unsafe { World::new(a) };
@@ -902,7 +894,6 @@ pub unsafe extern "C" fn openttd_rust_landscape_level(
         diagonal,
         mode,
         flags,
-        area,
     );
     *extra = money;
     t

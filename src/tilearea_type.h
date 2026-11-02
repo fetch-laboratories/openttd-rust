@@ -13,6 +13,7 @@
 #include "map_func.h"
 
 #include "rust/spiral_ffi.h"
+#include "rust/tilearea_ffi.h"
 static_assert(sizeof(uint) == sizeof(uint32_t) && std::is_unsigned_v<uint> && std::numeric_limits<uint>::digits == 32);
 static_assert(sizeof(DiagDirection) == sizeof(uint8_t));
 static_assert(DIAGDIR_BEGIN == 0 && DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && DIAGDIR_END == 4 && INVALID_DIAGDIR == 255);
@@ -49,10 +50,6 @@ struct OrthogonalTileArea {
 		this->h    = 0;
 	}
 
-	bool Intersects(const OrthogonalTileArea &ta) const;
-
-	bool Contains(TileIndex tile) const;
-
 	OrthogonalTileArea &Expand(int rad);
 
 	void ClampToMap();
@@ -69,38 +66,6 @@ struct OrthogonalTileArea {
 	OrthogonalTileIterator begin() const;
 
 	OrthogonalTileIterator end() const;
-};
-
-/** Represents a diagonal tile area. */
-struct DiagonalTileArea {
-
-	TileIndex tile; ///< Base tile of the area
-	int16_t a;        ///< Extent in diagonal "x" direction (may be negative to signify the area stretches to the left)
-	int16_t b;        ///< Extent in diagonal "y" direction (may be negative to signify the area stretches upwards)
-
-	/**
-	 * Construct this tile area with some set values.
-	 * @param tile The base tile.
-	 * @param a The "x" extent.
-	 * @param b The "y" extent.
-	 */
-	DiagonalTileArea(TileIndex tile = INVALID_TILE, int16_t a = 0, int16_t b = 0) : tile(tile), a(a), b(b)
-	{
-	}
-
-	DiagonalTileArea(TileIndex start, TileIndex end);
-
-	/**
-	 * Clears the TileArea by making the tile invalid and setting a and b to 0.
-	 */
-	void Clear()
-	{
-		this->tile = INVALID_TILE;
-		this->a    = 0;
-		this->b    = 0;
-	}
-
-	bool Contains(TileIndex tile) const;
 };
 
 /** Shorthand for the much more common orthogonal tile area. */
@@ -165,8 +130,6 @@ public:
 	{
 		return this->tile == rhs;
 	}
-
-	static std::unique_ptr<TileIterator> Create(TileIndex corner1, TileIndex corner2, bool diagonal);
 };
 
 /** Iterator to iterate over a tile area (rectangle) of the map. */
@@ -183,16 +146,6 @@ public:
 	 */
 	OrthogonalTileIterator(const OrthogonalTileArea &ta) : TileIterator(ta.w == 0 || ta.h == 0 ? INVALID_TILE : ta.tile), w(ta.w), x(ta.w), y(ta.h)
 	{
-	}
-
-	/**
-	 * Construct the iterator.
-	 * @param corner1 Tile from where to begin iterating.
-	 * @param corner2 Tile where to end the iterating.
-	 */
-	OrthogonalTileIterator(TileIndex corner1, TileIndex corner2)
-	{
-		*this = OrthogonalTileIterator(OrthogonalTileArea(corner1, corner2));
 	}
 
 	/**
@@ -216,45 +169,6 @@ public:
 	std::unique_ptr<TileIterator> Clone() const override
 	{
 		return std::make_unique<OrthogonalTileIterator>(*this);
-	}
-};
-
-/** Iterator to iterate over a diagonal area of the map. */
-class DiagonalTileIterator : public TileIterator {
-private:
-	uint base_x; ///< The base tile x coordinate from where the iterating happens.
-	uint base_y; ///< The base tile y coordinate from where the iterating happens.
-	int a_cur;   ///< The current (rotated) x coordinate of the iteration.
-	int b_cur;   ///< The current (rotated) y coordinate of the iteration.
-	int a_max;   ///< The (rotated) x coordinate of the end of the iteration.
-	int b_max;   ///< The (rotated) y coordinate of the end of the iteration.
-
-public:
-
-	/**
-	 * Construct the iterator.
-	 * @param ta Area, i.e. begin point and (diagonal) width/height of to-be-iterated area.
-	 */
-	DiagonalTileIterator(const DiagonalTileArea &ta) :
-		TileIterator(ta.tile), base_x(TileX(ta.tile)), base_y(TileY(ta.tile)), a_cur(0), b_cur(0), a_max(ta.a), b_max(ta.b)
-	{
-	}
-
-	/**
-	 * Construct the iterator.
-	 * @param corner1 Tile from where to begin iterating.
-	 * @param corner2 Tile where to end the iterating.
-	 */
-	DiagonalTileIterator(TileIndex corner1, TileIndex corner2)
-	{
-		*this = DiagonalTileIterator(DiagonalTileArea(corner1, corner2));
-	}
-
-	TileIterator& operator ++() override;
-
-	std::unique_ptr<TileIterator> Clone() const override
-	{
-		return std::make_unique<DiagonalTileIterator>(*this);
 	}
 };
 

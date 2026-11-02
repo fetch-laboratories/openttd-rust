@@ -21,16 +21,10 @@ struct OpenTTDIndustryDefinitionCargo { OpenTTDIndustryProducedSlots produced; O
  * leaves never yield or reset definitions. No borrowed spec survives vector cleanup. */
 struct OpenTTDIndustryDefinitionServices {
 	const OpenTTDIndustryGenerationServices *generation;
+	const OpenTTDSharedServices *shared;
 	IndustrySpec *(*industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry);
 	IndustryTileSpec *(*tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	uint32_t (*grfid)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
-	OpenTTDSubstituteSpecIdentity (*identity)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(identity);
-	OpenTTDSubstituteSpecIdentity (*tile_identity)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_identity);
 	OpenTTDIndustryDefinitionAvailability (*availability)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(availability);
-	void (*set_enabled)(IndustrySpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_enabled);
-	void (*set_override)(IndustrySpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_override);
-	void (*set_tile_override)(IndustryTileSpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_override);
-	void (*set_tile_enabled)(IndustryTileSpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_enabled);
 	void (*publish)(uint16_t, IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(publish);
 	void (*publish_tile)(uint16_t, IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(publish_tile);
 	void (*industry_full)() noexcept OPENTTD_SERVICE_DEFAULT(industry_full);
@@ -40,7 +34,6 @@ struct OpenTTDIndustryDefinitionServices {
 	bool (*climate_available)(const IndustrySpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(climate_available);
 	void (*reset_tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_tile);
 	void (*clear_tile)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_tile);
-	GRFFile *(*file)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(file);
 	size_t (*industry_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(industry_count);
 	size_t (*tile_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(tile_count);
 	IndustrySpec *(*file_industry)(GRFFile *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(file_industry);

@@ -30,9 +30,6 @@ struct OpenTTDObjectScope {
 struct OpenTTDObjectEligibility { uint16_t flags; uint8_t climate, views; };
 struct OpenTTDObjectLifetime { int32_t introduction, end; };
 struct OpenTTDObjectResolverServices {
-	const GRFFile *(*file)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(file);
-	const SpriteGroup *(*root)(const ObjectSpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);
-	uint16_t (*local_id)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(local_id);
 	const OpenTTDSharedServices *shared;
 	uint8_t (*views)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(views);
 	OpenTTDObjectEligibility (*eligibility)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(eligibility);

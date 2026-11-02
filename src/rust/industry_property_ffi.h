@@ -39,10 +39,6 @@ struct OpenTTDIndustryPropertyServices {
 	void (*set_callbacks)(IndustrySpec *spec, uint16_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_callbacks);
 	void (*set_tile_slopes)(IndustryTileSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_slopes);
 	void (*set_tile_callbacks)(IndustryTileSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_callbacks);
-	void (*set_animation_frames)(IndustryTileSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_animation_frames);
-	void (*set_animation_status)(IndustryTileSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_animation_status);
-	void (*set_animation_speed)(IndustryTileSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_animation_speed);
-	void (*set_animation_triggers)(IndustryTileSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_animation_triggers);
 	void (*set_tile_flags)(IndustryTileSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_flags);
 	void (*map_closure_text)(IndustrySpec *spec, uint16_t string) noexcept OPENTTD_SERVICE_DEFAULT(map_closure_text);
 	void (*map_production_up_text)(IndustrySpec *spec, uint16_t string) noexcept OPENTTD_SERVICE_DEFAULT(map_production_up_text);
@@ -64,8 +60,6 @@ struct OpenTTDIndustryPropertyServices {
 	void (*layout_import_index)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_import_index);
 	void (*layout_tile_undefined)(uint16_t tile, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_tile_undefined);
 	void (*layout_invalid)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_invalid);
-	std::vector<BadgeID> *(*industry_badges)(IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(industry_badges);
-	std::vector<BadgeID> *(*tile_badges)(IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_badges);
 };
 struct OpenTTDIndustryPropertyContext {
 	GRFFile *file;

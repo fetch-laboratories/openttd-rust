@@ -138,9 +138,7 @@ pub struct Services {
         usize,
     ) -> u16,
     company: extern "C" fn(u8, *const c_void) -> u32,
-    spec_file: extern "C" fn(*const RailSpec) -> *const c_void,
     nearby_station: extern "C" fn(u8, u32, crate::services::Axis) -> u32,
-    badges: extern "C" fn(*const c_void, *const RailSpec, u32) -> u32,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
     airport_ttd_type: extern "C" fn(
         *const crate::station_cmd::AirportSpec,
@@ -682,7 +680,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
                 };
                 land_info(native, file, nearby, axis)
             }
-            0x7a => (native.badges)(resolver, spec, parameter),
+            0x7a => (native.shared().specs().station().badges)(resolver, spec, parameter),
             0xfa => build_date(crate::timer_game_common::calendar_date().0),
             _ => {
                 unsafe {
@@ -701,7 +699,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             (native.shared().terrain_type)(tile)
                 | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
                     (native.rail().rail_type)(tile).0,
-                    (native.spec_file)(spec),
+                    (native.shared().specs().station().file)(spec),
                 )) << 8)
         }
         0x43 => (native.company)((native.world().station_owner)(st), ptr::null()),
@@ -780,7 +778,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             }
             value
         }
-        0x7a => (native.badges)(resolver, spec, parameter),
+        0x7a => (native.shared().specs().station().badges)(resolver, spec, parameter),
         0x82 => 50,
         0x84 => (native.commands().string_id)(st),
         0x86 => 0,
@@ -1023,7 +1021,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, company, spec_file, nearby_station, badges, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, company, nearby_station, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
  };
 }
 

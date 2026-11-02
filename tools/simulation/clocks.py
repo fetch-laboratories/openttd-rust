@@ -106,6 +106,7 @@ def native_probes(folder: Path, env: dict[str, str]) -> None:
                 *probe.target_flags(),
                 "-DWITH_ASSERT" if assertions else "-DNDEBUG",
                 "-I" + str(source / "src"),
+                "-I" + str(ROOT / "build-rust/generated-abi"),
                 "-I" + str(target),
                 str(ROOT / "tools/simulation/clocks-native.cpp"),
                 "-pthread",

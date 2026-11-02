@@ -20,6 +20,8 @@
 enum class LandscapeType : uint8_t;
 enum class StationType : uint8_t;
 struct OpenTTDStationService;
+struct OpenTTDNewGRFSpecs;
+struct ResolverObject;
 enum class RoadStopType : uint8_t;
 struct OpenTTDStationCommandServices;
 struct OpenTTDStationCatchmentServices;
@@ -206,6 +208,13 @@ struct OpenTTDSharedServices {
 	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
+	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
+	GRFFile *(*grf_file_at_or_null)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_at_or_null);
+	uint32_t (*grf_file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_id);
+	const OpenTTDNewGRFSpecs *newgrf_specs = nullptr;
+	const GRFFile *(*resolver_grf_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file);
+	uint32_t (*resolver_grf_file_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file_id);
+	uint8_t (*resolver_grf_version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_version);
 	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);
 	void (*not_reached)() noexcept OPENTTD_SERVICE_DEFAULT(not_reached);
 };

@@ -209,7 +209,7 @@ pub(crate) unsafe fn feature_town_name(
      * V parts       The parts */
     unsafe {
         let file = newgrf_loading::file();
-        let grfid = (s.file_id)(file);
+        let grfid = (s.shared().grf_file_id)(file);
 
         // Only `DelGRFTownName` changes the list before this entry returns.
         let index = add(grfid);

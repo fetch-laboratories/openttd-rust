@@ -27,7 +27,6 @@ struct OpenTTDRoadStopSpecTriggers { uint16_t animation; CargoTypes cargo; };
 struct OpenTTDRoadStopReseed { uint32_t reseed; uint8_t used; };
 struct OpenTTDRoadStopResolverServices {
 	void (*rebind)(BaseStation *, size_t, const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rebind);
-	uint32_t (*badges)(const ResolverObject *, const RoadStopSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	ScopeResolver * (*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	int32_t (*build_date)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
 	BaseStation * (*by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(by_tile);
@@ -60,9 +59,6 @@ struct OpenTTDRoadStopResolverServices {
 	OpenTTDRoadStopSpecVacancy (*slot_vacancy)(const BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(slot_vacancy);
 	CargoTypes (*spec_cargo)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_cargo);
 	size_t (*spec_count)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(spec_count);
-	const GRFFile * (*spec_file)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_file);
-	uint32_t (*spec_grfid)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_grfid);
-	uint16_t (*spec_local_id)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_local_id);
 	OpenTTDRoadStopSpecTriggers (*spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_triggers);
 	uint16_t (*station_id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_id);
 	uint32_t (*tile)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
@@ -70,7 +66,6 @@ struct OpenTTDRoadStopResolverServices {
 	uint8_t (*tile_random)(const BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_random);
 	Town * (*town)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(town);
 	uint32_t (*town_tile)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
-	uint8_t (*version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version);
 	uint8_t (*waiting)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);
 };
 const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept;

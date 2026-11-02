@@ -267,15 +267,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.lifecycle = &GetIndustryLifecycleRustServices(),
 		.tile = &GetIndustryTileServices(),
 		.get = [](uint16_t id) noexcept -> OpenTTDIndustryResolverRef { Industry *i = RustIndustryByID(id); return {RustIndustryCanonicalOwner(i), OpenTTDIndustryTown(i)}; },
-		.spec_grfid = RustSpecGRFID<IndustrySpec>,
-		.spec_local_id = RustSpecLocalID<IndustrySpec>,
-		.root = RustSpecSpriteGroup<IndustrySpec>,
-		.tile_root = RustSpecSpriteGroup<IndustryTileSpec>,
-		.tile_local_id = RustSpecLocalID<IndustryTileSpec>,
-		.tile_override = RustSpecOverride<IndustryTileSpec>,
-		.tile_grfid = RustSpecGRFID<IndustryTileSpec>,
-		.tile_has_groups = RustSpecHasSpriteGroups<IndustryTileSpec>,
-		.tile_substitute = RustSpecSubstitute<IndustryTileSpec>,
 		.clean_gfx = [](uint32_t tile) noexcept { return GetCleanIndustryGfx(TileIndex(tile)); },
 		.nearby = RustNearbyTile,
 		.water_distance = RustClosestWaterDistance,
@@ -285,13 +276,7 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 			const Company *company = Company::GetIfValid(CompanyID(founder));
 			return {company == nullptr ? uint8_t{0} : RustCompanyRecolour(company, true), company != nullptr && company->is_ai};
 		},
-		.grfid = RustResolverGRFFileID,
-		.version = RustResolverGRFVersion,
 		.callback_id = RustResolverCallback,
-		.cargo_file = RustResolverGRFFile,
-		.cargo_map = RustSpecCargoMap<IndustrySpec>,
-		.badges = RustSpecBadges<IndustrySpec>,
-		.tile_badges = RustSpecBadges<IndustryTileSpec>,
 		.storage_owner = RustIndustryStorageOwner,
 		.unhandled = [](uint8_t variable, bool tile, bool missing, uint16_t callback) noexcept {
 			if (missing) Debug(grf, 1, "Unhandled variable 0x{:X} (no available industry) in callback 0x{:x}", variable, callback);
@@ -303,7 +288,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.existing_town = [](ResolverObject *r) noexcept -> TownScopeResolver * { auto &town = static_cast<IndustriesResolverObject *>(r)->town_scope; return town.has_value() ? &*town : nullptr; },
 		.make_town = [](ResolverObject *r, Town *t, bool readonly) noexcept -> TownScopeResolver * { return &static_cast<IndustriesResolverObject *>(r)->town_scope.emplace(*r, t, readonly); },
 		.callback = [](uint16_t cb, uint32_t p1, uint32_t p2, Industry *i, uint8_t type, uint32_t tile) noexcept { return GetIndustryCallback(static_cast<CallbackID>(cb), p1, p2, i, type, TileIndex(tile)); },
-		.boolean = RustSpecBooleanCallback<IndustrySpec>,
 		.callback_error = [](const IndustrySpec *spec, uint16_t cb, uint16_t result) noexcept { RustSpecCallbackError<IndustrySpec, IndustrySpec>(spec, cb, result); },
 	};
 	return services;

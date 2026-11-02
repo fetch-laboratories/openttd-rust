@@ -1121,7 +1121,6 @@ int TicksToLeaveDepot(const Train *v)
 #include "rust/company_services.h"
 #include "rust/settings_services.h"
 #include "rust/vehicle_services.h"
-#include "tilearea_type.h"
 #include "window_func.h"
 
 static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28);
@@ -1253,13 +1252,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.depot_windows = RailDepotWindows,
 		.close_inspect = OpenTTDDeleteRailInspect,
 		.make_shore = RailMakeShore,
-		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },
-		.area_tile = [](OpenTTDRailConvertFrame *frame) noexcept { return (**frame->iter).base(); },
-		.area_next = [](OpenTTDRailConvertFrame *frame) noexcept { ++(*frame->iter); },
-		.area_contains = [](uint32_t start, uint32_t end, bool diagonal, uint32_t tile) noexcept {
-			if (diagonal) return DiagonalTileArea(TileIndex{start}, TileIndex{end}).Contains(TileIndex{tile});
-			return OrthogonalTileArea(TileIndex{start}, TileIndex{end}).Contains(TileIndex{tile});
-		},
 		.include_train = RailIncludeTrain,
 		.consist_changed = RailConsistChanged,
 	};

@@ -44,7 +44,6 @@ pub struct Result {
 #[repr(C)]
 pub struct Services {
     shared: *const Shared,
-    cargo_map: extern "C" fn(*const c_void, u8) -> u8,
     cargo_bitnum: extern "C" fn(u8) -> u8,
     industry_substitute: extern "C" fn(u8) -> u16,
     evaluate: extern "C" fn(*const Invocation, *mut i32, usize) -> u16,
@@ -142,7 +141,7 @@ pub unsafe extern "C" fn openttd_rust_generic_variable(
     let s = services();
     if scope.ai {
         match variable {
-            0x40 => return u32::from((s.cargo_map)(file, scope.cargo)),
+            0x40 => return u32::from((unsafe { &*s.shared }.grf_cargo_map)(file, scope.cargo)),
             0x80 => return u32::from(scope.cargo),
             0x81 => return u32::from((s.cargo_bitnum)(scope.cargo)),
             0x82 => return u32::from(scope.selection),
@@ -311,5 +310,5 @@ crate::abi::layouts! {
     "OpenTTDGenericScope" ["probe"] => Scope { cargo, selection, source, destination, distance, event, count, station_size, feature, ai };
     "OpenTTDGenericInvocation" ["probe"] => Invocation { scope, callback, param1, file, root };
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
-    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_map, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, water_class, sound, unsupported, unhandled };
+    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, water_class, sound, unsupported, unhandled };
 }

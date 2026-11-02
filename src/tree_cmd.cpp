@@ -72,7 +72,6 @@ struct OpenTTDTreeCommand {
 	explicit OpenTTDTreeCommand(DoCommandFlags flags) : flags(flags) {}
 	DoCommandFlags flags;
 	Company *company = nullptr;
-	std::unique_ptr<TileIterator> iter;
 	CommandCost nested;
 };
 
@@ -134,11 +133,10 @@ static void TreeTownRating(uint16_t flags, uint32_t tile, bool up) noexcept
 	}
 }
 
-static int32_t TreeCommandBegin(OpenTTDTreeCommand *ctx, uint32_t tile, uint32_t start_tile, bool diagonal) noexcept
+static int32_t TreeCommandBegin(OpenTTDTreeCommand *ctx) noexcept
 {
 	ctx->company = (_game_mode != GM_EDITOR) ? Company::GetIfValid(_current_company) : nullptr;
 	int limit = (ctx->company == nullptr ? INT32_MAX : GB(ctx->company->Finances().tree_limit, 16, 16));
-	ctx->iter = TileIterator::Create(TileIndex{tile}, TileIndex{start_tile}, diagonal);
 	return limit;
 }
 
@@ -164,8 +162,6 @@ static const OpenTTDTreeServices _tree_services{
 	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { RustSetGeneratingWorldProgress(GWP_TREE, total); }); },
 	.town_rating = TreeTownRating,
 	.command_begin = TreeCommandBegin,
-	.command_tile = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(*ctx->iter).base(); },
-	.command_next = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(++(*ctx->iter)).base(); },
 	.command_debit = [](OpenTTDTreeCommand *ctx) noexcept { if (ctx->company != nullptr) ctx->company->Finances().tree_limit -= 1 << 16; },
 };
 

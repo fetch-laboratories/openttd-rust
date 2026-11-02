@@ -65,15 +65,13 @@ inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept {
 inline bool RustResolverGRFVersion8(const ResolverObject *resolver) noexcept { return RustResolverGRFVersion(resolver) >= 8; }
 template <typename Spec>
 inline const GRFFile *RustSpecGRFFile(const Spec *spec) noexcept { return spec->grf_prop.grffile; }
-template <typename Spec, typename Handle>
-inline const GRFFile *RustSpecHandleGRFFile(const Handle *spec) noexcept { return RustSpecGRFFile(reinterpret_cast<const Spec *>(spec)); }
 template <typename Spec>
 inline void RustSpecPlayTileSound(const Spec *spec, uint8_t sound, uint32_t tile) noexcept { RustGRFPlayTileSound(RustSpecGRFFile(spec), sound, tile); }
 template <typename Spec>
 inline void RustSpecSetGRFFile(Spec *spec, const GRFFile *file) noexcept { spec->grf_prop.SetGRFFile(file); }
 template <typename Spec>
 inline void RustSpecSetCargoGroup(Spec *spec, CargoType cargo, const SpriteGroup *group) noexcept { spec->grf_prop.SetSpriteGroup(cargo, group); }
-template <typename Spec, typename Handle = Spec> inline bool RustSpecEnabled(const Handle *spec) noexcept { return reinterpret_cast<const Spec *>(spec)->enabled; }
+template <typename Spec> inline bool RustSpecEnabled(const Spec *spec) noexcept { return spec->enabled; }
 template <typename Spec> inline void RustSpecSetEnabled(Spec *spec, bool value) noexcept { spec->enabled = value; }
 template <typename Spec> inline void RustSpecSetOverride(Spec *spec, uint16_t value) noexcept { spec->grf_prop.override_id = value; }
 template <typename Spec> inline void RustSpecSetSubstitute(Spec *spec, uint16_t value) noexcept { spec->grf_prop.subst_id = value; }
