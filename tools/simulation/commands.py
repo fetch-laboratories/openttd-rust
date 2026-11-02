@@ -92,7 +92,10 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         env,
         core.ROOT / "tools/simulation/commands-console.cpp",
         "commands",
-        wraps=("_ZN2AI8StartNewE6PoolIDIh12CompanyIDTagLh15ELh255EE",),
+        wraps=(
+            "_ZN2AI8StartNewE6PoolIDIh12CompanyIDTagLh15ELh255EE",
+            "_Z10DebugPrintSt17basic_string_viewIcSt11char_traitsIcEEiONSt7__cxx1112basic_stringIcS1_SaIcEEE",
+        ),
         replace_objects=("/src/network/network_command.cpp.o",),
     )
 

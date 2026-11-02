@@ -14,6 +14,7 @@
 #include "saveload/saveload.h"
 
 static bool command_throw = false;
+static uint command_diagnostics = 0;
 static CompanyID command_allocated = CompanyID::Invalid();
 struct CommandStartupFailure {};
 extern "C" void __real__ZN2AI8StartNewE6PoolIDIh12CompanyIDTagLh15ELh255EE(CompanyID);
@@ -21,6 +22,16 @@ extern "C" void __wrap__ZN2AI8StartNewE6PoolIDIh12CompanyIDTagLh15ELh255EE(Compa
 {
 	if (command_throw) { command_allocated = id; throw CommandStartupFailure{}; }
 	__real__ZN2AI8StartNewE6PoolIDIh12CompanyIDTagLh15ELh255EE(id);
+}
+extern "C" void __real__Z10DebugPrintSt17basic_string_viewIcSt11char_traitsIcEEiONSt7__cxx1112basic_stringIcS1_SaIcEEE(std::string_view, int, std::string &&);
+extern "C" void __wrap__Z10DebugPrintSt17basic_string_viewIcSt11char_traitsIcEEiONSt7__cxx1112basic_stringIcS1_SaIcEEE(std::string_view category, int level, std::string &&message)
+{
+	/* Source locations differ between the native and Rust-backed templates. */
+	if (command_throw && category == "misc" && level == 0 && message.ends_with(": Backed-up value was not restored!")) {
+		command_diagnostics++;
+		message = "command scope: Backed-up value was not restored!";
+	}
+	__real__Z10DebugPrintSt17basic_string_viewIcSt11char_traitsIcEEiONSt7__cxx1112basic_stringIcS1_SaIcEEE(category, level, std::move(message));
 }
 static void CommandNeed(bool value, int line)
 {
@@ -104,14 +115,11 @@ static bool CommandsScenario([[maybe_unused]] std::span<std::string_view> args)
 	const auto count = Company::GetNumItems();
 	command_throw = true;
 	bool caught = false;
-	{
-		AutoRestoreBackup<int> logging(_debug_misc_level, -1);
-		try {
-			ObservedCommand<CMD_COMPANY_CTRL>::InternalPost(0, &CommandObserve, true, false, std::make_tuple(CCA_NEW_AI, CompanyID::Invalid(), CompanyRemoveReason{}, ClientID{1}));
-		} catch (const CommandStartupFailure &) { caught = true; }
-	}
+	try {
+		ObservedCommand<CMD_COMPANY_CTRL>::InternalPost(0, &CommandObserve, true, false, std::make_tuple(CCA_NEW_AI, CompanyID::Invalid(), CompanyRemoveReason{}, ClientID{1}));
+	} catch (const CommandStartupFailure &) { caught = true; }
 	command_throw = false;
-	CommandNeed(caught && command_callbacks == 2 && _current_company == actor && Company::GetNumItems() == count + 1, __LINE__);
+	CommandNeed(caught && command_diagnostics == 1 && command_callbacks == 2 && _current_company == actor && Company::GetNumItems() == count + 1, __LINE__);
 	CommandNeed(Company::IsValidID(command_allocated) && Company::Get(command_allocated)->is_ai, __LINE__);
 	{ RecursiveCommandCounter counter; CommandNeed(counter.IsTopLevel(), __LINE__); }
 	/* The original leaves command storage mode active on this exception. */
