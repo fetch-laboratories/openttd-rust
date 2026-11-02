@@ -117,7 +117,7 @@ crate::abi::layouts! {
 }
 
 pub(crate) fn close(s: &Services, f: &FrameServices, close_admins: bool) {
-    if unsafe { f.connection.network_server.read() } {
+    if (f.command.company.network_server)() {
         if close_admins {
             (s.admins_close)();
         }
@@ -162,7 +162,7 @@ fn initialize(s: &Services, f: &FrameServices, close_admins: bool) {
 }
 
 pub(crate) fn disconnect(s: &Services, f: &FrameServices, close_admins: bool) {
-    if unsafe { f.connection.network_server.read() } {
+    if (f.command.company.network_server)() {
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             crate::network_connection::send_shutdown(f.connection, f, client.socket);
@@ -178,7 +178,7 @@ pub(crate) fn disconnect(s: &Services, f: &FrameServices, close_admins: bool) {
 }
 
 pub(crate) fn reboot(s: &Services, f: &FrameServices, session: &SessionServices) {
-    if unsafe { f.connection.network_server.read() } {
+    if (f.command.company.network_server)() {
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             crate::network_connection::send_newgame(f.connection, f, client.socket);
@@ -298,7 +298,7 @@ pub(crate) fn server_start(
 }
 
 pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionServices) {
-    if !unsafe { f.connection.network_server.read() } {
+    if !(f.command.company.network_server)() {
         return;
     }
     (s.update_game_info)();

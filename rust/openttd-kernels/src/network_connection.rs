@@ -689,7 +689,7 @@ pub extern "C" fn openttd_rust_network_receive_quit(
 }
 
 fn close_connection(s: &Services, f: &FrameServices, socket: *mut c_void, result: u8) -> u8 {
-    assert_ne!(result, NETWORK_RECV_STATUS_OKAY);
+    crate::movement::native_assert(f.command.company.shared, result != NETWORK_RECV_STATUS_OKAY);
     if (f.socket_pending_deletion)((s.game)(socket)) || !(f.socket_valid)((s.game)(socket)) {
         return result;
     }

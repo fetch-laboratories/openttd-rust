@@ -576,11 +576,11 @@ pub extern "C" fn openttd_rust_network_client_receive_newgame(
 }
 
 fn close(s: &Services, f: &FrameServices, game: *mut c_void, result: u8) -> u8 {
-    assert_ne!(result, NETWORK_RECV_STATUS_OKAY);
+    crate::movement::native_assert(f.command.company.shared, result != NETWORK_RECV_STATUS_OKAY);
     if (f.socket_pending_deletion)(game) {
         return result;
     }
-    assert!((f.socket_valid)(game));
+    crate::movement::native_assert(f.command.company.shared, (f.socket_valid)(game));
     if !(f.socket_has_quit)(game) {
         (s.debug_close)(game);
         (f.socket_send_packets)(game, true);

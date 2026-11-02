@@ -9,6 +9,7 @@
 #![allow(unsafe_code, missing_docs)]
 
 use crate::game_state::GameState;
+use crate::gfx_type::MILLISECONDS_PER_TICK;
 use crate::network_command::{Client, next_client};
 use crate::network_type::{
     NETWORK_ERROR_NOT_AUTHORIZED, NETWORK_ERROR_TIMEOUT_COMPUTER, NETWORK_ERROR_TIMEOUT_JOIN,
@@ -24,8 +25,6 @@ use server_status::{
 };
 use std::ffi::c_void;
 
-/// `MILLISECONDS_PER_TICK` from `gfx_type.h`.
-const MILLISECONDS_PER_TICK: u32 = 27;
 const NANOSECONDS_PER_MILLISECOND: i64 = 1_000_000;
 
 use crate::tcp_game::{PACKET_CLIENT_ACK, PACKET_SERVER_FRAME, PACKET_SERVER_SYNC};
