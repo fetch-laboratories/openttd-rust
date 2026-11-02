@@ -161,7 +161,10 @@ bool CommandHelperBase::DesyncLogging()
 /** `Backup<CompanyID>` destruction: unrestored only while a procedure's exception unwinds `Execute`. */
 CommandExecutionScope::~CommandExecutionScope() noexcept
 {
-	if (openttd_rust_command_unwind(&GetRustCommandServices()) != 0) Debug(misc, 0, "{}:{}: Backed-up value was not restored!", this->location.file_name(), this->location.line());
+	if (openttd_rust_command_backup_held() != 0) {
+		Debug(misc, 0, "{}:{}: Backed-up value was not restored!", this->location.file_name(), this->location.line());
+		openttd_rust_command_restore(&GetRustCommandServices());
+	}
 }
 
 /**

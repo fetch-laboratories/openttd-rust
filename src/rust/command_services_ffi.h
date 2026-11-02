@@ -64,7 +64,7 @@ uint8_t openttd_rust_command_prepare(const OpenTTDCommandServices *, bool, uint1
 OpenTTDCommandTested openttd_rust_command_tested(const OpenTTDCommandServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
 void openttd_rust_command_restore(const OpenTTDCommandServices *);
 void openttd_rust_command_finish(const OpenTTDCommandServices *, uint8_t, uint8_t, uint16_t, const OpenTTDCommandCost *, OpenTTDCommandCost *, int64_t, uint32_t);
-uint8_t openttd_rust_command_unwind(const OpenTTDCommandServices *);
+uint8_t openttd_rust_command_backup_held();
 OpenTTDCommandAdmission openttd_rust_command_admit(const OpenTTDCommandServices *, uint8_t, uint16_t, uint32_t, uint32_t, bool);
 uint8_t openttd_rust_command_posted(const OpenTTDCommandServices *, const OpenTTDCommandCost *, uint32_t, bool, bool, uint32_t, bool, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);

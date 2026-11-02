@@ -28,6 +28,8 @@ extern "C" void __wrap__Z10DebugPrintSt17basic_string_viewIcSt11char_traitsIcEEi
 {
 	/* Source locations differ between the native and Rust-backed templates. */
 	if (command_throw && category == "misc" && level == 0 && message.ends_with(": Backed-up value was not restored!")) {
+		/* Backup emits its diagnostic before restoring the command company. */
+		if (_current_company != COMPANY_SPECTATOR) std::abort();
 		command_diagnostics++;
 		message = "command scope: Backed-up value was not restored!";
 	}

@@ -509,13 +509,10 @@ pub unsafe extern "C" fn openttd_rust_command_finish(
     flush_signals(s);
 }
 
-/// `Backup<CompanyID>` destruction at the end of `Execute`. Returns whether the
-/// backup was still held, as when a procedure's exception unwinds; it is restored.
+/// `Backup::IsValid` for native destruction, before its diagnostic and restoration.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_command_unwind(s: &CommandServices) -> u8 {
-    let held = backup().is_some();
-    restore(s);
-    u8::from(held)
+pub extern "C" fn openttd_rust_command_backup_held() -> u8 {
+    u8::from(backup().is_some())
 }
 
 /// Admission and presentation decisions of `InternalPostBefore`.
