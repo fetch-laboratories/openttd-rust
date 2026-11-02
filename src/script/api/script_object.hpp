@@ -20,18 +20,9 @@
 #include "script_log_types.hpp"
 #include "../script_suspend.hpp"
 #include "../squirrel.hpp"
+#include "../../rust/script_host_ffi.h"
 
 #include <utility>
-
-/**
- * The callback function for Mode-classes.
- */
-typedef bool (ScriptModeProc)();
-
-/**
- * The callback function for Async Mode-classes.
- */
-typedef bool (ScriptAsyncModeProc)();
 
 /**
  * Simple counted object. Use it as base of your struct/class if you want to use
@@ -78,10 +69,8 @@ protected:
 		ActiveInstance(ScriptInstance &instance);
 		~ActiveInstance();
 	private:
-		ScriptInstance *last_active;    ///< The active instance before we go instantiated.
+		OpenTTDScriptHost *last_active; ///< The active instance before we go instantiated.
 		ScriptAllocatorScope alc_scope; ///< Keep the correct allocator for the script instance activated
-
-		static ScriptInstance *active;  ///< The global current active instance.
 	};
 
 	class DisableDoCommandScope : private AutoRestoreBackup<bool> {
@@ -189,7 +178,6 @@ protected:
 	/**
 	 * Check if it's the latest command executed by the script.
 	 */
-	static bool CheckLastCommand(const CommandDataBuffer &data, Commands cmd);
 
 	/**
 	 * Sets the DoCommand costs counter to a value.
@@ -239,12 +227,12 @@ protected:
 	/**
 	 * Set the current mode of your script to this proc.
 	 */
-	static void SetDoCommandMode(ScriptModeProc *proc, ScriptObject *instance);
+	static void SetDoCommandMode(OpenTTDScriptMode mode, ScriptObject *instance);
 
 	/**
 	 * Get the current mode your script is currently under.
 	 */
-	static ScriptModeProc *GetDoCommandMode();
+	static OpenTTDScriptMode GetDoCommandMode();
 
 	/**
 	 * Get the instance of the current mode your script is currently under.
@@ -254,12 +242,12 @@ protected:
 	/**
 	 * Set the current async mode of your script to this proc.
 	 */
-	static void SetDoCommandAsyncMode(ScriptAsyncModeProc *proc, ScriptObject *instance);
+	static void SetDoCommandAsyncMode(OpenTTDScriptMode mode, ScriptObject *instance);
 
 	/**
 	 * Get the current async mode your script is currently under.
 	 */
-	static ScriptModeProc *GetDoCommandAsyncMode();
+	static OpenTTDScriptMode GetDoCommandAsyncMode();
 
 	/**
 	 * Get the instance of the current async mode your script is currently under.
@@ -284,7 +272,7 @@ protected:
 	/**
 	 * Get the extra return data from the last DoCommand.
 	 */
-	static const CommandDataBuffer &GetLastCommandResData();
+	static std::span<const uint8_t> GetLastCommandResData();
 
 	/**
 	 * Set the current company to execute commands for or request
@@ -333,9 +321,9 @@ protected:
 	static bool CanSuspend();
 
 	/**
-	 * Get the reference to the event queue.
+	 * Get the host state of the active instance.
 	 */
-	static struct ScriptEventQueue &GetEventQueue();
+	static OpenTTDScriptHost &GetStorage();
 
 	/**
 	 * Get the reference to the log message storage.

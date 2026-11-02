@@ -16,8 +16,8 @@
 #include "../../string_func.h"
 #include "../../strings_func.h"
 #include "../../command_func.h"
+#include "../../rust/command_cost_services.h"
 
-#include "../script_storage.hpp"
 #include "../script_instance.hpp"
 #include "../script_fatalerror.hpp"
 #include "script_error.hpp"
@@ -45,23 +45,19 @@ void SimpleCountedObject::Release()
  * Get the storage associated with the current ScriptInstance.
  * @return The storage.
  */
-static ScriptStorage &GetStorage()
+/* static */ OpenTTDScriptHost &ScriptObject::GetStorage()
 {
 	return ScriptObject::GetActiveInstance().GetStorage();
 }
 
-
-/* static */ ScriptInstance *ScriptObject::ActiveInstance::active = nullptr;
-
 ScriptObject::ActiveInstance::ActiveInstance(ScriptInstance &instance) : alc_scope(instance.engine.get())
 {
-	this->last_active = ScriptObject::ActiveInstance::active;
-	ScriptObject::ActiveInstance::active = &instance;
+	this->last_active = openttd_rust_script_activate(&instance.GetStorage());
 }
 
 ScriptObject::ActiveInstance::~ActiveInstance()
 {
-	ScriptObject::ActiveInstance::active = this->last_active;
+	openttd_rust_script_activate(this->last_active);
 }
 
 ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
@@ -70,8 +66,8 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 
 /* static */ ScriptInstance &ScriptObject::GetActiveInstance()
 {
-	assert(ScriptObject::ActiveInstance::active != nullptr);
-	return *ScriptObject::ActiveInstance::active;
+	assert(GetRustScriptContext().active != nullptr);
+	return *GetRustScriptContext().active->instance;
 }
 
 
@@ -86,15 +82,15 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 	return GetStorage().delay;
 }
 
-/* static */ void ScriptObject::SetDoCommandMode(ScriptModeProc *proc, ScriptObject *instance)
+/* static */ void ScriptObject::SetDoCommandMode(OpenTTDScriptMode mode, ScriptObject *instance)
 {
-	GetStorage().mode = proc;
+	GetStorage().mode = mode;
 	GetStorage().mode_instance = instance;
 }
 
-/* static */ ScriptModeProc *ScriptObject::GetDoCommandMode()
+/* static */ OpenTTDScriptMode ScriptObject::GetDoCommandMode()
 {
-	return GetStorage().mode;
+	return OpenTTDScriptMode{GetStorage().mode};
 }
 
 /* static */ ScriptObject *ScriptObject::GetDoCommandModeInstance()
@@ -102,15 +98,15 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 	return GetStorage().mode_instance;
 }
 
-/* static */ void ScriptObject::SetDoCommandAsyncMode(ScriptAsyncModeProc *proc, ScriptObject *instance)
+/* static */ void ScriptObject::SetDoCommandAsyncMode(OpenTTDScriptMode mode, ScriptObject *instance)
 {
-	GetStorage().async_mode = proc;
+	GetStorage().async_mode = mode;
 	GetStorage().async_mode_instance = instance;
 }
 
-/* static */ ScriptAsyncModeProc *ScriptObject::GetDoCommandAsyncMode()
+/* static */ OpenTTDScriptMode ScriptObject::GetDoCommandAsyncMode()
 {
-	return GetStorage().async_mode;
+	return OpenTTDScriptMode{GetStorage().async_mode};
 }
 
 /* static */ ScriptObject *ScriptObject::GetDoCommandAsyncModeInstance()
@@ -120,34 +116,24 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 
 /* static */ void ScriptObject::SetLastCommand(const CommandDataBuffer &data, Commands cmd)
 {
-	ScriptStorage &s = GetStorage();
+	OpenTTDScriptHost &s = GetStorage();
 	Debug(script, 6, "SetLastCommand company={:02d} cmd={} data={}", s.root_company, cmd, FormatArrayAsHex(data));
-	s.last_data = data;
-	s.last_cmd = cmd;
-}
-
-/* static */ bool ScriptObject::CheckLastCommand(const CommandDataBuffer &data, Commands cmd)
-{
-	ScriptStorage &s = GetStorage();
-	Debug(script, 6, "CheckLastCommand company={:02d} cmd={} data={}", s.root_company, cmd, FormatArrayAsHex(data));
-	if (s.last_cmd != cmd) return false;
-	if (s.last_data != data) return false;
-	return true;
+	openttd_rust_script_set_last_command(&s, data.data(), data.size(), cmd);
 }
 
 /* static */ void ScriptObject::SetDoCommandCosts(Money value)
 {
-	GetStorage().costs = CommandCost(INVALID_EXPENSES, value); // Expense type is never read.
+	GetStorage().costs = value.base();
 }
 
 /* static */ void ScriptObject::IncreaseDoCommandCosts(Money value)
 {
-	GetStorage().costs.AddCost(value);
+	GetStorage().costs = (Money(GetStorage().costs) + value).base();
 }
 
 /* static */ Money ScriptObject::GetDoCommandCosts()
 {
-	return GetStorage().costs.GetCost();
+	return GetStorage().costs;
 }
 
 /* static */ void ScriptObject::SetLastError(ScriptErrorType last_error)
@@ -162,7 +148,7 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 
 /* static */ void ScriptObject::SetLastCost(Money last_cost)
 {
-	GetStorage().last_cost = last_cost;
+	GetStorage().last_cost = last_cost.base();
 }
 
 /* static */ Money ScriptObject::GetLastCost()
@@ -177,7 +163,7 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 
 /* static */ RoadType ScriptObject::GetRoadType()
 {
-	return GetStorage().road_type;
+	return static_cast<RoadType>(GetStorage().road_type);
 }
 
 /* static */ void ScriptObject::SetRailType(RailType rail_type)
@@ -187,7 +173,7 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 
 /* static */ RailType ScriptObject::GetRailType()
 {
-	return GetStorage().rail_type;
+	return static_cast<RailType>(GetStorage().rail_type);
 }
 
 /* static */ void ScriptObject::SetLastCommandRes(bool res)
@@ -202,30 +188,27 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 
 /* static */ void ScriptObject::SetLastCommandResData(CommandDataBuffer data)
 {
-	GetStorage().last_cmd_ret = std::move(data);
+	openttd_rust_script_set_result(&GetStorage(), data.data(), data.size());
 }
 
-/* static */ const CommandDataBuffer &ScriptObject::GetLastCommandResData()
+/* static */ std::span<const uint8_t> ScriptObject::GetLastCommandResData()
 {
-	return GetStorage().last_cmd_ret;
+	return {GetStorage().last_cmd_ret, GetStorage().last_cmd_ret_size};
 }
 
 /* static */ void ScriptObject::SetCompany(::CompanyID company)
 {
-	if (GetStorage().root_company == INVALID_OWNER) GetStorage().root_company = company;
-	GetStorage().company = company;
-
-	_current_company = company;
+	openttd_rust_script_set_company(&GetStorage(), &GetRustScriptHostServices(), company.base());
 }
 
 /* static */ ::CompanyID ScriptObject::GetCompany()
 {
-	return GetStorage().company;
+	return ::CompanyID(GetStorage().company);
 }
 
 /* static */ ::CompanyID ScriptObject::GetRootCompany()
 {
-	return GetStorage().root_company;
+	return ::CompanyID(GetStorage().root_company);
 }
 
 /* static */ bool ScriptObject::CanSuspend()
@@ -234,20 +217,14 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 	return GetStorage().allow_do_command && squirrel.CanSuspend();
 }
 
-/* static */ ScriptEventQueue &ScriptObject::GetEventQueue()
-{
-	return GetStorage().event_queue;
-}
-
 /* static */ ScriptLogTypes::LogData &ScriptObject::GetLogData()
 {
-	return GetStorage().log_data;
+	return GetActiveInstance().log_data;
 }
 
 /* static */ void ScriptObject::SetCallbackVariable(int index, int value)
 {
-	if (static_cast<size_t>(index) >= GetStorage().callback_value.size()) GetStorage().callback_value.resize(index + 1);
-	GetStorage().callback_value[index] = value;
+	openttd_rust_script_set_callback_value(&GetStorage(), index, value);
 }
 
 /* static */ int ScriptObject::GetCallbackVariable(int index)
@@ -266,20 +243,8 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 		throw Script_FatalError("You are not allowed to execute any DoCommand (even indirect) in your constructor, Save(), Load(), and any valuator.");
 	}
 
-	/* Are we only interested in the estimate costs? */
-	bool estimate_only = GetDoCommandMode() != nullptr && !GetDoCommandMode()();
-
-	/* Should the command be executed asynchronously? */
-	bool asynchronous = GetDoCommandAsyncMode() != nullptr && GetDoCommandAsyncMode()();
-
-	bool networking = _networking && !_generating_world;
-
-	if (!ScriptCompanyMode::IsDeity() && !ScriptCompanyMode::IsValid()) {
-		ScriptObject::SetLastError(ScriptError::ERR_PRECONDITION_INVALID_COMPANY);
-		return { true, estimate_only, asynchronous, networking };
-	}
-
-	return { false, estimate_only, asynchronous, networking };
+	auto [rejected, estimate_only, asynchronous, networking] = openttd_rust_script_command_prep(&GetStorage(), &GetRustScriptHostServices());
+	return { rejected, estimate_only, asynchronous, networking };
 }
 
 /* static */ bool ScriptObject::DoCommandProcessResult(const CommandCost &res, Script_SuspendCallbackProc *callback, bool estimate_only, bool asynchronous)
@@ -287,50 +252,23 @@ ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
 	/* Set the default callback to return a true/false result of the DoCommand */
 	if (callback == nullptr) callback = &ScriptInstance::DoCommandReturn;
 
-	/* We failed; set the error and bail out */
-	if (res.Failed()) {
-		SetLastError(ScriptError::StringToError(res.GetErrorMessage()));
-		return false;
-	}
-
-	/* No error, then clear it. */
-	SetLastError(ScriptError::ERR_NONE);
-
-	/* Estimates, update the cost for the estimate and be done */
-	if (estimate_only) {
-		IncreaseDoCommandCosts(res.GetCost());
-		return true;
-	}
-
-	/* Costs of this operation. */
-	SetLastCost(res.GetCost());
-	SetLastCommandRes(true);
-
-	if (_generating_world || asynchronous) {
-		IncreaseDoCommandCosts(res.GetCost());
-		if (!_generating_world) {
+	auto [outcome, suspend] = openttd_rust_script_command_result(&GetStorage(), &GetRustScriptHostServices(), RustCommandCost(&res), estimate_only, asynchronous);
+	switch (outcome) {
+		case OpenTTDScriptOutcome::Failed: return false;
+		case OpenTTDScriptOutcome::Done: return true;
+		case OpenTTDScriptOutcome::ChargedCallback:
 			/* Charge a nominal fee for asynchronously executed commands */
-			Squirrel &engine = *ScriptObject::GetActiveInstance().engine;
-			Squirrel::DecreaseOps(engine.GetVM(), 100);
-		}
-		if (callback != nullptr) {
+			Squirrel::DecreaseOps(ScriptObject::GetActiveInstance().engine->GetVM(), 100);
+			[[fallthrough]];
+		case OpenTTDScriptOutcome::Callback:
 			/* Insert return value into to stack and throw a control code that
 			 * the return value in the stack should be used. */
 			callback(GetActiveInstance());
 			throw SQInteger(1);
-		}
-		return true;
-	} else if (_networking) {
-		/* Suspend the script till the command is really executed. */
-		throw Script_Suspend(-(int)GetDoCommandDelay(), callback);
-	} else {
-		IncreaseDoCommandCosts(res.GetCost());
-
-		/* Suspend the script player for 1+ ticks, so it simulates multiplayer. This
-		 *  both avoids confusion when a developer launched the script in a
-		 *  multiplayer game, but also gives time for the GUI and human player
-		 *  to interact with the game. */
-		throw Script_Suspend(GetDoCommandDelay(), callback);
+		case OpenTTDScriptOutcome::Suspend:
+			/* Suspend the script till the command is really executed, or for 1+ ticks
+			 * to simulate multiplayer. */
+			throw Script_Suspend(suspend, callback);
 	}
 
 	NOT_REACHED();

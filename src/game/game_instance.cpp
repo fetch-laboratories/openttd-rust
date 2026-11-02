@@ -12,7 +12,6 @@
 
 #include "../script/squirrel_class.hpp"
 
-#include "../script/script_storage.hpp"
 #include "../script/script_cmd.h"
 #include "../script/script_gui.h"
 #include "game_config.hpp"
