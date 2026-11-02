@@ -272,6 +272,46 @@ pub unsafe extern "C" fn openttd_rust_grf_text_cleanup() {
     unsafe { &mut *TEXTS.get() }.clear();
 }
 
+/// Fixture-only table observation; the visitor may look up strings but cannot mutate the table.
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn visit(
+    context: *const c_void,
+    visitor: unsafe extern "C" fn(*const c_void, u32, u32, u8, u32, u32, ByteSpan),
+) -> u8 {
+    let count = unsafe { &*TEXTS.get() }.len();
+    for index in 0..count {
+        let languages = unsafe { &(&*TEXTS.get())[index] }.texts.len();
+        for language in 0..languages {
+            let (grfid, stringid, lang, default, bytes) = {
+                let entry = unsafe { &(&*TEXTS.get())[index] };
+                let text = &entry.texts[language];
+                (
+                    entry.grfid,
+                    entry.stringid,
+                    text.language,
+                    entry.default,
+                    ByteSpan {
+                        data: text.bytes.as_ptr(),
+                        size: text.bytes.len(),
+                    },
+                )
+            };
+            unsafe {
+                visitor(
+                    context,
+                    grfid,
+                    stringid,
+                    lang,
+                    default,
+                    grf_string_id(index),
+                    bytes,
+                );
+            };
+        }
+    }
+    unsafe { *LANGUAGE.get() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

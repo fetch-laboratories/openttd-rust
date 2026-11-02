@@ -3,6 +3,13 @@
 #include "stdafx.h"
 #include "console_internal.h"
 #include "newgrf/newgrf_act2.cpp"
+#include "newgrf_text.cpp"
+#ifdef WITH_RUST
+#include "rust/byte_span_ffi.h"
+#else
+struct OpenTTDByteSpan { const uint8_t *data; size_t size; };
+#endif
+#include "language.h"
 #include "newgrf_station.h"
 #include "station_cmd.h"
 #include "landscape.h"
@@ -55,6 +62,48 @@ static std::string Hex(std::string_view text)
 	for (char c : text) result += fmt::format("{:02X}", uint8_t(c));
 	return result;
 }
+#ifdef WITH_RUST
+extern "C" uint8_t openttd_test_grf_text_dump(const void *, void (*)(const void *, uint32_t, uint32_t, uint8_t, StringID, StringID, OpenTTDByteSpan) noexcept);
+#endif
+/** Saves omit translated bytes, defaults, language selection and table StringIDs. */
+static void GrfStrings(const char *phase)
+{
+	auto emit = [](const void *context, uint32_t grfid, uint32_t stringid, uint8_t language, StringID fallback, StringID returned, OpenTTDByteSpan text) noexcept {
+		Require(GetGRFStringID(grfid, GRFStringID{stringid}) == returned, "text-id");
+		fmt::print(stderr, "LOADING text {} row {:08X} {:X} {:X} {} {} {}\n", static_cast<const char *>(context), grfid, stringid, language, fallback, returned, text.size == 0 ? "-" : Hex({reinterpret_cast<const char *>(text.data), text.size}));
+	};
+#ifdef WITH_RUST
+	uint8_t saved = openttd_test_grf_text_dump(phase, emit);
+#else
+	uint8_t saved = _current_lang_id;
+	for (uint32_t index = 0; index < _grf_text.size(); index++) {
+		const auto &entry = _grf_text[StringIndexInTab{index}];
+		for (const auto &text : entry.textholder) emit(phase, entry.grfid, entry.stringid.base(), text.langid, entry.def_string, MakeStringID(TEXT_TAB_NEWGRF_START, StringIndexInTab{index}), {reinterpret_cast<const uint8_t *>(text.text.data()), text.text.size()});
+	}
+#endif
+	for (uint8_t language : {0, 1, 2, 7, 96, 127}) {
+		SetCurrentGrfLangID(language);
+#ifdef WITH_RUST
+		uint8_t current = openttd_test_grf_text_dump(nullptr, [](const void *, uint32_t, uint32_t, uint8_t, StringID, StringID, OpenTTDByteSpan) noexcept {});
+#else
+		uint8_t current = _current_lang_id;
+#endif
+		uint32_t old = 0;
+		for (uint8_t mask = 0; mask < 32; mask++) if (CheckGrfLangID(mask, 6)) old |= 1U << mask;
+		StringID id = GetGRFStringID(ID("TX52"), GRFStringID{0xD000});
+		fmt::print(stderr, "LOADING text {} language {} {} {} {} {} {}\n", phase, language, current, old, CheckGrfLangID(language, 7), CheckGrfLangID(0x7F, 7), id == STR_UNDEFINED ? "-" : Hex(GetStringPtr(id)));
+	}
+	SetCurrentGrfLangID(saved);
+	fmt::print(stderr, "LOADING text {} byte80 {}\n", phase, Hex(TranslateTTDPatchCodes(0, 1, false, "\x80", static_cast<StringControlCode>('!'))));
+	if (GetGRFConfig(ID("TX52")) != nullptr) {
+		const GRFConfig *before = GetGRFConfig(ID("TB52"));
+		const GRFConfig *bounds = GetGRFConfig(ID("TE52"));
+		Require(before->status == GCS_DISABLED && before->errors.size() == 1 && before->errors.front().message == STR_NEWGRF_ERROR_LOAD_AFTER && before->errors.front().data == GetString(STR_NEWGRF_ERROR_AFTER_TRANSLATED_FILE), "text-load-after");
+		Require(bounds->status == GCS_DISABLED && bounds->errors.size() == 1 && bounds->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, "text-read-bounds");
+		Require(GetGRFStringID(ID("TX52"), GRFStringID{0xD00A}) == STR_UNDEFINED && GetGRFStringID(ID("TX52"), GRFStringID{0xD00B}) != STR_UNDEFINED && GetGRFStringID(ID("TX52"), GRFStringID{0xFFFF}) == STR_UNDEFINED, "text-empty-and-wrapped");
+	}
+}
+
 /** Generator lists, style lookups and generated name bytes of the ActionF fixtures. */
 static void GrfTownNames(const char *phase, bool loaded)
 {
@@ -312,12 +361,17 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	if (args[1] == "inspect") {
 		/* Interactive RNG is unsaved; observe it from a deterministic reload command seed. */
 		_interactive_random.SetSeed(0x61700001);
-		Inspect(true); GrfTownNames("inspect", false); SeasonalSnow("inspect", true); return true;
+		if (GetGRFConfig(ID("TX52")) != nullptr) { Require(ReadLanguagePack(GetLanguage(7)), "text-language-pack"); ReloadNewGRFData(); }
+		Inspect(true); GrfTownNames("inspect", false); GrfStrings("inspect"); SeasonalSnow("inspect", true); return true;
 	}
 	if (args.size() < 3) return false;
 	SetRandomSeed(0x47100001);
 	_grfconfig.clear();
-	for (const char *name : {"main", "graph-broken", "broken", "victim", "fatal", "before", "after", "names-a", "names-bad", "names-b", "names-short", "snow", "snow-duplicate"}) {
+	bool strings = std::filesystem::exists(std::filesystem::path(args[2]) / "text-modern.grf");
+	if (strings) Require(ReadLanguagePack(GetLanguage(7)), "text-language-pack");
+	std::vector<const char *> files{"main", "graph-broken", "broken", "victim", "fatal", "before", "after", "names-a", "names-bad", "names-b", "names-short", "snow", "snow-duplicate"};
+	if (strings) files.insert(files.end(), {"translation-before", "text-modern", "text-old", "text-translate", "text-translate7", "translation-bounds"});
+	for (const char *name : files) {
 		auto c = std::make_unique<GRFConfig>(std::string(args[2]) + "/" + name + ".grf");
 		Require(FillGRFDetails(*c, false, NO_DIRECTORY), "file-scan");
 		c->flags.Reset(GRFConfigFlag::InitOnly);
@@ -335,9 +389,11 @@ static bool LoadingScenario(std::span<std::string_view> args)
 	SeasonalSnow("reconstructed", true);
 	Inspect(false);
 	GrfTownNames("first", true);
+	GrfStrings("first");
 	ReloadNewGRFData();
 	Inspect(false);
 	GrfTownNames("reload", true);
+	GrfStrings("reload");
 	SeasonalSnow("reload", true);
 	GrfTownNameTowns();
 	EngineID id = GetNewEngineID(GetFileByGRFID(ID("R471")), VEH_ROAD, 0);

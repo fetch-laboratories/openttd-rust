@@ -528,3 +528,22 @@ pub unsafe extern "C" fn openttd_test_command_stack_probe(
         })
     })
 }
+
+/// Observe GRF text bytes and language state, which saves do not contain.
+/// # Safety
+/// The visitor is synchronous and may read, but cannot mutate, the text table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_grf_text_dump(
+    context: *const std::ffi::c_void,
+    visitor: unsafe extern "C" fn(
+        *const std::ffi::c_void,
+        u32,
+        u32,
+        u8,
+        u32,
+        u32,
+        crate::services::ByteSpan,
+    ),
+) -> u8 {
+    unsafe { crate::newgrf_text::visit(context, visitor) }
+}
