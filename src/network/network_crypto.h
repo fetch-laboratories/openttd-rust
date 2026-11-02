@@ -85,9 +85,12 @@ public:
 /**
  * Callback interface for client implementations to provide the handling of the password requests.
  */
+struct OpenTTDAuthHandlerServices;
+const OpenTTDAuthHandlerServices &GetAuthHandlerServices();
+
 class NetworkAuthenticationPasswordRequestHandler : public NetworkAuthenticationPasswordRequest {
 protected:
-	friend class X25519PAKEClientHandler;
+	friend const OpenTTDAuthHandlerServices &GetAuthHandlerServices();
 
 	std::string password; ///< The entered password.
 public:

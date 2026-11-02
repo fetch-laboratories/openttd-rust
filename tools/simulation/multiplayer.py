@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deep-only mixed multiplayer, with a visibly fixture-matched candidate identity (#510)."""
+"""Opt-in mixed multiplayer auth modes with a visibly matched fixture identity (#510)."""
 
 import argparse
 import hashlib
@@ -22,6 +22,10 @@ from simulation import core  # noqa: E402
 from simulation.console_adapter import console_adapter  # noqa: E402
 
 NAME = "mixed-multiplayer-opus"
+AUTH_MODES = ("plain", "password", "authorized-key")
+AUTH_PASSWORD = "NetworkCrypto64"
+AUTH_SECRET = "0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a"
+AUTH_PUBLIC = "54558C3F5FABC16BE191BFE5D2A9F97227952A99F6F2E7286D02E6A3FE5F932B"
 SOURCE = core.ROOT / "migration/saves/opus-55-167-002.sav"
 STOP = (727960, 0, 84677)  # Calendar callback precedes economy/tick advancement.
 REVISION_FIELDS = (
@@ -161,6 +165,7 @@ class Session:
     sync_packets: list[tuple[str, str]] = field(default_factory=list)
     rng: tuple[int, int] | None = None
     stop: tuple[int, int, int] | None = None
+    authentication: str = "plain"
 
 
 def session(
@@ -169,9 +174,10 @@ def session(
     folder: Path,
     server_role: str,
     timeout: int,
+    authentication: str = "plain",
 ) -> Session:
     started = time.monotonic()
-    result = Session(server_role, str(folder))
+    result = Session(server_role, str(folder), authentication=authentication)
     envs = {}
     # The T3 host probes every 127.0.0.1 listener with HTTP and TLS (#629); the
     # kernel's free port keeps concurrent runs apart. A bind failure remains retained.
@@ -195,6 +201,10 @@ def session(
                         "server_port": str(port),
                         "client_name": "Mixed510",
                         "participate_survey": "no",
+                        "client_secret_key": AUTH_SECRET,
+                        "server_password": AUTH_PASSWORD
+                        if side == "server" and authentication == "password"
+                        else "",
                     },
                 },
             },
@@ -203,6 +213,8 @@ def session(
         )
         with (run / "openttd.cfg").open("a") as config:
             config.write(f"\n[server_bind_addresses]\n{host} = \n")
+            if side == "server" and authentication == "authorized-key":
+                config.write(f"\n[server_authorized_keys]\n{AUTH_PUBLIC} = \n")
         scripts = run / "scripts"
         scripts.mkdir()
         start = "script console.log\nschedule on-next-calendar-month scripts/stop.scr\n"
@@ -223,6 +235,8 @@ def session(
                 "640x480",
             ]
         )
+        if side == "client" and authentication == "password":
+            args += ["-p", AUTH_PASSWORD]
         # -D resets net debug; ACTIVE must remain observable after the initial ACK.
         result.commands[side] = [
             str(binaries[role]),
@@ -354,6 +368,13 @@ def check(result: Session, source: Path) -> None:
         re.I,
     ):
         raise RuntimeError("desync, skipped sync test or unexpected network disconnect")
+    if result.authentication != "plain":
+        method = "PAKE" if result.authentication == "password" else "AuthorizedKey"
+        if (
+            f"Sending X25519-{method}-server authentication request" not in server
+            or f"Received X25519-{method}-client authentication request" not in client
+        ):
+            raise RuntimeError("missing selected authentication method evidence")
     initial = core.rows(source, "DATE")[0]
     dates = []
     for side in ("server", "client"):
@@ -424,7 +445,12 @@ def main() -> int:
     parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=1200)
     args = parser.parse_args()
-    if any(name not in NAME for name in args.names) or args.timeout < 1:
+    selected = [
+        mode
+        for mode in AUTH_MODES
+        if not args.names or any(name in f"{NAME}-{mode}" for name in args.names)
+    ]
+    if not selected or args.timeout < 1:
         parser.error("no mixed multiplayer input matches selectors")
     if migration.SANITIZE or migration.TSAN:
         parser.error("mixed multiplayer requires ordinary native runtimes")
@@ -435,16 +461,38 @@ def main() -> int:
         migration.git("rev-parse", "HEAD"),
         migration.git("status", "--short"),
     )
-    result, identities = Result(), {}
-    started = time.monotonic()
+    identities: dict[str, Identity] = {}
+    results: list[Result] = []
     try:
         binaries, identities = freeze(out)
         source, _ = core.normalize(SOURCE, out / "input")
-        for role in ("reference", "candidate"):
-            run = session(binaries, source, out / f"{role}-server", role, args.timeout)
-            result.sessions.append(run)
-            check(run, source)
-        compare(result)
+        for mode in selected:
+            result = Result(scenario=f"{NAME}-{mode}")
+            results.append(result)
+            started = time.monotonic()
+            try:
+                for role in ("reference", "candidate"):
+                    run = session(
+                        binaries,
+                        source,
+                        out / f"{mode}-{role}-server",
+                        role,
+                        args.timeout,
+                        mode,
+                    )
+                    result.sessions.append(run)
+                    check(run, source)
+                compare(result)
+            except (
+                OSError,
+                RuntimeError,
+                ValueError,
+                KeyError,
+                core.Corrupt,
+                subprocess.SubprocessError,
+            ) as error:
+                result.problems.append(str(error))
+            result.seconds = round(time.monotonic() - started, 3)
     except (
         OSError,
         RuntimeError,
@@ -453,17 +501,18 @@ def main() -> int:
         core.Corrupt,
         subprocess.SubprocessError,
     ) as error:
-        result.problems.append(str(error))
-    result.seconds = round(time.monotonic() - started, 3)
-    report = Report(commit, status, identities, [result], result.passed)
+        results.append(Result(problems=[str(error)]))
+    passed = bool(results) and all(result.passed for result in results)
+    report = Report(commit, status, identities, results, passed)
     path = out / "report.json"
     path.write_text(json.dumps(asdict(report), indent=2) + "\n")
-    print(
-        f"{'ok' if result.passed else 'FAIL'} {NAME}: {result.problems}; {len(result.differences)} differences",
-        flush=True,
-    )
+    for result in results:
+        print(
+            f"{'ok' if result.passed else 'FAIL'} {result.scenario}: {result.problems}; {len(result.differences)} differences",
+            flush=True,
+        )
     print(f"Report: {path}", flush=True)
-    return 0 if result.passed else 1
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":
