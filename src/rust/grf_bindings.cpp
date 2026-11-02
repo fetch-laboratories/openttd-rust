@@ -2,6 +2,7 @@
 /** @file grf_bindings.cpp Operations on native spec and engine binding payloads. */
 #include "../stdafx.h"
 #include "grf_bindings_ffi.h"
+#include "../company_type.h"
 #include "engine_services.h"
 #include "../engine_base.h"
 #include "../newgrf_badge.h"
@@ -22,7 +23,6 @@ const OpenTTDAct3CargoServices &GetAct3CargoServices() noexcept
 		.not_available = [](uint8_t cargo) noexcept { GrfMsg(5, "TranslateCargo: Cargo type {} not available in this climate, skipping.", cargo); },
 		.unsupported = [](uint32_t cl) noexcept { GrfMsg(5, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' unsupported, skipping.", GB(cl, 24, 8), GB(cl, 16, 8), GB(cl, 8, 8), GB(cl, 0, 8)); },
 		.mapped = [](uint32_t cl, CargoType cargo) noexcept { GrfMsg(6, "TranslateCargo: Cargo '{:c}{:c}{:c}{:c}' mapped to cargo type {}.", GB(cl, 24, 8), GB(cl, 16, 8), GB(cl, 8, 8), GB(cl, 0, 8), cargo); },
-
 	};
 	return services;
 }
