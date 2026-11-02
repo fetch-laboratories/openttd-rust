@@ -105,9 +105,10 @@ static void Trees()
 	const auto Tick = [&](uint32_t size) {
 		SessionFixture fixture;
 		auto tick_shared = shared;
-		fixture.map.size = size;
+		OpenTTDFixtureMap tick_map{6};
+		tick_map.size = size;
 		fixture.extra_tree_placement = 2;
-		tick_shared.map = fixture.shared.map;
+		tick_shared.map = &tick_map.statics;
 		tick_shared.settings = &fixture.settings;
 		tick_shared.tick_counter = []() noexcept -> uint64_t { return 0; };
 		fixture.services.shared = &tick_shared;
