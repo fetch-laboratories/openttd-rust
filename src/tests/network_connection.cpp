@@ -3,6 +3,8 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../network/core/packet.h"
+#include "../network/core/tcp.h"
+#include "../rust/services_assert.h"
 #include "../newgrf_config.h"
 #include "../rust/network_client_ffi.h"
 #include "../rust/network_connection_ffi.h"
@@ -177,4 +179,88 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 		{7, 3}, {7, 3}, {8, 0}, {9, 0}, {10, 0},
 	};
 	CHECK(map_events == expected);
+}
+
+static OpenTTDPacketState *tcp_packet;
+static intptr_t tcp_transfer_result;
+static bool tcp_valid, tcp_writable, tcp_blocked;
+static uint tcp_calls, tcp_logs, tcp_pops;
+static std::vector<uint8_t> tcp_output;
+TEST_CASE("Network TCP - partial writes and close requests preserve cursor and closing policy")
+{
+	struct Case { intptr_t result; bool closing, blocked, valid, writable; OpenTTDTcpSend expected; size_t cursor; uint calls, logs, pops; };
+	const Case cases[]{
+		{-2, false, false, true, true, OpenTTDTcpSend::All, 0, 1, 0, 1},
+		{2, false, false, true, true, OpenTTDTcpSend::Partly, 2, 1, 0, 0},
+		{-1, false, true, true, true, OpenTTDTcpSend::Partly, 0, 1, 0, 0},
+		{-1, false, false, true, true, OpenTTDTcpSend::Close, 0, 1, 1, 0},
+		{-1, true, false, true, true, OpenTTDTcpSend::Closed, 0, 1, 0, 0},
+		{0, false, false, true, true, OpenTTDTcpSend::Close, 0, 1, 0, 0},
+		{0, true, false, true, true, OpenTTDTcpSend::Closed, 0, 1, 0, 0},
+		{-2, false, false, false, true, OpenTTDTcpSend::Closed, 0, 0, 0, 0},
+		{-2, false, false, true, false, OpenTTDTcpSend::None, 0, 0, 0, 0},
+	};
+	auto services = GetRustNetworkTcpServices();
+	services.valid = [](const NetworkTCPSocketHandler *) noexcept { return tcp_valid; };
+	services.writable = [](const NetworkTCPSocketHandler *) noexcept { return tcp_writable; };
+	services.send_front = [](NetworkTCPSocketHandler *) noexcept { return tcp_packet; };
+	services.send_bytes = [](NetworkTCPSocketHandler *, const uint8_t *data, size_t size) noexcept -> intptr_t {
+		tcp_calls++;
+		auto result = tcp_transfer_result == -2 ? static_cast<intptr_t>(size) : tcp_transfer_result;
+		if (result > 0) tcp_output.insert(tcp_output.end(), data, data + result);
+		return result;
+	};
+	services.error_would_block = [](const NetworkError *) noexcept { return tcp_blocked; };
+	services.error_send = [](const NetworkError *) noexcept { tcp_logs++; };
+	services.send_pop = [](NetworkTCPSocketHandler *) noexcept { *tcp_packet = {}; tcp_packet = nullptr; tcp_pops++; };
+	for (const auto &test : cases) {
+		CAPTURE(test.result, test.closing, test.blocked, test.valid, test.writable);
+		Packet packet(nullptr, PacketType{9}); packet.Send_uint32(0x04030201); packet.PrepareToSend();
+		tcp_packet = packet.Record(); tcp_transfer_result = test.result;
+		tcp_valid = test.valid; tcp_writable = test.writable; tcp_blocked = test.blocked;
+		tcp_calls = tcp_logs = tcp_pops = 0; tcp_output.clear();
+		CHECK(openttd_rust_tcp_send(&services, nullptr, test.closing, RustAssertCondition) == test.expected);
+		CHECK(tcp_calls == test.calls); CHECK(tcp_logs == test.logs); CHECK(tcp_pops == test.pops);
+		if (tcp_packet != nullptr) CHECK(tcp_packet->position == test.cursor);
+		const std::array<uint8_t, 7> expected{7, 0, 9, 1, 2, 3, 4};
+		CHECK(std::equal(tcp_output.begin(), tcp_output.end(), expected.begin()));
+	}
+}
+
+static Packet *tcp_receive_packet;
+static std::vector<uint8_t> tcp_input;
+static size_t tcp_read_position, tcp_read_limit;
+static intptr_t tcp_read_end;
+TEST_CASE("Network TCP - fragmented size headers resume and invalid sizes request close")
+{
+	auto services = GetRustNetworkTcpServices();
+	services.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
+	class Socket : public NetworkSocketHandler {} socket;
+	static NetworkSocketHandler *base;
+	base = &socket;
+	services.base_socket = [](NetworkTCPSocketHandler *) noexcept { return base; };
+	services.receive_packet = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return tcp_receive_packet == nullptr ? nullptr : tcp_receive_packet->Record(); };
+	services.receive_create = [](NetworkTCPSocketHandler *, OpenTTDPacketState *state) noexcept { tcp_receive_packet = new Packet(*state); return tcp_receive_packet->Record(); };
+	services.receive_bytes = [](NetworkTCPSocketHandler *, uint8_t *data, size_t size) noexcept -> intptr_t {
+		if (tcp_read_position == tcp_read_limit) return tcp_read_end;
+		size_t count = std::min(size, tcp_read_limit - tcp_read_position);
+		std::copy_n(tcp_input.data() + tcp_read_position, count, data);
+		tcp_read_position += count;
+		return count;
+	};
+	services.error_would_block = [](const NetworkError *) noexcept { return true; };
+	tcp_receive_packet = nullptr; tcp_input = {7, 0, 9, 1, 2, 3, 4};
+	tcp_read_position = 0; tcp_read_limit = 1; tcp_read_end = -1;
+	CHECK(openttd_rust_tcp_receive(&services, nullptr, RustAssertCondition) == OpenTTDTcpReceive::None);
+	REQUIRE(tcp_receive_packet != nullptr); CHECK(tcp_receive_packet->Record()->position == 1);
+	tcp_read_limit = tcp_input.size();
+	CHECK(openttd_rust_tcp_receive(&services, nullptr, RustAssertCondition) == OpenTTDTcpReceive::Ready);
+	CHECK(tcp_receive_packet->Record()->position == 7);
+	CHECK(std::equal(tcp_input.begin(), tcp_input.end(), tcp_receive_packet->Record()->data));
+	delete std::exchange(tcp_receive_packet, nullptr);
+	for (const auto &wire : {std::vector<uint8_t>{1, 0}, std::vector<uint8_t>{0, 128}, std::vector<uint8_t>{7, 0}}) {
+		tcp_input = wire; tcp_read_position = 0; tcp_read_limit = wire.size(); tcp_read_end = 0;
+		CHECK(openttd_rust_tcp_receive(&services, nullptr, RustAssertCondition) == OpenTTDTcpReceive::Close);
+		delete std::exchange(tcp_receive_packet, nullptr);
+	}
 }

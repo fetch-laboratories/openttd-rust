@@ -56,6 +56,7 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(network_crypto) \
 	X(network_frame) \
 	X(network_lifecycle) \
+	X(network_tcp) \
 	X(packet) \
 	X(landscape) \
 	X(genworld) \
