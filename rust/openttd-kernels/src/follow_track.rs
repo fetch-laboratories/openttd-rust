@@ -119,7 +119,10 @@ impl State {
     }
     /// `CFollowTrackRail(v, types)` for a train, else `CFollowTrackRail(owner, types)`.
     pub(crate) fn rail(s: &Services, v: crate::train::Handle, owner: u8, types: u64) -> Self {
-        let vehicle = std::ptr::NonNull::new(v.shell.cast()).map(VehicleRef);
+        let vehicle = std::ptr::NonNull::new(v.shell).map(|shell| {
+            // SAFETY: The source train handle remains live for this search.
+            unsafe { VehicleRef::from_shell(shell.as_ptr(), crate::movement::table(s).vehicle()) }
+        });
         if vehicle.is_some() {
             Self::vehicle(s, RAIL, vehicle, types, true)
         } else {

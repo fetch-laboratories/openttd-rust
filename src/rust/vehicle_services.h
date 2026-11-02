@@ -44,10 +44,10 @@ void RustVehicleClearName(void *shell) noexcept;
 void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept;
 
 /** The Rust handle of a live vehicle; null stays null. */
-inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpret_cast<OpenTTDVehicle *>(const_cast<Vehicle *>(v)); }
+inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return v == nullptr ? nullptr : v->record; }
 /** The vehicle behind a Rust handle. */
-inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<Vehicle *>(v); }
-inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return reinterpret_cast<const Vehicle *>(v); }
+inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return Vehicle::FromRecord(v); }
+inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return Vehicle::FromRecord(v); }
 
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
@@ -64,7 +64,8 @@ template <class T> inline void RustVehicleUpdateViewport(T *v, bool update_delta
 template <typename Handle> inline void RustVehicleUpdateDelta(Handle handle) noexcept
 {
 	Vehicle *v;
-	if constexpr (std::is_pointer_v<Handle>) { v = reinterpret_cast<Vehicle *>(handle); }
+	if constexpr (std::is_same_v<Handle, OpenTTDVehicle *>) { v = VehicleOf(handle); }
+	else if constexpr (std::is_pointer_v<Handle>) { v = reinterpret_cast<Vehicle *>(handle); }
 	else if constexpr (requires { handle.handle; }) { v = VehicleOf(handle.handle); }
 	else { v = static_cast<Vehicle *>(handle.shell); }
 	v->UpdateDeltaXY();
@@ -173,7 +174,11 @@ inline int32_t RustVehicleLastServiceOf(OpenTTDVehicle *v) noexcept { return Rus
 inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v->Record().breakdown_ctr; }
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->value.base(); }
 inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }
-template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept { return static_cast<const Vehicle *>(static_cast<const void *>(v))->index.base(); }
+template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept
+{
+	if constexpr (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Handle>>, OpenTTDVehicle>) return VehicleOf(v)->index.base();
+	else return static_cast<const Vehicle *>(static_cast<const void *>(v))->index.base();
+}
 inline uint32_t RustVehicleIndexOpaque(const void *v) noexcept { return RustVehicleIndex(v); }
 /** The legacy company sentinel is UINT32_MAX, distinct from VehicleID::Invalid(). */
 inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
@@ -257,7 +262,12 @@ static auto OPENTTD_RUST_CALL RustVehicleHandleInvoke(Handle vehicle, Args... ar
 template <typename Result, auto Read>
 static Result RustOpaqueVehicleRead(void *shell) noexcept { return Read(static_cast<Vehicle *>(shell)); }
 template <typename Result, auto Read>
-static Result RustOpaqueHandleRead(void *shell) noexcept { return Read(RustVehicle(static_cast<Vehicle *>(shell))); }
+static Result RustOpaqueHandleRead(void *shell) noexcept
+{
+	auto result = Read(RustVehicle(static_cast<Vehicle *>(shell)));
+	if constexpr (std::is_same_v<Result, void *> && std::is_same_v<decltype(result), OpenTTDVehicle *>) return VehicleOf(result);
+	else return result;
+}
 /** Typed legacy-context adapter; the native operation remains defined once. */
 template <auto Operation, typename... Args>
 static auto RustOpaqueVehicleInvoke(void *shell, Args... args) noexcept { return Operation(static_cast<Vehicle *>(shell), args...); }

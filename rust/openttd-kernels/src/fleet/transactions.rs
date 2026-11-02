@@ -124,7 +124,7 @@ unsafe fn move_vehicle(
 unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {
     let s = (w.build_services)();
     let b = s.refit.common.base;
-    let v = unsafe { vehicle_ref_for_build(old) };
+    let v = unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) };
     let tile = (s.refit.common.vehicles.tile)(v);
     let result = crate::command::nested(
         b.commands,
@@ -153,8 +153,11 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
         std::ptr::null_mut()
     }
 }
-unsafe fn vehicle_ref_for_build(v: *mut ()) -> crate::vehicle::VehicleRef {
-    crate::vehicle::VehicleRef(std::ptr::NonNull::new(v.cast()).unwrap())
+unsafe fn vehicle_ref_for_build(
+    v: *mut (),
+    services: &crate::vehicle::VehicleServices,
+) -> crate::vehicle::VehicleRef {
+    unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), services) }
 }
 
 unsafe fn direct_start(w: &Services, out: *mut (), v: *mut (), evaluate: bool) {
@@ -426,7 +429,7 @@ unsafe fn new_cargo(
     let mask = unsafe {
         crate::engine_capabilities::openttd_rust_articulated_live_cargoes(
             w.capabilities,
-            v.cast(),
+            vehicle_ref_for_build(v, (w.common)().vehicles).0.as_ptr(),
             &raw mut cargo,
         )
     };
@@ -445,7 +448,12 @@ unsafe fn new_cargo(
         }
         v = unsafe { (w.first)(v) };
         while !v.is_null() {
-            if unsafe { crate::engine_capabilities::can_carry_vehicle(w.capabilities, v.cast()) } {
+            if unsafe {
+                crate::engine_capabilities::can_carry_vehicle(
+                    w.capabilities,
+                    vehicle_ref_for_build(v, (w.common)().vehicles).0.as_ptr(),
+                )
+            } {
                 let cargo = unsafe { (w.cargo_type)(v) };
                 if available & 1_u64.wrapping_shl(u32::from(cargo)) != 0 {
                     return cargo;
@@ -532,19 +540,24 @@ unsafe fn build(
         check!(w, unsafe { (w.success)(cost) });
     }
     if unsafe { (gw.vehicle_type)(new) } == 0
-        && ((w.refit_services)().train_handle)(old.cast()).get_flags()
+        && ((w.refit_services)().train_handle)(
+            unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
+                .0
+                .as_ptr(),
+        )
+        .get_flags()
             & (1 << crate::train::FLIPPED)
             != 0
         && !unsafe {
             crate::newgrf_vehicle::reverse_probability(
                 (w.common)().vehicles,
-                vehicle_ref_for_build(old),
+                vehicle_ref_for_build(old, (w.common)().vehicles),
             )
         }
         && !unsafe {
             crate::newgrf_vehicle::reverse_probability(
                 (w.common)().vehicles,
-                vehicle_ref_for_build(new),
+                vehicle_ref_for_build(new, (w.common)().vehicles),
             )
         }
     {

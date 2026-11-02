@@ -40,8 +40,9 @@ static void ShipBoundary()
 	static OpenTTDVehicleMaintenanceServices ship_maintenance;
 	static OpenTTDVehicleServices ship_vehicle;
 	ship_vehicle.maintenance = &ship_maintenance;
-	static int ship_shell; ///< Its address is the opaque vehicle handle.
-	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&ship_shell);
+	static OpenTTDVehicle ship_record{};
+	ship_record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&ship_record);
+	auto *shell = &ship_record;
 	/* Initialize every function pointer, including paths unused in this concrete gap. */
 	static const OpenTTDEngineCapabilitiesServices capabilities{};
 	OpenTTDShipLeaves leaves{

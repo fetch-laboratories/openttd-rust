@@ -147,7 +147,7 @@ impl Services {
     /// `v->index`.
     fn id(&self, v: VehicleRef) -> u32 {
         // SAFETY: a live shell; the scalar read retains no borrow.
-        unsafe { (self.refit.common.base.groups.vehicle_id)(v.0.as_ptr().cast()) }
+        unsafe { (self.refit.common.base.groups.vehicle_id)(v.shell().cast()) }
     }
     fn orders(&self) -> VisitOrders {
         VisitOrders::new(self.refit.common.orders)
@@ -893,7 +893,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     cancel_reservation(v, INVALID_STATION, st.native, s);
     // SAFETY: the live station's queue owner; the vehicle shell is its key.
     unsafe {
-        crate::station_service::openttd_rust_station_queue_remove(st.state, v.0.as_ptr().cast());
+        crate::station_service::openttd_rust_station_queue_remove(st.state, v.shell().cast());
     }
 
     (s.hide_filling)(v);
@@ -986,7 +986,7 @@ fn entered_depot_this_tick(v: VehicleRef, s: &Services) {
 pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.check(|| {
         // SAFETY: a live serialized shell; First() does not retain a borrow.
-        (unsafe { (s.refit.common.transactions.first)(v.0.as_ptr().cast()) }) == v.0.as_ptr().cast()
+        (unsafe { (s.refit.common.transactions.first)(v.shell().cast()) }) == v.shell().cast()
     });
     witness::hit(witness::VISITS_DEPOT);
     let vs = s.vehicles();

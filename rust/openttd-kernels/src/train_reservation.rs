@@ -266,10 +266,19 @@ impl Game<'_> {
     fn needs_service(&self, id: Handle) -> bool {
         // SAFETY: Live serialized train and immutable table; no owner borrow
         // spans the direct `Vehicle::NeedsServicing` port.
-        unsafe { crate::vehicle::maintenance::needs_servicing(id.vehicle(), &*self.leaves.vehicle) }
+        unsafe {
+            crate::vehicle::maintenance::needs_servicing(
+                id.vehicle(&*self.leaves.vehicle),
+                &*self.leaves.vehicle,
+            )
+        }
     }
     fn order_stop(&self, id: Handle, station: u16) -> bool {
-        crate::movement::should_stop(self.shared(), id.vehicle(), station)
+        crate::movement::should_stop(
+            self.shared(),
+            id.vehicle(unsafe { &*self.leaves.vehicle }),
+            station,
+        )
     }
     fn reserved(&self, tile: u32) -> u8 {
         self.pbs().reserved(tile)
@@ -313,7 +322,7 @@ impl Game<'_> {
                 &*self.leaves.vehicle,
                 tile,
                 end,
-                id.vehicle().0.as_ptr(),
+                id.vehicle(&*self.leaves.vehicle).0.as_ptr(),
             )
             .is_none()
         }
@@ -1483,7 +1492,7 @@ pub(crate) mod tests {
     }
     fn vehicle_table() -> crate::vehicle::VehicleServices {
         crate::vehicle::VehicleServices {
-            record_from_shell: unused(),
+            record_from_shell: resolve_record,
             assert_next: unused(),
             tile_links: unused(),
             occupancy_update: unused(),
@@ -1581,7 +1590,12 @@ pub(crate) mod tests {
             ship_get: unused(),
         }
     }
+    extern "C" fn resolve_record(shell: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {
+        // SAFETY: Test handles retain their exclusive stack Mock for each query.
+        unsafe { &raw mut *(*shell.cast::<Mock>()).record }
+    }
     struct Mock {
+        record: Box<crate::vehicle_base::VehicleRecord>,
         state: State,
         stop: u8,
         log: Vec<(&'static str, u32, u8)>,
@@ -1594,6 +1608,13 @@ pub(crate) mod tests {
     impl Mock {
         fn new(stop: u8) -> Self {
             Self {
+                // SAFETY: Transfer the private record allocation to this test owner.
+                record: unsafe {
+                    Box::from_raw(crate::vehicle_base::openttd_rust_vehicle_record_new(
+                        std::ptr::null_mut(),
+                        crate::vehicle::VehicleType::TRAIN,
+                    ))
+                },
                 state: State::default(),
                 stop,
                 log: Vec::new(),
@@ -1605,6 +1626,7 @@ pub(crate) mod tests {
             }
         }
         fn handle(&mut self) -> Handle {
+            self.record.shell = std::ptr::from_mut(self).cast();
             Handle {
                 shell: std::ptr::from_mut(self).cast(),
                 owner: &raw mut self.state,

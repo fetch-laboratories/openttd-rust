@@ -302,8 +302,9 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
         }
         current = if svc!(C, base.vehicle_type, unit) == VehicleType::TRAIN.0 {
             let t = unsafe { &*s.transaction };
-            let next = unsafe { svc!(C, t.next_unit, unit.0.as_ptr().cast()) };
-            std::ptr::NonNull::new(next.cast()).map(VehicleRef)
+            let next = unsafe { svc!(C, t.next_unit, unit.shell().cast()) };
+            std::ptr::NonNull::new(next)
+                .map(|next| unsafe { VehicleRef::from_shell(next.as_ptr().cast(), base) })
         } else {
             None
         };
@@ -600,7 +601,7 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         svc!(C, s.age_write, v, CalendarDate(age));
     }
     let g = unsafe { &*s.group };
-    if !unsafe { svc!(C, g.primary, v.0.as_ptr().cast()) }
+    if !unsafe { svc!(C, g.primary, v.shell().cast()) }
         && (svc!(C, base.vehicle_type, v) != VehicleType::TRAIN.0
             || svc!(C, base.subtype, v) & 8 == 0)
     {
@@ -651,7 +652,7 @@ unsafe fn economy_age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         let age = EconomyDate(r.0 + 1);
         svc!(C, s.economy_age_write, v, age);
         let g = unsafe { &*s.group };
-        if unsafe { svc!(C, g.primary, v.0.as_ptr().cast()) } && age.0 == s.profit_min_age.0 + 1 {
+        if unsafe { svc!(C, g.primary, v.shell().cast()) } && age.0 == s.profit_min_age.0 + 1 {
             svc!(C, s.reached_min_age, v);
             branch!(C, VEHICLE_MAINT_PROFIT_AGE);
         }

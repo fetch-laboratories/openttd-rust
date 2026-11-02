@@ -115,7 +115,7 @@ pub(crate) unsafe fn elapsed(
         let shared = unsafe { &*services.shared };
         let mut from = 0;
         while let Some(vehicle) = (shared.vehicle_next)(from) {
-            from = (services.vehicle_id)(vehicle.0.as_ptr().cast()).wrapping_add(1);
+            from = (services.vehicle_id)(vehicle.shell().cast()).wrapping_add(1);
             (services.vehicle_shift_dates)(vehicle, -days);
         }
         let mut from = 0;

@@ -97,7 +97,7 @@ pub struct Overrides {
 }
 #[repr(C)]
 pub struct Services {
-    vehicle: &'static VehicleServices,
+    pub(crate) vehicle: &'static VehicleServices,
     pub(crate) shared: &'static crate::services::Services,
     cache: unsafe extern "C" fn(V) -> *mut Cache,
     first: unsafe extern "C" fn(V) -> V,

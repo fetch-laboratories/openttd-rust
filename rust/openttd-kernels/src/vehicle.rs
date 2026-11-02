@@ -5,8 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared vehicle boundary: one opaque handle (a live `Vehicle *`, valid until the service that
-//! deletes it), the base-`Vehicle` and `GroundVehicle` service tables and constants. The tables
+//! Shared vehicle boundary: one canonical record handle (valid until its shell is
+//! deleted), the base-`Vehicle` and `GroundVehicle` service tables and constants. The tables
 //! are declared in `src/rust/vehicle_ffi.h` and filled in `src/rust/vehicle_services.cpp`.
 //! Callers end every owner borrow before a service that can reenter Rust.
 pub(crate) mod maintenance;
@@ -20,7 +20,7 @@ use crate::timer_game_common::DAYS_IN_YEAR;
 use crate::timer_game_tick::DAY_TICKS;
 use std::ptr::NonNull;
 
-/// Opaque C++ `Vehicle`.
+/// Shared Rust-owned record of a C++ `Vehicle` shell.
 pub use crate::vehicle_type::OpenTTDVehicle;
 
 /// Native `VehicleType : uint8_t`. A transparent carrier preserves every byte,
@@ -50,6 +50,26 @@ impl RailVehicleTypes {
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct VehicleRef(pub NonNull<OpenTTDVehicle>);
+
+// A VehicleRef and its record are live and serialized at every field access.
+#[allow(unsafe_code)]
+impl VehicleRef {
+    /// Native shell identity for legacy opaque contexts.
+    pub(crate) fn shell(self) -> *mut std::ffi::c_void {
+        crate::raw_field::read_field!(self.0.as_ptr(), shell).cast()
+    }
+
+    /// Resolve a legacy native shell under the caller's original lifetime rules.
+    ///
+    /// # Safety
+    /// `shell` is a live non-null vehicle shell for this serialized entry.
+    pub(crate) unsafe fn from_shell(
+        shell: *mut std::ffi::c_void,
+        services: &VehicleServices,
+    ) -> Self {
+        Self(unsafe { NonNull::new_unchecked((services.record_from_shell)(shell)) })
+    }
+}
 
 /// Opaque immutable C++ engine context captured before a callback.
 pub use crate::engine_type::OpenTTDEngine;
@@ -310,6 +330,19 @@ impl VehicleServices {
     ) {
         let record = (self.record_from_shell)(shell);
         let next = (self.record_from_shell)(next);
+        // SAFETY: The caller preserves both resolved records.
+        unsafe { self.set_next_record(record, next) };
+    }
+
+    /// Complete chain operation on canonical records.
+    ///
+    /// # Safety
+    /// `record`, non-null `next` and all reachable links remain live.
+    pub(crate) unsafe fn set_next_record(
+        &self,
+        record: *mut OpenTTDVehicle,
+        next: *mut OpenTTDVehicle,
+    ) {
         if record == next {
             (self.assert_next)(record, next);
         }

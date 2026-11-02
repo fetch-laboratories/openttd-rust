@@ -1526,7 +1526,7 @@ pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> boo
     // SAFETY: Both native leaves resolve the same serialized surviving shell.
     // The Order is owned by Rust and its facade aliases this stable allocation.
     unsafe {
-        let owner = ((*s.orders).vehicle)(v.0.as_ptr().cast());
+        let owner = ((*s.orders).vehicle)(v.shell().cast());
         crate::orders::openttd_rust_order_should_stop(
             std::ptr::addr_of_mut!((*owner).current).cast(),
             last,

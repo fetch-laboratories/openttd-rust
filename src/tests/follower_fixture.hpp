@@ -3,6 +3,7 @@
 #ifndef FOLLOWER_FIXTURE_HPP
 #define FOLLOWER_FIXTURE_HPP
 #include "../rust/movement_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
 #include "fixture_map.hpp"
 #include "../rust/ground_vehicle_ffi.h"
 #include "../rust/train_ffi.h"
@@ -23,6 +24,7 @@ struct FollowerFixture {
 	OpenTTDSharedServices shared{};
 	OpenTTDMovementServices movement{};
 	OpenTTDVehicleServices vehicle{};
+	OpenTTDVehicle record{};
 	OpenTTDOrdersLeaves orders{};
 	OpenTTDVehicleOrderState order_state{};
 	OpenTTDGroundPhysicsServices physics{};
@@ -33,6 +35,8 @@ struct FollowerFixture {
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> state{openttd_rust_train_state_new(), openttd_rust_train_state_destroy};
 	explicit FollowerFixture(uint32_t width = 64, uint32_t height = 64) : tiles(std::countr_zero(width), width * height) {
 		active = this;
+		record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this);
+		vehicle.record_from_shell = [](void *) noexcept { return &active->record; };
 		shared.map = &tiles.statics;
 		shared.tile_type = [](uint32_t t) noexcept -> uint8_t { return t < active->tiles.size ? active->tiles.base[t].type >> 4 : MP_VOID; };
 		shared.is_plain_rail = [](uint32_t t) noexcept { return active->tiles.base[t].m5 >> 6 <= 1; };
@@ -50,7 +54,7 @@ struct FollowerFixture {
 		movement.rail_map = &rail; movement.rail = &ground;
 		vehicle.owner = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 		vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_TRAIN; };
-		vehicle.train_handle = [](OpenTTDVehicle *v) noexcept -> OpenTTDTrainHandle { return {v, active->state.get()}; };
+		vehicle.train_handle = [](OpenTTDVehicle *v) noexcept -> OpenTTDTrainHandle { return {v->shell, active->state.get()}; };
 		movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 		movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };
 		movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 0; };
@@ -78,6 +82,6 @@ struct FollowerFixture {
 		openttd_rust_train_state_set_railtypes(state.get(), 1);
 	}
 	void Tile(uint32_t t, uint8_t kind, uint8_t bits = 0) { tiles.base[t] = {}; tiles.extended[t] = {}; tiles.base[t].type = kind << 4; tiles.base[t].m5 = bits; }
-	OpenTTDVehicle *Vehicle() { return reinterpret_cast<OpenTTDVehicle *>(this); }
+	OpenTTDVehicle *Vehicle() { return &record; }
 };
 #endif

@@ -672,7 +672,7 @@ impl Game<'_> {
         let orders_vehicle = (self.vs().ship_get)(id);
         let orders = self.vs().orders();
         let reverse = unsafe {
-            crate::orders::openttd_rust_process_orders(orders_vehicle.0.as_ptr().cast(), orders)
+            crate::orders::openttd_rust_process_orders(orders_vehicle.shell().cast(), orders)
         } != 0;
         if reverse && (self.leaves.yapf_reverse)(id, false).reverse {
             self.reverse(id, v, INVALID);

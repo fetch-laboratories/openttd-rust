@@ -54,11 +54,10 @@ pub struct Depot {
     pub length: u32,
 }
 impl Handle {
-    /// The base `Vehicle` of this live `Train` shell: `Vehicle` is the primary,
-    /// non-virtual base of `Train`, so the native upcast does not adjust it.
-    pub(crate) fn vehicle(self) -> VehicleRef {
+    /// Resolve the live native Train shell to its canonical vehicle record.
+    pub(crate) fn vehicle(self, services: &VehicleServices) -> VehicleRef {
         // SAFETY: Callers pass the live serialized train of this entry.
-        VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(self.shell.cast()) })
+        unsafe { VehicleRef::from_shell(self.shell, services) }
     }
     pub(crate) const NONE: Self = Self {
         shell: std::ptr::null_mut(),
@@ -640,7 +639,7 @@ impl<'a> Game<'a> {
         entry: unsafe fn(VehicleRef, &VehicleServices) -> R,
     ) -> R {
         // SAFETY: The caller meets the maintenance entry contract.
-        unsafe { self.vs().maintain(id.vehicle(), entry) }
+        unsafe { self.vs().maintain(id.vehicle(self.vs()), entry) }
     }
     /// `TryPathReserve`.
     fn try_path_reserve(&self, id: Handle, mark_as_reserved: bool, first_tile_okay: bool) -> bool {
@@ -657,7 +656,7 @@ impl<'a> Game<'a> {
     /// `UpdateVehicleTileHash` of this shell, which stays in place.
     fn update_occupancy(&self, id: Handle) {
         // SAFETY: The controller retains this live shell through the index update.
-        unsafe { crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false) };
+        unsafe { crate::vehicle::occupancy::update(self.vs(), id.vehicle(self.vs()), false) };
     }
     fn handle_breakdown(&self, id: Handle) -> bool {
         // SAFETY: The live train and unborrowed owner satisfy `vehicle_handle_breakdown`.
@@ -674,7 +673,7 @@ impl<'a> Game<'a> {
     /// `SetWindowDirty(WC_VEHICLE_VIEW, v->index)`.
     fn view_dirty(&self, id: Handle) {
         // SAFETY: The base table names its immutable maintenance table.
-        (unsafe { &*self.vs().maintenance }.view_dirty)(id.vehicle());
+        (unsafe { &*self.vs().maintenance }.view_dirty)(id.vehicle(self.vs()));
     }
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
         let vs = self.vs();
@@ -704,7 +703,7 @@ impl Game<'_> {
     fn property(&self, id: Handle, prop: u32, default: u64) -> u64 {
         (self.vs().property)(
             (self.vs().newgrf)(),
-            id.vehicle(),
+            id.vehicle(self.vs()),
             prop as u8,
             default as i32,
         ) as u64
@@ -757,15 +756,15 @@ impl Game<'_> {
             min_curve_mod = min_curve_mod.min(unsafe {
                 crate::newgrf_vehicle::signed_property(
                     self.vs(),
-                    u.vehicle(),
+                    u.vehicle(self.vs()),
                     crate::newgrf_properties::PROP_TRAIN_CURVE_SPEED_MOD,
                     i32::from((self.leaves.curve_mod_default)(u)),
                 )
             } as i16);
             // SAFETY: live serialized shell; evaluation retains no owner reference.
-            unsafe { crate::newgrf_vehicle::cache_override(self.vs(), u.vehicle()) };
+            unsafe { crate::newgrf_vehicle::cache_override(self.vs(), u.vehicle(self.vs())) };
             (self.leaves.write_colourmap)(u, 0);
-            crate::vehicle_effect::openttd_rust_visual_update(u.vehicle(), true);
+            crate::vehicle_effect::openttd_rust_visual_update(u.vehicle(self.vs()), true);
             let powered = (self.leaves.pow_wag_power)(id) != 0
                 && (self.leaves.railveh_wagon)(u) != 0
                 && (self.leaves.wagon_override)(u) != 0
@@ -799,8 +798,8 @@ impl Game<'_> {
             let cap = unsafe {
                 crate::engine_capabilities::openttd_rust_engine_capacity(
                     self.leaves.capabilities,
-                    (self.vs().engine)(u.vehicle()).0.as_ptr(),
-                    u.shell.cast(),
+                    (self.vs().engine)(u.vehicle(self.vs())).0.as_ptr(),
+                    u.vehicle(self.vs()).0.as_ptr(),
                     std::ptr::null_mut(),
                 )
             } as u16;
@@ -835,7 +834,7 @@ impl Game<'_> {
                 if length != u16::MAX && length >= 8 {
                     let vs = self.vs();
                     vs.unknown_callback_result(
-                        (vs.engine)(u.vehicle()),
+                        (vs.engine)(u.vehicle(self.vs())),
                         crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
                         length,
                     );
@@ -843,7 +842,7 @@ impl Game<'_> {
             } else if (self.leaves.length_callback)(u) != 0 {
                 length = (self.vs().callback)(
                     (self.vs().newgrf)(),
-                    u.vehicle(),
+                    u.vehicle(self.vs()),
                     crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
                 );
             }
@@ -854,7 +853,7 @@ impl Game<'_> {
             if allowed & 1 != 0 {
                 (self.leaves.write_length)(u, (u64::from(length)) as u8);
             } else if length != (self.leaves.read_length)(u) {
-                (self.vs().length_changed)(u.vehicle());
+                (self.vs().length_changed)(u.vehicle(self.vs()));
             }
             (self.leaves.write_total_length)(
                 id,
@@ -870,7 +869,7 @@ impl Game<'_> {
         id.set_cached_tilt(u64::from(tilt));
         id.set_cached_curve_speed_mod(u64::from(min_curve_mod as u16));
         id.set_cached_max_curve_speed(u64::from(self.curve_limit(id)));
-        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
+        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle(self.vs()));
         if (self.leaves.read_front)(id) != 0 {
             self.update_acceleration(id);
             (self.leaves.consist_windows)(id);
@@ -981,7 +980,7 @@ impl Game<'_> {
         };
         if model == 1 && (self.leaves.is_station)(id, v.tile) != 0 {
             let station = (self.leaves.station)(id, v.tile) as u16;
-            if crate::movement::should_stop(self.services, id.vehicle(), station) {
+            if crate::movement::should_stop(self.services, id.vehicle(self.vs()), station) {
                 let (stop, ahead, length) = self.stop_location(id, station, v.tile);
                 let distance = ahead / 16 - length.wrapping_sub(stop) / 16;
                 if distance > 0 {
@@ -1023,7 +1022,7 @@ impl Game<'_> {
         if (self.leaves.acc_model)(id) == 0 {
             crate::ground_vehicle::update_speed(
                 self.leaves.physics,
-                id.vehicle(),
+                id.vehicle(self.vs()),
                 (i64::from(i32::from(v.acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
                 0,
                 (max as u64) as i32,
@@ -1032,8 +1031,9 @@ impl Game<'_> {
         } else {
             crate::ground_vehicle::update_speed(
                 self.leaves.physics,
-                id.vehicle(),
-                crate::ground_vehicle::acceleration(self.leaves.physics, id.vehicle()) as u32,
+                id.vehicle(self.vs()),
+                crate::ground_vehicle::acceleration(self.leaves.physics, id.vehicle(self.vs()))
+                    as u32,
                 (u64::from(!braking) * 2) as i32,
                 (max as u64) as i32,
             )
@@ -1050,7 +1050,7 @@ impl Game<'_> {
                 break;
             }
         }
-        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
+        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle(self.vs()));
         self.update_acceleration(id);
     }
     fn trackdir(&self, id: Handle) -> u8 {
@@ -1077,7 +1077,7 @@ impl Game<'_> {
         let mut cost = 0_i64;
         let mut u = id;
         loop {
-            let e = (vs.engine)(u.vehicle()).0.as_ptr();
+            let e = (vs.engine)(u.vehicle(self.vs())).0.as_ptr();
             if (cap.train_price)(e) != crate::economy_type::INVALID_PRICE {
                 let mut factor = self.property(
                     u,
@@ -1301,7 +1301,7 @@ impl Game<'_> {
             id.set_wait_counter(0);
             (self.leaves.write_speed)(id, 0_u16);
             (self.leaves.write_subspeed)(id, 0_u8);
-            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle(self.vs()));
             (self.leaves.start_stop_dirty)(id);
         }
     }
@@ -1349,7 +1349,7 @@ impl Game<'_> {
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         &self.movement,
-                        id.vehicle(),
+                        id.vehicle(self.vs()),
                         true,
                         true,
                     );
@@ -1658,10 +1658,10 @@ impl Game<'_> {
         }
         id.set_force_proceed(0);
         self.view_dirty(id);
-        crate::vehicle::visits::begin_loading(id.vehicle(), self.vs().visits());
+        crate::vehicle::visits::begin_loading(id.vehicle(self.vs()), self.vs().visits());
         crate::animated_tile::rail_event(
             crate::animated_tile::station_base(station),
-            (self.vs().tile)(id.vehicle()),
+            (self.vs().tile)(id.vehicle(self.vs())),
             crate::station_type::SAT_VEHICLE_ARRIVES,
             crate::station_type::SRT_VEHICLE_ARRIVES,
         );
@@ -1912,7 +1912,7 @@ impl Game<'_> {
                         let diff = (self.leaves.read_direction)(id).wrapping_sub(dir) & 7;
                         let small = if u64::from(crate::ground_vehicle::acceleration_type(
                             self.leaves.physics,
-                            id.vehicle(),
+                            id.vehicle(self.vs()),
                         )) == 2
                         {
                             0
@@ -1973,7 +1973,7 @@ impl Game<'_> {
         let old_z = crate::ground_vehicle::inclination(
             self.leaves.physics,
             &self.movement,
-            id.vehicle(),
+            id.vehicle(self.vs()),
             new != old,
             false,
         );
@@ -2068,7 +2068,7 @@ impl Game<'_> {
         }
         victims = victims.wrapping_add(crate::ground_vehicle::crash(
             self.leaves.physics,
-            id.vehicle(),
+            id.vehicle(self.vs()),
             flooded,
         ));
         id.set_crash_anim_pos(if flooded { 4000 } else { 1 });
@@ -2137,8 +2137,8 @@ impl Game<'_> {
         (self.leaves.crash_news)(id, victims);
         crate::station::spatial::modify_rating_around(
             self.services,
-            (self.vs().tile)(id.vehicle()),
-            (self.vs().owner)(id.vehicle()),
+            (self.vs().tile)(id.vehicle(self.vs())),
+            (self.vs().owner)(id.vehicle(self.vs())),
             -160,
             30,
         );
@@ -2253,7 +2253,7 @@ impl Game<'_> {
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         &self.movement,
-                        id.vehicle(),
+                        id.vehicle(self.vs()),
                         false,
                         true,
                     );
@@ -2272,7 +2272,7 @@ impl Game<'_> {
         id.set_crash_anim_pos(u64::from(state));
         if state == 4 && (self.leaves.read_status)(id) & 1 == 0 {
             crate::effect::openttd_rust_effect_create_rel(
-                id.vehicle().0.as_ptr(),
+                id.vehicle(self.vs()).0.as_ptr(),
                 4,
                 4,
                 8,
@@ -2289,7 +2289,7 @@ impl Game<'_> {
                     if index < 0 {
                         r = self.services.random();
                         crate::effect::openttd_rust_effect_create_rel(
-                            u.vehicle().0.as_ptr(),
+                            u.vehicle(self.vs()).0.as_ptr(),
                             (((r >> 8) & 7) + 2) as i32,
                             (((r >> 16) & 7) + 2) as i32,
                             ((r & 7) + 5) as i32,
@@ -2352,7 +2352,7 @@ impl Game<'_> {
         {
             if (self.leaves.has_depot_res)(Handle::NONE, (self.leaves.read_tile)(id)) == 0 {
                 crate::witness::hit(crate::witness::TRAIN_DEPOT_REENTRY);
-                self.vs().enter_depot(id.vehicle());
+                self.vs().enter_depot(id.vehicle(self.vs()));
             }
             return true;
         }
@@ -2437,14 +2437,15 @@ impl Game<'_> {
             }
             id.set_flag(9, false);
         }
-        self.vs().handle_loading(id.vehicle(), mode, orders);
+        self.vs()
+            .handle_loading(id.vehicle(self.vs()), mode, orders);
         if (self.leaves.read_order)(id) == OT_LOADING || self.stay_depot(id) {
             return true;
         }
         if !mode {
-            if crate::vehicle_effect::openttd_rust_visual_eligible(id.vehicle()) {
+            if crate::vehicle_effect::openttd_rust_visual_eligible(id.vehicle(self.vs())) {
                 crate::vehicle_effect::openttd_rust_visual_show(
-                    id.vehicle(),
+                    id.vehicle(self.vs()),
                     self.current_max_speed(id) as u32,
                 );
             }
@@ -2501,7 +2502,7 @@ impl Game<'_> {
         let mut advance = (self.leaves.advance_distance)(id) as i32;
         if distance < advance {
             if (self.leaves.read_speed)(id) == 0 {
-                crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+                crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle(self.vs()));
             }
         } else {
             self.line_ends(id, true);
@@ -2530,7 +2531,7 @@ impl Game<'_> {
                     };
                 }
             }
-            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle(self.vs()));
         }
         let mut u = id;
         while u != Handle::NONE {
@@ -2579,7 +2580,7 @@ impl Game<'_> {
         }
         if u64::from(crate::ground_vehicle::chain_in_depot(
             self.leaves.physics,
-            id.vehicle(),
+            id.vehicle(self.vs()),
         )) != 0
         {
             crate::witness::hit(crate::witness::TRAIN_DEPOT_SERVICE);
@@ -2649,7 +2650,7 @@ impl Game<'_> {
         if !id.flag(8) {
             return if u64::from(crate::ground_vehicle::chain_in_depot(
                 self.leaves.physics,
-                id.vehicle(),
+                id.vehicle(self.vs()),
             )) != 0
             {
                 1
@@ -2701,7 +2702,10 @@ impl Game<'_> {
                         || (self.leaves.station)(Handle::NONE, last)
                             != (self.leaves.station)(Handle::NONE, (self.leaves.read_tile)(id))
                     {
-                        crate::vehicle::visits::leave_station(id.vehicle(), self.vs().visits());
+                        crate::vehicle::visits::leave_station(
+                            id.vehicle(self.vs()),
+                            self.vs().visits(),
+                        );
                     }
                 }
                 id.set_force_proceed(0);
@@ -2710,7 +2714,7 @@ impl Game<'_> {
                     id.set_flag(0, !id.flag(0));
                 } else {
                     (self.leaves.write_speed)(id, 0_u16);
-                    crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
+                    crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle(self.vs()));
                     (self.leaves.hide_fill)(id);
                     self.reverse(id);
                 }
@@ -3453,7 +3457,7 @@ impl Game<'_> {
         u64::from(unsafe {
             crate::movement::openttd_rust_movement_enter(
                 self.movement.get(),
-                id.vehicle(),
+                id.vehicle(self.vs()),
                 tile,
                 x,
                 y,

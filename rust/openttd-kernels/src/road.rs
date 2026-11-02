@@ -1030,7 +1030,7 @@ impl Game<'_> {
             // SAFETY: The crash chain stays live through unlinking and station copy.
             unsafe {
                 self.vs
-                    .set_next_shell(previous.v.0.as_ptr().cast(), std::ptr::null_mut());
+                    .set_next_record(previous.v.0.as_ptr(), std::ptr::null_mut());
             };
             let station = service!(self.vs.last_station)(v.v);
             service!(self.vs.write_last_station)(last.v, station);
@@ -1751,7 +1751,7 @@ impl Game<'_> {
         // SAFETY: The getter returns the immutable process-wide orders table.
         let orders = unsafe { &*service!(self.vs.orders)() };
         // SAFETY: The original live shell survives orders; no owner borrow spans reentry.
-        unsafe { crate::orders::openttd_rust_process_orders(v.v.0.as_ptr().cast(), orders) };
+        unsafe { crate::orders::openttd_rust_process_orders(v.v.shell().cast(), orders) };
         self.vs.handle_loading(v.v, false, orders);
         if service!(self.vs.order_type)(v.v) == OT_LOADING {
             return true;

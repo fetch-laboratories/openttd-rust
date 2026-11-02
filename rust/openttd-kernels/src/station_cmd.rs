@@ -1173,7 +1173,7 @@ impl Ctx<'_> {
             let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_free(
                 handle,
-                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
+                handle.vehicle(self.vehicle()),
                 self.s.reservation,
                 std::ptr::null_mut(),
             );
@@ -1188,7 +1188,7 @@ impl Ctx<'_> {
             let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_try_path(
                 handle,
-                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
+                handle.vehicle(self.vehicle()),
                 1,
                 1,
                 self.s.reservation,
@@ -1201,9 +1201,7 @@ impl Ctx<'_> {
     fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
         let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
         // SAFETY: The reached platform update always supplies a live train shell.
-        let vehicle = unsafe {
-            crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast()))
-        };
+        let vehicle = handle.vehicle(self.vehicle());
         let tile = (self.vehicle().tile)(vehicle);
         if self.rail_station(tile) {
             // SAFETY: The shell and canonical immutable tables remain live for this call.

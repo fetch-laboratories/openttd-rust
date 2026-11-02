@@ -28,7 +28,7 @@ const ENGINE: u8 = 1 << GVSF_ENGINE;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PoolCursor {
-    pub slots: *const Option<VehicleRef>,
+    pub slots: *const *mut crate::vehicle_base::OpenTTDVehicleShell,
     pub slots_len: usize,
     pub first_unused: *const usize,
 }
@@ -117,8 +117,9 @@ unsafe fn next<const COUNTED: bool>(
     while *from < unsafe { extent::<COUNTED>(s, pool) } {
         let vehicle = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(*from)) };
         *from += 1;
-        if vehicle.is_some() {
-            return vehicle;
+        if !vehicle.is_null() {
+            // SAFETY: A native slot holds a live shell, resolved once for this visit.
+            return Some(unsafe { VehicleRef::from_shell(vehicle.cast(), &*s.vehicle) });
         }
     }
     None
@@ -144,9 +145,11 @@ unsafe fn day<const COUNTED: bool>(
     while id < unsafe { extent::<COUNTED>(s, &mut pool) } {
         let vehicle = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(id)) };
         id += DAY_TICKS as usize;
-        let Some(vehicle) = vehicle else {
+        if vehicle.is_null() {
             continue;
-        };
+        }
+        // SAFETY: A native slot holds a live shell for this day callback.
+        let vehicle = unsafe { VehicleRef::from_shell(vehicle.cast(), &*s.vehicle) };
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }
@@ -419,6 +422,7 @@ unsafe fn run_ticks<const COUNTED: bool>(
         let mut id = 0;
         while let Some(vehicle) = unsafe { next::<COUNTED>(s, &mut pool, &mut id) } {
             let current_id = id - 1;
+            let shell = vehicle.shell();
             if COUNTED {
                 crate::witness::hit(crate::witness::VEHICLE_OUTER_VISITS);
             }
@@ -430,7 +434,14 @@ unsafe fn run_ticks<const COUNTED: bool>(
             if s.assertions {
                 let _ = unsafe { extent::<COUNTED>(s, &mut pool) };
                 let actual = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(current_id)) };
-                assert!(actual == if survives { Some(vehicle) } else { None });
+                assert!(
+                    actual
+                        == if survives {
+                            shell.cast()
+                        } else {
+                            std::ptr::null_mut()
+                        }
+                );
             }
             if !survives {
                 if COUNTED {

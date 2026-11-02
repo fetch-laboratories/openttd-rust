@@ -31,9 +31,10 @@ struct RoadAbiProbe {
 	int32_t order_time = 0;
 };
 static RoadAbiProbe *road_abi_probe;
-static int road_abi_second, road_abi_hidden, road_abi_engine, road_abi_new_engine;
-static int road_abi_vehicle; ///< Its address is the opaque vehicle handle.
-static OpenTTDVehicle *RoadAbiHandle() { return reinterpret_cast<OpenTTDVehicle *>(&road_abi_vehicle); }
+static OpenTTDVehicle road_abi_second{}, road_abi_hidden{};
+static int road_abi_engine, road_abi_new_engine;
+static OpenTTDVehicle road_abi_vehicle{};
+static OpenTTDVehicle *RoadAbiHandle() { road_abi_vehicle.shell = reinterpret_cast<OpenTTDVehicleShell *>(&road_abi_vehicle); return &road_abi_vehicle; }
 static int road_abi_stop; ///< Its address is the opaque road stop shell.
 /* The road controller calls the Rust road stop owner directly; these native
  * shell services resolve the probe's single stop at tile 100. */
@@ -458,8 +459,8 @@ struct RoadServiceProbe {
 	uint32_t depot_orders = 0, services = 0, searches = 0;
 };
 static RoadServiceProbe *road_service_probe;
-static int road_service_vehicles[2]; ///< Their addresses are the opaque head and tail handles.
-static OpenTTDVehicle *RoadServiceHandle(int part) { return reinterpret_cast<OpenTTDVehicle *>(&road_service_vehicles[part]); }
+static OpenTTDVehicle road_service_vehicles[2]{};
+static OpenTTDVehicle *RoadServiceHandle(int part) { auto *record = &road_service_vehicles[part]; record->shell = reinterpret_cast<OpenTTDVehicleShell *>(record); return record; }
 static void RoadServiceBoundary()
 {
 	RoadServiceProbe probe;

@@ -123,6 +123,12 @@ TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity"
 	REQUIRE(Vehicle::CanAllocateItem());
 	auto *v = new Vehicle(VEH_ROAD);
 	const auto &services = GetRustVehicleServices();
+	CHECK(static_cast<void *>(RustVehicle(v)) != static_cast<void *>(v));
+	CHECK(RustVehicle(v) == &v->Record());
+	CHECK(VehicleOf(RustVehicle(v)) == v);
+	CHECK(services.record_from_shell(v) == RustVehicle(v));
+	CHECK(RustVehicle(nullptr) == nullptr);
+	CHECK(VehicleOf(static_cast<OpenTTDVehicle *>(nullptr)) == nullptr);
 	{
 		const auto movement = services.movement_observations(RustVehicle(v));
 		const auto position = services.position_observations(RustVehicle(v));

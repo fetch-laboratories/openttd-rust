@@ -13,6 +13,7 @@
 #include "../rust/station_service_ffi.h"
 #include "../engine_type.h"
 #include "../rust/vehicle_visits_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
 #include "../rust/station_association_ffi.h"
 #include "../rust/station_definitions_ffi.h"
 #include "../rust/newgrf_act3_ffi.h"
@@ -261,7 +262,9 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 		_station_loading_probe->staged = true;
 	};
 	loading.create_payment = [](OpenTTDVehicle *) noexcept -> OpenTTDNativeCargoPayment * { return reinterpret_cast<OpenTTDNativeCargoPayment *>(&_station_loading_probe->payment); };
-	openttd_rust_station_prepare(reinterpret_cast<OpenTTDVehicle *>(&probe.vehicle), &services, &loading);
+	OpenTTDVehicle record{};
+	record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&probe.vehicle);
+	openttd_rust_station_prepare(&record, &services, &loading);
 	CHECK(probe.staged);
 	CHECK_FALSE(probe.frame_live);
 	CHECK(cargo->rating == 6);

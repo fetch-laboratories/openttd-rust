@@ -37,7 +37,7 @@ impl Services {
         unsafe {
             crate::vehicle::occupancy::update(
                 self.refit.common.vehicles,
-                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(v.cast())),
+                super::vehicle_ref(v, self.refit.common.vehicles),
                 false,
             );
         }
@@ -68,7 +68,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                 r.capabilities,
                 index,
                 (g.vehicle_engine)(first),
-                first.cast(),
+                super::vehicle_ref(first, c.vehicles).0.as_ptr(),
                 flip.as_mut_ptr(),
             )
         };
@@ -89,8 +89,16 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                     c.vehicles.set_next_shell(previous.cast(), v.cast());
                     (*(c.vehicles.record_from_shell)(v.cast())).subtype = 0;
                 }
-                let front = (r.train_handle)(first.cast());
-                let train = (r.train_handle)(v.cast());
+                let front = (r.train_handle)(
+                    unsafe { super::vehicle_ref(first, r.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                );
+                let train = (r.train_handle)(
+                    unsafe { super::vehicle_ref(v, r.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                );
                 train.set_track(u64::from(front.track()));
                 train.set_railtypes(front.get_railtypes());
                 v
@@ -103,7 +111,11 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                     (*(c.vehicles.record_from_shell)(v.cast())).subtype = 0;
                 }
                 (s.road_length)(cache);
-                unsafe { crate::road::set_depot_state((r.road_state)(v.cast())) };
+                unsafe {
+                    crate::road::set_depot_state((r.road_state)(
+                        super::vehicle_ref(v, r.common.vehicles).0.as_ptr(),
+                    ));
+                };
                 (s.copy_roadtype)(v, first);
                 v
             }
@@ -143,13 +155,18 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
             let probability = unsafe {
                 crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
                     &*(r.common.vehicles.newgrf)(),
-                    v.cast(),
+                    super::vehicle_ref(v, c.vehicles).0.as_ptr(),
                     (g.vehicle_engine)(v),
                     crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
                 )
             };
             if probability >= 0 {
-                (r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability != 0);
+                (r.train_handle)(
+                    unsafe { super::vehicle_ref(v, r.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                )
+                .set_flag(crate::train::FLIPPED, probability != 0);
             }
         }
         unsafe {
@@ -163,7 +180,11 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
 pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
     let r = s.refit;
     let c = r.common;
-    let e = (r.vehicle_engine)(v.cast());
+    let e = (r.vehicle_engine)(
+        unsafe { super::vehicle_ref(v, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    );
     let mut purchase_union = 0;
     let mut purchase_intersection = 0;
     unsafe {
@@ -202,7 +223,12 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
         if c.transactions.assertions {
             unsafe { (c.transactions.check)(cargo < c.strings.cargo_count) };
         }
-        if (r.cargo_cap)(v.cast()) > 0 {
+        if (r.cargo_cap)(
+            unsafe { super::vehicle_ref(v, r.common.vehicles) }
+                .0
+                .as_ptr(),
+        ) > 0
+        {
             real_cargo |= 1_u64.wrapping_shl(u32::from(cargo));
         }
         v = if (s.has_articulated)(v) {

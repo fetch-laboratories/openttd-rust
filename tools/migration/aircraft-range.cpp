@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include "rust/aircraft_ffi.h"
+#include "rust/vehicle_record_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
 
@@ -54,6 +55,7 @@ static void AirportGoToNextPosition(Aircraft *) {}
 #include "aircraft-range-reference.inc"
 
 struct Fixture {
+	OpenTTDVehicle record{}, shadow{};
 	Aircraft aircraft;
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
 	int32_t x = 0, y = 0, z = 1;
@@ -126,7 +128,7 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.plane_speed = []() noexcept { return uint8_t{1}; };
 	vehicle.z = [](OpenTTDVehicle *) noexcept { return int32_t{1}; };
-	vehicle.subtype = [](OpenTTDVehicle * v) noexcept { return uint8_t(v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? 2 : 4); };
+	vehicle.subtype = [](OpenTTDVehicle * v) noexcept { return uint8_t(v == &fixture->record ? 2 : 4); };
 	vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept { return uint8_t{3}; };
 	vehicle.altitude_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleAltitudeInputs{100, 0}; };
 	movement.shared = &shared;
@@ -137,13 +139,13 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.write_x = vehicle.write_y = vehicle.write_z = [](OpenTTDVehicle *, int32_t) noexcept {};
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
-	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? 0 : 1]; };
+	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
 	vehicle.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
 	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = vehicle.tile(shell)}; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
-	vehicle.next = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicle * { return v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}) : nullptr; };
-	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };
+	vehicle.next = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicle * { return v == &fixture->record ? &fixture->shadow : nullptr; };
+	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = &fixture->shadow; return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };
 	vehicle.speed = [](OpenTTDVehicle *) noexcept { return uint16_t{0}; };
 	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 	vehicle.owner = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
@@ -175,11 +177,13 @@ int main()
 		f.state->cached_max_range_sqr = range; f.state->state = state; f.state->flags = flag; f.state->targetairport = 0;
 		messages = {}; AircraftEventHandler(&f.aircraft, 0); auto expected = messages;
 		fixture = &f;
+		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.record);
+		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();
-		openttd_rust_aircraft_event(&leaves, {reinterpret_cast<OpenTTDVehicle *>(&f), f.state.get(), 17}, false);
+		openttd_rust_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
-		openttd_rust_occupancy_update(&vehicle, reinterpret_cast<OpenTTDVehicle *>(&f), true);
-		openttd_rust_occupancy_update(&vehicle, reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}), true);
+		openttd_rust_occupancy_update(&vehicle, &f.record, true);
+		openttd_rust_occupancy_update(&vehicle, &fixture->shadow, true);
 		cases++;
 	}
 	std::printf("finite range transition: %u unchanged-reference cases passed\n", cases);

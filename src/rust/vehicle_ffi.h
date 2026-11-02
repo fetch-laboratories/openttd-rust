@@ -16,10 +16,9 @@ enum CallbackID : uint16_t;
 enum VehicleSoundEvent : uint8_t;
 enum Direction : uint8_t;
 #include "call_ffi.h"
-/** Opaque handle: a live `Vehicle *` of the port's type, valid for one synchronous call.
- * Each service is one typed noexcept function defined once; it resolves its
- * vehicle once and reads only the fields it returns. Rust holds no reference into
- * a vehicle or the map across a service call; an escaping exception terminates. */
+/** Typed vehicle handles identify shared records; legacy void* contexts identify
+ * native shells. Handles stay live for the synchronous call; a service may destroy
+ * them. No owner reference spans a service that mutates or reenters Rust. */
 struct OpenTTDTrainState;
 struct OpenTTDTrainHandle { void *shell; OpenTTDTrainState *owner; };
 struct OpenTTDVehicle;

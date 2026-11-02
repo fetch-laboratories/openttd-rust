@@ -454,7 +454,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             std::mem::size_of::<*const crate::orders::Leaves>(),
         );
         // SAFETY: The original live shell survives orders; no state borrow spans reentry.
-        unsafe { crate::orders::openttd_rust_process_orders(v.handle.cast(), orders) };
+        unsafe { crate::orders::openttd_rust_process_orders(v.base().shell(), orders) };
         orders
     }
     fn handle_loading(&self, v: Vehicle, second: bool, orders: &'static crate::orders::Leaves) {

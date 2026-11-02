@@ -105,7 +105,7 @@ impl Ctx {
         gv::is_rear_dualheaded(self.subtype(v))
     }
     fn length(self, v: *mut ()) -> u8 {
-        (self.s.ground.cached_length)(unsafe { super::vehicle_ref(v) })
+        (self.s.ground.cached_length)(unsafe { super::vehicle_ref(v, self.c.vehicles) })
     }
     fn next(self, v: *mut ()) -> *mut () {
         unsafe { (self.g.next_part)(v) }
@@ -124,7 +124,7 @@ impl Ctx {
         unsafe { (self.g.vehicle_engine)(v) }
     }
     fn tile(self, v: *mut ()) -> u32 {
-        (self.c.vehicles.tile)(unsafe { super::vehicle_ref(v) })
+        (self.c.vehicles.tile)(unsafe { super::vehicle_ref(v, self.c.vehicles) })
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
         if self.w.assertions {
@@ -138,7 +138,7 @@ impl Ctx {
     fn consist_changed(self, v: *mut ()) {
         unsafe {
             crate::train::openttd_rust_train_consist_changed(
-                (self.r.train_handle)(v.cast()),
+                (self.r.train_handle)(super::vehicle_ref(v, self.c.vehicles).0.as_ptr()),
                 CCF_ARRANGE,
                 self.r.train,
                 self.t.shared,
@@ -156,13 +156,14 @@ impl Ctx {
         let probability = unsafe {
             crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
                 &*(self.c.vehicles.newgrf)(),
-                v.cast(),
+                super::vehicle_ref(v, self.c.vehicles).0.as_ptr(),
                 self.engine(v),
                 crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
             )
         };
         if probability >= 0 {
-            (self.r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability != 0);
+            (self.r.train_handle)(unsafe { super::vehicle_ref(v, self.c.vehicles) }.0.as_ptr())
+                .set_flag(crate::train::FLIPPED, probability != 0);
         }
     }
     /// `Vehicle::orders` of the canonical Rust-owned order view.
@@ -180,7 +181,7 @@ fn free_wagons(x: Ctx, tile: u32) -> Vec<u32> {
     unsafe extern "C" fn visit(ctx: *mut std::ffi::c_void, handle: VehicleRef) {
         // SAFETY: synchronous traversal; only the caller-local list is mutated.
         let c = unsafe { &mut *ctx.cast::<Visit>() };
-        let v = handle.0.as_ptr().cast();
+        let v = handle.shell().cast();
         if unsafe { (c.x.g.vehicle_type)(v) } != VEH_TRAIN {
             return;
         }
@@ -331,7 +332,7 @@ pub(crate) unsafe fn build(
         let a = k.articulated;
         let company = (x.t.shared.current_company)();
         v = (s.new_engine)(tile, e);
-        (x.c.vehicles.set_max_age)(unsafe { super::vehicle_ref(v) }, unsafe {
+        (x.c.vehicles.set_max_age)(unsafe { super::vehicle_ref(v, x.c.vehicles) }, unsafe {
             crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
         });
         (s.engine_dates)(v, e);
@@ -520,7 +521,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
         if !x.is_articulated(t) && !x.is_rear(t) {
             let first_engine = (x.s.first_engine)(t);
             (x.s.ground.write_first_engine)(
-                unsafe { super::vehicle_ref(t) },
+                unsafe { super::vehicle_ref(t, x.c.vehicles) },
                 crate::engine_type::INVALID_ENGINE,
             );
             (x.s.invalidate_grf)(t);
@@ -528,8 +529,8 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
             let callback = unsafe {
                 crate::newgrf_vehicle::callback(
                     x.c.vehicles,
-                    Some(super::vehicle_ref(t)),
-                    (x.c.vehicles.engine_id)(super::vehicle_ref(head)),
+                    Some(super::vehicle_ref(t, x.c.vehicles)),
+                    (x.c.vehicles.engine_id)(super::vehicle_ref(head, x.c.vehicles)),
                     crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH.0,
                     0,
                     head.cast(),
@@ -538,7 +539,10 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                     1,
                 )
             };
-            (x.s.ground.write_first_engine)(unsafe { super::vehicle_ref(t) }, first_engine);
+            (x.s.ground.write_first_engine)(
+                unsafe { super::vehicle_ref(t, x.c.vehicles) },
+                first_engine,
+            );
             (x.s.invalidate_grf)(t);
             (x.s.invalidate_grf)(head);
             if callback != CALLBACK_FAILED {
@@ -553,7 +557,9 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                     }
                     if callback >= 0x100 {
                         x.c.vehicles.unknown_callback_result(
-                            (x.c.vehicles.engine)(unsafe { super::vehicle_ref(head) }),
+                            (x.c.vehicles.engine)(unsafe {
+                                super::vehicle_ref(head, x.c.vehicles)
+                            }),
                             crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH,
                             callback,
                         );
@@ -669,7 +675,7 @@ fn delete_orders(x: Ctx, v: *mut ()) {
 fn mark_dirty(x: Ctx, v: *mut ()) {
     unsafe {
         crate::train::openttd_rust_train_mark_dirty(
-            (x.r.train_handle)(v.cast()),
+            (x.r.train_handle)(super::vehicle_ref(v, x.c.vehicles).0.as_ptr()),
             x.r.train,
             x.t.shared,
         );
@@ -931,7 +937,7 @@ pub(crate) unsafe fn sell(
     normalise_train_head(x, new_head);
     (s.depot_changed)(x.tile(v));
     // No shell access follows the deleting callback.
-    (x.c.vehicles.destroy)(unsafe { super::vehicle_ref(sell_head) });
+    (x.c.vehicles.destroy)(unsafe { super::vehicle_ref(sell_head, x.c.vehicles) });
 }
 
 /// Command entry for `CmdMoveRailVehicle`.

@@ -18,7 +18,6 @@ use crate::tile_type::TileIndex;
 use crate::tile_type::{INVALID_TILE, MP_INDUSTRY, MP_STATION, MP_TREES, MP_WATER};
 use crate::vehicle::VehicleRef;
 use crate::vehicle_type::VehicleID;
-use std::ptr::NonNull;
 
 use crate::industry::SpecHandle as IndustrySpec;
 /// Process-lifetime string constants from `table/strings.h`.
@@ -457,12 +456,12 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         if front.is_null() {
             break;
         }
-        let vehicle = VehicleRef(
-            NonNull::new(
-                unsafe { crate::station_service::openttd_rust_station_queue_value(front) }.cast(),
+        let vehicle = unsafe {
+            VehicleRef::from_shell(
+                crate::station_service::openttd_rust_station_queue_value(front),
+                visits.vehicles(),
             )
-            .unwrap(),
-        );
+        };
         crate::vehicle::visits::leave_station(vehicle, visits);
     }
     let id = (s.catchment.id)(st);

@@ -128,7 +128,9 @@ unsafe fn clone(
     }
     if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
         && (!unsafe { (b.groups.front)(v) }
-            || (r.train_handle)(v.cast()).get_crash_anim_pos() >= 4400)
+            || (r.train_handle)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr())
+                .get_crash_anim_pos()
+                >= 4400)
     {
         total.error(c.strings.destroyed);
         return invalid;
@@ -137,8 +139,8 @@ unsafe fn clone(
         let mut count = 0_i32;
         loop {
             count += 1;
-            v = (c.vehicles.next)(unsafe { vehicle_ref(v) })
-                .map_or(ptr::null_mut(), |v| v.0.as_ptr().cast());
+            v = (c.vehicles.next)(unsafe { vehicle_ref(v, c.vehicles) })
+                .map_or(ptr::null_mut(), |v| v.shell().cast());
             if v.is_null() {
                 break;
             }
@@ -198,22 +200,24 @@ unsafe fn clone(
             if flags & DoCommandFlag::EXECUTE != 0 {
                 w = unsafe { (b.groups.vehicle)(new_id) };
                 if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0 {
-                    let old_train = (r.train_handle)(v.cast());
+                    let old_train =
+                        (r.train_handle)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
                     if old_train.get_flags() & (1 << crate::train::FLIPPED) != 0
                         && !unsafe {
                             crate::newgrf_vehicle::reverse_probability(
                                 c.vehicles,
-                                super::vehicle_ref(v),
+                                super::vehicle_ref(v, c.vehicles),
                             )
                         }
                         && !unsafe {
                             crate::newgrf_vehicle::reverse_probability(
                                 c.vehicles,
-                                super::vehicle_ref(w),
+                                super::vehicle_ref(w, c.vehicles),
                             )
                         }
                     {
-                        (r.train_handle)(w.cast()).set_flag(crate::train::FLIPPED, true);
+                        (r.train_handle)(unsafe { super::vehicle_ref(w, c.vehicles) }.0.as_ptr())
+                            .set_flag(crate::train::FLIPPED, true);
                     }
                 }
                 if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
@@ -271,7 +275,8 @@ unsafe fn clone(
                 }
                 let cargo = unsafe { (c.transactions.cargo_type)(v) };
                 let subtype = unsafe { (c.transactions.subtype)(v, w, cargo) };
-                let new_cargo = (r.cargo_kind)(w.cast());
+                let new_cargo =
+                    (r.cargo_kind)(unsafe { super::vehicle_ref(w, c.vehicles) }.0.as_ptr());
                 // Subtype selection invokes NewGRF: observe the source cargo again.
                 if new_cargo.cargo != unsafe { (c.transactions.cargo_type)(v) }
                     || new_cargo.subtype != subtype
@@ -300,7 +305,7 @@ unsafe fn clone(
                     break;
                 }
             } else {
-                let e = (r.vehicle_engine)(v.cast());
+                let e = (r.vehicle_engine)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
                 let initial = if unsafe {
                     crate::engine_capabilities::openttd_rust_engine_can_carry(r.capabilities, e)
                 } {
@@ -308,7 +313,8 @@ unsafe fn clone(
                 } else {
                     c.strings.invalid_cargo
                 };
-                let old_cargo = (r.cargo_kind)(v.cast());
+                let old_cargo =
+                    (r.cargo_kind)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
                 if old_cargo.cargo != initial && (c.valid_cargo)(initial) {
                     unsafe {
                         refit::get_cost(

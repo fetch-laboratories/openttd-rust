@@ -106,7 +106,7 @@ fn vehicles(s: &Services) -> impl Iterator<Item = VehicleRef> + '_ {
     let mut from = 0u32;
     std::iter::from_fn(move || {
         let v = (s.shared.vehicle_next)(from)?;
-        from = (s.clock.vehicle_id)(v.0.as_ptr().cast()).wrapping_add(1);
+        from = (s.clock.vehicle_id)(v.shell().cast()).wrapping_add(1);
         Some(v)
     })
 }

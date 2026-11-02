@@ -15,6 +15,7 @@
 #include "../rust/command_services.h"
 #include "../rust/station_command_ffi.h"
 #include "../rust/vehicle_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
 #include "../company_func.h"
 #include "../core/backup_type.hpp"
 #include "../strings_func.h"
@@ -50,13 +51,14 @@ TEST_CASE("Order vector preserves values and allocation invalidation")
 }
 namespace {
 struct TimetableDateFixture {
+	OpenTTDVehicle record{};
 	OpenTTDVehicleOrderState vehicle{};
 	OpenTTDOrderListState list{};
 	RustOrderVector orders;
 	uint8_t owner = 0;
 	uint32_t owner_reads = 0;
 	bool primary = true;
-	TimetableDateFixture() { this->vehicle.orders = this; }
+	TimetableDateFixture() { this->vehicle.orders = this; this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); }
 };
 }
 TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
@@ -69,7 +71,8 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 	leaves.vector = [](void *v) noexcept { return static_cast<TimetableDateFixture *>(v)->orders.GetRustOwner(); };
 	leaves.primary_vehicle = [](void *) noexcept -> uint64_t { return 1; };
 	auto base = GetRustVehicleServices();
-	base.owner = [](OpenTTDVehicle *v) noexcept -> uint8_t { return reinterpret_cast<TimetableDateFixture *>(v)->owner; };
+	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
+	base.owner = [](OpenTTDVehicle *v) noexcept -> uint8_t { return reinterpret_cast<TimetableDateFixture *>(v->shell)->owner; };
 	OpenTTDStationCommandServices station{};
 	station.command = &GetRustCommandServices(); station.cost = &GetRustCommandCostServices();
 	leaves.base = &base; leaves.station_commands = &station;
@@ -97,7 +100,8 @@ TEST_CASE("Orders ownership - early validation and complete native error storage
 	leaves.primary_vehicle = [](void *v) noexcept -> uint64_t { return static_cast<TimetableDateFixture *>(v)->primary; };
 	leaves.command_error = [](void *out, uint32_t error, uint32_t detail) noexcept { CHECK(error == 0); CHECK(detail == 0); *static_cast<CommandCost *>(out) = CMD_ERROR; };
 	auto base = GetRustVehicleServices();
-	base.owner = [](OpenTTDVehicle *v) noexcept -> uint8_t { auto *f = reinterpret_cast<TimetableDateFixture *>(v); ++f->owner_reads; return f->owner; };
+	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
+	base.owner = [](OpenTTDVehicle *v) noexcept -> uint8_t { auto *f = reinterpret_cast<TimetableDateFixture *>(v->shell); ++f->owner_reads; return f->owner; };
 	OpenTTDStationCommandServices station{};
 	station.command = &GetRustCommandServices(); station.cost = &GetRustCommandCostServices();
 	leaves.base = &base; leaves.station_commands = &station;

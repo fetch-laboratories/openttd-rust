@@ -192,8 +192,8 @@ unsafe fn vehicle_set(
             if (s.multiheaded)(v) {
                 emit(unsafe { (s.groups.vehicle_id)((s.other_multihead)(v)) });
             }
-            let handle = crate::vehicle::VehicleRef(std::ptr::NonNull::new(v.cast()).unwrap());
-            v = (s.vehicles.next)(handle).map_or(std::ptr::null_mut(), |v| v.0.as_ptr().cast());
+            let handle = unsafe { vehicle_ref(v, s.vehicles) };
+            v = (s.vehicles.next)(handle).map_or(std::ptr::null_mut(), |v| v.shell().cast());
             if v.is_null() || !unsafe { (s.transactions.articulated)(v) } {
                 break;
             }
@@ -236,7 +236,7 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
     ) {
         // Callback runs synchronously; emit mutates only caller-local selection.
         let c = unsafe { &mut *ctx.cast::<Visit<'_, F>>() };
-        let v = handle.0.as_ptr().cast();
+        let v = handle.shell().cast();
         if unsafe { (c.s.groups.vehicle_type)(v) } != c.kind || !(c.s.in_depot)(v) {
             return;
         }
@@ -457,8 +457,11 @@ pub struct CommonServices {
 }
 /// # Safety
 /// `v` denotes a live shell, established by the caller's source preconditions.
-unsafe fn vehicle_ref(v: *mut ()) -> crate::vehicle::VehicleRef {
-    crate::vehicle::VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast()) })
+unsafe fn vehicle_ref(
+    v: *mut (),
+    services: &crate::vehicle::VehicleServices,
+) -> crate::vehicle::VehicleRef {
+    unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), services) }
 }
 pub(crate) unsafe fn sell(
     s: &CommonServices,
@@ -507,7 +510,7 @@ pub(crate) unsafe fn sell(
             unsafe { crate::orders::openttd_rust_backup_create(front.cast(), client, s.orders) };
         }
         // No owner access or retained reference crosses the deleting callback.
-        (s.vehicles.destroy)(unsafe { vehicle_ref(front) });
+        (s.vehicles.destroy)(unsafe { vehicle_ref(front, s.vehicles) });
     }
 }
 pub(crate) unsafe fn startstop(
@@ -525,7 +528,7 @@ pub(crate) unsafe fn startstop(
     if v.is_null() {
         return;
     }
-    let handle = unsafe { vehicle_ref(v) };
+    let handle = unsafe { vehicle_ref(v, s.vehicles) };
     let status = (s.vehicles.status)(handle);
     if status & crate::vehicle_base::VS_CRASHED != 0 {
         return (b.cost.error)(cost, s.strings.destroyed);
@@ -552,8 +555,8 @@ pub(crate) unsafe fn startstop(
         let callback = unsafe {
             crate::newgrf_vehicle::callback(
                 s.vehicles,
-                Some(vehicle_ref(v)),
-                (s.vehicles.engine_id)(vehicle_ref(v)),
+                Some(vehicle_ref(v, s.vehicles)),
+                (s.vehicles.engine_id)(vehicle_ref(v, s.vehicles)),
                 crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
                 0,
                 std::ptr::null_mut(),
@@ -663,7 +666,9 @@ crate::abi::layouts! {
 impl CommonServices {
     fn grf_text(&self, v: *mut (), string: u32) -> u32 {
         let cap = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
-        let e = (self.vehicles.engine)(unsafe { vehicle_ref(v) }).0.as_ptr();
+        let e = (self.vehicles.engine)(unsafe { vehicle_ref(v, self.vehicles) })
+            .0
+            .as_ptr();
         let grfid = unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(cap, e) };
         (self.grf_string)(grfid, string)
     }

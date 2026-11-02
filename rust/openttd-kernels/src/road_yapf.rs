@@ -240,9 +240,12 @@ impl Search<'_> {
         // SAFETY: The context's road kind is invariant throughout this search.
         *self.tram.get_or_init(|| {
             // SAFETY: The native search retains the same live vehicle handle.
-            let vehicle = crate::vehicle::VehicleRef(unsafe {
-                std::ptr::NonNull::new_unchecked(self.context.cast_mut().cast())
-            });
+            let vehicle = unsafe {
+                crate::vehicle::VehicleRef::from_shell(
+                    self.context.cast_mut(),
+                    self.movement.get().vehicle(),
+                )
+            };
             (self.movement.get().road_kind)(vehicle).0
         })
     }
@@ -267,8 +270,10 @@ impl Search<'_> {
     }
     fn follow(&self, tile: u32, td: u8) -> Follow {
         let s = unsafe { &*self.leaves.shared };
-        let v =
-            std::ptr::NonNull::new(self.context.cast_mut().cast()).map(crate::vehicle::VehicleRef);
+        let v = std::ptr::NonNull::new((self.movement.get().vehicle().record_from_shell)(
+            self.context.cast_mut(),
+        ))
+        .map(crate::vehicle::VehicleRef);
         let mut state = *self.follower.get_or_init(|| {
             crate::follow_track::State::vehicle(
                 s,
@@ -449,9 +454,9 @@ impl Search<'_> {
             let next_z = center_z(f.tile);
             let shared = unsafe { &*self.leaves.shared };
             let movement = crate::movement::table(shared);
-            let vehicle = crate::vehicle::VehicleRef(
-                std::ptr::NonNull::new(self.context.cast_mut().cast()).unwrap(),
-            );
+            let vehicle = unsafe {
+                crate::vehicle::VehicleRef::from_shell(self.context.cast_mut(), movement.vehicle())
+            };
             let (display_speed, order_speed) = *self.speeds.get_or_init(|| {
                 ((movement.train().physics.display_max_speed)(vehicle), {
                     // SAFETY: the movement table's orders leaves have process lifetime.
@@ -633,9 +638,12 @@ impl Search<'_> {
                 return self.arena[index].td;
             }
             // Native entries supply the canonical vehicle handle as their context.
-            let vehicle = crate::vehicle::VehicleRef(unsafe {
-                std::ptr::NonNull::new_unchecked(self.context.cast_mut().cast())
-            });
+            let vehicle = unsafe {
+                crate::vehicle::VehicleRef::from_shell(
+                    self.context.cast_mut(),
+                    self.movement.get().vehicle(),
+                )
+            };
             let stop = crate::road_stop::primary_for_vehicle(shared, st, vehicle);
             if stop.is_null() {
                 return self.arena[index].td;

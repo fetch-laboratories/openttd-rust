@@ -143,7 +143,8 @@ unsafe fn cost_factor(
         let result = unsafe {
             crate::newgrf_vehicle::callback(
                 s.common.vehicles,
-                std::ptr::NonNull::new(v.cast()).map(crate::vehicle::VehicleRef),
+                std::ptr::NonNull::new((s.common.vehicles.record_from_shell)(v.cast()))
+                    .map(crate::vehicle::VehicleRef),
                 engine,
                 crate::newgrf_callbacks::CBID_VEHICLE_REFIT_COST.0,
                 param,
@@ -209,11 +210,11 @@ pub(super) unsafe fn get_cost(
     automatic
 }
 pub(super) unsafe fn next(s: &Services, v: *mut ()) -> *mut () {
-    (s.common.vehicles.next)(unsafe { vehicle_ref(v) })
-        .map_or(ptr::null_mut(), |v| v.0.as_ptr().cast())
+    (s.common.vehicles.next)(unsafe { vehicle_ref(v, s.common.vehicles) })
+        .map_or(ptr::null_mut(), |v| v.shell().cast())
 }
 unsafe fn truncate(s: &Services, v: *mut (), cap: u16) {
-    let owner = (s.scheduler.cargo_owner)(unsafe { vehicle_ref(v) });
+    let owner = (s.scheduler.cargo_owner)(unsafe { vehicle_ref(v, s.common.vehicles) });
     if unsafe { crate::cargo_storage::openttd_rust_cargo_list_count(owner) } > u32::from(cap) {
         let amount = unsafe { crate::cargo_storage::openttd_rust_cargo_list_count(owner) }
             .wrapping_sub(u32::from(cap));
@@ -236,7 +237,17 @@ unsafe fn refit_chain(
 ) -> Capacity {
     let c = s.common;
     let b = c.base;
-    (b.cost.expense_money)(cost, (s.expense)(v.cast(), false).0, 0);
+    (b.cost.expense_money)(
+        cost,
+        (s.expense)(
+            unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                .0
+                .as_ptr(),
+            false,
+        )
+        .0,
+        0,
+    );
     let mut total = Capacity::default();
     let mut mail_total = 0_u32;
     let mut transaction = Transaction::new();
@@ -255,7 +266,11 @@ unsafe fn refit_chain(
         }
         v = unsafe { (c.transactions.first)(v) };
     }
-    (s.invalidate_chain)(v.cast());
+    (s.invalidate_chain)(
+        unsafe { super::vehicle_ref(v, s.common.vehicles) }
+            .0
+            .as_ptr(),
+    );
     let mut actual_subtype = subtype;
     while !v.is_null() {
         if !unsafe { (c.transactions.articulated)(v) } {
@@ -271,7 +286,11 @@ unsafe fn refit_chain(
             v = unsafe { next(s, v) };
             continue;
         }
-        let e = (s.vehicle_engine)(v.cast());
+        let e = (s.vehicle_engine)(
+            unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                .0
+                .as_ptr(),
+        );
         if !unsafe { crate::engine_capabilities::openttd_rust_engine_can_carry(s.capabilities, e) }
         {
             v = if only {
@@ -288,7 +307,7 @@ unsafe fn refit_chain(
                 crate::engine_capabilities::openttd_rust_engine_capacity(
                     s.capabilities,
                     e,
-                    v.cast(),
+                    super::vehicle_ref(v, s.common.vehicles).0.as_ptr(),
                     ptr::null_mut(),
                 )
             };
@@ -307,16 +326,26 @@ unsafe fn refit_chain(
         if actual_subtype == 0xff {
             actual_subtype = unsafe { (c.transactions.subtype)(v, v, cargo) };
         }
-        let old = (s.cargo_kind)(v.cast());
+        let old = (s.cargo_kind)(
+            unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                .0
+                .as_ptr(),
+        );
         if refittable {
-            (s.set_cargo_kind)(v.cast(), cargo, actual_subtype);
+            (s.set_cargo_kind)(
+                unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                    .0
+                    .as_ptr(),
+                cargo,
+                actual_subtype,
+            );
         }
         let mut mail = 0_u16;
         let amount = unsafe {
             crate::engine_capabilities::openttd_rust_engine_capacity(
                 s.capabilities,
                 e,
-                v.cast(),
+                super::vehicle_ref(v, s.common.vehicles).0.as_ptr(),
                 &raw mut mail,
             )
         };
@@ -330,17 +359,30 @@ unsafe fn refit_chain(
                 total.cargo[usize::from(mail_cargo)].wrapping_add(u32::from(mail));
         }
         if refittable {
-            (s.set_cargo_kind)(v.cast(), old.cargo, old.subtype);
+            (s.set_cargo_kind)(
+                unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                    .0
+                    .as_ptr(),
+                old.cargo,
+                old.subtype,
+            );
             let engine = unsafe { (b.groups.vehicle_engine)(v) };
             let allowed = unsafe { get_cost(s, temp, v, engine, cargo, actual_subtype) };
             if automatic && flags & DoCommandFlag::QUERY_COST == 0 && !allowed {
                 total.total = total.total.wrapping_sub(amount);
                 mail_total = mail_total.wrapping_sub(u32::from(mail));
                 if unsafe { (c.transactions.cargo_type)(v) } == cargo {
-                    total.total = total.total.wrapping_add(u32::from((s.cargo_cap)(v.cast())));
+                    total.total = total.total.wrapping_add(u32::from((s.cargo_cap)(
+                        unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                            .0
+                            .as_ptr(),
+                    )));
                     if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::AIRCRAFT.0 {
-                        mail_total = mail_total
-                            .wrapping_add(u32::from((s.cargo_cap)(unsafe { next(s, v) }.cast())));
+                        mail_total = mail_total.wrapping_add(u32::from((s.cargo_cap)(
+                            unsafe { super::vehicle_ref(next(s, v), s.common.vehicles) }
+                                .0
+                                .as_ptr(),
+                        )));
                     }
                 }
             } else {
@@ -364,17 +406,33 @@ unsafe fn refit_chain(
             // Copy only the private result; no Vec borrow crosses a callback.
             let result = transaction.0.results[index];
             let v = result.vehicle;
-            let old = (s.commit)(v.cast());
+            let old = (s.commit)(
+                unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                    .0
+                    .as_ptr(),
+            );
             let cap = if old.cargo == cargo {
                 (result.capacity as u16).min(old.capacity)
             } else {
                 0
             };
-            (s.set_refit_cap)(v.cast(), cap);
+            (s.set_refit_cap)(
+                unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                    .0
+                    .as_ptr(),
+                cap,
+            );
             unsafe {
                 truncate(s, v, cap);
             }
-            (s.write_refit)(v.cast(), cargo, result.capacity as u16, result.subtype);
+            (s.write_refit)(
+                unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                    .0
+                    .as_ptr(),
+                cargo,
+                result.capacity as u16,
+                result.subtype,
+            );
             if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::AIRCRAFT.0 {
                 let shadow = unsafe { next(s, v) };
                 if c.transactions.assertions {
@@ -382,9 +440,24 @@ unsafe fn refit_chain(
                         (c.transactions.check)(!shadow.is_null());
                     }
                 }
-                let cap = (s.refit_cap)(shadow.cast()).min(result.mail as u16);
-                (s.set_refit_cap)(shadow.cast(), cap);
-                (s.set_capacity)(shadow.cast(), result.mail as u16);
+                let cap = (s.refit_cap)(
+                    unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                )
+                .min(result.mail as u16);
+                (s.set_refit_cap)(
+                    unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                    cap,
+                );
+                (s.set_capacity)(
+                    unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                    result.mail as u16,
+                );
                 unsafe {
                     truncate(s, shadow, cap);
                 }
@@ -474,7 +547,7 @@ pub(crate) unsafe fn refit(
         match VehicleType(unsafe { (b.groups.vehicle_type)(v) }) {
             VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
-                    (s.train_handle)(front.cast()),
+                    (s.train_handle)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
                     if automatic {
                         s.prices.auto_refit
                     } else {
@@ -487,8 +560,8 @@ pub(crate) unsafe fn refit(
             VehicleType::ROAD => {
                 unsafe {
                     crate::road::openttd_rust_road_update_cache(
-                        vehicle_ref(front),
-                        (s.road_state)(front.cast()),
+                        vehicle_ref(front, s.common.vehicles),
+                        (s.road_state)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
                         automatic,
                         s.road,
                     );
@@ -496,15 +569,21 @@ pub(crate) unsafe fn refit(
                 if (s.road_acceleration)() != 0 {
                     crate::ground_vehicle::cargo_changed(
                         s.road_ground.physics,
-                        (s.road_ground.physics.first)(unsafe { vehicle_ref(front) }),
+                        (s.road_ground.physics.first)(unsafe {
+                            vehicle_ref(front, s.common.vehicles)
+                        }),
                     );
                 }
             }
             VehicleType::SHIP => {
-                (s.invalidate_chain)(v.cast());
+                (s.invalidate_chain)(
+                    unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                );
                 unsafe {
                     crate::ship_control::openttd_rust_ship_cache(
-                        vehicle_ref(v),
+                        vehicle_ref(v, s.common.vehicles),
                         (b.groups.vehicle_id)(v),
                         s.ship,
                         b.shared,
@@ -512,27 +591,41 @@ pub(crate) unsafe fn refit(
                 }
             }
             VehicleType::AIRCRAFT => {
-                (s.invalidate_chain)(v.cast());
+                (s.invalidate_chain)(
+                    unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                        .0
+                        .as_ptr(),
+                );
                 unsafe {
                     crate::aircraft::openttd_rust_aircraft_cache(
                         s.aircraft,
-                        (s.aircraft_handle)(v.cast()),
+                        (s.aircraft_handle)(super::vehicle_ref(v, s.common.vehicles).0.as_ptr()),
                         true,
                     );
                 }
             }
             _ => unreachable!("original NOT_REACHED vehicle type"),
         }
-        (unsafe { &*c.vehicles.maintenance }.mark_dirty)(unsafe { vehicle_ref(front) });
+        (unsafe { &*c.vehicles.maintenance }.mark_dirty)(unsafe {
+            vehicle_ref(front, s.common.vehicles)
+        });
         if !free {
-            (s.details_ui)(front.cast());
+            (s.details_ui)(
+                unsafe { super::vehicle_ref(front, s.common.vehicles) }
+                    .0
+                    .as_ptr(),
+            );
             (s.lists_ui)(unsafe { (b.groups.vehicle_type)(v) });
         }
         unsafe {
             (b.groups.depot_dirty)(front);
         }
     } else {
-        (s.invalidate_chain)(v.cast());
+        (s.invalidate_chain)(
+            unsafe { super::vehicle_ref(v, s.common.vehicles) }
+                .0
+                .as_ptr(),
+        );
     }
     result
 }

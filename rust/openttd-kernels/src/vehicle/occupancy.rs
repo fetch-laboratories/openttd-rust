@@ -125,8 +125,10 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
     let pool = (s.pool)();
     let vs = unsafe { &*s.vehicle };
     for i in 0..unsafe { *pool.first_unused } {
-        if let Some(v) = unsafe { *pool.slots.add(i) } {
+        let shell = unsafe { *pool.slots.add(i) };
+        if !shell.is_null() {
             unsafe {
+                let v = VehicleRef::from_shell(shell.cast(), vs);
                 (*((vs.tile_links)(v))).current = ptr::null_mut();
             }
         }
