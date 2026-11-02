@@ -237,7 +237,7 @@ TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
 	auto check = [](auto *v) {
 		CHECK(&v->gcache == &v->rust_ground.state->cache);
 		CHECK(&v->gv_flags == &v->rust_ground.state->flags);
-		CHECK(v->gcache.first_engine == EngineID::Invalid());
+		CHECK(v->gcache.first_engine == EngineID::Invalid().base());
 		v->gv_flags = 0x8003;
 		CHECK(v->rust_ground.state->flags == 0x8003);
 		v->gcache.last_speed = 65535;

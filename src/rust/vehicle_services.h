@@ -49,7 +49,7 @@ inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return v == null
 inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return Vehicle::FromRecord(v); }
 inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return Vehicle::FromRecord(v); }
 
-inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
+inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine.base(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline uint16_t RustVehicleLastLoadingStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->GetLastStationVisited().base(); }
@@ -109,7 +109,7 @@ inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->Rec
 inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
-inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine.base(); }
+inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine; }
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 inline OpenTTDVehicleTileLinks *RustVehicleTileLinks(Vehicle *v) noexcept { return &v->tile_links; }
 inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }

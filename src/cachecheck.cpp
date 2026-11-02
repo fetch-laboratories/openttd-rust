@@ -125,7 +125,7 @@ void CheckCaches()
 			}
 			switch (u->GetType()) {
 				case VEH_TRAIN:
-					if (gro_cache[length] != Train::From(u)->gcache) {
+					if (openttd_rust_ground_cache_equal(&gro_cache[length], &Train::From(u)->gcache) == 0) {
 						Debug(desync, 2, "warning: train ground vehicle cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->unitnumber, length);
 					}
 					if (tra_cache[length] != Train::From(u)->CopyTrainCache()) {
@@ -133,7 +133,7 @@ void CheckCaches()
 					}
 					break;
 				case VEH_ROAD:
-					if (gro_cache[length] != RoadVehicle::From(u)->gcache) {
+					if (openttd_rust_ground_cache_equal(&gro_cache[length], &RoadVehicle::From(u)->gcache) == 0) {
 						Debug(desync, 2, "warning: road vehicle ground vehicle cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->unitnumber, length);
 					}
 					break;

@@ -65,29 +65,43 @@ pub(crate) const fn is_rear_dualheaded(subtype: u8) -> bool {
     is_multiheaded(subtype) && !is_engine(subtype)
 }
 
-/// Canonical `GroundVehicleCache`; native aliases borrow this allocation.
-#[repr(C)]
-#[derive(Default)]
-pub struct Cache {
-    pub cached_weight: u32,
-    pub cached_slope_resistance: u32,
-    pub cached_max_te: u32,
-    pub cached_axle_resistance: u16,
-    pub cached_max_track_speed: u16,
-    pub cached_power: u32,
-    pub cached_air_drag: u32,
-    pub cached_total_length: u16,
-    pub first_engine: u16,
-    pub cached_veh_length: u8,
-    pub last_speed: u16,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Canonical cache; native aliases borrow this allocation.
+    #[derive(Default, PartialEq, Eq)]
+    "GroundVehicleCache" ["ground"] => pub struct GroundCache {
+        pub cached_weight: u32,
+        pub cached_slope_resistance: u32,
+        pub cached_max_te: u32,
+        pub cached_axle_resistance: u16,
+        pub cached_max_track_speed: u16,
+        pub cached_power: u32,
+        pub cached_air_drag: u32,
+        pub cached_total_length: u16,
+        /// Invalid for the front vehicle itself.
+        pub first_engine: u16,
+        pub cached_veh_length: u8,
+        pub last_speed: u16,
+    }
+    /// One stable owner per native train/road shell.
+    #[derive(Default)]
+    "OpenTTDGroundState" ["ground"] => pub struct GroundState {
+        pub cache: GroundCache,
+        pub flags: u16,
+    }
 }
-/// One owner per native train/road shell, never relocated.
-#[repr(C)]
-#[derive(Default)]
-pub struct State {
-    pub cache: Cache,
-    pub flags: u16,
+pub type Cache = GroundCache;
+pub type State = GroundState;
+
+/// Compare cache values without observing their padding bytes.
+/// # Safety
+/// Both pointers identify live caches for this synchronous comparison.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ground_cache_equal(a: *const Cache, b: *const Cache) -> u8 {
+    // SAFETY: the caller supplies live caches; this call invokes no callbacks.
+    u8::from(unsafe { *a == *b })
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_ground_new() -> *mut State {
     Box::into_raw(Box::new(State {
@@ -826,15 +840,9 @@ fn reversing(s: &Services, v: VehicleRef) -> bool {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDGroundAccelerationInput" ["probe"] => crate::ground_vehicle::AccelerationInput { tile, speed, status, roadtype, };
-    "GroundVehicleCache" ["probe"] => crate::ground_vehicle::Cache {
-        cached_weight, cached_slope_resistance, cached_max_te, cached_axle_resistance,
-        cached_max_track_speed, cached_power, cached_air_drag, cached_total_length,
-        first_engine, cached_veh_length, last_speed,
-    };
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
     "OpenTTDGroundSpeedInput" ["probe"] => crate::ground_vehicle::SpeedInput { speed, subspeed, };
     "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, acceleration_input, speed_input, capabilities, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
-    "OpenTTDGroundState" ["probe"] => crate::ground_vehicle::State { cache, flags, };
     "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
     "OpenTTDGroundPowerInput" ["probe"] => crate::ground_vehicle::PowerInput { tile, subtype, };
 }

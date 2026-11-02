@@ -1357,7 +1357,7 @@ PaletteID GetEnginePalette(EngineID engine_type, CompanyID company)
 PaletteID GetVehiclePalette(const Vehicle *v)
 {
 	if (v->IsGroundVehicle()) {
-		return GetEngineColourMap(v->GetEngineType(), v->GetOwner(), v->GetGroundVehicleCache()->first_engine, v);
+		return GetEngineColourMap(v->GetEngineType(), v->GetOwner(), EngineID(v->GetGroundVehicleCache()->first_engine), v);
 	}
 
 	return GetEngineColourMap(v->GetEngineType(), v->GetOwner(), EngineID::Invalid(), v);
