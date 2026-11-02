@@ -991,7 +991,7 @@ impl Links {
         unsafe { ((*self.station_resolver).cargo_owner)(st, cargo) }
     }
     pub(crate) fn vehicle_cargo(&self, v: VehicleRef) -> *mut crate::cargo_storage::List {
-        unsafe { ((*self.vehicle_resolver).cargo_owner)(v.shell().cast()) }.cast_mut()
+        unsafe { ((*self.vehicle_resolver).cargo_owner)(v.0.as_ptr()) }.cast_mut()
     }
 }
 unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &World, l: &Links) {

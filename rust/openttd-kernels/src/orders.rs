@@ -4771,7 +4771,9 @@ fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u6
     // SAFETY: The caller supplies live serialized vehicle and destination shells.
     u64::from(unsafe {
         crate::vehicle_func::can_vehicle_use_station(
-            vehicle.cast(),
+            native_vehicle(vehicle, &*crate::newgrf_airport::runtime().vehicles)
+                .0
+                .as_ptr(),
             crate::newgrf_airport::station_by_id(destination, crate::newgrf_airport::runtime()),
             crate::newgrf_airport::runtime(),
         )
