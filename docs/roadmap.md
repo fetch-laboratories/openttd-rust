@@ -30,7 +30,8 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh
 
 - The platform cadence after integration 60 failed on a Linux Clang warning from #639's new `shared` field (run 41436192681); #648 fixed it and the rerun (run 41441266701) passed. The next cadence is after integration 65.
 - Coverage: #156 holds the gaps, including #640's and #642's unreached branches, and #503 comes last.
-- Unintegrated branches: five (#647, #636, #628, #649 and #575).
+- Integration 65 (#651, #575's script host, `6afdcbf390`) followed the stocktake: 354 retired, net glue +220, compiled C++ -134.
+- Unintegrated branches: five (#647, #636, #628, #649 and #655).
 
 ## Phases
 
@@ -254,6 +255,7 @@ Rust / tooling / original C++ retired / net glue.
 | 62 | #641 packet state and byte storage in a generated Rust record / #645 | `bf2c4632a2` | 718 / 175 / 52 / +80 |
 | 63 | #559 command invocation lifecycle (phase 1's last owner) / #640 | `7940e700c2` | 403 / 287 / 136 / +115; rebound rows 420 to 418, orphan exports 55 to 54 |
 | 64 | #64 maintained crypto crates and Rust network authentication / #642 | `5e414c5a64` | 2,027 / 480 / 2,242 / -68 |
+| 65 | #575 script host, command context and event lifecycle / #651 | `6afdcbf390` | 386 / 364 / 354 / +220 |
 
 ## Work order
 
@@ -265,14 +267,13 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
 1. **#570 vehicle records (#636) to checkpoint 2.** It is phase 2's first owner and the template for every later pool.
    - First the four items in the twenty-seventh steering comment on #636: remove the `SetNext` bounce, switch handle identity with the first Rust field read, delete the retargeted per-field services with the design's inventory, and merge base, taking #643's generator.
    - Judge its cost by compiled C++ (original plus glue), not by its retired figure: rewritten consumer lines count on both sides. The audit estimates final net glue at -150 to -450, against the issue's -500 to -1,100.
-   - Then, one at a time in the shared vehicle files: #598 vehicle routing decisions, then #599 vehicle base lifecycle. Remeasure #599's inventory after #570.
+   - Then #598 vehicle routing decisions and #599 vehicle base lifecycle as one owner in the shared vehicle files (plan-after64: #599 alone adds net glue). Remeasure the inventory after #570.
 2. **Phase 1 has exited:** #559 integrated as 63 (#640). Every remaining non-drawing body moves with the phase-2 owner of its file; #621 lists them.
 3. **Maintenance, one batch at a time** (one reviewer, one Full):
    - #647 (#644 boundary `bool` returns with #646 `TileArea::expand` overflow) is in review and integrates next. It overlaps #640 in eight files, so its base update over integration 63 needs a fresh scoped review unless every conflict keeps both sides ([review](workflow.md#review)). Its quick-CI gate then rejects new `bool` returns from Rust-defined `extern "C"` functions.
-   - #604 shared settings access. It is ready, because its selection event, #570's declaration generator, integrated as #643. It also extends `tools/rebound-callees.py` to `.inc` tables (51 rows, moved from #639).
-   - #199's open items, disjoint from #570: the `CargoFlow` bounce, #578's story-page bounce, #580's date parameters and the sweep's stale comments.
-   - #565 item 2, after #570 integrates, because both change `movement.rs`. Delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body). Production net glue -300 to -600. It also deletes the native `bridge_above` and `rail_tile_type` services that #616 and #620 duplicated with Rust map readers (`road_cmd.rs:932`, `road_cmd.rs:1443`, `station_cmd.rs:447`).
-   - Later: #168/#199/#500 completed-job publication and #501 probe typing.
+   - #649 (#604 settings access with #199's disjoint items and the `.inc` rebound coverage) is reviewed. It integrates after #651; its base update overlaps #651 in `src/rust/services.cpp` and `tools/migration/windows-abi.cpp`. Its inherited session `bool` returns are converted by #647 or by #647's conflict resolution, whichever integrates second (root's comment on #649).
+   - #565 item 2, after #570 integrates, because both change `movement.rs`. Delete the map fallbacks and convert the remaining rail, crossing, depot, stop, water and tunnel leaves, `tile_slope_z`, and world generation's per-tile services (issue body), with #168's unfinished world-generation items. Production net glue -300 to -600. It also deletes the native `bridge_above` and `rail_tile_type` services that #616 and #620 duplicated with Rust map readers (`road_cmd.rs:932`, `road_cmd.rs:1443`, `station_cmd.rs:447`).
+   - Later: #501 probe typing. #168/#199/#500's completed-job publication moves to the link-graph pool owner.
 4. **The next phase-2 pools after #570 integrates** (ranked by plan-after56, 2026-11-01). Each needs #570's generator, save descriptors and record lookup. Rank and judge each by compiled C++ removed ([selection](planning.md#selection)).
    - Before briefing #634 or #635, root decides whether later records sit beside their shells, as #570's do, or inside them. Each moved-field read beside the shell costs a dependent load. Read the cost from the merged-tip profile after #570 and #566's drawing workload. If the cost is material, record the decision in the [world-state design](design/world-state.md) before the briefs.
    - #634 stations and road stops: 450 to 650 retired, -300 to -800 net glue, about 110 to 160 station-field slots. It removes the per-station `SharedForEachStation` bounce and #612's two C++ calls per k-d tree coordinate (`station/spatial.rs:12`).
@@ -280,16 +281,16 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
    - Then orders and order lists (441 left; read on every vehicle tick), #637 engines (545, with #497's engine bindings), companies and groups (510), link graph (607), #638 the smaller pools (615, with #498's ObjectSpec payloads), and the map (3,988 storage) with the rail, road, water, tunnel, landscape and tile bodies. Pools without an issue get one and a design section when selected. Each moves its coupled save adapters with each record, generates native declarations, verifies the layout, and deletes the displaced readers, services and their baseline rows.
 5. **Phase 3 fills every other free slot:**
    - #628 (#574 network protocol): the resume checkpoint, its status comment and the steering comment on #628 hold the next round. #645 (62) and #640 (63) have integrated, so its close, receive, send and command-post bounces adopt them now; it does not build a second packet or command path.
-   - #575 script host, commands and events, with its unsaved-output evidence. Ready: #559 integrated as 63.
    - #573's next PR, after #570 integrates: slice 3b changes the `SaveLoad` base and the `saveload.h` macros that #570's vehicle descriptors use. Its brief keeps the save-descriptor macros unchanged so it can run beside #634 and #635; otherwise whichever starts second waits. Then slice 4, the corrupt-input and LoadCheck probes, and the native `CopyFromOldName` helper, as #627's status comment lists.
-   - #497's non-engine spec handlers: their return condition, #622's shared `RustSpec*` table, integrated in #639. The next planning round re-plans them on that table. #497's `Engine::grf_prop` and `overrides` bindings stay with #637, and #498 with #638 (twenty-first steering, correction 2: no data behind setters).
+   - #652 (#655, in implementation): GRF text and NewGRF Actions 3, 4 and 13, absorbing #497's re-planned Action 3 (plan-after64, comment on #3). Compiled C++ about -750 to -850. Formatting-time GRF string code (about 170 lines) stays C++ as phase 4. `Engine::grf_prop` and `overrides` stay with #637, and #498 with #638.
+   - #653 industry and industry-tile specifications, after #647 and #649 integrate (both edit the industry files). Compiled C++ about -270 to -400; the spec records' vector fields are decided at its first checkpoint.
 
    Size each owner to repay its review and Full ([selection](planning.md#selection)). Plan no Squirrel port.
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect just to fill a slot.
 
 Recurring:
 - After every second integration (next after 66), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip with the pinned `LD_LIBRARY_PATH` from [speed](speed.md#instruction-projections).
-- Run the platform cadence after every fifth integration; the next is after 65. Fix a red cadence before further integrations.
+- Run the platform cadence after every fifth integration. The cadence after 65 is run 41466312349; the next is after 70. Fix a red cadence before further integrations.
 - A quiet speed pass is owed in the next quiet window ([speed passes](speed.md#speed-passes)): #642 changed `rust/openttd-kernels/Cargo.toml`, so `simulate --instructions` rejects the anchors' identity. It pauses builds and games for timed collection, so run it when no agent is building, at the latest before the post-#570 record-placement decision.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
@@ -298,18 +299,20 @@ Recurring:
 Excluded, with return conditions checked by this review:
 - #507's NewGRF corpus (#525, #526) stays parked by the user (2026-10-28) until the user reselects it. #525's branch stays on origin.
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
+- #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
+- #654 asks the user whether to reselect #507's corpus for the NewGRF loading ports; root recommends keeping it parked until the Action 0 owners.
 
-## Resume checkpoint (2026-11-02, stocktake 64)
+## Resume checkpoint (2026-11-02, after integration 65)
 
-Root is active in Claude Code (`claude-opus-5-5`, xhigh). Code is `5e414c5a64` (integration 64). `CI_ON_DEMAND` is `true`. Implementers and reviewers mostly run on Codex `gpt-6.1-sol` high; Claude Opus takes work when the Claude five-hour window has room, so reviewer and implementer families differ where possible. Each PR's status comment holds its next action.
+Root is active in Claude Code (`claude-opus-5-5`, xhigh). Code is `6afdcbf390` (integration 65). `CI_ON_DEMAND` is `true`. Implementers and reviewers mostly run on Codex `gpt-6.1-sol` high; Claude Opus takes work when the Claude five-hour window has room, so reviewer and implementer families differ where possible. Each PR's status comment holds its next action. The platform cadence after 65 (run 41466312349) is running. #654 awaits the user.
 
 | Issue / PR | Head | Next action | Running job or CI |
 | --- | --- | --- | --- |
-| #644, #646 / #647 boundary `bool` returns and `expand` overflow | `0f1ee72286` | Finish review (the reviewer fixed the gate), root spot-check, base update over integrations 63 and 64 with a scoped review of any non-trivial conflict, then Full and merge | Review by /root/bool_review |
-| #604, #199 / #649 settings access batch | `01b3e64f93` | All seven carriers deleted, four #199 items, `.inc` rebound coverage and a shared-RNG fix. After validation: review (check the RNG fix's draw order), Full, merge | /root/settings_batch |
-| #570 / #636 vehicle records | `b894512bb6` | Bounce removed, handle identity switched, identity and common reader services deleted. Next: ground and train records and the rest of the per-field inventory, checkpoint 2, then review | /root/vehicle_records_cp2 |
-| #574 / #628 network protocol | `e773dbf2ed` | Close and send bounces removed, socket state canonical. Next: receive dispatch, the command-post bounce on #640, merge integration 64 and adopt #642's authentication owner, slice 4, then one round review | /root/network_round |
-| #575 script host (new PR) | - | Implementation started on #640's command lifecycle | /root/script_host (Claude Opus, medium) |
+| #604, #199 / #649 settings access batch | `824303ba11` | Reviewed (/root/settings_review fixed the evidence guard). Base update over integration 65 (overlaps #651 in two files; a scoped review if a conflict needs more than both sides), Full, merge | None |
+| #644, #646 / #647 boundary `bool` returns and `expand` overflow | `0f1ee72286` | Finish review (audit rerun), root spot-check, base update over integrations 63 to 65 with a scoped review of the conflict resolution, then Full and merge | /root/bool_review |
+| #570 / #636 vehicle records | `8f8208f4d0` | Ground record moved; compiled C++ -359 so far. Next: the train record and the rest of the inventory, checkpoint 2, then review | /root/vehicle_records_cp2 |
+| #574 / #628 network protocol | `91dd2fdfed` | Close, send and receive bounces removed; #642 adopted. Next: command transport cleanup and the command-post bounce on #640, slice 4, then one round review | /root/network_round |
+| #652 / #655 GRF text and NewGRF Actions 3, 4 and 13 | `59e006df00` | Text table and language selection done. Next: translation, Actions 13, 4 and 3, the string-table dump and fixtures, then review by function group | /root/grf_text |
 
 PR worktrees: T3 task worktrees for each running agent, plus the earlier `t3-5aa8a17f` and `t3-fc38354a` (#628) and `t3-41b02f9e` (#636).
 
