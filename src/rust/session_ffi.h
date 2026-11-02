@@ -138,7 +138,6 @@ struct OpenTTDSessionServices {
 	const OpenTTDStationServices *station;
 	const OpenTTDStationLinks *links;
 	const OpenTTDVehicleVisits *visits;
-	OpenTTDTreeTickSettings (*tree_tick)() noexcept OPENTTD_SERVICE_DEFAULT(tree_tick);
 	OpenTTDIndustryTickRecord (*industry_tick)() noexcept OPENTTD_SERVICE_DEFAULT(industry_tick);
 	OpenTTDIndustryBuilder *(*industry_builder)() noexcept OPENTTD_SERVICE_DEFAULT(industry_builder);
 	OpenTTDCompanyTick (*company_tick)() noexcept OPENTTD_SERVICE_DEFAULT(company_tick);
@@ -156,7 +155,6 @@ void RustAskUnsafeUnpause() noexcept;
 void RustSaveDesyncGame();
 OpenTTDWorldFrame *RustWorldFrameBegin(OpenTTDWorldFrameStorage *) noexcept;
 bool RustWorldFrameEnd(OpenTTDSessionFrame *, OpenTTDWorldFrame *, uint8_t) noexcept;
-OpenTTDTreeTickSettings RustTreeTickSettings() noexcept;
 OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept;
 OpenTTDVehicleSchedulerTables RustVehicleSchedulerTables(OpenTTDCommandCost *refit = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept;
 OpenTTDScheduleTime RustScheduleTime() noexcept;

@@ -160,16 +160,6 @@ pub struct LoopSettings {
     pub ambient_callback: bool,
 }
 
-/// `OnTick_Trees` settings, read once per entry.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TickSettings {
-    pub tick_counter: u64,
-    pub size: u32,
-    pub climate: u8,
-    pub extra: u8,
-}
-
 /// `GenerateTrees` and `PlaceTreesRandomly` settings, read once per entry.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -840,9 +830,12 @@ impl Trees<'_> {
     }
 
     /// `PlantRandomTree`.
-    fn plant_random_tree(&self, s: &TickSettings, rainforest: bool) {
+    fn plant_random_tree(&self, rainforest: bool) {
         let r = self.random();
-        let tile = r & s.size.wrapping_sub(1);
+        let tile = r & crate::map_func::World::new(self.s)
+            .types
+            .count()
+            .wrapping_sub(1);
         let p = self.plant_observation(tile);
         if rainforest && p.zone != ZONE_RAINFOREST {
             return;
@@ -850,7 +843,7 @@ impl Trees<'_> {
         if !p.suitable(false) {
             return;
         }
-        let tree = random_tree_type(s.climate, p.zone, r >> 24);
+        let tree = random_tree_type(unsafe { self.s.settings().climate.read() }, p.zone, r >> 24);
         if tree == TREE_INVALID {
             return;
         }
@@ -858,32 +851,36 @@ impl Trees<'_> {
     }
 
     /// `OnTick_Trees`.
-    fn tick(&self, s: &TickSettings) {
-        if s.extra == ETP_NO_SPREAD || s.extra == ETP_NO_GROWTH_NO_SPREAD {
+    fn tick(&self) {
+        let settings = self.s.settings();
+        if unsafe { settings.extra_tree_placement.read() } == ETP_NO_SPREAD
+            || unsafe { settings.extra_tree_placement.read() } == ETP_NO_GROWTH_NO_SPREAD
+        {
             return;
         }
-        let skip = scale_by_size(s.size, 16);
-        if skip < 16 && s.tick_counter & u64::from(16 / skip - 1) != 0 {
+        let size = crate::map_func::World::new(self.s).types.count();
+        let skip = scale_by_size(size, 16);
+        if skip < 16 && (self.s.tick_counter)() & u64::from(16 / skip - 1) != 0 {
             return;
         }
-        if s.climate == TROPIC {
-            let mut c = scale_by_size(s.size, 1);
+        if unsafe { settings.climate.read() } == TROPIC {
+            let mut c = scale_by_size(size, 1);
             while c > 0 {
-                self.plant_random_tree(s, true);
+                self.plant_random_tree(true);
                 c -= 1;
             }
         }
         // SAFETY: Game thread only; no reference to this byte is formed, and no
         // service runs between the read and the write.
         let wrapped = unsafe {
-            let (next, wrapped) = decrement(TREE_COUNTER, scale_by_size(s.size, 1));
+            let (next, wrapped) = decrement(TREE_COUNTER, scale_by_size(size, 1));
             TREE_COUNTER = next;
             wrapped
         };
-        if !wrapped || s.extra == ETP_SPREAD_RAINFOREST {
+        if !wrapped || unsafe { settings.extra_tree_placement.read() } == ETP_SPREAD_RAINFOREST {
             return;
         }
-        self.plant_random_tree(s, false);
+        self.plant_random_tree(false);
     }
 
     /// `CmdPlantTree`.
@@ -1065,13 +1062,9 @@ pub(crate) unsafe fn tile_loop(
 /// `OnTick_Trees`.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
-pub(crate) unsafe fn tick(
-    settings: TickSettings,
-    services: *const TreeServices,
-    shared: *const Services,
-) {
+pub(crate) unsafe fn tick(services: *const TreeServices, shared: *const Services) {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    unsafe { trees(services, shared) }.tick(&settings);
+    unsafe { trees(services, shared) }.tick();
 }
 
 /// `GenerateTrees`; true when a progress service reported world-generation abort.
@@ -1330,12 +1323,6 @@ crate::abi::layouts! {
         extra,
         ambient,
         ambient_callback,
-    };
-    "OpenTTDTreeTickSettings" ["probe"] => TickSettings {
-        tick_counter,
-        size,
-        climate,
-        extra,
     };
     "OpenTTDTreeGenerateSettings" ["probe"] => GenerateSettings {
         size,

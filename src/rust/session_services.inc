@@ -150,7 +150,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.station = &GetRustStationServices(),
 		.links = &GetRustStationLinks(),
 		.visits = &GetRustVehicleVisits(),
-		.tree_tick = RustTreeTickSettings,
 		.industry_tick = RustIndustryTickRecord,
 		.industry_builder = RustIndustryBuilderState,
 		.company_tick = RustCompanyTick,
