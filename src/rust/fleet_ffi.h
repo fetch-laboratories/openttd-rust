@@ -161,7 +161,6 @@ struct OpenTTDFleetPendingServices {
 	const OpenTTDCompanyIdentityServices *company;
 	void (*subtract)(int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(subtract);
 	void (*command)(void *out, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(command);
-	void (*animation)(int32_t x, int32_t y, int32_t z, int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(animation);
 	void (*length_news)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(length_news);
 	void (*failed_news)(uint32_t id, uint32_t error) noexcept OPENTTD_SERVICE_DEFAULT(failed_news);
 	uint32_t cash;

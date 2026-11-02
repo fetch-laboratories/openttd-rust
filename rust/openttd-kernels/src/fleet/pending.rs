@@ -22,7 +22,6 @@ pub struct Services {
     pub(crate) company: *const crate::company_identity::Services,
     pub(crate) subtract: unsafe extern "C" fn(i64),
     pub(crate) command: unsafe extern "C" fn(*mut (), u32),
-    pub(crate) animation: unsafe extern "C" fn(i32, i32, i32, i64),
     pub(crate) length_news: unsafe extern "C" fn(u32),
     pub(crate) failed_news: unsafe extern "C" fn(u32, u32),
     pub(crate) cash: u32,
@@ -95,7 +94,7 @@ pub(crate) unsafe fn drain(
         }
         if unsafe { (t.success)(cost) } {
             let money = unsafe { (t.money)(cost) };
-            unsafe { (w.animation)(x, y, z, money) };
+            unsafe { ((*g.shared).cost_animation)(x, y, z, money) };
             continue;
         }
         let mut error = unsafe { (t.error)(cost) };
@@ -125,7 +124,6 @@ crate::abi::layouts! {
         company,
         subtract,
         command,
-        animation,
         length_news,
         failed_news,
         cash,

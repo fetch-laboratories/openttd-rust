@@ -12,6 +12,7 @@
 #include "cargo_payment_stubs.hpp"
 #include "../company_base.h"
 #include "../rust/vehicle_ffi.h"
+#include "../rust/services_ffi.h"
 #include "../economy_type.h"
 #include "../newgrf_sound.h"
 #include "../sound_type.h"
@@ -43,7 +44,9 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 	s.x = [](OpenTTDVehicle *) noexcept -> int32_t { return 11; };
 	s.y = [](OpenTTDVehicle *) noexcept -> int32_t { return 22; };
 	s.z = [](OpenTTDVehicle *) noexcept -> int32_t { return 33; };
-	s.cost_animation = [](int32_t x, int32_t y, int32_t z, int64_t income) noexcept { CHECK(std::tuple{x, y, z} == std::tuple{11, 22, 33}); settlement.emplace_back(9, 0, income); };
+	OpenTTDSharedServices shared{};
+	s.shared = &shared;
+	shared.cost_animation = [](int32_t x, int32_t y, int32_t z, int64_t income) noexcept { CHECK(std::tuple{x, y, z} == std::tuple{11, 22, 33}); settlement.emplace_back(9, 0, income); };
 	s.feeder_animation = [](int32_t x, int32_t y, int32_t z, int64_t transfer, int64_t income) noexcept { CHECK(std::tuple{x, y, z} == std::tuple{11, 22, 33}); settlement.emplace_back(8, transfer, income); };
 	for (bool cleaning : {false, true}) for (bool transfer : {false, true}) for (bool is_local : {false, true}) for (bool custom : {false, true}) for (bool valid : {false, true}) {
 		settlement.clear();

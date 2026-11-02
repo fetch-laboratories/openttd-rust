@@ -46,7 +46,7 @@ template <typename Clock> static bool FixtureClockElapsed()
 	openttd_rust_session_state_loop(&fixture.services, nullptr);
 	// The intentional phase stop leaves storage entered, just like a real
 	// exception. Restore the fixture scope before relaying an exception.
-	openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, fixture.storage.assert_condition, fixture.world.storage_discard);
+	openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, fixture.storage.assert_condition, fixture.shared.storage_discard);
 	_game_mode = saved_mode;
 	_pause_mode = saved_pause;
 	if (fixture.exception) std::rethrow_exception(fixture.exception);

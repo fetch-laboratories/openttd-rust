@@ -66,7 +66,7 @@ pub struct Services {
     pub(crate) x: extern "C" fn(*mut OpenTTDVehicle) -> i32,
     pub(crate) y: extern "C" fn(*mut OpenTTDVehicle) -> i32,
     pub(crate) z: extern "C" fn(*mut OpenTTDVehicle) -> i32,
-    pub(crate) cost_animation: extern "C" fn(i32, i32, i32, i64),
+    pub(crate) shared: *const crate::services::Services,
     pub(crate) feeder_animation: extern "C" fn(i32, i32, i32, i64, i64),
     pub(crate) subsidy_multiplier: extern "C" fn() -> u8,
     pub(crate) feeder_payment_share: extern "C" fn() -> u8,
@@ -326,7 +326,15 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
                     fields.visual_profit.saturating_neg(),
                 );
             } else {
-                (s.cost_animation)(x_pos, y_pos, z_pos, fields.visual_profit.saturating_neg());
+                // SAFETY: the caller supplies the immutable shared table for settlement.
+                unsafe {
+                    ((*s.shared).cost_animation)(
+                        x_pos,
+                        y_pos,
+                        z_pos,
+                        fields.visual_profit.saturating_neg(),
+                    );
+                }
             }
             (finance.set_current_company)(old_company.0);
         }
@@ -477,7 +485,7 @@ crate::abi::layouts! {
         x,
         y,
         z,
-        cost_animation,
+        shared,
         feeder_animation,
         subsidy_multiplier,
         feeder_payment_share,

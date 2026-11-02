@@ -140,8 +140,9 @@ struct SessionFixture {
 		services.news = Nothing;
 		services.assert_local_company = Nothing;
 		world.landscape = &storage;
+		storage.shared = &shared;
 		storage.assert_condition = [](bool valid) noexcept { if (!valid) std::abort(); };
-		world.storage_discard = [](void *) noexcept {};
+		shared.storage_discard = [](void *) noexcept {};
 	}
 	OpenTTDLandscapeGenerationServices storage{};
 	~SessionFixture() { openttd_rust_industry_builder_destroy(builder); active = previous; }
@@ -150,7 +151,7 @@ struct SessionFixture {
 		// Nested tile probes enter a fresh session while their outer fixture is
 		// already in storage's game-loop mode. Restore that outer mode on return.
 		const bool outer_loop = previous != nullptr && previous->in_loop;
-		if (outer_loop) openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, storage.assert_condition, world.storage_discard);
+		if (outer_loop) openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, storage.assert_condition, shared.storage_discard);
 		skip_animation = !animate && mode != GM_EDITOR;
 		const auto clocks = *openttd_rust_clock_storage();
 		if (mode != GM_EDITOR) { TimerGameEconomy::date_fract = 0; TimerGameCalendar::date_fract = 0; }
@@ -163,9 +164,9 @@ struct SessionFixture {
 		const bool result = openttd_rust_session_state_loop(&services, nullptr);
 		// An injected phase failure intentionally leaves the production storage
 		// mode entered; the narrow fixture must not leak it into its next case.
-		openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, storage.assert_condition, world.storage_discard);
+		openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, storage.assert_condition, shared.storage_discard);
 		in_loop = false;
-		if (outer_loop) openttd_rust_storage_switch_mode(PSM_ENTER_GAMELOOP, false, previous->storage.assert_condition, previous->world.storage_discard);
+		if (outer_loop) openttd_rust_storage_switch_mode(PSM_ENTER_GAMELOOP, false, previous->storage.assert_condition, previous->shared.storage_discard);
 		*openttd_rust_clock_storage() = clocks;
 		_game_mode = saved_mode;
 		_pause_mode = saved_pause;
