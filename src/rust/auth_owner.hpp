@@ -31,8 +31,7 @@ public:
 	T *get() const noexcept { return this->value.get(); }
 };
 
-using RustAuthKeys = RustAuthOwner<OpenTTDAuthKeys, openttd_rust_auth_keys_clone, openttd_rust_auth_keys_assign, openttd_rust_auth_keys_destroy>;
-using RustAuthSession = RustAuthOwner<OpenTTDAuthSession, openttd_rust_auth_session_clone, openttd_rust_auth_session_assign, openttd_rust_auth_session_destroy>;
+using RustAuthHandler = RustAuthOwner<OpenTTDAuthHandler, openttd_rust_auth_handler_clone, openttd_rust_auth_handler_assign, openttd_rust_auth_handler_destroy>;
 using RustAuthStream = RustAuthOwner<OpenTTDAuthStream, openttd_rust_auth_stream_clone, openttd_rust_auth_stream_assign, openttd_rust_auth_stream_destroy>;
 
 #endif /* OPENTTD_RUST_AUTH_OWNER_HPP */
