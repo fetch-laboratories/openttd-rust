@@ -31,7 +31,6 @@
 #include "safeguards.h"
 
 
-
 StoryPageElementPool _story_page_element_pool("StoryPageElement");
 StoryPagePool _story_page_pool("StoryPage");
 INSTANTIATE_POOL_METHODS(StoryPageElement)
@@ -42,16 +41,6 @@ StoryPage::~StoryPage()
 	if (CleaningPool()) return;
 }
 
-/**
- * This helper for Create/Update PageElement Cmd procedure verifies if the page
- * element parameters are correct for the given page element type.
- * @param page_id The page id of the page which the page element (will) belong to
- * @param type The type of the page element to create/update
- * @param tile The tile parameter of the DoCommand proc
- * @param reference The reference parameter of the DoCommand proc (p2)
- * @param text The text parameter of the DoCommand proc
- * @return true, if and only if the given parameters are valid for the given page element type and page id.
- */
 
 /** Set the button background colour. */
 void StoryPageButtonData::SetColour(Colours button_colour)

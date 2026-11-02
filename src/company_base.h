@@ -67,7 +67,7 @@ private:
 typedef Pool<Company, CompanyID, 1> CompanyPool;
 extern CompanyPool _company_pool;
 
-/** Canonical finance fields; WITH_RUST storage is allocated and owned in Rust. */
+/** Canonical finance fields, allocated and owned in Rust. */
 struct CompanyFinances {
 	Money money = 0; ///< Money owned by the company.
 	uint8_t money_fraction = 0; ///< Fraction of money of the company, too small to represent in #money.

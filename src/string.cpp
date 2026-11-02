@@ -103,11 +103,6 @@ std::string FormatArrayAsHex(std::span<const uint8_t> data)
 	return str;
 }
 
-/**
- * Test if a character is (only) part of an encoded string.
- * @param c Character to test.
- * @returns True iff the character is an encoded string control code.
- */
 
 /**
  * Copies the valid (UTF-8) characters from \c consumer to the \c builder.

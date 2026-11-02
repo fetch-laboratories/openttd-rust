@@ -38,7 +38,6 @@
 #include "safeguards.h"
 
 
-
 static_assert(INITIAL_STATION_RATING == 175 && HVOT_WAYPOINT == (1 << 6));
 static_assert(ATP_TTDP_LARGE == 1 && CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
 static_assert(VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1);
@@ -148,7 +147,6 @@ uint8_t GoodsEntry::ConvertState() const
 }
 
 
-
 /**
  * Evaluate a tile's position within a station, and return the result in a bit-stuffed format.
  * if not centered: .TNLcCpP, if centered: .TNL..CP
@@ -166,15 +164,6 @@ uint32_t GetPlatformInfo(Axis axis, uint8_t tile, int platforms, int length, int
 	return openttd_rust_platform_info(axis, tile, platforms, length, x, y, centred);
 }
 
-
-/**
- * Find the end of a railway station, from the \a tile, in the direction of \a delta.
- * @param tile Start tile.
- * @param delta Movement direction.
- * @param check_type Stop when the custom station type changes.
- * @param check_axis Stop when the station direction changes.
- * @return Found end of the railway station.
- */
 
 /* Station Resolver Functions */
 /* virtual */ uint32_t StationScopeResolver::GetRandomBits() const
@@ -348,11 +337,6 @@ void AssignSpecToStation(const StationSpec *spec, BaseStation *st, uint8_t speci
 	openttd_rust_station_spec_assign(&GetStationAssociationServices(), spec, st, specindex);
 }
 
-/**
- * Deallocate a StationSpec from a Station. Called when removing a single station tile.
- * @param st Station to work with.
- * @param specindex Index of the custom station within the Station's station spec list.
- */
 
 /**
  * Draw representation of a station tile for GUI purposes.

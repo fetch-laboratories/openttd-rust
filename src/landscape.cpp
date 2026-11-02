@@ -596,11 +596,6 @@ uint8_t GetSnowLine()
 	return openttd_rust_snow_line_get(&GetRustSharedServices());
 }
 
-/**
- * Get the highest possible snow line height, either variable or static.
- * @return the highest snow line height.
- * @ingroup SnowLineGroup
- */
 
 /**
  * Get the lowest possible snow line height, either variable or static.
@@ -621,10 +616,6 @@ void ClearSnowLine()
 	openttd_rust_snow_line_clear(&GetRustSharedServices());
 }
 
-/**
- * Check if all tiles on the map edge should be considered water borders.
- * @return true If the edge of the map is flat and height 0, allowing for infinite water borders.
- */
 
 /**
  * Clear a piece of landscape
@@ -704,9 +695,6 @@ OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, 
 	};
 }
 
-/**
- * Gradually iterate over all tiles on the map, calling their TileLoopProcs once every TILE_UPDATE_FREQUENCY ticks.
- */
 
 #include "rust/landscape_generation_ffi.h"
 #include "void_map.h"
@@ -782,7 +770,6 @@ OpenTTDLandscapeGenerationCall::OpenTTDLandscapeGenerationCall()
 		.freeform = _settings_game.construction.freeform_edges,
 	};
 }
-
 
 
 #include "rust/service_table_check.hpp"

@@ -39,10 +39,6 @@ OrderBackup::OrderBackup(const Vehicle *v, uint32_t user)
 	openttd_rust_capture_backup(this, v, user, &GetRustOrdersLeaves());
 }
 
-/**
- * Restore the data of this order to the given vehicle.
- * @param v The vehicle to restore to.
- */
 
 /**
  * Create an order backup for the given vehicle.
