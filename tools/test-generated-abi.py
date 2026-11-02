@@ -38,12 +38,13 @@ class GeneratedAbiTests(unittest.TestCase):
                 "        pub value: Value,\n        pub context: *mut c_void,\n"
                 "    }\n"
                 '    "ZValue" ["test"] => pub struct Value {\n'
-                "        pub number: u32,\n    }\n}\n"
+                "        pub number: u32,\n        pub bytes: [u8; 3],\n    }\n}\n"
             )
             header = "\n".join(
                 GENERATOR["record_header"]("test", GENERATOR["shared_records"](root))
             )
             self.assertIn("ZValue value;", header)
+            self.assertIn("std::array<uint8_t, 3> bytes;", header)
             self.assertIn("void *context;", header)
             self.assertNotIn("struct void;", header)
             self.assertLess(
@@ -52,7 +53,7 @@ class GeneratedAbiTests(unittest.TestCase):
             source = root / "record.cpp"
             (root / "record.h").write_text(header)
             source.write_text(
-                '#include "record.h"\nstatic_assert(sizeof(AContainer::value) == 4);\n'
+                '#include "record.h"\nstatic_assert(sizeof(ZValue::bytes) == 3);\n'
             )
             subprocess.run(
                 ["c++", "-std=c++20", "-fsyntax-only", str(source)], check=True
