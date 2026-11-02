@@ -39,9 +39,7 @@ struct OpenTTDCargoListFields {
  * pool-shell handles. Payment callbacks may reenter packet and list getters; raw owner accesses end
  * before them, and metadata writes keep their source order. Save/load writes packet fields in place;
  * import never dereferences
- * unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call. Flow mode:
- * 0 normal/restricted, 1 forced transfer (excludes current and next reverse), 2 reroute (excludes
- * avoid/avoid2); selector 3 asks for the first flow origin, selector 4 whether any flows exist.
+ * unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call.
  * Handles are live and serially accessed, create/destroy match once, and callbacks retain no arguments;
  * next-hop storage stays live and stable for the call, with snapshot output confined to local exports. */
 struct OpenTTDCargoStorageServices {
@@ -51,7 +49,6 @@ struct OpenTTDCargoStorageServices {
 	void (*destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	uint32_t (*random)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	uint32_t (*coordinate)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(coordinate);
-	uint16_t (*flow)(const void *, uint8_t, uint16_t, uint16_t, uint16_t, const uint16_t *, size_t, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(flow);
 	int64_t (*pay)(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pay);
 	void (*origin)(void *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(origin);
 	OpenTTDCargoFlowMap *(*flow_map)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(flow_map);

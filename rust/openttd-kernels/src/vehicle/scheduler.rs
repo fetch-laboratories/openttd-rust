@@ -689,18 +689,6 @@ mod tests {
     extern "C" fn coordinate(_: u32, _: u8) -> u32 {
         0
     }
-    extern "C" fn flow(
-        _: *const c_void,
-        _: u8,
-        _: u16,
-        _: u16,
-        _: u16,
-        _: *const u16,
-        _: usize,
-        _: *mut u8,
-    ) -> u16 {
-        0
-    }
     extern "C" fn pay(_: *mut c_void, _: u8, _: u8, _: *const c_void, _: u32, _: u32) -> i64 {
         0
     }
@@ -721,7 +709,6 @@ mod tests {
         destroy,
         random,
         coordinate,
-        flow,
         pay,
         origin,
         flow_map,
