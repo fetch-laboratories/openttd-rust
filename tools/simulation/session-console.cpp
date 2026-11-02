@@ -162,6 +162,9 @@ static void SessionLiveSettings()
 	SessionSetting("vehicle.freight_trains", vehicle.freight_trains == 1 ? 3 : 1);
 	SessionSetting("difficulty.town_council_tolerance", _settings_game.difficulty.town_council_tolerance == 0 ? 2 : 0);
 	SessionSetting("station.modified_catchment", !_settings_game.station.modified_catchment);
+	SessionSetting("construction.extra_tree_placement", _settings_game.construction.extra_tree_placement == 2 ? 3 : 2);
+	SessionSetting("economy.industry_cargo_scale", _settings_game.economy.industry_cargo_scale == 100 ? 200 : 100);
+	SetSettingValue("sound.ambient", !_settings_client.sound.ambient);
 	const uint8_t road_side = vehicle.road_side;
 	SessionSetting("vehicle.road_side", 1 - road_side);
 	SessionCheck("settings-road-side-refused", vehicle.road_side == road_side);
@@ -289,13 +292,16 @@ static bool SessionScenario(std::span<std::string_view> args)
 	SessionCheck("scan-replacement", session_scans == 2);
 	_game_mode = GM_BOOTSTRAP; GameLoop(); SessionObserve("bootstrap"); _game_mode = GM_NORMAL;
 	_settings_newgame = _settings_game;
-	_settings_newgame.game_creation.map_x = _settings_newgame.game_creation.map_y = 6;
+	_settings_newgame.game_creation.map_x = 6; _settings_newgame.game_creation.map_y = 7;
 	_settings_newgame.game_creation.generation_seed = 12345;
 	_settings_newgame.game_creation.starting_year = TimerGameCalendar::Year{1950};
 	_settings_newgame.difficulty.max_no_competitors = 0;
 	_settings_newgame.difficulty.industry_density = ID_FUND_ONLY;
 	_settings_client.gui.pause_on_newgame = true;
-	MakeNewgameSettingsLive(); SwitchToMode(SM_NEWGAME); SessionCheck("new-settings", TimerGameCalendar::year == 1950 && _settings_game.game_creation.generation_seed == 12345 && _pause_mode.Test(PauseMode::Normal)); SessionSave(folder, "newgame");
+	MakeNewgameSettingsLive();
+	SessionCheck("configured-dimensions-differ", Map::SizeX() != 64 || Map::SizeY() != 128);
+	SwitchToMode(SM_NEWGAME);
+	SessionCheck("configured-dimensions-generated", Map::SizeX() == 64 && Map::SizeY() == 128); SessionCheck("new-settings", TimerGameCalendar::year == 1950 && _settings_game.game_creation.generation_seed == 12345 && _pause_mode.Test(PauseMode::Normal)); SessionSave(folder, "newgame");
 	_settings_game.game_creation.generation_seed = 777;
 	_settings_game.game_creation.starting_year = TimerGameCalendar::Year{1960};
 	_settings_client.gui.pause_on_newgame = false;
