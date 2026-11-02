@@ -135,7 +135,7 @@ OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
 void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_town_tunnel_abi(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t tile, uint32_t dir);
-extern "C++" inline bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *a0, const OpenTTDSharedServices *a1, const OpenTTDRoadCommandContext *a2, uint32_t town a3, uint32_t tile a4, uint32_t dir a5) { return openttd_rust_town_tunnel_abi(a0, a1, a2, a3, a4, a5) != 0; }
+extern "C++" inline bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *a0, const OpenTTDSharedServices *a1, const OpenTTDRoadCommandContext *a2, uint32_t a3, uint32_t a4, uint32_t a5) { return openttd_rust_town_tunnel_abi(a0, a1, a2, a3, a4, a5) != 0; }
 }
 const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif /* RUST_TOWN_FFI_H */
