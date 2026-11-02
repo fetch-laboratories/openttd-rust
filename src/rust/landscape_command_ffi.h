@@ -42,8 +42,8 @@ struct OpenTTDLandscapeCommandServices {
 const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcept;
 extern "C" {
 void openttd_rust_landscape_clear(const OpenTTDLandscapeCommandServices *, OpenTTDCommandCost *, uint32_t, uint16_t);
-int64_t openttd_rust_landscape_clear_area(const OpenTTDLandscapeCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint32_t, bool, uint16_t, OpenTTDWaterArea *);
+int64_t openttd_rust_landscape_clear_area(const OpenTTDLandscapeCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint32_t, bool, uint16_t);
 uint32_t openttd_rust_landscape_terraform(const OpenTTDLandscapeCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, bool, uint16_t);
-uint32_t openttd_rust_landscape_level(const OpenTTDLandscapeCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint32_t, bool, uint8_t, uint16_t, OpenTTDWaterArea *, int64_t *);
+uint32_t openttd_rust_landscape_level(const OpenTTDLandscapeCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint32_t, bool, uint8_t, uint16_t, int64_t *);
 }
 #endif /* RUST_LANDSCAPE_COMMAND_FFI_H */
