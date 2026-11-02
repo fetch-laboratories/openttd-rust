@@ -216,7 +216,7 @@ const OpenTTDCommandPostServices &GetRustCommandPostServices() noexcept
 	static const OpenTTDCommandPostServices services{
 		.assign_company_cost = [](OpenTTDCommandCost *out, const OpenTTDCompanyCost *value) noexcept { *reinterpret_cast<CommandCost *>(out) = RustCompanyCost(*value); },
 		.command = GetRustCommandServices,
-		.control_begin = [](OpenTTDCommandControlStorage *storage) noexcept { return &(new (storage) RustTileOwnerContext())->view; },
+		.control_begin = [](OpenTTDCommandControlStorage *storage) noexcept -> const OpenTTDTileOwnerContext * { return &(new (storage) RustTileOwnerContext())->view; },
 		.control_end = [](OpenTTDCommandControlStorage *storage) noexcept { reinterpret_cast<RustTileOwnerContext *>(storage)->~RustTileOwnerContext(); },
 		.desync_logging = []() noexcept { return CommandHelperBase::DesyncLogging(); },
 		.log = [](uint8_t cmd, OpenTTDByteSpan args, bool failed) noexcept { CommandHelperBase::LogCommandExecution(static_cast<Commands>(cmd), 0, std::span(args.data, args.size), failed); },
