@@ -223,6 +223,24 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 
 static void DestroySnowLine(SnowLine *record) noexcept { delete record; }
 
+static_assert(std::is_same_v<std::underlying_type_t<Colours>, uint8_t>);
+static_assert(std::is_same_v<std::underlying_type_t<LandscapeType>, uint8_t>);
+static_assert(LS_DEFAULT == 0);
+static const OpenTTDSettingAddresses _rust_setting_addresses{
+	.ambient = &_settings_client.sound.ambient,
+	.climate = reinterpret_cast<const uint8_t *>(&_settings_game.game_creation.landscape),
+	.competitor_interval = &_settings_game.difficulty.competitors_interval,
+	.construction_limits = &_settings_game.construction.limits,
+	.extra_tree_placement = &_settings_game.construction.extra_tree_placement,
+	.industry_cargo_scale = &_settings_game.economy.industry_cargo_scale,
+	.map_x = &_settings_game.game_creation.map_x,
+	.map_y = &_settings_game.game_creation.map_y,
+	.max_companies = &_settings_client.network.max_companies,
+	.max_competitors = &_settings_game.difficulty.max_no_competitors,
+	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
+	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
+	.used_liveries = &_loaded_newgrf_features.used_liveries,
+};
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
 
 extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept
@@ -406,7 +424,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.generating_world = OpenTTDGeneratingWorld,
 	},
 	.company_valid = OpenTTDCompanyIsValid,
-	.construction_limits = &_settings_game.construction.limits,
 	.context = nullptr,
 	.cost_animation = RustCostOrIncomeAnimation,
 	.crossing_road_bits = SharedCrossingRoadBits,
@@ -432,6 +449,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_sea = Shared_is_sea,
 	.is_water_tile = MapSvcIsWaterTile,
 	.map = &_rust_map_statics,
+	.settings = &_rust_setting_addresses,
 	.map_max_x = SharedMapMaxX,
 	.map_max_y = SharedMapMaxY,
 	.mark_bridge_dirty = SharedMarkBridgeDirty,

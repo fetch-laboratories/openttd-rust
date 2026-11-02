@@ -286,8 +286,6 @@ pub struct Services {
     pub clear_square_services: ClearSquareServices,
     /// Whether this company pool ID is live.
     pub company_valid: extern "C" fn(u8) -> bool,
-    /// Canonical landscaping rates, embedded in native construction settings.
-    pub construction_limits: *const crate::settings_type::ConstructionLimits,
     /// Opaque context for test fixtures; production leaves ignore it.
     pub context: *mut c_void,
     /// Canonical `ShowCostOrIncomeAnimation` presentation leaf.
@@ -338,6 +336,8 @@ pub struct Services {
     pub is_water_tile: extern "C" fn(u32) -> bool,
     /// Canonical `Tile` and `Map` statics, loaded at each observation.
     pub map: *const crate::map_func::MapStatics,
+    /// Shared addresses of canonical settings; field values are loaded at their source branches.
+    pub settings: *const crate::settings_type::SettingAddresses,
     /// Shared live map max x observation.
     pub map_max_x: extern "C" fn() -> u32,
     /// Shared live map max y observation.
@@ -550,6 +550,11 @@ pub struct FoundationSlope {
     pub slope: Slope,
 }
 impl Services {
+    /// Immutable address catalog; its targets are read with field-sized raw loads.
+    pub(crate) fn settings(&self) -> &crate::settings_type::SettingAddresses {
+        unsafe { &*self.settings }
+    }
+
     /// Typed `NewGRF` specification leaves.
     #[must_use]
     pub fn specs(&self) -> &crate::newgrf_specs::Specs {
@@ -775,7 +780,6 @@ crate::abi::layouts! {
         build_on_slopes,
         clear_square_services,
         company_valid,
-        construction_limits,
         context,
         cost_animation,
         crossing_road_bits,
@@ -801,6 +805,7 @@ crate::abi::layouts! {
         is_sea,
         is_water_tile,
         map,
+        settings,
         map_max_x,
         map_max_y,
         mark_bridge_dirty,
@@ -1052,7 +1057,6 @@ pub fn fixture(
             generating_world: flag0,
         },
         company_valid: unused_company_valid,
-        construction_limits: std::ptr::null(),
         context,
         cost_animation: fixture_cost_animation,
         crossing_road_bits: fixture_crossing_road_bits,
@@ -1078,6 +1082,7 @@ pub fn fixture(
         is_sea: flag,
         is_water_tile: flag,
         map: crate::map_func::fixture::statics(),
+        settings: std::ptr::null(),
         map_max_x: word0,
         map_max_y: word0,
         mark_bridge_dirty: tile,

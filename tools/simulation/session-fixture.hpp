@@ -16,6 +16,7 @@ struct SessionFixture {
 	SessionFixture *previous = active;
 	OpenTTDFixtureMap map{6};
 	OpenTTDConstructionLimits limits{};
+	OpenTTDSettingAddresses settings{};
 	OpenTTDSharedServices shared{};
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
@@ -51,7 +52,8 @@ struct SessionFixture {
 	SessionFixture()
 	{
 		active = this;
-		shared.construction_limits = &limits;
+		settings.construction_limits = &limits;
+		shared.settings = &settings;
 		shared.map = &map.statics;
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
 		tiles.shared = &shared;

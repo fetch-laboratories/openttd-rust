@@ -37,16 +37,6 @@ use crate::fileio_type::{AbstractFileType as FileKind, FT_HEIGHTMAP, FT_SAVEGAME
 use crate::gfx_type::COLOUR_END;
 use crate::saveload::{SL_OK, SL_REINIT, SaveOrLoadResult as LoadResult};
 #[repr(C)]
-pub struct Dimensions {
-    pub x: u32,
-    pub y: u32,
-}
-#[repr(C)]
-pub struct SecondaryColour {
-    pub colour: u8,
-    pub used: bool,
-}
-#[repr(C)]
 pub struct Services {
     pub clock: *const crate::timer_game_common::ClockServices,
     pub company: *const crate::company::Services,
@@ -101,11 +91,9 @@ pub struct Services {
     pub autosave_frequency: extern "C" fn(bool),
     pub leave_survey: extern "C" fn(),
     pub file_kind: extern "C" fn() -> FileKind,
-    pub map_dimensions: extern "C" fn() -> Dimensions,
     pub has_gui: extern "C" fn() -> bool,
     pub pause_on_newgame: extern "C" fn() -> bool,
     pub starting_colour: extern "C" fn() -> u8,
-    pub secondary_colour: extern "C" fn() -> SecondaryColour,
     pub disable_elrails: extern "C" fn() -> bool,
     pub settings_elrail: extern "C" fn(bool),
     pub company_settings: extern "C" fn(),
@@ -303,8 +291,10 @@ impl Session<'_> {
         Ok(())
     }
     fn sized_world(&self, kind: crate::genworld::Mode, reset: bool) -> Outcome {
-        let size = (self.s.map_dimensions)();
-        self.generate(kind, size.x, size.y, reset)
+        let settings = unsafe { &*self.s.shared }.settings();
+        let x = 1_u32 << unsafe { settings.map_x.read() };
+        let y = 1_u32 << unsafe { settings.map_y.read() };
+        self.generate(kind, x, y, reset)
     }
     fn intro(&self, newgrfs: bool) -> Outcome {
         let s = self.s;
@@ -359,9 +349,12 @@ impl Session<'_> {
         if colour != COLOUR_END {
             (s.company_colour)(true, colour);
         }
-        let secondary = (s.secondary_colour)();
-        if secondary.colour != COLOUR_END && secondary.used {
-            (s.company_colour)(false, secondary.colour);
+        let settings = unsafe { &*s.shared }.settings();
+        let secondary = unsafe { settings.secondary_colour.read() };
+        if secondary != COLOUR_END
+            && unsafe { settings.used_liveries.read() } & (1_u64 << crate::livery::LS_DEFAULT) != 0
+        {
+            (s.company_colour)(false, secondary);
         }
         self.start_game(false)?;
         (s.rail_gui)();
@@ -596,7 +589,7 @@ impl Session<'_> {
     fn landscaping(&self) {
         crate::company::update_landscaping_limits(
             unsafe { &*self.s.company },
-            unsafe { &*self.s.shared }.construction_limits,
+            unsafe { &*self.s.shared }.settings().construction_limits,
         );
     }
     fn storage(&self, mode: u8) {
@@ -860,8 +853,6 @@ pub(crate) unsafe fn switch(s: &Services, frame: *mut Frame, mode: SwitchMode) -
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDSessionDimensions" ["session"] => Dimensions { x, y, };
-    "OpenTTDSessionSecondaryColour" ["session"] => SecondaryColour { colour, used, };
     "OpenTTDSessionFrameStorage" ["session"] => FrameStorage { storage, };
     "OpenTTDWorldFrameStorage" ["session"] => WorldFrameStorage { storage, };
     "OpenTTDSessionState" ["session"] => State { mode, switch_mode, pause, };
@@ -919,11 +910,9 @@ crate::abi::layouts! {
         autosave_frequency,
         leave_survey,
         file_kind,
-        map_dimensions,
         has_gui,
         pause_on_newgame,
         starting_colour,
-        secondary_colour,
         disable_elrails,
         settings_elrail,
         company_settings,

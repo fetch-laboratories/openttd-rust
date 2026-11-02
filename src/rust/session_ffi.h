@@ -15,8 +15,6 @@ struct OpenTTDSessionLoad;
 /* Native objects are placement-constructed here; Rust never interprets the bytes. */
 struct alignas(16) OpenTTDSessionFrameStorage { std::byte storage[4096]; };
 struct alignas(16) OpenTTDWorldFrameStorage { std::byte storage[8192]; };
-struct OpenTTDSessionDimensions { uint32_t x, y; };
-struct OpenTTDSessionSecondaryColour { Colours colour; bool used; };
 /* Serialized entries; native resource/exception frames live on their callers' stacks.
 	* No state access spans a callback, progress yield, reset or network reentry. */
 struct OpenTTDSessionServices {
@@ -73,11 +71,9 @@ struct OpenTTDSessionServices {
 	void (*autosave_frequency)(bool) noexcept OPENTTD_SERVICE_DEFAULT(autosave_frequency);
 	void (*leave_survey)() noexcept OPENTTD_SERVICE_DEFAULT(leave_survey);
 	AbstractFileType (*file_kind)() noexcept OPENTTD_SERVICE_DEFAULT(file_kind);
-	OpenTTDSessionDimensions (*map_dimensions)() noexcept OPENTTD_SERVICE_DEFAULT(map_dimensions);
 	bool (*has_gui)() noexcept OPENTTD_SERVICE_DEFAULT(has_gui);
 	bool (*pause_on_newgame)() noexcept OPENTTD_SERVICE_DEFAULT(pause_on_newgame);
 	Colours (*starting_colour)() noexcept OPENTTD_SERVICE_DEFAULT(starting_colour);
-	OpenTTDSessionSecondaryColour (*secondary_colour)() noexcept OPENTTD_SERVICE_DEFAULT(secondary_colour);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	void (*settings_elrail)(bool) noexcept OPENTTD_SERVICE_DEFAULT(settings_elrail);
 	void (*company_settings)() noexcept OPENTTD_SERVICE_DEFAULT(company_settings);
