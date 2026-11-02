@@ -9,12 +9,11 @@
 #include "stdafx.h"
 #include "tests/fixture_map.hpp"
 #include "ground_vehicle.hpp"
-#include "3rdparty/monocypher/monocypher.h"
 #include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"
 #include "rust/auth_ffi.h"
+#include "rust/crypto_ffi.h"
 #include "rust/alternating_ffi.h"
-#include "rust/blake2b_ffi.h"
 #include "rust/builder_ffi.h"
 #include "rust/byte_strings_ffi.h"
 #include "rust/cargo_flow_ffi.h"
@@ -23,7 +22,6 @@
 #include "rust/command_cost_ffi.h"
 #include "rust/command_services_ffi.h"
 #include "rust/consumer_ffi.h"
-#include "rust/crypto_primitives_ffi.h"
 #include "rust/encoded_ffi.h"
 #include "rust/ffi.h"
 #include "rust/history_ffi.h"
@@ -62,7 +60,6 @@
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
-#include "rust/x25519_ffi.h"
 #include "abi-includes.inc"
 #include "rust/tile_type_access.hpp"
 #include "tests/abi_layout.hpp"
@@ -107,6 +104,7 @@ static void Layouts()
 #include "abi-layout-genworld.inc"
 #include "abi-layout-session.inc"
 #include "abi-layout-settings.inc"
+#include "abi-layout-script.inc"
 
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::value), uint32_t>);
@@ -355,145 +353,16 @@ static void Math()
 	std::printf("math int_sqrt and soft_clamp scalar high-bit, width and boundary calls passed\n");
 }
 
-static void CryptoPrimitives()
+static void Crypto()
 {
-	/* Actual public facades invoke all 15 Rust functions with native descriptors.
-	 * Counter high bits, initialized-only Poly1305 storage, callback convention,
-	 * in-place failure/retry and rekey are observed on the current native target. */
-	std::array<uint8_t, 32> key{}, h{};
-	std::array<uint8_t, 24> nonce{};
-	std::array<uint8_t, 65> cipher{}, plain{}, decoded{};
-	for (size_t i = 0; i < key.size(); ++i) key[i] = static_cast<uint8_t>(i * 13 + 9);
-	for (size_t i = 0; i < nonce.size(); ++i) nonce[i] = static_cast<uint8_t>(i * 7 + 101);
-	nonce[0] = 0x12; nonce[1] = 0x34; nonce[2] = 0x56; nonce[3] = 0xF8;
-	crypto_chacha20_h(h.data(), key.data(), nonce.data());
-	CHECK(crypto_chacha20_djb(cipher.data(), nullptr, 65, key.data(), nonce.data(), UINT64_MAX) == 1);
-	CHECK(crypto_chacha20_ietf(cipher.data(), nullptr, 65, key.data(), nonce.data(), UINT32_MAX) == 1);
-	CHECK(crypto_chacha20_x(cipher.data(), nullptr, 65, key.data(), nonce.data(), UINT64_MAX) == 1);
-	plain.fill(0x42);
-	CHECK(crypto_chacha20_djb(cipher.data(), plain.data(), plain.size(), key.data(), nonce.data(), UINT64_C(0xFEDCBA9876543210)) == UINT64_C(0xFEDCBA9876543212));
-	crypto_chacha20_djb(decoded.data(), cipher.data(), cipher.size(), key.data(), nonce.data(), UINT64_C(0xFEDCBA9876543210));
-	CHECK(decoded == plain);
-	crypto_poly1305_ctx poly;
-	std::fill_n(reinterpret_cast<uint8_t *>(&poly), sizeof(poly), 0xA5);
-	crypto_poly1305_init(&poly, key.data());
-	CHECK(std::all_of(std::begin(poly.c), std::end(poly.c), [](uint8_t c) { return c == 0xA5; }));
-	crypto_poly1305_update(&poly, nullptr, 0);
-	crypto_poly1305_update(&poly, plain.data(), 15);
-	crypto_poly1305_update(&poly, plain.data() + 15, plain.size() - 15);
-	std::array<uint8_t, 16> mac{}, split{};
-	crypto_poly1305_final(&poly, split.data());
-	CHECK(std::all_of(reinterpret_cast<const uint8_t *>(&poly), reinterpret_cast<const uint8_t *>(&poly) + sizeof(poly), [](uint8_t c) { return c == 0; }));
-	crypto_poly1305(mac.data(), plain.data(), plain.size(), key.data());
-	CHECK(mac == split);
-	for (unsigned variant = 0; variant != 3; ++variant) {
-		crypto_aead_ctx send, receive;
-		if (variant == 0) { crypto_aead_init_x(&send, key.data(), nonce.data()); crypto_aead_init_x(&receive, key.data(), nonce.data()); }
-		if (variant == 1) { crypto_aead_init_djb(&send, key.data(), nonce.data()); crypto_aead_init_djb(&receive, key.data(), nonce.data()); }
-		if (variant == 2) { crypto_aead_init_ietf(&send, key.data(), nonce.data()); crypto_aead_init_ietf(&receive, key.data(), nonce.data()); }
-		auto counter = send.counter;
-		CHECK(counter == (variant == 2 ? UINT64_C(0xF856341200000000) : uint64_t{0}));
-		for (unsigned chunk = 0; chunk != 2; ++chunk) {
-			crypto_aead_write(&send, cipher.data(), mac.data(), nonce.data(), 17, plain.data(), plain.size());
-			CHECK(send.counter == counter);
-			auto bad = mac; bad[0] ^= 1;
-			decoded.fill(0xA5);
-			auto before = receive;
-			CHECK(crypto_aead_read(&receive, decoded.data(), bad.data(), nonce.data(), 17, cipher.data(), cipher.size()) == -1);
-			CHECK(std::all_of(decoded.begin(), decoded.end(), [](uint8_t c) { return c == 0xA5; }));
-			CHECK(receive.counter == before.counter && std::equal(std::begin(receive.key), std::end(receive.key), std::begin(before.key)));
-			CHECK(crypto_aead_read(&receive, cipher.data(), mac.data(), nonce.data(), 17, cipher.data(), cipher.size()) == 0);
-			CHECK(cipher == plain && receive.counter == counter && std::equal(std::begin(send.key), std::end(send.key), std::begin(receive.key)));
-		}
-	}
-	crypto_aead_lock(cipher.data(), mac.data(), key.data(), nonce.data(), nonce.data(), 17, plain.data(), plain.size());
-	CHECK(crypto_aead_unlock(decoded.data(), mac.data(), key.data(), nonce.data(), nonce.data(), 17, cipher.data(), cipher.size()) == 0 && decoded == plain);
-	std::printf("crypto 15 Rust algorithms, cdecl leaves, caller layouts, counter high bits, partial init, padding and failed retry passed; poly_size=%zu poly_align=%zu aead_size=%zu aead_align=%zu\n", sizeof(poly), alignof(crypto_poly1305_ctx), sizeof(crypto_aead_ctx), alignof(crypto_aead_ctx));
-}
-
-static void Blake2b()
-{
-	std::array<uint8_t, 129> message;
-	std::array<uint8_t, 128> key;
-	for (size_t i = 0; i < message.size(); ++i) message[i] = static_cast<uint8_t>(i * 37 + 11);
-	for (size_t i = 0; i < key.size(); ++i) key[i] = static_cast<uint8_t>(i * 13 + 7);
-	std::array<uint8_t, 64> expected, actual;
-	crypto_blake2b_keyed(expected.data(), 32, key.data(), 65, message.data(), message.size());
-	crypto_blake2b_ctx ctx;
-	std::fill_n(reinterpret_cast<uint8_t *>(&ctx), sizeof(ctx), 0xA5);
-	crypto_blake2b_keyed_init(&ctx, 32, key.data(), 65);
-	CHECK(ctx.input_idx == 128 && ctx.hash_size == 32 && ctx.input_offset[0] == 0 && ctx.input_offset[1] == 0);
-	crypto_blake2b_update(&ctx, nullptr, 0);
-	crypto_blake2b_update(&ctx, message.data(), 127);
-	auto copy = ctx;
-	crypto_blake2b_update(&ctx, message.data() + 127, 2);
-	crypto_blake2b_final(&ctx, actual.data());
-	CHECK(std::equal(actual.begin(), actual.begin() + 32, expected.begin()));
-	CHECK(std::all_of(reinterpret_cast<const uint8_t *>(&ctx), reinterpret_cast<const uint8_t *>(&ctx) + sizeof(ctx), [](uint8_t x) { return x == 0; }));
-	crypto_blake2b_update(&copy, message.data() + 127, 1);
-	crypto_blake2b_final(&copy, actual.data());
-	crypto_blake2b_keyed(expected.data(), 32, key.data(), 65, message.data(), 128);
-	CHECK(std::equal(actual.begin(), actual.begin() + 32, expected.begin()));
-	crypto_blake2b(expected.data(), 64, message.data(), message.size());
-	crypto_blake2b_init(&ctx, 64);
-	crypto_blake2b_update(&ctx, message.data(), 128);
-	CHECK(ctx.input_idx == 128 && ctx.input_offset[0] == 0);
-	crypto_blake2b_update(&ctx, message.data() + 128, 1);
-	crypto_blake2b_final(&ctx, actual.data()); CHECK(actual == expected);
-	crypto_blake2b_init(&ctx, 64); crypto_blake2b_update(&ctx, message.data(), 128);
-	ctx.input_offset[0] = UINT64_MAX - 127; ctx.input_offset[1] = UINT64_C(0x1122334455667788);
-	crypto_blake2b_update(&ctx, message.data() + 128, 1);
-	CHECK(ctx.input_offset[0] == 0 && ctx.input_offset[1] == UINT64_C(0x1122334455667789) && ctx.input_idx == 1);
-	crypto_blake2b_final(&ctx, actual.data());
-	crypto_blake2b_init(&ctx, 0); crypto_blake2b_final(&ctx, nullptr);
-	CHECK(std::all_of(reinterpret_cast<const uint8_t *>(&ctx), reinterpret_cast<const uint8_t *>(&ctx) + sizeof(ctx), [](uint8_t x) { return x == 0; }));
-	std::array<uint8_t, 72> sentinel; sentinel.fill(0xA5);
-	crypto_blake2b_keyed(sentinel.data(), 65, key.data(), 128, message.data(), message.size());
-	CHECK(std::all_of(sentinel.begin() + 64, sentinel.end(), [](uint8_t x) { return x == 0xA5; }));
-	std::printf("blake2b six facades, context size %zu align %zu offsets %zu %zu %zu %zu %zu; copy, carry, pending block, wipe and source sizes passed\n", sizeof(ctx), alignof(crypto_blake2b_ctx), offsetof(crypto_blake2b_ctx, hash), offsetof(crypto_blake2b_ctx, input_offset), offsetof(crypto_blake2b_ctx, input), offsetof(crypto_blake2b_ctx, input_idx), offsetof(crypto_blake2b_ctx, hash_size));
-}
-
-static size_t x25519_wipes, x25519_last_wipe;
-static unsigned x25519_verifies;
-static bool x25519_wipes_zero;
-static void OPENTTD_RUST_CALL X25519Wipe(void *data, size_t size) noexcept
-{
-	crypto_wipe(data, size);
-	x25519_wipes++; x25519_last_wipe = size;
-	const auto *bytes = static_cast<const uint8_t *>(data);
-	x25519_wipes_zero &= std::all_of(bytes, bytes + size, [](uint8_t x) { return x == 0; });
-}
-static int32_t OPENTTD_RUST_CALL X25519Verify32(const uint8_t *a, const uint8_t *b) noexcept
-{
-	x25519_verifies++;
-	return crypto_verify32(a, b);
-}
-static void X25519()
-{
-	const OpenTTDX25519Leaves leaves{X25519Wipe, X25519Verify32};
-	std::array<uint8_t, 32> secret, point{}, expected, actual;
-	for (size_t i = 0; i < secret.size(); ++i) secret[i] = static_cast<uint8_t>(i * 37 + 13);
-	point[0] = 9;
-	crypto_x25519_public_key(expected.data(), secret.data());
-	x25519_wipes = x25519_verifies = 0; x25519_wipes_zero = true;
-	openttd_rust_x25519_public_key(&leaves, actual.data(), secret.data());
-	CHECK(actual == expected && x25519_verifies == 4 && x25519_wipes == 29 && x25519_last_wipe == 32 && x25519_wipes_zero);
-	x25519_wipes = x25519_verifies = 0;
-	openttd_rust_x25519(&leaves, actual.data(), secret.data(), point.data());
-	CHECK(actual == expected && x25519_verifies == 4 && x25519_wipes == 29 && x25519_last_wipe == 32 && x25519_wipes_zero);
-	std::array<uint8_t, 64> storage;
-	storage.fill(13); storage[33] = 0xA5;
-	openttd_rust_x25519_trim(storage.data() + 1, storage.data());
-	CHECK(storage[1] == 8 && storage[32] == 0x4D && storage[33] == 0xA5);
-	CHECK(std::all_of(storage.begin() + 2, storage.begin() + 32, [](uint8_t x) { return x == 13; }));
-	secret.fill(0); secret[31] = 0x80;
-	std::array<uint8_t, 32> short_result, full_result;
-	x25519_wipes = x25519_verifies = 0;
-	openttd_rust_x25519_ladder(&leaves, short_result.data(), secret.data(), point.data(), 255);
-	CHECK(x25519_verifies == 4 && x25519_wipes == 28 && x25519_last_wipe == 40 && x25519_wipes_zero);
-	openttd_rust_x25519_ladder(&leaves, full_result.data(), secret.data(), point.data(), 256);
-	CHECK(short_result != full_result && x25519_verifies == 8 && x25519_wipes == 56 && x25519_last_wipe == 40 && x25519_wipes_zero);
-	std::printf("x25519 four exports, cdecl wipe/verify32, physical wipe counts/final sizes, forward trim and 255/256 high-bit distinction passed\n");
+	/* Monocypher's cofactored equation accepts the identity with zero S. Check
+	 * both native uint8_t success values across the signature-check boundary. */
+	std::array<uint8_t, 64> signature{};
+	std::array<uint8_t, 32> public_key{};
+	signature[0] = public_key[0] = 1;
+	CHECK(openttd_rust_crypto_check(signature.data(), public_key.data(), nullptr, 0) == 1);
+	signature[32] = 255;
+	CHECK(openttd_rust_crypto_check(signature.data(), public_key.data(), nullptr, 0) == 0);
 }
 
 static void StationCargo()
@@ -645,9 +514,8 @@ int main()
 	const char *name = openttd_rust_townname_data(townname, &name_length);
 	CHECK(name_length == 8 && std::memcmp(name, "Alen\xc3\xa7on", name_length) == 0);
 	openttd_rust_townname_destroy(townname);
-	Blake2b();
 	Calls();
-	CryptoPrimitives();
+	Crypto();
 	Encoded();
 	History();
 	Locale();
@@ -656,6 +524,5 @@ int main()
 	ScriptListControl();
 	StationCargo();
 	StringValidation();
-	X25519();
 	std::printf("ABI audit passed\n");
 }
