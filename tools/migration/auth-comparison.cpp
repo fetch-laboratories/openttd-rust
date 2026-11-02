@@ -17,7 +17,7 @@
 #include <cstdlib>
 
 /* Fail only ordinary C++ allocation at the selected application boundary.
- * Rust allocation uses its own allocator and is never redirected by this hook. */
+ * Packet growth uses the Rust allocator and is outside this C++ exception probe. */
 static bool fail_cpp_allocation;
 void *operator new(size_t size)
 {
@@ -608,14 +608,12 @@ int main(int argc, char **argv)
 				wipes = 0; bool caught = false;
 				try {
 					FixtureSession owned(*session);
-					Packet packet(&socket_handler, PacketType{});
 					if (a == "log") {
 						auto empty = Read("030000"); throw_log = true;
 						owned.ReceiveRequest(empty);
 					} else {
 						fail_cpp_allocation = true;
-						if (a == "packet") owned.SendRequest(packet);
-						else (void)owned.GetPeerPublicKey();
+						(void)owned.GetPeerPublicKey();
 					}
 				} catch (const std::exception &) { caught = true; }
 				fail_cpp_allocation = false; throw_log = false;

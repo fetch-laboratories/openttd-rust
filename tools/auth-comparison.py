@@ -163,7 +163,7 @@ def scenario(server_binary, client_binary, env, extra_server, extra_client, mode
         alias = client.call(f"alias-keys {SECRET_CLIENT} {server_pub}").split()
         assert alias[0:2] == ["1", "1"] and alias[3] == "1"
         assert alias[2] != alias[4]
-        for operation in ("packet", "log", "output"):
+        for operation in ("log", "output"):
             assert server.call(f"throw-operations {operation}") == "1 1 1"
             assert client.call(f"throw-operations {operation}") == "1 1 1"
         for after in (0, 1):
