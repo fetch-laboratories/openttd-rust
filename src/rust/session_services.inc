@@ -5,6 +5,7 @@
 #include "services_station.h"
 #include "services_industry.h"
 #include "town_services.h"
+#include "network_frame_ffi.h"
 #include "abi-visit-OpenTTDSessionServices.hpp"
 static void RustSessionRealtime()
 {
@@ -26,6 +27,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 	static const OpenTTDSessionServices services{
 		.clock = &GetRustClockServices(),
 		.company = &GetRustCompanyServices(),
+		.network = &GetRustNetworkFrameServices(),
 		.shared = &GetRustSharedServices(),
 		.schedule = &LinkGraphSchedule::services,
 		.world = []() noexcept { return &GetRustWorldServices(); },
@@ -38,12 +40,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.exit_game = RustExitGame,
 		.set_exit = RustSetExitGame,
 		.modal = RustHasModalProgress,
-		.network_reboot = []() noexcept { NetworkReboot(); },
-		.network_disconnect = []() noexcept { NetworkDisconnect(); },
-		.network_server_start = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkServerStart(); }); },
 		.network_background = []() noexcept { NetworkBackgroundLoop(); },
-		.network_start_game = []() noexcept { NetworkOnGameStart(); },
-		.network_join = []() noexcept { NetworkClientJoinGame(); },
 		.kill_ai = []() noexcept { AI::KillAll(); },
 		.load_config = []() noexcept { LoadFromConfig(); },
 		.reset_session_stats = []() noexcept { _game_session_stats.start_time = std::chrono::steady_clock::now(); _game_session_stats.savegame_size = std::nullopt; },
@@ -102,13 +99,10 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.pause_change = [](uint8_t prev, PauseMode mode) noexcept { NetworkHandlePauseChange(PauseModes{prev}, mode); },
 		.pause_dirty = []() noexcept { SetWindowDirty(WC_STATUS_BAR, 0); SetWindowDirty(WC_MAIN_TOOLBAR, 0); },
 		.full_animation = []() noexcept { return HasBit(_display_opt, DO_FULL_ANIMATION); },
-		.reconnect_due = []() noexcept { return _network_reconnect > 0 && --_network_reconnect == 0; },
 		.console_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { IConsoleCmdExec("exec scripts/game_start.scr 0"); }); },
 		.game_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { Game::GameLoop(); }); },
 		.ai_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { AI::GameLoop(); }); },
 		.startup_company = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { DoStartupNewCompany(false); }); },
-		.network_loop = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkGameLoop(); }); },
-		.network_reconnect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkClientConnectGame(_settings_client.network.last_joined, COMPANY_SPECTATOR); }); },
 		.state_frame_begin = [](OpenTTDSessionFrameStorage *storage) noexcept { return new (storage) OpenTTDSessionFrame; },
 		.state_frame_end = [](OpenTTDSessionFrame *parent, OpenTTDSessionFrame *f) noexcept { parent->exception = f->exception; std::destroy_at(f); return !parent->exception; },
 		.real_time = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { RustSessionRealtime(); }); },

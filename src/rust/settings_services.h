@@ -9,6 +9,7 @@
 #ifndef RUST_SETTINGS_SERVICES_H
 #define RUST_SETTINGS_SERVICES_H
 #include "services_road.h"
+#include "byte_span_ffi.h"
 #include "../settings_type.h"
 #include "../road.h"
 #include "../autoslope.h"
@@ -24,6 +25,39 @@ inline uint8_t RustPlaneCrashes() noexcept { return _settings_game.vehicle.plane
 inline bool RustServiceAtHelipad() noexcept { return _settings_game.order.serviceathelipad; }
 inline bool RustDisastersEnabled() noexcept { return _settings_game.difficulty.disasters; }
 inline bool RustDisasterSound() noexcept { return _settings_client.sound.disaster; }
+inline uint16_t RustCommandsPerFrame() noexcept { return _settings_client.network.commands_per_frame; }
+inline uint16_t RustCommandsPerFrameServer() noexcept { return _settings_client.network.commands_per_frame_server; }
+inline uint16_t RustNetworkBytesPerFrame() noexcept { return _settings_client.network.bytes_per_frame; }
+inline uint16_t RustNetworkBytesPerFrameBurst() noexcept { return _settings_client.network.bytes_per_frame_burst; }
+inline OpenTTDByteSpan RustNetworkClientName() noexcept
+{
+	const auto &name = _settings_client.network.client_name;
+	return {reinterpret_cast<const uint8_t *>(name.data()), name.size()};
+}
+inline OpenTTDByteSpan RustNetworkLastJoined() noexcept
+{
+	const auto &name = _settings_client.network.last_joined;
+	return {reinterpret_cast<const uint8_t *>(name.data()), name.size()};
+}
+inline void RustNetworkSetLastJoined(OpenTTDByteSpan connection) noexcept
+{
+	_settings_client.network.last_joined.assign(reinterpret_cast<const char *>(connection.data), connection.size);
+}
+inline uint16_t RustNetworkServerPort() noexcept { return _settings_client.network.server_port; }
+inline uint16_t RustNetworkServerAdminPort() noexcept { return _settings_client.network.server_admin_port; }
+inline bool RustNetworkAdminAuthenticationConfigured() noexcept { return _settings_client.network.AdminAuthenticationConfigured(); }
+inline uint8_t RustNetworkServerGameType() noexcept { return _settings_client.network.server_game_type; }
+inline uint8_t RustNetworkMaxClients() noexcept { return _settings_client.network.max_clients; }
+inline uint8_t RustNetworkMaxCompanies() noexcept { return _settings_client.network.max_companies; }
+inline uint8_t RustNetworkMinActiveClients() noexcept { return _settings_client.network.min_active_clients; }
+inline bool RustNetworkPauseOnJoin() noexcept { return _settings_client.network.pause_on_join; }
+inline uint8_t RustNetworkFrameFreq() noexcept { return _settings_client.network.frame_freq; }
+inline uint16_t RustNetworkMaxDownloadTime() noexcept { return _settings_client.network.max_download_time; }
+inline uint16_t RustNetworkMaxInitTime() noexcept { return _settings_client.network.max_init_time; }
+inline uint16_t RustNetworkMaxJoinTime() noexcept { return _settings_client.network.max_join_time; }
+inline uint16_t RustNetworkMaxLagTime() noexcept { return _settings_client.network.max_lag_time; }
+inline uint16_t RustNetworkMaxPasswordTime() noexcept { return _settings_client.network.max_password_time; }
+inline uint16_t RustNetworkSyncFreq() noexcept { return _settings_client.network.sync_freq; }
 inline bool RustNeverExpireAirports() noexcept { return _settings_game.station.never_expire_airports; }
 inline bool RustNeverExpireVehicles() noexcept { return _settings_game.vehicle.never_expire_vehicles; }
 inline uint16_t RustTrainLimit() noexcept { return _settings_game.vehicle.max_trains; }

@@ -1,0 +1,102 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+/** @file network_client_ffi.h Client admission, map and connection native services. */
+#ifndef RUST_NETWORK_CLIENT_FFI_H
+#define RUST_NETWORK_CLIENT_FFI_H
+#include "network_frame_ffi.h"
+struct OpenTTDSessionServices;
+struct OpenTTDNetworkClientServices {
+	bool (*check_grf)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(check_grf);
+	void (*client_list_changed)() noexcept OPENTTD_SERVICE_DEFAULT(client_list_changed);
+	OpenTTDByteSpan (*client_name)() noexcept OPENTTD_SERVICE_DEFAULT(client_name);
+	void (*debug_banned)() noexcept OPENTTD_SERVICE_DEFAULT(debug_banned);
+	void (*debug_close)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_close);
+	void (*debug_connected)() noexcept OPENTTD_SERVICE_DEFAULT(debug_connected);
+	void (*debug_error)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_error);
+	void (*debug_error_quit)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_error_quit);
+	void (*debug_full)() noexcept OPENTTD_SERVICE_DEFAULT(debug_full);
+	void (*debug_grfs)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_grfs);
+	void (*debug_join)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_join);
+	void (*debug_join_authorizing)() noexcept OPENTTD_SERVICE_DEFAULT(debug_join_authorizing);
+	void (*debug_join_downloading)() noexcept OPENTTD_SERVICE_DEFAULT(debug_join_downloading);
+	void (*debug_join_processing)() noexcept OPENTTD_SERVICE_DEFAULT(debug_join_processing);
+	void (*debug_join_registering)() noexcept OPENTTD_SERVICE_DEFAULT(debug_join_registering);
+	void (*debug_join_waiting)() noexcept OPENTTD_SERVICE_DEFAULT(debug_join_waiting);
+	void (*debug_map_begin)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_map_begin);
+	void (*debug_map_done)() noexcept OPENTTD_SERVICE_DEFAULT(debug_map_done);
+	void (*debug_map_size)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_map_size);
+	void (*debug_newgame)() noexcept OPENTTD_SERVICE_DEFAULT(debug_newgame);
+	void (*debug_quit)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_quit);
+	void (*debug_send_error)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_error);
+	void (*debug_send_getmap)() noexcept OPENTTD_SERVICE_DEFAULT(debug_send_getmap);
+	void (*debug_send_grfs_ok)() noexcept OPENTTD_SERVICE_DEFAULT(debug_send_grfs_ok);
+	void (*debug_send_identify)() noexcept OPENTTD_SERVICE_DEFAULT(debug_send_identify);
+	void (*debug_send_join)() noexcept OPENTTD_SERVICE_DEFAULT(debug_send_join);
+	void (*debug_send_map_ok)() noexcept OPENTTD_SERVICE_DEFAULT(debug_send_map_ok);
+	void (*debug_send_quit)() noexcept OPENTTD_SERVICE_DEFAULT(debug_send_quit);
+	void (*debug_shutdown)() noexcept OPENTTD_SERVICE_DEFAULT(debug_shutdown);
+	void (*debug_status_active)() noexcept OPENTTD_SERVICE_DEFAULT(debug_status_active);
+	void (*debug_status_authorized)() noexcept OPENTTD_SERVICE_DEFAULT(debug_status_authorized);
+	void (*debug_status_join)() noexcept OPENTTD_SERVICE_DEFAULT(debug_status_join);
+	void (*debug_status_map)() noexcept OPENTTD_SERVICE_DEFAULT(debug_status_map);
+	void (*debug_status_map_wait)() noexcept OPENTTD_SERVICE_DEFAULT(debug_status_map_wait);
+	void (*debug_wait)() noexcept OPENTTD_SERVICE_DEFAULT(debug_wait);
+	void (*debug_welcome)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_welcome);
+	void (*delete_info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(delete_info);
+	void (*dirty_join)() noexcept OPENTTD_SERVICE_DEFAULT(dirty_join);
+	void (*emergency_save)() noexcept OPENTTD_SERVICE_DEFAULT(emergency_save);
+	void (*enter_multiplayer)() noexcept OPENTTD_SERVICE_DEFAULT(enter_multiplayer);
+	void (*join)(void *) noexcept OPENTTD_SERVICE_DEFAULT(join);
+	uint32_t *join_bytes;
+	uint32_t *join_bytes_total;
+	const uint8_t *join_company;
+	uint8_t *join_status;
+	uint8_t *join_waiting;
+	void (*leave)(void *) noexcept OPENTTD_SERVICE_DEFAULT(leave);
+	void (*leave_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(leave_error);
+	uint32_t (*map_add_packet)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(map_add_packet);
+	void (*map_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_create);
+	bool (*map_exists)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_exists);
+	bool (*map_load)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_load);
+	void (*new_company)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_company);
+	uint32_t *own_client_id;
+	uint8_t *reconnect;
+	OpenTTDByteSpan (*revision)() noexcept OPENTTD_SERVICE_DEFAULT(revision);
+	void (*show_banned)() noexcept OPENTTD_SERVICE_DEFAULT(show_banned);
+	void (*show_client_list)() noexcept OPENTTD_SERVICE_DEFAULT(show_client_list);
+	void (*show_full)() noexcept OPENTTD_SERVICE_DEFAULT(show_full);
+	void (*show_join_window)() noexcept OPENTTD_SERVICE_DEFAULT(show_join_window);
+	void (*show_lag)(int64_t) noexcept OPENTTD_SERVICE_DEFAULT(show_lag);
+	void (*show_newgrf_mismatch)() noexcept OPENTTD_SERVICE_DEFAULT(show_newgrf_mismatch);
+	void (*show_reboot)() noexcept OPENTTD_SERVICE_DEFAULT(show_reboot);
+	void (*show_savegame_error)() noexcept OPENTTD_SERVICE_DEFAULT(show_savegame_error);
+	void (*show_server_error)(uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(show_server_error);
+	void (*show_shutdown)() noexcept OPENTTD_SERVICE_DEFAULT(show_shutdown);
+	uint8_t * (*status)(void *) noexcept OPENTTD_SERVICE_DEFAULT(status);
+	void (*unknown_quit)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_quit);
+	void (*wait_for_quit_packets)() noexcept OPENTTD_SERVICE_DEFAULT(wait_for_quit_packets);
+};
+const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;
+extern "C" {
+uint8_t openttd_rust_network_client_send_identify(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
+uint8_t openttd_rust_network_client_receive_full(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game);
+uint8_t openttd_rust_network_client_receive_banned(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game);
+uint8_t openttd_rust_network_client_receive_error(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet, void * scratch);
+uint8_t openttd_rust_network_client_receive_grfs(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet, void * scratch);
+uint8_t openttd_rust_network_client_receive_welcome(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_wait(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_map_begin(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_map_size(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_map_data(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_map_done(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, const OpenTTDSessionServices *, void * game);
+uint8_t openttd_rust_network_client_receive_error_quit(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_quit(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_join(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, void * packet);
+uint8_t openttd_rust_network_client_receive_shutdown(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game);
+uint8_t openttd_rust_network_client_receive_newgame(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game);
+uint8_t openttd_rust_network_client_close(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, uint8_t result);
+void openttd_rust_network_client_error(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game, uint8_t result);
+void openttd_rust_network_client_check_connection(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, void * game);
+bool openttd_rust_network_client_is_connected(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
+void openttd_rust_network_client_connected(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
+}
+#endif /* RUST_NETWORK_CLIENT_FFI_H */

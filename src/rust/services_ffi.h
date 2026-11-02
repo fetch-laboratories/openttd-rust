@@ -22,6 +22,7 @@ enum class StationType : uint8_t;
 struct OpenTTDStationService;
 struct OpenTTDNewGRFSpecs;
 struct ResolverObject;
+struct NetworkClientInfo;
 enum class RoadStopType : uint8_t;
 struct OpenTTDStationCommandServices;
 struct OpenTTDStationCatchmentServices;
@@ -97,6 +98,7 @@ struct OpenTTDSharedServices {
 	uint16_t (*bridge_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
 	OpenTTDClearSquareServices clear_square_services;
+	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
 	RoadBits (*crossing_road_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_bits);
@@ -205,6 +207,7 @@ struct OpenTTDSharedServices {
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 	uint32_t (*nearby_tile)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile);
 	uint32_t (*nearby_tile_information)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile_information);
+	NetworkClientInfo *(*network_client_info)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_client_info);
 	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);

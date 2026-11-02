@@ -38,6 +38,8 @@
 #include "../error.h"
 #include "../misc_cmd.h"
 #include "../core/string_builder.hpp"
+#include "../rust/session_native.hpp"
+#include "../rust/settings_services.h"
 #ifdef DEBUG_DUMP_COMMANDS
 #	include "../fileio_func.h"
 #	include "../core/string_consumer.hpp"
@@ -75,17 +77,7 @@ uint8_t _network_reconnect;             ///< Reconnect timeout
 StringList _network_bind_list;        ///< The addresses to bind on.
 StringList _network_host_list;        ///< The servers we know.
 StringList _network_ban_list;         ///< The banned clients.
-uint32_t _frame_counter_server;         ///< The frame_counter of the server, if in network-mode
-uint32_t _frame_counter_max;            ///< To where we may go with our clients
-uint32_t _frame_counter;                ///< The current frame.
-uint32_t _last_sync_frame;              ///< Used in the server to store the last time a sync packet was sent to clients.
 NetworkAddressList _broadcast_list;   ///< List of broadcast addresses.
-uint32_t _sync_seed_1;                  ///< Seed to compare during sync checks.
-#ifdef NETWORK_SEND_DOUBLE_SEED
-uint32_t _sync_seed_2;                  ///< Second part of the seed.
-#endif
-uint32_t _sync_frame;                   ///< The frame to perform the sync check.
-bool _network_first_time;             ///< Whether we have finished joining or not.
 
 /** The amount of clients connected */
 uint8_t _network_clients_connected = 0;
@@ -284,14 +276,7 @@ void NetworkTextMessage(NetworkAction action, TextColour colour, bool self_send,
 /* Calculate the frame-lag of a client */
 uint NetworkCalculateLag(const NetworkClientSocket *cs)
 {
-	int lag = cs->last_frame_server - cs->last_frame;
-	/* This client has missed their ACK packet after 1 DAY_TICKS..
-	 *  so we increase their lag for every frame that passes!
-	 * The packet can be out by a max of _net_frame_freq */
-	if (cs->last_frame_server + Ticks::DAY_TICKS + _settings_client.network.frame_freq < _frame_counter) {
-		lag += _frame_counter - (cs->last_frame_server + Ticks::DAY_TICKS + _settings_client.network.frame_freq);
-	}
-	return lag;
+	return openttd_rust_network_calculate_lag(&GetRustNetworkFrameServices(), cs);
 }
 
 
@@ -395,77 +380,6 @@ void NetworkHandlePauseChange(PauseModes prev_mode, PauseMode changed_mode)
 	}
 }
 
-
-/**
- * Helper function for the pause checkers. If pause is true and the
- * current pause mode isn't set the game will be paused, if it it false
- * and the pause mode is set the game will be unpaused. In the other
- * cases nothing happens to the pause state.
- * @param pause whether we'd like to pause
- * @param pm the mode which we would like to pause with
- */
-static void CheckPauseHelper(bool pause, PauseMode pm)
-{
-	if (pause == _pause_mode.Test(pm)) return;
-
-	Command<CMD_PAUSE>::Post(pm, pause);
-}
-
-/**
- * Counts the number of active clients connected.
- * It has to be in STATUS_ACTIVE and not a spectator
- * @return number of active clients
- */
-static uint NetworkCountActiveClients()
-{
-	uint count = 0;
-
-	for (const NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		if (cs->status != NetworkClientSocket::STATUS_ACTIVE) continue;
-		if (!Company::IsValidID(cs->GetInfo()->client_playas)) continue;
-		count++;
-	}
-
-	return count;
-}
-
-/**
- * Check if the minimum number of active clients has been reached and pause or unpause the game as appropriate
- */
-static void CheckMinActiveClients()
-{
-	if (_pause_mode.Test(PauseMode::Error) ||
-			!_network_dedicated ||
-			(_settings_client.network.min_active_clients == 0 && !_pause_mode.Test(PauseMode::ActiveClients))) {
-		return;
-	}
-	CheckPauseHelper(NetworkCountActiveClients() < _settings_client.network.min_active_clients, PauseMode::ActiveClients);
-}
-
-/**
- * Checks whether there is a joining client
- * @return true iff one client is joining (but not authorizing)
- */
-static bool NetworkHasJoiningClient()
-{
-	for (const NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-		if (cs->status >= NetworkClientSocket::STATUS_AUTHORIZED && cs->status < NetworkClientSocket::STATUS_ACTIVE) return true;
-	}
-
-	return false;
-}
-
-/**
- * Check whether we should pause on join
- */
-static void CheckPauseOnJoin()
-{
-	if (_pause_mode.Test(PauseMode::Error) ||
-			(!_settings_client.network.pause_on_join && !_pause_mode.Test(PauseMode::Join))) {
-		return;
-	}
-	CheckPauseHelper(NetworkHasJoiningClient(), PauseMode::Join);
-}
 
 /**
  * Parse the company part ("#company" postfix) of a connecting string.
@@ -586,55 +500,11 @@ static void InitializeNetworkPools(bool close_admins = true)
 	PoolBase::Clean(to_clean);
 }
 
-/**
- * Close current connections.
- * @param close_admins Whether the admin connections have to be closed as well.
- */
-void NetworkClose(bool close_admins)
-{
-	if (_network_server) {
-		if (close_admins) {
-			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::Iterate()) {
-				as->CloseConnection(true);
-			}
-		}
-
-		for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-			cs->CloseConnection(NETWORK_RECV_STATUS_CLIENT_QUIT);
-		}
-		ServerNetworkGameSocketHandler::CloseListeners();
-		ServerNetworkAdminSocketHandler::CloseListeners();
-
-		_network_coordinator_client.CloseConnection();
-	} else {
-		if (MyClient::my_client != nullptr) {
-			MyClient::SendQuit();
-			MyClient::my_client->CloseConnection(NETWORK_RECV_STATUS_CLIENT_QUIT);
-		}
-
-		_network_coordinator_client.CloseAllConnections();
-	}
-	NetworkGameSocketHandler::ProcessDeferredDeletions();
-
-	TCPConnecter::KillAll();
-
-	_networking = false;
-	_network_server = false;
-
-	NetworkFreeLocalCommandQueue();
-
-	InitializeNetworkPools(close_admins);
-}
 
 /* Initializes the network (cleans sockets and stuff) */
 static void NetworkInitialize(bool close_admins = true)
 {
-	InitializeNetworkPools(close_admins);
-
-	_sync_frame = 0;
-	_network_first_time = true;
-
-	_network_reconnect = 0;
+	openttd_rust_network_initialize(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), close_admins);
 }
 
 /** Non blocking connection to query servers for their game info. */
@@ -785,66 +655,10 @@ public:
  */
 bool NetworkClientConnectGame(std::string_view connection_string, CompanyID default_company, const std::string &join_server_password)
 {
-	Debug(net, 9, "NetworkClientConnectGame(): connection_string={}", connection_string);
-
-	CompanyID join_as = default_company;
-	std::string resolved_connection_string = ServerAddress::Parse(connection_string, NETWORK_DEFAULT_PORT, &join_as).connection_string;
-
-	if (!_network_available) return false;
-	if (!NetworkValidateOurClientName()) return false;
-
-	_network_join.connection_string = std::move(resolved_connection_string);
-	_network_join.company = join_as;
-	_network_join.server_password = join_server_password;
-
-	if (_game_mode == GM_MENU) {
-		/* From the menu we can immediately continue with the actual join. */
-		NetworkClientJoinGame();
-	} else {
-		/* When already playing a game, first go back to the main menu. This
-		 * disconnects the user from the current game, meaning we can safely
-		 * load in the new. After all, there is little point in continuing to
-		 * play on a server if we are connecting to another one.
-		 */
-		_switch_mode = SM_JOIN_GAME;
-	}
-	return true;
+	std::string resolved;
+	return openttd_rust_network_connect_game(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), {reinterpret_cast<const uint8_t *>(connection_string.data()), connection_string.size()}, default_company.base(), &join_server_password, &resolved);
 }
 
-/**
- * Actually perform the joining to the server. Use #NetworkClientConnectGame
- * when you want to connect to a specific server/company. This function
- * assumes _network_join is already fully set up.
- */
-void NetworkClientJoinGame()
-{
-	NetworkDisconnect();
-	NetworkInitialize();
-
-	_settings_client.network.last_joined = _network_join.connection_string;
-	Debug(net, 9, "status = CONNECTING");
-	_network_join_status = NETWORK_JOIN_STATUS_CONNECTING;
-	ShowJoinStatusWindow();
-
-	TCPConnecter::Create<TCPClientConnecter>(_network_join.connection_string);
-}
-
-static void NetworkInitGameInfo()
-{
-	FillStaticNetworkServerGameInfo();
-	/* The server is a client too */
-	_network_game_info.clients_on = _network_dedicated ? 0 : 1;
-
-	/* There should be always space for the server. */
-	assert(NetworkClientInfo::CanAllocateItem());
-	NetworkClientInfo *ci = new NetworkClientInfo(CLIENT_ID_SERVER);
-	ci->client_playas = COMPANY_SPECTATOR;
-
-	ci->client_name = _settings_client.network.client_name;
-
-	NetworkAuthenticationClientHandler::EnsureValidSecretKeyAndUpdatePublicKey(_settings_client.network.client_secret_key, _settings_client.network.client_public_key);
-	ci->public_key = _settings_client.network.client_public_key;
-}
 
 /**
  * Trim the given server name in place, i.e. remove leading and trailing spaces.
@@ -888,110 +702,6 @@ static void CheckClientAndServerName()
 	}
 }
 
-bool NetworkServerStart()
-{
-	if (!_network_available) return false;
-
-	/* Call the pre-scripts */
-	IConsoleCmdExec("exec scripts/pre_server.scr 0");
-	if (_network_dedicated) IConsoleCmdExec("exec scripts/pre_dedicated.scr 0");
-
-	/* Check for the client and server names to be set, but only after the scripts had a chance to set them.*/
-	if (_network_dedicated) CheckClientAndServerName();
-
-	NetworkDisconnect(false);
-	NetworkInitialize(false);
-	NetworkUDPInitialize();
-	Debug(net, 5, "Starting listeners for clients");
-	if (!ServerNetworkGameSocketHandler::Listen(_settings_client.network.server_port)) return false;
-
-	/* Only listen for admins when the authentication is configured. */
-	if (_settings_client.network.AdminAuthenticationConfigured()) {
-		Debug(net, 5, "Starting listeners for admins");
-		if (!ServerNetworkAdminSocketHandler::Listen(_settings_client.network.server_admin_port)) return false;
-	}
-
-	/* Try to start UDP-server */
-	Debug(net, 5, "Starting listeners for incoming server queries");
-	NetworkUDPServerListen();
-
-	_network_server = true;
-	_networking = true;
-	_frame_counter = 0;
-	_frame_counter_server = 0;
-	_frame_counter_max = 0;
-	_last_sync_frame = 0;
-	_network_own_client_id = CLIENT_ID_SERVER;
-
-	_network_clients_connected = 0;
-
-	NetworkInitGameInfo();
-
-	if (_settings_client.network.server_game_type != SERVER_GAME_TYPE_LOCAL) {
-		_network_coordinator_client.Register();
-	}
-
-	/* execute server initialization script */
-	IConsoleCmdExec("exec scripts/on_server.scr 0");
-	/* if the server is dedicated ... add some other script */
-	if (_network_dedicated) IConsoleCmdExec("exec scripts/on_dedicated.scr 0");
-
-	return true;
-}
-
-/**
- * Perform tasks when the server is started. This consists of things
- * like putting the server's client in a valid company and resetting the restart time.
- */
-void NetworkOnGameStart()
-{
-	if (!_network_server) return;
-
-	/* Update the static game info to set the values from the new game. */
-	NetworkServerUpdateGameInfo();
-
-	ChangeNetworkRestartTime(true);
-
-	if (!_network_dedicated) {
-		Company *c = Company::GetIfValid(GetFirstPlayableCompanyID());
-		NetworkClientInfo *ci = NetworkClientInfo::GetByClientID(CLIENT_ID_SERVER);
-		if (c != nullptr && ci != nullptr) {
-			ci->client_playas = c->index;
-
-			/*
-			 * If the company has not been named yet, the company was just started.
-			 * Otherwise it would have gotten a name already, so announce it as a new company.
-			 */
-			if (c->name_1 == STR_SV_UNNAMED && c->name.empty()) NetworkServerNewCompany(c, ci);
-		}
-
-		ShowClientList();
-	} else {
-		/* welcome possibly still connected admins - this can only happen on a dedicated server. */
-		ServerNetworkAdminSocketHandler::WelcomeAll();
-	}
-}
-
-/* The server is rebooting...
- * The only difference with NetworkDisconnect, is the packets that is sent */
-void NetworkReboot()
-{
-	if (_network_server) {
-		for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-			cs->SendNewGame();
-			cs->SendPackets();
-		}
-
-		for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
-			as->SendNewGame();
-			as->SendPackets();
-		}
-	}
-
-	/* For non-dedicated servers we have to kick the admins as we are not
-	 * certain that we will end up in a new network game. */
-	NetworkClose(!_network_dedicated);
-}
 
 /**
  * We want to disconnect from the host/clients.
@@ -999,26 +709,7 @@ void NetworkReboot()
  */
 void NetworkDisconnect(bool close_admins)
 {
-	if (_network_server) {
-		for (NetworkClientSocket *cs : NetworkClientSocket::Iterate()) {
-			cs->SendShutdown();
-			cs->SendPackets();
-		}
-
-		if (close_admins) {
-			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
-				as->SendShutdown();
-				as->SendPackets();
-			}
-		}
-	}
-
-	CloseWindowById(WC_NETWORK_STATUS_WINDOW, WN_NETWORK_STATUS_WINDOW_JOIN);
-
-	NetworkClose(close_admins);
-
-	/* Reinitialize the UDP stack, i.e. close all existing connections. */
-	NetworkUDPInitialize();
+	openttd_rust_network_disconnect(&GetRustNetworkLifecycleServices(), &GetRustNetworkFrameServices(), close_admins);
 }
 
 /**
@@ -1090,196 +781,256 @@ void NetworkBackgroundLoop()
 	NetworkBackgroundUDPLoop();
 }
 
-/* The main loop called from ttd.c
- *  Here we also have to do StateGameLoop if needed! */
-void NetworkGameLoop()
+/** Log the sync state to check for in-syncedness of replays. */
+static void NetworkSyncLog()
 {
-	if (!_networking) return;
-
-	if (!NetworkReceive()) return;
-
-	if (_network_server) {
-		/* Log the sync state to check for in-syncedness of replays. */
-		if (TimerGameEconomy::date_fract == 0) {
-			/* We don't want to log multiple times if paused. */
-			static TimerGameEconomy::Date last_log;
-			if (last_log != TimerGameEconomy::date) {
-				Debug(desync, 1, "sync: {:08x}; {:02x}; {:08x}; {:08x}", TimerGameEconomy::date, TimerGameEconomy::date_fract, _random.state[0], _random.state[1]);
-				last_log = TimerGameEconomy::date;
-			}
+	if (TimerGameEconomy::date_fract == 0) {
+		/* We don't want to log multiple times if paused. */
+		static TimerGameEconomy::Date last_log;
+		if (last_log != TimerGameEconomy::date) {
+			Debug(desync, 1, "sync: {:08x}; {:02x}; {:08x}; {:08x}", TimerGameEconomy::date, TimerGameEconomy::date_fract, _random.state[0], _random.state[1]);
+			last_log = TimerGameEconomy::date;
 		}
+	}
+}
 
+/** Replay commands.log; only with DEBUG_DUMP_COMMANDS. */
+static void NetworkReplayCommands()
+{
 #ifdef DEBUG_DUMP_COMMANDS
-		/* Loading of the debug commands from -ddesync>=1 */
-		static auto f = FioFOpenFile("commands.log", "rb", SAVE_DIR);
-		static TimerGameEconomy::Date next_date(0);
-		static uint32_t next_date_fract;
-		static CommandPacket *cp = nullptr;
-		static bool check_sync_state = false;
-		static uint32_t sync_state[2];
-		if (!f.has_value() && next_date == 0) {
-			Debug(desync, 0, "Cannot open commands.log");
-			next_date = TimerGameEconomy::Date(1);
-		}
+	/* Loading of the debug commands from -ddesync>=1 */
+	static auto f = FioFOpenFile("commands.log", "rb", SAVE_DIR);
+	static TimerGameEconomy::Date next_date(0);
+	static uint32_t next_date_fract;
+	/** A replayed command, injected through NetworkSendCommand. */
+	struct DumpedCommand {
+		CompanyID company = CompanyID::Invalid();
+		Commands cmd{};
+		StringID err_msg{};
+		CommandDataBuffer data{};
+	};
+	static DumpedCommand *cp = nullptr;
+	static bool check_sync_state = false;
+	static uint32_t sync_state[2];
+	if (!f.has_value() && next_date == 0) {
+		Debug(desync, 0, "Cannot open commands.log");
+		next_date = TimerGameEconomy::Date(1);
+	}
 
-		while (f.has_value() && !feof(*f)) {
-			if (TimerGameEconomy::date == next_date && TimerGameEconomy::date_fract == next_date_fract) {
-				if (cp != nullptr) {
-					NetworkSendCommand(cp->cmd, cp->err_msg, nullptr, cp->company, cp->data);
-					Debug(desync, 0, "Injecting: {:08x}; {:02x}; {:02x}; {:08x}; {} ({})", TimerGameEconomy::date, TimerGameEconomy::date_fract, _current_company.base(), cp->cmd, FormatArrayAsHex(cp->data), GetCommandName(cp->cmd));
-					delete cp;
-					cp = nullptr;
-				}
-				if (check_sync_state) {
-					if (sync_state[0] == _random.state[0] && sync_state[1] == _random.state[1]) {
-						Debug(desync, 0, "Sync check: {:08x}; {:02x}; match", TimerGameEconomy::date, TimerGameEconomy::date_fract);
-					} else {
-						Debug(desync, 0, "Sync check: {:08x}; {:02x}; mismatch expected {{{:08x}, {:08x}}}, got {{{:08x}, {:08x}}}",
-									TimerGameEconomy::date, TimerGameEconomy::date_fract, sync_state[0], sync_state[1], _random.state[0], _random.state[1]);
-						NOT_REACHED();
-					}
-					check_sync_state = false;
-				}
+	while (f.has_value() && !feof(*f)) {
+		if (TimerGameEconomy::date == next_date && TimerGameEconomy::date_fract == next_date_fract) {
+			if (cp != nullptr) {
+				NetworkSendCommand(cp->cmd, cp->err_msg, nullptr, cp->company, cp->data);
+				Debug(desync, 0, "Injecting: {:08x}; {:02x}; {:02x}; {:08x}; {} ({})", TimerGameEconomy::date, TimerGameEconomy::date_fract, _current_company.base(), cp->cmd, FormatArrayAsHex(cp->data), GetCommandName(cp->cmd));
+				delete cp;
+				cp = nullptr;
 			}
-
-			/* Skip all entries in the command-log till we caught up with the current game again. */
-			if (TimerGameEconomy::date > next_date || (TimerGameEconomy::date == next_date && TimerGameEconomy::date_fract > next_date_fract)) {
-				Debug(desync, 0, "Skipping to next command at {:08x}:{:02x}", next_date, next_date_fract);
-				if (cp != nullptr) {
-					delete cp;
-					cp = nullptr;
+			if (check_sync_state) {
+				if (sync_state[0] == _random.state[0] && sync_state[1] == _random.state[1]) {
+					Debug(desync, 0, "Sync check: {:08x}; {:02x}; match", TimerGameEconomy::date, TimerGameEconomy::date_fract);
+				} else {
+					Debug(desync, 0, "Sync check: {:08x}; {:02x}; mismatch expected {{{:08x}, {:08x}}}, got {{{:08x}, {:08x}}}",
+								TimerGameEconomy::date, TimerGameEconomy::date_fract, sync_state[0], sync_state[1], _random.state[0], _random.state[1]);
+					NOT_REACHED();
 				}
 				check_sync_state = false;
 			}
+		}
 
-			if (cp != nullptr || check_sync_state) break;
-
-			char buff[4096];
-			if (fgets(buff, lengthof(buff), *f) == nullptr) break;
-
-			StringConsumer consumer{std::string_view{buff}};
-			/* Ignore the "[date time] " part of the message */
-			if (consumer.ReadCharIf('[')) {
-				consumer.SkipUntilChar(']', StringConsumer::SKIP_ONE_SEPARATOR);
-				consumer.SkipCharIf(' ');
+		/* Skip all entries in the command-log till we caught up with the current game again. */
+		if (TimerGameEconomy::date > next_date || (TimerGameEconomy::date == next_date && TimerGameEconomy::date_fract > next_date_fract)) {
+			Debug(desync, 0, "Skipping to next command at {:08x}:{:02x}", next_date, next_date_fract);
+			if (cp != nullptr) {
+				delete cp;
+				cp = nullptr;
 			}
+			check_sync_state = false;
+		}
 
-			if (consumer.ReadIf("cmd: ")
+		if (cp != nullptr || check_sync_state) break;
+
+		char buff[4096];
+		if (fgets(buff, lengthof(buff), *f) == nullptr) break;
+
+		StringConsumer consumer{std::string_view{buff}};
+		/* Ignore the "[date time] " part of the message */
+		if (consumer.ReadCharIf('[')) {
+			consumer.SkipUntilChar(']', StringConsumer::SKIP_ONE_SEPARATOR);
+			consumer.SkipCharIf(' ');
+		}
+
+		if (consumer.ReadIf("cmd: ")
 #ifdef DEBUG_FAILED_DUMP_COMMANDS
-				|| consumer.ReadIf("cmdf: ")
+			|| consumer.ReadIf("cmdf: ")
 #endif
-				) {
-				cp = new CommandPacket();
-				next_date = TimerGameEconomy::Date(consumer.ReadIntegerBase<uint32_t>(16));
-				bool valid = consumer.ReadIf("; ");
-				next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
-				valid &= consumer.ReadIf("; ");
-				cp->company = static_cast<CompanyID>(consumer.ReadIntegerBase<uint16_t>(16));
-				valid &= consumer.ReadIf("; ");
-				cp->cmd = static_cast<Commands>(consumer.ReadIntegerBase<uint32_t>(16));
-				valid &= consumer.ReadIf("; ");
-				cp->err_msg = consumer.ReadIntegerBase<uint32_t>(16);
-				valid &= consumer.ReadIf("; ");
-				auto args = consumer.ReadUntilChar(' ', StringConsumer::SKIP_ONE_SEPARATOR);
-				assert(valid);
+			) {
+			cp = new DumpedCommand();
+			next_date = TimerGameEconomy::Date(consumer.ReadIntegerBase<uint32_t>(16));
+			bool valid = consumer.ReadIf("; ");
+			next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
+			valid &= consumer.ReadIf("; ");
+			cp->company = static_cast<CompanyID>(consumer.ReadIntegerBase<uint16_t>(16));
+			valid &= consumer.ReadIf("; ");
+			cp->cmd = static_cast<Commands>(consumer.ReadIntegerBase<uint32_t>(16));
+			valid &= consumer.ReadIf("; ");
+			cp->err_msg = consumer.ReadIntegerBase<uint32_t>(16);
+			valid &= consumer.ReadIf("; ");
+			auto args = consumer.ReadUntilChar(' ', StringConsumer::SKIP_ONE_SEPARATOR);
+			assert(valid);
 
-				/* Parse command data. */
-				cp->data.clear();
-				for (size_t i = 0; i + 1 < args.size(); i += 2) {
-					uint8_t e = 0;
-					std::from_chars(args.data() + i, args.data() + i + 2, e, 16);
-					cp->data.push_back(e);
-				}
-			} else if (consumer.ReadIf("join: ")) {
-				/* Manually insert a pause when joining; this way the client can join at the exact right time. */
-				next_date = TimerGameEconomy::Date(consumer.ReadIntegerBase<uint32_t>(16));
-				bool valid = consumer.ReadIf("; ");
-				next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
-				assert(valid);
-				Debug(desync, 0, "Injecting pause for join at {:08x}:{:02x}; please join when paused", next_date, next_date_fract);
-				cp = new CommandPacket();
-				cp->company = COMPANY_SPECTATOR;
-				cp->cmd = CMD_PAUSE;
-				cp->data = EndianBufferWriter<>::FromValue(CommandTraits<CMD_PAUSE>::Args{ PauseMode::Normal, true });
-				_ddc_fastforward = false;
-			} else if (consumer.ReadIf("sync: ")) {
-				next_date = TimerGameEconomy::Date(consumer.ReadIntegerBase<uint32_t>(16));
-				bool valid = consumer.ReadIf("; ");
-				next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
-				valid &= consumer.ReadIf("; ");
-				sync_state[0] = consumer.ReadIntegerBase<uint32_t>(16);
-				valid &= consumer.ReadIf("; ");
-				sync_state[1] = consumer.ReadIntegerBase<uint32_t>(16);
-				assert(valid);
-				check_sync_state = true;
-			} else if (consumer.ReadIf("msg: ") || consumer.ReadIf("client: ") ||
-						consumer.ReadIf("load: ") || consumer.ReadIf("save: ") ||
-						consumer.ReadIf("warning: ")) {
-				/* A message that is not very important to the log playback, but part of the log. */
+			/* Parse command data. */
+			cp->data.clear();
+			for (size_t i = 0; i + 1 < args.size(); i += 2) {
+				uint8_t e = 0;
+				std::from_chars(args.data() + i, args.data() + i + 2, e, 16);
+				cp->data.push_back(e);
+			}
+		} else if (consumer.ReadIf("join: ")) {
+			/* Manually insert a pause when joining; this way the client can join at the exact right time. */
+			next_date = TimerGameEconomy::Date(consumer.ReadIntegerBase<uint32_t>(16));
+			bool valid = consumer.ReadIf("; ");
+			next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
+			assert(valid);
+			Debug(desync, 0, "Injecting pause for join at {:08x}:{:02x}; please join when paused", next_date, next_date_fract);
+			cp = new DumpedCommand();
+			cp->company = COMPANY_SPECTATOR;
+			cp->cmd = CMD_PAUSE;
+			cp->data = EndianBufferWriter<>::FromValue(CommandTraits<CMD_PAUSE>::Args{ PauseMode::Normal, true });
+			_ddc_fastforward = false;
+		} else if (consumer.ReadIf("sync: ")) {
+			next_date = TimerGameEconomy::Date(consumer.ReadIntegerBase<uint32_t>(16));
+			bool valid = consumer.ReadIf("; ");
+			next_date_fract = consumer.ReadIntegerBase<uint32_t>(16);
+			valid &= consumer.ReadIf("; ");
+			sync_state[0] = consumer.ReadIntegerBase<uint32_t>(16);
+			valid &= consumer.ReadIf("; ");
+			sync_state[1] = consumer.ReadIntegerBase<uint32_t>(16);
+			assert(valid);
+			check_sync_state = true;
+		} else if (consumer.ReadIf("msg: ") || consumer.ReadIf("client: ") ||
+					consumer.ReadIf("load: ") || consumer.ReadIf("save: ") ||
+					consumer.ReadIf("warning: ")) {
+			/* A message that is not very important to the log playback, but part of the log. */
 #ifndef DEBUG_FAILED_DUMP_COMMANDS
-			} else if (consumer.ReadIf("cmdf: ")) {
-				Debug(desync, 0, "Skipping replay of failed command: {}", consumer.Read(StringConsumer::npos));
+		} else if (consumer.ReadIf("cmdf: ")) {
+			Debug(desync, 0, "Skipping replay of failed command: {}", consumer.Read(StringConsumer::npos));
 #endif
-			} else {
-				/* Can't parse a line; what's wrong here? */
-				Debug(desync, 0, "Trying to parse: {}", consumer.Read(StringConsumer::npos));
-				NOT_REACHED();
-			}
-		}
-		if (f.has_value() && feof(*f)) {
-			Debug(desync, 0, "End of commands.log");
-			f.reset();
-		}
-#endif /* DEBUG_DUMP_COMMANDS */
-		if (_frame_counter >= _frame_counter_max) {
-			/* Only check for active clients just before we're going to send out
-			 * the commands so we don't send multiple pause/unpause commands when
-			 * the frame_freq is more than 1 tick. Same with distributing commands. */
-			CheckPauseOnJoin();
-			CheckMinActiveClients();
-			NetworkDistributeCommands();
-		}
-
-		bool send_frame = false;
-
-		/* We first increase the _frame_counter */
-		_frame_counter++;
-		/* Update max-frame-counter */
-		if (_frame_counter > _frame_counter_max) {
-			_frame_counter_max = _frame_counter + _settings_client.network.frame_freq;
-			send_frame = true;
-		}
-
-		NetworkExecuteLocalCommandQueue();
-
-		/* Then we make the frame */
-		StateGameLoop();
-
-		_sync_seed_1 = _random.state[0];
-#ifdef NETWORK_SEND_DOUBLE_SEED
-		_sync_seed_2 = _random.state[1];
-#endif
-
-		NetworkServer_Tick(send_frame);
-	} else {
-		/* Client */
-
-		/* Make sure we are at the frame were the server is (quick-frames) */
-		if (_frame_counter_server > _frame_counter) {
-			/* Run a number of frames; when things go bad, get out. */
-			while (_frame_counter_server > _frame_counter) {
-				if (!ClientNetworkGameSocketHandler::GameLoop()) return;
-			}
 		} else {
-			/* Else, keep on going till _frame_counter_max */
-			if (_frame_counter_max > _frame_counter) {
-				/* Run one frame; if things went bad, get out. */
-				if (!ClientNetworkGameSocketHandler::GameLoop()) return;
-			}
+			/* Can't parse a line; what's wrong here? */
+			Debug(desync, 0, "Trying to parse: {}", consumer.Read(StringConsumer::npos));
+			NOT_REACHED();
 		}
 	}
+	if (f.has_value() && feof(*f)) {
+		Debug(desync, 0, "End of commands.log");
+		f.reset();
+	}
+#endif /* DEBUG_DUMP_COMMANDS */
+}
 
-	NetworkSend();
+static_assert(std::is_same_v<std::chrono::steady_clock::duration, std::chrono::nanoseconds>); // network_frame.rs now
+static_assert(PACKET_SERVER_FRAME == 26 && PACKET_CLIENT_ACK == 27 && PACKET_SERVER_SYNC == 28);
+static_assert(NetworkClientSocket::STATUS_INACTIVE == 0 && NetworkClientSocket::STATUS_AUTH_GAME == 1 && NetworkClientSocket::STATUS_IDENTIFY == 2);
+static_assert(NetworkClientSocket::STATUS_NEWGRFS_CHECK == 3 && NetworkClientSocket::STATUS_AUTHORIZED == 4 && NetworkClientSocket::STATUS_MAP_WAIT == 5);
+static_assert(NetworkClientSocket::STATUS_MAP == 6 && NetworkClientSocket::STATUS_DONE_MAP == 7 && NetworkClientSocket::STATUS_PRE_ACTIVE == 8);
+static_assert(NetworkClientSocket::STATUS_ACTIVE == 9 && NetworkClientSocket::STATUS_END == 10);
+static_assert(NETWORK_ERROR_NOT_AUTHORIZED == 6 && NETWORK_ERROR_TIMEOUT_PASSWORD == 16 && NETWORK_ERROR_TIMEOUT_COMPUTER == 17);
+static_assert(NETWORK_ERROR_TIMEOUT_MAP == 18 && NETWORK_ERROR_TIMEOUT_JOIN == 19);
+static_assert(NETWORK_RECV_STATUS_OKAY == 0 && NETWORK_RECV_STATUS_MALFORMED_PACKET == 5);
+
+const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
+{
+	static const OpenTTDNetworkFrameServices services{
+		.bytes_per_frame = RustNetworkBytesPerFrame,
+		.bytes_per_frame_burst = RustNetworkBytesPerFrameBurst,
+		.client = &GetRustNetworkClientServices(),
+		.client_desync = []() noexcept {
+			ShowNetworkError(STR_NETWORK_ERROR_DESYNC);
+			Debug(desync, 1, "sync_err: {:08x}; {:02x}", TimerGameEconomy::date, TimerGameEconomy::date_fract);
+			Debug(net, 0, "Sync error detected");
+		},
+		.client_game = []() noexcept -> void * { return static_cast<NetworkGameSocketHandler *>(ClientNetworkGameSocketHandler::my_client); },
+		.client_sync = []() noexcept -> OpenTTDNetworkSocketSync * { return ClientNetworkGameSocketHandler::my_client; },
+		.command = &GetRustNetworkCommandServices(),
+		.connection = &GetRustNetworkConnectionServices(),
+		.console_bad_acks = [](void *cs) noexcept {
+			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it fails to send valid acks.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP());
+		},
+		.console_download_timeout = [](void *cs) noexcept {
+			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to download the map.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxDownloadTime());
+		},
+		.console_init_timeout = [](void *cs) noexcept {
+			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to start the joining process.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxInitTime());
+		},
+		.console_join_timeout = [](void *cs) noexcept {
+			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to join.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxJoinTime());
+		},
+		.console_lagging = [](void *cs, uint32_t lag, bool recent) noexcept {
+			if (recent) {
+				/* A packet was received in the last three game days, so the client is likely lagging behind. */
+				IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because the client's game state is more than {} ticks behind.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), lag);
+			} else {
+				/* No packet was received in the last three game days; sounds like a lost connection. */
+				IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because the client did not respond for more than {} ticks.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), lag);
+			}
+		},
+		.console_password_timeout = [](void *cs) noexcept {
+			IConsolePrint(CC_WARNING, "Client #{} (IP: {}) is dropped because it took longer than {} ticks to enter the password.", static_cast<NetworkClientSocket *>(cs)->client_id, static_cast<NetworkClientSocket *>(cs)->GetClientIP(), RustNetworkMaxPasswordTime());
+		},
+		.console_slow = [](void *cs, uint32_t frame) noexcept {
+			IConsolePrint(CC_WARNING, "[{}] Client #{} is slow, try increasing [network.]frame_freq to a higher value!", frame, static_cast<NetworkClientSocket *>(cs)->client_id);
+		},
+		.debug_ack_sent = [](uint32_t frame) noexcept { Debug(net, 7, "Sent ACK at {}", frame); },
+		.debug_active = [](void *game) noexcept { Debug(net, 9, "client[{}] status = ACTIVE", static_cast<NetworkGameSocketHandler *>(game)->client_id); },
+		.debug_missed_sync = [](uint32_t sync_frame, uint32_t frame) noexcept { Debug(net, 1, "Missed frame for sync-test: {} / {}", sync_frame, frame); },
+		.debug_receive_ack = [](void *game, uint32_t frame) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_ACK(): frame={}", static_cast<NetworkGameSocketHandler *>(game)->client_id, frame); },
+		.debug_receive_sync = [](uint32_t sync_frame, uint32_t seed) noexcept { Debug(net, 9, "Client::Receive_SERVER_SYNC(): sync_frame={}, sync_seed_1={}", sync_frame, seed); },
+		.debug_send_ack = []() noexcept { Debug(net, 9, "Client::SendAck()"); },
+		.debug_send_sync = [](void *game, uint32_t frame, uint32_t seed) noexcept { Debug(net, 9, "client[{}] SendSync(), frame_counter={}, sync_seed_1={}", static_cast<NetworkGameSocketHandler *>(game)->client_id, frame, seed); },
+		.frame_freq = RustNetworkFrameFreq,
+		.interactive_random_range = [](uint32_t limit) noexcept { return InteractiveRandomRange(limit); },
+		.lifecycle = &GetRustNetworkLifecycleServices(),
+		.max_download_time = RustNetworkMaxDownloadTime,
+		.max_init_time = RustNetworkMaxInitTime,
+		.max_join_time = RustNetworkMaxJoinTime,
+		.max_lag_time = RustNetworkMaxLagTime,
+		.max_password_time = RustNetworkMaxPasswordTime,
+		.now = []() noexcept -> int64_t { return std::chrono::steady_clock::now().time_since_epoch().count(); },
+		/* Execute script for, e.g. MOTD */
+		.on_server_connect = []() noexcept { IConsoleCmdExec("exec scripts/on_server_connect.scr 0"); },
+		.packet_can_read = [](void *p, size_t size) noexcept { return static_cast<Packet *>(p)->CanReadFromPacket(size); },
+		.packet_new = [](void *game, uint8_t type) noexcept -> void * { return new Packet(static_cast<NetworkGameSocketHandler *>(game), static_cast<PacketType>(type)); },
+		.packet_recv_string = [](void *packet, void *text, size_t limit) noexcept { *static_cast<std::string *>(text) = static_cast<Packet *>(packet)->Recv_string(limit); },
+		.packet_recv_uint32 = [](void *p) noexcept { return static_cast<Packet *>(p)->Recv_uint32(); },
+		.packet_recv_uint8 = [](void *p) noexcept { return static_cast<Packet *>(p)->Recv_uint8(); },
+		.packet_send = [](void *game, void *p) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPacket(std::unique_ptr<Packet>(static_cast<Packet *>(p))); },
+		.packet_send_string = [](void *packet, OpenTTDByteSpan text) noexcept { static_cast<Packet *>(packet)->Send_string(std::string_view(reinterpret_cast<const char *>(text.data), text.size)); },
+		.packet_send_uint32 = [](void *p, uint32_t value) noexcept { static_cast<Packet *>(p)->Send_uint32(value); },
+		.packet_send_uint8 = [](void *p, uint8_t value) noexcept { static_cast<Packet *>(p)->Send_uint8(value); },
+		.random = _random.state,
+		.receive = [](OpenTTDSessionFrame *f, bool *received) noexcept { return SessionException(f, [=] { *received = NetworkReceive(); }); },
+		.replay_commands = []() noexcept { NetworkReplayCommands(); },
+		.send = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkSend(); }); },
+		.socket_close = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->NetworkGameSocketHandler::CloseConnection(); },
+		.socket_defer_deletion = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->DeferDeletion(); },
+		.socket_has_quit = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->HasClientQuit(); },
+		.socket_last_packet = [](void *game) noexcept -> int64_t { return static_cast<NetworkGameSocketHandler *>(game)->last_packet.time_since_epoch().count(); },
+		.socket_mark_closed = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->MarkClosed(); },
+		.socket_pending_deletion = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->IsPendingDeletion(); },
+		.socket_send_packets = [](void *game, bool closing) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPackets(closing); },
+		.socket_set_last_packet_now = [](void *game) noexcept { static_cast<NetworkGameSocketHandler *>(game)->last_packet = std::chrono::steady_clock::now(); },
+		.socket_valid = [](void *game) noexcept -> bool { return static_cast<NetworkGameSocketHandler *>(game)->sock != INVALID_SOCKET; },
+		.sync_freq = RustNetworkSyncFreq,
+		.sync_log = []() noexcept { NetworkSyncLog(); },
+	};
+	return services;
+}
+
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDNetworkFrameServices.hpp"
+bool CheckAbi_network_frame()
+{
+	return AbiServicesComplete(GetRustNetworkFrameServices());
 }
 
 /** This tries to launch the network for a given OS */
@@ -1324,3 +1075,92 @@ void CDECL em_openttd_add_server(const char *connection_string)
 
 }
 #endif
+
+const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcept
+{
+	static_assert(SERVER_GAME_TYPE_LOCAL == 0 && CLIENT_ID_SERVER == 1);
+	static const OpenTTDNetworkLifecycleServices services{
+		.admin_auth_configured = RustNetworkAdminAuthenticationConfigured,
+		.admin_port = RustNetworkServerAdminPort,
+		.admins_close = []() noexcept {
+			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::Iterate()) {
+				as->CloseConnection(true);
+			}
+		},
+		.admins_newgame = []() noexcept {
+			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
+				as->SendNewGame();
+				as->SendPackets();
+			}
+		},
+		.admins_shutdown = []() noexcept {
+			for (ServerNetworkAdminSocketHandler *as : ServerNetworkAdminSocketHandler::IterateActive()) {
+				as->SendShutdown();
+				as->SendPackets();
+			}
+		},
+		.admins_welcome = []() noexcept { ServerNetworkAdminSocketHandler::WelcomeAll(); },
+		.allocate_server_info = []() noexcept -> void * {
+			assert(NetworkClientInfo::CanAllocateItem());
+			auto *ci = new NetworkClientInfo(CLIENT_ID_SERVER);
+			ci->client_playas = COMPANY_SPECTATOR;
+			ci->client_name = _settings_client.network.client_name;
+			return ci;
+		},
+		.auth_client_key = []() noexcept { NetworkAuthenticationClientHandler::EnsureValidSecretKeyAndUpdatePublicKey(_settings_client.network.client_secret_key, _settings_client.network.client_public_key); },
+		.check_names = []() noexcept { CheckClientAndServerName(); },
+		.close_admin_listeners = []() noexcept { ServerNetworkAdminSocketHandler::CloseListeners(); },
+		.close_client_listeners = []() noexcept { ServerNetworkGameSocketHandler::CloseListeners(); },
+		.connect_debug = [](OpenTTDByteSpan connection) noexcept { Debug(net, 9, "NetworkClientConnectGame(): connection_string={}", std::string_view(reinterpret_cast<const char *>(connection.data), connection.size)); },
+		.connect_text_begin = [](void *storage) noexcept -> void * {
+			static_assert(sizeof(std::string) <= 8 * sizeof(uint64_t));
+			static_assert(alignof(std::string) <= alignof(uint64_t));
+			return new (storage) std::string;
+		},
+		.connect_text_end = [](void *text) noexcept { std::destroy_at<std::string>(static_cast<std::string *>(text)); },
+		.coordinator_close_client = []() noexcept { _network_coordinator_client.CloseAllConnections(); },
+		.coordinator_close_server = []() noexcept { _network_coordinator_client.CloseConnection(); },
+		.coordinator_register = []() noexcept { _network_coordinator_client.Register(); },
+		.create_client_connecter = []() noexcept { TCPConnecter::Create<TCPClientConnecter>(_network_join.connection_string); },
+		.debug_connecting = []() noexcept { Debug(net, 9, "status = CONNECTING"); },
+		.debug_listen_admins = []() noexcept { Debug(net, 5, "Starting listeners for admins"); },
+		.debug_listen_clients = []() noexcept { Debug(net, 5, "Starting listeners for clients"); },
+		.debug_listen_queries = []() noexcept { Debug(net, 5, "Starting listeners for incoming server queries"); },
+		.deferred_deletions = []() noexcept { NetworkGameSocketHandler::ProcessDeferredDeletions(); },
+		.fill_game_info = []() noexcept { FillStaticNetworkServerGameInfo(); },
+		.initialize_pools = [](bool close_admins) noexcept { InitializeNetworkPools(close_admins); },
+		.join_connection = []() noexcept -> OpenTTDByteSpan { const auto &connection = _network_join.connection_string; return {reinterpret_cast<const uint8_t *>(connection.data()), connection.size()}; },
+		.kill_connecters = []() noexcept { TCPConnecter::KillAll(); },
+		.last_joined = RustNetworkLastJoined,
+		.listen_admins = [](uint16_t port) noexcept -> bool { return ServerNetworkAdminSocketHandler::Listen(port); },
+		.listen_clients = [](uint16_t port) noexcept -> bool { return ServerNetworkGameSocketHandler::Listen(port); },
+		.new_company = [](const Company *company, void *info) noexcept { NetworkServerNewCompany(company, static_cast<NetworkClientInfo *>(info)); },
+		.on_dedicated = []() noexcept { IConsoleCmdExec("exec scripts/on_dedicated.scr 0"); },
+		.on_server = []() noexcept { IConsoleCmdExec("exec scripts/on_server.scr 0"); },
+		.parse_connection = [](OpenTTDByteSpan connection, uint8_t *company, void *resolved) noexcept {
+			CompanyID join_as(*company);
+			*static_cast<std::string *>(resolved) = ServerAddress::Parse(std::string_view(reinterpret_cast<const char *>(connection.data), connection.size), NETWORK_DEFAULT_PORT, &join_as).connection_string;
+			*company = join_as.base();
+		},
+		.pre_dedicated = []() noexcept { IConsoleCmdExec("exec scripts/pre_dedicated.scr 0"); },
+		.pre_server = []() noexcept { IConsoleCmdExec("exec scripts/pre_server.scr 0"); },
+		.remember_joined_server = RustNetworkSetLastJoined,
+		.reset_restart_time = []() noexcept { ChangeNetworkRestartTime(true); },
+		.server_game_type = RustNetworkServerGameType,
+		.server_port = RustNetworkServerPort,
+		.set_info_company = [](void *info, uint8_t company) noexcept { static_cast<NetworkClientInfo *>(info)->client_playas = CompanyID(company); },
+		.set_join_info = [](void *resolved, uint8_t company, const void *password) noexcept {
+			_network_join.connection_string = std::move(*static_cast<std::string *>(resolved));
+			_network_join.company = CompanyID(company);
+			_network_join.server_password = *static_cast<const std::string *>(password);
+		},
+		.set_server_info_key = [](void *info) noexcept { static_cast<NetworkClientInfo *>(info)->public_key = _settings_client.network.client_public_key; },
+		.udp_initialize = []() noexcept { NetworkUDPInitialize(); },
+		.udp_listen = []() noexcept { NetworkUDPServerListen(); },
+		.update_game_info = []() noexcept { NetworkServerUpdateGameInfo(); },
+		.validate_client_name = []() noexcept -> bool { return NetworkValidateOurClientName(); },
+	};
+	return services;
+}
+#include "abi-visit-OpenTTDNetworkLifecycleServices.hpp"
+bool CheckAbi_network_lifecycle() { return AbiServicesComplete(GetRustNetworkLifecycleServices()); }

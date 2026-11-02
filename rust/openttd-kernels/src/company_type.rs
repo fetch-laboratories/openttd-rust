@@ -65,3 +65,6 @@ pub const MAX_LENGTH_PRESIDENT_NAME_CHARS: usize = 32;
 pub const CALCA_ADD: u8 = 0;
 /// Company allow-list removal.
 pub const CALCA_REMOVE: u8 = 1;
+
+/// `COMPANY_NEW_COMPANY`.
+pub const COMPANY_NEW_COMPANY: u8 = 254;

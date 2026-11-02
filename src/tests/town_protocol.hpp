@@ -135,7 +135,6 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	houses.delete_inspect = [](uint32_t) noexcept {};
 	houses.cargogen_mode = []() noexcept -> uint8_t { return 0; };
 	houses.place_houses = []() noexcept -> uint8_t { return 2; };
-	houses.company_human = [](uint8_t) noexcept { return true; };
 	return houses;
 }
 static inline const OpenTTDHouseServices town_protocol_houses = TownProtocolHouses();
@@ -215,6 +214,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	auto *fields = openttd_rust_town_simulation(owner.get()); fields->xy = 2080; std::fill_n(fields->radius, 5, 100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
+	services.company_human = [](uint8_t) noexcept { return true; };
 	/* The callback reenters the town owner through the direct resolver entry;
 	 * preserve the original fixture's mutation and success. */
 	auto resolver = OpenTTDHouseResolverServices{};

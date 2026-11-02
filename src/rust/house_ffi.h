@@ -81,7 +81,6 @@ struct OpenTTDHouseServices {
 	uint32_t (*scale_cargo)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(scale_cargo);
 	uint8_t (*cargogen_mode)() noexcept OPENTTD_SERVICE_DEFAULT(cargogen_mode);
 	uint8_t (*place_houses)() noexcept OPENTTD_SERVICE_DEFAULT(place_houses);
-	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
 	OpenTTDHouseErrors errors;
 };
 /* Resolver and AnimationBase services live beside their native templates. */

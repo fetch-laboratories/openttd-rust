@@ -180,7 +180,7 @@ void Packet::Send_string(std::string_view data)
  * Copy a sized byte buffer into the packet.
  * @param data The data to send.
  */
-void Packet::Send_buffer(const std::vector<uint8_t> &data)
+void Packet::Send_buffer(std::span<const uint8_t> data)
 {
 	assert(this->CanWriteToPacket(openttd_rust_packet_buffer_size(data.size())));
 	this->Send_uint16(openttd_rust_packet_prefix(data.size()));

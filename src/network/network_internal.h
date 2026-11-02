@@ -18,6 +18,7 @@
 #include "../command_func.h"
 #include "../misc/endian_buffer.hpp"
 #include "../strings_type.h"
+#include "../rust/network_lifecycle_ffi.h"
 
 #ifdef RANDOM_DEBUG
 /**
@@ -53,21 +54,19 @@ enum NetworkJoinStatus : uint8_t {
 	NETWORK_JOIN_STATUS_END,
 };
 
-extern uint32_t _frame_counter_server; // The frame_counter of the server, if in network-mode
-extern uint32_t _frame_counter_max; // To where we may go with our clients
-extern uint32_t _frame_counter;
+inline uint32_t &_frame_counter_server = GetRustNetworkFrameState().frame_counter_server; ///< The frame_counter of the server, if in network-mode
+inline uint32_t &_frame_counter_max = GetRustNetworkFrameState().frame_counter_max; ///< To where we may go with our clients
+inline uint32_t &_frame_counter = GetRustNetworkFrameState().frame_counter; ///< The current frame.
 
-extern uint32_t _last_sync_frame; // Used in the server to store the last time a sync packet was sent to clients.
+inline uint32_t &_last_sync_frame = GetRustNetworkFrameState().last_sync_frame; ///< Used in the server to store the last time a sync packet was sent to clients.
 
 /* networking settings */
 extern NetworkAddressList _broadcast_list;
 
-extern uint32_t _sync_seed_1;
-#ifdef NETWORK_SEND_DOUBLE_SEED
-extern uint32_t _sync_seed_2;
-#endif
-extern uint32_t _sync_frame;
-extern bool _network_first_time;
+inline uint32_t &_sync_seed_1 = GetRustNetworkFrameState().sync_seed_1; ///< Seed to compare during sync checks.
+inline uint32_t &_sync_seed_2 = GetRustNetworkFrameState().sync_seed_2; ///< Second part of the seed.
+inline uint32_t &_sync_frame = GetRustNetworkFrameState().sync_frame; ///< The frame to perform the sync check.
+inline bool &_network_first_time = GetRustNetworkFrameState().network_first_time; ///< Whether we have finished joining or not.
 /* Vars needed for the join-GUI */
 extern NetworkJoinStatus _network_join_status;
 extern uint8_t _network_join_waiting;
@@ -89,24 +88,6 @@ void NetworkRebuildHostList();
 void UpdateNetworkGameWindow();
 
 /* From network_command.cpp */
-/**
- * Everything we need to know about a command to be able to execute it.
- */
-struct CommandPacket {
-	CompanyID company = CompanyID::Invalid(); ///< company that is executing the command
-	uint32_t frame = 0; ///< the frame in which this packet is executed
-	bool my_cmd = false; ///< did the command originate from "me"
-
-	Commands cmd{}; ///< command being executed.
-	StringID err_msg{}; ///< string ID of error message to use.
-	CommandCallback *callback = nullptr; ///< any callback function executed upon successful completion of the command.
-	CommandDataBuffer data{}; ///< command parameters.
-};
-
-void NetworkDistributeCommands();
-void NetworkExecuteLocalCommandQueue();
-void NetworkFreeLocalCommandQueue();
-void NetworkSyncCommandQueue(NetworkClientSocket *cs);
 void NetworkReplaceCommandClientId(CommandPacket &cp, ClientID client_id);
 
 void ShowNetworkError(StringID error_string);

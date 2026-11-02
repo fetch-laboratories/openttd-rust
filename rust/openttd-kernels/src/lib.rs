@@ -1492,4 +1492,11 @@ mod story_type;
 mod void_map;
 mod window_type;
 
+mod network_client;
+mod network_command;
+mod network_connection;
+mod network_frame;
+mod network_internal;
+mod network_lifecycle;
 mod network_type;
+mod tcp_game;

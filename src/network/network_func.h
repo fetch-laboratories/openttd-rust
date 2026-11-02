@@ -40,9 +40,7 @@ bool NetworkValidateServerName(std::string &server_name);
 void NetworkUpdateClientName(const std::string &client_name);
 void NetworkUpdateServerGameType();
 bool NetworkCompanyHasClients(CompanyID company);
-void NetworkReboot();
 void NetworkDisconnect(bool close_admins = true);
-void NetworkGameLoop();
 void NetworkBackgroundLoop();
 std::string_view ParseFullConnectionString(std::string_view connection_string, uint16_t &port, CompanyID *company_id = nullptr);
 using NetworkCompanyStatsArray = TypedIndexContainer<std::array<NetworkCompanyStats, MAX_COMPANIES>, CompanyID>;
@@ -51,7 +49,6 @@ NetworkCompanyStatsArray NetworkGetCompanyStats();
 void NetworkUpdateClientInfo(ClientID client_id);
 void NetworkClientsToSpectators(CompanyID cid);
 bool NetworkClientConnectGame(std::string_view connection_string, CompanyID default_company, const std::string &join_server_password = "");
-void NetworkClientJoinGame();
 void NetworkClientRequestMove(CompanyID company);
 void NetworkClientSendRcon(std::string_view password, std::string_view command);
 void NetworkClientSendChat(NetworkAction action, DestType type, int dest, std::string_view msg, int64_t data = 0);
@@ -62,13 +59,11 @@ void NetworkPrintClients();
 std::string_view NetworkGetPublicKeyOfClient(ClientID client_id);
 void NetworkHandlePauseChange(PauseModes prev_mode, PauseMode changed_mode);
 
-void NetworkOnGameStart();
 
 /*** Commands ran by the server ***/
 void NetworkServerSendConfigUpdate();
 void NetworkServerUpdateGameInfo();
 void NetworkServerShowStatusToConsole();
-bool NetworkServerStart();
 void NetworkServerNewCompany(const Company *company, NetworkClientInfo *ci);
 bool NetworkServerChangeClientName(ClientID client_id, const std::string &new_name);
 

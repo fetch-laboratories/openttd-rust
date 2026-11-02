@@ -11,6 +11,7 @@
 #define NETWORK_CLIENT_H
 
 #include "network_internal.h"
+#include "../rust/network_client_ffi.h"
 
 /** Class for handling the client side of the game connection. */
 class ClientNetworkGameSocketHandler : public NetworkGameSocketHandler {
@@ -18,7 +19,6 @@ private:
 	std::unique_ptr<class NetworkAuthenticationClientHandler> authentication_handler = nullptr; ///< The handler for the authentication.
 	std::string connection_string; ///< Address we are connected to.
 	std::shared_ptr<struct PacketReader> savegame = nullptr; ///< Packet reader for reading the savegame.
-	uint8_t token = 0; ///< The token we need to send back to the server to prove we're the right client.
 
 	/** Status of the connection with the server. */
 	enum ServerStatus : uint8_t {
@@ -37,8 +37,9 @@ private:
 	ServerStatus status = STATUS_INACTIVE; ///< Status of the connection with the server.
 
 protected:
-	friend void NetworkExecuteLocalCommandQueue();
-	friend void NetworkClose(bool close_admins);
+	friend const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;
+	friend const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;
+	friend const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 	static ClientNetworkGameSocketHandler *my_client; ///< This is us!
 
 	NetworkRecvStatus Receive_SERVER_FULL(Packet &p) override;
@@ -68,9 +69,6 @@ protected:
 	NetworkRecvStatus Receive_SERVER_MOVE(Packet &p) override;
 	NetworkRecvStatus Receive_SERVER_CONFIG_UPDATE(Packet &p) override;
 
-	static NetworkRecvStatus SendNewGRFsOk();
-	static NetworkRecvStatus SendGetMap();
-	static NetworkRecvStatus SendMapOk();
 	static NetworkRecvStatus SendIdentify();
 	void CheckConnection();
 public:
@@ -80,11 +78,7 @@ public:
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
 	void ClientError(NetworkRecvStatus res);
 
-	static NetworkRecvStatus SendJoin();
-	static NetworkRecvStatus SendCommand(const CommandPacket &cp);
-	static NetworkRecvStatus SendError(NetworkErrorCode errorno);
-	static NetworkRecvStatus SendQuit();
-	static NetworkRecvStatus SendAck();
+	static NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 
 	static NetworkRecvStatus SendAuthResponse();
 
@@ -97,7 +91,6 @@ public:
 
 	static void Send();
 	static bool Receive();
-	static bool GameLoop();
 };
 
 /** Helper to make the code look somewhat nicer. */

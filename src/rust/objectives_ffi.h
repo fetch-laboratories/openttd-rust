@@ -58,7 +58,6 @@ struct OpenTTDObjectivesServices {
 	uint8_t (*table_allocate)(const EncodedString *, const EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(table_allocate);
 	uint16_t (*entry_allocate)(uint8_t, int64_t, uint8_t, const EncodedString *, const EncodedString *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);
 	const OpenTTDOrdersLeaves *orders;
-	bool (*client_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(client_valid);
 	const OpenTTDSubsidyServices *subsidy;
 	const OpenTTDRoadCommandServices *road_commands;
 	bool (*vehicle_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_valid);

@@ -27,6 +27,7 @@ inline void RustCompanyAssignVehicleUnit(uint32_t id, uint8_t company) noexcept
 inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
 inline bool RustCompanyIsHuman(uint8_t company) noexcept { return Company::IsHumanID(CompanyID{company}); }
 inline uint16_t RustCompanyRoadVehicleCount(const Company *company) noexcept { return company->group_all[VEH_ROAD].num_vehicle; }
+inline bool RustCompanyAllowsPublicKey(uint8_t company, std::string_view public_key) noexcept { return Company::Get(company)->allow_list.Contains(public_key); }
 inline bool OpenTTDCompanyIsValidHuman(uint8_t company) noexcept { return Company::IsValidHumanID(CompanyID(company)); }
 inline CompanyID OpenTTDCurrentCompany() noexcept { return _current_company; }
 inline void OpenTTDSetCurrentCompany(CompanyID company) noexcept { _current_company = company; }

@@ -23,6 +23,7 @@ extern NetworkClientSocketPool _networkclientsocket_pool;
 /** Class for handling the server side of the game connection. */
 class ServerNetworkGameSocketHandler : public NetworkClientSocketPool::PoolItem<&_networkclientsocket_pool>, public NetworkGameSocketHandler, public TCPListenHandler<ServerNetworkGameSocketHandler, PACKET_SERVER_FULL, PACKET_SERVER_BANNED> {
 protected:
+	friend const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexcept;
 	std::unique_ptr<class NetworkAuthenticationServerHandler> authentication_handler = nullptr; ///< The handler for the authentication.
 	std::string peer_public_key{}; ///< The public key of our client.
 
@@ -43,8 +44,6 @@ protected:
 	NetworkRecvStatus Receive_CLIENT_MOVE(Packet &p) override;
 
 	NetworkRecvStatus SendGameInfo();
-	NetworkRecvStatus SendNewGRFCheck();
-	NetworkRecvStatus SendWelcome();
 	NetworkRecvStatus SendAuthRequest();
 	NetworkRecvStatus SendEnableEncryption();
 
@@ -64,12 +63,8 @@ public:
 		STATUS_END,           ///< Must ALWAYS be on the end of this list!! (period).
 	};
 
-	uint8_t lag_test = 0; ///< Byte used for lag-testing the client
-	uint8_t last_token = 0; ///< The last random token we did send to verify the client is listening
-	uint32_t last_token_frame = 0; ///< The last frame we received the right token
 	ClientStatus status = STATUS_INACTIVE; ///< Status of this client
 	CommandQueue outgoing_queue{}; ///< The command-queue awaiting delivery; conceptually more a bucket to gather commands in, after which the whole bucket is sent to the client.
-	size_t receive_limit = 0; ///< Amount of bytes that we can receive at this moment
 
 	std::shared_ptr<struct PacketWriter> savegame = nullptr; ///< Writer used to write the savegame.
 	NetworkAddress client_address{}; ///< IP-address of the client (so they can be banned)
@@ -81,14 +76,8 @@ public:
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
 	std::string GetClientName() const;
 
-	void CheckNextClientToSendMap(NetworkClientSocket *ignore_cs = nullptr);
 
-	NetworkRecvStatus SendWait();
 	NetworkRecvStatus SendMap();
-	NetworkRecvStatus SendErrorQuit(ClientID client_id, NetworkErrorCode errorno);
-	NetworkRecvStatus SendQuit(ClientID client_id);
-	NetworkRecvStatus SendShutdown();
-	NetworkRecvStatus SendNewGame();
 	NetworkRecvStatus SendRConResult(uint16_t colour, std::string_view command);
 	NetworkRecvStatus SendMove(ClientID client_id, CompanyID company_id);
 
@@ -96,10 +85,7 @@ public:
 	NetworkRecvStatus SendError(NetworkErrorCode error, std::string_view reason = {});
 	NetworkRecvStatus SendChat(NetworkAction action, ClientID client_id, bool self_send, std::string_view msg, int64_t data);
 	NetworkRecvStatus SendExternalChat(std::string_view source, TextColour colour, std::string_view user, std::string_view msg);
-	NetworkRecvStatus SendJoin(ClientID client_id);
-	NetworkRecvStatus SendFrame();
-	NetworkRecvStatus SendSync();
-	NetworkRecvStatus SendCommand(const CommandPacket &cp);
+	NetworkRecvStatus SendCommand(const OpenTTDCommandPacket &cp);
 	NetworkRecvStatus SendConfigUpdate();
 
 	static void Send();
@@ -121,7 +107,6 @@ public:
 	static ServerNetworkGameSocketHandler *GetByClientID(ClientID client_id);
 };
 
-void NetworkServer_Tick(bool send_frame);
 void ChangeNetworkRestartTime(bool reset);
 
 #endif /* NETWORK_SERVER_H */

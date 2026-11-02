@@ -75,7 +75,7 @@ public:
 	void   Send_uint32(uint32_t data);
 	void   Send_uint64(uint64_t data);
 	void   Send_string(std::string_view data);
-	void   Send_buffer(const std::vector<uint8_t> &data);
+	void   Send_buffer(std::span<const uint8_t> data);
 	std::span<const uint8_t> Send_bytes(const std::span<const uint8_t> span);
 
 	/* Reading/receiving of packets */
