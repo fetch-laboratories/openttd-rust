@@ -20,7 +20,6 @@ add_files(
     newgrf_act0.cpp
     newgrf_act1.cpp
     newgrf_act2.cpp
-    newgrf_act3.cpp
     newgrf_act5.cpp
     newgrf_act6.cpp
     newgrf_act7_9.cpp

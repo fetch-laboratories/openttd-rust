@@ -156,3 +156,6 @@ impl crate::map_func::World<'_> {
 pub(crate) fn is_compatible_rail(s: &crate::services::Services, engine: u8, tile: u8) -> bool {
     (crate::pbs::Pbs::acquire(s).0.compatible)(engine) & (1_u64 << tile) != 0
 }
+
+/// `RailTypeSpriteGroup::RTSG_END`.
+pub const RTSG_END: u8 = 13;

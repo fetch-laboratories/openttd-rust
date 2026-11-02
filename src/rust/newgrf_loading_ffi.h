@@ -100,7 +100,6 @@ struct OpenTTDGrfLoadingServices {
 	bool (*feature_change_info)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_change_info);
 	bool (*skip_act1)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act1);
 	bool (*new_sprite_set)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(new_sprite_set);
-	bool (*feature_map_sprite_group)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_map_sprite_group);
 	bool (*skip_act5)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act5);
 	bool (*graphics_new)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(graphics_new);
 	bool (*skip_act_a)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act_a);

@@ -83,7 +83,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.feature_change_info = ParseGrfAction<&GrfActionHandler<0x00>::Activation>,
 		.skip_act1 = ParseGrfAction<&GrfActionHandler<0x01>::FileScan>,
 		.new_sprite_set = ParseGrfAction<&GrfActionHandler<0x01>::Activation>,
-		.feature_map_sprite_group = ParseGrfAction<&GrfActionHandler<0x03>::Activation>,
 		.skip_act5 = ParseGrfAction<&GrfActionHandler<0x05>::FileScan>,
 		.graphics_new = ParseGrfAction<&GrfActionHandler<0x05>::Activation>,
 		.skip_act_a = ParseGrfAction<&GrfActionHandler<0x0A>::FileScan>,

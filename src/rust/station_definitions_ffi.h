@@ -91,9 +91,5 @@ void openttd_rust_station_class_set_name(const StationSpec *, StringID);
 void openttd_rust_roadstop_class_set_name(const RoadStopSpec *, StringID);
 bool openttd_rust_station_change_info(const OpenTTDStationDefinitionServices *, const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, OpenTTDStationSequence *, uint8_t *);
 bool openttd_rust_roadstop_change_info(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
-void openttd_rust_station_map_specific(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, uint8_t, const SpriteGroup *);
-void openttd_rust_station_map_default(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, const SpriteGroup *);
-void openttd_rust_roadstop_map_specific(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, uint8_t, const SpriteGroup *);
-void openttd_rust_roadstop_map_default(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, const SpriteGroup *);
 }
 #endif

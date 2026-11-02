@@ -4,6 +4,7 @@
 use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_config::{GCS_ACTIVATED, GCS_INITIALISED};
 use crate::newgrf_loading::{self as loading, Services};
+use std::ffi::c_void;
 
 pub(crate) unsafe fn translate_grf_strings(
     s: &Services,
@@ -73,13 +74,27 @@ pub(crate) unsafe fn translate_grf_strings(
 
 #[repr(C)]
 pub struct BindingServices {
-    badge_name: unsafe extern "C" fn(*mut std::ffi::c_void, u16) -> *mut u32,
-    engine_string: unsafe extern "C" fn(*const crate::engine_type::OpenTTDEngine) -> *mut u32,
-    new_name: unsafe extern "C" fn(u16, *const u8, usize),
+    pub(crate) badge_bind: unsafe extern "C" fn(*mut c_void, u16, u8, *const c_void) -> bool,
+    pub(crate) badge_name: unsafe extern "C" fn(*mut c_void, u16) -> *mut u32,
+    pub(crate) canal_bind: unsafe extern "C" fn(u8, *const c_void, *const c_void),
+    pub(crate) cargo_bind: unsafe extern "C" fn(u8, *const c_void, *const c_void),
+    pub(crate) custom_engine_sprites: unsafe extern "C" fn(u16, u8, *const c_void),
+    pub(crate) engine_grf: unsafe extern "C" fn(u16, *const c_void),
+    pub(crate) engine_string:
+        unsafe extern "C" fn(*const crate::engine_type::OpenTTDEngine) -> *mut u32,
+    pub(crate) invalid_engine: unsafe extern "C" fn(u8),
+    pub(crate) mark_feature: unsafe extern "C" fn(*mut c_void, u8),
+    pub(crate) new_name: unsafe extern "C" fn(u16, *const u8, usize),
+    pub(crate) object_spec: unsafe extern "C" fn(*mut c_void, u16) -> *mut crate::objects::Spec,
+    pub(crate) rail_bind: unsafe extern "C" fn(u8, u8, *const c_void, *const c_void),
+    pub(crate) road_bind: unsafe extern "C" fn(u8, u8, *const c_void, *const c_void),
+    pub(crate) tram_bind: unsafe extern "C" fn(u8, u8, *const c_void, *const c_void),
+    pub(crate) wagon_override:
+        unsafe extern "C" fn(u16, u8, *const c_void, *mut crate::engine_type::EngineID, usize),
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfBindingServices" ["grf_loading"] => BindingServices { badge_name, engine_string, new_name };
+    "OpenTTDGrfBindingServices" ["grf_loading"] => BindingServices { badge_bind, badge_name, canal_bind, cargo_bind, custom_engine_sprites, engine_grf, engine_string, invalid_engine, mark_feature, new_name, object_spec, rail_bind, road_bind, tram_bind, wagon_override };
 }
 
 pub(crate) unsafe fn feature_new_name(

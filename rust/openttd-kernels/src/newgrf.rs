@@ -232,3 +232,8 @@ pub const GSF_BADGES: u8 = 21;
 
 /// `GSF_ORIGINAL_STRINGS`.
 pub const GSF_ORIGINAL_STRINGS: u8 = 0x48;
+
+/// `CanalFeature::CF_END`.
+pub const CF_END: u16 = 9;
+/// `GSF_DEFAULT`.
+pub const GSF_DEFAULT: u8 = GSF_END;

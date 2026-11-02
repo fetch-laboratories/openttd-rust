@@ -26,7 +26,7 @@ const GSF_ROADSTOPS: u8 = crate::newgrf::GSF_ROADSTOPS;
 #[repr(C)]
 pub struct Services {
     empty_string: u32,
-    cargo: *const crate::newgrf_act3::Services,
+    pub(crate) cargo: *const crate::newgrf_act3::Services,
     reader: *const crate::newgrf_bytereader::Services,
     shared: *const crate::services::Services,
     station_resize: unsafe extern "C" fn(*mut c_void, u32) -> (),
@@ -516,8 +516,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_change_info(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_map_specific(
+pub(crate) unsafe fn station_map_specific(
     s: *const Services,
     file: *mut c_void,
     id: u16,
@@ -541,8 +540,7 @@ pub unsafe extern "C" fn openttd_rust_station_map_specific(
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_map_default(
+pub(crate) unsafe fn station_map_default(
     s: *const Services,
     file: *mut c_void,
     id: u16,
@@ -568,8 +566,7 @@ pub unsafe extern "C" fn openttd_rust_station_map_default(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_roadstop_map_specific(
+pub(crate) unsafe fn roadstop_map_specific(
     s: *const Services,
     file: *mut c_void,
     id: u16,
@@ -593,8 +590,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_map_specific(
         }
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_roadstop_map_default(
+pub(crate) unsafe fn roadstop_map_default(
     s: *const Services,
     file: *mut c_void,
     id: u16,
