@@ -75,7 +75,6 @@ pub struct Services {
     pub map_create: extern "C" fn(*mut c_void),
     pub map_exists: extern "C" fn(*mut c_void) -> bool,
     pub map_load: extern "C" fn(*mut c_void) -> bool,
-    pub map_loaded_stats: extern "C" fn(),
     pub new_company: extern "C" fn(u32),
     pub own_client_id: *mut u32,
     pub reconnect: *mut u8,
@@ -149,7 +148,6 @@ crate::abi::layouts! {
         map_create,
         map_exists,
         map_load,
-        map_loaded_stats,
         new_company,
         own_client_id,
         reconnect,
@@ -425,6 +423,7 @@ pub extern "C" fn openttd_rust_network_client_receive_map_data(
 pub extern "C" fn openttd_rust_network_client_receive_map_done(
     s: &Services,
     f: &FrameServices,
+    session: &crate::session::Services,
     game: *mut c_void,
 ) -> u8 {
     if status(s, game) != status::MAP || !(s.map_exists)(game) {
@@ -441,7 +440,7 @@ pub extern "C" fn openttd_rust_network_client_receive_map_done(
         return NETWORK_RECV_STATUS_SAVEGAME;
     }
     send_map_ok(s, f);
-    (s.map_loaded_stats)();
+    (session.reset_session_stats)();
     (s.show_client_list)();
     if join_company(s) == crate::company_type::COMPANY_NEW_COMPANY
         || !(f.command.company.shared.company_valid)(join_company(s))

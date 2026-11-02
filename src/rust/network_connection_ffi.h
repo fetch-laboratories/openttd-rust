@@ -66,7 +66,6 @@ struct OpenTTDNetworkConnectionServices {
 	OpenTTDCommandQueue * (*outgoing_queue)(void *) noexcept OPENTTD_SERVICE_DEFAULT(outgoing_queue);
 	bool (*pause_on_join)() noexcept OPENTTD_SERVICE_DEFAULT(pause_on_join);
 	void (*quit_announcement)(void *) noexcept OPENTTD_SERVICE_DEFAULT(quit_announcement);
-	void (*reset_company_empty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_company_empty);
 	bool (*revision_compatible)(void *) noexcept OPENTTD_SERVICE_DEFAULT(revision_compatible);
 	uint8_t (*send_client_info)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(send_client_info);
 	uint8_t (*send_config)(void *) noexcept OPENTTD_SERVICE_DEFAULT(send_config);

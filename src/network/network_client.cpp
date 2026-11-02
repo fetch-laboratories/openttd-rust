@@ -36,6 +36,7 @@
 #include "table/strings.h"
 
 #include "../rust/network_client_ffi.h"
+#include "../rust/session_ffi.h"
 #include "../rust/settings_services.h"
 
 #include "../safeguards.h"
@@ -460,7 +461,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DATA(Packet
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MAP_DONE(Packet &)
 {
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_done(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<NetworkGameSocketHandler *>(this)));
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_receive_map_done(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), &GetRustSessionServices(), static_cast<NetworkGameSocketHandler *>(this)));
 }
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_FRAME(Packet &p)
@@ -910,7 +911,6 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 			cs->savegame = nullptr;
 			return success;
 		},
-		.map_loaded_stats = []() noexcept { _game_session_stats.start_time = std::chrono::steady_clock::now(); _game_session_stats.savegame_size = std::nullopt; },
 		.new_company = [](uint32_t client_id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_NEW, CompanyID::Invalid(), CRR_NONE, static_cast<ClientID>(client_id)); },
 		.own_client_id = reinterpret_cast<uint32_t *>(&_network_own_client_id),
 		.reconnect = &_network_reconnect,

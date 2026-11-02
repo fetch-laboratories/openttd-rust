@@ -90,7 +90,6 @@ pub struct Services {
     pub outgoing_queue: extern "C" fn(*mut c_void) -> *mut crate::network_command::CommandQueue,
     pub pause_on_join: extern "C" fn() -> bool,
     pub quit_announcement: extern "C" fn(*mut c_void),
-    pub reset_company_empty: extern "C" fn(u8),
     pub revision_compatible: extern "C" fn(*mut c_void) -> bool,
     pub send_client_info: extern "C" fn(*mut c_void, *mut c_void) -> u8,
     pub send_config: extern "C" fn(*mut c_void) -> u8,
@@ -166,7 +165,6 @@ crate::abi::layouts! {
         outgoing_queue,
         pause_on_join,
         quit_announcement,
-        reset_company_empty,
         revision_compatible,
         send_client_info,
         send_config,
@@ -526,7 +524,10 @@ pub extern "C" fn openttd_rust_network_receive_identify(
         return send_error(s, f, socket, NETWORK_ERROR_NAME_IN_USE, EMPTY_TEXT);
     }
     (s.allocate_info)(socket, name, company);
-    (s.reset_company_empty)(company);
+    let finances = (f.command.company.finance.company_finances)(company);
+    if !finances.is_null() {
+        write_field!(finances, empty, 0);
+    }
     send_newgrf_check(s, f, socket)
 }
 
