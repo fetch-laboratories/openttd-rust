@@ -103,7 +103,7 @@ struct SessionFixture {
 		clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
 		clock.using_wallclock_units = [](bool) noexcept { return true; };
 		services.clock = &clock;
-		services.desync_level = []() noexcept -> int32_t { return 0; };
+		world.desync_level = []() noexcept -> int32_t { return 0; };
 		services.check_caches = Nothing;
 		services.company_begin = FrameNothing;
 		services.company_restore = FrameNothing;
@@ -115,15 +115,14 @@ struct SessionFixture {
 		services.shared = &shared;
 		services.schedule = &schedule;
 		services.world = []() noexcept -> const OpenTTDWorldServices * { return &active->world; };
-		services.networking = []() noexcept { return true; };
-		services.network_server = []() noexcept { return false; };
-		services.modal = []() noexcept { return false; };
+		finance.networking = []() noexcept { return true; };
+		companies.network_server = []() noexcept { return false; };
+		world.modal = []() noexcept { return false; };
 		services.state_frame_begin = [](OpenTTDSessionFrameStorage *p) noexcept { return reinterpret_cast<OpenTTDSessionFrame *>(p); };
 		services.state_frame_end = [](OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept { return true; };
 		services.state_begin = FrameNothing;
 		services.tile_loop_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDGenerationLoop * { active->in_loop = true; return &active->loop; };
 		services.tile_loop_end = FrameNothing;
-		services.map_log_y = []() noexcept -> uint32_t { return 6; };
 		services.vehicle_tables = [](OpenTTDSessionFrame *, bool) noexcept { return active->tables; };
 		services.vehicle_cost = [](OpenTTDSessionFrame *) noexcept -> OpenTTDCommandCost * { return nullptr; };
 		services.vehicle_end = FrameNothing;
@@ -147,7 +146,7 @@ struct SessionFixture {
 		services.station = &stations;
 		services.links = &links;
 		services.visits = &visits;
-		services.industry_builder = []() noexcept { return active->builder; };
+		services.industry_builder = builder;
 		services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept -> void * { return nullptr; };
 		services.schedule_end = FrameNothing;
 		services.window_tick = Nothing;

@@ -38,7 +38,7 @@ pub(crate) struct Services {
     next_graph: extern "C" fn(*mut u32) -> *mut Graph,
     next_job: extern "C" fn(*mut u32) -> *mut Job,
     shift_job: extern "C" fn(*mut Job, i32),
-    post_pause: extern "C" fn(crate::openttd::PauseMode, bool),
+    pub(crate) post_pause: extern "C" fn(crate::openttd::PauseMode, bool),
     begin_measurement: extern "C" fn(*mut c_void, bool),
 }
 crate::abi::layouts! {

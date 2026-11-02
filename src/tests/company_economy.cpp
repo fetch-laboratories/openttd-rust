@@ -382,6 +382,8 @@ TEST_CASE("Company economy - competitor posts return to the caller before each P
 		SessionFixture fixture;
 		auto companies = fixture_services;
 		companies.shared = &fixture.shared;
+		fixture.finance.networking = FixtureNetworking;
+		companies.network_server = FixtureServer;
 		companies.competitor_fired = []() noexcept { return true; };
 		companies.ai_can_start = []() noexcept { return true; };
 		companies.company_count = []() noexcept -> size_t { return 0; };

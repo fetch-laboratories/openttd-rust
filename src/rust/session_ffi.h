@@ -23,15 +23,9 @@ struct OpenTTDSessionServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDScheduleServices *schedule;
 	const OpenTTDWorldServices *(*world)() noexcept OPENTTD_SERVICE_DEFAULT(world);
-	bool (*networking)() noexcept OPENTTD_SERVICE_DEFAULT(networking);
-	bool (*network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
-	bool (*dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(dedicated);
 	bool (*server_requested)() noexcept OPENTTD_SERVICE_DEFAULT(server_requested);
 	void (*clear_server_requested)() noexcept OPENTTD_SERVICE_DEFAULT(clear_server_requested);
 	bool (*network_available)() noexcept OPENTTD_SERVICE_DEFAULT(network_available);
-	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
-	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);
-	bool (*modal)() noexcept OPENTTD_SERVICE_DEFAULT(modal);
 	void (*network_reboot)() noexcept OPENTTD_SERVICE_DEFAULT(network_reboot);
 	void (*network_disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(network_disconnect);
 	bool (*network_server_start)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_server_start);
@@ -43,8 +37,6 @@ struct OpenTTDSessionServices {
 	void (*reset_session_stats)() noexcept OPENTTD_SERVICE_DEFAULT(reset_session_stats);
 	void (*reset_file_mode)() noexcept OPENTTD_SERVICE_DEFAULT(reset_file_mode);
 	void (*generate_id)() noexcept OPENTTD_SERVICE_DEFAULT(generate_id);
-	void (*reset_windows)() noexcept OPENTTD_SERVICE_DEFAULT(reset_windows);
-	void (*setup_windows)() noexcept OPENTTD_SERVICE_DEFAULT(setup_windows);
 	void (*fix_title_zoom)() noexcept OPENTTD_SERVICE_DEFAULT(fix_title_zoom);
 	void (*release_cursor)() noexcept OPENTTD_SERVICE_DEFAULT(release_cursor);
 	void (*check_glyphs)() noexcept OPENTTD_SERVICE_DEFAULT(check_glyphs);
@@ -74,11 +66,9 @@ struct OpenTTDSessionServices {
 	bool (*has_gui)() noexcept OPENTTD_SERVICE_DEFAULT(has_gui);
 	bool (*pause_on_newgame)() noexcept OPENTTD_SERVICE_DEFAULT(pause_on_newgame);
 	Colours (*starting_colour)() noexcept OPENTTD_SERVICE_DEFAULT(starting_colour);
-	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	void (*settings_elrail)(bool) noexcept OPENTTD_SERVICE_DEFAULT(settings_elrail);
 	void (*company_settings)() noexcept OPENTTD_SERVICE_DEFAULT(company_settings);
 	void (*company_colour)(bool, Colours) noexcept OPENTTD_SERVICE_DEFAULT(company_colour);
-	void (*post_pause)(PauseMode, bool) noexcept OPENTTD_SERVICE_DEFAULT(post_pause);
 	void (*reset_ai_config)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_ai_config);
 	void (*reset_game_config)() noexcept OPENTTD_SERVICE_DEFAULT(reset_game_config);
 	void (*publish_settings)() noexcept OPENTTD_SERVICE_DEFAULT(publish_settings);
@@ -124,8 +114,6 @@ struct OpenTTDSessionServices {
 	void (*paused_measurements)() noexcept OPENTTD_SERVICE_DEFAULT(paused_measurements);
 	bool (*scripts_enabled)() noexcept OPENTTD_SERVICE_DEFAULT(scripts_enabled);
 	void (*assert_local_company)() noexcept OPENTTD_SERVICE_DEFAULT(assert_local_company);
-	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
-	uint32_t (*map_log_y)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_y);
 	bool (*tick_timer)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tick_timer);
 	const OpenTTDGenerationLoop * (*tile_loop_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tile_loop_begin);
 	void (*tile_loop_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tile_loop_end);
@@ -137,7 +125,7 @@ struct OpenTTDSessionServices {
 	const OpenTTDStationServices *station;
 	const OpenTTDStationLinks *links;
 	const OpenTTDVehicleVisits *visits;
-	OpenTTDIndustryBuilder *(*industry_builder)() noexcept OPENTTD_SERVICE_DEFAULT(industry_builder);
+	OpenTTDIndustryBuilder *industry_builder;
 	bool (*post_ai)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(post_ai);
 	const OpenTTDRoadCommandContext *(*road_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(road_begin);
 	void (*road_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(road_end);

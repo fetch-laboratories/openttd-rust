@@ -131,7 +131,7 @@ static void Tick(int date, int fract, bool client = false)
 		std::optional<PerformanceMeasurer> m;
 		static void *measurement; measurement = &m;
 		fixture.services.schedule = &services;
-		fixture.services.networking = []() noexcept { return _networking; };
+		fixture.finance.networking = []() noexcept { return _networking; };
 		fixture.services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept { return measurement; };
 		if (!fixture.Run()) std::abort();
 	}
@@ -145,8 +145,8 @@ static void Pause(int bits, bool load = false)
 		fixture.services.schedule = &services;
 		if (load) { _pause_mode = {}; openttd_rust_schedule_after_load(&services); fixture_pause_mode.bits = _pause_mode.Test(PauseMode::LinkGraph) ? 1 : 0; }
 		else {
-			fixture.services.networking = []() noexcept { return false; };
-			fixture.services.modal = []() noexcept { return true; };
+			fixture.finance.networking = []() noexcept { return false; };
+			fixture.world.modal = []() noexcept { return true; };
 			fixture.services.paused_measurements = SessionFixture::Nothing;
 			fixture.services.scripts_enabled = []() noexcept { return false; };
 			PauseModes pause; if (bits & 1) pause.Set(PauseMode::LinkGraph); if (bits & 2) pause.Set(PauseMode::Normal);
