@@ -813,7 +813,11 @@ def sprite_binding(
 
 def binding_fixtures(folder: Path) -> None:
     """Saves erase binding identity/order and partial parse history; earlier GRFs omit these handlers."""
-    main = [info(b"BD52"), action2(0, 210, [], 0x8091), action2(0, 211, [], 0x8092)]
+    main = [
+        info(b"BD52"),
+        action2(0, 210, [(0x8091, 0, 255)], 0x8091),
+        action2(0, 211, [(0x8092, 0, 255)], 0x8092),
+    ]
     main += [
         sprite_binding(0, [0, 1], [(0, 210), (255, 211), (254, 256)], 210),
         sprite_binding(0, [27], [(0, 211)], 211, True),
@@ -836,7 +840,10 @@ def binding_fixtures(folder: Path) -> None:
     ):
         main.append(grf_property(feature, 0, 8, value))
     for feature in (4, 5, 7, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20, 21):
-        main += [action2(feature, 210, [], 0x8091), action2(feature, 211, [], 0x8092)]
+        main += [
+            action2(feature, 210, [(0x8091, 0, 255)], 0x8091),
+            action2(feature, 211, [(0x8092, 0, 255)], 0x8092),
+        ]
         if feature in (4, 20):
             cargos = [(0, 210), (254, 211), (255, 210), (254, 256)]
         elif feature in (16, 18, 19, 21):
@@ -865,7 +872,7 @@ def binding_fixtures(folder: Path) -> None:
             "bindings-after-ids",
             [
                 info(b"BO52"),
-                action2(0, 210, [], 0x8094),
+                action2(0, 210, [(0x8094, 0, 255)], 0x8094),
                 sprite_binding(0, [27], [], 210, True),
             ],
         ),
@@ -873,7 +880,7 @@ def binding_fixtures(folder: Path) -> None:
             "bindings-partial-group",
             [
                 info(b"BQ52"),
-                action2(0, 210, [], 0x8095),
+                action2(0, 210, [(0x8095, 0, 255)], 0x8095),
                 sprite_binding(0, [3], [(0, 210)], 210)[:-2],
             ],
         ),
@@ -881,7 +888,7 @@ def binding_fixtures(folder: Path) -> None:
             "bindings-after-group",
             [
                 info(b"BR52"),
-                action2(0, 210, [], 0x8096),
+                action2(0, 210, [(0x8096, 0, 255)], 0x8096),
                 sprite_binding(0, [27], [], 210, True),
             ],
         ),
@@ -892,11 +899,19 @@ def binding_fixtures(folder: Path) -> None:
         *histories,
         (
             "bindings-generic-a",
-            [info(b"BG52"), action2(1, 210, [], 0x8097), bytes((3, 1, 0, 123, 210, 0))],
+            [
+                info(b"BG52"),
+                action2(1, 210, [(0x8097, 0, 255)], 0x8097),
+                bytes((3, 1, 0, 123, 210, 0)),
+            ],
         ),
         (
             "bindings-generic-b",
-            [info(b"BH52"), action2(1, 210, [], 0x8098), bytes((3, 1, 0, 99, 210, 0))],
+            [
+                info(b"BH52"),
+                action2(1, 210, [(0x8098, 0, 255)], 0x8098),
+                bytes((3, 1, 0, 99, 210, 0)),
+            ],
         ),
     ]:
         (folder / f"{name}.grf").write_bytes(grf(actions, 2))
