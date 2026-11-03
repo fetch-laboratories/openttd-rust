@@ -162,6 +162,7 @@ def start(
                     "client_name": "Protocol574" + mode,
                     "participate_survey": "no",
                     "max_commands_in_queue": "128",
+                    "client_secret_key": multiplayer.AUTH_SECRET,
                 },
             },
         },
@@ -207,6 +208,7 @@ def start(
             "XDG_CONFIG_HOME": str(folder / "config"),
             "XDG_CACHE_HOME": str(folder / "cache"),
             "SDL_VIDEODRIVER": "offscreen",
+            "OPENTTD_PROTOCOL_KEY": multiplayer.AUTH_PUBLIC,
             "OPENTTD_PROTOCOL_STOP": str(
                 core.rows(source, "DATE")[0]["tick_counter"] + 20
             ),
@@ -351,6 +353,7 @@ def session(
             )
             peers.append(server)
             server.wait("NET574 ready server")
+            server.wait("NET574 allowed")
             issuer = start(
                 binaries[client_role],
                 folder / "issuer",

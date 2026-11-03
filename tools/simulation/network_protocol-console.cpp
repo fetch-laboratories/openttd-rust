@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "command_func.h"
 #include "company_cmd.h"
+#include "company_base.h"
 #include "console_internal.h"
 #include "console_func.h"
 #include "core/random_func.hpp"
@@ -16,7 +17,7 @@
 #include "timer/timer_game_tick.h"
 #include <fstream>
 
-static bool armed, held_map, saved;
+static bool armed, held_map, saved, awaiting_key;
 static uint connections;
 static uint64_t stop_tick;
 
@@ -77,6 +78,10 @@ extern "C" void __wrap__Z30CcPlaySound_CONSTRUCTION_OTHER8CommandsRK11CommandCos
 
 static IntervalTimer<TimerGameRealtime> control_timer({std::chrono::milliseconds{1}, TimerGameRealtime::ALWAYS}, [](auto) {
 	if (!armed) return;
+	if (awaiting_key && Company::Get(CompanyID{0})->allow_list.Contains(std::getenv("OPENTTD_PROTOCOL_KEY"))) {
+		awaiting_key = false;
+		fmt::print(stderr, "NET574 allowed\n");
+	}
 	std::ifstream trigger("trigger.txt");
 	std::string action;
 	if (!std::getline(trigger, action)) return;
@@ -106,6 +111,9 @@ static bool ProtocolCommand(std::span<std::string_view> argv)
 		_settings_client.network.commands_per_frame = 1;
 		_settings_client.network.commands_per_frame_server = 1;
 		_settings_client.network.frame_freq = 0;
+		Backup<CompanyID> current(_current_company, CompanyID{0});
+		Command<CMD_COMPANY_ALLOW_LIST_CTRL>::Post(STR_NULL, CALCA_ADD, std::string(std::getenv("OPENTTD_PROTOCOL_KEY")));
+		awaiting_key = true;
 	}
 	fmt::print(stderr, "NET574 ready {} {} {} {}\n", argv[1], ++connections, _network_own_client_id, TimerGameTick::counter);
 	return true;
