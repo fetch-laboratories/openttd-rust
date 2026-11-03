@@ -128,6 +128,7 @@ static void GrfBindings(const char *phase)
 {
 	const GRFFile *file = GetFileByGRFID(ID("BD52"));
 	if (file == nullptr) return;
+	const CargoType passengers = GetCargoTypeByLabel(CT_PASSENGERS);
 	std::array<uint32_t, 4> rng{_random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]};
 	auto standard = [&](uint8_t feature, const auto *spec) {
 		const auto &p = spec->grf_prop;
@@ -146,13 +147,13 @@ static void GrfBindings(const char *phase)
 		int def = BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT)), purchase = BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_PURCHASE));
 		int na = BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA));
 		Require(p.grfid == file->grfid && def == 145 && purchase == 146 && na == 146, "binding-station-first");
-		fmt::print(stderr, "LOADING binding {} station {} {:08X} {} {} {} {}\n", phase, feature, p.grfid, BindingResult(p.GetSpriteGroup(CT_PASSENGERS)), def, purchase, na);
+		fmt::print(stderr, "LOADING binding {} station {} {:08X} {} {} {} {}\n", phase, feature, p.grfid, BindingResult(p.GetSpriteGroup(passengers)), def, purchase, na);
 	};
 	cargo_groups(4, file->stations[0].get()); cargo_groups(20, file->roadstops[0].get());
 	for (uint16_t local : {0, 1, 2, 3, 27}) {
 		const Engine *engine = Engine::Get(GetNewEngineID(file, VEH_TRAIN, local));
 		const auto &p = engine->grf_prop;
-		fmt::print(stderr, "LOADING binding {} engine {} {} {:08X} {} {} {}\n", phase, local, engine->index, p.grfid, BindingResult(p.GetSpriteGroup(CT_PASSENGERS)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_PURCHASE)));
+		fmt::print(stderr, "LOADING binding {} engine {} {} {:08X} {} {} {}\n", phase, local, engine->index, p.grfid, BindingResult(p.GetSpriteGroup(passengers)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_PURCHASE)));
 		for (uint i = 0; i < engine->overrides.size(); i++) {
 			const auto &override = engine->overrides[i];
 			std::string ids;
@@ -162,7 +163,7 @@ static void GrfBindings(const char *phase)
 	}
 	EngineID wagon = GetNewEngineID(file, VEH_TRAIN, 27);
 	for (uint16_t local : {0, 1, 2, 3}) {
-		int result = BindingResult(GetWagonOverrideSpriteSet(wagon, local == 1 ? CargoGRFFileProps::SG_PURCHASE : CT_PASSENGERS, GetNewEngineID(file, VEH_TRAIN, local)));
+		int result = BindingResult(GetWagonOverrideSpriteSet(wagon, local == 1 ? CargoGRFFileProps::SG_PURCHASE : passengers, GetNewEngineID(file, VEH_TRAIN, local)));
 		Require(result == (local < 2 ? 146 : local == 2 ? 148 : 150), "binding-wagon-order");
 		fmt::print(stderr, "LOADING binding {} selected {} {}\n", phase, local, result);
 	}
@@ -181,7 +182,7 @@ static void GrfBindings(const char *phase)
 	const auto &badge = GetBadge(file->badge_map.at(0))->grf_prop;
 	Require(badge.grfid == file->grfid && BindingResult(badge.GetSpriteGroup(GSF_TRAINS)) == 146 && BindingResult(badge.GetSpriteGroup(GSF_DEFAULT)) == 145, "binding-badge");
 	fmt::print(stderr, "LOADING binding {} badge {} {}\n", phase, BindingResult(badge.GetSpriteGroup(GSF_TRAINS)), BindingResult(badge.GetSpriteGroup(GSF_DEFAULT)));
-	auto generic = GetAiPurchaseCallbackResult(GSF_ROADVEHICLES, CT_PASSENGERS, 0, IT_AI_UNKNOWN, IT_AI_TOWN, 1, AICE_ROAD_CHECK_ENGINE, 1, 1);
+	auto generic = GetAiPurchaseCallbackResult(GSF_ROADVEHICLES, passengers, 0, IT_AI_UNKNOWN, IT_AI_TOWN, 1, AICE_ROAD_CHECK_ENGINE, 1, 1);
 	Require(generic.first != nullptr && generic.first->grfid == ID("BH52") && generic.second == 152, "binding-generic-order");
 	fmt::print(stderr, "LOADING binding {} generic {:08X} {}\n", phase, generic.first->grfid, generic.second);
 	for (const char *id : {"BE52", "BD52", "BG52", "BH52", "BP52", "BO52", "BQ52", "BR52"}) {
