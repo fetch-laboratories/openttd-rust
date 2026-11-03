@@ -1129,12 +1129,13 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 		.on_dedicated = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_dedicated.scr 0"); }); },
 		.on_server = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_server.scr 0"); }); },
 		.pack_company_allow = [](void *info) noexcept {
-			CommandTraits<CMD_COMPANY_ALLOW_LIST_CTRL>::Args args{CALCA_ADD, static_cast<NetworkClientInfo *>(info)->public_key};
+			const auto action = CALCA_ADD;
+			auto args = std::forward_as_tuple(action, std::as_const(static_cast<NetworkClientInfo *>(info)->public_key));
 			auto data = EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args);
 			return std::exchange(static_cast<OpenTTDCommandData &>(data), {});
 		},
 		.pack_president = [](void *info) noexcept {
-			CommandTraits<CMD_RENAME_PRESIDENT>::Args args{static_cast<NetworkClientInfo *>(info)->client_name};
+			auto args = std::forward_as_tuple(std::as_const(static_cast<NetworkClientInfo *>(info)->client_name));
 			auto data = EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args);
 			return std::exchange(static_cast<OpenTTDCommandData &>(data), {});
 		},
