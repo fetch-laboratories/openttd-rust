@@ -33,7 +33,6 @@ struct OpenTTDGenericServices {
 	uint16_t (*evaluate)(const OpenTTDGenericInvocation *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate);
 	const OpenTTDSpriteGroupServices *common;
 	bool (*enabled)() noexcept OPENTTD_SERVICE_DEFAULT(enabled);
-	bool (*ambient)() noexcept OPENTTD_SERVICE_DEFAULT(ambient);
 	WaterClass (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
 	void (*sound)(const GRFFile *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 	void (*unsupported)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unsupported);

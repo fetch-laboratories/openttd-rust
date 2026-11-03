@@ -46,8 +46,8 @@ OpenTTDEffectVehicle *openttd_rust_effect_create_rel(const OpenTTDVehicle *, int
  * Typed field writes run immediately in original order. Sound: 0 fail, 1 success. run returns 1 alive, 0 expiry;
  * C++ deletes only after return. Save/load get/set use the C++ staging.
  * Tables are live, aligned, immutable and disjoint from the exclusive owner until return; context
- * is its live shell. Leaves cannot reenter, retain pointers or destroy the shell, and observe output
- * is call-scoped. Original subtype, table-index and coordinate preconditions apply. */
+ * is its live shell. Leaves cannot reenter, retain pointers or destroy the shell, and field accesses
+ * end before each leaf call. Original subtype, table-index and coordinate preconditions apply. */
 OpenTTDEffectState *OPENTTD_RUST_CALL openttd_rust_effect_new(void);
 void OPENTTD_RUST_CALL openttd_rust_effect_destroy(OpenTTDEffectState *);
 void OPENTTD_RUST_CALL openttd_rust_effect_set_animation(OpenTTDEffectState *, uint16_t value);
