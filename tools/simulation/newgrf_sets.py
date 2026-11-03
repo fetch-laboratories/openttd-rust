@@ -23,9 +23,9 @@ AI_FOLDER = "newgrf-sets-scenario-ai"
 # Each set's Action14 parameter defaults: the original applies them only in the
 # GUI, and a `[newgrf]` line without values leaves every parameter at zero.
 GRFS = {
-    "ogfx-trains.grf": "0 14 0 0",
-    "ogfx-rv.grf": "0 9 9 1 1 1",
-    "ogfx-industries.grf": "16 0 0 0 0 0 0 0 0 0",
+    "OpenGFX_Trains-0.3.0/ogfx-trains.grf": "0 14 0 0",
+    "OpenGFX_Road_Vehicles-0.4.1/ogfx-rv.grf": "0 9 9 1 1 1",
+    "OpenGFX_Industries-VERSION/ogfx-industries.grf": "16 0 0 0 0 0 0 0 0 0",
 }
 # Candidate counters that must be nonzero; the reference has no witnesses.
 REQUIRED = {
