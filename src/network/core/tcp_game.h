@@ -171,7 +171,6 @@ public:
 class NetworkGameSocketHandler : public NetworkTCPSocketHandler, public OpenTTDNetworkSocketSync, public OpenTTDNetworkGameSocket {
 /* TODO: rewrite into a proper class */
 private:
-	friend const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept;
 	NetworkClientInfo *info = nullptr; ///< Client info related to this socket
 
 protected:

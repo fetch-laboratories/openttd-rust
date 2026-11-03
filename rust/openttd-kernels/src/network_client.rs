@@ -323,18 +323,8 @@ pub(crate) fn receive_grfs(
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let count = u32::from(unsafe { packet::recv_uint8(p, f.packet) });
-    let mut result = NETWORK_RECV_STATUS_OKAY;
     (s.debug_grfs)(count);
-    for _ in 0..count {
-        let id = unsafe { packet::recv_uint32(p, f.packet) };
-        let mut hash = [0; crate::md5::MD5_HASH_BYTES];
-        unsafe {
-            (*p).recv_bytes(&mut hash);
-        }
-        if !(s.check_grf)(id, hash.as_ptr()) {
-            result = NETWORK_RECV_STATUS_NEWGRF_MISMATCH;
-        }
-    }
+    let result = check_grfs(f.packet, p, count, s.check_grf);
     if result == NETWORK_RECV_STATUS_OKAY {
         return send_grfs_ok(s, f);
     }
@@ -715,4 +705,55 @@ pub extern "C" fn openttd_rust_network_client_connected(s: &Services, f: &FrameS
     crate::network_frame::client_connected();
     (s.debug_connected)();
     send_join(s, f);
+}
+
+fn check_grfs(
+    services: &packet::Services,
+    p: *mut PacketState,
+    count: u32,
+    check: extern "C" fn(u32, *const u8) -> bool,
+) -> u8 {
+    let mut result = NETWORK_RECV_STATUS_OKAY;
+    for _ in 0..count {
+        let id = unsafe { packet::recv_uint32(p, services) };
+        let mut hash = [0; crate::md5::MD5_HASH_BYTES];
+        unsafe {
+            (*p).recv_bytes(&mut hash);
+        }
+        if !check(id, hash.as_ptr()) {
+            result = NETWORK_RECV_STATUS_NEWGRF_MISMATCH;
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn each_newgrf_checksum_starts_empty() {
+        extern "C" fn check(id: u32, hash: *const u8) -> bool {
+            let hash = unsafe { std::slice::from_raw_parts(hash, crate::md5::MD5_HASH_BYTES) };
+            match id {
+                7 => {
+                    assert_eq!(hash, [42; 16]);
+                    true
+                }
+                8 => {
+                    assert_eq!(hash, [0; 16]);
+                    false
+                }
+                _ => panic!("unexpected NewGRF"),
+            }
+        }
+        let mut p = PacketState::new(100, std::ptr::null_mut());
+        p.send_bytes(&7_u32.to_le_bytes());
+        p.send_bytes(&[42; 16]);
+        p.send_bytes(&8_u32.to_le_bytes());
+        assert_eq!(
+            check_grfs(packet::test_services(), &raw mut p, 2, check),
+            NETWORK_RECV_STATUS_NEWGRF_MISMATCH
+        );
+        assert_eq!(p.position, 24);
+    }
 }

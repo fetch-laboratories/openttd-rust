@@ -1102,3 +1102,27 @@ crate::abi::layouts! {
         stream,
     };
 }
+
+#[cfg(test)]
+pub(crate) fn test_services() -> &'static Services {
+    unsafe extern "C" fn has_quit(_: *const NetworkSocketHandler) -> bool {
+        false
+    }
+    unsafe extern "C" fn no_handler(
+        _: *const NetworkSocketHandler,
+    ) -> *mut NetworkEncryptionHandler {
+        std::ptr::null_mut()
+    }
+    unsafe extern "C" fn unused<A, R>(_: A) -> R {
+        panic!("unexpected packet operation")
+    }
+    static SERVICES: Services = Services {
+        has_quit,
+        mac_size: unused,
+        mark_closed: unused,
+        receive_handler: no_handler,
+        send_handler: no_handler,
+        stream: unused,
+    };
+    &SERVICES
+}

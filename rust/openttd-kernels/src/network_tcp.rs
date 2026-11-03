@@ -214,3 +214,233 @@ crate::abi::layouts! {
         send_pop, valid, writable,
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ptr::{null_mut, replace};
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct Fixture {
+        packet: Option<Box<State>>,
+        result: isize,
+        valid: bool,
+        writable: bool,
+        blocked: bool,
+        calls: usize,
+        logs: usize,
+        pops: usize,
+        output: Vec<u8>,
+        input: Vec<u8>,
+        read_position: usize,
+        read_limit: usize,
+        read_end: isize,
+    }
+    // SAFETY: The packet owns its allocation; socket identities are never dereferenced.
+    unsafe impl std::marker::Send for Fixture {}
+    // Error callbacks have no socket argument; serialize the two fixture entries.
+    static ENTRY: Mutex<()> = Mutex::new(());
+    static FIXTURE: Mutex<Option<Fixture>> = Mutex::new(None);
+    fn with<R>(f: impl FnOnce(&mut Fixture) -> R) -> R {
+        f(FIXTURE.lock().unwrap().as_mut().unwrap())
+    }
+    extern "C" fn check(value: bool) {
+        assert!(value);
+    }
+    extern "C" fn unused1<A, R>(_: A) -> R {
+        panic!("unexpected TCP operation")
+    }
+    extern "C" fn packet(_: *mut NetworkTCPSocketHandler) -> *mut State {
+        with(|f| f.packet.as_deref_mut().map_or(null_mut(), |p| &raw mut *p))
+    }
+    extern "C" fn valid(_: *const NetworkTCPSocketHandler) -> bool {
+        with(|f| f.valid)
+    }
+    extern "C" fn writable(_: *const NetworkTCPSocketHandler) -> bool {
+        with(|f| f.writable)
+    }
+    extern "C" fn blocked(_: *const NetworkError) -> bool {
+        with(|f| f.blocked)
+    }
+    extern "C" fn error_begin(_: *mut TcpErrorStorage) -> *mut NetworkError {
+        null_mut()
+    }
+    extern "C" fn error_end(_: *mut NetworkError) {}
+    extern "C" fn error_send(_: *const NetworkError) {
+        with(|f| f.logs += 1);
+    }
+    extern "C" fn send_bytes(
+        _: *mut NetworkTCPSocketHandler,
+        data: *const u8,
+        size: usize,
+    ) -> isize {
+        with(|f| {
+            f.calls += 1;
+            let result = if f.result == -2 {
+                isize::try_from(size).unwrap()
+            } else {
+                f.result
+            };
+            if result > 0 {
+                f.output.extend_from_slice(unsafe {
+                    std::slice::from_raw_parts(data, usize::try_from(result).unwrap())
+                });
+            }
+            result
+        })
+    }
+    extern "C" fn send_pop(_: *mut NetworkTCPSocketHandler) {
+        with(|f| {
+            let mut p = f.packet.take().unwrap();
+            // The send owner already dropped the record before removing its shell.
+            unsafe {
+                std::ptr::write(&raw mut *p, State::new(0, null_mut()));
+            }
+            f.pops += 1;
+        });
+    }
+    extern "C" fn base(socket: *mut NetworkTCPSocketHandler) -> *mut packet::NetworkSocketHandler {
+        socket.cast()
+    }
+    extern "C" fn create(_: *mut NetworkTCPSocketHandler, record: *mut State) -> *mut State {
+        with(|f| {
+            f.packet = Some(Box::new(unsafe {
+                replace(record, State::new(0, null_mut()))
+            }));
+            &raw mut **f.packet.as_mut().unwrap()
+        })
+    }
+    extern "C" fn receive_bytes(
+        _: *mut NetworkTCPSocketHandler,
+        data: *mut u8,
+        size: usize,
+    ) -> isize {
+        with(|f| {
+            if f.read_position == f.read_limit {
+                return f.read_end;
+            }
+            let count = size.min(f.read_limit - f.read_position);
+            unsafe {
+                std::ptr::copy_nonoverlapping(f.input.as_ptr().add(f.read_position), data, count);
+            }
+            f.read_position += count;
+            isize::try_from(count).unwrap()
+        })
+    }
+    fn services() -> Services {
+        Services {
+            base_socket: base,
+            can_send_receive: unused1,
+            error_begin,
+            error_end,
+            error_receive: unused1,
+            error_reset: unused1,
+            error_send,
+            error_would_block: blocked,
+            invalid_packet: invalid,
+            packet: packet::test_services(),
+            packet_delete_shell: unused1,
+            packet_record: unused1,
+            receive_bytes,
+            receive_create: create,
+            receive_packet: packet,
+            receive_take: unused1,
+            send_bytes,
+            send_front: packet,
+            send_pop,
+            valid,
+            writable,
+        }
+    }
+    extern "C" fn invalid() {
+        panic!("unexpected invalid packet log");
+    }
+
+    #[test]
+    fn partial_writes_and_close_requests_preserve_cursor_and_closing_policy() {
+        let _entry = ENTRY.lock().unwrap();
+        let cases = [
+            (-2, false, false, true, true, Send::All, 0, 1, 0, 1),
+            (2, false, false, true, true, Send::Partly, 2, 1, 0, 0),
+            (-1, false, true, true, true, Send::Partly, 0, 1, 0, 0),
+            (-1, false, false, true, true, Send::Close, 0, 1, 1, 0),
+            (-1, true, false, true, true, Send::Closed, 0, 1, 0, 0),
+            (0, false, false, true, true, Send::Close, 0, 1, 0, 0),
+            (0, true, false, true, true, Send::Closed, 0, 1, 0, 0),
+            (-2, false, false, false, true, Send::Closed, 0, 0, 0, 0),
+            (-2, false, false, true, false, Send::None, 0, 0, 0, 0),
+        ];
+        for (result, closing, blocked, valid, writable, expected, cursor, calls, logs, pops) in
+            cases
+        {
+            let mut p = State::new(100, null_mut());
+            p.send_bytes(&[7, 0, 9, 1, 2, 3, 4]);
+            *FIXTURE.lock().unwrap() = Some(Fixture {
+                packet: Some(Box::new(p)),
+                result,
+                blocked,
+                valid,
+                writable,
+                ..Fixture::default()
+            });
+            let sent = unsafe { openttd_rust_tcp_send(&services(), null_mut(), closing, check) };
+            assert_eq!(sent as u8, expected as u8);
+            with(|f| {
+                assert_eq!((f.calls, f.logs, f.pops), (calls, logs, pops));
+                if let Some(p) = &f.packet {
+                    assert_eq!(p.position, cursor);
+                }
+                assert_eq!(f.output, [7, 0, 9, 1, 2, 3, 4][..f.output.len()]);
+            });
+        }
+        *FIXTURE.lock().unwrap() = None;
+    }
+    #[test]
+    fn fragmented_headers_resume_and_invalid_sizes_request_close() {
+        let _entry = ENTRY.lock().unwrap();
+        *FIXTURE.lock().unwrap() = Some(Fixture {
+            valid: true,
+            blocked: true,
+            input: vec![7, 0, 9, 1, 2, 3, 4],
+            read_limit: 1,
+            read_end: -1,
+            ..Fixture::default()
+        });
+        let socket = std::ptr::dangling_mut::<NetworkTCPSocketHandler>();
+        let s = services();
+        assert_eq!(
+            unsafe { openttd_rust_tcp_receive(&s, socket, check) } as u8,
+            Receive::None as u8
+        );
+        with(|f| {
+            assert_eq!(f.packet.as_ref().unwrap().position, 1);
+            f.read_limit = f.input.len();
+        });
+        assert_eq!(
+            unsafe { openttd_rust_tcp_receive(&s, socket, check) } as u8,
+            Receive::Ready as u8
+        );
+        with(|f| {
+            let p = f.packet.as_ref().unwrap();
+            assert_eq!(p.position, 7);
+            assert_eq!(
+                unsafe { std::slice::from_raw_parts(p.data, p.size) },
+                f.input
+            );
+        });
+        for input in [vec![1, 0], vec![0, 128], vec![7, 0]] {
+            *FIXTURE.lock().unwrap() = Some(Fixture {
+                valid: true,
+                input: input.clone(),
+                read_limit: input.len(),
+                ..Fixture::default()
+            });
+            assert_eq!(
+                unsafe { openttd_rust_tcp_receive(&s, socket, check) } as u8,
+                Receive::Close as u8
+            );
+        }
+        *FIXTURE.lock().unwrap() = None;
+    }
+}
