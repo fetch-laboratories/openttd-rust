@@ -35,16 +35,16 @@ struct ChoiceList {
     strings: BTreeMap<i32, Vec<u8>>,
 }
 impl ChoiceList {
-    fn flush(&mut self, s: &Services, lm: *const c_void) -> Vec<u8> {
+    fn flush(&mut self, s: &Services, lm: *const c_void, result: &mut Vec<u8>) {
         if let std::collections::btree_map::Entry::Vacant(entry) = self.strings.entry(0) {
             s.message("choice list misses default value");
             entry.insert(Vec::new());
         }
         if lm.is_null() {
-            return self.strings[&0].clone();
+            result.extend_from_slice(&self.strings[&0]);
+            return;
         }
-        let mut result = Vec::new();
-        put(&mut result, self.code);
+        put(result, self.code);
         if self.code == SCC_SWITCH_CASE {
             let cases = unsafe { (s.num_cases)() };
             let count = (0..cases)
@@ -64,10 +64,10 @@ impl ChoiceList {
                 let index = unsafe { (s.reverse_mapping)(lm, i32::from(i), false) };
                 if let Some(text) = self.strings.get(&index) {
                     result.push(i + 1);
-                    add_case(&mut result, text);
+                    add_case(result, text);
                 }
             }
-            add_case(&mut result, &self.strings[&0]);
+            add_case(result, &self.strings[&0]);
         } else {
             if self.code == SCC_PLURAL_LIST {
                 result.push(unsafe { (s.plural_form)(lm) } as u8);
@@ -103,7 +103,6 @@ impl ChoiceList {
                 result.extend_from_slice(&text[..text.len().min(usize::from(u8::MAX))]);
             }
         }
-        result
     }
 }
 #[derive(Clone, Copy)]
@@ -200,7 +199,7 @@ pub(crate) fn translate(
                     dest(&mut output, &mut case, &mut plural, target),
                     SCC_NEWGRF_STRINL,
                 );
-                codepoint = Some(unsafe { (s.map_string)(grfid, string) });
+                codepoint = Some(unsafe { super::openttd_rust_grf_text_map(s, grfid, string) });
             }
             0x82..=0x84 => codepoint = Some(SCC_NEWGRF_PRINT_WORD_DATE_LONG + c - 0x82),
             0x85 => codepoint = Some(SCC_NEWGRF_DISCARD_WORD),
@@ -316,7 +315,6 @@ pub(crate) fn translate(
                             let mapping = if is_plural { &mut plural } else { &mut case };
                             let mut mapping = mapping.take().unwrap();
                             let lm = unsafe { (s.language_map)(grfid, language) };
-                            let flushed = mapping.flush(s, lm);
                             target = if is_plural {
                                 case_destination.map_or(Destination::Main, Destination::Case)
                             } else {
@@ -325,8 +323,7 @@ pub(crate) fn translate(
                             if !is_plural {
                                 case_destination = None;
                             }
-                            dest(&mut output, &mut case, &mut plural, target)
-                                .extend_from_slice(&flushed);
+                            mapping.flush(s, lm, dest(&mut output, &mut case, &mut plural, target));
                         }
                     }
                     0x13..=0x15 => {
@@ -396,7 +393,7 @@ pub(crate) fn translate(
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use std::sync::Mutex;
     static MESSAGES: Mutex<Vec<(i32, Vec<u8>)>> = Mutex::new(Vec::new());
@@ -435,7 +432,7 @@ mod tests {
     unsafe extern "C" fn plural(_: *const c_void) -> i32 {
         3
     }
-    unsafe extern "C" fn map_string(_: u32, string: u32) -> u32 {
+    unsafe extern "C" fn legacy_string(string: u32) -> u32 {
         0x20000 + string
     }
     unsafe extern "C" fn added(_: u32, _: u32, _: u32, _: u8, _: *const u8, _: usize, _: u32) {}
@@ -443,12 +440,12 @@ mod tests {
         let text = format!("Source buffer too short: {count} > {available}");
         unsafe { message(0, text.as_ptr(), text.len()) };
     }
-    fn services() -> Services {
+    pub(crate) fn services() -> Services {
         Services {
             added,
             empty: 1,
             language_map,
-            map_string,
+            legacy_string,
             mapping,
             max_plural_forms: 2,
             message,
@@ -457,6 +454,7 @@ mod tests {
             plural_form: plural,
             reverse_mapping,
             short_buffer,
+            undefined: 2,
         }
     }
     #[test]
@@ -464,6 +462,9 @@ mod tests {
         let services = services();
         let cases: &[(&[u8], u8, bool, &[u8])] = &[
             (b"a\x00ignored", 1, true, b"a"),
+            (b"\x81\x01", 1, false, b"\xee\x81\xb4\xf0\xa0\x80\x80"),
+            (b"\x9a\x13\x80\x9a\x11D\x9a\x11ignored\x9a\x12", 99, false, b"Dignored"),
+            (b"\x9a\x13\x80\x9a\x10\x07M\x9a\x12", 99, false, b""),
             (b"\x01X\x1fYZ\x0a\x0d\x0e\x0f\x80\x9e\x9f", 1, true, b"  \n\xee\x80\x85\xee\x80\x86\x7f\xe2\x82\xac\xc5\xb8"),
             (b"\xc3\x9e\xe2\x82\xac\xee\x82\x80\xff\xed\xa0\x80", 1, false, b"\xe2\x82\xac\x7f\xc3\xbf\xed\xa0\x80"),
             (b"\xc3\x9e\xee\x87\x80\x9e", 1, false, b"?\xe2\x82\xac"),
@@ -484,6 +485,12 @@ mod tests {
                 "input {input:?}"
             );
         }
+        let mut saturated = b"\x9a\x13\x80\x9a\x11".to_vec();
+        saturated.extend_from_slice(&[b'D'; 256]);
+        saturated.extend_from_slice(b"\x9a\x12");
+        let mut expected = b"\xee\x80\xbd\x00\x02\xff\xff".to_vec();
+        expected.extend_from_slice(&[b'D'; 510]);
+        assert_eq!(translate(&services, 123, 1, false, &saturated, 0), expected);
         MESSAGES.lock().unwrap().clear();
         assert_eq!(
             translate(

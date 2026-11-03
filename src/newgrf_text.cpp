@@ -23,6 +23,7 @@
 #include "strings_internal.h"
 #include "newgrf_storage.h"
 #include "newgrf_text.h"
+#include "newgrf/newgrf_stringmapping.h"
 #include "newgrf_cargo.h"
 #include "string_func.h"
 #include "timer/timer_game_calendar.h"
@@ -54,7 +55,7 @@ const OpenTTDGrfTextServices &GetRustGrfTextServices() noexcept
 		.added = [](uint32_t index, uint32_t grfid, uint32_t stringid, uint8_t lang, const uint8_t *text, size_t len, StringID id) noexcept { GrfMsg(3, "Added 0x{:X} grfid {:08X} string 0x{:X} lang 0x{:X} string '{}' ({:X})", index, grfid, stringid, lang, std::string_view{reinterpret_cast<const char *>(text), len}, id); },
 		.empty = STR_EMPTY,
 		.language_map = [](uint32_t grfid, uint8_t language) noexcept { return LanguageMap::GetLanguageMap(grfid, language); },
-		.map_string = [](uint32_t grfid, uint32_t stringid) noexcept { return MapGRFStringID(grfid, GRFStringID{stringid}); },
+		.legacy_string = [](uint32_t stringid) noexcept { return TTDPStringIDToOTTDStringIDMapping(GRFStringID{stringid}); },
 		.mapping = [](const LanguageMap *lm, int32_t id, bool gender) noexcept { return lm->GetMapping(id, gender); },
 		.max_plural_forms = LANGUAGE_MAX_PLURAL_FORMS,
 		.message = [](int32_t level, const uint8_t *text, size_t len) noexcept { GrfMsg(level, "{}", std::string_view{reinterpret_cast<const char *>(text), len}); },
@@ -63,6 +64,7 @@ const OpenTTDGrfTextServices &GetRustGrfTextServices() noexcept
 		.plural_form = [](const LanguageMap *lm) noexcept { return lm->plural_form; },
 		.reverse_mapping = [](const LanguageMap *lm, int32_t id, bool gender) noexcept { return lm->GetReverseMapping(id, gender); },
 		.short_buffer = [](size_t count, size_t available) noexcept { DebugPrint("misc", 0, fmt::format("Source buffer too short: {} > {}", count, available)); },
+		.undefined = STR_UNDEFINED,
 	};
 	return services;
 }
@@ -193,7 +195,8 @@ StringID GetGRFStringID(uint32_t grfid, GRFStringID stringid)
  */
 std::optional<std::string_view> GetGRFStringFromGRFText(const GRFTextList &text_list)
 {
-	size_t index = openttd_rust_grf_text_select(&text_list, text_list.size(), [](const void *list, size_t index) noexcept { return (*static_cast<const GRFTextList *>(list))[index].langid; });
+	static_assert(std::is_standard_layout_v<GRFText> && offsetof(GRFText, langid) == 0);
+	size_t index = openttd_rust_grf_text_select(text_list.data(), text_list.size(), sizeof(GRFText));
 	return index == SIZE_MAX ? std::nullopt : std::optional<std::string_view>{text_list[index].text};
 }
 

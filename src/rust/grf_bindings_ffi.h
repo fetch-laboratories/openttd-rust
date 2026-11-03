@@ -15,13 +15,11 @@ struct OpenTTDGrfBindingServices {
 	void (*custom_engine_sprites)(uint16_t, uint8_t, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(custom_engine_sprites);
 	void (*engine_grf)(uint16_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(engine_grf);
 	StringID * (*engine_string)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_string);
-	void (*invalid_engine)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(invalid_engine);
 	void (*mark_feature)(GRFFile *, GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(mark_feature);
 	void (*new_name)(uint16_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(new_name);
 	ObjectSpec * (*object_spec)(GRFFile *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(object_spec);
 	void (*rail_bind)(RailType, uint8_t, const GRFFile *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(rail_bind);
 	void (*road_bind)(RoadType, uint8_t, const GRFFile *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(road_bind);
-	void (*tram_bind)(RoadType, uint8_t, const GRFFile *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(tram_bind);
 	void (*wagon_override)(uint16_t, uint8_t, const SpriteGroup *, EngineID *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(wagon_override);
 };
 const OpenTTDGrfBindingServices &GetRustGrfBindingServices() noexcept;

@@ -27,7 +27,7 @@ pub struct Services {
     added: unsafe extern "C" fn(u32, u32, u32, u8, *const u8, usize, u32),
     empty: u32,
     language_map: unsafe extern "C" fn(u32, u8) -> *const c_void,
-    map_string: unsafe extern "C" fn(u32, u32) -> u32,
+    legacy_string: unsafe extern "C" fn(u32) -> u32,
     mapping: unsafe extern "C" fn(*const c_void, i32, bool) -> i32,
     max_plural_forms: u8,
     message: unsafe extern "C" fn(i32, *const u8, usize),
@@ -36,6 +36,7 @@ pub struct Services {
     plural_form: unsafe extern "C" fn(*const c_void) -> i32,
     reverse_mapping: unsafe extern "C" fn(*const c_void, i32, bool) -> i32,
     short_buffer: unsafe extern "C" fn(usize, usize),
+    undefined: u32,
 }
 impl Services {
     fn message(&self, text: &str) {
@@ -47,7 +48,7 @@ impl Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfTextServices" ["grf_loading"] => Services { added, empty, language_map, map_string, mapping, max_plural_forms, message, num_cases, num_genders, plural_form, reverse_mapping, short_buffer };
+    "OpenTTDGrfTextServices" ["grf_loading"] => Services { added, empty, language_map, legacy_string, mapping, max_plural_forms, message, num_cases, num_genders, plural_form, reverse_mapping, short_buffer, undefined };
 }
 
 #[unsafe(no_mangle)]
@@ -211,6 +212,22 @@ pub unsafe extern "C" fn openttd_rust_grf_text_id(
         .map_or(undefined, grf_string_id)
 }
 
+/// `MapGRFStringID`: native legacy mappings cannot reenter the GRF table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_grf_text_map(s: &Services, grfid: u32, stringid: u32) -> u32 {
+    if (0xd000..0x10000).contains(&stringid) {
+        let stringid = if stringid < 0xd800 {
+            // TTDPatch adds 0x400 for inline callback text references.
+            stringid & !0x400
+        } else {
+            stringid
+        };
+        unsafe { openttd_rust_grf_text_id(grfid, stringid, s.undefined) }
+    } else {
+        unsafe { (s.legacy_string)(stringid) }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_text_get(index: usize, default: *mut u32) -> ByteSpan {
     let entry = unsafe { &(&*TEXTS.get())[index] };
@@ -232,15 +249,23 @@ pub unsafe extern "C" fn openttd_rust_grf_text_get(index: usize, default: *mut u
     }
 }
 
+/// Prefix of a retained native `GRFText`. The native stride includes its opaque
+/// `std::string` tail. Access only `langid` through raw pointers, without a borrow
+/// or a Rust-sized slice of the native records. C++ checks the prefix offset.
+#[repr(C)]
+pub struct GrfText {
+    langid: u8,
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_text_select(
-    list: *const c_void,
+    list: *const GrfText,
     count: usize,
-    language_at: unsafe extern "C" fn(*const c_void, usize) -> u8,
+    stride: usize,
 ) -> usize {
     select(
         unsafe { *LANGUAGE.get() },
-        (0..count).map(|i| unsafe { language_at(list, i) }),
+        (0..count).map(|i| unsafe { (&raw const (*list.byte_add(i * stride)).langid).read() }),
     )
     .unwrap_or(usize::MAX)
 }
@@ -315,6 +340,11 @@ pub(crate) unsafe fn visit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[repr(C)]
+    struct NativeText {
+        language: u8,
+        opaque: [usize; 4],
+    }
     #[test]
     fn language_priority_and_process_state() {
         assert_eq!(select(9, [0, 1, 0x7f, 0x7f].into_iter()), Some(3));
@@ -326,6 +356,36 @@ mod tests {
             let index = prepare(123, 0xd000, 42);
             assert_eq!(index, 0);
             assert_eq!(prepare(123, 0xd000, 99), 0);
+            let services = translation::tests::services();
+            for (local, expected) in [
+                (0xd000, grf_string_id(0)),
+                (0xd400, grf_string_id(0)),
+                (0xd800, 2),
+                (0xffff, 2),
+                (0x10000, 0x30000),
+                (1, 0x20001),
+            ] {
+                assert_eq!(openttd_rust_grf_text_map(&services, 123, local), expected);
+            }
+            let inline = translate(&services, 123, 1, false, b"\x81\x00\xd4", 0);
+            assert_eq!(inline, b"\xee\x81\xb4\xf0\xa0\x80\x80");
+            let native = [2, 3].map(|language| NativeText {
+                language,
+                opaque: [0; 4],
+            });
+            let ptr = native.as_ptr().cast::<GrfText>();
+            let stride = std::mem::size_of::<NativeText>();
+            assert_eq!(
+                openttd_rust_grf_text_select(ptr, native.len(), stride),
+                usize::MAX
+            );
+            openttd_rust_grf_text_set_language(3);
+            assert_eq!(openttd_rust_grf_text_select(ptr, native.len(), stride), 1);
+            assert_eq!(
+                openttd_rust_grf_text_select(std::ptr::null(), 0, stride),
+                usize::MAX
+            );
+            openttd_rust_grf_text_set_language(1);
             publish(index, 2, b"German".as_ptr(), 6);
             let mut default = 0;
             assert!(

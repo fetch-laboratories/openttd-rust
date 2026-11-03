@@ -76,7 +76,7 @@ unsafe fn vehicle_map(
                 &*s.engine, file, feature, local, false,
             );
             if engine.is_null() {
-                (bindings.invalid_engine)(feature);
+                loading::disable_invalid_id(s);
                 return Ok(());
             }
             let id = EngineID(((*(*s.engine).resolver).capabilities.id)(engine));
@@ -322,11 +322,7 @@ unsafe fn map_binding(
                         crate::road_type::INVALID_ROADTYPE
                     };
                     if roadtype != crate::road_type::INVALID_ROADTYPE {
-                        if feature == GSF_TRAMTYPES {
-                            (bindings.tram_bind)(roadtype, cargo, file, group);
-                        } else {
-                            (bindings.road_bind)(roadtype, cargo, file, group);
-                        }
+                        (bindings.road_bind)(roadtype, cargo, file, group);
                     }
                 }
             }
