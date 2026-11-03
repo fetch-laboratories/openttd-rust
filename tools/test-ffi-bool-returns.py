@@ -78,6 +78,27 @@ const TEXT: &str = "extern \\"C\\" fn string() -> bool { false }";
             [],
         )
 
+    def test_transparent_wrappers_follow_the_field_return_abi(self) -> None:
+        for scalar, failures in (("bool", 1), ("u8", 0)):
+            for field in ("(pub Scalar);", "{ pub value: Scalar, }"):
+                with self.subTest(scalar=scalar, field=field):
+                    files = {
+                        "types.rs": f"""type Scalar = ({scalar});
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct Flag {field}
+#[repr(transparent)]
+pub(crate) struct Outer(pub(crate) Flag);
+type Result = Outer;
+""",
+                        "entry.rs": 'extern "C" fn entry() -> types::Result { todo!() }',
+                    }
+                    self.assertEqual(len(checker.violations(files)), failures)
+        self.assertEqual(
+            self.check('struct Flag(bool); extern "C" fn entry() -> Flag { todo!() }'),
+            [],
+        )
+
     def test_macro_definitions_and_return_type_arguments(self) -> None:
         self.assertEqual(
             len(

@@ -15,6 +15,11 @@ C_FN = r'\bextern\s+(?:"C"\s+)?fn'
 ENTRY = re.compile(rf"{C_FN}\s+\$?({IDENT})\s*(?:<[^{{;]*?>\s*)?\(")
 ALIAS = re.compile(rf"\btype\s+({IDENT})\s*=\s*({TYPE})\s*;")
 IMPORT = re.compile(rf"\buse\s+({PATH})\s+as\s+({IDENT})\s*;")
+TRANSPARENT = re.compile(
+    rf"#\[\s*repr\s*\(\s*transparent\s*\)\s*\]\s*(?:#\[[^]]*\]\s*)*"
+    rf"(?:pub(?:\([^)]*\))?\s+)?struct\s+({IDENT})\s*[({{]\s*"
+    rf"(?:pub(?:\([^)]*\))?\s+)?(?:{IDENT}\s*:\s*)?({TYPE})\s*,?\s*[)}}]"
+)
 
 
 def type_name(spelling: str) -> str:
@@ -49,10 +54,13 @@ def violations(files: dict[str, str]) -> list[str]:
     sources = {
         path: without_comments(text, path, strings=True) for path, text in files.items()
     }
-    # Conservatively retain every visible alias to bool, including qualified uses.
+    # Transparent single-field wrappers share their field's return ABI.
     aliases = {"bool"}
     bindings = [
-        binding for source in sources.values() for binding in ALIAS.findall(source)
+        binding
+        for source in sources.values()
+        for pattern in (ALIAS, TRANSPARENT)
+        for binding in pattern.findall(source)
     ] + [
         (name, target)
         for source in sources.values()
