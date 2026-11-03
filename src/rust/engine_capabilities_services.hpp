@@ -24,6 +24,7 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.mail_capacity = RustEngineMailCapacity,
 		.train_class = RustEngineTrainClass,
 		.aircraft_subtype = RustEngineAircraftSubtype,
+		.road_sound = RustEngineRoadSound,
 		.rail_kind = Engine_rail_kind,
 		.grf = RustEngineGRF,
 		.loading = []() noexcept { return &GetRustEngineLoadingServices(); },

@@ -48,26 +48,12 @@
 
 static const OpenTTDRoadLeaves &GetRoadLeaves();
 const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept { return GetRoadLeaves(); }
-static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept;
 
 /** Settings and map size a road entry may consult, read once per entry. */
 static OpenTTDRoadEntry GetRoadEntry(const RoadVehicle *v) noexcept
 {
 	return {.ground = v->rust_ground.state, .acceleration_model = RustRoadAccelerationModel(),
 		.road_side = RustRoadSide(), .queue = RustRoadQueue(), .map_log_x = static_cast<uint8_t>(Map::LogX())};
-}
-
-/** The front gate never observes movement settings or front-only fields for parts. */
-OpenTTDRoadTickRead RustRoadTickRead(const RoadVehicle *v) noexcept
-{
-	OpenTTDRoadTickRead read{.tick = RustVehicleTick(v), .front = RustVehicleFront(v), .movement = {}, .order_time = nullptr, .running = nullptr, .status = nullptr};
-	if (read.front) {
-		read.movement = GetRoadEntry(v);
-		read.order_time = RustVehicleOrderTimeAddress(v);
-		read.running = RustVehicleRunningAddress(v);
-		read.status = RustVehicleStatusAddress(v);
-	}
-	return read;
 }
 
 static const uint16_t _roadveh_images[] = {
@@ -333,8 +319,7 @@ void RoadVehicle::UpdateDeltaXY()
  */
 int RoadVehicle::GetCurrentMaxSpeed() const
 {
-	OpenTTDRoadMaxSpeedRead read = RoadMaxSpeedRead(this);
-	return openttd_rust_road_max_speed(RustVehicle(this), this->GetRustState(), RustRoadAccelerationModel(), &read, &GetRoadLeaves());
+	return openttd_rust_road_max_speed(RustVehicle(this), this->GetRustState(), RustRoadAccelerationModel(), &GetRoadLeaves());
 }
 
 /**
@@ -454,9 +439,9 @@ Money RoadVehicle::GetRunningCost() const
 bool RoadVehicle::Tick()
 {
 	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
-	const auto read = RustRoadTickRead(this);
+	const auto entry = this->IsFrontEngine() ? GetRoadEntry(this) : OpenTTDRoadEntry{};
 	OpenTTDRoadCommandSlot road;
-	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &read, &GetRoadLeaves(), &road);
+	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &entry, &GetRoadLeaves(), &road);
 }
 
 void RoadVehicle::SetDestTile(TileIndex tile)

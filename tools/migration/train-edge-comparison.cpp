@@ -105,7 +105,7 @@ static void RustReverse(int left, int right)
 	shared.tile_type = [](uint32_t tile) noexcept { entered_tile = tile; return uint8_t{1}; };
 	movement.resolve = [](OpenTTDVehicle *shell) noexcept {
 		auto *v = reinterpret_cast<Train *>(shell->shell);
-		assert(entered_tile == v->tile);
+		assert(entered_tile == v->record.tile);
 		events.push_back(0x300 + v->id);
 		return OpenTTDMovementVehicle{Handle(v), nullptr, nullptr, VehicleType{0}};
 	};

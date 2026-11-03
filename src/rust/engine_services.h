@@ -106,6 +106,7 @@ inline void RustSetEngineRoadPrice(const OpenTTDEngine *shell, Price value) noex
 inline void RustSetEngineRoadImage(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().image_index = value; }
 inline void RustSetEngineRoadCapacity(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().capacity = value; }
 inline void RustSetEngineRoadCost(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().cost_factor = value; }
+inline uint16_t RustEngineRoadSound(const OpenTTDEngine *shell) noexcept { return RoadVehInfo(EngineOf(shell)->index)->sfx; }
 inline void RustSetEngineRoadSound(const OpenTTDEngine *shell, SoundID value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().sfx = value; }
 inline void RustSetEngineRoadPower(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().power = value; }
 inline void RustSetEngineRoadWeight(const OpenTTDEngine *shell, uint8_t value) noexcept { const_cast<Engine *>(EngineOf(shell))->VehInfo<RoadVehicleInfo>().weight = value; }

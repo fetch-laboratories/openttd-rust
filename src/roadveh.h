@@ -106,7 +106,7 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 	RoadTypes compatible_roadtypes{}; ///< NOSAVE: Roadtypes this consist is powered on.
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
-	RoadVehicle() : GroundVehicleBase() {}
+	RoadVehicle() : GroundVehicleBase() { this->record->road = this->rust_state.get(); }
 	/** We want to 'destruct' the right class. */
 	virtual ~RoadVehicle() { this->PreDestructor(); }
 

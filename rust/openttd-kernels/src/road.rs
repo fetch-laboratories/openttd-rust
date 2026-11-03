@@ -59,6 +59,12 @@ const CRASHED: usize = 5;
 const REVERSE_CTR: usize = 6;
 
 /// Exact scalar path entry; padding is never read.
+/// Native declaration for a metadata link to this module's private owner.
+#[repr(C)]
+pub struct OpenTTDRoadState {
+    _private: [u8; 0],
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct PathElement {
@@ -187,21 +193,9 @@ pub struct Entry {
     pub map_log_x: u8,
 }
 
-/// Tick/front values and named read-only native places. Nonfront places are null.
-#[repr(C)]
-pub struct TickRead {
-    pub tick: u8,
-    pub front: bool,
-    pub movement: Entry,
-    pub order_time: *const i32,
-    pub running: *const u8,
-    pub status: *const u8,
-}
-
 /// `GetCurrentMaxSpeed` inputs of the front part.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct MaxSpeedRead {
+struct MaxSpeedRead {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
     pub tile: u32,
@@ -212,9 +206,8 @@ pub struct MaxSpeedRead {
 }
 
 /// Speed and first-step inputs observed after visual effects return.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct SpeedRead {
+struct SpeedRead {
     pub max: MaxSpeedRead,
     pub x: i32,
     pub y: i32,
@@ -224,9 +217,8 @@ pub struct SpeedRead {
 }
 
 /// One further consist part for speed, viewport and slope walks.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct SpeedPart {
+struct SpeedPart {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
     pub tile: u32,
@@ -235,25 +227,22 @@ pub struct SpeedPart {
 }
 
 /// Consist links and the next shell's separate ground owner, refreshed after callbacks.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Link {
+struct Link {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
     pub next_ground: *mut crate::ground_vehicle::State,
 }
 /// Consist links and tile for depot traversal.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct LinkTile {
+struct LinkTile {
     pub link: Link,
     pub tile: u32,
 }
 
 /// Movement inputs of one part at the start of `IndividualRoadVehicleController`.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Step {
+struct Step {
     pub tile: u32,
     pub x: i32,
     pub y: i32,
@@ -266,9 +255,8 @@ pub struct Step {
 }
 
 /// One part for `RoadVehCheckTrainCrash`.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct CrashPart {
+struct CrashPart {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
     pub z: i32,
@@ -276,9 +264,8 @@ pub struct CrashPart {
 }
 
 /// `VehicleEnterTile` result, then the fields it may have changed.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Entered {
+struct Entered {
     pub tile: u32,
     pub cur_speed: u16,
     pub flags: u8,
@@ -287,10 +274,8 @@ pub struct Entered {
 }
 
 /// One road vehicle near the probe, other than the probing consist.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Candidate {
-    pub vehicle: VehicleRef,
+struct Candidate {
     pub state: *mut State,
     pub first: VehicleRef,
     pub first_state: *mut State,
@@ -304,9 +289,8 @@ pub struct Candidate {
 }
 
 /// Generic part read: link, tile, height and road/tram type.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct PartRead {
+struct PartRead {
     pub next: Option<VehicleRef>,
     pub next_state: *mut State,
     pub tile: u32,
@@ -315,18 +299,16 @@ pub struct PartRead {
 }
 
 /// `RoadFindPathToDest` vehicle inputs.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct PathRead {
+struct PathRead {
     pub dest: u32,
     pub owner: u8,
     pub articulated: bool,
 }
 
 /// `RoadVehCheckOvertake` inputs of either vehicle.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct OvertakeRead {
+struct OvertakeRead {
     pub tile: u32,
     pub cur_speed: u16,
     pub direction: u8,
@@ -354,30 +336,26 @@ pub struct DepotResult {
     pub length: u32,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct ArrivalRead {
+struct ArrivalRead {
     pub had_vehicle_of_type: u8,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct SoundRead {
+struct SoundRead {
     pub sound: u16,
     pub tick: u8,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct ServiceRead {
+struct ServiceRead {
     pub tile: u32,
     pub servint: u16,
     pub cur_speed: u16,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct TurnRead {
+struct TurnRead {
     pub tile: u32,
     pub breakdown_ctr: u8,
     pub direction: u8,
@@ -385,9 +363,8 @@ pub struct TurnRead {
     pub status: u8,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct TrackdirRead {
+struct TrackdirRead {
     pub tile: u32,
     pub direction: u8,
     pub status: u8,
@@ -396,20 +373,10 @@ pub struct TrackdirRead {
 /// Road-specific services; the shared tables are borrowed through pointers.
 #[repr(C)]
 pub struct Leaves {
-    pub candidate: unsafe extern "C" fn(VehicleRef, VehicleRef, *mut Candidate) -> bool,
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,
     pub shared: *const Services,
     pub max_depot_penalty: extern "C" fn() -> u32,
-    pub speed_read: extern "C" fn(VehicleRef) -> SpeedRead,
-    pub max_speed_read: extern "C" fn(VehicleRef) -> MaxSpeedRead,
-    pub speed_part: extern "C" fn(VehicleRef) -> SpeedPart,
-    pub step: extern "C" fn(VehicleRef) -> Step,
-    pub crash_part: extern "C" fn(VehicleRef) -> CrashPart,
-    pub part: extern "C" fn(VehicleRef) -> PartRead,
-    pub link: extern "C" fn(VehicleRef) -> Link,
-    pub link_tile: extern "C" fn(VehicleRef) -> LinkTile,
-    pub after_enter_tile: extern "C" fn(VehicleRef, u8) -> Entered,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
@@ -419,18 +386,14 @@ pub struct Leaves {
     pub is_drive_through: extern "C" fn(u32) -> bool,
     pub is_station_road_stop: extern "C" fn(u32) -> bool,
     pub move_tile: extern "C" fn(VehicleRef, u32) -> RoadTypes,
-    pub path_read: extern "C" fn(VehicleRef) -> PathRead,
     pub choose_track: extern "C" fn(VehicleRef, u32, u8, u16) -> TrackChoice,
     pub find_depot: extern "C" fn(VehicleRef, i32) -> DepotResult,
     pub tram_build_read:
         extern "C" fn(VehicleRef, *mut crate::road_cmd::CommandSlot) -> TramBuildRead,
     pub disconnect: extern "C" fn(),
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
-    pub arrival_read: extern "C" fn(VehicleRef, u16) -> ArrivalRead,
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
     /// The road stop arrival randomisation and animation triggers.
-    pub overtake_read: extern "C" fn(VehicleRef) -> OvertakeRead,
-    pub sound_read: extern "C" fn(VehicleRef) -> SoundRead,
     pub depot_exit_dirty: extern "C" fn(VehicleRef),
     pub depot_exit: extern "C" fn(VehicleRef, i32, i32),
     pub crash_news: extern "C" fn(VehicleRef, u32),
@@ -438,9 +401,6 @@ pub struct Leaves {
     pub default_max_speed: extern "C" fn(VehicleRef) -> u16,
     pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
     pub pay_running: extern "C" fn(VehicleRef, i64),
-    pub service_read: extern "C" fn(VehicleRef) -> ServiceRead,
-    pub turn_read: extern "C" fn(VehicleRef) -> TurnRead,
-    pub trackdir_read: extern "C" fn(VehicleRef) -> TrackdirRead,
 }
 
 /// A consist part: live vehicle handle and its live Rust owner.
@@ -535,7 +495,7 @@ struct Game<'a> {
     acceleration_model: u8,
     road_side: u8,
     queue: bool,
-    // Entry/TickRead dimensions last only for this synchronous controller call.
+    // Entry dimensions last only for this synchronous controller call.
     // Orders, sound/GRF, movement, crash and viewport callbacks cannot load/reset
     // the map or yield the game-state mutex; nested entries have their own Game.
     map: Map,
@@ -584,7 +544,15 @@ fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -
             break;
         };
         part = next;
-        u = service!(l.speed_part)(next.v);
+        u = SpeedPart {
+            next: next.v.next(),
+            next_state: next.v.next().map_or(std::ptr::null_mut(), |n| {
+                crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+            }),
+            tile: next.v.tile(),
+            direction: next.v.direction(),
+            status: next.v.status(),
+        };
     }
     speed.min(i32::from(r.order_max_speed) * 2)
 }
@@ -667,11 +635,44 @@ impl Game<'_> {
 
     fn visual_effect_and_speed(&self, v: Part) -> SpeedRead {
         if crate::vehicle_effect::openttd_rust_visual_eligible(v.v) {
-            let r = service!(self.l.max_speed_read)(v.v);
+            let r = MaxSpeedRead {
+                next: v.v.next(),
+                next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                    crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                }),
+                tile: v.v.tile(),
+                max_track_speed: crate::raw_field::read_field!(
+                    v.v.ground_cache(),
+                    cached_max_track_speed
+                ),
+                order_max_speed: v.v.current_order().speed,
+                direction: v.v.direction(),
+                status: v.v.status(),
+            };
             let speed = max_speed(v, r, self.acceleration_model, self.l);
             crate::vehicle_effect::openttd_rust_visual_show(v.v, speed as u32);
         }
-        service!(self.l.speed_read)(v.v)
+        SpeedRead {
+            max: MaxSpeedRead {
+                next: v.v.next(),
+                next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                    crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                }),
+                tile: v.v.tile(),
+                max_track_speed: crate::raw_field::read_field!(
+                    v.v.ground_cache(),
+                    cached_max_track_speed
+                ),
+                order_max_speed: v.v.current_order().speed,
+                direction: v.v.direction(),
+                status: v.v.status(),
+            },
+            x: v.v.x(),
+            y: v.v.y(),
+            z: v.v.z(),
+            length: crate::raw_field::read_field!(v.v.ground_cache(), cached_veh_length),
+            tram: (crate::movement::table(self.ss).road_kind)(v.v).0,
+        }
     }
     /// `RoadVehicle::UpdateSpeed`, returning the distance and stored speed.
     fn update_speed(
@@ -707,13 +708,24 @@ impl Game<'_> {
         let mut best: Option<Candidate> = None;
         let mut best_diff = u32::MAX;
         let wormhole = v.state() == RVSB_WORMHOLE;
-        let mut offer = |vehicle| {
-            let mut out = std::mem::MaybeUninit::<Candidate>::uninit();
-            // SAFETY: Live shell; successful admission initializes the narrow read.
-            if !unsafe { (self.l.candidate)(vehicle, v.v, out.as_mut_ptr()) } {
+        let mut offer = |vehicle: VehicleRef| {
+            if vehicle.vehicle_type() != crate::vehicle_type::VEH_ROAD || vehicle.first() == v.v {
                 return false;
             }
-            let candidate = unsafe { out.assume_init() };
+            let first = vehicle.first();
+            let candidate = Candidate {
+                state: crate::raw_field::read_field!(vehicle.0.as_ptr(), road).cast(),
+                first,
+                first_state: crate::raw_field::read_field!(first.0.as_ptr(), road).cast(),
+                first_ground: first.ground(),
+                // SAFETY: The spatial cursor offers a live record and the shared resolver table is static.
+                index: unsafe { ((*((self.vs.newgrf)())).id)(vehicle.0.as_ptr()) },
+                x: vehicle.x(),
+                y: vehicle.y(),
+                z: vehicle.z(),
+                first_speed: first.speed(),
+                direction: vehicle.direction(),
+            };
             let u = &candidate;
             crate::witness::hit(crate::witness::ROAD_VISITORS);
             let mut consider = || {
@@ -796,7 +808,12 @@ impl Game<'_> {
         if s.tram {
             return;
         }
-        let ur = service!(self.l.overtake_read)(u.v);
+        let ur = OvertakeRead {
+            tile: u.v.tile(),
+            cur_speed: u.v.speed(),
+            direction: u.v.direction(),
+            status: u.v.status(),
+        };
         if s.direction != ur.direction || s.direction & 1 == 0 {
             return;
         }
@@ -817,7 +834,20 @@ impl Game<'_> {
         {
             max_speed(
                 u,
-                service!(self.l.max_speed_read)(u.v),
+                MaxSpeedRead {
+                    next: u.v.next(),
+                    next_state: u.v.next().map_or(std::ptr::null_mut(), |n| {
+                        crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                    }),
+                    tile: u.v.tile(),
+                    max_track_speed: crate::raw_field::read_field!(
+                        u.v.ground_cache(),
+                        cached_max_track_speed
+                    ),
+                    order_max_speed: u.v.current_order().speed,
+                    direction: u.v.direction(),
+                    status: u.v.status(),
+                },
                 self.acceleration_model,
                 self.l,
             )
@@ -827,7 +857,20 @@ impl Game<'_> {
         if u_speed
             >= max_speed(
                 v,
-                service!(self.l.max_speed_read)(v.v),
+                MaxSpeedRead {
+                    next: v.v.next(),
+                    next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                        crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                    }),
+                    tile: v.v.tile(),
+                    max_track_speed: crate::raw_field::read_field!(
+                        v.v.ground_cache(),
+                        cached_max_track_speed
+                    ),
+                    order_max_speed: v.v.current_order().speed,
+                    direction: v.v.direction(),
+                    status: v.v.status(),
+                },
                 self.acceleration_model,
                 self.l,
             )
@@ -931,7 +974,13 @@ impl Game<'_> {
     /// `StartRoadVehSound`.
     fn start_sound(&self, v: Part) {
         if !service!(self.vs.play_vehicle_sound)(v.v, VSE_START) {
-            let r = service!(self.l.sound_read)(v.v);
+            let r = SoundRead {
+                sound: {
+                    let cap = unsafe { (*((self.vs.newgrf)())).capabilities };
+                    (cap.road_sound)((self.vs.engine)(v.v).0.as_ptr())
+                },
+                tick: v.v.tick(),
+            };
             let mut sound = r.sound;
             if sound == SND_DEPARTURE_OLD_RV_1 && r.tick & 3 == 0 {
                 sound = SND_DEPARTURE_OLD_RV_2;
@@ -990,7 +1039,14 @@ impl Game<'_> {
                 return false;
             };
             part = next;
-            u = service!(self.l.crash_part)(next.v);
+            u = CrashPart {
+                next: next.v.next(),
+                next_state: next.v.next().map_or(std::ptr::null_mut(), |n| {
+                    crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                }),
+                z: next.v.z(),
+                crossing: (self.ss.is_level_crossing)(next.v.tile()),
+            };
         }
     }
     /// `RoadVehIsCrashed` with this tick's counter.
@@ -1017,7 +1073,13 @@ impl Game<'_> {
                 }
             }
         } else if counter >= 2220 && tick & 31 == 0 {
-            let first = service!(self.l.link)(v.v);
+            let first = Link {
+                next: v.v.next(),
+                next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                    crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                }),
+                next_ground: v.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+            };
             let alive = first.next.is_some();
             let mut previous = v;
             let mut last = v;
@@ -1025,7 +1087,16 @@ impl Game<'_> {
             while let Some(part) = next {
                 previous = last;
                 last = part;
-                let r = service!(self.l.link)(part.v);
+                let r = Link {
+                    next: part.v.next(),
+                    next_state: part.v.next().map_or(std::ptr::null_mut(), |n| {
+                        crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                    }),
+                    next_ground: part
+                        .v
+                        .next()
+                        .map_or(std::ptr::null_mut(), VehicleRef::ground),
+                };
                 next = Part::link(r.next, r.next_state);
             }
             // SAFETY: The crash chain stays live through unlinking and station copy.
@@ -1112,7 +1183,16 @@ impl Game<'_> {
         let ts = self.movement.road_tracks(v.v, tile);
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
-        let p = service!(self.l.path_read)(v.v);
+        let p = PathRead {
+            dest: v.v.dest_tile(),
+            owner: v.v.owner(),
+            articulated: v.v.next().is_some_and(|next| {
+                crate::vehicle_base::is_articulated_part(
+                    crate::vehicle_base::is_ground_vehicle(next.vehicle_type()),
+                    next.subtype(),
+                )
+            }),
+        };
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         let kind = service!(self.ss.tile_type)(tile);
         if kind == MP_ROAD {
@@ -1216,13 +1296,30 @@ impl Game<'_> {
         if v.state() != DEPOT {
             return false;
         }
-        let d = service!(self.l.part)(v.v);
+        let d = PartRead {
+            next: v.v.next(),
+            next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+            }),
+            tile: v.v.tile(),
+            z: v.v.z(),
+            tram: (crate::movement::table(self.ss).road_kind)(v.v).0,
+        };
         let mut next = Part::link(d.next, d.next_state);
         while let Some(u) = next {
             if u.state() != DEPOT {
                 return false;
             }
-            let r = service!(self.l.link_tile)(u.v);
+            let r = LinkTile {
+                link: Link {
+                    next: u.v.next(),
+                    next_state: u.v.next().map_or(std::ptr::null_mut(), |n| {
+                        crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                    }),
+                    next_ground: u.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+                },
+                tile: u.v.tile(),
+            };
             if r.tile != d.tile {
                 return false;
             }
@@ -1310,7 +1407,13 @@ impl Game<'_> {
     }
     /// `RoadVehArrivesAt`, `BeginLoading` and the road stop arrival triggers.
     fn arrive_load(&self, v: Part, s: &Step, station: u16) {
-        let r = service!(self.l.arrival_read)(v.v, station);
+        let r = ArrivalRead {
+            had_vehicle_of_type: {
+                // SAFETY: The process-wide station command table names the shared aircraft station leaves.
+                let aircraft = unsafe { &*((*((self.ss.station_commands)())).aircraft) };
+                unsafe { (aircraft.had_vehicle)((aircraft.station)(station)) }
+            },
+        };
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         let bit = if bus { HVOT_BUS } else { HVOT_TRUCK };
         if r.had_vehicle_of_type & bit == 0 {
@@ -1558,7 +1661,13 @@ impl Game<'_> {
             self.move_to(v, ground, s, (x, y), true, true);
             return true;
         }
-        let link = service!(self.l.link)(v.v);
+        let link = Link {
+            next: v.v.next(),
+            next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+            }),
+            next_ground: v.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+        };
         if let Some(next) = Part::link(link.next, link.next_state) {
             if service!(self.l.is_road_depot_tile)(s.tile)
                 && u16::from(v.frame()) == u16::from(s.length) + 6
@@ -1704,16 +1813,41 @@ impl Game<'_> {
             return None;
         }
         let mut prev = v;
-        let mut link = service!(self.l.link)(v.v);
+        let mut link = Link {
+            next: v.v.next(),
+            next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+            }),
+            next_ground: v.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+        };
         let mut next = Part::link(link.next, link.next_state);
         let traversed_tail = next.is_some();
         while let Some(u) = next {
-            let mut us = service!(self.l.step)(u.v);
+            let mut us = Step {
+                tile: u.v.tile(),
+                x: u.v.x(),
+                y: u.v.y(),
+                z: u.v.z(),
+                cur_speed: u.v.speed(),
+                direction: u.v.direction(),
+                length: crate::raw_field::read_field!(u.v.ground_cache(), cached_veh_length),
+                front: crate::vehicle_base::is_front_engine(
+                    crate::vehicle_base::is_ground_vehicle(u.v.vehicle_type()),
+                    u.v.subtype(),
+                ),
+                tram: (crate::movement::table(self.ss).road_kind)(u.v).0,
+            };
             if !self.individual(u, u.ground(link.next_ground), Some(prev), &mut us) {
                 return None;
             }
             prev = u;
-            link = service!(self.l.link)(u.v);
+            link = Link {
+                next: u.v.next(),
+                next_state: u.v.next().map_or(std::ptr::null_mut(), |n| {
+                    crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                }),
+                next_ground: u.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+            };
             next = Part::link(link.next, link.next_state);
         }
         Some(traversed_tail)
@@ -1730,7 +1864,19 @@ impl Game<'_> {
         if reverse != 0 {
             v.set(REVERSE_CTR, reverse - 1);
         }
-        if status & VS_CRASHED != 0 || self.train_crash(v, service!(self.l.crash_part)(v.v)) {
+        if status & VS_CRASHED != 0
+            || self.train_crash(
+                v,
+                CrashPart {
+                    next: v.v.next(),
+                    next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                        crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                    }),
+                    z: v.v.z(),
+                    crossing: (self.ss.is_level_crossing)(v.v.tile()),
+                },
+            )
+        {
             return self.crashed(v, tick);
         }
         let b = if crate::witness::enabled() {
@@ -1785,13 +1931,32 @@ impl Game<'_> {
             };
             if traversed_tail {
                 // A traversed tail may have changed the front, including by detaching itself.
-                s = service!(self.l.step)(v.v);
+                s = Step {
+                    tile: v.v.tile(),
+                    x: v.v.x(),
+                    y: v.v.y(),
+                    z: v.v.z(),
+                    cur_speed: v.v.speed(),
+                    direction: v.v.direction(),
+                    length: crate::raw_field::read_field!(v.v.ground_cache(), cached_veh_length),
+                    front: crate::vehicle_base::is_front_engine(
+                        crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type()),
+                        v.v.subtype(),
+                    ),
+                    tram: (crate::movement::table(self.ss).road_kind)(v.v).0,
+                };
             }
             adv = advance_distance(s.direction);
             if j >= adv {
                 let crossing =
                     v.state() != RVSB_WORMHOLE && service!(self.ss.is_level_crossing)(s.tile);
-                let link = service!(self.l.link)(v.v);
+                let link = Link {
+                    next: v.v.next(),
+                    next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                        crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                    }),
+                    next_ground: v.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+                };
                 let first = CrashPart {
                     next: link.next,
                     next_state: link.next_state,
@@ -1818,30 +1983,29 @@ impl Game<'_> {
         true
     }
     /// `RoadVehicle::Tick`.
-    fn tick(&mut self, v: Part, t: &TickRead) -> bool {
-        let tick = t.tick.wrapping_add(1);
-        if !t.front {
-            (v.v).write_tick(tick);
+    fn tick(&mut self, v: Part, entry: &Entry) -> bool {
+        let tick = v.v.tick().wrapping_add(1);
+        if !crate::vehicle_base::is_front_engine(
+            crate::vehicle_base::is_ground_vehicle(v.v.vehicle_type()),
+            v.v.subtype(),
+        ) {
+            v.v.write_tick(tick);
             return true;
         }
-        self.acceleration_model = t.movement.acceleration_model;
-        self.road_side = t.movement.road_side;
-        self.queue = t.movement.queue;
-        self.map.log_x = t.movement.map_log_x;
-        // SAFETY: The front entry supplies actual scalar addresses of the live shell.
-        // Load at the original branches; no native-field reference spans a service.
-        let running = if unsafe { t.status.read() } & VS_STOPPED == 0 {
-            unsafe { t.running.read() }.wrapping_add(1)
+        self.acceleration_model = entry.acceleration_model;
+        self.road_side = entry.road_side;
+        self.queue = entry.queue;
+        self.map.log_x = entry.map_log_x;
+        let running = if v.v.status() & VS_STOPPED == 0 {
+            v.v.running().wrapping_add(1)
         } else {
-            unsafe { t.running.read() }
+            v.v.running()
         };
-        let order_time = unsafe { t.order_time.read() }.wrapping_add(1);
+        let order_time = v.v.order_time().wrapping_add(1);
         v.v.write_tick(tick);
         v.v.write_running(running);
-        service!(self.vs.write_order_time)(v.v, order_time);
-        // Reload after native writes; discard all places before controller callbacks.
-        let status = unsafe { t.status.read() };
-        self.controller(v, v.ground(t.movement.ground), status, tick)
+        v.v.write_order_time(order_time);
+        self.controller(v, v.ground(entry.ground), v.v.status(), tick)
     }
     /// `RoadVehicle::SetDestTile`.
     fn set_dest(v: Part, tile: u32) {
@@ -1871,7 +2035,20 @@ impl Game<'_> {
     }
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {
-        let r = service!(self.l.service_read)(v.v);
+        let r = ServiceRead {
+            tile: v.v.tile(),
+            servint: {
+                // SAFETY: Base maintenance names the shared static command and company tables.
+                let command = unsafe { &*(*(*self.vs.maintenance).transaction).commands };
+                let company = unsafe { &*(command.company)() };
+                let settings = (company.settings)();
+                let defaults = (settings.company_vehicle_defaults)(crate::company_type::CompanyID(
+                    v.v.owner(),
+                ));
+                crate::raw_field::read_field!(defaults, servint_roadveh)
+            },
+            cur_speed: v.v.speed(),
+        };
         if r.servint == 0
             || !unsafe {
                 self.vs
@@ -1887,11 +2064,26 @@ impl Game<'_> {
         }
         if all_in_depot {
             let mut next = {
-                let p = service!(self.l.link)(v.v);
+                let p = Link {
+                    next: v.v.next(),
+                    next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
+                        crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                    }),
+                    next_ground: v.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+                };
                 Part::link(p.next, p.next_state)
             };
             while let Some(u) = next {
-                let p = service!(self.l.link_tile)(u.v);
+                let p = LinkTile {
+                    link: Link {
+                        next: u.v.next(),
+                        next_state: u.v.next().map_or(std::ptr::null_mut(), |n| {
+                            crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+                        }),
+                        next_ground: u.v.next().map_or(std::ptr::null_mut(), VehicleRef::ground),
+                    },
+                    tile: u.v.tile(),
+                };
                 if u.state() != DEPOT || p.tile != r.tile {
                     all_in_depot = false;
                     break;
@@ -1951,7 +2143,13 @@ impl Game<'_> {
     }
     /// `CmdTurnRoadVeh` after the ownership checks.
     fn turn(&self, v: Part, execute: bool) -> bool {
-        let r = service!(self.l.turn_read)(v.v);
+        let r = TurnRead {
+            tile: v.v.tile(),
+            breakdown_ctr: crate::raw_field::read_field!(v.v.0.as_ptr(), breakdown_ctr),
+            direction: v.v.direction(),
+            order_type: v.v.current_order().kind(),
+            status: v.v.status(),
+        };
         if r.status & (VS_STOPPED | VS_CRASHED) != 0
             || r.breakdown_ctr != 0
             || v.overtaking() != 0
@@ -1981,7 +2179,11 @@ impl Game<'_> {
     }
     /// `RoadVehicle::GetVehicleTrackdir`.
     fn trackdir(&self, v: Part) -> u8 {
-        let r = service!(self.l.trackdir_read)(v.v);
+        let r = TrackdirRead {
+            tile: v.v.tile(),
+            direction: v.v.direction(),
+            status: v.v.status(),
+        };
         if r.status & VS_CRASHED != 0 {
             return INVALID_TRACKDIR;
         }
@@ -2044,16 +2246,16 @@ macro_rules! entry {
 pub unsafe extern "C" fn openttd_rust_road_tick(
     v: VehicleRef,
     state: *mut State,
-    read: *const TickRead,
+    entry: *const Entry,
     leaves: *const Leaves,
     road: *mut crate::road_cmd::CommandSlot,
 ) -> bool {
     crate::witness::hit(crate::witness::ROAD_TICKS);
     // SAFETY: Records are borrowed for this call only.
-    let t = unsafe { &*read };
+    let e = unsafe { &*entry };
     let mut g = entry!(leaves, None);
     g.road = road;
-    g.tick(Part::new(v, state), t)
+    g.tick(Part::new(v, state), e)
 }
 /// # Safety
 /// As `openttd_rust_road_tick`; `prev` is null or a live pair.
@@ -2071,7 +2273,20 @@ pub unsafe extern "C" fn openttd_rust_road_individual(
     let e = unsafe { &*entry };
     let mut g = entry!(leaves, Some(e));
     g.road = road;
-    let mut s = service!(g.l.step)(v);
+    let mut s = Step {
+        tile: v.tile(),
+        x: v.x(),
+        y: v.y(),
+        z: v.z(),
+        cur_speed: v.speed(),
+        direction: v.direction(),
+        length: crate::raw_field::read_field!(v.ground_cache(), cached_veh_length),
+        front: crate::vehicle_base::is_front_engine(
+            crate::vehicle_base::is_ground_vehicle(v.vehicle_type()),
+            v.subtype(),
+        ),
+        tram: (crate::movement::table(g.ss).road_kind)(v).0,
+    };
     let v = Part::new(v, state);
     g.individual(v, v.ground(e.ground), Part::link(prev, prev_state), &mut s)
 }
@@ -2158,12 +2373,21 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
     v: VehicleRef,
     state: *mut State,
     acceleration_model: u8,
-    read: *const MaxSpeedRead,
     leaves: *const Leaves,
 ) -> i32 {
     crate::witness::hit(crate::witness::ROAD_ENTRIES);
     // SAFETY: Records borrowed for this call only.
-    let r = unsafe { *read };
+    let r = MaxSpeedRead {
+        next: v.next(),
+        next_state: v.next().map_or(std::ptr::null_mut(), |n| {
+            crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+        }),
+        tile: v.tile(),
+        max_track_speed: crate::raw_field::read_field!(v.ground_cache(), cached_max_track_speed),
+        order_max_speed: v.current_order().speed,
+        direction: v.direction(),
+        status: v.status(),
+    };
     // SAFETY: The static table and live state outlive this synchronous query.
     max_speed(Part::new(v, state), r, acceleration_model, unsafe {
         &*leaves
@@ -2247,93 +2471,6 @@ crate::abi::layouts! {
         queue,
         map_log_x,
     };
-    "OpenTTDRoadTickRead" ["probe"] => TickRead {
-        tick,
-        front,
-        movement,
-        order_time,
-        running,
-        status,
-    };
-    "OpenTTDRoadMaxSpeedRead" ["probe"] => MaxSpeedRead {
-        next,
-        next_state,
-        tile,
-        max_track_speed,
-        order_max_speed,
-        direction,
-        status,
-    };
-    "OpenTTDRoadSpeedRead" ["probe"] => SpeedRead {
-        max,
-        x,
-        y,
-        z,
-        length,
-        tram,
-    };
-    "OpenTTDRoadSpeedPart" ["probe"] => SpeedPart {
-        next,
-        next_state,
-        tile,
-        direction,
-        status,
-    };
-    "OpenTTDRoadStep" ["probe"] => Step {
-        tile,
-        x,
-        y,
-        z,
-        cur_speed,
-        direction,
-        length,
-        front,
-        tram,
-    };
-    "OpenTTDRoadCrashPart" ["probe"] => CrashPart {
-        next,
-        next_state,
-        z,
-        crossing,
-    };
-    "OpenTTDRoadEntered" ["probe"] => Entered {
-        tile,
-        cur_speed,
-        flags,
-        direction,
-        order_type,
-    };
-    "OpenTTDRoadCandidate" ["probe"] => Candidate {
-        vehicle,
-        state,
-        first,
-        first_state,
-        first_ground,
-        index,
-        x,
-        y,
-        z,
-        first_speed,
-        direction,
-    };
-    "OpenTTDRoadPartRead" ["probe"] => PartRead {
-        next,
-        next_state,
-        tile,
-        z,
-        tram,
-    };
-    "OpenTTDRoadPathRead" ["probe"] => PathRead {
-        dest,
-        owner,
-        articulated,
-    };
-    "OpenTTDRoadOvertakeRead" ["probe"] => OvertakeRead {
-        tile,
-        cur_speed,
-        direction,
-        status,
-    };
     "OpenTTDRoadRoadTypes" ["probe"] => RoadTypes {
         before,
         after,
@@ -2346,54 +2483,11 @@ crate::abi::layouts! {
         tile,
         length,
     };
-    "OpenTTDRoadArrivalRead" ["probe"] => ArrivalRead {
-        had_vehicle_of_type,
-    };
-    "OpenTTDRoadSoundRead" ["probe"] => SoundRead {
-        sound,
-        tick,
-    };
-    "OpenTTDRoadLink" ["probe"] => Link {
-        next,
-        next_state,
-        next_ground,
-    };
-    "OpenTTDRoadLinkTile" ["probe"] => LinkTile {
-        link,
-        tile,
-    };
-    "OpenTTDRoadServiceRead" ["probe"] => ServiceRead {
-        tile,
-        servint,
-        cur_speed,
-    };
-    "OpenTTDRoadTurnRead" ["probe"] => TurnRead {
-        tile,
-        breakdown_ctr,
-        direction,
-        order_type,
-        status,
-    };
-    "OpenTTDRoadTrackdirRead" ["probe"] => TrackdirRead {
-        tile,
-        direction,
-        status,
-    };
     "OpenTTDRoadLeaves" ["probe"] => Leaves {
-        candidate,
         vehicle,
         ground,
         shared,
         max_depot_penalty,
-        speed_read,
-        max_speed_read,
-        speed_part,
-        step,
-        crash_part,
-        part,
-        link,
-        link_tile,
-        after_enter_tile,
         any_road_bits,
         is_road_depot_tile,
         depot_direction,
@@ -2403,26 +2497,19 @@ crate::abi::layouts! {
         is_drive_through,
         is_station_road_stop,
         move_tile,
-        path_read,
         choose_track,
         find_depot,
         tram_build_read,
         disconnect,
         should_stop,
-        arrival_read,
         arrival_news,
 
-        overtake_read,
-        sound_read,
         depot_exit,
         crash_news,
         shorten_factor,
         default_max_speed,
         cargo_age_default,
         pay_running,
-        service_read,
-        turn_read,
-        trackdir_read,
         depot_exit_dirty,
     };
 }
@@ -2454,7 +2541,13 @@ impl Game<'_> {
         let flags = unsafe {
             crate::movement::openttd_rust_movement_enter(self.movement.get(), v, tile, x, y)
         };
-        service!(self.l.after_enter_tile)(v, flags)
+        Entered {
+            tile: v.tile(),
+            cur_speed: v.speed(),
+            flags,
+            direction: v.direction(),
+            order_type: v.current_order().kind(),
+        }
     }
 }
 
@@ -2486,7 +2579,20 @@ pub(crate) unsafe fn current_max_speed(
 ) -> i32 {
     max_speed(
         Part::new(v, state),
-        (leaves.max_speed_read)(v),
+        MaxSpeedRead {
+            next: v.next(),
+            next_state: v.next().map_or(std::ptr::null_mut(), |n| {
+                crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
+            }),
+            tile: v.tile(),
+            max_track_speed: crate::raw_field::read_field!(
+                v.ground_cache(),
+                cached_max_track_speed
+            ),
+            order_max_speed: v.current_order().speed,
+            direction: v.direction(),
+            status: v.status(),
+        },
         model,
         leaves,
     )

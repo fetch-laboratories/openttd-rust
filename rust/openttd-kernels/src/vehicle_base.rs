@@ -109,6 +109,7 @@ crate::abi::shared_records! {
         /// Stable owner links, initialized by the corresponding native constructors.
         pub ground: *mut crate::ground_vehicle::GroundState,
         pub train: *mut crate::train_state::TrainState,
+        pub road: *mut crate::road::OpenTTDRoadState,
         pub consist: *mut crate::orders::Consist,
         pub orders: *mut crate::orders::VehicleOrders,
         pub visual: *mut u8,
@@ -162,6 +163,7 @@ pub extern "C" fn openttd_rust_vehicle_record_new(
         next: std::ptr::null_mut(),
         ground: std::ptr::null_mut(),
         train: std::ptr::null_mut(),
+        road: std::ptr::null_mut(),
         consist: std::ptr::null_mut(),
         orders: std::ptr::null_mut(),
         visual: std::ptr::null_mut(),

@@ -23,6 +23,7 @@ struct OpenTTDEngineCapabilitiesServices {
 	uint8_t (*mail_capacity)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(mail_capacity);
 	EngineClass (OPENTTD_RUST_CALL *train_class)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(train_class);
 	uint8_t (OPENTTD_RUST_CALL *aircraft_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_subtype);
+	uint16_t (*road_sound)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_sound);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	const GRFFile *(*grf)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(grf);
 	const OpenTTDEngineLoadingServices *(*loading)() noexcept OPENTTD_SERVICE_DEFAULT(loading);
