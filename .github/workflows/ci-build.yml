@@ -46,12 +46,13 @@ jobs:
 
   emscripten:
     needs: policy
-    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true') && inputs.profile != 'native' }}
+    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true') && inputs.profile != 'native' }}
     name: Emscripten
 
     uses: ./.github/workflows/ci-emscripten.yml
     with:
       checkout-ref: ${{ inputs.checkout-ref }}
+      cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
   linux:
     needs: policy
