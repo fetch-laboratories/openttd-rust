@@ -199,7 +199,9 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 	tileservice.set_frame = [](uint32_t tile, uint8_t frame) noexcept { SetAnimationFrame(tile, frame); };
 	tileservice.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(tile); };
 	tileservice.set_animation_loop = [](uint32_t tile, uint8_t loop) noexcept { SetIndustryAnimationLoop(tile, loop); };
-	tileservice.ambient = []() noexcept -> bool { return _settings_client.sound.ambient; };
+	OpenTTDSharedServices tile_shared = OpenTTDFixtureSharedServices(nullptr, nullptr);
+	tile_shared.ambient_sound = []() noexcept -> bool { return _settings_client.sound.ambient; };
+	tileservice.shared = &tile_shared;
 	tileservice.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; };
 	animation.industry_tiles = &tileservice;
 	builtin_mode = true;

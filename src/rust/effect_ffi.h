@@ -27,7 +27,6 @@ typedef struct OpenTTDEffectLeaves {
 	void (OPENTTD_RUST_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 
 } OpenTTDEffectLeaves;
-struct OpenTTDVehicle;
 typedef struct EffectVehicle OpenTTDEffectVehicle;
 struct OpenTTDEffectAllocation { void *shell; OpenTTDVehicle *record; OpenTTDEffectState *owner; };
 struct OpenTTDEffectCreationServices {

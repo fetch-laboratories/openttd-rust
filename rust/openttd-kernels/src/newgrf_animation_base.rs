@@ -250,7 +250,7 @@ fn sound<S, O, E: Callback<S, O>>(
     cb: u16,
 ) {
     let id = ((cb >> 8) & 0x7F) as u8;
-    if id != 0 && unsafe { ((*a.industry_tiles).ambient)() } {
+    if id != 0 && unsafe { ((*(*a.industry_tiles).shared).ambient_sound)() } {
         (b.sound)(spec, id, tile);
     }
 }

@@ -2032,7 +2032,6 @@ crate::abi::layouts! {
         set_frame,
         animation_loop,
         set_animation_loop,
-        ambient,
 
         construction_counter,
         construction_stage,

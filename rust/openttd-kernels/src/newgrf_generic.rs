@@ -49,7 +49,6 @@ pub struct Services {
     evaluate: extern "C" fn(*const Invocation, *mut i32, usize) -> u16,
     common: *const crate::newgrf_spritegroup::Services,
     enabled: extern "C" fn() -> bool,
-    ambient: extern "C" fn() -> bool,
     water_class: extern "C" fn(u32) -> WaterClass,
     sound: extern "C" fn(*const c_void, u16, u32),
     unsupported: extern "C" fn(u8),
@@ -274,7 +273,7 @@ fn ambient_callback(tile: u32) {
         matches!((shared.tile_type)(tile), MP_CLEAR | MP_TREES | MP_WATER),
     );
     let random = shared.random();
-    if !chance16_i(1, 200, random) || !(s.ambient)() {
+    if !chance16_i(1, 200, random) || !(unsafe { &*s.shared }.ambient_sound)() {
         return;
     }
     let v7 = u32::from((shared.tile_type)(tile)) << 28
@@ -310,5 +309,5 @@ crate::abi::layouts! {
     "OpenTTDGenericScope" ["probe"] => Scope { cargo, selection, source, destination, distance, event, count, station_size, feature, ai };
     "OpenTTDGenericInvocation" ["probe"] => Invocation { scope, callback, param1, file, root };
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
-    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, water_class, sound, unsupported, unhandled };
+    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_bitnum, industry_substitute, evaluate, common, enabled, water_class, sound, unsupported, unhandled };
 }

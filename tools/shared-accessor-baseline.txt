@@ -11,7 +11,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2f3fe8935519
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 42b3050e03485e2d | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 45992d52fc0daa85 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | b47b72a3c9ac9c98 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint64_t | 64e8426b85c95e58 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cb5a659cbe6a8f4 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cf059c2aa94086f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | b837556a01baf950 | 1

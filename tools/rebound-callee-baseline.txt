@@ -63,8 +63,6 @@ rebound | LiveGraphOwner | src/rust/services.cpp | owner
 rebound | LiveGraphOwner | src/timer/timer_game_common.cpp | graph_owner
 rebound | MapSvcRoadIsLevelCrossing | src/landscape.cpp | road_crossing
 rebound | MapSvcRoadIsLevelCrossing | src/pbs.cpp | is_crossing
-rebound | OpenTTDAmbientSound | src/industry_cmd.cpp | ambient
-rebound | OpenTTDAmbientSound | src/newgrf_generic.cpp | ambient
 rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame
 rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
@@ -219,7 +217,6 @@ rebound | RustNetworkServer | src/order_cmd.cpp | network_server
 rebound | RustNetworkServer | src/rust/company_adapter.cpp | network_server
 rebound | RustOnWater | src/industry_cmd.cpp | on_water
 rebound | RustOnWater | src/landscape.cpp | on_water
-rebound | RustOpaqueVehicleInvoke | src/effectvehicle.cpp | unclickable
 rebound | RustOpaqueVehicleInvoke | src/rust/rail_construction_services.hpp | invalidate_grf
 rebound | RustOpaqueVehicleInvoke | src/rust/rail_construction_services.hpp | release_unit
 rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_articulated_services.hpp | flip_image
@@ -373,8 +370,6 @@ rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
 rebound | RustVehicleNextArticulated | src/economy.cpp | next_articulated
 rebound | RustVehicleNextArticulated | src/rust/engine_capabilities_services.hpp | next_articulated
-rebound | RustVehicleSetOwner | src/rust/disaster_adapter.hpp | write_owner
-rebound | RustVehicleSetOwner | src/rust/engine_capabilities_services.hpp | set_owner
 rebound | RustVehicleTrain | src/rust/vehicle_refit_services.hpp | train_handle
 rebound | RustVehicleTrain | src/rust/vehicle_services.cpp | train_handle
 rebound | RustVehicleUpdateDelta | src/effectvehicle.cpp | delta

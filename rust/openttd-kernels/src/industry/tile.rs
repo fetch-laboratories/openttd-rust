@@ -46,7 +46,6 @@ pub struct TileServices {
     pub set_frame: unsafe extern "C" fn(u32, u8),
     pub animation_loop: unsafe extern "C" fn(u32) -> u8,
     pub set_animation_loop: unsafe extern "C" fn(u32, u8),
-    pub ambient: unsafe extern "C" fn() -> bool,
 
     pub construction_counter: unsafe extern "C" fn(u32) -> u8,
     pub construction_stage: unsafe extern "C" fn(u32) -> u8,
@@ -70,7 +69,7 @@ fn chance(s: &Services, a: u32, b: u32) -> bool {
     crate::random_func::chance16_i(a, b, s.shared().random())
 }
 fn sound(tile: u32, sound: u16, s: &Services, t: &TileServices) {
-    if unsafe { (t.ambient)() } {
+    if unsafe { ((*t.shared).ambient_sound)() } {
         unsafe { (s.play_sound)(sound, tile) };
     }
 }
@@ -197,7 +196,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
     match gfx {
         174 if (s.shared().tick_counter)() & 1 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
-            if unsafe { (t.ambient)() } {
+            if unsafe { ((*t.shared).ambient_sound)() } {
                 match frame & 7 {
                     2 => unsafe { (s.play_sound)(45, tile) },
                     6 => unsafe { (s.play_sound)(41, tile) },
