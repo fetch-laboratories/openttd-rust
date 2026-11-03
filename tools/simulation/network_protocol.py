@@ -464,6 +464,9 @@ def prepare(
         raise RuntimeError("mixed server-role semantic worlds differ")
     result["network_protocol"] = summaries
     (folder / "observations.json").write_text(json.dumps(summaries, indent=2) + "\n")
+    # The actual binaries record their own revisions again on the subsequent reload.
+    for role, save in saves.items():
+        saves[role], _ = core.normalize(save, folder / role / "reload-input")
     return {
         **scenario,
         "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
