@@ -407,10 +407,11 @@ impl<'a> Pbs<'a> {
                     != 0
             {
                 let t = (c.pbs.train().read_first)(t);
-                if c.best.shell.is_null()
-                    || (c.pbs.0.index)(t.shell) < (c.pbs.0.index)(c.best.shell)
+                if c.best.record.is_null()
+                    || (c.pbs.0.index)(t.vehicle().shell())
+                        < (c.pbs.0.index)(c.best.vehicle().shell())
                 {
-                    if !c.best.shell.is_null() {
+                    if !c.best.record.is_null() {
                         crate::witness::hit(crate::witness::PBS_LOWER_ID);
                     }
                     *c.best = t;
@@ -467,25 +468,25 @@ impl<'a> Pbs<'a> {
         if check_other {
             let mut best = Handle::NONE;
             self.check_trains(&res, res.tile, &mut best);
-            if !best.shell.is_null() {
+            if !best.record.is_null() {
                 other.write((self.train().read_first)(best));
             }
-            if other.read().shell.is_null() && (self.rail().is_rail_station)(res.tile) {
+            if other.read().record.is_null() && (self.rail().is_rail_station)(res.tile) {
                 let diff = self
                     .map()
                     .offs_by_diag_dir(trackdir_to_exitdir(reverse_trackdir(res.td)));
                 let mut st_tile = res.tile.wrapping_add(diff);
-                while other.read().shell.is_null()
+                while other.read().record.is_null()
                     && World::new(self.shared()).compatible_station(st_tile, res.tile)
                 {
                     self.check_trains(&res, st_tile, &mut best);
-                    if !best.shell.is_null() {
+                    if !best.record.is_null() {
                         other.write((self.train().read_first)(best));
                     }
                     st_tile = st_tile.wrapping_add(diff);
                 }
             }
-            if other.read().shell.is_null()
+            if other.read().record.is_null()
                 && (self.shared().tile_type)(res.tile) == MP_TUNNELBRIDGE
             {
                 self.check_trains(
@@ -493,7 +494,7 @@ impl<'a> Pbs<'a> {
                     (self.rail().other_tunnel_bridge_end)(res.tile),
                     &mut best,
                 );
-                if !best.shell.is_null() {
+                if !best.record.is_null() {
                     other.write((self.train().read_first)(best));
                     crate::witness::hit(crate::witness::PBS_OTHER_END_TRAIN);
                 }
@@ -526,7 +527,7 @@ impl<'a> Pbs<'a> {
                 self.follow_reservation((self.shared().tile_owner)(tile), types, tile, td, true);
             let mut best = Handle::NONE;
             self.check_trains(&res, res.tile, &mut best);
-            if !best.shell.is_null() {
+            if !best.record.is_null() {
                 return best;
             }
             if (self.rail().is_rail_station)(res.tile) {
@@ -536,7 +537,7 @@ impl<'a> Pbs<'a> {
                 let mut st_tile = res.tile.wrapping_add(diff);
                 while World::new(self.shared()).compatible_station(st_tile, res.tile) {
                     self.check_trains(&res, st_tile, &mut best);
-                    if !best.shell.is_null() {
+                    if !best.record.is_null() {
                         crate::witness::hit(crate::witness::PBS_PLATFORM_TRAIN);
                         return best;
                     }
@@ -549,7 +550,7 @@ impl<'a> Pbs<'a> {
                     (self.rail().other_tunnel_bridge_end)(res.tile),
                     &mut best,
                 );
-                if !best.shell.is_null() {
+                if !best.record.is_null() {
                     crate::witness::hit(crate::witness::PBS_OTHER_END_TRAIN);
                     return best;
                 }

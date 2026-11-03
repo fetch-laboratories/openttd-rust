@@ -40,8 +40,8 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.station = RustBaseStationByTile,
 
 		.is_crossing = MapSvcRoadIsLevelCrossing,
-		.read_train_on_res = [](const OpenTTDPbsTrainOutput *slot) noexcept -> OpenTTDTrainHandle { return {*reinterpret_cast<Vehicle *const *>(slot), nullptr}; },
-		.write_train_on_res = [](OpenTTDPbsTrainOutput *slot, OpenTTDTrainHandle v) noexcept { *reinterpret_cast<Vehicle **>(slot) = static_cast<Train *>(v.shell); },
+		.read_train_on_res = [](const OpenTTDPbsTrainOutput *slot) noexcept -> OpenTTDTrainHandle { return {RustVehicle(*reinterpret_cast<Vehicle *const *>(slot)), nullptr}; },
+		.write_train_on_res = [](OpenTTDPbsTrainOutput *slot, OpenTTDTrainHandle v) noexcept { *reinterpret_cast<Vehicle **>(slot) = static_cast<Train *>(VehicleFromRecord(v.record)); },
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 		.assertions = true,
 #else
@@ -68,6 +68,6 @@ PBSTileInfo FollowTrainReservation(const Train *v, Vehicle **other)
 	auto result = openttd_rust_pbs_follow_train(&GetPbsServices(), TrainHandle(v), reinterpret_cast<OpenTTDPbsTrainOutput *>(other));
 	return {TileIndex{result.tile}, static_cast<Trackdir>(result.td), result.okay != 0};
 }
-Train *GetTrainForReservation(TileIndex tile, Track track) { return static_cast<Train *>(openttd_rust_pbs_train_for(&GetPbsServices(), tile.base(), track).shell); }
+Train *GetTrainForReservation(TileIndex tile, Track track) { return static_cast<Train *>(VehicleFromRecord(openttd_rust_pbs_train_for(&GetPbsServices(), tile.base(), track).record)); }
 bool IsSafeWaitingPosition(const Train *v, TileIndex tile, Trackdir td, bool end, bool no90) { return openttd_rust_pbs_safe(&GetPbsServices(), TrainHandle(v), tile.base(), td, end, no90); }
 bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir td, bool no90) { return openttd_rust_pbs_free(&GetPbsServices(), TrainHandle(v), tile.base(), td, no90); }

@@ -266,19 +266,10 @@ impl Game<'_> {
     fn needs_service(&self, id: Handle) -> bool {
         // SAFETY: Live serialized train and immutable table; no owner borrow
         // spans the direct `Vehicle::NeedsServicing` port.
-        unsafe {
-            crate::vehicle::maintenance::needs_servicing(
-                id.vehicle(&*self.leaves.vehicle),
-                &*self.leaves.vehicle,
-            )
-        }
+        unsafe { crate::vehicle::maintenance::needs_servicing(id.vehicle(), &*self.leaves.vehicle) }
     }
     fn order_stop(&self, id: Handle, station: u16) -> bool {
-        crate::movement::should_stop(
-            self.shared(),
-            id.vehicle(unsafe { &*self.leaves.vehicle }),
-            station,
-        )
+        crate::movement::should_stop(self.shared(), id.vehicle(), station)
     }
     fn reserved(&self, tile: u32) -> u8 {
         self.pbs().reserved(tile)
@@ -322,7 +313,7 @@ impl Game<'_> {
                 &*self.leaves.vehicle,
                 tile,
                 end,
-                id.vehicle(&*self.leaves.vehicle).0.as_ptr(),
+                id.vehicle().0.as_ptr(),
             )
             .is_none()
         }
@@ -1577,14 +1568,14 @@ pub(crate) mod tests {
             self.record.owner = crate::company_type::CompanyID(0);
             self.record.shell = std::ptr::from_mut(self).cast();
             Handle {
-                shell: std::ptr::from_mut(self).cast(),
+                record: &raw mut *self.record,
                 owner: &raw mut self.state,
             }
         }
     }
     unsafe fn mock<'a>(h: Handle) -> &'a mut Mock {
         // SAFETY: Every test installs this handle to its live exclusive stack mock.
-        unsafe { &mut *h.shell.cast::<Mock>() }
+        unsafe { &mut *h.vehicle().shell().cast::<Mock>() }
     }
 
     // A PBS service has no vehicle argument; each test thread names its world here.

@@ -1261,7 +1261,7 @@ impl<'a> World<'a> {
         w::hit(w::TB_RESERVATION);
         let train = crate::pbs::Pbs::acquire(self.s)
             .train_for(tile, track)
-            .shell
+            .shell()
             .cast::<Train>();
         if !train.is_null() {
             unsafe {

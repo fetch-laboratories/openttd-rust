@@ -20,7 +20,7 @@ TEST_CASE("PBS depot early return does not read or write train_on_res")
 	map.pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
 	(map.state.get())->track = TRACK_BIT_X;
 	void *other = nullptr;
-	const auto result = openttd_rust_pbs_follow_train(&map.pbs, {map.state.get(), map.state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
+	const auto result = openttd_rust_pbs_follow_train(&map.pbs, {&map.record, map.state.get()}, reinterpret_cast<OpenTTDPbsTrainOutput *>(&other));
 	CHECK(result.tile == 23); CHECK(result.td == 0); CHECK(result.okay == 0); CHECK(other == nullptr);
 }
 
@@ -65,7 +65,8 @@ TEST_CASE("Train speed - depot break and wormhole limits")
 {
 	/* Abort defaults stand for every service the original loop must not reach. */
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> owner(openttd_rust_train_state_new(), openttd_rust_train_state_destroy);
-	const OpenTTDTrainHandle handle{owner.get(), owner.get()};
+	OpenTTDVehicle record{};
+	const OpenTTDTrainHandle handle{&record, owner.get()};
 	owner->cached_max_curve_speed = 180;
 	auto table = OpenTTDTrainServices{};
 	table.read_current_max_speed = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainCurrentMaxSpeedRead { return {17, 200, 100}; };

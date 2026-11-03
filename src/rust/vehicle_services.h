@@ -67,7 +67,7 @@ template <typename Handle> inline void RustVehicleUpdateDelta(Handle handle) noe
 	if constexpr (std::is_same_v<Handle, OpenTTDVehicle *>) { v = VehicleOf(handle); }
 	else if constexpr (std::is_pointer_v<Handle>) { v = reinterpret_cast<Vehicle *>(handle); }
 	else if constexpr (requires { handle.handle; }) { v = VehicleOf(handle.handle); }
-	else { v = static_cast<Vehicle *>(handle.shell); }
+	else { v = VehicleOf(handle.record); }
 	v->UpdateDeltaXY();
 }
 inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)->PlayLeaveStationSound(); }

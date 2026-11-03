@@ -1173,7 +1173,7 @@ impl Ctx<'_> {
             let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_free(
                 handle,
-                handle.vehicle(self.vehicle()),
+                handle.vehicle(),
                 self.s.reservation,
                 std::ptr::null_mut(),
             );
@@ -1188,7 +1188,7 @@ impl Ctx<'_> {
             let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_try_path(
                 handle,
-                handle.vehicle(self.vehicle()),
+                handle.vehicle(),
                 1,
                 1,
                 self.s.reservation,
@@ -1201,7 +1201,7 @@ impl Ctx<'_> {
     fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
         let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
         // SAFETY: The reached platform update always supplies a live train shell.
-        let vehicle = handle.vehicle(self.vehicle());
+        let vehicle = handle.vehicle();
         let tile = (vehicle).tile();
         if self.rail_station(tile) {
             // SAFETY: The shell and canonical immutable tables remain live for this call.
@@ -1273,7 +1273,7 @@ impl Ctx<'_> {
                         {
                             let train = crate::pbs::Pbs::acquire(self.shared)
                                 .train_for(tile, track)
-                                .shell
+                                .shell()
                                 .cast::<crate::services::Train>();
                             if !train.is_null() {
                                 affected.push(train);
@@ -1580,7 +1580,7 @@ impl Ctx<'_> {
                 if self.rail_station(t) && (self.s.reserved)(t) {
                     let train = crate::pbs::Pbs::acquire(self.shared)
                         .train_for(t, self.station_axis(t))
-                        .shell
+                        .shell()
                         .cast::<crate::services::Train>();
                     if !train.is_null() {
                         affected.push(train);
@@ -1833,7 +1833,7 @@ impl Ctx<'_> {
             if (self.s.reserved)(tile) {
                 train = crate::pbs::Pbs::acquire(self.shared)
                     .train_for(tile, track)
-                    .shell
+                    .shell()
                     .cast::<crate::services::Train>();
                 if !train.is_null() {
                     self.free_reservation(train);

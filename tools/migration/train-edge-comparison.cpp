@@ -67,8 +67,8 @@ static bool IsTileType(TileIndex, int) { return false; }
 static bool IsBridgeTile(TileIndex) { return false; }
 #include "train-reference.inc"
 
-static OpenTTDTrainHandle Handle(Train *v) noexcept { return {v, v == nullptr ? nullptr : v->state}; }
-static Train &Part(OpenTTDTrainHandle part) noexcept { return *static_cast<Train *>(part.shell); }
+static OpenTTDTrainHandle Handle(Train *v) noexcept { return {v == nullptr ? nullptr : &v->record, v == nullptr ? nullptr : v->state}; }
+static Train &Part(OpenTTDTrainHandle part) noexcept { return *reinterpret_cast<Train *>(part.record->shell); }
 static uint32_t UnexpectedRandom(void *) noexcept { std::abort(); }
 static uint32_t UnexpectedIndustry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
 static OpenTTDMovementServices movement;

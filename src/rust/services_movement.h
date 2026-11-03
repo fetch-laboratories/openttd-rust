@@ -42,7 +42,7 @@ inline OpenTTDMovementPose RustMovementPose(OpenTTDVehicle *handle) noexcept
 }
 inline OpenTTDMovementDepotPosition RustMovementDepotPosition(OpenTTDTrainHandle handle) noexcept
 {
-	const Train *v = static_cast<const Train *>(handle.shell);
+	const Train *v = static_cast<const Train *>(VehicleFromRecord(handle.record));
 	return {.tile = RustVehicleTile(v), .x = RustVehicleX(v), .y = RustVehicleY(v)};
 }
 inline OpenTTDMovementIncline RustMovementIncline(OpenTTDVehicle *handle) noexcept

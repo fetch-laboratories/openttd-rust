@@ -53,7 +53,7 @@ struct FollowerFixture {
 		movement.shared = &shared; movement.vehicle = &vehicle; movement.train = &train;
 		movement.rail_map = &rail; movement.rail = &ground;
 
-		vehicle.train_handle = [](OpenTTDVehicle *v) noexcept -> OpenTTDTrainHandle { return {v->shell, active->state.get()}; };
+		vehicle.train_handle = [](OpenTTDVehicle *v) noexcept -> OpenTTDTrainHandle { return {v, active->state.get()}; };
 		movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 		movement.road_compatible = [](OpenTTDVehicle *) noexcept -> uint64_t { return 1; };
 		movement.road_type_speed = [](RoadType) noexcept -> uint16_t { return 0; };
@@ -72,7 +72,7 @@ struct FollowerFixture {
 		physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { return 100; };
 		train.physics = &physics; train.read_owner = [](OpenTTDTrainHandle) noexcept -> uint8_t { return 0; };
 		pbs.shared = &shared; pbs.rail = &rail; pbs.train = &train;
-		pbs.handle = [](const ::Train *v) noexcept -> OpenTTDTrainHandle { return {const_cast<::Train *>(v), active->state.get()}; };
+		pbs.handle = [](const ::Train *) noexcept -> OpenTTDTrainHandle { return {&active->record, active->state.get()}; };
 		pbs.rail90 = [](uint8_t, uint8_t, bool def) noexcept { return def; };
 		pbs.all_compatible = [](uint64_t types) noexcept { return types; };
 		pbs.compatible = [](uint8_t type) noexcept -> uint64_t { return uint64_t{1} << type; };

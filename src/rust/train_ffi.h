@@ -18,10 +18,8 @@ struct OpenTTDEngineCapabilitiesServices;
 #include "signal_ffi.h"
 struct OpenTTDVehicleServices;
 struct OpenTTDGroundPhysicsServices;
-/* Each shell owns one Rust state allocation. A resolved handle copies native identity and its
- * owner once per entry or topology read; records hold only the fields the policy consumes.
- * Native visitors keep container order and filter non-trains before Rust policy. Destruction
- * invalidates both handle pointers; policy never reads them after the original deletion point. */
+/* Handles carry the canonical record and train owner. Both remain live until
+ * their source deletion point; no Rust borrow spans a native callback. */
 struct OpenTTDTrainDepot { uint32_t tile, length; };
 struct Train;
 struct OpenTTDTrainServices;

@@ -51,7 +51,7 @@
 #include "rust/settings_services.h"
 OpenTTDTrainHandle TrainHandle(const Train *v) noexcept
 {
-	return {const_cast<Train *>(v), v == nullptr ? nullptr : v->GetRustState()};
+	return {RustVehicle(v), v == nullptr ? nullptr : v->GetRustState()};
 }
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);

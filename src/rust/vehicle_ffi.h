@@ -20,8 +20,8 @@ enum Direction : uint8_t;
  * native shells. Handles stay live for the synchronous call; a service may destroy
  * them. No owner reference spans a service that mutates or reenters Rust. */
 struct OpenTTDTrainState;
-struct OpenTTDTrainHandle { void *shell; OpenTTDTrainState *owner; };
 struct OpenTTDVehicle;
+struct OpenTTDTrainHandle { OpenTTDVehicle *record; OpenTTDTrainState *owner; };
 struct OpenTTDOrdersLeaves;
 /** Canonical stable NOSAVE links; only the Rust occupancy owner mutates them. */
 struct OpenTTDVehicleTileLinks {
