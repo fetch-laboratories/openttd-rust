@@ -43,17 +43,13 @@ class GeneratedAbiTests(unittest.TestCase):
             header = "\n".join(
                 GENERATOR["record_header"]("test", GENERATOR["shared_records"](root))
             )
-            self.assertIn("ZValue value;", header)
-            self.assertIn("std::array<uint8_t, 3> bytes;", header)
-            self.assertIn("void *context;", header)
-            self.assertNotIn("struct void;", header)
-            self.assertLess(
-                header.index("struct ZValue {"), header.index("struct AContainer {")
-            )
             source = root / "record.cpp"
             (root / "record.h").write_text(header)
             source.write_text(
-                '#include "record.h"\nstatic_assert(sizeof(ZValue::bytes) == 3);\n'
+                '#include "record.h"\n#include <type_traits>\n'
+                "static_assert(std::is_same_v<decltype(AContainer::value), ZValue>);\n"
+                "static_assert(std::is_same_v<decltype(AContainer::context), void *>);\n"
+                "static_assert(std::is_same_v<decltype(ZValue::bytes), std::array<uint8_t, 3>>);\n"
             )
             subprocess.run(
                 ["c++", "-std=c++20", "-fsyntax-only", str(source)], check=True
