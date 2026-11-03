@@ -274,6 +274,8 @@ Rust / tooling / original C++ retired / net glue.
 | 63 | #559 command invocation lifecycle (phase 1's last owner) / #640 | `7940e700c2` | 403 / 287 / 136 / +115; rebound rows 420 to 418, orphan exports 55 to 54 |
 | 64 | #64 maintained crypto crates and Rust network authentication / #642 | `5e414c5a64` | 2,027 / 480 / 2,242 / -68 |
 | 65 | #575 script host, command context and event lifecycle / #651 | `6afdcbf390` | 386 / 364 / 354 / +220 |
+| 66 | #659 carried Full validation across pushes that keep the tested non-Markdown tree / #660 (CI only; the user allowed it ahead of the cadence repair) | `f47064fc57` | 0 / tooling only / 0 / 0 |
+| 67 | #661 Emscripten compiler cache / #662 (CI only; the user allowed it ahead of the cadence repair) | `d93afabee9` | 0 / tooling only / 0 / 0 |
 
 ## Work order
 
@@ -341,7 +343,7 @@ Excluded, with return conditions checked by this review:
 
 ## Resume checkpoint (2026-11-02, wind-down after integration 65)
 
-Paused at the user's request: wind-down at 16:20Z. Code is `6afdcbf390` (integration 65). `CI_ON_DEMAND` is `true`. No open head has a requested or passing Full. Each PR's status comment holds its detail. The user reselected #507's NewGRF corpus on 2026-11-02 (work order 3). Agents were stopped or told to stop after recording state; no local job result below is known unless stated.
+Paused at the user's request: wind-down at 16:20Z. Code is `d93afabee9` (integration 67: the CI-only #660 and #662 merged after the pause at the user's request; the cadence repair below still gates every other integration). `CI_ON_DEMAND` is `true`. No open head has a requested or passing Full. Each PR's status comment holds its detail. The user reselected #507's NewGRF corpus on 2026-11-02 (work order 3). Agents were stopped or told to stop after recording state; no local job result below is known unless stated.
 
 Due first on resume, in order:
 1. **Repair the red platform cadence** (run 41466312349) before any integration. Confirm the cause from the macOS `rust-native-libs.log` (evidence artifact or a local configure for `aarch64-apple-darwin`), then make the configure probe and the build agree on native libraries now that `libc` is a dependency, in a small root PR with Full and a platform run. Rerun the cadence on the merged fix.
