@@ -66,10 +66,6 @@ OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *v) noexcept
 }
 OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *v) noexcept { return RustAircraftVehicle(VehicleOf(v)); }
 
-OpenTTDAircraftVehicle OPENTTD_RUST_CALL RustAircraftNext(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	return RustAircraftVehicle(RustVehicleNext(VehicleOf(vehicle.handle)));
-}
 
 #include "../safeguards.h"
 
@@ -172,8 +168,6 @@ static OpenTTDEngineForLength OPENTTD_RUST_CALL VehicleSvcEngineForLength(OpenTT
 }
 
 
-static int32_t OPENTTD_RUST_CALL VehicleSvcOrderTime(OpenTTDVehicle *v) noexcept { return RustVehicleOrderTime(VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteOrderTime(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->current_order_time = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteProfit(OpenTTDVehicle *v, int64_t value) noexcept { VehicleOf(v)->profit_this_year = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteEconomyService(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->date_of_last_service = TimerGameEconomy::Date{value}; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteCalendarService(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->date_of_last_service_newgrf = TimerGameCalendar::Date{value}; }
@@ -230,8 +224,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.order_type = VehicleSvcOrderType,
 	.order_destination = VehicleSvcOrderDestination,
 	.order_nonstop = VehicleSvcOrderNonStop,
-	.order_time = VehicleSvcOrderTime,
-	.write_order_time = VehicleSvcWriteOrderTime,
 	.write_profit = VehicleSvcWriteProfit,
 	.write_economy_service = VehicleSvcWriteEconomyService,
 	.write_calendar_service = VehicleSvcWriteCalendarService,
@@ -244,6 +236,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.visits = RustVehicleVisits,
 	.orders = VehicleOrders,
 	.ship_get = RustShipGet,
+	.first_sprite = RustVehicleRead<uint32_t, RustVehicleFirstSprite>,
 };
 
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept

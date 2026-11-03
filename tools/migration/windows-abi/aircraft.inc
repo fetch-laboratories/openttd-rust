@@ -14,15 +14,15 @@ static struct AircraftBoundaryProbe {
 	OpenTTDSharedServices shared_services;
 	OpenTTDAircraftLeaves leaves;
 	OpenTTDAircraftVehicle vehicle;
-	OpenTTDVehicle record{}, shadow{};
+	OpenTTDVehicle record{}, shadow{}, rotor{};
 	std::unique_ptr<ControllerOrders> order_owner;
 	OpenTTDVehicleCommonServices common{};
 	OpenTTDVehicleRefitServices refit{};
 	OpenTTDVehicleVisits visits{};
 	OpenTTDVehicleTileLinks links[2];
 	uint64_t blocks = UINT64_MAX;
-	unsigned orders = 0, deleted = 0, rotor_reads = 0, moves = 0;
-	int32_t order_time = 0;
+	unsigned orders = 0, deleted = 0, moves = 0;
+	OpenTTDConsistState consist{};
 	uint8_t order_kind = 0;
 
 
@@ -31,6 +31,7 @@ static struct AircraftBoundaryProbe {
 static void AircraftDirectBoundary()
 {
 	auto &p = aircraft_probe;
+	p.record.consist = &p.consist;
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p.record.type = 3;
 	p.record.z_pos = 1;
@@ -75,9 +76,10 @@ static void AircraftDirectBoundary()
 	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property == 0x0C) { CHECK(fallback == 0); return int32_t{200}; } CHECK((property == 0x1C && fallback == 71) || (property == 0x1F && fallback == 41)); return fallback; };
 	leaves.cargo_age_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{71}; };
 	capabilities.aircraft_range = [](const OpenTTDEngine *) noexcept { return uint16_t{41}; };
-	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { return v; };
 	p.record.subtype = 2;
 	p.vehicle = {&p.record, openttd_rust_aircraft_state_new(), 17};
+	p.record.aircraft = p.shadow.aircraft = p.vehicle.state;
+	resolver.id = [](OpenTTDVehicle *) noexcept -> uint32_t { return 18; };
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.orders == 1 && p.vehicle.state->pos == 19 && p.vehicle.state->cached_max_range == 41 && p.vehicle.state->cached_max_range_sqr == 1681);
 	CHECK(p.record.cached_max_speed == 2560 && p.record.cached_cargo_age_period == 71);
@@ -141,6 +143,7 @@ static void AircraftPhaseBoundary()
 {
 	auto &p = aircraft_probe;
 	p = {};
+	p.record.consist = &p.consist;
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p.record.type = 3;
 	p.record.z_pos = 1;
@@ -154,12 +157,13 @@ static void AircraftPhaseBoundary()
 	p.vehicle = {&p.record, state.get(), 17};
 
 	p.record.tick_counter = 7;
-	leaves.next = [](OpenTTDAircraftVehicle u) noexcept {
-		if (u.id == 18) { aircraft_probe.order_time = 40; aircraft_probe.rotor_reads++; }
-		u.id++; u.handle = &aircraft_probe.shadow; aircraft_probe.shadow.vehstatus = 1; return u;
-	};
-	v.order_time = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.rotor_reads == 1); return aircraft_probe.order_time; };
-	v.write_order_time = [](OpenTTDVehicle *, int32_t time) noexcept { CHECK(time == 41); aircraft_probe.order_time = time; };
+	p.consist.current_order_time = 40;
+	p.shadow.next = &p.rotor; p.rotor.type = 3; p.rotor.subtype = 6; p.rotor.vehstatus = 1;
+	p.rotor.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.rotor);
+	p.record.aircraft = p.shadow.aircraft = p.rotor.aircraft = state.get();
+	static OpenTTDVehicleResolverServices resolver{};
+	resolver.id = [](OpenTTDVehicle *record) noexcept -> uint32_t { return record == &aircraft_probe.shadow ? 18 : 19; };
+	v.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	v.maintenance = &_vehicle_maintenance_probe;
 	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	p.order_owner = std::make_unique<ControllerOrders>(&v);
@@ -171,7 +175,7 @@ static void AircraftPhaseBoundary()
 	v.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	v.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_kind; };
 	CHECK(openttd_rust_aircraft_tick(&leaves, p.vehicle));
-	CHECK(p.record.tick_counter == 8 && p.record.running_ticks == 1 && p.orders == 2 && p.rotor_reads == 1 && p.order_time == 41);
+	CHECK(p.record.tick_counter == 8 && p.record.running_ticks == 1 && p.orders == 2 && p.consist.current_order_time == 41);
 
 	/* A speed change dirties the native widget before direction/progress are
 	 * read. Their mutation yields exactly one move; a stale snapshot yields none. */

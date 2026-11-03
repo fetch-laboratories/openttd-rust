@@ -16,7 +16,6 @@ struct OpenTTDAircraftLeaves;
 struct OpenTTDAircraftVehicle;
 const OpenTTDAircraftLeaves &GetRustAircraftLeaves() noexcept;
 struct Vehicle;
-OpenTTDAircraftVehicle OPENTTD_RUST_CALL RustAircraftNext(OpenTTDAircraftVehicle) noexcept;
 OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *) noexcept;
 OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *) noexcept;
 
@@ -48,7 +47,6 @@ struct OpenTTDAircraftLeaves {
 	OpenTTDAircraftLayoutRoute (OPENTTD_RUST_CALL *layout_route)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_route);
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDSharedServices *shared;
-	OpenTTDAircraftVehicle (OPENTTD_RUST_CALL *next)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	const OpenTTDStation *(OPENTTD_RUST_CALL *station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint32_t (OPENTTD_RUST_CALL *airport_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);

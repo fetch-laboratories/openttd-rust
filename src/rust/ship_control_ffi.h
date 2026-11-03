@@ -100,8 +100,6 @@ struct OpenTTDShipLeaves {
 	void (*build_acceleration)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_acceleration);
 	void (*build_prototype)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_prototype);
 	void (*build_interval_percent)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_interval_percent);
-	void (*set_order_time)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_order_time);
-	uint32_t (*order_time)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_time);
 	uint32_t (*order_destination)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_destination);
 	uint32_t (*order_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_type);
 	uint32_t (*order_max_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_max_speed);

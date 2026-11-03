@@ -23,14 +23,13 @@ struct RoadTestTables {
 	{
 		VEHICLE_UNUSED(vehicle, assert_next);
 		VEHICLE_UNUSED(vehicle, record_from_shell);
+		VEHICLE_UNUSED(vehicle, first_sprite);
 		vehicle.maintenance = &_vehicle_maintenance_probe;
 		ground.physics = &physics;
 		physics.vehicle = &physics_vehicle;
 
 
 		VEHICLE_UNUSED(vehicle, check_orders_only);
-		VEHICLE_UNUSED(vehicle, order_time);
-		VEHICLE_UNUSED(vehicle, write_order_time);
 		VEHICLE_UNUSED(vehicle, write_profit);
 		VEHICLE_UNUSED(vehicle, write_economy_service);
 		VEHICLE_UNUSED(vehicle, write_calendar_service);

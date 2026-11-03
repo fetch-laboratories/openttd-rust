@@ -236,7 +236,6 @@ pub struct Leaves {
     pub acc_model: extern "C" fn(Handle) -> u64,
     pub advance_distance: extern "C" fn(Handle) -> u64,
     pub all_powered: extern "C" fn(Handle, u64) -> u64,
-    pub ambient_sound: extern "C" fn(Handle) -> u64,
     pub arrival_news: extern "C" fn(Handle, u16),
 
     pub axis_diag: extern "C" fn(Handle, u8) -> u64,
@@ -1004,7 +1003,7 @@ impl Game<'_> {
             } else {
                 crate::witness::TRAIN_CROSS_UNBAR
             });
-            if barred && sound && (self.leaves.ambient_sound)(Handle::NONE) != 0 {
+            if barred && sound && (self.services.ambient_sound)() {
                 (self.leaves.crossing_sound)(Handle::NONE, tile);
             }
             (self.leaves.write_crossing_bar)(Handle::NONE, tile, u8::from(barred));
@@ -1780,7 +1779,7 @@ impl Game<'_> {
                     let crossing = self.approaching_crossing(id);
                     if crossing != INVALID_TILE
                         && (self.services.crossing_reserved)(crossing)
-                        && (self.leaves.ambient_sound)(id) != 0
+                        && (self.services.ambient_sound)()
                     {
                         (self.leaves.crossing_sound)(Handle::NONE, crossing);
                     }
@@ -2918,7 +2917,6 @@ crate::abi::layouts! {
         acc_model,
         advance_distance,
         all_powered,
-        ambient_sound,
         arrival_news,
 
         axis_diag,

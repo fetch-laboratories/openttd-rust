@@ -242,9 +242,7 @@ static void Ship_build_interval_percent(uint32_t id) noexcept
 	RustVehicleSetServiceIntervalIsPercent(v, RustCompanyServiceIntervalPercent(RustCurrentCompanyID()));
 }
 
-static void Ship_set_order_time(uint32_t id, int32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->current_order_time = static_cast<int32_t>(value); }
 
-static uint32_t Ship_order_time(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleOrderTime(v)); }
 
 static uint32_t Ship_order_destination(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleOrderDestination(v)); }
 
@@ -318,9 +316,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.build_dates = Ship_build_dates, .build_acceleration = Ship_build_acceleration,
 		.build_prototype = Ship_build_prototype, .build_interval_percent = Ship_build_interval_percent,
 
-		.set_order_time = Ship_set_order_time,
 
-		.order_time = Ship_order_time,
 
 		.order_destination = Ship_order_destination, .order_type = Ship_order_type,
 		.order_max_speed = Ship_order_max_speed,

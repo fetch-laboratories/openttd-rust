@@ -1380,8 +1380,6 @@ pub(crate) mod tests {
             order_type: unused(),
             order_destination: unused(),
             order_nonstop: unused(),
-            order_time: unused(),
-            write_order_time: unused(),
             write_profit: unused(),
             write_economy_service: unused(),
             write_calendar_service: unused(),
@@ -1394,6 +1392,7 @@ pub(crate) mod tests {
             visits: unused(),
             orders: unused(),
             ship_get: unused(),
+            first_sprite: unused(),
         }
     }
     extern "C" fn resolve_record(shell: *mut c_void) -> *mut crate::vehicle_base::VehicleRecord {

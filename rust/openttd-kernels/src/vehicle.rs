@@ -173,8 +173,6 @@ pub struct VehicleServices {
     pub order_type: extern "C" fn(VehicleRef) -> u8,
     pub order_destination: extern "C" fn(VehicleRef) -> u16,
     pub order_nonstop: extern "C" fn(VehicleRef) -> u8,
-    pub order_time: extern "C" fn(VehicleRef) -> i32,
-    pub write_order_time: extern "C" fn(VehicleRef, i32),
     pub write_profit: extern "C" fn(VehicleRef, i64),
     pub write_economy_service: extern "C" fn(VehicleRef, i32),
     pub write_calendar_service: extern "C" fn(VehicleRef, i32),
@@ -190,6 +188,7 @@ pub struct VehicleServices {
     pub orders: extern "C" fn() -> *const crate::orders::Leaves,
     /// Strict `Ship::Get`, never a nullable pool lookup.
     pub ship_get: extern "C" fn(u32) -> VehicleRef,
+    pub first_sprite: extern "C" fn(VehicleRef) -> u32,
 }
 // The visit table and its entries are native-supplied static Rust functions.
 #[allow(unsafe_code)]
@@ -338,8 +337,6 @@ crate::abi::layouts! {
         order_type,
         order_destination,
         order_nonstop,
-        order_time,
-        write_order_time,
         write_profit,
         write_economy_service,
         write_calendar_service,
@@ -352,6 +349,7 @@ crate::abi::layouts! {
         visits,
         orders,
         ship_get,
+        first_sprite,
     };
 
 

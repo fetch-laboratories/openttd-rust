@@ -963,7 +963,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.acc_model = TrainAccModel,
 		.advance_distance = TrainAdvanceDistance,
 		.all_powered = TrainAllPowered,
-		.ambient_sound = RustAmbientSoundLegacy<OpenTTDTrainHandle>,
 		.arrival_news = TrainArrivalNews,
 		.axis_diag = TrainAxisDiag,
 		.backoff = RustTrainPathBackoffInterval,

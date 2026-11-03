@@ -58,7 +58,7 @@ static void Disasters()
 	vehicles.map_log_x = []() noexcept { return 6U; };
 
 	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
-	services.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
+	vehicles.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
 	services.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
 	probe.record.tick_counter = 1; probe.record.subtype = 8;
 	CHECK(openttd_rust_disaster_tick(&services, vehicle));

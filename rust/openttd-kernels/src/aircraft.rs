@@ -19,7 +19,7 @@
     clippy::manual_midpoint // Source int bounds are finite map heights.
 )]
 #[repr(C)]
-pub struct State {
+pub struct AircraftState {
     pub cached_max_range_sqr: u32,
     pub cached_max_range: u16,
     pub cache_padding: u16,
@@ -33,6 +33,7 @@ pub struct State {
     pub turn_counter: u8,
     pub flags: u8,
 }
+pub type State = AircraftState;
 /// `AIR_SHADOW` from `aircraft.h`.
 pub(crate) const AIR_SHADOW: u8 = 4;
 
@@ -162,7 +163,6 @@ pub struct Leaves {
     pub layout_route: unsafe extern "C" fn(*const c_void, u8) -> LayoutRoute,
     pub vehicle: *const VehicleServices,
     pub shared: *const Services,
-    pub next: unsafe extern "C" fn(Vehicle) -> Vehicle,
     pub station: unsafe extern "C" fn(u16) -> *const Station,
     pub airport_tile: unsafe extern "C" fn(*const Station) -> u32,
     pub station_tile: unsafe extern "C" fn(*const Station) -> u32,
@@ -479,7 +479,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     scalar_services! {
         order_type(self; v: Vehicle) => (self.vs.order_type)(v.base());
         order_destination(self; v: Vehicle) => (self.vs.order_destination)(v.base());
-        order_time(self; v: Vehicle) => (self.vs.order_time)(v.base());
+        order_time(self; v: Vehicle) => v.base().order_time();
         plane_speed(self; ) => (self.ss.plane_speed)();
         no_jetcrash(self; ) => (self.ss.no_jetcrash)();
         plane_crashes(self; ) => (self.ss.plane_crashes)();
@@ -530,7 +530,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         layout_route(self; ap: *const c_void, pos: u8) -> LayoutRoute => unsafe { (self.leaves.layout_route)(ap, pos) };
         profit(self; v: Vehicle) -> i64 => (self.vs.profit)(v.base());
 
-        set_order_time(self; v: Vehicle, value: i64) -> () => (self.vs.write_order_time)(v.base(), value as i32);
+        set_order_time(self; v: Vehicle, value: i64) -> () => v.base().write_order_time(value as i32);
         set_profit(self; v: Vehicle, value: i64) -> () => (self.vs.write_profit)(v.base(), value as i64);
         set_economy_service(self; v: Vehicle, value: i64) -> () => (self.vs.write_economy_service)(v.base(), value as i32);
         set_calendar_service(self; v: Vehicle, value: i64) -> () => (self.vs.write_calendar_service)(v.base(), value as i32);
@@ -581,10 +581,18 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     fn next(&self, v: Vehicle) -> Vehicle {
-        {
-            let result = unsafe { (self.leaves.next)(v) };
-            Self::service_witness("next", std::mem::size_of_val(&result));
-            result
+        let Some(next) = v.base().next() else {
+            return Vehicle::invalid();
+        };
+        Vehicle {
+            handle: next.0.as_ptr(),
+            state: if next.vehicle_type() == crate::vehicle_type::VEH_AIRCRAFT {
+                crate::raw_field::read_field!(next.0.as_ptr(), aircraft)
+            } else {
+                std::ptr::null_mut()
+            },
+            // SAFETY: The current record and static resolver table remain live for this native ID read.
+            id: unsafe { ((*((self.vs.newgrf)())).id)(next.0.as_ptr()) },
         }
     }
     fn station(&self, id: u32) -> *const Station {
@@ -2426,7 +2434,7 @@ pub(crate) unsafe fn invalidate_target(leaves: *const Leaves, station: u16) {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDAircraftState" ["probe"] => State {
+    "OpenTTDAircraftState" ["probe"] => AircraftState {
         cached_max_range_sqr,
         cached_max_range,
         cache_padding,
@@ -2467,7 +2475,6 @@ crate::abi::layouts! {
         layout_route,
         vehicle,
         shared,
-        next,
         station,
         airport_tile,
         station_tile,

@@ -329,7 +329,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.layout_route = Aircraft_layout_route,
 	.vehicle = &GetRustVehicleServices(),
 	.shared = &GetRustSharedServices(),
-	.next = RustAircraftNext,
 	.station = Aircraft_station,
 	.airport_tile = Aircraft_airport_tile,
 	.station_tile = Aircraft_station_tile,

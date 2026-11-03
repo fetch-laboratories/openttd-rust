@@ -34,7 +34,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*acc_model)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(acc_model);
 	uint64_t (*advance_distance)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(advance_distance);
 	uint64_t (*all_powered)(OpenTTDTrainHandle, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_powered);
-	uint64_t (*ambient_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(ambient_sound);
 	void (*arrival_news)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
 
 	uint64_t (*axis_diag)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(axis_diag);

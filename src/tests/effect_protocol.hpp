@@ -9,20 +9,26 @@
 #ifndef EFFECT_PROTOCOL_HPP
 #define EFFECT_PROTOCOL_HPP
 #include "../rust/effect_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
+#include "../rust/vehicle_ffi.h"
+#include "../rust/newgrf_vehicle_ffi.h"
 #include <array>
 #include <memory>
 
 #include "../rust/animation_save.hpp"
+struct EffectTestView {
+	int32_t x, y, z;
+	uint32_t sprite;
+	uint8_t progress, spritenum, subtype, ambient;
+};
 struct EffectTestWorld {
-	OpenTTDEffectView view{};
+	EffectTestView view{};
+	OpenTTDVehicle record{};
+	EffectTestWorld() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); }
 	uint32_t random = UINT32_MAX, draws = 0, industry = 0, queries = 0, writes = 0, viewports = 0, animated = 0;
 	uint8_t sound = 0; ///< Last sound played: 1 + success, or 0 for none.
 };
 static inline EffectTestWorld *effect_test_world;
-static inline void OPENTTD_RUST_CALL EffectTestObserve(void *context, OpenTTDEffectView *view) noexcept
-{
-	*view = static_cast<EffectTestWorld *>(context)->view;
-}
 static inline void OPENTTD_RUST_CALL EffectTestWrite(void *context, uint8_t field, uint32_t value) noexcept
 {
 	auto &w = *static_cast<EffectTestWorld *>(context);
@@ -32,20 +38,20 @@ static inline void OPENTTD_RUST_CALL EffectTestWrite(void *context, uint8_t fiel
 		case 1: w.view.y = static_cast<int32_t>(value); break;
 		case 2: w.view.z = static_cast<int32_t>(value); break;
 		case 3: case 4: w.view.sprite = value; break;
-		case 5: w.view.progress = static_cast<uint8_t>(value); break;
 		case 6: w.view.spritenum = static_cast<uint8_t>(value); break;
 	}
 }
 static inline OpenTTDEffectLeaves EffectTestLeaves()
 {
+	static OpenTTDVehicleResolverServices resolver{};
+	resolver.sprite = [](OpenTTDVehicle *record) noexcept { return reinterpret_cast<EffectTestWorld *>(record->shell)->view.spritenum; };
+	static OpenTTDVehicleServices vehicles{};
+	vehicles.first_sprite = [](OpenTTDVehicle *record) noexcept { return reinterpret_cast<EffectTestWorld *>(record->shell)->view.sprite; };
+	vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	return {
-		.observe = EffectTestObserve,
-		.write_x = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 0, v); },
-		.write_y = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 1, v); },
-		.write_z = [](void *c, int32_t v) noexcept { EffectTestWrite(c, 2, v); },
+		.vehicles = &vehicles,
 		.sprite_sequence = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 3, v); },
 		.sprite = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 4, v); },
-		.progress = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 5, v); },
 		.spritenum = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 6, v); },
 		.viewport = [](void *c) noexcept { static_cast<EffectTestWorld *>(c)->viewports++; },
 		.sound = [](void *c, uint8_t v) noexcept { static_cast<EffectTestWorld *>(c)->sound = 1 + v; },
@@ -75,7 +81,8 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	EffectTestWorld w;
 	effect_test_world = &w;
 	const OpenTTDEffectLeaves leaves = EffectTestLeaves();
-	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
+	auto services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
+	services.ambient_sound = []() noexcept { return effect_test_world->view.ambient != 0; };
 	auto animation_shared = services;
 	animation_shared.mark_dirty = [](uint32_t) noexcept {};
 	auto animation = OpenTTDAnimationServices{};
@@ -93,8 +100,14 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	const std::array<uint8_t, 12> progress{7,12,0,1,12,0,0,0,0,0,12,12};
 	auto run = [&](uint8_t init = 0) -> uint8_t {
 		w.writes = w.viewports = w.animated = w.sound = 0;
-		if (init != 0) { openttd_rust_effect_initialize(owner.get(), &w, w.view.subtype, &leaves, &services); return 1; }
-		return openttd_rust_effect_run(owner.get(), &w, &leaves, &services);
+		w.record.x_pos = w.view.x; w.record.y_pos = w.view.y; w.record.z_pos = w.view.z;
+		w.record.progress = w.view.progress; w.record.subtype = w.view.subtype;
+		uint8_t alive = 1;
+		if (init != 0) openttd_rust_effect_initialize(owner.get(), &w.record, w.view.subtype, &leaves, &services);
+		else alive = openttd_rust_effect_run(owner.get(), &w.record, &leaves, &services);
+		w.view.x = w.record.x_pos; w.view.y = w.record.y_pos; w.view.z = w.record.z_pos;
+		w.view.progress = w.record.progress;
+		return alive;
 	};
 	for (uint8_t subtype = 0; subtype < 12; subtype++) {
 		w.view = {13,-9,21,0,0,99,subtype,1};
@@ -109,13 +122,13 @@ template <typename Check> void CheckEffectProtocol(Check check)
 		w.view = {0,0,0,3740,255,0,6,0};
 		openttd_rust_effect_set_animation(owner.get(), duration);
 		check(run() == (duration == 1 ? 0 : 1));
-		check(w.view.progress == 0 && w.view.sprite == 3737 && w.writes == 2 && w.viewports == 1);
+		check(w.view.progress == 0 && w.view.sprite == 3737 && w.viewports == 1);
 		check(openttd_rust_effect_get_animation(owner.get()) == static_cast<uint16_t>(duration - 1));
 	}
 	w.view = {0,0,0,UINT32_MAX,3,0,5,0};
 	check(run() == 1 && w.view.sprite == 0);
 	w.view = {0,0,0,3724,3,0,5,0};
-	check(run() == 0 && w.writes == 1); // Deletion occurs only after return.
+	check(run() == 0); // Deletion occurs only after return.
 	for (uint32_t random : {0U, 682U, 683U, 65536U}) {
 		w.view = {10,20,180,4748,3,1,9,1}; w.random = random; w.draws = 0;
 		openttd_rust_effect_set_animation(owner.get(), 3);
@@ -136,7 +149,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	}
 	w.view = {0,0,0,4757,3,5,9,0};
 	openttd_rust_effect_set_animation(owner.get(), 3);
-	check(run() == 0 && w.writes == 1);
+	check(run() == 0);
 	owner.reset();
 	effect_test_world = nullptr;
 }

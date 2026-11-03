@@ -92,6 +92,7 @@ static void RoadBoundary()
 	const OpenTTDRoadEntry part{};
 	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves, nullptr));
 	CHECK(probe.tick == 0 && probe.running == 0 && probe.order_time == 0 && world.draws == 0);
+	road_abi_vehicle.subtype = 1;
 
 	/* A direct callback changes canonical state before Rust reobserves it. */
 	t.physics.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundOwner { return {road_abi_probe->ground.state, {}, road_abi_probe->state, VEH_ROAD}; };
@@ -261,10 +262,8 @@ static void RoadBoundary()
 	OpenTTDEffectCreationServices creation{
 		.effect = &emission_leaves, .shared = &t.shared,
 		.can_allocate = [](size_t) noexcept { return true; },
-		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {effect_test_world, current_emission_owner}; },
-		.place = [](void *shell, int32_t x, int32_t y, int32_t z, uint8_t type) noexcept { static_cast<EffectTestWorld *>(shell)->view = {x, y, z, 0, 0, 0, type, 0}; },
-		.delta = [](void *) noexcept {}, .unclickable = [](void *) noexcept {},
-		.position = [](const OpenTTDVehicle *) noexcept -> OpenTTDEffectPosition { return {}; },
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { return {effect_test_world, &effect_test_world->record, current_emission_owner}; },
+		.delta = [](void *) noexcept {},
 	};
 	auto previous_creation = openttd_rust_effect_bind(&creation);
 	auto emission_vehicle = t.vehicle;

@@ -1,5 +1,4 @@
 forwarded | src/economy.cpp | current_company = GetRustCompanyFinanceServices().current_company
-forwarded | src/economy.cpp | order_time = GetRustVehicleServices().order_time
 forwarded | src/economy.cpp | set_current_company = GetRustCompanyFinanceServices().set_current_company
 forwarded | src/industry_cmd.cpp | generating = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/industry_cmd.cpp | magic_bulldozer = GetRustTownAuthorityServices().bulldozer

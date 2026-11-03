@@ -12,6 +12,7 @@
 #include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
+#include "services_sound.h"
 #include "pbs_ffi.h"
 #include "movement_ffi.h"
 #include "services_bridge.h"
@@ -412,6 +413,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.current_company = RustCurrentCompanyID,
 	.depot_index = MapSvcDepotIndex,
 	.disallowed_road_directions = Shared_disallowed_road_directions,
+	.ambient_sound = OpenTTDAmbientSound,
 	.disaster_sound = SharedDisasterSound,
 	.drive_through_axis = Shared_drive_through_axis,
 	.forbid_90_deg = RustForbid90Deg,

@@ -8,7 +8,7 @@
 struct ShipProbe {
 	OpenTTDVehicle record{};
 	ShipProbe() { record.type = VEH_SHIP; record.x_pos = 32768; record.y_pos = -32769; record.tick_counter = 255; record.running_ticks = 255; record.direction = 1; record.cur_speed = 33; }
-	uint32_t order_time = UINT32_MAX;
+	OpenTTDConsistState consist{};
 	uint32_t stage = 0, paths = 0, positions = 0;
 	OpenTTDVehicleTileLinks links;
 	OpenTTDShipState *owner = nullptr;
@@ -89,9 +89,7 @@ static void ShipBoundary()
 		.build_dates = ShipProbeUnused<void, uint32_t>, .build_acceleration = ShipProbeUnused<void, uint32_t, uint32_t>,
 		.build_prototype = ShipProbeUnused<void, uint32_t>, .build_interval_percent = ShipProbeUnused<void, uint32_t>,
 
-		.set_order_time = ShipProbeUnused<void, uint32_t, int32_t>,
 
-		.order_time = ShipProbeUnused<uint32_t, uint32_t>,
 
 		.order_destination = ShipProbeUnused<uint32_t, uint32_t>, .order_type = ShipProbeUnused<uint32_t, uint32_t>,
 		.order_max_speed = ShipProbeUnused<uint32_t, uint32_t>,
@@ -101,19 +99,19 @@ static void ShipBoundary()
 		.vehicle = &ship_vehicle
 	};
 	ship_probe = {};
+	ship_probe.consist.current_order_time = -1;
+	ship_probe.record.consist = &ship_probe.consist;
 	ship_probe.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&ship_probe);
 	ship_probe.owner = state.get();
 	ship_probe.leaves = &leaves;
 	ship_probe.services = OpenTTDFixtureSharedServices(nullptr, ShipProbeUnused<uint32_t, void *>, ShipProbeUnused<uint32_t, int32_t, int32_t, uint32_t *>);
 	leaves.state_owner = [](uint32_t) noexcept { return ship_probe.owner; };
-	leaves.order_time = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.order_time); };
-	leaves.set_order_time = [](uint32_t, int32_t value) noexcept { ship_probe.order_time = static_cast<uint32_t>(value); };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
 	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
 	ship_vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
 		CHECK(ship_probe.stage++ == 0);
-		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.order_time == 0);
+		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
 		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0};
 	};
 	ControllerOrders orders(&ship_vehicle);

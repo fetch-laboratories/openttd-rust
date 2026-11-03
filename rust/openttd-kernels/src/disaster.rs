@@ -149,10 +149,7 @@ pub struct Services {
     pub age: extern "C" fn(VehicleRef) -> i32,
     pub write_age: extern "C" fn(VehicleRef, i32),
     pub write_sprite: extern "C" fn(VehicleRef, u32),
-    pub first_sprite: extern "C" fn(VehicleRef) -> u32,
     pub write_first_sprite: extern "C" fn(VehicleRef, u32),
-    pub write_subtype: extern "C" fn(VehicleRef, u8),
-    pub write_owner: extern "C" fn(VehicleRef, u8),
     pub next_part: extern "C" fn(VehicleRef) -> Vehicle,
     pub update_delta: extern "C" fn(VehicleRef),
     pub toward: extern "C" fn(VehicleRef, i32, i32) -> u8,
@@ -161,13 +158,9 @@ pub struct Services {
     pub next_disaster: extern "C" fn(u32) -> Vehicle,
     pub next_road: extern "C" fn(u32) -> RoadTarget,
     pub road_target: extern "C" fn(u32) -> RoadTarget,
-    pub front: extern "C" fn(VehicleRef) -> bool,
     pub road_disaster: extern "C" fn(VehicleRef) -> u32,
-    pub breakdown_counter: extern "C" fn(VehicleRef) -> u8,
     pub write_road_disaster: extern "C" fn(VehicleRef, u32),
-    pub write_breakdown: extern "C" fn(VehicleRef, u8, u8),
     pub next_vehicle: extern "C" fn(u32) -> Vehicle,
-    pub ground: extern "C" fn(VehicleRef) -> bool,
     pub next_train: extern "C" fn(u32) -> Vehicle,
     pub road_count: extern "C" fn(u8) -> u16,
     pub human: extern "C" fn(u8) -> bool,
@@ -512,7 +505,10 @@ impl<'a> World<'a> {
                 if target.handle.is_null() {
                     break;
                 }
-                if (self.s.front)(target.vehicle()) {
+                if crate::vehicle_base::is_front_engine(
+                    crate::vehicle_base::is_ground_vehicle(target.vehicle().vehicle_type()),
+                    target.vehicle().subtype(),
+                ) {
                     let old = n;
                     n = n.wrapping_sub(1);
                     if old == 0 {
@@ -537,9 +533,11 @@ impl<'a> World<'a> {
         let dist = distance(p.0, p.1, t.0, t.1) as u32;
         if dist < TILE_SIZE
             && (target.vehicle()).status() & VS_HIDDEN == 0
-            && (self.s.breakdown_counter)(target.vehicle()) == 0
+            && crate::raw_field::read_field!(target.handle, breakdown_ctr) == 0
         {
-            (self.s.write_breakdown)(target.vehicle(), 3, 140);
+            target.vehicle().write_breakdown_counter(3);
+            // SAFETY: The immutable shared table and current vehicle remain live.
+            unsafe { ((*self.v.maintenance).breakdown_delay_write)(target.vehicle(), 140) };
         }
         (v.vehicle()).write_direction((self.s.toward)(v.vehicle(), t.0, t.1));
         let gp = (self.v.new_position)(v.vehicle());
@@ -657,7 +655,7 @@ impl<'a> World<'a> {
         if Self::increment_tick(v) & 1 != 0 {
             return true;
         }
-        let image = (self.s.first_sprite)(v.vehicle()).wrapping_add(1);
+        let image = (self.v.first_sprite)(v.vehicle()).wrapping_add(1);
         (self.s.write_first_sprite)(
             v.vehicle(),
             if image > SPR_ROTOR_MOVING_3 {
@@ -670,8 +668,10 @@ impl<'a> World<'a> {
         true
     }
     fn valid_train(&self, v: Vehicle) -> bool {
-        (self.s.front)(v.vehicle())
-            && (self.s.human)(v.vehicle().owner())
+        crate::vehicle_base::is_front_engine(
+            crate::vehicle_base::is_ground_vehicle(v.vehicle().vehicle_type()),
+            v.vehicle().subtype(),
+        ) && (self.s.human)(v.vehicle().owner())
             && (self.shared.is_plain_rail)(Self::tile(v))
             && (v.vehicle()).status() & VS_CRASHED == 0
     }
@@ -704,11 +704,15 @@ impl<'a> World<'a> {
                 if target.handle.is_null() {
                     break;
                 }
-                if (self.s.ground)(target.vehicle()) {
+                if crate::vehicle_base::is_ground_vehicle(target.vehicle().vehicle_type()) {
                     let t = (target.vehicle().x(), target.vehicle().y());
                     let p = (v.vehicle().x(), v.vehicle().y());
                     if distance(t.0, t.1, p.0, p.1) <= 12 * TILE_SIZE as i32 {
-                        (self.s.write_breakdown)(target.vehicle(), 5, 0xF0);
+                        target.vehicle().write_breakdown_counter(5);
+                        // SAFETY: The immutable shared table and current vehicle remain live.
+                        unsafe {
+                            ((*self.v.maintenance).breakdown_delay_write)(target.vehicle(), 0xF0);
+                        };
                     }
                 }
                 from = target.id + 1;
@@ -1119,9 +1123,13 @@ impl<'a> World<'a> {
         (v.vehicle()).write_z(z);
         (v.vehicle()).write_direction(dir);
         (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
-        (self.s.write_subtype)(v.vehicle(), subtype);
+        crate::raw_field::write_field!(v.handle, subtype, subtype);
         (self.s.update_delta)(v.vehicle());
-        (self.s.write_owner)(v.vehicle(), crate::company_type::OWNER_NONE);
+        crate::raw_field::write_field!(
+            v.handle,
+            owner,
+            crate::company_type::CompanyID(crate::company_type::OWNER_NONE)
+        );
         v.set_image(0);
         v.set_state(0);
         self.update_image(v);
@@ -1255,7 +1263,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, first_sprite, write_first_sprite, write_subtype, write_owner, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, front, road_disaster, breakdown_counter, write_road_disaster, write_breakdown, next_vehicle, ground, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, write_first_sprite, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
 }
 
 #[cfg(test)]

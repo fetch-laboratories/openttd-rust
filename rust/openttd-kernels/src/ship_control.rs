@@ -233,8 +233,6 @@ pub struct Leaves {
     pub build_acceleration: extern "C" fn(u32, u32),
     pub build_prototype: extern "C" fn(u32),
     pub build_interval_percent: extern "C" fn(u32),
-    pub set_order_time: extern "C" fn(u32, i32),
-    pub order_time: extern "C" fn(u32) -> u32,
     pub order_destination: extern "C" fn(u32) -> u32,
     pub order_type: extern "C" fn(u32) -> u32,
     pub order_max_speed: extern "C" fn(u32) -> u32,
@@ -639,10 +637,11 @@ impl Game<'_> {
     }
     fn controller(&self, id: u32, v: VehicleRef) {
         let observed_tick = u32::from(self.vehicle().tick());
-        let observed_order_time = (self.leaves.order_time)(id);
+        let observed_order_time = self.vehicle().order_time() as u32;
         self.vehicle()
             .write_tick(observed_tick.wrapping_add(1) as u8);
-        (self.leaves.set_order_time)(id, observed_order_time.wrapping_add(1) as i32);
+        self.vehicle()
+            .write_order_time(observed_order_time.wrapping_add(1) as i32);
         let breakdown = unsafe { self.vs().maintain(v, maintenance::handle_breakdown_status) };
         if breakdown.broken {
             return;
@@ -1227,8 +1226,6 @@ crate::abi::layouts! {
         build_acceleration,
         build_prototype,
         build_interval_percent,
-        set_order_time,
-        order_time,
         order_destination,
         order_type,
         order_max_speed,

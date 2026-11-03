@@ -1289,7 +1289,6 @@ pub struct Loading {
     pub(crate) current_company: extern "C" fn() -> u8,
     pub(crate) vehicle: *const crate::vehicle::VehicleServices,
     pub(crate) total_count: extern "C" fn(VehicleRef) -> u32,
-    pub(crate) order_time: extern "C" fn(VehicleRef) -> i32,
     pub(crate) refit_mask: extern "C" fn(VehicleRef) -> u64,
     pub(crate) set_cargo_unloading: extern "C" fn(VehicleRef, bool),
     pub(crate) set_loading_finished: extern "C" fn(VehicleRef, bool),
@@ -1871,7 +1870,7 @@ unsafe fn load_vehicle(
                 let wait = i32::from(observed.wait)
                     .wrapping_sub(observed.lateness)
                     .max(0);
-                (l.order_time)(front) >= wait
+                front.order_time() >= wait
             } {
                 (l.set_stop)(front, true);
             }
@@ -2207,7 +2206,6 @@ crate::abi::layouts! {
         current_company,
         vehicle,
         total_count,
-        order_time,
         refit_mask,
         set_cargo_unloading,
         set_loading_finished,

@@ -212,7 +212,6 @@ struct OpenTTDStationLoading {
 	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	const OpenTTDVehicleServices *vehicle;
 	uint32_t (*total_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(total_count);
-	int32_t (*order_time)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_time);
 	uint64_t (*refit_mask)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(refit_mask);
 	void (*set_cargo_unloading)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_unloading);
 	void (*set_loading_finished)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_finished);

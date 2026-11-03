@@ -90,7 +90,7 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VEH_AIRCRAFT> {
 	AircraftCache &acache = *new (std::addressof(this->rust_state->cached_max_range_sqr)) AircraftCache{};
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
-	Aircraft() : SpecializedVehicleBase() {}
+	Aircraft() : SpecializedVehicleBase() { this->record->aircraft = this->rust_state.get(); }
 	/** We want to 'destruct' the right class. */
 	virtual ~Aircraft() { this->PreDestructor(); }
 
