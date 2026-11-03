@@ -1034,7 +1034,7 @@ impl MovementServices {
         }
         let direction = (v).direction();
         if direction == diag_dir_to_dir(dir, |ok| (self.native_assert)(ok)) {
-            let length = crate::train::next_offset(self.train(), self.shared(), h.train);
+            let length = crate::train::next_offset(h.train);
             let enter = FRACT_ENTER[usize::from(dir)];
             let point = (i32::from(enter & 15) + (length + 1) * LEAVE_OFFSET[usize::from(dir)])
                 .wrapping_add(
@@ -1416,7 +1416,7 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
     w::hit(w::MOVE_DEPOT_TICKS);
     let p = (s.depot_position)(v);
     let dir = (s.rail_map().rail_depot_direction)(p.tile).0;
-    let length = crate::train::next_offset(s.train(), s.shared(), v);
+    let length = crate::train::next_offset(v);
     let enter = FRACT_ENTER[usize::from(dir)];
     match dir {
         0 => (p.x & 15) - (i32::from(enter & 15) - (length + 1)),

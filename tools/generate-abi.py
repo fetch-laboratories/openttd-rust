@@ -90,14 +90,18 @@ def shared_records(
             block = re.sub(r"#\[[^\]]*\]", "", block)
             found += [match for match in RECORD.findall(block)]
     names = {rust: cpp for cpp, _, rust, _ in found}
+    pointer_names = {
+        declaration.rust: declaration.cpp for declaration in declarations(root)
+    }
+    pointer_names.update(names)
 
     def native(rust: str) -> str:
         rust = rust.strip()
         pointer = re.fullmatch(r"\*(mut|const)\s+(.+)", rust)
         if pointer:
             target = pointer[2].strip().split("::")[-1]
-            if target in names:
-                target = names[target]
+            if target in pointer_names:
+                target = pointer_names[target]
             elif target not in opaque:
                 target = native(target)
             return f"{'const ' if pointer[1] == 'const' else ''}{target} *"
@@ -139,7 +143,7 @@ def shared_records(
                     raise ValueError(f"unsupported pointee tag: {tag}")
                 if opaque_tags.setdefault(target, tag) != tag:
                     raise ValueError(f"conflicting pointee tags: {target}")
-            if cpp_type.endswith(" *") and target in names.values():
+            if cpp_type.endswith(" *") and target in pointer_names.values():
                 tag = "struct"
             fields.append(Field(match[1], cpp_type, tag))
         result.append(SharedRecord(cpp, group, rust, fields))

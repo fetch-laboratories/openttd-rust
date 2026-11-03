@@ -103,7 +103,7 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	void SetOtherMultiheadedPart(Train *part) { this->rust_state->other_multiheaded_part = part == nullptr ? nullptr : part->record; }
 
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
-	Train() : GroundVehicleBase() {}
+	Train() : GroundVehicleBase() { this->record->train = this->rust_state.get(); }
 	/** We want to 'destruct' the right class. */
 	virtual ~Train() { this->PreDestructor(); }
 

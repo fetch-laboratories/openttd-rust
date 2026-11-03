@@ -395,7 +395,7 @@ impl<'a> Pbs<'a> {
         extern "C" fn visit(context: *mut std::ffi::c_void, t: Handle) -> u8 {
             // SAFETY: visitor and call-local selection state live through synchronous enumeration.
             let c = unsafe { &mut *context.cast::<Check<'_>>() };
-            if (c.pbs.train().read_status)(t) & 128 != 0 {
+            if t.vehicle().status() & 128 != 0 {
                 return 0;
             }
             let track = t.track();
@@ -406,7 +406,7 @@ impl<'a> Pbs<'a> {
                     })
                     != 0
             {
-                let t = (c.pbs.train().read_first)(t);
+                let t = t.first();
                 if c.best.record.is_null()
                     || (c.pbs.0.index)(t.vehicle().shell())
                         < (c.pbs.0.index)(c.best.vehicle().shell())
@@ -446,7 +446,7 @@ impl<'a> Pbs<'a> {
         check_other: bool,
         other: &mut O,
     ) -> TileInfo {
-        let tile = (self.train().read_tile)(v);
+        let tile = v.vehicle().tile();
         let td =
             unsafe { crate::train::openttd_rust_train_trackdir(v, self.0.train, self.0.shared) };
         if self.is_depot(tile) && (self.0.depot_bits)(tile).0 == 0 {
@@ -458,7 +458,7 @@ impl<'a> Pbs<'a> {
             };
         }
         let mut res = self.follow_reservation(
-            (self.train().read_owner)(v),
+            v.vehicle().owner(),
             (self.0.all_compatible)(v.get_railtypes()),
             tile,
             td,
@@ -469,7 +469,7 @@ impl<'a> Pbs<'a> {
             let mut best = Handle::NONE;
             self.check_trains(&res, res.tile, &mut best);
             if !best.record.is_null() {
-                other.write((self.train().read_first)(best));
+                other.write(best.first());
             }
             if other.read().record.is_null() && (self.rail().is_rail_station)(res.tile) {
                 let diff = self
@@ -481,7 +481,7 @@ impl<'a> Pbs<'a> {
                 {
                     self.check_trains(&res, st_tile, &mut best);
                     if !best.record.is_null() {
-                        other.write((self.train().read_first)(best));
+                        other.write(best.first());
                     }
                     st_tile = st_tile.wrapping_add(diff);
                 }
@@ -495,7 +495,7 @@ impl<'a> Pbs<'a> {
                     &mut best,
                 );
                 if !best.record.is_null() {
-                    other.write((self.train().read_first)(best));
+                    other.write(best.first());
                     crate::witness::hit(crate::witness::PBS_OTHER_END_TRAIN);
                 }
             }

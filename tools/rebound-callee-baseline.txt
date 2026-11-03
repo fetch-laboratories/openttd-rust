@@ -398,9 +398,5 @@ rebound | Shared_is_road_depot | src/rust/road_services.h | is_road_depot_tile
 rebound | Shared_is_road_depot | src/rust/services.cpp | is_road_depot
 rebound | Shared_road_depot_direction | src/rust/road_services.h | depot_direction
 rebound | Shared_road_depot_direction | src/rust/services.cpp | road_depot_direction
-rebound | TrainReadLastStation | src/train_cmd.cpp | read_last_station
-rebound | TrainReadLastStation | src/train_cmd.cpp | read_last_station | 2
-rebound | TrainReadNext | src/train_cmd.cpp | read_next
-rebound | TrainReadNext | src/train_cmd.cpp | read_next | 2
 rebound | openttd_orders_tick_counter | src/order_cmd.cpp | tick_counter
 rebound | openttd_orders_tick_counter | src/rust/services.cpp | tick_counter

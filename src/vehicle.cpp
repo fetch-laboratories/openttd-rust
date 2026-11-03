@@ -382,6 +382,9 @@ void VehicleLengthChanged(const Vehicle *u)
 Vehicle::Vehicle(VehicleType type) : BaseVehicle(type)
 {
 	this->record->shell      = reinterpret_cast<OpenTTDVehicleShell *>(this);
+	this->record->consist    = this->rust_orders.get();
+	this->record->orders     = this->rust_order_state.get();
+	this->record->visual     = &this->vcache.cached_vis_effect;
 	this->coord.left         = INVALID_COORD;
 	this->sprite_cache.old_coord.left = INVALID_COORD;
 	this->group_id           = DEFAULT_GROUP;

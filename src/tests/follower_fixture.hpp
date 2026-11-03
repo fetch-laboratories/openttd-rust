@@ -36,6 +36,11 @@ struct FollowerFixture {
 	explicit FollowerFixture(uint32_t width = 64, uint32_t height = 64) : tiles(std::countr_zero(width), width * height) {
 		active = this;
 		record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this);
+		record.train = state.get();
+		record.first = &record;
+		record.type = VEH_TRAIN;
+		record.owner = 0;
+		record.orders = &order_state;
 		vehicle.record_from_shell = [](void *) noexcept { return &active->record; };
 		shared.map = &tiles.statics;
 		shared.tile_type = [](uint32_t t) noexcept -> uint8_t { return t < active->tiles.size ? active->tiles.base[t].type >> 4 : MP_VOID; };
@@ -70,7 +75,7 @@ struct FollowerFixture {
 		rail.rail_reservation = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m2 & 63); };
 		physics.rail_speed = [](RailType) noexcept -> uint16_t { return 0; };
 		physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { return 100; };
-		train.physics = &physics; train.read_owner = [](OpenTTDTrainHandle) noexcept -> uint8_t { return 0; };
+		train.physics = &physics;
 		pbs.shared = &shared; pbs.rail = &rail; pbs.train = &train;
 		pbs.handle = [](const ::Train *) noexcept -> OpenTTDTrainHandle { return {&active->record, active->state.get()}; };
 		pbs.rail90 = [](uint8_t, uint8_t, bool def) noexcept { return def; };

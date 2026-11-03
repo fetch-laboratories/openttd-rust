@@ -106,6 +106,12 @@ crate::abi::shared_records! {
         pub shell: *mut OpenTTDVehicleShell,
         /// `Vehicle::next`.
         pub next: *mut VehicleRecord,
+        /// Stable owner links, initialized by the corresponding native constructors.
+        pub ground: *mut crate::ground_vehicle::GroundState,
+        pub train: *mut crate::train_state::TrainState,
+        pub consist: *mut crate::orders::Consist,
+        pub orders: *mut crate::orders::VehicleOrders,
+        pub visual: *mut u8,
         /// NOSAVE `Vehicle::previous`.
         pub previous: *mut VehicleRecord,
         /// NOSAVE `Vehicle::first`.
@@ -154,6 +160,11 @@ pub extern "C" fn openttd_rust_vehicle_record_new(
     let record = Box::into_raw(Box::new(VehicleRecord {
         shell,
         next: std::ptr::null_mut(),
+        ground: std::ptr::null_mut(),
+        train: std::ptr::null_mut(),
+        consist: std::ptr::null_mut(),
+        orders: std::ptr::null_mut(),
+        visual: std::ptr::null_mut(),
         previous: std::ptr::null_mut(),
         first: std::ptr::null_mut(),
         tile: TileIndex(u32::MAX),
@@ -252,6 +263,53 @@ pub(crate) unsafe fn set_next(this: *mut VehicleRecord, next: *mut VehicleRecord
 
 // VehicleRef's live-record contract permits field-sized raw reads between callbacks.
 impl crate::vehicle::VehicleRef {
+    pub(crate) fn first(self) -> Self {
+        Self(std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), first)).unwrap())
+    }
+    pub(crate) fn last(self) -> Self {
+        let mut v = self;
+        while let Some(next) = v.next() {
+            v = next;
+        }
+        v
+    }
+    pub(crate) fn next_vehicle(self) -> Option<Self> {
+        let mut next = self.next();
+        while let Some(v) = next {
+            if !is_articulated_part(is_ground_vehicle(v.vehicle_type()), v.subtype()) {
+                break;
+            }
+            next = v.next();
+        }
+        next
+    }
+    pub(crate) fn ground(self) -> *mut crate::ground_vehicle::GroundState {
+        crate::raw_field::read_field!(self.0.as_ptr(), ground)
+    }
+    pub(crate) fn ground_cache(self) -> *mut crate::ground_vehicle::GroundCache {
+        let ground = self.ground();
+        // SAFETY: Ground shells bind a live owner before controller entries.
+        unsafe { std::ptr::addr_of_mut!((*ground).cache) }
+    }
+    pub(crate) fn current_order(self) -> crate::orders::Order {
+        let orders = crate::raw_field::read_field!(self.0.as_ptr(), orders);
+        // SAFETY: Vehicle construction starts the native Order lifetime before publication.
+        let order = crate::raw_field::read_field!(orders, current);
+        unsafe { order.assume_init() }
+    }
+    pub(crate) fn order_time(self) -> i32 {
+        let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
+        crate::raw_field::read_field!(consist, time)
+    }
+    pub(crate) fn write_order_time(self, value: i32) {
+        let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
+        crate::raw_field::write_field!(consist, time, value);
+    }
+    pub(crate) fn visual_effect(self) -> u8 {
+        let visual = crate::raw_field::read_field!(self.0.as_ptr(), visual);
+        // SAFETY: The bound visual owner lives throughout the source access interval.
+        unsafe { visual.read() }
+    }
     pub(crate) fn next(self) -> Option<Self> {
         std::ptr::NonNull::new(crate::raw_field::read_field!(self.0.as_ptr(), next)).map(Self)
     }

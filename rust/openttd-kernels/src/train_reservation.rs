@@ -416,9 +416,7 @@ fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
 fn free(g: &Game, id: Handle) {
     crate::witness::hit(crate::witness::TRAIN_FREE_PATH);
     if g.pbs().0.assertions {
-        // SAFETY: The canonical train services remain live for this entry.
-        let train = unsafe { &*g.pbs().0.train };
-        crate::movement::native_assert(g.shared(), (train.read_front)(id) != 0);
+        crate::movement::native_assert(g.shared(), id.front() != 0);
     }
     let v = g.read_free(id);
     let mut tile = v.tile;

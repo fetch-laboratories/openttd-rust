@@ -158,7 +158,7 @@ int Train::GetCurrentMaxSpeed() const
 /** Update acceleration of the train from the cached power and weight. */
 void Train::UpdateAcceleration()
 {
-	openttd_rust_train_update_acceleration(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices());
+	openttd_rust_train_update_acceleration(TrainHandle(this));
 }
 
 int Train::GetCursorImageOffset() const
@@ -830,7 +830,7 @@ uint Train::Crash(bool flooded)
  */
 bool TrainController(Train *v, Vehicle *nomove, bool reverse)
 {
-	return openttd_rust_train_controller(TrainHandle(v), OpenTTDTrainHandle{nomove, nullptr}, static_cast<uint8_t>(reverse), &GetTrainServices(), &GetRustSharedServices()) != 0;
+	return openttd_rust_train_controller(TrainHandle(v), OpenTTDTrainHandle{RustVehicle(nomove), nullptr}, static_cast<uint8_t>(reverse), &GetTrainServices(), &GetRustSharedServices()) != 0;
 }
 
 
@@ -959,87 +959,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 {
 	static const OpenTTDTrainServices services{
 		.physics = &GetRustGroundPhysicsServices(),
-		.read_first = TrainReadFirst,
-		.read_next = TrainReadNext,
-		.read_previous = TrainReadPrevious,
-		.read_next_unit = TrainReadNextUnit,
-		.read_last = TrainReadLast,
-		.read_tile = TrainVehicleRead<uint32_t, RustVehicleTile>,
-		.read_dest = TrainVehicleRead<uint32_t, RustVehicleDestTile>,
-		.read_order_time = TrainReadOrderTime,
-		.read_length = TrainVehicleRead<uint16_t, RustGroundCachedLength<Train>>,
-		.read_total_length = TrainReadTotalLength,
-		.read_max_track_speed = TrainReadMaxTrackSpeed,
-		.read_speed = TrainVehicleRead<uint16_t, RustVehicleSpeed>,
-		.read_gv_flags = TrainReadGvFlags,
-		.read_refit_cap = TrainReadRefitCap,
-		.read_last_station = TrainReadLastStation,
-		.read_direction = TrainVehicleRead<uint8_t, RustVehicleDirection>,
-		.read_status = TrainVehicleRead<uint8_t, RustVehicleStatus>,
-		.read_tick = TrainVehicleRead<uint8_t, RustVehicleTick>,
-		.read_running = TrainReadRunning,
-		.read_day = TrainVehicleRead<uint8_t, RustVehicleDay>,
-		.read_progress = TrainVehicleRead<uint8_t, RustVehicleProgress>,
-		.read_order = TrainVehicleRead<uint8_t, RustVehicleOrderType>,
-		.read_front = TrainReadFront,
-		.read_articulated = TrainVehicleRead<uint8_t, RustVehicleArticulated>,
-		.read_multiheaded = TrainReadMultiheaded,
-		.read_owner = TrainVehicleRead<uint8_t, RustVehicleOwner>,
-		.read_vis_effect = TrainReadVisEffect,
-		.read_consist_changed = TrainReadConsistChanged,
-		.read_consist_changed_1 = TrainReadConsistChanged1,
-		.read_consist_changed_2 = TrainReadConsistChanged2,
-		.read_curve_limit = TrainReadCurveLimit,
-		.read_stop_location = TrainReadStopLocation,
-		.read_current_max_speed = TrainReadCurrentMaxSpeed,
-		.read_update_acceleration = TrainReadUpdateAcceleration,
-		.read_update_speed = TrainReadUpdateSpeed,
-		.read_trackdir = TrainReadTrackdir,
-		.read_can_leave = TrainReadCanLeave,
-		.read_crossing_approach = TrainReadCrossingApproach,
-		.read_next_offset = TrainReadNextOffset,
-		.read_after_swap = TrainReadAfterSwap,
-		.read_reverse_swap = TrainReadReverseSwap,
-		.read_approaching_end = TrainReadApproachingEnd,
-		.read_line_ends = TrainReadLineEnds,
-		.read_speed_z = TrainReadSpeedZ,
-		.read_move_vehicle = TrainReadMoveVehicle,
-		.read_move_vehicle_20 = TrainReadMoveVehicle20,
-		.read_collision_one = TrainReadCollisionOne,
-		.read_collision_one_22 = TrainReadCollisionOne22,
-		.read_delete_last = TrainReadDeleteLast,
-		.read_stay_depot = TrainReadStayDepot,
-		.read_loco = TrainReadLoco,
-		.read_loco_26 = TrainReadLoco26,
-		.read_tick_state = TrainReadTickState,
-		.read_needs_service = TrainReadNeedsService,
-		.read_next_force = TrainReadNextForce,
-		.read_reverse_command = TrainReadReverseCommand,
-		.write_tile = TrainWriteTile,
-		.write_dest = TrainWriteDest,
-		.write_x = TrainWriteX,
-		.write_y = TrainWriteY,
-		.write_z = TrainWriteZ,
-		.write_direction = TrainWriteDirection,
-		.write_speed = TrainWriteSpeed,
-		.write_tick = TrainWriteTick,
-		.write_running = TrainWriteRunning,
-		.write_day = TrainWriteDay,
-		.write_order_time = TrainWriteOrderTime,
-		.write_progress = TrainWriteProgress,
-		.write_subspeed = TrainWriteSubspeed,
-		.write_gv_flags = TrainWriteGvFlags,
-		.write_acceleration = TrainWriteAcceleration,
-		.write_length = TrainWriteLength,
-		.write_total_length = TrainWriteTotalLength,
-		.write_first_engine = TrainWriteFirstEngine,
-		.write_max_speed = TrainWriteMaxSpeed,
-		.write_cargo_cap = TrainWriteCargoCap,
-		.write_refit_cap = TrainWriteRefitCap,
-		.write_cargo_age = TrainWriteCargoAge,
-		.write_last_station = TrainWriteLastStation,
 		.write_colourmap = TrainWriteColourmap,
-		.write_status = TrainWriteStatus,
 		.acc_model = TrainAccModel,
 		.advance_distance = TrainAdvanceDistance,
 		.all_powered = TrainAllPowered,
@@ -1190,11 +1110,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 {
 	static const OpenTTDTrainReservationLeaves services{
-		.read_tile = TrainVehicleRead<uint32_t, RustVehicleTile>,
-		.read_next = TrainReadNext,
-		.read_last_station = TrainReadLastStation,
-		.read_direction = TrainVehicleRead<uint8_t, RustVehicleDirection>,
-		.read_order = TrainVehicleRead<uint8_t, RustVehicleOrderType>,
 		.read_num_orders = TrainVehicleRead<uint8_t, RustVehicleNumOrders>,
 		.read_order_index = TrainVehicleRead<uint8_t, RustVehicleRealOrderIndex>,
 		.read_free = TrainReservationReadFree,
@@ -1265,7 +1180,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
-		.write_dest = TrainReservationWriteDest,
 		.write_last = TrainReservationWriteLast,
 		.write_suppress = TrainReservationWriteSuppress,
 

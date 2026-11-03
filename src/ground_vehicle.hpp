@@ -76,7 +76,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	/**
 	 * The constructor at SpecializedVehicle must be called.
 	 */
-	GroundVehicle() : SpecializedVehicle<T, Type>() {}
+	GroundVehicle() : SpecializedVehicle<T, Type>() { this->record->ground = this->rust_ground.state; }
 
 	void PowerChanged();
 	void CargoChanged();

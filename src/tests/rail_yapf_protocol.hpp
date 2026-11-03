@@ -77,10 +77,11 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	if (follow_fail) map.tiles.base[start - 1].m5 = 0;
 	// Reservation and speed callbacks mark their original observation points.
 	map.record.owner = 0;
+	map.record.tile = start;
+	map.record.vehstatus = 1;
+	map.record.direction = 0;
 	map.rail.rail_reservation = [](uint32_t) noexcept { follow_reads.push_back('r'); return TRACK_BIT_NONE; };
 	map.physics.rail_speed = [](RailType) noexcept -> uint16_t { follow_reads.push_back('s'); return 0; };
-	map.train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return start; };
-	map.train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {0, 0, 1}; };
 	map.train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
 	map.train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
 	map.pbs.try_track = [](uint32_t tile, uint8_t track) noexcept { return Write(tile, track, 1) != 0; };

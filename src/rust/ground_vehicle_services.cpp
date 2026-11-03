@@ -23,7 +23,7 @@
 static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 {
 	Vehicle *v = VehicleOf(shell);
-	if (v->GetType() == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, {t, t->GetRustState()}, nullptr, v->GetType()}; }
+	if (v->GetType() == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, TrainHandle(t), nullptr, v->GetType()}; }
 	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->GetType()};
 }
 static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->GetType() == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSubtype(v)}; }

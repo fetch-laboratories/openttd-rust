@@ -102,10 +102,10 @@ class GeneratedAbiTests(unittest.TestCase):
             rust = root / "rust/openttd-kernels/src"
             rust.mkdir(parents=True)
             (rust / "records.rs").write_text(
-                'layouts! { "Dummy" ["nested"] => Dummy {}; }\n'
+                'layouts! { "LegacyRecord" ["nested"] => Legacy {}; }\n'
                 "shared_records! { fn abi_record;\n"
                 '"AParent" ["nested"] => pub struct Parent {\n'
-                "pub child: Child, pub tail: u16, pub link: *const External,\n    }\n"
+                "pub child: Child, pub tail: u16, pub link: *const External, pub legacy: *mut Legacy,\n    }\n"
                 '"ZChild" ["nested"] => pub struct Child {\n'
                 "pub field: u32,\n    }\n"
                 '"External" ["external"] => pub struct External { pub value: u8, }\n}\n'
@@ -127,6 +127,7 @@ class GeneratedAbiTests(unittest.TestCase):
                     "static_assert(std::is_same_v<decltype(AParent::child), ZChild>);\n"
                     "static_assert(offsetof(AParent, tail) == sizeof(ZChild));\n"
                     "static_assert(std::is_same_v<decltype(AParent::link), const External *>);\n"
+                    "static_assert(std::is_same_v<decltype(AParent::legacy), LegacyRecord *>);\n"
                 ),
                 text=True,
                 check=True,
