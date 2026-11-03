@@ -297,6 +297,15 @@ impl crate::vehicle::VehicleRef {
         let order = crate::raw_field::read_field!(orders, current);
         unsafe { order.assume_init() }
     }
+    pub(crate) fn order_index(self) -> u8 {
+        let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
+        crate::raw_field::read_field!(consist, real)
+    }
+    pub(crate) fn current_order_pointer(self) -> *mut crate::orders::Order {
+        let orders = crate::raw_field::read_field!(self.0.as_ptr(), orders);
+        // SAFETY: The native Order lifetime begins during Vehicle construction.
+        unsafe { std::ptr::addr_of_mut!((*orders).current).cast() }
+    }
     pub(crate) fn order_time(self) -> i32 {
         let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
         crate::raw_field::read_field!(consist, time)

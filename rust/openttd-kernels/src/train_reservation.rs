@@ -21,6 +21,7 @@ use crate::order_type::{
     OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION,
     OT_LOADING, OT_NOTHING,
 };
+use crate::raw_field::read_field;
 use crate::tile_map::is_tile_type;
 use crate::tile_type::INVALID_TILE;
 use crate::tile_type::{MP_RAILWAY, MP_TUNNELBRIDGE};
@@ -32,48 +33,6 @@ use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE
 
 use crate::follow_track::State as Follower;
 use crate::train::Handle;
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct TrainReservationFreeRead {
-    pub tile: u32,
-}
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct TrainReservationFree1Read {
-    pub tile: u32,
-    pub next: Handle,
-}
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct TrainReservationNewRead {
-    pub dest: u32,
-    pub last_station: u16,
-    pub order_index: u8,
-    pub suppress: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct TrainReservationChooseRead {
-    pub tile: u32,
-    pub dest: u32,
-    pub destination: u16,
-    pub order: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct TrainReservationChoose4Read {
-    pub order: u8,
-    pub nearest: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct TrainReservationCheckNextRead {
-    pub tile: u32,
-    pub dest: u32,
-    pub destination: u16,
-    pub order: u8,
-    pub num_orders: u8,
-}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Pbs {
@@ -111,19 +70,7 @@ pub struct Choice {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub read_tile: extern "C" fn(Handle) -> u32,
-    pub read_next: extern "C" fn(Handle) -> Handle,
-    pub read_last_station: extern "C" fn(Handle) -> u16,
-    pub read_direction: extern "C" fn(Handle) -> u8,
-    pub read_order: extern "C" fn(Handle) -> u8,
     pub read_num_orders: extern "C" fn(Handle) -> u8,
-    pub read_order_index: extern "C" fn(Handle) -> u8,
-    pub read_free: extern "C" fn(Handle) -> TrainReservationFreeRead,
-    pub read_free_1: extern "C" fn(Handle) -> TrainReservationFree1Read,
-    pub read_new: extern "C" fn(Handle) -> TrainReservationNewRead,
-    pub read_choose: extern "C" fn(Handle) -> TrainReservationChooseRead,
-    pub read_choose_4: extern "C" fn(Handle) -> TrainReservationChoose4Read,
-    pub read_check_next: extern "C" fn(Handle) -> TrainReservationCheckNextRead,
 
     pub all_compat: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub backoff: extern "C" fn() -> u8,
@@ -163,11 +110,8 @@ pub struct Leaves {
     pub reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reserve_paths: extern "C" fn() -> bool,
-    pub restore_order: unsafe extern "C" fn(Handle, *const crate::orders::Order),
-    pub save_order: extern "C" fn(Handle) -> crate::orders::Order,
     pub service: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub set_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
-    pub set_depot_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
     pub set_signal: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8, u8),
     pub set_tunnel: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub show_res: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
@@ -183,9 +127,6 @@ pub struct Leaves {
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub write_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
-    pub write_last: extern "C" fn(*mut std::ffi::c_void, Handle, u16),
-    pub write_suppress: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
 
     pub pathfind: extern "C" fn(Handle, u32, u8, u8, u8, u8) -> Search,
     pub safe_track: extern "C" fn(Handle, u32, u8, u8) -> u8,
@@ -213,44 +154,8 @@ impl Game<'_> {
             context,
         }
     }
-    fn read_tile(&self, id: Handle) -> u32 {
-        (self.leaves.read_tile)(id)
-    }
-    fn read_next(&self, id: Handle) -> Handle {
-        (self.leaves.read_next)(id)
-    }
-    fn read_last_station(&self, id: Handle) -> u16 {
-        (self.leaves.read_last_station)(id)
-    }
-    fn read_direction(&self, id: Handle) -> u8 {
-        (self.leaves.read_direction)(id)
-    }
-    fn read_order(&self, id: Handle) -> u8 {
-        (self.leaves.read_order)(id)
-    }
     fn read_num_orders(&self, id: Handle) -> u8 {
         (self.leaves.read_num_orders)(id)
-    }
-    fn read_order_index(&self, id: Handle) -> u8 {
-        (self.leaves.read_order_index)(id)
-    }
-    fn read_free(&self, id: Handle) -> TrainReservationFreeRead {
-        (self.leaves.read_free)(id)
-    }
-    fn read_free_1(&self, id: Handle) -> TrainReservationFree1Read {
-        (self.leaves.read_free_1)(id)
-    }
-    fn read_new(&self, id: Handle) -> TrainReservationNewRead {
-        (self.leaves.read_new)(id)
-    }
-    fn read_choose(&self, id: Handle) -> TrainReservationChooseRead {
-        (self.leaves.read_choose)(id)
-    }
-    fn read_choose_4(&self, id: Handle) -> TrainReservationChoose4Read {
-        (self.leaves.read_choose_4)(id)
-    }
-    fn read_check_next(&self, id: Handle) -> TrainReservationCheckNextRead {
-        (self.leaves.read_check_next)(id)
     }
 
     fn pbs(&self) -> crate::pbs::Pbs<'_> {
@@ -418,8 +323,8 @@ fn free(g: &Game, id: Handle) {
     if g.pbs().0.assertions {
         crate::movement::native_assert(g.shared(), id.front() != 0);
     }
-    let v = g.read_free(id);
-    let mut tile = v.tile;
+    let v_tile: u32 = id.vehicle().tile();
+    let mut tile = v_tile;
     let mut td = g.td(id);
     let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
         || (is_tile_type(g.shared(), tile, MP_TUNNELBRIDGE)));
@@ -436,11 +341,12 @@ fn free(g: &Game, id: Handle) {
     if id.get_track() == u64::from(DEPOT) {
         let mut u = id;
         while u != Handle::NONE {
-            let part = g.read_free_1(u);
-            if u.get_track() != u64::from(DEPOT) || part.tile != v.tile {
+            let part_tile: u32 = u.vehicle().tile();
+            let part_next: Handle = u.next();
+            if u.get_track() != u64::from(DEPOT) || part_tile != v_tile {
                 return;
             }
-            u = part.next;
+            u = part_next;
         }
     }
     let reserved = g.reserved(tile);
@@ -619,26 +525,38 @@ struct Orders<'a> {
 }
 impl<'a> Orders<'a> {
     fn new(g: &Game<'a>, id: Handle) -> Self {
-        let v = g.read_new(id);
-        let saved_order = (g.leaves.save_order)(id);
+        let v_dest: u32 = id.vehicle().dest_tile();
+        let v_last_station: u16 = id.vehicle().last_station();
+        let v_order_index: u8 = id.vehicle().order_index();
+        let v_suppress: u8 = u8::from(
+            read_field!(id.vehicle().ground(), flags)
+                & (1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS)
+                != 0,
+        );
+        let saved_order = id.vehicle().current_order();
         Self {
             g: *g,
             id,
-            dest: v.dest,
-            last: v.last_station,
-            suppress: v.suppress,
-            index: v.order_index,
+            dest: v_dest,
+            last: v_last_station,
+            suppress: v_suppress,
+            index: v_order_index,
             restored: false,
             saved_order,
         }
     }
     fn restore(&mut self) {
         crate::witness::hit(crate::witness::TRAIN_ORDER_RESTORE);
-        // SAFETY: this stack snapshot is live; the service copies it before returning.
-        unsafe { (self.g.leaves.restore_order)(self.id, &raw const self.saved_order) };
-        (self.g.leaves.write_dest)(self.g.context, self.id, self.dest);
-        (self.g.leaves.write_last)(self.g.context, self.id, self.last);
-        (self.g.leaves.write_suppress)(self.g.context, self.id, self.suppress);
+        // SAFETY: The current order and this stack snapshot are live for this copy.
+        unsafe {
+            self.id
+                .vehicle()
+                .current_order_pointer()
+                .write(self.saved_order);
+        };
+        self.id.vehicle().write_dest(self.dest);
+        self.id.vehicle().write_last_station(self.last);
+        self.id.set_suppress_implicit(self.suppress != 0);
         self.restored = true;
     }
     fn next(&mut self, skip: bool) -> bool {
@@ -672,7 +590,7 @@ impl<'a> Orders<'a> {
                     if next != 0xff {
                         depth += 1;
                         self.index = next;
-                        if self.index != g.read_order_index(id)
+                        if self.index != id.vehicle().order_index()
                             && depth < i32::from(g.read_num_orders(id))
                         {
                             continue;
@@ -684,7 +602,8 @@ impl<'a> Orders<'a> {
             }
             self.index = self.index.wrapping_add(1);
             depth += 1;
-            if self.index == g.read_order_index(id) || depth >= i32::from(g.read_num_orders(id)) {
+            if self.index == id.vehicle().order_index() || depth >= i32::from(g.read_num_orders(id))
+            {
                 return false;
             }
         }
@@ -766,25 +685,31 @@ fn choose(
             if changed {
                 (g.leaves.mark_tile)(g.context, id, tile);
             }
-            g.reserve(g.read_tile(id), g.td(id));
+            g.reserve(id.vehicle().tile(), g.td(id));
             return (best, true);
         }
         (g.leaves.service)(g.context, id);
-        if matches!(g.read_order(id), OT_GOTO_DEPOT | OT_DUMMY | OT_CONDITIONAL) {
+        if matches!(
+            id.vehicle().current_order().kind(),
+            OT_GOTO_DEPOT | OT_DUMMY | OT_CONDITIONAL
+        ) {
             (g.leaves.process_orders)(id);
         }
     }
     let mut orders = Orders::new(g, id);
-    let v = g.read_choose(id);
-    if v.order == OT_LEAVESTATION {
+    let v_tile: u32 = id.vehicle().tile();
+    let v_dest: u32 = id.vehicle().dest_tile();
+    let v_destination: u16 = id.vehicle().current_order().destination;
+    let v_order: u8 = id.vehicle().current_order().kind();
+    if v_order == OT_LEAVESTATION {
         orders.next(false);
-    } else if v.order == OT_LOADING
-        || (v.order != OT_GOTO_DEPOT
-            && if v.order == OT_GOTO_STATION {
-                ((g.leaves.is_station)(g.context, id, v.tile) != 0)
-                    && u64::from(v.destination) == (g.leaves.station)(g.context, id, v.tile)
+    } else if v_order == OT_LOADING
+        || (v_order != OT_GOTO_DEPOT
+            && if v_order == OT_GOTO_STATION {
+                ((g.leaves.is_station)(g.context, id, v_tile) != 0)
+                    && u64::from(v_destination) == (g.leaves.station)(g.context, id, v_tile)
             } else {
-                v.tile == v.dest
+                v_tile == v_dest
             })
     {
         orders.next(true);
@@ -814,7 +739,7 @@ fn choose(
         if g.safe_track(id, origin.tile, origin.td, false) {
             let res = g.reserved(tile) & (g.leaves.reach_tracks)(g.context, id, dir) as u8;
             best = first(u16::from(res));
-            g.reserve(g.read_tile(id), g.td(id));
+            g.reserve(id.vehicle().tile(), g.td(id));
             got = true;
             if changed {
                 (g.leaves.mark_tile)(g.context, id, tile);
@@ -863,34 +788,40 @@ fn choose(
         }
         break;
     }
-    g.reserve(g.read_tile(id), g.td(id));
+    g.reserve(id.vehicle().tile(), g.td(id));
     if changed {
         (g.leaves.mark_tile)(g.context, id, tile);
     }
     orders.restore();
-    let v = g.read_choose_4(id);
-    if v.order == OT_GOTO_DEPOT
-        && v.nearest != 0
+    let v_order: u8 = id.vehicle().current_order().kind();
+    let v_nearest: u8 = u8::from(
+        id.vehicle().current_order().depot_action_flags() & crate::order_type::ODATF_NEAREST_DEPOT
+            != 0,
+    );
+    if v_order == OT_GOTO_DEPOT
+        && v_nearest != 0
         && final_dest != INVALID_TILE
         && ((g.leaves.is_depot)(g.context, id, final_dest) != 0)
     {
-        (g.leaves.set_depot_dest)(g.context, id, final_dest);
-        (g.leaves.write_dest)(g.context, id, final_dest);
+        let destination = (g.shared().depot_index)(final_dest);
+        // SAFETY: The live current order belongs to this serialized train.
+        unsafe { (*id.vehicle().current_order_pointer()).destination = destination };
+        id.vehicle().write_dest(final_dest);
         (g.leaves.start_stop)(g.context, id);
     }
     (best, got)
 }
 fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
-    let v = g.read_free(id);
+    let v_tile: u32 = id.vehicle().tile();
     if id.get_track() == u64::from(DEPOT) {
-        if (g.leaves.depot_reserved)(g.context, id, v.tile) != 0 {
+        if (g.leaves.depot_reserved)(g.context, id, v_tile) != 0 {
             if mark {
                 (g.leaves.stuck)(g.context, id);
             }
             return false;
         }
-        let dir = (g.leaves.depot_dir)(g.context, id, v.tile) as u8;
-        let next = g.add(id, v.tile, dir);
+        let dir = (g.leaves.depot_dir)(g.context, id, v_tile) as u8;
+        let next = g.add(id, v_tile, dir);
         if g.has_reserved(next, (g.leaves.reach_tracks)(g.context, id, dir) as u8) {
             return false;
         }
@@ -902,7 +833,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
         }
         return false;
     }
-    if origin.okay != 0 && (v.tile != origin.tile || first_okay) {
+    if origin.okay != 0 && (v_tile != origin.tile || first_okay) {
         if id.stuck() {
             (g.leaves.start_stop)(g.context, id);
         }
@@ -910,9 +841,9 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
         return true;
     }
     if id.get_track() == u64::from(DEPOT) {
-        (g.leaves.set_depot)(g.context, id, v.tile, 1);
+        (g.leaves.set_depot)(g.context, id, v_tile, 1);
         if (g.leaves.show_res)(g.context, id) != 0 {
-            (g.leaves.mark_tile)(g.context, id, v.tile);
+            (g.leaves.mark_tile)(g.context, id, v_tile);
         }
     }
     let exit = g.dir(id, origin.td);
@@ -925,7 +856,7 @@ fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
     let (_, made) = choose(g, id, new_tile, exit, reachable, true, mark);
     if !made {
         if id.get_track() == u64::from(DEPOT) {
-            (g.leaves.set_depot)(g.context, id, g.read_tile(id), 0);
+            (g.leaves.set_depot)(g.context, id, id.vehicle().tile(), 0);
         }
         return false;
     }
@@ -940,24 +871,28 @@ fn check_next(g: &Game, id: Handle) {
     if (g.leaves.backoff)() == 255 || id.get_track() == u64::from(DEPOT) {
         return;
     }
-    let v = g.read_check_next(id);
-    match v.order {
+    let v_tile: u32 = id.vehicle().tile();
+    let v_dest: u32 = id.vehicle().dest_tile();
+    let v_destination: u16 = id.vehicle().current_order().destination;
+    let v_order: u8 = id.vehicle().current_order().kind();
+    let v_num_orders: u8 = g.read_num_orders(id);
+    match v_order {
         OT_GOTO_DEPOT => {
-            if v.tile == v.dest {
+            if v_tile == v_dest {
                 return;
             }
         }
         OT_GOTO_WAYPOINT => {
-            if ((g.leaves.is_waypoint)(g.context, id, v.tile) != 0)
-                && (g.leaves.station)(g.context, id, v.tile) == u64::from(v.destination)
+            if ((g.leaves.is_waypoint)(g.context, id, v_tile) != 0)
+                && (g.leaves.station)(g.context, id, v_tile) == u64::from(v_destination)
             {
                 (g.leaves.process_orders)(id);
             }
         }
-        OT_NOTHING | OT_LOADING | OT_LEAVESTATION if v.num_orders > 0 => return,
+        OT_NOTHING | OT_LOADING | OT_LEAVESTATION if v_num_orders > 0 => return,
         _ => {}
     }
-    let tile = g.read_tile(id);
+    let tile = id.vehicle().tile();
     if ((g.leaves.is_station)(g.context, id, tile) != 0)
         && g.order_stop(id, (g.leaves.station)(g.context, id, tile) as u16)
     {
@@ -1084,7 +1019,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_reverse(
     if (g.leaves.line_reverse)(g.context, id) == 0
         && id.get_track() != u64::from(DEPOT)
         && id.get_track() != u64::from(WORMHOLE)
-        && g.read_direction(id) & 1 != 0
+        && id.vehicle().direction() & 1 != 0
     {
         (g.leaves.check_reverse)(g.context, id) as u8
     } else {
@@ -1104,8 +1039,8 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
     context: *mut std::ffi::c_void,
 ) -> u32 {
     let g = unsafe { Game::entry(vehicle, leaves, context) };
-    if station == g.read_last_station(id) {
-        (g.leaves.write_last)(g.context, id, u16::MAX);
+    if station == id.vehicle().last_station() {
+        id.vehicle().write_last_station(u16::MAX);
     }
     if (g.leaves.station_train)(g.context, id, station) == 0 {
         (g.leaves.increment_order)(g.context, id);
@@ -1128,60 +1063,30 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
     let g = unsafe { Game::entry(vehicle, leaves, context) };
     let mut part = id;
     while part != Handle::NONE {
-        let v = g.read_free(part);
+        let v_tile: u32 = part.vehicle().tile();
         let track = part.get_track() as u8;
         match track {
             WORMHOLE => {
                 g.reserve_track(
-                    v.tile,
+                    v_tile,
                     (g.leaves.diag_track)(
                         g.context,
                         part,
-                        ((g.leaves.tunnel_dir)(g.context, part, v.tile)) as u8,
+                        ((g.leaves.tunnel_dir)(g.context, part, v_tile)) as u8,
                     ) as u8,
                 );
             }
             DEPOT => {}
             _ => {
-                g.reserve_track(v.tile, (g.leaves.bits_track)(g.context, part, track) as u8);
+                g.reserve_track(v_tile, (g.leaves.bits_track)(g.context, part, track) as u8);
             }
         }
-        part = g.read_next(part);
+        part = part.next();
     }
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTrainReservationFreeRead" ["probe"] => TrainReservationFreeRead {
-        tile,
-    };
-    "OpenTTDTrainReservationFree1Read" ["probe"] => TrainReservationFree1Read {
-        tile,
-        next,
-    };
-    "OpenTTDTrainReservationNewRead" ["probe"] => TrainReservationNewRead {
-        dest,
-        last_station,
-        order_index,
-        suppress,
-    };
-    "OpenTTDTrainReservationChooseRead" ["probe"] => TrainReservationChooseRead {
-        tile,
-        dest,
-        destination,
-        order,
-    };
-    "OpenTTDTrainReservationChoose4Read" ["probe"] => TrainReservationChoose4Read {
-        order,
-        nearest,
-    };
-    "OpenTTDTrainReservationCheckNextRead" ["probe"] => TrainReservationCheckNextRead {
-        tile,
-        dest,
-        destination,
-        order,
-        num_orders,
-    };
     "OpenTTDTrainReservationPbs" ["probe"] => Pbs {
         tile,
         other,
@@ -1197,19 +1102,7 @@ crate::abi::layouts! {
         okay,
     };
     "OpenTTDTrainReservationLeaves" ["probe"] => Leaves {
-        read_tile,
-        read_next,
-        read_last_station,
-        read_direction,
-        read_order,
         read_num_orders,
-        read_order_index,
-        read_free,
-        read_free_1,
-        read_new,
-        read_choose,
-        read_choose_4,
-        read_check_next,
         all_compat,
         backoff,
         bits_track,
@@ -1248,11 +1141,8 @@ crate::abi::layouts! {
         reach_dirs,
         reach_tracks,
         reserve_paths,
-        restore_order,
-        save_order,
         service,
         set_depot,
-        set_depot_dest,
         set_signal,
         set_tunnel,
         show_res,
@@ -1268,9 +1158,6 @@ crate::abi::layouts! {
         tile_offset,
         trackdir,
         tunnel_dir,
-        write_dest,
-        write_last,
-        write_suppress,
         pathfind,
         safe_track,
         process_orders,
@@ -1330,20 +1217,7 @@ pub(crate) mod tests {
 
     fn leaves() -> Leaves {
         Leaves {
-            write_dest: unused(),
-            read_tile: unused(),
-            read_next: unused(),
-            read_last_station: unused(),
-            read_direction: unused(),
-            read_order: unused(),
             read_num_orders: unused(),
-            read_order_index: unused(),
-            read_free: unused(),
-            read_free_1: unused(),
-            read_new: unused(),
-            read_choose: unused(),
-            read_choose_4: unused(),
-            read_check_next: unused(),
             all_compat: unused(),
             backoff: unused(),
             bits_track: unused(),
@@ -1382,11 +1256,8 @@ pub(crate) mod tests {
             reach_dirs: unused(),
             reach_tracks: unused(),
             reserve_paths: unused(),
-            restore_order: unused(),
-            save_order: unused(),
             service: unused(),
             set_depot: unused(),
-            set_depot_dest: unused(),
             set_signal: unused(),
             set_tunnel: unused(),
             show_res: unused(),
@@ -1402,8 +1273,6 @@ pub(crate) mod tests {
             tile_offset: unused(),
             trackdir: unused(),
             tunnel_dir: unused(),
-            write_last: unused(),
-            write_suppress: unused(),
             pathfind: unused(),
             safe_track: unused(),
             process_orders: unused(),
@@ -1536,11 +1405,9 @@ pub(crate) mod tests {
         state: State,
         stop: u8,
         log: Vec<(&'static str, u32, u8)>,
-        order_token: u32,
-        dest: u32,
-        last: u16,
-        suppress: u8,
-        restores: usize,
+        ground: crate::ground_vehicle::GroundState,
+        consist: crate::orders::Consist,
+        orders: crate::orders::VehicleOrders,
     }
     impl Mock {
         fn new(stop: u8) -> Self {
@@ -1555,14 +1422,55 @@ pub(crate) mod tests {
                 state: State::default(),
                 stop,
                 log: Vec::new(),
-                order_token: 1,
-                dest: 9,
-                last: 7,
-                suppress: 1,
-                restores: 0,
+                ground: crate::ground_vehicle::GroundState {
+                    flags: 4,
+                    ..Default::default()
+                },
+                consist: crate::orders::Consist {
+                    time: 0,
+                    lateness: 0,
+                    start: 0,
+                    last_departure: 0,
+                    next_departure: 0,
+                    round_trip: 0,
+                    real: 254,
+                    implicit: 0,
+                    flags: 0,
+                },
+                orders: crate::orders::VehicleOrders {
+                    current: std::mem::MaybeUninit::new(crate::orders::Order {
+                        kind: 0x12,
+                        flags: 0x34,
+                        destination: 1,
+                        refit: 0x56,
+                        wait: 0,
+                        travel: 0x789a,
+                        speed: 0xbcde,
+                    }),
+                    orders: std::ptr::null_mut(),
+                    next: std::ptr::null_mut(),
+                    previous: std::ptr::null_mut(),
+                },
             }
         }
+        fn set_order_token(&mut self, token: u32) {
+            // SAFETY: The fixture initializes this Order before every access.
+            let order = unsafe { self.orders.current.assume_init_mut() };
+            order.destination = token as u16;
+            order.wait = (token >> 16) as u16;
+        }
+        fn order_token(&self) -> u32 {
+            // SAFETY: The fixture initializes this Order before every access.
+            let order = unsafe { self.orders.current.assume_init_ref() };
+            u32::from(order.destination) | (u32::from(order.wait) << 16)
+        }
         fn handle(&mut self) -> Handle {
+            self.record.dest_tile = crate::tile_type::TileIndex(9);
+            self.record.last_station_visited = crate::station_type::StationID(7);
+            self.record.ground = &raw mut self.ground;
+            self.record.consist = &raw mut self.consist;
+            self.record.orders = &raw mut self.orders;
+            self.record.train = &raw mut self.state;
             self.record.owner = crate::company_type::CompanyID(0);
             self.record.shell = std::ptr::from_mut(self).cast();
             Handle {
@@ -1885,85 +1793,13 @@ pub(crate) mod tests {
             );
         }
     }
-    extern "C" fn read_order(h: Handle) -> TrainReservationNewRead {
-        // SAFETY: Live test mock, no reference escapes.
-        unsafe {
-            let m = mock(h);
-            TrainReservationNewRead {
-                dest: m.dest,
-                last_station: m.last,
-                order_index: 254,
-                suppress: m.suppress,
-            }
-        }
-    }
-    extern "C" fn save_order(h: Handle) -> crate::orders::Order {
-        // SAFETY: The live fixture is accessed only during this synchronous call.
-        let token = unsafe { mock(h).order_token };
-        crate::orders::Order {
-            kind: 0x12,
-            flags: 0x34,
-            destination: token as u16,
-            refit: 0x56,
-            wait: (token >> 16) as u16,
-            travel: 0x789a,
-            speed: 0xbcde,
-        }
-    }
-    unsafe extern "C" fn restore_order(h: Handle, order: *const crate::orders::Order) {
-        // SAFETY: The calling Orders guard owns this independent stack snapshot.
-        let order = unsafe { order.read() };
-        assert_eq!(
-            (
-                order.kind,
-                order.flags,
-                order.refit,
-                order.travel,
-                order.speed
-            ),
-            (0x12, 0x34, 0x56, 0x789a, 0xbcde)
-        );
-        // SAFETY: The live fixture is accessed only during this synchronous call.
-        let m = unsafe { mock(h) };
-        m.order_token = u32::from(order.destination) | (u32::from(order.wait) << 16);
-        m.restores += 1;
-    }
-    extern "C" fn write_dest(_: *mut c_void, h: Handle, dest: u32) {
-        // SAFETY: Live exclusive mock.
-        unsafe {
-            mock(h).dest = dest;
-        }
-    }
-    extern "C" fn write_last(_: *mut c_void, h: Handle, last: u16) {
-        // SAFETY: Live exclusive mock.
-        unsafe {
-            mock(h).last = last;
-        }
-    }
-    extern "C" fn write_suppress(_: *mut c_void, h: Handle, suppress: u8) {
-        // SAFETY: Live exclusive mock.
-        unsafe {
-            mock(h).suppress = suppress;
-        }
-    }
-    fn order_leaves() -> Leaves {
-        Leaves {
-            read_new: read_order,
-            save_order,
-            restore_order,
-            write_dest,
-            write_last,
-            write_suppress,
-            ..leaves()
-        }
-    }
     #[test]
     fn explicit_or_drop_order_restoration_runs_once_with_nested_snapshots() {
         for explicit in [false, true] {
             let mut m = Mock::new(0);
-            m.order_token = 0x89ab_cdef;
+            m.set_order_token(0x89ab_cdef);
             let h = m.handle();
-            let ls = order_leaves();
+            let ls = leaves();
             let g = Game {
                 vehicle: std::ptr::null_mut(),
                 leaves: &ls,
@@ -1971,10 +1807,10 @@ pub(crate) mod tests {
             };
             {
                 let mut outer = Orders::new(&g, h);
-                m.order_token = 0x7654_3210;
-                m.dest = 42;
-                m.last = 8;
-                m.suppress = 0;
+                m.set_order_token(0x7654_3210);
+                m.record.dest_tile = crate::tile_type::TileIndex(42);
+                m.record.last_station_visited = crate::station_type::StationID(8);
+                m.ground.flags &= !4;
                 {
                     let inner_game = Game {
                         vehicle: std::ptr::null_mut(),
@@ -1982,24 +1818,34 @@ pub(crate) mod tests {
                         context: std::ptr::null_mut(),
                     };
                     let mut inner = Orders::new(&inner_game, h);
-                    m.order_token = 3;
-                    m.dest = 99;
+                    m.set_order_token(3);
+                    m.record.dest_tile = crate::tile_type::TileIndex(99);
                     inner.restore();
                 }
                 assert_eq!(
-                    (m.dest, m.last, m.suppress, m.order_token),
+                    (
+                        m.record.dest_tile.0,
+                        m.record.last_station_visited.0,
+                        u8::from(m.ground.flags & 4 != 0),
+                        m.order_token()
+                    ),
                     (42, 8, 0, 0x7654_3210)
                 );
                 assert_eq!(outer.index, 254);
                 if explicit {
                     outer.restore();
+                    m.set_order_token(0x1357_2468);
                 }
             }
             assert_eq!(
-                (m.dest, m.last, m.suppress, m.order_token),
-                (9, 7, 1, 0x89ab_cdef)
+                (
+                    m.record.dest_tile.0,
+                    m.record.last_station_visited.0,
+                    u8::from(m.ground.flags & 4 != 0),
+                    m.order_token()
+                ),
+                (9, 7, 1, if explicit { 0x1357_2468 } else { 0x89ab_cdef })
             );
-            assert_eq!(m.restores, 2);
         }
     }
     #[test]

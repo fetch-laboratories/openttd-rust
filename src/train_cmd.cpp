@@ -1111,13 +1111,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 {
 	static const OpenTTDTrainReservationLeaves services{
 		.read_num_orders = TrainVehicleRead<uint8_t, RustVehicleNumOrders>,
-		.read_order_index = TrainVehicleRead<uint8_t, RustVehicleRealOrderIndex>,
-		.read_free = TrainReservationReadFree,
-		.read_free_1 = TrainReservationReadFree1,
-		.read_new = TrainReservationReadNew,
-		.read_choose = TrainReservationReadChoose,
-		.read_choose_4 = TrainReservationReadChoose4,
-		.read_check_next = TrainReservationReadCheckNext,
 		.all_compat = TrainReservationAllCompat,
 		.backoff = RustTrainPathBackoffInterval,
 		.bits_track = TrainReservationBitsTrack,
@@ -1159,11 +1152,8 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.reach_tracks = TrainReservationReachTracks,
 
 		.reserve_paths = RustTrainReservePaths,
-		.restore_order = TrainReservationRestoreOrder,
-		.save_order = TrainReservationSaveOrder,
 		.service = TrainReservationService,
 		.set_depot = OpenTTDLegacyContextMapQuery<void, RustSetDepotReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.set_depot_dest = TrainReservationSetDepotDest,
 
 		.set_signal = OpenTTDLegacyContextMapQuery<void, RustRailSetSignalGreen, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
 		.set_tunnel = OpenTTDLegacyContextMapQuery<void, RustSetTunnelBridgeReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
@@ -1180,8 +1170,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
-		.write_last = TrainReservationWriteLast,
-		.write_suppress = TrainReservationWriteSuppress,
 
 		.pathfind = TrainReservationPathfind,
 		.safe_track = TrainReservationSafeTrack,

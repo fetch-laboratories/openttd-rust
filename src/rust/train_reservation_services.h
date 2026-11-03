@@ -128,24 +128,10 @@ static uint64_t TrainReservationReachTracks(void *, OpenTTDTrainHandle, uint8_t 
 }
 /* Order has the existing OrderFields layout and trivial copy/destruction. Rust
  * owns each nested snapshot on its stack; no native context survives a call. */
-static void TrainReservationRestoreOrder(OpenTTDTrainHandle id, const OpenTTDOrderFields *order) noexcept
-{
-	static_cast<Train *>(VehicleFromRecord(id.record))->current_order = std::bit_cast<Order>(*order);
-}
-static OpenTTDOrderFields TrainReservationSaveOrder(OpenTTDTrainHandle id) noexcept
-{
-	return std::bit_cast<OpenTTDOrderFields>(static_cast<Train *>(VehicleFromRecord(id.record))->current_order);
-}
 static void TrainReservationService(void *, OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	CheckIfTrainNeedsService(v);
-}
-static void TrainReservationSetDepotDest(void *, OpenTTDTrainHandle id, uint32_t a) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	TileIndex t(static_cast<uint32_t>(a));
-	v->current_order.SetDestination(GetDepotIndex(t));
 }
 
 
@@ -177,22 +163,6 @@ static uint64_t TrainReservationTrackdir(void *, OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return GetRustSharedServices().train_trackdir(v);
 }
-static void TrainReservationWriteDest(void *, OpenTTDTrainHandle id, uint32_t a) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	TileIndex t(static_cast<uint32_t>(a));
-	v->StoreDestTile(t);
-}
-static void TrainReservationWriteLast(void *, OpenTTDTrainHandle id, uint16_t a) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	v->SetLastStationVisited(StationID(static_cast<uint16_t>(a)));
-}
-static void TrainReservationWriteSuppress(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	AssignBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS, a != 0);
-}
 
 
 
@@ -208,34 +178,3 @@ static uint8_t TrainReservationProcessOrders(OpenTTDTrainHandle id) noexcept
 {return ProcessOrders(static_cast<Train *>(VehicleFromRecord(id.record)));}
 static uint8_t TrainReservationUpdateOrderDest(OpenTTDTrainHandle id, uint8_t index) noexcept
 {Train *v=static_cast<Train *>(VehicleFromRecord(id.record));return UpdateOrderDest(v,v->GetOrder(static_cast<VehicleOrderID>(index)),0,true);}
-
-static OpenTTDTrainReservationFreeRead TrainReservationReadFree(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(VehicleFromRecord(id.record));
-	return {RustVehicleTile(v)};
-}
-static OpenTTDTrainReservationFree1Read TrainReservationReadFree1(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(VehicleFromRecord(id.record));
-	return {RustVehicleTile(v), TrainHandle(static_cast<Train *>(RustVehicleNext(v)))};
-}
-static OpenTTDTrainReservationNewRead TrainReservationReadNew(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(VehicleFromRecord(id.record));
-	return {RustVehicleDestTile(v), v->GetLastStationVisited().base(), RustVehicleRealOrderIndex(v), static_cast<uint8_t>(HasBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS))};
-}
-static OpenTTDTrainReservationChooseRead TrainReservationReadChoose(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(VehicleFromRecord(id.record));
-	return {RustVehicleTile(v), RustVehicleDestTile(v), RustVehicleOrderDestination(v), RustVehicleOrderType(v)};
-}
-static OpenTTDTrainReservationChoose4Read TrainReservationReadChoose4(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(VehicleFromRecord(id.record));
-	return {RustVehicleOrderType(v), static_cast<uint8_t>(v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot))};
-}
-static OpenTTDTrainReservationCheckNextRead TrainReservationReadCheckNext(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(VehicleFromRecord(id.record));
-	return {RustVehicleTile(v), RustVehicleDestTile(v), RustVehicleOrderDestination(v), RustVehicleOrderType(v), RustVehicleNumOrders(v)};
-}

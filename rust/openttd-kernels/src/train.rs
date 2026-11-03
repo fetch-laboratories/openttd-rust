@@ -117,6 +117,15 @@ impl Default for Handle {
     }
 }
 impl Handle {
+    pub(crate) fn set_suppress_implicit(self, value: bool) {
+        let mask = 1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS;
+        let flags = read_field!(self.vehicle().ground(), flags);
+        write_field!(
+            self.vehicle().ground(),
+            flags,
+            if value { flags | mask } else { flags & !mask }
+        );
+    }
     pub(crate) fn clear_stuck(self) {
         self.set_flags(self.get_flags() & !(1 << 8));
     }

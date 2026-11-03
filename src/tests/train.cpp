@@ -43,7 +43,6 @@ TEST_CASE("Train reservation - native front-engine assertion precedes depot retu
 		map.movement.native_assert = [](bool okay) noexcept { if (!okay) ++_reservation_assert_failures; };
 		auto leaves = OpenTTDTrainReservationLeaves{};
 		leaves.shared = &map.shared;
-		leaves.read_free = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainReservationFreeRead { return {23}; };
 		leaves.trackdir = [](void *, OpenTTDTrainHandle) noexcept -> uint64_t { return TRACKDIR_X_NE; };
 		leaves.is_station = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 0; };
 		leaves.is_depot = [](void *, OpenTTDTrainHandle, uint32_t) noexcept -> uint64_t { return 1; };

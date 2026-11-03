@@ -27,51 +27,9 @@ struct OpenTTDTrainReservationSearch {
 	uint32_t tile, final_dest;
 	uint8_t td, found, okay;
 };
-struct OpenTTDTrainReservationFreeRead {
-	uint32_t tile;
-};
-struct OpenTTDTrainReservationFree1Read {
-	uint32_t tile;
-	OpenTTDTrainHandle next;
-};
-struct OpenTTDTrainReservationNewRead {
-	uint32_t dest;
-	uint16_t last_station;
-	uint8_t order_index;
-	uint8_t suppress;
-};
-struct OpenTTDTrainReservationChooseRead {
-	uint32_t tile;
-	uint32_t dest;
-	uint16_t destination;
-	uint8_t order;
-};
-struct OpenTTDTrainReservationChoose4Read {
-	uint8_t order;
-	uint8_t nearest;
-};
-struct OpenTTDTrainReservationCheckNextRead {
-	uint32_t tile;
-	uint32_t dest;
-	uint16_t destination;
-	uint8_t order;
-	uint8_t num_orders;
-};
 struct OpenTTDTrainReservationChoice { uint8_t track, reserved; };
 struct OpenTTDTrainReservationLeaves {
-	uint32_t (*read_tile)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_tile);
-	OpenTTDTrainHandle (*read_next)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_next);
-	uint16_t (*read_last_station)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_last_station);
-	uint8_t (*read_direction)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_direction);
-	uint8_t (*read_order)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_order);
 	uint8_t (*read_num_orders)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_num_orders);
-	uint8_t (*read_order_index)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_order_index);
-	OpenTTDTrainReservationFreeRead (*read_free)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_free);
-	OpenTTDTrainReservationFree1Read (*read_free_1)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_free_1);
-	OpenTTDTrainReservationNewRead (*read_new)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_new);
-	OpenTTDTrainReservationChooseRead (*read_choose)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_choose);
-	OpenTTDTrainReservationChoose4Read (*read_choose_4)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_choose_4);
-	OpenTTDTrainReservationCheckNextRead (*read_check_next)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_check_next);
 
 	uint64_t (*all_compat)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(all_compat);
 	uint8_t (*backoff)() noexcept OPENTTD_SERVICE_DEFAULT(backoff);
@@ -111,11 +69,8 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*reach_dirs)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reach_dirs);
 	uint64_t (*reach_tracks)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reach_tracks);
 	bool (*reserve_paths)() noexcept OPENTTD_SERVICE_DEFAULT(reserve_paths);
-	void (*restore_order)(OpenTTDTrainHandle, const OpenTTDOrderFields *) noexcept OPENTTD_SERVICE_DEFAULT(restore_order);
-	OpenTTDOrderFields (*save_order)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(save_order);
 	void (*service)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(service);
 	void (*set_depot)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot);
-	void (*set_depot_dest)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot_dest);
 	void (*set_signal)(void *, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal);
 	void (*set_tunnel)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tunnel);
 	uint64_t (*show_res)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(show_res);
@@ -131,9 +86,6 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*tile_offset)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_offset);
 	uint64_t (*trackdir)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(trackdir);
 	uint64_t (*tunnel_dir)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_dir);
-	void (*write_dest)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_dest);
-	void (*write_last)(void *, OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_last);
-	void (*write_suppress)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_suppress);
 
 	OpenTTDTrainReservationSearch (*pathfind)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(pathfind);
 	uint8_t (*safe_track)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(safe_track);

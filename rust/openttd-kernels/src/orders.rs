@@ -877,6 +877,10 @@ impl Game {
     }
 }
 impl Order {
+    /// `Order::GetDepotActionType`.
+    pub(crate) fn depot_action_flags(self) -> u8 {
+        (self.flags >> 3) & 15
+    }
     pub(crate) fn kind(&self) -> u8 {
         self.kind & 15
     }
