@@ -6,6 +6,7 @@
 #include "console_internal.h"
 #include "console_func.h"
 #include "core/random_func.hpp"
+#include "core/string_consumer.hpp"
 #include "network/network_client.h"
 #include "network/network_server.h"
 #include "road_cmd.h"
@@ -100,7 +101,7 @@ static bool ProtocolCommand(std::span<std::string_view> argv)
 {
 	if (argv.size() != 2) return false;
 	armed = true;
-	stop_tick = std::stoull(std::getenv("OPENTTD_PROTOCOL_STOP"));
+	stop_tick = ParseInteger<uint64_t>(std::getenv("OPENTTD_PROTOCOL_STOP")).value();
 	if (_network_server) {
 		_settings_client.network.commands_per_frame = 1;
 		_settings_client.network.commands_per_frame_server = 1;

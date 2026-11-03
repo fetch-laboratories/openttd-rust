@@ -66,11 +66,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
             (migration.REFERENCE_BUILD / "generated/rev.cpp").read_text(),
         )
         combined = folder / "network-protocol.cpp"
-        combined.write_text(
-            '#include "stdafx.h"\n#include "core/format.hpp"\n'
-            + revision
-            + f'\n#include "{source}"\n'
-        )
+        combined.write_text(f'#include "{source}"\n' + revision)
         source = combined
         replaced = ("generated/rev.cpp.o",)
     return console_adapter(
