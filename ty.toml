@@ -31,6 +31,7 @@ include = [
     "tools/simulation/commands.py",
     "tools/simulation/community_ai.py",
     "tools/simulation/multiplayer.py",
+    "tools/simulation/network_protocol.py",
     "tools/simulation/platform_subset.py",
     "tools/simulation/sanitizers.py",
     "tools/simulation/threaded.py",
