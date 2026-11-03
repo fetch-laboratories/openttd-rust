@@ -15,6 +15,9 @@
 #include "timer/timer.h"
 #include "timer/timer_game_realtime.h"
 #include "timer/timer_game_tick.h"
+#include "viewport_func.h"
+#include "window_func.h"
+#include "window_gui.h"
 #include <fstream>
 
 static bool armed, held_map, saved, awaiting_key;
@@ -98,6 +101,10 @@ static IntervalTimer<TimerGameRealtime> control_timer({std::chrono::milliseconds
 static IntervalTimer<TimerGameTick> stop_timer({TimerGameTick::NONE, 1}, [](auto) {
 	if (!armed || saved || !_networking || (!_network_server && !MyClient::IsConnected()) || TimerGameTick::counter < stop_tick) return;
 	saved = true;
+	/* Equal local camera inputs retain the full VIEW chunk comparison. */
+	auto *window = GetMainWindow();
+	assert(window != nullptr && window->viewport != nullptr);
+	window->viewport->scrollpos_x = window->viewport->scrollpos_y = 0;
 	IConsoleCmdExec("save stop");
 	fmt::print(stderr, "NET574 saved {} {} {}\n", TimerGameTick::counter, _random.state[0], _random.state[1]);
 });

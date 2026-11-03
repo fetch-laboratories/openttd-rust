@@ -155,6 +155,11 @@ def start(
         {
             "kind": "save",
             "settings": {
+                "locale": {
+                    key.removeprefix("locale."): str(value)
+                    for key, value in core.rows(source, "PATS")[0].items()
+                    if key.startswith("locale.")
+                },
                 "gui": {"threaded_saves": "false"},
                 "network": {
                     "server_game_type": "local",
