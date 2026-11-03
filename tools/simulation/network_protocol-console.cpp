@@ -91,7 +91,7 @@ static IntervalTimer<TimerGameRealtime> control_timer({std::chrono::milliseconds
 });
 
 static IntervalTimer<TimerGameTick> stop_timer({TimerGameTick::NONE, 1}, [](auto) {
-	if (!armed || saved || TimerGameTick::counter < stop_tick) return;
+	if (!armed || saved || !_networking || (!_network_server && !MyClient::IsConnected()) || TimerGameTick::counter < stop_tick) return;
 	saved = true;
 	IConsoleCmdExec("save stop");
 	fmt::print(stderr, "NET574 saved {} {} {}\n", TimerGameTick::counter, _random.state[0], _random.state[1]);

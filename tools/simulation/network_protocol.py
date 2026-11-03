@@ -45,7 +45,7 @@ def scenarios(soak: bool) -> list[Scenario]:
         {
             "name": NAME,
             "kind": "save",
-            "save": str(multiplayer.SOURCE),
+            "save": str(core.ROOT / "migration/saves/padhattan-ridge-2000.sav"),
             "ticks": 1,
             "short_checkpoint": True,
             "network_protocol": True,
