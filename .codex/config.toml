@@ -2,10 +2,10 @@
 model = "gpt-6.1-sol"
 model_reasoning_effort = "xhigh"
 
-# Five workers plus the orchestrator: six agents total.
+# Codex: eight subagents plus the orchestrator, nine agents total.
 # Existing sessions may retain limits supplied by their host.
 [agents]
 enabled = true
-max_concurrent_threads_per_session = 5
+max_concurrent_threads_per_session = 8
 default_subagent_model = "gpt-6.1-sol"
 default_subagent_reasoning_effort = "high"
