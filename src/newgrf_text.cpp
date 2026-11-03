@@ -19,6 +19,7 @@
 
 #include "debug.h"
 #include "rust/newgrf_text_ffi.h"
+#include "rust/services_ffi.h"
 #include "newgrf.h"
 #include "strings_internal.h"
 #include "newgrf_storage.h"
@@ -218,7 +219,7 @@ std::optional<std::string_view> GetGRFStringFromGRFText(const GRFTextWrapper &te
 std::string_view GetGRFStringPtr(StringIndexInTab stringid)
 {
 	StringID fallback;
-	auto text = openttd_rust_grf_text_get(stringid.base(), &fallback);
+	auto text = openttd_rust_grf_text_get(&GetRustSharedServices(), stringid.base(), &fallback);
 	return text.data != nullptr ? std::string_view{reinterpret_cast<const char *>(text.data), text.size} : GetStringPtr(fallback);
 }
 

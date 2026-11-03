@@ -229,9 +229,18 @@ pub unsafe extern "C" fn openttd_rust_grf_text_map(s: &Services, grfid: u32, str
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_text_get(index: usize, default: *mut u32) -> ByteSpan {
-    let entry = unsafe { &(&*TEXTS.get())[index] };
-    assert_ne!(entry.grfid, 0);
+pub unsafe extern "C" fn openttd_rust_grf_text_get(
+    shared: &crate::services::Services,
+    index: usize,
+    default: *mut u32,
+) -> ByteSpan {
+    crate::movement::native_assert(shared, index < unsafe { &*TEXTS.get() }.len());
+    crate::movement::native_assert(shared, unsafe {
+        (*(*TEXTS.get()).as_ptr().add(index)).grfid != 0
+    });
+    // Native operator[] is unchecked when assertions are disabled. Reacquire the
+    // entry after a returning assertion handler, without a table borrow across it.
+    let entry = unsafe { &*(*TEXTS.get()).as_ptr().add(index) };
     if let Some(index) = select(
         unsafe { *LANGUAGE.get() },
         entry.texts.iter().map(|t| t.language),
@@ -340,6 +349,36 @@ pub(crate) unsafe fn visit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
+
+    extern "C" fn unused_random(_: *mut c_void) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        std::process::abort()
+    }
+    fn shared() -> crate::services::Services {
+        crate::services::fixture(std::ptr::null_mut(), unused_random, unused_industry)
+    }
+    extern "C" fn returning_assert(condition: bool) {
+        assert!(!condition);
+        unsafe {
+            match ASSERTIONS.fetch_add(1, Ordering::SeqCst) {
+                0 => {
+                    assert_eq!(prepare(0, 0xd000, 42), 0);
+                }
+                1 => {
+                    (&mut *TEXTS.get())[0].grfid = 123;
+                    publish(0, 1, b"assertion".as_ptr(), 9);
+                    openttd_rust_grf_text_set_language(1);
+                }
+                _ => std::process::abort(),
+            }
+        }
+    }
+
     #[repr(C)]
     struct NativeText {
         language: u8,
@@ -389,7 +428,7 @@ mod tests {
             publish(index, 2, b"German".as_ptr(), 6);
             let mut default = 0;
             assert!(
-                openttd_rust_grf_text_get(index, &raw mut default)
+                openttd_rust_grf_text_get(&shared(), index, &raw mut default)
                     .data
                     .is_null()
             );
@@ -398,7 +437,7 @@ mod tests {
         }
         std::thread::spawn(|| unsafe {
             let mut default = 0;
-            let text = openttd_rust_grf_text_get(0, &raw mut default);
+            let text = openttd_rust_grf_text_get(&shared(), 0, &raw mut default);
             assert_eq!(crate::utf8::borrow(text.data, text.size), b"German");
             assert_eq!(openttd_rust_grf_text_check_language(4, 6), 1);
             assert_eq!(openttd_rust_grf_text_check_language(1, 7), 0);
@@ -409,10 +448,18 @@ mod tests {
         .unwrap();
         unsafe {
             let mut default = 0;
-            let text = openttd_rust_grf_text_get(0, &raw mut default);
+            let text = openttd_rust_grf_text_get(&shared(), 0, &raw mut default);
             assert_eq!(crate::utf8::borrow(text.data, text.size), b"Deutsch");
             openttd_rust_grf_text_cleanup();
             assert_eq!(openttd_rust_grf_text_id(123, 0xd000, 2), 2);
+            let mut movement = crate::train_reservation::tests::movement_table();
+            movement.native_assert = returning_assert;
+            let mut shared = shared();
+            shared.movement = &raw const movement;
+            let text = openttd_rust_grf_text_get(&shared, 0, &raw mut default);
+            assert_eq!(crate::utf8::borrow(text.data, text.size), b"assertion");
+            assert_eq!(ASSERTIONS.load(Ordering::SeqCst), 2);
+            openttd_rust_grf_text_cleanup();
             openttd_rust_grf_text_set_language(1);
         }
     }

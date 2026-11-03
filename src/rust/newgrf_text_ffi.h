@@ -21,12 +21,13 @@ struct OpenTTDGrfTextServices {
 	uint32_t undefined;
 };
 const OpenTTDGrfTextServices &GetRustGrfTextServices() noexcept;
+struct OpenTTDSharedServices;
 extern "C" {
 void openttd_rust_grf_text_translate(const OpenTTDGrfTextServices *, uint32_t, uint8_t, bool, const uint8_t *, size_t, uint32_t, void *, void (*)(void *, const uint8_t *, size_t) noexcept);
 uint32_t openttd_rust_grf_text_add(const OpenTTDGrfTextServices *, uint32_t, uint32_t, uint8_t, bool, bool, const uint8_t *, size_t, uint32_t);
 uint32_t openttd_rust_grf_text_id(uint32_t, uint32_t, uint32_t);
 uint32_t openttd_rust_grf_text_map(const OpenTTDGrfTextServices *, uint32_t, uint32_t);
-OpenTTDByteSpan openttd_rust_grf_text_get(size_t, uint32_t *);
+OpenTTDByteSpan openttd_rust_grf_text_get(const OpenTTDSharedServices *, size_t, uint32_t *);
 size_t openttd_rust_grf_text_select(const GRFText *, size_t, size_t);
 void openttd_rust_grf_text_set_language(uint8_t);
 uint8_t openttd_rust_grf_text_check_language(uint8_t, uint8_t);
