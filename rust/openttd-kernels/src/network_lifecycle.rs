@@ -24,6 +24,7 @@ pub struct Services {
     pub admins_shutdown: extern "C" fn(),
     pub admins_welcome: extern "C" fn(),
     pub allocate_server_info: extern "C" fn() -> *mut c_void,
+    pub announce_company: extern "C" fn(*mut c_void, u8),
     pub auth_client_key: extern "C" fn(),
     pub check_names: extern "C" fn(),
     pub close_admin_listeners: extern "C" fn(),
@@ -46,9 +47,10 @@ pub struct Services {
     pub last_joined: extern "C" fn() -> crate::services::ByteSpan,
     pub listen_admins: extern "C" fn(u16) -> bool,
     pub listen_clients: extern "C" fn(u16) -> bool,
-    pub new_company: extern "C" fn(*const crate::company_type::OpenTTDCompany, *mut c_void),
     pub on_dedicated: extern "C" fn(*mut crate::session::Frame) -> bool,
     pub on_server: extern "C" fn(*mut crate::session::Frame) -> bool,
+    pub pack_company_allow: extern "C" fn(*mut c_void) -> crate::network_command::CommandData,
+    pub pack_president: extern "C" fn(*mut c_void) -> crate::network_command::CommandData,
     pub parse_connection: extern "C" fn(crate::services::ByteSpan, *mut u8, *mut c_void),
     pub pre_dedicated: extern "C" fn(*mut crate::session::Frame) -> bool,
     pub pre_server: extern "C" fn(*mut crate::session::Frame) -> bool,
@@ -58,9 +60,12 @@ pub struct Services {
     pub server_port: extern "C" fn() -> u16,
     pub set_info_company: extern "C" fn(*mut c_void, u8),
     pub set_join_info: extern "C" fn(*mut c_void, u8, *const c_void),
+    pub set_network_server: extern "C" fn(bool),
+    pub set_networking: extern "C" fn(bool),
     pub set_server_info_key: extern "C" fn(*mut c_void),
     pub udp_initialize: extern "C" fn(),
     pub udp_listen: extern "C" fn(),
+    pub update_client_info: extern "C" fn(*mut c_void),
     pub update_game_info: extern "C" fn(),
     pub validate_client_name: extern "C" fn() -> bool,
 }
@@ -74,6 +79,7 @@ crate::abi::layouts! {
         admins_shutdown,
         admins_welcome,
         allocate_server_info,
+        announce_company,
         auth_client_key,
         check_names,
         close_admin_listeners,
@@ -96,9 +102,10 @@ crate::abi::layouts! {
         last_joined,
         listen_admins,
         listen_clients,
-        new_company,
         on_dedicated,
         on_server,
+        pack_company_allow,
+        pack_president,
         parse_connection,
         pre_dedicated,
         pre_server,
@@ -108,9 +115,12 @@ crate::abi::layouts! {
         server_port,
         set_info_company,
         set_join_info,
+        set_network_server,
+        set_networking,
         set_server_info_key,
         udp_initialize,
         udp_listen,
+        update_client_info,
         update_game_info,
         validate_client_name,
     };
@@ -171,10 +181,8 @@ fn close_client(s: &Services, f: &FrameServices) {
 fn close_end(s: &Services, f: &FrameServices, close_admins: bool) {
     socket::process_deferred(f);
     (s.kill_connecters)();
-    unsafe {
-        f.connection.networking.write(false);
-        f.connection.network_server.write(false);
-    }
+    (s.set_networking)(false);
+    (s.set_network_server)(false);
     crate::network_command::free_local_command_queue();
     (s.initialize_pools)(close_admins);
 }
@@ -361,10 +369,8 @@ pub(crate) fn server_start_after_close(
     }
     (s.debug_listen_queries)();
     (s.udp_listen)();
-    unsafe {
-        f.connection.network_server.write(true);
-        f.connection.networking.write(true);
-    }
+    (s.set_network_server)(true);
+    (s.set_networking)(true);
     crate::network_frame::server_started();
     unsafe {
         f.client.own_client_id.write(CLIENT_ID_SERVER);
@@ -406,7 +412,7 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
                 == company_services.identity.strings.unnamed
                 && (company_services.identity.name)(company).size == 0
             {
-                (s.new_company)(company, info);
+                new_company(s, f, company, info);
             }
         }
         (f.client.show_client_list)();
@@ -487,4 +493,41 @@ pub extern "C" fn openttd_rust_network_connect_game(
     u8::from(connect_game(
         s, f, session, connection, company, password, resolved, work,
     ))
+}
+
+/// `NetworkServerNewCompany`: info publication precedes the two ordered command sends.
+pub(crate) fn new_company(
+    s: &Services,
+    f: &FrameServices,
+    company: *mut crate::company_type::OpenTTDCompany,
+    info: *mut c_void,
+) {
+    crate::network_frame::packet_check(f)(!company.is_null());
+    if !(f.command.company.network_server)() || info.is_null() {
+        return;
+    }
+    let id = (f.command.company.identity.company_id)(company).0;
+    (s.set_info_company)(info, id);
+    (s.update_client_info)(info);
+    let allow = (s.pack_company_allow)(info);
+    crate::network_command::send_command(
+        f.command,
+        crate::command_type::CMD_COMPANY_ALLOW_LIST_CTRL,
+        0,
+        std::ptr::null(),
+        id,
+        allow.span(),
+    );
+    drop(allow);
+    let president = (s.pack_president)(info);
+    crate::network_command::send_command(
+        f.command,
+        crate::command_type::CMD_RENAME_PRESIDENT,
+        0,
+        std::ptr::null(),
+        id,
+        president.span(),
+    );
+    drop(president);
+    (s.announce_company)(info, id);
 }

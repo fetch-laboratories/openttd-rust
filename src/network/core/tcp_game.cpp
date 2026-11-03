@@ -13,6 +13,9 @@
 
 #include "../network.h"
 #include "../network_internal.h"
+#include "../network_client.h"
+#include "../network_query.h"
+#include "../network_server.h"
 #include "../../debug.h"
 #include "../../error.h"
 #include "../../strings_func.h"
@@ -64,32 +67,6 @@ NetworkRecvStatus NetworkGameSocketHandler::ReceivePackets()
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_actions_result(&frame.network_actions));
 }
 
-/**
- * Helper for logging receiving invalid packets.
- * @param type The received packet type.
- * @return The status the network should have, in this case: "malformed packet error".
- */
-NetworkRecvStatus NetworkGameSocketHandler::ReceiveInvalidPacket(PacketGameType type)
-{
-	Debug(net, 0, "[tcp/game] Received illegal packet type {} from client {}", type, this->client_id);
-	return NETWORK_RECV_STATUS_MALFORMED_PACKET;
-}
-
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_FULL(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_FULL); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_BANNED(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_BANNED); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_ERROR(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_ERROR); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_GAME_INFO(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_GAME_INFO); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_CLIENT_INFO(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_CLIENT_INFO); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_CLIENT_CHAT(Packet &) { return this->ReceiveInvalidPacket(PACKET_CLIENT_CHAT); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_CHAT(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_CHAT); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_EXTERNAL_CHAT(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_EXTERNAL_CHAT); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_CLIENT_SET_NAME(Packet &) { return this->ReceiveInvalidPacket(PACKET_CLIENT_SET_NAME); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_RCON(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_RCON); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_CLIENT_RCON(Packet &) { return this->ReceiveInvalidPacket(PACKET_CLIENT_RCON); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_MOVE(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_MOVE); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_CLIENT_MOVE(Packet &) { return this->ReceiveInvalidPacket(PACKET_CLIENT_MOVE); }
-NetworkRecvStatus NetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE(Packet &) { return this->ReceiveInvalidPacket(PACKET_SERVER_CONFIG_UPDATE); }
-
 void NetworkGameSocketHandler::DeferDeletion()
 {
 	openttd_rust_network_defer(this);
@@ -100,86 +77,36 @@ void NetworkGameSocketHandler::DeferDeletion()
 	openttd_rust_network_process_deferred(&GetRustNetworkFrameServices());
 }
 
+template <typename T, NetworkRecvStatus (T::*Handler)(Packet &)>
+static uint8_t ReceiveGamePacket(OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept
+{
+	NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
+	SessionException(frame, [&] { result = (static_cast<T *>(static_cast<NetworkGameSocketHandler *>(socket->game))->*Handler)(*packet); });
+	return result;
+}
+
 const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept
 {
 	static const OpenTTDNetworkDispatchServices services{
-		.client_chat = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_CLIENT_CHAT(*packet); });
-			return result;
-		},
-
-		.client_move = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_CLIENT_MOVE(*packet); });
-			return result;
-		},
-		.client_rcon = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_CLIENT_RCON(*packet); });
-			return result;
-		},
-		.client_set_name = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_CLIENT_SET_NAME(*packet); });
-			return result;
-		},
+		.client_chat = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_CHAT>,
+		.client_move = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_MOVE>,
+		.client_rcon = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_RCON>,
+		.client_set_name = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_SET_NAME>,
 		.illegal_packet = [](OpenTTDNetworkGameSocket *socket, uint8_t kind) noexcept { Debug(net, 0, "[tcp/game] Received illegal packet type {} from client {}", kind, static_cast<NetworkGameSocketHandler *>(socket->game)->client_id); },
 		.invalid_packet = [](OpenTTDNetworkGameSocket *socket) noexcept { Debug(net, 0, "[tcp/game] Received invalid packet from client {}", static_cast<NetworkGameSocketHandler *>(socket->game)->client_id); },
 		.invalid_type = [](OpenTTDNetworkGameSocket *socket, uint8_t kind) noexcept { Debug(net, 0, "[tcp/game] Received invalid packet type {} from client {}", kind, static_cast<NetworkGameSocketHandler *>(socket->game)->client_id); },
 		.map_load_args = [](OpenTTDSessionFrame *frame) noexcept -> OpenTTDSessionLoad * { return &frame->packet_load.emplace().args; },
 		.packet_end = [](OpenTTDSessionFrame *frame) noexcept { frame->packet_load.reset(); frame->packet_text.reset(); },
-		.server_banned = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_BANNED(*packet); });
-			return result;
-		},
-		.server_chat = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_CHAT(*packet); });
-			return result;
-		},
-		.server_client_info = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_CLIENT_INFO(*packet); });
-			return result;
-		},
-
-		.server_config_update = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_CONFIG_UPDATE(*packet); });
-			return result;
-		},
-		.server_error = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_ERROR(*packet); });
-			return result;
-		},
-		.server_external_chat = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_EXTERNAL_CHAT(*packet); });
-			return result;
-		},
-		.server_full = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_FULL(*packet); });
-			return result;
-		},
-		.server_game_info = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_GAME_INFO(*packet); });
-			return result;
-		},
-		.server_move = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_MOVE(*packet); });
-			return result;
-		},
-		.server_rcon = [](OpenTTDNetworkGameSocket *socket, Packet *packet, OpenTTDSessionFrame *frame) noexcept -> uint8_t {
-			NetworkRecvStatus result = NETWORK_RECV_STATUS_OKAY;
-			SessionException(frame, [&] { result = static_cast<NetworkGameSocketHandler *>(socket->game)->Receive_SERVER_RCON(*packet); });
-			return result;
-		},
+		.server_banned = ReceiveGamePacket<QueryNetworkGameSocketHandler, &QueryNetworkGameSocketHandler::Receive_SERVER_BANNED>,
+		.server_chat = ReceiveGamePacket<ClientNetworkGameSocketHandler, &ClientNetworkGameSocketHandler::Receive_SERVER_CHAT>,
+		.server_client_info = ReceiveGamePacket<ClientNetworkGameSocketHandler, &ClientNetworkGameSocketHandler::Receive_SERVER_CLIENT_INFO>,
+		.server_config_update = ReceiveGamePacket<ClientNetworkGameSocketHandler, &ClientNetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE>,
+		.server_error = ReceiveGamePacket<QueryNetworkGameSocketHandler, &QueryNetworkGameSocketHandler::Receive_SERVER_ERROR>,
+		.server_external_chat = ReceiveGamePacket<ClientNetworkGameSocketHandler, &ClientNetworkGameSocketHandler::Receive_SERVER_EXTERNAL_CHAT>,
+		.server_full = ReceiveGamePacket<QueryNetworkGameSocketHandler, &QueryNetworkGameSocketHandler::Receive_SERVER_FULL>,
+		.server_game_info = ReceiveGamePacket<QueryNetworkGameSocketHandler, &QueryNetworkGameSocketHandler::Receive_SERVER_GAME_INFO>,
+		.server_move = ReceiveGamePacket<ClientNetworkGameSocketHandler, &ClientNetworkGameSocketHandler::Receive_SERVER_MOVE>,
+		.server_rcon = ReceiveGamePacket<ClientNetworkGameSocketHandler, &ClientNetworkGameSocketHandler::Receive_SERVER_RCON>,
 		.text_begin = [](OpenTTDSessionFrame *frame) noexcept -> void * { return &frame->packet_text.emplace(); },
 	};
 	return services;

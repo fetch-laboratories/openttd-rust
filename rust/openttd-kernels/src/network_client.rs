@@ -646,7 +646,7 @@ pub(crate) fn client_error(
     if result == NETWORK_RECV_STATUS_CLOSE_QUERY {
         unsafe { (f.packet.mark_closed)(socket::base(game)) };
         close(s, f, game, result);
-        unsafe { f.connection.networking.write(false) };
+        (f.lifecycle.set_networking)(false);
         (f.command.company.close_network_status)();
         return;
     }
@@ -672,7 +672,7 @@ pub(crate) fn client_error(
     if crate::session::mode() != GameMode::MENU {
         crate::session::set_pending(SwitchMode::MENU);
     }
-    unsafe { f.connection.networking.write(false) };
+    (f.lifecycle.set_networking)(false);
 }
 
 const SECOND: i64 = 1_000_000_000;

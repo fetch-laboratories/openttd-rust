@@ -12,6 +12,8 @@
 pub const CMD_COMPANY_CTRL: u8 = 90;
 /// `Commands::CMD_COMPANY_ALLOW_LIST_CTRL`.
 pub const CMD_COMPANY_ALLOW_LIST_CTRL: u8 = 91;
+/// `Commands::CMD_RENAME_PRESIDENT`.
+pub const CMD_RENAME_PRESIDENT: u8 = 63;
 /// `Commands::CMD_PAUSE`.
 pub const CMD_PAUSE: u8 = 71;
 /// `Commands::CMD_SET_COMPANY_COLOUR`.

@@ -164,11 +164,11 @@ struct PacketWriter : SaveFilter {
  * Create a new socket for the server side of the game connection.
  * @param s The socket to connect with.
  */
-ServerNetworkGameSocketHandler::ServerNetworkGameSocketHandler(SOCKET s) : NetworkGameSocketHandler(s, 1)
+ServerNetworkGameSocketHandler::ServerNetworkGameSocketHandler(SOCKET s, uint32_t client_id) : NetworkGameSocketHandler(s, 1)
 {
 	this->server = this;
 	this->outgoing = &this->outgoing_queue;
-	this->client_id = static_cast<ClientID>(openttd_rust_network_next_client_id());
+	this->client_id = static_cast<ClientID>(client_id);
 	this->receive_limit = _settings_client.network.bytes_per_frame_burst;
 
 	Debug(net, 9, "client[{}] status = INACTIVE", this->client_id);
@@ -1122,35 +1122,6 @@ std::string_view NetworkGetPublicKeyOfClient(ClientID client_id)
 	return socket == nullptr ? "" : socket->GetPeerPublicKey();
 }
 
-/**
- * Perform all the server specific administration of a new company.
- * @param c  The newly created company; can't be nullptr.
- * @param ci The client information of the client that made the company; can be nullptr.
- */
-void NetworkServerNewCompany(const Company *c, NetworkClientInfo *ci)
-{
-	assert(c != nullptr);
-
-	if (!_network_server) return;
-
-	if (ci != nullptr) {
-		/* ci is nullptr when replaying, or for AIs. In neither case there is a client. */
-		ci->client_playas = c->index;
-		NetworkUpdateClientInfo(ci->client_id);
-
-		/*
-		 * This function is called from a command, but is only called for the server.
-		 * The client information is managed out-of-band from the commands, so to not have a
-		 * different state/president/company name in the different clients, we need to
-		 * circumvent the normal ::Post logic and go directly to sending the command.
-		 */
-		Command<CMD_COMPANY_ALLOW_LIST_CTRL>::SendNet(STR_NULL, c->index, CALCA_ADD, ci->public_key);
-		Command<CMD_RENAME_PRESIDENT>::SendNet(STR_NULL, c->index, ci->client_name);
-
-		NetworkServerSendChat(NETWORK_ACTION_COMPANY_NEW, DESTTYPE_BROADCAST, 0, "", ci->client_id, c->index + 1);
-	}
-}
-
 static_assert(CLIENT_ID_FIRST == 2 && COMPANY_NEW_COMPANY == CompanyID(254));
 static_assert(NETWORK_REVISION_LENGTH == 33 && NETWORK_CLIENT_NAME_LENGTH == 25);
 static_assert(NETWORK_ERROR_WRONG_REVISION == 8 && NETWORK_ERROR_FULL == 14 && NETWORK_ERROR_COMPANY_MISMATCH == 11);
@@ -1263,8 +1234,6 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.max_clients = RustNetworkMaxClients,
 		.max_companies = RustNetworkMaxCompanies,
 		.min_active_clients = RustNetworkMinActiveClients,
-		.network_server = &_network_server,
-		.networking = &_networking,
 		.newgrf_version = []() noexcept -> uint32_t { return _openttd_newgrf_version; },
 		.pause_on_join = RustNetworkPauseOnJoin,
 		.quit_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_MESSAGE_CLIENT_LEAVING); },

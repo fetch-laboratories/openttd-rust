@@ -372,8 +372,6 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 			ReceivingSocket() : NetworkGameSocketHandler(INVALID_SOCKET, 0) {}
 			NetworkRecvStatus CloseConnection(NetworkRecvStatus result) override { return result; }
 			void Receive(std::unique_ptr<NetworkEncryptionHandler> handler) { this->receive_encryption_handler = std::move(handler); }
-		protected:
-			NetworkRecvStatus Receive_SERVER_RCON(Packet &) override { throw 574; }
 		} receiver;
 		sender.Send(server_auth.CreateServerToClientEncryptionHandler());
 		receiver.Receive(client_auth.CreateServerToClientEncryptionHandler());
@@ -421,6 +419,7 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		tcp.packet_record = [](Packet *packet) noexcept { dispatch_position = packet->Record()->position; return packet->Record(); };
 		tcp.packet_delete_shell = [](Packet *packet) noexcept { dispatch_deletes++; dispatch_cleanup_order &= dispatch_ended; Packet::DeleteShell(packet); };
 		auto dispatch = GetRustNetworkDispatchServices();
+		dispatch.server_rcon = [](OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *frame) noexcept -> uint8_t { SessionException(frame, [] { throw 574; }); return NETWORK_RECV_STATUS_OKAY; };
 		dispatch.illegal_packet = [](OpenTTDNetworkGameSocket *, uint8_t) noexcept {};
 		dispatch.invalid_packet = [](OpenTTDNetworkGameSocket *) noexcept {};
 		dispatch.invalid_type = [](OpenTTDNetworkGameSocket *, uint8_t) noexcept {};
@@ -436,8 +435,6 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		command.company = &company;
 		command.console_bad_server = [](OpenTTDNetworkCommandDecodeError) noexcept {};
 		OpenTTDNetworkConnectionServices connection{};
-		bool networking = false;
-		connection.networking = &networking;
 		auto network = GetRustNetworkFrameServices();
 		network.client = &client;
 		network.command = &command;

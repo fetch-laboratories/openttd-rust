@@ -64,7 +64,6 @@ void NetworkHandlePauseChange(PauseModes prev_mode, PauseMode changed_mode);
 void NetworkServerSendConfigUpdate();
 void NetworkServerUpdateGameInfo();
 void NetworkServerShowStatusToConsole();
-void NetworkServerNewCompany(const Company *company, NetworkClientInfo *ci);
 bool NetworkServerChangeClientName(ClientID client_id, const std::string &new_name);
 
 

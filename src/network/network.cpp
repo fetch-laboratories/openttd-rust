@@ -11,6 +11,7 @@
 
 #include "../strings_func.h"
 #include "../command_func.h"
+#include "../company_cmd.h"
 #include "../timer/timer_game_tick.h"
 #include "../timer/timer_game_economy.h"
 #include "network_admin.h"
@@ -482,12 +483,12 @@ NetworkAddress ParseConnectionString(std::string_view connection_string, uint16_
  * @param s The socket of the new connection.
  * @param address The address of the peer.
  */
-/* static */ void ServerNetworkGameSocketHandler::AcceptConnection(SOCKET s, const NetworkAddress &address)
+/* static */ void ServerNetworkGameSocketHandler::AcceptConnection(SOCKET s, const NetworkAddress &address, uint32_t client_id)
 {
 	/* Register the login */
 	_network_clients_connected++;
 
-	ServerNetworkGameSocketHandler *cs = new ServerNetworkGameSocketHandler(s);
+	ServerNetworkGameSocketHandler *cs = new ServerNetworkGameSocketHandler(s, client_id);
 	cs->client_address = address; // Save the IP of the client
 
 	InvalidateWindowData(WC_CLIENT_LIST, 0);
@@ -986,9 +987,17 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.query_close = [](void *game, uint8_t result) noexcept -> uint8_t { return static_cast<NetworkGameSocketHandler *>(game)->CloseConnection(static_cast<NetworkRecvStatus>(result)); },
 		.random = _random.state,
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },
+		.server_accept = [](OpenTTDSessionFrame *f, uint32_t client_id) noexcept {
+			return SessionException(f, [&] { auto &accepted = *f->socket_accept; NetworkClientSocket::AcceptConnection(accepted.first, accepted.second, client_id); f->socket_accept.reset(); });
+		},
+		.server_accept_next = [](OpenTTDSessionFrame *f) noexcept {
+			bool ready = false;
+			if (!SessionException(f, [&] { auto &accepted = f->socket_accept.emplace(); accepted.first = NetworkClientSocket::AcceptReady(f->socket_poll->first, f->socket_listener, accepted.second); ready = accepted.first != INVALID_SOCKET; })) return OpenTTDNetworkPoll::Exception;
+			return ready ? OpenTTDNetworkPoll::Ready : OpenTTDNetworkPoll::Error;
+		},
 		.server_poll = [](OpenTTDSessionFrame *f) noexcept {
 			bool ready = false;
-			if (!SessionException(f, [&] { auto &sets = f->socket_poll.emplace(); ready = NetworkClientSocket::PrepareReceive(sets.first, sets.second); })) return OpenTTDNetworkPoll::Exception;
+			if (!SessionException(f, [&] { auto &sets = f->socket_poll.emplace(); f->socket_listener = 0; ready = NetworkClientSocket::SelectReceive(sets.first, sets.second); })) return OpenTTDNetworkPoll::Exception;
 			return ready ? OpenTTDNetworkPoll::Ready : OpenTTDNetworkPoll::Error;
 		},
 		.server_poll_client = [](OpenTTDSessionFrame *f, OpenTTDNetworkGameSocket *game) noexcept {
@@ -997,7 +1006,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 			socket->writable = !!FD_ISSET(socket->sock, &sets.second);
 			return FD_ISSET(socket->sock, &sets.first) != 0;
 		},
-		.server_poll_end = [](OpenTTDSessionFrame *f) noexcept { f->socket_poll.reset(); },
+		.server_poll_end = [](OpenTTDSessionFrame *f) noexcept { f->socket_accept.reset(); f->socket_poll.reset(); },
 		.show_lost_connection = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_LOSTCONNECTION), {}, WL_CRITICAL); },
 		.socket_delete = RustDeleteNetworkSocket,
 		.sync_freq = RustNetworkSyncFreq,
@@ -1059,6 +1068,7 @@ void CDECL em_openttd_add_server(const char *connection_string)
 }
 #endif
 
+static_assert(CMD_RENAME_PRESIDENT == 63 && CMD_COMPANY_ALLOW_LIST_CTRL == 91 && CALCA_ADD == 0);
 const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcept
 {
 	static_assert(SERVER_GAME_TYPE_LOCAL == 0 && CLIENT_ID_SERVER == 1);
@@ -1090,6 +1100,7 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 			ci->client_name = _settings_client.network.client_name;
 			return ci;
 		},
+		.announce_company = [](void *info, uint8_t company) noexcept { NetworkServerSendChat(NETWORK_ACTION_COMPANY_NEW, DESTTYPE_BROADCAST, 0, "", static_cast<NetworkClientInfo *>(info)->client_id, company + 1); },
 		.auth_client_key = []() noexcept { NetworkAuthenticationClientHandler::EnsureValidSecretKeyAndUpdatePublicKey(_settings_client.network.client_secret_key, _settings_client.network.client_public_key); },
 		.check_names = []() noexcept { CheckClientAndServerName(); },
 		.close_admin_listeners = []() noexcept { ServerNetworkAdminSocketHandler::CloseListeners(); },
@@ -1115,9 +1126,18 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 		.last_joined = RustNetworkLastJoined,
 		.listen_admins = [](uint16_t port) noexcept -> bool { return ServerNetworkAdminSocketHandler::Listen(port); },
 		.listen_clients = [](uint16_t port) noexcept -> bool { return ServerNetworkGameSocketHandler::Listen(port); },
-		.new_company = [](const Company *company, void *info) noexcept { NetworkServerNewCompany(company, static_cast<NetworkClientInfo *>(info)); },
 		.on_dedicated = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_dedicated.scr 0"); }); },
 		.on_server = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_server.scr 0"); }); },
+		.pack_company_allow = [](void *info) noexcept {
+			CommandTraits<CMD_COMPANY_ALLOW_LIST_CTRL>::Args args{CALCA_ADD, static_cast<NetworkClientInfo *>(info)->public_key};
+			auto data = EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args);
+			return std::exchange(static_cast<OpenTTDCommandData &>(data), {});
+		},
+		.pack_president = [](void *info) noexcept {
+			CommandTraits<CMD_RENAME_PRESIDENT>::Args args{static_cast<NetworkClientInfo *>(info)->client_name};
+			auto data = EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args);
+			return std::exchange(static_cast<OpenTTDCommandData &>(data), {});
+		},
 		.parse_connection = [](OpenTTDByteSpan connection, uint8_t *company, void *resolved) noexcept {
 			CompanyID join_as(*company);
 			*static_cast<std::string *>(resolved) = ServerAddress::Parse(std::string_view(reinterpret_cast<const char *>(connection.data), connection.size), NETWORK_DEFAULT_PORT, &join_as).connection_string;
@@ -1135,9 +1155,12 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 			_network_join.company = CompanyID(company);
 			_network_join.server_password = *static_cast<const std::string *>(password);
 		},
+		.set_network_server = RustSetNetworkServer,
+		.set_networking = RustSetNetworking,
 		.set_server_info_key = [](void *info) noexcept { static_cast<NetworkClientInfo *>(info)->public_key = _settings_client.network.client_public_key; },
 		.udp_initialize = []() noexcept { NetworkUDPInitialize(); },
 		.udp_listen = []() noexcept { NetworkUDPServerListen(); },
+		.update_client_info = [](void *info) noexcept { NetworkUpdateClientInfo(static_cast<NetworkClientInfo *>(info)->client_id); },
 		.update_game_info = []() noexcept { NetworkServerUpdateGameInfo(); },
 		.validate_client_name = []() noexcept -> bool { return NetworkValidateOurClientName(); },
 	};

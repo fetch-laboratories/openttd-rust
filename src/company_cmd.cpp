@@ -825,11 +825,9 @@ void RustCompanyNetworkSpectate(uint32_t client) noexcept
 		NetworkUpdateClientInfo(ci->client_id);
 	}
 }
-void RustCompanyNetworkNew(uint8_t id, uint32_t client, bool with_client) noexcept
+void RustCompanyAdminNew(uint8_t id) noexcept
 {
-	Company *c = Company::Get(id);
-	NetworkAdminCompanyNew(c);
-	NetworkServerNewCompany(c, with_client ? NetworkClientInfo::GetByClientID(ClientID(client)) : nullptr);
+	NetworkAdminCompanyNew(Company::Get(id));
 }
 /** CCA_NEW: the requesting client takes control of its new company. */
 Company *RustCompanyNetworkOwn(uint8_t id, uint32_t client) noexcept

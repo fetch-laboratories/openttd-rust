@@ -82,7 +82,7 @@ bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t, bool) noexcept;
 void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
 void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
 void RustCompanyNetworkSpectate(uint32_t) noexcept;
-void RustCompanyNetworkNew(uint8_t, uint32_t, bool) noexcept;
+void RustCompanyAdminNew(uint8_t) noexcept;
 Company *RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
 void RustCompanyNetworkOwnSettings(Company *) noexcept;
 
@@ -445,7 +445,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.prepare_new_company = RustCompanyPrepare, .company_defaults = RustCompanyDefaults, .startup_windows = RustCompanyStartupWindows, .new_company_events = Co_new_company_events,
 		.company_league_dirty = Co_company_league_dirty, .company_ctrl_windows = Co_company_ctrl_windows,
 		.close_network_status = Co_close_network_status, .network_spectate = RustCompanyNetworkSpectate,
-		.network_company_new = RustCompanyNetworkNew, .network_own_company = RustCompanyNetworkOwn,
+		.admin_company_new = RustCompanyAdminNew, .network_own_company = RustCompanyNetworkOwn,
 		.network_own_company_settings = RustCompanyNetworkOwnSettings,
 		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,

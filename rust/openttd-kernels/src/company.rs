@@ -317,7 +317,7 @@ pub struct Services {
     pub company_ctrl_windows: extern "C" fn(),
     pub close_network_status: extern "C" fn(),
     pub network_spectate: extern "C" fn(u32),
-    pub network_company_new: extern "C" fn(u8, u32, bool),
+    pub admin_company_new: extern "C" fn(u8),
     pub network_own_company: extern "C" fn(u8, u32) -> *mut crate::company_type::OpenTTDCompany,
     pub network_own_company_settings: extern "C" fn(*mut crate::company_type::OpenTTDCompany),
     pub assert_new_ai_slot: extern "C" fn(u8),
@@ -1464,7 +1464,7 @@ pub(crate) fn control(
                     (s.network_spectate)(c.client);
                 } else {
                     let id = startup_frame.company as u8;
-                    (s.network_company_new)(id, c.client, true);
+                    network_new(s, id, Some(c.client));
                     let company = (s.network_own_company)(id, c.client);
                     if !company.is_null() {
                         set_local_company(s, (s.identity.company_id)(company));
@@ -1537,7 +1537,7 @@ pub(crate) fn control(
         }
         c.stage = 2;
         if c.startup.company != INVALID {
-            (s.network_company_new)(c.startup.company as u8, 0, false);
+            network_new(s, c.startup.company as u8, None);
         }
     }
     (s.company_ctrl_windows)();
@@ -2242,7 +2242,7 @@ crate::abi::layouts! {
         company_ctrl_windows,
         close_network_status,
         network_spectate,
-        network_company_new,
+        admin_company_new,
         network_own_company,
         network_own_company_settings,
         assert_new_ai_slot,
@@ -2424,4 +2424,15 @@ crate::abi::layouts! {
         tree_burst,
         object_burst,
     };
+}
+
+fn network_new(s: &Services, id: u8, client: Option<u32>) {
+    (s.admin_company_new)(id);
+    let f = ((s.shared.command_post)().network)();
+    let f = (f.network)();
+    let company = (s.identity.company)(crate::company_type::CompanyID(id));
+    let info = client.map_or(std::ptr::null_mut(), |id| {
+        (s.shared.network_client_info)(id)
+    });
+    crate::network_lifecycle::new_company(f.lifecycle, f, company, info);
 }

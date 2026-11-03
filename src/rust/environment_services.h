@@ -21,6 +21,8 @@
 
 inline int32_t RustDesyncLevel() noexcept { return _debug_desync_level; }
 inline bool RustNetworking() noexcept { return _networking; }
+inline void RustSetNetworking(bool value) noexcept { _networking = value; }
+inline void RustSetNetworkServer(bool value) noexcept { _network_server = value; }
 inline bool RustNetworkServer() noexcept { return _network_server; }
 inline bool RustNetworkDedicated() noexcept { return _network_dedicated; }
 inline bool RustNetworkAvailable() noexcept { return _network_available; }

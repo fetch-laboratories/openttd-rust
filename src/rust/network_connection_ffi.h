@@ -71,8 +71,6 @@ struct OpenTTDNetworkConnectionServices {
 	uint8_t (*max_clients)() noexcept OPENTTD_SERVICE_DEFAULT(max_clients);
 	uint8_t (*max_companies)() noexcept OPENTTD_SERVICE_DEFAULT(max_companies);
 	uint8_t (*min_active_clients)() noexcept OPENTTD_SERVICE_DEFAULT(min_active_clients);
-	bool *network_server;
-	bool *networking;
 	uint32_t (*newgrf_version)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf_version);
 	bool (*pause_on_join)() noexcept OPENTTD_SERVICE_DEFAULT(pause_on_join);
 	void (*quit_announcement)(void *) noexcept OPENTTD_SERVICE_DEFAULT(quit_announcement);

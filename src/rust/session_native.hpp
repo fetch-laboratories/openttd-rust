@@ -12,6 +12,7 @@
 #include "settings_services.h"
 #include "newgrf_storage_ffi.h"
 #include "../network/core/os_abstraction.h"
+#include "../network/core/address.h"
 #include <exception>
 static_assert(GM_MENU == 0 && GM_NORMAL == 1 && GM_EDITOR == 2 && GM_BOOTSTRAP == 3);
 static_assert(SM_NONE == 0 && SM_NEWGAME == 1 && SM_RESTARTGAME == 2 && SM_RELOADGAME == 3 && SM_EDITOR == 4 && SM_LOAD_GAME == 5 && SM_MENU == 6 && SM_SAVE_GAME == 7 && SM_SAVE_HEIGHTMAP == 8 && SM_GENRANDLAND == 9 && SM_LOAD_SCENARIO == 10 && SM_START_HEIGHTMAP == 11 && SM_LOAD_HEIGHTMAP == 12 && SM_RESTART_HEIGHTMAP == 13 && SM_JOIN_GAME == 14);
@@ -35,6 +36,8 @@ struct OpenTTDSessionFrame {
 	OpenTTDSessionFrame() { openttd_rust_network_actions_init(&this->network_actions); }
 	~OpenTTDSessionFrame() { this->packet_load.reset(); this->packet_text.reset(); openttd_rust_network_actions_drop(&this->network_actions); }
 	std::optional<std::pair<fd_set, fd_set>> socket_poll;
+	std::optional<std::pair<SOCKET, NetworkAddress>> socket_accept;
+	size_t socket_listener = 0;
 	std::optional<RustNetworkPacketLoad> packet_load;
 	std::optional<std::string> packet_text;
 	std::optional<std::pair<std::string, std::string>> reconnect;

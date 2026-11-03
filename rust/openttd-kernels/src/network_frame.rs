@@ -128,6 +128,8 @@ pub struct Services {
     pub random: *const u32,
     /// The developer-only `DEBUG_DUMP_COMMANDS` replay.
     pub replay_commands: extern "C" fn(),
+    pub server_accept: extern "C" fn(*mut Frame, u32) -> bool,
+    pub server_accept_next: extern "C" fn(*mut Frame) -> socket::Poll,
     pub server_poll: extern "C" fn(*mut Frame) -> socket::Poll,
     pub server_poll_client: extern "C" fn(*mut Frame, *mut socket::GameSocket) -> bool,
     pub server_poll_end: extern "C" fn(*mut Frame),
@@ -712,6 +714,8 @@ crate::abi::layouts! {
         query_close,
         random,
         replay_commands,
+        server_accept,
+        server_accept_next,
         server_poll,
         server_poll_client,
         server_poll_end,

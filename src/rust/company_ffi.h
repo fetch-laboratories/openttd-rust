@@ -156,7 +156,7 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *company_ctrl_windows)() noexcept OPENTTD_SERVICE_DEFAULT(company_ctrl_windows);
 	void (OPENTTD_RUST_CALL *close_network_status)() noexcept OPENTTD_SERVICE_DEFAULT(close_network_status);
 	void (OPENTTD_RUST_CALL *network_spectate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_spectate);
-	void (OPENTTD_RUST_CALL *network_company_new)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(network_company_new);
+	void (OPENTTD_RUST_CALL *admin_company_new)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(admin_company_new);
 	Company *(OPENTTD_RUST_CALL *network_own_company)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company);
 	void (OPENTTD_RUST_CALL *network_own_company_settings)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(network_own_company_settings);
 	void (OPENTTD_RUST_CALL *assert_new_ai_slot)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_new_ai_slot);

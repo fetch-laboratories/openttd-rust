@@ -36,17 +36,18 @@ private:
 
 
 protected:
+	friend const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept;
 	friend const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;
 	friend const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept;
 	friend const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 	static ClientNetworkGameSocketHandler *my_client; ///< This is us!
 
-	NetworkRecvStatus Receive_SERVER_CLIENT_INFO(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_CHAT(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_EXTERNAL_CHAT(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_RCON(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_MOVE(Packet &p) override;
-	NetworkRecvStatus Receive_SERVER_CONFIG_UPDATE(Packet &p) override;
+	NetworkRecvStatus Receive_SERVER_CLIENT_INFO(Packet &p);
+	NetworkRecvStatus Receive_SERVER_CHAT(Packet &p);
+	NetworkRecvStatus Receive_SERVER_EXTERNAL_CHAT(Packet &p);
+	NetworkRecvStatus Receive_SERVER_RCON(Packet &p);
+	NetworkRecvStatus Receive_SERVER_MOVE(Packet &p);
+	NetworkRecvStatus Receive_SERVER_CONFIG_UPDATE(Packet &p);
 
 public:
 	ClientNetworkGameSocketHandler(SOCKET s, std::string_view connection_string);

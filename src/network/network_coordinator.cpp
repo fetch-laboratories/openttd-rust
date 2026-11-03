@@ -587,7 +587,7 @@ void ClientNetworkCoordinatorSocketHandler::ConnectSuccess(std::string_view toke
 	if (_network_server) {
 		if (!ServerNetworkGameSocketHandler::ValidateClient(sock, address)) return;
 		Debug(net, 3, "[{}] Client connected from {} on frame {}", ServerNetworkGameSocketHandler::GetName(), address.GetHostname(), _frame_counter);
-		ServerNetworkGameSocketHandler::AcceptConnection(sock, address);
+		ServerNetworkGameSocketHandler::AcceptConnection(sock, address, openttd_rust_network_next_client_id());
 	} else {
 		/* The client informs the Game Coordinator about the success. The server
 		 * doesn't have to, as it is implied by the client telling. */

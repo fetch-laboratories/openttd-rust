@@ -210,7 +210,7 @@ static OpenTTDCompanyRef FixtureAllocate(uint8_t, bool) noexcept
 static bool FixturePrepare(uint8_t id, bool) noexcept { fixture_trace.push_back(fmt::format("setup {}", id)); return true; }
 static void FixtureEvents(uint8_t id) noexcept { fixture_trace.push_back(fmt::format("events {}", id)); }
 static void FixtureVoid() noexcept {}
-static void FixtureNetworkNew(uint8_t id, uint32_t, bool) noexcept { fixture_trace.push_back(fmt::format("network {}", id)); }
+static void FixtureNetworkNew(uint8_t id) noexcept { fixture_trace.push_back(fmt::format("network {}", id)); }
 static void FixtureReset(bool networking, bool server)
 {
 	fixture_networking = networking; fixture_server = server; fixture_is_ai = false; fixture_current = 18; fixture_trace.clear();
@@ -278,7 +278,7 @@ static void FixtureReset(bool networking, bool server)
 	fixture_identity.faces = &fixture_faces;
 	fixture_services.identity = &fixture_identity;
 	fixture_services.company_league_dirty = FixtureVoid; fixture_services.company_ctrl_windows = FixtureVoid;
-	fixture_services.assert_new_ai_slot = FixtureNoop; fixture_services.network_company_new = FixtureNetworkNew;
+	fixture_services.assert_new_ai_slot = FixtureNoop; fixture_services.admin_company_new = FixtureNetworkNew;
 	fixture_services.company_count = []() noexcept -> size_t { return std::count_if(fixture_companies.begin(), fixture_companies.end(), [](const auto &p) { return p != nullptr; }); };
 	fixture_services.company_bankrupt_news = FixtureNoop;
 	fixture_services.remove_engine_replacements = FixtureNoop;

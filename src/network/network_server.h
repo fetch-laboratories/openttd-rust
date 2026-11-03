@@ -23,14 +23,15 @@ extern NetworkClientSocketPool _networkclientsocket_pool;
 /** Class for handling the server side of the game connection. */
 class ServerNetworkGameSocketHandler : public NetworkClientSocketPool::PoolItem<&_networkclientsocket_pool>, public NetworkGameSocketHandler, public TCPListenHandler<ServerNetworkGameSocketHandler, PACKET_SERVER_FULL, PACKET_SERVER_BANNED> {
 protected:
+	friend const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept;
 	friend const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexcept;
 	std::unique_ptr<class NetworkAuthenticationServerHandler> authentication_handler = nullptr; ///< The handler for the authentication.
 	std::string peer_public_key{}; ///< The public key of our client.
 
-	NetworkRecvStatus Receive_CLIENT_CHAT(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_SET_NAME(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_RCON(Packet &p) override;
-	NetworkRecvStatus Receive_CLIENT_MOVE(Packet &p) override;
+	NetworkRecvStatus Receive_CLIENT_CHAT(Packet &p);
+	NetworkRecvStatus Receive_CLIENT_SET_NAME(Packet &p);
+	NetworkRecvStatus Receive_CLIENT_RCON(Packet &p);
+	NetworkRecvStatus Receive_CLIENT_MOVE(Packet &p);
 
 	NetworkRecvStatus SendGameInfo();
 
@@ -55,7 +56,7 @@ public:
 	std::shared_ptr<struct PacketWriter> savegame = nullptr; ///< Writer used to write the savegame.
 	NetworkAddress client_address{}; ///< IP-address of the client (so they can be banned)
 
-	ServerNetworkGameSocketHandler(SOCKET s);
+	ServerNetworkGameSocketHandler(SOCKET s, uint32_t client_id);
 	~ServerNetworkGameSocketHandler();
 
 	NetworkRecvStatus CloseConnection(NetworkRecvStatus status) override;
@@ -71,7 +72,7 @@ public:
 	NetworkRecvStatus SendExternalChat(std::string_view source, TextColour colour, std::string_view user, std::string_view msg);
 	NetworkRecvStatus SendConfigUpdate();
 
-	static void AcceptConnection(SOCKET s, const NetworkAddress &address);
+	static void AcceptConnection(SOCKET s, const NetworkAddress &address, uint32_t client_id);
 	static bool AllowConnection();
 
 	/**

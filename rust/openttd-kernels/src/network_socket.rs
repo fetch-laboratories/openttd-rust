@@ -112,7 +112,7 @@ pub(crate) fn close(s: &Services, socket: *mut GameSocket, work: Actions) -> u8 
         if !(s.command.company.network_server)() && (s.command.company.finance.networking)() {
             (s.client.emergency_save)();
             crate::session::set_pending(crate::openttd::SwitchMode::MENU);
-            unsafe { s.connection.networking.write(false) };
+            (s.lifecycle.set_networking)(false);
             (s.show_lost_connection)();
             NETWORK_RECV_STATUS_CLIENT_QUIT
         } else {
@@ -252,6 +252,18 @@ pub(crate) fn receive_all(
             Poll::Exception => return Err(()),
             Poll::Error => return Ok(receive_finish(s, frame, true, false, work)),
             Poll::Ready => (),
+        }
+        loop {
+            match (s.server_accept_next)(frame) {
+                Poll::Exception => return Err(()),
+                Poll::Error => break,
+                Poll::Ready => {
+                    let id = crate::network_connection::openttd_rust_network_next_client_id();
+                    if !(s.server_accept)(frame, id) {
+                        return Err(());
+                    }
+                }
+            }
         }
         receive_clients(session, s, frame, 0, work)
     } else {
