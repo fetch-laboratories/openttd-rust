@@ -4,9 +4,9 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-03, stocktake 68; profile pending)
+## Where the fork stands (2026-11-03, stocktake 68; paused)
 
-Agent: /root/stocktake-68 | Model: gpt-6.1-sol | Reasoning effort: high
+Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 
 - Code is `e7d12e1508` (integration 68). Since stocktake 64, #651 (65, script host), #660 (66, carried validation), #662 (67, Emscripten cache) and #665 (68, native-library query repair) integrated. No rollback is recorded.
 - `python3 tools/port-metrics.py --whole-fork` at `e7d12e1508`, compared with stocktake 64 at `5e414c5a64` (doc history `dca42d6c02`):
@@ -28,11 +28,11 @@ Agent: /root/stocktake-68 | Model: gpt-6.1-sol | Reasoning effort: high
 | **Whole fork** | **56,176** | **+354** |
 
 - Baselines: 418 rebound-callee rows, 126 shared-accessor rows and 54 orphan exports, all unchanged from stocktake 64 and steering 65. Pending draft reductions are not integrated credit.
-- The compiled-C++ metric still excludes 445 code lines (487 physical lines) in three `.inc` files. #658 remains pending; its future +445 accounting re-baseline must be separated from deletion savings and is **not added** to the totals above.
+- The integrated compiled-C++ metric still excludes 445 code lines (487 physical lines) in three `.inc` files. **#649 now carries that inventory fix**, already reviewed on its branch; its merge must record the +445 accounting re-baseline separately from deletion savings. At pending head `c519c9da92`, the completed metric reports 262,451 compiled lines: 262,065 old main +445 baseline correction -59 actual deletion. None of that pending branch is integrated credit above. #658 retains its other boundary cleanup; do not implement or credit the metric fix again.
 - Compiled C++ has stopped falling across the three infrastructure integrations. The accepted response remains finishing reviewed owners and deleting field/log services through #570/#657; no new phase-1 owner is selected. The last steering's open-draft cost table is historical; current heads, costs and actions live in their PR status comments and the checkpoint below.
-- **Speed remains incomplete for stocktake 68.** Root owns the untimed merged-tip profile; profile 68 counts, equality results, drawing count and six projections remain pending. The table carries **profile 64 at `5e414c5a64`**, flat against profile 62 (-0.11% to +0.07% Ir). Its scenarios were 0.12% to 0.90% below their anchors; drawing (#566) was 1.0027x reference Ir. These are historical measurements, not profile-68 results. The instruction harness rejects the old anchor identity after #642 changed `rust/openttd-kernels/Cargo.toml`; the carried projections use the speed formula by hand until a quiet pass re-anchors.
+- **Profile 68 is blocked on the quiet speed pass.** Session `26637` exited 1 at `e7d12e1508`: six of seven scenarios failed with "instruction anchor identity mismatch; quiet speed pass required". Only `draw-padhattan-ridge-1996-giant` is equal. Keep the locked profile worktree; no new projection or speed-pass result is accepted. The quiet pass is still owed before the post-#570 record-placement decision. The table carries **profile 64 at `5e414c5a64`**, flat against profile 62 (-0.11% to +0.07% Ir). Its scenarios were 0.12% to 0.90% below their anchors; drawing (#566) was 1.0027x reference Ir. These are historical measurements, not profile-68 results. The old anchor identity changed with #642's `rust/openttd-kernels/Cargo.toml` dependency change.
 
-| Scenario | Candidate Ir, carried profile 64 | Carried projection (pending profile 68) | Carried three-pass record |
+| Scenario | Candidate Ir, carried profile 64 | Carried projection (quiet pass owed) | Carried three-pass record |
 | --- | ---: | ---: | ---: |
 | TGP | 2,731,301,085 | 1.111722x | 1.154106x |
 | Grok | 26,898,981,923 | 1.387147x | 1.385653x |
@@ -41,9 +41,9 @@ Agent: /root/stocktake-68 | Model: gpt-6.1-sol | Reasoning effort: high
 | P2000 | 7,400,813,786 | 1.400577x | 1.401446x |
 | P2016 | 13,400,911,478 | 1.522911x | 1.481910x |
 
-- #664/#665 passed pre-merge platform and exact-head Full and is integrated. **The merged-tip platform cadence rerun is running and still gates every other integration.** Evidence belongs on #665. The next ordinary cadence is after integration 70.
+- #664/#665 passed pre-merge platform and exact-head Full and is integrated. **The cadence rerun passed at `e7d12e1508`, all jobs green; the integration gate is clear for resume.** Evidence is on #665. The next ordinary cadence remains after integration 70. No rollback is needed.
 - Coverage: #156 retains the command/network, authentication, script-host, NewGRF and other unreached domains; #647/#649/#655 review limits do not establish their closure. #503 still has 119 unfinished original traces and the clock-preparation/sanitized-support fixes, last in the work order. No coverage run or deep check was performed for this stocktake.
-- Unintegrated components: **six**, #647, #649, #636, #628, #655 and the new #507 corpus draft starting from integration 68. Review and measurement worktrees are not additional components.
+- Unintegrated components: **six**, #649, #647, #670 (#507), #655, #636 and #628. Review and measurement worktrees are not additional components.
 - Issue placement: 41 open, zero unplaced, one excluded policy issue in the exclusions below. The first-accepted-improvement trigger remains unmet; the six behavior improvements and #650 retain their return conditions below. No residual issue has fully completed scope, so none was closed. Corrected stale wording in #3, #168, #199, #275 and #501; checked completed milestones without closing their remaining scopes.
 
 ## Phases
@@ -387,32 +387,38 @@ Excluded, with return conditions reconsidered on 2026-11-03; neither trigger is 
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
-## Resume checkpoint (2026-11-03, stocktake after integration 68)
+## Resume checkpoint (2026-11-03, user wind-down after integration 68)
 
-Code is `e7d12e1508` (integration 68). `CI_ON_DEMAND` is `true`.
-#665 passed pre-merge platform and exact-head Full and is integrated; its
-running merged-tip cadence rerun still gates every other integration. Finish
-reviewed branches first. Six component slots are occupied, including #507's
-new draft. The accepted #666/#667/#668 and #669 placement remains above.
-Root owns the separate frozen profile-68 worktree; size and issue stocktake
-work is done, **profile 68 and the quiet speed pass remain owed**. No timed
-collection runs while agents build or play. Complete the quiet pass and use
-the merged #570 profile before deciding record placement for #634/#635.
+Paused at the user's request. Code is `e7d12e1508` (integration 68), with
+stocktake guidance at `2a5f97486a` before this checkpoint commit.
+`CI_ON_DEMAND` is `true`. The cadence passed at the merged code head, so the
+integration gate is clear for resume; the next cadence is after integration 70.
+This session integrated only #665 (68) and performed no rollback. Nothing is
+merged at wind-down: no open PR has a passing Full at its current head.
+Later job or CI results do not restart work.
 
-Heads below were read from the active PRs; linked task status/review comments
-hold evidence. A newer pushed head does not inherit an unreported validation.
+The size and issue stocktake is recorded above. Profile 68 exited 1 on anchor
+identity (six of seven scenarios; drawing alone equal), and the quiet speed
+pass remains owed. Preserve its locked worktree. After #570 integrates, finish
+the quiet pass and merged-tip profile before deciding record placement for
+#634/#635. None of that collection or placement starts during wind-down.
 
-| Issue / PR | Head | Next action / reported status | Validation still pending |
+| Issue / PR | Head | Next action on resume | Jobs and CI at stop |
 | --- | --- | --- | --- |
-| #664 / #665 cadence repair (integrated) | `e7d12e1508` | Pre-merge platform and exact-head Full passed; root merged the repair. Evidence stays on #665. | Running merged-tip platform cadence; every other integration waits. |
-| #644, #646 / #647 boundary bool/expand | `5d809ff395` | Six orphan findings resolved; root reports full local verify and eight scenarios/56 snapshots passing. [Fresh cleanup review](https://github.com/fetch-laboratories/openttd-rust/pull/647#issuecomment-6596304907) is clear. Root's archive inventory finds all six old exports absent and all six replacements support-only. | Final base update and exact-head Full after cadence passes. |
-| #604, #199 / #649 settings access | `ba07c85bb1` | [Scoped fixture review](https://github.com/fetch-laboratories/openttd-rust/pull/649#issuecomment-6595841556) is clear; affected family evidence and native tests pass. | Current-base exact-head Full after cadence passes. |
-| #570 / #636 vehicle records | `85924074d0` | Active `/root/vehicle-570-checkpoint2`; [latest edited status](https://github.com/fetch-laboratories/openttd-rust/pull/636#issuecomment-6575942666) reports train handles, 29 carriers removed, owner links and disaster naming at `ff194457a4`. Finish remaining routes and final cost/evidence. | The status's Cargo/unit/generator/gates/preflight passes are at its reported checkpoint, not the newer pushed head. Native build, CTests, focused scenarios and independent review remain unreported there. |
-| #574 / #628 network protocol | `b32d5b00a1` | [Latest edited status](https://github.com/fetch-laboratories/openttd-rust/pull/628#issuecomment-6575922784) reports implementation complete, builds/239 CTests, packet/auth checks, scoped scenarios and default loopback in both server roles passing; compiled C++ -92 before #657. Root arranges fresh review. | Independent review, integrated #657 adoption and current-base Full. |
-| #652 / #655 NewGRF text/Actions 3, 4, 13 | `68bcc7d8d2` | [ACTIONS review](https://github.com/fetch-laboratories/openttd-rust/pull/655#issuecomment-6596094494) is clear; [TEXT review](https://github.com/fetch-laboratories/openttd-rust/pull/655#issuecomment-6596095180) fixed native assertion behavior and passed affected checks. Root spot-checked the fix. | Adopt integrated #657; final base update, metrics and exact-head Full. |
-| #507 NewGRF corpus (new draft starting) | Base `e7d12e1508` | Active `/root/corpus-507-newgrf-downloads`; root verified the three pinned archives and old payload hashes. Implement ignored CDN downloads and reuse the selected scenario/AI. | Implementation, affected evidence, one independent review and Full; same-NewGRF larger save follows later. |
+| #604, #199 / #649 settings access | `c519c9da92` | Base `2a5f97486a` merged into reviewed `ba07c85bb1` without conflicts; cheap checks green. Request Full at this head, then merge only if green and still current. The completed metrics are on #649: +445 `.inc` accounting re-baseline, with 59 actual compiled lines removed. | Whole-fork metric finished and recorded. Full pending; not requested at this head. Preserve `update649-after68`. |
+| #644, #646 / #647 boundary bool/expand | `5d809ff395` | Reviews clear; full local verify and eight scenarios/56 snapshots pass. Update from base, then Full and merge. | No local job remains. Full pending. |
+| #507 / #670 NewGRF corpus | `230cbc075e` | [Independent review](https://github.com/fetch-laboratories/openttd-rust/pull/670#issuecomment-6596875528) clear; short and long cases pass with 26 and 95 equal snapshots. Update from base, then Full. Same-NewGRF larger save remains later #507 work. | No reported local job remains. Full pending. |
+| #652 / #655 NewGRF text/Actions 3, 4, 13 | `68bcc7d8d2` | ACTIONS and TEXT reviews clear; native assertion fix and affected checks pass. Adopt integrated #657, then final base update and validation. | No local job remains. Full pending. |
+| #570 / #636 vehicle records | `ae72c8c200` | Worker cancelled. PR conflicts with base. Read job `23352` logs in the preserved worktree, merge base, then finish cargo/fleet/rail link routes, final scenarios, cost metrics and PR text before review. Do not claim checkpoint 2 complete. | Job `23352` started native build, CTest, train-edge and metrics; its result is **unknown**, logs retained in the worktree's shared logs. Full pending. |
+| #574 / #628 network protocol | `0e650fc593` | PR conflicts with base. COMMAND/FRAME/SESSION and evidence [review](https://github.com/fetch-laboratories/openttd-rust/pull/628#issuecomment-6596854706) published one test fix and no production divergence. CONNECTION/TCP [report](https://github.com/fetch-laboratories/openttd-rust/pull/628#issuecomment-6597036887) is published at source head `b32d5b00a1`; caller inventory remains unfinished because session `12069` output was truncated. Merge base, finish that inventory and #647's canonical-byte return adoption, adopt integrated #657, then Full. | Reviewers stopped. Session `12069` exited; no new check was run to replace its inventory. Existing local validation stands; Full pending. |
 
-Preserve active component and review checkouts, cancelled-review checkouts,
-the dirty cancelled #565 source, native-fixture evidence, the pinned original
-and all instruction-profile worktrees/runtimes. T3-locked merged checkouts stay
-until the host releases them; root applies the ordinary housekeeping rules.
+No #657+#658 implementation, #666/#667/#668, #669, #573 or #653 owner, quiet
+speed pass, placement decision, new review or new Full starts during wind-down.
+The read-only #657 design and accepted planning remain available for resume.
+
+Preserve every unfinished component/review branch and worktree, including
+`.local/worktrees/update649-after68`, `.local/worktrees/fix647-orphans`,
+`t3-d038aacc` and the locked `.local/worktrees/profile-after68-664`.
+Preserve all five dirty files in `t3-3b491ddb`, the dirty cancelled #565 source,
+native-fixture evidence, the unchanged pinned original and retained profiles
+and runtimes. No unfinished worktree is discarded.
