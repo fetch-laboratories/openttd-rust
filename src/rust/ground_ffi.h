@@ -169,8 +169,7 @@ struct OpenTTDGroundABICalls {
 	OpenTTDGroundFloodPose (*ground)() noexcept OPENTTD_SERVICE_DEFAULT(ground);
 	bool (*enums)(ClearGround, RailGroundType, Slope, TrackBits, Track, Foundation, Roadside, RoadBits, RoadType, TreeGround, WaterClass, FloodingBehaviour, DiagDirection, LandscapeType, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(enums);
 };
-extern "C" uint8_t openttd_rust_ground_abi_calls_abi(const OpenTTDGroundABICalls *);
-extern "C++" inline bool openttd_rust_ground_abi_calls(const OpenTTDGroundABICalls *a0) { return openttd_rust_ground_abi_calls_abi(a0) != 0; }
+extern "C" uint8_t openttd_test_ground_abi_calls(const OpenTTDGroundABICalls *);
 extern "C" void openttd_rust_water_restore(uint32_t, uint8_t, const OpenTTDSharedServices *, const OpenTTDWaterGroundServices *, const OpenTTDWaterRestorationServices *);
 extern "C" void openttd_rust_clear_square(uint32_t, const OpenTTDSharedServices *);
 #endif /* RUST_GROUND_FFI_H */

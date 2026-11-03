@@ -1151,8 +1151,7 @@ unsafe fn dispatch(
             }
             (13, GLS_INIT | GLS_RESERVE | GLS_ACTIVATION) => return param_set(s, b),
             (2, GLS_ACTIVATION) => {
-                return if crate::newgrf_act2::openttd_rust_action2_parse_abi(&*s.action2, s, b) != 0
-                {
+                return if crate::newgrf_act2::parse_action(&*s.action2, s, b) {
                     Ok(())
                 } else {
                     Err(ReadBounds)

@@ -2498,14 +2498,10 @@ pub unsafe extern "C" fn openttd_rust_aircraft_closest_depot(
 /// # Safety
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_event_abi(
-    leaves: *const Leaves,
-    id: Vehicle,
-    pass: bool,
-) -> u8 {
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn event(leaves: *const Leaves, id: Vehicle, pass: bool) -> bool {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    u8::from(with_world!(leaves, |w| { w.event(id, u32::from(pass)) }))
+    with_world!(leaves, |w| { w.event(id, u32::from(pass)) })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety

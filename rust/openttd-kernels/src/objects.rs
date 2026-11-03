@@ -2312,20 +2312,19 @@ pub unsafe extern "C" fn openttd_rust_object_tile_loop(
 /// Synchronous object owner entry.
 /// # Safety
 /// The module's export contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_generate_abi(
+pub(crate) unsafe fn generate(
     s: *const ObjectServices,
     out: *mut CommandCost,
     tmp: *mut CommandCost,
     aux: *mut CommandCost,
     frame: *mut GenerationFrame,
-) -> u8 {
+) -> bool {
     let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     let tmp = Cost(tmp, costs);
     let aux = Cost(aux, costs);
-    u8::from(w.generate(frame, out, tmp, aux))
+    w.generate(frame, out, tmp, aux)
 }
 
 /// `ChangeTileOwner_Object`, entered only from the shared ownership dispatcher.

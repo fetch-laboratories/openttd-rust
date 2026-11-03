@@ -846,8 +846,8 @@ pub struct ABICalls {
 /// # Safety
 /// A complete immutable fixture table. Returned opaque handles are marker values
 /// for this ABI-only call; they are compared, never dereferenced or used by game services.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ground_abi_calls_abi(calls: *const ABICalls) -> u8 {
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn abi_calls(calls: *const ABICalls) -> u8 {
     // SAFETY: Caller provides actual typed native functions for this fixture.
     let c = unsafe { &*calls };
     let fences = (c.fences)();

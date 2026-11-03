@@ -98,8 +98,7 @@ struct OpenTTDWorldServices;
 extern "C" {
 /* Plain synchronous entries; original game preconditions apply. Panics abort. */
 uint32_t openttd_rust_trees_place_group(uint32_t tile, uint8_t type, uint32_t radius, uint32_t count, bool set_zone, const OpenTTDTreeServices *, const OpenTTDSharedServices *, const OpenTTDEnvironmentServices *, const OpenTTDWorldServices *);
-uint8_t openttd_rust_trees_generate_abi(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
-extern "C++" inline bool openttd_rust_trees_generate(OpenTTDTreeGenerateSettings a0, const OpenTTDTreeServices *a1, const OpenTTDSharedServices *a2) { return openttd_rust_trees_generate_abi(a0, a1, a2) != 0; }
+uint8_t openttd_test_trees_generate(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_trees_place_randomly_abi(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 extern "C++" inline bool openttd_rust_trees_place_randomly(OpenTTDTreeGenerateSettings a0, const OpenTTDTreeServices *a1, const OpenTTDSharedServices *a2) { return openttd_rust_trees_place_randomly_abi(a0, a1, a2) != 0; }
 void openttd_rust_trees_place(uint32_t tile, uint32_t r, bool keep_density, uint8_t climate, const OpenTTDTreeServices *, const OpenTTDSharedServices *);

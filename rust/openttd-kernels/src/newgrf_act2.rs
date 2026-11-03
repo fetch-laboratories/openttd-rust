@@ -961,11 +961,6 @@ unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result
         Ok(())
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_action2_parse_abi(
-    s: &Services,
-    l: &LoadingServices,
-    reader: &mut Cursor,
-) -> u8 {
-    u8::from(unsafe { parse(s, l, reader).is_ok() })
+pub(crate) unsafe fn parse_action(s: &Services, l: &LoadingServices, reader: &mut Cursor) -> bool {
+    unsafe { parse(s, l, reader).is_ok() }
 }

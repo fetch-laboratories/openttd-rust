@@ -1077,14 +1077,13 @@ pub(crate) unsafe fn tick(
 /// `GenerateTrees`; true when a progress service reported world-generation abort.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_trees_generate_abi(
+pub(crate) unsafe fn generate(
     settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
-) -> u8 {
+) -> bool {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    u8::from(unsafe { trees(services, shared) }.generate(&settings))
+    unsafe { trees(services, shared) }.generate(&settings)
 }
 
 /// `PlaceTreesRandomly`; true when a progress service reported world-generation abort.

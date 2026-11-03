@@ -498,17 +498,12 @@ impl World<'_> {
         native(completed)?;
         let call = (s.object_begin)(self.frame);
         let completed = unsafe {
-            crate::objects::openttd_rust_object_generate_abi(
-                s.objects, call.out, call.tmp, call.aux, call.frame,
-            ) != 0
+            crate::objects::generate(s.objects, call.out, call.tmp, call.aux, call.frame)
         };
         (s.object_end)(self.frame);
         native(completed)?;
         let a = unsafe { &*s.landscape };
-        let aborted = unsafe {
-            crate::trees::openttd_rust_trees_generate_abi((s.tree_settings)(), a.trees, a.shared)
-                != 0
-        };
+        let aborted = unsafe { crate::trees::generate((s.tree_settings)(), a.trees, a.shared) };
         if aborted {
             (s.tree_end)(self.frame);
             return Err(Failure::Native);

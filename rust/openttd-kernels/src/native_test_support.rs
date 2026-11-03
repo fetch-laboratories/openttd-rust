@@ -534,3 +534,78 @@ pub unsafe extern "C" fn openttd_test_command_stack_probe(
         })
     })
 }
+
+/// Exercise the production Action 2 parser with a native reader.
+/// # Safety
+/// The services and reader satisfy the Action 2 module's serialized lifetime contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_action2_parse(
+    s: &crate::newgrf_act2::Services,
+    l: &crate::newgrf_loading::Services,
+    reader: &mut crate::newgrf_bytereader::Cursor,
+) -> u8 {
+    u8::from(unsafe { crate::newgrf_act2::parse_action(s, l, reader) })
+}
+
+/// Exercise the aircraft controller over native fixture handles.
+/// # Safety
+/// Handles and immutable services satisfy the aircraft module's synchronous contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_aircraft_event(
+    leaves: *const crate::aircraft::Leaves,
+    id: crate::aircraft::Vehicle,
+    pass: bool,
+) -> u8 {
+    u8::from(unsafe { crate::aircraft::event(leaves, id, pass) })
+}
+
+/// Exercise native record returns and enum arguments.
+/// # Safety
+/// The immutable table returns only ABI marker values, never dereferenced handles.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_ground_abi_calls(
+    calls: *const crate::ground::ABICalls,
+) -> u8 {
+    unsafe { crate::ground::abi_calls(calls) }
+}
+
+/// Exercise production object generation through native fixture storage.
+/// # Safety
+/// The services, cost objects and frame satisfy the object module's entry contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_object_generate(
+    s: *const crate::objects::ObjectServices,
+    out: *mut crate::services::CommandCost,
+    tmp: *mut crate::services::CommandCost,
+    aux: *mut crate::services::CommandCost,
+    frame: *mut crate::objects::GenerationFrame,
+) -> u8 {
+    u8::from(unsafe { crate::objects::generate(s, out, tmp, aux, frame) })
+}
+
+/// Exercise the town tunnel path with native fixture services.
+/// # Safety
+/// Tables and town/map identities satisfy the town module's serialized entry contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_town_tunnel(
+    leaves: *const crate::town::Leaves,
+    services: *const crate::services::Services,
+    road: *const crate::road_cmd::CommandContext,
+    town: u32,
+    tile: u32,
+    dir: u32,
+) -> u8 {
+    u8::from(unsafe { crate::town::tunnel(leaves, services, road, town, tile, dir) })
+}
+
+/// Exercise production tree generation with native fixture callbacks.
+/// # Safety
+/// Immutable tables and settings satisfy the tree module's serialized entry contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_trees_generate(
+    settings: crate::trees::GenerateSettings,
+    services: *const crate::trees::TreeServices,
+    shared: *const crate::services::Services,
+) -> u8 {
+    u8::from(unsafe { crate::trees::generate(settings, services, shared) })
+}

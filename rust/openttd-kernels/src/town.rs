@@ -2148,18 +2148,18 @@ pub unsafe extern "C" fn openttd_rust_town_road_type(
 ) -> u32 {
     engine(leaves, services).road_type()
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_tunnel_abi(
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn tunnel(
     leaves: *const Leaves,
     services: *const Services,
     road: *const crate::road_cmd::CommandContext,
     town: u32,
     tile: u32,
     dir: u32,
-) -> u8 {
+) -> bool {
     let mut engine = engine(leaves, services);
     engine.road = road;
-    u8::from(engine.bind(town).tunnel(town, tile, dir))
+    engine.bind(town).tunnel(town, tile, dir)
 }
 
 // Original std::accumulate's literal 0 deduces an int accumulator. Each lambda
