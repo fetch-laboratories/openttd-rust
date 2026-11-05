@@ -36,6 +36,7 @@ mod company_identity;
 mod company_manager_face;
 mod company_type;
 mod consumer;
+mod debug;
 mod direction_func;
 mod direction_type;
 mod disaster;

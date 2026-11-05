@@ -83,6 +83,9 @@
 #include "../texteff.hpp"
 #include "newgrf_storage_ffi.h"
 #include "signal_ffi.h"
+#include "debug_ffi.h"
+#include "../debug.h"
+#include "../newgrf.h"
 #include "../safeguards.h"
 static_assert(VE_OFFSET_START == 0);
 static_assert(VE_OFFSET_CENTRE == 8);
@@ -825,3 +828,26 @@ static_assert(GSF_AIRPORTS == 0x0D && GSF_TRAMTYPES == 0x13);
 static_assert(MAX_CATCHMENT == 10 && CalendarTime::MAX_YEAR.base() == 5000000);
 
 static_assert(PR_BUILD_INDUSTRY == 48 && PR_CLEAR_INDUSTRY == 49 && PR_BUILD_INDUSTRY_RAW == 58);
+
+static const OpenTTDDebugServices _rust_debug_services{
+	.console = &_debug_console_level,
+	.desync = &_debug_desync_level,
+	.driver = &_debug_driver_level,
+	.fontcache = &_debug_fontcache_level,
+	.gamelog = &_debug_gamelog_level,
+	.grf = &_debug_grf_level,
+	.grf_msg = [](int severity, const char *message, size_t size) noexcept { GrfMsgI(severity, std::string(message, size)); },
+	.map = &_debug_map_level,
+	.misc = &_debug_misc_level,
+	.net = &_debug_net_level,
+	.oldloader = &_debug_oldloader_level,
+	.print = [](const char *category, size_t category_size, int level, const char *message, size_t size) noexcept { DebugPrint({category, category_size}, level, std::string(message, size)); },
+	.script = &_debug_script_level,
+	.sl = &_debug_sl_level,
+	.sprite = &_debug_sprite_level,
+	.yapf = &_debug_yapf_level,
+};
+/* Bound before main, so Rust Debug and GrfMsg see the native levels from the first message. */
+[[maybe_unused]] static const bool _rust_debug_bound = (openttd_rust_debug_bind(&_rust_debug_services), true);
+#include "abi-visit-OpenTTDDebugServices.hpp"
+bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services); }
