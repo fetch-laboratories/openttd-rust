@@ -242,7 +242,8 @@ fn property(
             0x0d | 0x0e => (s.set_acceptance)(spec, (prop - 0x0d) as u8, reader.byte()?),
             0x0f => {
                 let mut goods = i16::from(reader.byte()? as i8);
-                let toyland = unsafe { (*s.resolver).shared().settings().climate.read() } == crate::landscape_type::TOYLAND;
+                let toyland = unsafe { (*s.resolver).shared().settings().climate.read() }
+                    == crate::landscape_type::TOYLAND;
                 let label = if goods >= 0 {
                     if toyland { CT_CANDY } else { CT_GOODS }
                 } else if toyland {
@@ -620,7 +621,8 @@ pub fn finalise(s: &Services) {
         }
         id += 1;
     }
-    let climates = crate::house::climate_mask(unsafe { (*s.resolver).shared().settings().climate.read() });
+    let climates =
+        crate::house::climate_mask(unsafe { (*s.resolver).shared().settings().climate.read() });
     for climate in 0..16 {
         if climates & (1 << climate) != 0 {
             for zone in 0..16 {

@@ -120,7 +120,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.set_modal = [](bool value) noexcept { SetModalProgress(value); },
 		.initialize = [](OpenTTDWorldSetupFrame *f, uint32_t x, uint32_t y, bool reset) noexcept { try { InitializeGame(x, y, true, reset); } catch (...) { f->cancellation = std::current_exception(); return false; } return true; },
 		.prepare_progress = []() noexcept { PrepareGenerateWorldProgress(); },
-		.settings = []() noexcept { return OpenTTDWorldSettings{RustMapHeightLimit(), _settings_game.game_creation.se_flat_world_height, _settings_game.game_creation.heightmap_height, _settings_game.game_creation.land_generator}; },
 		.height_limit = RustSetMapHeightLimit,
 		.session = &GetRustSessionServices(),
 		.session_frame = [](OpenTTDWorldFrame *f) noexcept { return &f->session.emplace(); },
@@ -148,7 +147,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.show_error = []() noexcept { ShowFirstError(); },
 		.set_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { RustSetGeneratingWorldProgress(p, total); }); },
 		.increase_progress = [](OpenTTDWorldFrame *f, GenWorldProgress p) noexcept { return RunGenerationProgress(f, [=] { RustIncreaseGeneratingWorldProgress(p); }); },
-		.freeform = OpenTTDFreeformEdges,
 		.count_land = RustCountLandTiles,
 		.landscape_begin = [](OpenTTDWorldFrame *f) noexcept { auto &c = f->landscape.emplace(); return OpenTTDWorldLandscape{&c.frame, &c.heightmap.view, c.settings}; },
 		.landscape_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->landscape->frame.cancellation; f->landscape.reset(); return !f->cancellation; },
@@ -159,7 +157,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.industry_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->industry->cancellation; f->industry.reset(); },
 		.object_begin = [](OpenTTDWorldFrame *f) noexcept { auto &o = f->objects.emplace(); return OpenTTDWorldObject{&o.frame, RustCommandCost(&o.out), RustCommandCost(&o.tmp), RustCommandCost(&o.aux)}; },
 		.object_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->objects->frame.cancellation; f->objects.reset(); },
-		.tree_settings = TreeGenerateSettings,
 		.tree_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = TakeTreeGenerationException(); },
 		.loop_begin = [](OpenTTDWorldFrame *f) noexcept -> const OpenTTDGenerationLoop * {
 			auto &loop = f->loop.emplace();

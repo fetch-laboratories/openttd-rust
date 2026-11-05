@@ -571,6 +571,10 @@ impl Services {
     pub(crate) fn map_log_y(&self) -> u32 {
         unsafe { (*self.map).log_y.read() }
     }
+    /// Canonical `Map::Size()`, loaded at the observation point.
+    pub(crate) fn map_size(&self) -> u32 {
+        unsafe { (*self.map).size.read() }
+    }
     /// Immutable address catalog; its targets are read with field-sized raw loads.
     pub(crate) fn settings(&self) -> &crate::settings_type::SettingAddresses {
         unsafe { &*self.settings }

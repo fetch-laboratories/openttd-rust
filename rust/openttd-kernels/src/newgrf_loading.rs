@@ -1514,7 +1514,10 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
             (s.clear_errors)(c);
             i += 1;
         }
-        crate::cargo_registry::openttd_rust_cargo_setup(s.cargo, s.shared().settings().climate.read());
+        crate::cargo_registry::openttd_rust_cargo_setup(
+            s.cargo,
+            s.shared().settings().climate.read(),
+        );
         (s.set_misc)(0);
         (s.reset_loaded_features)();
         crate::engine_loading::openttd_rust_engine_override_clear();

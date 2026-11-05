@@ -1222,7 +1222,9 @@ pub(crate) unsafe fn truncate_station(
         while let Some(current) = n {
             n = unsafe { after(l, current.token) };
             let p = unsafe { packet(s, current.shell) };
-            if previous > max_move && unsafe { &*s.shared }.random_range(previous) < previous - max_move {
+            if previous > max_move
+                && unsafe { &*s.shared }.random_range(previous) < previous - max_move
+            {
                 if !origins.is_null() && loop_count == 0 {
                     (s.origin)(origins, p.first_station, u32::from(p.count), 0);
                 }

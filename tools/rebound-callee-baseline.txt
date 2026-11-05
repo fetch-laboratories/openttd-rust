@@ -84,7 +84,6 @@ rebound | OpenTTDDistanceSquare | src/rust/ship_control_services.h | dist_square
 rebound | OpenTTDEditor | src/landscape.cpp | editor
 rebound | OpenTTDEditor | src/rust/engine_adapter.hpp | editor
 rebound | OpenTTDEditor | src/rust/services.cpp | editor
-rebound | OpenTTDFreeformEdges | src/genworld.cpp | freeform
 rebound | OpenTTDFreeformEdges | src/landscape.cpp | freeform_edges
 rebound | OpenTTDFreeformEdges | src/rust/services.cpp | freeform_edges
 rebound | OpenTTDIsDockingTile | src/rust/services.cpp | docking

@@ -13,7 +13,6 @@ struct OpenTTDWorldFrame;
 struct OpenTTDWorldSetupFrame;
 struct OpenTTDSessionServices;
 struct OpenTTDSessionFrame;
-struct OpenTTDWorldSettings { uint8_t height_limit, flat_height, heightmap_height, generator; };
 struct OpenTTDWorldLandscape { OpenTTDGenerationFrame *frame; const OpenTTDHeightmapInput *decoder; OpenTTDLandscapeGenerationSettings settings; };
 struct OpenTTDWorldTown { OpenTTDTownFoundingFrame *frame; OpenTTDTownNameFrame *names; const OpenTTDRoadCommandContext *road; TownLayout layout; };
 struct OpenTTDWorldObject { OpenTTDObjectGenerationFrame *frame; OpenTTDCommandCost *out, *tmp, *aux; };
@@ -33,7 +32,6 @@ struct OpenTTDWorldServices {
 	void (*set_modal)(bool) noexcept OPENTTD_SERVICE_DEFAULT(set_modal);
 	bool (*initialize)(OpenTTDWorldSetupFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize);
 	void (*prepare_progress)() noexcept OPENTTD_SERVICE_DEFAULT(prepare_progress);
-	OpenTTDWorldSettings (*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	void (*height_limit)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(height_limit);
 	const OpenTTDSessionServices *session;
 	OpenTTDSessionFrame *(*session_frame)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(session_frame);
@@ -61,7 +59,6 @@ struct OpenTTDWorldServices {
 	void (*show_error)() noexcept OPENTTD_SERVICE_DEFAULT(show_error);
 	bool (*set_progress)(OpenTTDWorldFrame *, GenWorldProgress, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDWorldFrame *, GenWorldProgress) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
-	bool (*freeform)() noexcept OPENTTD_SERVICE_DEFAULT(freeform);
 	void (*count_land)() noexcept OPENTTD_SERVICE_DEFAULT(count_land);
 	OpenTTDWorldLandscape (*landscape_begin)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_begin);
 	bool (*landscape_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(landscape_end);
@@ -72,7 +69,6 @@ struct OpenTTDWorldServices {
 	void (*industry_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(industry_end);
 	OpenTTDWorldObject (*object_begin)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(object_begin);
 	void (*object_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(object_end);
-	OpenTTDTreeGenerateSettings (*tree_settings)() noexcept OPENTTD_SERVICE_DEFAULT(tree_settings);
 	void (*tree_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(tree_end);
 	const OpenTTDGenerationLoop * (*loop_begin)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(loop_begin);
 	void (*loop_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(loop_end);

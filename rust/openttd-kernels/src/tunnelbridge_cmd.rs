@@ -282,7 +282,9 @@ impl<'a> World<'a> {
         if b.year > crate::timer_game_common::calendar_year().0 {
             return Self::error(out);
         }
-        let maximum = b.max.min(unsafe { (*self.r.shared).settings().max_bridge_length.read() });
+        let maximum = b
+            .max
+            .min(unsafe { (*self.r.shared).settings().max_bridge_length.read() });
         if u32::from(b.min) > length {
             return Self::error(out);
         }
@@ -443,7 +445,9 @@ impl<'a> World<'a> {
             if !ret.ok() {
                 return cost.take(ret);
             }
-        } else if length > u32::from(unsafe { (*self.r.shared).settings().max_bridge_length.read() }) {
+        } else if length
+            > u32::from(unsafe { (*self.r.shared).settings().max_bridge_length.read() })
+        {
             return cost.error(self.a.strings.too_long);
         }
         length = length.wrapping_add(2);

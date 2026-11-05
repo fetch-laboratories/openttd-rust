@@ -237,9 +237,12 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.construction_limits = &_settings_game.construction.limits,
 	.disable_elrails = &_settings_game.vehicle.disable_elrails,
 	.extra_tree_placement = &_settings_game.construction.extra_tree_placement,
+	.freeform_edges = &_settings_game.construction.freeform_edges,
 	.generation_seed = &_settings_game.game_creation.generation_seed,
 	.height_limit = &_settings_game.construction.map_height_limit,
+	.heightmap_height = &_settings_game.game_creation.heightmap_height,
 	.industry_cargo_scale = &_settings_game.economy.industry_cargo_scale,
+	.land_generator = &_settings_game.game_creation.land_generator,
 	.map_x = &_settings_game.game_creation.map_x,
 	.map_y = &_settings_game.game_creation.map_y,
 	.max_bridge_length = &_settings_game.construction.max_bridge_length,
@@ -248,8 +251,10 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.never_expire_airports = &_settings_game.station.never_expire_airports,
 	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
+	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
 	.station_noise = &_settings_game.economy.station_noise_level,
+	.tree_placer = &_settings_game.game_creation.tree_placer,
 	.used_liveries = &_loaded_newgrf_features.used_liveries,
 };
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();

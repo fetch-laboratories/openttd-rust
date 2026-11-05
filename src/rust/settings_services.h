@@ -55,7 +55,6 @@ inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
 inline void RustSetMapHeightLimit(uint8_t height) noexcept { _settings_game.construction.map_height_limit = height; }
 inline void RustSetGenerationSeed(uint32_t seed) noexcept { _settings_game.game_creation.generation_seed = seed; }
-inline uint8_t RustMapHeightLimit() noexcept { return _settings_game.construction.map_height_limit; }
 inline uint8_t RustMaxBridgeHeight() noexcept { return _settings_game.construction.max_bridge_height; }
 inline uint16_t RustMaxTunnelLength() noexcept { return _settings_game.construction.max_tunnel_length; }
 inline uint16_t OpenTTDSubsidyDuration() noexcept { return _settings_game.difficulty.subsidy_duration; }
