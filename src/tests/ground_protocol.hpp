@@ -32,7 +32,7 @@ inline bool Run()
 			return to_underlying(c) == 240 && to_underlying(r) == 239 && to_underlying(s) == 238 && to_underlying(b) == 237 && to_underlying(t) == 227 && to_underlying(f) == 228 && to_underlying(side) == 229 && to_underlying(rb) == 230 && to_underlying(rt) == 231 && to_underlying(tree) == 232 && to_underlying(water) == 233 && to_underlying(flood) == 234 && to_underlying(d) == 235 && to_underlying(l) == 236 && to_underlying(v) == 226;
 		},
 	};
-	return openttd_rust_ground_abi_calls(&calls);
+	return openttd_test_ground_abi_calls(&calls);
 }
 } // namespace GroundProbe
 #endif /* TESTS_GROUND_PROTOCOL_HPP */

@@ -204,7 +204,7 @@ static bool Candidate()
 		assert(flags == 10); *reinterpret_cast<bool *>(out) = BuildRoad(town, tile, bits, rt, 0);
 	}; roads.rail_commands = &rail;
 	OpenTTDRoadCommandContext road{&roads, nullptr, reinterpret_cast<OpenTTDCommandCost *>(&road_ok), nullptr};
-	return openttd_rust_town_tunnel(&leaves, &services, &road, world->town.index, world->start, world->direction);
+	return openttd_test_town_tunnel(&leaves, &services, &road, world->town.index, world->start, world->direction);
 }
 static uint32_t Along(const World &w, int distance) { return w.start + distance * TileOffsByDiagDir(static_cast<DiagDirection>(w.direction)); }
 static World Fixture(uint32_t dir, uint32_t length, bool mountain)

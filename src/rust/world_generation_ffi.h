@@ -100,7 +100,9 @@ struct OpenTTDWorldServices {
 const OpenTTDWorldServices &GetRustWorldServices() noexcept;
 extern "C" {
 void openttd_rust_world_request_abort();
-bool openttd_rust_world_aborted(const OpenTTDWorldServices *);
-bool openttd_rust_world_handle_abort(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
+uint8_t openttd_rust_world_aborted_abi(const OpenTTDWorldServices *);
+extern "C++" inline bool openttd_rust_world_aborted(const OpenTTDWorldServices *a0) { return openttd_rust_world_aborted_abi(a0) != 0; }
+uint8_t openttd_rust_world_handle_abort_abi(const OpenTTDWorldServices *, OpenTTDWorldFrame *);
+extern "C++" inline bool openttd_rust_world_handle_abort(const OpenTTDWorldServices *a0, OpenTTDWorldFrame *a1) { return openttd_rust_world_handle_abort_abi(a0, a1) != 0; }
 }
 #endif /* RUST_WORLD_GENERATION_FFI_H */

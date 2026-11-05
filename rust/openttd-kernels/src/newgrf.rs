@@ -33,13 +33,13 @@ pub struct Services {
     width: unsafe extern "C" fn(*const c_void) -> u32,
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_global_variable(
+pub unsafe extern "C" fn openttd_rust_global_variable_abi(
     s: &Services,
     variable: u8,
     value: *mut u32,
     file: *const c_void,
-) -> bool {
-    unsafe {
+) -> u8 {
+    u8::from(unsafe {
         let shared = &*s.shared;
         let result = match variable {
             0x00 => crate::timer_game_common::calendar_date()
@@ -114,11 +114,11 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
             0x22 => crate::settings_type::SP_CUSTOM,
             0x23 => crate::timer_game_common::calendar_date().0 as u32,
             0x24 => crate::timer_game_common::calendar_year().0 as u32,
-            _ => return false,
+            _ => return u8::from(false),
         };
         value.write(result);
         true
-    }
+    })
 }
 crate::abi::layouts! {
     fn abi_layout;

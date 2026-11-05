@@ -13,7 +13,12 @@ import preflight
 
 class PreflightTests(unittest.TestCase):
     def test_checker_exit_code_and_revision_range_are_preserved(self) -> None:
-        for checker_code, rebound_code in ((0, 0), (0, 1), (1, 0)):
+        for checker_code, rebound_code, bool_code in (
+            (0, 0, 0),
+            (0, 0, 1),
+            (0, 1, 0),
+            (1, 0, 0),
+        ):
             with (
                 patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
                 patch.object(preflight, "git", side_effect=["base", "head", "/git"]),
@@ -23,23 +28,37 @@ class PreflightTests(unittest.TestCase):
                 run.side_effect = [
                     CompletedProcess([], checker_code),
                     CompletedProcess([], rebound_code),
+                    CompletedProcess([], bool_code),
                 ]
-                self.assertEqual(preflight.main(), checker_code or rebound_code)
+                self.assertEqual(
+                    preflight.main(), checker_code or rebound_code or bool_code
+                )
                 checker = run.call_args_list[0]
                 self.assertEqual(
                     checker.args[0],
                     ["sh", "/hooks/hooks/check-commits.sh", "base..head"],
                 )
                 self.assertEqual(checker.kwargs["env"]["GIT_DIR"], "/git")
-                self.assertEqual(run.call_count, 1 if checker_code else 2)
+                self.assertEqual(
+                    run.call_count, 1 if checker_code else 2 if rebound_code else 3
+                )
                 if not checker_code:
                     self.assertEqual(
-                        run.call_args.args[0],
+                        run.call_args_list[1].args[0],
                         [
                             sys.executable,
                             str(preflight.migration.ROOT / "tools/rebound-callees.py"),
                             "--base-ref",
                             "base",
+                        ],
+                    )
+
+                if not checker_code and not rebound_code:
+                    self.assertEqual(
+                        run.call_args_list[2].args[0],
+                        [
+                            sys.executable,
+                            str(preflight.migration.ROOT / "tools/ffi-bool-returns.py"),
                         ],
                     )
 

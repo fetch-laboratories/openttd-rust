@@ -83,7 +83,7 @@ pub(super) unsafe fn clone_name(
             data: transaction.0.candidate.as_ptr(),
             size: transaction.0.candidate.len(),
         };
-        if unsafe { super::openttd_rust_vehicle_unique_name(s.base, proposed) } {
+        if unsafe { super::openttd_rust_vehicle_unique_name_abi(s.base, proposed) != 0 } {
             (s.base.set_name)(destination, proposed);
             break;
         }

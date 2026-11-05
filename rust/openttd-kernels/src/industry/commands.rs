@@ -22,19 +22,19 @@ pub struct IndustryCommandServices {
 /// Live synchronous pool services; the owner is resolved only for an executing
 /// command and no reference to its fields survives a callback.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_set_flags_command(
+pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
     id: u16,
     execute: bool,
     value: u8,
     services: *const IndustryCommandServices,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*services };
     if !unsafe { (s.deity)() } {
-        return false;
+        return u8::from(false);
     }
     let shell = unsafe { (s.get)(id) };
     if shell.is_null() || value & !15 != 0 {
-        return false;
+        return u8::from(false);
     }
     if execute {
         let owner = unsafe { (s.owner)(shell) };
@@ -42,26 +42,26 @@ pub unsafe extern "C" fn openttd_rust_industry_set_flags_command(
             (*owner).fields.ctlflags = value;
         }
     }
-    true
+    u8::from(true)
 }
 /// # Safety
 /// Live synchronous services. The original post-assignment news comparison is
 /// always false; production multiplier leaves cannot mutate the requested level.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_set_production_command(
+pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     id: u16,
     execute: bool,
     level: u8,
     services: *const IndustryCommandServices,
     production: *const Services,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*services };
     if !unsafe { (s.deity)() } || !(4..=128).contains(&level) {
-        return false;
+        return u8::from(false);
     }
     let shell = unsafe { (s.get)(id) };
     if shell.is_null() {
-        return false;
+        return u8::from(false);
     }
     if execute {
         let owner = unsafe { (s.owner)(shell) };
@@ -71,28 +71,28 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command(
         }
         super::recompute(shell.cast(), owner, unsafe { &*production });
     }
-    true
+    u8::from(true)
 }
 /// # Safety
 /// Synchronous native pool and company lookup; owner mutation has no reentry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command(
+pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command_abi(
     id: u16,
     execute: bool,
     company: u8,
     consumer: bool,
     services: *const IndustryCommandServices,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*services };
     if !unsafe { (s.deity)() } {
-        return false;
+        return u8::from(false);
     }
     let shell = unsafe { (s.get)(id) };
     if shell.is_null() {
-        return false;
+        return u8::from(false);
     }
     if company != 16 && company != 255 && company != 18 && !unsafe { (s.valid_company)(company) } {
-        return false;
+        return u8::from(false);
     }
     if execute {
         let owner = unsafe { (s.owner)(shell) };
@@ -104,25 +104,25 @@ pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command(
             }
         }
     }
-    true
+    u8::from(true)
 }
 /// # Safety
 /// Borrowed full encoded byte span remains live through this synchronous call.
 /// Native UI invalidation runs only after the owner text mutation ends.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_set_text_command(
+pub unsafe extern "C" fn openttd_rust_industry_set_text_command_abi(
     id: u16,
     execute: bool,
     text: ByteSpan,
     services: *const IndustryCommandServices,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*services };
     if !unsafe { (s.deity)() } {
-        return false;
+        return u8::from(false);
     }
     let shell = unsafe { (s.get)(id) };
     if shell.is_null() {
-        return false;
+        return u8::from(false);
     }
     if execute {
         let owner = unsafe { (s.owner)(shell) };
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text_command(
             (s.invalidate_view)(id);
         }
     }
-    true
+    u8::from(true)
 }
 /// # Safety
 /// Live owner, with no callbacks or surviving reference to metadata.

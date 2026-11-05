@@ -1848,8 +1848,8 @@ pub(crate) fn openttd_rust_economy_month(s: &Services, m: &Month) {
 }
 /// `AddInflation`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_economy_add_inflation(check_year: bool, year: i32) -> bool {
-    inflation(check_year, year)
+pub extern "C" fn openttd_rust_economy_add_inflation_abi(check_year: bool, year: i32) -> u8 {
+    u8::from(inflation(check_year, year))
 }
 /// `RecomputePrices`.
 #[unsafe(no_mangle)]
@@ -1940,20 +1940,20 @@ pub unsafe extern "C" fn openttd_rust_company_max_loan(p: *const Finances) -> i6
 /// `DoStartupNewCompany`; `true` asks the caller to run `AI::StartNew(company)`
 /// and call again. If that throws, the frame is simply abandoned.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_startup(s: &Services, f: &mut Startup) -> bool {
-    startup(s, f)
+pub extern "C" fn openttd_rust_company_startup_abi(s: &Services, f: &mut Startup) -> u8 {
+    u8::from(startup(s, f))
 }
 /// Competitor timeout callback; `true` asks the caller to Post `CCA_NEW_AI`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_competitor_timeout(s: &Services, r: &Competitors) -> bool {
+pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services, r: &Competitors) -> u8 {
     if r.menu
         || !r.can_start
         || (r.networking && r.num_companies >= usize::from(r.max_companies))
         || r.interval == 0
     {
-        return false;
+        return u8::from(false);
     }
-    count_ais(s) < r.max_competitors
+    u8::from(count_ais(s) < r.max_competitors)
 }
 /// `OnTick_Companies`; `true` asks the caller to Post `CCA_NEW_AI` and call again.
 /// # Safety
@@ -1983,18 +1983,22 @@ pub(crate) unsafe fn openttd_rust_company_yearly(s: &Services, y: &Year) {
 }
 /// `CheckTakeoverVehicleLimit`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_takeover_allowed(s: &Services, big: u8, small: u8) -> bool {
-    takeover_limit(s, big, small)
+pub extern "C" fn openttd_rust_company_takeover_allowed_abi(
+    s: &Services,
+    big: u8,
+    small: u8,
+) -> u8 {
+    u8::from(takeover_limit(s, big, small))
 }
 /// `CmdCompanyCtrl`; `true` asks the caller to run `AI::StartNew(startup.company)`
 /// and call again. The result is in `result` once it returns `false`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_control(
+pub extern "C" fn openttd_rust_company_control_abi(
     s: &Services,
     ownership: &crate::tile_owner::Context,
     c: &mut Control,
-) -> bool {
-    control(s, ownership, c)
+) -> u8 {
+    u8::from(control(s, ownership, c))
 }
 /// `ChangeOwnershipOfCompanyItems`.
 #[unsafe(no_mangle)]

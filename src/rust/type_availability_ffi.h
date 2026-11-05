@@ -33,13 +33,15 @@ extern "C" {
 /* Pinned Rust 1.99 can return noncanonical bool bytes for the four Has/Val bit predicates.
  * Their wire results are uint8_t 0/1; logical APIs and callbacks remain bool. */
 uint8_t openttd_rust_has_rail_type(const OpenTTDTypeAvailabilityServices *, uint8_t, RailType);
-bool openttd_rust_has_any_rail_types(const OpenTTDTypeAvailabilityServices *, uint8_t);
+uint8_t openttd_rust_has_any_rail_types_abi(const OpenTTDTypeAvailabilityServices *, uint8_t);
+extern "C++" inline bool openttd_rust_has_any_rail_types(const OpenTTDTypeAvailabilityServices *a0, uint8_t a1) { return openttd_rust_has_any_rail_types_abi(a0, a1) != 0; }
 uint8_t openttd_rust_val_rail_type(const OpenTTDSharedServices *, RailType);
 uint64_t openttd_rust_add_date_rail_types(const OpenTTDTypeAvailabilityServices *, uint64_t, int32_t);
 uint64_t openttd_rust_company_rail_types( const OpenTTDTypeAvailabilityServices *, uint8_t, bool);
 uint64_t openttd_rust_rail_types( const OpenTTDTypeAvailabilityServices *, bool);
 uint8_t openttd_rust_has_road_type(const OpenTTDSharedServices *, const OpenTTDTypeAvailabilityServices *, uint8_t, RoadType);
-bool openttd_rust_has_any_road_types(const OpenTTDTypeAvailabilityServices *, uint8_t, RoadTramType);
+uint8_t openttd_rust_has_any_road_types_abi(const OpenTTDTypeAvailabilityServices *, uint8_t, RoadTramType);
+extern "C++" inline bool openttd_rust_has_any_road_types(const OpenTTDTypeAvailabilityServices *a0, uint8_t a1, RoadTramType a2) { return openttd_rust_has_any_road_types_abi(a0, a1, a2) != 0; }
 uint8_t openttd_rust_val_road_type(const OpenTTDSharedServices *, RoadType);
 uint64_t openttd_rust_add_date_road_types(const OpenTTDTypeAvailabilityServices *, uint64_t, int32_t);
 uint64_t openttd_rust_company_road_types( const OpenTTDTypeAvailabilityServices *, uint8_t, bool);

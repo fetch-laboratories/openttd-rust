@@ -467,7 +467,7 @@ fn check_dynamic_engines(s: &Services) -> bool {
     if menu() {
         return true;
     }
-    if !crate::engine_loading::openttd_rust_engine_reset_config(s.engines) {
+    if crate::engine_loading::openttd_rust_engine_reset_config_abi(s.engines) == 0 {
         hit(witness::SETTINGS_DYNAMIC_REFUSED);
         return refuse(s, s.dynamic_engines_existing_vehicles);
     }
@@ -637,7 +637,7 @@ macro_rules! callbacks {
 callbacks! {
     openttd_rust_settings_update_consists() => update_consists;
     openttd_rust_settings_update_all_service_interval(new_value: i32) => update_all_service_interval;
-    openttd_rust_settings_can_update_service_interval(new_value: i32) -> bool => can_update_service_interval;
+
     openttd_rust_settings_update_service_interval(kind: u8, new_value: i32) => update_service_interval;
     openttd_rust_settings_default_service_interval(def: i32, kind: u8) -> i32 => default_service_interval;
     openttd_rust_settings_service_interval_range() -> Range => service_interval_range;
@@ -646,11 +646,11 @@ callbacks! {
     openttd_rust_settings_road_acceleration_model_changed() => road_acceleration_model_changed;
     openttd_rust_settings_road_slope_steepness_changed() => road_slope_steepness_changed;
     openttd_rust_settings_difficulty_noise_change() => difficulty_noise_change;
-    openttd_rust_settings_check_road_side() -> bool => check_road_side;
-    openttd_rust_settings_check_freeform_edges(new_value: i32) -> bool => check_freeform_edges;
+
+
     openttd_rust_settings_update_freeform_edges(new_value: i32) => update_freeform_edges;
-    openttd_rust_settings_check_dynamic_engines() -> bool => check_dynamic_engines;
-    openttd_rust_settings_check_max_height_level(new_value: i32) -> bool => check_max_height_level;
+
+
     openttd_rust_settings_station_catchment_changed() => station_catchment_changed;
     openttd_rust_settings_change_timekeeping_units() => change_timekeeping_units;
     openttd_rust_settings_change_minutes_per_year(new_value: i32) => change_minutes_per_year;
@@ -659,8 +659,8 @@ callbacks! {
 
 /// `CanChangeTimetableMode`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_settings_can_change_timetable_mode(s: &Services) -> bool {
-    !(s.clock.using_wallclock_units)(false)
+pub extern "C" fn openttd_rust_settings_can_change_timetable_mode_abi(s: &Services) -> u8 {
+    u8::from(!(s.clock.using_wallclock_units)(false))
 }
 
 /// # Safety
@@ -704,4 +704,38 @@ crate::abi::layouts! {
         window_classes_dirty, error_message, edges_not_empty,
         edges_not_water, dynamic_engines_existing_vehicles, too_high_mountain,
     };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_settings_can_update_service_interval_abi(
+    s: &Services,
+    new_value: i32,
+) -> u8 {
+    u8::from(can_update_service_interval(s, new_value))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_settings_check_road_side_abi(s: &Services) -> u8 {
+    u8::from(check_road_side(s))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_settings_check_freeform_edges_abi(
+    s: &Services,
+    new_value: i32,
+) -> u8 {
+    u8::from(check_freeform_edges(s, new_value))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_settings_check_dynamic_engines_abi(s: &Services) -> u8 {
+    u8::from(check_dynamic_engines(s))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_settings_check_max_height_level_abi(
+    s: &Services,
+    new_value: i32,
+) -> u8 {
+    u8::from(check_max_height_level(s, new_value))
 }

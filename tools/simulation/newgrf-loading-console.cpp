@@ -127,7 +127,7 @@ static void Action2PartialRead()
 	auto parse = [](std::initializer_list<uint8_t> bytes) {
 #ifdef WITH_RUST
 		OpenTTDGrfCursor reader{bytes.begin(), bytes.size(), 0};
-		bool success = openttd_rust_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &reader);
+		bool success = openttd_test_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &reader);
 		return std::pair{!success, reader.len - reader.pos};
 #else
 		ByteReader reader(bytes.begin(), bytes.size());

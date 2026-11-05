@@ -337,8 +337,8 @@ pub unsafe extern "C" fn openttd_rust_economy_change(
 macro_rules! registry_entries {
     ($registry:ident, $valid:ident, $register:ident, $unregister:ident) => {
         #[unsafe(no_mangle)]
-        pub extern "C" fn $valid(period: Period) -> bool {
-            valid(&$registry, period)
+        pub extern "C" fn $valid(period: Period) -> u8 {
+            u8::from(valid(&$registry, period))
         }
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $register(
@@ -360,13 +360,13 @@ macro_rules! registry_entries {
 }
 registry_entries!(
     CALENDAR,
-    openttd_rust_calendar_valid,
+    openttd_rust_calendar_valid_abi,
     openttd_rust_calendar_register,
     openttd_rust_calendar_unregister
 );
 registry_entries!(
     ECONOMY,
-    openttd_rust_economy_valid,
+    openttd_rust_economy_valid_abi,
     openttd_rust_economy_register,
     openttd_rust_economy_unregister
 );
@@ -433,21 +433,21 @@ pub struct ClockCompany {
 macro_rules! owner_callback {
     ($name:ident, $ty:ty, $s:ident, $body:block) => {
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(context: *const c_void, _: *mut ConsoleException) -> bool {
+        pub unsafe extern "C" fn $name(context: *const c_void, _: *mut ConsoleException) -> u8 {
             let $s = unsafe { &*context.cast::<$ty>() };
             unsafe { $body }
-            true
+            u8::from(true)
         }
     };
 }
-owner_callback!(openttd_rust_clock_industry_daily, ClockIndustry, c, {
+owner_callback!(openttd_rust_clock_industry_daily_abi, ClockIndustry, c, {
     crate::industry::openttd_rust_industry_daily(c.builder, c.services);
 });
-owner_callback!(openttd_rust_clock_industry_monthly, ClockIndustry, c, {
+owner_callback!(openttd_rust_clock_industry_monthly_abi, ClockIndustry, c, {
     crate::industry::openttd_rust_industry_monthly(c.builder, c.services);
 });
 owner_callback!(
-    openttd_rust_clock_engine_daily,
+    openttd_rust_clock_engine_daily_abi,
     crate::engine::Services,
     s,
     {
@@ -455,7 +455,7 @@ owner_callback!(
     }
 );
 owner_callback!(
-    openttd_rust_clock_engine_monthly,
+    openttd_rust_clock_engine_monthly_abi,
     crate::engine::Services,
     s,
     {
@@ -463,7 +463,7 @@ owner_callback!(
     }
 );
 owner_callback!(
-    openttd_rust_clock_station_monthly,
+    openttd_rust_clock_station_monthly_abi,
     crate::station_service::World,
     s,
     {
@@ -471,7 +471,7 @@ owner_callback!(
     }
 );
 owner_callback!(
-    openttd_rust_clock_subsidy_monthly,
+    openttd_rust_clock_subsidy_monthly_abi,
     crate::subsidy::Services,
     s,
     {
@@ -484,32 +484,32 @@ owner_callback!(
         );
     }
 );
-owner_callback!(openttd_rust_clock_town_monthly, ClockTown, c, {
+owner_callback!(openttd_rust_clock_town_monthly_abi, ClockTown, c, {
     crate::town::openttd_rust_town_monthly_all(c.leaves, c.shared, economy_month());
 });
-owner_callback!(openttd_rust_clock_town_yearly, ClockTown, c, {
+owner_callback!(openttd_rust_clock_town_yearly_abi, ClockTown, c, {
     crate::town::house::openttd_rust_house_age_all(c.leaves, c.shared);
 });
 owner_callback!(
-    openttd_rust_clock_disaster_daily,
+    openttd_rust_clock_disaster_daily_abi,
     crate::disaster::Services,
     s,
     {
         crate::disaster::openttd_rust_disaster_daily(s);
     }
 );
-owner_callback!(openttd_rust_clock_economy_month, ClockCompany, c, {
+owner_callback!(openttd_rust_clock_economy_month_abi, ClockCompany, c, {
     crate::company::openttd_rust_economy_month(&*c.services, &(c.month)());
 });
 owner_callback!(
-    openttd_rust_clock_economy_calendar_month,
+    openttd_rust_clock_economy_calendar_month_abi,
     ClockCompany,
     c,
     {
         crate::company::openttd_rust_economy_calendar_month(&*c.services, &(c.settings)());
     }
 );
-owner_callback!(openttd_rust_clock_company_yearly, ClockCompany, c, {
+owner_callback!(openttd_rust_clock_company_yearly_abi, ClockCompany, c, {
     crate::company::openttd_rust_company_yearly(&*c.services, &(c.year)());
 });
 crate::abi::layouts! {
