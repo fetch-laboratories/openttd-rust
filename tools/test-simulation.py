@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -708,6 +709,22 @@ class SimulationRuntimeTests(unittest.TestCase):
 
 
 class SimulationSpeedTests(unittest.TestCase):
+    def test_candidate_profile_entries_name_rust_functions(self):
+        # A renamed export toggles no collection, so every profile reports zero loop Ir.
+        source = simulate.ROOT / "rust/openttd-kernels/src"
+        for entry in ir.CANDIDATE_ENTRIES:
+            *module, name = entry.split("::")
+            module = module[1:] if module[:1] == ["openttd_kernels"] else module
+            files = (
+                [source.joinpath(*module).with_suffix(".rs")]
+                if module
+                else sorted(source.rglob("*.rs"))
+            )
+            text = "".join(path.read_text() for path in files if path.is_file())
+            with self.subTest(entry=entry):
+                found = re.search(rf"\bfn {re.escape(name)}\s*[<(]", text)
+                self.assertIsNotNone(found, f"no Rust function {name} for {entry}")
+
     def test_record_and_fixed_ceilings(self):
         from math import inf, nextafter
 
