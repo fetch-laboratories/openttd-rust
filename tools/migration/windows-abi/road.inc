@@ -26,7 +26,7 @@ struct RoadAbiProbe {
 	OpenTTDRoadEntry entry{.ground = ground.state, .acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
 	uint32_t &dest = road_abi_vehicle.dest_tile;
 	uint8_t &progress = road_abi_vehicle.progress;
-	uint32_t nested = 0, destroyed = 0, departures = 0;
+	uint32_t nested = 0, destroyed = 0;
 	uint8_t &tick = road_abi_vehicle.tick_counter, &running = road_abi_vehicle.running_ticks, &status = road_abi_vehicle.vehstatus;
 	uint32_t cache_properties = 0, cargo_ages = 0, length_changes = 0, viewports = 0, turns = 0;
 	uint32_t visual_stage = 0;
@@ -51,11 +51,6 @@ static const OpenTTDRoadStopServices road_abi_stops{
 	.primary = [](uint32_t tile, RoadStopType) noexcept { CHECK(tile == 100); return reinterpret_cast<RoadStop *>(&road_abi_stop); },
 	.tile = [](const RoadStop *) noexcept -> uint32_t { return 100; },
 	.state = [](const RoadStop *) noexcept { return road_abi_probe->stop.get(); },
-	.drive_read = [](OpenTTDVehicle *u) noexcept -> OpenTTDRoadStopDriveRead {
-		CHECK(u == RoadAbiHandle());
-		++road_abi_probe->departures;
-		return {.total_length = 8, .direction = 1};
-	},
 };
 static void RoadBoundary()
 {
@@ -109,8 +104,10 @@ static void RoadBoundary()
 	t.shared.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	probe.stop->entries = &probe.entries;
 	probe.entries.east.occupied = 8;
+	/* Leaving reads the record's direction and the ground total length. */
+	probe.ground.state->cache.cached_total_length = 8;
 	CHECK(openttd_rust_road_crash(v, probe.state, false, &t.leaves) == 8);
-	CHECK(probe.departures == 1 && openttd_rust_road_get(probe.state, 5) == 1 && probe.entries.east.occupied == 0);
+	CHECK(openttd_rust_road_get(probe.state, 5) == 1 && probe.entries.east.occupied == 0);
 
 	/* Entries nested in a NewGRF property callback see and change the same owner. */
 
