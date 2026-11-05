@@ -314,6 +314,7 @@ static void RoadBoundary()
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	probe.reset_status = false;
 	CHECK(probe.tick == 0 && probe.status == 0);
+	CHECK(probe.speed == 2);
 	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == INT32_MIN && probe.running == 0 && probe.progress == 7 && world.draws == 0);
 
 	/* Stopped parts preserve running ticks; later status resets must survive the entry. */
@@ -332,6 +333,7 @@ static void RoadBoundary()
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
 	probe.visual_eligible = false; probe.entry.acceleration_model = 1;
+	probe.speed = 0; road_abi_vehicle.subspeed = 0;
 	front = probe.entry;
 	/* Hidden vehicles skip viewport callbacks, then use the direct canonical link. */
 	probe.status = 1;
