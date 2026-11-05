@@ -228,9 +228,6 @@ pub struct RailCommandServices {
     pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
 
-const TRACK_X: u8 = 0;
-const TRACK_Y: u8 = 1;
-const INVALID_TRACK: u8 = 0xFF;
 use crate::track_type::INVALID_TRACKDIR;
 use crate::track_type::TRACK_BIT_DEPOT as BIT_DEPOT;
 use crate::track_type::TRACK_BIT_LEFT as BIT_LEFT;
@@ -239,6 +236,7 @@ use crate::track_type::TRACK_BIT_RIGHT as BIT_RIGHT;
 use crate::track_type::TRACK_BIT_UPPER as BIT_UPPER;
 use crate::track_type::TRACK_BIT_X as BIT_X;
 use crate::track_type::TRACK_BIT_Y as BIT_Y;
+use crate::track_type::{INVALID_TRACK, TRACK_X, TRACK_Y};
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.
 pub(crate) const CROSSING_SLOPES: u32 =

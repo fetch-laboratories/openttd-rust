@@ -6,6 +6,12 @@
  */
 
 //! Helpers of `signal_func.h`.
+/// `SignalAlongTrackdir` (`_signal_along_trackdir`, `table/signal_data.h`).
+pub fn signal_along_trackdir(trackdir: u8) -> u8 {
+    [
+        0x8, 0x8, 0x8, 0x2, 0x4, 0x1, 0, 0, 0x4, 0x4, 0x4, 0x1, 0x8, 0x2,
+    ][usize::from(trackdir)]
+}
 /// `SignalOnTrack` on the native valid-track domain.
 pub const fn signal_on_track(track: u8) -> u8 {
     [0x0c, 0x0c, 0x0c, 0x03, 0x0c, 0x03][track as usize]

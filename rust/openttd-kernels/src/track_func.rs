@@ -123,6 +123,22 @@ pub const fn trackdir_bits_to_track_bits(bits: u16) -> u8 {
     ((bits | (bits >> 8)) & crate::track_type::TRACK_BIT_MASK as u16) as u8
 }
 
+/// `IsValidTrackdir`.
+pub const fn is_valid_trackdir(trackdir: u8) -> bool {
+    trackdir != crate::track_type::INVALID_TRACKDIR
+        && (1_u32.wrapping_shl(trackdir as u32) & crate::track_type::TRACKDIR_BIT_MASK) != 0
+}
+
+/// `FindFirstTrack`.
+#[allow(clippy::cast_possible_truncation)] // `trailing_zeros` of a nonzero byte is below 8.
+pub const fn find_first_track(tracks: u8) -> u8 {
+    if tracks == crate::track_type::TRACK_BIT_NONE {
+        crate::track_type::INVALID_TRACK
+    } else {
+        tracks.trailing_zeros() as u8
+    }
+}
+
 /// `ReverseTrackdir`.
 pub const fn reverse_trackdir(td: u8) -> u8 {
     td ^ 8

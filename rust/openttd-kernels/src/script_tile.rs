@@ -26,7 +26,7 @@ use crate::slope_func::{
 use crate::tile_type::{MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_ROAD, MP_STATION, MP_TREES, MP_WATER};
 
 /// `ScriptError::ERR_PRECONDITION_FAILED`.
-const ERR_PRECONDITION_FAILED: u32 = 2;
+pub(crate) const ERR_PRECONDITION_FAILED: u32 = 2;
 /// `ScriptTile::SLOPE_INVALID`.
 const SLOPE_INVALID: u32 = 0xFFFF;
 /// `ScriptTile::TRANSPORT_ROAD`.
@@ -36,12 +36,12 @@ const COMPANY_INVALID: i32 = -1;
 /// `TREE_GROUND_SHORE`.
 const TREE_GROUND_SHORE: u8 = 3;
 
-fn world(s: &Services) -> World<'_> {
+pub(crate) fn world(s: &Services) -> World<'_> {
     World::new(s.command.shared)
 }
 
 /// `::IsValidTile`.
-fn valid(w: &World<'_>, tile: u32) -> bool {
+pub(crate) fn valid(w: &World<'_>, tile: u32) -> bool {
     w.asserted(|m| crate::tile_map::is_valid_tile(m, tile, m.count()))
 }
 
@@ -56,12 +56,12 @@ fn company_mode_valid(s: &Services) -> bool {
 }
 
 /// `ScriptCompanyMode::IsDeity() || ScriptCompanyMode::IsValid()`.
-fn deity_or_company_mode_valid(s: &Services) -> bool {
+pub(crate) fn deity_or_company_mode_valid(s: &Services) -> bool {
     script_host::active_company() == crate::company_type::OWNER_DEITY || company_mode_valid(s)
 }
 
 /// `EnforcePreconditionCustomError`: record `error` when `condition` fails.
-fn enforce(condition: bool, error: u32) -> bool {
+pub(crate) fn enforce(condition: bool, error: u32) -> bool {
     if !condition {
         script_host::set_active_error(error);
     }
@@ -465,7 +465,7 @@ fn resolve_company_id(s: &Services, company: i32) -> i32 {
 
 /// `ScriptTile::HasTransportType`; `(::TransportType)` truncates to the `uint8_t` enum.
 #[allow(clippy::cast_possible_truncation)]
-fn has_transport_type(s: &Services, tile: u32, transport_type: u32) -> bool {
+pub(crate) fn has_transport_type(s: &Services, tile: u32, transport_type: u32) -> bool {
     use crate::track_func::track_status_to_trackdir_bits;
     if !valid(&world(s), tile) {
         return false;

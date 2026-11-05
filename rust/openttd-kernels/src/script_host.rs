@@ -168,6 +168,18 @@ pub(crate) fn active_company() -> u8 {
     unsafe { (*(*CONTEXT.get()).active).company }
 }
 
+/// `ScriptObject::GetRailType` of the active instance.
+pub(crate) fn active_rail_type() -> u8 {
+    // SAFETY: as for `active_company`.
+    unsafe { (*(*CONTEXT.get()).active).rail_type }
+}
+
+/// `ScriptObject::SetRailType` on the active instance.
+pub(crate) fn set_active_rail_type(rail_type: u8) {
+    // SAFETY: as for `active_company`; no other reference to the host is live.
+    unsafe { (*(*CONTEXT.get()).active).rail_type = rail_type };
+}
+
 /// `ScriptObject::SetLastError` on the active instance.
 pub(crate) fn set_active_error(error: u32) {
     // SAFETY: as for `active_company`; no other reference to the host is live.

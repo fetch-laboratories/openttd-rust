@@ -184,6 +184,15 @@ impl crate::map_func::World<'_> {
     pub(crate) fn road_tile_type(&self, t: u32) -> crate::services::RoadTileKind {
         self.asserted(|m| get_road_tile_type(m, t))
     }
+    /// `IsLevelCrossingTile`.
+    pub(crate) fn level_crossing_tile(&self, t: u32) -> bool {
+        self.kind(t) == crate::tile_type::MP_ROAD && self.road_tile_type(t).0 == ROAD_TILE_CROSSING
+    }
+    /// `GetCrossingRoadAxis`, with its `IsLevelCrossing` assertion.
+    pub(crate) fn crossing_road_axis(&self, t: u32) -> u8 {
+        self.check(self.road_tile_type(t).0 == ROAD_TILE_CROSSING);
+        Self::byte(self.types.m5(t)) & 1
+    }
     /// `IsNormalRoad`.
     #[allow(clippy::inline_always)]
     #[inline(always)]

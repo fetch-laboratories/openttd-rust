@@ -190,6 +190,14 @@ impl crate::map_func::World<'_> {
                 .0
                 == crate::station_type::STATION_RAIL
     }
+    /// `IsRailWaypointTile`.
+    pub(crate) fn rail_waypoint_tile(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && get_station_type(&self.types, TileIndex(t))
+                .expect("station tile")
+                .0
+                == RAIL_WAYPOINT
+    }
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn has_station_rail(&self, t: u32) -> bool {
