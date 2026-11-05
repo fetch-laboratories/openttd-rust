@@ -1316,6 +1316,33 @@ class SpeedPassTests(unittest.TestCase):
                     speed.collect(out, migration)
                 games.assert_not_called()
 
+    def test_preparation_identities_match_each_profiled_role(self):
+        from simulation import speed
+
+        calls = []
+
+        def prepare(scenario, command, binary, build, folder, env, reference):
+            calls.append((binary, reference))
+            identity = {"compatible": binary, "executable": binary}
+            if not reference:
+                identity["entries"] = ["candidate"]
+            return command, {"identity": identity}
+
+        scenario = {"name": "play-a", "kind": "play"}
+        roles = {role: role for role in speed.ROLES}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(speed, "speed_scenarios", return_value=[scenario]),
+            patch.object(simulate, "scenario_modules", return_value=[]),
+            patch.object(simulate, "prepare_scenario", return_value=scenario),
+            patch.object(simulate, "prepare_run_dir"),
+            patch.object(speed.instructions, "prepare", side_effect=prepare),
+        ):
+            _, identities = speed.prepare_inputs(Path(directory), roles, roles, {})
+        self.assertEqual(sorted(calls), [("candidate", False), ("reference", True)])
+        self.assertNotIn("entries", identities["play-a"]["reference"])
+        self.assertEqual(identities["play-a"]["candidate"]["entries"], ["candidate"])
+
     def test_hold_scans_before_start_returns_and_resumes_on_observer_error(self):
         from simulation import speed
 

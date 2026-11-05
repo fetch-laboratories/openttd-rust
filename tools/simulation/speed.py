@@ -141,7 +141,13 @@ def prepare_inputs(out, binaries, builds, env):
                 folder = out / name / "plain" / role
                 core.prepare_run_dir(setup, builds[role], folder)
                 identity[role] = instructions.prepare(
-                    setup, [], binaries[role], builds[role], folder, dict(env), False
+                    setup,
+                    [],
+                    binaries[role],
+                    builds[role],
+                    folder,
+                    dict(env),
+                    role == "reference",
                 )[1]["identity"]
             # instructions.finish combines the candidate identity the same way.
             identity["candidate"]["compatible"] = instructions.digest(
