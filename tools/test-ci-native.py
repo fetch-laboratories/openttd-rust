@@ -165,17 +165,17 @@ class FrozenRuntimeTests(unittest.TestCase):
                     for role, build in builds.items()
                 }
                 prepared = industries.prepare(
-                    scenario, binaries, builds, output, 10, {}, {}
+                    scenario, binaries, builds, output, 10, {}, cast(core.Result, {})
                 )
             for role, executable in prepared["executables"].items():
                 self.assertEqual(executable.read_bytes(), role.encode())
             with self.assertRaisesRegex(RuntimeError, "no branch-witnesses.json"):
                 industries.check(
-                    dict(prepared, witnesses=True),
-                    {"dir": output},
+                    cast(industries.Scenario, dict(prepared, witnesses=True)),
+                    cast(core.Run, {"dir": output}),
                     "snapshots",
                     "candidate",
-                    {},
+                    cast(core.Result, {}),
                 )
 
     def test_native_metadata_relocates_without_touching_binary_bytes(self) -> None:
