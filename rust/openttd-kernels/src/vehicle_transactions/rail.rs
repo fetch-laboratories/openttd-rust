@@ -212,7 +212,7 @@ fn free_wagons(x: Ctx, tile: u32) -> Vec<u32> {
         if handle.vehicle_type() != VEH_TRAIN {
             return;
         }
-        if unsafe { (c.x.w.crashed)(Ctx::sh(v)) } {
+        if handle.status() & crate::vehicle_base::VS_CRASHED != 0 {
             return;
         }
         if !gv::is_free_wagon(c.x.subtype(v)) {
@@ -648,7 +648,9 @@ fn arrange_trains(x: Ctx, dst_head: &mut R, dst: R, src_head: &mut R, src: R, mo
         *src_head = if move_chain {
             ptr::null_mut()
         } else if x.is_multiheaded(src) {
-            x.rec(unsafe { (x.w.next_unit)(Ctx::sh(src)) })
+            Ctx::vref(src)
+                .next_unit()
+                .map_or(ptr::null_mut(), |v| v.0.as_ptr())
         } else {
             x.next_vehicle(src)
         };
@@ -724,7 +726,7 @@ pub(crate) unsafe fn move_vehicle(
     if !(cost.success)(out) {
         return;
     }
-    if unsafe { (x.w.crashed)(Ctx::sh(src)) } {
+    if Ctx::vref(src).status() & crate::vehicle_base::VS_CRASHED != 0 {
         return (cost.error)(out, ERROR);
     }
     let mut dst;
@@ -743,7 +745,7 @@ pub(crate) unsafe fn move_vehicle(
         if !(cost.success)(out) {
             return;
         }
-        if unsafe { (x.w.crashed)(Ctx::sh(dst)) } {
+        if Ctx::vref(dst).status() & crate::vehicle_base::VS_CRASHED != 0 {
             return (cost.error)(out, ERROR);
         }
     }

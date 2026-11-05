@@ -98,14 +98,8 @@ struct OpenTTDFleetTransactionServices {
 	uint32_t (*error)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	int64_t (*money)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(money);
 	const OpenTTDCommandServices *commands;
-	bool (*rear)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(rear);
-	bool (*crashed)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(crashed);
-	bool (*stopped)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped);
 	bool (*chain_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(chain_depot);
 	const OpenTTDVehicleServices *vehicles;
-	void * (*next_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(next_unit);
-	void * (*prev_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(prev_unit);
-	uint16_t (*length)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(length);
 	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);

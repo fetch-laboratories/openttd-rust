@@ -287,9 +287,48 @@ impl crate::vehicle::VehicleRef {
         }
         next
     }
+    /// `Train::GetNextUnit`; this record is a train.
+    pub(crate) fn next_unit(self) -> Option<Self> {
+        let mut next = self.next_vehicle();
+        if let Some(v) = next
+            && crate::ground_vehicle::is_rear_dualheaded(v.subtype())
+        {
+            next = v.next_vehicle();
+        }
+        next
+    }
+    /// `Vehicle::GetPrevVehicle`.
+    pub(crate) fn previous_vehicle(self) -> Option<Self> {
+        let mut previous = self.previous();
+        while let Some(v) = previous {
+            if !v.is_articulated_part() {
+                break;
+            }
+            previous = v.previous();
+        }
+        previous
+    }
+    /// `Train::GetPrevUnit`; this record is a train.
+    pub(crate) fn previous_unit(self) -> Option<Self> {
+        let mut previous = self.previous_vehicle();
+        if let Some(v) = previous
+            && crate::ground_vehicle::is_rear_dualheaded(v.subtype())
+        {
+            previous = v.previous_vehicle();
+        }
+        previous
+    }
     /// `Vehicle::IsArticulatedPart`.
     pub(crate) fn is_articulated_part(self) -> bool {
         is_articulated_part(is_ground_vehicle(self.vehicle_type()), self.subtype())
+    }
+    /// `Vehicle::HasEngineType`.
+    pub(crate) fn has_engine_type(self) -> bool {
+        match VehicleType(self.vehicle_type()) {
+            VehicleType::AIRCRAFT => crate::aircraft::is_normal_aircraft(self.subtype()),
+            VehicleType::TRAIN | VehicleType::ROAD | VehicleType::SHIP => true,
+            _ => false,
+        }
     }
     /// `Vehicle::IsFrontEngine`.
     pub(crate) fn is_front_engine(self) -> bool {
@@ -570,6 +609,54 @@ impl crate::vehicle::VehicleRef {
 #[cfg(test)]
 mod record_tests {
     use super::*;
+
+    #[test]
+    fn train_units_skip_articulated_parts_and_one_rear_head() {
+        use crate::vehicle::VehicleRef;
+        let articulated = 1 << GVSF_ARTICULATED_PART;
+        let rear = 1 << GVSF_MULTIHEADED;
+        let engine = 1 << GVSF_ENGINE;
+        let records: Vec<_> = [
+            engine,
+            articulated,
+            rear,
+            0,
+            articulated,
+            engine,
+            rear,
+            rear,
+        ]
+        .into_iter()
+        .map(|subtype| {
+            let record = openttd_rust_vehicle_record_new(std::ptr::null_mut(), VehicleType::TRAIN);
+            // SAFETY: Each record is privately owned through this test.
+            unsafe { (*record).subtype = subtype };
+            VehicleRef::of(record)
+        })
+        .collect();
+        for pair in records.windows(2) {
+            // SAFETY: Both records remain live through traversal and cleanup.
+            unsafe { set_next(pair[0].0.as_ptr(), pair[1].0.as_ptr()) };
+        }
+        let expected = [
+            (Some(3), None),
+            (Some(3), Some(0)),
+            (Some(3), Some(0)),
+            (Some(5), Some(0)),
+            (Some(5), Some(3)),
+            (Some(7), Some(3)),
+            (None, Some(5)),
+            (None, Some(5)),
+        ];
+        for (record, (next, previous)) in records.iter().zip(expected) {
+            assert_eq!(record.next_unit(), next.map(|i| records[i]));
+            assert_eq!(record.previous_unit(), previous.map(|i| records[i]));
+        }
+        for record in records {
+            // SAFETY: No traversal follows these private records after cleanup.
+            unsafe { openttd_rust_vehicle_record_delete(record.0.as_ptr()) };
+        }
+    }
 
     #[test]
     fn set_next_detaches_old_suffix_and_new_predecessor() {

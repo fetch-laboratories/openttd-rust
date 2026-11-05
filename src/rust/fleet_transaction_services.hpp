@@ -31,13 +31,7 @@ static void FleetTransaction_cost_amount(void *out, int64_t amount) noexcept { G
 static bool FleetTransaction_success(void *out) noexcept { return GetRustCommandCostServices().success(RustCommandCost(static_cast<CommandCost *>(out))); }
 static uint32_t FleetTransaction_error(void *out) noexcept { return GetRustCommandCostServices().error_message(RustCommandCost(static_cast<CommandCost *>(out))); }
 static int64_t FleetTransaction_money(void *out) noexcept { return GetRustCommandCostServices().money(RustCommandCost(static_cast<CommandCost *>(out))); }
-static bool FleetTransaction_rear(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->IsRearDualheaded(); }
-static bool FleetTransaction_crashed(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->GetVehStatus().Test(VehState::Crashed); }
-static bool FleetTransaction_stopped(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->GetVehStatus().Test(VehState::Stopped); }
 static bool FleetTransaction_chain_depot(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsChainInDepot(); }
-static void * FleetTransaction_next_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetNextUnit(); }
-static void * FleetTransaction_prev_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetPrevUnit(); }
-static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustGroundCachedTotalLength(&Train::From(v)->gcache); }
 static bool FleetTransaction_stopped_in_depot(void *shell) noexcept { return static_cast<Vehicle *>(shell)->IsStoppedInDepot(); }
 static uint8_t FleetTransaction_max_length() noexcept { return _settings_game.vehicle.max_train_length; }
 /* Original assertion sites; Rust evaluates their conditions only when assertions is set. */
@@ -84,14 +78,8 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.error = FleetTransaction_error,
 	.money = FleetTransaction_money,
 	.commands = &GetRustCommandServices(),
-	.rear = FleetTransaction_rear,
-	.crashed = FleetTransaction_crashed,
-	.stopped = FleetTransaction_stopped,
 	.chain_depot = FleetTransaction_chain_depot,
 	.vehicles = &GetRustVehicleServices(),
-	.next_unit = FleetTransaction_next_unit,
-	.prev_unit = FleetTransaction_prev_unit,
-	.length = FleetTransaction_length,
 	.cargo_type = RustOpaqueHandleRead<uint8_t, RustVehicleCargoType>,
 	.capabilities = &GetRustEngineCapabilitiesServices(),
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,

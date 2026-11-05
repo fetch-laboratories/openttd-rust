@@ -22,8 +22,6 @@ struct OpenTTDVehicleMaintenanceRenewal {
 	OpenTTDCalendarDate max_age;
 	int16_t months;
 	bool enabled;
-	VehicleType kind;
-	uint8_t subtype;
 };
 struct OpenTTDVehicleMaintenanceReset {
 	OpenTTDEconomyDate economy_date;
@@ -59,38 +57,13 @@ struct OpenTTDVehicleMaintenanceCheckBreakdown {
 	uint8_t breakdowns;
 };
 struct OpenTTDVehicleMaintenanceBreakdownGuard {
-	uint16_t speed;
-	uint8_t counter;
-	uint8_t status;
 	uint8_t breakdowns;
 	bool menu;
 };
 struct OpenTTDVehicleMaintenanceBreakdownTrigger {
 	uint16_t reliability;
 	uint8_t chance;
-	VehicleType kind;
 	uint8_t breakdowns;
-};
-struct OpenTTDVehicleMaintenanceBreakdownProbe {
-	uint8_t counter;
-	uint8_t status;
-};
-struct OpenTTDVehicleMaintenanceBreakdownStart {
-	uint8_t since;
-	VehicleType kind;
-};
-struct OpenTTDVehicleMaintenanceBreakdownActive {
-	VehicleType kind;
-	uint8_t tick;
-	uint8_t delay;
-};
-struct OpenTTDVehicleMaintenanceBreakdownCountdown {
-	OrderType order_type;
-	uint8_t counter;
-};
-struct OpenTTDVehicleMaintenanceBreakdownSoundState {
-	VehicleType kind;
-	LandscapeType landscape;
 };
 struct OpenTTDVehicleMaintenanceAge {
 	OpenTTDCalendarDate age;
@@ -99,9 +72,7 @@ struct OpenTTDVehicleMaintenanceAge {
 };
 struct OpenTTDVehicleMaintenanceWarning {
 	bool enabled;
-	bool has_previous;
-	bool local;
-	uint8_t status;
+	uint8_t local_company;
 };
 struct OpenTTDVehicleMaintenanceWarningCompany {
 	const Company *company;
@@ -114,7 +85,6 @@ struct OpenTTDVehicleMaintenanceServices {
 	const OpenTTDCompanyIdentityServices *company;
 	OpenTTDVehicleMaintenanceRenewal (OPENTTD_RUST_CALL *renewal)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(renewal);
 	OpenTTDVehicleMaintenanceReset (OPENTTD_RUST_CALL *reset)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reset);
-	bool (OPENTTD_RUST_CALL *has_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_engine);
 	OpenTTDVehicleMaintenanceInterval (OPENTTD_RUST_CALL *interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(interval);
 	uint16_t (OPENTTD_RUST_CALL *engine_reliability)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_reliability);
 	OpenTTDVehicleMaintenanceReplacement (OPENTTD_RUST_CALL *replacement)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(replacement);
@@ -125,17 +95,9 @@ struct OpenTTDVehicleMaintenanceServices {
 	OpenTTDVehicleMaintenanceBreakdownGuard (OPENTTD_RUST_CALL *breakdown_guard)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_guard);
 	OpenTTDVehicleMaintenanceBreakdownTrigger (OPENTTD_RUST_CALL *breakdown_trigger)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_trigger);
 	void (OPENTTD_RUST_CALL *chance_write)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(chance_write);
-	void (OPENTTD_RUST_CALL *trigger)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(trigger);
-	OpenTTDVehicleMaintenanceBreakdownProbe (OPENTTD_RUST_CALL *breakdown_probe)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_probe);
-	OpenTTDVehicleMaintenanceBreakdownStart (OPENTTD_RUST_CALL *breakdown_start)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_start);
-	void (OPENTTD_RUST_CALL *breakdown_start_write)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_start_write);
-	OpenTTDVehicleMaintenanceBreakdownActive (OPENTTD_RUST_CALL *breakdown_active)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_active);
-	OpenTTDVehicleMaintenanceBreakdownCountdown (OPENTTD_RUST_CALL *breakdown_countdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_countdown);
-	OpenTTDVehicleMaintenanceBreakdownSoundState (OPENTTD_RUST_CALL *breakdown_sound_state)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_sound_state);
 	void (OPENTTD_RUST_CALL *breakdown_delay_write)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay_write);
 	bool (OPENTTD_RUST_CALL *smoke_disabled)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_disabled);
 	uint8_t (OPENTTD_RUST_CALL *smoke_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_delay);
-	void (OPENTTD_RUST_CALL *aircraft_broken)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_broken);
 	void (OPENTTD_RUST_CALL *mark_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty);
 	void (OPENTTD_RUST_CALL *view_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(view_dirty);
 	void (OPENTTD_RUST_CALL *details_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(details_dirty);

@@ -158,7 +158,9 @@ unsafe fn clone(
     let mut new_id = invalid;
     loop {
         if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN.0
-            || !unsafe { (c.transactions.rear)(v) }
+            || !crate::ground_vehicle::is_rear_dualheaded(
+                crate::fleet::transactions::record(c.transactions, v).subtype(),
+            )
         {
             let build_flags =
                 if flags & DoCommandFlag::EXECUTE != 0 && !unsafe { (b.groups.primary)(v) } {

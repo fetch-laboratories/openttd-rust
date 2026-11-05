@@ -766,9 +766,10 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
     let mut part = Some(front);
     while let Some(v) = part {
         count = count.wrapping_add((s.loading.stored_count)(v).cast_signed());
-        let p = (s.loading.part)(v);
-        max = max.wrapping_add(i32::from(p.capacity));
-        if p.capacity != 0 && wants_colour {
+        let capacity = v.cargo_cap();
+        max = max.wrapping_add(i32::from(capacity));
+        if capacity != 0 && wants_colour {
+            let p = (s.loading.part)(v);
             unloading = unloading.wrapping_add(i32::from(p.unloading));
             loading |= !order_no_load
                 && (order_full_load || has_rating((s.station.owner)(st), p.cargo))

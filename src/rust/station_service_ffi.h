@@ -45,26 +45,11 @@ struct OpenTTDStationExclusivity {
 	uint8_t counter;
 	uint8_t exclusive;
 };
-/* Stable Rust cargo owner and the native capacity/type used at this read point.
+/* Stable Rust cargo owner and the native cargo type used at this read point.
  * Rust reads remaining counts directly; refresh after refit or reservation. */
 struct OpenTTDCargoCapacity {
 	const OpenTTDCargoList *owner;
 	uint8_t cargo;
-};
-struct OpenTTDCargoReservation {
-	uint64_t mask;
-	uint32_t reserved;
-	uint16_t capacity;
-	uint8_t cargo;
-};
-struct OpenTTDCargoStored {
-	uint32_t stored;
-	uint16_t capacity;
-};
-struct OpenTTDDeliveryRemaining {
-	uint32_t remaining;
-	uint32_t deliver;
-	uint16_t capacity;
 };
 struct OpenTTDLoadEngine {
 	const OpenTTDEngine *engine;
@@ -74,24 +59,17 @@ struct OpenTTDLoadingWait {
 	int32_t lateness;
 	uint16_t wait;
 };
-/* Front order/type/settings stay unchanged during Reserve, refit and bounded
+/* Front order/settings stay unchanged during Reserve, refit and bounded
  * NewGRF/cargo callbacks. Captured after GetNextStoppingStation; StopLoading and
  * load_unload_ticks are written only after the part loop. */
 struct OpenTTDLoadingControl {
 	uint16_t ticks;
-	uint8_t vehicle_type, unload_type, load_type, refit_cargo;
+	uint8_t unload_type, load_type, refit_cargo;
 	bool refit, full_load, stop, gradual, improved;
 };
 struct OpenTTDLoadingPart {
-	uint16_t capacity;
-	uint8_t cargo, vehicle_type;
-	bool unloading;
-};
-struct OpenTTDLoadingStats {
-	uint32_t stored, load_count;
-	int32_t speed, age;
-	uint16_t capacity;
 	uint8_t cargo;
+	bool unloading;
 };
 using OpenTTDStationScope = void (*)(void *, void *) noexcept;
 enum OrderType : uint8_t;
@@ -178,15 +156,11 @@ struct OpenTTDStationLinks {
 struct OpenTTDStationLoading {
 	OpenTTDLoadingControl (*control)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(control);
 	OpenTTDLoadingPart (*part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(part);
-	OpenTTDLoadingStats (*set_refit_capacity_and_stats)(OpenTTDVehicle *, OpenTTDVehicle *, uint8_t, uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_refit_capacity_and_stats);
 	OpenTTDLoadingWait (*wait_observation)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(wait_observation);
 	OpenTTDLoadEngine (*load_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_engine);
 	uint8_t (*grf_version)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
 	bool (*engine_load_callback)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_load_callback);
 	bool (*engine_no_multiplier)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_no_multiplier);
-	OpenTTDDeliveryRemaining (*delivery_remaining)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(delivery_remaining);
-	OpenTTDCargoStored (*cargo_stored)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_stored);
-	OpenTTDCargoReservation (*cargo_reservation)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_reservation);
 	OpenTTDCargoCapacity (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	uint32_t (*stored_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stored_count);
