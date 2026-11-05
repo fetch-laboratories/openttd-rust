@@ -33,8 +33,6 @@ const SLOPE_INVALID: u32 = 0xFFFF;
 const TRANSPORT_ROAD: u32 = crate::transport_type::TRANSPORT_ROAD as u32;
 /// `ScriptCompany::COMPANY_INVALID`.
 const COMPANY_INVALID: i32 = -1;
-/// `TREE_GROUND_SHORE`.
-const TREE_GROUND_SHORE: u8 = 3;
 
 pub(crate) fn world(s: &Services) -> World<'_> {
     World::new(s.command.shared)
@@ -257,7 +255,8 @@ fn is_coast(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         (is_type(w, tile, MP_WATER) && w.asserted(|m| crate::water_map::is_coast(m, tile)))
             || (is_type(w, tile, MP_TREES)
-                && w.asserted(|m| crate::tree_map::get_tree_ground(m, tile)) == TREE_GROUND_SHORE)
+                && w.asserted(|m| crate::tree_map::get_tree_ground(m, tile))
+                    == crate::tree_map::TREE_GROUND_SHORE)
     })
 }
 
