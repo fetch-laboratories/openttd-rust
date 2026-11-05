@@ -649,8 +649,14 @@ mod record_tests {
             (None, Some(5)),
         ];
         for (record, (next, previous)) in records.iter().zip(expected) {
-            assert_eq!(record.next_unit(), next.map(|i| records[i]));
-            assert_eq!(record.previous_unit(), previous.map(|i| records[i]));
+            assert_eq!(
+                record.next_unit().map(|v| v.0.as_ptr()),
+                next.map(|i| records[i].0.as_ptr())
+            );
+            assert_eq!(
+                record.previous_unit().map(|v| v.0.as_ptr()),
+                previous.map(|i| records[i].0.as_ptr())
+            );
         }
         for record in records {
             // SAFETY: No traversal follows these private records after cleanup.
