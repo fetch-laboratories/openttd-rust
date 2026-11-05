@@ -121,14 +121,6 @@ struct OpenTTDRailConstructionServices {
 	void (*engine_dates)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_dates);
 	void *(*new_rear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_rear);
 	void (*link_multihead)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(link_multihead);
-	uint8_t (*subtype)(void *) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
-	void (*set_subtype)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_subtype);
-	void *(*previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
-	void *(*last)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last);
-	void *(*next_vehicle)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
-	void *(*last_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last_engine_part);
-	const OpenTTDGroundServices *ground;
-	uint16_t (*first_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine);
 	void (*invalidate_grf)(void *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
 	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
 	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);

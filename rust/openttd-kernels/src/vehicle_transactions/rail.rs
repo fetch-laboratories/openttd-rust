@@ -1,19 +1,24 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Rail vehicle construction and depot consist transactions: the original `train_cmd.cpp`
-//! bodies from `GetFreeWagonsInDepot` through `CmdSellRailWagon`. Shells keep their chain
-//! links and fields; Rust owns control flow, the temporary backup lists and the free-wagon
-//! order.
+//! bodies from `GetFreeWagonsInDepot` through `CmdSellRailWagon`. Records carry chain links
+//! and moved fields; shells keep the rest. Rust owns control flow, the temporary backup lists
+//! and the free-wagon order.
 #![allow(clippy::many_single_char_names, clippy::too_many_lines)]
 use super::{CommonServices, ERROR, TransactionServices, build, construct, refit};
 use crate::command_type::DoCommandFlag;
 use crate::fleet::{DEFAULT_GROUP, GroupServices, INVALID_VEHICLE};
 use crate::ground_vehicle as gv;
+use crate::raw_field::{read_field, write_field};
 use crate::services::{CommandCost, Cost};
 use crate::tile_type::TILE_SIZE;
+use crate::vehicle::OpenTTDVehicle;
 use crate::vehicle::{CALLBACK_FAILED, OpenTTDEngine, RailVehicleTypes, VehicleRef};
 use crate::vehicle_base::{is_articulated_part, is_front_engine};
 use std::mem::MaybeUninit;
 use std::ptr;
+
+/// A nullable canonical record; native shell leaves receive `Ctx::sh`.
+type R = *mut OpenTTDVehicle;
 
 /// Original error strings of this component not already in a shared table.
 #[repr(C)]
@@ -34,14 +39,6 @@ pub struct Services {
     pub engine_dates: extern "C" fn(*mut (), *const OpenTTDEngine),
     pub new_rear: extern "C" fn(*mut ()) -> *mut (),
     pub link_multihead: extern "C" fn(*mut (), *mut ()),
-    pub subtype: extern "C" fn(*mut ()) -> u8,
-    pub set_subtype: extern "C" fn(*mut (), u8),
-    pub previous: extern "C" fn(*mut ()) -> *mut (),
-    pub last: extern "C" fn(*mut ()) -> *mut (),
-    pub next_vehicle: extern "C" fn(*mut ()) -> *mut (),
-    pub last_engine_part: extern "C" fn(*mut ()) -> *mut (),
-    pub ground: &'static crate::vehicle::GroundServices,
-    pub first_engine: extern "C" fn(*mut ()) -> u16,
     pub invalidate_grf: extern "C" fn(*mut ()),
     pub train_limit: extern "C" fn() -> u16,
     pub unit: extern "C" fn(*mut ()) -> u16,
@@ -67,6 +64,8 @@ struct Ctx {
     g: &'static GroupServices,
     w: &'static crate::fleet::transactions::Services,
 }
+// Field reads keep the original member-call shape at each use.
+#[allow(clippy::unused_self)]
 impl Ctx {
     fn new(b: &'static build::Services) -> Self {
         let s = b.rail;
@@ -82,49 +81,83 @@ impl Ctx {
             w: c.transactions,
         }
     }
-    // Every helper below is one synchronous native leaf over a live shell.
-    fn subtype(self, v: *mut ()) -> u8 {
-        (self.s.subtype)(v)
+    /// Native shell of a nullable record, for shell-keyed leaves.
+    fn sh(v: R) -> *mut () {
+        VehicleRef::shell_from_record(v)
     }
-    fn set_subtype(self, v: *mut (), f: fn(u8) -> u8) {
-        (self.s.set_subtype)(v, f(self.subtype(v)));
+    /// Canonical record of a nullable shell returned by a native leaf.
+    fn rec(self, shell: *mut ()) -> R {
+        (self.c.vehicles.record_from_shell)(shell.cast())
     }
-    fn is_engine(self, v: *mut ()) -> bool {
+    fn subtype(self, v: R) -> u8 {
+        read_field!(v, subtype)
+    }
+    fn set_subtype(self, v: R, f: fn(u8) -> u8) {
+        write_field!(v, subtype, f(self.subtype(v)));
+    }
+    fn is_engine(self, v: R) -> bool {
         gv::is_engine(self.subtype(v))
     }
-    fn is_front(self, v: *mut ()) -> bool {
+    fn is_front(self, v: R) -> bool {
         is_front_engine(true, self.subtype(v))
     }
-    fn is_articulated(self, v: *mut ()) -> bool {
+    fn is_articulated(self, v: R) -> bool {
         is_articulated_part(true, self.subtype(v))
     }
-    fn is_multiheaded(self, v: *mut ()) -> bool {
+    fn is_multiheaded(self, v: R) -> bool {
         gv::is_multiheaded(self.subtype(v))
     }
-    fn is_rear(self, v: *mut ()) -> bool {
+    fn is_rear(self, v: R) -> bool {
         gv::is_rear_dualheaded(self.subtype(v))
     }
-    fn length(self, v: *mut ()) -> u8 {
-        (self.s.ground.cached_length)(unsafe { super::vehicle_ref(v, self.c.vehicles) })
+    fn length(self, v: R) -> u8 {
+        read_field!(Self::vref(v).ground_cache(), cached_veh_length)
     }
-    fn next(self, v: *mut ()) -> *mut () {
-        unsafe { (self.g.next_part)(v) }
+    fn next(self, v: R) -> R {
+        read_field!(v, next)
     }
-    fn first(self, v: *mut ()) -> *mut () {
-        unsafe { (self.w.first)(v) }
+    fn previous(self, v: R) -> R {
+        read_field!(v, previous)
     }
-    fn set_next(self, v: *mut (), next: *mut ()) {
-        // SAFETY: The transaction retains both shells until explicit deletion.
-        unsafe { self.c.vehicles.set_next_shell(v.cast(), next.cast()) };
+    fn first(self, v: R) -> R {
+        read_field!(v, first)
     }
-    fn id(self, v: *mut ()) -> u32 {
-        unsafe { (self.g.vehicle_id)(v) }
+    /// `Vehicle::Last`.
+    fn last(self, v: R) -> R {
+        Self::vref(v).last().0.as_ptr()
     }
-    fn engine(self, v: *mut ()) -> u16 {
-        unsafe { (self.g.vehicle_engine)(v) }
+    /// `Vehicle::GetNextVehicle`.
+    fn next_vehicle(self, v: R) -> R {
+        Self::vref(v)
+            .next_vehicle()
+            .map_or(ptr::null_mut(), |v| v.0.as_ptr())
     }
-    fn tile(self, v: *mut ()) -> u32 {
-        (unsafe { super::vehicle_ref(v, self.c.vehicles) }).tile()
+    /// `GroundVehicle::GetLastEnginePart`.
+    fn last_engine_part(self, mut v: R) -> R {
+        loop {
+            let next = self.next(v);
+            if next.is_null() || !self.is_articulated(next) {
+                return v;
+            }
+            v = next;
+        }
+    }
+    /// A non-null live record.
+    fn vref(v: R) -> VehicleRef {
+        VehicleRef(ptr::NonNull::new(v).unwrap())
+    }
+    fn set_next(self, v: R, next: R) {
+        // SAFETY: The transaction retains every linked record until explicit deletion.
+        unsafe { self.c.vehicles.set_next_record(v, next) };
+    }
+    fn id(self, v: R) -> u32 {
+        unsafe { (self.g.vehicle_id)(Self::sh(v)) }
+    }
+    fn engine(self, v: R) -> u16 {
+        Self::vref(v).engine_id()
+    }
+    fn tile(self, v: R) -> u32 {
+        Self::vref(v).tile()
     }
     fn assert(self, condition: impl FnOnce() -> bool) {
         if self.w.assertions {
@@ -132,43 +165,43 @@ impl Ctx {
         }
     }
     /// `Train::GetIfValid`.
-    fn train(self, id: u32) -> *mut () {
-        (self.s.train_if_valid)(id)
+    fn train(self, id: u32) -> R {
+        self.rec((self.s.train_if_valid)(id))
     }
-    fn consist_changed(self, v: *mut ()) {
+    fn consist_changed(self, v: R) {
         unsafe {
             crate::train::openttd_rust_train_consist_changed(
-                (self.r.train_handle)(super::vehicle_ref(v, self.c.vehicles).0.as_ptr()),
+                (self.r.train_handle)(v),
                 CCF_ARRANGE,
                 self.r.train,
                 self.t.shared,
             );
         }
     }
-    fn update_group(self, v: *mut ()) {
-        unsafe { crate::fleet::openttd_rust_fleet_update_train_group(self.g, v) };
+    fn update_group(self, v: R) {
+        unsafe { crate::fleet::openttd_rust_fleet_update_train_group(self.g, Self::sh(v)) };
     }
-    fn count_vehicle(self, v: *mut (), delta: i32) {
-        unsafe { crate::fleet::openttd_rust_fleet_count_vehicle(self.g, v, delta) };
+    fn count_vehicle(self, v: R, delta: i32) {
+        unsafe { crate::fleet::openttd_rust_fleet_count_vehicle(self.g, Self::sh(v), delta) };
     }
     /// `TestVehicleBuildProbability(v, v->engine_type, Reversed)` and its flag.
-    fn reverse_on_build(self, v: *mut ()) {
+    fn reverse_on_build(self, v: R) {
         let probability = unsafe {
             crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
                 &*(self.c.vehicles.newgrf)(),
-                super::vehicle_ref(v, self.c.vehicles).0.as_ptr(),
+                v,
                 self.engine(v),
                 crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
             )
         };
         if probability >= 0 {
-            (self.r.train_handle)(unsafe { super::vehicle_ref(v, self.c.vehicles) }.0.as_ptr())
-                .set_flag(crate::train::FLIPPED, probability != 0);
+            (self.r.train_handle)(v).set_flag(crate::train::FLIPPED, probability != 0);
         }
     }
-    /// `Vehicle::orders` of the canonical Rust-owned order view.
-    fn orders(self, v: *mut ()) -> *mut std::ffi::c_void {
-        unsafe { (*(self.c.orders.vehicle)(v.cast())).orders }
+    /// `Vehicle::orders`.
+    fn orders(self, v: R) -> *mut std::ffi::c_void {
+        let orders = read_field!(v, orders);
+        read_field!(orders, orders)
     }
 }
 
@@ -181,11 +214,11 @@ fn free_wagons(x: Ctx, tile: u32) -> Vec<u32> {
     unsafe extern "C" fn visit(ctx: *mut std::ffi::c_void, handle: VehicleRef) {
         // SAFETY: synchronous traversal; only the caller-local list is mutated.
         let c = unsafe { &mut *ctx.cast::<Visit>() };
-        let v = handle.shell().cast();
-        if unsafe { (c.x.g.vehicle_type)(v) } != VEH_TRAIN {
+        let v = handle.0.as_ptr();
+        if handle.vehicle_type() != VEH_TRAIN {
             return;
         }
-        if unsafe { (c.x.w.crashed)(v) } {
+        if unsafe { (c.x.w.crashed)(Ctx::sh(v)) } {
             return;
         }
         if !gv::is_free_wagon(c.x.subtype(v)) {
@@ -236,7 +269,7 @@ unsafe fn build_wagon(
     flags: u16,
     tile: u32,
     e: *const OpenTTDEngine,
-) -> *mut () {
+) -> R {
     if !(x.s.compatible)(e, tile) {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
@@ -244,30 +277,30 @@ unsafe fn build_wagon(
     let mut v = ptr::null_mut();
     if flags & DoCommandFlag::EXECUTE != 0 {
         let a = x.b.construct.articulated;
-        v = (x.s.new_wagon)(tile, e);
-        (a.random_bits)(v, x.t.shared.random() as u16);
-        unsafe { (x.g.set_membership)(v, DEFAULT_GROUP) };
+        v = x.rec((x.s.new_wagon)(tile, e));
+        (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
+        unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.reverse_on_build(v);
-        unsafe { super::articulated::add(a, v) };
+        unsafe { super::articulated::add(a, Ctx::sh(v)) };
         unsafe {
-            a.position(v);
+            a.position(Ctx::sh(v));
         }
         let first = x.first(v);
         x.consist_changed(first);
         x.update_group(x.first(v));
-        unsafe { super::articulated::consistency(a, v) };
+        unsafe { super::articulated::consistency(a, Ctx::sh(v)) };
         for vehicle in free_wagons(x, tile) {
             if vehicle == x.id(v) {
                 continue;
             }
-            let w = unsafe { (x.g.vehicle)(vehicle) };
+            let w = x.rec(unsafe { (x.g.vehicle)(vehicle) });
             if x.engine(w) != x.engine(v) {
                 continue;
             }
             if x.first(w) == v {
                 continue;
             }
-            let last = x.id((x.s.last)(w));
+            let last = x.id(x.last(w));
             if unsafe { nested_move(x.b, out, DoCommandFlag::EXECUTE, x.id(v), last, true) } {
                 crate::witness::hit(crate::witness::VT_RAIL_WAGON_JOIN);
                 break;
@@ -281,6 +314,7 @@ unsafe fn build_wagon(
 /// Original `NormalizeTrainVehInDepot`; `out` is a free caller-owned result.
 pub(crate) unsafe fn normalize(b: &'static build::Services, out: *mut CommandCost, u: *mut ()) {
     let x = Ctx::new(b);
+    let u = x.rec(u);
     x.assert(|| x.is_engine(u));
     for vehicle in free_wagons(x, x.tile(u)) {
         if !unsafe { nested_move(b, out, DoCommandFlag::EXECUTE, vehicle, x.id(u), true) } {
@@ -291,18 +325,18 @@ pub(crate) unsafe fn normalize(b: &'static build::Services, out: *mut CommandCos
 }
 
 /// Original `AddRearEngineToMultiheadedTrain`.
-fn add_rear_engine(x: Ctx, v: *mut ()) {
+fn add_rear_engine(x: Ctx, v: R) {
     let a = x.b.construct.articulated;
-    let u = (x.s.new_rear)(v);
-    (a.random_bits)(u, x.t.shared.random() as u16);
+    let u = x.rec((x.s.new_rear)(Ctx::sh(v)));
+    (a.random_bits)(Ctx::sh(u), x.t.shared.random() as u16);
     x.set_subtype(v, gv::set_multiheaded);
     x.set_subtype(u, gv::set_multiheaded);
     x.set_next(v, u);
     x.reverse_on_build(u);
     unsafe {
-        a.position(u);
+        a.position(Ctx::sh(u));
     }
-    (x.s.link_multihead)(v, u);
+    (x.s.link_multihead)(Ctx::sh(v), Ctx::sh(u));
 }
 
 /// Original `CmdBuildRailVehicle`.
@@ -320,7 +354,7 @@ pub(crate) unsafe fn build(
     let s = x.s;
     let kind = (x.r.rail_kind)(e);
     if kind == RailVehicleTypes::WAGON {
-        return unsafe { build_wagon(x, out, flags, tile, e) };
+        return Ctx::sh(unsafe { build_wagon(x, out, flags, tile, e) });
     }
     if !(s.powered)(e, tile) {
         (x.t.cost.error)(out, ERROR);
@@ -331,39 +365,43 @@ pub(crate) unsafe fn build(
         let k: &construct::Services = x.b.construct;
         let a = k.articulated;
         let company = (x.t.shared.current_company)();
-        v = (s.new_engine)(tile, e);
-        (x.c.vehicles.set_max_age)(unsafe { super::vehicle_ref(v, x.c.vehicles) }, unsafe {
+        v = x.rec((s.new_engine)(tile, e));
+        (x.c.vehicles.set_max_age)(Ctx::vref(v), unsafe {
             crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
         });
-        (s.engine_dates)(v, e);
-        (a.random_bits)(v, x.t.shared.random() as u16);
-        (k.service_flags)(v, (k.exclusive_preview)(e), (x.t.interval_percent)(company));
-        unsafe { (x.g.set_membership)(v, DEFAULT_GROUP) };
+        (s.engine_dates)(Ctx::sh(v), e);
+        (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
+        (k.service_flags)(
+            Ctx::sh(v),
+            (k.exclusive_preview)(e),
+            (x.t.interval_percent)(company),
+        );
+        unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.set_subtype(v, gv::set_front_engine);
         x.set_subtype(v, gv::set_engine);
         x.reverse_on_build(v);
         unsafe {
-            a.position(v);
+            a.position(Ctx::sh(v));
         }
         if kind == RailVehicleTypes::MULTIHEAD {
             crate::witness::hit(crate::witness::VT_RAIL_MULTIHEAD);
             add_rear_engine(x, v);
         } else {
-            unsafe { super::articulated::add(a, v) };
+            unsafe { super::articulated::add(a, Ctx::sh(v)) };
         }
         x.consist_changed(v);
         x.update_group(v);
-        unsafe { super::articulated::consistency(a, v) };
+        unsafe { super::articulated::consistency(a, Ctx::sh(v)) };
     }
     (x.t.cost.zero)(out);
-    v
+    Ctx::sh(v)
 }
 
 /// Original `FindGoodVehiclePos`.
-fn find_good_position(x: Ctx, src: *mut ()) -> *mut () {
+fn find_good_position(x: Ctx, src: R) -> R {
     let eng = x.engine(src);
     for vehicle in free_wagons(x, x.tile(src)) {
-        let dst = unsafe { (x.g.vehicle)(vehicle) };
+        let dst = x.rec(unsafe { (x.g.vehicle)(vehicle) });
         let mut t = dst;
         while x.engine(t) == eng {
             t = x.next(t);
@@ -376,7 +414,7 @@ fn find_good_position(x: Ctx, src: *mut ()) -> *mut () {
 }
 
 /// Original `MakeTrainBackup`: a local list, as the original's `TrainList`.
-fn backup(x: Ctx, mut t: *mut ()) -> Vec<*mut ()> {
+fn backup(x: Ctx, mut t: R) -> Vec<R> {
     let mut list = Vec::new();
     while !t.is_null() {
         list.push(t);
@@ -385,15 +423,15 @@ fn backup(x: Ctx, mut t: *mut ()) -> Vec<*mut ()> {
     list
 }
 /// Original `RestoreTrainBackup`.
-fn restore(x: Ctx, list: &[*mut ()]) {
+fn restore(x: Ctx, list: &[R]) {
     if list.is_empty() {
         return;
     }
-    let mut prev: *mut () = ptr::null_mut();
+    let mut prev: R = ptr::null_mut();
     for &t in list {
         if prev.is_null() {
             // Make sure the head of the train is always the first in the chain.
-            let previous = (x.s.previous)(t);
+            let previous = x.previous(t);
             if !previous.is_null() {
                 x.set_next(previous, ptr::null_mut());
             }
@@ -404,20 +442,20 @@ fn restore(x: Ctx, list: &[*mut ()]) {
     }
 }
 /// Original `RemoveFromConsist`.
-fn remove_from_consist(x: Ctx, part: *mut (), chain: bool) {
+fn remove_from_consist(x: Ctx, part: R, chain: bool) {
     let tail = if chain {
-        (x.s.last)(part)
+        x.last(part)
     } else {
-        (x.s.last_engine_part)(part)
+        x.last_engine_part(part)
     };
-    let previous = (x.s.previous)(part);
+    let previous = x.previous(part);
     if !previous.is_null() {
         x.set_next(previous, x.next(tail));
     }
     x.set_next(tail, ptr::null_mut());
 }
 /// Original `InsertInConsist`.
-fn insert_in_consist(x: Ctx, dst: *mut (), chain: *mut ()) {
+fn insert_in_consist(x: Ctx, dst: R, chain: R) {
     // We do not want to add something in the middle of an articulated part.
     x.assert(|| {
         !dst.is_null() && {
@@ -425,11 +463,11 @@ fn insert_in_consist(x: Ctx, dst: *mut (), chain: *mut ()) {
             next.is_null() || !x.is_articulated(next)
         }
     });
-    x.set_next((x.s.last)(chain), x.next(dst));
+    x.set_next(x.last(chain), x.next(dst));
     x.set_next(dst, chain);
 }
 /// Original `NormaliseDualHeads`.
-fn normalise_dual_heads(x: Ctx, mut t: *mut ()) {
+fn normalise_dual_heads(x: Ctx, mut t: R) {
     while !t.is_null() {
         if x.is_multiheaded(t) && x.is_engine(t) {
             let mut u = t;
@@ -440,22 +478,22 @@ fn normalise_dual_heads(x: Ctx, mut t: *mut ()) {
                 }
                 u = next;
             }
-            let other = (x.r.selection.other_multihead)(t);
+            let other = x.rec((x.r.selection.other_multihead)(Ctx::sh(t)));
             if u != other {
                 remove_from_consist(x, other, false);
                 crate::witness::hit(crate::witness::VT_RAIL_DUAL_HEADS);
                 insert_in_consist(x, u, other);
             }
         }
-        t = (x.s.next_vehicle)(t);
+        t = x.next_vehicle(t);
     }
 }
 /// Original `NormaliseSubtypes`.
-fn normalise_subtypes(x: Ctx, chain: *mut ()) {
+fn normalise_subtypes(x: Ctx, chain: R) {
     if chain.is_null() {
         return;
     }
-    x.assert(|| (x.s.previous)(chain).is_null());
+    x.assert(|| x.previous(chain).is_null());
     if gv::is_wagon(x.subtype(chain)) {
         x.set_subtype(chain, gv::set_free_wagon);
     } else {
@@ -471,14 +509,8 @@ fn normalise_subtypes(x: Ctx, chain: *mut ()) {
 }
 
 /// Original `CheckNewTrain`; `Some` is the `CommandCost(StringID)` error.
-fn check_new_train(
-    x: Ctx,
-    original_dst: *mut (),
-    dst: *mut (),
-    original_src: *mut (),
-    src: *mut (),
-) -> Option<u32> {
-    let engine = |v: *mut ()| i32::from(!v.is_null() && x.is_engine(v));
+fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> Option<u32> {
+    let engine = |v: R| i32::from(!v.is_null() && x.is_engine(v));
     if engine(src) + engine(dst) - engine(original_src) - engine(original_dst) <= 0 {
         return None;
     }
@@ -489,7 +521,7 @@ fn check_new_train(
 }
 /// Original `CheckTrainAttachment`. An error leaves the chain split, exactly
 /// as the original; every caller restores its backup.
-fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
+fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
     if t.is_null() || x.next(t).is_null() {
         return None;
     }
@@ -512,43 +544,40 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
     let mut prev = t;
     t = x.next(t);
     x.set_next(prev, ptr::null_mut());
-    (x.s.invalidate_grf)(head);
+    (x.s.invalidate_grf)(Ctx::sh(head));
     let strings = &x.c.strings;
     while !t.is_null() {
         allowed_len -= i32::from(x.length(t));
         let next = x.next(t);
         x.set_next(t, ptr::null_mut());
         if !x.is_articulated(t) && !x.is_rear(t) {
-            let first_engine = (x.s.first_engine)(t);
-            (x.s.ground.write_first_engine)(
-                unsafe { super::vehicle_ref(t, x.c.vehicles) },
-                crate::engine_type::INVALID_ENGINE,
-            );
-            (x.s.invalidate_grf)(t);
+            let cache = Ctx::vref(t).ground_cache();
+            let first_engine = read_field!(cache, first_engine);
+            write_field!(cache, first_engine, crate::engine_type::INVALID_ENGINE);
+            (x.s.invalidate_grf)(Ctx::sh(t));
             let mut regs100 = MaybeUninit::<i32>::uninit();
             let callback = unsafe {
                 crate::newgrf_vehicle::callback(
                     x.c.vehicles,
-                    Some(super::vehicle_ref(t, x.c.vehicles)),
-                    (super::vehicle_ref(head, x.c.vehicles)).engine_id(),
+                    Some(Ctx::vref(t)),
+                    x.engine(head),
                     crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH.0,
                     0,
-                    super::vehicle_ref(head, x.c.vehicles).0.as_ptr(),
+                    head,
                     true,
                     regs100.as_mut_ptr(),
                     1,
                 )
             };
-            (x.s.ground.write_first_engine)(
-                unsafe { super::vehicle_ref(t, x.c.vehicles) },
-                first_engine,
-            );
-            (x.s.invalidate_grf)(t);
-            (x.s.invalidate_grf)(head);
+            write_field!(Ctx::vref(t).ground_cache(), first_engine, first_engine);
+            (x.s.invalidate_grf)(Ctx::sh(t));
+            (x.s.invalidate_grf)(Ctx::sh(head));
             if callback != CALLBACK_FAILED {
                 let mut error = strings.null_string;
-                let grf_text = |n: u32| x.c.grf_text(head, strings.grf_text.0.wrapping_add(n));
-                if (x.c.grf_version)(head) < 8 {
+                let grf_text = |n: u32| {
+                    x.c.grf_text(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
+                };
+                if (x.c.grf_version)(Ctx::sh(head)) < 8 {
                     if callback == 0xFD {
                         error = strings.incompatible_rail;
                     }
@@ -557,9 +586,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                     }
                     if callback >= 0x100 {
                         x.c.vehicles.unknown_callback_result(
-                            (x.c.vehicles.engine)(unsafe {
-                                super::vehicle_ref(head, x.c.vehicles)
-                            }),
+                            (x.c.vehicles.engine)(Ctx::vref(head)),
                             crate::newgrf_callbacks::CBID_TRAIN_ALLOW_WAGON_ATTACH,
                             callback,
                         );
@@ -571,7 +598,9 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                         0x400 | 0x401 => (),
                         0x40F => {
                             // The original reads register 100 only for this result.
-                            error = x.c.grf_text(head, unsafe { regs100.assume_init() } as u32);
+                            error = x
+                                .c
+                                .grf_text(Ctx::sh(head), unsafe { regs100.assume_init() } as u32);
                         }
                         _ => error = strings.incompatible_rail,
                     }
@@ -593,10 +622,10 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
 /// Original `ValidateTrains`.
 fn validate_trains(
     x: Ctx,
-    original_dst: *mut (),
-    dst: *mut (),
-    original_src: *mut (),
-    src: *mut (),
+    original_dst: R,
+    dst: R,
+    original_src: R,
+    src: R,
     check_limit: bool,
 ) -> Option<u32> {
     // Source attachment errors take precedence over destination errors.
@@ -615,14 +644,7 @@ fn validate_trains(
     }
 }
 /// Original `ArrangeTrains`.
-fn arrange_trains(
-    x: Ctx,
-    dst_head: &mut *mut (),
-    dst: *mut (),
-    src_head: &mut *mut (),
-    src: *mut (),
-    move_chain: bool,
-) {
+fn arrange_trains(x: Ctx, dst_head: &mut R, dst: R, src_head: &mut R, src: R, move_chain: bool) {
     if *src_head == *dst_head {
         *dst_head = ptr::null_mut();
     } else if dst_head.is_null() {
@@ -632,9 +654,9 @@ fn arrange_trains(
         *src_head = if move_chain {
             ptr::null_mut()
         } else if x.is_multiheaded(src) {
-            unsafe { (x.w.next_unit)(src) }
+            x.rec(unsafe { (x.w.next_unit)(Ctx::sh(src)) })
         } else {
-            (x.s.next_vehicle)(src)
+            x.next_vehicle(src)
         };
     }
     remove_from_consist(x, src, move_chain);
@@ -645,7 +667,7 @@ fn arrange_trains(
     normalise_dual_heads(x, *dst_head);
 }
 /// Original `NormaliseTrainHead`.
-fn normalise_train_head(x: Ctx, head: *mut ()) {
+fn normalise_train_head(x: Ctx, head: R) {
     if head.is_null() {
         return;
     }
@@ -654,31 +676,35 @@ fn normalise_train_head(x: Ctx, head: *mut ()) {
     if !x.is_front(head) {
         return;
     }
-    (x.s.head_windows)(head);
-    if (x.s.unit)(head) != 0 {
+    (x.s.head_windows)(Ctx::sh(head));
+    if (x.s.unit)(Ctx::sh(head)) != 0 {
         return;
     }
-    (x.s.use_unit)(head, (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN));
+    (x.s.use_unit)(
+        Ctx::sh(head),
+        (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN),
+    );
 }
-/// `new_head->orders = old->orders`, through the canonical order view.
-fn take_orders(x: Ctx, new_head: *mut (), old: *mut ()) {
+/// `new_head->orders = old->orders`.
+fn take_orders(x: Ctx, new_head: R, old: R) {
     let orders = x.orders(old);
-    unsafe { (*(x.c.orders.vehicle)(new_head.cast())).orders = orders };
+    let view = read_field!(new_head, orders);
+    write_field!(view, orders, orders);
 }
-fn add_to_shared(x: Ctx, v: *mut (), chain: *mut ()) {
-    unsafe { crate::orders::openttd_rust_add_shared(v.cast(), chain.cast(), x.c.orders) };
+fn add_to_shared(x: Ctx, v: R, chain: R) {
+    unsafe {
+        crate::orders::openttd_rust_add_shared(Ctx::sh(v).cast(), Ctx::sh(chain).cast(), x.c.orders)
+    };
 }
 /// `DeleteVehicleOrders(v)` with its default arguments.
-fn delete_orders(x: Ctx, v: *mut ()) {
-    unsafe { crate::orders::openttd_rust_delete_vehicle_orders(v.cast(), 0, 1, x.c.orders) };
-}
-fn mark_dirty(x: Ctx, v: *mut ()) {
+fn delete_orders(x: Ctx, v: R) {
     unsafe {
-        crate::train::openttd_rust_train_mark_dirty(
-            (x.r.train_handle)(super::vehicle_ref(v, x.c.vehicles).0.as_ptr()),
-            x.r.train,
-            x.t.shared,
-        );
+        crate::orders::openttd_rust_delete_vehicle_orders(Ctx::sh(v).cast(), 0, 1, x.c.orders)
+    };
+}
+fn mark_dirty(x: Ctx, v: R) {
+    unsafe {
+        crate::train::openttd_rust_train_mark_dirty((x.r.train_handle)(v), x.r.train, x.t.shared);
     }
 }
 
@@ -700,11 +726,11 @@ pub(crate) unsafe fn move_vehicle(
     if src.is_null() {
         return (cost.error)(out, ERROR);
     }
-    unsafe { x.t.commands.ownership(out, (x.g.vehicle_owner)(src), 0) };
+    unsafe { x.t.commands.ownership(out, Ctx::vref(src).owner(), 0) };
     if !(cost.success)(out) {
         return;
     }
-    if unsafe { (x.w.crashed)(src) } {
+    if unsafe { (x.w.crashed)(Ctx::sh(src)) } {
         return (cost.error)(out, ERROR);
     }
     let mut dst;
@@ -719,18 +745,18 @@ pub(crate) unsafe fn move_vehicle(
         if dst.is_null() {
             return (cost.error)(out, ERROR);
         }
-        unsafe { x.t.commands.ownership(out, (x.g.vehicle_owner)(dst), 0) };
+        unsafe { x.t.commands.ownership(out, Ctx::vref(dst).owner(), 0) };
         if !(cost.success)(out) {
             return;
         }
-        if unsafe { (x.w.crashed)(dst) } {
+        if unsafe { (x.w.crashed)(Ctx::sh(dst)) } {
             return (cost.error)(out, ERROR);
         }
     }
     let first_part = x.r.selection.first_engine_part;
-    src = first_part(src);
+    src = x.rec(first_part(Ctx::sh(src)));
     if !dst.is_null() {
-        dst = first_part(dst);
+        dst = x.rec(first_part(Ctx::sh(dst)));
     }
     if src == dst {
         return (cost.zero)(out);
@@ -744,7 +770,7 @@ pub(crate) unsafe fn move_vehicle(
         if x.tile(dst_head) != x.tile(src_head) {
             return (cost.error)(out, ERROR);
         }
-        dst = (s.last_engine_part)(dst);
+        dst = x.last_engine_part(dst);
     }
     if x.is_rear(src) {
         return (cost.error)(out, s.strings.rear_follow);
@@ -755,14 +781,14 @@ pub(crate) unsafe fn move_vehicle(
     if !move_chain
         && !dst.is_null()
         && x.is_rear(dst)
-        && src == (x.r.selection.other_multihead)(dst)
+        && src == x.rec((x.r.selection.other_multihead)(Ctx::sh(dst)))
     {
         return (cost.zero)(out);
     }
-    if !unsafe { (x.w.stopped_in_depot)(src_head) } {
+    if !unsafe { (x.w.stopped_in_depot)(Ctx::sh(src_head)) } {
         return (cost.error)(out, s.strings.depot_only);
     }
-    if !dst_head.is_null() && !unsafe { (x.w.stopped_in_depot)(dst_head) } {
+    if !dst_head.is_null() && !unsafe { (x.w.stopped_in_depot)(Ctx::sh(dst_head)) } {
         return (cost.error)(out, s.strings.depot_only);
     }
     let original_src = backup(x, src_head);
@@ -809,22 +835,24 @@ pub(crate) unsafe fn move_vehicle(
     if src == original_src_head && x.is_engine(src) && !x.is_front(src) {
         // Cases #2 and #3: the front engine gets trashed.
         crate::witness::hit(crate::witness::VT_RAIL_FRONT_TRASHED);
-        (s.front_windows)(src);
+        (s.front_windows)(Ctx::sh(src));
         if !src_head.is_null() && x.is_front(src_head) {
             crate::witness::hit(crate::witness::VT_RAIL_HEAD_TRANSFER);
             take_orders(x, src_head, src);
             if !x.orders(src_head).is_null() {
                 add_to_shared(x, src_head, src);
             }
-            unsafe { (x.w.copy_configuration)(src, src_head) };
+            unsafe { (x.w.copy_configuration)(Ctx::sh(src), Ctx::sh(src_head)) };
         }
         delete_orders(x, src);
-        (s.release_unit)(src);
-        (x.t.clear_name)(src);
+        (s.release_unit)(Ctx::sh(src));
+        (x.t.clear_name)(Ctx::sh(src));
     }
     if original_src_head != src && dst_head == src {
         crate::witness::hit(crate::witness::VT_RAIL_NEW_FRONT);
-        unsafe { crate::fleet::openttd_rust_fleet_set_train_group(x.g, src, DEFAULT_GROUP) };
+        unsafe {
+            crate::fleet::openttd_rust_fleet_set_train_group(x.g, Ctx::sh(src), DEFAULT_GROUP);
+        }
         (s.company_dirty)();
     }
     normalise_train_head(x, src_head);
@@ -839,14 +867,14 @@ pub(crate) unsafe fn move_vehicle(
         unsafe {
             crate::cargo_storage::openttd_rust_cargo_capacity(
                 s.cargo_capacity,
-                src_head.cast(),
+                Ctx::sh(src_head).cast(),
                 ptr::null_mut(),
                 0,
                 0,
             );
             crate::cargo_storage::openttd_rust_cargo_capacity(
                 s.cargo_capacity,
-                dst_head.cast(),
+                Ctx::sh(dst_head).cast(),
                 ptr::null_mut(),
                 0,
                 0,
@@ -879,7 +907,7 @@ pub(crate) unsafe fn sell(
     let x = Ctx::new(b);
     let s = x.s;
     let cost = x.t.cost;
-    let v = (x.r.selection.first_engine_part)(t);
+    let v = x.rec((x.r.selection.first_engine_part)(t));
     let first = x.first(v);
     if x.is_rear(v) {
         return (cost.error)(out, s.strings.rear_follow);
@@ -914,7 +942,7 @@ pub(crate) unsafe fn sell(
     (cost.expense_money)(out, x.c.strings.new_vehicle_expense, 0);
     let mut part = sell_head;
     while !part.is_null() {
-        (cost.amount)(out, (x.c.value)(part).saturating_neg());
+        (cost.amount)(out, (x.c.value)(Ctx::sh(part)).saturating_neg());
         part = x.next(part);
     }
     if flags & DoCommandFlag::EXECUTE == 0 {
@@ -928,16 +956,16 @@ pub(crate) unsafe fn sell(
             take_orders(x, new_head, first);
             add_to_shared(x, new_head, first);
             delete_orders(x, first);
-            unsafe { (x.w.copy_configuration)(first, new_head) };
+            unsafe { (x.w.copy_configuration)(Ctx::sh(first), Ctx::sh(new_head)) };
         }
         x.count_vehicle(new_head, 1);
-    } else if unsafe { (x.g.primary)(v) } && backup_order {
-        unsafe { crate::orders::openttd_rust_backup_create(v.cast(), user, x.c.orders) };
+    } else if unsafe { (x.g.primary)(Ctx::sh(v)) } && backup_order {
+        unsafe { crate::orders::openttd_rust_backup_create(Ctx::sh(v).cast(), user, x.c.orders) };
     }
     normalise_train_head(x, new_head);
     (s.depot_changed)(x.tile(v));
     // No shell access follows the deleting callback.
-    (x.c.vehicles.destroy)(unsafe { super::vehicle_ref(sell_head, x.c.vehicles) });
+    (x.c.vehicles.destroy)(Ctx::vref(sell_head));
 }
 
 /// Command entry for `CmdMoveRailVehicle`.
@@ -958,10 +986,8 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, engine_dates, new_rear, link_multihead, subtype,
-        set_subtype, previous, last, next_vehicle, last_engine_part, ground, first_engine,
-        invalidate_grf, train_limit, unit,
-        use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
+        cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
+        invalidate_grf, train_limit, unit, use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };
 }
