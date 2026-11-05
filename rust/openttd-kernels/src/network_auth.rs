@@ -28,7 +28,7 @@ pub(crate) fn send_request(f: &Services, game: *mut GameSocket, work: Actions) -
         net,
         9,
         "client[{}] SendAuthRequest()",
-        (s.client_id)(native)
+        (f.dispatch.client_id)(game)
     );
     if !matches!(socket::status(game), server::INACTIVE | server::AUTH_GAME) {
         return socket::specialized_close(f, game, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
@@ -37,7 +37,7 @@ pub(crate) fn send_request(f: &Services, game: *mut GameSocket, work: Actions) -
         net,
         9,
         "client[{}] status = AUTH_GAME",
-        (s.client_id)(native)
+        (f.dispatch.client_id)(game)
     );
     write_field!(game, status, server::AUTH_GAME);
     crate::network_connection::reset_lag(s, game);
@@ -131,7 +131,7 @@ pub(crate) fn receive_response(
         net,
         9,
         "client[{}] Receive_CLIENT_AUTH_RESPONSE()",
-        (s.client_id)(native)
+        (f.dispatch.client_id)(game)
     );
     let owner = (f.auth_owner)((s.auth)(native));
     let method = unsafe { auth::openttd_rust_auth_handler_method(owner) };
@@ -158,7 +158,7 @@ pub(crate) fn receive_response(
         net,
         9,
         "client[{}] SendEnableEncryption()",
-        (s.client_id)(native)
+        (f.dispatch.client_id)(game)
     );
     if socket::status(game) != server::AUTH_GAME {
         return socket::specialized_close(f, game, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
@@ -176,7 +176,7 @@ pub(crate) fn receive_response(
         net,
         9,
         "client[{}] status = IDENTIFY",
-        (s.client_id)(native)
+        (f.dispatch.client_id)(game)
     );
     write_field!(game, status, server::IDENTIFY);
     crate::network_connection::reset_lag(s, game);

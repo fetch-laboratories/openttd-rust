@@ -415,7 +415,7 @@ fn send_packet(
             net,
             9,
             "client[{}] SendCommand(): cmd={}",
-            (f.connection.client_id)(socket::server(game)),
+            (f.dispatch.client_id)(game),
             cp.cmd
         );
         crate::tcp_game::PACKET_SERVER_COMMAND
@@ -567,7 +567,7 @@ pub(crate) fn receive_client(
         net,
         9,
         "client[{}] Receive_CLIENT_COMMAND()",
-        (f.connection.client_id)(shell)
+        (f.dispatch.client_id)(game)
     );
     let mut cp = empty_packet();
     let err = receive_packet(f, p, &mut cp);
@@ -580,14 +580,14 @@ pub(crate) fn receive_client(
     }
     let commands = commands(s);
     if (commands.command_flags)(cp.cmd) & CommandFlag::SERVER != 0
-        && (f.connection.client_id)(shell) != CLIENT_ID_SERVER
+        && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
     {
         (s.console_server_only)(shell, cp.cmd);
         return fail(NETWORK_ERROR_KICKED);
     }
     if (commands.command_flags)(cp.cmd) & CommandFlag::SPECTATOR == 0
         && !(s.company.shared.company_valid)(cp.company)
-        && (f.connection.client_id)(shell) != CLIENT_ID_SERVER
+        && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
     {
         (s.console_spectator)(shell, cp.cmd);
         return fail(NETWORK_ERROR_KICKED);
@@ -610,12 +610,12 @@ pub(crate) fn receive_client(
             return fail(NETWORK_ERROR_CHEATER);
         }
         if (s.company.company_count)() >= usize::from((f.connection.max_companies)()) {
-            (s.server_full)((f.connection.client_id)(shell));
+            (s.server_full)((f.dispatch.client_id)(game));
             return NETWORK_RECV_STATUS_OKAY;
         }
     }
     if cp.cmd == CMD_COMPANY_ALLOW_LIST_CTRL {
-        if (f.connection.client_id)(shell) != CLIENT_ID_SERVER
+        if (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
             && (f.connection.client_company)(shell) != cp.company
         {
             return NETWORK_RECV_STATUS_OKAY;
@@ -639,7 +639,7 @@ pub(crate) fn receive_client(
         }
     }
     if (commands.command_flags)(cp.cmd) & CommandFlag::CLIENT_ID != 0 {
-        cp.data = (s.replace_client_id)(cp.cmd, cp.data.span(), (f.connection.client_id)(shell));
+        cp.data = (s.replace_client_id)(cp.cmd, cp.data.span(), (f.dispatch.client_id)(game));
     }
     unsafe {
         CommandQueue::edit(socket::incoming(game), |q| q.push(cp));

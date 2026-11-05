@@ -17,7 +17,6 @@ struct OpenTTDNetworkConnectionServices {
 	void (*auth_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth_create);
 	uint8_t (*client_company)(void *) noexcept OPENTTD_SERVICE_DEFAULT(client_company);
 	void (*client_error_announcement)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(client_error_announcement);
-	uint32_t (*client_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(client_id);
 	uint8_t *clients_connected;
 	uint8_t *clients_on;
 	bool (*company_allows_client)(uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(company_allows_client);

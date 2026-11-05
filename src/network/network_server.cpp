@@ -1159,7 +1159,6 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			Debug(net, 1, "'{}' reported an error and is closing its connection: {}", client_name, GetString(strid));
 			NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", strid);
 		},
-		.client_id = [](void *socket) noexcept -> uint32_t { return static_cast<NetworkClientSocket *>(socket)->client_id; },
 		.clients_connected = &_network_clients_connected,
 		.clients_on = &_network_game_info.clients_on,
 		.company_allows_client = [](uint8_t company, void *socket) noexcept { return RustCompanyAllowsPublicKey(company, static_cast<NetworkClientSocket *>(socket)->GetPeerPublicKey()); },

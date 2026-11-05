@@ -144,7 +144,6 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	};
 	OpenTTDNetworkConnectionServices connection{};
 	connection.join_date = [](void *) noexcept { return 0; };
-	connection.client_id = [](void *socket) noexcept { return static_cast<uint32_t>(MapIndex(socket)); };
 	connection.map_create = [](void *socket) noexcept { MapEvent(2, socket); };
 	connection.map_destroy = [](void *socket) noexcept { MapEvent(1, socket); };
 	connection.map_begin = [](void *socket) noexcept { MapEvent(4, socket); return reinterpret_cast<PacketWriter *>(socket); };
@@ -158,6 +157,9 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	OpenTTDNetworkFrameServices network{};
 	network.command = &command;
 	network.connection = &connection;
+	auto dispatch = GetRustNetworkDispatchServices();
+	dispatch.client_id = [](OpenTTDNetworkGameSocket *socket) noexcept { return static_cast<uint32_t>(MapIndex(socket->game)); };
+	network.dispatch = &dispatch;
 	OpenTTDNetworkTcpServices tcp{};
 	tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
 	tcp.writable = [](const NetworkTCPSocketHandler *socket) noexcept { MapEvent(9, const_cast<void *>(static_cast<const void *>(socket))); return true; };
