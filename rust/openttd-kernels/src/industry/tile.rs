@@ -105,7 +105,7 @@ fn bigger(
     unsafe {
         (c.set_construction_counter)(tile, 0);
         (c.set_construction_stage)(tile, stage);
-        super::openttd_rust_industry_animate_tile(tile, 0, 0, s, l);
+        super::openttd_rust_industry_animate_tile_abi(tile, 0, 0, s, l);
         if stage == 3 {
             (t.set_completed)(tile);
         }
@@ -370,14 +370,14 @@ pub(crate) unsafe fn tile_loop(
     if unsafe { (t.transport)(tile) } {
         let industry = unsafe { (t.industry)(tile) };
         if !unsafe {
-            super::openttd_rust_industry_animate(
+            super::openttd_rust_industry_animate_abi(
                 industry.owner,
                 (t.industry_index)(tile),
                 4,
                 map.size_x(),
                 s,
                 l,
-            )
+            ) != 0
         } {
             let gfx = unsafe { (t.gfx)(tile) };
             let next = unsafe { (t.anim_production)(gfx) };
@@ -392,7 +392,7 @@ pub(crate) unsafe fn tile_loop(
             }
         }
     }
-    if unsafe { super::openttd_rust_industry_animate_tile(tile, 1, 0, s, l) } {
+    if unsafe { super::openttd_rust_industry_animate_tile_abi(tile, 1, 0, s, l) != 0 } {
         return;
     }
     let gfx = unsafe { (t.gfx)(tile) };

@@ -96,15 +96,18 @@ struct OpenTTDEngineServices {
 };
 const OpenTTDEngineServices &EngineServices() noexcept;
 extern "C" {
-bool openttd_rust_engine_enabled(const OpenTTDEngineServices *, const OpenTTDEngine *);
+uint8_t openttd_rust_engine_enabled_abi(const OpenTTDEngineServices *, const OpenTTDEngine *);
+extern "C++" inline bool openttd_rust_engine_enabled(const OpenTTDEngineServices *a0, const OpenTTDEngine *a1) { return openttd_rust_engine_enabled_abi(a0, a1) != 0; }
 void openttd_rust_engine_reliability(const OpenTTDEngineServices *, OpenTTDEngineRef, bool);
 void openttd_rust_engine_start_one(const OpenTTDEngineServices *, OpenTTDEngineRef, OpenTTDEngineYMD, uint32_t);
 void openttd_rust_engine_aging_stops(const OpenTTDEngineServices *);
 void openttd_rust_engine_start_all(const OpenTTDEngineServices *);
 void openttd_rust_engine_monthly(const OpenTTDEngineServices *);
 void openttd_rust_engine_clear_hidden(const OpenTTDEngineServices *, uint8_t);
-bool openttd_rust_engine_buildable(const OpenTTDEngineServices *, OpenTTDEngineRef, VehicleType, uint8_t);
-bool openttd_rust_engine_variant_hidden(const OpenTTDEngineServices *, OpenTTDEngineRef, uint8_t);
+uint8_t openttd_rust_engine_buildable_abi(const OpenTTDEngineServices *, OpenTTDEngineRef, VehicleType, uint8_t);
+extern "C++" inline bool openttd_rust_engine_buildable(const OpenTTDEngineServices *a0, OpenTTDEngineRef a1, VehicleType a2, uint8_t a3) { return openttd_rust_engine_buildable_abi(a0, a1, a2, a3) != 0; }
+uint8_t openttd_rust_engine_variant_hidden_abi(const OpenTTDEngineServices *, OpenTTDEngineRef, uint8_t);
+extern "C++" inline bool openttd_rust_engine_variant_hidden(const OpenTTDEngineServices *a0, OpenTTDEngineRef a1, uint8_t a2) { return openttd_rust_engine_variant_hidden_abi(a0, a1, a2) != 0; }
 uint8_t openttd_rust_engine_visibility(const OpenTTDEngineServices *, OpenTTDEngineRef, bool, bool);
 uint8_t openttd_rust_engine_want_preview(const OpenTTDEngineServices *, OpenTTDEngineRef, bool);
 uint8_t openttd_rust_engine_control(const OpenTTDEngineServices *, OpenTTDEngineRef, uint8_t, bool, bool);

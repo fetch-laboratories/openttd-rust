@@ -34,14 +34,14 @@ struct Layout {
 pub struct Services {
     reader: *const crate::newgrf_bytereader::Services,
     shared: *const crate::services::Services,
-    airport_count: unsafe extern "C" fn(*const c_void) -> usize,
+    pub(crate) airport_count: unsafe extern "C" fn(*const c_void) -> usize,
     airport_resize: unsafe extern "C" fn(*mut c_void, usize) -> (),
-    airport_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut AirportSpec,
+    pub(crate) airport_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut AirportSpec,
     airport_new: unsafe extern "C" fn(*mut c_void, usize, *const AirportSpec) -> *mut AirportSpec,
     airport_set_substitute: unsafe extern "C" fn(*mut AirportSpec, u16) -> (),
-    tile_count: unsafe extern "C" fn(*const c_void) -> usize,
+    pub(crate) tile_count: unsafe extern "C" fn(*const c_void) -> usize,
     tile_resize: unsafe extern "C" fn(*mut c_void, usize) -> (),
-    tile_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut TileSpec,
+    pub(crate) tile_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut TileSpec,
     tile_new: unsafe extern "C" fn(*mut c_void, usize, *const TileSpec) -> *mut TileSpec,
     tile_set_substitute: unsafe extern "C" fn(*mut TileSpec, u16) -> (),
     airport_base: unsafe extern "C" fn(u16) -> *mut AirportSpec,
@@ -92,11 +92,11 @@ crate::abi::layouts! {
     "OpenTTDAirportDefinitionServices" ["probe"] => Services { reader, shared, airport_count, airport_resize, airport_get, airport_new, airport_set_substitute, tile_count, tile_resize, tile_get, tile_new, tile_set_substitute, airport_base, tile_base, airport_default, airport_clear, tile_default, tile_clear, airport_publish, tile_publish, airport_file_clear, airport_file_shrink, tile_file_clear, tile_file_shrink, airport_min_year, airport_max_year, airport_ttdp_type, airport_catchment, airport_noise, airport_maintenance, airport_name, tile_clear_animation, tile_callbacks, layouts_resize, layout_assign, dimensions, airport_invalid, airport_undefined, airport_substitute_invalid, layout_tile_undefined, airport_full, tile_invalid, tile_undefined, tile_substitute_invalid, tile_override_invalid, tile_full };
 }
 
-unsafe extern "C" fn airport_valid(_: *mut c_void, _: u16) -> bool {
-    true
+unsafe extern "C" fn airport_valid(_: *mut c_void, _: u16) -> u8 {
+    u8::from(true)
 }
-unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> bool {
-    crate::newgrf_commons::airport_tile_check_valid_new_id(id)
+unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> u8 {
+    u8::from(crate::newgrf_commons::airport_tile_check_valid_new_id(id))
 }
 unsafe fn allocate(
     manager: *mut Manager,
@@ -354,23 +354,25 @@ macro_rules! parser_entry {
             prop: u32,
             native: *mut ByteReader,
             result: *mut u8,
-        ) -> bool {
+        ) -> u8 {
             let s = unsafe { &*s };
             let mut reader = unsafe { Reader::new(native, &*s.reader) };
-            match unsafe { $parser(s, file, first, last, prop, &mut reader) } {
-                Ok(value) => {
-                    unsafe {
-                        result.write(value);
+            u8::from(
+                match unsafe { $parser(s, file, first, last, prop, &mut reader) } {
+                    Ok(value) => {
+                        unsafe {
+                            result.write(value);
+                        }
+                        true
                     }
-                    true
-                }
-                Err(ReadError) => false,
-            }
+                    Err(ReadError) => false,
+                },
+            )
         }
     };
 }
-parser_entry!(openttd_rust_airport_change_info, airport_change);
-parser_entry!(openttd_rust_airport_tile_change_info, tile_change);
+parser_entry!(openttd_rust_airport_change_info_abi, airport_change);
+parser_entry!(openttd_rust_airport_tile_change_info_abi, tile_change);
 
 pub unsafe fn reset(s: *const Services) {
     let s = unsafe { &*s };

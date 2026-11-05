@@ -829,13 +829,13 @@ pub unsafe extern "C" fn openttd_rust_industry_probability(
 /// # Safety
 /// Live owner and original accepted-cargo assertion, checked by the native facade.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_refuses(
+pub unsafe extern "C" fn openttd_rust_industry_refuses_abi(
     industry: *mut c_void,
     owner: *mut Industry,
     cargo: u8,
     s: *const ResolverServices,
-) -> bool {
-    unsafe { refuses(industry, owner, cargo, &*s) }
+) -> u8 {
+    u8::from(unsafe { refuses(industry, owner, cargo, &*s) })
 }
 /// SAFETY: live owner/shell, caller has established an accepted cargo slot.
 /// Action2 may reenter; owner observations end before every native call.

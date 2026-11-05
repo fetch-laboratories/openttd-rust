@@ -155,7 +155,7 @@ static void Trees()
 	CHECK(*counter == 0 && counter == openttd_rust_tree_counter());
 	tree_probe.abort = true;
 	const OpenTTDTreeGenerateSettings generate{.size = 4096, .size_x = 64, .size_y = 64, .climate = 0, .placer = 1, .height_limit = 15, .editor = false, .freeform_edges = true};
-	CHECK(openttd_rust_trees_generate(generate, &tree_probe_services, &shared));
+	CHECK(openttd_test_trees_generate(generate, &tree_probe_services, &shared));
 	CHECK(openttd_rust_trees_place_randomly(generate, &tree_probe_services, &shared) && tree_probe.writes == 1);
 	std::printf("tree_direct_services_counter_abort_and_reentry passed\n");
 }

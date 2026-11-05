@@ -57,15 +57,20 @@ struct OpenTTDAirportResolverServices {
 const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept;
 extern "C" {
 const OpenTTDAirportResolverServices *openttd_rust_airport_exchange(const OpenTTDAirportResolverServices *);
-bool openttd_rust_can_engine_use_station(uint16_t, const Station *, const OpenTTDAirportResolverServices *);
-bool openttd_rust_can_vehicle_use_station(const OpenTTDVehicle *, const Station *, const OpenTTDAirportResolverServices *);
-bool openttd_rust_is_hangar(uint32_t, const OpenTTDAirportResolverServices *);
+uint8_t openttd_rust_can_engine_use_station_abi(uint16_t, const Station *, const OpenTTDAirportResolverServices *);
+extern "C++" inline bool openttd_rust_can_engine_use_station(uint16_t a0, const Station *a1, const OpenTTDAirportResolverServices *a2) { return openttd_rust_can_engine_use_station_abi(a0, a1, a2) != 0; }
+uint8_t openttd_rust_can_vehicle_use_station_abi(const OpenTTDVehicle *, const Station *, const OpenTTDAirportResolverServices *);
+extern "C++" inline bool openttd_rust_can_vehicle_use_station(const OpenTTDVehicle *a0, const Station *a1, const OpenTTDAirportResolverServices *a2) { return openttd_rust_can_vehicle_use_station_abi(a0, a1, a2) != 0; }
+uint8_t openttd_rust_is_hangar_abi(uint32_t, const OpenTTDAirportResolverServices *);
+extern "C++" inline bool openttd_rust_is_hangar(uint32_t a0, const OpenTTDAirportResolverServices *a1) { return openttd_rust_is_hangar_abi(a0, a1) != 0; }
 uint8_t openttd_rust_vehicle_pos_on_build(uint32_t, const OpenTTDAirportResolverServices *);
 const AirportFTAClass *openttd_rust_airport_fta(uint8_t, const OpenTTDAirportResolverServices *);
 const AirportSpec *openttd_rust_airport_get_spec(uint32_t, uint8_t, const OpenTTDAirportResolverServices *);
 const AirportSpec *openttd_rust_airport_spec(uint8_t, const OpenTTDAirportResolverServices *);
-bool openttd_rust_airport_available(const AirportSpec *, const OpenTTDAirportResolverServices *);
-bool openttd_rust_airport_in_bounds(const AirportSpec *, uint8_t, uint32_t, const OpenTTDAirportResolverServices *);
+uint8_t openttd_rust_airport_available_abi(const AirportSpec *, const OpenTTDAirportResolverServices *);
+extern "C++" inline bool openttd_rust_airport_available(const AirportSpec *a0, const OpenTTDAirportResolverServices *a1) { return openttd_rust_airport_available_abi(a0, a1) != 0; }
+uint8_t openttd_rust_airport_in_bounds_abi(const AirportSpec *, uint8_t, uint32_t, const OpenTTDAirportResolverServices *);
+extern "C++" inline bool openttd_rust_airport_in_bounds(const AirportSpec *a0, uint8_t a1, uint32_t a2, const OpenTTDAirportResolverServices *a3) { return openttd_rust_airport_in_bounds_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_airport_init(OpenTTDAirportResolverState *, Station *, const AirportSpec *, const AirportTileSpec *, uint32_t, uint8_t, const OpenTTDAirportResolverServices *);
 const SpriteGroup *openttd_rust_airport_tile_init(const OpenTTDAirportResolverState *, OpenTTDAirportResolverState *, const OpenTTDAirportResolverServices *);
 const SpriteGroup *openttd_rust_airport_root(const OpenTTDAirportResolverState *, const OpenTTDAirportResolverServices *);

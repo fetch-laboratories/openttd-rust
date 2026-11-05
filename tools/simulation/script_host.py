@@ -10,7 +10,7 @@ The ordinary comparator also compares the full logs, snapshots and exit saves.
 
 import shutil
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any
 
 from . import core
 
@@ -54,18 +54,8 @@ RELOAD = ("ai load", "ai start loaded=", "ai idle", "gs load", "gs start loaded=
 ABSENT = ("ai unreachable", "fail unreachable", "fail start", "gs after break")
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
+class Scenario(core.Scenario):
     script_host: str
-    ticks: int
-    seed: int
-    map_log2: int
-    land_generator: int
-    console: list[str]
-    settings: dict[str, dict[str, str]]
-    save: NotRequired[str]
-    scenario_ai: NotRequired[str]
 
 
 def scenarios(soak: bool) -> list[Scenario]:
@@ -110,25 +100,26 @@ def game_args(scenario: dict[str, Any]) -> list[str]:
 
 
 def prepare(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     binaries: dict[str, Path],
     builds: dict[str, Path],
     out: Path,
     timeout: int,
     env: dict[str, str],
-    result: dict[str, Any],
-) -> dict[str, Any]:
+    result: core.Result,
+) -> Scenario:
     if scenario.get("script_host") != "reload":
         return scenario
     folder = out / scenario["name"] / "input"
+    setup: Scenario = {
+        **scenario,
+        "kind": "generate",
+        "script_host": "run",
+        "ticks": RELOAD_INPUT_TICKS,
+        "console": CONSOLE,
+    }
     run = core.run_game(
-        dict(
-            scenario,
-            kind="generate",
-            script_host="run",
-            ticks=RELOAD_INPUT_TICKS,
-            console=CONSOLE,
-        ),
+        setup,
         binaries["reference"],
         builds["reference"],
         folder / "generate",
@@ -139,8 +130,8 @@ def prepare(
     if run["exit"] or not run["snapshots"]:
         raise RuntimeError("script host reload input did not produce a save")
     normalized, record = core.normalize(run["snapshots"][-1], folder)
-    result["script_host_input"] = record
-    return dict(scenario, kind="save", save=str(normalized))
+    core.findings(result)["script_host_input"] = record
+    return {**scenario, "kind": "save", "save": str(normalized)}
 
 
 def observations(lines: list[str]) -> list[str]:

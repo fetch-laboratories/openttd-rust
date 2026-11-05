@@ -98,7 +98,7 @@ This host has a 220 GB SSD and a 1 TB HDD mounted at `/mnt/storage` (`/etc/fstab
 
 ## Simulation comparison
 
-`python3 tools/migration.py simulate` builds both games and runs `tools/simulate.py`. CI runs the default set after component comparisons. Add scenario dictionaries and prepare/check hooks to the component's module in `tools/simulation/`; `scenario_modules()` assembles them.
+`python3 tools/migration.py simulate` builds both games and runs `tools/simulate.py`. CI runs the default set after component comparisons. Add scenario dictionaries and prepare/check hooks to the component's module in `tools/simulation/`; `scenario_modules()` assembles them. A module's hooks run only for the scenarios it defines; a hook that must also act on another module's scenarios is named in `SHARED_HOOKS` in `core.py`.
 
 - Each scenario runs headless in both plain and `-d desync=3` modes under `.local/simulation/`. Desync mode saves an uncompressed snapshot every 32 economy days and changes cache and YAPF behavior. Both modes compare exit saves and full output; warnings, different checkpoint lists or end moments, and semantic differences fail.
 - Default scenarios include regression saves with AIs, generated TGP and original maps, and `play-*` LLM road saves with manual distribution and cargodist. `--soak` adds scenarios, `--self` compares the reference to itself, and names filter the set. The driver runs `--jobs // 2` scenarios at once. See `migration/saves/README.md`.
@@ -158,12 +158,13 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 | --- | --- |
 | `python3 tools/shared-accessors.py --base-ref origin/rust-migration` | Enforce #249 in quick CI. `tools/shared-accessor-baseline.txt` can shrink, not gain exemptions. Macros, derived fields and compound callbacks need review. |
 | `python3 tools/rebound-callees.py --base-ref origin/rust-migration` | Reject duplicate bindings and forwarded service fields in quick CI. `tools/rebound-callee-baseline.txt` can shrink, not grow. Macros, lambdas, wrappers, some templates and namespace resolution remain review work. |
+| `python3 tools/ffi-bool-returns.py` | Reject Rust-defined C `bool` returns, including callbacks, macro templates and visible simple aliases (#644). Rust-only `cfg(test)` service mocks are excluded. |
 | `python3 tools/orphan-exports.py --base-ref origin/rust-migration` | Check Rust exports and C++ declarations for production use. `tools/orphan-export-baseline.txt` can shrink, not grow. Macros and arbitrary conditional compilation need review; reviewers also check orphan `WITH_RUST` bodies. |
 | `python3 tools/port-metrics.py` | Report code lines with Pygments 2.19.2, using `uv` if needed. Original retirement may be negative; removing fork glue does not retire original C++. |
 | `python3 tools/port-metrics.py --whole-fork` | Report whole-fork and simulation retirement, per-area original, retired, remaining, glue and compiled C++ lines, Rust exports and boundary function pointers. |
 | `python3 tools/port-metrics.py --functions [AREA ...]` | Add the whole-fork report's remaining original code lines per baseline file and top-level function, plus file scope. Rows sum to each area's remaining count. `facade` marks rows whose remaining lines are only a signature and braces. Function detection is a brace heuristic; macro-headed blocks show as `?`. |
 
-The `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py`, `tools/test-orphan-exports.py` and `tools/test-port-metrics.py` tests exercise their checks. Original header helpers and constants live in shared Rust header modules (#261); the checker cannot detect Rust copies. See [porting](porting.md#callees-and-shared-accessors) for the rule.
+The `tools/test-ffi-bool-returns.py`, `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py`, `tools/test-orphan-exports.py` and `tools/test-port-metrics.py` tests exercise their checks. Original header helpers and constants live in shared Rust header modules (#261); the checker cannot detect Rust copies. See [porting](porting.md#callees-and-shared-accessors) for the rule.
 
 Metrics count code lines, excluding comments, directives, blank lines and Python docstrings; a second line retains historical physical counts. The whole-fork report inventories source and `WITH_RUST` guards rather than preprocessing all build defines. Compiled C++ means remaining original plus compiled fork glue; it is not a claim of behavioral completion. Ownership ports retire more original C++ than net glue and tooling added, or explain why; conversions report net glue.
 

@@ -169,9 +169,13 @@ extern "C" {
 	void openttd_rust_vehicle_economy_age(OpenTTDVehicle *, const OpenTTDVehicleServices *);
 	void openttd_rust_vehicle_decrease_value(OpenTTDVehicle *, const OpenTTDVehicleServices *);
 	void openttd_rust_vehicle_check_breakdown(OpenTTDVehicle *, const OpenTTDVehicleServices *);
-	bool openttd_rust_vehicle_needs_service(OpenTTDVehicle *, const OpenTTDVehicleServices *);
-	bool openttd_rust_vehicle_needs_automatic_service(OpenTTDVehicle *, const OpenTTDVehicleServices *);
-	bool openttd_rust_vehicle_handle_breakdown(OpenTTDVehicle *, const OpenTTDVehicleServices *);
-	bool openttd_rust_vehicle_needs_renew(OpenTTDVehicle *, const OpenTTDVehicleServices *, const Company *, bool);
+	uint8_t openttd_rust_vehicle_needs_service_abi(OpenTTDVehicle *, const OpenTTDVehicleServices *);
+	extern "C++" inline bool openttd_rust_vehicle_needs_service(OpenTTDVehicle *a0, const OpenTTDVehicleServices *a1) { return openttd_rust_vehicle_needs_service_abi(a0, a1) != 0; }
+	uint8_t openttd_rust_vehicle_needs_automatic_service_abi(OpenTTDVehicle *, const OpenTTDVehicleServices *);
+	extern "C++" inline bool openttd_rust_vehicle_needs_automatic_service(OpenTTDVehicle *a0, const OpenTTDVehicleServices *a1) { return openttd_rust_vehicle_needs_automatic_service_abi(a0, a1) != 0; }
+	uint8_t openttd_rust_vehicle_handle_breakdown_abi(OpenTTDVehicle *, const OpenTTDVehicleServices *);
+	extern "C++" inline bool openttd_rust_vehicle_handle_breakdown(OpenTTDVehicle *a0, const OpenTTDVehicleServices *a1) { return openttd_rust_vehicle_handle_breakdown_abi(a0, a1) != 0; }
+	uint8_t openttd_rust_vehicle_needs_renew_abi(OpenTTDVehicle *, const OpenTTDVehicleServices *, const Company *, bool);
+	extern "C++" inline bool openttd_rust_vehicle_needs_renew(OpenTTDVehicle *a0, const OpenTTDVehicleServices *a1, const Company *a2, bool a3) { return openttd_rust_vehicle_needs_renew_abi(a0, a1, a2, a3) != 0; }
 }
 #endif /* RUST_VEHICLE_MAINTENANCE_FFI_H */

@@ -284,6 +284,64 @@ class SimulationDeterminismTests(unittest.TestCase):
                     self.assertEqual(options, [diagnostics] if diagnostics else [])
                     launch.assert_called_once()
 
+    def test_unnamed_controller_inputs_install_their_ai(self) -> None:
+        cases = (
+            (
+                {"aircraft_controller_setup": True, "aircraft_count": 1},
+                "aircraft-controller-ai",
+                "aircraft-controller",
+                "main.nut",
+                "AIRCRAFT_COUNT <- 1;",
+                ["-d", "script=2"],
+            ),
+            (
+                {"road_setup": "flooding"},
+                "road-scenario-ai",
+                "road-crossing",
+                "setup.nut",
+                'ROAD_SETUP <- "flooding";',
+                [],
+            ),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for keys, source, installed, main, parameter, diagnostics in cases:
+                with self.subTest(source=source):
+                    source_dir = simulate.ROOT / "tools" / source
+                    run_dir = root / installed
+                    plan = simulate.prepare_game(
+                        dict(
+                            kind="generate",
+                            seed=86,
+                            map_log2=7,
+                            land_generator=1,
+                            ticks=1,
+                            scenario_ai=str(source_dir),
+                            **keys,
+                        ),
+                        root / "openttd",
+                        root,
+                        run_dir,
+                        10,
+                        {},
+                        False,
+                    )
+                    ai = run_dir / "ai" / installed
+                    self.assertEqual(
+                        (ai / "main.nut").read_bytes(), (source_dir / main).read_bytes()
+                    )
+                    self.assertIn(parameter, (ai / "parameters.nut").read_text())
+                    self.assertEqual(
+                        [
+                            list(pair)
+                            for pair in zip(
+                                plan["command"], plan["command"][1:], strict=False
+                            )
+                            if pair[0] == "-d"
+                        ],
+                        [diagnostics] if diagnostics else [],
+                    )
+
     def test_each_requested_selector_must_match_before_any_run(self):
         stderr = io.StringIO()
         with (

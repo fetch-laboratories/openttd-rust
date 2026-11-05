@@ -32,8 +32,10 @@ void openttd_rust_monitor_clear_pickups(uint8_t);
 void openttd_rust_monitor_clear_deliveries(uint8_t);
 int32_t openttd_rust_monitor_pickup(uint32_t, bool);
 int32_t openttd_rust_monitor_delivery(uint32_t, bool);
-bool openttd_rust_monitor_next_pickup(bool, uint32_t *, uint32_t *);
-bool openttd_rust_monitor_next_delivery(bool, uint32_t *, uint32_t *);
+uint8_t openttd_rust_monitor_next_pickup_abi(bool, uint32_t *, uint32_t *);
+extern "C++" inline bool openttd_rust_monitor_next_pickup(bool a0, uint32_t *a1, uint32_t *a2) { return openttd_rust_monitor_next_pickup_abi(a0, a1, a2) != 0; }
+uint8_t openttd_rust_monitor_next_delivery_abi(bool, uint32_t *, uint32_t *);
+extern "C++" inline bool openttd_rust_monitor_next_delivery(bool a0, uint32_t *a1, uint32_t *a2) { return openttd_rust_monitor_next_delivery_abi(a0, a1, a2) != 0; }
 void openttd_rust_monitor_insert_pickup(uint32_t, uint32_t);
 void openttd_rust_monitor_insert_delivery(uint32_t, uint32_t);
 }

@@ -150,7 +150,7 @@ uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid,
 {
 	return openttd_rust_override_allocate(this->rust_owner, grf_local_id, grfid, substitute_id, this,
 		this->GetID(grf_local_id, grfid),
-		[](void *self, uint16_t id) noexcept { return static_cast<OverrideManagerBase *>(self)->CheckValidNewID(id); });
+		[](void *self, uint16_t id) noexcept -> uint8_t { return static_cast<OverrideManagerBase *>(self)->CheckValidNewID(id); });
 }
 
 /**

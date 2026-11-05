@@ -79,7 +79,8 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept;
 extern "C" {
 void openttd_rust_town_found(const OpenTTDTownFoundingServices *, const OpenTTDRoadCommandContext *, OpenTTDTownFoundingFrame *, OpenTTDTownNameFrame *, OpenTTDCommandCost *, uint32_t, TownSize, bool, TownLayout, bool, uint32_t, OpenTTDByteSpan, bool);
 uint openttd_rust_town_default_number(const OpenTTDTownFoundingServices *);
-bool openttd_rust_town_generate(const OpenTTDTownFoundingServices *, const OpenTTDRoadCommandContext *, OpenTTDTownFoundingFrame *, OpenTTDTownNameFrame *, TownLayout, bool, uint, bool *);
+uint8_t openttd_rust_town_generate_abi(const OpenTTDTownFoundingServices *, const OpenTTDRoadCommandContext *, OpenTTDTownFoundingFrame *, OpenTTDTownNameFrame *, TownLayout, bool, uint, bool *);
+extern "C++" inline bool openttd_rust_town_generate(const OpenTTDTownFoundingServices *a0, const OpenTTDRoadCommandContext *a1, OpenTTDTownFoundingFrame *a2, OpenTTDTownNameFrame *a3, TownLayout a4, bool a5, uint a6, bool *a7) { return openttd_rust_town_generate_abi(a0, a1, a2, a3, a4, a5, a6, a7) != 0; }
 void openttd_rust_town_rename(const OpenTTDTownFoundingServices *, OpenTTDCommandCost *, uint16_t, OpenTTDByteSpan, bool);
 }
 #endif /* RUST_TOWN_FOUNDING_FFI_H */

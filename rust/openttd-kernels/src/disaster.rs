@@ -1189,8 +1189,8 @@ macro_rules! entry {
 /// # Safety
 /// The services and live shell/owner satisfy the module's synchronous contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_tick(s: *const Services, v: Vehicle) -> bool {
-    entry!(s, w, { w.tick_vehicle(v) })
+pub unsafe extern "C" fn openttd_rust_disaster_tick_abi(s: *const Services, v: Vehicle) -> u8 {
+    u8::from(entry!(s, w, { w.tick_vehicle(v) }))
 }
 /// # Safety
 /// As `openttd_rust_disaster_tick`.

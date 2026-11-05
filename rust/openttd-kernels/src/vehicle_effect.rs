@@ -210,7 +210,7 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
     }
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_visual_eligible(v: VehicleRef) -> bool {
+pub extern "C" fn openttd_rust_visual_eligible_abi(v: VehicleRef) -> u8 {
     let s = services();
     let mut g = std::mem::MaybeUninit::uninit();
     (s.gate)(v, g.as_mut_ptr());
@@ -218,7 +218,7 @@ pub extern "C" fn openttd_rust_visual_eligible(v: VehicleRef) -> bool {
     if s.vehicle.assertions {
         assert!(g.primary);
     }
-    g.smoke != 0 && g.status & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && g.speed >= 2
+    u8::from(g.smoke != 0 && g.status & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && g.speed >= 2)
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {

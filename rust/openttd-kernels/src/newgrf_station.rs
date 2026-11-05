@@ -1059,8 +1059,8 @@ pub(crate) const fn get_station_layout_key(platforms: u8, length: u8) -> u16 {
 }
 /// Both station and road-stop classes accept the historical high-byte-FF extension.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_is_waypoint_class(global_id: u32) -> bool {
-    is_waypoint_class(global_id)
+pub extern "C" fn openttd_rust_is_waypoint_class_abi(global_id: u32) -> u8 {
+    u8::from(is_waypoint_class(global_id))
 }
 pub(crate) const fn is_waypoint_class(global_id: u32) -> bool {
     global_id == STATION_CLASS_LABEL_WAYPOINT

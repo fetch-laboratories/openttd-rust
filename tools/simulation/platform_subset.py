@@ -8,7 +8,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 import migration
 
@@ -22,7 +22,10 @@ NAMES = (
     "aircraft-route-manual",
 )
 MODES = (("snapshots", True), ("plain", False))
-Scenario = dict[str, Any]
+
+
+class Scenario(core.Scenario):
+    platform_end_date: NotRequired[int]
 
 
 class Capture(TypedDict):
@@ -52,7 +55,7 @@ def identity() -> Bundle:
     }
 
 
-def stored_run(bundle: Path, key: str, record: Capture) -> dict[str, Any]:
+def stored_run(bundle: Path, key: str, record: Capture) -> core.Run:
     run = core.read_game(
         {"dir": bundle / "captures" / key, **record, "instructions": None}
     )
@@ -80,7 +83,7 @@ def load_bundle(folder: Path) -> Bundle:
 
 def scenarios(output: Path) -> list[Scenario]:
     available = {s["name"]: s for s in core.scenario_list(False)}
-    cases = [dict(available[name]) for name in NAMES]
+    cases = [cast(Scenario, dict(available[name])) for name in NAMES]
     for case in cases:
         case["settings"] = {
             "gui": {"threaded_saves": "false"},
@@ -115,7 +118,7 @@ def scenarios(output: Path) -> list[Scenario]:
     return cases
 
 
-def check_no_join(case: Scenario, run: dict[str, Any]) -> None:
+def check_no_join(case: Scenario, run: core.Run) -> None:
     for path in run["snapshots"]:
         state = core.read_save(path)
         jobs = core.rows(state, "LGRJ")
@@ -208,7 +211,7 @@ def main(arguments: list[str]) -> int:
             desync: bool,
             *,
             isolate: bool,
-        ) -> dict[str, Any]:
+        ) -> core.Run:
             key = f"{scenario['name']}/{'snapshots' if desync else 'plain'}"
             if run_dir.name == "reference":
                 return stored_run(bundle, key, metadata["captures"][key])
@@ -240,7 +243,7 @@ def main(arguments: list[str]) -> int:
             prepared=True,
         )
         result["scenario"] = "platform-no-join-" + name
-        result.pop("plain_speed")
+        core.findings(result).pop("plain_speed")
         results.append(result)
         print(f"{name}: {'passed' if result['passed'] else 'FAILED'}", flush=True)
     passed = all(result["passed"] for result in results)

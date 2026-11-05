@@ -375,7 +375,9 @@ def finite_range_probe(folder, candidate_build, env):
     begin = source.index("static void AircraftHandleDestTooFar(")
     end = source.index("bool Aircraft::Tick()", begin)
     (folder / "aircraft-range-reference.inc").write_text(source[begin:end])
-    archive = next((candidate_build / "cargo").glob("*/release/libopenttd_kernels.a"))
+    archive = migration.rust_archive(
+        candidate_build, target_dir=candidate_build / "cargo-native-test-support"
+    )
     probe = folder / "aircraft-range"
     command = [
         "c++",

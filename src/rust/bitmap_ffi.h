@@ -17,6 +17,7 @@ OpenTTDBitmapTileArea *openttd_rust_bitmap_new();
 void openttd_rust_bitmap_destroy(OpenTTDBitmapTileArea *);
 void openttd_rust_bitmap_initialize(OpenTTDBitmapTileArea *, OpenTTDBitmapArea);
 void openttd_rust_bitmap_set(OpenTTDBitmapTileArea *, uint32_t, const OpenTTDSharedServices *);
-bool openttd_rust_bitmap_has(const OpenTTDBitmapTileArea *, uint32_t, const OpenTTDSharedServices *);
+uint8_t openttd_rust_bitmap_has_abi(const OpenTTDBitmapTileArea *, uint32_t, const OpenTTDSharedServices *);
+extern "C++" inline bool openttd_rust_bitmap_has(const OpenTTDBitmapTileArea *a0, uint32_t a1, const OpenTTDSharedServices *a2) { return openttd_rust_bitmap_has_abi(a0, a1, a2) != 0; }
 }
 #endif /* RUST_BITMAP_FFI_H */

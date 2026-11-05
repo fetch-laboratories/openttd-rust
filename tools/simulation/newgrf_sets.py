@@ -6,11 +6,9 @@ scenario AI builds a train and buses from them."""
 
 import gzip
 import shutil
-from collections.abc import Mapping
 from pathlib import Path
-from typing import NotRequired, TypedDict
 
-from . import community_ai
+from . import community_ai, core
 from .core import (
     SNAPSHOT_TICKS,
     TICKS_PER_DAY,
@@ -42,28 +40,14 @@ REQUIRED = {
 }
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
-    seed: int
-    map_log2: int
-    land_generator: int
+class Scenario(core.Scenario):
     newgrf_sets: bool
-    ticks: int
-    console: list[str]
-    settings: Mapping[str, Mapping[str, str | int]]
-    scenario_ai: NotRequired[str]
-    witnesses: NotRequired[bool]
 
 
-class Run(TypedDict):
-    exit: int
-    dir: Path
-    log: list[str]
-    snapshots: list[Path]
+Run = core.Run
 
 
-class Result(TypedDict, total=False):
+class Result(core.Result, total=False):
     newgrf_sets_witnesses: dict[str, dict[str, dict[str, int]]]
 
 
@@ -129,8 +113,8 @@ def game_environment(scenario: Scenario) -> dict[str, str]:
 def check(
     scenario: Scenario,
     run: Run,
-    mode: str,
-    role: str,
+    mode: core.Mode,
+    role: core.Role,
     result: Result,
 ) -> None:
     if not uses_ai(scenario) or run["exit"]:

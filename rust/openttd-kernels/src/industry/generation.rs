@@ -143,16 +143,16 @@ fn initial(
 // Keep the wanted-number services inside the source nonzero-total branch.
 #[allow(clippy::manual_checked_ops)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_generate(
+pub unsafe extern "C" fn openttd_rust_industry_generate_abi(
     builder: *mut Builder,
     context: *mut GenerationContext,
     s: *const Services,
     g: *const GenerationServices,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*s };
     let g = unsafe { &*g };
     if !(g.environment.editor)() && unsafe { (g.density)() } == 0 {
-        return true;
+        return u8::from(true);
     }
     let land = probabilities(false, s, g);
     let water = probabilities(true, s, g);
@@ -169,13 +169,13 @@ pub unsafe extern "C" fn openttd_rust_industry_generate(
             amount = p.num_forced;
         }
         if !unsafe { (g.set_progress)(context, on_water, amount) } {
-            return false;
+            return u8::from(false);
         }
         for kind in 0..TYPES {
             if p.force_one[kind] {
                 amount = amount.wrapping_sub(1);
                 if !initial(kind as u8, on_water, true, context, s, g) {
-                    return false;
+                    return u8::from(false);
                 }
             }
         }
@@ -187,12 +187,12 @@ pub unsafe extern "C" fn openttd_rust_industry_generate(
                 kind += 1;
             }
             if !initial(kind as u8, on_water, false, context, s, g) {
-                return false;
+                return u8::from(false);
             }
         }
     }
     unsafe { super::openttd_rust_industry_build_reset(builder, s) };
-    true
+    u8::from(true)
 }
 /// # Safety
 /// Tables and returned immutable specs remain live for this invocation.
