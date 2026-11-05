@@ -95,6 +95,17 @@ include = [
     "tools/simulation/orders.py",
     "tools/simulation/vehicles.py",
     "tools/simulation/ships.py",
+    "tools/simulation/roads.py",
+    "tools/simulation/disasters.py",
+    "tools/simulation/effects.py",
+    "tools/simulation/instructions.py",
+    "tools/simulation/speed.py",
+    "tools/simulate.py",
+    "tools/simulation/__init__.py",
+    "tools/cargo-income-comparison.py",
+    "tools/company-command-comparison.py",
+    "tools/industry-production-comparison.py",
+    "tools/landscape-comparison.py",
 ]
 
 [analysis]
