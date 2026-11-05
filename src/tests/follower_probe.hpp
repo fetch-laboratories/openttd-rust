@@ -4,6 +4,7 @@
 #define FOLLOWER_PROBE_HPP
 #include "../pathfinder/follow_track.hpp"
 #include "../rust/services_ffi.h"
+#include "../rust/vehicle_services.h"
 #include <memory>
 extern "C" {
 /** Opaque boxed Rust follower. */
@@ -62,13 +63,11 @@ struct FollowerProbeT {
 	}
 	void Init(const VehicleType *v, RailTypes types) {
 		this->veh = v;
-		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), Handle(this->veh), 0, types.base(), Allow90degTurns(), true);
+		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), RustVehicle(this->veh), 0, types.base(), Allow90degTurns(), true);
 	}
 	void Init(Owner owner, RailTypes types) {
-		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), Handle(this->veh), owner.base(), types.base(), Allow90degTurns(), false);
+		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), RustVehicle(this->veh), owner.base(), types.base(), Allow90degTurns(), false);
 	}
-	/** Rust follower handles are vehicle records, as production `RustVehicle` passes them. */
-	static OpenTTDVehicle *Handle(const Vehicle *v) { return v == nullptr ? nullptr : v->record; }
 	static constexpr TransportType TT() { return Ttr_type_; }
 	static constexpr bool IsWaterTT() { return TT() == TRANSPORT_WATER; }
 	static constexpr bool IsRailTT() { return TT() == TRANSPORT_RAIL; }
@@ -79,7 +78,7 @@ struct FollowerProbeT {
 	bool MaskReservedTracks() { return !DoTrackMasking() || this->Read(openttd_test_follower_mask(&GetRustSharedServices(), this->state.get())); }
 	int GetSpeedLimit(int *min = nullptr) const { return GetSpeedLimit(this->old_tile, static_cast<const VehicleType *>(this->veh), min); }
 	static int GetSpeedLimit(TileIndex tile, const VehicleType *v, int *min = nullptr) {
-		int max = openttd_test_follower_speed(&GetRustSharedServices(), TT(), Handle(v), tile.base());
+		int max = openttd_test_follower_speed(&GetRustSharedServices(), TT(), RustVehicle(v), tile.base());
 		if (min != nullptr) *min = 0;
 		return max;
 	}
