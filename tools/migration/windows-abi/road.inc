@@ -239,6 +239,7 @@ static void RoadBoundary()
 	road_orders->services.vehicle = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()); return road_orders->vehicle.get(); };
 	road_orders->services.consist = [](void *) noexcept { return &road_orders->consist; };
 	road_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{1}; };
+	road_orders->services.primary_vehicle = [](void *) noexcept { return uint64_t{1}; };
 	road_orders->services.station_location = [](void *, uint16_t) noexcept { return uint64_t{100}; };
 	road_orders->services.set_destination = [](void *shell, uint32_t destination) noexcept {
 		CHECK(destination == 100);
