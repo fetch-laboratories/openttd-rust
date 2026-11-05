@@ -276,7 +276,11 @@ def identity(key: str) -> str | None:
 
 
 def reclassified(
-    growth: set[str], baseline: set[str], base_rows: int, base_files: dict[str, str]
+    growth: set[str],
+    baseline: set[str],
+    base_rows: int,
+    base_files: dict[str, str],
+    current_files: dict[str, str],
 ) -> set[str]:
     """Added rows for bodies whose path and header existed at the base revision.
 
@@ -285,7 +289,9 @@ def reclassified(
     """
     if len(baseline) > base_rows:
         return set()
-    headers: dict[str, set[str]] = {}
+    headers: dict[str, Counter[str]] = {}
+    current_headers: dict[str, Counter[str]] = {}
+    rows = Counter(identity(key) for key in baseline)
     accepted = set()
     for key in growth:
         name = identity(key)
@@ -293,8 +299,18 @@ def reclassified(
             continue
         path, header = name.split(" | ", 1)
         if path not in headers:
-            headers[path] = {h for h, _, _ in definitions(base_files.get(path, ""))}
-        if header in headers[path]:
+            headers[path] = Counter(
+                h for h, _, _ in definitions(base_files.get(path, ""))
+            )
+            current_headers[path] = Counter(
+                h for h, _, _ in definitions(current_files.get(path, ""))
+            )
+        # Repeated lambda headers identify occurrences, not one shared body.
+        # Read and write rows consume the same pre-existing occurrence budget.
+        if (
+            rows[name] <= headers[path][header]
+            and current_headers[path][header] <= headers[path][header]
+        ):
             accepted.add(key)
     return accepted
 
@@ -349,7 +365,7 @@ def main():
     inherited_callees = callee_copies(sources(args.base_ref or "origin/rust-migration"))
     new, growth = set(hits) - baseline - inherited_callees.keys(), baseline - previous
     accepted = (
-        reclassified(growth, baseline, base_rows, sources(args.base_ref))
+        reclassified(growth, baseline, base_rows, sources(args.base_ref), all_files)
         if growth and args.base_ref
         else set()
     )
