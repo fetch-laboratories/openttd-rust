@@ -41,10 +41,10 @@ const DEPOT: u16 = crate::track_type::TRACK_BIT_DEPOT as u16;
 const WORMHOLE: u16 = crate::track_type::TRACK_BIT_WORMHOLE as u16;
 // Match FindFirstBit and FindFirstTrack, including their distinct zero results.
 fn first_bit(bits: u32) -> u32 {
-    if bits == 0 { 0 } else { bits.trailing_zeros() }
+    u32::from(crate::bitmath_func::find_first_bit(u64::from(bits)))
 }
 fn first_track(bits: u32) -> u32 {
-    if bits == 0 { 255 } else { first_bit(bits) }
+    u32::from(crate::track_func::find_first_track_u32(bits))
 }
 /// One private allocation per shell, including indexed load construction.
 pub struct State {
