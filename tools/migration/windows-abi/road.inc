@@ -290,7 +290,7 @@ static void RoadBoundary()
 	// speed 2/distance 1; realistic kickoff gives speed 4/distance 3.
 	static OpenTTDVehicleResolverServices physics_resolver{};
 	physics_resolver.roadtype = [](OpenTTDVehicle *) noexcept { return RoadType{0}; };
-	t.physics_vehicle.newgrf = []() noexcept { return &physics_resolver; };
+	t.physics_vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &physics_resolver; };
 	probe.ground.state->cache.cached_weight = 1;
 	t.physics_vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.ground.update_viewport = [](OpenTTDVehicle *part) noexcept {
