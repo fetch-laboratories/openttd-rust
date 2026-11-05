@@ -28,9 +28,12 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
+from types import ModuleType
+from typing import IO, Any, Literal, NotRequired, TypedDict, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from validation_execution import file_lock  # noqa: E402
@@ -69,8 +72,132 @@ RUNTIME_DIRECTORIES = ("lang", "baseset", "ai", "game", "regression")
 TICKS_PER_DAY = 74
 SNAPSHOT_TICKS = 32 * TICKS_PER_DAY
 
+Kind = Literal["generate", "save", "regression"]
+Role = Literal["reference", "candidate"]
+Mode = Literal["snapshots", "plain"]
+ROLES: tuple[Role, Role] = ("reference", "candidate")
 
-def scenario_modules():
+
+class Scenario(TypedDict):
+    """Keys core reads; each family's record extends it with its own keys."""
+
+    name: str
+    kind: Kind
+    ticks: int
+    seed: NotRequired[int]
+    map_log2: NotRequired[int]
+    map_log2_y: NotRequired[int]
+    land_generator: NotRequired[int]
+    settings: NotRequired[Mapping[str, Mapping[str, int | bool | str]]]
+    console: NotRequired[list[str]]
+    save: NotRequired[str]
+    test: NotRequired[str]
+    video: NotRequired[str]
+    short_checkpoint: NotRequired[bool]
+    snapshot_minimum: NotRequired[int]
+    witnesses: NotRequired[bool]
+    executables: NotRequired[dict[str, Path]]
+    role_inputs: NotRequired[dict[str, dict[str, Any]]]
+    scenario_ai: NotRequired[str]
+
+
+class Plan(TypedDict):
+    """A prepared launch (prepare_game) that execute_game runs."""
+
+    dir: Path
+    command: list[str]
+    env: dict[str, str]
+    build: Path
+    timeout: int
+    isolate: bool
+    instructions: dict[str, Any] | None
+    native_threads: bool
+
+
+class Executed(TypedDict):
+    """One finished game (execute_game)."""
+
+    dir: Path
+    exit: int | Literal["timeout"]
+    seconds: float
+    command: list[str]
+    instructions: dict[str, Any] | None
+
+
+class Run(Executed):
+    """A finished game with its decoded output (read_game)."""
+
+    snapshots: list[Path]
+    log: list[str]
+    stdout: bytes
+    sanitizer: Any
+
+
+class Difference(TypedDict):
+    snapshot: str
+    chunk: str
+    element: str
+    field: str
+    reference: str
+    candidate: str
+    issue: NotRequired[str]
+
+
+class Stats(TypedDict):
+    chunks: int
+    elements: int
+    masked: dict[str, int]
+
+
+class SpeedSample(TypedDict):
+    reference_seconds: float
+    candidate_seconds: float
+    candidate_reference_ratio: float | None
+    same_end: bool
+
+
+class PlainSpeed(TypedDict):
+    samples: list[SpeedSample]
+    median_candidate_reference_ratio: float | None
+    budget: NotRequired[Any]
+
+
+class Result(TypedDict):
+    """One scenario's report entry. Mode-, role- and family-specific keys go
+    through findings(); a TypedDict names only literal keys."""
+
+    scenario: str
+    plain_speed: PlainSpeed
+    differences: list[Difference]
+    known_failures: list[Difference]
+    problems: list[str]
+    notes: list[str]
+    snapshots: int
+    stats: Stats
+    requested_ticks: NotRequired[int]
+    instruction_speed: NotRequired[Any]
+    plain_commands: NotRequired[dict[Role, list[str]]]
+    sanitizer: NotRequired[dict[str, Any]]
+    passed: NotRequired[bool]
+    seconds: NotRequired[float]
+
+
+def findings(result: Result) -> dict[str, Any]:
+    """The result as an open record, for keys built from a mode, role or family."""
+    return cast(dict[str, Any], result)
+
+
+Install = Callable[[Scenario, Path], None]
+Prepare = Callable[
+    [Scenario, dict[str, Path], dict[str, Path], Path, int, dict[str, str], Result],
+    Scenario,
+]
+GameArgs = Callable[[Scenario], list[str]]
+GameEnvironment = Callable[[Scenario], Mapping[str, str]]
+Check = Callable[[Scenario, Run, Mode, Role, Result], None]
+
+
+def scenario_modules() -> tuple[ModuleType, ...]:
     """Families in scenario-list order; import after shared core initialization."""
     from . import (
         aircraft,
@@ -141,19 +268,27 @@ def scenario_modules():
     )
 
 
-def adapter_modules():
+def adapter_modules() -> list[ModuleType]:
     """Families whose console adapter relinks the game; runtime bundles carry each."""
     return [module for module in scenario_modules() if hasattr(module, "adapter")]
 
 
-def sanitized():
+Hook = Literal["install", "prepare", "game_args", "game_environment", "check"]
+
+
+def hook_modules(scenario: Scenario, hook: Hook) -> list[ModuleType]:
+    """Modules defining `hook`, in scenario-list order."""
+    return [module for module in scenario_modules() if hasattr(module, hook)]
+
+
+def sanitized() -> bool:
     """Whether the driver's --sanitize selected the ASan and UBSan trees (#505)."""
     import migration
 
     return migration.SANITIZE
 
 
-def scenario_list(soak):
+def scenario_list(soak: bool) -> list[Scenario]:
     return [
         scenario for module in scenario_modules() for scenario in module.scenarios(soak)
     ]
@@ -163,23 +298,48 @@ class Corrupt(Exception):
     pass
 
 
+class Field(TypedDict):
+    """One table header entry; struct fields carry their own sub-header."""
+
+    type: int
+    key: str
+    fields: NotRequired[list["Field"]]
+
+
+Buffer = bytes | bytearray
+
+
+class Chunk(TypedDict):
+    kind: int
+    elements: list[tuple[int, Buffer]]
+    header: list[Field] | None
+    raw: NotRequired[Buffer]
+    span: tuple[int, int]
+    noncanonical: int
+
+
+Chunks = dict[str, Chunk]
+# Decoded field values by path; each value's type follows the save's header.
+Row = dict[str, Any]
+
+
 class Reader:
-    def __init__(self, data, pos=0, end=None):
+    def __init__(self, data: Buffer, pos: int = 0, end: int | None = None) -> None:
         self.data, self.pos, self.end = data, pos, len(data) if end is None else end
         # Gammas whose bytes are not SlWriteSimpleGamma's minimal form for their value.
         self.noncanonical = 0
 
-    def take(self, count):
+    def take(self, count: int) -> Buffer:
         if self.pos + count > self.end:
             raise Corrupt("read past end")
         value = self.data[self.pos : self.pos + count]
         self.pos += count
         return value
 
-    def byte(self):
+    def byte(self) -> int:
         return self.take(1)[0]
 
-    def gamma(self):
+    def gamma(self) -> int:
         """Saveload SlReadSimpleGamma: 1 to 5 bytes, big endian, prefix coded."""
         start = self.pos
         first = self.byte()
@@ -200,7 +360,7 @@ class Reader:
 
 
 # SLE_FILE_* types: (struct format, size); 10 is STRING, 11 is STRUCT.
-FILE_TYPES = {
+FILE_TYPES: dict[int, tuple[str, int]] = {
     1: (">b", 1),
     2: (">B", 1),
     3: (">h", 2),
@@ -214,9 +374,9 @@ FILE_TYPES = {
 FILE_STRING, FILE_STRUCT, HAS_LENGTH = 10, 11, 0x10
 
 
-def read_header(reader):
+def read_header(reader: Reader) -> list[Field]:
     """Table header: (type, key) pairs ending in type 0, then sub-headers of struct fields."""
-    fields = []
+    fields: list[Field] = []
     while True:
         kind = reader.byte()
         if kind == 0:
@@ -233,7 +393,7 @@ def read_header(reader):
     return fields
 
 
-def read_value(reader, kind):
+def read_value(reader: Reader, kind: int) -> int | str:
     base = kind & 0x0F
     if base == FILE_STRING:
         # surrogateescape keeps distinct invalid byte sequences distinct.
@@ -242,7 +402,7 @@ def read_value(reader, kind):
     return struct.unpack(fmt, reader.take(size))[0]
 
 
-def read_object(reader, fields, prefix, out):
+def read_object(reader: Reader, fields: list[Field], prefix: str, out: Row) -> None:
     """Flatten one object into out[path] = value, following SlObject's table encoding."""
     for field in fields:
         path = prefix + field["key"]
@@ -256,15 +416,15 @@ def read_object(reader, fields, prefix, out):
             out[path] = tuple(read_value(reader, kind) for _ in range(reader.gamma()))
 
 
-def read_save(path):
+def read_save(path: Path) -> Chunks:
     """Return {chunk id: chunk} for an uncompressed OTTN save."""
     return parse_save(path.read_bytes(), path.name)
 
 
-def parse_save(data, name="save"):
+def parse_save(data: Buffer, name: str = "save") -> Chunks:
     if data[:4] != b"OTTN":
         raise Corrupt(f"{name} is not an uncompressed save")
-    reader, chunks = Reader(data, 8), {}
+    reader, chunks = Reader(data, 8), Chunks()
     while True:
         chunk_start = reader.pos
         cid = reader.take(4)
@@ -272,7 +432,13 @@ def parse_save(data, name="save"):
             return chunks
         mode = reader.byte()
         kind = mode & 0x0F
-        chunk = {"kind": kind, "elements": [], "header": None}
+        chunk: Chunk = {
+            "kind": kind,
+            "elements": [],
+            "header": None,
+            "span": (0, 0),
+            "noncanonical": 0,
+        }
         before = reader.noncanonical
         if kind == 0:  # CH_RIFF
             length = int.from_bytes(reader.take(3), "big") + ((mode >> 4) << 24)
@@ -304,10 +470,10 @@ def parse_save(data, name="save"):
         chunks[cid.decode("latin-1")] = chunk
 
 
-def decode_element(chunk, body):
+def decode_element(chunk: Chunk, body: Buffer) -> Row | None:
     if chunk["header"] is None:
         return None
-    reader, out = Reader(body), {}
+    reader, out = Reader(body), Row()
     try:
         read_object(reader, chunk["header"], "", out)
     except (Corrupt, struct.error, KeyError):
@@ -316,7 +482,7 @@ def decode_element(chunk, body):
     return out if reader.pos == len(body) else None
 
 
-def mask_for(cid, path):
+def mask_for(cid: str, path: str) -> str | None:
     """Return the MASKS pattern covering this field, if any."""
     generic = re.sub(r"\[\d+\]", "", path)
     return next(
@@ -329,7 +495,9 @@ def mask_for(cid, path):
     )
 
 
-def compare_chunk(cid, ref, cand, stats):
+def compare_chunk(
+    cid: str, ref: Chunk, cand: Chunk, stats: Stats
+) -> Iterator[tuple[str, str, object, object]]:
     """Yield (element, field, reference, candidate) differences in one chunk."""
     if ref["kind"] != cand["kind"]:
         yield ("", "chunk type", ref["kind"], cand["kind"])
@@ -385,7 +553,9 @@ def compare_chunk(cid, ref, cand, stats):
                 )
 
 
-def failure_key(scenario, cid, element, field):
+def failure_key(
+    scenario: str, cid: str, element: str, field: str
+) -> tuple[str, str, str]:
     """KNOWN_FAILURES key: the field path without indices, or the element for byte-level differences."""
     return (
         scenario,
@@ -394,18 +564,22 @@ def failure_key(scenario, cid, element, field):
     )
 
 
-def compare_saves(ref_path, cand_path, scenario, limit, stats):
+def compare_saves(
+    ref_path: Path, cand_path: Path, scenario: str, limit: int, stats: Stats
+) -> list[Difference]:
     """Return difference records; stops after `limit` differences not in KNOWN_FAILURES."""
     ref, cand = read_save(ref_path), read_save(cand_path)
-    records, unknown = [], 0
+    records: list[Difference] = []
+    unknown = 0
     for cid in sorted(set(ref) | set(cand)):
         stats["chunks"] += 1
+        diffs: Iterable[tuple[str, str, object, object]]
         if cid not in ref or cid not in cand:
             diffs = [("", "chunk", cid in ref, cid in cand)]
         else:
             diffs = compare_chunk(cid, ref[cid], cand[cid], stats)
         for element, field, ref_value, cand_value in diffs:
-            record = {
+            record: Difference = {
                 "snapshot": ref_path.name,
                 "chunk": cid,
                 "element": element,
@@ -424,7 +598,7 @@ def compare_saves(ref_path, cand_path, scenario, limit, stats):
     return records
 
 
-def set_option(text, section, line):
+def set_option(text: str, section: str, line: str) -> str:
     """Add a line to an existing cfg section (a repeated section would be ignored)."""
     text, count = re.subn(
         rf"^\[{section}\]\s*$", f"[{section}]\n{line}", text, count=1, flags=re.M
@@ -432,7 +606,7 @@ def set_option(text, section, line):
     return text if count else f"{text.rstrip()}\n[{section}]\n{line}\n"
 
 
-def write_config(scenario, build, run_dir):
+def write_config(scenario: Scenario, build: Path, run_dir: Path) -> None:
     if scenario["kind"] == "regression":
         text = (build / "regression/regression.cfg").read_text()
     else:
@@ -456,11 +630,11 @@ def write_config(scenario, build, run_dir):
     (run_dir / "openttd.cfg").write_text(text)
 
 
-GAME_LOCK = None  # Set by main to the clone-wide game coordination file.
+GAME_LOCK: Path | None = None  # Set by main to the clone-wide game coordination file.
 
 
 @contextlib.contextmanager
-def game_slot():
+def game_slot() -> Generator[None, None, None]:
     """All games share coordination; timed games never reserve a quiet host."""
     path = GAME_LOCK
     if path is None:
@@ -473,12 +647,22 @@ def game_slot():
         yield
 
 
-def benchmark_run(command, *, timeout, **kwargs):
+def benchmark_run(
+    command: list[str],
+    *,
+    timeout: float,
+    cwd: Path,
+    env: Mapping[str, str],
+    stdout: IO[Any] | int,
+    stderr: IO[Any] | int,
+) -> subprocess.CompletedProcess[bytes]:
     """Wait without polling; the watchdog kills and the caller reaps on timeout."""
-    with subprocess.Popen(command, **kwargs) as child:
+    with subprocess.Popen(
+        command, cwd=cwd, env=env, stdout=stdout, stderr=stderr
+    ) as child:
         expired = threading.Event()
 
-        def kill():
+        def kill() -> None:
             expired.set()
             child.kill()
 
@@ -499,14 +683,13 @@ def benchmark_run(command, *, timeout, **kwargs):
         return subprocess.CompletedProcess(command, code)
 
 
-def prepare_run_dir(scenario, build, run_dir):
+def prepare_run_dir(scenario: Scenario, build: Path, run_dir: Path) -> None:
     """Write a game's configuration, module files and console script."""
     shutil.rmtree(run_dir, ignore_errors=True)
     run_dir.mkdir(parents=True)
     write_config(scenario, build, run_dir)
-    for module in scenario_modules():
-        if install := getattr(module, "install", None):
-            install(scenario, run_dir)
+    for module in hook_modules(scenario, "install"):
+        cast(Install, module.install)(scenario, run_dir)
     if "console" in scenario:
         (run_dir / "scripts").mkdir()
         (run_dir / "scripts/game_start.scr").write_text(
@@ -514,29 +697,38 @@ def prepare_run_dir(scenario, build, run_dir):
         )
 
 
-def prepare_scenario(scenario, binaries, builds, out, timeout, env, result):
+def prepare_scenario(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: Result,
+) -> Scenario:
     """Module preparation hooks in PREPARE_ORDER, not scenario-list order."""
     for module in sorted(
-        scenario_modules(), key=lambda m: getattr(m, "PREPARE_ORDER", 4)
+        hook_modules(scenario, "prepare"), key=lambda m: getattr(m, "PREPARE_ORDER", 4)
     ):
-        if prepare := getattr(module, "prepare", None):
-            scenario = prepare(scenario, binaries, builds, out, timeout, env, result)
+        scenario = cast(Prepare, module.prepare)(
+            scenario, binaries, builds, out, timeout, env, result
+        )
     return scenario
 
 
 def run_game(
-    scenario,
-    binary,
-    build,
-    run_dir,
-    timeout,
-    base_env=None,
-    desync=True,
+    scenario: Scenario,
+    binary: Path,
+    build: Path,
+    run_dir: Path,
+    timeout: int,
+    base_env: Mapping[str, str] | None = None,
+    desync: bool = True,
     *,
-    isolate=False,
-    instructions=False,
+    isolate: bool = False,
+    instructions: bool = False,
     native_threads: bool = False,
-):
+) -> Run:
     """Run one binary on one scenario in an isolated personal directory.
 
     desync=3 writes the 32-day snapshots but also checks and rebuilds caches
@@ -561,18 +753,18 @@ def run_game(
 
 
 def prepare_game(
-    scenario,
-    binary,
-    build,
-    run_dir,
-    timeout,
-    base_env=None,
-    desync=True,
+    scenario: Scenario,
+    binary: Path,
+    build: Path,
+    run_dir: Path,
+    timeout: int,
+    base_env: Mapping[str, str] | None = None,
+    desync: bool = True,
     *,
-    isolate=False,
-    instructions=False,
+    isolate: bool = False,
+    instructions: bool = False,
     native_threads: bool = False,
-):
+) -> Plan:
     """Prepare a launch without executing or decoding a game."""
     prepare_run_dir(scenario, build, run_dir)
     if scenario["kind"] == "save":
@@ -583,9 +775,8 @@ def prepare_game(
         game = ["-g", f"ai/{scenario['test']}/test.sav", "-d", "script=2", "-Q"]
     else:
         game = ["-g", "-G", str(scenario["seed"])]
-    for module in scenario_modules():
-        if game_args := getattr(module, "game_args", None):
-            game += game_args(scenario)
+    for module in hook_modules(scenario, "game_args"):
+        game += cast(GameArgs, module.game_args)(scenario)
     command = [
         str(binary),
         "-x",
@@ -604,9 +795,8 @@ def prepare_game(
         XDG_CONFIG_HOME=str(run_dir / "xdg-config"),
         XDG_CACHE_HOME=str(run_dir / "xdg-cache"),
     )
-    for module in scenario_modules():
-        if game_environment := getattr(module, "game_environment", None):
-            env.update(game_environment(scenario))
+    for module in hook_modules(scenario, "game_environment"):
+        env.update(cast(GameEnvironment, module.game_environment)(scenario))
     if sanitized():
         from . import sanitizers
 
@@ -619,7 +809,7 @@ def prepare_game(
         command, instruction_info = profiler.prepare(
             scenario, command, binary, build, run_dir, env, run_dir.name == "reference"
         )
-    return dict(
+    return Plan(
         dir=run_dir,
         command=command,
         env=env,
@@ -631,7 +821,7 @@ def prepare_game(
     )
 
 
-def execute_game(plan):
+def execute_game(plan: Plan) -> Executed:
     """Execute an already prepared game; leave output decoding to read_game."""
     run_dir, command = plan["dir"], plan["command"]
     with (
@@ -640,6 +830,7 @@ def execute_game(plan):
         open(run_dir / "stderr.log", "wb") as err,
     ):
         started = time.monotonic()
+        code: int | Literal["timeout"]
         try:
             code = (benchmark_run if plan["isolate"] else subprocess.run)(
                 command
@@ -667,8 +858,10 @@ def execute_game(plan):
     }
 
 
-def read_game(run):
-    """Decode a completed game's logs and discover its snapshots."""
+def read_game(run: Mapping[str, Any]) -> Run:
+    """Decode a completed game's logs and discover its snapshots.
+
+    `run` is an Executed record or a stored capture with at least its `dir`."""
     run_dir = run["dir"]
     autosave = run_dir / "save/autosave"
     snapshots = sorted(
@@ -689,22 +882,33 @@ def read_game(run):
         builds = (migration.REFERENCE_BUILD, migration.CANDIDATE_BUILD)
         log, sanitizer = sanitizers.split_log(log, roots, builds)
         sanitizers.file_findings(run_dir, roots, sanitizer, builds)
-    return {
-        **run,
-        "snapshots": snapshots,
-        "log": log,
-        "stdout": (run_dir / "stdout.log").read_bytes(),
-        "sanitizer": sanitizer,
-    }
+    return cast(
+        Run,
+        {
+            **run,
+            "snapshots": snapshots,
+            "log": log,
+            "stdout": (run_dir / "stdout.log").read_bytes(),
+            "sanitizer": sanitizer,
+        },
+    )
 
 
-def capture_pair(scenario, executables, builds, folder, timeout, env, name="capture"):
+def capture_pair(
+    scenario: Scenario | Callable[[str], Scenario],
+    executables: Mapping[str, Path],
+    builds: Mapping[str, Path],
+    folder: Path,
+    timeout: int,
+    env: Mapping[str, str] | None,
+    name: str = "capture",
+) -> dict[str, Run]:
     """One plain preparation game per role in folder/role/name.
 
     `scenario` is a dictionary or a function of the role."""
     return {
         role: run_game(
-            scenario(role) if callable(scenario) else scenario,
+            cast(Scenario, scenario(role) if callable(scenario) else scenario),
             executables[role],
             builds[role],
             folder / role / name,
@@ -712,14 +916,14 @@ def capture_pair(scenario, executables, builds, folder, timeout, env, name="capt
             env,
             False,
         )
-        for role in ("reference", "candidate")
+        for role in ROLES
     }
 
 
 WITNESS_ENVIRONMENT = {"OPENTTD_WITNESS": "1"}
 
 
-def witness_counts(run, prefix):
+def witness_counts(run: Run | Executed, prefix: str) -> dict[str, int] | None:
     """A run's `prefix.*` counters, unprefixed, or None without a witness file."""
     path = run["dir"] / "branch-witnesses.json"
     if not path.is_file():
@@ -732,7 +936,9 @@ def witness_counts(run, prefix):
     }
 
 
-def branch_witnesses(scenario, run, role, prefix, required):
+def branch_witnesses(
+    scenario: Scenario, run: Run, role: str, prefix: str, required: Iterable[str]
+) -> dict[str, int] | None:
     """Return a candidate's `prefix.*` counts; a missing file or zero count fails.
 
     Scenario modules enable counters through game_environment when
@@ -747,7 +953,7 @@ def branch_witnesses(scenario, run, role, prefix, required):
     return counts
 
 
-def log_lines(run_dir):
+def log_lines(run_dir: Path) -> list[str]:
     """Debug output (script logs, warnings) without its timestamps."""
     return [
         re.sub(r"^\[[^\]]*\] ", "", line)
@@ -757,17 +963,19 @@ def log_lines(run_dir):
     ]
 
 
-def save_moment(path):
+def save_moment(path: Path) -> tuple[int, int, int]:
     """(date, date_fract, tick_counter) at which a save was written."""
     chunk = read_save(path)["DATE"]
-    fields = decode_element(chunk, chunk["elements"][0][1])
+    fields = cast(Row, decode_element(chunk, chunk["elements"][0][1]))
     return fields["date"], fields["date_fract"], fields["tick_counter"]
 
 
-def first_difference(a, b):
+def first_difference(
+    a: Sequence[object], b: Sequence[object]
+) -> tuple[int, object, object]:
     index = next(
         i
-        for i, (x, y) in enumerate(zip(a + [None], b + [None], strict=False))
+        for i, (x, y) in enumerate(zip([*a, None], [*b, None], strict=False))
         if x != y
     )
     return (
@@ -777,11 +985,11 @@ def first_difference(a, b):
     )
 
 
-def field_spans(body, header):
+def field_spans(body: Buffer, header: list[Field]) -> dict[str, tuple[int, int, int]]:
     """Locate table values for input patches without changing semantic decoding."""
-    reader, spans = Reader(body), {}
+    reader, spans = Reader(body), dict[str, tuple[int, int, int]]()
 
-    def visit(fields, prefix):
+    def visit(fields: list[Field], prefix: str) -> None:
         for field in fields:
             kind, path = field["type"], prefix + field["key"]
             if kind & 15 == FILE_STRUCT:
@@ -802,7 +1010,7 @@ def field_spans(body, header):
     return spans
 
 
-def gamma(value):
+def gamma(value: int) -> bytes:
     """Saveload SlWriteSimpleGamma, the inverse of Reader.gamma."""
     for size, limit, prefix in (
         (1, 128, 0),
@@ -815,16 +1023,16 @@ def gamma(value):
     return b"\xf0" + value.to_bytes(4, "big")
 
 
-def rows(source, cid="VEHS"):
+def rows(source: Path | Chunks, cid: str = "VEHS") -> dict[int, Row]:
     """Decoded table elements by index from a save path or its read_save chunks."""
     chunk = (source if isinstance(source, dict) else read_save(source))[cid]
     result = {index: decode_element(chunk, body) for index, body in chunk["elements"]}
     if any(row is None for row in result.values()):
         raise RuntimeError(f"undecodable {cid} element")
-    return result
+    return cast(dict[int, Row], result)
 
 
-def strip_glog(data, target):
+def strip_glog(data: Buffer, target: Path) -> Chunks:
     """Write save bytes without optional GLOG history; other chunks keep every byte.
 
     Input fixtures only: a reference-produced revision log would make only the
@@ -843,7 +1051,7 @@ def strip_glog(data, target):
     return check
 
 
-def normalize(source, directory):
+def normalize(source: Path, directory: Path) -> tuple[Path, dict[str, Any]]:
     """Keep every original chunk byte except optional GLOG history."""
     packed = source.read_bytes()
     data = (
@@ -868,12 +1076,12 @@ def normalize(source, directory):
 EMPTY_AI = b"\0\0\xff\xff\xff\xff"  # AIPL slot without a configured AI
 
 
-def ai_config(name):
+def ai_config(name: bytes) -> bytes:
     """AIPL configuration prefix: script name, empty settings, version 1."""
     return gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
 
 
-def set_ai_slots(data, slots):
+def set_ai_slots(data: Buffer, slots: dict[int, Buffer]) -> bytes:
     """Replace AIPL elements by company index; other chunks keep every byte."""
     chunks = parse_save(data)
     chunk = chunks["AIPL"]
@@ -900,10 +1108,17 @@ def set_ai_slots(data, slots):
     return prepared
 
 
-def patch(source, target, changes, ai=None):
+def patch(
+    source: Path,
+    target: Path,
+    changes: Mapping[str, Mapping[int, Mapping[str, Any]]],
+    ai: str | None = None,
+) -> dict[str, Any]:
     """Only declared typed input fields, AIPL company 1 and optional GLOG change."""
     original, chunks = source.read_bytes(), read_save(source)
-    work, allowed, assignments = bytearray(original), set(), []
+    work: Buffer = bytearray(original)
+    allowed: set[int] = set()
+    assignments: list[list[object]] = []
     for cid, byindex in changes.items():
         chunk = chunks[cid]
         if chunk["kind"] not in (3, 4):
@@ -919,8 +1134,8 @@ def patch(source, target, changes, ai=None):
             body = reader.take(end - begin)
             if index in byindex:
                 fields, locations = (
-                    decode_element(chunk, body),
-                    field_spans(body, chunk["header"]),
+                    cast(Row, decode_element(chunk, body)),
+                    field_spans(body, cast(list[Field], chunk["header"])),
                 )
                 for key, value in byindex[index].items():
                     lo, hi, kind = locations[key]
@@ -966,20 +1181,23 @@ def patch(source, target, changes, ai=None):
     }
 
 
+GameRunner = Callable[..., Run]
+
+
 def run_scenario(
-    scenario,
-    binaries,
-    builds,
-    out,
-    limit,
-    timeout,
-    env,
-    benchmark_repetitions=0,
-    instructions=False,
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    limit: int,
+    timeout: int,
+    env: dict[str, str],
+    benchmark_repetitions: int = 0,
+    instructions: bool = False,
     *,
-    game_runner=None,
-    prepared=False,
-):
+    game_runner: GameRunner | None = None,
+    prepared: bool = False,
+) -> Result:
     """Run both binaries twice (with and without desync snapshots) and compare.
 
     The child launcher denies worker threads, selecting the original synchronous
@@ -989,7 +1207,7 @@ def run_scenario(
         benchmark_repetitions = 1
     name = scenario["name"]
     started = time.monotonic()
-    result = {
+    result: Result = {
         "scenario": name,
         "plain_speed": {"samples": [], "median_candidate_reference_ratio": None},
         "differences": [],
@@ -999,9 +1217,10 @@ def run_scenario(
         "snapshots": 0,
         "stats": {"chunks": 0, "elements": 0, "masked": {}},
     }
-    sanitizer_reports = {}
+    sanitizer_reports: dict[str, Any] = {}
+    runs: dict[Role, Run] = {}
 
-    def compare(mode, snapshot):
+    def compare(mode: Mode, snapshot: str) -> None:
         records = compare_saves(
             next(p for p in runs["reference"]["snapshots"] if p.name == snapshot),
             next(p for p in runs["candidate"]["snapshots"] if p.name == snapshot),
@@ -1022,12 +1241,12 @@ def run_scenario(
             )
         result["requested_ticks"] = scenario["ticks"]
         # Only a distinct candidate counts branches; timed runs keep counters off.
-        scenario = dict(
-            scenario,
-            witnesses=not benchmark_repetitions
+        scenario = {
+            **scenario,
+            "witnesses": not benchmark_repetitions
             and binaries["candidate"] != binaries["reference"],
-        )
-        modes = (
+        }
+        modes: tuple[tuple[Mode, bool], ...] = (
             (("plain", False),) * benchmark_repetitions
             if benchmark_repetitions
             else (("snapshots", True), ("plain", False))
@@ -1035,10 +1254,13 @@ def run_scenario(
         for mode, desync in modes:
             runs = {
                 role: (game_runner or run_game)(
-                    dict(
-                        scenario,
-                        **scenario.get("role_inputs", {}).get(role, {}),
-                        witnesses=scenario["witnesses"] and role == "candidate",
+                    cast(
+                        Scenario,
+                        dict(
+                            scenario,
+                            **scenario.get("role_inputs", {}).get(role, {}),
+                            witnesses=scenario["witnesses"] and role == "candidate",
+                        ),
                     ),
                     scenario.get("executables", binaries)[role],
                     builds[role],
@@ -1049,7 +1271,7 @@ def run_scenario(
                     isolate=bool(benchmark_repetitions),
                     **({"instructions": True} if instructions else {}),
                 )
-                for role in ("reference", "candidate")
+                for role in ROLES
             }
             exits = [
                 runs[role]["snapshots"][-1]
@@ -1060,7 +1282,7 @@ def run_scenario(
             ]
             clean = all(exits) and all(run["exit"] == 0 for run in runs.values())
             moments = [save_moment(path) if path else None for path in exits]
-            result[f"{mode}_end_moments"] = moments
+            findings(result)[f"{mode}_end_moments"] = moments
             same_end = clean and moments[0] == moments[1]
             for role, run in runs.items():
                 if run.get("sanitizer") is not None:
@@ -1069,10 +1291,9 @@ def run_scenario(
                     found = sanitizer_reports.setdefault(role, Findings())
                     for key, text in run["sanitizer"].reports.items():
                         found.add(key, text)
-                for module in scenario_modules():
-                    if check := getattr(module, "check", None):
-                        check(scenario, run, mode, role, result)
-                result[f"{mode}_{role}_seconds"] = run["seconds"]
+                for module in hook_modules(scenario, "check"):
+                    cast(Check, module.check)(scenario, run, mode, role, result)
+                findings(result)[f"{mode}_{role}_seconds"] = run["seconds"]
                 if run["exit"] != 0:
                     result["problems"].append(
                         f"{mode}: {role} exited with {run['exit']}"
@@ -1114,13 +1335,15 @@ def run_scenario(
                     first = next(
                         (p for p in run["snapshots"] if p.name != "exit.sav"), None
                     )
-                    for line in scenario.get("console", []) if first else []:
+                    if first is None:
+                        continue
+                    for line in scenario.get("console", []):
                         if line.startswith("setting "):
                             _, key, value = line.split()
                             chunk = read_save(first)["PATS"]
-                            saved = decode_element(chunk, chunk["elements"][0][1]).get(
-                                key
-                            )
+                            saved = cast(
+                                Row, decode_element(chunk, chunk["elements"][0][1])
+                            ).get(key)
                             if str(saved) != value:
                                 result["problems"].append(
                                     f"{role}: {key} is {saved}, not {value}, in {first.name}"
@@ -1129,7 +1352,7 @@ def run_scenario(
                 compare(mode, snapshot)
                 if result["differences"]:
                     break  # Later snapshots only repeat the first divergence.
-            result[f"{mode}_exit_compared"] = bool(all(exits))
+            findings(result)[f"{mode}_exit_compared"] = bool(all(exits))
             if all(exits):
                 compare(mode, "exit.sav")
             if not same_end and all(exits):
@@ -1139,10 +1362,10 @@ def run_scenario(
                 )
             for label in ("log", "stdout"):
                 a, b = (
-                    runs[role][label]
+                    runs[role]["log"]
                     if label == "log"
-                    else runs[role][label].splitlines()
-                    for role in ("reference", "candidate")
+                    else runs[role]["stdout"].splitlines()
+                    for role in ROLES
                 )
                 if a != b:
                     index, ref_line, cand_line = first_difference(a, b)
@@ -1236,7 +1459,9 @@ def run_scenario(
     return result
 
 
-def copy_runtime(build, binary, destination, *, candidate=False):
+def copy_runtime(
+    build: Path, binary: Path, destination: Path, *, candidate: bool = False
+) -> Path:
     if candidate:
         with file_lock(
             Path(build).resolve() / ".migration.lock",
@@ -1247,10 +1472,10 @@ def copy_runtime(build, binary, destination, *, candidate=False):
     return _copy_runtime(build, binary, destination)
 
 
-def _copy_runtime(build, binary, destination):
+def _copy_runtime(build: Path, binary: Path, destination: Path) -> Path:
     """Freeze the executable and its data, including symlink targets, for one run."""
 
-    def missing_links(directory, names):
+    def missing_links(directory: str, names: list[str]) -> list[str]:
         # Extracted basesets can contain dangling documentation links. They were
         # unavailable in the source runtime too; resolve relative links there.
         return [
@@ -1270,7 +1495,7 @@ def _copy_runtime(build, binary, destination):
     return executable
 
 
-def prune_simulation_runs(root):
+def prune_simulation_runs(root: Path) -> None:
     """Keep the newest ten completed runs; unpublished reports are still active."""
     completed = sorted(
         (run for run in root.iterdir() if (run / "report.json").is_file()),
@@ -1281,12 +1506,13 @@ def prune_simulation_runs(root):
         shutil.rmtree(run, ignore_errors=True)
 
 
-def main():
+def main() -> int:
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
         "migration", ROOT / "tools/migration.py"
     )
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
 
@@ -1417,9 +1643,15 @@ def main():
     return 0 if report["passed"] else 1
 
 
-def sanitizer_summary(results):
+def sanitizer_summary(
+    results: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, list[str]]]:
     """Each sanitizer report key with the scenarios that raised it, by category."""
-    summary = {"original": {}, "candidate_only": {}, "reference_only": {}}
+    summary: dict[str, dict[str, list[str]]] = {
+        "original": {},
+        "candidate_only": {},
+        "reference_only": {},
+    }
     for result in results:
         for category, keys in summary.items():
             for key in result.get("sanitizer", {}).get(category, []):
@@ -1427,7 +1659,14 @@ def sanitizer_summary(results):
     return summary
 
 
-def run_simulation(args, scenarios, migration, out, parser, stamp):
+def run_simulation(
+    args: argparse.Namespace,
+    scenarios: list[Scenario],
+    migration: ModuleType,
+    out: Path,
+    parser: argparse.ArgumentParser,
+    stamp: str,
+) -> dict[str, Any]:
     candidate_commit = migration.git("rev-parse", "HEAD")
     candidate_status = migration.git("status", "--short")
     builds = {role: out / f"{role}-runtime" for role in ("reference", "candidate")}
@@ -1435,7 +1674,7 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
         if args.self or args.candidate:
             parser.error("--frozen-runtimes conflicts with --self/--candidate")
         bundle = args.frozen_runtimes.resolve()
-        binaries = {}
+        binaries: dict[str, Path] = {}
         for role in ("reference", "candidate"):
             source = (
                 bundle

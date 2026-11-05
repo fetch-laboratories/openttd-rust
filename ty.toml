@@ -49,5 +49,6 @@ include = [
     "tools/test-coverage.py",
     "tools/simulation/game_launcher.py",
     "tools/test-kernel-state.py",
+    "tools/simulation/core.py",
     "tools/migration.py",
 ]

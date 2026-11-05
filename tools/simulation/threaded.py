@@ -22,26 +22,12 @@ from simulation import core, sanitizers, thread_sanitizer  # noqa: E402
 from simulation.console_adapter import console_adapter  # noqa: E402
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
-    save: str
-    ticks: int
-    snapshot_minimum: int
+class Scenario(core.Scenario):
     moment: tuple[int, int, int]
     tile: int
 
 
-class Run(TypedDict):
-    dir: Path
-    exit: int | str
-    seconds: float
-    command: list[str]
-    instructions: None
-    snapshots: list[Path]
-    log: list[str]
-    stdout: bytes
-    sanitizer: object
+Run = core.Run
 
 
 class Result(TypedDict):
@@ -168,17 +154,14 @@ def run_game(
             )
         except subprocess.TimeoutExpired:
             code = "timeout"
-    run = cast(
-        Run,
-        core.read_game(
-            {
-                "dir": run_dir,
-                "exit": code,
-                "seconds": round(time.monotonic() - started, 3),
-                "command": command,
-                "instructions": None,
-            }
-        ),
+    run = core.read_game(
+        {
+            "dir": run_dir,
+            "exit": code,
+            "seconds": round(time.monotonic() - started, 3),
+            "command": command,
+            "instructions": None,
+        }
     )
     if migration.TSAN:
         found = thread_sanitizer.findings(
@@ -274,10 +257,11 @@ def main() -> int:
                 if pair == "paired"
                 else (pair.removesuffix("-repeat"),) * 2
             )
+            named: Scenario = {**scenario, "name": f"{scenario['name']}-{pair}"}
             result = cast(
                 Result,
                 core.run_scenario(
-                    dict(scenario, name=f"{scenario['name']}-{pair}"),
+                    named,
                     dict(
                         zip(
                             ("reference", "candidate"),

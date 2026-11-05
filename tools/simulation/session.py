@@ -1,7 +1,7 @@
 """Actual session entry comparisons, unsaved aliases and native exception phases."""
 
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import NotRequired
 
 from . import core, landscape
 from .console_adapter import console_adapter, prepared_console
@@ -94,26 +94,12 @@ def witness_environment(scenario: "Scenario", role: str) -> dict[str, str]:
     return {}
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
-    save: str
+class Scenario(core.Scenario):
     session: bool
-    ticks: int
-    short_checkpoint: bool
-    witnesses: NotRequired[bool]
-    console: NotRequired[list[str]]
     partial: NotRequired[str]
-    executables: NotRequired[dict[str, Path]]
-    role_inputs: NotRequired[dict[str, dict[str, str]]]
 
 
-class Run(TypedDict):
-    log: list[str]
-
-
-class Result(TypedDict, total=False):
-    problems: list[str]
+class Result(core.Result, total=False):
     session_capture: dict[str, list[str]]
 
 
@@ -202,11 +188,12 @@ def prepare(
         for role in ("reference", "candidate"):
             states = folder / role / f"states-{mode}"
             states.mkdir(parents=True)
+            setup: Scenario = {
+                **scenario,
+                "console": [f'session_scenario capture "{states}"', "unpause"],
+            }
             capture = core.run_game(
-                {
-                    **scenario,
-                    "console": [f'session_scenario capture "{states}"', "unpause"],
-                },
+                setup,
                 executables[role],
                 builds[role],
                 folder / role / mode,
@@ -275,6 +262,8 @@ def prepare(
     }
 
 
-def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) -> None:
+def check(
+    scenario: Scenario, run: core.Run, mode: core.Mode, role: core.Role, result: Result
+) -> None:
     if scenario.get("session") and "SESSION check reload-mode true" not in run["log"]:
         result["problems"].append(f"{mode}: {role} session reload observation missing")
