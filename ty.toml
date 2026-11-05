@@ -58,4 +58,6 @@ include = [
     "tools/test-harness-inventory.py",
     "tools/simulation/runtime.py",
     "tools/simulation/play_saves.py",
+    "tools/simulation/cargo_storage.py",
+    "tools/simulation/economy.py",
 ]
