@@ -11,6 +11,7 @@
 //! the active handler synchronously. Panics abort and callbacks cannot unwind.
 #![allow(unsafe_code)]
 
+use crate::debug::debug;
 use crate::{
     crypto::{self, Aead},
     packet,
@@ -40,14 +41,8 @@ pub(crate) struct Services {
         unsafe extern "C" fn(*const NetworkAuthenticationAuthorizedKeyHandler) -> u8,
     client_password:
         unsafe extern "C" fn(*const RustAuthenticationClientHandler, *mut usize) -> *const u8,
-    illegal_public_key: unsafe extern "C" fn(),
-    illegal_size: unsafe extern "C" fn(),
     packet: *const packet::Services,
     random_bytes: unsafe extern "C" fn(*mut u8, usize),
-    received_request: unsafe extern "C" fn(*const u8, usize),
-    receiving_response: unsafe extern "C" fn(*const u8, usize),
-    sending_request: unsafe extern "C" fn(*const u8, usize),
-    sending_response: unsafe extern "C" fn(*const u8, usize),
     server_password:
         unsafe extern "C" fn(*const NetworkAuthenticationPasswordProvider, *mut usize) -> *const u8,
 }
@@ -220,13 +215,6 @@ unsafe fn can_be_used(owner: *const Handler) -> bool {
     }
 }
 
-unsafe fn log(owner: *const Handler, callback: unsafe extern "C" fn(*const u8, usize)) {
-    let name = unsafe { (*owner).name() };
-    unsafe {
-        callback(name.as_ptr(), name.len());
-    }
-}
-
 unsafe fn receive_request(owner: *mut Handler, packet: *mut packet::State) -> u8 {
     let services = unsafe { (*owner).services };
     if matches!(unsafe { &(*owner).kind }, Kind::Client { .. }) {
@@ -241,16 +229,17 @@ unsafe fn receive_request(owner: *mut Handler, packet: *mut packet::State) -> u8
             return 2;
         };
         *current = Some(index);
-        unsafe {
-            log(owner, (*services).received_request);
-        }
+        debug!(net, 9, "Received {} authentication request", unsafe {
+            (*owner).name()
+        });
         let active = unsafe { Handler::active(owner) };
         return unsafe { receive_request(active, packet) };
     }
     if unsafe { (*packet).remaining() } != 56 {
-        unsafe {
-            ((*services).illegal_size)();
-        }
+        debug!(
+            net,
+            1, "[crypto] Received auth response of illegal size; authentication aborted."
+        );
         return 2;
     }
     unsafe {
@@ -275,9 +264,9 @@ unsafe fn receive_request(owner: *mut Handler, packet: *mut packet::State) -> u8
 unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool {
     let services = unsafe { (*owner).services };
     if matches!(unsafe { &(*owner).kind }, Kind::Client { .. }) {
-        unsafe {
-            log(owner, (*services).sending_response);
-        }
+        debug!(net, 9, "Sending {} authentication response", unsafe {
+            (*owner).name()
+        });
         return unsafe { send_response(Handler::active(owner), packet) };
     }
     let mut size = 0;
@@ -299,9 +288,10 @@ unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool
         )
     };
     if !valid {
-        unsafe {
-            ((*services).illegal_public_key)();
-        }
+        debug!(
+            net,
+            0, "[crypto] Peer sent an illegal public key; authentication aborted."
+        );
         return false;
     }
     let mut message = Zeroizing::new([0; 8]);
@@ -325,9 +315,9 @@ unsafe fn send_response(owner: *mut Handler, packet: *mut packet::State) -> bool
 unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u8 {
     let services = unsafe { (*owner).services };
     if matches!(unsafe { &(*owner).kind }, Kind::Server { .. }) {
-        unsafe {
-            log(owner, (*services).receiving_response);
-        }
+        debug!(net, 9, "Receiving {} authentication response", unsafe {
+            (*owner).name()
+        });
         let result = unsafe { receive_response(Handler::active(owner), packet) };
         if result != 1 {
             return result;
@@ -347,9 +337,10 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
         ptr::null()
     };
     if unsafe { (*packet).remaining() } != 56 {
-        unsafe {
-            ((*services).illegal_size)();
-        }
+        debug!(
+            net,
+            1, "[crypto] Received auth response of illegal size; authentication aborted."
+        );
         return 1;
     }
     let mut message = Zeroizing::new([0; 8]);
@@ -369,9 +360,10 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
         )
     };
     if !valid {
-        unsafe {
-            ((*services).illegal_public_key)();
-        }
+        debug!(
+            net,
+            0, "[crypto] Peer sent an illegal public key; authentication aborted."
+        );
         return 1;
     }
     let valid = unsafe {
@@ -402,29 +394,6 @@ unsafe fn receive_response(owner: *mut Handler, packet: *mut packet::State) -> u
 }
 
 // Entries share the module contract. Native success values are 0-or-1 u8 (#644).
-#[allow(clippy::too_many_arguments)]
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_single_new(
-    services: *const Services,
-    method: u8,
-    server: u8,
-    secret: *const u8,
-    client_password: *mut RustAuthenticationClientHandler,
-    server_password: *const NetworkAuthenticationPasswordProvider,
-    authorized: *const NetworkAuthenticationAuthorizedKeyHandler,
-) -> *mut Handler {
-    Box::into_raw(Box::new(unsafe {
-        new_single(
-            services,
-            method,
-            server != 0,
-            &*secret.cast::<[u8; 32]>(),
-            client_password,
-            server_password,
-            authorized,
-        )
-    }))
-}
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_auth_client_new(
     services: *const Services,
@@ -571,10 +540,9 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_handler_send_request(
     packet: *mut packet::State,
     check: extern "C" fn(bool),
 ) {
-    let services = unsafe { (*owner).services };
     if matches!(unsafe { &(*owner).kind }, Kind::Server { .. }) {
         unsafe {
-            log(owner, (*services).sending_request);
+            debug!(net, 9, "Sending {} authentication request", (*owner).name());
             (*packet).send_uint8((*owner).method(), check);
         }
     }
@@ -662,8 +630,105 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_decrypt(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAuthHandlerServices" ["probe"] => Services {
-        allowed, ask_password, authorized_available, client_password,
-        illegal_public_key, illegal_size, packet, random_bytes, received_request,
-        receiving_response, sending_request, sending_response, server_password,
+        allowed, ask_password, authorized_available, client_password, packet, random_bytes,
+        server_password,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        Handler, NetworkAuthenticationAuthorizedKeyHandler, NetworkAuthenticationPasswordProvider,
+        RustAuthenticationClientHandler, Services, new_single,
+        openttd_rust_auth_handler_send_request, receive_request, receive_response, send_response,
+    };
+    use crate::packet;
+    use std::ptr;
+
+    extern "C" fn unused_allowed(
+        _: *const NetworkAuthenticationAuthorizedKeyHandler,
+        _: *const u8,
+        _: usize,
+    ) -> u8 {
+        unreachable!()
+    }
+    extern "C" fn unused_available(_: *const NetworkAuthenticationAuthorizedKeyHandler) -> u8 {
+        unreachable!()
+    }
+    extern "C" fn ask(_: *mut RustAuthenticationClientHandler) {}
+    /// Fixture providers point at a `&[u8]` password.
+    extern "C" fn client_password(
+        handler: *const RustAuthenticationClientHandler,
+        size: *mut usize,
+    ) -> *const u8 {
+        let password = unsafe { *handler.cast::<&[u8]>() };
+        unsafe { size.write(password.len()) };
+        password.as_ptr()
+    }
+    extern "C" fn server_password(
+        provider: *const NetworkAuthenticationPasswordProvider,
+        size: *mut usize,
+    ) -> *const u8 {
+        let password = unsafe { *provider.cast::<&[u8]>() };
+        unsafe { size.write(password.len()) };
+        password.as_ptr()
+    }
+    extern "C" fn random(data: *mut u8, size: usize) {
+        let bytes = unsafe { std::slice::from_raw_parts_mut(data, size) };
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = i.to_le_bytes()[0].wrapping_mul(37).wrapping_add(11);
+        }
+    }
+    extern "C" fn check(condition: bool) {
+        assert!(condition);
+    }
+
+    /// Upstream `Authentication_PAKE` sections on the single PAKE handlers, including the
+    /// empty server password that the production server factory never offers.
+    fn pake(server: &'static [u8], client: &'static [u8]) -> u8 {
+        let services = Services {
+            allowed: unused_allowed,
+            ask_password: ask,
+            authorized_available: unused_available,
+            client_password,
+            packet: ptr::null(),
+            random_bytes: random,
+            server_password,
+        };
+        let server_password: &[u8] = server;
+        let client_password: &[u8] = client;
+        let new = |is_server: bool, secret: u8| -> Handler {
+            unsafe {
+                new_single(
+                    &raw const services,
+                    1,
+                    is_server,
+                    &[secret; 32],
+                    (&raw const client_password).cast_mut().cast(),
+                    (&raw const server_password).cast(),
+                    ptr::null(),
+                )
+            }
+        };
+        let mut server = new(true, 1);
+        let mut client = new(false, 2);
+        let mut request = packet::State::new(1460, ptr::null_mut());
+        let mut response = packet::State::new(1460, ptr::null_mut());
+        unsafe {
+            openttd_rust_auth_handler_send_request(&raw mut server, &raw mut request, check);
+            // RequestResult::AwaitUserInput.
+            assert_eq!(receive_request(&raw mut client, &raw mut request), 0);
+            assert!(send_response(&raw mut client, &raw mut response));
+            receive_response(&raw mut server, &raw mut response)
+        }
+    }
+
+    #[test]
+    fn pake_handlers_match_upstream_sections() {
+        // ResponseResult::Authenticated, then NotAuthenticated.
+        assert_eq!(pake(b"", b""), 0);
+        assert_eq!(pake(b"sikrit", b"sikrit"), 0);
+        assert_eq!(pake(b"sikrit", b"secret"), 1);
+        assert_eq!(pake(b"", b"secret"), 1);
+    }
 }

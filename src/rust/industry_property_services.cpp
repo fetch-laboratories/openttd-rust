@@ -61,17 +61,6 @@ const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept
 		.original_layout_count = [](uint8_t type) noexcept -> size_t { return _origin_industry_specs[type].layouts.size(); },
 		.original_layout = [](uint8_t type, uint8_t layout) noexcept -> OpenTTDIndustryDefinitionLayout { const auto &tiles = _origin_industry_specs[type].layouts[layout]; return {tiles.data(), tiles.size()}; },
 		.install_layouts = [](IndustrySpec *spec, const OpenTTDIndustryDefinitionLayoutBuffer *layouts, size_t count) noexcept { std::vector<IndustryTileLayout> result; result.reserve(count); for (size_t i = 0; i < count; ++i) result.emplace_back(layouts[i].data, layouts[i].data + layouts[i].size); spec->layouts = std::move(result); },
-		.too_many_tiles = [](uint32_t last) noexcept { GrfMsg(1, "IndustryTilesChangeInfo: Too many industry tiles loaded ({}), max ({}). Ignoring.", last, NUM_INDUSTRYTILES_PER_GRF); },
-		.too_many_industries = [](uint32_t last) noexcept { GrfMsg(1, "IndustriesChangeInfo: Too many industries loaded ({}), max ({}). Ignoring.", last, NUM_INDUSTRYTYPES_PER_GRF); },
-		.tile_substitute_invalid = [](uint8_t substitute, uint32_t id) noexcept { GrfMsg(2, "IndustryTilesChangeInfo: Attempt to use new industry tile {} as substitute industry tile for {}. Ignoring.", substitute, id); },
-		.tile_override_invalid = [](uint8_t override_id, uint32_t id) noexcept { GrfMsg(2, "IndustryTilesChangeInfo: Attempt to override new industry tile {} with industry tile id {}. Ignoring.", override_id, id); },
-		.industry_substitute_invalid = [](uint8_t substitute, uint32_t id) noexcept { GrfMsg(2, "_industry_specs: Attempt to use new industry {} as substitute industry for {}. Ignoring.", substitute, id); },
-		.industry_override_invalid = [](uint8_t override_id, uint32_t id) noexcept { GrfMsg(2, "IndustriesChangeInfo: Attempt to override new industry {} with industry id {}. Ignoring.", override_id, id); },
-		.layout_size_mismatch = [](uint32_t id) noexcept { GrfMsg(3, "IndustriesChangeInfo: Incorrect size for industry tile layout definition for industry {}.", id); },
-		.layout_import_type = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid original industry number for layout import, industry {}", id); },
-		.layout_import_index = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid original industry layout index for layout import, industry {}", id); },
-		.layout_tile_undefined = [](uint16_t tile, uint32_t id) noexcept { GrfMsg(2, "IndustriesChangeInfo: Attempt to use industry tile {} with industry id {}, not yet defined. Ignoring.", tile, id); },
-		.layout_invalid = [](uint32_t id) noexcept { GrfMsg(1, "IndustriesChangeInfo: Invalid industry layout for industry id {}. Ignoring", id); },
 	};
 	return services;
 }

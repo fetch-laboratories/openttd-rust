@@ -16,6 +16,7 @@
 pub(crate) mod actions;
 mod translation;
 use crate::control_codes::SCC_NEWGRF_PRINT_WORD_STRING_ID;
+use crate::debug::{Bytes, grf_msg};
 use crate::game_state::GameState;
 use crate::services::ByteSpan;
 use crate::strings_type::{TAB_SIZE_NEWGRF, grf_string_id};
@@ -24,31 +25,27 @@ pub(crate) use translation::translate;
 
 #[repr(C)]
 pub struct Services {
-    added: unsafe extern "C" fn(u32, u32, u32, u8, *const u8, usize, u32),
     empty: u32,
     language_map: unsafe extern "C" fn(u32, u8) -> *const c_void,
     legacy_string: unsafe extern "C" fn(u32) -> u32,
     mapping: unsafe extern "C" fn(*const c_void, i32, bool) -> i32,
     max_plural_forms: u8,
-    message: unsafe extern "C" fn(i32, *const u8, usize),
     num_cases: unsafe extern "C" fn() -> u8,
     num_genders: unsafe extern "C" fn() -> u8,
     plural_form: unsafe extern "C" fn(*const c_void) -> i32,
     reverse_mapping: unsafe extern "C" fn(*const c_void, i32, bool) -> i32,
-    short_buffer: unsafe extern "C" fn(usize, usize),
     undefined: u32,
 }
 impl Services {
+    /// `GrfMsg(1, text)` of the original string translation diagnostics.
+    #[allow(clippy::unused_self)] // Translation callers reach the message through their table.
     fn message(&self, text: &str) {
-        self.log(1, text.as_bytes());
-    }
-    pub(crate) fn log(&self, level: i32, text: &[u8]) {
-        unsafe { (self.message)(level, text.as_ptr(), text.len()) };
+        grf_msg!(1, "{}", text);
     }
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfTextServices" ["grf_loading"] => Services { added, empty, language_map, legacy_string, mapping, max_plural_forms, message, num_cases, num_genders, plural_form, reverse_mapping, short_buffer, undefined };
+    "OpenTTDGrfTextServices" ["grf_loading"] => Services { empty, language_map, legacy_string, mapping, max_plural_forms, num_cases, num_genders, plural_form, reverse_mapping, undefined };
 }
 
 #[unsafe(no_mangle)]
@@ -125,17 +122,16 @@ pub unsafe extern "C" fn openttd_rust_grf_text_add(
     );
     unsafe { publish(index, language, newtext.as_ptr(), newtext.len()) };
     let id = grf_string_id(index);
-    unsafe {
-        (s.added)(
-            index as u32,
-            grfid,
-            stringid,
-            language,
-            newtext.as_ptr(),
-            newtext.len(),
-            id,
-        );
-    };
+    grf_msg!(
+        3,
+        "Added 0x{:X} grfid {:08X} string 0x{:X} lang 0x{:X} string '{}' ({:X})",
+        index as u32,
+        grfid,
+        stringid,
+        language,
+        Bytes(&newtext),
+        id
+    );
     id
 }
 

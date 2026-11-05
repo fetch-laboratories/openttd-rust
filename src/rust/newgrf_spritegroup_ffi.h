@@ -85,7 +85,6 @@ struct OpenTTDSpriteGroupServices {
 	const OpenTTDStorageServices *storage;
 	void (*store_psa)(ScopeResolver *, uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(store_psa);
 	void (*tile_random_check)(const OpenTTDIndustryResolverContext *) noexcept OPENTTD_SERVICE_DEFAULT(tile_random_check);
-	void (*unhandled_scope)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled_scope);
 	uint32_t (*variable)(const ScopeResolver *, uint8_t, uint32_t, bool *) noexcept OPENTTD_SERVICE_DEFAULT(variable);
 	const OpenTTDVehicleResolverServices *vehicle;
 };
@@ -94,7 +93,7 @@ extern "C" {
 const SpriteGroup *openttd_rust_resolver_default_real(const OpenTTDSpriteGroupServices *, const struct RealSpriteGroup *);
 uint32_t openttd_rust_resolver_reseed_sum(const OpenTTDResolverState *);
 uint32_t openttd_rust_scope_default_random();
-uint32_t openttd_rust_scope_default_variable(const OpenTTDSpriteGroupServices *, uint8_t, bool *);
+uint32_t openttd_rust_scope_default_variable(uint8_t, bool *);
 void openttd_rust_resolver_init(OpenTTDResolverState *, CallbackID, uint32_t, uint32_t);
 OpenTTDResolverResult openttd_rust_spritegroup_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *, bool);
 OpenTTDResolverResult openttd_rust_resolver_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *);

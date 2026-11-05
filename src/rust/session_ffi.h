@@ -79,7 +79,6 @@ struct OpenTTDSessionServices {
 	bool (*survey_ask)() noexcept OPENTTD_SERVICE_DEFAULT(survey_ask);
 	void (*show_load_error)(bool) noexcept OPENTTD_SERVICE_DEFAULT(show_load_error);
 	void (*social_mode)(GameMode) noexcept OPENTTD_SERVICE_DEFAULT(social_mode);
-	void (*load_failed_debug)(bool) noexcept OPENTTD_SERVICE_DEFAULT(load_failed_debug);
 	void (*pause_query)() noexcept OPENTTD_SERVICE_DEFAULT(pause_query);
 	void (*pause_change)(uint8_t, PauseMode) noexcept OPENTTD_SERVICE_DEFAULT(pause_change);
 	void (*pause_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(pause_dirty);

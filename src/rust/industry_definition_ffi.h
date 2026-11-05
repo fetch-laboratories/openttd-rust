@@ -27,8 +27,6 @@ struct OpenTTDIndustryDefinitionServices {
 	OpenTTDIndustryDefinitionAvailability (*availability)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(availability);
 	void (*publish)(uint16_t, IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(publish);
 	void (*publish_tile)(uint16_t, IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(publish_tile);
-	void (*industry_full)() noexcept OPENTTD_SERVICE_DEFAULT(industry_full);
-	void (*tile_full)() noexcept OPENTTD_SERVICE_DEFAULT(tile_full);
 	void (*reset_industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_industry);
 	void (*clear_industry)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_industry);
 	bool (*climate_available)(const IndustrySpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(climate_available);

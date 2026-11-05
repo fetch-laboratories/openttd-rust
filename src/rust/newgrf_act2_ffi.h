@@ -89,26 +89,6 @@ struct OpenTTDAction2Services {
 	TileLayoutRegisters * (*registers)(NewGRFSpriteLayout *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(registers);
 	void (*assert_offsets)(bool, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_offsets);
 	void (*error_data)(GRFError *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(error_data);
-	void (*missing_group)(uint8_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(missing_group);
-	void (*missing_set)(uint8_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(missing_set);
-	void (*unsupported_feature)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unsupported_feature);
-	void (*reserved_type)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved_type);
-	void (*random_count)() noexcept OPENTTD_SERVICE_DEFAULT(random_count);
-	void (*no_sets)() noexcept OPENTTD_SERVICE_DEFAULT(no_sets);
-	void (*real_counts)(uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(real_counts);
-	void (*real_empty)() noexcept OPENTTD_SERVICE_DEFAULT(real_empty);
-	void (*real_one)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(real_one);
-	void (*real_same)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(real_same);
-	void (*loaded_entry)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(loaded_entry);
-	void (*loading_entry)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(loading_entry);
-	void (*production_version)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(production_version);
-	void (*sprite_set)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_set);
-	void (*palette_set)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(palette_set);
-	void (*sprite_var10)() noexcept OPENTTD_SERVICE_DEFAULT(sprite_var10);
-	void (*palette_var10)() noexcept OPENTTD_SERVICE_DEFAULT(palette_var10);
-	void (*register_var10)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(register_var10);
-	void (*ground_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(ground_flags);
-	void (*unknown_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_flags);
 };
 const OpenTTDAction2Services &GetRustAction2Services() noexcept;
 extern "C" {

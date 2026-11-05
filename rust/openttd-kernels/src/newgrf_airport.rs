@@ -21,6 +21,7 @@ pub struct TtdpAirportType(pub u8);
 // ordinary-play native exception is reachable; native leaves are noexcept and
 // Rust panics abort. No ownership is transferred across this boundary.
 use crate::airport::{AT_INVALID, INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AIRPORTTILE_OFFSET};
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 use crate::tile_type::INVALID_TILE;
@@ -75,7 +76,6 @@ pub struct Services {
     base_spec: extern "C" fn(u16) -> *const AirportSpec,
     min_year: extern "C" fn(*const AirportSpec) -> i32,
     max_year: extern "C" fn(*const AirportSpec) -> i32,
-    never_expire: extern "C" fn() -> bool,
     station_layout: extern "C" fn(*const BaseStation) -> u8,
     random: extern "C" fn(*mut BaseStation) -> u16,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
@@ -95,7 +95,6 @@ pub struct Services {
         *mut i32,
         usize,
     ) -> u16,
-    unhandled: extern "C" fn(u8),
 }
 static REGISTRY: GameState<*const Services> = GameState::new(ptr::null());
 /// Install the immutable process-lifetime services before game/runtime queries.
@@ -189,7 +188,7 @@ pub(crate) fn available(spec: *const AirportSpec, s: &Services) -> bool {
     if crate::timer_game_common::calendar_year().0 < (s.min_year)(spec) {
         return false;
     }
-    if (s.never_expire)() {
+    if unsafe { s.shared().settings().never_expire_airports.read() } {
         return true;
     }
     crate::timer_game_common::calendar_year().0 <= (s.max_year)(spec)
@@ -484,7 +483,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
         ),
         0x7a => (s.shared().specs().airport_tile().badges)(resolver, c.tile_spec, parameter),
         _ => {
-            (s.unhandled)(variable);
+            debug!(grf, 1, "Unhandled airport tile variable 0x{:X}", variable);
             unsafe {
                 *available = false;
             }
@@ -555,7 +554,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, never_expire, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]

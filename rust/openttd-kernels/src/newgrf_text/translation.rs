@@ -3,6 +3,7 @@
 //! surrogate UTF-8 and embedded NULs. Native services borrow only for their call.
 use super::Services;
 use crate::control_codes::*;
+use crate::debug::debug;
 use crate::{consumer, string_func, utf8};
 use std::collections::BTreeMap;
 use std::ffi::c_void;
@@ -13,7 +14,6 @@ fn put(dest: &mut Vec<u8>, value: u32) {
 }
 struct Consumer<'a> {
     bytes: &'a [u8],
-    services: &'a Services,
 }
 impl Consumer<'_> {
     fn read(&mut self, width: u8) -> u32 {
@@ -24,7 +24,10 @@ impl Consumer<'_> {
     fn skip(&mut self, count: usize) {
         let bounds = consumer::bound(self.bytes.len(), 0, count);
         if bounds.shortfall != 0 {
-            unsafe { (self.services.short_buffer)(count, bounds.length) };
+            debug!(
+                misc,
+                0, "Source buffer too short: {} > {}", count, bounds.length
+            );
         }
         self.bytes = &self.bytes[bounds.position..];
     }
@@ -132,10 +135,7 @@ pub(crate) fn translate(
     text: &[u8],
     byte80: u32,
 ) -> Vec<u8> {
-    let mut input = Consumer {
-        bytes: text,
-        services: s,
-    };
+    let mut input = Consumer { bytes: text };
     let identifier = utf8::decode(input.bytes);
     let unicode = identifier.length != 0 && identifier.codepoint == 0xde;
     if unicode {
@@ -395,13 +395,12 @@ pub(crate) fn translate(
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
-    use std::sync::Mutex;
-    static MESSAGES: Mutex<Vec<(i32, Vec<u8>)>> = Mutex::new(Vec::new());
-    unsafe extern "C" fn message(level: i32, text: *const u8, size: usize) {
-        MESSAGES
-            .lock()
-            .unwrap()
-            .push((level, unsafe { utf8::borrow(text, size) }.to_vec()));
+    /// `GrfMsg` severities and texts recorded on this thread since the last call.
+    fn messages() -> Vec<(i32, Vec<u8>)> {
+        crate::debug::tests::take()
+            .into_iter()
+            .map(|(_, level, text)| (level, text))
+            .collect()
     }
     unsafe extern "C" fn language_map(_: u32, language: u8) -> *const c_void {
         if language == 1 {
@@ -435,25 +434,17 @@ pub(super) mod tests {
     unsafe extern "C" fn legacy_string(string: u32) -> u32 {
         0x20000 + string
     }
-    unsafe extern "C" fn added(_: u32, _: u32, _: u32, _: u8, _: *const u8, _: usize, _: u32) {}
-    unsafe extern "C" fn short_buffer(count: usize, available: usize) {
-        let text = format!("Source buffer too short: {count} > {available}");
-        unsafe { message(0, text.as_ptr(), text.len()) };
-    }
     pub(crate) fn services() -> Services {
         Services {
-            added,
             empty: 1,
             language_map,
             legacy_string,
             mapping,
             max_plural_forms: 2,
-            message,
             num_cases: two,
             num_genders: two,
             plural_form: plural,
             reverse_mapping,
-            short_buffer,
             undefined: 2,
         }
     }
@@ -491,7 +482,7 @@ pub(super) mod tests {
         let mut expected = b"\xee\x80\xbd\x00\x02\xff\xff".to_vec();
         expected.extend_from_slice(&[b'D'; 510]);
         assert_eq!(translate(&services, 123, 1, false, &saturated, 0), expected);
-        MESSAGES.lock().unwrap().clear();
+        messages();
         assert_eq!(
             translate(
                 &services,
@@ -504,7 +495,7 @@ pub(super) mod tests {
             b"a "
         );
         assert_eq!(
-            *MESSAGES.lock().unwrap(),
+            messages(),
             [
                 (
                     1,

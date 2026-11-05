@@ -83,7 +83,7 @@ static OpenTTDEngineYear Engine_aging_year(const OpenTTDEngine *shell) noexcept
 	return {.base_intro = RustEngineBaseIntro(shell), .lifelength = e->info.lifelength.base()};
 }
 
-static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.generation_seed = RustGenerationSeed(), .starting_year = RustStartingYear(), .date = TimerGameCalendar::date.base()}; }
+static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.starting_year = RustStartingYear(), .date = TimerGameCalendar::date.base()}; }
 
 
 static void Engine_clear_last_variant(const OpenTTDEngine *shell) noexcept
@@ -157,7 +157,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.seed_config = Engine_seed_config,
 		.base_intro = RustEngineBaseIntro,
 		.aging_year = Engine_aging_year,
-		.never_expire = RustNeverExpireVehicles,
 		.start_settings = Engine_start_settings,
 		.train_limit = RustTrainLimit,
 		.road_limit = RustRoadVehicleLimit,

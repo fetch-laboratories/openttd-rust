@@ -392,7 +392,7 @@ bool IsTileForestIndustry(TileIndex tile)
 
 void PlantRandomFarmField(const Industry *i)
 {
-	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)}, &GetIndustryRustServices());
+	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), &GetIndustryRustServices());
 }
 
 
@@ -1007,7 +1007,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.set_frame = GetRustSharedServices().tile_animation_set_frame,
 		.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(TileIndex(tile)); },
 		.set_animation_loop = [](uint32_t tile, uint8_t value) noexcept { SetIndustryAnimationLoop(TileIndex(tile), value); },
-		.ambient = OpenTTDAmbientSound,
 
 		.construction_counter = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryConstructionCounter(TileIndex(tile)); },
 		.construction_stage = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryConstructionStage(TileIndex(tile)); },

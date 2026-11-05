@@ -26,14 +26,8 @@ struct OpenTTDAuthHandlerServices {
 	void (*ask_password)(RustAuthenticationClientHandler *) noexcept OPENTTD_SERVICE_DEFAULT(ask_password);
 	uint8_t (*authorized_available)(const NetworkAuthenticationAuthorizedKeyHandler *) noexcept OPENTTD_SERVICE_DEFAULT(authorized_available);
 	const uint8_t *(*client_password)(const RustAuthenticationClientHandler *, size_t *) noexcept OPENTTD_SERVICE_DEFAULT(client_password);
-	void (*illegal_public_key)() noexcept OPENTTD_SERVICE_DEFAULT(illegal_public_key);
-	void (*illegal_size)() noexcept OPENTTD_SERVICE_DEFAULT(illegal_size);
 	const OpenTTDPacketServices *packet;
 	void (*random_bytes)(uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bytes);
-	void (*received_request)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(received_request);
-	void (*receiving_response)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(receiving_response);
-	void (*sending_request)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(sending_request);
-	void (*sending_response)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(sending_response);
 	const uint8_t *(*server_password)(const NetworkAuthenticationPasswordProvider *, size_t *) noexcept OPENTTD_SERVICE_DEFAULT(server_password);
 };
 const OpenTTDAuthHandlerServices &GetAuthHandlerServices();
@@ -44,7 +38,6 @@ const OpenTTDAuthHandlerServices &GetAuthHandlerServices();
  * owner. Packet::Recv_bytes keeps its original nonempty-short precondition.
  * Owners and streams allocate/free in Rust. Native success values are uint8_t. */
 extern "C" {
-OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_handler_single_new(const OpenTTDAuthHandlerServices *, uint8_t, uint8_t, const uint8_t *, RustAuthenticationClientHandler *, const NetworkAuthenticationPasswordProvider *, const NetworkAuthenticationAuthorizedKeyHandler *);
 OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_client_new(const OpenTTDAuthHandlerServices *, const uint8_t *, RustAuthenticationClientHandler *);
 OpenTTDAuthHandler *OPENTTD_RUST_CALL openttd_rust_auth_server_new(const OpenTTDAuthHandlerServices *, const NetworkAuthenticationPasswordProvider *, const NetworkAuthenticationAuthorizedKeyHandler *, uint16_t);
 void OPENTTD_RUST_CALL openttd_rust_auth_handler_destroy(OpenTTDAuthHandler *);

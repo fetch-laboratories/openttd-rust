@@ -154,9 +154,16 @@ static void Trees()
 	openttd_rust_trees_initialize();
 	CHECK(*counter == 0 && counter == openttd_rust_tree_counter());
 	tree_probe.abort = true;
-	const OpenTTDTreeGenerateSettings generate{.size = 4096, .size_x = 64, .size_y = 64, .climate = 0, .placer = 1, .height_limit = 15, .editor = false, .freeform_edges = true};
-	CHECK(openttd_test_trees_generate(generate, &tree_probe_services, &shared));
-	CHECK(openttd_rust_trees_place_randomly(generate, &tree_probe_services, &shared) && tree_probe.writes == 1);
+	static const uint8_t climate = 0, placer = 1, height_limit = 15;
+	static const bool freeform_edges = true;
+	OpenTTDSettingAddresses settings{};
+	settings.climate = &climate;
+	settings.freeform_edges = &freeform_edges;
+	settings.height_limit = &height_limit;
+	settings.tree_placer = &placer;
+	shared.settings = &settings;
+	CHECK(openttd_test_trees_generate(&tree_probe_services, &shared));
+	CHECK(openttd_rust_trees_place_randomly(&tree_probe_services, &shared) && tree_probe.writes == 1);
 	std::printf("tree_direct_services_counter_abort_and_reentry passed\n");
 }
 ABI_PROBE(Trees);

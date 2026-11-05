@@ -84,7 +84,6 @@ TEST_CASE("Session load - original restoration and callback partial effects")
 	world = *services.world();
 	world.dedicated = []() noexcept { return session_dedicated; };
 	services.world = []() noexcept -> const OpenTTDWorldServices * { return &world; };
-	services.load_failed_debug = [](bool) noexcept {};
 	services.load = [](OpenTTDSessionFrame *, OpenTTDSessionLoad *) noexcept {
 		CHECK(_game_mode == GM_EDITOR);
 		_game_mode = GM_BOOTSTRAP; _switch_mode = SM_EDITOR; _pause_mode = PauseMode::LinkGraph;

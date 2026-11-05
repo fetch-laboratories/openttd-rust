@@ -59,7 +59,6 @@ struct OpenTTDFleetGroupServices {
 	const Livery * (*company_livery)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(company_livery);
 	bool (*keep_length)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(keep_length);
 	void (*delete_group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(delete_group);
-	void (*invalid_parent)(uint16_t id, uint16_t parent) noexcept OPENTTD_SERVICE_DEFAULT(invalid_parent);
 	void (*clear_backup)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(clear_backup);
 	void (*remove_rule)(uint8_t owner, uint16_t engine, uint16_t id, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(remove_rule);
 	void (*remove_vehicles)(uint16_t id, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(remove_vehicles);

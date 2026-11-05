@@ -25,9 +25,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 			if (loaded) GrfMsg(5, "Mapping from GRFID {:x} to {:x}", std::byteswap(source), std::byteswap(target));
 			else GrfMsg(5, "Tried mapping from GRFID {:x} to {:x} but target is not loaded", std::byteswap(source), std::byteswap(target));
 		},
-		.replaced_log = [](uint16_t id, uint32_t file, VehicleType type, uint16_t local) noexcept { GrfMsg(5, "Replaced engine at index {} for GRFID {:x}, type {}, index {}", id, std::byteswap(file), type, local); },
-		.created_log = [](uint16_t id, uint32_t file, VehicleType type, uint16_t local) noexcept { GrfMsg(5, "Created new engine at index {} for GRFID {:x}, type {}, index {}", id, std::byteswap(file), type, local); },
-		.full_log = []() noexcept { GrfMsg(0, "Can't allocate any more engines"); },
 		.can_allocate = []() noexcept { return Engine::CanAllocateItem(); },
 		.pool_size = []() noexcept -> size_t { return Engine::GetPoolSize(); },
 		.construct = [](VehicleType type, uint16_t local) noexcept { return EngineRef(new Engine(type, local)); },
@@ -57,7 +54,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.rail_kind = Engine_rail_kind,
 		.use_livery = [](LiveryScheme scheme) noexcept { SetBit(_loaded_newgrf_features.used_liveries, scheme); },
 		.variant_flags = [](const OpenTTDEngine *shell) noexcept { const_cast<Engine *>(EngineOf(shell))->display_flags.Set({EngineDisplayFlag::HasVariants, EngineDisplayFlag::IsFolded}); },
-		.variant_cycle_log = [](const OpenTTDEngine *shell) noexcept { const Engine *e = EngineOf(shell); GrfMsg(1, "FinaliseEngineArray: Variant of engine {:x} in '{}' loops back on itself", e->grf_prop.local_id, RustEngineGRF(shell)->filename); },
 		.is_tram = RustEngineIsTram,
 		.set_road_speed = RustSetEngineRoadSpeed,
 		.set_roadtype = RustSetEngineRoadType,

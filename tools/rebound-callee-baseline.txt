@@ -71,8 +71,6 @@ rebound | LiveGraphOwner | src/rust/services.cpp | owner
 rebound | LiveGraphOwner | src/timer/timer_game_common.cpp | graph_owner
 rebound | MapSvcRoadIsLevelCrossing | src/landscape.cpp | road_crossing
 rebound | MapSvcRoadIsLevelCrossing | src/pbs.cpp | is_crossing
-rebound | OpenTTDAmbientSound | src/industry_cmd.cpp | ambient
-rebound | OpenTTDAmbientSound | src/newgrf_generic.cpp | ambient
 rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame
 rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
@@ -86,7 +84,6 @@ rebound | OpenTTDDistanceSquare | src/rust/ship_control_services.h | dist_square
 rebound | OpenTTDEditor | src/landscape.cpp | editor
 rebound | OpenTTDEditor | src/rust/engine_adapter.hpp | editor
 rebound | OpenTTDEditor | src/rust/services.cpp | editor
-rebound | OpenTTDFreeformEdges | src/genworld.cpp | freeform
 rebound | OpenTTDFreeformEdges | src/landscape.cpp | freeform_edges
 rebound | OpenTTDFreeformEdges | src/rust/services.cpp | freeform_edges
 rebound | OpenTTDIsDockingTile | src/rust/services.cpp | docking
@@ -95,7 +92,6 @@ rebound | OpenTTDIsTileFlat | src/rust/station_command_services.hpp | tile_flat
 rebound | OpenTTDIsTileFlat | src/town_cmd.cpp | flat
 rebound | OpenTTDLandscapeValue | src/industry_cmd.cpp | landscape
 rebound | OpenTTDLandscapeValue | src/rust/engine_loading_services.hpp | climate
-rebound | OpenTTDLandscapeValue | src/rust/newgrf_spritegroup_services.cpp | climate
 rebound | OpenTTDLandscapeValue | src/town_cmd.cpp | climate
 rebound | OpenTTDLargerTowns | src/newgrf_house.cpp | larger_towns
 rebound | OpenTTDLargerTowns | src/town_cmd.cpp | larger_towns
@@ -158,8 +154,6 @@ rebound | RustCurrentCompanyID | src/rust/fleet_group_services.hpp | current_com
 rebound | RustCurrentCompanyID | src/rust/services.cpp | current_company
 rebound | RustCustomRoadStopIndex | src/newgrf_roadstop.cpp | index
 rebound | RustCustomRoadStopIndex | src/rust/station_command_services.hpp | custom_road_index
-rebound | RustDisableElrails | src/rail_cmd.cpp | disable_elrails
-rebound | RustDisableElrails | src/rust/newgrf_spritegroup_services.cpp | disable_elrails
 rebound | RustEngineByID | src/rust/engine_capabilities_services.hpp | engine
 rebound | RustEngineByID | src/rust/vehicle_refit_services.hpp | engine
 rebound | RustEngineByID | src/rust/vehicle_services_newgrf.h | engine_by_id
@@ -219,8 +213,6 @@ rebound | RustLinkGraphNext | src/timer/timer_game_common.cpp | next_graph
 rebound | RustLocalCompanyID | src/rust/company_adapter.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/engine_adapter.hpp | local_company
 rebound | RustLocalCompanyID | src/subsidy.cpp | local_company
-rebound | RustMapHeightLimit | src/landscape.cpp | height_limit
-rebound | RustMapHeightLimit | src/rust/newgrf_spritegroup_services.cpp | height_limit
 rebound | RustMaxBridgeHeight | src/landscape.cpp | max_bridge_height
 rebound | RustMaxBridgeHeight | src/tunnelbridge_cmd.cpp | max_bridge_height
 rebound | RustNetworkServer | src/order_cmd.cpp | network_server

@@ -13,6 +13,7 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
+use crate::debug::grf_msg;
 use crate::newgrf_act2::{self, Services as Action2Services};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::{CIR_DISABLED, CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
@@ -26,7 +27,6 @@ const GSF_ROADSTOPS: u8 = crate::newgrf::GSF_ROADSTOPS;
 #[repr(C)]
 pub struct Services {
     empty_string: u32,
-    pub(crate) cargo: *const crate::newgrf_act3::Services,
     reader: *const crate::newgrf_bytereader::Services,
     shared: *const crate::services::Services,
     station_resize: unsafe extern "C" fn(*mut c_void, u32) -> (),
@@ -84,16 +84,6 @@ pub struct Services {
     station_bridge_pillars: unsafe extern "C" fn(*mut RailSpec, usize, u8) -> (),
     road_bridge_height: unsafe extern "C" fn(*mut RoadSpec, usize, u8) -> (),
     road_bridge_pillars: unsafe extern "C" fn(*mut RoadSpec, usize, u8) -> (),
-    station_invalid: unsafe extern "C" fn(u32) -> (),
-    road_invalid: unsafe extern "C" fn(u32) -> (),
-    station_undefined: unsafe extern "C" fn(u32) -> (),
-    road_undefined: unsafe extern "C" fn(u32) -> (),
-    odd_layout: unsafe extern "C" fn(u32) -> (),
-    missing_sprite: unsafe extern "C" fn(u16, u32) -> (),
-    missing_custom: unsafe extern "C" fn(u16, u32) -> (),
-    invalid_tile: unsafe extern "C" fn(u8, u8, u8) -> (),
-    undefined_publication: unsafe extern "C" fn(u16) -> (),
-    duplicate_publication: unsafe extern "C" fn(u16) -> (),
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
@@ -103,7 +93,7 @@ impl Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, cargo, reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_cargo_triggers, station_callback_mask, station_flags, station_set_group, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_cargo_triggers, road_callback_mask, road_flags, road_set_group, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars, station_invalid, road_invalid, station_undefined, road_undefined, odd_layout, missing_sprite, missing_custom, invalid_tile, undefined_publication, duplicate_publication };
+    "OpenTTDStationDefinitionServices" ["station_service"] => Services { empty_string, reader, shared, station_resize, station_count, station_get, station_new, station_class, station_name, station_class_name, station_cargo_triggers, station_callback_mask, station_flags, station_set_group, road_resize, road_count, road_get, road_new, road_class, road_name, road_class_name, road_cargo_triggers, road_callback_mask, road_flags, road_set_group, station_disallowed_platforms, station_disallowed_lengths, station_cargo_threshold, road_stop_type, road_draw_mode, road_build_cost, road_clear_cost, station_render_clear, station_render_reserve, station_render_size, station_render_append, station_render_pop, station_render_copy_append, sequence_reset, sequence_append, layout_sequence_move, layout_original, station_custom_assign, station_custom_tile, station_custom_copy, station_tileflags_size, station_tileflags_resize, station_pylons, station_wires, station_blocked, station_tileflags_assign, station_bridge_size, station_bridge_resize, road_bridge_size, station_bridge_height, station_bridge_pillars, road_bridge_height, road_bridge_pillars };
 }
 
 unsafe fn station_change(
@@ -119,7 +109,12 @@ unsafe fn station_change(
 ) -> Result<i32, ReadError> {
     unsafe {
         if last > NUM_STATIONS_PER_GRF {
-            (s.station_invalid)(last);
+            grf_msg!(
+                1,
+                "StationChangeInfo: Station {} is invalid, max {}, ignoring",
+                last,
+                u16::MAX - 1
+            );
             return Ok(CIR_INVALID_ID);
         }
         if (s.station_count)(file) < last as usize {
@@ -129,7 +124,11 @@ unsafe fn station_change(
         for id in first..last {
             let mut spec = (s.station_get)(file, id);
             if spec.is_null() && prop != 0x08 {
-                (s.station_undefined)(id);
+                grf_msg!(
+                    2,
+                    "StationChangeInfo: Attempt to modify undefined station {}, ignoring",
+                    id
+                );
                 return Ok(CIR_INVALID_ID);
             }
             match prop {
@@ -207,7 +206,11 @@ unsafe fn station_change(
                         (s.sequence_reset)(sequence);
                     }
                     if (s.station_render_size)(spec) & 1 != 0 {
-                        (s.odd_layout)(id);
+                        grf_msg!(
+                            1,
+                            "StationChangeInfo: Station {} defines an odd number of sprite layouts, dropping the last item",
+                            id
+                        );
                         (s.station_render_pop)(spec);
                     }
                 }
@@ -215,7 +218,12 @@ unsafe fn station_change(
                     let source_id = reader.extended()?;
                     let source = (s.station_get)(file, u32::from(source_id));
                     if source.is_null() {
-                        (s.missing_sprite)(source_id, id);
+                        grf_msg!(
+                            1,
+                            "StationChangeInfo: Station {} is not defined, cannot copy sprite layout to {}.",
+                            source_id,
+                            id
+                        );
                         continue;
                     }
                     // StationChangeInfo clears before observing the source, including self-copy.
@@ -243,7 +251,13 @@ unsafe fn station_change(
                         for index in 0..count {
                             let tile = data.add(index).read();
                             if tile & !1 != tile {
-                                (s.invalid_tile)(tile, length, number);
+                                grf_msg!(
+                                    1,
+                                    "StationChangeInfo: Invalid tile {} in layout {}x{}",
+                                    tile,
+                                    length,
+                                    number
+                                );
                                 (s.station_custom_tile)(spec, key, index, tile & !1);
                             }
                         }
@@ -253,7 +267,12 @@ unsafe fn station_change(
                     let source_id = reader.extended()?;
                     let source = (s.station_get)(file, u32::from(source_id));
                     if source.is_null() {
-                        (s.missing_custom)(source_id, id);
+                        grf_msg!(
+                            1,
+                            "StationChangeInfo: Station {} is not defined, cannot copy tile layout to {}.",
+                            source_id,
+                            id
+                        );
                         continue;
                     }
                     (s.station_custom_copy)(spec, source);
@@ -311,7 +330,11 @@ unsafe fn station_change(
                         }
                     }
                     if (s.station_render_size)(spec) & 1 != 0 {
-                        (s.odd_layout)(id);
+                        grf_msg!(
+                            1,
+                            "StationChangeInfo: Station {} defines an odd number of sprite layouts, dropping the last item",
+                            id
+                        );
                         (s.station_render_pop)(spec);
                     }
                 }
@@ -381,7 +404,12 @@ unsafe fn road_change(
 ) -> Result<i32, ReadError> {
     unsafe {
         if last > crate::newgrf_roadstop::NUM_ROADSTOPS_PER_GRF {
-            (s.road_invalid)(last);
+            grf_msg!(
+                1,
+                "RoadStopChangeInfo: RoadStop {} is invalid, max {}, ignoring",
+                last,
+                crate::newgrf_roadstop::NUM_ROADSTOPS_PER_GRF
+            );
             return Ok(CIR_INVALID_ID);
         }
         if (s.road_count)(file) < last as usize {
@@ -391,7 +419,11 @@ unsafe fn road_change(
         for id in first..last {
             let mut spec = (s.road_get)(file, id);
             if spec.is_null() && prop != 0x08 {
-                (s.road_undefined)(id);
+                grf_msg!(
+                    1,
+                    "RoadStopChangeInfo: Attempt to modify undefined road stop {}, ignoring",
+                    id
+                );
                 result = result.max(ignore_road_property(prop, reader)?);
                 continue;
             }
@@ -529,15 +561,13 @@ pub(crate) unsafe fn station_map_specific(
 ) {
     let s = unsafe { &*s };
     // CargoTypeMapSpriteGroupHandler uses GSF_STATIONS for both native spec types.
-    let cargo = crate::newgrf_act3::translate_cargo(unsafe { &*s.cargo }, GSF_STATIONS, cid, file);
+    let cargo = crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file);
     if !crate::cargo_type::is_valid_cargo_type(cargo) {
         return;
     }
     let spec = unsafe { (s.station_get)(file, u32::from(id)) };
     if spec.is_null() {
-        unsafe {
-            (s.undefined_publication)(id);
-        }
+        grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else {
         unsafe {
             (s.station_set_group)(spec, cargo, group);
@@ -553,13 +583,9 @@ pub(crate) unsafe fn station_map_default(
     let s = unsafe { &*s };
     let spec = unsafe { (s.station_get)(file, u32::from(id)) };
     if spec.is_null() {
-        unsafe {
-            (s.undefined_publication)(id);
-        }
+        grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else if (s.shared().specs().station().has_file)(spec) {
-        unsafe {
-            (s.duplicate_publication)(id);
-        }
+        grf_msg!(1, "MapSpriteGroup: {} mapped multiple times, skipping", id);
     } else {
         unsafe {
             (s.station_set_group)(spec, crate::newgrf_commons::SG_DEFAULT, group);
@@ -579,15 +605,13 @@ pub(crate) unsafe fn roadstop_map_specific(
 ) {
     let s = unsafe { &*s };
     // CargoTypeMapSpriteGroupHandler uses GSF_STATIONS for both native spec types.
-    let cargo = crate::newgrf_act3::translate_cargo(unsafe { &*s.cargo }, GSF_STATIONS, cid, file);
+    let cargo = crate::newgrf_act3::translate_cargo(GSF_STATIONS, cid, file);
     if !crate::cargo_type::is_valid_cargo_type(cargo) {
         return;
     }
     let spec = unsafe { (s.road_get)(file, u32::from(id)) };
     if spec.is_null() {
-        unsafe {
-            (s.undefined_publication)(id);
-        }
+        grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else {
         unsafe {
             (s.road_set_group)(spec, cargo, group);
@@ -603,13 +627,9 @@ pub(crate) unsafe fn roadstop_map_default(
     let s = unsafe { &*s };
     let spec = unsafe { (s.road_get)(file, u32::from(id)) };
     if spec.is_null() {
-        unsafe {
-            (s.undefined_publication)(id);
-        }
+        grf_msg!(1, "MapSpriteGroup: {} undefined, skipping", id);
     } else if (s.shared().specs().road_stop().has_file)(spec) {
-        unsafe {
-            (s.duplicate_publication)(id);
-        }
+        grf_msg!(1, "MapSpriteGroup: {} mapped multiple times, skipping", id);
     } else {
         unsafe {
             (s.road_set_group)(spec, crate::newgrf_commons::SG_DEFAULT, group);

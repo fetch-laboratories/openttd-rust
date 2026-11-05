@@ -47,16 +47,6 @@ const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept
 		.layouts_resize = [](AirportSpec *spec, size_t count) noexcept -> void { spec->layouts.clear(); spec->layouts.resize(count); },
 		.layout_assign = [](AirportSpec *spec, size_t index, uint8_t rotation, const AirportTileTable *tiles, size_t count) noexcept -> void { auto &layout = spec->layouts[index]; layout.rotation = static_cast<Direction>(rotation); layout.tiles.assign(tiles, tiles + count); },
 		.dimensions = [](AirportSpec *spec, uint8_t x, uint8_t y) noexcept -> void { spec->size_x = x; spec->size_y = y; },
-		.airport_invalid = [](uint32_t last) noexcept -> void { GrfMsg(1, "AirportChangeInfo: Too many airports, trying id ({}), max ({}). Ignoring.", last, NUM_AIRPORTS_PER_GRF); },
-		.airport_undefined = [](uint32_t id) noexcept -> void { GrfMsg(2, "AirportChangeInfo: Attempt to modify undefined airport {}, ignoring", id); },
-		.airport_substitute_invalid = [](uint8_t subs_id, uint32_t id) noexcept -> void { GrfMsg(2, "AirportChangeInfo: Attempt to use new airport {} as substitute airport for {}. Ignoring.", subs_id, id); },
-		.layout_tile_undefined = [](uint16_t local_tile_id, uint32_t id) noexcept -> void { GrfMsg(2, "AirportChangeInfo: Attempt to use airport tile {} with airport id {}, not yet defined. Ignoring.", local_tile_id, id); },
-		.airport_full = []() noexcept -> void { GrfMsg(1, "Airport.SetEntitySpec: Too many airports allocated. Ignoring."); },
-		.tile_invalid = [](uint32_t last) noexcept -> void { GrfMsg(1, "AirportTileChangeInfo: Too many airport tiles loaded ({}), max ({}). Ignoring.", last, NUM_AIRPORTTILES_PER_GRF); },
-		.tile_undefined = [](uint32_t id) noexcept -> void { GrfMsg(2, "AirportTileChangeInfo: Attempt to modify undefined airport tile {}. Ignoring.", id); },
-		.tile_substitute_invalid = [](uint8_t subs_id, uint32_t id) noexcept -> void { GrfMsg(2, "AirportTileChangeInfo: Attempt to use new airport tile {} as substitute airport tile for {}. Ignoring.", subs_id, id); },
-		.tile_override_invalid = [](uint8_t override_id, uint32_t id) noexcept -> void { GrfMsg(2, "AirportTileChangeInfo: Attempt to override new airport tile {} with airport tile id {}. Ignoring.", override_id, id); },
-		.tile_full = []() noexcept -> void { GrfMsg(1, "AirportTile.SetEntitySpec: Too many airport tiles allocated. Ignoring."); },
 	};
 	return services;
 }
