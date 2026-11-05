@@ -3,6 +3,7 @@
 import calendar
 import struct
 from pathlib import Path
+from typing import cast
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
@@ -323,11 +324,18 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
     saves = {role: folder / role / "loaded.sav" for role in executables}
     captures = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            save=str(normalized),
-            console=['debug_level "grf=8"', command + f' "{saves[role]}"', "unpause"],
-            ticks=1,
+        lambda role: cast(
+            core.Scenario,
+            dict(
+                scenario,
+                save=str(normalized),
+                console=[
+                    'debug_level "grf=8"',
+                    command + f' "{saves[role]}"',
+                    "unpause",
+                ],
+                ticks=1,
+            ),
         ),
         executables,
         builds,

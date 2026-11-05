@@ -48,6 +48,13 @@ include = [
     "tools/test-migration-env.py",
     "tools/test-multiplayer.py",
     "tools/test-sanitizers.py",
+    "tools/simulation/coverage.py",
+    "tools/simulation/drawing.py",
+    "tools/test-coverage.py",
+    "tools/simulation/game_launcher.py",
+    "tools/test-kernel-state.py",
+    "tools/simulation/core.py",
+    "tools/migration.py",
     "tools/harness_inventory.py",
     "tools/test-harness-inventory.py",
 ]

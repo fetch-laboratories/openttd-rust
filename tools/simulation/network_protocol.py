@@ -9,7 +9,7 @@ import subprocess
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from . import core, multiplayer
 from .console_adapter import console_adapter, prepared_console
@@ -18,14 +18,8 @@ NAME = "network-protocol-loopback"
 CALLBACK = "_Z30CcPlaySound_CONSTRUCTION_OTHER8CommandsRK11CommandCostN10StrongType7TypedefIj12TileIndexTagJNS3_7CompareENS3_7IntegerENS3_10CompatibleIiEENS8_IlEEEEE"
 
 
-class Scenario(TypedDict, total=False):
-    name: str
-    kind: str
-    save: str
-    ticks: int
-    short_checkpoint: bool
+class Scenario(core.Scenario, total=False):
     network_protocol: bool
-    role_inputs: dict[str, dict[str, str]]
 
 
 class Summary(TypedDict):
@@ -36,7 +30,7 @@ class Summary(TypedDict):
     rng: list[int]
 
 
-class Result(TypedDict, total=False):
+class Result(core.Result, total=False):
     network_protocol: dict[str, Summary]
 
 
@@ -152,25 +146,29 @@ def start(
 ) -> Peer:
     folder.mkdir(parents=True)
     core.write_config(
-        {
-            "kind": "save",
-            "settings": {
-                "locale": {
-                    key.removeprefix("locale."): str(value)
-                    for key, value in core.rows(source, "PATS")[0].items()
-                    if key.startswith("locale.")
-                },
-                "gui": {"threaded_saves": "false"},
-                "network": {
-                    "server_game_type": "local",
-                    "server_port": str(port),
-                    "client_name": "Protocol574" + mode,
-                    "participate_survey": "no",
-                    "max_commands_in_queue": "128",
-                    "client_secret_key": multiplayer.AUTH_SECRET,
+        # write_config reads only the kind and settings of a save game.
+        cast(
+            core.Scenario,
+            {
+                "kind": "save",
+                "settings": {
+                    "locale": {
+                        key.removeprefix("locale."): str(value)
+                        for key, value in core.rows(source, "PATS")[0].items()
+                        if key.startswith("locale.")
+                    },
+                    "gui": {"threaded_saves": "false"},
+                    "network": {
+                        "server_game_type": "local",
+                        "server_port": str(port),
+                        "client_name": "Protocol574" + mode,
+                        "participate_survey": "no",
+                        "max_commands_in_queue": "128",
+                        "client_secret_key": multiplayer.AUTH_SECRET,
+                    },
                 },
             },
-        },
+        ),
         binary.parent,
         folder,
     )
@@ -306,7 +304,7 @@ def observe(peers: list[Peer], rejected: bytes, source: Path) -> Summary:
     if len(packets(server, 40)) < 3 or rejected != bytes((4, 0, 3, 7)):
         raise RuntimeError("quit or invalid-admission reason differs")
     saves = [peer.folder / "save/stop.sav" for peer in peers]
-    stats = {"chunks": 0, "elements": 0, "masked": {}}
+    stats: core.Stats = {"chunks": 0, "elements": 0, "masked": {}}
     for save in saves[1:]:
         if core.compare_saves(saves[0], save, NAME, 10, stats):
             raise RuntimeError("controlled-tick client/server semantic worlds differ")

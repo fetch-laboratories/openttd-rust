@@ -11,10 +11,12 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from validation_execution import file_lock, run_logged
 
@@ -22,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / ".local"
 
 
-def _common_root():
+def _common_root() -> Path:
     """The main checkout; linked worktrees share its reference and caches."""
     try:
         common = subprocess.check_output(
@@ -119,7 +121,7 @@ def deps_build_options() -> list[str]:
     ]
 
 
-def rust_configuration(build: Path):
+def rust_configuration(build: Path) -> dict[str, Any]:
     """Read the target validated by CMake, refusing portable or stale archive layouts."""
     build = build.resolve()
     cache = cmake_cache(build)
@@ -208,13 +210,15 @@ CCACHE_POLICY = {
 }
 
 
-def compiler_cache_base(role):
+def compiler_cache_base(role: str) -> Path:
     """Root containing the role's source and build trees. ccache rewrites paths
     below it to relative ones, so separate worktrees share cache entries."""
     return COMMON_ROOT.resolve() if role == "reference" else ROOT.resolve()
 
 
-def compiler_cache_environment(env, role, *, bypass=False):
+def compiler_cache_environment(
+    env: Mapping[str, str], role: str, *, bypass: bool = False
+) -> dict[str, str]:
     """Isolate role caches and ignore ambient cache-policy overrides."""
     if role not in ("reference", "candidate"):
         raise ValueError("Compiler cache role must be reference or candidate")
@@ -227,10 +231,12 @@ def compiler_cache_environment(env, role, *, bypass=False):
     return result
 
 
-def compiler_cache_settings(executable, env):
+def compiler_cache_settings(
+    executable: str, env: Mapping[str, str]
+) -> tuple[dict[str, str], str]:
     """Retain and verify effective settings rather than trusting a config file."""
     output = subprocess.check_output([executable, "--show-config"], env=env, text=True)
-    settings = {}
+    settings: dict[str, str] = {}
     for line in output.splitlines():
         if ") " in line and " =" in line:
             key, _, value = line.split(") ", 1)[1].partition(" =")
@@ -247,14 +253,16 @@ def compiler_cache_settings(executable, env):
     return settings, output
 
 
-def compiler_cache_statistics(executable, env):
+def compiler_cache_statistics(
+    executable: str, env: Mapping[str, str]
+) -> dict[str, int]:
     output = subprocess.check_output([executable, "--print-stats"], env=env, text=True)
     return {
         key: int(value) for key, value in (line.split() for line in output.splitlines())
     }
 
 
-def compiler_cache_options(executable):
+def compiler_cache_options(executable: str | None) -> list[str]:
     """Clear stale launchers/PCH overrides when returning to ordinary builds."""
     return [
         f"-DCMAKE_C_COMPILER_LAUNCHER={executable or ''}",
@@ -263,8 +271,8 @@ def compiler_cache_options(executable):
     ]
 
 
-def cmake_cache(build):
-    cache = {}
+def cmake_cache(build: Path) -> dict[str, str]:
+    cache: dict[str, str] = {}
     for line in (build / "CMakeCache.txt").read_text().splitlines():
         if line and not line.startswith(("#", "//")) and "=" in line:
             key, value = line.split("=", 1)
@@ -272,7 +280,12 @@ def cmake_cache(build):
     return cache
 
 
-def configured_as(build, source, command, env=None):
+def configured_as(
+    build: Path,
+    source: Path | str,
+    command: list[str],
+    env: Mapping[str, str] | None = None,
+) -> bool:
     """Whether an existing build tree already holds every requested -D value."""
     if not (build / "build.ninja").exists() or not (build / "CMakeCache.txt").exists():
         return False
@@ -291,9 +304,11 @@ def configured_as(build, source, command, env=None):
     )
 
 
-def verify_compiler_cache_options(build, executable):
+def verify_compiler_cache_options(
+    build: Path, executable: str | None
+) -> dict[str, str | None]:
     cache = cmake_cache(build)
-    expected = {
+    expected: dict[str, str | None] = {
         "CMAKE_C_COMPILER_LAUNCHER": executable or "",
         "CMAKE_CXX_COMPILER_LAUNCHER": executable or "",
         "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON" if executable else "OFF",
@@ -308,19 +323,21 @@ def verify_compiler_cache_options(build, executable):
     return expected
 
 
-def compiler_cache_compatibility(env=None):
+def compiler_cache_compatibility(
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     """Key for restoring cache directories. ccache itself hashes compiler content,
     arguments and every included file, so this only groups compatible entries;
     it deliberately excludes workflow and driver files that component PRs edit."""
     env = environment() if env is None else env
-    tools = {}
+    tools: dict[str, str] = {}
     for name in (env.get("CC", "cc"), env.get("CXX", "c++"), "ccache"):
         tools[name] = subprocess.check_output([name, "--version"], env=env, text=True)
     files = ("migration/ccache.conf",)
     policy = {
         name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in files
     }
-    identity = {
+    identity: dict[str, Any] = {
         "os": platform.system(),
         "architecture": platform.machine(),
         "baseline": BASELINE["commit"],
@@ -334,12 +351,12 @@ def compiler_cache_compatibility(env=None):
     return identity
 
 
-def git(*args, cwd=ROOT):
+def git(*args: str, cwd: Path = ROOT) -> str:
     return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
 
 
 @contextmanager
-def reference_lock(shared=False):
+def reference_lock(shared: bool = False) -> Generator[None, None, None]:
     """Serialize reference checkout/build/test across concurrent worktree runs.
 
     Shared holders (tools/simulate.py copying the built reference's runtime) may
@@ -349,7 +366,9 @@ def reference_lock(shared=False):
 
 
 @contextmanager
-def candidate_lock(build, shared=False):
+def candidate_lock(
+    build: Path | str, shared: bool = False
+) -> Generator[None, None, None]:
     """Protect candidate compilation and runtime capture in this build directory."""
     with file_lock(
         Path(build).resolve() / ".migration.lock", shared=shared, label="candidate"
@@ -357,7 +376,7 @@ def candidate_lock(build, shared=False):
         yield
 
 
-def ensure_reference():
+def ensure_reference() -> None:
     if not REFERENCE.exists():
         REFERENCE.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
@@ -380,7 +399,7 @@ def ensure_reference():
         )
 
 
-def supply_graphics(build):
+def supply_graphics(build: Path) -> None:
     candidates = [
         LOCAL / "deps/usr/share/games/openttd/baseset/opengfx",
         COMMON_LOCAL / "deps/usr/share/games/openttd/baseset/opengfx",
@@ -398,7 +417,7 @@ def supply_graphics(build):
         destination.symlink_to(source, target_is_directory=True)
 
 
-def free_cores():
+def free_cores() -> int:
     """Cores the 1-minute load leaves idle, read once per run."""
     return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
 
@@ -551,7 +570,7 @@ def main() -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     evidence = LOCAL / "verification" / stamp
     evidence.mkdir(parents=True)
-    report = {
+    report: dict[str, Any] = {
         "schema_version": 1,
         "jobs": args.jobs,
         "candidate_root": str(ROOT.resolve()),
@@ -576,7 +595,7 @@ def main() -> None:
         "passed": False,
     }
 
-    def run(name, command, cwd=ROOT):
+    def run(name: str, command: Sequence[str | Path], cwd: Path = ROOT) -> Path:
         log = evidence / f"{name}.log"
         start = time.monotonic()
         code = run_logged(
@@ -602,9 +621,9 @@ def main() -> None:
     if args.action == "coverage":
         builds = {"reference": LOCAL / "build-reference-coverage"}
     original_environment = env.copy()
-    cache_before = {}
+    cache_before: dict[str, dict[str, int]] = {}
 
-    def select_role(role):
+    def select_role(role: str) -> None:
         nonlocal env
         env = (
             compiler_cache_environment(

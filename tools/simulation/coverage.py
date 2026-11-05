@@ -7,10 +7,10 @@ import json
 import re
 import shutil
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from validation_execution import run_logged  # noqa: E402
@@ -256,7 +256,7 @@ def collect(
 
 
 def measure(
-    scenario: dict[str, Any],
+    scenario: Mapping[str, Any],
     binary: Path,
     runtime: Path,
     out: Path,
@@ -272,10 +272,10 @@ def measure(
     env = dict(migration.environment(), OPENTTD_COVERAGE_PREFIX=str(prefix))
     binaries = dict(reference=binary, candidate=binary)
     builds = dict(reference=runtime, candidate=runtime)
-    last: dict[str, Any] = {}
+    last = cast(core.Run, {})
 
     def reference_game(
-        s: dict[str, Any],
+        s: core.Scenario,
         executable: Path,
         data: Path,
         run_dir: Path,
@@ -284,7 +284,7 @@ def measure(
         desync: bool,
         *,
         isolate: bool = False,
-    ) -> dict[str, Any]:
+    ) -> core.Run:
         # Self-mode's candidate checks inspect the same original run. Preparation
         # hooks still run their original reference-only captures in this workspace.
         nonlocal last
@@ -297,7 +297,7 @@ def measure(
     token = migration.SCENARIO_COVERAGE_PREFIX.set(str(prefix))
     try:
         result = core.run_scenario(
-            scenario,
+            cast(core.Scenario, scenario),
             binaries,
             builds,
             folder,

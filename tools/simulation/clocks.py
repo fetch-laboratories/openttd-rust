@@ -2,34 +2,17 @@
 
 import subprocess
 from pathlib import Path
-from typing import NotRequired, TypedDict
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
 from .core import ROOT
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
-    save: str
+class Scenario(core.Scenario):
     clocks: str
-    ticks: int
-    short_checkpoint: bool
-    console: NotRequired[list[str]]
-    executables: NotRequired[dict[str, Path]]
-    role_inputs: NotRequired[dict[str, dict[str, str]]]
 
 
-class Run(TypedDict):
-    exit: int
-    log: list[str]
-    snapshots: list[Path]
-
-
-class Result(TypedDict, total=False):
-    problems: list[str]
-    differences: list[str]
+class Result(core.Result, total=False):
     clocks_capture: dict[str, list[str]]
 
 
@@ -154,12 +137,13 @@ def prepare(
     native_probes(folder / "native", env)
     executables = prepared_console("clocks", adapter, binaries, builds, folder, env)
     saves = {role: folder / role / "fractions.sav" for role in executables}
+
+    def capture(role: str) -> Scenario:
+        console = [f'clocks_scenario capture "{saves[role]}"', "unpause"]
+        return {**scenario, "console": console, "ticks": 1}
+
     runs = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=[f'clocks_scenario capture "{saves[role]}"', "unpause"],
-            ticks=1,
-        ),
+        capture,
         executables,
         builds,
         folder,
@@ -193,6 +177,8 @@ def prepare(
     }
 
 
-def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) -> None:
+def check(
+    scenario: Scenario, run: core.Run, mode: core.Mode, role: core.Role, result: Result
+) -> None:
     if "clocks" in scenario and "CLOCK reloaded-fractions true" not in run["log"]:
         result["problems"].append(f"{mode}: {role} clock reload observation missing")
