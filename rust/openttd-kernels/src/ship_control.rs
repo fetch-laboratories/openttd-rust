@@ -1119,7 +1119,7 @@ pub(crate) unsafe fn ship_build(
     (game.leaves.build_dates)(id);
     (game.leaves.build_random)(id, game.services.random() as u16);
     (game.leaves.build_acceleration)(id, engine);
-    (game.leaves.cache)(id);
+    game.cache(id, v);
     if (game.leaves.build_flag)(engine) {
         (game.leaves.build_prototype)(id);
     }
