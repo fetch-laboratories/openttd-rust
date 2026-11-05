@@ -46,7 +46,8 @@ inline uint8_t RustEngineTrainCost(const OpenTTDEngine *e) noexcept { return Eng
 inline Price RustEngineTrainPrice(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RailVehicleInfo>().running_cost_class; }
 inline uint8_t RustEngineTrainRunning(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RailVehicleInfo>().running_cost; }
 inline int32_t RustEngineLifeYears(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.lifelength.base(); }
-inline bool RustEngineValidString(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.string_id != STR_NEWGRF_INVALID_ENGINE; }
+inline StringID *RustEngineString(const OpenTTDEngine *e) noexcept { return &const_cast<Engine *>(EngineOf(e))->info.string_id; }
+inline bool RustEngineValidString(const OpenTTDEngine *e) noexcept { return *RustEngineString(e) != STR_NEWGRF_INVALID_ENGINE; }
 
 inline uint16_t RustEngineCargoAge(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.cargo_age_period; }
 inline uint16_t RustEngineAircraftRange(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<AircraftVehicleInfo>().max_range; }
@@ -60,7 +61,7 @@ inline int32_t RustEnginePriceShift(const OpenTTDEngine *e, uint32_t price) noex
 inline uint16_t RustEngineVariant(const Engine *e) noexcept { return e->info.variant_id.base(); }
 inline uint16_t RustEngineVariant(const OpenTTDEngine *e) noexcept { return RustEngineVariant(EngineOf(e)); }
 
-inline void RustSetEngineInvalidString(const OpenTTDEngine *e) noexcept { const_cast<Engine *>(EngineOf(e))->info.string_id = STR_NEWGRF_INVALID_ENGINE; }
+inline void RustSetEngineInvalidString(const OpenTTDEngine *e) noexcept { *RustEngineString(e) = STR_NEWGRF_INVALID_ENGINE; }
 inline void RustSetEngineVariant(const OpenTTDEngine *e, uint16_t variant) noexcept { const_cast<Engine *>(EngineOf(e))->info.variant_id = EngineID{variant}; }
 inline void RustSetEngineCargo(const OpenTTDEngine *e, CargoType cargo) noexcept { const_cast<Engine *>(EngineOf(e))->info.cargo_type = cargo; }
 inline void RustSetEngineRefitMask(const OpenTTDEngine *e, CargoTypes mask) noexcept { const_cast<Engine *>(EngineOf(e))->info.refit_mask = mask; }

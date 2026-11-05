@@ -93,9 +93,5 @@ uint8_t openttd_rust_station_change_info_abi(const OpenTTDStationDefinitionServi
 extern "C++" inline bool openttd_rust_station_change_info(const OpenTTDStationDefinitionServices *a0, const OpenTTDAction2Services *a1, const OpenTTDGrfLoadingServices *a2, GRFFile *a3, uint32_t a4, uint32_t a5, uint32_t a6, ByteReader *a7, OpenTTDStationSequence *a8, uint8_t *a9) { return openttd_rust_station_change_info_abi(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) != 0; }
 uint8_t openttd_rust_roadstop_change_info_abi(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
 extern "C++" inline bool openttd_rust_roadstop_change_info(const OpenTTDStationDefinitionServices *a0, GRFFile *a1, uint32_t a2, uint32_t a3, uint32_t a4, ByteReader *a5, uint8_t *a6) { return openttd_rust_roadstop_change_info_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }
-void openttd_rust_station_map_specific(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, uint8_t, const SpriteGroup *);
-void openttd_rust_station_map_default(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, const SpriteGroup *);
-void openttd_rust_roadstop_map_specific(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, uint8_t, const SpriteGroup *);
-void openttd_rust_roadstop_map_default(const OpenTTDStationDefinitionServices *, GRFFile *, uint16_t, const SpriteGroup *);
 }
 #endif

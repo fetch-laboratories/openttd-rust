@@ -96,9 +96,9 @@ pub struct Services {
     rail_labels: extern "C" fn(Handle) -> Labels,
     road_labels: extern "C" fn(Handle) -> Labels,
     tram_labels: extern "C" fn(Handle) -> Labels,
-    rail_map: extern "C" fn(Handle) -> TypeMap,
-    road_map: extern "C" fn(Handle) -> TypeMap,
-    tram_map: extern "C" fn(Handle) -> TypeMap,
+    pub(crate) rail_map: extern "C" fn(Handle) -> TypeMap,
+    pub(crate) road_map: extern "C" fn(Handle) -> TypeMap,
+    pub(crate) tram_map: extern "C" fn(Handle) -> TypeMap,
 }
 struct Registry {
     services: *const Services,

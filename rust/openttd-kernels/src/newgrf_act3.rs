@@ -6,6 +6,7 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation
 )]
+pub(crate) mod loading;
 use crate::cargo_registry::{openttd_rust_cargo_by_label, openttd_rust_cargo_translation_table};
 use crate::cargo_type::{INVALID_CARGO, is_valid_cargo_type};
 use crate::newgrf_commons::{SG_DEFAULT_NA, SG_PURCHASE};
@@ -54,15 +55,6 @@ pub(crate) fn translate_cargo(s: &Services, feature: u8, cargo: u8, file: *const
         (s.mapped)(label, result);
     }
     result
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_act3_translate_cargo(
-    s: *const Services,
-    feature: u8,
-    cargo: u8,
-    file: *const c_void,
-) -> u8 {
-    translate_cargo(unsafe { &*s }, feature, cargo, file)
 }
 crate::abi::layouts! {
     fn abi_layout;

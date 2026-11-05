@@ -2,18 +2,45 @@
 
 import calendar
 import struct
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import cast
+from typing import NotRequired, TypedDict, cast
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
 
+
+class Scenario(TypedDict):
+    name: str
+    kind: str
+    save: str
+    newgrf_loading: str
+    short_checkpoint: bool
+    ticks: int
+    console: NotRequired[list[str]]
+    executables: NotRequired[dict[str, Path]]
+    role_inputs: NotRequired[dict[str, dict[str, str]]]
+    loading_fixture_dir: NotRequired[str]
+
+
+class Run(TypedDict):
+    exit: int
+    log: list[str]
+    snapshots: list[Path]
+
+
+class Result(TypedDict, total=False):
+    loading_input: object
+    problems: list[str]
+    differences: list[core.Difference]
+
+
 ADAPTER = core.ROOT / "tools/simulation/newgrf-loading-console.cpp"
 # Reference town-name lines per scenario and mode, compared with the candidate run.
-TOWN_NAMES = {}
+TOWN_NAMES: dict[tuple[str, str], list[str]] = {}
 
 
-def scenarios(soak):
+def scenarios(soak: bool) -> list[Scenario]:
     return [
         {
             "name": "newgrf-loading-" + mode,
@@ -23,25 +50,27 @@ def scenarios(soak):
             "short_checkpoint": True,
             "ticks": 74 if soak else 1,
         }
-        for mode in ("v1", "v2", "reload")
+        for mode in ("v1", "v2", "bindings", "reload")
     ]
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return ["-d", "grf=1"] if "newgrf_loading" in scenario else []
 
 
-def dword(value):
+def dword(value: int) -> bytes:
     return struct.pack("<I", value)
 
 
-def param(target, value, operation=0, source=255):
+def param(target: int, value: int, operation: int = 0, source: int = 255) -> bytes:
     return bytes((13, target, operation, source, 255)) + dword(value)
 
 
-def grf(actions, version):
+def grf(actions: Sequence[bytes], version: int) -> bytes:
     """Construct both documented container encodings with an empty sprite section."""
-    length = dword if version == 2 else lambda n: struct.pack("<H", n)
+    length: Callable[[int], bytes] = (
+        dword if version == 2 else lambda n: struct.pack("<H", n)
+    )
     body = length(4) + b"\xff" + dword(len(actions))
     body += b"".join(length(len(action)) + b"\xff" + action for action in actions)
     body += length(0)
@@ -52,14 +81,21 @@ def grf(actions, version):
     )
 
 
-def info(identifier):
+def info(identifier: bytes) -> bytes:
     return b"\x08\x08" + identifier + b"Interpreter fixture\x00Loading test\x00"
 
 
-def action2(feature, setid, ranges, default=0x7FFF, kind=0x81, variable=0x0C):
+def action2(
+    feature: int,
+    setid: int,
+    ranges: Sequence[tuple[int, int, int]],
+    default: int = 0x7FFF,
+    kind: int = 0x81,
+    variable: int = 0x0C,
+) -> bytes:
     width = {0x81: 1, 0x85: 2, 0x89: 4}[kind]
 
-    def pack(value):
+    def pack(value: int) -> bytes:
         return value.to_bytes(width, "little")
 
     return (
@@ -74,7 +110,7 @@ def action2(feature, setid, ranges, default=0x7FFF, kind=0x81, variable=0x0C):
     )
 
 
-def fixtures(folder, version):
+def fixtures(folder: Path, version: int) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     seasonal = bytes(
         (month * 37 + day * 11) % 256 for month in range(12) for day in range(32)
@@ -205,10 +241,10 @@ def fixtures(folder, version):
         bytes((2, 1, 30, 0x81, 0x0C, 0, 255, 1, 4, 128)),
     ]
 
-    def town_names(identifier, actions):
+    def town_names(identifier: bytes, actions: Sequence[bytes]) -> list[bytes]:
         return [info(identifier)] + [bytes((15,)) + action for action in actions]
 
-    def text(prob, value):
+    def text(prob: int, value: bytes) -> bytes:
         return bytes((prob,)) + value + b"\x00"
 
     # ActionF: <id> [<lang> <name>]... 00 <parts> {<texts> <bitstart> <bitcount> {<prob> ...}}
@@ -297,12 +333,20 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         env,
         ADAPTER,
         "newgrf_loading",
-        replace_objects=("/newgrf/newgrf_act2.cpp.o",),
+        replace_objects=("/newgrf/newgrf_act2.cpp.o", "/newgrf_text.cpp.o"),
         native_test_support=True,
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: Result,
+) -> Scenario:
     if "newgrf_loading" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
@@ -310,18 +354,21 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     result["loading_input"] = record
     mode = scenario["newgrf_loading"]
     fixtures(folder / "grfs", 1 if mode == "v1" else 2)
-    scenario = dict(scenario, loading_fixture_dir=str(folder / "grfs"))
+    if mode in ("bindings", "reload"):
+        text_fixtures(folder / "grfs")
+        binding_fixtures(folder / "grfs")
+    scenario = {**scenario, "loading_fixture_dir": str(folder / "grfs")}
     executables = prepared_console(
         "newgrf_loading", adapter, binaries, builds, folder, env
     )
     command = f'loading_scenario run "{folder / "grfs"}"'
     if mode != "reload":
-        return dict(
-            scenario,
-            save=str(normalized),
-            executables=executables,
-            console=['debug_level "grf=8"', command, "unpause"],
-        )
+        return {
+            **scenario,
+            "save": str(normalized),
+            "executables": executables,
+            "console": ['debug_level "grf=8"', command, "unpause"],
+        }
     saves = {role: folder / role / "loaded.sav" for role in executables}
     captures = core.capture_pair(
         lambda role: cast(
@@ -363,12 +410,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if differences or captures["reference"]["log"] != captures["candidate"]["log"]:
         result["differences"].extend(differences)
         raise RuntimeError("file-loaded GRF captures differ")
-    return dict(
-        scenario,
-        executables=executables,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["loading_scenario inspect", "unpause"],
-    )
+    return {
+        **scenario,
+        "executables": executables,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": ["loading_scenario inspect", "unpause"],
+    }
 
 
 def seasonal_scaled(raw: int, version: int, limit: int) -> int:
@@ -457,7 +504,7 @@ def townname_observations(log: list[str], phases: tuple[str, ...]) -> list[str]:
     return names
 
 
-def check(scenario, run, mode, role, result):
+def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) -> None:
     if "newgrf_loading" not in scenario or run["exit"]:
         return
     expected = (
@@ -519,7 +566,15 @@ def check(scenario, run, mode, role, result):
     snow = seasonal_observations(
         run["log"], snow_phases, 7 if scenario["newgrf_loading"] == "v1" else 8
     )
-    names = townname_observations(run["log"], phases) + snow
+    text = text_observations(
+        run["log"], phases, scenario["newgrf_loading"] in ("bindings", "reload")
+    )
+    bindings = (
+        binding_observations(run["log"], phases)
+        if scenario["newgrf_loading"] in ("bindings", "reload")
+        else []
+    )
+    names = townname_observations(run["log"], phases) + snow + text + bindings
     # Generated name bytes and style lookups are not saved; compare them across roles.
     key = (scenario["name"], mode)
     if role == "reference":
@@ -528,7 +583,7 @@ def check(scenario, run, mode, role, result):
         raise RuntimeError("file-loaded GRF town names or seasonal snow differ")
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if "loading_fixture_dir" not in scenario:
         return
     source = Path(scenario["loading_fixture_dir"])
@@ -542,3 +597,418 @@ def install(scenario, run_dir):
         target.mkdir(parents=True, exist_ok=True)
         for path in source.glob("*.grf"):
             (target / path.name).write_bytes(path.read_bytes())
+
+
+def text_fixtures(folder: Path) -> None:
+    """Saves and town-name samples cannot distinguish Action 4/13 table bytes or targets."""
+
+    def name_action(
+        feature: int,
+        language: int,
+        local: int,
+        texts: tuple[bytes, ...],
+        generic: bool = True,
+    ) -> bytes:
+        encoded = (
+            struct.pack("<H", local)
+            if generic
+            else (
+                b"\xff" + struct.pack("<H", local)
+                if feature <= 3 or feature == 21
+                else bytes((local,))
+            )
+        )
+        return (
+            bytes((4, feature, language | (0x80 if generic else 0), len(texts)))
+            + encoded
+            + b"\0".join(texts)
+            + b"\0"
+        )
+
+    modern = [info(b"TX52")]
+    for feature, prop, value in (
+        (4, 8, b"ST52"),
+        (7, 8, b"\0"),
+        (17, 8, b"\0"),
+        (21, 8, b"badge/text52\0"),
+    ):
+        modern.append(grf_property(feature, 256 if feature == 21 else 0, prop, value))
+    for prop, value in (
+        (0x13, b"\x07m\0\x08f\0\0"),
+        (0x14, b"\x09nom\0\x0agen\0\0"),
+        (0x15, b"\x06"),
+    ):
+        modern.append(grf_property(8, 7, prop, value))
+    modern += [grf_property(8, 96, 0x15, b"\x01")]
+    for feature in (*range(22), 0x48):
+        modern.append(
+            name_action(feature, 1, 0xD800 + feature, (f"feature-{feature}".encode(),))
+        )
+    for feature in range(4):
+        modern.append(name_action(feature, 1, 0, (b"vehicle-name",), False))
+    modern += [
+        name_action(0x48, 7, 0xD000, (b"localized-7",)),
+        name_action(21, 7, 256, (b"badge-name",), False),
+        name_action(21, 7, 257, (b"undefined-badge",), False),
+    ]
+    for local in (
+        0xC400,
+        0xC500,
+        0xC700,
+        0xC900,
+        0xC4FF,
+        0xC5FF,
+        0xC7FF,
+        0xC9FF,
+        0xC600,
+    ):
+        modern.append(name_action(0x48, 1, local, (b"spec-name",)))
+    choice = b"\x9a\x13\x80\x9a\x11default\x9a\x10\x07male\x9a\x12"
+    case = b"\x9a\x14\x9a\x11base\x9a\x10\x09nom\x9a\x15\x81\x9a\x11many\x9a\x10\x01one\x9a\x12\x9a\x12"
+    modern += [
+        name_action(
+            0x48, 1, 0xD000, (b"Line\r\n\x80\x81\x01\xd8\x9a\x03\x34\x12\x9e",)
+        ),
+        name_action(
+            0x48,
+            7,
+            0xD001,
+            (
+                choice,
+                case,
+                b"\x9a\x0e\x07\x9a\x0f\x09",
+                b"\xc3\x9e\xee\x82\x80\xff\xed\xa0\x80",
+            ),
+        ),
+        name_action(0x48, 96, 0xD005, (choice,)),
+        name_action(0x48, 1, 0xFFFF, (b"wrapped", b"end")),
+        name_action(0xFE, 1, 0xD000, (b"unsupported",)),
+    ]
+    old = [
+        b"\x08\x06TX56Legacy\0Text\0",
+        name_action(0x48, 28, 0xD000, (b"old-languages",)),
+        name_action(0x48, 31, 0xD001, (b"old-english-first",)),
+    ]
+    translated = [
+        info(b"TT52"),
+        b"\x13TX52\x07\x02\x06\xd0translated\0second\0",
+        b"\x13TX52\x01\x02\x0a\xd0\0after-empty\0",
+        b"\x13NONEignored\0",
+        b"\x13TX52\x01\x01\x00\xc0range\0",
+    ]
+    for name, actions in (
+        ("translation-before", [info(b"TB52"), b"\x13TX52\x07\x01\x00\xd0before\0"]),
+        ("text-modern", modern),
+        ("text-old", old),
+        ("text-translate", translated),
+        (
+            "text-translate7",
+            [
+                b"\x08\x07TP57Legacy translation\0Text\0",
+                b"\x13TX52\x01\x02\xd0generic-translation\0",
+            ],
+        ),
+        ("translation-bounds", [info(b"TE52"), b"\x13TX"]),
+    ):
+        (folder / f"{name}.grf").write_bytes(grf(actions, 2))
+
+
+def text_observations(
+    log: list[str], phases: tuple[str, ...], extended: bool
+) -> list[str]:
+    """Require table keys and switches; saves do not retain bytes or language fallbacks."""
+    observations = [line for line in log if line.startswith("LOADING text ")]
+    modern = int.from_bytes(b"TX52", "little")
+    old = int.from_bytes(b"TX56", "little")
+    expected = {(modern, 0xD800 + feature, 1) for feature in (*range(22), 0x48)}
+    expected |= {
+        (modern, 0xD000, 1),
+        (modern, 0xD000, 7),
+        (modern, 0xD005, 96),
+        (modern, 0xD002, 127),
+        (modern, 0xD00B, 1),
+    }
+    expected |= {(modern, local, 7) for local in range(0xD001, 0xD005)}
+    expected |= {(modern, local, 7) for local in (0xD006, 0xD007)}
+    expected |= {(old, 0xD000, language) for language in (2, 3, 4)} | {(old, 0xD001, 1)}
+    for phase in phases:
+        rows = [
+            line.split()
+            for line in observations
+            if line.startswith(f"LOADING text {phase} row ")
+        ]
+        keys = {(int(row[4], 16), int(row[5], 16), int(row[6], 16)) for row in rows}
+        if not rows or len(keys) != len(rows) or (extended and not expected <= keys):
+            raise RuntimeError("GRF text table keys missing or duplicated: " + phase)
+        for row in rows:
+            if len(row) != 10 or not 0x20000 <= int(row[8]) < 0xA0000:
+                raise RuntimeError("GRF text return ID or bytes missing")
+            if row[9] != "-":
+                bytes.fromhex(row[9])
+        languages = [
+            line.split()
+            for line in observations
+            if line.startswith(f"LOADING text {phase} language ")
+        ]
+        if len(languages) != 6 or {int(row[4]) for row in languages} != {
+            0,
+            1,
+            2,
+            7,
+            96,
+            127,
+        }:
+            raise RuntimeError("GRF text language switch missing or duplicated")
+        for row in languages:
+            language = int(row[4])
+            mask = {2: 4, 3: 8, 4: 16}.get(language, 3)
+            expected_mask = sum(1 << value for value in range(32) if value & mask)
+            if (
+                len(row) != 10
+                or int(row[5]) != language
+                or int(row[6]) != expected_mask
+                or row[7:9] != ["true", "true"]
+            ):
+                raise RuntimeError("GRF text language state or old/new scheme differs")
+        if f"LOADING text {phase} byte80 21" not in observations:
+            raise RuntimeError("GRF text custom byte-80 translation missing")
+    return observations
+
+
+def grf_property(feature: int, local: int, prop: int, value: bytes) -> bytes:
+    """One Action 0 property, retaining extended local IDs."""
+    encoded = bytes((local,)) if local < 255 else b"\xff" + struct.pack("<H", local)
+    return bytes((0, feature, 1, 1)) + encoded + bytes((prop,)) + value
+
+
+def sprite_binding(
+    feature: int,
+    ids: Sequence[int],
+    cargos: Sequence[tuple[int, int]],
+    default: int,
+    override: bool = False,
+) -> bytes:
+    """Action 3 encoding; generic callbacks intentionally use the ignored cargo byte."""
+    encoded = b"".join(
+        bytes((local,)) if local < 255 else b"\xff" + struct.pack("<H", local)
+        for local in ids
+    )
+    return (
+        bytes((3, feature, len(ids) | (128 if override else 0)))
+        + encoded
+        + bytes((len(cargos),))
+        + b"".join(struct.pack("<BH", cargo, group) for cargo, group in cargos)
+        + struct.pack("<H", default)
+    )
+
+
+def binding_fixtures(folder: Path) -> None:
+    """Saves erase binding identity/order and partial parse history; earlier GRFs omit these handlers."""
+    main = [
+        info(b"BD52"),
+        action2(0, 210, [(0x8091, 0, 255)], 0x8091),
+        action2(0, 211, [(0x8092, 0, 255)], 0x8092),
+    ]
+    main += [
+        sprite_binding(0, [0, 1], [(0, 210), (255, 211), (254, 256)], 210),
+        sprite_binding(0, [27], [(0, 211)], 211, True),
+        sprite_binding(0, [1], [], 211),
+        sprite_binding(0, [27], [(255, 210)], 210, True),
+    ]
+    for feature, value in (
+        (4, b"BS52"),
+        (7, b"\0"),
+        (9, b"\0"),
+        (10, b"\0"),
+        (13, b"\0"),
+        (15, b"BO52"),
+        (16, b"R052"),
+        (17, b"\0"),
+        (18, b"D052"),
+        (19, b"T052"),
+        (20, b"BR52"),
+        (21, b"badge/bindings52\0"),
+    ):
+        main.append(grf_property(feature, 0, 8, value))
+    for feature in (4, 5, 7, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20, 21):
+        main += [
+            action2(feature, 210, [(0x8091, 0, 255)], 0x8091),
+            action2(feature, 211, [(0x8092, 0, 255)], 0x8092),
+        ]
+        if feature in (4, 20):
+            cargos = [(0, 210), (254, 211), (255, 210), (254, 256)]
+        elif feature in (16, 18, 19, 21):
+            cargos = [(0, 210), (255, 211)]
+        else:
+            cargos = [(255, 210), (0, 211)]
+        main += [
+            sprite_binding(
+                feature,
+                [0, 255],
+                cargos,
+                211 if feature in (7, 9, 10, 13, 15, 17, 21) else 210,
+            ),
+            sprite_binding(
+                feature,
+                [0],
+                [(255 if feature not in (16, 18, 19, 21) else 0, 211)],
+                210 if feature in (7, 9, 10, 13, 15, 17, 21) else 211,
+            ),
+        ]
+    # Nonzero unsupported features are still marked; an out-of-range feature is not.
+    main += [bytes((3, 8, 1)), bytes((3, 254, 1))]
+    histories = [
+        ("bindings-partial-ids", [info(b"BP52"), bytes((3, 0, 2, 2))]),
+        (
+            "bindings-after-ids",
+            [
+                info(b"BO52"),
+                action2(0, 210, [(0x8094, 0, 255)], 0x8094),
+                sprite_binding(0, [27], [], 210, True),
+            ],
+        ),
+        (
+            "bindings-partial-group",
+            [
+                info(b"BQ52"),
+                action2(0, 210, [(0x8095, 0, 255)], 0x8095),
+                sprite_binding(0, [3], [(0, 210)], 210)[:-2],
+            ],
+        ),
+        (
+            "bindings-after-group",
+            [
+                info(b"BR52"),
+                action2(0, 210, [(0x8096, 0, 255)], 0x8096),
+                sprite_binding(0, [27], [], 210, True),
+            ],
+        ),
+    ]
+    for name, actions in [
+        ("bindings-empty", [info(b"BE52"), bytes((3, 0, 128))]),
+        ("bindings-main", main),
+        *histories,
+        (
+            "bindings-generic-a",
+            [
+                info(b"BG52"),
+                action2(1, 210, [(0x8097, 0, 255)], 0x8097),
+                bytes((3, 1, 0, 123, 210, 0)),
+            ],
+        ),
+        (
+            "bindings-generic-b",
+            [
+                info(b"BH52"),
+                action2(1, 210, [(0x8098, 0, 255)], 0x8098),
+                bytes((3, 1, 0, 99, 210, 0)),
+            ],
+        ),
+    ]:
+        (folder / f"{name}.grf").write_bytes(grf(actions, 2))
+
+
+def binding_observations(log: list[str], phases: tuple[str, ...]) -> list[str]:
+    """Reject missing handlers/order/flags before comparing normalized roots and RNG."""
+    observations = [line for line in log if line.startswith("LOADING binding ")]
+    expected = {("standard", str(feature)) for feature in (7, 9, 10, 13, 15, 17)}
+    expected |= {("station", str(feature)) for feature in (4, 20)}
+    expected |= {("engine", str(local)) for local in (0, 1, 2, 3, 27)}
+    expected |= {("override", str(index)) for index in range(6)}
+    expected |= {("selected", str(local)) for local in range(4)}
+    expected |= {("leaf", str(feature)) for feature in (5, 11, 16, 18, 19)}
+    expected |= {
+        ("flags", grfid)
+        for grfid in ("BE52", "BD52", "BG52", "BH52", "BP52", "BO52", "BQ52", "BR52")
+    }
+    expected |= {("badge", ""), ("generic", ""), ("rng", "")}
+    lengths = {
+        "standard": 9,
+        "station": 10,
+        "engine": 10,
+        "override": 9,
+        "selected": 6,
+        "leaf": 7,
+        "flags": 7,
+        "badge": 6,
+        "generic": 6,
+        "rng": 8,
+    }
+    overrides = [
+        (0, 146, "0,1,"),
+        (64, 146, "0,1,"),
+        (65, 145, "1,"),
+        (64, 145, "1,"),
+        (64, 148, "2,0,"),
+        (64, 150, "3,"),
+    ]
+    features = sum(
+        1 << feature
+        for feature in (0, 4, 5, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20, 21)
+    )
+    for phase in phases:
+        rows = [
+            line.split()
+            for line in observations
+            if line.startswith(f"LOADING binding {phase} ")
+        ]
+        keys: set[tuple[str, str]] = set()
+        for row in rows:
+            kind = row[3]
+            if kind not in lengths or len(row) != lengths[kind]:
+                raise RuntimeError("malformed binding observation")
+            key = (
+                kind,
+                row[5]
+                if kind == "override"
+                else ""
+                if kind in ("badge", "generic", "rng")
+                else row[4],
+            )
+            if key in keys:
+                raise RuntimeError("duplicate binding observation")
+            keys.add(key)
+            if kind == "override":
+                if (
+                    row[4] != "27"
+                    or (int(row[6]), int(row[7]), row[8]) != overrides[int(row[5])]
+                ):
+                    raise RuntimeError(
+                        "wagon override publication/history order differs"
+                    )
+            elif kind == "flags":
+                status = 1 if row[4] in ("BE52", "BP52", "BQ52") else 4
+                flags = (
+                    0
+                    if row[4] in ("BG52", "BH52")
+                    else features
+                    if row[4] == "BD52"
+                    else 1
+                )
+                if int(row[5]) != status or int(row[6], 16) != flags:
+                    raise RuntimeError(
+                        "generic/unsupported/partial feature flags differ"
+                    )
+            elif kind == "leaf" and int(row[6]) != 146:
+                raise RuntimeError("native binding leaf did not replace its group")
+            elif kind == "engine":
+                groups = {
+                    0: (145, 145, 146),
+                    1: (145, 146, 146),
+                    2: (-1, -1, -1),
+                    3: (149, -1, -1),
+                    27: (-1, -1, -1),
+                }
+                if tuple(map(int, row[7:])) != groups[int(row[4])]:
+                    raise RuntimeError(
+                        "engine cargo/default/purchase partial publication differs"
+                    )
+            elif kind == "rng" and not all(
+                0 <= int(value) <= 0xFFFFFFFF for value in row[4:]
+            ):
+                raise RuntimeError("binding RNG observation missing")
+        if keys != expected:
+            raise RuntimeError(
+                "binding handlers, override order or flags missing: " + phase
+            )
+    return observations

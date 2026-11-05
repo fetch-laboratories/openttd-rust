@@ -13,5 +13,4 @@ struct OpenTTDAct3CargoServices {
 	void (*mapped)(uint32_t, CargoType) noexcept OPENTTD_SERVICE_DEFAULT(mapped);
 };
 const OpenTTDAct3CargoServices &GetAct3CargoServices() noexcept;
-extern "C" CargoType openttd_rust_act3_translate_cargo(const OpenTTDAct3CargoServices *, GrfSpecFeature, uint8_t, const GRFFile *);
 #endif
