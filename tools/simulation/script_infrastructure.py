@@ -18,9 +18,13 @@ from . import core
 AI_FOLDER = "script-infrastructure-ai"
 PROBE = "probe.nut"
 CONSOLE = ["start_ai MigrationInfra", "unpause"]
+# The per-tile sweeps need many opcodes; a larger budget and the fastest AI
+# speed finish them in fewer ticks than the default limits.
 SETTINGS = {
     "game_scripts": {"MigrationInfraGS": ""},
     "gui": {"ai_developer_tools": "true"},
+    "script": {"script_max_opcode_till_suspend": "250000"},
+    "difficulty": {"competitor_speed": "4"},
 }
 WHO = ("ai", "gs.deity", "gs.company", "gs.invalid")
 # Each probe ends with this record; absence means a script stopped early.
