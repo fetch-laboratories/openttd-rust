@@ -291,6 +291,10 @@ def collect(out, migration):
         != manifest["profile_sha256"]
     ):
         sys.exit("instruction profile changed after preparation")
+    if (out / "observations.jsonl").exists():
+        # summarize reads every observation in the bundle, so an earlier
+        # rejected collection would reject this one too.
+        sys.exit("bundle already collected; prepare a fresh one")
     env = migration.environment()
     if env.get("LD_LIBRARY_PATH", "") != manifest["ld_library_path"]:
         sys.exit("LD_LIBRARY_PATH differs from preparation")
