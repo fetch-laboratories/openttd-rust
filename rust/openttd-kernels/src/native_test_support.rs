@@ -491,26 +491,6 @@ pub unsafe extern "C" fn openttd_test_station_tree_sequence(
     observe(&tree, 44);
 }
 
-/// Exercise the production pending-replacement drain with native fixture tables.
-/// # Safety
-/// Live serialized service tables and caller-owned cost, as in the scheduler.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_fleet_pending_drain(
-    pending: *const crate::fleet::pending::Services,
-    transaction: *const crate::fleet::transactions::Services,
-    group: *const crate::fleet::GroupServices,
-    cost: *mut (),
-) {
-    unsafe { crate::fleet::pending::drain(pending, transaction, group, cost) }
-}
-/// Seed and reenter the production pending map from native fixture callbacks.
-/// # Safety
-/// Serialized test access, with no pending-map borrow spanning this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_fleet_pending_add(id: u32, leave: bool) {
-    unsafe { crate::fleet::pending::add(id, leave) };
-}
-
 // Mixed widths force padding; the recursive pointer checks the generated native type.
 crate::abi::shared_records! {
     fn abi_record;

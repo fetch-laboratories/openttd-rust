@@ -40,6 +40,26 @@ pub unsafe extern "C" fn openttd_rust_fleet_pending_clear() {
 pub(crate) unsafe fn add(id: u32, leave: bool) {
     unsafe { (&mut *PENDING.get()).insert(id, leave) };
 }
+/// Iterate the live pending map without retaining an entry across the action.
+/// # Safety
+/// Serialized access; the action may insert or overwrite entries synchronously.
+unsafe fn for_each_pending(mut action: impl FnMut(u32, bool)) {
+    let mut from = 0;
+    loop {
+        let item = unsafe {
+            (&*PENDING.get())
+                .range(from..)
+                .next()
+                .map(|(&id, &leave)| (id, leave))
+        };
+        let Some((id, leave)) = item else {
+            break;
+        };
+        from = id + 1;
+        action(id, leave);
+    }
+}
+
 /// Drain in ascending IDs; newly inserted later keys remain visible this tick.
 /// # Safety
 /// Static noexcept services, serial game thread and a native caller-owned cost.
@@ -54,18 +74,7 @@ pub(crate) unsafe fn drain(
     let t = unsafe { &*transaction };
     let g = unsafe { &*group };
     let previous = unsafe { (g.current_company)() };
-    let mut from = 0;
-    loop {
-        let item = unsafe {
-            (&*PENDING.get())
-                .range(from..)
-                .next()
-                .map(|(&id, &leave)| (id, leave))
-        };
-        let Some((id, leave)) = item else {
-            break;
-        };
-        from = id + 1;
+    let visit = |id, leave| {
         let v = crate::fleet::record(g, unsafe { (g.vehicle)(id) });
         let owner = v.owner();
         unsafe { (w.set_current)(owner) };
@@ -85,16 +94,16 @@ pub(crate) unsafe fn drain(
             (w.subtract)(reserve.wrapping_neg());
         }
         if !unsafe { (t.local)() } {
-            continue;
+            return;
         }
         if unsafe { (t.success)(cost) } {
             let money = unsafe { (t.money)(cost) };
             unsafe { ((*g.shared).cost_animation)(x, y, z, money) };
-            continue;
+            return;
         }
         let mut error = unsafe { (t.error)(cost) };
         if error == t.nothing || error == INVALID_STRING {
-            continue;
+            return;
         }
         if error == w.cash {
             error = w.limit;
@@ -104,7 +113,8 @@ pub(crate) unsafe fn drain(
         } else {
             unsafe { (w.failed_news)(id, error) };
         }
-    }
+    };
+    unsafe { for_each_pending(visit) };
     unsafe { (w.set_current)(previous) };
 }
 
@@ -120,4 +130,48 @@ crate::abi::layouts! {
         cash,
         limit,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pending_iteration_observes_later_insertions_and_overwrites() {
+        // This test retains no pending-map entry while reentering insertion.
+        unsafe { openttd_rust_fleet_pending_clear() };
+        for (id, leave) in [(5, true), (3, false), (7, true)] {
+            unsafe { add(id, leave) };
+        }
+        let mut trace = Vec::new();
+        unsafe {
+            for_each_pending(|id, leave| {
+                trace.push((id, leave));
+                if id == 5 {
+                    add(9, true);
+                    add(2, true);
+                    add(5, false);
+                }
+                if id == 9 {
+                    add(crate::vehicle_type::VehicleID::INVALID.0, false);
+                }
+            });
+        }
+        assert_eq!(
+            trace,
+            [
+                (3, false),
+                (5, true),
+                (7, true),
+                (9, true),
+                (0xFFFFF, false)
+            ]
+        );
+        // Earlier/current keys remain stored, but are not revisited this tick.
+        unsafe {
+            assert_eq!((&*PENDING.get()).get(&2), Some(&true));
+            assert_eq!((&*PENDING.get()).get(&5), Some(&false));
+            openttd_rust_fleet_pending_clear();
+        }
+    }
 }
