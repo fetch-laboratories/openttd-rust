@@ -1,4 +1,4 @@
-"""Pinned community scripts and a vanilla long-game save for #507."""
+"""Pinned community inputs and a vanilla long-game save for #507."""
 
 import argparse
 import gzip
@@ -34,10 +34,11 @@ class Package:
     metadata: str
     publisher: str
     dependencies: list[str]
+    archive_filename: str = ""
 
     @property
     def filename(self) -> str:
-        return f"{self.uid}-{self.name}-{self.version}.tar.gz"
+        return self.archive_filename or f"{self.uid}-{self.name}-{self.version}.tar.gz"
 
     @property
     def url(self) -> str:
@@ -81,8 +82,15 @@ def packages() -> list[Package]:
     ]
 
 
+def ai_packages_sha256() -> str:
+    """The vanilla save pins AI inputs independently of the NewGRF corpus."""
+    rows = json.loads((INPUTS / "packages.json").read_text())
+    scripts = [row for row in rows if row["kind"] != "newgrf"]
+    return hashlib.sha256((json.dumps(scripts, indent=2) + "\n").encode()).hexdigest()
+
+
 def fetch() -> dict[str, Path]:
-    """Keep complete source archives; reject corrupted cache entries before use."""
+    """Keep complete archives; reject corrupted cache entries before use."""
     cache = core.ROOT / ".local/community-ai"
     cache.mkdir(parents=True, exist_ok=True)
     paths = {}
@@ -169,6 +177,8 @@ def install(scenario: Mapping[str, Any], run_dir: Path) -> None:
         return
     paths = fetch()
     for package in packages():
+        if package.kind == "newgrf":
+            continue
         destination = (
             run_dir / "ai" / ("library" if package.kind == "ai-library" else "")
         )
@@ -199,10 +209,7 @@ def prepare(
     provenance = json.loads(FIXTURE.with_suffix(".json").read_text())
     if record["source_sha256"] != provenance["sha256"]:
         raise RuntimeError("community save differs from its provenance")
-    if (
-        hashlib.sha256((INPUTS / "packages.json").read_bytes()).hexdigest()
-        != provenance["packages_sha256"]
-    ):
+    if ai_packages_sha256() != provenance["packages_sha256"]:
         raise RuntimeError("community packages differ from the save's provenance")
     result["community_input"] = record
     return dict(scenario, save=str(path))
@@ -360,9 +367,7 @@ def generate_fixture(destination: Path, timeout: int) -> None:
         license="GPL-2.0-only",
         scenario=scenario,
         sha256=hashlib.sha256(packed).hexdigest(),
-        packages_sha256=hashlib.sha256(
-            (INPUTS / "packages.json").read_bytes()
-        ).hexdigest(),
+        packages_sha256=ai_packages_sha256(),
         command="python3 -m tools.simulation.community_ai generate",
         end_moment=core.save_moment(run["snapshots"][-1]),
     )
@@ -378,7 +383,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=7200)
     args = parser.parse_args()
     if args.action == "fetch":
-        print(f"Validated {len(fetch())} community source packages")
+        print(f"Validated {len(fetch())} community input packages")
     else:
         generate_fixture(FIXTURE, args.timeout)
 
