@@ -221,7 +221,6 @@ pub struct Leaves {
     pub path_clear: extern "C" fn(u32),
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
-    pub cache: extern "C" fn(u32),
     pub play_sound: extern "C" fn(u32),
     pub yapf_reverse: extern "C" fn(u32, bool) -> ReverseResult,
     pub yapf_choose: extern "C" fn(u32, u32) -> TrackResult,
@@ -810,7 +809,7 @@ impl Game<'_> {
                             != (self.leaves.water_class)(new_tile)
                         {
                             crate::witness::hit(crate::witness::SHIP_WATER_CHANGE);
-                            (self.leaves.cache)(id);
+                            self.cache(id, v);
                         }
                     }
                     let diff = u32::from(direction)
@@ -1217,7 +1216,6 @@ crate::abi::layouts! {
         path_clear,
         viewport,
         base_viewport,
-        cache,
         play_sound,
         yapf_reverse,
         yapf_choose,
