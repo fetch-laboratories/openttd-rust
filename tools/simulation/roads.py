@@ -4,8 +4,12 @@ import hashlib
 import json
 import lzma
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
+from types import ModuleType
+from typing import Any, NotRequired, cast
 
+from . import core, signals
 from .core import ROOT, copy_runtime, decode_element, patch, read_save, run_game
 
 ROAD = "roadveh[0]/"
@@ -13,13 +17,22 @@ COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
 
-def uses_ai(scenario):
+class Scenario(signals.Scenario):
+    """road_commands scenarios reuse the signal fixture (prepare_commands)."""
+
+    roads: NotRequired[str]
+    road_commands: NotRequired[str]
+    crash_expiry: NotRequired[str]
+    road_setup: NotRequired[str]
+
+
+def uses_ai(scenario: Scenario) -> bool | str | None:
     return scenario.get("roads") in ("level-crossing", "flooding") or scenario.get(
         "road_setup"
     )
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
         ai = run_dir / "ai/road-crossing"
         shutil.copytree(scenario["scenario_ai"], ai)
@@ -31,9 +44,9 @@ def install(scenario, run_dir):
             shutil.copy2(ai / "setup.nut", ai / "main.nut")
 
 
-def scenarios(soak):
+def scenarios(soak: bool) -> list[Scenario]:
     # These transient windows stay short in soak; play saves cover longer runs.
-    cases = [
+    cases: list[Scenario] = [
         {
             "name": f"roads-{operation}",
             "kind": "save",
@@ -74,7 +87,12 @@ def scenarios(soak):
     ]
     crossing = next(case for case in cases if case["roads"] == "level-crossing")
     cases.extend(
-        dict(crossing, name=f"roads-crash-{phase}", ticks=ticks, crash_expiry=phase)
+        {
+            **crossing,
+            "name": f"roads-crash-{phase}",
+            "ticks": ticks,
+            "crash_expiry": phase,
+        }
         for phase, ticks in (("before-expiry", 2238), ("expiry", 2239))
     )
     cases.extend(
@@ -98,11 +116,16 @@ def scenarios(soak):
     return cases
 
 
-def check_tram(scenario, run, mode, role, result, lines):
+def check_tram(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+    lines: list[str],
+) -> None:
     """Both executables: the buildable dead end holds its tram, unturned, at the
     last X_SW frame. Candidate: the controller's build query had both outcomes."""
-    from . import core
-
     ends = {
         int(y): (int(v), int(tile))
         for y, v, tile in (
@@ -110,7 +133,9 @@ def check_tram(scenario, run, mode, role, result, lines):
         )
     }
     vehicle, tile = ends.get(4, (None, None))
-    final = rows(run["snapshots"][-1]).get(vehicle) if run["snapshots"] else None
+    final = (
+        rows(run["snapshots"][-1]).get(cast(int, vehicle)) if run["snapshots"] else None
+    )
     pose = final and (
         final[COMMON + "tile"],
         final[ROAD + "state"],
@@ -118,32 +143,40 @@ def check_tram(scenario, run, mode, role, result, lines):
     )
     if pose != (tile, 8, 15):
         result["problems"].append(f"{mode}/{role}: tram does not wait at its dead end")
-    result[f"{mode}_{role}_tram"] = core.branch_witnesses(
+    core.findings(result)[f"{mode}_{role}_tram"] = core.branch_witnesses(
         scenario, run, role, "road", ("tram_build", "tram_refused")
     )
 
 
-def rows(path):
+def rows(path: Path) -> dict[int, core.Row]:
     chunk = read_save(path)["VEHS"]
     return {
         index: fields
         for index, body in chunk["elements"]
-        if (fields := decode_element(chunk, body))["type"] == 1
+        if (fields := cast(core.Row, decode_element(chunk, body)))["type"] == 1
     }
 
 
-def path_cache(row):
+def path_cache(row: core.Row) -> list[tuple[int, int]]:
     return [
         (row[f"{ROAD}path[{index}]/trackdir"], row[f"{ROAD}path[{index}]/tile"])
         for index in range(sum(key.endswith("/trackdir") for key in row))
     ]
 
 
-def position(row):
+def position(row: core.Row) -> tuple[int, ...]:
     return tuple(row[COMMON + name] for name in ("tile", "x_pos", "y_pos"))
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if scenario.get("road_commands"):
         return prepare_commands(scenario, binaries, builds, out, timeout, env, result)
     if "roads" not in scenario:
@@ -158,7 +191,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if packed[:4] == b"OTTN"
         else b"OTTN" + packed[4:8] + lzma.decompress(packed[8:])
     )
-    operation, changes = scenario["roads"], {}
+    operation = scenario["roads"]
+    changes: dict[str, dict[int, dict[str, int]]] = {}
     if operation == "no-destination":
         # The existing head is approaching a junction. Remove its order list
         # and active destination so ordinary control picks a random track.
@@ -251,7 +285,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     # for threads. Keep their relative join order, beyond these transient windows.
     jobs = read_save(unpacked)["LGRJ"]
     changes["LGRJ"] = {
-        index: {"join_date": decode_element(jobs, body)["join_date"] + 32}
+        index: {
+            "join_date": cast(core.Row, decode_element(jobs, body))["join_date"] + 32
+        }
         for index, body in jobs["elements"]
     }
     fixture = folder / "road-input.sav"
@@ -262,8 +298,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         console=scenario["console"],
     )
     if operation == "reload":
+        setup: Scenario = {**scenario, "save": str(fixture), "ticks": 1}
         run = run_game(
-            dict(scenario, save=str(fixture), ticks=1),
+            setup,
             binaries["reference"],
             builds["reference"],
             folder / "reference",
@@ -282,8 +319,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         fixture = folder / "reload-input.sav"
         record["reload"] = patch(reference, fixture, {})
         record["reload"]["head"] = 65
-    result["road_input"] = record
-    return dict(scenario, save=str(fixture))
+    core.findings(result)["road_input"] = record
+    return {**scenario, "save": str(fixture)}
 
 
 def cleanup_complete(lines: list[str]) -> bool:
@@ -299,10 +336,14 @@ def cleanup_complete(lines: list[str]) -> bool:
     ] and done == [[str(4 * 34 * 4 * 259 + 6 * 256), "true"]]
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario.get("roads"):
-        from . import core
-
         required = ["road_power", "road_weight"]
         operation = scenario["roads"]
         occupancy = ["insert", "same_bucket", "reset"]
@@ -317,12 +358,10 @@ def check(scenario, run, mode, role, result):
             required += ["accelerate", "uphill", "downhill"]
         if operation in ("level-crossing", "flooding"):
             required += ["flood" if operation == "flooding" else "crash"]
-        result[f"{mode}_{role}_ground"] = core.branch_witnesses(
+        core.findings(result)[f"{mode}_{role}_ground"] = core.branch_witnesses(
             scenario, run, role, "ground", required
         )
     if scenario.get("road_commands"):
-        from . import core
-
         lines = [line for line in run["log"] if line.startswith("ROADCMD ")]
         required = {"reload": "ROADCMD reload ", "tram": "ROADCMD tram-end "}.get(
             scenario["road_commands"], "ROADCMD rng "
@@ -426,8 +465,6 @@ def check(scenario, run, mode, role, result):
     before, after = rows(source), rows(final)
     chunks = read_save(source)
     operation = scenario["roads"]
-    from . import core
-
     required = (
         ["pixel_z", "track_road"]
         if operation in ("original", "depot-service", "reload")
@@ -437,16 +474,16 @@ def check(scenario, run, mode, role, result):
         required += ["road_depot_enter_0"]
     if operation == "reload":
         required += ["road_stop_admit"]
-    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+    core.findings(result)[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
         scenario, run, role, "movement", required
     )
-    witnesses = {}
+    witnesses: dict[Any, Any] = {}
 
-    def require(condition, message):
+    def require(condition: object, message: str) -> None:
         if not condition:
             raise RuntimeError(f"road {operation}: {message}")
 
-    def observe(index):
+    def observe(index: int) -> tuple[core.Row, core.Row]:
         keys = [
             ROAD + key
             for key in ("state", "frame", "blocked_ctr", "overtaking", "overtaking_ctr")
@@ -479,13 +516,13 @@ def check(scenario, run, mode, role, result):
         }
         return before[index], after[index]
 
-    def map_tile(tile):
+    def map_tile(tile: int) -> tuple[int, int]:
         values = {cid: chunks[cid]["raw"][tile] for cid in ("MAPT", "MAP5")}
         witnesses.setdefault("map", {})[tile] = values
         return values["MAPT"] >> 4, values["MAP5"]
 
     pats = read_save(final)["PATS"]
-    model = decode_element(pats, pats["elements"][0][1])[
+    model = cast(core.Row, decode_element(pats, pats["elements"][0][1]))[
         "vehicle.roadveh_acceleration_model"
     ]
     require(
@@ -516,7 +553,9 @@ def check(scenario, run, mode, role, result):
         )
         depot, tile = (2, 6206) if refresh else (5, 3091)
         depots = chunks["DEPT"]
-        depot_row = decode_element(depots, dict(depots["elements"])[depot])
+        depot_row = cast(
+            core.Row, decode_element(depots, dict(depots["elements"])[depot])
+        )
         require(
             depot_row["xy"] == tile
             and b[COMMON + "current_order.dest"] == depot
@@ -526,7 +565,7 @@ def check(scenario, run, mode, role, result):
             "service routing decision or implicit-order suppression differs",
         )
         date = read_save(final)["DATE"]
-        fields = decode_element(date, date["elements"][0][1])
+        fields = cast(core.Row, decode_element(date, date["elements"][0][1]))
         rng = tuple(fields[f"random_state[{i}]"] for i in (0, 1))
         require(
             rng == ((2072642750, 3270530758) if refresh else (2876180153, 3044549951)),
@@ -552,7 +591,7 @@ def check(scenario, run, mode, role, result):
         )
         witnesses["random_track"] = b[ROAD + "state"]
         date = read_save(final)["DATE"]
-        fields = decode_element(date, date["elements"][0][1])
+        fields = cast(core.Row, decode_element(date, date["elements"][0][1]))
         witnesses["shared_rng"] = [fields[f"random_state[{i}]"] for i in range(2)]
         # Frozen unchanged-reference result; removing this site's Random draw
         # changes both DATE seeds and chooses state 5 instead of 10.
@@ -567,7 +606,7 @@ def check(scenario, run, mode, role, result):
         tile, roadbits = map_tile(10005)
         require(tile == 2 and roadbits & 192 == 64, "tile is not a level crossing")
         train = next(
-            decode_element(chunks["VEHS"], body)
+            cast(core.Row, decode_element(chunks["VEHS"], body))
             for index, body in chunks["VEHS"]["elements"]
             if index == 17
         )
@@ -597,7 +636,9 @@ def check(scenario, run, mode, role, result):
         if expiry:
             final_chunks = read_save(final)
             date = final_chunks["DATE"]
-            tick = decode_element(date, date["elements"][0][1])["tick_counter"]
+            tick = cast(core.Row, decode_element(date, date["elements"][0][1]))[
+                "tick_counter"
+            ]
             require(
                 a[COMMON + "next"] == 0
                 and a[COMMON + "tick_counter"] == 129
@@ -667,7 +708,7 @@ def check(scenario, run, mode, role, result):
             "ordinary canal-removal command missing",
         )
         date = final_chunks["DATE"]
-        fields = decode_element(date, date["elements"][0][1])
+        fields = cast(core.Row, decode_element(date, date["elements"][0][1]))
         rng = [fields[f"random_state[{i}]"] for i in range(2)]
         require(
             fields["tick_counter"] == 16080 and rng == [1209897734, 2054087316],
@@ -709,7 +750,7 @@ def check(scenario, run, mode, role, result):
             new and all(tile not in (16383, 10814) for _, tile in new),
             "forced miss did not reconstruct",
         )
-        settings = decode_element(pats, pats["elements"][0][1])
+        settings = cast(core.Row, decode_element(pats, pats["elements"][0][1]))
         require(
             settings["pf.yapf.road_curve_penalty"] == 800
             and settings["pf.yapf.road_slope_penalty"] == 4000
@@ -823,10 +864,12 @@ def check(scenario, run, mode, role, result):
                 and position(a) == position(b),
                 "reference reload did not retain a live path and advance the blocked counter",
             )
-    result[f"{mode}_{role}_roads"] = witnesses
+    core.findings(result)[f"{mode}_{role}_roads"] = witnesses
 
 
-def prepare_crossing(migration, out, operation="crossing"):
+def prepare_crossing(
+    migration: ModuleType, out: Path, operation: str = "crossing"
+) -> None:
     """Freeze reference-built road crash fixtures through ordinary commands."""
     runtime = out / "reference-runtime"
     with migration.reference_lock(shared=True):
@@ -850,21 +893,27 @@ def prepare_crossing(migration, out, operation="crossing"):
                 "VEHS": {21: {COMMON + "vehstatus": 10}},
                 "LGRJ": {
                     index: {
-                        "join_date": decode_element(chunks["LGRJ"], body)["join_date"]
+                        "join_date": cast(
+                            core.Row, decode_element(chunks["LGRJ"], body)
+                        )["join_date"]
                         + 32
                     }
                     for index, body in chunks["LGRJ"]["elements"]
                 },
             },
         )
-    scenario = {
-        "kind": "save",
-        "save": str(fixture_source),
-        "ticks": 1000,
-        "road_setup": operation,
-        "scenario_ai": str(scripts),
-        "console": ["unpause"],
-    }
+    # A preparation game outside the scenario list: it has no name.
+    scenario = cast(
+        Scenario,
+        {
+            "kind": "save",
+            "save": str(fixture_source),
+            "ticks": 1000,
+            "road_setup": operation,
+            "scenario_ai": str(scripts),
+            "console": ["unpause"],
+        },
+    )
     run = run_game(
         scenario,
         binary,
@@ -911,8 +960,6 @@ if __name__ == "__main__":
     import sys
 
     import migration
-
-    from . import core
 
     if sys.argv[1:] not in (["--prepare-crossing"], ["--prepare-flooding"]):
         raise SystemExit(
@@ -984,9 +1031,7 @@ COMMAND_BRANCHES = (
 )
 
 
-def game_environment(scenario):
-    from . import core
-
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     return (
         core.WITNESS_ENVIRONMENT
         if (scenario.get("road_commands") or scenario.get("roads"))
@@ -995,12 +1040,19 @@ def game_environment(scenario):
     )
 
 
-def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
+def prepare_commands(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     # Reuse the signal fixture and its frozen-object relinking path.
-    from . import core, signals
-
+    probe: Scenario = {**scenario, "signals": "road-commands"}
     prepared = signals.prepare(
-        dict(scenario, signals="road-commands"),
+        probe,
         binaries,
         builds,
         out,
@@ -1009,9 +1061,10 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
         result,
     )
     prepared.pop("signals")
+    prepared = cast(Scenario, prepared)
     if scenario["road_commands"] != "reload":
         return prepared
-    saves = {}
+    saves: dict[str, Path] = {}
     runs = core.capture_pair(
         prepared, prepared["executables"], builds, out / scenario["name"], timeout, env
     )
@@ -1023,8 +1076,8 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
         saves["reference"], saves["candidate"], scenario["name"], 20, result["stats"]
     ):
         raise RuntimeError("road command reload input differs")
-    return dict(
-        prepared,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["road_commands inspect", "unpause"],
-    )
+    return {
+        **prepared,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": ["road_commands inspect", "unpause"],
+    }
