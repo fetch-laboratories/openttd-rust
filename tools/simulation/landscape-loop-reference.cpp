@@ -52,7 +52,7 @@ static std::unique_ptr<TileExtendedStorage[]> extended;
 static bool raw_backend, mutate;
 /* Map::size stand-in; zero selects the callback backend. */
 static uint32_t map_size;
-static const OpenTTDMapStatics map_statics{.base = &tiles, .extended = &extended, .size = &map_size, .log_x = &log_x, .assertions = true};
+static const OpenTTDMapStatics map_statics{.base = &tiles, .extended = &extended, .size = &map_size, .log_x = &log_x, .log_y = &log_y, .assertions = true};
 /* Raw station tiles store StationType::End in m6 bits 3..6, as GetStationType reads them. */
 static constexpr uint8_t STATION_END_M6 = static_cast<uint8_t>(StationType::End) << 3;
 static uint32_t feedback;
@@ -145,7 +145,6 @@ static void RustRun()
 	shared.map = &map_statics;
 	SessionFixture fixture;
 	fixture.shared.map = &map_statics;
-	fixture.services.map_log_y = []() noexcept { return log_y; };
 	fixture.loop = {settings, &batch_services};
 	if (!fixture.Run()) std::abort();
 }

@@ -398,17 +398,6 @@ void SetupEngines()
 	openttd_rust_engine_setup(&GetRustEngineLoadingServices());
 }
 
-/**
- * Determine whether an engine type is a wagon (and not a loco).
- * @param index %Engine getting queried.
- * @return Whether the queried engine is a wagon.
- */
-
-/**
- * Ensure engine is not set as the last used variant for any other engine.
- * @param engine_id Engine being removed.
- * @param type      Type of engine.
- */
 
 /**
  * Update #Engine::reliability and (if needed) update the engine GUIs.
@@ -445,38 +434,6 @@ void StartupEngines()
 	openttd_rust_engine_start_all(&EngineServices());
 }
 
-/**
- * Allows engine \a eid to be used by a company \a company.
- * @param eid The engine to enable.
- * @param company The company to allow using the engine.
- */
-
-/**
- * Forbids engine \a eid to be used by a company \a company.
- * @param eid The engine to disable.
- * @param company The company to forbid using the engine.
- */
-
-/**
- * Company \a company accepts engine \a eid for preview.
- * @param eid Engine being accepted (is under preview).
- * @param company Current company previewing the engine.
- * @param recursion_depth Recursion depth to avoid infinite loop.
- */
-
-/**
- * Get the best company for an engine preview.
- * @param e Engine to preview.
- * @return Best company if it exists, #CompanyID::Invalid() otherwise.
- */
-
-/**
- * Checks if a vehicle type is disabled for all/ai companies.
- * @param type The vehicle type which shall be checked.
- * @param ai If true, check if the type is disabled for AI companies, otherwise check if
- *           the vehicle type is disabled for human companies.
- * @return Whether or not a vehicle type is disabled.
- */
 
 /** Daily check to offer an exclusive engine preview to the companies. */
 static const IntervalTimer<TimerGameCalendar> _calendar_engines_daily({TimerGameCalendar::DAY, TimerGameCalendar::Priority::ENGINE}, RustClockCallback{openttd_rust_clock_engine_daily, &EngineServices()});
@@ -528,11 +485,6 @@ CommandCost CmdEngineCtrl(DoCommandFlags flags, EngineID engine_id, CompanyID co
 	return openttd_rust_engine_control(&EngineServices(), Engine_resolve(engine_id.base()), company_id.base(), allow, flags.Test(DoCommandFlag::Execute)) == 0 ? CommandCost() : CMD_ERROR;
 }
 
-/**
- * An engine has become available for general use.
- * Also handle the exclusive engine preview contract.
- * @param e Engine generally available as of now.
- */
 
 /** Monthly update of the availability, reliability, and preview offers of the engines. */
 void CalendarEnginesMonthlyLoop()
@@ -542,12 +494,6 @@ void CalendarEnginesMonthlyLoop()
 
 static const IntervalTimer<TimerGameCalendar> _calendar_engines_monthly({TimerGameCalendar::MONTH, TimerGameCalendar::Priority::ENGINE}, RustClockCallback{openttd_rust_clock_engine_monthly, &EngineServices()});
 
-
-/**
- * Is \a name still free as name for an engine?
- * @param name New name of an engine.
- * @return \c false if the name is being used already, else \c true.
- */
 
 /**
  * Rename an engine.

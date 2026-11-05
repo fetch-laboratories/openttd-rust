@@ -126,9 +126,6 @@ static bool CompareRailTypes(const RailType &first, const RailType &second)
 	return GetRailTypeInfo(first)->sorting_order < GetRailTypeInfo(second)->sorting_order;
 }
 
-/**
- * Resolve sprites of custom rail types
- */
 
 /**
  * Allocate a new rail type label
@@ -192,7 +189,6 @@ static const uint8_t _track_sloped_sprites[14] = {
  */
 
 
-
 /* MAP2 byte:    abcd???? => Signal On? Same coding as map3lo
  * MAP3LO byte:  abcd???? => Signal Exists?
  *               a and b are for diagonals, upper and left,
@@ -208,7 +204,6 @@ static const uint8_t _track_sloped_sprites[14] = {
  */
 
 
-
 /** Valid TrackBits on a specific (non-steep)-slope without foundation */
 
 /**
@@ -222,8 +217,6 @@ Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 {
 	return openttd_rust_rail_foundation(tileh, bits, RustAssertCondition);
 }
-
-
 
 
 /**
@@ -972,7 +965,6 @@ void DrawTrainDepotSprite(int x, int y, int dir, RailType railtype)
 }
 
 
-
 const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 {
 	static const OpenTTDRailServices services{
@@ -986,7 +978,6 @@ const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 	};
 	return services;
 }
-
 
 
 static bool ClickTile_Track(TileIndex tile)
@@ -1091,8 +1082,6 @@ static void GetTileDesc_Track(TileIndex tile, TileDesc &td)
 }
 
 
-
-
 /**
  * Compute number of ticks when next wagon will leave a depot.
  * Negative means next wagon should have left depot n ticks before.
@@ -1104,16 +1093,10 @@ int TicksToLeaveDepot(const Train *v)
 	return openttd_rust_movement_depot_ticks(&GetRustMovementServices(), TrainHandle(v));
 }
 
-/**
- * Tile callback routine when vehicle enters tile
- * @see vehicle_enter_tile_proc
- */
-
 
 /* Rust owns the rail track, depot and signal commands and the rail clear,
  * owner, terraform and build-above tile procs (rail_cmd.rs). Map, pools, company
- * counters and every CommandCost stay native; the original bodies remain
- * under #ifndef WITH_RUST above. */
+ * counters and command results use typed native services. */
 #include "rust/rail_command_ffi.h"
 #include "rust/services_water.h"
 #include "rust/services_newgrf.h"
@@ -1336,7 +1319,6 @@ CommandCost CmdConvertRail(DoCommandFlags flags, TileIndex tile, TileIndex area_
 	openttd_rust_rail_convert(RailServices(), &frame, RustCommandCost(&cost), RustCommandCost(&error), RustCommandCost(&ret), flags.base(), tile.base(), area_start.base(), totype, diagonal);
 	return cost;
 }
-
 
 
 static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, Axis, int)

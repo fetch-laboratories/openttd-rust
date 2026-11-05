@@ -96,7 +96,6 @@ extern "C" uint64_t openttd_orders_vehicle_status(void *ctx) noexcept
 }
 
 
-
 extern "C" uint64_t openttd_orders_ticks_per_second() noexcept
 {
 	return Ticks::TICKS_PER_SECOND;
@@ -219,15 +218,11 @@ extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
 }
 
 
-
-
-
 extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return GetVehicleCannotUseStationReason(v, Station::Get(StationID(destination)));
 }
-
 
 
 extern "C" uint64_t openttd_orders_valid_depot(uint16_t destination) noexcept
@@ -314,9 +309,6 @@ extern "C" void *openttd_orders_create_backup(void *ctx, uint32_t user) noexcept
 }
 
 
-
-
-
 extern "C" uint64_t openttd_orders_network_client() noexcept
 {
 	return _network_own_client_id;
@@ -350,8 +342,6 @@ extern "C" uint64_t openttd_orders_unique_backup_name(void *ctx) noexcept
 }
 
 
-
-
 extern "C" uint64_t openttd_orders_review_setting() noexcept
 {
 	return _settings_client.gui.order_review_system;
@@ -368,7 +358,6 @@ extern "C" uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return (RustAircraftInfoSubtype(AircraftVehInfo(EngineID(RustVehicleEngineID(v)))) & AIR_FAST) != 0;
 }
-
 
 
 extern "C" uint64_t openttd_orders_no_jet_crash() noexcept
@@ -935,20 +924,6 @@ void OrderList::DebugCheckSanity() const
 }
 #endif
 
-/**
- * Checks whether the order goes to a station or not, i.e. whether the
- * destination is a station
- * @param v the vehicle to check for
- * @param o the order to check
- * @return true if the destination is a station
- */
-
-/**
- * Delete all news items regarding defective orders about a vehicle
- * This could kill still valid warnings (for example about void order when just
- * another order gets added), but assume the company will notice the problems,
- * when they're changing the orders.
- */
 
 /**
  * Returns a tile somewhat representing the order destination (not suitable for pathfinding).
@@ -1001,11 +976,6 @@ void InsertOrder(Vehicle *v, Order &&new_o, VehicleOrderID sel_ord)
 	openttd_rust_insert_order(v, sel_ord, &new_o, &GetRustOrdersLeaves());
 }
 
-/**
- * Declone an order-list
- * @param *dst delete the orders of this vehicle
- * @param flags execution flags
- */
 
 /**
  * Delete an order from the orderlist of a vehicle.
@@ -1019,10 +989,6 @@ CommandCost CmdDeleteOrder(DoCommandFlags flags, VehicleID veh_id, VehicleOrderI
 	CommandCost result; openttd_rust_command_delete(Vehicle::GetIfValid(veh_id), sel_ord, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
 }
 
-/**
- * Cancel the current loading order of the vehicle as the order was deleted.
- * @param v the vehicle
- */
 
 /**
  * Delete an order but skip the parameter validation.
@@ -1077,13 +1043,6 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID s
 	CommandCost result; openttd_rust_command_modify(Vehicle::GetIfValid(veh), sel_ord, mof, data, flags.Test(DoCommandFlag::Execute), &result, &GetRustOrdersLeaves()); return result;
 }
 
-/**
- * Check if an aircraft has enough range for an order list.
- * @param v_new Aircraft to check.
- * @param v_order Vehicle currently holding the order list.
- * @param first First order in the source order list.
- * @return True if the aircraft has enough range for the orders, false otherwise.
- */
 
 /**
  * Clone/share/copy an order-list of another vehicle.
@@ -1177,14 +1136,6 @@ uint16_t GetServiceIntervalClamped(int interval, bool ispercent)
 	return Clamp(interval, MIN_SERVINT_DAYS, MAX_SERVINT_DAYS);
 }
 
-/**
- *
- * Check if a vehicle has any valid orders
- *
- * @return false if there are no valid orders
- * @note Conditional orders are not considered valid destination orders
- *
- */
 
 /**
  * Process a conditional order and determine the next order.

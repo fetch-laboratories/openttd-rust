@@ -33,7 +33,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
   libfontconfig-dev libharfbuzz-dev libicu-dev liblzo2-dev openttd-opengfx
 ```
 
-On this Ubuntu 26.04 x86-64 host without administrator access, `python3 tools/bootstrap-local.py` downloads packages to `.local/downloads`, extracts them to `.local/deps`, and installs Rust in `.local/cargo` and `.local/rustup`. It changes no shell profiles or system packages. It depends on host libraries and package names; it is not a portable installer.
+This host runs Ubuntu 24.04 x86-64, the release CI's `ubuntu-24.04` runners use, with the packages above plus `valgrind`, `ccache`, `unifdef` and `gdb` from apt (moved 2026-11-05). Keep `.local/deps` absent here: the driver puts it ahead of system packages on every compiler, library and pkg-config path. `python3 tools/bootstrap-local.py` is for an Ubuntu 26.04 host without administrator access; it extracts that release's packages to `.local/deps` and installs Rust in `.local/cargo` and `.local/rustup`, changing no shell profile or system package. Output built on the previous Ubuntu 26.04 host needs glibc 2.43; it is kept unused at `/mnt/storage/openttd-rust/old-host-ubuntu2604-20261105/`.
 
 | Command | What it does |
 | --- | --- |
@@ -80,6 +80,21 @@ Cache build outputs when the key covers what determines them; never cache test r
 - Install ccache or use `tools/bootstrap-local.py`. `migration/ccache.conf` uses compiler-content checks, direct mode and no sloppiness. `--no-ccache` enables an ordinary PCH build; `--ccache-bypass` keeps no-PCH flags without reuse.
 - The driver skips CMake configure when the cache has all requested `-D` values; Ninja still responds to CMake input changes. For changed configure-time environment such as a dependency prefix, use a fresh build directory or configure manually.
 - CI caches use compatible OS, architecture, baseline, compiler, ccache and configuration keys (#79). Windows and macOS also cache vcpkg binaries and use ccache 4.14.1 without PCH; MSVC uses `/Z7` (CMP0141). Emscripten builds without PCH and wraps emcc's clang with the container's ccache through `EM_COMPILER_WRAPPER`.
+
+## Output disk
+
+This host has a 220 GB SSD and a 1 TB HDD mounted at `/mnt/storage` (`/etc/fstab` label `storage`, `nofail`). Write-once output lives on the HDD behind symlinks. Caches, toolchains, the pinned original and its builds, and each worktree's `build-rust` stay on the SSD for build speed.
+
+| Path | Symlink target |
+| --- | --- |
+| Main checkout `.local/` `simulation`, `verification`, `coverage`, `deep`, `speed-pass`, `worktrees` | `/mnt/storage/openttd-rust/main-local/<name>` |
+| Each other worktree's `.local` | `/mnt/storage/openttd-rust/worktree-local/<worktree>-<id>/local` |
+
+- `.git/hooks/post-checkout` calls `.git/hooks/offload-local hook`, which links the `.local` of each new worktree, T3's included. Worktrees inside the main `.local` keep a real `.local`: `.local/worktrees` is already on the HDD, and the pinned original stays unchanged. The hook always exits 0, so it never fails `git worktree add`; without the HDD the new worktree keeps `.local` on the SSD. Both scripts are untracked and exist only on this host.
+- Removing a worktree removes only its link. Each time the hook links a new worktree, it deletes HDD output whose worktree has been gone for 24 hours. `offload-local sweep` lists that output; `--apply` deletes it now.
+- `offload-local migrate` moves a worktree's real `.local` onto the HDD, for example after `git worktree add --no-checkout` skipped the hook, and recreates a missing main-checkout link. It is idempotent. The scripts log to `/mnt/storage/openttd-rust/offload.log`.
+- If the HDD is unmounted, the main checkout's links dangle and runs fail instead of filling the SSD. Mount it and rerun.
+- In tool code, `.resolve()` can take a `.local` path off the checkout's tree, so compute `relative_to(ROOT)` from the unresolved path. `Path.rglob` follows a symlinked starting folder but not symlinked subfolders, which is why worktrees link `.local` whole.
 
 ## Simulation comparison
 
@@ -157,8 +172,8 @@ Metrics count code lines, excluding comments, directives, blank lines and Python
 `WITH_RUST` stays defined by CMake for dual-build harnesses under `tools/`.
 The pinned original remains the oracle; do not sweep its worktree or `tools/`.
 
-Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). On the
-Ubuntu 26.04 host without administrator access, obtain package 2.12-1:
+Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). Without administrator access on
+Ubuntu, obtain package 2.12-1:
 
 ```sh
 mkdir -p .local/unifdef

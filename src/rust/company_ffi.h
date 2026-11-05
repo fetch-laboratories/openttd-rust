@@ -61,14 +61,6 @@ struct OpenTTDCompanyControl {
 	bool execute;
 	uint8_t stage;
 };
-struct OpenTTDCompanyTick {
-	CompanyFinances *finances; ///< Company _cur_company_tick_index, or null.
-	size_t num_companies;
-	int32_t index, timeout;
-	uint16_t interval;
-	bool editor, named, competitor_due, networking;
-	uint8_t max_companies, max_competitors, num_ais, stage;
-};
 struct OpenTTDCompanyCompetitors {
 	size_t num_companies;
 	uint16_t interval;
@@ -78,10 +70,6 @@ struct OpenTTDCompanyCompetitors {
 struct OpenTTDEconomyMonth { uint8_t month; bool infinite_money, maintenance, fluctuating; };
 struct OpenTTDCompanyYear { CompanyFinances *local_finances; uint8_t local; bool show_finances, new_year_sound; };
 struct OpenTTDEconomySettings { int32_t year; uint32_t max_loan; uint8_t initial_interest, vehicle_costs, construction_cost; bool inflation; };
-struct OpenTTDCompanyLandscaping {
-	uint32_t terraform_per_64k, clear_per_64k, tree_per_64k, object_per_64k;
-	uint16_t terraform_burst, clear_burst, tree_burst, object_burst;
-};
 /** Finance services used by money paths and financial commands. */
 struct OpenTTDCompanyFinanceServices {
 	uint8_t (OPENTTD_RUST_CALL *current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
@@ -106,6 +94,7 @@ struct OpenTTDCompanyServices {
 	const OpenTTDCompanyIdentityServices *identity;
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
+	bool (*ai_can_start)() noexcept OPENTTD_SERVICE_DEFAULT(ai_can_start);
 	bool (*allow_list_add)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_add);
 	bool (*allow_list_remove)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_remove);
 	void (*assign_company_context)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_company_context);
@@ -116,6 +105,7 @@ struct OpenTTDCompanyServices {
 	const OpenTTDSettingServices &(*settings)() noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	OpenTTDCompanyRef (OPENTTD_RUST_CALL *company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
 	size_t (OPENTTD_RUST_CALL *company_count)() noexcept OPENTTD_SERVICE_DEFAULT(company_count);
+	bool (*competitor_fired)() noexcept OPENTTD_SERVICE_DEFAULT(competitor_fired);
 	bool (OPENTTD_RUST_CALL *can_allocate_company)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate_company);
 	uint8_t (OPENTTD_RUST_CALL *local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	bool (OPENTTD_RUST_CALL *network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);

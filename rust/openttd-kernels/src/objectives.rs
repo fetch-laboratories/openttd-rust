@@ -75,7 +75,6 @@ pub struct Services {
     pub element_allocate: extern "C" fn(u32, u8, StoryPageID) -> StoryPageElementID,
     pub element_next: extern "C" fn(u32) -> *mut StoryPageElement,
     pub element_id: unsafe extern "C" fn(*mut StoryPageElement) -> StoryPageElementID,
-    pub page_cleaning: extern "C" fn() -> bool,
     pub table_can_allocate: extern "C" fn() -> bool,
     pub table_allocate: unsafe extern "C" fn(
         *const EncodedString,
@@ -120,7 +119,7 @@ impl Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStoryState" ["probe"] => StoryState { page_next_sort, element_next_sort };
-    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, page_cleaning, table_can_allocate, table_allocate, entry_allocate, orders, client_valid, subsidy, road_commands, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
+    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, table_can_allocate, table_allocate, entry_allocate, orders, client_valid, subsidy, road_commands, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
 }
 
 // Native loader aliases and Rust control share one process-wide allocation. Accesses
@@ -675,21 +674,13 @@ pub unsafe extern "C" fn openttd_rust_show_story_page(
         true
     }
 }
-unsafe fn delete_elements(s: &Services, page: StoryPageID) {
+pub(crate) unsafe fn delete_elements(s: &Services, page: StoryPageID) {
     unsafe {
         each_element(s, |element| {
             if *(s.element_page)(element) == page {
                 (s.element_destroy)(element);
             }
         });
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_story_page_destruct(s: &Services, id: StoryPageID) {
-    if !(s.page_cleaning)() {
-        unsafe {
-            delete_elements(s, id);
-        }
     }
 }
 #[unsafe(no_mangle)]

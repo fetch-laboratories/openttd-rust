@@ -21,6 +21,7 @@ include = [
     "tools/validation_execution.py",
     "tools/simulation/clocks.py",
     "tools/simulation/objectives.py",
+    "tools/simulation/newgrf_loading.py",
     "tools/simulation/signs.py",
     "tools/simulation/session.py",
     "tools/simulation/generated.py",

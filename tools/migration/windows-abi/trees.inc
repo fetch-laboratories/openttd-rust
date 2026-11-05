@@ -102,15 +102,17 @@ static void Trees()
 	openttd_rust_trees_initialize();
 	CHECK(*counter == 0);
 	*counter = 37; // Same boundary write made by DATE/TTD descriptors.
-	static uint32_t tick_size;
 	const auto Tick = [&](uint32_t size) {
-		tick_size = size;
 		SessionFixture fixture;
 		auto tick_shared = shared;
-		tick_shared.map = fixture.shared.map;
+		OpenTTDFixtureMap tick_map{6};
+		tick_map.size = size;
+		fixture.extra_tree_placement = 2;
+		tick_shared.map = &tick_map.statics;
+		tick_shared.settings = &fixture.settings;
+		tick_shared.tick_counter = []() noexcept -> uint64_t { return 0; };
 		fixture.services.shared = &tick_shared;
 		fixture.services.trees = &tree_probe_services;
-		fixture.services.tree_tick = []() noexcept { return OpenTTDTreeTickSettings{.tick_counter = 0, .size = tick_size, .climate = 0, .extra = 2}; };
 		CHECK(fixture.Run());
 	};
 	Tick(4096);

@@ -17,6 +17,7 @@ This file holds what every agent needs. The routing table points to the rest (us
 - Commit docs-only changes (only `docs/` or `*.md` files) directly to `rust-migration`. Everything else goes through a PR that passes CI. Never merge with `--admin`. See [change types](docs/workflow.md#change-types).
 - The user authorizes ordinary issues, PRs and review reports on this fork. Do not contact upstream maintainers or submit upstream changes. Agents share GitHub credentials. Publish an attributed review report. Never self-approve or claim the accounts are independent.
 - Leave host state alone: do not archive threads or edit host databases.
+- This host's SSD is small, so `.local` output lives on an HDD behind symlinks that a Git hook makes for each new worktree. Keep the links and write to the usual `.local` paths. Read [output disk](docs/rust-migration.md#output-disk) before tool code walks or resolves `.local` paths, or when a link is missing or broken.
 - Preserve upstream copyright notices, credits and GPLv2. Third-party test inputs, such as NewGRF sets and AIs, stay out of Git and CI artifacts, so the fork redistributes nothing ([evidence](docs/porting.md#evidence)).
 
 ## Routing

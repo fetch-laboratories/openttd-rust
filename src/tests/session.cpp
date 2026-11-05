@@ -25,7 +25,10 @@ TEST_CASE("Session pause - all command inputs and unsaved native aliases")
 		CHECK(_game_mode == GM_EDITOR); CHECK(_switch_mode == SM_RELOADGAME); CHECK(_pause_mode == PauseMode::Normal);
 	}); second.join();
 	auto services = GetRustSessionServices();
-	services.networking = []() noexcept { return session_networking; };
+	auto company = *services.company;
+	auto finance = *company.finance;
+	finance.networking = []() noexcept { return session_networking; };
+	company.finance = &finance; services.company = &company;
 	services.pause_query = []() noexcept { session_queries++; };
 	services.pause_change = [](uint8_t previous, PauseMode) noexcept { session_changes++; session_previous = previous; };
 	services.pause_dirty = []() noexcept { session_dirty++; };
@@ -77,7 +80,10 @@ TEST_CASE("Session load - original restoration and callback partial effects")
 	struct RestoreExit { bool value; ~RestoreExit() { _exit_game = this->value; } } exit{_exit_game.load()};
 	_exit_game = false;
 	auto services = GetRustSessionServices();
-	services.dedicated = []() noexcept { return session_dedicated; };
+	static OpenTTDWorldServices world;
+	world = *services.world();
+	world.dedicated = []() noexcept { return session_dedicated; };
+	services.world = []() noexcept -> const OpenTTDWorldServices * { return &world; };
 	services.load_failed_debug = [](bool) noexcept {};
 	services.load = [](OpenTTDSessionFrame *, OpenTTDSessionLoad *) noexcept {
 		CHECK(_game_mode == GM_EDITOR);

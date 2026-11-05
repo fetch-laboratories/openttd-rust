@@ -40,11 +40,6 @@ struct OpenTTDTreeLoopSettings {
 	uint8_t climate, extra;
 	bool ambient, ambient_callback;
 };
-struct OpenTTDTreeTickSettings {
-	uint64_t tick_counter;
-	uint32_t size;
-	uint8_t climate, extra;
-};
 struct OpenTTDTreeGenerateSettings {
 	uint32_t size, size_x, size_y;
 	uint8_t climate, placer, height_limit;

@@ -229,6 +229,8 @@ pub struct MapStatics {
     pub size: *const u32,
     /// `Map::log_x`.
     pub log_x: *const u32,
+    /// `Map::log_y`, including its pre-allocation zero value.
+    pub log_y: *const u32,
     /// Native assert policy of the C++ build.
     pub assertions: bool,
 }
@@ -577,11 +579,13 @@ pub(crate) mod fixture {
         static EXTENDED: Cell<*const ExtendedTileLayout> = const { Cell::new(std::ptr::null()) };
         static SIZE: Cell<u32> = const { Cell::new(0) };
         static LOG_X: Cell<u32> = const { Cell::new(0) };
+        static LOG_Y: Cell<u32> = const { Cell::new(0) };
         static STATICS: Cell<MapStatics> = Cell::new(MapStatics {
             base: BASE.with(Cell::as_ptr),
             extended: EXTENDED.with(Cell::as_ptr),
             size: SIZE.with(Cell::as_ptr),
             log_x: LOG_X.with(Cell::as_ptr),
+            log_y: LOG_Y.with(Cell::as_ptr),
             assertions: true,
         });
     }
@@ -595,6 +599,11 @@ pub(crate) mod fixture {
         EXTENDED.set(allocation.extended);
         SIZE.set(allocation.count);
         LOG_X.set(log_x);
+        LOG_Y.set(if allocation.count == 0 {
+            0
+        } else {
+            allocation.count.trailing_zeros() - log_x
+        });
         STATICS.with(|s| {
             // SAFETY: Thread-local cell; no reference to it is live.
             unsafe { (*s.as_ptr()).assertions = allocation.assertions };
