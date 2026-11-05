@@ -178,8 +178,6 @@ struct StoryPage : StoryPagePool::PoolItem<&_story_page_pool> {
 	StoryPage() { }
 	StoryPage(uint32_t sort_value, TimerGameCalendar::Date date, CompanyID company, const EncodedString &title) :
 		sort_value(sort_value), date(date), company(company), title(title) {}
-
-	~StoryPage();
 };
 
 #endif /* STORY_BASE_H */
