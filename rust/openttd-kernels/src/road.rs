@@ -2605,3 +2605,6 @@ pub(crate) unsafe fn current_max_speed(
 
 pub(crate) mod availability;
 pub(crate) use availability::*;
+
+/// `RoadTypeSpriteGroup::ROTSG_END`.
+pub const ROTSG_END: u8 = 12;

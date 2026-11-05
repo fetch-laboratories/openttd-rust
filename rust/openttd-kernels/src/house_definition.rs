@@ -33,7 +33,7 @@ type File = *mut c_void;
 #[repr(C)]
 pub struct Identity {
     grfid: u32,
-    local: u16,
+    pub(crate) local: u16,
     substitute: u16,
 }
 #[repr(C)]
@@ -69,10 +69,10 @@ pub struct Services {
     append_default: extern "C" fn(u16),
     file_count: extern "C" fn() -> usize,
     file_at: extern "C" fn(usize) -> File,
-    local_count: extern "C" fn(File) -> usize,
+    pub(crate) local_count: extern "C" fn(File) -> usize,
     has_filename: extern "C" fn(File) -> bool,
     resize_local: extern "C" fn(File, usize),
-    local: extern "C" fn(File, usize) -> Spec,
+    pub(crate) local: extern "C" fn(File, usize) -> Spec,
     clear_local: extern "C" fn(File),
     copy_substitute: extern "C" fn(File, u16, Spec) -> Spec,
     set_identity: extern "C" fn(Spec, File, u16, u16),

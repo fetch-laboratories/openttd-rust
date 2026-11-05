@@ -20,8 +20,6 @@ add_files(
     newgrf_act0.cpp
     newgrf_act1.cpp
     newgrf_act2.cpp
-    newgrf_act3.cpp
-    newgrf_act4.cpp
     newgrf_act5.cpp
     newgrf_act6.cpp
     newgrf_act7_9.cpp
@@ -35,7 +33,6 @@ add_files(
     newgrf_act10.cpp
     newgrf_act11.cpp
     newgrf_act12.cpp
-    newgrf_act13.cpp
     newgrf_act14.cpp
     newgrf_bytereader.cpp
     newgrf_bytereader.h

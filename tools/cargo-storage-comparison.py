@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Check the pool-limit Split failure and large queues absent from play saves."""
 
+from pathlib import Path
+
 import probe
 from simulation.cargo_storage import scaling_probe
 
 
-def main():
+def main() -> None:
     out = probe.output("cargo-storage-comparison")
     original = (probe.REFERENCE / "src/cargopacket.cpp").read_text()
     body = probe.body(original, "CargoPacket *CargoPacket::Split(uint new_size)")
@@ -13,7 +15,7 @@ def main():
     source = out / "split.cpp"
     source.write_text(fixture.read_text().replace("@UNCHANGED_SPLIT@", body))
 
-    def command(label, root):
+    def command(label: str, root: Path) -> list[probe.Argument]:
         return [
             probe.compiler(),
             "-std=c++20",

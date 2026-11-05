@@ -9,6 +9,9 @@ import json
 import re
 import resource
 import subprocess
+from collections.abc import Iterator, Mapping, Sequence
+from pathlib import Path
+from typing import TypedDict
 
 import probe
 
@@ -30,7 +33,13 @@ MODES = {
 }
 
 
-def scopes(out, label, source):
+class Outcome(TypedDict):
+    exit_code: int
+    stdout_hex: str
+    stderr_hex: str
+
+
+def scopes(out: Path, label: str, source: Path) -> Path:
     """Retain each complete function verbatim; no reference algorithm reimplementation."""
     header = '#include "stdafx.h"\n#include "strings_func.h"\n#include "core/string_builder.hpp"\n#include "core/string_consumer.hpp"\n#include "core/utf8.hpp"\n#include "table/control_codes.h"\n#ifdef WITH_RUST\n#include "rust/encoded_adapter.hpp"\n#endif\n'
     parts = []
@@ -43,11 +52,11 @@ def scopes(out, label, source):
     return path
 
 
-def hexbytes(value):
+def hexbytes(value: bytes) -> str:
     return value.hex() or "-"
 
 
-def token(value):
+def token(value: int | bytes | None) -> str:
     if value is None:
         return "E"
     if isinstance(value, int):
@@ -55,7 +64,7 @@ def token(value):
     return "S" + hexbytes(value)
 
 
-def corpus():
+def corpus() -> Iterator[str]:
     encoded, internal, numeric, string = (
         chr(value).encode() for value in range(0xE000, 0xE004)
     )
@@ -179,11 +188,13 @@ def corpus():
         yield f"default {index} N1"
 
 
-def child_limits():
+def child_limits() -> None:
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
-def normalized(result):
+def normalized(
+    result: subprocess.CompletedProcess[bytes],
+) -> tuple[int, bytes, bytes]:
     stderr = result.stderr
     # libc assertion paths/functions differ between unchanged source and adapter.
     # Preserve the expression and signal; WITH_ASSERT's release handler is exact stdout.
@@ -194,7 +205,9 @@ def normalized(result):
     return result.returncode, result.stdout, stderr
 
 
-def command(out, label, source, flags):
+def command(
+    out: Path, label: str, source: Path, flags: list[str]
+) -> list[probe.Argument]:
     return [
         probe.compiler(),
         "-std=c++20",
@@ -214,7 +227,9 @@ def command(out, label, source, flags):
     ] + (probe.rust() if label == "candidate" else [])
 
 
-def run(argv, data, env=None):
+def run(
+    argv: Sequence[probe.Argument], data: bytes, env: Mapping[str, str] | None = None
+) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         list(map(str, argv)),
         input=data,
@@ -224,11 +239,12 @@ def run(argv, data, env=None):
     )
 
 
-def main():
+def main() -> None:
     out = probe.output("encoded-comparison")
     records = list(dict.fromkeys(corpus()))
     (out / "corpus.txt").write_text("\n".join(records) + "\n")
-    outputs, failures = {}, []
+    outputs: dict[tuple[str, str], list[Outcome]] = {}
+    failures: list[dict[str, object]] = []
     for label, source in probe.LABELS:
         scopes(out, label, source)
         for mode, flags in MODES.items():
@@ -236,7 +252,7 @@ def main():
             probe.compile(
                 [*command(out, label, source, flags), "-o", binary], f"{binary}.log"
             )
-            results = []
+            results: list[Outcome] = []
             for index, record in enumerate(records):
                 value = normalized(run([binary], (record + "\n").encode()))
                 results.append(

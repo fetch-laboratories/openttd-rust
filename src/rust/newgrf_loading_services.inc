@@ -10,6 +10,7 @@
 #include "newgrf_global_ffi.h"
 #include "generic_ffi.h"
 #include "../string_func.h"
+#include "../strings_func.h"
 #include "services_newgrf.h"
 #include "cargo_registry_ffi.h"
 #include "settings_services.h"
@@ -39,6 +40,9 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.airports = &GetAirportDefinitionServices(),
 		.types = &GetRustTypeRegistryServices(),
 		.action2 = &GetRustAction2Services(),
+		.text = &GetRustGrfTextServices(),
+		.bindings = &GetRustGrfBindingServices(),
+		.stations = &GetStationDefinitionServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
 		.config_id = [](const GRFConfig *c) noexcept { return c->ident.grfid; },
 		.config_status = [](const GRFConfig *c) noexcept { return c->status; },
@@ -55,6 +59,8 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.error = [](GRFConfig *c, uint32_t line, StringID message, bool current) noexcept { auto it = std::ranges::find(c->errors, line, &GRFError::nfo_line); if (it == c->errors.end()) it = c->errors.emplace(it, STR_NEWGRF_ERROR_MSG_FATAL, line, message); if (current) it->param_value[0] = line; return &*it; },
 		.error_name = [](GRFError *e, const GRFConfig *c) noexcept { e->data = c->GetName(); },
 		.error_property = RustGRFErrorProperty,
+		.error_after_translated_file = [](GRFError *error) noexcept { error->data = GetString(STR_NEWGRF_ERROR_AFTER_TRANSLATED_FILE); },
+		.load_after = STR_NEWGRF_ERROR_LOAD_AFTER,
 		.read_byte = [](SpriteFile *f) noexcept { return f->ReadByte(); },
 		.read_word = [](SpriteFile *f) noexcept { return f->ReadWord(); },
 		.read_dword = [](SpriteFile *f) noexcept { return f->ReadDword(); },
@@ -78,8 +84,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.feature_change_info = ParseGrfAction<&GrfActionHandler<0x00>::Activation>,
 		.skip_act1 = ParseGrfAction<&GrfActionHandler<0x01>::FileScan>,
 		.new_sprite_set = ParseGrfAction<&GrfActionHandler<0x01>::Activation>,
-		.feature_map_sprite_group = ParseGrfAction<&GrfActionHandler<0x03>::Activation>,
-		.feature_new_name = ParseGrfAction<&GrfActionHandler<0x04>::Activation>,
 		.skip_act5 = ParseGrfAction<&GrfActionHandler<0x05>::FileScan>,
 		.graphics_new = ParseGrfAction<&GrfActionHandler<0x05>::Activation>,
 		.skip_act_a = ParseGrfAction<&GrfActionHandler<0x0A>::FileScan>,
@@ -90,7 +94,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.grf_sound = ParseGrfAction<&GrfActionHandler<0x11>::Init>,
 		.skip_act12 = ParseGrfAction<&GrfActionHandler<0x12>::FileScan>,
 		.load_font_glyph = ParseGrfAction<&GrfActionHandler<0x12>::Activation>,
-		.translate_grf_strings = ParseGrfAction<&GrfActionHandler<0x13>::Activation>,
 		.static_grf_info = ParseGrfAction<&GrfActionHandler<0x14>::FileScan>,
 		.gradual_loading = RustGradualLoading,
 		.signal_side = RustTrainSignalSide,
@@ -119,7 +122,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.init_file = [](const GRFConfig *c) noexcept { InitNewGRFFile(*c); },
 		.too_many = [](GRFConfig *c) noexcept { Debug(grf, 0, "'{}' is not loaded as the maximum number of non-static GRFs has been reached", c->filename); c->errors.emplace_back(STR_NEWGRF_ERROR_MSG_FATAL, 0, STR_NEWGRF_ERROR_TOO_MANY_NEWGRFS_LOADED); },
 		.clear_errors = [](GRFConfig *c) noexcept { c->errors.clear(); },
-		.cleanup_strings = []() noexcept { CleanUpStrings(); },
 		.reset_badges = []() noexcept { ResetBadges(); },
 		.reset_bridges = []() noexcept { ResetBridges(); },
 		.reset_prices = []() noexcept { ResetPriceBaseMultipliers(); },
@@ -193,12 +195,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.grm_feature = [](GrfSpecFeature feature) noexcept { GrfMsg(1, "ParamSet: GRM: Unsupported feature 0x{:X}", feature); },
 		.unimplemented_target = [](uint8_t target) noexcept { GrfMsg(7, "ParamSet: Skipping unimplemented target 0x{:02X}", target); },
 		.unknown_target = [](uint8_t target) noexcept { GrfMsg(7, "ParamSet: Skipping unknown target 0x{:02X}", target); },
-		.translate_text = [](uint32_t grfid, uint8_t lang, bool allow_newlines, const uint8_t *text, size_t len) noexcept -> OpenTTDByteSpan {
-			auto &result = *_cur_gps.translated_text;
-			result = TranslateTTDPatchCodes(grfid, lang, allow_newlines, {reinterpret_cast<const char *>(text), len});
-			return {reinterpret_cast<const uint8_t *>(result.data()), result.size()};
-		},
-		.add_string = [](uint32_t grfid, uint32_t stringid, uint8_t lang, bool new_scheme, bool allow_newlines, const uint8_t *text, size_t len, StringID def_string) noexcept { return AddGRFString(grfid, GRFStringID{stringid}, lang, new_scheme, allow_newlines, {reinterpret_cast<const char *>(text), len}, def_string); },
 		.undefined = STR_UNDEFINED,
 		.town_definition = [](uint8_t id) noexcept { GrfMsg(6, "FeatureTownName: definition 0x{:02X}", id); },
 		.town_lang = [](uint8_t lang, const uint8_t *name, size_t len) noexcept { GrfMsg(6, "FeatureTownName: lang 0x{:X} -> '{}'", lang, std::string_view{reinterpret_cast<const char *>(name), len}); },
@@ -212,7 +208,9 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 	return services;
 }
 #include "abi-visit-OpenTTDAirportDefinitionServices.hpp"
+#include "abi-visit-OpenTTDGrfBindingServices.hpp"
 #include "abi-visit-OpenTTDGrfLoadingServices.hpp"
+#include "abi-visit-OpenTTDGrfTextServices.hpp"
 #include "abi-visit-OpenTTDAction2Services.hpp"
 #include "abi-visit-OpenTTDHouseDefinitionServices.hpp"
 #include "abi-visit-OpenTTDStationClassServices.hpp"
@@ -222,5 +220,5 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 bool CheckAbi_grf_loading()
 {
 	const auto &s = GetRustGrfLoadingServices();
-	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.houses) && AbiServicesComplete(*s.airports) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
+	return AbiServicesComplete(GetRustAction2Services()) && AbiServicesComplete(s) && AbiServicesComplete(*s.bindings) && AbiServicesComplete(*s.text) && AbiServicesComplete(*s.houses) && AbiServicesComplete(*s.airports) && AbiServicesComplete(*s.station_classes) && AbiServicesComplete(*s.roadstop_classes) && AbiServicesComplete(*s.airport_classes) && AbiServicesComplete(*s.object_classes);
 }

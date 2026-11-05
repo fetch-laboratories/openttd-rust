@@ -100,3 +100,10 @@
 - C++ keeps: CargoSpec/default data, per-file GRF vectors, strings, class/name sort, Action0 reader/error frames and resolver/profiler frames.
 - Limits: These remain #156 gaps: arbitrary external GRF loading, historical saves and GUI scheduling. Runtime fixture graphs reconstructed after reload do not establish file-loaded persistence.
 - PRs: #472.
+
+## GRF text and Actions 3, 4 and 0x13 (#652, #497)
+
+- Rust owns: GRF text storage, language selection, TTDPatch byte translation and choice lists, string insertion/lookup/cleanup, Action 3 dispatch and binding order with process-wide engine history, Action 4 naming and Action 0x13 translation of another GRF's strings.
+- C++ keeps: Formatting-time text-stack/control-code processing (phase 4), GRFConfig text lists and native string tails, legacy TTD string mapping, language-map payloads, engine binding operations and storage (#637), ObjectSpec payloads (#638), and other spec payloads accessed through the shared spec table and named binding operations.
+- Limits: #156 tracks remaining malformed-choice/control combinations, table and engine-pool exhaustion, historical saves, rendering, external GRFs and GUI/network scheduling. Text views retain the original invalidation rules.
+- PRs: #655.
