@@ -215,6 +215,11 @@ template <typename Check> void CheckTownProtocol(Check check)
 	auto *fields = openttd_rust_town_simulation(owner.get()); fields->xy = 2080; std::fill_n(fields->radius, 5, 100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
+	/* The removed allow_roads fixture leaf returned false; the catalog keeps that setting. */
+	static const bool town_roads = false;
+	static OpenTTDSettingAddresses town_settings{};
+	town_settings.allow_town_roads = &town_roads;
+	services.settings = &town_settings;
 	/* The callback reenters the town owner through the direct resolver entry;
 	 * preserve the original fixture's mutation and success. */
 	auto resolver = OpenTTDHouseResolverServices{};

@@ -391,7 +391,8 @@ TEST_CASE("Company economy - competitor posts return to the caller before each P
 		if (change_limit) fixture.services.post_ai = [](OpenTTDSessionFrame *) noexcept { CHECK(fixture_trace.empty()); ++posts; SessionFixture::active->max_competitors = 1; return true; };
 		CHECK(fixture.Run(GM_NORMAL));
 		CHECK(posts == (change_limit ? 1 : 2));
-		/* The competitor timeout reads the same canonical settings in place. */
+		/* The competitor timeout reads the same canonical settings and game mode in place. */
+		AutoRestoreBackup game_mode(_game_mode, GM_NORMAL);
 		fixture.competitor_interval = 1;
 		fixture.max_competitors = 1;
 		CHECK(openttd_rust_company_competitor_timeout(&companies));
