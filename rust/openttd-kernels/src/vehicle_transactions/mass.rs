@@ -125,7 +125,11 @@ pub unsafe extern "C" fn openttd_rust_vehicle_mass_start(
     }
     for i in 0..list.0.len() {
         let v = list.0[i];
-        if unsafe { (s.common.transactions.stopped)(v) } != start {
+        if (crate::fleet::transactions::record(s.common.transactions, v).status()
+            & crate::vehicle_base::VS_STOPPED
+            != 0)
+            != start
+        {
             continue;
         }
         if !window && !unsafe { (s.common.transactions.chain_depot)(v) } {

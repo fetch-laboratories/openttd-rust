@@ -300,10 +300,7 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
             return false;
         }
         current = if unit.vehicle_type() == VehicleType::TRAIN.0 {
-            let t = unsafe { &*s.transaction };
-            let next = unsafe { svc!(C, t.next_unit, unit.shell().cast()) };
-            std::ptr::NonNull::new(next)
-                .map(|next| unsafe { VehicleRef::from_shell(next.as_ptr().cast(), base) })
+            unit.next_unit()
         } else {
             None
         };

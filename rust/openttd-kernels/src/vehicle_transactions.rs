@@ -245,10 +245,11 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
             return;
         }
         if c.kind == VehicleType::TRAIN.0 {
-            if unsafe {
-                crate::fleet::transactions::articulated(c.s.transactions, v)
-                    || (c.s.transactions.rear)(v)
-            } {
+            if crate::fleet::transactions::articulated(c.s.transactions, v)
+                || crate::ground_vehicle::is_rear_dualheaded(
+                    crate::fleet::transactions::record(c.s.transactions, v).subtype(),
+                )
+            {
                 return;
             }
             if c.wagons && (c.s.free_wagon)(crate::fleet::transactions::first(c.s.transactions, v))
@@ -501,7 +502,10 @@ pub(crate) unsafe fn sell(
     if !(b.cost.success)(cost) {
         return;
     }
-    if unsafe { (s.transactions.crashed)(front) } {
+    if crate::fleet::transactions::record(s.transactions, front).status()
+        & crate::vehicle_base::VS_CRASHED
+        != 0
+    {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
     if !unsafe { (s.transactions.stopped_in_depot)(front) } {

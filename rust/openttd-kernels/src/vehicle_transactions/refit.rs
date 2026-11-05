@@ -532,7 +532,10 @@ pub(crate) unsafe fn refit(
         );
         return Capacity::default();
     }
-    if unsafe { (c.transactions.crashed)(front) } {
+    if crate::fleet::transactions::record(c.transactions, front).status()
+        & crate::vehicle_base::VS_CRASHED
+        != 0
+    {
         (b.cost.error)(cost, c.strings.destroyed);
         return Capacity::default();
     }
