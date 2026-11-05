@@ -171,8 +171,9 @@ def callee_copies(files: dict[str, str]) -> dict[str, int]:
         for h, b, line in definitions(t, with_literals=True)
         if h.startswith("[]")
     ]
-    groups: dict[str, dict[str, int]] = {}
-    occurrences: Counter[str] = Counter()
+    groups: dict[str, dict[str, int]]
+    occurrences: Counter[str]
+    groups, occurrences = {}, Counter()
     for path, header, body, line in candidates:
         if "noexcept" not in header:
             continue

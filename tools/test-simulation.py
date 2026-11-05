@@ -249,7 +249,7 @@ class SimulationDeterminismTests(unittest.TestCase):
                     lines[:index] + lines[index + 1 :], ("first",)
                 )
 
-    def test_unnamed_fixture_runs_and_named_river_diagnostics(self):
+    def test_unnamed_fixture_runs_and_named_river_diagnostics(self) -> None:
         # Disaster and aircraft preparation call run_game directly with unnamed
         # generation/setup and save/stepping dictionaries. All hooks run there.
         generated = dict(kind="generate", seed=86, map_log2=7, land_generator=1)
@@ -345,7 +345,7 @@ class SimulationDeterminismTests(unittest.TestCase):
                         [diagnostics] if diagnostics else [],
                     )
 
-    def test_each_requested_selector_must_match_before_any_run(self):
+    def test_each_requested_selector_must_match_before_any_run(self) -> None:
         stderr = io.StringIO()
         with (
             patch.object(simulate, "scenario_list", return_value=[{"name": "valid"}]),
@@ -357,7 +357,7 @@ class SimulationDeterminismTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 2)
         self.assertIn("misspelled", stderr.getvalue())
 
-    def test_exact_and_substring_selectors_preserve_selection(self):
+    def test_exact_and_substring_selectors_preserve_selection(self) -> None:
         output = io.StringIO()
         with (
             patch.object(
@@ -375,7 +375,7 @@ class SimulationDeterminismTests(unittest.TestCase):
             self.assertEqual(simulate.main(), 0)
         self.assertEqual(output.getvalue().splitlines(), ["valid", "other-test"])
 
-    def test_end_mismatch_compares_exits_and_full_logs_without_retry(self):
+    def test_end_mismatch_compares_exits_and_full_logs_without_retry(self) -> None:
         calls, compared = [], []
 
         def run(scenario, binary, build, folder, *args, **kwargs):
@@ -426,7 +426,7 @@ class SimulationDeterminismTests(unittest.TestCase):
         )
 
     @unittest.skipUnless(sys.platform == "linux", "Linux child resource policy")
-    def test_launcher_denies_threads_without_changing_parent_limit(self):
+    def test_launcher_denies_threads_without_changing_parent_limit(self) -> None:
         import resource
 
         before = resource.getrlimit(resource.RLIMIT_NPROC)
@@ -626,22 +626,22 @@ class SimulationRuntimeTests(unittest.TestCase):
             for role in ("reference", "candidate"):
                 self.assertFalse((report_path.parent / f"{role}-runtime").exists())
 
-    def test_default_candidate_survives_rebuild(self):
+    def test_default_candidate_survives_rebuild(self) -> None:
         self.exercise()
 
-    def test_custom_candidate_uses_its_own_frozen_runtime(self):
+    def test_custom_candidate_uses_its_own_frozen_runtime(self) -> None:
         self.exercise(custom=True)
 
-    def test_reference_self_needs_no_candidate(self):
+    def test_reference_self_needs_no_candidate(self) -> None:
         self.exercise(self_compare=True)
 
-    def test_failed_runs_remove_runtimes_and_preserve_results(self):
+    def test_failed_runs_remove_runtimes_and_preserve_results(self) -> None:
         self.exercise(passed=False)
 
-    def test_unexpected_worker_failure_removes_runtimes(self):
+    def test_unexpected_worker_failure_removes_runtimes(self) -> None:
         self.exercise(crash=True)
 
-    def test_fixture_preparation_removes_runtimes_on_pass_and_fail(self):
+    def test_fixture_preparation_removes_runtimes_on_pass_and_fail(self) -> None:
         from simulation import aircraft, ships
 
         for module, name, arguments in (
@@ -687,7 +687,7 @@ class SimulationRuntimeTests(unittest.TestCase):
                             (run / "fixture.log").read_text(), "retained output"
                         )
 
-    def test_pruning_keeps_newest_ten_completed_runs_and_active_outputs(self):
+    def test_pruning_keeps_newest_ten_completed_runs_and_active_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             completed = []
@@ -741,7 +741,7 @@ class SimulationSpeedTests(unittest.TestCase):
             with self.subTest(entry=entry):
                 self.assertIn(name, functions, f"no Rust module function for {entry}")
 
-    def test_record_and_fixed_ceilings(self):
+    def test_record_and_fixed_ceilings(self) -> None:
         from math import inf, nextafter
 
         for name, ceiling in (("play-test", 1.6), ("generate-test", 1.3)):
@@ -776,7 +776,7 @@ class SimulationSpeedTests(unittest.TestCase):
                 )  # A single wall ratio cannot breach the record.
         self.assertIsNone(speed_budget("unrecorded", 1.0))
 
-    def test_three_pass_record_drives_decisions(self):
+    def test_three_pass_record_drives_decisions(self) -> None:
         from simulation.instructions import SPEED_ANCHORS, SPEED_PASS, budget
 
         name = "play-padhattan-ridge-2016-manual"
@@ -878,7 +878,7 @@ class SimulationSpeedTests(unittest.TestCase):
                 self.assertEqual(cache.read_text(), "42")
             return result, game.call_count, game.call_args_list
 
-    def test_speed_ratio_needs_matching_semantic_pairs(self):
+    def test_speed_ratio_needs_matching_semantic_pairs(self) -> None:
         result, _, _ = self.exercise(instructions=True)
         self.assertEqual(result["plain_speed"]["samples"], [])
         self.assertEqual(result["instruction_speed"]["reference"]["Ir"], 42)
@@ -909,7 +909,7 @@ class SimulationSpeedTests(unittest.TestCase):
 
 
 class InstructionSpeedTests(unittest.TestCase):
-    def test_fixed_anchor_cumulative_projection_and_replacement(self):
+    def test_fixed_anchor_cumulative_projection_and_replacement(self) -> None:
         anchor = dict(
             head="quiet", ratio=1.2314, Ir=100, identity={"compatible": "same"}
         )
@@ -930,7 +930,7 @@ class InstructionSpeedTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ir.budget("play-test", incompatible, record)
 
-    def test_real_nested_scope_extraction_identity_and_semantic_rejection(self):
+    def test_real_nested_scope_extraction_identity_and_semantic_rejection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source, binary, run = root / "probe.cpp", root / "openttd", root / "run"
@@ -1116,7 +1116,7 @@ class InstructionSpeedTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     ir.finish({}, failure)  # Reject before extraction/cache writes.
 
-    def test_reference_cache_write_stays_within_the_cache_disk(self):
+    def test_reference_cache_write_stays_within_the_cache_disk(self) -> None:
         rename = Path.replace
 
         def same_disk(source: Path, target: Path) -> Path:
@@ -1142,7 +1142,7 @@ class InstructionSpeedTests(unittest.TestCase):
             self.assertEqual(json.loads((cache / "k").read_text()), 40)
             self.assertEqual([path.name for path in cache.iterdir()], ["k"])
 
-    def test_main_checkout_and_worktree_record_one_settings_identity(self):
+    def test_main_checkout_and_worktree_record_one_settings_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             main, worktree = Path(directory) / "clone", Path(directory) / "wt"
             shared = main / ".local"
@@ -1161,7 +1161,7 @@ class InstructionSpeedTests(unittest.TestCase):
             settings = json.loads(recorded[0])["settings"]
             self.assertIn(f"{shared}/deps/lib;<source>/src;<build>/x;", settings)
 
-    def test_rust_only_cache_keeps_anchored_compatible_spelling(self):
+    def test_rust_only_cache_keeps_anchored_compatible_spelling(self) -> None:
         anchored = (
             "GITCOMMAND:FILEPATH=/usr/bin/git\n\n//Global directory\n"
             "OPTION_PACKAGE_DEPENDENCIES:BOOL=OFF\n\n" + ir.RUST_OPTION + "//Survey\n"
@@ -1198,7 +1198,7 @@ class InstructionSpeedTests(unittest.TestCase):
                 settings = json.loads((build / "instruction-build.json").read_text())
             self.assertTrue(settings["settings"].startswith(anchored + "ct"))
 
-    def test_effective_compiled_debug_rejects_overrides_and_stripping(self):
+    def test_effective_compiled_debug_rejects_overrides_and_stripping(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "Cargo.toml").write_text(
@@ -1240,7 +1240,7 @@ class InstructionSpeedTests(unittest.TestCase):
                 else:
                     ir.verify_debug(archive)
 
-    def test_reused_build_restores_captured_release_debug(self):
+    def test_reused_build_restores_captured_release_debug(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             build = Path(directory)
             (build / "build.ninja").touch()
@@ -1257,7 +1257,7 @@ class InstructionSpeedTests(unittest.TestCase):
 
 
 class SpeedPassTests(unittest.TestCase):
-    def test_collection_prepares_before_hold_and_compares_after_release(self):
+    def test_collection_prepares_before_hold_and_compares_after_release(self) -> None:
         from simulation import speed
 
         held, events = False, []
@@ -1348,7 +1348,7 @@ class SpeedPassTests(unittest.TestCase):
                     )
                 )
 
-    def test_preparation_accepts_only_stale_anchor_failures(self):
+    def test_preparation_accepts_only_stale_anchor_failures(self) -> None:
         from simulation import speed
 
         def result(
@@ -1384,7 +1384,7 @@ class SpeedPassTests(unittest.TestCase):
         for results in rejected:
             self.assertFalse(speed.profile_passed({"results": results}))
 
-    def test_collection_rejects_changed_profile_and_runtime_before_hold(self):
+    def test_collection_rejects_changed_profile_and_runtime_before_hold(self) -> None:
         from simulation import speed
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1423,7 +1423,7 @@ class SpeedPassTests(unittest.TestCase):
                     speed.collect(out, migration)
                 games.assert_not_called()
 
-    def test_collection_refuses_an_already_collected_bundle(self):
+    def test_collection_refuses_an_already_collected_bundle(self) -> None:
         from simulation import speed
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1447,7 +1447,7 @@ class SpeedPassTests(unittest.TestCase):
                 speed.collect(out, migration)
             games.assert_not_called()
 
-    def test_preparation_identities_match_each_profiled_role(self):
+    def test_preparation_identities_match_each_profiled_role(self) -> None:
         from simulation import speed
 
         calls = []
@@ -1474,7 +1474,7 @@ class SpeedPassTests(unittest.TestCase):
         self.assertNotIn("entries", identities["play-a"]["reference"])
         self.assertEqual(identities["play-a"]["candidate"]["entries"], ["candidate"])
 
-    def test_hold_scans_before_start_returns_and_resumes_on_observer_error(self):
+    def test_hold_scans_before_start_returns_and_resumes_on_observer_error(self) -> None:
         from simulation import speed
 
         with (
@@ -1496,7 +1496,7 @@ class SpeedPassTests(unittest.TestCase):
                     hold.release()
             kill.assert_called_once_with(123, speed.signal.SIGCONT)
 
-    def test_anchor_is_median_of_group_medians(self):
+    def test_anchor_is_median_of_group_medians(self) -> None:
         from simulation import speed
 
         names = ["play-a", "generate-b"]
@@ -1640,7 +1640,7 @@ class SpeedPassTests(unittest.TestCase):
 
 
 class DrawingWorkloadTests(unittest.TestCase):
-    def test_drawing_ratio_has_no_speed_ceiling(self):
+    def test_drawing_ratio_has_no_speed_ceiling(self) -> None:
         from simulation import drawing
 
         self.assertIsNone(ir.speed_budget(drawing.NAME, 1.4))
@@ -1654,7 +1654,7 @@ class DrawingWorkloadTests(unittest.TestCase):
         self.assertEqual(set(report), {"projected_ratio"})
         self.assertAlmostEqual(report["projected_ratio"], 1.32)
 
-    def test_profiled_launch_counts_drawing_in_both_builds(self):
+    def test_profiled_launch_counts_drawing_in_both_builds(self) -> None:
         from simulation import drawing
 
         (scenario,) = drawing.scenarios(False)
@@ -1674,7 +1674,7 @@ class DrawingWorkloadTests(unittest.TestCase):
         self.assertEqual(command[command.index("-b") + 1], drawing.BLITTER)
         self.assertEqual(plan["env"]["SDL_VIDEODRIVER"], "dummy")
 
-    def test_images_compare_byte_for_byte_and_require_equal_graphics(self):
+    def test_images_compare_byte_for_byte_and_require_equal_graphics(self) -> None:
         from simulation import drawing
 
         scenario = dict(draw=True)
