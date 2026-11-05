@@ -126,23 +126,23 @@ function Command(who, name, attempt) {
 function ProbeCommands(who, free) {
 	local size = ApiMap.GetMapSize();
 	local edge = ApiMap.GetTileIndex(ApiMap.GetMapSizeX() - 2, 5);
-	Command(who, "raise-invalid", function() { return ApiTile.RaiseTile(size, ApiTile.SLOPE_N); });
+	Command(who, "raise-invalid", function() : (size) { return ApiTile.RaiseTile(size, ApiTile.SLOPE_N); });
 	Command(who, "raise-void", function() { return ApiTile.RaiseTile(0, ApiTile.SLOPE_N); });
-	Command(who, "raise", function() { return ApiTile.RaiseTile(free, ApiTile.SLOPE_N); });
-	Command(who, "raise-bad-slope", function() { return ApiTile.RaiseTile(free, 0x1FF); });
-	Command(who, "lower", function() { return ApiTile.LowerTile(free + 1, ApiTile.SLOPE_ELEVATED); });
-	Command(who, "level-invalid-start", function() { return ApiTile.LevelTiles(size, free); });
-	Command(who, "level-invalid-end", function() { return ApiTile.LevelTiles(free, size + 3); });
-	Command(who, "level", function() { return ApiTile.LevelTiles(free, free + 2); });
+	Command(who, "raise", function() : (free) { return ApiTile.RaiseTile(free, ApiTile.SLOPE_N); });
+	Command(who, "raise-bad-slope", function() : (free) { return ApiTile.RaiseTile(free, 0x1FF); });
+	Command(who, "lower", function() : (free) { return ApiTile.LowerTile(free + 1, ApiTile.SLOPE_ELEVATED); });
+	Command(who, "level-invalid-start", function() : (size, free) { return ApiTile.LevelTiles(size, free); });
+	Command(who, "level-invalid-end", function() : (size, free) { return ApiTile.LevelTiles(free, size + 3); });
+	Command(who, "level", function() : (free) { return ApiTile.LevelTiles(free, free + 2); });
 	Command(who, "demolish-void", function() { return ApiTile.DemolishTile(0); });
-	Command(who, "demolish", function() { return ApiTile.DemolishTile(free + 3); });
-	Command(who, "tree-invalid", function() { return ApiTile.PlantTree(size); });
-	Command(who, "tree", function() { return ApiTile.PlantTree(free + 4); });
+	Command(who, "demolish", function() : (free) { return ApiTile.DemolishTile(free + 3); });
+	Command(who, "tree-invalid", function() : (size) { return ApiTile.PlantTree(size); });
+	Command(who, "tree", function() : (free) { return ApiTile.PlantTree(free + 4); });
 	foreach (wh in [[0, 1], [1, 0], [1, 1], [20, 20], [21, 1], [1, 21], [3, 3]]) {
 		local w = wh[0], h = wh[1];
-		Command(who, "tree-rect " + w + "x" + h, function() { return ApiTile.PlantTreeRectangle(free + 5, w, h); });
+		Command(who, "tree-rect " + w + "x" + h, function() : (free, w, h) { return ApiTile.PlantTreeRectangle(free + 5, w, h); });
 	}
-	Command(who, "tree-rect-edge", function() { return ApiTile.PlantTreeRectangle(edge, 3, 2); });
+	Command(who, "tree-rect-edge", function() : (edge) { return ApiTile.PlantTreeRectangle(edge, 3, 2); });
 	Command(who, "tree-rect-void", function() { return ApiTile.PlantTreeRectangle(0, 2, 2); });
 }
 
