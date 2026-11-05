@@ -29,6 +29,7 @@ pub const CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY: u8 = 4;
 use crate::bitmath_func::gb;
 use crate::clear_map::{CLEAR_DESERT, CLEAR_ROCKS, CLEAR_ROUGH};
 use crate::company_type::CompanyID;
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::landscape_generation;
 use crate::openttd::{GameMode, SwitchMode};
@@ -104,13 +105,6 @@ pub struct SetupFrame {
 }
 
 #[repr(C)]
-pub struct Settings {
-    pub height_limit: u8,
-    pub flat_height: u8,
-    pub heightmap_height: u8,
-    pub generator: u8,
-}
-#[repr(C)]
 pub struct LandscapeCall {
     pub frame: *mut landscape_generation::Frame,
     pub decoder: *const crate::heightmap::Input,
@@ -145,12 +139,10 @@ pub struct WorldServices {
     pub set_modal: extern "C" fn(bool),
     pub initialize: extern "C" fn(*mut SetupFrame, u32, u32, bool) -> bool,
     pub prepare_progress: extern "C" fn(),
-    pub settings: extern "C" fn() -> Settings,
     pub height_limit: extern "C" fn(u8),
     pub session: *const crate::session::Services,
     pub session_frame: extern "C" fn(*mut Frame) -> *mut crate::session::Frame,
     pub session_end: extern "C" fn(*mut Frame) -> bool,
-    pub seed: extern "C" fn() -> u32,
     pub set_seed: extern "C" fn(u32),
     pub interactive_random: extern "C" fn() -> u32,
     pub random_seed: extern "C" fn(u32),
@@ -174,7 +166,6 @@ pub struct WorldServices {
     pub show_error: extern "C" fn(),
     pub set_progress: extern "C" fn(*mut Frame, Progress, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame, Progress) -> bool,
-    pub freeform: extern "C" fn() -> bool,
     pub count_land: extern "C" fn(),
     pub landscape_begin: extern "C" fn(*mut Frame) -> LandscapeCall,
     pub landscape_end: extern "C" fn(*mut Frame) -> bool,
@@ -185,7 +176,6 @@ pub struct WorldServices {
     pub industry_end: extern "C" fn(*mut Frame),
     pub object_begin: extern "C" fn(*mut Frame) -> ObjectCall,
     pub object_end: extern "C" fn(*mut Frame),
-    pub tree_settings: extern "C" fn() -> crate::trees::GenerateSettings,
     pub tree_end: extern "C" fn(*mut Frame),
     pub loop_begin: extern "C" fn(*mut Frame) -> *const landscape_generation::Loop,
     pub loop_end: extern "C" fn(*mut Frame),
@@ -202,11 +192,6 @@ pub struct WorldServices {
     pub dedicated: extern "C" fn() -> bool,
     pub exit_game: extern "C" fn() -> bool,
     pub set_exit: extern "C" fn(),
-    pub debug_start: extern "C" fn(),
-    pub debug_done: extern "C" fn(),
-    pub debug_abort: extern "C" fn(),
-    pub debug_map: extern "C" fn(u32),
-    pub desync_level: extern "C" fn() -> i32,
     pub save: extern "C" fn(*mut Frame) -> bool,
 }
 
@@ -292,14 +277,14 @@ pub(crate) unsafe fn setup(
         return false;
     }
     (s.prepare_progress)();
-    let g = (s.settings)();
-    if g.height_limit == 0 {
+    let settings = unsafe { (*(*s.landscape).shared).settings() };
+    if unsafe { settings.height_limit.read() } == 0 {
         let mode = read_field!(INFO.get(), mode);
         let height = if mode == GWM_EMPTY && crate::session::mode() != GameMode::MENU {
-            u32::from(g.flat_height)
+            u32::from(unsafe { settings.se_flat_world_height.read() })
         } else if mode.0 == GWM_HEIGHTMAP {
-            u32::from(g.heightmap_height)
-        } else if g.generator == LG_TERRAGENESIS {
+            u32::from(unsafe { settings.heightmap_height.read() })
+        } else if unsafe { settings.land_generator.read() } == LG_TERRAGENESIS {
             let input = unsafe { ((*s.landscape).tgp_settings)() };
             unsafe { crate::tgp::openttd_rust_tgp_estimate(&raw const input) }
         } else {
@@ -311,7 +296,7 @@ pub(crate) unsafe fn setup(
                 .clamp(MAP_HEIGHT_LIMIT_AUTO_MINIMUM, MAX_MAP_HEIGHT_LIMIT) as u8,
         );
     }
-    if (s.seed)() == GENERATE_NEW_SEED {
+    if generation_seed(s) == GENERATE_NEW_SEED {
         (s.set_seed)((s.interactive_random)());
     }
     if !(s.load_sprites)(frame) {
@@ -503,7 +488,7 @@ impl World<'_> {
         (s.object_end)(self.frame);
         native(completed)?;
         let a = unsafe { &*s.landscape };
-        let aborted = unsafe { crate::trees::generate((s.tree_settings)(), a.trees, a.shared) };
+        let aborted = unsafe { crate::trees::generate(a.trees, a.shared) };
         if aborted {
             (s.tree_end)(self.frame);
             return Err(Failure::Native);
@@ -529,9 +514,9 @@ impl World<'_> {
         let s = self.s;
         write_field!(INFO.get(), generating, true);
         if (s.dedicated)() {
-            (s.debug_start)();
+            debug!(net, 3, "Generating map, please wait...");
         }
-        (s.random_seed)((s.seed)());
+        (s.random_seed)(generation_seed(s));
         self.set_progress(GWP_MAP_INIT, 2)?;
         (s.place_cursor)();
         (s.randomizers)();
@@ -550,7 +535,7 @@ impl World<'_> {
             self.set_progress(GWP_OBJECT, 1)?;
             let a = unsafe { &*s.landscape };
             let shared = unsafe { &*a.shared };
-            if (s.freeform)() {
+            if unsafe { shared.settings().freeform_edges.read() } {
                 let map = shared.map();
                 for x in 0..map.size_x() {
                     (a.make_void)(map.tile_xy(x, 0));
@@ -560,13 +545,13 @@ impl World<'_> {
                 }
             }
             if crate::session::mode() != GameMode::MENU {
-                let g = (s.settings)();
+                let settings = shared.settings();
                 unsafe {
                     landscape_generation::flat_empty_world(
                         s.landscape,
-                        g.flat_height,
-                        (s.freeform)(),
-                        g.height_limit,
+                        settings.se_flat_world_height.read(),
+                        settings.freeform_edges.read(),
+                        settings.height_limit.read(),
                     );
                 }
             }
@@ -643,10 +628,10 @@ impl World<'_> {
         self.cleanup();
         (s.show_grf_error)();
         if (s.dedicated)() {
-            (s.debug_done)();
+            debug!(net, 3, "Map generated, starting game");
         }
-        (s.debug_map)((s.seed)());
-        if (s.desync_level)() > 0 {
+        debug!(desync, 1, "new_map: {:08x}", generation_seed(s));
+        if crate::debug::level(|l| l.desync) > 0 {
             native((s.save)(self.frame))?;
         }
         Ok(())
@@ -668,7 +653,7 @@ fn run(s: &WorldServices, frame: *mut Frame) -> u8 {
                 (s.restore_company)(frame);
             }
             if (s.dedicated)() {
-                (s.debug_abort)();
+                debug!(net, 0, "Generating map failed; closing server");
                 (s.set_exit)();
             } else {
                 let call = (s.session_frame)(frame);
@@ -684,9 +669,12 @@ fn run(s: &WorldServices, frame: *mut Frame) -> u8 {
     }
 }
 
+/// `_settings_game.game_creation.generation_seed`, read through the shared catalog.
+fn generation_seed(s: &WorldServices) -> u32 {
+    unsafe { (*(*s.landscape).shared).settings().generation_seed.read() }
+}
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDWorldSettings" ["genworld"] => Settings { height_limit, flat_height, heightmap_height, generator, };
     "OpenTTDWorldLandscape" ["genworld"] => LandscapeCall { frame, decoder, settings, };
     "OpenTTDWorldTown" ["genworld"] => TownCall { frame, names, road, layout, };
     "OpenTTDWorldObject" ["genworld"] => ObjectCall { frame, out, tmp, aux, };
@@ -703,12 +691,10 @@ crate::abi::layouts! {
         set_modal,
         initialize,
         prepare_progress,
-        settings,
         height_limit,
         session,
         session_frame,
         session_end,
-        seed,
         set_seed,
         interactive_random,
         random_seed,
@@ -732,7 +718,6 @@ crate::abi::layouts! {
         show_error,
         set_progress,
         increase_progress,
-        freeform,
         count_land,
         landscape_begin,
         landscape_end,
@@ -743,7 +728,6 @@ crate::abi::layouts! {
         industry_end,
         object_begin,
         object_end,
-        tree_settings,
         tree_end,
         loop_begin,
         loop_end,
@@ -760,11 +744,6 @@ crate::abi::layouts! {
         dedicated,
         exit_game,
         set_exit,
-        debug_start,
-        debug_done,
-        debug_abort,
-        debug_map,
-        desync_level,
         save,
     };
 }

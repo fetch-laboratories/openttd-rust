@@ -143,7 +143,6 @@ pub struct AgingYear {
 pub use crate::services::CalendarYmd as Ymd;
 #[repr(C)]
 pub struct StartSettings {
-    pub generation_seed: u32,
     pub starting_year: i32,
     pub date: i32,
 }
@@ -197,7 +196,6 @@ pub struct Services {
     pub seed_config: unsafe extern "C" fn(*const OpenTTDEngine) -> SeedConfig,
     pub base_intro: unsafe extern "C" fn(*const OpenTTDEngine) -> i32,
     pub aging_year: unsafe extern "C" fn(*const OpenTTDEngine) -> AgingYear,
-    pub never_expire: unsafe extern "C" fn() -> bool,
     pub start_settings: unsafe extern "C" fn() -> StartSettings,
     pub train_limit: unsafe extern "C" fn() -> u16,
     pub road_limit: unsafe extern "C" fn() -> u16,
@@ -264,7 +262,7 @@ unsafe fn clear_last_variant(s: &Services, e: EngineRef) {
     }
 }
 unsafe fn never_expire(s: &Services) -> bool {
-    let enabled = unsafe { call!(s, never_expire) };
+    let enabled = unsafe { (*s.shared).settings().never_expire_vehicles.read() };
     if enabled {
         crate::witness::hit(crate::witness::ENGINE_NEVER_EXPIRE);
     }
@@ -361,7 +359,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
         call!(
             rng,
             set_seed,
-            settings.generation_seed
+            shared.settings().generation_seed.read()
                 ^ seed
                 ^ cfg.base_intro as u32
                 ^ u32::from(e.kind.0)
@@ -401,7 +399,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
         call!(
             rng,
             set_seed,
-            settings.generation_seed
+            shared.settings().generation_seed.read()
                 ^ seed
                 ^ (u32::from(call!(s, engine_id, re.shell)) << 16)
                 ^ (re_cfg.base_intro as u32).wrapping_shl(12)
@@ -1225,7 +1223,6 @@ crate::abi::layouts! {
         day,
     };
     "OpenTTDEngineStartSettings" ["engine"] => StartSettings {
-        generation_seed,
         starting_year,
         date,
     };
@@ -1274,7 +1271,6 @@ crate::abi::layouts! {
         seed_config,
         base_intro,
         aging_year,
-        never_expire,
         start_settings,
         train_limit,
         road_limit,

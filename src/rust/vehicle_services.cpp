@@ -583,11 +583,6 @@ static OpenTTDVehicleMaintenanceBreakdownCountdown OPENTTD_RUST_CALL Maintenance
 	const Vehicle *v = VehicleOf(handle);
 	return {.order_type = RustVehicleOrderType(v), .counter = RustVehicleBreakdownCounter(v)};
 }
-static OpenTTDVehicleMaintenanceBreakdownSoundState OPENTTD_RUST_CALL MaintenanceBreakdownSoundState(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.kind = RustVehicleVehicleType(v), .landscape = OpenTTDLandscape()};
-}
 static void OPENTTD_RUST_CALL MaintenanceBreakdownDelayWrite(OpenTTDVehicle *handle, uint8_t delay) noexcept { VehicleOf(handle)->breakdown_delay = delay; }
 static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
 static void OPENTTD_RUST_CALL MaintenanceAircraftBroken(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->vehstatus.Set(VehState::AircraftBroken); }
@@ -653,7 +648,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.breakdown_start_write = MaintenanceBreakdownStartWrite,
 	.breakdown_active = MaintenanceBreakdownActive,
 	.breakdown_countdown = MaintenanceBreakdownCountdown,
-	.breakdown_sound_state = MaintenanceBreakdownSoundState,
 	.breakdown_delay_write = MaintenanceBreakdownDelayWrite,
 	.smoke_disabled = MaintenanceSmokeDisabled,
 	.smoke_delay = RustVehicleRead<uint8_t, RustVehicleBreakdownDelay>,

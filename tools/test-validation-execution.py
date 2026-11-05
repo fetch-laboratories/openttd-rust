@@ -12,6 +12,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import IO, cast
 from unittest.mock import patch
 
 from simulation import core
@@ -22,7 +23,7 @@ import migration
 TOOLS = Path(__file__).resolve().parent
 
 
-def running(pid):
+def running(pid: int) -> bool:
     """Return whether pid exists and is not a zombie; a reaped pid has exited."""
     try:
         state = Path(f"/proc/{pid}/stat").read_text()
@@ -32,7 +33,7 @@ def running(pid):
 
 
 class ExecutionTests(unittest.TestCase):
-    def test_package_module_import_needs_no_pythonpath(self):
+    def test_package_module_import_needs_no_pythonpath(self) -> None:
         subprocess.run(
             [
                 sys.executable,
@@ -44,7 +45,9 @@ class ExecutionTests(unittest.TestCase):
             check=True,
         )
 
-    def capture(self, script, directory, phase, **options):
+    def capture(
+        self, script: str, directory: str, phase: str, **options: bool
+    ) -> tuple[int, Path, str]:
         log, output = Path(directory) / f"{phase}.log", io.StringIO()
         with contextlib.redirect_stdout(output):
             code = run_logged(
@@ -58,7 +61,7 @@ class ExecutionTests(unittest.TestCase):
             )
         return code, log, output.getvalue()
 
-    def test_quiet_child_reports_heartbeat_and_failure(self):
+    def test_quiet_child_reports_heartbeat_and_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             code, log, output = self.capture(
                 "import time; time.sleep(.12); print('retained'); raise SystemExit(7)",
@@ -70,7 +73,7 @@ class ExecutionTests(unittest.TestCase):
             for expected in ("quiet: running", str(log), "exit 7"):
                 self.assertIn(expected, output)
 
-    def test_streaming_preserves_split_utf8_and_complete_log(self):
+    def test_streaming_preserves_split_utf8_and_complete_log(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             code, log, output = self.capture(
                 "import os,time; os.write(1,b'\\xe2'); time.sleep(.08); os.write(1,b'\\x82\\xac\\n')",
@@ -83,7 +86,7 @@ class ExecutionTests(unittest.TestCase):
             self.assertIn("€\n", output)
             self.assertNotIn("�", output)
 
-    def test_timeout_reaps_child_and_retains_output(self):
+    def test_timeout_reaps_child_and_retains_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "timeout.log"
             with contextlib.redirect_stdout(io.StringIO()):
@@ -104,7 +107,7 @@ class ExecutionTests(unittest.TestCase):
             self.assertEqual(log.read_text(), "started\n")
 
     @unittest.skipUnless(sys.platform == "linux", "Linux descendant process state")
-    def test_killed_driver_group_or_timeout_leaves_no_running_descendants(self):
+    def test_killed_driver_group_or_timeout_leaves_no_running_descendants(self) -> None:
         signals = (signal.SIGTERM, signal.SIGHUP, signal.SIGKILL, None)
         for index, killed in enumerate(signals * 2):
             with (
@@ -128,7 +131,7 @@ class ExecutionTests(unittest.TestCase):
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                descendants = []
+                descendants: list[int] = []
                 try:
                     deadline = time.monotonic() + 5
                     while not log.exists() or len(log.read_text().splitlines()) < 2:
@@ -158,7 +161,7 @@ class ExecutionTests(unittest.TestCase):
                             pass
 
     @unittest.skipUnless(os.name == "posix", "POSIX cross-process locks")
-    def test_wait_reports_holder_and_releases(self):
+    def test_wait_reports_holder_and_releases(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             lock = Path(directory) / "held.lock"
             script = (
@@ -172,13 +175,13 @@ class ExecutionTests(unittest.TestCase):
                     stdout=subprocess.PIPE,
                     text=True,
                 )
-                line = child.stdout.readline()
+                line = cast(IO[str], child.stdout).readline()
                 self.assertIn("waiting", line)
                 self.assertIn(f'"pid": {os.getpid()}', line)
                 self.assertIn('"label": "parent"', line)
                 self.assertIsNone(child.poll())
             with child:
-                remaining = child.stdout.read()
+                remaining = cast(IO[str], child.stdout).read()
                 self.assertEqual(child.wait(timeout=5), 0)
             self.assertIn("acquired", remaining)
             self.assertIn("entered", remaining)
@@ -188,7 +191,7 @@ class ExecutionTests(unittest.TestCase):
 
 
 class RuntimeTests(unittest.TestCase):
-    def initialize_repo(self, root):
+    def initialize_repo(self, root: Path) -> None:
         for arguments in (
             ("init", "-q"),
             ("config", "user.email", "test@example.invalid"),
@@ -205,7 +208,7 @@ class RuntimeTests(unittest.TestCase):
         )
 
     @unittest.skipUnless(os.name == "posix", "POSIX cross-process locks")
-    def test_capture_waits_for_build_and_copies_completed_runtime(self):
+    def test_capture_waits_for_build_and_copies_completed_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             build = root / "build"
@@ -231,15 +234,17 @@ class RuntimeTests(unittest.TestCase):
                     stdout=subprocess.PIPE,
                     text=True,
                 )
-                self.assertIn("candidate capture: waiting", child.stdout.readline())
+                self.assertIn(
+                    "candidate capture: waiting", cast(IO[str], child.stdout).readline()
+                )
                 self.assertFalse((root / "frozen").exists())
                 binary.write_text("new")
             with child:
-                child.stdout.read()
+                cast(IO[str], child.stdout).read()
                 self.assertEqual(child.wait(timeout=5), 0)
             self.assertEqual((root / "frozen/openttd-rust").read_text(), "new")
 
-    def test_direct_game_call_initializes_clone_lock(self):
+    def test_direct_game_call_initializes_clone_lock(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with (
                 patch.object(migration, "COMMON_LOCAL", Path(directory)),
@@ -249,7 +254,7 @@ class RuntimeTests(unittest.TestCase):
                     self.assertTrue((Path(directory) / "simulation-game.lock").exists())
 
     @unittest.skipUnless(os.name == "posix", "POSIX cross-process locks")
-    def test_benchmark_enters_while_another_shared_game_is_running(self):
+    def test_benchmark_enters_while_another_shared_game_is_running(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             lock = Path(directory) / "simulation-game.lock"
             script = (
@@ -281,7 +286,7 @@ class RuntimeTests(unittest.TestCase):
 class NarrowChecksTests(unittest.TestCase):
     initialize_repo = RuntimeTests.initialize_repo
 
-    def exercise_checks(self, *, failing=False):
+    def exercise_checks(self, *, failing: bool = False) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.initialize_repo(root)
@@ -353,17 +358,17 @@ class NarrowChecksTests(unittest.TestCase):
                 log = json.loads((root / command["log"]).read_text())
                 self.assertEqual(log["jobs"], "6" if failing else "2")
 
-    def test_free_cores_keep_two_jobs_on_a_loaded_host(self):
+    def test_free_cores_keep_two_jobs_on_a_loaded_host(self) -> None:
         with (
             patch.object(migration.os, "cpu_count", return_value=8),
             patch.object(migration.os, "getloadavg", return_value=(7.6, 0, 0)),
         ):
             self.assertEqual(migration.free_cores(), 2)
 
-    def test_rust_checks_never_prepares_native_or_reference_build(self):
+    def test_rust_checks_never_prepares_native_or_reference_build(self) -> None:
         self.exercise_checks()
 
-    def test_rust_checks_retains_failure_log(self):
+    def test_rust_checks_retains_failure_log(self) -> None:
         self.exercise_checks(failing=True)
 
 

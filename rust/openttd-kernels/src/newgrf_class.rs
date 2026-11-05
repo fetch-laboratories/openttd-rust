@@ -9,6 +9,7 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation
 )]
+use crate::debug::grf_msg;
 use crate::game_state::GameState;
 use std::ptr;
 
@@ -34,7 +35,6 @@ pub struct Services<T> {
     pub class_index: unsafe extern "C" fn(*const T) -> u16,
     pub set_index: unsafe extern "C" fn(*mut T, u16),
     pub identity: unsafe extern "C" fn(*const T) -> Identity,
-    pub exhausted: unsafe extern "C" fn(u16),
     pub object: *const crate::objects::ObjectServices,
     defaults: *const DefaultClass,
     default_count: usize,
@@ -58,13 +58,7 @@ impl<T> Registry<T> {
         }
     }
 }
-unsafe fn allocate<T>(
-    state: *mut Registry<T>,
-    global_id: u32,
-    max: u16,
-    empty: u32,
-    s: &Services<T>,
-) -> u16 {
+unsafe fn allocate<T>(state: *mut Registry<T>, global_id: u32, max: u16, empty: u32) -> u16 {
     if let Some(i) = unsafe {
         (*state)
             .classes
@@ -88,9 +82,11 @@ unsafe fn allocate<T>(
         }
         return index as u16;
     }
-    unsafe {
-        (s.exhausted)(max);
-    }
+    grf_msg!(
+        2,
+        "ClassAllocate: already allocated {} classes, using default",
+        max
+    );
     0
 }
 unsafe fn get_spec<T>(state: *mut Registry<T>, class: u16, index: u32) -> *mut T {
@@ -179,7 +175,7 @@ macro_rules! registry {
             }
             #[unsafe(export_name = concat!($prefix, "_allocate"))]
             pub unsafe extern "C" fn allocate(id: u32, max: u16, empty: u32) -> u16 {
-                unsafe { super::allocate(STATE.get(), id, max, empty, SERVICES.table()) }
+                unsafe { super::allocate(STATE.get(), id, max, empty) }
             }
             pub unsafe extern "C" fn insert(class: u16, spec: *mut Spec) {
                 unsafe {
@@ -277,10 +273,10 @@ crate::abi::layouts! {
     "ObjectClass" ["station_service"] => Class { global_id, name, rust_index };
     "OpenTTDGRFClassDefault" ["station_service"] => DefaultClass { label, name };
     "OpenTTDGRFClassIdentity" ["station_service"] => Identity { grfid, local_id };
-    "OpenTTDStationClassServices" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
-    "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
-    "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
-    "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, exhausted, object, defaults, default_count, maximum, empty, insert_empty };
+    "OpenTTDStationClassServices" ["station_service"] => Services<crate::station_cmd::RailSpec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
+    "OpenTTDRoadStopClassServices" ["station_service"] => Services<crate::station_cmd::RoadSpec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
+    "OpenTTDAirportClassServices" ["station_service"] => Services<crate::station_cmd::AirportSpec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
+    "OpenTTDObjectClassServices" ["station_service"] => Services<crate::objects::Spec> { class_index, set_index, identity, object, defaults, default_count, maximum, empty, insert_empty };
 }
 
 pub(crate) unsafe fn station_identity(spec: *const crate::station_cmd::RailSpec) -> Identity {

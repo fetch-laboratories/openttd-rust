@@ -134,6 +134,10 @@ def collect(files, originals, writes=False):
     return hits
 
 
+# Compiled fork glue includes `.inc` table fragments, such as src/rust/newgrf_loading_services.inc.
+NATIVE_SUFFIXES = {".cpp", ".h", ".hpp", ".inc"}
+
+
 def sources(revision=None):
     command = ("ls-tree", "-r", "--name-only", revision) if revision else ("ls-files",)
     return {
@@ -146,9 +150,7 @@ def sources(revision=None):
 
 def callee_copies(files):
     """Compare simple bound leaves; compound callbacks still require review."""
-    native = {
-        p: s for p, s in files.items() if Path(p).suffix in {".cpp", ".h", ".hpp"}
-    }
+    native = {p: s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES}
     tables = [(p, t) for p, s in native.items() for t in re.findall(TABLE, s, re.S)]
     bound = {n for _, t in tables for n in re.findall(r"\.\w+\s*=\s*(\w+)\s*[,}]", t)}
     candidates = [
@@ -245,7 +247,7 @@ def boundary_hits(files, wrappers, originals):
     native = "\n".join(
         s
         for p, s in files.items()
-        if Path(p).suffix in {".cpp", ".h", ".hpp"} and not SHARED.fullmatch(p)
+        if Path(p).suffix in NATIVE_SUFFIXES and not SHARED.fullmatch(p)
     )
     # Direct bindings may reuse one definition in the canonical shared layer.
     # A port-local definition with the same name must still be checked.
@@ -253,9 +255,7 @@ def boundary_hits(files, wrappers, originals):
     bindings = Counter()
     for table in re.findall(
         TABLE,
-        "\n".join(
-            s for p, s in files.items() if Path(p).suffix in {".cpp", ".h", ".hpp"}
-        ),
+        "\n".join(s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES),
         re.S,
     ):
         bindings.update(
@@ -267,25 +267,43 @@ def boundary_hits(files, wrappers, originals):
     return hits
 
 
+def scan(
+    pinned: str, revision: str | None = None, all_files: dict[str, str] | None = None
+) -> dict[str, int]:
+    """Every hit of the working tree, or of `revision` (sources preloaded) under the same rules."""
+    if revision:
+        paths = git("diff", "--name-only", pinned, revision, "--", "src").splitlines()
+        present = set(git("ls-tree", "-r", "--name-only", revision, "src").splitlines())
+        files = {
+            p: git("show", f"{revision}:{p}")
+            for p in paths
+            if p in present and Path(p).suffix in NATIVE_SUFFIXES
+        }
+    else:
+        paths = git("diff", "--name-only", pinned, "--", "src").splitlines()
+        files = {
+            p: (ROOT / p).read_text()
+            for p in paths
+            if (ROOT / p).is_file() and Path(p).suffix in NATIVE_SUFFIXES
+        }
+    tracked = set(git("ls-tree", "-r", "--name-only", pinned, "src").splitlines())
+    originals = {p: git("show", f"{pinned}:{p}") for p in files if p in tracked}
+    if all_files is None:
+        all_files = sources(revision)
+    return (
+        collect(files, originals)
+        | boundary_hits(all_files, files, originals)
+        | callee_copies(all_files)
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", help="ratchet against this Git revision")
     args = parser.parse_args()
     pinned = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
-    paths = git("diff", "--name-only", pinned, "--", "src").splitlines()
-    files = {
-        p: (ROOT / p).read_text()
-        for p in paths
-        if (ROOT / p).is_file() and Path(p).suffix in {".h", ".hpp", ".cpp"}
-    }
     tracked = set(git("ls-tree", "-r", "--name-only", pinned, "src").splitlines())
-    originals = {p: git("show", f"{pinned}:{p}") for p in files if p in tracked}
-    all_files = sources()
-    hits = (
-        collect(files, originals)
-        | boundary_hits(all_files, files, originals)
-        | callee_copies(all_files)
-    )
+    hits = scan(pinned)
     baseline = set((ROOT / BASELINE).read_text().splitlines())
     previous = baseline
     if args.base_ref:
@@ -302,7 +320,7 @@ def main():
             wrappers = {
                 p: s
                 for p, s in base_files.items()
-                if p in base_paths and Path(p).suffix in {".h", ".hpp", ".cpp"}
+                if p in base_paths and Path(p).suffix in NATIVE_SUFFIXES
             }
             reference = {
                 p: git("show", f"{pinned}:{p}") for p in wrappers if p in tracked
@@ -312,8 +330,12 @@ def main():
         if key.startswith("binding | "):
             name, count = key.rsplit(" | ", 1)
             previous.update(f"{name} | {n}" for n in range(2, int(count) + 1))
-    inherited_callees = callee_copies(sources(args.base_ref or "origin/rust-migration"))
+    base_sources = sources(args.base_ref or "origin/rust-migration")
+    inherited_callees = callee_copies(base_sources)
     new, growth = set(hits) - baseline - inherited_callees.keys(), baseline - previous
+    if growth and args.base_ref:
+        # Rows the base already had under these rules are newly visible, not new glue.
+        growth -= scan(pinned, args.base_ref, base_sources).keys()
     for key in new:
         print(f"{key.split(' | ')[0]}:{hits[key]}: new shared accessor: {key}")
     stale = baseline - set(hits)

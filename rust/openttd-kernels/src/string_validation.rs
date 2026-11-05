@@ -64,6 +64,20 @@ pub fn step(bytes: &[u8], settings: u8) -> Step {
     result
 }
 
+/// `StrMakeValid(str, settings)`: the scan decisions of `step`, appended to a new string.
+pub fn make_valid(mut bytes: &[u8], settings: u8) -> Vec<u8> {
+    let mut result = Vec::new();
+    while !bytes.is_empty() {
+        let step = step(bytes, settings);
+        bytes = &bytes[step.consumed..];
+        if step.stopped != 0 {
+            break;
+        }
+        result.extend_from_slice(&step.output.bytes[..step.output.length]);
+    }
+    result
+}
+
 pub fn valid(bytes: &[u8]) -> bool {
     let mut position = 0;
     while position < bytes.len() {

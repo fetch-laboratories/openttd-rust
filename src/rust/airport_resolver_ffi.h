@@ -41,7 +41,6 @@ struct OpenTTDAirportResolverServices {
 	const AirportSpec *(*base_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_spec);
 	int32_t (*min_year)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(min_year);
 	int32_t (*max_year)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(max_year);
-	bool (*never_expire)() noexcept OPENTTD_SERVICE_DEFAULT(never_expire);
 	uint8_t (*station_layout)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_layout);
 	uint16_t (*random)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	int32_t (*build_date)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
@@ -52,7 +51,6 @@ struct OpenTTDAirportResolverServices {
 	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	TownScopeResolver *(*town_scope)(AirportResolverObject *, const Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(town_scope);
 	uint16_t (*evaluate_tile)(uint16_t, uint32_t, uint32_t, const AirportTileSpec *, Station *, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate_tile);
-	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 };
 const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept;
 extern "C" {

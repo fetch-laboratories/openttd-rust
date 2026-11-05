@@ -17,8 +17,10 @@
     clippy::comparison_chain,
     clippy::struct_field_names
 )]
+use crate::debug::{Bytes, debug, grf_msg};
 use crate::game_state::GameState;
 use crate::newgrf::GSF_END;
+use crate::string_validation::make_valid;
 use std::{collections::BTreeMap, ffi::c_void, ptr};
 
 #[repr(C)]
@@ -104,7 +106,7 @@ pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, error_after_translated_file, load_after, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match, unexpected_large, unexpected_real, missing_file, sprite_grm_failed, grm_failure, unknown_operation, id_mismatch, invalid_version, null_error, unknown_action, handling_action, preloaded_sprite, unexpected_data, unexpected_import, read_bounds_error, reading_file, invalid_format, unsupported_compression, loaded_sprites, unsupported_variable, cfg_real, cfg_unset, cfg_applying, skip_undefined, skip_test, skip_condition, skip_grf_condition, skip_unknown_grf, skip_false, skip_jump, skip_count, loaded_info, inhibiting, defined_label, unknown_patch, grm_reserved, param_defined, sprites_allocated, sprites_using, sprite_operation, grm_feature, unimplemented_target, unknown_target, undefined, town_definition, town_lang, town_parts, town_part, town_missing, town_reference, town_text, town_total };
+    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, config_filename, config_palette, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, error_after_translated_file, load_after, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match, null_error, undefined };
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
     "OpenTTDGrfClock" ["grf_loading"] => Clock { ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
@@ -136,6 +138,10 @@ pub struct Services {
     set_config_id: unsafe extern "C" fn(*mut c_void, u32),
     set_file_info: unsafe extern "C" fn(*mut c_void, u32, u8),
     config_version: unsafe extern "C" fn(*const c_void) -> u32,
+    /// `GRFConfig::filename`, live while the config is.
+    config_filename: unsafe extern "C" fn(*const c_void) -> crate::services::ByteSpan,
+    /// `GRFConfig::palette`.
+    config_palette: unsafe extern "C" fn(*const c_void) -> u8,
     param_count: unsafe extern "C" fn(*const c_void) -> usize,
     set_parameter: unsafe extern "C" fn(*mut c_void, u8, u32),
     pub(crate) find_config: unsafe extern "C" fn(u32, u32) -> *mut c_void,
@@ -236,58 +242,8 @@ pub struct Services {
     newgrf_dir: u8,
     assert_override_size: unsafe extern "C" fn(usize, u32),
     assert_file_match: unsafe extern "C" fn(*const c_void, *const c_void),
-    unexpected_large: unsafe extern "C" fn(),
-    unexpected_real: unsafe extern "C" fn(),
-    missing_file: unsafe extern "C" fn(*const c_void),
-    sprite_grm_failed: unsafe extern "C" fn(u16),
-    grm_failure: unsafe extern "C" fn(u16, bool, bool),
-    unknown_operation: unsafe extern "C" fn(u8),
-    id_mismatch: unsafe extern "C" fn(u32, u32),
-    invalid_version: unsafe extern "C" fn(*const c_void, u32, u8, *const u8, usize),
     null_error: u32,
-    unknown_action: unsafe extern "C" fn(u8),
-    handling_action: unsafe extern "C" fn(u8, u8),
-    preloaded_sprite: unsafe extern "C" fn(),
-    unexpected_data: unsafe extern "C" fn(),
-    unexpected_import: unsafe extern "C" fn(),
-    read_bounds_error: unsafe extern "C" fn(),
-    reading_file: unsafe extern "C" fn(*const c_void),
-    invalid_format: unsafe extern "C" fn(),
-    unsupported_compression: unsafe extern "C" fn(),
-    loaded_sprites: unsafe extern "C" fn(u32),
-    unsupported_variable: unsafe extern "C" fn(u8),
-    cfg_real: unsafe extern "C" fn(),
-    cfg_unset: unsafe extern "C" fn(u32),
-    cfg_applying: unsafe extern "C" fn(u32, u32, u32),
-    skip_undefined: unsafe extern "C" fn(u8),
-    skip_test: unsafe extern "C" fn(u8, u8, u32),
-    skip_condition: unsafe extern "C" fn(u8),
-    skip_grf_condition: unsafe extern "C" fn(u8),
-    skip_unknown_grf: unsafe extern "C" fn(u32),
-    skip_false: unsafe extern "C" fn(),
-    skip_jump: unsafe extern "C" fn(u8, u32),
-    skip_count: unsafe extern "C" fn(u8),
-    loaded_info: unsafe extern "C" fn(*const c_void, u8, u32, *const u8, usize),
-    inhibiting: unsafe extern "C" fn(*const c_void),
-    defined_label: unsafe extern "C" fn(u8),
-    unknown_patch: unsafe extern "C" fn(u8),
-    grm_reserved: unsafe extern "C" fn(u16, bool, u32),
-    param_defined: unsafe extern "C" fn(u8),
-    sprites_allocated: unsafe extern "C" fn(u16, u32),
-    sprites_using: unsafe extern "C" fn(u32),
-    sprite_operation: unsafe extern "C" fn(u8),
-    grm_feature: unsafe extern "C" fn(u8),
-    unimplemented_target: unsafe extern "C" fn(u8),
-    unknown_target: unsafe extern "C" fn(u8),
     pub(crate) undefined: u32,
-    pub(crate) town_definition: unsafe extern "C" fn(u8),
-    pub(crate) town_lang: unsafe extern "C" fn(u8, *const u8, usize),
-    pub(crate) town_parts: unsafe extern "C" fn(u8),
-    pub(crate) town_part: unsafe extern "C" fn(u32, u8, u8, u8),
-    pub(crate) town_missing: unsafe extern "C" fn(u8),
-    pub(crate) town_reference: unsafe extern "C" fn(u32, u32, u8, u8),
-    pub(crate) town_text: unsafe extern "C" fn(u32, u32, *const u8, usize, u8),
-    pub(crate) town_total: unsafe extern "C" fn(u32, u16),
 }
 impl Services {
     pub(crate) fn shared(&self) -> &crate::services::Services {
@@ -301,8 +257,8 @@ use crate::newgrf::{
 };
 use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_config::{
-    GCS_ACTIVATED, GCS_DISABLED, GCS_INITIALISED, GCS_NOT_FOUND, GCS_UNKNOWN, INIT_ONLY, INVALID,
-    RESERVED, STATIC, SYSTEM, UNSAFE,
+    GCS_ACTIVATED, GCS_DISABLED, GCS_INITIALISED, GCS_NOT_FOUND, GCS_UNKNOWN, GRFP_USE_MASK,
+    INIT_ONLY, INVALID, RESERVED, STATIC, SYSTEM, UNSAFE,
 };
 #[derive(Clone, Copy)]
 struct Label {
@@ -467,7 +423,7 @@ unsafe fn openttd_rust_grf_param(s: &Services, param: u8, cond: *mut u32) -> u32
             0x88 => 0,
             p if p < 0x80 => (s.shared().grf_parameter)(file(), u32::from(p)),
             _ => {
-                (s.unsupported_variable)(param);
+                grf_msg!(1, "Unsupported in-game variable 0x{:02X}", param);
                 u32::MAX
             }
         }
@@ -487,7 +443,7 @@ unsafe fn cfg_apply(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
         };
         let typ = (s.read_byte)(f);
         if typ != 0xFF {
-            (s.cfg_real)();
+            grf_msg!(2, "CfgApply: Ignoring (next sprite is real, unsupported)");
             (s.seek)(f, pos, false);
             return Ok(());
         }
@@ -517,10 +473,20 @@ unsafe fn cfg_apply(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
             if pn < 128
                 && pn.wrapping_add(size.wrapping_sub(1) / 4) as usize >= (s.param_count)(file())
             {
-                (s.cfg_unset)(pn.wrapping_add(size.wrapping_sub(1) / 4));
+                grf_msg!(
+                    2,
+                    "CfgApply: Ignoring (param {} not set)",
+                    pn.wrapping_add(size.wrapping_sub(1) / 4)
+                );
                 break;
             }
-            (s.cfg_applying)(size, pn, offset);
+            grf_msg!(
+                8,
+                "CfgApply: Applying {} bytes from parameter 0x{:02X} at offset 0x{:04X}",
+                size,
+                pn,
+                offset
+            );
             let mut carry = false;
             for i in 0..size {
                 if offset.wrapping_add(i) >= num {
@@ -561,10 +527,16 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
             _ => (0, 0),
         };
         if pn < 128 && (s.param_count)(file()) <= usize::from(pn) {
-            (s.skip_undefined)(pn);
+            grf_msg!(7, "SkipIf: Param {} undefined, skipping test", pn);
             return Ok(());
         }
-        (s.skip_test)(cond, pn, value);
+        grf_msg!(
+            7,
+            "SkipIf: Test condtype {}, param 0x{:02X}, condval 0x{:08X}",
+            cond,
+            pn,
+            value
+        );
         let result = if cond >= 11 {
             match cond {
                 11 | 12 => {
@@ -591,7 +563,11 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
                     if cond % 2 == 1 { !valid } else { valid }
                 }
                 _ => {
-                    (s.skip_condition)(cond);
+                    grf_msg!(
+                        1,
+                        "SkipIf: Unsupported condition type {:02X}. Ignoring",
+                        cond
+                    );
                     return Ok(());
                 }
             }
@@ -606,7 +582,11 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
                 c = ptr::null_mut();
             }
             if cond != 10 && c.is_null() {
-                (s.skip_unknown_grf)(value);
+                grf_msg!(
+                    7,
+                    "SkipIf: GRFID 0x{:08X} unknown, skipping test",
+                    value.swap_bytes()
+                );
                 return Ok(());
             }
             match cond {
@@ -616,7 +596,11 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
                 9 => matches!((s.config_status)(c), GCS_ACTIVATED | GCS_INITIALISED),
                 10 => c.is_null() || matches!((s.config_status)(c), GCS_DISABLED | GCS_NOT_FOUND),
                 _ => {
-                    (s.skip_grf_condition)(cond);
+                    grf_msg!(
+                        1,
+                        "SkipIf: Unsupported GRF condition type {:02X}. Ignoring",
+                        cond
+                    );
                     return Ok(());
                 }
             }
@@ -630,13 +614,17 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
                 4 => (p & mask) < value,
                 5 => (p & mask) > value,
                 _ => {
-                    (s.skip_condition)(cond);
+                    grf_msg!(
+                        1,
+                        "SkipIf: Unsupported condition type {:02X}. Ignoring",
+                        cond
+                    );
                     return Ok(());
                 }
             }
         };
         if !result {
-            (s.skip_false)();
+            grf_msg!(2, "SkipIf: Not skipping sprites, test was false");
             return Ok(());
         }
         let count = b.byte()?;
@@ -656,12 +644,17 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
             }
         }
         if let Some(label) = choice {
-            (s.skip_jump)(label.label, label.nfo_line);
+            grf_msg!(
+                2,
+                "SkipIf: Jumping to label 0x{:X} at line {}, test was true",
+                label.label,
+                label.nfo_line
+            );
             (s.seek)((*execution()).file, label.pos, false);
             (*execution()).nfo_line = label.nfo_line;
             return Ok(());
         }
-        (s.skip_count)(count);
+        grf_msg!(2, "SkipIf: Skipping {} sprites, test was true", count);
         (*execution()).skip_sprites = i32::from(count);
         if count == 0 {
             (*execution()).skip_sprites = -1;
@@ -678,6 +671,10 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
         Ok(())
     }
 }
+/// `GRFConfig::filename` of a live config.
+unsafe fn config_filename(s: &Services, c: *const c_void) -> &[u8] {
+    unsafe { (s.config_filename)(c).bytes() }
+}
 unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), ReadBounds> {
     unsafe {
         let version = b.byte()?;
@@ -687,7 +684,15 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
             (s.set_config_id)(config(), id);
             if !(2..=8).contains(&version) {
                 (s.set_flag)(config(), INVALID, true);
-                (s.invalid_version)(config(), id, version, name, size);
+                debug!(
+                    grf,
+                    0,
+                    "{}: NewGRF \"{}\" (GRFID {:08X}) uses GRF version {}, which is incompatible with this version of OpenTTD.",
+                    Bytes(config_filename(s, config())),
+                    Bytes(&make_valid(std::slice::from_raw_parts(name, size), 1)),
+                    id.swap_bytes(),
+                    version
+                );
             }
             if id & 255 == 255 {
                 (s.set_flag)(config(), SYSTEM, true);
@@ -705,7 +710,13 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
             }
             let old_id = (s.shared().grf_file_id)(file());
             if old_id != id {
-                (s.id_mismatch)(old_id, id);
+                debug!(
+                    grf,
+                    0,
+                    "GRFInfo: GRFID {:08X} in FILESCAN stage does not match GRFID {:08X} in INIT/RESERVE/ACTIVATION stage",
+                    old_id.swap_bytes(),
+                    id.swap_bytes()
+                );
             }
             (s.set_file_info)(file(), id, version);
             (s.set_status)(
@@ -716,7 +727,20 @@ unsafe fn grf_info(s: &Services, b: &mut ByteReader, scan: bool) -> Result<(), R
                     GCS_ACTIVATED
                 },
             );
-            (s.loaded_info)(config(), version, id, name, size);
+            debug!(
+                grf,
+                1,
+                "GRFInfo: Loaded GRFv{} set {:08X} - {} (palette: {}, version: {})",
+                version,
+                id.swap_bytes(),
+                Bytes(&make_valid(std::slice::from_raw_parts(name, size), 1)),
+                if (s.config_palette)(config()) & GRFP_USE_MASK != 0 {
+                    "Windows"
+                } else {
+                    "DOS"
+                },
+                (s.config_version)(config())
+            );
         }
         Ok(())
     }
@@ -734,7 +758,11 @@ unsafe fn inhibit(s: &Services, b: &mut ByteReader, safe: bool) -> Result<(), Re
             } else {
                 let c = (s.find_config)(id, u32::MAX);
                 if !c.is_null() && c != config() {
-                    (s.inhibiting)(c);
+                    grf_msg!(
+                        2,
+                        "GRFInhibit: Deactivating file '{}'",
+                        Bytes(config_filename(s, c))
+                    );
                     let e = openttd_rust_grf_disable(s, s.force_disabled, c);
                     (s.error_name)(e, config());
                 }
@@ -755,7 +783,7 @@ unsafe fn define_label(s: &Services, b: &mut ByteReader) -> Result<(), ReadBound
                 nfo_line: line(),
                 pos,
             });
-        (s.defined_label)(label);
+        grf_msg!(2, "DefineGotoLabel: GOTO target with label 0x{:02X}", label);
         Ok(())
     }
 }
@@ -796,7 +824,7 @@ unsafe fn patch_variable(s: &Services, pn: u8) -> u32 {
             0x16 => s.shore_sprite,
             0x17 => s.shared().settings().generation_seed.read(),
             _ => {
-                (s.unknown_patch)(pn);
+                grf_msg!(2, "ParamSet: Unknown Patch variable 0x{:02X}.", pn);
                 0
             }
         }
@@ -839,7 +867,17 @@ unsafe fn perform_grm(
         }
         if size == u32::from(count) {
             if op == 0 || op == 3 {
-                (s.grm_reserved)(count, grm != (*GRM_CARGOES.get()).as_mut_ptr(), start);
+                grf_msg!(
+                    2,
+                    "ParamSet: GRM: Reserving {} {} at {}",
+                    count,
+                    if grm != (*GRM_CARGOES.get()).as_mut_ptr() {
+                        "vehicles"
+                    } else {
+                        "cargoes"
+                    },
+                    start
+                );
                 let id = (s.shared().grf_file_id)(file());
                 for i in 0..u32::from(count) {
                     grm.add(start.wrapping_add(i) as usize).write(id);
@@ -847,11 +885,21 @@ unsafe fn perform_grm(
             }
             return start;
         }
-        (s.grm_failure)(
-            count,
-            grm != (*GRM_CARGOES.get()).as_mut_ptr(),
-            op != 4 && op != 5,
-        );
+        let kind = if grm != (*GRM_CARGOES.get()).as_mut_ptr() {
+            "vehicles"
+        } else {
+            "cargoes"
+        };
+        if op != 4 && op != 5 {
+            grf_msg!(
+                0,
+                "ParamSet: GRM: Unable to allocate {} {}, deactivating",
+                count,
+                kind
+            );
+        } else {
+            grf_msg!(1, "ParamSet: GRM: Unable to allocate {} {}", count, kind);
+        }
         if op != 4 && op != 5 {
             disable(s, s.grm_failed);
         }
@@ -867,7 +915,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
         let data = if b.remaining() >= 4 { b.dword()? } else { 0 };
         if op & 128 != 0 {
             if target < 128 && usize::from(target) < (s.param_count)(file()) {
-                (s.param_defined)(target);
+                grf_msg!(7, "ParamSet: Param {} already defined, skipping", target);
                 return Ok(());
             }
             op &= 127;
@@ -884,11 +932,20 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                         if feature == crate::newgrf::GSF_GLOBALVAR && operation == 0 {
                             let sprite = (*execution()).spriteid;
                             if sprite.wrapping_add(u32::from(count)) >= 16384 {
-                                (s.sprite_grm_failed)(count);
+                                grf_msg!(
+                                    0,
+                                    "ParamSet: GRM: Unable to allocate {} sprites; try changing NewGRF order",
+                                    count
+                                );
                                 disable(s, s.grm_failed);
                                 return Ok(());
                             }
-                            (s.sprites_allocated)(count, sprite);
+                            grf_msg!(
+                                4,
+                                "ParamSet: GRM: Allocated {} sprites at {}",
+                                count,
+                                sprite
+                            );
                             (*GRM_SPRITES.get()).insert(
                                 ((s.shared().grf_file_id)(file()), line()),
                                 (sprite, count),
@@ -928,12 +985,20 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                                             .entry(((s.shared().grf_file_id)(file()), line()))
                                             .or_default()
                                             .0;
-                                        (s.sprites_using)(sprite);
+                                        grf_msg!(
+                                            4,
+                                            "ParamSet: GRM: Using pre-allocated sprites at {}",
+                                            sprite
+                                        );
                                         sprite
                                     }
                                     1 => (*execution()).spriteid,
                                     _ => {
-                                        (s.sprite_operation)(operation);
+                                        grf_msg!(
+                                            1,
+                                            "ParamSet: GRM: Unsupported operation {} for general sprites",
+                                            operation
+                                        );
                                         return Ok(());
                                     }
                                 };
@@ -952,7 +1017,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                                 }
                             }
                             _ => {
-                                (s.grm_feature)(feature);
+                                grf_msg!(1, "ParamSet: GRM: Unsupported feature 0x{:X}", feature);
                                 return Ok(());
                             }
                         }
@@ -1040,7 +1105,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                 }
             }
             _ => {
-                (s.unknown_operation)(op);
+                grf_msg!(0, "ParamSet: Unknown operation {}, skipping", op);
                 return Ok(());
             }
         };
@@ -1079,9 +1144,13 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                 };
                 (s.set_misc)(bits as u8);
             }
-            0x93..=0x97 | 0x99 | 0x9F => (s.unimplemented_target)(target),
+            0x93..=0x97 | 0x99 | 0x9F => grf_msg!(
+                7,
+                "ParamSet: Skipping unimplemented target 0x{:02X}",
+                target
+            ),
             t if t < 128 => (s.set_parameter)(file(), t, result),
-            _ => (s.unknown_target)(target),
+            _ => grf_msg!(7, "ParamSet: Skipping unknown target 0x{:02X}", target),
         }
         Ok(())
     }
@@ -1203,7 +1272,7 @@ unsafe fn decode_special_sprite(s: &Services, allocator: &mut Vec<u8>, num: u32,
             .map(|v| (v.as_ptr(), v.len()));
         let data = if let Some((data, len)) = preload {
             (s.assert_override_size)(len, num);
-            (s.preloaded_sprite)();
+            grf_msg!(7, "DecodeSpecialSprite: Using preloaded pseudo sprite data");
             (s.seek)((*execution()).file, num as usize, true);
             data
         } else {
@@ -1216,18 +1285,30 @@ unsafe fn decode_special_sprite(s: &Services, allocator: &mut Vec<u8>, num: u32,
         let mut reader = ByteReader::new(data, num as usize);
         let result = reader.byte().and_then(|a| {
             match a {
-                0xFF => (s.unexpected_data)(),
-                0xFE => (s.unexpected_import)(),
+                0xFF => grf_msg!(2, "DecodeSpecialSprite: Unexpected data block, skipping"),
+                0xFE => grf_msg!(2, "DecodeSpecialSprite: Unexpected import block, skipping"),
                 0x00..=0x14 => {
-                    (s.handling_action)(a, stage);
+                    grf_msg!(
+                        7,
+                        "DecodeSpecialSprite: Handling action 0x{:02X} in stage {}",
+                        a,
+                        stage
+                    );
                     return dispatch(s, a, stage, &mut reader);
                 }
-                _ => (s.unknown_action)(a),
+                _ => grf_msg!(
+                    7,
+                    "DecodeSpecialSprite: Skipping unknown action 0x{:02X}",
+                    a
+                ),
             }
             Ok(())
         });
         if result.is_err() {
-            (s.read_bounds_error)();
+            grf_msg!(
+                1,
+                "DecodeSpecialSprite: Tried to read past end of pseudo-sprite data"
+            );
             disable(s, s.read_bounds);
         }
     }
@@ -1245,10 +1326,15 @@ unsafe fn load_from_file(s: &Services, c: *mut c_void, stage: u8, f: *mut c_void
 }
 unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
     unsafe {
-        (s.reading_file)(config());
+        debug!(
+            grf,
+            2,
+            "LoadNewGRFFile: Reading NewGRF-file '{}'",
+            Bytes(config_filename(s, config()))
+        );
         let version = (s.container_version)(f);
         if version == 0 {
-            (s.invalid_format)();
+            debug!(grf, 7, "LoadNewGRFFile: Custom .grf has invalid format");
             return;
         }
         if stage == GLS_INIT || stage == GLS_ACTIVATION {
@@ -1257,7 +1343,7 @@ unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
             (s.read_dword)(f);
         }
         if version >= 2 && (s.read_byte)(f) != 0 {
-            (s.unsupported_compression)();
+            debug!(grf, 7, "LoadNewGRFFile: Unsupported compression format");
             return;
         }
         let size = if version >= 2 {
@@ -1268,7 +1354,7 @@ unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
         if size == 4 && (s.read_byte)(f) == 0xFF {
             (s.read_dword)(f);
         } else {
-            (s.invalid_format)();
+            debug!(grf, 7, "LoadNewGRFFile: Custom .grf has invalid format");
             return;
         }
         openttd_rust_grf_clear_file();
@@ -1287,7 +1373,7 @@ unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
             if typ == 0xFF {
                 if (*execution()).skip_sprites == 0 {
                     if num > 1024 * 1024 {
-                        (s.unexpected_large)();
+                        grf_msg!(0, "LoadNewGRFFile: Unexpectedly large sprite, disabling");
                         disable(s, s.unexpected_sprite);
                         break;
                     }
@@ -1300,7 +1386,7 @@ unsafe fn load_file_body(s: &Services, stage: u8, f: *mut c_void) {
                 (s.skip)(f, num as usize);
             } else {
                 if (*execution()).skip_sprites == 0 {
-                    (s.unexpected_real)();
+                    grf_msg!(0, "LoadNewGRFFile: Unexpected sprite, disabling");
                     disable(s, s.unexpected_sprite);
                     break;
                 }
@@ -1403,7 +1489,7 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         (s.reset_prices)();
         (s.reset_currencies)();
         crate::house_definition::reset(&*s.houses);
-        crate::industry::definitions::reset(((*s.global).climate)(), &*s.industry);
+        crate::industry::definitions::reset(s.shared().settings().climate.read(), &*s.industry);
         crate::newgrf_class::object::reset(s.object_classes);
         (s.reset_objects)();
         crate::newgrf_class::station::reset(s.station_classes);
@@ -1427,7 +1513,10 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
             (s.clear_errors)(c);
             i += 1;
         }
-        crate::cargo_registry::openttd_rust_cargo_setup(s.cargo, ((*s.global).climate)());
+        crate::cargo_registry::openttd_rust_cargo_setup(
+            s.cargo,
+            s.shared().settings().climate.read(),
+        );
         (s.set_misc)(0);
         (s.reset_loaded_features)();
         crate::engine_loading::openttd_rust_engine_override_clear();
@@ -1557,7 +1646,12 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
                     s.newgrf_dir
                 };
                 if !(s.exists)(c, subdir) {
-                    (s.missing_file)(c);
+                    debug!(
+                        grf,
+                        0,
+                        "NewGRF file is missing '{}'; disabling",
+                        Bytes(config_filename(s, c))
+                    );
                     (s.set_status)(c, GCS_NOT_FOUND);
                     continue;
                 }
@@ -1567,6 +1661,12 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
                 if flags & ((1 << STATIC) | (1 << SYSTEM)) == 0 {
                     if num_non_static == crate::network_config::NETWORK_MAX_GRF_COUNT {
                         (s.set_status)(c, GCS_DISABLED);
+                        debug!(
+                            grf,
+                            0,
+                            "'{}' is not loaded as the maximum number of non-static GRFs has been reached",
+                            Bytes(config_filename(s, c))
+                        );
                         (s.too_many)(c);
                         continue;
                     }
@@ -1581,7 +1681,12 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
                     (s.assert_file_match)(c, file());
                     clear_labels(file());
                     crate::cargo_registry::openttd_rust_cargo_build_inverse(file());
-                    (s.loaded_sprites)((*execution()).spriteid);
+                    debug!(
+                        sprite,
+                        2,
+                        "LoadNewGRF: Currently {} sprites are loaded",
+                        (*execution()).spriteid
+                    );
                 } else if stage == GLS_INIT && (s.config_flags)(c) & (1 << INIT_ONLY) != 0 {
                     clear_labels(file());
                 }

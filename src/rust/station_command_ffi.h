@@ -159,7 +159,6 @@ struct OpenTTDStationCommandServices {
 	uint32_t (*iterator_tile)(TileIterator *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_tile);
 	void (*iterator_next)(TileIterator *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_next);
 	uint8_t (*airport_noise)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_noise);
-	bool (*noise_enabled)() noexcept OPENTTD_SERVICE_DEFAULT(noise_enabled);
 	uint16_t (*town_max_noise)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_max_noise);
 	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	uint32_t (*airport_tile)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
@@ -193,7 +192,6 @@ struct OpenTTDStationCommandServices {
 	void (*water_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_infrastructure);
 	void (*make_dock)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_dock);
 	BaseStation *(*neutral_for_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(neutral_for_tile);
-	void (*oilrig_unavailable)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(oilrig_unavailable);
 	void (*associate_industry)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(associate_industry);
 	void (*make_oilrig)(uint32_t, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_oilrig);
 	void (*set_station_owner)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);

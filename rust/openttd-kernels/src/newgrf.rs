@@ -20,9 +20,6 @@ use std::ffi::c_void;
 pub const TRAIN_WIDTH_32_PIXELS: u8 = 3;
 #[repr(C)]
 pub struct Services {
-    pub(crate) climate: unsafe extern "C" fn() -> u8,
-    disable_elrails: unsafe extern "C" fn() -> bool,
-    height_limit: unsafe extern "C" fn() -> u8,
     pub(crate) misc_bits: unsafe extern "C" fn() -> u8,
     newgrf_version: unsafe extern "C" fn() -> u32,
     palette: unsafe extern "C" fn(*const c_void) -> u8,
@@ -65,7 +62,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
                         .wrapping_sub(first) as u32)
                         << 16
             }
-            0x03 => u32::from((s.climate)()),
+            0x03 => u32::from(shared.settings().climate.read()),
             0x06 => u32::from((s.road_side)()) << 4,
             0x09 => u32::from(crate::timer_game_common::calendar_fraction()) * 885,
             0x0A => gb((shared.tick_counter)() as u32, 0, 16),
@@ -75,7 +72,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
             0x0F => {
                 let mut costs = 0;
                 sb(&mut costs, 0, 8, u32::from((s.rail_cost)(RAILTYPE_RAIL)));
-                let middle = if (s.disable_elrails)() {
+                let middle = if shared.settings().disable_elrails.read() {
                     RAILTYPE_MONO
                 } else {
                     RAILTYPE_ELECTRIC
@@ -98,7 +95,9 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
             }
             0x20 => {
                 let snow = crate::snow_line::get(shared);
-                if (s.climate)() == crate::landscape_type::ARCTIC && snow <= (s.height_limit)() {
+                if shared.settings().climate.read() == crate::landscape_type::ARCTIC
+                    && snow <= shared.settings().height_limit.read()
+                {
                     (u32::from(snow)
                         * if (shared.grf_file_version)(file) >= 8 {
                             1
@@ -122,7 +121,7 @@ pub unsafe extern "C" fn openttd_rust_global_variable_abi(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, disable_elrails, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
+    "OpenTTDGlobalVariableServices" ["storage"] => Services { misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width };
 }
 
 // Feature identities from newgrf.h, pinned by native static assertions.

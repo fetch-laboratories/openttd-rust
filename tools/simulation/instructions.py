@@ -12,7 +12,7 @@ from typing import TypedDict
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 CANDIDATE_ENTRIES = (
-    "openttd_rust_session_state_loop",
+    "openttd_rust_session_state_loop_abi",
     "openttd_kernels::genworld::generate",
 )
 # Drawing workloads count C++ drawing, which both builds still share (#566).

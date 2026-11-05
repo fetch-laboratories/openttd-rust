@@ -162,13 +162,6 @@ pub extern "C" fn openttd_rust_script_context() -> *mut Context {
     CONTEXT.get()
 }
 
-/// `ScriptObject::ActiveInstance`: activate `host` and return the previous host.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_activate(host: *mut Host) -> *mut Host {
-    // SAFETY: serialized game-state access.
-    unsafe { std::mem::replace(&mut (*CONTEXT.get()).active, host) }
-}
-
 /// `ScriptStorage::ScriptStorage` for `instance`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_script_host_new(instance: *mut ScriptInstance) -> *mut Host {

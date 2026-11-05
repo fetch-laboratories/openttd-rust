@@ -4,11 +4,6 @@
 #include "engine_services.h"
 #include "../newgrf_sound.h"
 #include "../newgrf/newgrf_internal_vehicle.h"
-static std::string_view RustPropertyLocation(VehicleType type) noexcept
-{
-	static constexpr std::string_view names[]{"RailVehicleChangeInfo", "RoadVehicleChangeInfo", "ShipVehicleChangeInfo", "AircraftVehicleChangeInfo"};
-	return names[type];
-}
 const OpenTTDVehicleProperties &GetRustVehicleProperties() noexcept
 {
 	static const OpenTTDVehicleProperties services{
@@ -91,12 +86,6 @@ const OpenTTDVehicleProperties &GetRustVehicleProperties() noexcept
 		.ship_image_valid = IsValidNewGRFImageIndex<VEH_SHIP>,
 		.aircraft_image_valid = IsValidNewGRFImageIndex<VEH_AIRCRAFT>,
 		.uses_2cc = [](bool value) noexcept { _loaded_newgrf_features.has_2CC |= value; },
-		.invalid_sprite = [](VehicleType type, uint8_t value) noexcept { GrfMsg(1, "{}: Invalid Sprite {} specified, ignoring", RustPropertyLocation(type), value); },
-		.invalid_cargo = [](VehicleType type, uint8_t value) noexcept { GrfMsg(2, "{}: Invalid cargo type {}, using first refittable", RustPropertyLocation(type), value); },
-		.invalid_track = [](uint8_t value) noexcept { GrfMsg(1, "RailVehicleChangeInfo: Invalid track type {} specified, ignoring", value); },
-		.invalid_weight = [](uint8_t value) noexcept { GrfMsg(2, "RailVehicleChangeInfo: Nonsensical weight of {} tons, ignoring", value << 8); },
-		.ai_rank = []() noexcept { GrfMsg(2, "RailVehicleChangeInfo: Property 0x18 'AI rank' not used by NoAI, ignored."); },
-		.invalid_price = [](const char *location, size_t size, uint32_t value) noexcept { GrfMsg(1, "{}: Unsupported running cost base 0x{:04X}, ignoring", std::string_view(location, size), value); },
 	};
 	return services;
 }

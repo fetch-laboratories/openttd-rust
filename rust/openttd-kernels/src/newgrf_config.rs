@@ -12,3 +12,5 @@ pub const STATIC: u8 = 2;
 pub const INIT_ONLY: u8 = 5;
 pub const RESERVED: u8 = 6;
 pub const INVALID: u8 = 7;
+/// `GRFPalette::GRFP_USE_MASK`.
+pub const GRFP_USE_MASK: u8 = 0x1;

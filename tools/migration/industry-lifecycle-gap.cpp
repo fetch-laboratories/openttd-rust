@@ -136,6 +136,9 @@ static void CheckAcceptance()
 	spec_tables.industry_tile = &tile_spec;
 	auto shared = OpenTTDFixtureSharedServices(nullptr, nullptr);
 	shared.newgrf_specs = &spec_tables;
+	static OpenTTDSettingAddresses settings{};
+	settings.ambient = &_settings_client.sound.ambient;
+	shared.settings = &settings;
 	OpenTTDIndustryTileServices service{};
 	service.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(tile); };
 	service.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { return {reinterpret_cast<::Industry *>(Industry::GetByTile(tile)), acceptance_owner}; };
@@ -199,7 +202,6 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 	tileservice.set_frame = [](uint32_t tile, uint8_t frame) noexcept { SetAnimationFrame(tile, frame); };
 	tileservice.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(tile); };
 	tileservice.set_animation_loop = [](uint32_t tile, uint8_t loop) noexcept { SetIndustryAnimationLoop(tile, loop); };
-	tileservice.ambient = []() noexcept -> bool { return _settings_client.sound.ambient; };
 	tileservice.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; };
 	animation.industry_tiles = &tileservice;
 	builtin_mode = true;
@@ -252,6 +254,9 @@ static void Run()
 	auto shared = OpenTTDFixtureSharedServices(nullptr, [](void *) noexcept -> uint32_t { return Random(); });
 	shared.mark_dirty = [](uint32_t tile) noexcept { MarkTileDirtyByTile(tile); };
 	shared.tick_counter = []() noexcept -> uint64_t { return TimerGameTick::counter; };
+	static OpenTTDSettingAddresses tile_settings{};
+	tile_settings.ambient = &_settings_client.sound.ambient;
+	shared.settings = &tile_settings;
 	services.shared = &shared;
 	services.play_sound = [](uint16_t sound, uint32_t tile) noexcept { SndPlayTileFx(sound, tile); };
 	/* Observe the same no-op resolver boundary through the canonical Rust owner.

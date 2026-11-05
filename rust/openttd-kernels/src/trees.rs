@@ -22,6 +22,7 @@
     clippy::too_many_lines
 )]
 use crate::clear_map::{CLEAR_DESERT, CLEAR_FIELDS, CLEAR_GRASS, CLEAR_ROCKS, CLEAR_ROUGH};
+use crate::openttd::GameMode;
 use crate::random_func::chance16_i;
 use crate::services::Services;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
@@ -160,20 +161,6 @@ pub struct LoopSettings {
     pub ambient_callback: bool,
 }
 
-/// `GenerateTrees` and `PlaceTreesRandomly` settings, read once per entry.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct GenerateSettings {
-    pub size: u32,
-    pub size_x: u32,
-    pub size_y: u32,
-    pub climate: u8,
-    pub placer: u8,
-    pub height_limit: u8,
-    pub editor: bool,
-    pub freeform_edges: bool,
-}
-
 /// `CmdPlantTree` settings, read once per entry.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -242,15 +229,12 @@ fn scale_by_size(size: u32, n: u32) -> u32 {
         / 16
 }
 
-/// `TileAddWrap` for the generation map geometry.
-fn tile_add_wrap(g: &GenerateSettings, tile: u32, x: i32, y: i32) -> u32 {
-    crate::map_func::Map::from_log_x(g.size_x.trailing_zeros()).tile_add_wrap(
-        tile,
-        x,
-        y,
-        g.size_y,
-        g.freeform_edges,
-    )
+/// `TileAddWrap` on the canonical map; `freeform_edges` is read at the call, as in `map.cpp`.
+fn tile_add_wrap(s: &Services, tile: u32, x: i32, y: i32) -> u32 {
+    s.map()
+        .tile_add_wrap(tile, x, y, 1 << s.map_log_y(), unsafe {
+            s.settings().freeform_edges.read()
+        })
 }
 
 /// `GetRandomTreeType`; the zone is used only in the tropic climate.
@@ -421,6 +405,15 @@ impl Trees<'_> {
         ground
     }
 
+    /// `_settings_game.game_creation.landscape`, read at the observation point.
+    fn climate(&self) -> u8 {
+        unsafe { self.s.settings().climate.read() }
+    }
+    /// `_settings_game.game_creation.tree_placer`, read at the observation point.
+    fn placer(&self) -> u8 {
+        unsafe { self.s.settings().tree_placer.read() }
+    }
+
     /// `PlaceTree`; `GetTreeGround` after `MakeTree` is the ground just written.
     fn place(&self, tile: u32, p: PlantObservation, r: u32, keep_density: bool, climate: u8) {
         let tree = random_tree_type(climate, p.zone, r >> 24);
@@ -463,10 +456,10 @@ impl Trees<'_> {
     }
 
     /// `PlaceTreeGroups`; returns true on world-generation abort.
-    fn place_groups(&self, g: &GenerateSettings, groups: u32) -> bool {
+    fn place_groups(&self, groups: u32) -> bool {
         let mut groups = groups;
         loop {
-            let center = self.random() & g.size.wrapping_sub(1);
+            let center = self.random() & self.s.map_size().wrapping_sub(1);
             let shape = self.grove_shape();
             for _ in 0..DEFAULT_TREE_STEPS {
                 if (self.t.progress)() {
@@ -475,7 +468,7 @@ impl Trees<'_> {
                 let r = self.random();
                 let x = (r & 31) as i32 - 16;
                 let y = ((r >> 8) & 31) as i32 - 16;
-                let tile = tile_add_wrap(g, center, x, y);
+                let tile = tile_add_wrap(self.s, center, x, y);
                 if tile == INVALID_TILE {
                     continue;
                 }
@@ -483,7 +476,7 @@ impl Trees<'_> {
                 if !p.suitable(true) || !in_grove(x, y, &shape) {
                     continue;
                 }
-                self.place(tile, p, r, false, g.climate);
+                self.place(tile, p, r, false, self.climate());
             }
             groups = groups.wrapping_sub(1);
             if groups == 0 {
@@ -493,12 +486,12 @@ impl Trees<'_> {
     }
 
     /// `PlaceTreeAtSameHeight`.
-    fn place_at_same_height(&self, g: &GenerateSettings, tile: u32, height: i32) {
+    fn place_at_same_height(&self, tile: u32, height: i32) {
         for _ in 0..DEFAULT_TREE_STEPS {
             let r = self.random();
             let x = (r & 31) as i32 - 16;
             let y = ((r >> 8) & 31) as i32 - 16;
-            let current = tile_add_wrap(g, tile, x, y);
+            let current = tile_add_wrap(self.s, tile, x, y);
             if current == INVALID_TILE || x.abs() + y.abs() > 16 {
                 continue;
             }
@@ -515,15 +508,15 @@ impl Trees<'_> {
             {
                 continue;
             }
-            self.place(current, p, r, false, g.climate);
+            self.place(current, p, r, false, self.climate());
             break;
         }
     }
 
     /// One `PlaceTreesRandomly` attempt; returns true on world-generation abort.
-    fn scatter_one(&self, g: &GenerateSettings) -> bool {
+    fn scatter_one(&self, height_limit: u8) -> bool {
         let r = self.random();
-        let tile = r & g.size.wrapping_sub(1);
+        let tile = r & self.s.map_size().wrapping_sub(1);
         if (self.t.progress)() {
             return true;
         }
@@ -531,47 +524,48 @@ impl Trees<'_> {
         if !p.suitable(true) {
             return false;
         }
-        self.place(tile, p, r, false, g.climate);
-        if g.placer != TP_IMPROVED {
+        self.place(tile, p, r, false, self.climate());
+        if self.placer() != TP_IMPROVED {
             return false;
         }
         let ht = (self.s.tile_z)(tile);
         let mut j = (self.s.tile_z)(tile).wrapping_mul(2);
-        if g.climate == ARCTIC && ht > i32::from(crate::snow_line::get(self.s)) {
+        if self.climate() == ARCTIC && ht > i32::from(crate::snow_line::get(self.s)) {
             j = j.wrapping_mul(3);
         }
-        if g.height_limit > MAP_HEIGHT_LIMIT_ORIGINAL {
-            j = j.wrapping_mul(i32::from(MAP_HEIGHT_LIMIT_ORIGINAL)) / i32::from(g.height_limit);
+        if height_limit > MAP_HEIGHT_LIMIT_ORIGINAL {
+            j = j.wrapping_mul(i32::from(MAP_HEIGHT_LIMIT_ORIGINAL)) / i32::from(height_limit);
         }
         while j != 0 {
             j = j.wrapping_sub(1);
-            self.place_at_same_height(g, tile, ht);
+            self.place_at_same_height(tile, ht);
         }
         false
     }
 
     /// One rainforest `PlaceTreesRandomly` attempt; returns true on abort.
-    fn scatter_rainforest_one(&self, g: &GenerateSettings) -> bool {
+    fn scatter_rainforest_one(&self) -> bool {
         let r = self.random();
-        let tile = r & g.size.wrapping_sub(1);
+        let tile = r & self.s.map_size().wrapping_sub(1);
         if (self.t.progress)() {
             return true;
         }
         let p = self.plant_observation(tile);
         if p.zone == ZONE_RAINFOREST && p.suitable(false) {
-            self.place(tile, p, r, false, g.climate);
+            self.place(tile, p, r, false, self.climate());
         }
         false
     }
 
     /// `PlaceTreesRandomly`; returns true on world-generation abort.
-    fn place_randomly(&self, g: &GenerateSettings) -> bool {
-        let mut i = scale_by_size(g.size, DEFAULT_TREE_STEPS) as i32;
-        if g.editor {
+    fn place_randomly(&self) -> bool {
+        let height_limit = unsafe { self.s.settings().height_limit.read() };
+        let mut i = scale_by_size(self.s.map_size(), DEFAULT_TREE_STEPS) as i32;
+        if crate::session::mode() == GameMode::EDITOR {
             i /= EDITOR_TREE_DIV;
         }
         loop {
-            if self.scatter_one(g) {
+            if self.scatter_one(height_limit) {
                 return true;
             }
             i = i.wrapping_sub(1);
@@ -579,13 +573,13 @@ impl Trees<'_> {
                 break;
             }
         }
-        if g.climate == TROPIC {
-            let mut i = scale_by_size(g.size, DEFAULT_RAINFOREST_TREE_STEPS) as i32;
-            if g.editor {
+        if self.climate() == TROPIC {
+            let mut i = scale_by_size(self.s.map_size(), DEFAULT_RAINFOREST_TREE_STEPS) as i32;
+            if crate::session::mode() == GameMode::EDITOR {
                 i /= EDITOR_TREE_DIV;
             }
             loop {
-                if self.scatter_rainforest_one(g) {
+                if self.scatter_rainforest_one() {
                     return true;
                 }
                 i = i.wrapping_sub(1);
@@ -598,36 +592,39 @@ impl Trees<'_> {
     }
 
     /// `GenerateTrees`; returns true on world-generation abort.
-    fn generate(&self, g: &GenerateSettings) -> bool {
-        if g.placer == TP_NONE {
+    fn generate(&self) -> bool {
+        if self.placer() == TP_NONE {
             return false;
         }
-        let mut i: u32 = if g.placer == TP_ORIGINAL {
-            if g.climate == ARCTIC { 15 } else { 6 }
-        } else if g.climate == ARCTIC {
+        let mut i: u32 = if self.placer() == TP_ORIGINAL {
+            if self.climate() == ARCTIC { 15 } else { 6 }
+        } else if self.climate() == ARCTIC {
             4
         } else {
             2
         };
-        let mut total = scale_by_size(g.size, DEFAULT_TREE_STEPS);
-        if g.climate == TROPIC {
-            total = total.wrapping_add(scale_by_size(g.size, DEFAULT_RAINFOREST_TREE_STEPS));
+        let mut total = scale_by_size(self.s.map_size(), DEFAULT_TREE_STEPS);
+        if self.climate() == TROPIC {
+            total = total.wrapping_add(scale_by_size(
+                self.s.map_size(),
+                DEFAULT_RAINFOREST_TREE_STEPS,
+            ));
         }
         total = total.wrapping_mul(i);
-        let groups = if g.climate == TOYLAND {
+        let groups = if self.climate() == TOYLAND {
             0
         } else {
-            scale_by_size(g.size, (self.random() & 31) + 25)
+            scale_by_size(self.s.map_size(), (self.random() & 31) + 25)
         };
         total = total.wrapping_add(groups.wrapping_mul(DEFAULT_TREE_STEPS));
         if (self.t.progress_total)(total) {
             return true;
         }
-        if groups != 0 && self.place_groups(g, groups) {
+        if groups != 0 && self.place_groups(groups) {
             return true;
         }
         while i != 0 {
-            if self.place_randomly(g) {
+            if self.place_randomly() {
                 return true;
             }
             i -= 1;
@@ -843,7 +840,7 @@ impl Trees<'_> {
         if !p.suitable(false) {
             return;
         }
-        let tree = random_tree_type(unsafe { self.s.settings().climate.read() }, p.zone, r >> 24);
+        let tree = random_tree_type(self.climate(), p.zone, r >> 24);
         if tree == TREE_INVALID {
             return;
         }
@@ -1070,13 +1067,9 @@ pub(crate) unsafe fn tick(services: *const TreeServices, shared: *const Services
 /// `GenerateTrees`; true when a progress service reported world-generation abort.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
-pub(crate) unsafe fn generate(
-    settings: GenerateSettings,
-    services: *const TreeServices,
-    shared: *const Services,
-) -> bool {
+pub(crate) unsafe fn generate(services: *const TreeServices, shared: *const Services) -> bool {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    unsafe { trees(services, shared) }.generate(&settings)
+    unsafe { trees(services, shared) }.generate()
 }
 
 /// `PlaceTreesRandomly`; true when a progress service reported world-generation abort.
@@ -1084,12 +1077,11 @@ pub(crate) unsafe fn generate(
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_place_randomly_abi(
-    settings: GenerateSettings,
     services: *const TreeServices,
     shared: *const Services,
 ) -> u8 {
     // SAFETY: The caller supplies live immutable tables for this serialized entry.
-    u8::from(unsafe { trees(services, shared) }.place_randomly(&settings))
+    u8::from(unsafe { trees(services, shared) }.place_randomly())
 }
 
 /// `PlaceTree` on a tile suitable for trees.
@@ -1323,16 +1315,6 @@ crate::abi::layouts! {
         ambient,
         ambient_callback,
     };
-    "OpenTTDTreeGenerateSettings" ["probe"] => GenerateSettings {
-        size,
-        size_x,
-        size_y,
-        climate,
-        placer,
-        height_limit,
-        editor,
-        freeform_edges,
-    };
     "OpenTTDTreeCommandSettings" ["probe"] => CommandSettings {
         build_price,
         size,
@@ -1418,9 +1400,21 @@ mod tests {
         log(Event::Zone(zone));
         WORLD.with_borrow_mut(|w| w.plant.zone = zone);
     }
+    thread_local! {
+        static FREEFORM: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+        static CATALOG: crate::settings_type::SettingAddresses =
+            crate::settings_type::SettingAddresses {
+                climate: &0,
+                freeform_edges: FREEFORM.with(std::cell::Cell::as_ptr).cast_const(),
+                height_limit: &MAP_HEIGHT_LIMIT_ORIGINAL,
+                tree_placer: &TP_ORIGINAL,
+                ..crate::settings_type::SettingAddresses::NULL
+            };
+    }
     fn shared() -> Services {
         crate::map_func::fixture::set(water_map(), 6);
         Services {
+            settings: CATALOG.with(std::ptr::from_ref),
             snow_line_support: crate::snow_line::Support {
                 height: &4,
                 ..crate::services::fixture(std::ptr::null_mut(), random, industry).snow_line_support
@@ -1663,16 +1657,6 @@ mod tests {
         coast: false,
         zone: ZONE_NORMAL,
     };
-    const GENERATE: GenerateSettings = GenerateSettings {
-        size: 4096,
-        size_x: 64,
-        size_y: 64,
-        climate: 0,
-        placer: TP_ORIGINAL,
-        height_limit: 15,
-        editor: false,
-        freeform_edges: true,
-    };
     const COMMAND: CommandSettings = CommandSettings {
         build_price: 15,
         size: 4096,
@@ -1698,39 +1682,39 @@ mod tests {
         assert_eq!(scale_by_size(4096, 1000), 63);
         assert_eq!(scale_by_size(65536, 1), 1);
         assert_eq!(scale_by_size(4096 * 4096, 1), 256);
-        assert_eq!(tile_add_wrap(&GENERATE, 65, -1, 0), INVALID_TILE);
-        assert_eq!(tile_add_wrap(&GENERATE, 65, 1, 1), 130);
-        assert_eq!(tile_add_wrap(&GENERATE, 65, 62, 0), INVALID_TILE);
-        let edges = GenerateSettings {
-            freeform_edges: false,
-            ..GENERATE
-        };
-        assert_eq!(tile_add_wrap(&edges, 65, -1, 0), 64);
+        let shared = shared();
+        assert_eq!(tile_add_wrap(&shared, 65, -1, 0), INVALID_TILE);
+        assert_eq!(tile_add_wrap(&shared, 65, 1, 1), 130);
+        assert_eq!(tile_add_wrap(&shared, 65, 62, 0), INVALID_TILE);
+        FREEFORM.set(false);
+        assert_eq!(tile_add_wrap(&shared, 65, -1, 0), 64);
+        FREEFORM.set(true);
     }
 
     // Headless semantic scenarios cannot click Abort during map generation. The
     // aborting progress call is the last service: no draw, read or write follows it.
     #[test]
+    #[allow(clippy::redundant_closure_for_method_calls)] // `Trees::generate` is not lifetime-general.
     fn generation_abort_returns_at_the_progress_call() {
         reset(World {
             abort_at: Some(1),
             ..World::default()
         });
-        assert!(with(|t| t.place_randomly(&GENERATE)));
+        assert!(with(|t| t.place_randomly()));
         assert_eq!(events(), [Event::Draw, Event::Progress]);
 
         reset(World {
             abort_at: Some(1),
             ..World::default()
         });
-        assert!(with(|t| t.generate(&GENERATE)));
+        assert!(with(|t| t.generate()));
         assert_eq!(events(), [Event::Draw, Event::Total(6 * 63 + 2 * 1000)]);
 
         reset(World {
             abort_at: Some(2),
             ..World::default()
         });
-        assert!(with(|t| t.generate(&GENERATE)));
+        assert!(with(|t| t.generate()));
         let mut expected = vec![Event::Draw, Event::Total(6 * 63 + 2 * 1000)];
         expected.extend([Event::Draw; 5]); // Centre and four phases.
         expected.push(Event::Progress);
@@ -1744,7 +1728,7 @@ mod tests {
             },
             ..World::default()
         });
-        assert!(with(|t| t.place_randomly(&GENERATE)));
+        assert!(with(|t| t.place_randomly()));
         let attempt = [Event::Draw, Event::Progress, Event::Plant];
         let mut expected = [attempt, attempt].concat();
         expected.extend([Event::Draw, Event::Progress]);

@@ -124,3 +124,13 @@ write | src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t
 write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shell, uint16_t id) noexcept | 1b6edd36dbec0c7a | 1
 write | src/rust/ship_control_services.h | Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept | 680b8e84edac38d1 | 1
 write | src/rust/train_services.h | TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | aebb225d48856496 | 1
+write | src/rust/session_services.inc | []() noexcept | 56bc9a312836fcd1 | 1
+src/rust/session_services.inc | [=] | bd9340cb404adf2f | 1
+src/rust/session_services.inc | [](OpenTTDSessionFrame *f) noexcept | 309fd0e09c3b557e | 1
+src/rust/session_services.inc | []() noexcept | 5910eb80ec425d16 | 1
+src/rust/session_services.inc | []() noexcept | 819ee15bd28ec7c1 | 1
+src/rust/session_services.inc | []() noexcept | f0134ca136619379 | 1
+src/rust/session_services.inc | []() noexcept | d03f30b8b71355b4 | 1
+src/rust/session_services.inc | []() noexcept | bf49647f7492024a | 1
+write | src/rust/session_services.inc | []() noexcept | 11b9689a67f6034c | 1
+src/rust/session_services.inc | [](uint8_t c) noexcept | 5c9064175640b625 | 1

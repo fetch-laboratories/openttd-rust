@@ -8,6 +8,7 @@
     clippy::verbose_bit_mask
 )]
 use crate::company_type::{CompanyID, MAX_COMPANIES};
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::openttd::{GameMode, PauseMode, SwitchMode};
 use crate::raw_field::{read_field, write_field};
@@ -99,7 +100,6 @@ pub struct Services {
     pub survey_ask: extern "C" fn() -> bool,
     pub show_load_error: extern "C" fn(bool),
     pub social_mode: extern "C" fn(GameMode),
-    pub load_failed_debug: extern "C" fn(bool),
     pub pause_query: extern "C" fn(),
     pub pause_change: extern "C" fn(u8, PauseMode),
     pub pause_dirty: extern "C" fn(),
@@ -398,7 +398,7 @@ impl<'a> Session<'a> {
             return Ok(true);
         }
         if (self.world().dedicated)() && old == GameMode::MENU {
-            (s.load_failed_debug)(true);
+            debug!(net, 0, "Loading requested map failed; closing server.");
             (self.world().set_exit)();
             return Ok(false);
         }
@@ -407,7 +407,10 @@ impl<'a> Session<'a> {
             return Ok(false);
         }
         if (self.world().dedicated)() {
-            (s.load_failed_debug)(false);
+            debug!(
+                net,
+                0, "Loading game failed, so a new (random) game will be started"
+            );
             self.new_game(false, true)?;
             return Ok(false);
         }
@@ -702,7 +705,7 @@ impl<'a> Session<'a> {
             (s.window_tick)();
             (s.news)();
         } else {
-            if (self.world().desync_level)() > 2
+            if crate::debug::level(|l| l.desync) > 2
                 && crate::timer_game_common::economy_fraction() == 0
                 && crate::timer_game_common::economy_date().0 & 0x1f == 0
             {
@@ -924,7 +927,6 @@ crate::abi::layouts! {
         survey_ask,
         show_load_error,
         social_mode,
-        load_failed_debug,
         pause_query,
         pause_change,
         pause_dirty,

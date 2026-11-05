@@ -16,7 +16,6 @@ struct OpenTTDGrfBindingServices {
 	void (*engine_grf)(uint16_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(engine_grf);
 	StringID * (*engine_string)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_string);
 	void (*mark_feature)(GRFFile *, GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(mark_feature);
-	void (*new_name)(uint16_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(new_name);
 	ObjectSpec * (*object_spec)(GRFFile *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(object_spec);
 	void (*rail_bind)(RailType, uint8_t, const GRFFile *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(rail_bind);
 	void (*road_bind)(RoadType, uint8_t, const GRFFile *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(road_bind);

@@ -31,9 +31,6 @@
 #include "rust/environment_services.h"
 #include "rust/vehicle_services.h"
 
-static void SignalOverflowTbu() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _tbuset is full (maximum 64)"); }
-static void SignalOverflowTbd() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _tbdset is full (maximum 256)"); }
-static void SignalOverflowGlobal() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _globset is full (maximum 128)"); }
 static void SignalAssertCompany([[maybe_unused]] uint8_t owner) noexcept { assert(OpenTTDCompanyIsValid(owner)); }
 static void SignalAssertWormholeStart([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept
 {
@@ -49,9 +46,6 @@ static const OpenTTDSignalServices _signal_services{
 	.assert_condition = RustAssertCondition,
 	.assert_wormhole_start = SignalAssertWormholeStart,
 	.vehicles = &_rust_vehicle_services,
-	.overflow_tbu = SignalOverflowTbu,
-	.overflow_tbd = SignalOverflowTbd,
-	.overflow_global = SignalOverflowGlobal,
 	.assert_company = SignalAssertCompany,
 };
 

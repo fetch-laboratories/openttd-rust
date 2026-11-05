@@ -43,11 +43,8 @@ const OpenTTDGenericServices &GetRustGenericServices() noexcept
 		.evaluate = EvaluateGeneric,
 		.common = &GetRustSpriteGroupServices(),
 		.enabled = RustAmbientSoundEnabled,
-		.ambient = OpenTTDAmbientSound,
 		.water_class = RustWaterClass,
 		.sound = RustGRFPlayTileSound,
-		.unsupported = [](uint8_t feature) noexcept { GrfMsg(5, "AddGenericCallback: Unsupported feature 0x{:02X}", feature); },
-		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled generic feature variable 0x{:02X}", variable); },
 	};
 	return services;
 }
