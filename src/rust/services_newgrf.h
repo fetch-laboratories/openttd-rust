@@ -49,12 +49,12 @@ inline uint64_t RustHouseWatchedByID(uint16_t house) noexcept { return RustHouse
 inline uint16_t RustTownHouseClass(const HouseSpec *spec) noexcept { return spec->class_id; }
 inline uint16_t RustTownHouseClass(uint16_t house) noexcept { return RustTownHouseClass(RustHouseSpec(house)); }
 
-inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1, "Unhandled scope variable 0x{:X}", variable); }
 
 /* These synchronous field reads borrow live native objects. Callers retain
  * the original non-null resolver/file preconditions; nothing is cached. */
 inline const GRFFile *RustResolverGRFFile(const ResolverObject *resolver) noexcept { return resolver->grffile; }
 inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
+inline OpenTTDByteSpan RustGRFFileName(const GRFFile *file) noexcept { return {reinterpret_cast<const uint8_t *>(file->filename.data()), file->filename.size()}; }
 inline size_t RustGRFFileCount() noexcept { return GetAllGRFFiles().size(); }
 inline GRFFile *RustGRFFileAt(size_t index) noexcept { return const_cast<GRFFile *>(&GetAllGRFFiles()[index]); }
 inline GRFFile *RustGRFFileAtOrNull(size_t index) noexcept { return index < RustGRFFileCount() ? RustGRFFileAt(index) : nullptr; }
@@ -69,6 +69,15 @@ template <typename Spec>
 inline void RustSpecPlayTileSound(const Spec *spec, uint8_t sound, uint32_t tile) noexcept { RustGRFPlayTileSound(RustSpecGRFFile(spec), sound, tile); }
 template <typename Spec>
 inline void RustSpecSetGRFFile(Spec *spec, const GRFFile *file) noexcept { spec->grf_prop.SetGRFFile(file); }
+template <typename Spec>
+inline void RustSpecSetStandardSpriteGroup(Spec *spec, uint8_t which, const SpriteGroup *group) noexcept { spec->grf_prop.SetSpriteGroup(static_cast<StandardSpriteGroup>(which), group); }
+template <typename Spec>
+inline uint32_t *RustSpecName(Spec *spec) noexcept
+{
+	if constexpr (requires { spec->name; }) return &spec->name;
+	else if constexpr (requires { spec->building_name; }) return &spec->building_name;
+	else return nullptr;
+}
 template <typename Spec>
 inline void RustSpecSetCargoGroup(Spec *spec, CargoType cargo, const SpriteGroup *group) noexcept { spec->grf_prop.SetSpriteGroup(cargo, group); }
 template <typename Spec> inline bool RustSpecEnabled(const Spec *spec) noexcept { return spec->enabled; }

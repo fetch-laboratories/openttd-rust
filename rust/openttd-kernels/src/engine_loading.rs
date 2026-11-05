@@ -8,6 +8,7 @@
     clippy::cast_possible_truncation,
     clippy::too_many_lines
 )]
+use crate::debug::{Bytes, grf_msg};
 use crate::{
     cargo_registry::{
         openttd_rust_cargo_by_label, openttd_rust_cargo_is_default_abi, openttd_rust_cargo_mask,
@@ -234,7 +235,7 @@ type File = *const c_void;
 pub struct Services {
     identity: &'static crate::company_identity::Services,
     pub(crate) shared: *const Shared,
-    resolver: *const crate::newgrf_vehicle::Services,
+    pub(crate) resolver: *const crate::newgrf_vehicle::Services,
     next: extern "C" fn(u32) -> EngineRef,
     resolve: extern "C" fn(u16) -> EngineRef,
     pub(crate) dynamic: extern "C" fn() -> bool,
@@ -243,9 +244,6 @@ pub struct Services {
     has_file: extern "C" fn(E) -> bool,
     set_file: extern "C" fn(E, File),
     mapping_log: extern "C" fn(u32, u32, bool),
-    replaced_log: extern "C" fn(u16, u32, u8, u16),
-    created_log: extern "C" fn(u16, u32, u8, u16),
-    full_log: extern "C" fn(),
     can_allocate: extern "C" fn() -> bool,
     pool_size: extern "C" fn() -> usize,
     construct: extern "C" fn(u8, u16) -> EngineRef,
@@ -274,7 +272,6 @@ pub struct Services {
     rail_kind: extern "C" fn(E) -> RailVehicleTypes,
     use_livery: extern "C" fn(u8),
     variant_flags: extern "C" fn(E),
-    variant_cycle_log: extern "C" fn(E),
     is_tram: extern "C" fn(E) -> bool,
     set_road_speed: extern "C" fn(E, u16),
     set_roadtype: extern "C" fn(E, u8),
@@ -351,7 +348,14 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
         let engine = (s.resolve)(id);
         if !(s.has_file)(engine.shell) {
             (s.set_file)(engine.shell, file);
-            (s.replaced_log)(id, (unsafe { &*s.shared }.grf_file_id)(file), kind, local);
+            grf_msg!(
+                5,
+                "Replaced engine at index {} for GRFID {:x}, type {}, index {}",
+                id,
+                ((unsafe { &*s.shared }.grf_file_id)(file)).swap_bytes(),
+                kind,
+                local
+            );
         }
         return engine.shell;
     }
@@ -359,7 +363,7 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
         return ptr::null();
     }
     if !(s.can_allocate)() {
-        (s.full_log)();
+        grf_msg!(0, "Can't allocate any more engines");
         return ptr::null();
     }
     let size = (s.pool_size)();
@@ -384,11 +388,13 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
             initialize_rail_labels(s, engine);
         }
     }
-    (s.created_log)(
+    grf_msg!(
+        5,
+        "Created new engine at index {} for GRFID {:x}, type {}, index {}",
         engine.id,
-        (unsafe { &*s.shared }.grf_file_id)(file),
+        ((unsafe { &*s.shared }.grf_file_id)(file)).swap_bytes(),
         kind,
-        local,
+        local
     );
     engine.shell
 }
@@ -443,9 +449,6 @@ crate::abi::layouts! {
         has_file,
         set_file,
         mapping_log,
-        replaced_log,
-        created_log,
-        full_log,
         can_allocate,
         pool_size,
         construct,
@@ -474,7 +477,6 @@ crate::abi::layouts! {
         rail_kind,
         use_livery,
         variant_flags,
-        variant_cycle_log,
         is_tram,
         set_road_speed,
         set_roadtype,
@@ -910,7 +912,13 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
                 continue;
             }
             (s.set_variant)(e.shell, INVALID_ENGINE);
-            (s.variant_cycle_log)(e.shell);
+            let shared = unsafe { &*s.shared };
+            grf_msg!(
+                1,
+                "FinaliseEngineArray: Variant of engine {:x} in '{}' loops back on itself",
+                (shared.engine_local_id)(e.shell),
+                Bytes(unsafe { (shared.grf_file_name)((s.engine_file)(e.shell).cast()).bytes() })
+            );
             break;
         }
         let parent = (s.variant)(e.shell);

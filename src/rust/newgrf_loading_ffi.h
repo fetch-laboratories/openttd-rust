@@ -3,6 +3,9 @@
 #ifndef RUST_NEWGRF_LOADING_FFI_H
 #define RUST_NEWGRF_LOADING_FFI_H
 #include "newgrf_global_ffi.h"
+#include "newgrf_text_ffi.h"
+#include "grf_bindings_ffi.h"
+#include "station_definitions_ffi.h"
 #include "newgrf_class_ffi.h"
 #include "../newgrf_config.h"
 #include "../road_type.h"
@@ -22,7 +25,6 @@ struct OpenTTDGrfExecution {
 	uint32_t nfo_line;
 	int32_t skip_sprites;
 	std::array<const SpriteGroup *, 256> spritegroups;
-	std::string *translated_text; ///< Borrowed from the native loader stack frame.
 };
 extern "C" {
 OpenTTDGrfExecution *openttd_rust_grf_execution();
@@ -57,6 +59,9 @@ struct OpenTTDGrfLoadingServices {
 	const OpenTTDAirportDefinitionServices *airports;
 	const OpenTTDTypeRegistryServices *types;
 	const OpenTTDAction2Services *action2;
+	const OpenTTDGrfTextServices *text;
+	const OpenTTDGrfBindingServices *bindings;
+	const OpenTTDStationDefinitionServices *stations;
 	OpenTTDGrfEngineRange (*engine_range)(GrfSpecFeature) noexcept OPENTTD_SERVICE_DEFAULT(engine_range);
 	OpenTTDByteSpan (*config_md5)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_md5);
 	uint32_t (*config_id)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_id);
@@ -67,6 +72,8 @@ struct OpenTTDGrfLoadingServices {
 	void (*set_config_id)(GRFConfig *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_config_id);
 	void (*set_file_info)(GRFFile *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_file_info);
 	uint32_t (*config_version)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_version);
+	OpenTTDByteSpan (*config_filename)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_filename);
+	uint8_t (*config_palette)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(config_palette);
 	size_t (*param_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(param_count);
 	void (*set_parameter)(GRFFile *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_parameter);
 	GRFConfig *(*find_config)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_config);
@@ -74,6 +81,8 @@ struct OpenTTDGrfLoadingServices {
 	GRFError *(*error)(GRFConfig *, uint32_t, StringID, bool) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	void (*error_name)(GRFError *, const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(error_name);
 	void (*error_property)(GRFError *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_property);
+	void (*error_after_translated_file)(GRFError *) noexcept OPENTTD_SERVICE_DEFAULT(error_after_translated_file);
+	StringID load_after;
 	uint8_t (*read_byte)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_byte);
 	uint16_t (*read_word)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_word);
 	uint32_t (*read_dword)(SpriteFile *) noexcept OPENTTD_SERVICE_DEFAULT(read_dword);
@@ -97,8 +106,6 @@ struct OpenTTDGrfLoadingServices {
 	bool (*feature_change_info)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_change_info);
 	bool (*skip_act1)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act1);
 	bool (*new_sprite_set)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(new_sprite_set);
-	bool (*feature_map_sprite_group)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_map_sprite_group);
-	bool (*feature_new_name)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(feature_new_name);
 	bool (*skip_act5)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act5);
 	bool (*graphics_new)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(graphics_new);
 	bool (*skip_act_a)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act_a);
@@ -109,7 +116,6 @@ struct OpenTTDGrfLoadingServices {
 	bool (*grf_sound)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_sound);
 	bool (*skip_act12)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip_act12);
 	bool (*load_font_glyph)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(load_font_glyph);
-	bool (*translate_grf_strings)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(translate_grf_strings);
 	bool (*static_grf_info)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(static_grf_info);
 	bool (*gradual_loading)() noexcept OPENTTD_SERVICE_DEFAULT(gradual_loading);
 	uint8_t (*signal_side)() noexcept OPENTTD_SERVICE_DEFAULT(signal_side);
@@ -138,7 +144,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*init_file)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(init_file);
 	void (*too_many)(GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(too_many);
 	void (*clear_errors)(GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(clear_errors);
-	void (*cleanup_strings)() noexcept OPENTTD_SERVICE_DEFAULT(cleanup_strings);
 	void (*reset_badges)() noexcept OPENTTD_SERVICE_DEFAULT(reset_badges);
 	void (*reset_bridges)() noexcept OPENTTD_SERVICE_DEFAULT(reset_bridges);
 	void (*reset_prices)() noexcept OPENTTD_SERVICE_DEFAULT(reset_prices);
@@ -169,61 +174,8 @@ struct OpenTTDGrfLoadingServices {
 	Subdirectory newgrf_dir;
 	void (*assert_override_size)(size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_override_size);
 	void (*assert_file_match)(const GRFConfig *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(assert_file_match);
-	void (*unexpected_large)() noexcept OPENTTD_SERVICE_DEFAULT(unexpected_large);
-	void (*unexpected_real)() noexcept OPENTTD_SERVICE_DEFAULT(unexpected_real);
-	void (*missing_file)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(missing_file);
-	void (*sprite_grm_failed)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_grm_failed);
-	void (*grm_failure)(uint16_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(grm_failure);
-	void (*unknown_operation)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_operation);
-	void (*id_mismatch)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(id_mismatch);
-	void (*invalid_version)(const GRFConfig *, uint32_t, uint8_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_version);
 	StringID null_error;
-	void (*unknown_action)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_action);
-	void (*handling_action)(uint8_t, GrfLoadingStage) noexcept OPENTTD_SERVICE_DEFAULT(handling_action);
-	void (*preloaded_sprite)() noexcept OPENTTD_SERVICE_DEFAULT(preloaded_sprite);
-	void (*unexpected_data)() noexcept OPENTTD_SERVICE_DEFAULT(unexpected_data);
-	void (*unexpected_import)() noexcept OPENTTD_SERVICE_DEFAULT(unexpected_import);
-	void (*read_bounds_error)() noexcept OPENTTD_SERVICE_DEFAULT(read_bounds_error);
-	void (*reading_file)(const GRFConfig *) noexcept OPENTTD_SERVICE_DEFAULT(reading_file);
-	void (*invalid_format)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_format);
-	void (*unsupported_compression)() noexcept OPENTTD_SERVICE_DEFAULT(unsupported_compression);
-	void (*loaded_sprites)(SpriteID) noexcept OPENTTD_SERVICE_DEFAULT(loaded_sprites);
-	void (*unsupported_variable)(uint8_t param) noexcept OPENTTD_SERVICE_DEFAULT(unsupported_variable);
-	void (*cfg_real)() noexcept OPENTTD_SERVICE_DEFAULT(cfg_real);
-	void (*cfg_unset)(uint32_t param) noexcept OPENTTD_SERVICE_DEFAULT(cfg_unset);
-	void (*cfg_applying)(uint32_t size, uint32_t param, uint32_t offset) noexcept OPENTTD_SERVICE_DEFAULT(cfg_applying);
-	void (*skip_undefined)(uint8_t param) noexcept OPENTTD_SERVICE_DEFAULT(skip_undefined);
-	void (*skip_test)(uint8_t cond, uint8_t param, uint32_t value) noexcept OPENTTD_SERVICE_DEFAULT(skip_test);
-	void (*skip_condition)(uint8_t cond) noexcept OPENTTD_SERVICE_DEFAULT(skip_condition);
-	void (*skip_grf_condition)(uint8_t cond) noexcept OPENTTD_SERVICE_DEFAULT(skip_grf_condition);
-	void (*skip_unknown_grf)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(skip_unknown_grf);
-	void (*skip_false)() noexcept OPENTTD_SERVICE_DEFAULT(skip_false);
-	void (*skip_jump)(uint8_t label, uint32_t line) noexcept OPENTTD_SERVICE_DEFAULT(skip_jump);
-	void (*skip_count)(uint8_t count) noexcept OPENTTD_SERVICE_DEFAULT(skip_count);
-	void (*loaded_info)(const GRFConfig *c, uint8_t version, uint32_t id, const uint8_t *name, size_t len) noexcept OPENTTD_SERVICE_DEFAULT(loaded_info);
-	void (*inhibiting)(const GRFConfig *c) noexcept OPENTTD_SERVICE_DEFAULT(inhibiting);
-	void (*defined_label)(uint8_t label) noexcept OPENTTD_SERVICE_DEFAULT(defined_label);
-	void (*unknown_patch)(uint8_t param) noexcept OPENTTD_SERVICE_DEFAULT(unknown_patch);
-	void (*grm_reserved)(uint16_t count, bool engines, uint32_t start) noexcept OPENTTD_SERVICE_DEFAULT(grm_reserved);
-	void (*param_defined)(uint8_t target) noexcept OPENTTD_SERVICE_DEFAULT(param_defined);
-	void (*sprites_allocated)(uint16_t count, SpriteID sprite) noexcept OPENTTD_SERVICE_DEFAULT(sprites_allocated);
-	void (*sprites_using)(SpriteID sprite) noexcept OPENTTD_SERVICE_DEFAULT(sprites_using);
-	void (*sprite_operation)(uint8_t op) noexcept OPENTTD_SERVICE_DEFAULT(sprite_operation);
-	void (*grm_feature)(GrfSpecFeature feature) noexcept OPENTTD_SERVICE_DEFAULT(grm_feature);
-	void (*unimplemented_target)(uint8_t target) noexcept OPENTTD_SERVICE_DEFAULT(unimplemented_target);
-	void (*unknown_target)(uint8_t target) noexcept OPENTTD_SERVICE_DEFAULT(unknown_target);
-	/* TranslateTTDPatchCodes; view valid until the next translation in this loader frame. */
-	OpenTTDByteSpan (*translate_text)(uint32_t grfid, uint8_t lang, bool allow_newlines, const uint8_t *text, size_t len) noexcept OPENTTD_SERVICE_DEFAULT(translate_text);
-	StringID (*add_string)(uint32_t grfid, uint32_t stringid, uint8_t lang, bool new_scheme, bool allow_newlines, const uint8_t *text, size_t len, StringID def_string) noexcept OPENTTD_SERVICE_DEFAULT(add_string);
 	StringID undefined;
-	void (*town_definition)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(town_definition);
-	void (*town_lang)(uint8_t lang, const uint8_t *name, size_t len) noexcept OPENTTD_SERVICE_DEFAULT(town_lang);
-	void (*town_parts)(uint8_t parts) noexcept OPENTTD_SERVICE_DEFAULT(town_parts);
-	void (*town_part)(uint32_t partnum, uint8_t texts, uint8_t bitstart, uint8_t bitcount) noexcept OPENTTD_SERVICE_DEFAULT(town_part);
-	void (*town_missing)(uint8_t ref_id) noexcept OPENTTD_SERVICE_DEFAULT(town_missing);
-	void (*town_reference)(uint32_t partnum, uint32_t textnum, uint8_t ref_id, uint8_t prob) noexcept OPENTTD_SERVICE_DEFAULT(town_reference);
-	void (*town_text)(uint32_t partnum, uint32_t textnum, const uint8_t *text, size_t len, uint8_t prob) noexcept OPENTTD_SERVICE_DEFAULT(town_text);
-	void (*town_total)(uint32_t partnum, uint16_t maxprob) noexcept OPENTTD_SERVICE_DEFAULT(town_total);
 };
 extern "C" {
 void openttd_rust_grf_unsafe(const OpenTTDGrfLoadingServices *);

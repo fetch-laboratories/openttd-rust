@@ -59,8 +59,6 @@ struct OpenTTDHouseResolverServices {
 	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	uint16_t (*evaluate)(const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate);
 	OpenTTDHouseReseed (*reseed)(uint16_t, uint32_t, Town *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reseed);
-	void (*unhandled_house)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled_house);
-	void (*unhandled_town)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled_town);
 };
 const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept;
 extern "C" {

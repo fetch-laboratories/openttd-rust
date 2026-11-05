@@ -14,6 +14,7 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
+from typing import Any, TypedDict
 
 from simulation import core, runtime
 
@@ -23,7 +24,26 @@ ROOT = Path(__file__).resolve().parents[1]
 TIMINGS = ROOT / "migration/ci-scenario-seconds.json"
 
 
-def fixture_family(scenario):
+class Shard(TypedDict):
+    id: int
+    names: list[str]
+    seconds: float
+
+
+class ShardPlan(TypedDict):
+    schema_version: int
+    candidate_commit: str
+    inventory: list[str]
+    shards: list[Shard]
+
+
+class Summary(TypedDict):
+    passed: bool
+    scenarios: int
+    shards: int
+
+
+def fixture_family(scenario: core.Scenario) -> str:
     # These preparation modules share mutable scratch fixtures within one run.
     # Keeping them together avoids rebuilding them separately on multiple runners.
     if "effects" in scenario:
@@ -35,11 +55,13 @@ def fixture_family(scenario):
     return scenario["name"]
 
 
-def partition(scenarios, seconds, count):
+def partition(
+    scenarios: list[core.Scenario], seconds: dict[str, float], count: int
+) -> list[Shard]:
     if count < 1 or count > len(scenarios):
         raise ValueError("Shard count must be positive and no greater than inventory")
     default = statistics.median(seconds.values()) if seconds else 1
-    families = collections.defaultdict(list)
+    families: collections.defaultdict[str, list[str]] = collections.defaultdict(list)
     for scenario in scenarios:
         families[fixture_family(scenario)].append(scenario["name"])
     if count > len(families):
@@ -50,7 +72,9 @@ def partition(scenarios, seconds, count):
     ordered = sorted(
         families.values(), key=lambda names: (-sum(weights[n] for n in names), names)
     )
-    shards = [{"id": index, "names": [], "seconds": 0} for index in range(count)]
+    shards: list[Shard] = [
+        {"id": index, "names": [], "seconds": 0} for index in range(count)
+    ]
     for names in ordered:
         shard = min(shards, key=lambda s: (s["seconds"], s["id"]))
         shard["names"] += names
@@ -61,13 +85,13 @@ def partition(scenarios, seconds, count):
     return shards
 
 
-def plan(bundle, count):
+def plan(bundle: Path, count: int) -> ShardPlan:
     scenarios = core.scenario_list(False)
     names = [s["name"] for s in scenarios]
     if len(names) != len(set(names)):
         raise ValueError("Duplicate scenario names in inventory")
     shards = partition(scenarios, json.loads(TIMINGS.read_text())["seconds"], count)
-    result = {
+    result: ShardPlan = {
         "schema_version": 1,
         "candidate_commit": migration.git("rev-parse", "HEAD"),
         "inventory": sorted(names),
@@ -77,7 +101,7 @@ def plan(bundle, count):
     return result
 
 
-def validate_plan(value):
+def validate_plan(value: ShardPlan) -> None:
     names = sorted(s["name"] for s in core.scenario_list(False))
     shards = value["shards"]
     covered = [name for shard in shards for name in shard["names"]]
@@ -93,8 +117,8 @@ def validate_plan(value):
         raise ValueError("Shard plan differs from complete inventory/candidate")
 
 
-def run_shard(bundle, index, jobs, output):
-    value = json.loads((bundle / "shard-plan.json").read_text())
+def run_shard(bundle: Path, index: int, jobs: int, output: Path) -> int:
+    value: ShardPlan = json.loads((bundle / "shard-plan.json").read_text())
     validate_plan(value)
     if not 0 <= index < len(value["shards"]):
         raise ValueError("Invalid shard index")
@@ -119,7 +143,7 @@ def run_shard(bundle, index, jobs, output):
     return completed.returncode
 
 
-def aggregate(value, reports):
+def aggregate(value: ShardPlan, reports: list[dict[str, Any]]) -> Summary:
     validate_plan(value)
     expected = {s["id"]: s["names"] for s in value["shards"]}
     if len(reports) != len(expected) or {r.get("shard") for r in reports} != set(
@@ -144,7 +168,7 @@ def aggregate(value, reports):
     }
 
 
-def unpack(archive_path):
+def unpack(archive_path: Path) -> None:
     """Relocate only text build metadata; executable/archive bytes stay frozen."""
     with tarfile.open(archive_path) as archive:
         names = [member.name for member in archive.getmembers() if member.isfile()]
@@ -162,7 +186,7 @@ def unpack(archive_path):
         path.write_text(pattern.sub(lambda match: paths[match[0]], text))
 
 
-def pack(bundle, count):
+def pack(bundle: Path, count: int) -> None:
     bundle = bundle.resolve()
     runtime.export(bundle, migration)
     origin = ROOT / ".local/native-export-root.json"
@@ -250,7 +274,7 @@ def pack(bundle, count):
             output.write(shards)
 
 
-def collect_evidence(destination):
+def collect_evidence(destination: Path) -> None:
     """Retain reports, concise logs and failing saves, excluding rebuildable output."""
     roots = [
         ROOT / ".local/simulation",
@@ -292,7 +316,7 @@ def collect_evidence(destination):
                 shutil.copy2(path, target)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     restore = commands.add_parser("unpack")

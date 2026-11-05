@@ -85,6 +85,10 @@
 #include "../texteff.hpp"
 #include "newgrf_storage_ffi.h"
 #include "signal_ffi.h"
+#include "debug_ffi.h"
+#include "engine_services.h"
+#include "../debug.h"
+#include "../newgrf.h"
 #include "../safeguards.h"
 static_assert(VE_OFFSET_START == 0);
 static_assert(VE_OFFSET_CENTRE == 8);
@@ -239,9 +243,12 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.construction_limits = &_settings_game.construction.limits,
 	.disable_elrails = &_settings_game.vehicle.disable_elrails,
 	.extra_tree_placement = &_settings_game.construction.extra_tree_placement,
+	.freeform_edges = &_settings_game.construction.freeform_edges,
 	.generation_seed = &_settings_game.game_creation.generation_seed,
 	.height_limit = &_settings_game.construction.map_height_limit,
+	.heightmap_height = &_settings_game.game_creation.heightmap_height,
 	.industry_cargo_scale = &_settings_game.economy.industry_cargo_scale,
+	.land_generator = &_settings_game.game_creation.land_generator,
 	.map_x = &_settings_game.game_creation.map_x,
 	.map_y = &_settings_game.game_creation.map_y,
 	.max_bridge_length = &_settings_game.construction.max_bridge_length,
@@ -250,8 +257,10 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.never_expire_airports = &_settings_game.station.never_expire_airports,
 	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
+	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
 	.station_noise = &_settings_game.economy.station_noise_level,
+	.tree_placer = &_settings_game.game_creation.tree_placer,
 	.used_liveries = &_loaded_newgrf_features.used_liveries,
 };
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
@@ -558,6 +567,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.grf_cargo_map = RustGRFCargoMap,
 	.grf_file_at_or_null = RustGRFFileAtOrNull,
 	.grf_file_id = RustGRFFileID,
+	.grf_file_name = RustGRFFileName,
+	.engine_local_id = RustEngineLocalID,
 	.grf_parameter = RustGRFParameter,
 	.newgrf_specs = &_rust_newgrf_specs,
 	.resolver_grf_file = RustResolverGRFFile,
@@ -717,6 +728,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDByteReaderServices.hpp"
 #include "abi-visit-OpenTTDAirportSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecServices.hpp"
+#include "abi-visit-OpenTTDHouseSpecServices.hpp"
 #include "abi-visit-OpenTTDIndustrySpecServices.hpp"
 #include "abi-visit-OpenTTDIndustryTileSpecServices.hpp"
 #include "abi-visit-OpenTTDObjectSpecServices.hpp"
@@ -728,11 +740,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDStationSpecAnimation.hpp"
 #include "abi-visit-OpenTTDAirportSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecStandard.hpp"
+#include "abi-visit-OpenTTDHouseSpecStandard.hpp"
 #include "abi-visit-OpenTTDIndustrySpecStandard.hpp"
 #include "abi-visit-OpenTTDIndustryTileSpecStandard.hpp"
 #include "abi-visit-OpenTTDObjectSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecSubstitute.hpp"
+#include "abi-visit-OpenTTDHouseSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDIndustrySpecSubstitute.hpp"
 #include "abi-visit-OpenTTDIndustryTileSpecSubstitute.hpp"
 /* Each capability table Rust reaches is present and complete. */
@@ -742,6 +756,7 @@ static bool NewGRFSpecsComplete()
 	auto complete = [](const auto *table) { return table != nullptr && AbiServicesComplete(*table); };
 	return complete(s.airport) && complete(s.airport->standard) && complete(s.airport->substitute) &&
 		complete(s.airport_tile) && complete(s.airport_tile->animation) && complete(s.airport_tile->standard) && complete(s.airport_tile->substitute) &&
+		complete(s.house) && complete(s.house->standard) && complete(s.house->substitute) &&
 		complete(s.industry) && complete(s.industry->standard) && complete(s.industry->substitute) &&
 		complete(s.industry_tile) && complete(s.industry_tile->animation) && complete(s.industry_tile->standard) && complete(s.industry_tile->substitute) &&
 		complete(s.object) && complete(s.object->standard) &&
@@ -802,7 +817,6 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 		.node = LiveGraphStationNode,
 		.available = RustLinkGraphAvailable,
 		.allocate = RustLinkGraphAllocate,
-		.allocation_failure = RustLinkGraphAllocationFailure,
 	};
 	return services;
 }
@@ -833,3 +847,26 @@ static_assert(GSF_AIRPORTS == 0x0D && GSF_TRAMTYPES == 0x13);
 static_assert(MAX_CATCHMENT == 10 && CalendarTime::MAX_YEAR.base() == 5000000);
 
 static_assert(PR_BUILD_INDUSTRY == 48 && PR_CLEAR_INDUSTRY == 49 && PR_BUILD_INDUSTRY_RAW == 58);
+
+static const OpenTTDDebugServices _rust_debug_services{
+	.console = &_debug_console_level,
+	.desync = &_debug_desync_level,
+	.driver = &_debug_driver_level,
+	.fontcache = &_debug_fontcache_level,
+	.gamelog = &_debug_gamelog_level,
+	.grf = &_debug_grf_level,
+	.grf_msg = [](int severity, const char *message, size_t size) noexcept { GrfMsgI(severity, std::string(message, size)); },
+	.map = &_debug_map_level,
+	.misc = &_debug_misc_level,
+	.net = &_debug_net_level,
+	.oldloader = &_debug_oldloader_level,
+	.print = [](const char *category, size_t category_size, int level, const char *message, size_t size) noexcept { DebugPrint({category, category_size}, level, std::string(message, size)); },
+	.script = &_debug_script_level,
+	.sl = &_debug_sl_level,
+	.sprite = &_debug_sprite_level,
+	.yapf = &_debug_yapf_level,
+};
+/* Bound before main, so Rust Debug and GrfMsg see the native levels from the first message. */
+[[maybe_unused]] static const bool _rust_debug_bound = (openttd_rust_debug_bind(&_rust_debug_services), true);
+#include "abi-visit-OpenTTDDebugServices.hpp"
+bool CheckAbi_debug() { return AbiServicesComplete(_rust_debug_services); }

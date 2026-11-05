@@ -7,8 +7,9 @@ import shutil
 import struct
 import subprocess
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, Literal, NotRequired, TypedDict, cast
 
+from . import core
 from .core import (
     EMPTY_AI,
     ROOT,
@@ -25,7 +26,7 @@ from .core import (
 AI_FOLDER = "company-scenario-ai"
 
 
-def command_gap():
+def command_gap() -> None:
     """Unchanged native financial commands for deity/network/Money boundaries."""
     import importlib.util
 
@@ -34,6 +35,7 @@ def command_gap():
     spec = importlib.util.spec_from_file_location(
         "migration", ROOT / "tools/migration.py"
     )
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     out = ROOT / ".local/company-command-gap"
@@ -88,7 +90,12 @@ def command_gap():
     subprocess.run([str(out / "probe")], cwd=ROOT, check=True)
 
 
-def scenarios(soak):
+class Scenario(core.Scenario):
+    companies: NotRequired[str]
+    company_setup: NotRequired[bool]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     return [
         {
             "name": f"companies-{operation}",
@@ -121,11 +128,11 @@ def scenarios(soak):
     ]
 
 
-def uses_ai(scenario):
+def uses_ai(scenario: Scenario) -> bool:
     return "companies" in scenario
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if not uses_ai(scenario):
         return
     folder = run_dir / "ai/companies"
@@ -136,7 +143,7 @@ def install(scenario, run_dir):
     )
 
 
-def configure_competitors(path, record):
+def configure_competitors(path: Path, record: dict[str, Any]) -> None:
     """Declare fixed local scripts for vacant slots; preserve running AI data."""
     elements = dict(read_save(path)["AIPL"]["elements"])
     for index in (3, 4):
@@ -151,7 +158,15 @@ def configure_competitors(path, record):
     record["sha256"] = hashlib.sha256(prepared).hexdigest()
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if not uses_ai(scenario):
         return scenario
     folder = out / scenario["name"] / "input"
@@ -173,17 +188,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             "LGRJ": {i: {"join_date": v["join_date"] + 365} for i, v in jobs.items()},
         },
     )
-    setup = dict(
-        scenario,
-        save=str(setup_input),
-        company_setup=True,
-        ticks=19000,
-        console=[
+    setup: Scenario = {
+        **scenario,
+        "save": str(setup_input),
+        "company_setup": True,
+        "ticks": 19000,
+        "console": [
             "start_ai MigrationCompanies",
             "start_ai MigrationCompanies",
             "unpause",
         ],
-    )
+    }
     built = run_game(
         setup,
         binaries["reference"],
@@ -212,7 +227,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     operation = scenario["companies"]
     # Pinned-reference source CompanyCheckBankrupt uses money-loan < -maxloan;
     # months 4 warns, 7 opens sale and 10 deletes. Rank reads old_economy[1].
-    finances = {
+    finances: dict[int, dict[str, Any]] = {
         1: {"money": -1_000_000, "current_loan": 300_000, "max_loan": 300_000},
         2: {"money": 2_000_000},
     }
@@ -248,7 +263,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     # Start immediately before the monthly boundary; same calendar/economy input
     # and RNG go to both roles. Pending joins stay beyond the short windows.
-    changes = {
+    changes: dict[str, dict[int, dict[str, Any]]] = {
         "PLYR": finances,
         "DATE": {
             0: {
@@ -273,27 +288,27 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             block_preview=2,
         )
         changes["ECMY"] = {0: {"fluct": 1}}
-        scenario = dict(
-            scenario,
-            console=[
+        scenario = {
+            **scenario,
+            "console": [
                 "setting economy.infrastructure_maintenance 1",
                 "setting economy.inflation 1",
                 "setting difficulty.economy 1",
                 "unpause",
             ],
-        )
+        }
     if operation == "limit":
-        scenario = dict(scenario, console=["setting vehicle.max_roadveh 0", "unpause"])
+        scenario = {**scenario, "console": ["setting vehicle.max_roadveh 0", "unpause"]}
     if operation == "reuse":
-        scenario = dict(
-            scenario,
-            console=[
+        scenario = {
+            **scenario,
+            "console": [
                 "stop_ai 2",
                 "start_ai MigrationCompanies",
                 "reload_ai 2",
                 "unpause",
             ],
-        )
+        }
     if operation.startswith("competitor"):
         # There are already two actor AIs. Cap four requires two successive
         # OnTick Posts; interval one instead exercises the timer's single Post.
@@ -307,14 +322,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 "competitors_interval_fired": not timer,
             }
         }
-        scenario = dict(
-            scenario,
-            console=[
+        scenario = {
+            **scenario,
+            "console": [
                 "setting difficulty.max_no_competitors 4",
                 f"setting difficulty.competitors_interval {int(timer)}",
                 "unpause",
             ],
-        )
+        }
     prepared = folder / "company-input.sav"
     record = patch(fixture, prepared, changes)
     if operation.startswith("competitor"):
@@ -328,8 +343,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         console=scenario["console"],
     )
     if operation in ("reload", "competitor-reload"):
+        reload: Scenario = {**scenario, "save": str(prepared), "ticks": 120}
         live = run_game(
-            dict(scenario, save=str(prepared), ticks=120),
+            reload,
             binaries["reference"],
             builds["reference"],
             folder / "reload",
@@ -347,7 +363,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         from .economy import active_monitors
 
         active_monitors(prepared, cargoes=(63,), amount=17)
-    result["company_input"] = record
+    core.findings(result)["company_input"] = record
     if operation.startswith("identity"):
         from . import fleet
         from .console_adapter import prepared_console
@@ -356,16 +372,16 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         executables = prepared_console(
             "fleet", fleet.adapter, binaries, builds, folder, env
         )
-        scenario = dict(
-            scenario,
-            save=str(prepared),
-            console=["start_ai MigrationCompanies"] * 12
+        scenario = {
+            **scenario,
+            "save": str(prepared),
+            "console": ["start_ai MigrationCompanies"] * 12
             + ["fleet_scenario company-identity", "unpause"],
-            executables=executables,
-        )
+            "executables": executables,
+        }
         if operation == "identity-reload":
             runs = capture_pair(scenario, executables, builds, folder, timeout, env)
-            saves = {}
+            saves: dict[str, Path] = {}
             for role, run in runs.items():
                 check(scenario, run, "capture", role, result)
                 if run["exit"] or not run["snapshots"]:
@@ -398,27 +414,34 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 raise RuntimeError("company capture lacks an unambiguous RNG record")
             first, second = (int(value) for value in rng[0][-2:])
             record["interactive_reload"] = [first, second]
-            scenario = dict(
-                scenario,
-                role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-                console=[f"fleet_scenario company-resume {first} {second}", "unpause"],
-            )
+            scenario = {
+                **scenario,
+                "role_inputs": {
+                    role: {"save": str(save)} for role, save in saves.items()
+                },
+                "console": [
+                    f"fleet_scenario company-resume {first} {second}",
+                    "unpause",
+                ],
+            }
         return scenario
     if operation == "acquire":
         from . import fleet
         from .console_adapter import prepared_console
 
-        scenario = dict(
-            scenario,
-            executables=prepared_console(
+        scenario = {
+            **scenario,
+            "executables": prepared_console(
                 "fleet", fleet.adapter, binaries, builds, folder, env
             ),
-            console=["fleet_scenario company-control-observe"] + scenario["console"],
-        )
-    return dict(scenario, save=str(prepared))
+            "console": ["fleet_scenario company-control-observe"] + scenario["console"],
+        }
+    return {**scenario, "save": str(prepared)}
 
 
-def check_competitors(scenario, run, source, final):
+def check_competitors(
+    scenario: Scenario, run: core.Run, source: Path, final: Path
+) -> dict[str, Any]:
     """Require runtime creation/events, fixed configurations and saved timer state."""
     operation = scenario["companies"]
     before, after = rows(source, "PLYR"), rows(final, "PLYR")
@@ -511,7 +534,13 @@ def check_control(
     return trace
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode | Literal["capture"],  # identity-reload checks its capture
+    role: str,
+    result: core.Result,
+) -> None:
     if not uses_ai(scenario):
         return
     if not run["snapshots"]:
@@ -520,7 +549,8 @@ def check(scenario, run, mode, role, result):
     source, final = Path(scenario["save"]), run["snapshots"][-1]
     before, after = rows(source, "PLYR"), rows(final, "PLYR")
     if operation.startswith("identity"):
-        control_trace = check_control(scenario, run, final)
+        # Every companies scenario carries a console; prepare only replaces it.
+        control_trace = check_control(cast(ControlInput, scenario), run, final)
         log = run["log"]
         if len(after) != 15 or len({c["colour"] for c in after.values()}) != 15:
             raise RuntimeError(
@@ -546,7 +576,7 @@ def check(scenario, run, mode, role, result):
             and after[1]["name_2"] == after[2]["name_2"]
         ):
             raise RuntimeError("company generated-name collision was not resolved")
-        result[f"{mode}_{role}_identity"] = {
+        core.findings(result)[f"{mode}_{role}_identity"] = {
             "companies": len(after),
             "ai_companies": sum(c["is_ai"] for c in after.values()),
             "control_trace": control_trace,
@@ -558,12 +588,12 @@ def check(scenario, run, mode, role, result):
         }
         return
     if operation.startswith("competitor"):
-        result[f"{mode}_{role}_competitors"] = check_competitors(
+        core.findings(result)[f"{mode}_{role}_competitors"] = check_competitors(
             scenario, run, source, final
         )
     log = "\n".join(run["log"])
 
-    def require(condition, message):
+    def require(condition: object, message: str) -> None:
         if not condition:
             raise RuntimeError(f"company {operation}: {message}")
 
@@ -608,7 +638,7 @@ def check(scenario, run, mode, role, result):
             after[1]["months_of_bankruptcy"] == 0 and after[1]["bankrupt_asked"] == 0,
             "positive balance did not clear bankruptcy",
         )
-    depot, station, vehicle, group = result["company_input"]["assets"]
+    depot, station, vehicle, group = core.findings(result)["company_input"]["assets"]
     if operation in ("acquire", "delete", "reuse"):
         if operation != "reuse":
             for cid in ("CMDL", "CMPU"):
@@ -710,14 +740,14 @@ def check(scenario, run, mode, role, result):
         require(
             bool(nested), "company acquisition nested service-interval arguments absent"
         )
-        result[f"{mode}_{role}_service_commands"] = nested
+        core.findings(result)[f"{mode}_{role}_service_commands"] = nested
     if operation == "reload":
         require(
             set(after) == {0, 1, 2}
             and after[1]["money_fraction"] == before[1]["money_fraction"],
             "live company reload absent",
         )
-    result[f"{mode}_{role}_companies"] = {
+    core.findings(result)[f"{mode}_{role}_companies"] = {
         i: {
             key: row[key]
             for key in (

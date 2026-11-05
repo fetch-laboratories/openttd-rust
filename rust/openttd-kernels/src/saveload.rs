@@ -24,6 +24,7 @@
     clippy::cast_sign_loss
 )]
 
+use crate::debug::debug;
 use crate::game_state::GameState;
 use std::ffi::c_void;
 
@@ -170,8 +171,6 @@ pub struct OpenTTDSaveLoadServices {
     pub shared: *const crate::services::Services,
     /// Native `assert`, keeping the native assertion policy.
     pub native_assert: extern "C" fn(bool),
-    /// `Debug(sl, 0, "SlIterateArray error")`.
-    pub debug_iterate_error: extern "C" fn(),
     /// `LoadFilter::Read` on the reader's filter; false when it threw.
     pub read:
         extern "C" fn(filter: *mut c_void, buf: *mut u8, len: usize, read: *mut usize) -> bool,
@@ -500,7 +499,7 @@ fn iterate_array(services: &OpenTTDSaveLoadServices) -> Result<i32, OpenTTDRustS
                 index
             }),
             _ => {
-                (services.debug_iterate_error)();
+                debug!(sl, 0, "SlIterateArray error");
                 return Ok(-1);
             }
         };
@@ -1627,7 +1626,6 @@ crate::abi::layouts! {
     "OpenTTDSaveLoadServices" ["probe"] => OpenTTDSaveLoadServices {
         shared,
         native_assert,
-        debug_iterate_error,
         read,
         write,
         finish,
@@ -1668,9 +1666,6 @@ mod tests {
 
     extern "C" fn assert_ok(ok: bool) {
         assert!(ok, "native assertion");
-    }
-    extern "C" fn unused() {
-        unreachable!("unused service");
     }
     extern "C" fn unused_read(_: *mut c_void, _: *mut u8, _: usize, _: *mut usize) -> bool {
         unreachable!("the test buffer holds every byte");
@@ -1713,7 +1708,6 @@ mod tests {
     const SERVICES: OpenTTDSaveLoadServices = OpenTTDSaveLoadServices {
         shared: std::ptr::null(),
         native_assert: assert_ok,
-        debug_iterate_error: unused,
         read: unused_read,
         write: unused_write,
         finish: unused_filter,

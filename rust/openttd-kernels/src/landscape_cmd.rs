@@ -51,7 +51,6 @@ pub struct LandscapeServices {
     pub coast: extern "C" fn(u32) -> bool,
     pub buoy: extern "C" fn(u32) -> bool,
     pub canal: extern "C" fn(u32) -> bool,
-    pub height_limit: extern "C" fn() -> u8,
     pub max_bridge_height: extern "C" fn() -> u8,
     pub freeform_edges: extern "C" fn() -> bool,
     pub editor: extern "C" fn() -> bool,
@@ -633,7 +632,7 @@ impl<'a> World<'a> {
             out.error(self.a.strings.sea_level);
             return INVALID_TILE;
         }
-        if height > i32::from((self.a.height_limit)()) {
+        if height > i32::from(unsafe { self.s.settings().height_limit.read() }) {
             out.error(self.a.strings.high);
             return INVALID_TILE;
         }
@@ -724,7 +723,7 @@ impl<'a> World<'a> {
                 return (0, INVALID_TILE);
             }
         };
-        if h > u32::from((self.a.height_limit)()) {
+        if h > u32::from(unsafe { self.s.settings().height_limit.read() }) {
             out.error(if old == 0 {
                 self.a.strings.sea_level
             } else {
@@ -922,7 +921,7 @@ crate::abi::layouts! {
     };
     "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
         shared, costs, commands, strings, tile_procs, water, on_water, coast, buoy, canal,
-        height_limit, max_bridge_height, freeform_edges, editor, exchange_generating,
+        max_bridge_height, freeform_edges, editor, exchange_generating,
         tunnel_in_way, mark_dirty_height, set_height, paused,
     };
     "OpenTTDLandscapeTileServices" ["landscape"] => crate::landscape_cmd::TileServices {

@@ -16,6 +16,7 @@ use crate::airport::{
     INVALID_AIRPORTTILE, NEW_AIRPORT_OFFSET, NEW_AIRPORTTILE_OFFSET, NUM_AIRPORTS,
     NUM_AIRPORTS_PER_GRF, NUM_AIRPORTTILES, NUM_AIRPORTTILES_PER_GRF,
 };
+use crate::debug::grf_msg;
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader};
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::override_manager::{self, Manager};
@@ -34,14 +35,14 @@ struct Layout {
 pub struct Services {
     reader: *const crate::newgrf_bytereader::Services,
     shared: *const crate::services::Services,
-    airport_count: unsafe extern "C" fn(*const c_void) -> usize,
+    pub(crate) airport_count: unsafe extern "C" fn(*const c_void) -> usize,
     airport_resize: unsafe extern "C" fn(*mut c_void, usize) -> (),
-    airport_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut AirportSpec,
+    pub(crate) airport_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut AirportSpec,
     airport_new: unsafe extern "C" fn(*mut c_void, usize, *const AirportSpec) -> *mut AirportSpec,
     airport_set_substitute: unsafe extern "C" fn(*mut AirportSpec, u16) -> (),
-    tile_count: unsafe extern "C" fn(*const c_void) -> usize,
+    pub(crate) tile_count: unsafe extern "C" fn(*const c_void) -> usize,
     tile_resize: unsafe extern "C" fn(*mut c_void, usize) -> (),
-    tile_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut TileSpec,
+    pub(crate) tile_get: unsafe extern "C" fn(*mut c_void, usize) -> *mut TileSpec,
     tile_new: unsafe extern "C" fn(*mut c_void, usize, *const TileSpec) -> *mut TileSpec,
     tile_set_substitute: unsafe extern "C" fn(*mut TileSpec, u16) -> (),
     airport_base: unsafe extern "C" fn(u16) -> *mut AirportSpec,
@@ -69,16 +70,6 @@ pub struct Services {
     layout_assign:
         unsafe extern "C" fn(*mut AirportSpec, usize, u8, *const LayoutTile, usize) -> (),
     dimensions: unsafe extern "C" fn(*mut AirportSpec, u8, u8) -> (),
-    airport_invalid: unsafe extern "C" fn(u32) -> (),
-    airport_undefined: unsafe extern "C" fn(u32) -> (),
-    airport_substitute_invalid: unsafe extern "C" fn(u8, u32) -> (),
-    layout_tile_undefined: unsafe extern "C" fn(u16, u32) -> (),
-    airport_full: unsafe extern "C" fn() -> (),
-    tile_invalid: unsafe extern "C" fn(u32) -> (),
-    tile_undefined: unsafe extern "C" fn(u32) -> (),
-    tile_substitute_invalid: unsafe extern "C" fn(u8, u32) -> (),
-    tile_override_invalid: unsafe extern "C" fn(u8, u32) -> (),
-    tile_full: unsafe extern "C" fn() -> (),
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
@@ -89,7 +80,7 @@ impl Services {
 crate::abi::layouts! {
     fn abi_layout;
     "AirportTileTable" ["probe"] => LayoutTile { ti, gfx };
-    "OpenTTDAirportDefinitionServices" ["probe"] => Services { reader, shared, airport_count, airport_resize, airport_get, airport_new, airport_set_substitute, tile_count, tile_resize, tile_get, tile_new, tile_set_substitute, airport_base, tile_base, airport_default, airport_clear, tile_default, tile_clear, airport_publish, tile_publish, airport_file_clear, airport_file_shrink, tile_file_clear, tile_file_shrink, airport_min_year, airport_max_year, airport_ttdp_type, airport_catchment, airport_noise, airport_maintenance, airport_name, tile_clear_animation, tile_callbacks, layouts_resize, layout_assign, dimensions, airport_invalid, airport_undefined, airport_substitute_invalid, layout_tile_undefined, airport_full, tile_invalid, tile_undefined, tile_substitute_invalid, tile_override_invalid, tile_full };
+    "OpenTTDAirportDefinitionServices" ["probe"] => Services { reader, shared, airport_count, airport_resize, airport_get, airport_new, airport_set_substitute, tile_count, tile_resize, tile_get, tile_new, tile_set_substitute, airport_base, tile_base, airport_default, airport_clear, tile_default, tile_clear, airport_publish, tile_publish, airport_file_clear, airport_file_shrink, tile_file_clear, tile_file_shrink, airport_min_year, airport_max_year, airport_ttdp_type, airport_catchment, airport_noise, airport_maintenance, airport_name, tile_clear_animation, tile_callbacks, layouts_resize, layout_assign, dimensions };
 }
 
 unsafe extern "C" fn airport_valid(_: *mut c_void, _: u16) -> u8 {
@@ -129,7 +120,12 @@ unsafe fn airport_change(
 ) -> Result<u8, ReadError> {
     unsafe {
         if last > NUM_AIRPORTS_PER_GRF {
-            (s.airport_invalid)(last);
+            grf_msg!(
+                1,
+                "AirportChangeInfo: Too many airports, trying id ({}), max ({}). Ignoring.",
+                last,
+                NUM_AIRPORTS_PER_GRF
+            );
             return Ok(CIR_INVALID_ID as u8);
         }
         if (s.airport_count)(file) < last as usize {
@@ -139,7 +135,11 @@ unsafe fn airport_change(
         for id in first..last {
             let mut spec = (s.airport_get)(file, id as usize);
             if spec.is_null() && prop != 0x08 && prop != 0x09 {
-                (s.airport_undefined)(id);
+                grf_msg!(
+                    2,
+                    "AirportChangeInfo: Attempt to modify undefined airport {}, ignoring",
+                    id
+                );
                 return Ok(CIR_INVALID_ID as u8);
             }
             match prop {
@@ -153,7 +153,12 @@ unsafe fn airport_change(
                         );
                         continue;
                     } else if substitute >= NEW_AIRPORT_OFFSET {
-                        (s.airport_substitute_invalid)(substitute, id);
+                        grf_msg!(
+                            2,
+                            "AirportChangeInfo: Attempt to use new airport {} as substitute airport for {}. Ignoring.",
+                            substitute,
+                            id
+                        );
                         continue;
                     }
                     if spec.is_null() {
@@ -198,7 +203,12 @@ unsafe fn airport_change(
                                     (s.shared().grf_file_id)(file),
                                 );
                                 if mapped == INVALID_AIRPORTTILE {
-                                    (s.layout_tile_undefined)(local, id);
+                                    grf_msg!(
+                                        2,
+                                        "AirportChangeInfo: Attempt to use airport tile {} with airport id {}, not yet defined. Ignoring.",
+                                        local,
+                                        id
+                                    );
                                 } else {
                                     gfx = mapped as u8;
                                 }
@@ -276,7 +286,12 @@ unsafe fn tile_change(
 ) -> Result<u8, ReadError> {
     unsafe {
         if last > NUM_AIRPORTTILES_PER_GRF {
-            (s.tile_invalid)(last);
+            grf_msg!(
+                1,
+                "AirportTileChangeInfo: Too many airport tiles loaded ({}), max ({}). Ignoring.",
+                last,
+                NUM_AIRPORTTILES_PER_GRF
+            );
             return Ok(CIR_INVALID_ID as u8);
         }
         if (s.tile_count)(file) < last as usize {
@@ -286,14 +301,23 @@ unsafe fn tile_change(
         for id in first..last {
             let mut spec = (s.tile_get)(file, id as usize);
             if prop != 0x08 && spec.is_null() {
-                (s.tile_undefined)(id);
+                grf_msg!(
+                    2,
+                    "AirportTileChangeInfo: Attempt to modify undefined airport tile {}. Ignoring.",
+                    id
+                );
                 return Ok(CIR_INVALID_ID as u8);
             }
             match prop {
                 0x08 => {
                     let substitute = b.byte()?;
                     if substitute >= NEW_AIRPORTTILE_OFFSET {
-                        (s.tile_substitute_invalid)(substitute, id);
+                        grf_msg!(
+                            2,
+                            "AirportTileChangeInfo: Attempt to use new airport tile {} as substitute airport tile for {}. Ignoring.",
+                            substitute,
+                            id
+                        );
                         continue;
                     }
                     if spec.is_null() {
@@ -315,7 +339,12 @@ unsafe fn tile_change(
                 0x09 => {
                     let override_id = b.byte()?;
                     if override_id >= NEW_AIRPORTTILE_OFFSET {
-                        (s.tile_override_invalid)(override_id, id);
+                        grf_msg!(
+                            2,
+                            "AirportTileChangeInfo: Attempt to override new airport tile {} with airport tile id {}. Ignoring.",
+                            override_id,
+                            id
+                        );
                         continue;
                     }
                     override_manager::openttd_rust_override_add(
@@ -399,7 +428,7 @@ pub unsafe fn reset_tiles(s: *const Services) {
     }
 }
 macro_rules! publisher {
-    ($entry:ident, $spec:ty, $tile:literal, $specs:ident, $publish:ident, $base:ident, $full:ident) => {
+    ($entry:ident, $spec:ty, $tile:literal, $specs:ident, $publish:ident, $base:ident, $full:literal) => {
         unsafe fn $entry(manager: *mut Manager, spec: *mut $spec, s: *const Services) {
             let s = unsafe { &*s };
             let substitute = s.shared().specs().$specs().substitute();
@@ -416,9 +445,7 @@ macro_rules! publisher {
                 )
             } as u8;
             if u16::from(id) == invalid {
-                unsafe {
-                    (s.$full)();
-                }
+                grf_msg!(1, $full);
                 return;
             }
             unsafe {
@@ -451,7 +478,7 @@ publisher!(
     airport,
     airport_publish,
     airport_base,
-    airport_full
+    "Airport.SetEntitySpec: Too many airports allocated. Ignoring."
 );
 publisher!(
     publish_tile,
@@ -460,7 +487,7 @@ publisher!(
     airport_tile,
     tile_publish,
     tile_base,
-    tile_full
+    "AirportTile.SetEntitySpec: Too many airport tiles allocated. Ignoring."
 );
 
 pub unsafe fn finalise(s: &Services) {

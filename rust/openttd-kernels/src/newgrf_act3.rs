@@ -6,18 +6,13 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation
 )]
+pub(crate) mod loading;
 use crate::cargo_registry::{openttd_rust_cargo_by_label, openttd_rust_cargo_translation_table};
 use crate::cargo_type::{INVALID_CARGO, is_valid_cargo_type};
+use crate::debug::{Char, grf_msg};
 use crate::newgrf_commons::{SG_DEFAULT_NA, SG_PURCHASE};
 use std::ffi::c_void;
-#[repr(C)]
-pub struct Services {
-    out_of_range: unsafe extern "C" fn(u8, u32),
-    not_available: unsafe extern "C" fn(u8),
-    unsupported: unsafe extern "C" fn(u32),
-    mapped: unsafe extern "C" fn(u32, u8),
-}
-pub(crate) fn translate_cargo(s: &Services, feature: u8, cargo: u8, file: *const c_void) -> u8 {
+pub(crate) fn translate_cargo(feature: u8, cargo: u8, file: *const c_void) -> u8 {
     if (feature == crate::newgrf::GSF_STATIONS || feature == crate::newgrf::GSF_ROADSTOPS)
         && cargo == 0xfe
     {
@@ -28,43 +23,43 @@ pub(crate) fn translate_cargo(s: &Services, feature: u8, cargo: u8, file: *const
     }
     let table = openttd_rust_cargo_translation_table(file);
     if usize::from(cargo) >= table.size {
-        unsafe {
-            (s.out_of_range)(
-                cargo,
-                (crate::cargo_registry::file_cargo_count(file) as u32).wrapping_sub(1),
-            );
-        }
+        grf_msg!(
+            1,
+            "TranslateCargo: Cargo type {} out of range (max {}), skipping.",
+            cargo,
+            (crate::cargo_registry::file_cargo_count(file) as u32).wrapping_sub(1)
+        );
         return INVALID_CARGO;
     }
     let label = unsafe { table.data.add(usize::from(cargo)).read() };
     if label == crate::cargo_type::CT_INVALID {
-        unsafe {
-            (s.not_available)(cargo);
-        }
+        grf_msg!(
+            5,
+            "TranslateCargo: Cargo type {} not available in this climate, skipping.",
+            cargo
+        );
         return INVALID_CARGO;
     }
     let result = openttd_rust_cargo_by_label(label);
     if !is_valid_cargo_type(result) {
-        unsafe {
-            (s.unsupported)(label);
-        }
+        grf_msg!(
+            5,
+            "TranslateCargo: Cargo '{}{}{}{}' unsupported, skipping.",
+            Char(label.to_be_bytes()[0]),
+            Char(label.to_be_bytes()[1]),
+            Char(label.to_be_bytes()[2]),
+            Char(label.to_be_bytes()[3])
+        );
         return INVALID_CARGO;
     }
-    unsafe {
-        (s.mapped)(label, result);
-    }
+    grf_msg!(
+        6,
+        "TranslateCargo: Cargo '{}{}{}{}' mapped to cargo type {}.",
+        Char(label.to_be_bytes()[0]),
+        Char(label.to_be_bytes()[1]),
+        Char(label.to_be_bytes()[2]),
+        Char(label.to_be_bytes()[3]),
+        result
+    );
     result
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_act3_translate_cargo(
-    s: *const Services,
-    feature: u8,
-    cargo: u8,
-    file: *const c_void,
-) -> u8 {
-    translate_cargo(unsafe { &*s }, feature, cargo, file)
-}
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDAct3CargoServices" ["station_service"] => Services { out_of_range, not_available, unsupported, mapped };
 }

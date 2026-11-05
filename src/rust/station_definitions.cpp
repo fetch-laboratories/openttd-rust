@@ -8,14 +8,12 @@
 #include "../newgrf/newgrf_stringmapping.h"
 #include "services_newgrf.h"
 #include "services_station.h"
-#include "newgrf_act3_ffi.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
 const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 {
 	static const OpenTTDStationDefinitionServices services{
 		.empty_string = STR_EMPTY,
-		.cargo = &GetAct3CargoServices(),
 		.reader = &GetRustByteReaderServices(),
 		.shared = &GetRustSharedServices(),
 		.station_resize = [](GRFFile *file, uint32_t count) noexcept -> void { file->stations.resize(count); },
@@ -73,16 +71,6 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept
 		.station_bridge_pillars = [](StationSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].disallowed_pillars = BridgePillarFlags{value}; },
 		.road_bridge_height = [](RoadStopSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].height = value; },
 		.road_bridge_pillars = [](RoadStopSpec *spec, size_t index, uint8_t value) noexcept -> void { spec->bridgeable_info[index].disallowed_pillars = BridgePillarFlags{value}; },
-		.station_invalid = [](uint32_t last) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} is invalid, max {}, ignoring", last, UINT16_MAX - 1); },
-		.road_invalid = [](uint32_t last) noexcept -> void { GrfMsg(1, "RoadStopChangeInfo: RoadStop {} is invalid, max {}, ignoring", last, NUM_ROADSTOPS_PER_GRF); },
-		.station_undefined = [](uint32_t id) noexcept -> void { GrfMsg(2, "StationChangeInfo: Attempt to modify undefined station {}, ignoring", id); },
-		.road_undefined = [](uint32_t id) noexcept -> void { GrfMsg(1, "RoadStopChangeInfo: Attempt to modify undefined road stop {}, ignoring", id); },
-		.odd_layout = [](uint32_t id) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} defines an odd number of sprite layouts, dropping the last item", id); },
-		.missing_sprite = [](uint16_t source, uint32_t id) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} is not defined, cannot copy sprite layout to {}.", source, id); },
-		.missing_custom = [](uint16_t source, uint32_t id) noexcept -> void { GrfMsg(1, "StationChangeInfo: Station {} is not defined, cannot copy tile layout to {}.", source, id); },
-		.invalid_tile = [](uint8_t tile, uint8_t length, uint8_t number) noexcept -> void { GrfMsg(1, "StationChangeInfo: Invalid tile {} in layout {}x{}", tile, length, number); },
-		.undefined_publication = [](uint16_t id) noexcept -> void { GrfMsg(1, "MapSpriteGroup: {} undefined, skipping", id); },
-		.duplicate_publication = [](uint16_t id) noexcept -> void { GrfMsg(1, "MapSpriteGroup: {} mapped multiple times, skipping", id); },
 	};
 	return services;
 }

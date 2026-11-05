@@ -42,7 +42,6 @@
 #include "rust/station_service_ffi.h"
 #include "rust/station_association_ffi.h"
 #include "rust/station_definitions_ffi.h"
-#include "rust/newgrf_act3_ffi.h"
 #include "newgrf_station.h"
 #include "newgrf_roadstop.h"
 #include "newgrf_airport.h"

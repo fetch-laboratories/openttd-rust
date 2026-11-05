@@ -2,6 +2,7 @@
 /** @file service_tables.cpp Production table completeness and typed default contracts. */
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
+#include "../rust/debug_ffi.h"
 #include "../rust/services_ffi.h"
 #include "../rust/service_table_check.hpp"
 #include "../company_type.h"
@@ -71,6 +72,7 @@ static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 	X(storage) \
 	X(cargo_registry) \
 	X(generic) \
+	X(debug) \
 	X(grf_loading) \
 	X(settings) \
 	X(script_instance)
@@ -93,6 +95,11 @@ TEST_CASE("Rust ABI - omitted and explicit null callbacks fail completeness")
 	CHECK(AbiServicesComplete(table));
 	table.restore = nullptr;
 	CHECK_FALSE(AbiServicesComplete(table));
+}
+TEST_CASE("Rust ABI - debug levels and print leaves")
+{
+	ABI_LAYOUT_CHECK;
+#include "abi-layout-debug.inc"
 }
 TEST_CASE("Rust ABI - setting callback records")
 {

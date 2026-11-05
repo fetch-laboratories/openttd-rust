@@ -36,11 +36,6 @@ StoryPagePool _story_page_pool("StoryPage");
 INSTANTIATE_POOL_METHODS(StoryPageElement)
 INSTANTIATE_POOL_METHODS(StoryPage)
 
-StoryPage::~StoryPage()
-{
-	if (CleaningPool()) return;
-}
-
 
 /** Set the button background colour. */
 void StoryPageButtonData::SetColour(Colours button_colour)

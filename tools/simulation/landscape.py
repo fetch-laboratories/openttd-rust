@@ -3,7 +3,9 @@
 import struct
 import subprocess
 import zlib
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, NotRequired, cast
 
 from . import core, objects, trees
 from .console_adapter import prepared_console
@@ -12,7 +14,8 @@ from .effects import effect_rows
 
 # name, climate, MAPT, M3LO, M3HI, MAP5, MAP2, base height, N/W/E/S slope,
 # observed chunk/value, required branches. Numeric encodings follow *_map.h.
-GROUND_CASES = (
+Ground = tuple[str, int, int, int, int, int, int, int, int, str, int, str]
+GROUND_CASES: tuple[Ground, ...] = (
     ("grass", 0, 0, 0, 0, 226, 0, 3, 0, "MAP5", 3, ""),
     ("field", 0, 0, 8, 0, 239, 45, 3, 0, "M3LO", 96, "field_cycle field_fence"),
     ("orphan", 0, 0, 7, 0, 239, 65535, 3, 0, "MAP5", 2, "field_orphan"),
@@ -54,63 +57,72 @@ REQUIRED = {
 }
 
 
-def scenarios(soak):
+class Scenario(core.Scenario):
+    ground: NotRequired[Ground]
+    ground_tile: NotRequired[int]
+    landscape_commands: NotRequired[str]
+    generic_callbacks: NotRequired[bool]
+    generation_probe: NotRequired[bool]
+    roads: NotRequired[str]  # roads.Scenario's key, read by game_environment and check.
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     saves = {"airport": "aircraft-route", "victims": "road-crossing"}
     return (
         [
-            dict(
-                name="landscape-" + case[0],
-                kind="save",
-                ground=case,
-                save=str(
+            {
+                "name": "landscape-" + case[0],
+                "kind": "save",
+                "ground": case,
+                "save": str(
                     ROOT
                     / "migration/saves"
                     / (saves.get(case[0], "road-flooding") + ".sav")
                 ),
-                short_checkpoint=True,
-                ticks=1,
-                console=["unpause"],
-            )
+                "short_checkpoint": True,
+                "ticks": 1,
+                "console": ["unpause"],
+            }
             for case in GROUND_CASES
         ]
         + [
-            dict(
-                name="landscape-commands-" + mode,
-                kind="save",
-                landscape_commands=mode,
-                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
-                ticks=1,
-                short_checkpoint=True,
-            )
+            {
+                "name": "landscape-commands-" + mode,
+                "kind": "save",
+                "landscape_commands": mode,
+                "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                "ticks": 1,
+                "short_checkpoint": True,
+            }
             for mode in ("control", "reload")
         ]
         + [
-            dict(
-                name="landscape-generic-callbacks",
-                kind="save",
-                generic_callbacks=True,
-                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
-                short_checkpoint=True,
-                ticks=1,
-            )
+            {
+                "name": "landscape-generic-callbacks",
+                "kind": "save",
+                "generic_callbacks": True,
+                "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                "short_checkpoint": True,
+                "ticks": 1,
+            }
         ]
         + [
-            dict(
-                name="generate-heightmap-and-cancellation",
-                kind="generate",
-                seed=1,
-                map_log2=6,
-                map_log2_y=7,
-                land_generator=1,
-                generation_probe=True,
-                ticks=1,
-                short_checkpoint=True,
-            )
+            {
+                "name": "generate-heightmap-and-cancellation",
+                "kind": "generate",
+                "seed": 1,
+                "map_log2": 6,
+                "map_log2_y": 7,
+                "land_generator": 1,
+                "generation_probe": True,
+                "ticks": 1,
+                "short_checkpoint": True,
+            }
         ]
     )
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     selected = (
         scenario.get("generation_probe")
         or "ground" in scenario
@@ -120,20 +132,28 @@ def game_environment(scenario):
     return WITNESS_ENVIRONMENT if selected and scenario.get("witnesses") else {}
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if scenario.get("generic_callbacks"):
         folder = out / scenario["name"] / "input"
         source, record = core.normalize(Path(scenario["save"]), folder / "normalized")
-        result["generic_input"] = record
-        scenario = dict(scenario, save=str(source))
+        core.findings(result)["generic_input"] = record
+        scenario = {**scenario, "save": str(source)}
         executables = prepared_console(
             "objects", objects.adapter, binaries, builds, folder, env
         )
-        return dict(
-            scenario,
-            executables=executables,
-            console=["generic_scenario probe", "unpause"],
-        )
+        return {
+            **scenario,
+            "executables": executables,
+            "console": ["generic_scenario probe", "unpause"],
+        }
     if scenario.get("generation_probe"):
         executables = prepared_console(
             "objects",
@@ -143,39 +163,45 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             out / scenario["name"] / "input",
             env,
         )
-        return dict(
-            scenario, executables=executables, console=["generation_scenario probe"]
-        )
+        return {
+            **scenario,
+            "executables": executables,
+            "console": ["generation_scenario probe"],
+        }
 
     if "landscape_commands" in scenario:
         folder = out / scenario["name"] / "input"
         source, record = core.normalize(Path(scenario["save"]), folder / "normalized")
-        result["landscape_input"] = record
-        scenario = dict(scenario, save=str(source))
+        core.findings(result)["landscape_input"] = record
+        scenario = {**scenario, "save": str(source)}
         executables = prepared_console(
             "objects", objects.adapter, binaries, builds, folder, env
         )
         if scenario["landscape_commands"] == "control":
-            return dict(
-                scenario,
-                executables=executables,
-                console=["landscape_scenario control", "unpause"],
-            )
+            return {
+                **scenario,
+                "executables": executables,
+                "console": ["landscape_scenario control", "unpause"],
+            }
         saves = {
             role: folder / role / "landscape.sav" for role in ("reference", "candidate")
         }
+
+        def control(role: str) -> Scenario:
+            return {
+                **scenario,
+                "console": [f'landscape_scenario control "{saves[role]}"', "unpause"],
+            }
+
         runs = core.capture_pair(
-            lambda role: dict(
-                scenario,
-                console=[f'landscape_scenario control "{saves[role]}"', "unpause"],
-            ),
+            control,
             executables,
             builds,
             folder,
             timeout,
             env,
         )
-        reload_inputs = {}
+        reload_inputs: dict[str, dict[str, Any]] = {}
         for role, run in runs.items():
             trees.check_editor_groups(run["log"])
             checkpoint = [
@@ -208,11 +234,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             {"chunks": 0, "elements": 0, "masked": {}},
         ):
             raise RuntimeError("landscape reload setup differs")
-        return dict(
-            scenario,
-            executables=executables,
-            role_inputs=reload_inputs,
-        )
+        return {
+            **scenario,
+            "executables": executables,
+            "role_inputs": reload_inputs,
+        }
     if "ground" not in scenario:
         return scenario
     case = scenario["ground"]
@@ -237,7 +263,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     sea = tile + width if case[0] == "half-rail" else tile - 1 if victims else None
     fixture = folder / "ground.sav"
-    changes = {
+    changes: dict[str, dict[int, dict[str, Any]]] = {
         "DATE": {0: {"cur_tileloop_tile": sea if sea is not None else tile}},
         "PATS": {
             0: {
@@ -273,7 +299,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     patch(source, fixture, changes)
     data = bytearray(fixture.read_bytes())
 
-    def put(cid, t, value):
+    def put(cid: str, t: int, value: int) -> None:
         size = 2 if cid in ("MAP2", "MAP8") else 1
         position = chunks[cid]["span"][0] + 8 + size * t
         data[position : position + size] = value.to_bytes(size, "big")
@@ -316,10 +342,16 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         for cid, value in (("MAPT", 96), ("MAPO", 17), ("MAP5", 0), ("M3LO", 0)):
             put(cid, t, value)
     fixture.write_bytes(data)
-    return dict(scenario, save=str(fixture), ground_tile=tile)
+    return {**scenario, "save": str(fixture), "ground_tile": tile}
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario.get("generic_callbacks"):
         lines = [line for line in run["log"] if line.startswith("GENERIC ")]
         required = (
@@ -452,7 +484,7 @@ def check(scenario, run, mode, role, result):
             # a no-op second slope pass must not hide an early continuation exit.
             if counts["fix_slopes"] < 18 or counts["watering"] < 11:
                 raise RuntimeError("missing downstream heightmap slope/watering passes")
-            result.setdefault("generation_witnesses", {})[mode] = counts
+            core.findings(result).setdefault("generation_witnesses", {})[mode] = counts
         return
 
     if "landscape_commands" in scenario:
@@ -488,7 +520,7 @@ def check(scenario, run, mode, role, result):
         return
     if scenario.get("roads") == "flooding":
         required = "flood_success flood_fail vehicle_crash wakeup".split()
-        result[f"{mode}_{role}_flood"] = branch_witnesses(
+        core.findings(result)[f"{mode}_{role}_flood"] = branch_witnesses(
             scenario, run, role, "landscape", required
         )
         return
@@ -504,7 +536,10 @@ def check(scenario, run, mode, role, result):
     actual = int.from_bytes(chunks[case[9]]["raw"][at : at + size], "big")
     if actual != case[10]:
         raise RuntimeError(f"{case[0]} tile endpoint {actual} != {case[10]}")
-    result[f"{mode}_{role}_ground"] = {"endpoint": actual, "branches": counts}
+    core.findings(result)[f"{mode}_{role}_ground"] = {
+        "endpoint": actual,
+        "branches": counts,
+    }
     if case[0] in REMOTE:
         vehicles = rows(run["snapshots"][-1])
         heads = tuple(v for v, _, _ in REMOTE[case[0]][1])
@@ -522,7 +557,7 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError("flood victim explosions missing")
 
 
-def scheduler_gap():
+def scheduler_gap() -> None:
     """Compare unreachable map phases and commit-after-batch with unchanged C++."""
     import migration
 
@@ -536,15 +571,21 @@ def scheduler_gap():
 
     # Movement gaps: impossible foundation outcomes and off-map signed extrema.
     # Every algorithm/helper body below is extracted from the unchanged reference.
-    def function(text, name):
+    def function(text: str, name: str) -> str:
         import re
 
         import probe
 
-        match = re.search(
-            r"^(?:static )?(?:inline )?[\w:<>, \t*&]+\s+" + name + r"\([^;{}]*\)\s*\{",
-            text,
-            re.M,
+        # The pinned reference defines every requested function.
+        match = cast(
+            re.Match[str],
+            re.search(
+                r"^(?:static )?(?:inline )?[\w:<>, \t*&]+\s+"
+                + name
+                + r"\([^;{}]*\)\s*\{",
+                text,
+                re.M,
+            ),
         )
         return probe.body(text, match[0]) + "\n"
 
@@ -767,7 +808,7 @@ def check_heightmap_inputs(lines: list[str]) -> None:
             )
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if not scenario.get("generation_probe"):
         return
     for name, width, height in (("wide", 17, 9), ("tall", 9, 17)):

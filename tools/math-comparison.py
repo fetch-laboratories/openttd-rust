@@ -25,7 +25,7 @@ REJECTED = {
 }
 
 
-def bounded(out, counts):
+def bounded(out: Path, counts: dict[str, int]) -> None:
     fixture = probe.ROOT / "tools/migration/math-comparison.cpp"
     signature = "uint GetPartialPixelZ(int x, int y, Slope corners)"
     for label, source in LABELS:
@@ -39,7 +39,7 @@ def bounded(out, counts):
             + "\n"
         )
     for mode, flags in (("asserts", []), ("ndebug", ["-DNDEBUG"])):
-        streams = {}
+        streams: dict[str, bytes] = {}
         for label, source in LABELS:
             binary = out / f"{label}-{mode}"
             command = [
@@ -92,12 +92,12 @@ def bounded(out, counts):
     counts["preserved_rejections"] = len(REJECTED)
 
 
-def wide(out, build, counts):
+def wide(out: Path, build: Path, counts: dict[str, int]) -> None:
     configuration = migration.rust_configuration(build)
     fixture = probe.ROOT / "tools/migration/math-extension-comparison.cpp"
     width = f"-DOPENTTD_MATH_POINTER_BYTES={configuration['pointer_bytes']}"
 
-    def command(label, source):
+    def command(label: str, source: Path) -> list[probe.Argument]:
         return [
             probe.compiler(build),
             "-std=c++20",
@@ -109,7 +109,7 @@ def wide(out, build, counts):
             fixture,
         ]
 
-    streams = {}
+    streams: dict[str, bytes] = {}
     for label, source in LABELS:
         binary = out / f"wide-{label}"
         argv = [*command(label, source), "-o", binary]
@@ -120,13 +120,13 @@ def wide(out, build, counts):
     counts["wide_lines"] = len(streams["reference"].splitlines())
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=probe.BUILD)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     out = probe.output("math-comparison", args.output)
-    counts = {}
+    counts: dict[str, int] = {}
     if migration.rust_configuration(args.build)["platform"] == "Linux":
         bounded(out, counts)
     wide(out, args.build, counts)

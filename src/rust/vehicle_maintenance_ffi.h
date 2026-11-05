@@ -88,10 +88,6 @@ struct OpenTTDVehicleMaintenanceBreakdownCountdown {
 	OrderType order_type;
 	uint8_t counter;
 };
-struct OpenTTDVehicleMaintenanceBreakdownSoundState {
-	VehicleType kind;
-	LandscapeType landscape;
-};
 struct OpenTTDVehicleMaintenanceAge {
 	OpenTTDCalendarDate age;
 	OpenTTDCalendarDate max_age;
@@ -132,7 +128,6 @@ struct OpenTTDVehicleMaintenanceServices {
 	void (OPENTTD_RUST_CALL *breakdown_start_write)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_start_write);
 	OpenTTDVehicleMaintenanceBreakdownActive (OPENTTD_RUST_CALL *breakdown_active)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_active);
 	OpenTTDVehicleMaintenanceBreakdownCountdown (OPENTTD_RUST_CALL *breakdown_countdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_countdown);
-	OpenTTDVehicleMaintenanceBreakdownSoundState (OPENTTD_RUST_CALL *breakdown_sound_state)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_sound_state);
 	void (OPENTTD_RUST_CALL *breakdown_delay_write)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay_write);
 	bool (OPENTTD_RUST_CALL *smoke_disabled)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_disabled);
 	uint8_t (OPENTTD_RUST_CALL *smoke_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_delay);

@@ -25,7 +25,6 @@ inline void RustInvalidateWindowClassesData(uint16_t cls, int32_t data) noexcept
 inline void RustResetWindowSystem() noexcept { ResetWindowSystem(); }
 inline void RustSetupColoursAndInitialWindow() noexcept { SetupColoursAndInitialWindow(); }
 inline size_t RustUtf8Length(const uint8_t *text, size_t length) noexcept { return Utf8StringLength(std::string_view(reinterpret_cast<const char *>(text), length)); }
-inline void RustDebugNewMap(uint32_t seed) noexcept { Debug(desync, 1, "new_map: {:08x}", seed); }
 inline void RustCostOrIncomeAnimation(int32_t x, int32_t y, int32_t z, int64_t amount) noexcept { ShowCostOrIncomeAnimation(x, y, z, Money(amount)); }
 inline void RustFeederIncomeAnimation(int32_t x, int32_t y, int32_t z, int64_t transfer, int64_t income) noexcept { ShowFeederIncomeAnimation(x, y, z, Money(transfer), Money(income)); }
 #endif /* RUST_PRESENTATION_SERVICES_H */

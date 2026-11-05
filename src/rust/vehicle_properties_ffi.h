@@ -84,12 +84,6 @@ struct OpenTTDVehicleProperties {
 	bool (*ship_image_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_image_valid);
 	bool (*aircraft_image_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_image_valid);
 	void (*uses_2cc)(bool) noexcept OPENTTD_SERVICE_DEFAULT(uses_2cc);
-	void (*invalid_sprite)(VehicleType, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_sprite);
-	void (*invalid_cargo)(VehicleType, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_cargo);
-	void (*invalid_track)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_track);
-	void (*invalid_weight)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_weight);
-	void (*ai_rank)() noexcept OPENTTD_SERVICE_DEFAULT(ai_rank);
-	void (*invalid_price)(const char *, size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_price);
 };
 const OpenTTDVehicleProperties &GetRustVehicleProperties() noexcept;
 extern "C" {

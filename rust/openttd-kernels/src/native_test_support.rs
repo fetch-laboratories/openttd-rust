@@ -535,6 +535,25 @@ pub unsafe extern "C" fn openttd_test_command_stack_probe(
     })
 }
 
+/// Observe GRF text bytes and language state, which saves do not contain.
+/// # Safety
+/// The visitor is synchronous and may read, but cannot mutate, the text table.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_grf_text_dump(
+    context: *const std::ffi::c_void,
+    visitor: unsafe extern "C" fn(
+        *const std::ffi::c_void,
+        u32,
+        u32,
+        u8,
+        u32,
+        u32,
+        crate::services::ByteSpan,
+    ),
+) -> u8 {
+    unsafe { crate::newgrf_text::visit(context, visitor) }
+}
+
 /// Exercise the production Action 2 parser with a native reader.
 /// # Safety
 /// The services and reader satisfy the Action 2 module's serialized lifetime contract.
@@ -603,9 +622,8 @@ pub unsafe extern "C" fn openttd_test_town_tunnel(
 /// Immutable tables and settings satisfy the tree module's serialized entry contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_trees_generate(
-    settings: crate::trees::GenerateSettings,
     services: *const crate::trees::TreeServices,
     shared: *const crate::services::Services,
 ) -> u8 {
-    u8::from(unsafe { crate::trees::generate(settings, services, shared) })
+    u8::from(unsafe { crate::trees::generate(services, shared) })
 }

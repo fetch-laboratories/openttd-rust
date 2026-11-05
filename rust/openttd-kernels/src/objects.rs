@@ -27,6 +27,7 @@ use crate::command_type::DoCommandFlag;
 use crate::company_type::{
     INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
 };
+use crate::debug::debug;
 use crate::economy_func::get_price;
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::game_state::GameState;
@@ -379,8 +380,6 @@ pub struct QueryServices {
     pub manhattan: unsafe extern "C" fn(u32, u32) -> u32,
     pub square: unsafe extern "C" fn(u32, u32) -> u32,
     pub triggers: unsafe extern "C" fn(*const Spec) -> u16,
-
-    pub unhandled: unsafe extern "C" fn(u8),
 }
 
 struct World<'a> {
@@ -517,10 +516,10 @@ impl<'a> World<'a> {
                     0x7a => {
                         return (self.shared.specs().object().badges)(ro.cast(), spec, parameter);
                     }
-                    _ => return self.unhandled(variable, available),
+                    _ => return Self::unhandled(variable, available),
                 }
                 if !(self.shared.tile_valid)(tile) {
-                    return self.unhandled(variable, available);
+                    return Self::unhandled(variable, available);
                 }
             } else if matches!(variable, 0x45 | 0x46) {
                 town = (q.town)(obj);
@@ -579,12 +578,12 @@ impl<'a> World<'a> {
                     obj,
                 ),
                 0x7a => (self.shared.specs().object().badges)(ro.cast(), spec, parameter),
-                _ => self.unhandled(variable, available),
+                _ => Self::unhandled(variable, available),
             }
         }
     }
-    fn unhandled(&self, variable: u8, available: &mut bool) -> u32 {
-        unsafe { (self.query().unhandled)(variable) };
+    fn unhandled(variable: u8, available: &mut bool) -> u32 {
+        debug!(grf, 1, "Unhandled object variable 0x{:X}", variable);
         *available = false;
         u32::MAX
     }
@@ -2485,7 +2484,6 @@ crate::abi::layouts! {
         square,
         triggers,
 
-        unhandled,
     };
     "OpenTTDObjectScope" ["landscape"] => ObjectScope { object, spec, parent, tile, view };
     "OpenTTDObjectEligibility" ["landscape"] => Eligibility { flags, climate, views };

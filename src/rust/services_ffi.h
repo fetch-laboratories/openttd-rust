@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
 #include "abi-record-settings.h"
+#include "byte_span_ffi.h"
 #include "../tile_storage_type.h"
 #include "service_defaults.hpp"
 #include <cstdint>
@@ -221,6 +222,8 @@ struct OpenTTDSharedServices {
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
 	GRFFile *(*grf_file_at_or_null)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_at_or_null);
 	uint32_t (*grf_file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_id);
+	OpenTTDByteSpan (*grf_file_name)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_name);
+	uint16_t (*engine_local_id)(const struct OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_local_id);
 	uint32_t (*grf_parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_parameter);
 	const OpenTTDNewGRFSpecs *newgrf_specs = nullptr;
 	const GRFFile *(*resolver_grf_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file);

@@ -15,6 +15,7 @@
     clippy::comparison_chain, // Preserve native signed/unsigned comparison branches.
     clippy::too_many_lines
 )]
+use crate::debug::debug;
 use crate::newgrf_callbacks::{CALLBACK_FAILED, CBID_RANDOM_TRIGGER};
 use crate::newgrf_storage::{
     openttd_rust_storage_temp_clear, openttd_rust_storage_temp_get, openttd_rust_storage_temp_store,
@@ -176,7 +177,6 @@ pub struct Services {
     storage: *const crate::newgrf_storage::Services,
     store_psa: unsafe extern "C" fn(Resolver, u32, i32),
     tile_random_check: unsafe extern "C" fn(*const crate::industry::resolver::ResolverContext),
-    unhandled_scope: unsafe extern "C" fn(u8),
     variable: unsafe extern "C" fn(Handle, u8, u32, *mut bool) -> u32,
     vehicle: *const crate::newgrf_vehicle::Services,
 }
@@ -335,7 +335,7 @@ impl<'a> Invocation<'a> {
         unsafe {
             let b = scope.binding;
             match b.kind {
-                0 => openttd_rust_scope_default_variable(self.s, variable, available),
+                0 => openttd_rust_scope_default_variable(variable, available),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_variable(
                     &*self.s.vehicle,
                     b.data.vehicle,
@@ -872,13 +872,10 @@ pub extern "C" fn openttd_rust_scope_default_random() -> u32 {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_scope_default_variable(
-    s: &Services,
     variable: u8,
     available: *mut bool,
 ) -> u32 {
-    unsafe {
-        (s.unhandled_scope)(variable);
-    }
+    debug!(grf, 1, "Unhandled scope variable 0x{:X}", variable);
     unsafe {
         available.write(false);
     }
@@ -976,7 +973,7 @@ crate::abi::layouts! {
     "OpenTTDGroupNode" ["storage"] => Node { data, kind };
     "OpenTTDGroupAdjust" ["storage"] => Adjust { subroutine, and_mask, add_val, divmod_val, operation, kind => type, variable, parameter, shift_num };
     "OpenTTDGroupRange" ["storage"] => Range { result, low, high };
-    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, airport, global, house, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
+    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, airport, global, house, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, variable, vehicle };
 }
 
 pub(crate) const DSG_SIZE_DWORD: u8 = 2;

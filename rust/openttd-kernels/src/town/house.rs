@@ -804,7 +804,11 @@ impl<'a> House<'a> {
                         tile = tile.wrapping_add(map.diff(x, 0));
                     }
                 }
-                let modes = 1 | if (self.l.allow_roads)() { 2 } else { 0 };
+                let modes = 1 | if unsafe { self.s.settings().allow_town_roads.read() } {
+                    2
+                } else {
+                    0
+                };
                 let id = u32::from(town.id.0);
                 self.engine(town).try_house(id, tile, modes);
             }

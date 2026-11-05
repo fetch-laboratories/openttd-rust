@@ -61,12 +61,6 @@ struct OpenTTDCompanyControl {
 	bool execute;
 	uint8_t stage;
 };
-struct OpenTTDCompanyCompetitors {
-	size_t num_companies;
-	uint16_t interval;
-	bool menu, can_start, networking;
-	uint8_t max_companies, max_competitors;
-};
 struct OpenTTDEconomyMonth { uint8_t month; bool infinite_money, maintenance, fluctuating; };
 struct OpenTTDCompanyYear { CompanyFinances *local_finances; uint8_t local; bool show_finances, new_year_sound; };
 struct OpenTTDEconomySettings { int32_t year; uint32_t max_loan; uint8_t initial_interest, vehicle_costs, construction_cost; bool inflation; };
@@ -230,8 +224,8 @@ int64_t OPENTTD_RUST_CALL openttd_rust_company_available_money(const CompanyFina
 int64_t OPENTTD_RUST_CALL openttd_rust_company_max_loan(const CompanyFinances *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_startup_abi(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_startup(const OpenTTDCompanyServices *a0, OpenTTDCompanyStartup *a1) { return openttd_rust_company_startup_abi(a0, a1) != 0; }
-uint8_t OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout_abi(const OpenTTDCompanyServices *, const OpenTTDCompanyCompetitors *);
-extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *a0, const OpenTTDCompanyCompetitors *a1) { return openttd_rust_company_competitor_timeout_abi(a0, a1) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout_abi(const OpenTTDCompanyServices *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *a0) { return openttd_rust_company_competitor_timeout_abi(a0) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed_abi(const OpenTTDCompanyServices *, uint8_t, uint8_t);
 extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed(const OpenTTDCompanyServices *a0, uint8_t a1, uint8_t a2) { return openttd_rust_company_takeover_allowed_abi(a0, a1, a2) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_control_abi(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCompanyControl *);

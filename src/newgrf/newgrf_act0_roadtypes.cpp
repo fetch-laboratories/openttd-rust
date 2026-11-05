@@ -40,11 +40,6 @@ static const OpenTTDRoadProperties &GetRustRoadProperties() noexcept
 		.required = [](RoadTypeInfo *info, RoadType value) noexcept { info->introduction_required_roadtypes.Set(value); },
 		.introduces = [](RoadTypeInfo *info, RoadType value) noexcept { info->introduces_roadtypes.Set(value); },
 		.badges = [](RoadTypeInfo *info) noexcept { return &info->badges; },
-		.invalid_reserve = [](uint32_t last, size_t size) noexcept { GrfMsg(1, "RoadTypeReserveInfo: Road type {} is invalid, max {}, ignoring", last, size); },
-		.invalid_change = [](uint32_t last, size_t size) noexcept { GrfMsg(1, "RoadTypeChangeInfo: Road type {} is invalid, max {}, ignoring", last, size); },
-		.no_label = [](uint32_t id) noexcept { GrfMsg(1, "RoadTypeReserveInfo: Ignoring property 1D for road type {} because no label was set", id); },
-		.reserve_mismatch = [](uint32_t id) noexcept { GrfMsg(1, "RoadTypeReserveInfo: Road type {} is invalid type (road/tram), ignoring", id); },
-		.power_mismatch = [](uint8_t resolved, uint8_t current) noexcept { GrfMsg(1, "RoadTypeChangeInfo: Powered road type list: Road type {} road/tram type does not match road type {}, ignoring", resolved, current); },
 	};
 	return services;
 }

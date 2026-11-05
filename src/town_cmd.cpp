@@ -505,7 +505,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.generating_world = GetRustSharedServices().clear_square_services.generating_world,
 		.allow_crossings = RustTown_allow_crossings,
 		.climate = OpenTTDLandscapeValue,
-		.allow_roads = RustAllowTownRoads,
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,
 		.house_placement = RustTownHousePlacement,

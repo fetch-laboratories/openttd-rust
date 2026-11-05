@@ -44,7 +44,6 @@ typedef struct OpenTTDRustSaveLoadCodec {
 typedef struct OpenTTDSaveLoadServices {
 	const OpenTTDSharedServices *shared; ///< not_reached is the native NOT_REACHED.
 	void (*native_assert)(bool ok);
-	void (*debug_iterate_error)(void);
 	bool (*read)(void *filter, uint8_t *buf, size_t len, size_t *read);
 	bool (*write)(void *filter, const uint8_t *buf, size_t len);
 	bool (*finish)(void *filter);

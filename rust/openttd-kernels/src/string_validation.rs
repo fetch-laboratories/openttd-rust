@@ -24,9 +24,6 @@ pub struct Write {
     pub accepted: u8,
 }
 
-fn printable(codepoint: u32) -> bool {
-    codepoint >= 0x20 && !(0xe000..0xe200).contains(&codepoint)
-}
 fn sprite(codepoint: u32) -> bool {
     (0xe200..=0xe2ff).contains(&codepoint)
 }
@@ -51,7 +48,7 @@ pub fn step(bytes: &[u8], settings: u8) -> Step {
     } else {
         let codepoint = decoded.codepoint;
         let newline = settings & 2 != 0;
-        if (printable(codepoint) && !sprite(codepoint))
+        if (crate::string_func::is_printable(codepoint) && !sprite(codepoint))
             || (settings & 4 != 0 && encoded_control(codepoint))
             || (newline && codepoint == 10)
         {
@@ -67,6 +64,20 @@ pub fn step(bytes: &[u8], settings: u8) -> Step {
     result
 }
 
+/// `StrMakeValid(str, settings)`: the scan decisions of `step`, appended to a new string.
+pub fn make_valid(mut bytes: &[u8], settings: u8) -> Vec<u8> {
+    let mut result = Vec::new();
+    while !bytes.is_empty() {
+        let step = step(bytes, settings);
+        bytes = &bytes[step.consumed..];
+        if step.stopped != 0 {
+            break;
+        }
+        result.extend_from_slice(&step.output.bytes[..step.output.length]);
+    }
+    result
+}
+
 pub fn valid(bytes: &[u8]) -> bool {
     let mut position = 0;
     while position < bytes.len() {
@@ -77,7 +88,7 @@ pub fn valid(bytes: &[u8]) -> bool {
         if decoded.codepoint == 0 {
             return true;
         }
-        if !printable(decoded.codepoint) || sprite(decoded.codepoint) {
+        if !crate::string_func::is_printable(decoded.codepoint) || sprite(decoded.codepoint) {
             return false;
         }
         position += decoded.length;

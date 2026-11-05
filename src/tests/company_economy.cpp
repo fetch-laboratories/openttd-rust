@@ -416,8 +416,6 @@ TEST_CASE("Company economy - network deferred deletion and synchronous pool iter
 TEST_CASE("Company economy - competitor posts return to the caller before each Post")
 {
 	FixtureReset(false, false);
-	const OpenTTDCompanyCompetitors competitors{.num_companies = 0, .interval = 1, .menu = false, .can_start = true, .networking = false, .max_companies = 15, .max_competitors = 1};
-	CHECK(openttd_rust_company_competitor_timeout(&fixture_services, &competitors));
 	for (bool change_limit : {false, true}) {
 		fixture_trace.clear();
 		uint32_t cursor = *openttd_rust_company_tick();
@@ -437,6 +435,16 @@ TEST_CASE("Company economy - competitor posts return to the caller before each P
 		if (change_limit) fixture.services.post_ai = [](OpenTTDSessionFrame *) noexcept { CHECK(fixture_trace.empty()); ++posts; SessionFixture::active->max_competitors = 1; return true; };
 		CHECK(fixture.Run(GM_NORMAL));
 		CHECK(posts == (change_limit ? 1 : 2));
+		/* The competitor timeout reads the same canonical settings and game mode in place. */
+		AutoRestoreBackup game_mode(_game_mode, GM_NORMAL);
+		fixture.competitor_interval = 1;
+		fixture.max_competitors = 1;
+		CHECK(openttd_rust_company_competitor_timeout(&companies));
+		fixture.max_competitors = 0;
+		CHECK_FALSE(openttd_rust_company_competitor_timeout(&companies));
+		fixture.max_competitors = 1;
+		fixture.competitor_interval = 0;
+		CHECK_FALSE(openttd_rust_company_competitor_timeout(&companies));
 		CHECK(fixture_trace == std::vector<std::string>{"timeout 19425"});
 		CHECK(*openttd_rust_company_tick() == (cursor + 1) % MAX_COMPANIES);
 	}

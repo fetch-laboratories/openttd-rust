@@ -11,7 +11,6 @@ static uint8_t CargoCanAllocate() noexcept { return CargoPacket::CanAllocateItem
 static void *CargoCreate(const OpenTTDCargoPacketFields *fields) noexcept { return new CargoPacket(*fields); }
 static OpenTTDCargoPacket *CargoOwner(void *shell) noexcept { return static_cast<CargoPacket *>(shell)->RustOwner(); }
 static void CargoDestroy(void *shell) noexcept { delete static_cast<CargoPacket *>(shell); }
-static uint32_t CargoRandom(uint32_t limit) noexcept { return RandomRange(limit); }
 static uint32_t CargoCoordinate(uint32_t tile, uint8_t axis) noexcept { return axis == 0 ? TileX(TileIndex(tile)) : TileY(TileIndex(tile)); }
 static int64_t CargoPay(void *context, uint8_t final, uint8_t cargo, const void *shell, uint32_t amount, uint32_t tile) noexcept
 {
@@ -45,7 +44,6 @@ static const OpenTTDCargoStorageServices _cargo_storage_services = {
 	.create = CargoCreate,
 	.packet = CargoOwner,
 	.destroy = CargoDestroy,
-	.random = CargoRandom,
 	.coordinate = CargoCoordinate,
 	.pay = CargoPay,
 	.origin = CargoOrigin,

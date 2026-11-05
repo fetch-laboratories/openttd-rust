@@ -23,14 +23,8 @@ const OpenTTDAuthHandlerServices &GetAuthHandlerServices()
 		.ask_password = [](RustAuthenticationClientHandler *shell) noexcept { shell->password_handler->AskUserForPassword(shell->password_handler); },
 		.authorized_available = [](const NetworkAuthenticationAuthorizedKeyHandler *handler) noexcept -> uint8_t { return handler->CanBeUsed(); },
 		.client_password = [](const RustAuthenticationClientHandler *shell, size_t *size) noexcept { const auto &password = shell->password_handler->password; *size = password.size(); return reinterpret_cast<const uint8_t *>(password.data()); },
-		.illegal_public_key = []() noexcept { Debug(net, 0, "[crypto] Peer sent an illegal public key; authentication aborted."); },
-		.illegal_size = []() noexcept { Debug(net, 1, "[crypto] Received auth response of illegal size; authentication aborted."); },
 		.packet = &Packet::Services(),
 		.random_bytes = [](uint8_t *data, size_t size) noexcept { RandomBytesWithFallback(std::span(data, size)); },
-		.received_request = [](const uint8_t *name, size_t size) noexcept { Debug(net, 9, "Received {} authentication request", std::string_view(reinterpret_cast<const char *>(name), size)); },
-		.receiving_response = [](const uint8_t *name, size_t size) noexcept { Debug(net, 9, "Receiving {} authentication response", std::string_view(reinterpret_cast<const char *>(name), size)); },
-		.sending_request = [](const uint8_t *name, size_t size) noexcept { Debug(net, 9, "Sending {} authentication request", std::string_view(reinterpret_cast<const char *>(name), size)); },
-		.sending_response = [](const uint8_t *name, size_t size) noexcept { Debug(net, 9, "Sending {} authentication response", std::string_view(reinterpret_cast<const char *>(name), size)); },
 		.server_password = [](const NetworkAuthenticationPasswordProvider *provider, size_t *size) noexcept { auto password = provider->GetPassword(); *size = password.size(); return reinterpret_cast<const uint8_t *>(password.data()); },
 	};
 	return services;
@@ -61,12 +55,8 @@ std::unique_ptr<NetworkEncryptionHandler> MakeNetworkEncryptionHandler(OpenTTDAu
 	return std::make_unique<X25519EncryptionHandler>(stream);
 }
 
-RustAuthenticationClientHandler::RustAuthenticationClientHandler(const X25519SecretKey &secret, uint8_t method, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password) :
-	password_handler(std::move(password)), handler(openttd_rust_auth_handler_single_new(&GetAuthHandlerServices(), method, 0, secret.data(), this, nullptr, nullptr)) {}
 RustAuthenticationClientHandler::RustAuthenticationClientHandler(const X25519SecretKey &secret, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password) :
 	password_handler(std::move(password)), handler(openttd_rust_auth_client_new(&GetAuthHandlerServices(), secret.data(), this)) {}
-RustAuthenticationServerHandler::RustAuthenticationServerHandler(const X25519SecretKey &secret, uint8_t method, const NetworkAuthenticationPasswordProvider *password, const NetworkAuthenticationAuthorizedKeyHandler *authorized) :
-	handler(openttd_rust_auth_handler_single_new(&GetAuthHandlerServices(), method, 1, secret.data(), nullptr, password, authorized)) {}
 RustAuthenticationServerHandler::RustAuthenticationServerHandler(const NetworkAuthenticationPasswordProvider *password, const NetworkAuthenticationAuthorizedKeyHandler *authorized, NetworkAuthenticationMethodMask mask) :
 	handler(openttd_rust_auth_server_new(&GetAuthHandlerServices(), password, authorized, mask.base())) {}
 

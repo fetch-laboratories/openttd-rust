@@ -12,26 +12,28 @@ from typing import TypedDict
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 CANDIDATE_ENTRIES = (
-    "openttd_rust_session_state_loop",
+    "openttd_rust_session_state_loop_abi",
     "openttd_kernels::genworld::generate",
 )
 # Drawing workloads count C++ drawing, which both builds still share (#566).
 DRAW_ENTRY = "ViewportDoDraw(Viewport const&, int, int, int, int)"
 
-# Quiet speed pass at 755609b8ea (#275): ratio is the median of
-# four three-pair medians; Ir and compatible identity come from profiles of the
-# same build. Ratios are the last three quiet passes, oldest first,
-# retained from b959f89059, f4923c79eb and 755609b8ea respectively. The latest
-# pass alone supplies the compatible instruction anchor; decisions use the mean.
-SPEED_HEAD = "755609b8ea"
+# Quiet speed pass at 27de6f8c18, the first on the Ubuntu 24.04 host (2026-11-05):
+# ratio is the median of four three-pair medians; Ir and compatible identity come
+# from profiles of the same build. The three-pass record restarted on this host,
+# so each scenario has one pass so far and decisions use the mean of the passes
+# it has (docs/speed.md). The drawing workload is anchored for projection only;
+# speed_budget applies no ceiling to it.
+SPEED_HEAD = "27de6f8c18"
 # fmt: off
 SPEED_PASS = (
-    ("generate-tgp-256-1", (1.172280764574488, 1.1783150183150184, 1.1117224479856325), 2734468220, "b5985e2afec2a7f3e2479df4e89f1bcf8560e9204398040de25f425cfb3b24a8"),
-    ("play-opus-55-167-002-manual", (1.3879109594186272, 1.4018075231030847, 1.3939491755220992), 28553652121, "7822ce2275a9fb521a67d47cdcdac6b1e9c433322de683cdfb6df5a3f2507ca3"),
-    ("play-grok-159-001-manual", (1.374991116425806, 1.394822381542774, 1.3871469688959217), 27140212414, "dc7e6fee2c033dc0c1506d3f18c9b8edfc4ffaf2d8962570063d1526dc4d0204"),
-    ("play-padhattan-ridge-1996-manual", (1.3413361169102298, 1.3354044451788813, 1.3365508365508365), 4559471842, "f95e791a1617f2e457fdd4f9b92b51bd9a663632f5390f3f66f0e2d92db2be24"),
-    ("play-padhattan-ridge-2000-manual", (1.410312146769846, 1.3934479388770433, 1.4005769924269744), 7441795115, "62575c1e01fe179a4b0c2f7f75bba73b2256c23a7b3ba08c2b22e59efe6e1d47"),
-    ("play-padhattan-ridge-2016-manual", (1.453359475929639, 1.4694601348806955, 1.522910560065014), 13501045042, "206fefda1a3c05ae702d001fb1b6aff2a36e59ee09e1213a6deba000d8288430"),
+    ("generate-tgp-256-1", (1.1601069121937235,), 2773615856, "4cbae59849fc44afcb65b35e6352c72b40b7caee046e7eb98dbba84ca7941a98"),
+    ("play-opus-55-167-002-manual", (1.3451151318876846,), 28611669801, "fd6c4136ee3265c95d39e5492b0bc2bf2e003e5176eccc54196e33bb23d5df1f"),
+    ("play-grok-159-001-manual", (1.346652325266398,), 27178405243, "c21abdd5925c474ceb5281286464f9058ac738b858533d9ba07b89cfaefe5111"),
+    ("play-padhattan-ridge-1996-manual", (1.3521934654919234,), 4744876185, "7de5a803c02832c70c7b22c739820e2d61bd8eabdae6f968a24947f893e33820"),
+    ("play-padhattan-ridge-2000-manual", (1.444530637399886,), 7834343043, "b66513819d453d3b54e0a5945f843a1c86d00ca09fc7856989d700f89e0a2865"),
+    ("play-padhattan-ridge-2016-manual", (1.3825932133062313,), 14200776421, "ed5da7ab10aedea72c0c9724dc6046c472c16ee66f9509b4e1888df22bf54ef7"),
+    ("draw-padhattan-ridge-1996-giant", (1.0046350128333592,), 2154533064, "ba0981bf678450f011e33e2a90d881e5562ba8b6274aec9992837f69ed0698ff"),
 )
 # Loop Ir at the anchor, in SPEED_PASS order, for projecting instruction-count growth.
 SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
@@ -48,8 +50,8 @@ SPEED_ANCHORS = {
     )
 }
 SPEED_BUDGETS = {name: sum(ratios) / len(ratios) for name, ratios, _, _ in SPEED_PASS}
-# Profiled and speed-pass scenarios: anchored ones plus the unanchored drawing workload.
-PROFILED = (*SPEED_BUDGETS, "draw-padhattan-ridge-1996-giant")
+# Profiled and speed-pass scenarios: the anchored ones, including the drawing workload.
+PROFILED = tuple(dict.fromkeys((*SPEED_BUDGETS, "draw-padhattan-ridge-1996-giant")))
 
 
 class SpeedBudget(TypedDict):

@@ -5,6 +5,7 @@ use super::{
     Builder, ConstructionServices, GenerationServices, Industry, LifecycleServices, SpecHandle,
     TileServices, TownHandle,
 };
+use crate::debug::debug;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{
     BUILT_ON_WATER, INVALID_INDUSTRY, INVALID_INDUSTRYTILE, IT_INVALID, NEW_INDUSTRYTILEOFFSET,
@@ -60,7 +61,6 @@ pub struct ResolverServices {
     pub storage_owner:
         unsafe extern "C" fn(*mut c_void) -> *mut crate::newgrf_storage::Payload<256>,
     pub unhandled: unsafe extern "C" fn(u8, bool, bool, u16),
-    pub pointer_magic: unsafe extern "C" fn(),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub existing_town: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
     pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
@@ -277,9 +277,7 @@ fn variable(
             0x80 => return c.tile,
             0x81 => return (c.tile >> 8) & 255,
             0x82 => return town_id(c.town, s),
-            0x83..=0x85 => unsafe {
-                (s.pointer_magic)();
-            },
+            0x83..=0x85 => debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic"),
             0x86 => return u32::from(unsafe { (*i).metadata.selected_layout }),
             0x87 => return (s.shared().terrain_type)(c.tile),
             0x88 => {
@@ -468,9 +466,7 @@ fn variable(
         0x81 => (unsafe { (*i).metadata.tile } >> 8) & 255,
         0x82 => town_id(c.town, s),
         0x83..=0x85 => {
-            unsafe {
-                (s.pointer_magic)();
-            }
+            debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic");
             unavailable(variable, available, false, false, callback, s)
         }
         0x86 => u32::from(unsafe { (*i).metadata.width }),
@@ -893,7 +889,6 @@ crate::abi::layouts! {
         callback_id,
         storage_owner,
         unhandled,
-        pointer_magic,
         base_scope,
         existing_town,
         make_town,

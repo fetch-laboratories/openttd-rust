@@ -59,8 +59,6 @@ inline uint16_t RustNetworkMaxJoinTime() noexcept { return _settings_client.netw
 inline uint16_t RustNetworkMaxLagTime() noexcept { return _settings_client.network.max_lag_time; }
 inline uint16_t RustNetworkMaxPasswordTime() noexcept { return _settings_client.network.max_password_time; }
 inline uint16_t RustNetworkSyncFreq() noexcept { return _settings_client.network.sync_freq; }
-inline bool RustNeverExpireAirports() noexcept { return _settings_game.station.never_expire_airports; }
-inline bool RustNeverExpireVehicles() noexcept { return _settings_game.vehicle.never_expire_vehicles; }
 inline uint16_t RustTrainLimit() noexcept { return _settings_game.vehicle.max_trains; }
 inline uint16_t RustRoadVehicleLimit() noexcept { return _settings_game.vehicle.max_roadveh; }
 inline uint16_t RustShipLimit() noexcept { return _settings_game.vehicle.max_ships; }
@@ -79,7 +77,6 @@ inline uint8_t OpenTTDTownNameStyle() noexcept { return _settings_game.game_crea
 inline bool RustBuildOnSlopes() noexcept { return _settings_game.construction.build_on_slopes; }
 inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
 inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
-inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
 inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
 inline uint8_t OpenTTDTownCargoGenMode() noexcept { return _settings_game.economy.town_cargogen_mode; }
 inline uint8_t OpenTTDPlaceHouses() noexcept { return _settings_game.economy.place_houses; }
@@ -88,14 +85,11 @@ inline uint8_t RustStationSpread() noexcept { return _settings_game.station.stat
 inline bool RustModifiedCatchment() noexcept { return _settings_game.station.modified_catchment; }
 inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.construction.road_stop_on_town_road; }
 inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.construction.road_stop_on_competitor_road; }
-inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
 inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
 inline void RustSetMapHeightLimit(uint8_t height) noexcept { _settings_game.construction.map_height_limit = height; }
 inline void RustSetGenerationSeed(uint32_t seed) noexcept { _settings_game.game_creation.generation_seed = seed; }
-inline uint8_t RustMapHeightLimit() noexcept { return _settings_game.construction.map_height_limit; }
-inline uint16_t RustMaxBridgeLength() noexcept { return _settings_game.construction.max_bridge_length; }
 inline uint8_t RustMaxBridgeHeight() noexcept { return _settings_game.construction.max_bridge_height; }
 inline uint16_t RustMaxTunnelLength() noexcept { return _settings_game.construction.max_tunnel_length; }
 inline uint16_t OpenTTDSubsidyDuration() noexcept { return _settings_game.difficulty.subsidy_duration; }
@@ -114,11 +108,9 @@ inline bool RustGradualLoading() noexcept { return _settings_game.order.gradual_
 inline uint8_t RustTrainSignalSide() noexcept { return _settings_game.construction.train_signal_side; }
 inline uint8_t RustFreightTrains() noexcept { return _settings_game.vehicle.freight_trains; }
 inline bool RustWagonSpeedLimits() noexcept { return _settings_game.vehicle.wagon_speed_limits; }
-inline bool RustAllowTownRoads() noexcept { return _settings_game.economy.allow_town_roads; }
 inline bool RustImprovedLoad() noexcept { return _settings_game.order.improved_load; }
 inline bool RustInflation() noexcept { return _settings_game.economy.inflation; }
 inline int32_t RustStartingYear() noexcept { return _settings_game.game_creation.starting_year.base(); }
-inline uint32_t RustGenerationSeed() noexcept { return _settings_game.game_creation.generation_seed; }
 /** Adapt legacy callback widths and unused context arguments to a canonical setting read. */
 template <typename Result, auto Read, typename... Args>
 inline Result RustSettingRead(Args...) noexcept { return Read(); }
