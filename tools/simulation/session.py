@@ -1,7 +1,7 @@
 """Actual session entry comparisons, unsaved aliases and native exception phases."""
 
 from pathlib import Path
-from typing import NotRequired
+from typing import NotRequired, cast
 
 from . import core, landscape
 from .console_adapter import console_adapter, prepared_console
@@ -130,7 +130,8 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
 def install(scenario: Scenario, run_dir: Path) -> None:
     if not scenario.get("session"):
         return
-    landscape.install({"generation_probe": True}, run_dir)
+    # landscape.install reads only generation_probe.
+    landscape.install(cast(landscape.Scenario, {"generation_probe": True}), run_dir)
     if partial := scenario.get("partial"):
         data = Path(partial).read_bytes()
         (run_dir / "partial.sav").write_bytes(data[: len(data) // 2])
