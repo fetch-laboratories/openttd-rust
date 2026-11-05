@@ -161,6 +161,65 @@ fn train_can_run_on_rail(s: &Services, engine: u32, track: u32) -> bool {
     crate::rail::is_compatible_rail(s.command.shared, engine as u8, track as u8)
 }
 
+/// `ScriptRail::TrainHasPowerOnRail`, using the integrated rail-command table.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn openttd_rust_script_rail_train_has_power(
+    s: &Services,
+    rail: &crate::rail_cmd::RailCommandServices,
+    engine: u32,
+    track: u32,
+) -> u8 {
+    u8::from(
+        rail_type_available(s, engine)
+            && rail_type_available(s, track)
+            && (rail.powered_rail)(engine as u8, track as u8),
+    )
+}
+
+/// `ScriptRail::GetMaxSpeed`, using the integrated ground-physics table.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn openttd_rust_script_rail_max_speed(
+    s: &Services,
+    physics: &crate::ground_vehicle::Services,
+    rail_type: u32,
+) -> i64 {
+    if !rail_type_available(s, rail_type) {
+        return -1;
+    }
+    i64::from((physics.rail_speed)(crate::services::RailType(
+        rail_type as u8,
+    )))
+}
+
+/// `ScriptRail::GetBuildCost`, retaining availability before build-type validation.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn openttd_rust_script_rail_build_cost(
+    s: &Services,
+    rail: &crate::rail_cmd::RailCommandServices,
+    rail_type: u32,
+    build_type: u32,
+) -> i64 {
+    use crate::economy_type::{
+        PR_BUILD_DEPOT_TRAIN, PR_BUILD_SIGNALS, PR_BUILD_STATION_RAIL,
+        PR_BUILD_STATION_RAIL_LENGTH, PR_BUILD_WAYPOINT_RAIL,
+    };
+    if !rail_type_available(s, rail_type) {
+        return -1;
+    }
+    let price = |index| crate::economy_func::get_price(index as u32, 1, 0, 0);
+    match build_type {
+        0 => (rail.rail_build_cost)(rail_type as u8),
+        1 => price(PR_BUILD_SIGNALS),
+        2 => price(PR_BUILD_DEPOT_TRAIN),
+        3 => price(PR_BUILD_STATION_RAIL).wrapping_add(price(PR_BUILD_STATION_RAIL_LENGTH)),
+        4 => price(PR_BUILD_WAYPOINT_RAIL),
+        _ => -1,
+    }
+}
+
 /// `ScriptRail::GetRailType`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_script_rail_type(s: &Services, tile: u32) -> u32 {
@@ -439,7 +498,7 @@ pub extern "C" fn openttd_rust_script_rail_waypoint(s: &Services, tile: u32) -> 
 
 /// `KillFirstBit((uint)rail_track) == 0`.
 fn single_bit(rail_track: u32) -> bool {
-    rail_track & rail_track.wrapping_sub(1) == 0
+    crate::bitmath_func::kill_first_bit_u32(rail_track) == 0
 }
 
 /// `ScriptRail::BuildRailTrack` preconditions after the native company-mode check;
@@ -697,4 +756,10 @@ byte_entries! {
     openttd_rust_script_rail_convert => convert_rail_type(start: u32, end: u32, convert_to: u32);
     /// Shared `ScriptRail::BuildRailStation` and `BuildNewGRFRailStation` preconditions.
     openttd_rust_script_rail_station => rail_station(tile: u32, direction: u32, platforms: i64, length: i64);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDScriptRailDrag" ["script"] => DragPlan { run, track, to };
+    "OpenTTDScriptRailSignal" ["script"] => SignalPlan { run, track, signal, cycles };
 }
