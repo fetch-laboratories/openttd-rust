@@ -9,6 +9,7 @@
 //! on the invocation stack. Only progress cancellation returns early, to a native stack
 //! exception frame.
 use super::{Builder, Services, TYPES, place};
+use crate::industrytype;
 
 pub use crate::industrytype::IndustrySpec as SpecHandle;
 #[repr(C)]
@@ -23,12 +24,6 @@ pub struct GenerationInfo {
 }
 #[repr(C)]
 pub struct GenerationServices {
-    pub spec: unsafe extern "C" fn(u8) -> *const SpecHandle,
-    pub spec_behaviour: unsafe extern "C" fn(*const SpecHandle) -> u32,
-    pub spec_life: unsafe extern "C" fn(*const SpecHandle) -> u8,
-    pub cost_multiplier: unsafe extern "C" fn(*const SpecHandle) -> u8,
-    pub info: unsafe extern "C" fn(*const SpecHandle) -> GenerationInfo,
-    pub coastal: unsafe extern "C" fn(*const SpecHandle) -> bool,
     pub environment: crate::services::EnvironmentServices,
     pub density: unsafe extern "C" fn() -> u8,
     pub custom_number: unsafe extern "C" fn() -> u32,
@@ -45,39 +40,34 @@ fn probability(
     s: &Services,
     g: &GenerationServices,
 ) -> u32 {
-    let spec = unsafe { (g.spec)(kind) };
-    let behaviour = water.map(|_| unsafe { (g.spec_behaviour)(spec) });
+    let spec = industrytype::industry(u16::from(kind));
+    let behaviour = water.map(|_| unsafe { (*spec).behaviour });
     if water.is_some_and(|water| (behaviour.unwrap_or(0) & (1 << 2) != 0) != water) {
         return 0; // Source deliberately leaves the force output untouched here.
     }
-    let info = unsafe { (g.info)(spec) };
-    if !info.enabled
-        || !info.layouts
-        || (!(g.environment.editor)() && unsafe { (g.density)() } == 0)
-    {
+    let (enabled, layouts) = unsafe { ((*spec).enabled, !(*spec).layouts.is_empty()) };
+    let climate = unsafe { s.shared().settings().climate.read() };
+    let appear = unsafe { (*spec).appear_creation[usize::from(climate)] };
+    if !enabled || !layouts || (!(g.environment.editor)() && unsafe { (g.density)() } == 0) {
         *forced = false;
         return 0;
     }
     let chance = unsafe {
-        super::resolver::openttd_rust_industry_probability(
-            kind,
-            0,
-            u32::from(info.appear),
-            s.resolver,
-        )
+        super::resolver::openttd_rust_industry_probability(kind, 0, u32::from(appear), s.resolver)
     };
     if chance == 0 {
         *forced = false;
         return 0;
     }
     let chance = chance.wrapping_mul(16);
-    let chance = if unsafe { (g.coastal)(spec) } {
+    // CHECK_REFINERY and CHECK_OIL_RIG place industries at the map edge.
+    let chance = if matches!(unsafe { (*spec).check_proc }, 2 | 8) {
         unsafe { (g.scale_by_size_1d)(chance) }
     } else {
         unsafe { (s.scale_by_map_size)(chance) }
     };
     *forced = chance > 0
-        && behaviour.unwrap_or_else(|| unsafe { (g.spec_behaviour)(spec) }) & (1 << 16) == 0
+        && behaviour.unwrap_or_else(|| unsafe { (*spec).behaviour }) & (1 << 16) == 0
         && !(g.environment.editor)();
     chance
 }
@@ -210,7 +200,7 @@ pub unsafe extern "C" fn openttd_rust_industry_check(
         if chance == 0 || !forced {
             continue;
         }
-        unsafe { (g.missing_warning)((g.spec)(kind as u8)) };
+        unsafe { (g.missing_warning)(industrytype::industry(u16::from(kind as u8))) };
         count += 1;
         if count >= 3 {
             break;

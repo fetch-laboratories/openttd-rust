@@ -12,6 +12,7 @@ use super::{
     IndustryCommandServices, IndustryCost, IndustryCostServices, LayoutHandle, LifecycleServices,
     Services, ShellHandle, SpecHandle, TilePolicyServices, TileServices, TownHandle,
 };
+use crate::industrytype;
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -47,8 +48,6 @@ pub struct LocationResult {
 #[repr(C)]
 pub struct TransactionServices {
     pub raw_setting: unsafe extern "C" fn() -> u8,
-    pub check_proc: unsafe extern "C" fn(*const SpecHandle) -> u8,
-    pub conflicting: unsafe extern "C" fn(*const SpecHandle) -> ConflictKinds,
     pub multiple_per_town: unsafe extern "C" fn() -> bool,
     pub town: unsafe extern "C" fn(*mut ShellHandle) -> *const TownHandle,
     pub population: unsafe extern "C" fn(*const TownHandle) -> u32,
@@ -70,14 +69,11 @@ pub struct TransactionServices {
         unsafe extern "C" fn(*mut IndustryCost, *const LocationResult, *const SpecHandle),
     pub shape_error:
         unsafe extern "C" fn(*mut IndustryCost, *const LocationResult, *const super::TileSpec),
-    pub tile_grf_version: unsafe extern "C" fn(*const super::TileSpec) -> u8,
-    pub shape_callback: unsafe extern "C" fn(*const super::TileSpec) -> bool,
     pub terragenesis: unsafe extern "C" fn() -> bool,
     pub ignore_restrictions: unsafe extern "C" fn() -> bool,
     pub platform: unsafe extern "C" fn() -> u8,
     pub can_allocate: unsafe extern "C" fn() -> bool,
     pub allocate: unsafe extern "C" fn(u32) -> Allocation,
-    pub prospecting_chance: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub local_company: unsafe extern "C" fn() -> bool,
     pub prospect_no_place: unsafe extern "C" fn(),
     pub prospect_unlucky: unsafe extern "C" fn(),
@@ -175,7 +171,7 @@ impl Engine<'_> {
         }
     }
     fn builtin_location(&self, tile: u32, spec: *const SpecHandle) -> bool {
-        match unsafe { (self.x.check_proc)(spec) } {
+        match unsafe { (*spec).check_proc } {
             1 => {
                 if self.map().landscape == 1
                     && (self.s.shared().tile_z)(tile)
@@ -237,9 +233,9 @@ impl Engine<'_> {
         unsafe { ptr::read((&*self.registry(kind)).as_ptr().add(n)) }
     }
     fn conflict(&self, tile: u32, kind: u8) -> bool {
-        let spec = unsafe { (self.g.spec)(kind) };
-        let conflicting = unsafe { (self.x.conflicting)(spec) };
-        for other in conflicting.kinds {
+        let spec = industrytype::industry(u16::from(kind));
+        let conflicting = unsafe { (*spec).conflicting };
+        for other in conflicting {
             if other == 255 {
                 continue;
             }
@@ -269,14 +265,12 @@ impl Engine<'_> {
         Some(town)
     }
     fn allowed(&self, tile: u32, kind: u8, town: *const TownHandle) -> bool {
-        let spec = unsafe { (self.g.spec)(kind) };
-        if unsafe { (self.g.spec_behaviour)(spec) } & 8 != 0
-            && unsafe { (self.x.population)(town) } < 1200
-        {
+        let spec = industrytype::industry(u16::from(kind));
+        if unsafe { (*spec).behaviour } & 8 != 0 && unsafe { (self.x.population)(town) } < 1200 {
             return self.fail(self.e.population);
         }
-        let spec = unsafe { (self.g.spec)(kind) };
-        if unsafe { (self.g.spec_behaviour)(spec) } & 32 != 0
+        let spec = industrytype::industry(u16::from(kind));
+        if unsafe { (*spec).behaviour } & 32 != 0
             && self.distance(unsafe { (self.x.town_position)(town) }, tile) > 9
         {
             return self.fail(self.e.near_town);
@@ -284,7 +278,7 @@ impl Engine<'_> {
         self.success()
     }
     fn free(&self, tile: u32, layout: *const LayoutHandle, kind: u8) -> bool {
-        let behaviour = unsafe { (self.g.spec_behaviour)((self.g.spec)(kind)) };
+        let behaviour = unsafe { (*industrytype::industry(u16::from(kind))).behaviour };
         for n in 0..unsafe { (*layout).len() } {
             let part = super::layout_tile(layout, n);
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
@@ -306,8 +300,8 @@ impl Engine<'_> {
                 if (self.s.shared().bridge_above)(current) {
                     return self.fail(self.e.site);
                 }
-                let spec = unsafe { (self.t.spec)(gfx) };
-                if unsafe { (self.p.slopes_refused)(spec) } & 32 == 0
+                let spec = industrytype::tile(gfx);
+                if unsafe { (*spec).slopes_refused } & 32 == 0
                     && ((self.s.shared().has_water_class)(current)
                         && unsafe { (self.t.on_water)(current) })
                         != (behaviour & 4 != 0)
@@ -369,8 +363,8 @@ impl Engine<'_> {
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
             let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
-                let spec = unsafe { (self.t.spec)(gfx) };
-                if unsafe { (self.x.shape_callback)(spec) } {
+                let spec = industrytype::tile(gfx);
+                if unsafe { (*spec).callback_mask & (1 << 4) != 0 } {
                     custom_shape = true;
                     self.shape_check(
                         tile,
@@ -388,7 +382,7 @@ impl Engine<'_> {
                     }
                 } else {
                     refused |= slope_refused((self.s.shared().tile_slope)(current), unsafe {
-                        (self.p.slopes_refused)(spec)
+                        (*spec).slopes_refused
                     });
                 }
             }
@@ -531,7 +525,7 @@ impl Engine<'_> {
         founder: u8,
         creation: u8,
     ) {
-        let spec = unsafe { (self.g.spec)(kind) };
+        let spec = industrytype::industry(u16::from(kind));
         let mut owner = Industry::default();
         let mut call = LocationCall {
             engine: self,
@@ -607,7 +601,7 @@ impl Engine<'_> {
         if !free {
             return false;
         }
-        if unsafe { (self.c.callback_mask)((self.g.spec)(kind)) } & 8 != 0 {
+        if unsafe { (*industrytype::industry(u16::from(kind))).callback_mask } & 8 != 0 {
             self.location_check(tile, kind, layout_index, random, bits, founder, creation);
         } else {
             self.builtin_location(tile, spec);
@@ -735,13 +729,13 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     let result = unsafe { (e.x.resolve_shape)(shell, call.current, call.gfx, parameter) };
     if result.callback == 0xffff {
         if !slope_refused((e.s.shared().tile_slope)(call.current), unsafe {
-            (e.p.slopes_refused)(call.spec)
+            (*call.spec).slopes_refused
         }) {
             e.success();
         } else {
             e.fail(e.e.site);
         }
-    } else if unsafe { (e.x.tile_grf_version)(call.spec) } < 7 {
+    } else if (e.s.shared().grf_file_version)(unsafe { (*call.spec).grf_prop.grffile }) < 7 {
         if result.callback != 0 {
             e.success();
         } else {
@@ -813,16 +807,15 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         e.fail(0xffff);
         return;
     }
-    let spec = unsafe { (e.g.spec)(kind) };
-    if !unsafe { (*spec).enabled } || unsafe { (*spec).layouts.is_empty() }
-    {
+    let spec = industrytype::industry(u16::from(kind));
+    if !unsafe { (*spec).enabled } || unsafe { (*spec).layouts.is_empty() } {
         e.fail(0xffff);
         return;
     }
     if !(e.g.environment.editor)()
         && e.company() != 18
         && unsafe { (e.x.raw_setting)() } == 0
-        && unsafe { super::spec_raw((e.g.spec_life)(spec)) }
+        && unsafe { super::spec_raw((*spec).life_type) }
     {
         e.fail(0xffff);
         return;
@@ -852,11 +845,11 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         || (!(e.g.environment.editor)()
             && e.company() != 18
             && unsafe { (e.x.raw_setting)() } == 2
-            && unsafe { super::spec_raw((e.g.spec_life)(spec)) })
+            && unsafe { super::spec_raw((*spec).life_type) })
     {
         if flags & 1 != 0 {
-            let succeeded = deity_prospect
-                || e.s.shared().random() <= unsafe { (e.x.prospecting_chance)(spec) };
+            let succeeded =
+                deity_prospect || e.s.shared().random() <= unsafe { (*spec).prospecting_chance };
             if succeeded {
                 let creation = if e.company() == 18 { 1 } else { 3 };
                 let company = e.swap_company(15);
@@ -928,8 +921,8 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     }
     let construction = unsafe {
         super::construction_cost(
-            (e.g.cost_multiplier)(spec),
-            (e.g.spec_life)(spec),
+            (*spec).cost_multiplier,
+            (*spec).life_type,
             (e.x.raw_setting)(),
         )
     };
@@ -947,7 +940,7 @@ pub unsafe extern "C" fn openttd_rust_industry_create(
     context: *const TransactionContext,
 ) {
     let e = unsafe { engine(context, out) };
-    let spec = unsafe { (e.g.spec)(kind) };
+    let spec = industrytype::industry(u16::from(kind));
     let random = e.s.shared().random();
     let second = e.s.shared().random();
     let count = unsafe { (*spec).layouts.len() };

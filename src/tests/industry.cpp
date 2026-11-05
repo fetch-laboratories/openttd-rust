@@ -277,9 +277,6 @@ struct IndustryGenerationFixture {
 		world.create = [](uint8_t, uint8_t creation) noexcept -> void * { CHECK(creation == 0); ++created; return &shell; };
 		world.type_count = [](uint8_t) noexcept -> uint16_t { return 0; };
 		static auto resolver = GetIndustryResolverServices();
-		static auto construction = GetIndustryConstructionServices();
-		construction.callback_mask = [](const OpenTTDIndustrySpecHandle *) noexcept -> uint16_t { return 0; };
-		resolver.construction = &construction;
 		world.resolver = &resolver;
 		world.scale_by_map_size = [](uint32_t n) noexcept -> uint32_t { return n; };
 		static auto shared = GetRustSharedServices();
@@ -292,10 +289,6 @@ struct IndustryGenerationFixture {
 	static OpenTTDIndustryGenerationServices Generation()
 	{
 		return {
-			.spec = [](uint8_t type) noexcept -> const OpenTTDIndustrySpecHandle * { return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(uintptr_t(type) + 1); },
-			.spec_behaviour = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return uintptr_t(spec) == 2 ? 1U << 2 : 0; },
-			.info = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> OpenTTDIndustryGenerationInfo { return {1, uintptr_t(spec) <= 2, true}; },
-			.coastal = [](const OpenTTDIndustrySpecHandle *) noexcept -> bool { return false; },
 			.environment = {.editor = []() noexcept -> bool { return false; }, .freeform_edges = []() noexcept -> bool { return false; }},
 			.density = []() noexcept -> uint8_t { return 4; },
 			.custom_number = []() noexcept -> uint32_t { return 0; },
@@ -306,6 +299,24 @@ struct IndustryGenerationFixture {
 			.missing_warning = [](const OpenTTDIndustrySpecHandle *) noexcept { },
 		};
 	}
+	/** Types 0 and 1 are enabled with one layout and appear once; type 1 is built on water. */
+	static std::vector<IndustrySpec> Specs()
+	{
+		static const IndustryTileLayoutTile tile{};
+		static const RustVector<IndustryTileLayoutTile> layout{&tile, 1, 0};
+		IndustrySpec *specs = openttd_rust_industry_specs();
+		std::vector<IndustrySpec> saved(specs, specs + NUM_INDUSTRYTYPES);
+		for (IndustryType type = 0; type < NUM_INDUSTRYTYPES; ++type) {
+			IndustrySpec &spec = specs[type];
+			spec.enabled = type <= 1;
+			spec.layouts = {&layout, 1, 0};
+			spec.behaviour = type == 1 ? IndustryBehaviours{IndustryBehaviour::BuiltOnWater} : IndustryBehaviours{};
+			spec.appear_creation[to_underlying(_settings_game.game_creation.landscape)] = 1;
+			spec.check_proc = CHECK_NOTHING;
+			spec.callback_mask = {};
+		}
+		return saved;
+	}
 };
 }
 
@@ -314,6 +325,8 @@ TEST_CASE("Industry - generation cancellation restores company before return")
 	using F = IndustryGenerationFixture;
 	const auto world = F::World();
 	const auto generation = F::Generation();
+	/* Borrowed views replace the owned specs only for this test; the originals return untouched. */
+	const auto saved = F::Specs();
 	for (const auto [cancel_set, cancel_increase, draws, created, increases, sets] : {
 		std::tuple{0, -1, 0U, 0U, 0U, 1U},
 		std::tuple{-1, 1, 0U, 0U, 1U, 1U},
@@ -339,6 +352,7 @@ TEST_CASE("Industry - generation cancellation restores company before return")
 		CHECK(fields->wanted_inds == (complete ? 0 : 123));
 		openttd_rust_industry_builder_destroy(builder);
 	}
+	std::copy(saved.begin(), saved.end(), openttd_rust_industry_specs());
 }
 
 TEST_CASE("Industry - shared plain water predicate excludes depot and lock parts")
@@ -369,9 +383,9 @@ TEST_CASE("Industry - shared plain water predicate excludes depot and lock parts
 namespace IndustryTemporaryFixture {
 static std::vector<uint8_t> trace;
 static uint16_t result;
-static uint8_t slope, refused, version;
-static IndustrySpec industry_spec;
+static uint8_t slope, version;
 static IndustryTileSpec tile_spec;
+static GRFFile tile_file;
 static OpenTTDIndustry *active_owner;
 static OpenTTDIndustryLocationResult Observe(Industry *shell)
 {
@@ -407,7 +421,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	OpenTTDIndustryTransactionServices transaction{};
 	OpenTTDIndustryConstructionErrors errors{};
 	errors.site = 1234;
-	generation.spec = [](uint8_t kind) noexcept -> const OpenTTDIndustrySpecHandle * { CHECK(kind == 7); trace.push_back(0); return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(&industry_spec); };
+	tile_spec.grf_prop.grffile = &tile_file;
 	commands.owner = RustIndustryCanonicalOwner<Industry *>;
 	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->town = nullptr; };
 	const OpenTTDFixtureMap map{Map::LogX()};
@@ -427,11 +441,10 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	};
 	transaction.resolve_location = [](Industry *shell, uint32_t tile, uint8_t kind, uint32_t seed, uint8_t creation) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 123); CHECK(kind == 7); CHECK(seed == 0x12345678); CHECK(creation == 2); CHECK(shell->selected_layout == 2); return Observe(shell); };
 	transaction.resolve_shape = [](Industry *shell, uint32_t tile, uint16_t gfx, uint32_t parameter) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 456); CHECK(gfx == 8); CHECK(parameter == 0x302); CHECK(shell->selected_layout == 0); return Observe(shell); };
-	transaction.location_error = [](CommandCost *out, const OpenTTDIndustryLocationResult *callback, const OpenTTDIndustrySpecHandle *spec) noexcept { CHECK(spec == reinterpret_cast<const OpenTTDIndustrySpecHandle *>(&industry_spec)); CHECK(callback->registers[3] == 456); trace.push_back(4); *out = CommandCost(EXPENSES_OTHER, Money(789)); };
+	transaction.location_error = [](CommandCost *out, const OpenTTDIndustryLocationResult *callback, const OpenTTDIndustrySpecHandle *spec) noexcept { CHECK(reinterpret_cast<const IndustrySpec *>(spec) == GetIndustrySpec(7)); CHECK(callback->registers[3] == 456); trace.push_back(4); *out = CommandCost(EXPENSES_OTHER, Money(789)); };
 	transaction.shape_error = [](CommandCost *out, const OpenTTDIndustryLocationResult *callback, const IndustryTileSpec *spec) noexcept { CHECK(spec == &tile_spec); CHECK(callback->registers[3] == 456); trace.push_back(4); *out = CommandCost(EXPENSES_OTHER, Money(789)); };
-	transaction.tile_grf_version = [](const IndustryTileSpec *spec) noexcept -> uint8_t { CHECK(spec == &tile_spec); trace.push_back(6); return version; };
+	shared.grf_file_version = [](const GRFFile *file) noexcept -> uint8_t { CHECK(file == &tile_file); trace.push_back(6); return version; };
 	shared.tile_slope = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 456); trace.push_back(7); return slope; };
-	policy.slopes_refused = [](const IndustryTileSpec *spec) noexcept -> uint8_t { CHECK(spec == &tile_spec); trace.push_back(8); return refused; };
 	costs.zero = [](CommandCost *out) noexcept { *out = CommandCost(); };
 	costs.error = [](CommandCost *out, uint32_t message) noexcept { *out = CommandCost(message); };
 	OpenTTDIndustryTransactionContext context{
@@ -447,13 +460,13 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		openttd_rust_industry_location_check(&cost, 123, 7, 258, 0x12345678, 0xABCD, 2, 2, &context);
 		CHECK(cost.Succeeded());
 		CHECK(cost.GetCost() == (callback == 0xFFFF ? 0 : 789));
-		CHECK(trace == (callback == 0xFFFF ? std::vector<uint8_t>{0, 1, 2, 3, 5} : std::vector<uint8_t>{0, 1, 2, 3, 4, 5}));
+		CHECK(trace == (callback == 0xFFFF ? std::vector<uint8_t>{1, 2, 3, 5} : std::vector<uint8_t>{1, 2, 3, 4, 5}));
 		for (uint8_t grf_version : {6, 7, 8}) for (uint8_t current_slope : {0, 16}) {
-			version = grf_version; slope = current_slope; refused = 0; trace.clear();
+			version = grf_version; slope = current_slope; tile_spec.slopes_refused = SLOPE_FLAT; trace.clear();
 			openttd_rust_industry_shape_check(&cost, 123, 456, &tile_spec, 7, 8, 258, 0xABCD, 2, 3, &context);
 			CHECK(cost.Succeeded() == (callback == 0xFFFF ? slope == 0 : version >= 7 || callback != 0));
 			CHECK(cost.GetCost() == (callback != 0xFFFF && version >= 7 ? 789 : 0));
-			if (callback == 0xFFFF) { CHECK(cost.GetErrorMessage() == (slope == 0 ? INVALID_STRING_ID : errors.site)); CHECK(trace == (std::vector<uint8_t>{1, 3, 7, 8, 5})); }
+			if (callback == 0xFFFF) { CHECK(cost.GetErrorMessage() == (slope == 0 ? INVALID_STRING_ID : errors.site)); CHECK(trace == (std::vector<uint8_t>{1, 3, 7, 5})); }
 			else if (version < 7) { CHECK(trace == (std::vector<uint8_t>{1, 3, 6, 5})); }
 			else { CHECK(trace == (std::vector<uint8_t>{1, 3, 6, 4, 5})); }
 		}

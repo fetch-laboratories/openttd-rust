@@ -14,6 +14,9 @@ use super::{
     LifecycleServices, Services, SpecHandle,
 };
 use crate::economy_type::PR_BUILD_FOUNDATION;
+use crate::industrytype;
+/// `IndustryTileSpecialFlag::AcceptsAllCargo`.
+const ACCEPTS_ALL_CARGO: u8 = 1 << 1;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use std::{ffi::c_void, ptr};
@@ -54,12 +57,8 @@ pub struct TileServices {
     pub toffee_offset: unsafe extern "C" fn(u8) -> u8,
     pub on_water: unsafe extern "C" fn(u32) -> bool,
     pub transport: unsafe extern "C" fn(u32) -> bool,
-    pub anim_production: unsafe extern "C" fn(u16) -> u16,
-    pub anim_next: unsafe extern "C" fn(u16) -> u16,
     pub build_oilrig: unsafe extern "C" fn(u32),
     pub pixel_max_z: unsafe extern "C" fn(u32) -> i32,
-    pub spec: unsafe extern "C" fn(u16) -> *const TileSpec,
-    pub acceptance: unsafe extern "C" fn(*const TileSpec) -> TileAcceptance,
     pub callback: unsafe extern "C" fn(u32, u16, u16, u32, u32) -> u16,
 }
 fn chance(s: &Services, a: u32, b: u32) -> bool {
@@ -186,7 +185,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
 ) {
     let (s, c, t) = unsafe { (&*s, &*c, &*t) };
     let gfx = unsafe { (t.gfx)(tile) };
-    if unsafe { (c.animation_enabled)(gfx) } {
+    if unsafe { (*industrytype::tile(gfx)).animation.status != 0xff } {
         crate::animated_tile::openttd_rust_animate_industry(tile);
         return;
     }
@@ -376,7 +375,7 @@ pub(crate) unsafe fn tile_loop(
             ) != 0
         } {
             let gfx = unsafe { (t.gfx)(tile) };
-            let next = unsafe { (t.anim_production)(gfx) };
+            let next = unsafe { u16::from((*industrytype::tile(gfx)).anim_production) };
             if next != 255 {
                 unsafe {
                     (t.reset_construction)(tile);
@@ -392,7 +391,7 @@ pub(crate) unsafe fn tile_loop(
         return;
     }
     let gfx = unsafe { (t.gfx)(tile) };
-    let next = unsafe { (t.anim_next)(gfx) };
+    let next = unsafe { u16::from((*industrytype::tile(gfx)).anim_next) };
     if next != 255 {
         unsafe {
             (t.reset_construction)(tile);
@@ -490,9 +489,17 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
 ) {
     let t = unsafe { &*services };
     let gfx = unsafe { (t.gfx)(tile) };
-    let spec = unsafe { (t.spec)(gfx) };
+    let spec = industrytype::tile(gfx);
     let industry = unsafe { (t.industry)(tile) };
-    let mut info = unsafe { (t.acceptance)(spec) };
+    let mut info = unsafe {
+        TileAcceptance {
+            cargo: (*spec).accepts_cargo,
+            amount: (*spec).acceptance,
+            accepts_all: (*spec).special_flags & ACCEPTS_ALL_CARGO != 0,
+            accepts_callback: (*spec).callback_mask & (1 << 3) != 0,
+            amount_callback: (*spec).callback_mask & (1 << 2) != 0,
+        }
+    };
     if info.accepts_all {
         for n in 0..super::accepted_count(industry.owner) {
             let cargo = unsafe { (*super::accepted(industry.owner, n)).cargo };
@@ -558,13 +565,10 @@ pub struct TilePolicyServices {
     pub current_company: unsafe extern "C" fn() -> u8,
     pub magic_bulldozer: unsafe extern "C" fn() -> bool,
     pub object_in_way: unsafe extern "C" fn(*mut IndustryCost, *const SpecHandle),
-    pub slopes_refused: unsafe extern "C" fn(*const TileSpec) -> u8,
     pub close_ai: unsafe extern "C" fn(*mut ShellHandle),
     pub close_game: unsafe extern "C" fn(*mut ShellHandle),
     pub destroy: unsafe extern "C" fn(*mut ShellHandle),
-    pub removal_multiplier: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub tile_max_z: unsafe extern "C" fn(u32) -> i32,
-    pub autoslope_callback: unsafe extern "C" fn(*const TileSpec) -> bool,
     pub command_checks: *const crate::services::CommandServices,
 }
 /// # Safety
@@ -582,14 +586,14 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
     let (t, p, c, g) = unsafe { (&*tiles, &*policy, &*costs, &*generation) };
     let industry = unsafe { (t.industry)(tile) };
     let kind = unsafe { (*industry.owner).metadata.kind };
-    let spec = unsafe { (g.spec)(kind) };
+    let spec = industrytype::industry(u16::from(kind));
     if (unsafe { (p.current_company)() } != 17
         && !(g.environment.editor)()
         && !unsafe { (p.magic_bulldozer)() })
         || flags & 2 != 0
         || (unsafe { (p.current_company)() } == 17
-            && (unsafe { (g.spec_behaviour)(spec) } & 4 != 0
-                || unsafe { (p.slopes_refused)((t.spec)((t.gfx)(tile))) } & 32 != 0))
+            && (unsafe { (*spec).behaviour } & 4 != 0
+                || unsafe { (*industrytype::tile((t.gfx)(tile))).slopes_refused } & 32 != 0))
     {
         if flags & 2 != 0 {
             unsafe { (p.object_in_way)(out, spec) };
@@ -605,7 +609,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
             (p.destroy)(industry.shell);
         }
     }
-    let removal = unsafe { super::removal_cost((p.removal_multiplier)(spec)) };
+    let removal = unsafe { super::removal_cost((*spec).removal_cost_multiplier) };
     unsafe { (c.expense_money)(out, 0, removal) };
 }
 /// # Safety
@@ -631,11 +635,15 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
             && unsafe { (p.tile_max_z)(tile) } == z_new.wrapping_add(get_slope_max_z(slope_new))
         {
             let gfx = unsafe { (t.gfx)(tile) };
-            let spec = unsafe { (t.spec)(gfx) };
-            let allowed = if unsafe { (p.autoslope_callback)(spec) } {
+            let spec = industrytype::tile(gfx);
+            let allowed = if unsafe { (*spec).callback_mask & (1 << 6) != 0 } {
                 let result = unsafe { (t.callback)(tile, gfx, 0x3c, 0, 0) };
                 result == CALLBACK_FAILED
-                    || !(shared.grf_boolean_callback)(unsafe { (*spec).grf_prop.grffile }, 0x3c, result)
+                    || !(shared.grf_boolean_callback)(
+                        unsafe { (*spec).grf_prop.grffile },
+                        0x3c,
+                        result,
+                    )
             } else {
                 true
             };

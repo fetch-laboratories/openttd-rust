@@ -163,9 +163,9 @@ pub unsafe fn finalise(s: &Services) {
         }
         let count = unsafe { industrytype::file_specs(file) }.industries.len();
         for i in 0..count {
-            let Some(spec) = (unsafe { industrytype::file_specs(file) }.industries[i].as_deref_mut())
-                .map(std::ptr::from_mut)
-            else {
+            let Some(spec) = (unsafe { industrytype::file_specs(file) }.industries[i]
+                .as_deref_mut())
+            .map(std::ptr::from_mut) else {
                 continue;
             };
             if unsafe { (*spec).enabled } {

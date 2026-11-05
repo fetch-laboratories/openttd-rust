@@ -27,8 +27,6 @@ struct OpenTTDIndustryResolverRef { OpenTTDIndustry *owner; Town *town; };
 struct OpenTTDIndustryFounderInfo { uint8_t colours; bool is_ai; };
 struct OpenTTDIndustryResolverServices {
 	const OpenTTDSharedServices *shared;
-	const OpenTTDIndustryGenerationServices *generation;
-	const OpenTTDIndustryConstructionServices *construction;
 	const OpenTTDIndustryLifecycleServices *lifecycle;
 	const OpenTTDIndustryTileServices *tile;
 	OpenTTDIndustryResolverRef (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);

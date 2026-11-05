@@ -196,7 +196,6 @@ const OpenTTDIndustryDeliveryServices &GetIndustryDeliveryServices() noexcept
 		},
 		.destroy = [](OpenTTDIndustryProductionContext *context) noexcept { reinterpret_cast<IndustriesResolverObject *>(context)->~IndustriesResolverObject(); },
 		.resolve = [](OpenTTDIndustryProductionContext *context, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out) noexcept { RustIndustryResolveProduction(context, random, parameter, out); },
-		.input_multiplier = [](const OpenTTDIndustrySpecHandle *spec, size_t input, size_t output) noexcept { return reinterpret_cast<const IndustrySpec *>(spec)->input_cargo_multiplier[input][output]; },
 	};
 	return services;
 }
@@ -246,8 +245,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 {
 	static const OpenTTDIndustryResolverServices services{
 		.shared = &GetRustSharedServices(),
-		.generation = &GetIndustryGenerationServices(),
-		.construction = &GetIndustryConstructionServices(),
 		.lifecycle = &GetIndustryLifecycleRustServices(),
 		.tile = &GetIndustryTileServices(),
 		.get = [](uint16_t id) noexcept -> OpenTTDIndustryResolverRef { Industry *i = RustIndustryByID(id); return {RustIndustryCanonicalOwner(i), OpenTTDIndustryTown(i)}; },

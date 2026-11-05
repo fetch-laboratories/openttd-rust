@@ -155,7 +155,7 @@ pub(crate) fn forest(tile: u32, s: &Services) -> bool {
     let owner = (catchment.industry_owner)(shell);
     let resolver = unsafe { &*s.resolver };
     let spec = resolver.spec(unsafe { (*owner).metadata.kind });
-    if unsafe { ((*resolver.generation).spec_life)(spec) } & LIFE_ORGANIC == 0 {
+    if unsafe { (*spec).life_type } & LIFE_ORGANIC == 0 {
         return false;
     }
     (0..produced_count(owner)).any(|slot| {

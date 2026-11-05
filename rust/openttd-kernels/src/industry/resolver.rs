@@ -1,17 +1,14 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Industry and industry-tile resolvers. Contexts are stack values; industry state and the
 //! ordered registries are read directly, and Action2, town and storage calls can reenter.
-use super::{
-    Builder, ConstructionServices, GenerationServices, Industry, LifecycleServices, SpecHandle,
-    TileServices, TownHandle,
-};
+use super::{Builder, Industry, LifecycleServices, SpecHandle, TileServices, TownHandle};
 use crate::debug::debug;
-use crate::industrytype;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{
     BUILT_ON_WATER, INVALID_INDUSTRY, INVALID_INDUSTRYTILE, IT_INVALID, NEW_INDUSTRYTILEOFFSET,
     NUM_INDUSTRYTYPES, PROD_MULTI_HANDLING,
 };
+use crate::industrytype;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_INDUSTRY_LOCATION, CBID_INDUSTRY_PROBABILITY, CBID_INDUSTRY_REFUSE_CARGO,
     INDUSTRY_PROBABILITY, INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
@@ -47,8 +44,6 @@ pub struct FounderInfo {
 #[repr(C)]
 pub struct ResolverServices {
     pub shared: *const crate::services::Services,
-    pub generation: *const GenerationServices,
-    pub construction: *const ConstructionServices,
     pub lifecycle: *const LifecycleServices,
     pub tile: *const TileServices,
     pub get: unsafe extern "C" fn(u16) -> ResolverRef,
@@ -72,12 +67,6 @@ impl ResolverServices {
     fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }
-    fn generation(&self) -> &GenerationServices {
-        unsafe { &*self.generation }
-    }
-    pub(crate) fn construction(&self) -> &ConstructionServices {
-        unsafe { &*self.construction }
-    }
     pub(crate) fn lifecycle(&self) -> &LifecycleServices {
         unsafe { &*self.lifecycle }
     }
@@ -94,10 +83,10 @@ impl ResolverServices {
         unsafe { (self.lifecycle().belongs)(tile, id) }
     }
     pub(crate) fn spec(&self, kind: u8) -> *const SpecHandle {
-        unsafe { (self.generation().spec)(kind) }
+        industrytype::industry(u16::from(kind))
     }
     pub(crate) fn behaviour(&self, spec: *const SpecHandle) -> u32 {
-        unsafe { (self.generation().spec_behaviour)(spec) }
+        unsafe { (*spec).behaviour }
     }
 }
 
@@ -196,7 +185,9 @@ fn count_and_distance(
     } else {
         if grfid == u32::MAX {
             grfid = unsafe {
-                (*industrytype::industry(u16::from((*current.owner).metadata.kind))).grf_prop.grfid
+                (*industrytype::industry(u16::from((*current.owner).metadata.kind)))
+                    .grf_prop
+                    .grfid
             };
         }
         parameter |= 0x80;
@@ -321,7 +312,7 @@ fn variable(
     }
     match variable {
         0x40..=0x42 => {
-            let callbacks = unsafe { (s.construction().callback_mask)(spec) };
+            let callbacks = unsafe { (*spec).callback_mask };
             if callbacks & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) == 0
             {
                 return 0;
@@ -783,7 +774,7 @@ pub unsafe extern "C" fn openttd_rust_industry_probability(
     witness::hit(witness::INDUSTRY_RESOLVER_PROBABILITY);
     let s = unsafe { &*s };
     let spec = s.spec(kind);
-    if unsafe { (s.construction().callback_mask)(spec) } & INDUSTRY_PROBABILITY != 0 {
+    if unsafe { (*spec).callback_mask } & INDUSTRY_PROBABILITY != 0 {
         let result = unsafe {
             (s.callback)(
                 CBID_INDUSTRY_PROBABILITY,
@@ -795,7 +786,7 @@ pub unsafe extern "C" fn openttd_rust_industry_probability(
             )
         };
         if result != CALLBACK_FAILED {
-            if unsafe { (s.construction().grf_version)(spec) } < 8 {
+            if (s.shared().grf_file_version)(unsafe { (*spec).grf_prop.grffile }) < 8 {
                 if result != 0 {
                     default = 0;
                 }
@@ -832,7 +823,7 @@ pub(crate) unsafe fn refuses(
     witness::hit(witness::INDUSTRY_RESOLVER_REFUSAL);
     let kind = unsafe { (*owner).metadata.kind };
     let spec = s.spec(kind);
-    if unsafe { (s.construction().callback_mask)(spec) } & INDUSTRY_REFUSE_CARGO != 0 {
+    if unsafe { (*spec).callback_mask } & INDUSTRY_REFUSE_CARGO != 0 {
         let file = unsafe { (*spec).grf_prop.grffile };
         let parameter = (s.shared().grf_cargo_map)(file, cargo);
         let tile = unsafe { (*owner).metadata.tile };
@@ -860,8 +851,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryResolverRef" ["industry"] => ResolverRef { owner, town, };
     "OpenTTDIndustryResolverServices" ["industry"] => ResolverServices {
         shared,
-        generation,
-        construction,
         lifecycle,
         tile,
         get,

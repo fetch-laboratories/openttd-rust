@@ -131,9 +131,7 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
         crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
     let owner = (s.catchment.industry_owner)(shell);
     let kind = unsafe { (*crate::industry::openttd_rust_industry_metadata(owner)).kind };
-    if unsafe { (*s.spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE
-        == 0
-    {
+    if unsafe { (*s.spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE == 0 {
         return false;
     }
     let mut result = false;

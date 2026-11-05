@@ -471,7 +471,7 @@ CommandCost CmdIndustrySetProduction(DoCommandFlags flags, IndustryID ind_id, ui
 {
 	(void)show_news;
 	(void)custom_news; // The original post-assignment news test is always false.
-	return openttd_rust_industry_set_production_command(ind_id.base(), flags.Test(DoCommandFlag::Execute), prod_level, &GetIndustryCommandServices(), &GetIndustryRustServices()) ? CommandCost() : CMD_ERROR;
+	return openttd_rust_industry_set_production_command(ind_id.base(), flags.Test(DoCommandFlag::Execute), prod_level, &GetIndustryCommandServices()) ? CommandCost() : CMD_ERROR;
 }
 
 /**
@@ -569,7 +569,7 @@ Industry::AcceptedHistory SumHistory(std::span<const Industry::AcceptedHistory> 
 void Industry::RecomputeProductionMultipliers()
 {
 	assert(UsesOriginalEconomy(GetIndustrySpec(this->type)));
-	openttd_rust_industry_recompute(this, this->production_owner.get(), &GetIndustryRustServices());
+	openttd_rust_industry_recompute(this->production_owner.get());
 }
 
 void Industry::FillCachedName() const
@@ -790,7 +790,6 @@ static const OpenTTDIndustryServices _industry_services = {
 		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), RustIndustrySpecCallbackMask(GetIndustrySpec(i->type))};
 	},
-	.sound_count = [](void *i) noexcept -> uint16_t { return static_cast<uint16_t>(RustIndustrySpec(i)->random_sounds.size()); },
 	.behaviour = RustIndustryBehaviour,
 	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
 		const Industry *i = RustIndustry(handle);
@@ -849,7 +848,6 @@ static const OpenTTDIndustryServices _industry_services = {
 		*out = {RustIndustryCanonicalOwner(i), RustIndustrySpecBehaviour(spec), RustIndustrySpecCallbackMask(spec), RustIndustrySpecLife(spec), i->type,
 			spec->production_up_text, spec->production_down_text, spec->closure_text};
 	},
-	.production_rate = [](void *i, uint32_t slot) noexcept -> uint8_t { return RustIndustrySpec(i)->production_rate[slot]; },
 	.change_callback = [](void *handle, bool monthly, uint32_t random) noexcept -> OpenTTDIndustryChange {
 		Industry *i = RustIndustry(handle);
 		std::array<int32_t, 1> reg{};
@@ -936,18 +934,6 @@ const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices() { ret
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 {
 	static const OpenTTDIndustryGenerationServices services = {
-		.spec = RustIndustryTypeSpec<OpenTTDIndustrySpecHandle>,
-		.spec_behaviour = RustIndustrySpecHandleBehaviour,
-		.spec_life = RustIndustrySpecLife<OpenTTDIndustrySpecHandle>,
-		.cost_multiplier = RustIndustrySpecCostMultiplier<OpenTTDIndustrySpecHandle>,
-		.info = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryGenerationInfo {
-			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);
-			return {spec->appear_creation[to_underlying(_settings_game.game_creation.landscape)], spec->enabled, !spec->layouts.empty()};
-		},
-		.coastal = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> bool {
-			auto proc = reinterpret_cast<const IndustrySpec *>(handle)->check_proc;
-			return proc == CHECK_REFINERY || proc == CHECK_OIL_RIG;
-		},
 		.environment = GetRustEnvironmentServices(),
 		.density = []() noexcept -> uint8_t { return _settings_game.difficulty.industry_density; },
 		.custom_number = []() noexcept -> uint32_t { return _settings_game.game_creation.custom_industry_number; },
@@ -973,14 +959,6 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 {
 	static const OpenTTDIndustryConstructionServices services = {
-		.cargo_lists = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryCargoLists {
-			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);
-			OpenTTDIndustryCargoLists result;
-			std::ranges::copy(spec->produced_cargo, result.produced);
-			std::ranges::copy(spec->accepts_cargo, result.accepted);
-			return result;
-		},
-		.callback_mask = RustIndustrySpecCallbackMask<OpenTTDIndustrySpecHandle>,
 		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
 		.generating = GetRustSharedServices().clear_square_services.generating_world,
 		.callback = [](void *shell, uint16_t callback, uint32_t parameter, uint32_t random) noexcept -> uint16_t {
@@ -988,15 +966,12 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 			return GetIndustryCallback(static_cast<CallbackID>(callback), parameter, random, i, i->type, INVALID_TILE);
 		},
 		.callback_error = RustSpecCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle>,
-		.grf_version = RustSpecGRFVersion<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.water_class = [](uint32_t tile) noexcept -> uint8_t { return IsWaterTile(TileIndex(tile)) ? to_underlying(RustWaterClass(tile)) : to_underlying(WaterClass::Invalid); },
 		.clear_tile = [](uint32_t tile, uint16_t flags) noexcept { Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags{flags}, TileIndex(tile)); },
 		.make_industry = [](uint32_t tile, uint16_t industry, uint16_t gfx, uint32_t random, uint8_t water) noexcept { MakeIndustry(TileIndex(tile), IndustryID(industry), gfx, random, static_cast<WaterClass>(water)); },
 		.set_construction_counter = [](uint32_t tile, uint8_t counter) noexcept { SetIndustryConstructionCounter(TileIndex(tile), counter); },
 		.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(TileIndex(tile), stage); },
 		.translated_gfx = [](uint16_t gfx) noexcept -> uint16_t { return GetTranslatedIndustryTileID(gfx); },
-		.animation_enabled = [](uint16_t gfx) noexcept -> bool { return GetIndustryTileSpec(gfx)->animation.status != AnimationStatus::NoAnimation; },
-
 		.build_window_dirty = []() noexcept { SetWindowDirty(WC_BUILD_INDUSTRY, 0); },
 		.serve_neutral = GetRustSharedServices().station_serve_neutral,
 	};
@@ -1024,20 +999,8 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; },
 		.on_water = RustOnWater,
 		.transport = [](uint32_t tile) noexcept -> bool { return TransportIndustryGoods(TileIndex(tile)); },
-		.anim_production = [](uint16_t gfx) noexcept -> uint16_t { return GetIndustryTileSpec(gfx)->anim_production; },
-		.anim_next = [](uint16_t gfx) noexcept -> uint16_t { return GetIndustryTileSpec(gfx)->anim_next; },
 		.build_oilrig = [](uint32_t tile) noexcept { BuildOilRig(TileIndex(tile)); },
 		.pixel_max_z = OpenTTDTileMaxPixelZ,
-		.spec = [](uint16_t gfx) noexcept -> const OpenTTDIndustryTileSpec * { return GetIndustryTileSpec(gfx); },
-		.acceptance = [](const OpenTTDIndustryTileSpec *spec) noexcept -> OpenTTDIndustryTileAcceptance {
-			OpenTTDIndustryTileAcceptance result;
-			std::ranges::copy(spec->accepts_cargo, result.cargo);
-			std::ranges::copy(spec->acceptance, result.amount);
-			result.accepts_all = spec->special_flags.Test(IndustryTileSpecialFlag::AcceptsAllCargo);
-			result.accepts_callback = spec->callback_mask.Test(IndustryTileCallbackMask::AcceptCargo);
-			result.amount_callback = spec->callback_mask.Test(IndustryTileCallbackMask::CargoAcceptance);
-			return result;
-		},
 		.callback = OpenTTDIndustryTileCallback,
 	};
 	return services;
@@ -1071,13 +1034,10 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 		.current_company = []() noexcept -> uint8_t { return OpenTTDCurrentCompany().base(); },
 		.magic_bulldozer = GetRustTownAuthorityServices().bulldozer,
 		.object_in_way = [](OpenTTDIndustryCost *out, const OpenTTDIndustrySpecHandle *spec) noexcept { *out = CommandCostWithParam(STR_ERROR_GENERIC_OBJECT_IN_THE_WAY, reinterpret_cast<const IndustrySpec *>(spec)->name); },
-		.slopes_refused = [](const OpenTTDIndustryTileSpec *spec) noexcept -> uint8_t { return spec->slopes_refused; },
 		.close_ai = [](Industry *industry) noexcept { AI::BroadcastNewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.close_game = [](Industry *industry) noexcept { Game::NewEvent(new ScriptEventIndustryClose(industry->index)); },
 		.destroy = [](Industry *industry) noexcept { delete industry; },
-		.removal_multiplier = RustIndustrySpecRemovalMultiplier<OpenTTDIndustrySpecHandle>,
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
-		.autoslope_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::Autoslope); },
 		.command_checks = &GetRustCommandServices(),
 	};
 	return services;
@@ -1087,8 +1047,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 {
 	static const OpenTTDIndustryTransactionServices services = {
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },
-		.check_proc = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint8_t { return reinterpret_cast<const IndustrySpec *>(spec)->check_proc; },
-		.conflicting = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> OpenTTDIndustryConflictKinds { OpenTTDIndustryConflictKinds result; std::ranges::copy(reinterpret_cast<const IndustrySpec *>(spec)->conflicting, result.kinds); return result; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
 		.town = OpenTTDIndustryTownHandle,
 		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
@@ -1103,14 +1061,11 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.resolve_shape = openttd_industry_resolve_shape,
 		.location_error = RustLocationCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle, OpenTTDIndustryLocationResult, OpenTTDIndustryCost, STR_ERROR_SITE_UNSUITABLE>,
 		.shape_error = RustLocationCallbackError<IndustryTileSpec, IndustryTileSpec, OpenTTDIndustryLocationResult, OpenTTDIndustryCost, STR_ERROR_SITE_UNSUITABLE>,
-		.tile_grf_version = RustSpecGRFVersion<IndustryTileSpec>,
-		.shape_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::ShapeCheck); },
 		.terragenesis = []() noexcept -> bool { return _settings_game.game_creation.land_generator == LG_TERRAGENESIS; },
 		.ignore_restrictions = []() noexcept -> bool { return _ignore_industry_restrictions; },
 		.platform = []() noexcept -> uint8_t { return _settings_game.construction.industry_platform; },
 		.can_allocate = []() noexcept -> bool { return Industry::CanAllocateItem(); },
 		.allocate = [](uint32_t tile) noexcept -> OpenTTDIndustryAllocation { Industry *i = new Industry(TileIndex(tile)); return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)}; },
-		.prospecting_chance = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return reinterpret_cast<const IndustrySpec *>(spec)->prospecting_chance; },
 		.local_company = []() noexcept -> bool { return IsLocalCompany(); },
 		.prospect_no_place = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_PROSPECT_INDUSTRY), GetEncodedString(STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING), WL_INFO); },
 		.prospect_unlucky = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_PROSPECT_INDUSTRY), GetEncodedString(STR_ERROR_PROSPECTING_WAS_UNLUCKY), WL_INFO); },

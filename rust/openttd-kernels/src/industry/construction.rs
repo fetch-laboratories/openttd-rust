@@ -12,12 +12,13 @@ use super::{
     SpecHandle, accepted, fields, produced, produced_count, valid,
 };
 use crate::history_type::LAST_MONTH;
+use crate::industrytype;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use std::ffi::c_void;
 
-pub use crate::town_type::TownHandle;
 /// One `IndustrySpec::layouts` entry, read in place.
 pub use crate::industrytype::Layout as LayoutHandle;
+pub use crate::town_type::TownHandle;
 /// Tile `n` of a layout as an offset and gfx.
 pub(crate) fn layout_tile(layout: *const LayoutHandle, n: usize) -> LayoutTile {
     let tile = unsafe { (*layout).as_slice()[n] };
@@ -55,21 +56,16 @@ pub struct ConstructionRequest {
 }
 #[repr(C)]
 pub struct ConstructionServices {
-    pub cargo_lists: unsafe extern "C" fn(*const SpecHandle) -> CargoLists,
-    pub callback_mask: unsafe extern "C" fn(*const SpecHandle) -> u16,
     pub set_town: unsafe extern "C" fn(*mut c_void, *const TownHandle),
     pub generating: unsafe extern "C" fn() -> bool,
     pub callback: unsafe extern "C" fn(*mut c_void, u16, u32, u32) -> u16,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
-    pub grf_version: unsafe extern "C" fn(*const SpecHandle) -> u8,
     pub water_class: unsafe extern "C" fn(u32) -> u8,
     pub clear_tile: unsafe extern "C" fn(u32, u16),
     pub make_industry: unsafe extern "C" fn(u32, u16, u16, u32, u8),
     pub set_construction_counter: unsafe extern "C" fn(u32, u8),
     pub set_construction_stage: unsafe extern "C" fn(u32, u8),
     pub translated_gfx: unsafe extern "C" fn(u16) -> u16,
-    pub animation_enabled: unsafe extern "C" fn(u16) -> bool,
-
     pub build_window_dirty: unsafe extern "C" fn(),
     pub serve_neutral: unsafe extern "C" fn() -> bool,
 }
@@ -147,8 +143,8 @@ fn cargo_callbacks(
     spec: *const SpecHandle,
     lists: &CargoLists,
     output: bool,
-    g: &GenerationServices,
     c: &ConstructionServices,
+    shared: &crate::services::Services,
 ) {
     let callback = if output {
         OUTPUT_CARGO_TYPES
@@ -162,7 +158,7 @@ fn cargo_callbacks(
             (*owner).accepted.clear();
         }
     }
-    let unlimited = unsafe { (g.spec_behaviour)(spec) } & (1 << 18) != 0;
+    let unlimited = unsafe { (*spec).behaviour } & (1 << 18) != 0;
     let maxcargoes = if unlimited {
         16
     } else if output {
@@ -175,7 +171,7 @@ fn cargo_callbacks(
         if res == CALLBACK_FAILED || res as u8 == u8::MAX {
             break;
         }
-        if unsafe { (c.grf_version)(spec) } >= 8 && res >= 0x100 {
+        if (shared.grf_file_version)(unsafe { (*spec).grf_prop.grffile }) >= 8 && res >= 0x100 {
             unsafe { (c.callback_error)(spec, callback, res) };
             break;
         }
@@ -255,7 +251,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     let g = unsafe { &*g };
     let l = unsafe { &*l };
     let c = unsafe { &*c };
-    let spec = unsafe { (g.spec)(r.kind) };
+    let spec = industrytype::industry(u16::from(r.kind));
     unsafe {
         (*owner).metadata.tile = r.tile;
         (*owner).metadata.width = 1;
@@ -263,7 +259,12 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         (*owner).metadata.kind = r.kind;
         super::openttd_rust_industry_registry_insert(builder, r.kind, r.id);
     }
-    let lists = unsafe { (c.cargo_lists)(spec) };
+    let lists = unsafe {
+        CargoLists {
+            produced: (*spec).produced_cargo,
+            accepted: (*spec).accepts_cargo,
+        }
+    };
     let mut count = 0;
     for (n, cargo) in lists.produced.iter().enumerate() {
         if valid(*cargo) {
@@ -277,7 +278,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 ..Produced::default()
             });
         }
-        let rate = unsafe { (s.production_rate)(industry, n as u32) };
+        let rate = unsafe { (*spec).production_rate[n] };
         unsafe {
             (*produced(owner, n)).rate = rate;
         }
@@ -296,7 +297,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
             });
         }
     }
-    let callbacks = unsafe { (c.callback_mask)(spec) };
+    let callbacks = unsafe { (*spec).callback_mask };
     if !super::original_economy(callbacks, unsafe { (s.economy_type)() }) {
         for n in 0..produced_count(owner) {
             let random = s.shared().random_range(256);
@@ -353,7 +354,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 unsafe {
                     (*f).prod_level = res as u8;
                 }
-                super::recompute(industry, owner, s);
+                super::recompute(owner);
             }
         }
     }
@@ -410,10 +411,10 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     if callbacks & (1 << 12) != 0 {
-        cargo_callbacks(industry, owner, spec, &lists, false, g, c);
+        cargo_callbacks(industry, owner, spec, &lists, false, c, s.shared());
     }
     if callbacks & (1 << 13) != 0 {
-        cargo_callbacks(industry, owner, spec, &lists, true, g, c);
+        cargo_callbacks(industry, owner, spec, &lists, true, c, s.shared());
     }
     let count = unsafe { (*r.layout).len() };
     for n in 0..count {
@@ -440,7 +441,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 }
             }
             let gfx = unsafe { (c.translated_gfx)(layout.gfx) };
-            if unsafe { (c.animation_enabled)(gfx) } {
+            if unsafe { (*industrytype::tile(gfx)).animation.status != 0xff } {
                 crate::animated_tile::openttd_rust_animation_add(tile, true);
             }
         }
@@ -455,7 +456,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         },
     );
     let kind = unsafe { (*owner).metadata.kind };
-    let behaviour = unsafe { (g.spec_behaviour)((g.spec)(kind)) };
+    let behaviour = unsafe { (*industrytype::industry(u16::from(kind))).behaviour };
     if behaviour & (1 << 6) != 0 {
         let map = Map {
             size_x: r.size_x,

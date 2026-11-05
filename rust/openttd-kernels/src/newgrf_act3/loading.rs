@@ -4,8 +4,8 @@
 #![allow(clippy::cast_possible_truncation, clippy::too_many_lines)]
 use crate::debug::grf_msg;
 use crate::engine_type::EngineID;
-use crate::industrytype;
 use crate::game_state::GameState;
+use crate::industrytype;
 use crate::newgrf::{
     CF_END, GSF_AIRCRAFT, GSF_AIRPORTS, GSF_AIRPORTTILES, GSF_BADGES, GSF_CANALS, GSF_CARGOES,
     GSF_DEFAULT, GSF_END, GSF_HOUSES, GSF_INDUSTRIES, GSF_INDUSTRYTILES, GSF_OBJECTS,
@@ -169,7 +169,11 @@ unsafe fn bind_record(
             // GRFFilePropsBase::SetGRFFile.
             let file = loading::file();
             (*props).grffile = file;
-            (*props).grfid = if file.is_null() { 0 } else { (shared.grf_file_id)(file) };
+            (*props).grfid = if file.is_null() {
+                0
+            } else {
+                (shared.grf_file_id)(file)
+            };
             (*props).local_id = local;
         }
     }
@@ -215,13 +219,17 @@ unsafe fn map_binding(
             GSF_INDUSTRIES => {
                 let specs = industrytype::file_specs(file);
                 let spec = specs.industries.get_mut(usize::from(local));
-                let props = spec.and_then(|spec| spec.as_deref_mut()).map(|spec| &raw mut spec.grf_prop);
+                let props = spec
+                    .and_then(|spec| spec.as_deref_mut())
+                    .map(|spec| &raw mut spec.grf_prop);
                 bind_record(props, local, cargo, group, s.shared());
             }
             GSF_INDUSTRYTILES => {
                 let specs = industrytype::file_specs(file);
                 let spec = specs.tiles.get_mut(usize::from(local));
-                let props = spec.and_then(|spec| spec.as_deref_mut()).map(|spec| &raw mut spec.grf_prop);
+                let props = spec
+                    .and_then(|spec| spec.as_deref_mut())
+                    .map(|spec| &raw mut spec.grf_prop);
                 bind_record(props, local, cargo, group, s.shared());
             }
             GSF_AIRPORTS => {

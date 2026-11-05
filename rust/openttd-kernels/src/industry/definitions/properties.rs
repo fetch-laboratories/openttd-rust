@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Action0 industry and tile property interpretation, including incremental failure effects.
 use super::Services;
-use crate::industrytype::{self, IndustrySpec, IndustryTileSpec, LayoutTile, NativeVec};
 use crate::bitmath_func::{gb, sb};
 use crate::cargo_type::INVALID_CARGO;
 use crate::debug::grf_msg;
@@ -11,6 +10,7 @@ use crate::industry_type::{
     INDUSTRY_ORIGINAL_NUM_OUTPUTS, INVALID_INDUSTRYTILE, NEW_INDUSTRYOFFSET,
     NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRYTILES_PER_GRF, NUM_INDUSTRYTYPES_PER_GRF,
 };
+use crate::industrytype::{self, IndustrySpec, IndustryTileSpec, LayoutTile, NativeVec};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::{
     CIR_DISABLED as DISABLED, CIR_INVALID_ID as INVALID_ID, CIR_SUCCESS as SUCCESS,
@@ -439,8 +439,7 @@ unsafe fn industries(
                     continue;
                 }
                 if spec.is_null() {
-                    let mut industry =
-                        unsafe { (*s.origin.add(usize::from(substitute))).clone() };
+                    let mut industry = unsafe { (*s.origin.add(usize::from(substitute))).clone() };
                     industry.enabled = true;
                     industry.grf_prop.local_id = id as u16;
                     industry.grf_prop.subst_id = u16::from(substitute);
