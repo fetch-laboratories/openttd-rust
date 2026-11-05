@@ -34,6 +34,7 @@ include = [
     "tools/test-preflight.py",
     "tools/simulation/commands.py",
     "tools/simulation/script_host.py",
+    "tools/simulation/script_infrastructure.py",
     "tools/simulation/community_ai.py",
     "tools/simulation/newgrf_sets.py",
     "tools/simulation/multiplayer.py",
