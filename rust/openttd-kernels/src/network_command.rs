@@ -115,10 +115,7 @@ impl CommandQueue {
     ///
     /// # Safety
     /// `queue` is live and holds parts from this function or `EMPTY`; `edit` calls no leaf.
-    pub(crate) unsafe fn edit<R>(
-        queue: *mut Self,
-        edit: impl FnOnce(&mut Vec<CommandPacket>) -> R,
-    ) -> R {
+    unsafe fn edit<R>(queue: *mut Self, edit: impl FnOnce(&mut Vec<CommandPacket>) -> R) -> R {
         unsafe {
             let mut packets = if (*queue).data.is_null() {
                 Vec::new()
@@ -172,9 +169,21 @@ pub struct Services {
     pub server_full: extern "C" fn(u32),
 }
 
-/// `_local_wait_queue`; the harness's native-test entries read it in place.
-pub(crate) static WAIT: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
+static WAIT: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
 static EXECUTION: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
+
+/// `_local_wait_queue` for the commands console's native-test entry.
+#[cfg(feature = "native-test-support")]
+pub(crate) fn wait_queue() -> *const CommandQueue {
+    WAIT.get()
+}
+
+/// `_local_wait_queue.clear()`, as `free_local_command_queue` clears it.
+#[cfg(feature = "native-test-support")]
+pub(crate) fn clear_wait_queue() {
+    // SAFETY: The queue is live and clearing calls no leaf.
+    unsafe { CommandQueue::edit(WAIT.get(), Vec::clear) };
+}
 
 pub(crate) fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {
     let mut client = Client {
