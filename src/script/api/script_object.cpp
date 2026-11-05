@@ -43,12 +43,12 @@ void SimpleCountedObject::Release()
 
 ScriptObject::ActiveInstance::ActiveInstance(ScriptInstance &instance) : alc_scope(instance.engine.get())
 {
-	this->last_active = openttd_rust_script_activate(&instance.GetStorage());
+	this->last_active = std::exchange(GetRustScriptContext().active, &instance.GetStorage());
 }
 
 ScriptObject::ActiveInstance::~ActiveInstance()
 {
-	openttd_rust_script_activate(this->last_active);
+	GetRustScriptContext().active = this->last_active;
 }
 
 ScriptObject::DisableDoCommandScope::DisableDoCommandScope()
