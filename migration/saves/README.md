@@ -274,8 +274,11 @@ python3 -m tools.simulation.community_newgrf generate
 `community-newgrf-large-reload-long` runs two years in soak. Both install the
 same AI and NewGRF packages, remove only optional GLOG, and compare every
 semantic checkpoint, the end states and the complete command and debug logs. The
-checks require the four AIs to keep their slots, earn revenue and move vehicles,
-and every snapshot to keep the saved GRF identities. Candidate Action2 and
-industry resolver witnesses must be reached, including the accepted-cargo
+checks require the four named AIs to keep their slots, positive recorded revenue
+and deliveries for each AI, vehicle movement across the fleet, and every snapshot
+to keep the saved GRF identities. Income and delivery history includes the input
+save; these checks do not require new revenue or movement from every AI during
+the reload. Candidate Action2 and industry resolver witnesses must be reached,
+including the accepted-cargo
 refusal check on AI deliveries to the sets' industries. Regeneration need not
 reproduce the bytes; the canonical comparison masks the random save ID and GLOG.
