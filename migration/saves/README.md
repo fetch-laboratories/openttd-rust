@@ -276,5 +276,6 @@ same AI and NewGRF packages, remove only optional GLOG, and compare every
 semantic checkpoint, the end states and the complete command and debug logs. The
 checks require the four AIs to keep their slots, earn revenue and move vehicles,
 and every snapshot to keep the saved GRF identities. Candidate Action2 and
-industry resolver witnesses must be reached. Regeneration need not reproduce the
-bytes; the canonical comparison masks the random save ID and GLOG.
+industry resolver witnesses must be reached, including the accepted-cargo
+refusal check on AI deliveries to the sets' industries. Regeneration need not
+reproduce the bytes; the canonical comparison masks the random save ID and GLOG.

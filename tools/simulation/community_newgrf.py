@@ -21,6 +21,13 @@ from . import community_ai, core, newgrf_sets
 FIXTURE = core.ROOT / "migration/saves/community-newgrf-arctic-2000.sav"
 YEARS = 50
 COMMAND = "python3 -m tools.simulation.community_newgrf generate"
+# Candidate counters a reload must reach. Industry placement (location,
+# probability) happens only during generation; `refusal` is the accepted-cargo
+# check on community-AI deliveries, which newgrf-sets-arctic never reaches.
+REQUIRED = {
+    "common_action2": newgrf_sets.REQUIRED["common_action2"],
+    "industry_resolver": ("refusal", "root", "tile_root", "tile_variable", "variable"),
+}
 
 
 class Scenario(community_ai.Scenario):
@@ -170,7 +177,7 @@ def check(
         saved = [(grf.grfid, grf.md5sum) for grf in saved_newgrfs(snapshot)]
         if saved != expected:
             raise RuntimeError(f"{snapshot.name} lost the save's NewGRF identities")
-    for prefix, required in newgrf_sets.REQUIRED.items():
+    for prefix, required in REQUIRED.items():
         if counts := core.branch_witnesses(scenario, run, role, prefix, required):
             result.setdefault("community_newgrf_witnesses", {}).setdefault(mode, {})[
                 prefix
