@@ -51,11 +51,11 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
     let r = s.refit;
     let c = r.common;
     let g = c.base.groups;
-    let kind = VehicleType(unsafe { (g.vehicle_type)(first) });
+    let kind = VehicleType(crate::fleet::record(g, first).vehicle_type());
     if !unsafe {
         crate::engine_capabilities::openttd_rust_articulated_is(
             r.capabilities,
-            (g.vehicle_engine)(first),
+            crate::fleet::record(g, first).engine_id(),
         )
     } {
         return;
@@ -67,7 +67,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
             crate::engine_capabilities::openttd_rust_articulated_next(
                 r.capabilities,
                 index,
-                (g.vehicle_engine)(first),
+                crate::fleet::record(g, first).engine_id(),
                 super::vehicle_ref(first, c.vehicles).0.as_ptr(),
                 flip.as_mut_ptr(),
             )
@@ -151,12 +151,12 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         if unsafe { flip.assume_init() } {
             (s.flip_image)(v);
         }
-        if unsafe { (g.vehicle_type)(v) } == VehicleType::TRAIN.0 {
+        if crate::fleet::record(g, v).vehicle_type() == VehicleType::TRAIN.0 {
             let probability = unsafe {
                 crate::newgrf_vehicle::openttd_rust_vehicle_build_probability(
                     &*(r.common.vehicles.newgrf)(),
                     super::vehicle_ref(v, c.vehicles).0.as_ptr(),
-                    (g.vehicle_engine)(v),
+                    crate::fleet::record(g, v).engine_id(),
                     crate::newgrf_vehicle::BUILD_PROBABILITY_REVERSED,
                 )
             };
@@ -190,7 +190,7 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
     unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_masks(
             r.capabilities,
-            (c.base.groups.vehicle_engine)(v),
+            crate::fleet::record(c.base.groups, v).engine_id(),
             true,
             &raw mut purchase_union,
             &raw mut purchase_intersection,
@@ -200,7 +200,7 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
     unsafe {
         crate::engine_capabilities::openttd_rust_articulated_capacity(
             r.capabilities,
-            (c.base.groups.vehicle_engine)(v),
+            crate::fleet::record(c.base.groups, v).engine_id(),
             purchase_capacity.as_mut_ptr(),
         );
     };
@@ -211,7 +211,7 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
         let mask = unsafe {
             crate::engine_capabilities::available_cargo(
                 r.capabilities,
-                (c.base.groups.vehicle_engine)(v),
+                crate::fleet::record(c.base.groups, v).engine_id(),
                 true,
             )
         };

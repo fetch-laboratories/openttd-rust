@@ -10,19 +10,14 @@
 #include "presentation_services.h"
 
 /* Typed tick-end services. Rust owns ordering and policy; native CommandCost
- * and presentation encoding stay on the native caller stack. Vehicle, owner,
- * locality and CommandCost reads reuse the group and transaction tables. */
-static void FleetPending_restart(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->SetVehStatus(v->GetVehStatus().Reset(VehState::Stopped)); }
+ * and presentation encoding stay on the native caller stack. Vehicle, locality
+ * and CommandCost reads reuse the group and transaction tables. */
 static void FleetPending_subtract(int64_t amount) noexcept { SubtractMoneyFromCompany(CommandCost(EXPENSES_NEW_VEHICLES, Money(amount))); }
 static void FleetPending_command(void *out, uint32_t id) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, VehicleID(id)); }
 static void FleetPending_length_news(uint32_t id) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_ERROR_TRAIN_TOO_LONG_AFTER_REPLACEMENT, VehicleID(id)), VehicleID(id)); }
 static void FleetPending_failed_news(uint32_t id, uint32_t error) noexcept { AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, VehicleID(id), error, std::monostate{}), VehicleID(id)); }
 static const OpenTTDFleetPendingServices _fleet_pending_services{
 	.set_current = RustSetCurrentCompanyID,
-	.restart = FleetPending_restart,
-	.x = RustOpaqueVehicleRead<int32_t, RustVehicleX>,
-	.y = RustOpaqueVehicleRead<int32_t, RustVehicleY>,
-	.z = RustOpaqueVehicleRead<int32_t, RustVehicleZ>,
 	.company = &GetRustCompanyIdentityServices(),
 	.subtract = FleetPending_subtract,
 	.command = FleetPending_command,

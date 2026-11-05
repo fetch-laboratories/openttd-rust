@@ -321,13 +321,8 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	auto group = FleetGroupServices();
 	group.current_company = []() noexcept -> uint8_t { return 0; };
 	const auto unused = [](auto...) noexcept { FAIL_CHECK("Unexpected pending fleet operation"); };
-	const auto unused_position = [](void *) noexcept -> int32_t { FAIL_CHECK("Unexpected pending fleet position"); return 0; };
 	OpenTTDFleetPendingServices pending{
 		.set_current = [](uint8_t) noexcept {},
-		.restart = unused,
-		.x = unused_position,
-		.y = unused_position,
-		.z = unused_position,
 		.company = &GetRustCompanyIdentityServices(),
 		.subtract = unused,
 		.command = unused,

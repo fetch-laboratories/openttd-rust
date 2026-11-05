@@ -1344,7 +1344,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             let settings = (s.settings)();
             let vehicle = unsafe { (settings.transactions.groups.vehicle)(v) };
             let defaults = (settings.company_vehicle_defaults)(crate::company_type::CompanyID(new));
-            let kind = unsafe { (settings.transactions.groups.vehicle_type)(vehicle) };
+            let kind = crate::fleet::record(settings.transactions.groups, vehicle).vehicle_type();
             let interval = service_interval_from(
                 settings.shared,
                 defaults,

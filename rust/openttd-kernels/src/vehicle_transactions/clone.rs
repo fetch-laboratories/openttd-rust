@@ -120,14 +120,14 @@ unsafe fn clone(
     let original = v;
     unsafe {
         b.commands
-            .ownership(temporary, (b.groups.vehicle_owner)(v), 0);
+            .ownership(temporary, crate::fleet::record(b.groups, v).owner(), 0);
     };
     if !(b.cost.success)(temporary) {
         total.take(Cost(temporary, b.cost));
         return invalid;
     }
-    if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
-        && (!unsafe { (b.groups.front)(v) }
+    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
+        && (!crate::fleet::front(crate::fleet::record(b.groups, v))
             || (r.train_handle)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr())
                 .get_crash_anim_pos()
                 >= 4400)
@@ -157,7 +157,7 @@ unsafe fn clone(
     let mut rear: *mut () = ptr::null_mut();
     let mut new_id = invalid;
     loop {
-        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0
+        if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN.0
             || !unsafe { (c.transactions.rear)(v) }
         {
             let build_flags =
@@ -166,7 +166,7 @@ unsafe fn clone(
                 } else {
                     flags
                 };
-            let engine = unsafe { (b.groups.vehicle_engine)(v) };
+            let engine = crate::fleet::record(b.groups, v).engine_id();
             let built = crate::command::nested(
                 b.commands,
                 b.shared,
@@ -200,7 +200,7 @@ unsafe fn clone(
             total.add_money((b.cost.money)(part));
             if flags & DoCommandFlag::EXECUTE != 0 {
                 w = unsafe { (b.groups.vehicle)(new_id) };
-                if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0 {
+                if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0 {
                     let old_train =
                         (r.train_handle)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
                     if old_train.get_flags() & (1 << crate::train::FLIPPED) != 0
@@ -221,8 +221,8 @@ unsafe fn clone(
                             .set_flag(crate::train::FLIPPED, true);
                     }
                 }
-                if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
-                    && !unsafe { (b.groups.front)(v) }
+                if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
+                    && !crate::fleet::front(crate::fleet::record(b.groups, v))
                 {
                     let moved = unsafe {
                         super::rail::nested_move(
@@ -250,7 +250,7 @@ unsafe fn clone(
                 rear = w;
             }
         }
-        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
+        if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN.0 {
             break;
         }
         v = (s.next_vehicle)(v);
@@ -259,7 +259,7 @@ unsafe fn clone(
         }
     }
     if flags & DoCommandFlag::EXECUTE != 0
-        && unsafe { (b.groups.vehicle_type)(original) } == VehicleType::TRAIN.0
+        && crate::fleet::record(b.groups, original).vehicle_type() == VehicleType::TRAIN.0
     {
         new_id = unsafe { (b.groups.vehicle_id)(front) };
     }
@@ -300,7 +300,10 @@ unsafe fn clone(
                         total.add_money((b.cost.money)(part));
                     }
                 }
-                if unsafe { (b.groups.ground)(w) } && (s.has_articulated)(w) {
+                if crate::vehicle_base::is_ground_vehicle(
+                    crate::fleet::record(b.groups, w).vehicle_type(),
+                ) && (s.has_articulated)(w)
+                {
                     w = (s.next_articulated)(w);
                 } else {
                     break;
@@ -322,7 +325,7 @@ unsafe fn clone(
                             r,
                             part,
                             ptr::null_mut(),
-                            (b.groups.vehicle_engine)(v),
+                            crate::fleet::record(b.groups, v).engine_id(),
                             old_cargo.cargo,
                             old_cargo.subtype,
                         )
@@ -330,7 +333,10 @@ unsafe fn clone(
                     total.add(Cost(part, b.cost));
                 }
             }
-            if unsafe { (b.groups.ground)(v) } && (s.has_articulated)(v) {
+            if crate::vehicle_base::is_ground_vehicle(
+                crate::fleet::record(b.groups, v).vehicle_type(),
+            ) && (s.has_articulated)(v)
+            {
                 v = (s.next_articulated)(v);
             } else {
                 break;
@@ -340,11 +346,11 @@ unsafe fn clone(
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0
-            && unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
+            && crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
         {
             w = (s.next_vehicle)(w);
         }
-        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
+        if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN.0 {
             break;
         }
         v = (s.next_vehicle)(v);

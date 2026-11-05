@@ -17,6 +17,7 @@
 #include "abi_layout.hpp"
 #include "../rust/command_services.h"
 #include "../rust/company_identity_ffi.h"
+#include "../rust/vehicle_ffi.h"
 #include "../table/strings.h"
 #include <map>
 #include "../safeguards.h"
@@ -108,15 +109,20 @@ TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
 	OpenTTDFleetGroupServices group{};
 	group.current_company = []() noexcept -> uint8_t { return _fleet_drain_company; };
 	group.vehicle = [](uint32_t id) noexcept -> void * { return reinterpret_cast<void *>(static_cast<uintptr_t>(id) + 1); };
-	group.vehicle_owner = [](void *shell) noexcept -> uint8_t { return static_cast<uint8_t>(reinterpret_cast<uintptr_t>(shell) % 3); };
+	/* Each shell's record owner is its shell value modulo three. */
+	static std::map<uintptr_t, OpenTTDVehicle> records;
+	OpenTTDVehicleServices vehicles{};
+	vehicles.record_from_shell = [](void *shell) noexcept {
+		auto id = reinterpret_cast<uintptr_t>(shell);
+		OpenTTDVehicle *record = &records[id];
+		record->owner = static_cast<uint8_t>(id % 3);
+		return record;
+	};
+	group.vehicles = &vehicles;
 	OpenTTDFleetTransactionServices transaction{};
 	transaction.local = []() noexcept { return false; };
 	OpenTTDFleetPendingServices pending{};
 	pending.set_current = [](uint8_t company) noexcept { _fleet_drain_company = company; };
-	pending.restart = [](void *) noexcept {};
-	pending.x = [](void *) noexcept -> int32_t { return 0; };
-	pending.y = [](void *) noexcept -> int32_t { return 0; };
-	pending.z = [](void *) noexcept -> int32_t { return 0; };
 	OpenTTDCompanyIdentityServices company{};
 	company.company = [](uint8_t id) noexcept { return reinterpret_cast<Company *>(static_cast<uintptr_t>(id) + 1); };
 	company.renew_reserve = [](const Company *c) noexcept -> uint32_t { CHECK(static_cast<uint8_t>(reinterpret_cast<uintptr_t>(c) - 1) == _fleet_drain_company); return 0; };

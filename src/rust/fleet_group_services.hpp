@@ -19,9 +19,7 @@ struct FleetVehicleListContext { VehicleList list; const VehicleListIdentifier &
 static void * FleetGroup_group(uint16_t id) noexcept { auto *g = Group::GetIfValid(GroupID(id)); return g == nullptr ? nullptr : g->state.state; }
 static uint32_t FleetGroup_next_group(uint32_t from) noexcept { for (Group *g : Group::Iterate(from)) { if (g->index.base() >= from) return g->index.base(); } return UINT32_MAX; }
 static void * FleetGroup_vehicle(uint32_t id) noexcept { return Vehicle::GetIfValid(VehicleID(id)); }
-static uint8_t FleetGroup_vehicle_type(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->GetType(); }
 static uint16_t FleetGroup_vehicle_group(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->group_id.base(); }
-static uint16_t FleetGroup_vehicle_engine(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustVehicleEngineID(v); }
 static bool FleetGroup_countable(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsEngineCountable(); }
 static void * FleetGroup_first_shared(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->FirstShared(); }
 static void * FleetGroup_next_shared(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->NextShared(); }
@@ -67,18 +65,13 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.next_company = RustNextCompanyID,
 		.next_vehicle = GetRustSharedServices().vehicle_next,
 		.vehicle = FleetGroup_vehicle,
+		.vehicles = &GetRustVehicleServices(),
 		.vehicle_id = OpenTTDMapQuery<uint32_t, RustVehicleIndexOpaque, void *>,
-		.vehicle_type = FleetGroup_vehicle_type,
-		.vehicle_owner = RustOpaqueHandleRead<uint8_t, RustVehicleOwnerOf>,
 		.vehicle_group = FleetGroup_vehicle_group,
-		.vehicle_engine = FleetGroup_vehicle_engine,
 		.profit = RustOpaqueVehicleRead<int64_t, RustVehicleDisplayProfitLastYear>,
 		.old_enough = RustOpaqueVehicleRead<bool, RustVehicleOldEnough>,
 		.primary = RustOpaqueVehicleRead<bool, RustVehiclePrimary>,
 		.countable = FleetGroup_countable,
-		.ground = RustOpaqueVehicleRead<bool, RustVehicleIsGround>,
-		.front = RustOpaqueVehicleRead<bool, RustVehicleFront>,
-		.next_part = RustOpaqueVehicleRead<void *, RustVehicleNext>,
 		.first_shared = FleetGroup_first_shared,
 		.next_shared = FleetGroup_next_shared,
 		.set_membership = FleetGroup_set_membership,

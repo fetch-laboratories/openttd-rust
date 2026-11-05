@@ -277,7 +277,7 @@ unsafe fn refit_chain(
         if !unsafe { (c.transactions.articulated)(v) } {
             actual_subtype = subtype;
         }
-        if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
+        if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
             && !only
             && !transaction
                 .0
@@ -367,7 +367,7 @@ unsafe fn refit_chain(
                 old.cargo,
                 old.subtype,
             );
-            let engine = unsafe { (b.groups.vehicle_engine)(v) };
+            let engine = crate::fleet::record(b.groups, v).engine_id();
             let allowed = unsafe { get_cost(s, temp, v, engine, cargo, actual_subtype) };
             if automatic && flags & DoCommandFlag::QUERY_COST == 0 && !allowed {
                 total.total = total.total.wrapping_sub(amount);
@@ -378,7 +378,7 @@ unsafe fn refit_chain(
                             .0
                             .as_ptr(),
                     )));
-                    if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::AIRCRAFT.0 {
+                    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
                         mail_total = mail_total.wrapping_add(u32::from((s.cargo_cap)(
                             unsafe { super::vehicle_ref(next(s, v), s.common.vehicles) }
                                 .0
@@ -434,7 +434,7 @@ unsafe fn refit_chain(
                 result.capacity as u16,
                 result.subtype,
             );
-            if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::AIRCRAFT.0 {
+            if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
                 let shadow = unsafe { next(s, v) };
                 if c.transactions.assertions {
                     unsafe {
@@ -487,7 +487,7 @@ pub(crate) unsafe fn refit(
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
     }
-    let kind = unsafe { (b.groups.vehicle_type)(v) };
+    let kind = crate::fleet::record(b.groups, v).vehicle_type();
     if !unsafe { (b.groups.buildable_type)(kind) } {
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
@@ -495,7 +495,7 @@ pub(crate) unsafe fn refit(
     let front = unsafe { (c.transactions.first)(v) };
     unsafe {
         b.commands
-            .ownership(cost, (b.groups.vehicle_owner)(front), 0);
+            .ownership(cost, crate::fleet::record(b.groups, front).owner(), 0);
     }
     if !(b.cost.success)(cost) {
         return Capacity::default();
@@ -523,7 +523,8 @@ pub(crate) unsafe fn refit(
     {
         (b.cost.error)(
             cost,
-            c.strings.stopped_in_depot + u32::from(unsafe { (b.groups.vehicle_type)(front) }),
+            c.strings.stopped_in_depot
+                + u32::from(crate::fleet::record(b.groups, front).vehicle_type()),
         );
         return Capacity::default();
     }
@@ -536,7 +537,7 @@ pub(crate) unsafe fn refit(
         return Capacity::default();
     }
     only |= matches!(
-        VehicleType(unsafe { (b.groups.vehicle_type)(front) }),
+        VehicleType(crate::fleet::record(b.groups, front).vehicle_type()),
         VehicleType::SHIP | VehicleType::AIRCRAFT
     );
     let result = unsafe {
@@ -545,7 +546,7 @@ pub(crate) unsafe fn refit(
         )
     };
     if flags & DoCommandFlag::EXECUTE != 0 {
-        match VehicleType(unsafe { (b.groups.vehicle_type)(v) }) {
+        match VehicleType(crate::fleet::record(b.groups, v).vehicle_type()) {
             VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
                     (s.train_handle)(super::vehicle_ref(front, s.common.vehicles).0.as_ptr()),
@@ -616,7 +617,7 @@ pub(crate) unsafe fn refit(
                     .0
                     .as_ptr(),
             );
-            (s.lists_ui)(unsafe { (b.groups.vehicle_type)(v) });
+            (s.lists_ui)(crate::fleet::record(b.groups, v).vehicle_type());
         }
         unsafe {
             (b.groups.depot_dirty)(front);

@@ -333,14 +333,14 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
     a == 0 || b == 0 || a & b != 0
 }
 unsafe fn order_vehicle(w: &Services, gw: &GroupServices, v: *mut ()) -> *mut () {
-    if unsafe { (gw.vehicle_type)(v) } == 0 {
+    if crate::fleet::record(gw, v).vehicle_type() == 0 {
         unsafe { (w.first)(v) }
     } else {
         v
     }
 }
 unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u16) -> bool {
-    let old_engine = unsafe { (gw.vehicle_engine)(v) };
+    let old_engine = crate::fleet::record(gw, v).engine_id();
     let old_mask = unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_union(
             w.capabilities,
@@ -443,7 +443,7 @@ unsafe fn new_cargo(
         return INVALID_CARGO;
     }
     if cargo == INVALID_CARGO {
-        if unsafe { (gw.vehicle_type)(v) } != 0 || !chain {
+        if crate::fleet::record(gw, v).vehicle_type() != 0 || !chain {
             return NO_REFIT;
         }
         v = unsafe { (w.first)(v) };
@@ -459,7 +459,7 @@ unsafe fn new_cargo(
                     return cargo;
                 }
             }
-            v = unsafe { (gw.next_part)(v) };
+            v = crate::fleet::next_part(crate::fleet::record(gw, v));
         }
         NO_REFIT
     } else {
@@ -479,7 +479,7 @@ unsafe fn new_engine(
     always: bool,
     cost: *mut (),
 ) -> u16 {
-    let kind = unsafe { (gw.vehicle_type)(v) };
+    let kind = crate::fleet::record(gw, v).vehicle_type();
     check!(w, kind != 0 || !unsafe { (w.articulated)(v) });
     unsafe { (w.cost_zero)(cost) };
     if kind == 0 && unsafe { (w.rear)(v) } {
@@ -487,7 +487,7 @@ unsafe fn new_engine(
     }
     let company = unsafe { (gw.current_company)() };
     let head = unsafe { (gw.head)(company).cast::<*mut ()>().read() };
-    let from = unsafe { (gw.vehicle_engine)(v) };
+    let from = crate::fleet::record(gw, v).engine_id();
     let id = unsafe { (gw.vehicle_group)(v) };
     let mut old = false;
     let mut engine = unsafe { replacement(gw, head, from, id, &raw mut old) };
@@ -539,7 +539,7 @@ unsafe fn build(
         }
         check!(w, unsafe { (w.success)(cost) });
     }
-    if unsafe { (gw.vehicle_type)(new) } == 0
+    if crate::fleet::record(gw, new).vehicle_type() == 0
         && ((w.refit_services)().train_handle)(
             unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
                 .0
@@ -681,7 +681,7 @@ unsafe fn replace_chain(
     check!(w, unsafe { (gw.primary)(old_head) });
     let cost = costs.replace;
     unsafe { (w.cost_vehicles)(cost) };
-    if unsafe { (gw.vehicle_type)(old_head) } == 0 {
+    if crate::fleet::record(gw, old_head).vehicle_type() == 0 {
         let length = unsafe { (w.length)(old_head) };
         let old_total_length = (u32::from(length).div_ceil(TILE_SIZE) * TILE_SIZE) as u16;
         let mut replacements = Vec::<ChainItem>::new();
@@ -728,7 +728,7 @@ unsafe fn replace_chain(
             if unsafe { (w.success)(cost) } {
                 for item in replacements.iter().rev() {
                     let append = item.vehicle();
-                    let engine = unsafe { (gw.vehicle_engine)(append) };
+                    let engine = crate::fleet::record(gw, append).engine_id();
                     if unsafe { (w.wagon)(engine) } {
                         continue;
                     }
@@ -777,7 +777,7 @@ unsafe fn replace_chain(
                 for item in replacements.iter().rev() {
                     check!(w, !last_engine.is_null());
                     let append = item.vehicle();
-                    let engine = unsafe { (gw.vehicle_engine)(append) };
+                    let engine = crate::fleet::record(gw, append).engine_id();
                     if unsafe { (w.wagon)(engine) } {
                         unsafe {
                             move_vehicle(
@@ -833,7 +833,9 @@ unsafe fn replace_chain(
                     if unsafe { (w.first)(wagon) } == new_head {
                         break;
                     }
-                    check!(w, unsafe { (w.wagon)((gw.vehicle_engine)(wagon)) });
+                    check!(w, unsafe {
+                        (w.wagon)(crate::fleet::record(gw, wagon).engine_id())
+                    });
                     unsafe {
                         direct_sell(w, costs.temporary, wagon, u32::from(DoCommandFlag::EXECUTE));
                     };
@@ -978,7 +980,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let owner = unsafe { (gw.vehicle_owner)(v) };
+    let owner = crate::fleet::record(gw, v).owner();
     // Native cost is live caller-owned CommandCost storage; no owner borrow spans the call.
     unsafe { (*w.commands).ownership(cost.cast(), owner, 0) };
     if !unsafe { (w.success)(cost) } {
@@ -988,16 +990,16 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let kind = unsafe { (gw.vehicle_type)(v) };
+    let kind = crate::fleet::record(gw, v).vehicle_type();
     let mut free = false;
     if kind == 0 {
         if unsafe { (w.articulated)(v) || (w.rear)(v) } {
             unsafe { (w.cost_error)(cost, ERROR) };
             return;
         }
-        free = !unsafe { (gw.front)(v) };
+        free = !crate::fleet::front(crate::fleet::record(gw, v));
         let first = unsafe { (w.first)(v) };
-        if free && unsafe { (gw.front)(first) } {
+        if free && crate::fleet::front(crate::fleet::record(gw, first)) {
             unsafe { (w.cost_error)(cost, ERROR) };
             return;
         }
@@ -1025,7 +1027,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
             return;
         }
         any |= engine != INVALID_ENGINE;
-        unit = if !free && unsafe { (gw.vehicle_type)(unit) } == 0 {
+        unit = if !free && crate::fleet::record(gw, unit).vehicle_type() == 0 {
             unsafe { (w.next_unit)(unit) }
         } else {
             ptr::null_mut()

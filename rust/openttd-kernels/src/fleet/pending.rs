@@ -10,15 +10,11 @@ use super::GroupServices;
 use super::transactions::Services as TransactionServices;
 use crate::game_state::GameState;
 use std::collections::BTreeMap;
-/// Tick-end-only services; vehicle, owner, locality and cost reads reuse the
-/// group and transaction tables.
+/// Tick-end-only services; vehicle, locality and cost reads reuse the group and
+/// transaction tables.
 #[repr(C)]
 pub struct Services {
     pub(crate) set_current: unsafe extern "C" fn(u8),
-    pub(crate) restart: unsafe extern "C" fn(*mut ()),
-    pub(crate) x: unsafe extern "C" fn(*mut ()) -> i32,
-    pub(crate) y: unsafe extern "C" fn(*mut ()) -> i32,
-    pub(crate) z: unsafe extern "C" fn(*mut ()) -> i32,
     pub(crate) company: *const crate::company_identity::Services,
     pub(crate) subtract: unsafe extern "C" fn(i64),
     pub(crate) command: unsafe extern "C" fn(*mut (), u32),
@@ -71,15 +67,15 @@ pub(crate) unsafe fn drain(
             break;
         };
         from = id + 1;
-        let v = unsafe { (g.vehicle)(id) };
-        let owner = unsafe { (g.vehicle_owner)(v) };
+        let v = crate::fleet::record(g, unsafe { (g.vehicle)(id) });
+        let owner = v.owner();
         unsafe { (w.set_current)(owner) };
         if leave {
-            unsafe { (w.restart)(v) };
+            v.write_status(v.status() & !crate::vehicle_base::VS_STOPPED);
         }
-        let x = unsafe { (w.x)(v) };
-        let y = unsafe { (w.y)(v) };
-        let z = unsafe { (w.z)(v) };
+        let x = v.x();
+        let y = v.y();
+        let z = v.z();
         let company = unsafe { &*w.company };
         let reserve = i64::from((company.renew_reserve)((company.company)(
             crate::company_type::CompanyID(owner),
@@ -117,10 +113,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDFleetPendingServices" ["fleet"] => Services {
         set_current,
-        restart,
-        x,
-        y,
-        z,
         company,
         subtract,
         command,

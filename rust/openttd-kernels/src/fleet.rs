@@ -20,7 +20,8 @@
 )]
 use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
-use crate::vehicle::OpenTTDVehicle;
+use crate::vehicle::{OpenTTDVehicle, VehicleRef};
+use crate::vehicle_base::{is_front_engine, is_ground_vehicle};
 use std::collections::{BTreeMap, BTreeSet};
 const NONE: u32 = u32::MAX;
 /// `VehicleID::Invalid()` (`vehicle_type.h`), the list-selection sentinel.
@@ -261,18 +262,14 @@ pub struct GroupServices {
     pub(crate) next_company: unsafe extern "C" fn(u32) -> u32,
     pub(crate) next_vehicle: unsafe extern "C" fn(u32) -> *mut OpenTTDVehicle,
     pub(crate) vehicle: unsafe extern "C" fn(u32) -> *mut (),
+    /// Resolves shells to their canonical records.
+    pub(crate) vehicles: &'static crate::vehicle::VehicleServices,
     pub(crate) vehicle_id: unsafe extern "C" fn(*mut ()) -> u32,
-    pub(crate) vehicle_type: unsafe extern "C" fn(*mut ()) -> u8,
-    pub(crate) vehicle_owner: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) vehicle_group: unsafe extern "C" fn(*mut ()) -> u16,
-    pub(crate) vehicle_engine: unsafe extern "C" fn(*mut ()) -> u16,
     pub(crate) profit: unsafe extern "C" fn(*mut ()) -> i64,
     pub(crate) old_enough: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) primary: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) countable: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) ground: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) front: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) next_part: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) first_shared: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) next_shared: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) set_membership: unsafe extern "C" fn(*mut (), u16),
@@ -326,6 +323,21 @@ const NEW_GROUP: u16 = 65532;
 const OK: u32 = u32::MAX;
 const ERROR: u32 = 65535;
 
+/// Canonical record of a live native shell.
+pub(crate) fn record(w: &GroupServices, v: *mut ()) -> VehicleRef {
+    // SAFETY: Every caller passes a live shell of the serialized game state.
+    unsafe { VehicleRef::from_shell(v.cast(), w.vehicles) }
+}
+/// `v->Next()` as a native shell.
+pub(crate) fn next_part(v: VehicleRef) -> *mut () {
+    v.next()
+        .map_or(std::ptr::null_mut(), |next| next.shell().cast())
+}
+/// `v->IsFrontEngine()`.
+pub(crate) fn front(v: VehicleRef) -> bool {
+    is_front_engine(is_ground_vehicle(v.vehicle_type()), v.subtype())
+}
+
 // Raw field access permits native aliases; every access ends before a callback.
 unsafe fn group(w: &GroupServices, id: u16) -> *mut GroupFields {
     unsafe { (w.group)(id).cast() }
@@ -360,19 +372,20 @@ unsafe fn contains(w: &GroupServices, mut search: u16, target: u16) -> bool {
         g = unsafe { group(w, search) };
     }
 }
-unsafe fn vehicle_stats(w: &GroupServices, v: *mut (), all: bool) -> *mut Stats {
-    let owner = unsafe { (w.vehicle_owner)(v) };
+unsafe fn vehicle_stats(w: &GroupServices, v: VehicleRef, all: bool) -> *mut Stats {
+    let owner = v.owner();
     let id = if all {
         ALL_GROUP
     } else {
-        unsafe { (w.vehicle_group)(v) }
+        unsafe { (w.vehicle_group)(v.shell().cast()) }
     };
-    let kind = unsafe { (w.vehicle_type)(v) };
+    let kind = v.vehicle_type();
     unsafe { (w.stats)(owner, id, kind).cast() }
 }
 unsafe fn count_vehicle(w: &GroupServices, v: *mut (), delta: i32) {
     let old = unsafe { (w.old_enough)(v) };
     let profit = unsafe { (w.profit)(v) }.saturating_mul(i64::from(delta));
+    let v = record(w, v);
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     for p in [all, stats] {
@@ -389,7 +402,8 @@ unsafe fn count_vehicle(w: &GroupServices, v: *mut (), delta: i32) {
     }
 }
 unsafe fn count_engine(w: &GroupServices, v: *mut (), delta: i32) {
-    let engine = unsafe { (w.vehicle_engine)(v) };
+    let v = record(w, v);
+    let engine = v.engine_id();
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     unsafe {
@@ -399,6 +413,7 @@ unsafe fn count_engine(w: &GroupServices, v: *mut (), delta: i32) {
 }
 unsafe fn add_profit(w: &GroupServices, v: *mut ()) {
     let profit = unsafe { (w.profit)(v) };
+    let v = record(w, v);
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     for p in [all, stats] {
@@ -407,6 +422,7 @@ unsafe fn add_profit(w: &GroupServices, v: *mut ()) {
 }
 unsafe fn min_age(w: &GroupServices, v: *mut ()) {
     let profit = unsafe { (w.profit)(v) };
+    let v = record(w, v);
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     for p in [all, stats] {
@@ -415,13 +431,13 @@ unsafe fn min_age(w: &GroupServices, v: *mut ()) {
         s.fields.profit_min_age = s.fields.profit_min_age.saturating_add(profit);
     }
 }
-unsafe fn engine_membership(w: &GroupServices, v: *mut (), old: u16, new: u16) {
+unsafe fn engine_membership(w: &GroupServices, v: VehicleRef, old: u16, new: u16) {
     if old == new {
         return;
     }
-    let owner = unsafe { (w.vehicle_owner)(v) };
-    let kind = unsafe { (w.vehicle_type)(v) };
-    let engine = unsafe { (w.vehicle_engine)(v) };
+    let owner = v.owner();
+    let kind = v.vehicle_type();
+    let engine = v.engine_id();
     let old_stats = unsafe { (w.stats)(owner, old, kind) };
     unsafe { openttd_rust_fleet_engine_change(old_stats, engine, -1) };
     let new_stats = unsafe { (w.stats)(owner, new, kind) };
@@ -528,12 +544,14 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
     }
 }
 unsafe fn train_group(w: &GroupServices, v: *mut (), new: u16, viewport: bool) {
-    let owner = unsafe { (w.vehicle_owner)(v) };
-    let mut u = v;
-    while !u.is_null() {
+    let v = record(w, v);
+    let owner = v.owner();
+    let mut part = Some(v);
+    while let Some(r) = part {
+        let u = r.shell().cast();
         let old = unsafe { (w.vehicle_group)(u) };
         if unsafe { (w.countable)(u) } {
-            unsafe { engine_membership(w, u, old, new) };
+            unsafe { engine_membership(w, r, old, new) };
         }
         unsafe {
             (w.set_membership)(u, new);
@@ -542,7 +560,7 @@ unsafe fn train_group(w: &GroupServices, v: *mut (), new: u16, viewport: bool) {
         if viewport {
             unsafe { (w.viewport)(u) };
         }
-        u = unsafe { (w.next_part)(u) };
+        part = r.next();
     }
     unsafe {
         update_autoreplace(w, owner);
@@ -551,21 +569,23 @@ unsafe fn train_group(w: &GroupServices, v: *mut (), new: u16, viewport: bool) {
 }
 unsafe fn add_vehicle(w: &GroupServices, v: *mut (), new: u16) {
     unsafe { count_vehicle(w, v, -1) };
-    match unsafe { (w.vehicle_type)(v) } {
+    let record = record(w, v);
+    match record.vehicle_type() {
         0 => unsafe { train_group(w, v, new, true) },
         1..=3 => {
             let old = unsafe { (w.vehicle_group)(v) };
             if unsafe { (w.countable)(v) } {
-                unsafe { engine_membership(w, v, old, new) };
+                unsafe { engine_membership(w, record, old, new) };
             }
             unsafe { (w.set_membership)(v, new) };
-            let mut u = v;
-            while !u.is_null() {
+            let mut part = Some(record);
+            while let Some(r) = part {
+                let u = r.shell().cast();
                 unsafe {
                     (w.invalidate_cache)(u);
                     (w.viewport)(u);
                 }
-                u = unsafe { (w.next_part)(u) };
+                part = r.next();
             }
         }
         _ => unreachable!(),
@@ -590,20 +610,17 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
     let g = unsafe { group(w, id) };
     if reset {
         let mut from = 0;
-        loop {
-            let v =
-                crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
-            if v.is_null() {
-                break;
-            }
+        while let Some(record) = std::ptr::NonNull::new(unsafe { (w.next_vehicle)(from) }) {
+            let record = VehicleRef(record);
+            let v = record.shell().cast();
             from = unsafe { (w.vehicle_id)(v) } + 1;
             if unsafe { (w.vehicle_group)(v) } == id
-                && (!unsafe { (w.ground)(v) } || unsafe { (w.front)(v) })
+                && (!is_ground_vehicle(record.vehicle_type()) || front(record))
             {
-                let mut u = v;
-                while !u.is_null() {
-                    unsafe { (w.invalidate_cache)(u) };
-                    u = unsafe { (w.next_part)(u) };
+                let mut part = Some(record);
+                while let Some(r) = part {
+                    unsafe { (w.invalidate_cache)(r.shell().cast()) };
+                    part = r.next();
                 }
             }
         }
@@ -990,12 +1007,12 @@ unsafe fn add_vehicle_group(
         VehicleList::Single(v)
     };
     let first = unsafe { list.at(w, 0) };
-    let kind = unsafe { (w.vehicle_type)(first) };
+    let kind = record(w, first).vehicle_type();
     let owner = unsafe { (w.current_company)() };
     let size = unsafe { list.size(w) };
     for i in 0..size {
         let v = unsafe { list.at(w, i) };
-        if unsafe { (w.vehicle_owner)(v) } != owner || !unsafe { (w.primary)(v) } {
+        if record(w, v).owner() != owner || !unsafe { (w.primary)(v) } {
             return ERROR;
         }
     }
@@ -1042,14 +1059,11 @@ unsafe fn add_shared_group(w: &GroupServices, flags: u32, id: u16, kind: u8) -> 
     }
     if flags & 1 != 0 {
         let mut from = 0;
-        loop {
-            let v =
-                crate::vehicle::VehicleRef::shell_from_record(unsafe { (w.next_vehicle)(from) });
-            if v.is_null() {
-                break;
-            }
+        while let Some(record) = std::ptr::NonNull::new(unsafe { (w.next_vehicle)(from) }) {
+            let record = VehicleRef(record);
+            let v = record.shell().cast();
             from = unsafe { (w.vehicle_id)(v) } + 1;
-            if unsafe { (w.vehicle_type)(v) } != kind
+            if record.vehicle_type() != kind
                 || !unsafe { (w.primary)(v) }
                 || unsafe { (w.vehicle_group)(v) } != id
             {
@@ -1502,7 +1516,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_update_train_group(
     let w = unsafe { &*services };
     unsafe {
         {
-            let id = if (w.front)(v) {
+            let id = if front(record(w, v)) {
                 (w.vehicle_group)(v)
             } else {
                 DEFAULT_GROUP
@@ -1686,18 +1700,13 @@ crate::abi::layouts! {
         next_company,
         next_vehicle,
         vehicle,
+        vehicles,
         vehicle_id,
-        vehicle_type,
-        vehicle_owner,
         vehicle_group,
-        vehicle_engine,
         profit,
         old_enough,
         primary,
         countable,
-        ground,
-        front,
-        next_part,
         first_shared,
         next_shared,
         set_membership,
