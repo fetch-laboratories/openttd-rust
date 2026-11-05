@@ -30,7 +30,7 @@ PACKAGES = (
 )
 
 
-def main():
+def main() -> None:
     downloads = LOCAL / "downloads"
     deps = LOCAL / "deps"
     downloads.mkdir(parents=True, exist_ok=True)

@@ -8,23 +8,26 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location(
     "port_metrics", Path(__file__).with_name("port-metrics.py")
 )
-METRICS = importlib.util.module_from_spec(SPEC)
+assert SPEC and SPEC.loader
+# Tests rebind BASELINE, which ModuleType does not declare.
+METRICS: Any = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(METRICS)
 
 ORIGINAL = "int a = 1;\nint b = 2;\n\nint c = 3;\n"
 
 
-def counts(result, *keys):
+def counts(result: dict[str, int], *keys: str) -> tuple[int, ...]:
     return tuple(result[key] for key in keys)
 
 
 class PortMetricsTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
@@ -42,10 +45,10 @@ class PortMetricsTests(unittest.TestCase):
         self.write("src/town_gui.cpp", "int gui = 1;\n")
         METRICS.BASELINE = self.commit()
 
-    def write(self, path, text):
+    def write(self, path: str, text: str) -> None:
         (self.root / path).write_text(text)
 
-    def commit(self):
+    def commit(self) -> str:
         METRICS.git("add", "-A")
         METRICS.git("commit", "-qm", "Change: Metric fixture")
         return METRICS.git("rev-parse", "HEAD").strip()
@@ -91,7 +94,7 @@ class PortMetricsTests(unittest.TestCase):
         removed = self.commit()
         self.assertEqual(counts(METRICS.metrics(added, removed), *keys), (0, 3, -3))
 
-    def test_original_restoration_and_fork_glue_transitions(self):
+    def test_original_restoration_and_fork_glue_transitions(self) -> None:
         baseline = METRICS.BASELINE
         original, glue = self.root / "src/town_gui.cpp", self.root / "src/rust_glue.cpp"
         original.unlink()
@@ -129,7 +132,7 @@ class PortMetricsTests(unittest.TestCase):
             (0, 2, -2),
         )
 
-    def test_conversion_counts_original_and_removed_glue(self):
+    def test_conversion_counts_original_and_removed_glue(self) -> None:
         # A first port wraps two original lines; a second replaces its glue,
         # moves `#endif` and retires the remaining original blank and line.
         self.write(
@@ -354,7 +357,7 @@ class PortMetricsTests(unittest.TestCase):
         head = self.commit()
         self.assertEqual(METRICS.boundary(head), {"exports": 2, "callback_slots": 2})
 
-    def test_simulation_inventory(self):
+    def test_simulation_inventory(self) -> None:
         for path in (
             "src/town_cmd.cpp",
             *(
