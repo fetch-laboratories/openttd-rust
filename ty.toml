@@ -85,6 +85,10 @@ include = [
     "tools/test-port-metrics.py",
     "tools/test-validation-execution.py",
     "tools/test-ci.py",
+    "tools/simulation/signals.py",
+    "tools/simulation/landscape.py",
+    "tools/simulation/companies.py",
+    "tools/simulation/industries.py",
 ]
 
 [analysis]

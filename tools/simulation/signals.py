@@ -3,7 +3,9 @@
 import hashlib
 import json
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, NotRequired
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
@@ -11,8 +13,12 @@ from .console_adapter import console_adapter, prepared_console
 ADAPTER = core.ROOT / "tools/simulation/signals-console.cpp"
 
 
-def scenarios(soak):
-    cases = [
+class Scenario(core.Scenario):
+    signals: NotRequired[str]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
+    cases: list[Scenario] = [
         {
             "name": f"signals-{year}",
             "kind": "save",
@@ -26,43 +32,43 @@ def scenarios(soak):
     ]
 
     cases.append(
-        dict(
-            cases[0],
-            name="signals-worksets",
-            signals="sets",
-            short_checkpoint=True,
-            ticks=1,
-            console=["signals_scenario sets", "unpause"],
-        )
+        {
+            **cases[0],
+            "name": "signals-worksets",
+            "signals": "sets",
+            "short_checkpoint": True,
+            "ticks": 1,
+            "console": ["signals_scenario sets", "unpause"],
+        }
     )
     cases.append(
-        dict(
-            cases[0],
-            name="signals-overflow",
-            signals="overflow",
-            short_checkpoint=True,
-            ticks=74 if soak else 1,
-            console=["signals_scenario overflow", "unpause"],
-        )
+        {
+            **cases[0],
+            "name": "signals-overflow",
+            "signals": "overflow",
+            "short_checkpoint": True,
+            "ticks": 74 if soak else 1,
+            "console": ["signals_scenario overflow", "unpause"],
+        }
     )
     cases.append(
-        dict(
-            cases[1],
-            name="signals-reload",
-            signals="reload",
-            short_checkpoint=True,
-            ticks=74,
-            console=["signals_scenario inspect-live", "unpause"],
-        )
+        {
+            **cases[1],
+            "name": "signals-reload",
+            "signals": "reload",
+            "short_checkpoint": True,
+            "ticks": 74,
+            "console": ["signals_scenario inspect-live", "unpause"],
+        }
     )
     cases.append(
-        dict(
-            cases[2],
-            name="signals-rail-commands",
-            signals="rail-commands",
-            ticks=45 * core.TICKS_PER_DAY + core.SNAPSHOT_TICKS,
-            console=["signals_scenario rail-commands", "unpause"],
-        )
+        {
+            **cases[2],
+            "name": "signals-rail-commands",
+            "signals": "rail-commands",
+            "ticks": 45 * core.TICKS_PER_DAY + core.SNAPSHOT_TICKS,
+            "console": ["signals_scenario rail-commands", "unpause"],
+        }
     )
     for case in cases:
         case["console"] = ["pbs_probe", *case["console"]]
@@ -115,13 +121,13 @@ RAIL_COMMAND_BRANCHES = (
 )
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if "signals" in scenario:
         (run_dir / "signals-live.scr").write_text("signals_scenario inspect-live\n")
         (run_dir / "rail-live.scr").write_text("signals_scenario rail-live\n")
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     return (
         core.WITNESS_ENVIRONMENT
         if scenario.get("signals") and scenario.get("witnesses")
@@ -187,7 +193,15 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "signals" not in scenario:
         return scenario
 
@@ -195,20 +209,21 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
     folder = out / scenario["name"] / "input"
     source, record = normalize(Path(scenario["save"]), folder / "normalized")
-    result["signals_input"] = record
+    core.findings(result)["signals_input"] = record
     executables = prepared_console("signals", adapter, binaries, builds, folder, env)
     if binaries["reference"] == binaries["candidate"]:
         # Reuse the identical reference adapter in --self. Distinct output paths
         # would incorrectly make the core expect Rust-only branch witnesses.
         executables["candidate"] = executables["reference"]
     if scenario["signals"] == "reload":
-        saves, logs = {}, {}
-        capture = dict(
-            scenario,
-            save=str(source),
-            ticks=32 * core.TICKS_PER_DAY + core.SNAPSHOT_TICKS,
-            console=["signals_scenario ordinary", "unpause"],
-        )
+        saves: dict[str, Path] = {}
+        logs: dict[str, list[str]] = {}
+        capture: Scenario = {
+            **scenario,
+            "save": str(source),
+            "ticks": 32 * core.TICKS_PER_DAY + core.SNAPSHOT_TICKS,
+            "console": ["signals_scenario ordinary", "unpause"],
+        }
         runs = core.capture_pair(capture, executables, builds, folder, timeout, env)
         for role, run in runs.items():
             if run["exit"] or not run["snapshots"]:
@@ -224,7 +239,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
         if differences or logs["reference"] != logs["candidate"]:
             raise RuntimeError("signal live reload input differs")
-        result["signals_capture"] = {
+        core.findings(result)["signals_capture"] = {
             role: {
                 "sha256": hashlib.sha256(save.read_bytes()).hexdigest(),
                 "witnesses": logs[role],
@@ -235,17 +250,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             role: normalize(save, folder / role / "reload")[0]
             for role, save in saves.items()
         }
-        return dict(
-            scenario,
-            executables=executables,
-            role_inputs={
+        return {
+            **scenario,
+            "executables": executables,
+            "role_inputs": {
                 role: {"save": str(save)} for role, save in normalized.items()
             },
-        )
-    return dict(scenario, save=str(source), executables=executables)
+        }
+    return {**scenario, "save": str(source), "executables": executables}
 
 
-def boundary_profile(counts):
+def boundary_profile(counts: dict[str, int] | None) -> dict[str, Any] | None:
     if counts is None:
         return None
     total = sum(
@@ -288,7 +303,13 @@ def boundary_profile(counts):
     }
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if "signals" not in scenario or run["exit"] or not run["snapshots"]:
         return
     if not any("PBS checked" in line for line in run["log"]):
@@ -330,7 +351,7 @@ def check(scenario, run, mode, role, result):
             ("updates", "tiles", "train", "reserved_skip"),
         )
         if counts is not None:
-            result[mode + "_signals_profile"] = boundary_profile(counts)
+            core.findings(result)[mode + "_signals_profile"] = boundary_profile(counts)
         return
     if scenario["signals"] == "overflow":
         for line in (
@@ -364,7 +385,7 @@ def check(scenario, run, mode, role, result):
             ),
         )
         if counts is not None:
-            result[mode + "_signals_profile"] = boundary_profile(counts)
+            core.findings(result)[mode + "_signals_profile"] = boundary_profile(counts)
         return
     if scenario["signals"] == "sets":
         for size in (64, 256, 128):
@@ -397,7 +418,7 @@ def check(scenario, run, mode, role, result):
         )
     from .rails import vehicle_rows
 
-    positions = {}
+    positions: dict[int, set[tuple[int, int, int]]] = {}
     for path in [Path(scenario["save"]), *run["snapshots"]]:
         for vehicle, row in vehicle_rows(path).items():
             if row["type"] == 0:
@@ -409,7 +430,7 @@ def check(scenario, run, mode, role, result):
         result["problems"].append(
             f"{mode}/{role}: signal fixture has no actual train movement"
         )
-    result[f"{mode}_{role}_signals_moving"] = moving
+    core.findings(result)[f"{mode}_{role}_signals_moving"] = moving
     counts = core.branch_witnesses(
         scenario,
         run,
@@ -436,4 +457,4 @@ def check(scenario, run, mode, role, result):
         ),
     )
     if counts is not None:
-        result[mode + "_signals_profile"] = boundary_profile(counts)
+        core.findings(result)[mode + "_signals_profile"] = boundary_profile(counts)
