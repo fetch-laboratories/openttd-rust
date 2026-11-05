@@ -1,6 +1,6 @@
 """A larger arctic save played by the community AIs on the pinned NewGRF sets (#507).
 
-The unchanged original plays twenty years on a 256x256 arctic map with the four
+The unchanged original plays fifty years on a 256x256 arctic map with the four
 #545 community AIs and the three #670 OpenGFX+ sets loaded from their complete,
 uncommitted packages. Reload scenarios then compare the matured save, so its
 saved GRF identities, community-set vehicles and industries and the AIs' saved
@@ -18,8 +18,8 @@ from typing import cast
 
 from . import community_ai, core, newgrf_sets
 
-FIXTURE = core.ROOT / "migration/saves/community-newgrf-arctic-1970.sav"
-YEARS = 20
+FIXTURE = core.ROOT / "migration/saves/community-newgrf-arctic-2000.sav"
+YEARS = 50
 COMMAND = "python3 -m tools.simulation.community_newgrf generate"
 
 
