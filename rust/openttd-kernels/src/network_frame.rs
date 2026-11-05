@@ -135,7 +135,6 @@ pub struct Services {
     pub tcp: &'static crate::network_tcp::Services,
     pub text_append: extern "C" fn(*mut c_void, *const u8, usize),
     pub text_reset: extern "C" fn(*mut c_void),
-    pub text_view: extern "C" fn(*mut c_void) -> crate::services::ByteSpan,
 }
 
 pub(crate) fn socket_has_quit(s: &Services, game: *mut socket::GameSocket) -> bool {
@@ -744,6 +743,5 @@ crate::abi::layouts! {
         tcp,
         text_append,
         text_reset,
-        text_view,
     };
 }

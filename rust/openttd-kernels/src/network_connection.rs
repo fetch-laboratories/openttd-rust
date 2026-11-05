@@ -631,7 +631,11 @@ pub(crate) fn receive_join(
         9,
         "client[{}] Receive_CLIENT_JOIN(): client_revision={}, newgrf_version={}",
         (f.dispatch.client_id)(socket),
-        Bytes(unsafe { (f.text_view)(text).bytes() }),
+        Bytes(unsafe {
+            let mut size = 0;
+            let data = (f.command.company.shared.string_data)(text, &raw mut size);
+            crate::utf8::borrow(data, size)
+        }),
         version
     );
     if !(s.revision_compatible)(text) || (s.newgrf_version)() != version {

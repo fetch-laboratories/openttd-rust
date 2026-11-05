@@ -534,6 +534,8 @@ pub struct Services {
     pub network_client_info: extern "C" fn(u32) -> *mut c_void,
     /// `MarkWholeScreenDirty`.
     pub screen_dirty: extern "C" fn(),
+    /// `std::string` at `ptr`: `data()`, with `size()` in `length`.
+    pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
     /// `GetTerrainType`.
     pub terrain_type: extern "C" fn(u32) -> u32,
     /// `GRFFile::grf_version` of a non-null file.
@@ -932,6 +934,7 @@ crate::abi::layouts! {
         nearby_tile_information,
         network_client_info,
         screen_dirty,
+        string_data,
         terrain_type,
         grf_file_version,
         grf_cargo_map,
@@ -1053,6 +1056,9 @@ pub fn fixture(
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
+    extern "C" fn unexpected_string_data(_: *const c_void, _: *mut usize) -> *const u8 {
+        std::process::abort()
+    }
     extern "C" fn unexpected_client_info(_: u32) -> *mut c_void {
         std::process::abort()
     }
@@ -1106,6 +1112,7 @@ pub fn fixture(
         nearby_tile_information: unexpected_information,
         network_client_info: unexpected_client_info,
         screen_dirty: unexpected_path,
+        string_data: unexpected_string_data,
         terrain_type: unexpected_terrain,
         show_error: unexpected_error,
         not_reached: unexpected_path,

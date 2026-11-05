@@ -217,6 +217,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*nearby_tile_information)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile_information);
 	NetworkClientInfo *(*network_client_info)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(network_client_info);
 	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
+	const uint8_t *(*string_data)(const void *, size_t *) noexcept OPENTTD_SERVICE_DEFAULT(string_data);
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);

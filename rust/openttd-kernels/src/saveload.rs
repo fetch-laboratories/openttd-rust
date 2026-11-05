@@ -204,8 +204,6 @@ pub struct OpenTTDSaveLoadServices {
     pub town_index: extern "C" fn(obj: *const c_void) -> u32,
     pub vehicle_get: extern "C" fn(index: usize) -> *mut c_void,
     pub vehicle_index: extern "C" fn(obj: *const c_void) -> u32,
-    /// `std::string` at `ptr`: `data()`, with `size()` in `length`.
-    pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
     /// `std::string` at `ptr`: `resize(length)`, then `data()`.
     pub string_resize: extern "C" fn(ptr: *mut c_void, length: usize, data: *mut *mut u8) -> bool,
     /// Replay native diagnostics/assertions and copy the borrowed encoded output into `*str`.
@@ -1032,7 +1030,7 @@ unsafe fn save_load_ref(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, co
 /// `SlCalcStdStringLen`: the string's length plus its gamma length.
 fn calc_std_string_len(services: &OpenTTDSaveLoadServices, ptr: *const c_void) -> usize {
     let mut len = 0;
-    (services.string_data)(ptr, &raw mut len);
+    (unsafe { &*services.shared }.string_data)(ptr, &raw mut len);
     len + gamma_length(len) as usize
 }
 
@@ -1053,7 +1051,7 @@ fn fix_encoded(
     fix: impl FnOnce(&[u8]) -> crate::encoded::Output,
 ) -> Status {
     let mut len = 0;
-    let data = (services.string_data)(ptr, &raw mut len);
+    let data = (unsafe { &*services.shared }.string_data)(ptr, &raw mut len);
     // SAFETY: `string_data` returns the string's live bytes, unchanged until `apply_encoded`.
     let output = fix(unsafe { crate::utf8::borrow(data, len) });
     let view = output.view();
@@ -1068,7 +1066,7 @@ fn fix_encoded(
 /// `StrMakeValidInPlace(std::string &)`: compact the existing allocation in place.
 fn make_valid(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -> Status {
     let mut length = 0;
-    let data = (services.string_data)(ptr, &raw mut length).cast_mut();
+    let data = (unsafe { &*services.shared }.string_data)(ptr, &raw mut length).cast_mut();
     if length == 0 {
         return Ok(());
     }
@@ -1118,7 +1116,7 @@ fn std_string(services: &OpenTTDSaveLoadServices, ptr: *mut c_void, conv: u32) -
     match shared(|s| s.action) {
         SLA_SAVE => {
             let mut len = 0;
-            let data = (services.string_data)(ptr, &raw mut len);
+            let data = (unsafe { &*services.shared }.string_data)(ptr, &raw mut len);
             write_simple_gamma(services, len);
             copy_bytes(services, data.cast_mut(), len)?;
         }
@@ -1651,7 +1649,6 @@ crate::abi::layouts! {
         town_index,
         vehicle_get,
         vehicle_index,
-        string_data,
         string_resize,
         apply_encoded,
         autolength,
@@ -1686,9 +1683,6 @@ mod tests {
         unreachable!("unused service")
     }
     extern "C" fn unused_index(_: *const c_void) -> u32 {
-        unreachable!("unused service")
-    }
-    extern "C" fn unused_data(_: *const c_void, _: *mut usize) -> *const u8 {
         unreachable!("unused service")
     }
     extern "C" fn unused_resize(_: *mut c_void, _: usize, _: *mut *mut u8) -> bool {
@@ -1733,7 +1727,6 @@ mod tests {
         town_index: unused_index,
         vehicle_get: unused_get,
         vehicle_index: unused_index,
-        string_data: unused_data,
         string_resize: unused_resize,
         apply_encoded: unused_apply,
         autolength: unused_autolength,
@@ -1845,10 +1838,19 @@ mod tests {
             unsafe { *length = 1 };
             ptr.cast()
         }
+        extern "C" fn unused_random(_: *mut c_void) -> u32 {
+            unreachable!()
+        }
+        extern "C" fn unused_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+            unreachable!()
+        }
         let _lock = CODEC_TEST.lock().unwrap();
+        let mut shared_services =
+            crate::services::fixture(std::ptr::null_mut(), unused_random, unused_industry);
+        shared_services.string_data = encoded_data;
         let services = OpenTTDSaveLoadServices {
+            shared: &raw const shared_services,
             copy_from_old_name: fail_name,
-            string_data: encoded_data,
             string_resize: fail_resize,
             apply_encoded: fail_apply,
             ..SERVICES
@@ -1868,8 +1870,9 @@ mod tests {
             }),
             Err(SL_STATUS_NATIVE)
         );
+        shared_services.string_data = mutable_data;
         let services = OpenTTDSaveLoadServices {
-            string_data: mutable_data,
+            shared: &raw const shared_services,
             ..services
         };
         let mut text = *b"x";

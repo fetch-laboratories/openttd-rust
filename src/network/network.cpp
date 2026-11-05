@@ -1007,7 +1007,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.tcp = &GetRustNetworkTcpServices(),
 		.text_append = RustStringAppend,
 		.text_reset = [](void *text) noexcept { *static_cast<std::string *>(text) = {}; },
-		.text_view = [](void *text) noexcept { const auto &s = *static_cast<std::string *>(text); return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(s.data()), s.size()}; },
 	};
 	return services;
 }

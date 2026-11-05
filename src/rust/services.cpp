@@ -562,6 +562,11 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.nearby_tile_information = RustNearbyTileInformation,
 	.network_client_info = [](uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)); },
 	.screen_dirty = RustScreenDirty,
+	.string_data = [](const void *ptr, size_t *length) noexcept {
+		const std::string &str = *static_cast<const std::string *>(ptr);
+		*length = str.size();
+		return reinterpret_cast<const uint8_t *>(str.data());
+	},
 	.terrain_type = RustTerrainType,
 	.grf_file_version = RustGRFFileVersion,
 	.grf_cargo_map = RustGRFCargoMap,

@@ -62,7 +62,6 @@ struct OpenTTDNetworkFrameServices {
 	const OpenTTDNetworkTcpServices *tcp;
 	void (*text_append)(void *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(text_append);
 	void (*text_reset)(void *) noexcept OPENTTD_SERVICE_DEFAULT(text_reset);
-	OpenTTDByteSpan (*text_view)(void *) noexcept OPENTTD_SERVICE_DEFAULT(text_view);
 };
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 void RustNetworkCompleteActions(OpenTTDSessionFrame *);
