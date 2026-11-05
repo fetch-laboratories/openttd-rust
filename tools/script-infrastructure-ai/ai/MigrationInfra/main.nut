@@ -9,7 +9,11 @@ require("probe.nut");
 
 class MigrationInfra extends AIController {
 	function Start() {
-		ProbeAll("ai", Free());
+		local free = Free();
+		/* Company-owned single-bit road pieces and a company road owner. */
+		AIRoad.SetCurrentRoadType(AIRoadTypeList(AIRoad.ROADTRAMTYPES_ROAD).Begin());
+		Record("ai", "road", Num(AIRoad.BuildRoad(free + 6, free + 7)) + " " + AIError.GetLastErrorString());
+		ProbeAll("ai", free);
 		while (true) this.Sleep(100);
 	}
 }

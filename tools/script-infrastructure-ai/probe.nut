@@ -103,7 +103,7 @@ function ProbeTiles(who) {
 		foreach (i, p in predicates) {
 			local v = Num(p[1](t));
 			hashes[i] = (hashes[i] * 31 + v) & 0x3FFFFFFF;
-			if (v != 0 && v != -1) counts[i]++;
+			if (v != 0) counts[i]++;
 		}
 	}
 	foreach (i, p in predicates) Record(who, "sweep." + p[0], hashes[i] + " nonzero=" + counts[i]);
