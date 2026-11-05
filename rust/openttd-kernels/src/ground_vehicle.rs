@@ -377,7 +377,7 @@ pub(crate) fn power_changed(s: &Services, v: VehicleRef) {
 }
 fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
     if s.assertions {
-        assert!(v.first() == v);
+        assert_eq!(v.first(), v);
     }
     hit(if o.rail() {
         witness::GROUND_RAIL_POWER
@@ -446,7 +446,7 @@ fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
 }
 pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
     if s.assertions {
-        assert!(v.first() == v);
+        assert_eq!(v.first(), v);
     }
     let o = (s.resolve)(v);
     hit(if o.rail() {

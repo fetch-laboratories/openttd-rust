@@ -146,38 +146,36 @@ unsafe fn day<const COUNTED: bool>(
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }
-        if !calendar {
-            if vehicle.day() & 0x1f == 0 && vehicle.has_engine_type() {
-                if COUNTED {
-                    crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
+        if !calendar && vehicle.day() & 0x1f == 0 && vehicle.has_engine_type() {
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
+            }
+            let vs = unsafe { &*s.vehicle };
+            let callback = svc!(
+                COUNTED,
+                vs.callback,
+                (vs.newgrf)(),
+                vehicle,
+                CBID_VEHICLE_32DAY_CALLBACK
+            );
+            if callback != CALLBACK_FAILED {
+                if callback & 1 != 0 {
+                    unsafe {
+                        crate::newgrf_vehicle::trigger(
+                            vs,
+                            vehicle,
+                            crate::newgrf_vehicle::Trigger::Callback32,
+                        );
+                    };
                 }
-                let vs = unsafe { &*s.vehicle };
-                let callback = svc!(
-                    COUNTED,
-                    vs.callback,
-                    (vs.newgrf)(),
-                    vehicle,
-                    CBID_VEHICLE_32DAY_CALLBACK
-                );
-                if callback != CALLBACK_FAILED {
-                    if callback & 1 != 0 {
-                        unsafe {
-                            crate::newgrf_vehicle::trigger(
-                                vs,
-                                vehicle,
-                                crate::newgrf_vehicle::Trigger::Callback32,
-                            );
-                        };
-                    }
-                    if callback != 0 {
-                        // SAFETY: The immutable maintenance table lives for this entry.
-                        let maintenance = unsafe { &*vs.maintenance };
-                        svc!(COUNTED, maintenance.mark_dirty, vehicle.first());
-                    }
-                    if callback & !3 != 0 {
-                        let engine = svc!(COUNTED, vs.engine, vehicle);
-                        vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
-                    }
+                if callback != 0 {
+                    // SAFETY: The immutable maintenance table lives for this entry.
+                    let maintenance = unsafe { &*vs.maintenance };
+                    svc!(COUNTED, maintenance.mark_dirty, vehicle.first());
+                }
+                if callback & !3 != 0 {
+                    let engine = svc!(COUNTED, vs.engine, vehicle);
+                    vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
                 }
             }
         }
