@@ -43,6 +43,7 @@ class Field(NamedTuple):
     name: str
     cpp_type: str
     pointee_tag: str | None
+    extent: int | None = None
 
 
 class SharedRecord(NamedTuple):
@@ -99,8 +100,12 @@ def shared_records(
         rust = rust.strip()
         pointer = re.fullmatch(r"\*(mut|const)\s+(.+)", rust)
         if pointer:
-            target = pointer[2].strip().split("::")[-1]
-            if target in pointer_names:
+            path = pointer[2].strip()
+            target = path.split("::")[-1]
+            if path in pointer_names:
+                # A layout declaration named by its full Rust path.
+                target = pointer_names[path]
+            elif target in pointer_names:
                 target = pointer_names[target]
             elif target not in opaque:
                 target = native(target)
@@ -128,7 +133,11 @@ def shared_records(
             )
             if not match:
                 raise ValueError(f"invalid record field: {cpp}: {field}")
-            cpp_type = native(match[2])
+            element = re.fullmatch(r"\[\s*(.+?)\s*;\s*(\d+)\s*\]", match[2].strip(), re.S)
+            extent = int(element[2]) if element else None
+            cpp_type = native(element[1] if element else match[2])
+            if extent is not None and cpp_type.endswith(" *"):
+                raise ValueError(f"unsupported pointer array: {cpp}.{match[1]}")
             target = cpp_type.removeprefix("const ").removesuffix(" *")
             tag = match[3]
             if tag is not None and (
@@ -145,7 +154,7 @@ def shared_records(
                     raise ValueError(f"conflicting pointee tags: {target}")
             if cpp_type.endswith(" *") and target in pointer_names.values():
                 tag = "struct"
-            fields.append(Field(match[1], cpp_type, tag))
+            fields.append(Field(match[1], cpp_type, tag, extent))
         result.append(SharedRecord(cpp, group, rust, fields))
     if len(names) != len(found):
         raise ValueError("duplicate shared record")
@@ -183,7 +192,8 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
                 emit(records[field.cpp_type], active | {record.cpp})
         lines.append(f"struct {record.cpp} {{")
         lines.extend(
-            f"\t{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name};"
+            f"\t{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name}"
+            f"{'' if field.extent is None else f'[{field.extent}]'};"
             for field in record.fields
         )
         lines.append("};")
