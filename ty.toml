@@ -61,4 +61,5 @@ include = [
     "tools/simulation/cargo_storage.py",
     "tools/simulation/economy.py",
     "tools/simulation/objects.py",
+    "tools/simulation/trees.py",
 ]
