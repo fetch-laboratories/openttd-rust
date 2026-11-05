@@ -238,7 +238,7 @@ void SetCurrentGrfLangID(uint8_t language_id)
 
 bool CheckGrfLangID(uint8_t lang_id, uint8_t grf_version)
 {
-	return openttd_rust_grf_text_check_language(lang_id, grf_version) != 0;
+	return openttd_rust_grf_text_check_language(lang_id, grf_version);
 }
 
 /**

@@ -30,7 +30,8 @@ uint32_t openttd_rust_grf_text_map(const OpenTTDGrfTextServices *, uint32_t, uin
 OpenTTDByteSpan openttd_rust_grf_text_get(const OpenTTDSharedServices *, size_t, uint32_t *);
 size_t openttd_rust_grf_text_select(const GRFText *, size_t, size_t);
 void openttd_rust_grf_text_set_language(uint8_t);
-uint8_t openttd_rust_grf_text_check_language(uint8_t, uint8_t);
+uint8_t openttd_rust_grf_text_check_language_abi(uint8_t, uint8_t);
+extern "C++" inline bool openttd_rust_grf_text_check_language(uint8_t a0, uint8_t a1) { return openttd_rust_grf_text_check_language_abi(a0, a1) != 0; }
 void openttd_rust_grf_text_cleanup();
 }
 #endif

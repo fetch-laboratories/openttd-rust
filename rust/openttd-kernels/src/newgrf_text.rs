@@ -285,7 +285,7 @@ pub unsafe extern "C" fn openttd_rust_grf_text_set_language(language: u8) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_text_check_language(language: u8, version: u8) -> u8 {
+pub unsafe extern "C" fn openttd_rust_grf_text_check_language_abi(language: u8, version: u8) -> u8 {
     let current = unsafe { *LANGUAGE.get() };
     u8::from(if version < 7 {
         language
@@ -439,9 +439,9 @@ mod tests {
             let mut default = 0;
             let text = openttd_rust_grf_text_get(&shared(), 0, &raw mut default);
             assert_eq!(crate::utf8::borrow(text.data, text.size), b"German");
-            assert_eq!(openttd_rust_grf_text_check_language(4, 6), 1);
-            assert_eq!(openttd_rust_grf_text_check_language(1, 7), 0);
-            assert_eq!(openttd_rust_grf_text_check_language(0x7f, 7), 1);
+            assert_eq!(openttd_rust_grf_text_check_language_abi(4, 6), 1);
+            assert_eq!(openttd_rust_grf_text_check_language_abi(1, 7), 0);
+            assert_eq!(openttd_rust_grf_text_check_language_abi(0x7f, 7), 1);
             publish(0, 2, b"Deutsch".as_ptr(), 7);
         })
         .join()
