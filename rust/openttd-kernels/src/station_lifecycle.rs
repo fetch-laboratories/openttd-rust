@@ -20,7 +20,7 @@ use crate::vehicle::VehicleRef;
 use crate::vehicle_type::VehicleID;
 use std::ptr::NonNull;
 
-use crate::industry::SpecHandle as IndustrySpec;
+use crate::industrytype::{self, IndustrySpec};
 /// Process-lifetime string constants from `table/strings.h`.
 #[repr(C)]
 pub struct Names {
@@ -59,8 +59,6 @@ pub struct Services {
     names: Names,
     pub industry_type: extern "C" fn(*mut BaseStation) -> u8,
     pub set_industry_type: extern "C" fn(*mut BaseStation, u8),
-    pub industry_generation: *const crate::industry::GenerationServices,
-    pub spec_name: extern "C" fn(*const IndustrySpec) -> u32,
     pub roadstop: *const crate::newgrf_roadstop::Services,
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(StationID),
@@ -88,11 +86,7 @@ impl Services {
         crate::map_func::World::new(self.shared).types
     }
     fn spec(&self, kind: u8) -> *const IndustrySpec {
-        unsafe { ((*self.industry_generation).spec)(kind) }
-    }
-    /// `IndustrySpec::enabled`, read through the generation table's spec summary.
-    fn spec_enabled(&self, spec: *const IndustrySpec) -> bool {
-        unsafe { ((*self.industry_generation).info)(spec) }.enabled
+        industrytype::industry(u16::from(kind))
     }
 }
 
@@ -137,8 +131,7 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
         crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
     let owner = (s.catchment.industry_owner)(shell);
     let kind = unsafe { (*crate::industry::openttd_rust_industry_metadata(owner)).kind };
-    if unsafe { ((*s.industry_generation).spec_life)(s.spec(kind)) }
-        & crate::industry_type::LIFE_EXTRACTIVE
+    if unsafe { (*s.spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE
         == 0
     {
         return false;
@@ -183,11 +176,11 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         let kind = (s.industry_type)(other);
         if kind != IT_INVALID {
             info.industries[usize::from(kind)] = true;
-            let name = (s.spec_name)(s.spec(kind));
+            let name = unsafe { (*s.spec(kind)).station_name };
             if name != n.undefined {
                 for it in 0..NUM_INDUSTRYTYPES {
                     let spec = s.spec(it);
-                    if s.spec_enabled(spec) && (s.spec_name)(spec) == name {
+                    if unsafe { (*spec).enabled && (*spec).station_name == name } {
                         info.industries[usize::from(it)] = true;
                     }
                 }
@@ -215,7 +208,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             s.check(),
         );
         let spec = s.spec(kind);
-        if (s.spec_name)(spec) == n.undefined {
+        if unsafe { (*spec).station_name } == n.undefined {
             continue;
         }
         info.set_used(n.oilfield, s);
@@ -223,7 +216,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         if info.industries[usize::from(kind)] {
             continue;
         }
-        if (s.spec_name)(spec) != n.null {
+        if unsafe { (*spec).station_name } != n.null {
             (s.set_industry_type)(st, kind);
             return n.fallback;
         }
@@ -596,5 +589,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, industry_generation, spec_name, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }

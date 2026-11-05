@@ -54,7 +54,7 @@ def split_fields(body: str) -> list[str]:
             quoted = not quoted
         elif not quoted and char in "<[(":
             depth += 1
-        elif not quoted and char in ">])":
+        elif not quoted and char in ">])" and body[index - 1 : index + 1] != "=>":
             depth -= 1
         elif not quoted and depth == 0 and char == ",":
             fields.append(body[start:index])
