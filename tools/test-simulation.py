@@ -692,16 +692,22 @@ class SimulationSpeedTests(unittest.TestCase):
         ratios = next(
             ratios for scenario, ratios, _, _ in SPEED_PASS if scenario == name
         )
-        self.assertEqual(len(ratios), 3)
-        self.assertAlmostEqual(sum(ratios) / 3, SPEED_BUDGETS[name])
+        # The record restarts on a new host; decisions use the passes it has.
+        self.assertIn(len(ratios), (1, 2, 3))
+        self.assertAlmostEqual(sum(ratios) / len(ratios), SPEED_BUDGETS[name])
         anchor = SPEED_ANCHORS[name]["anchor"]
         record = {"anchor": anchor, "integrated": {"Ir": anchor["Ir"]}}
-        report = budget(
-            name, {"Ir": anchor["Ir"] * 1.001, "identity": anchor["identity"]}, record
-        )
-        self.assertGreater(report["projected_ratio"], 1.52)
-        self.assertAlmostEqual(report["record"], sum(ratios) / 3 * 1.002)
-        self.assertFalse(report["near_ceiling"])
+        # A mean distinct from the latest pass shows which one each figure uses.
+        mean = anchor["ratio"] - 0.05
+        with patch.dict(SPEED_BUDGETS, {name: mean}):
+            report = budget(
+                name,
+                {"Ir": anchor["Ir"] * 1.001, "identity": anchor["identity"]},
+                record,
+            )
+        self.assertAlmostEqual(report["projected_ratio"], anchor["ratio"] * 1.002)
+        self.assertAlmostEqual(report["record"], mean * 1.002)
+        self.assertEqual(report["near_ceiling"], report["record"] >= 1.52)
         self.assertTrue(report["within_ceiling"])
         self.assertEqual(report["band"], 1.52)
 
@@ -1315,6 +1321,30 @@ class SpeedPassTests(unittest.TestCase):
                 ):
                     speed.collect(out, migration)
                 games.assert_not_called()
+
+    def test_collection_refuses_an_already_collected_bundle(self):
+        from simulation import speed
+
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            profile = out / "profile.json"
+            profile.write_text("profile")
+            manifest = dict(
+                head="head",
+                profile=str(profile),
+                profile_sha256=ir.digest(profile.read_bytes()),
+                ld_library_path="",
+                runtime_identities={},
+            )
+            (out / "manifest.json").write_text(json.dumps(manifest))
+            (out / "observations.jsonl").write_text('{"unheld": {"1": "cc1plus"}}\n')
+            with (
+                patch.object(migration, "git", side_effect=["head", ""]),
+                patch.object(speed, "collect_games") as games,
+                self.assertRaisesRegex(SystemExit, "already collected"),
+            ):
+                speed.collect(out, migration)
+            games.assert_not_called()
 
     def test_preparation_identities_match_each_profiled_role(self):
         from simulation import speed
