@@ -115,7 +115,10 @@ impl CommandQueue {
     ///
     /// # Safety
     /// `queue` is live and holds parts from this function or `EMPTY`; `edit` calls no leaf.
-    unsafe fn edit<R>(queue: *mut Self, edit: impl FnOnce(&mut Vec<CommandPacket>) -> R) -> R {
+    pub(crate) unsafe fn edit<R>(
+        queue: *mut Self,
+        edit: impl FnOnce(&mut Vec<CommandPacket>) -> R,
+    ) -> R {
         unsafe {
             let mut packets = if (*queue).data.is_null() {
                 Vec::new()
@@ -169,7 +172,8 @@ pub struct Services {
     pub server_full: extern "C" fn(u32),
 }
 
-static WAIT: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
+/// `_local_wait_queue`; the harness's native-test entries read it in place.
+pub(crate) static WAIT: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
 static EXECUTION: GameState<CommandQueue> = GameState::new(CommandQueue::EMPTY);
 
 pub(crate) fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {

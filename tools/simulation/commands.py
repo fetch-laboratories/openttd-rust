@@ -89,6 +89,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
             "_Z10DebugPrintSt17basic_string_viewIcSt11char_traitsIcEEiONSt7__cxx1112basic_stringIcS1_SaIcEEE",
         ),
         replace_objects=("/src/network/network_command.cpp.o",),
+        native_test_support=True,
     )
 
 

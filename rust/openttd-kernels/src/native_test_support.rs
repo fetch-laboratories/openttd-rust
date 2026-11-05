@@ -614,3 +614,18 @@ pub unsafe extern "C" fn openttd_test_trees_generate(
 ) -> u8 {
     u8::from(unsafe { crate::trees::generate(services, shared) })
 }
+
+/// `_local_wait_queue` for the commands console, which inspects it in place.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_network_wait_queue() -> *const crate::network_command::CommandQueue {
+    crate::network_command::WAIT.get()
+}
+
+/// `_local_wait_queue.clear()`.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_test_network_wait_queue_clear() {
+    // SAFETY: The serialized console thread owns the game state and clearing calls no leaf.
+    unsafe {
+        crate::network_command::CommandQueue::edit(crate::network_command::WAIT.get(), Vec::clear);
+    }
+}
