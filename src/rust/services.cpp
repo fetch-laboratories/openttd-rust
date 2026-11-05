@@ -553,6 +553,8 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.grf_cargo_map = RustGRFCargoMap,
 	.grf_file_at_or_null = RustGRFFileAtOrNull,
 	.grf_file_id = RustGRFFileID,
+	.grf_file_name = RustGRFFileName,
+	.engine_local_id = RustEngineLocalID,
 	.grf_parameter = RustGRFParameter,
 	.newgrf_specs = &_rust_newgrf_specs,
 	.resolver_grf_file = RustResolverGRFFile,
@@ -797,7 +799,6 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 		.node = LiveGraphStationNode,
 		.available = RustLinkGraphAvailable,
 		.allocate = RustLinkGraphAllocate,
-		.allocation_failure = RustLinkGraphAllocationFailure,
 	};
 	return services;
 }

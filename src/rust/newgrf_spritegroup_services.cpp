@@ -168,7 +168,6 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 		.storage = &GetRustStorageServices(),
 		.store_psa = [](ScopeResolver *s, uint32_t reg, int32_t value) noexcept { s->StorePSA(reg, value); },
 		.tile_random_check = RustIndustryTileRandomCheck,
-		.unhandled_scope = RustUnhandledScopeVariable,
 		.variable = [](const ScopeResolver *s, uint8_t var, uint32_t param, bool *available) noexcept { return s->GetVariable(var, param, *available); },
 		.vehicle = &GetRustVehicleResolverServices(),
 	};
@@ -203,7 +202,7 @@ uint32_t ScopeResolver::GetRandomBits() const { return openttd_rust_scope_defaul
 uint32_t ScopeResolver::GetRandomTriggers() const { return openttd_rust_scope_default_random(); }
 uint32_t ScopeResolver::GetVariable(uint8_t variable, uint32_t, bool &available) const
 {
-	return openttd_rust_scope_default_variable(&GetRustSpriteGroupServices(), variable, &available);
+	return openttd_rust_scope_default_variable(variable, &available);
 }
 void ScopeResolver::StorePSA(uint, int32_t) {}
 const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) const

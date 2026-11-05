@@ -27,9 +27,6 @@ struct OpenTTDRailProperties {
 	void (*fallback)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(fallback);
 	void (*acceleration)(RailTypeInfo *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(acceleration);
 	std::vector<BadgeID> *(*badges)(RailTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	void (*invalid_reserve)(uint32_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_reserve);
-	void (*invalid_change)(uint32_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_change);
-	void (*no_label)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_label);
 };
 extern "C" int32_t openttd_rust_rail_change(const OpenTTDRailProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint8_t, uint32_t, uint32_t, int32_t, ByteReader *);
 extern "C" int32_t openttd_rust_rail_reserve(const OpenTTDRailProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint32_t, uint32_t, int32_t, ByteReader *);
@@ -52,11 +49,6 @@ struct OpenTTDRoadProperties {
 	void (*required)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(required);
 	void (*introduces)(RoadTypeInfo *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(introduces);
 	std::vector<BadgeID> *(*badges)(RoadTypeInfo *) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	void (*invalid_reserve)(uint32_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_reserve);
-	void (*invalid_change)(uint32_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_change);
-	void (*no_label)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_label);
-	void (*reserve_mismatch)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(reserve_mismatch);
-	void (*power_mismatch)(uint8_t resolved, uint8_t current) noexcept OPENTTD_SERVICE_DEFAULT(power_mismatch);
 };
 extern "C" int32_t openttd_rust_road_change(const OpenTTDRoadProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint32_t, uint32_t, int32_t, ByteReader *, RoadTramType);
 extern "C" int32_t openttd_rust_road_reserve(const OpenTTDRoadProperties *, const OpenTTDByteReaderServices *, OpenTTDTypeMap, uint32_t, uint32_t, int32_t, ByteReader *, RoadTramType);

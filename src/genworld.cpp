@@ -181,10 +181,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.dedicated = RustNetworkDedicated,
 		.exit_game = RustExitGame,
 		.set_exit = RustSetExitGame,
-		.debug_start = []() noexcept { Debug(net, 3, "Generating map, please wait..."); },
-		.debug_done = []() noexcept { Debug(net, 3, "Map generated, starting game"); },
-		.debug_abort = []() noexcept { Debug(net, 0, "Generating map failed; closing server"); },
-		.debug_map = RustDebugNewMap,
 		.desync_level = RustDesyncLevel,
 		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, RustSaveDesyncGame); },
 	};

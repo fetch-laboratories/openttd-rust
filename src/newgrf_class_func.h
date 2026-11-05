@@ -22,7 +22,6 @@ const OpenTTDGRFClassServices<Tspec> &NewGRFClass<Tspec, Tindex, Tmax>::GetServi
 		.class_index = [](const Tspec *spec) noexcept { return static_cast<uint16_t>(spec->class_index); },
 		.set_index = [](Tspec *spec, uint16_t index) noexcept { spec->index = index; },
 		.identity = RustSpecIdentity<Tspec>,
-		.exhausted = [](uint16_t max) noexcept { GrfMsg(2, "ClassAllocate: already allocated {} classes, using default", max); },
 		.object = []() noexcept -> const OpenTTDObjectServices * { if constexpr (std::is_same_v<Tspec, ObjectSpec>) return &GetRustObjectServices(); else return nullptr; }(),
 		.defaults = defaults.data(),
 		.default_count = defaults.size(),

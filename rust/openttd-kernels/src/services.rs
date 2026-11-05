@@ -212,6 +212,17 @@ pub struct ByteSpan {
     pub size: usize,
 }
 impl ByteSpan {
+    /// The viewed bytes; an empty span may carry a null pointer.
+    ///
+    /// # Safety
+    /// The span denotes live readable bytes for the returned lifetime.
+    pub(crate) unsafe fn bytes<'a>(self) -> &'a [u8] {
+        if self.size == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(self.data, self.size) }
+        }
+    }
     /// Byte equality of two live spans, as `std::string` or `std::string_view` `==`.
     pub(crate) fn same_bytes(self, other: Self) -> bool {
         self.size == other.size
@@ -521,6 +532,10 @@ pub struct Services {
     pub grf_file_at_or_null: extern "C" fn(usize) -> *mut c_void,
     /// `GRFFile::grfid` of a non-null file.
     pub grf_file_id: extern "C" fn(*const c_void) -> u32,
+    /// `GRFFile::filename` of a non-null file, live while the file is.
+    pub grf_file_name: extern "C" fn(*const c_void) -> ByteSpan,
+    /// `Engine::grf_prop.local_id`.
+    pub engine_local_id: extern "C" fn(*const crate::engine_type::OpenTTDEngine) -> u16,
     /// Canonical native `GRFFile::GetParam` shared by loaders and resolvers.
     pub grf_parameter: extern "C" fn(*const c_void, u32) -> u32,
     /// `_rust_newgrf_specs`; read through `specs`.
@@ -902,6 +917,8 @@ crate::abi::layouts! {
         grf_cargo_map,
         grf_file_at_or_null,
         grf_file_id,
+        grf_file_name,
+        engine_local_id,
         grf_parameter,
         newgrf_specs,
         resolver_grf_file,
@@ -1037,6 +1054,12 @@ pub fn fixture(
     extern "C" fn unexpected_file_id(_: *const c_void) -> u32 {
         std::process::abort()
     }
+    extern "C" fn unexpected_file_name(_: *const c_void) -> ByteSpan {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_engine_local_id(_: *const crate::engine_type::OpenTTDEngine) -> u16 {
+        std::process::abort()
+    }
     extern "C" fn unexpected_file(_: *const c_void) -> *const c_void {
         std::process::abort()
     }
@@ -1045,6 +1068,8 @@ pub fn fixture(
         grf_cargo_map: unexpected_cargo_map,
         grf_file_at_or_null: unexpected_file_at,
         grf_file_id: unexpected_file_id,
+        grf_file_name: unexpected_file_name,
+        engine_local_id: unexpected_engine_local_id,
         grf_parameter: unexpected_parameter,
         newgrf_specs: std::ptr::null(),
         resolver_grf_file: unexpected_file,

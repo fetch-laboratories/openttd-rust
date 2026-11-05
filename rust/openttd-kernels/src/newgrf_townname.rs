@@ -9,6 +9,7 @@
     clippy::cast_possible_truncation
 )]
 use crate::bitmath_func::{gb, has_bit};
+use crate::debug::{Bytes, grf_msg};
 use crate::game_state::GameState;
 use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_loading::{self, Services};
@@ -197,6 +198,7 @@ unsafe fn translate(s: &Services, grfid: u32, lang: u8, text: (*const u8, usize)
 }
 
 /// Action 0x0F - Define Town names (`FeatureTownName`).
+#[allow(clippy::too_many_lines)] // One original function, FeatureTownName.
 pub(crate) unsafe fn feature_town_name(
     s: &Services,
     buf: &mut ByteReader,
@@ -216,7 +218,7 @@ pub(crate) unsafe fn feature_town_name(
         let townname: *mut GrfTownName = &raw mut townnames()[index];
 
         let mut id = buf.byte()?;
-        (s.town_definition)(id & 0x7F);
+        grf_msg!(6, "FeatureTownName: definition 0x{:02X}", id & 0x7F);
 
         if has_bit(id, 7) {
             // Final definition.
@@ -231,7 +233,12 @@ pub(crate) unsafe fn feature_town_name(
                 let name = buf.string();
 
                 let lang_name = translate(s, grfid, lang, name);
-                (s.town_lang)(lang, lang_name.as_ptr(), lang_name.len());
+                grf_msg!(
+                    6,
+                    "FeatureTownName: lang 0x{:X} -> '{}'",
+                    lang,
+                    Bytes(&lang_name)
+                );
 
                 style = (s.add_string)(
                     grfid,
@@ -253,7 +260,7 @@ pub(crate) unsafe fn feature_town_name(
         }
 
         let parts = buf.byte()?;
-        (s.town_parts)(parts);
+        grf_msg!(6, "FeatureTownName: {} parts", parts);
 
         let lists = &raw mut (*townname).partlists[usize::from(id)];
         (*lists).reserve(usize::from(parts));
@@ -264,7 +271,14 @@ pub(crate) unsafe fn feature_town_name(
             (*partlist).bitstart = buf.byte()?;
             (*partlist).bitcount = buf.byte()?;
             (*partlist).maxprob = 0;
-            (s.town_part)(partnum, texts, (*partlist).bitstart, (*partlist).bitcount);
+            grf_msg!(
+                6,
+                "FeatureTownName: part {} contains {} texts and will use GB(seed, {}, {})",
+                partnum,
+                texts,
+                (*partlist).bitstart,
+                (*partlist).bitcount
+            );
 
             (*partlist).parts.reserve(usize::from(texts));
             for textnum in 0..u32::from(texts) {
@@ -277,29 +291,46 @@ pub(crate) unsafe fn feature_town_name(
                     if usize::from(ref_id) >= MAX_LISTS
                         || (*townname).partlists[usize::from(ref_id)].is_empty()
                     {
-                        (s.town_missing)(ref_id);
+                        grf_msg!(
+                            0,
+                            "FeatureTownName: definition 0x{:02X} doesn't exist, deactivating",
+                            ref_id
+                        );
                         del(grfid);
                         newgrf_loading::disable_invalid_id(s);
                         return Ok(());
                     }
                     (*part).id = ref_id;
-                    (s.town_reference)(partnum, textnum, ref_id, (*part).prob & 0x7F);
+                    grf_msg!(
+                        6,
+                        "FeatureTownName: part {}, text {}, uses intermediate definition 0x{:02X} (with probability {})",
+                        partnum,
+                        textnum,
+                        ref_id,
+                        (*part).prob & 0x7F
+                    );
                 } else {
                     let text = buf.string();
                     (*part).text = translate(s, grfid, 0, text);
                     let text = &raw const (*part).text;
-                    (s.town_text)(
+                    grf_msg!(
+                        6,
+                        "FeatureTownName: part {}, text {}, '{}' (with probability {})",
                         partnum,
                         textnum,
-                        (*text).as_ptr(),
-                        (*text).len(),
-                        (*part).prob,
+                        Bytes(&*text),
+                        (*part).prob
                     );
                 }
                 let prob = gb(u32::from((*part).prob), 0, 7) as u16;
                 (*partlist).maxprob = (*partlist).maxprob.wrapping_add(prob);
             }
-            (s.town_total)(partnum, (*partlist).maxprob);
+            grf_msg!(
+                6,
+                "FeatureTownName: part {}, total probability {}",
+                partnum,
+                (*partlist).maxprob
+            );
         }
     }
     Ok(())

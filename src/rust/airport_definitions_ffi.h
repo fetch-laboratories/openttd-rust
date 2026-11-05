@@ -47,16 +47,6 @@ struct OpenTTDAirportDefinitionServices {
 	void (*layouts_resize)(AirportSpec *spec, size_t count) noexcept OPENTTD_SERVICE_DEFAULT(layouts_resize);
 	void (*layout_assign)(AirportSpec *spec, size_t index, uint8_t rotation, const AirportTileTable *tiles, size_t count) noexcept OPENTTD_SERVICE_DEFAULT(layout_assign);
 	void (*dimensions)(AirportSpec *spec, uint8_t x, uint8_t y) noexcept OPENTTD_SERVICE_DEFAULT(dimensions);
-	void (*airport_invalid)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(airport_invalid);
-	void (*airport_undefined)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(airport_undefined);
-	void (*airport_substitute_invalid)(uint8_t subs_id, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(airport_substitute_invalid);
-	void (*layout_tile_undefined)(uint16_t local_tile_id, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_tile_undefined);
-	void (*airport_full)() noexcept OPENTTD_SERVICE_DEFAULT(airport_full);
-	void (*tile_invalid)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(tile_invalid);
-	void (*tile_undefined)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_undefined);
-	void (*tile_substitute_invalid)(uint8_t subs_id, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_substitute_invalid);
-	void (*tile_override_invalid)(uint8_t override_id, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_override_invalid);
-	void (*tile_full)() noexcept OPENTTD_SERVICE_DEFAULT(tile_full);
 };
 void RustAirportTileDefault(uint16_t id) noexcept;
 const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept;

@@ -21,9 +21,6 @@ struct OpenTTDSignalServices {
 	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
 	void (*assert_wormhole_start)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_wormhole_start);
 	const OpenTTDVehicleServices *vehicles;
-	void (*overflow_tbu)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_tbu);
-	void (*overflow_tbd)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_tbd);
-	void (*overflow_global)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_global);
 	void (*assert_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_company);
 };
 
@@ -56,7 +53,7 @@ struct OpenTTDSignalSetTrace {
 };
 
 extern "C" {
-void openttd_rust_signal_workset_probe(const OpenTTDSignalServices *, OpenTTDSignalSetTrace *);
+void openttd_rust_signal_workset_probe(OpenTTDSignalSetTrace *);
 void openttd_rust_signal_inspect(OpenTTDSignalSnapshot *);
 void openttd_rust_signal_flush(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int);
 void openttd_rust_signal_add_track(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int, uint32_t, uint8_t, uint8_t);

@@ -52,7 +52,6 @@ struct OpenTTDAirportResolverServices {
 	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	TownScopeResolver *(*town_scope)(AirportResolverObject *, const Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(town_scope);
 	uint16_t (*evaluate_tile)(uint16_t, uint32_t, uint32_t, const AirportTileSpec *, Station *, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate_tile);
-	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 };
 const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept;
 extern "C" {

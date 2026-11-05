@@ -39,7 +39,6 @@ static uint16_t FleetGroup_use_number(uint8_t owner) noexcept { auto *c = Compan
 static void FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept { Company::Get(CompanyID(owner))->freegroups.ReleaseID(number); }
 static bool FleetGroup_keep_length(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.renew_keep_length; }
 static void FleetGroup_delete_group(uint16_t id) noexcept { delete Group::Get(GroupID(id)); }
-static void FleetGroup_invalid_parent(uint16_t id, uint16_t parent) noexcept { Debug(misc, 2, "Group {} has invalid parent {}", GroupID(id), GroupID(parent)); }
 static void FleetGroup_clear_backup(uint16_t id) noexcept { OrderBackup::ClearGroup(GroupID(id)); }
 static void FleetGroup_remove_rule(uint8_t owner, uint16_t engine, uint16_t id, uint32_t flags) noexcept { RemoveEngineReplacementForCompany(Company::Get(CompanyID(owner)), EngineID(engine), GroupID(id), DoCommandFlags(static_cast<uint16_t>(flags))); }
 static void FleetGroup_remove_vehicles(uint16_t id, uint32_t flags) noexcept { Command<CMD_REMOVE_ALL_VEHICLES_GROUP>::Do(DoCommandFlags(static_cast<uint16_t>(flags)), GroupID(id)); }
@@ -99,7 +98,6 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.company_livery = Identity_default_livery,
 		.keep_length = FleetGroup_keep_length,
 		.delete_group = FleetGroup_delete_group,
-		.invalid_parent = FleetGroup_invalid_parent,
 		.clear_backup = FleetGroup_clear_backup,
 		.remove_rule = FleetGroup_remove_rule,
 		.remove_vehicles = FleetGroup_remove_vehicles,

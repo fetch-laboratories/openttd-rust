@@ -3,6 +3,7 @@
 //! candidate copies one pointer pair before Action2, and invocations are stack values. Load
 //! and reset cannot run during resolution, so files and graphs stay live.
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
+use crate::debug::{debug, grf_msg};
 use crate::game_state::GameState;
 use crate::industry_type::IT_INVALID;
 use crate::newgrf::{GSF_END, GSF_SOUNDFX};
@@ -52,8 +53,6 @@ pub struct Services {
     ambient: extern "C" fn() -> bool,
     water_class: extern "C" fn(u32) -> WaterClass,
     sound: extern "C" fn(*const c_void, u16, u32),
-    unsupported: extern "C" fn(u8),
-    unhandled: extern "C" fn(u8),
 }
 #[derive(Clone, Copy)]
 struct Callback {
@@ -83,7 +82,11 @@ pub unsafe extern "C" fn openttd_rust_generic_reset(native: *const Services) {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_generic_add(feature: u8, file: *const c_void, group: *const c_void) {
     if feature >= GSF_END {
-        (services().unsupported)(feature);
+        grf_msg!(
+            5,
+            "AddGenericCallback: Unsupported feature 0x{:02X}",
+            feature
+        );
         return;
     }
     // SAFETY: registration is confined to native load phases; preserve duplicates.
@@ -154,7 +157,10 @@ pub unsafe extern "C" fn openttd_rust_generic_variable(
             _ => (),
         }
     }
-    (s.unhandled)(variable);
+    debug!(
+        grf,
+        1, "Unhandled generic feature variable 0x{:02X}", variable
+    );
     unsafe {
         *available = false;
     }
@@ -310,5 +316,5 @@ crate::abi::layouts! {
     "OpenTTDGenericScope" ["probe"] => Scope { cargo, selection, source, destination, distance, event, count, station_size, feature, ai };
     "OpenTTDGenericInvocation" ["probe"] => Invocation { scope, callback, param1, file, root };
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
-    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, water_class, sound, unsupported, unhandled };
+    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, water_class, sound };
 }

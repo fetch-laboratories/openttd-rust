@@ -17,6 +17,7 @@ use crate::cargo_registry::{
 use crate::cargo_type::{
     CT_CANDY, CT_FIZZY_DRINKS, CT_FOOD, CT_GOODS, CT_INVALID, INVALID_CARGO, is_valid_cargo_type,
 };
+use crate::debug::{Bytes, debug, grf_msg};
 use crate::gfx_type::{COLOUR_BLUE, COLOUR_GREEN, COLOUR_ORANGE, COLOUR_RED};
 use crate::house::{
     BUILDING_HAS_1_TILE, BUILDING_HAS_2_TILES, BUILDING_HAS_4_TILES, BUILDING_IS_CHURCH,
@@ -70,7 +71,6 @@ pub struct Services {
     file_count: extern "C" fn() -> usize,
     file_at: extern "C" fn(usize) -> File,
     local_count: extern "C" fn(File) -> usize,
-    has_filename: extern "C" fn(File) -> bool,
     resize_local: extern "C" fn(File, usize),
     local: extern "C" fn(File, usize) -> Spec,
     clear_local: extern "C" fn(File),
@@ -95,14 +95,6 @@ pub struct Services {
     move_spec: extern "C" fn(Spec, u16),
     set_override: extern "C" fn(Spec, u16),
     landscape: extern "C" fn() -> u8,
-    too_many: extern "C" fn(u32),
-    invalid_substitute: extern "C" fn(u8, u32),
-    invalid_override: extern "C" fn(u8, u32),
-    allocation_failed: extern "C" fn(),
-    invalid_missing: extern "C" fn(File, Spec),
-    invalid_population: extern "C" fn(File, Spec),
-    invalid_size: extern "C" fn(File, Spec),
-    invalid_availability: extern "C" fn(File, Spec),
     set_enabled: extern "C" fn(Spec, bool),
     set_flags: extern "C" fn(Spec, u8),
     set_min_year: extern "C" fn(Spec, i32),
@@ -128,7 +120,7 @@ crate::abi::layouts! {
     "OpenTTDHouseDefinitionPart" ["house_definition"] => Part { flags, population, enabled };
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, has_filename, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, landscape, too_many, invalid_substitute, invalid_override, allocation_failed, invalid_missing, invalid_population, invalid_size, invalid_availability, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, landscape, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> {
@@ -171,7 +163,12 @@ fn property(
     reader: &mut Reader<'_>,
 ) -> Result<u8, ReadError> {
     if last > NUM_HOUSES_PER_GRF {
-        (s.too_many)(last);
+        grf_msg!(
+            1,
+            "TownHouseChangeInfo: Too many houses loaded ({}), max ({}). Ignoring.",
+            last,
+            NUM_HOUSES_PER_GRF
+        );
         unsafe {
             newgrf_loading::disable_invalid_id(loading);
         }
@@ -196,7 +193,12 @@ fn property(
                     }
                     continue;
                 } else if u16::from(substitute) >= NEW_HOUSE_OFFSET {
-                    (s.invalid_substitute)(substitute, id);
+                    grf_msg!(
+                        2,
+                        "TownHouseChangeInfo: Attempt to use new house {} as substitute house for {}. Ignoring.",
+                        substitute,
+                        id
+                    );
                     continue;
                 }
                 if spec.is_null() {
@@ -268,7 +270,12 @@ fn property(
             0x15 => {
                 let target = reader.byte()?;
                 if u16::from(target) >= NEW_HOUSE_OFFSET {
-                    (s.invalid_override)(target, id);
+                    grf_msg!(
+                        2,
+                        "TownHouseChangeInfo: Attempt to override new house {} with house id {}. Ignoring.",
+                        target,
+                        id
+                    );
                     continue;
                 }
                 unsafe {
@@ -420,11 +427,23 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
         part.as_ref()
             .is_none_or(|info| !info.enabled || info.flags & BUILDING_HAS_1_TILE != 0)
     };
-    let report = !file.is_null() && (s.has_filename)(file);
+    // The original passes an empty name for files without one, and reports only nonempty names.
+    let filename = if file.is_null() {
+        &[][..]
+    } else {
+        unsafe { ((*s.resolver).shared().grf_file_name)(file.cast()).bytes() }
+    };
+    let report = !filename.is_empty();
     if (two && missing(&next1)) || (four && (missing(&next2) || missing(&next3))) {
         (s.set_enabled)(spec, false);
         if report {
-            (s.invalid_missing)(file, spec);
+            debug!(
+                grf,
+                1,
+                "FinaliseHouseArray: {} defines house {} as multitile, but no suitable tiles follow. Disabling house.",
+                Bytes(filename),
+                (s.identity)(spec).local
+            );
         }
         return false;
     }
@@ -435,7 +454,13 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     {
         (s.set_enabled)(spec, false);
         if report {
-            (s.invalid_population)(file, spec);
+            debug!(
+                grf,
+                1,
+                "FinaliseHouseArray: {} defines multitile house {} with non-zero population on additional tiles. Disabling house.",
+                Bytes(filename),
+                (s.identity)(spec).local
+            );
         }
         return false;
     }
@@ -444,7 +469,13 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
             != ((s.flags)((s.get)(info.substitute)) & BUILDING_HAS_1_TILE)
     {
         (s.set_enabled)(spec, false);
-        (s.invalid_size)(file, spec);
+        debug!(
+            grf,
+            1,
+            "FinaliseHouseArray: {} defines house {} with different house size then it's substitute type. Disabling house.",
+            Bytes(filename),
+            (s.identity)(spec).local
+        );
         return false;
     }
     if info.flags & BUILDING_HAS_1_TILE == 0
@@ -453,7 +484,13 @@ fn valid(s: &Services, spec: Spec, next: [Spec; 3], file: File) -> bool {
     {
         (s.set_enabled)(spec, false);
         if report {
-            (s.invalid_availability)(file, spec);
+            debug!(
+                grf,
+                1,
+                "FinaliseHouseArray: {} defines house {} without a size but marked it as available. Disabling house.",
+                Bytes(filename),
+                (s.identity)(spec).local
+            );
         }
         return false;
     }
@@ -508,7 +545,10 @@ pub fn publish(s: &Services, spec: Spec) {
         )
     };
     if id == INVALID_HOUSE_ID {
-        (s.allocation_failed)();
+        grf_msg!(
+            1,
+            "House.SetEntitySpec: Too many houses allocated. Ignoring."
+        );
         return;
     }
     if usize::from(id) >= (s.count)() {

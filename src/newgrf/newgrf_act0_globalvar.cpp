@@ -32,6 +32,7 @@
 
 #include "../rust/newgrf_global_ffi.h"
 #include "../rust/newgrf_translation_ffi.h"
+#include "../rust/services_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
 
 #include "../safeguards.h"
@@ -54,8 +55,7 @@ static ChangeInfoResult LoadTranslationTable(uint first, uint last, ByteReader &
 		.append = [](GRFFile *file, uint32_t label) noexcept { TGetTableFunc{}(*file).push_back(T(label)); },
 		.copy = [](GRFFile *target, const GRFFile *source) noexcept { TGetTableFunc{}(*target) = TGetTableFunc{}(*const_cast<GRFFile *>(source)); },
 		.override_file = []() noexcept { return GetCurrentGRFOverride(); },
-		.invalid_first = [](const char *name, size_t length) noexcept { GrfMsg(1, "LoadTranslationTable: {} translation table must start at zero", std::string_view{name, length}); },
-		.log_override = [](const char *name, size_t length, const GRFFile *file) noexcept { GrfMsg(1, "LoadTranslationTable: Copying {} translation table to override GRFID {:08X}", std::string_view{name, length}, std::byteswap(file->grfid)); },
+		.shared = &_rust_shared_services,
 	};
 	int32_t result = openttd_rust_load_translation(&services, &GetRustByteReaderServices(), _cur_gps.grffile, first, last, &buf, name.data(), name.size());
 	if (result < 0) RustGRFRethrowReadError();

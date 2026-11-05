@@ -16,6 +16,7 @@
     clippy::too_many_lines,
     clippy::too_many_arguments
 )]
+use crate::debug::debug;
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
@@ -298,7 +299,6 @@ pub struct CommandServicesTable {
     pub water_infrastructure: extern "C" fn(u8, u32),
     pub make_dock: extern "C" fn(u32, u8, u16, u8, u8),
     pub neutral_for_tile: extern "C" fn(u32) -> *mut BaseStation,
-    pub oilrig_unavailable: extern "C" fn(u32),
     pub associate_industry: extern "C" fn(*mut BaseStation, u32),
     pub make_oilrig: extern "C" fn(u32, u16, u8),
     pub set_station_owner: extern "C" fn(*mut BaseStation, u8),
@@ -3714,7 +3714,10 @@ impl Ctx<'_> {
     fn build_oilrig(&self, ret: Cost<'_>, tile: u32) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_OILRIG);
         if !(self.s.station_available)() {
-            (self.s.oilrig_unavailable)(tile);
+            debug!(
+                misc,
+                0, "Can't allocate station for oilrig at 0x{:X}, reverting to oilrig only", tile
+            );
             return;
         }
         let st = (self.s.new_station)(tile);
@@ -4364,7 +4367,6 @@ crate::abi::layouts! {
         water_infrastructure,
         make_dock,
         neutral_for_tile,
-        oilrig_unavailable,
         associate_industry,
         make_oilrig,
         set_station_owner,

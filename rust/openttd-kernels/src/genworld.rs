@@ -29,6 +29,7 @@ pub const CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY: u8 = 4;
 use crate::bitmath_func::gb;
 use crate::clear_map::{CLEAR_DESERT, CLEAR_ROCKS, CLEAR_ROUGH};
 use crate::company_type::CompanyID;
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::landscape_generation;
 use crate::openttd::{GameMode, SwitchMode};
@@ -202,10 +203,6 @@ pub struct WorldServices {
     pub dedicated: extern "C" fn() -> bool,
     pub exit_game: extern "C" fn() -> bool,
     pub set_exit: extern "C" fn(),
-    pub debug_start: extern "C" fn(),
-    pub debug_done: extern "C" fn(),
-    pub debug_abort: extern "C" fn(),
-    pub debug_map: extern "C" fn(u32),
     pub desync_level: extern "C" fn() -> i32,
     pub save: extern "C" fn(*mut Frame) -> bool,
 }
@@ -529,7 +526,7 @@ impl World<'_> {
         let s = self.s;
         write_field!(INFO.get(), generating, true);
         if (s.dedicated)() {
-            (s.debug_start)();
+            debug!(net, 3, "Generating map, please wait...");
         }
         (s.random_seed)((s.seed)());
         self.set_progress(GWP_MAP_INIT, 2)?;
@@ -643,9 +640,9 @@ impl World<'_> {
         self.cleanup();
         (s.show_grf_error)();
         if (s.dedicated)() {
-            (s.debug_done)();
+            debug!(net, 3, "Map generated, starting game");
         }
-        (s.debug_map)((s.seed)());
+        debug!(desync, 1, "new_map: {:08x}", (s.seed)());
         if (s.desync_level)() > 0 {
             native((s.save)(self.frame))?;
         }
@@ -668,7 +665,7 @@ fn run(s: &WorldServices, frame: *mut Frame) -> u8 {
                 (s.restore_company)(frame);
             }
             if (s.dedicated)() {
-                (s.debug_abort)();
+                debug!(net, 0, "Generating map failed; closing server");
                 (s.set_exit)();
             } else {
                 let call = (s.session_frame)(frame);
@@ -760,10 +757,6 @@ crate::abi::layouts! {
         dedicated,
         exit_game,
         set_exit,
-        debug_start,
-        debug_done,
-        debug_abort,
-        debug_map,
         desync_level,
         save,
     };

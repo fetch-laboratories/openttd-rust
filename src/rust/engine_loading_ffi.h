@@ -29,9 +29,6 @@ struct OpenTTDEngineLoadingServices {
 	bool (*has_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_file);
 	void (*set_file)(const OpenTTDEngine *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_file);
 	void (*mapping_log)(uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(mapping_log);
-	void (*replaced_log)(uint16_t, uint32_t, VehicleType, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(replaced_log);
-	void (*created_log)(uint16_t, uint32_t, VehicleType, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(created_log);
-	void (*full_log)() noexcept OPENTTD_SERVICE_DEFAULT(full_log);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	size_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
 	OpenTTDEngineRef (*construct)(VehicleType, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(construct);
@@ -60,7 +57,6 @@ struct OpenTTDEngineLoadingServices {
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	void (*use_livery)(LiveryScheme) noexcept OPENTTD_SERVICE_DEFAULT(use_livery);
 	void (*variant_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(variant_flags);
-	void (*variant_cycle_log)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(variant_cycle_log);
 	bool (*is_tram)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(is_tram);
 	void (*set_road_speed)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_speed);
 	void (*set_roadtype)(const OpenTTDEngine *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(set_roadtype);

@@ -8,6 +8,7 @@
     clippy::missing_safety_doc,
     clippy::too_many_arguments
 )]
+use crate::debug::{Bytes, grf_msg};
 use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS};
 use std::ffi::{c_char, c_void};
@@ -17,8 +18,7 @@ pub struct Services {
     append: extern "C" fn(*mut c_void, u32),
     copy: extern "C" fn(*mut c_void, *mut c_void),
     override_file: extern "C" fn() -> *mut c_void,
-    invalid_first: extern "C" fn(*const c_char, usize),
-    log_override: extern "C" fn(*const c_char, usize, *mut c_void),
+    shared: *const crate::services::Services,
 }
 fn load(
     s: &Services,
@@ -30,7 +30,11 @@ fn load(
     len: usize,
 ) -> Result<i32, ReadError> {
     if first != 0 {
-        (s.invalid_first)(name, len);
+        grf_msg!(
+            1,
+            "LoadTranslationTable: {} translation table must start at zero",
+            Bytes(unsafe { std::slice::from_raw_parts(name.cast::<u8>(), len) })
+        );
         return Ok(CIR_INVALID_ID);
     }
     (s.reset)(file, last);
@@ -40,7 +44,12 @@ fn load(
     }
     let target = (s.override_file)();
     if !target.is_null() {
-        (s.log_override)(name, len, target);
+        grf_msg!(
+            1,
+            "LoadTranslationTable: Copying {} translation table to override GRFID {:08X}",
+            Bytes(unsafe { std::slice::from_raw_parts(name.cast::<u8>(), len) }),
+            (unsafe { &*s.shared }.grf_file_id)(target).swap_bytes()
+        );
         (s.copy)(target, file);
     }
     Ok(CIR_SUCCESS)
@@ -61,5 +70,5 @@ pub unsafe extern "C" fn openttd_rust_load_translation(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTranslationServices" ["engine"] => Services { reset, append, copy, override_file, invalid_first, log_override };
+    "OpenTTDTranslationServices" ["engine"] => Services { reset, append, copy, override_file, shared };
 }

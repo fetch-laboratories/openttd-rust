@@ -146,7 +146,6 @@ static bool SlNativeFrame(F &&operation) noexcept
 static const OpenTTDSaveLoadServices _sl_services = {
 	.shared = &GetRustSharedServices(),
 	.native_assert = []([[maybe_unused]] bool ok) noexcept { assert(ok); },
-	.debug_iterate_error = []() noexcept { Debug(sl, 0, "SlIterateArray error"); },
 	.read = [](void *filter, uint8_t *buf, size_t len, size_t *read) noexcept { return SlNativeFrame([&] { *read = static_cast<LoadFilter *>(filter)->Read(buf, len); }); },
 	.write = [](void *filter, const uint8_t *buf, size_t len) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Write(const_cast<uint8_t *>(buf), len); }); },
 	.finish = [](void *filter) noexcept { return SlNativeFrame([&] { static_cast<SaveFilter *>(filter)->Finish(); }); },

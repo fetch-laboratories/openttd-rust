@@ -90,10 +90,6 @@ struct OpenTTDWorldServices {
 	bool (*dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(dedicated);
 	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
 	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);
-	void (*debug_start)() noexcept OPENTTD_SERVICE_DEFAULT(debug_start);
-	void (*debug_done)() noexcept OPENTTD_SERVICE_DEFAULT(debug_done);
-	void (*debug_abort)() noexcept OPENTTD_SERVICE_DEFAULT(debug_abort);
-	void (*debug_map)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_map);
 	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
 	bool (*save)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(save);
 };

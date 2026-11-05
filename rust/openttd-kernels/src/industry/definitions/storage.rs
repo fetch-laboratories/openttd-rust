@@ -80,17 +80,6 @@ pub struct Services {
     pub original_layout_count: unsafe extern "C" fn(u8) -> usize,
     pub original_layout: unsafe extern "C" fn(u8, u8) -> LayoutView,
     pub install_layouts: unsafe extern "C" fn(*mut SpecHandle, *const LayoutBuffer, usize),
-    pub too_many_tiles: unsafe extern "C" fn(u32),
-    pub too_many_industries: unsafe extern "C" fn(u32),
-    pub tile_substitute_invalid: unsafe extern "C" fn(u8, u32),
-    pub tile_override_invalid: unsafe extern "C" fn(u8, u32),
-    pub industry_substitute_invalid: unsafe extern "C" fn(u8, u32),
-    pub industry_override_invalid: unsafe extern "C" fn(u8, u32),
-    pub layout_size_mismatch: unsafe extern "C" fn(u32),
-    pub layout_import_type: unsafe extern "C" fn(u32),
-    pub layout_import_index: unsafe extern "C" fn(u32),
-    pub layout_tile_undefined: unsafe extern "C" fn(u16, u32),
-    pub layout_invalid: unsafe extern "C" fn(u32),
 }
 crate::abi::layouts! {
     fn abi_layout;
@@ -98,7 +87,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryDefinitionLayout" ["industry"] => LayoutView { data, size };
     "OpenTTDIndustryDefinitionLayoutBuffer" ["industry"] => LayoutBuffer { data, size, capacity };
     "OpenTTDIndustryPropertyServices" ["industry"] => Services {
-        resize_industries, resize_tiles, create_industry, create_tile, industry_identity, tile_identity, clear_placement_check, clear_animation, callbacks, set_rate, set_multiplier, set_conflicting, set_creation, set_ingame, invalidate_produced, invalidate_accepted, invalidate_tile_accepted, set_acceptance, set_sounds, clear_station_name, set_life, set_cost, set_minimal_cargo, set_map_colour, set_behaviour, set_prospecting, set_removal_cost, set_callbacks, set_tile_slopes, set_tile_callbacks, set_tile_flags, map_closure_text, map_production_up_text, map_production_down_text, map_new_industry_text, map_name, map_station_name, original_layout_count, original_layout, install_layouts,
-        too_many_tiles, too_many_industries, tile_substitute_invalid, tile_override_invalid, industry_substitute_invalid, industry_override_invalid, layout_size_mismatch, layout_import_type, layout_import_index, layout_tile_undefined, layout_invalid
+        resize_industries, resize_tiles, create_industry, create_tile, industry_identity, tile_identity, clear_placement_check, clear_animation, callbacks, set_rate, set_multiplier, set_conflicting, set_creation, set_ingame, invalidate_produced, invalidate_accepted, invalidate_tile_accepted, set_acceptance, set_sounds, clear_station_name, set_life, set_cost, set_minimal_cargo, set_map_colour, set_behaviour, set_prospecting, set_removal_cost, set_callbacks, set_tile_slopes, set_tile_callbacks, set_tile_flags, map_closure_text, map_production_up_text, map_production_down_text, map_new_industry_text, map_name, map_station_name, original_layout_count, original_layout, install_layouts
     };
 }

@@ -49,17 +49,6 @@ struct OpenTTDIndustryPropertyServices {
 	size_t (*original_layout_count)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(original_layout_count);
 	OpenTTDIndustryDefinitionLayout (*original_layout)(uint8_t type, uint8_t layout) noexcept OPENTTD_SERVICE_DEFAULT(original_layout);
 	void (*install_layouts)(IndustrySpec *spec, const OpenTTDIndustryDefinitionLayoutBuffer *layouts, size_t count) noexcept OPENTTD_SERVICE_DEFAULT(install_layouts);
-	void (*too_many_tiles)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(too_many_tiles);
-	void (*too_many_industries)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(too_many_industries);
-	void (*tile_substitute_invalid)(uint8_t substitute, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_substitute_invalid);
-	void (*tile_override_invalid)(uint8_t override_id, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(tile_override_invalid);
-	void (*industry_substitute_invalid)(uint8_t substitute, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(industry_substitute_invalid);
-	void (*industry_override_invalid)(uint8_t override_id, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(industry_override_invalid);
-	void (*layout_size_mismatch)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_size_mismatch);
-	void (*layout_import_type)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_import_type);
-	void (*layout_import_index)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_import_index);
-	void (*layout_tile_undefined)(uint16_t tile, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_tile_undefined);
-	void (*layout_invalid)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(layout_invalid);
 };
 struct OpenTTDIndustryPropertyContext {
 	GRFFile *file;
