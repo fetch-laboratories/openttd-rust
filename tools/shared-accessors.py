@@ -137,6 +137,7 @@ def collect(files, originals, writes=False):
 # Compiled fork glue includes `.inc` table fragments, such as src/rust/newgrf_loading_services.inc.
 NATIVE_SUFFIXES = {".cpp", ".h", ".hpp", ".inc"}
 
+
 def sources(revision=None):
     command = ("ls-tree", "-r", "--name-only", revision) if revision else ("ls-files",)
     return {
@@ -149,9 +150,7 @@ def sources(revision=None):
 
 def callee_copies(files):
     """Compare simple bound leaves; compound callbacks still require review."""
-    native = {
-        p: s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES
-    }
+    native = {p: s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES}
     tables = [(p, t) for p, s in native.items() for t in re.findall(TABLE, s, re.S)]
     bound = {n for _, t in tables for n in re.findall(r"\.\w+\s*=\s*(\w+)\s*[,}]", t)}
     candidates = [
@@ -256,9 +255,7 @@ def boundary_hits(files, wrappers, originals):
     bindings = Counter()
     for table in re.findall(
         TABLE,
-        "\n".join(
-            s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES
-        ),
+        "\n".join(s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES),
         re.S,
     ):
         bindings.update(

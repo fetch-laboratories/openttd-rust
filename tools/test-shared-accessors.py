@@ -263,7 +263,9 @@ with tempfile.TemporaryDirectory() as directory:
     )
     git("add", ".")
     result = check()
-    assert "new shared accessor: src/rust/fragment.inc |" in result.stdout, result.stdout
+    assert "new shared accessor: src/rust/fragment.inc |" in result.stdout, (
+        result.stdout
+    )
     git("commit", "-qm", "Add: Existing fragment copy")
     base = git("rev-parse", "HEAD")
     row = result.stdout.split("new shared accessor: ")[1].splitlines()[0]
@@ -274,7 +276,9 @@ with tempfile.TemporaryDirectory() as directory:
         + "OpenTTDFixtureServices g{.b = [](const Company *c) noexcept { return c->money; },\n};\n"
     )
     result = check()
-    assert "new shared accessor: src/rust/fragment.inc |" in result.stdout, result.stdout
+    assert "new shared accessor: src/rust/fragment.inc |" in result.stdout, (
+        result.stdout
+    )
     added = result.stdout.split("new shared accessor: ")[1].splitlines()[0]
     baseline.write_text(row + "\n" + added + "\n")
     assert "addition forbidden: " + added in check().stdout
