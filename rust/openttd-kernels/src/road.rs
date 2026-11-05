@@ -1348,9 +1348,9 @@ impl Game<'_> {
             self.start_sound(v);
             (v.v).write_speed(0);
         }
+        v.v.set_hidden(false);
         v.set(STATE, u16::from(tdir));
         v.set(FRAME, 6);
-        v.v.set_hidden(false);
         v.v.write_x(x);
         v.v.write_y(y);
         // SAFETY: The newly visible shell survives depot exit.

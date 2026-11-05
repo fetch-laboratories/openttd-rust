@@ -1116,17 +1116,23 @@ impl<'a> World<'a> {
     fn construct(&self, v: Vehicle, x: i32, y: i32, dir: u8, subtype: u8) {
         (v.vehicle()).write_status(VS_UNCLICKABLE);
         (v.vehicle()).write_xy(x, y);
-        let z = match subtype {
+        match subtype {
             ST_ZEPPELINER | ST_SMALL_UFO | ST_AIRPLANE | ST_HELICOPTER | ST_BIG_UFO
-            | ST_BIG_UFO_DESTROYER => self.bounds(v),
-            ST_HELICOPTER_ROTORS => self.bounds(v).wrapping_add(crate::aircraft::ROTOR_Z_OFFSET),
-            ST_SMALL_SUBMARINE | ST_BIG_SUBMARINE => 0,
+            | ST_BIG_UFO_DESTROYER => v.vehicle().write_z(self.bounds(v)),
+            ST_HELICOPTER_ROTORS => {
+                v.vehicle().write_z(self.bounds(v));
+                v.vehicle().write_z(
+                    v.vehicle()
+                        .z()
+                        .wrapping_add(crate::aircraft::ROTOR_Z_OFFSET),
+                );
+            }
+            ST_SMALL_SUBMARINE | ST_BIG_SUBMARINE => v.vehicle().write_z(0),
             _ => {
+                v.vehicle().write_z(0);
                 (v.vehicle()).write_status((v.vehicle()).status() | VS_SHADOW);
-                0
             }
         };
-        (v.vehicle()).write_z(z);
         (v.vehicle()).write_direction(dir);
         (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
         crate::raw_field::write_field!(v.handle, subtype, subtype);
