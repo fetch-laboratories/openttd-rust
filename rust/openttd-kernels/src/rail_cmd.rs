@@ -159,8 +159,6 @@ pub struct RailCommandServices {
     /// `RoadBuildCost`.
     /// `construction.crossing_with_competitor`.
     pub crossing_with_competitor: extern "C" fn() -> bool,
-    /// `GetSlopeZInCorner`.
-    pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
     /// `AutoslopeCheckForEntranceEdge`.
     pub entrance_edge: extern "C" fn(u32, i32, u8, u8) -> bool,
     /// `CMD_BUILD_SINGLE_RAIL`.
@@ -337,6 +335,12 @@ struct Ctx<'a> {
     map: Map,
 }
 impl<'a> Ctx<'a> {
+    /// `GetSlopeZInCorner` with the native assertion.
+    fn slope_z_in_corner(&self, tileh: u8, corner: u8) -> i32 {
+        crate::landscape::get_slope_z_in_corner(tileh, corner, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        })
+    }
     /// # Safety
     /// The table and its nested tables are valid for the synchronous call.
     unsafe fn new(s: *const RailCommandServices) -> Self {
@@ -2079,8 +2083,8 @@ impl<'a> Ctx<'a> {
                 return cost.set(price(PR_BUILD_FOUNDATION));
             }
         };
-        z_old += (self.s.slope_z_in_corner)(tileh_old & !SLOPE_HALFTILE_MASK, corner);
-        z_new += (self.s.slope_z_in_corner)(tileh_new & !SLOPE_HALFTILE_MASK, corner);
+        z_old += self.slope_z_in_corner(tileh_old & !SLOPE_HALFTILE_MASK, corner);
+        z_new += self.slope_z_in_corner(tileh_new & !SLOPE_HALFTILE_MASK, corner);
         if z_old != z_new {
             return cost.error(remove_track);
         }
@@ -2133,8 +2137,8 @@ impl<'a> Ctx<'a> {
                 if corner == allowed {
                     continue;
                 }
-                if z_old + (self.s.slope_z_in_corner)(tileh_old, corner)
-                    != z_new + (self.s.slope_z_in_corner)(tileh_new, corner)
+                if z_old + self.slope_z_in_corner(tileh_old, corner)
+                    != z_new + self.slope_z_in_corner(tileh_new, corner)
                 {
                     return;
                 }
@@ -2454,7 +2458,6 @@ crate::abi::layouts! {
         rail_clear_cost,
         rail_convert_cost,
         crossing_with_competitor,
-        slope_z_in_corner,
         entrance_edge,
         build_rail,
         remove_rail,

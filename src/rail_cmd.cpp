@@ -1209,7 +1209,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_clear_cost = [](uint8_t rt) noexcept { return RailClearCost(static_cast<RailType>(rt)).base(); },
 		.rail_convert_cost = [](uint8_t from, uint8_t to) noexcept { return RailConvertCost(static_cast<RailType>(from), static_cast<RailType>(to)).base(); },
 		.crossing_with_competitor = RustCrossingWithCompetitor,
-		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
 		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },
 		.build_rail = RailBuildSingle,
 		.remove_rail = RailRemoveSingle,
