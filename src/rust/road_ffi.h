@@ -32,10 +32,6 @@ struct OpenTTDRoadEntry {
 	bool queue;
 	uint8_t map_log_x;
 };
-struct OpenTTDRoadRoadTypes {
-	uint8_t before;
-	uint8_t after;
-};
 struct OpenTTDRoadTrackChoice {
 	uint8_t trackdir;
 	bool found;
@@ -57,7 +53,6 @@ struct OpenTTDRoadLeaves {
 	uint8_t (OPENTTD_RUST_CALL *bay_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_direction);
 	bool (OPENTTD_RUST_CALL *is_drive_through)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through);
 	bool (OPENTTD_RUST_CALL *is_station_road_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_station_road_stop);
-	OpenTTDRoadRoadTypes (OPENTTD_RUST_CALL *tile_road_types)(OpenTTDVehicle *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_road_types);
 	OpenTTDRoadTrackChoice (OPENTTD_RUST_CALL *choose_track)(OpenTTDVehicle *, uint32_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(choose_track);
 	OpenTTDRoadDepotResult (OPENTTD_RUST_CALL *find_depot)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_depot);
 	OpenTTDRoadTramBuildRead (OPENTTD_RUST_CALL *tram_build_read)(OpenTTDVehicle *, OpenTTDRoadCommandSlot *) noexcept OPENTTD_SERVICE_DEFAULT(tram_build_read);
