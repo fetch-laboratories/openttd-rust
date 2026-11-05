@@ -4,6 +4,7 @@
 //! Handler metadata is resolved once per entry; no borrow crosses a provider/UI callback.
 #![allow(unsafe_code, missing_docs)]
 use crate::auth;
+use crate::debug::debug;
 use crate::network_action::Actions;
 use crate::network_client::status as client;
 use crate::network_frame::{
@@ -23,11 +24,21 @@ use crate::tcp_game::{
 pub(crate) fn send_request(f: &Services, game: *mut GameSocket, work: Actions) -> u8 {
     let s = f.connection;
     let native = socket::server(game);
-    (s.debug_send_auth_request)(native);
+    debug!(
+        net,
+        9,
+        "client[{}] SendAuthRequest()",
+        (s.client_id)(native)
+    );
     if !matches!(socket::status(game), server::INACTIVE | server::AUTH_GAME) {
         return socket::specialized_close(f, game, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
     }
-    (s.debug_auth_game)(native);
+    debug!(
+        net,
+        9,
+        "client[{}] status = AUTH_GAME",
+        (s.client_id)(native)
+    );
     write_field!(game, status, server::AUTH_GAME);
     crate::network_connection::reset_lag(s, game);
     if (s.auth)(native).is_null() {
@@ -44,7 +55,7 @@ pub(crate) fn send_request(f: &Services, game: *mut GameSocket, work: Actions) -
 
 pub(crate) fn send_response(f: &Services) -> u8 {
     let s = f.client;
-    (s.debug_send_auth_response)();
+    debug!(net, 9, "Client::SendAuthResponse()");
     let game = (f.client_game)();
     let owner = (f.auth_owner)((s.auth)(socket::shell(game)));
     let mut p = packet_new(f, game, PACKET_CLIENT_AUTH_RESPONSE);
@@ -60,9 +71,9 @@ pub(crate) fn receive_request(f: &Services, game: *mut GameSocket, p: *mut State
     if !matches!(socket::status(game), client::JOIN | client::AUTH_GAME) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    (s.debug_auth_game)();
+    debug!(net, 9, "Client::status = AUTH_GAME");
     write_field!(game, status, client::AUTH_GAME);
-    (s.debug_auth_request)();
+    debug!(net, 9, "Client::Receive_SERVER_AUTH_REQUEST()");
     let native = socket::shell(game);
     if (s.auth)(native).is_null() {
         (s.auth_create)(native);
@@ -86,14 +97,14 @@ pub(crate) fn receive_enable(f: &Services, game: *mut GameSocket, p: *mut State)
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let owner = (f.auth_owner)(handler);
-    (s.debug_enable_encryption)();
+    debug!(net, 9, "Client::Receive_SERVER_ENABLE_ENCRYPTION()");
     if unsafe { auth::openttd_rust_auth_handler_receive_enable(owner, p) } == 0 {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let receive = unsafe { auth::openttd_rust_auth_stream_new(owner, 1) };
     let send = unsafe { auth::openttd_rust_auth_stream_new(owner, 0) };
     (s.enable_encryption)(native, receive, send);
-    (s.debug_encrypted)();
+    debug!(net, 9, "Client::status = ENCRYPTED");
     write_field!(game, status, client::ENCRYPTED);
     crate::network_client::send_identify(s, f)
 }
@@ -116,7 +127,12 @@ pub(crate) fn receive_response(
         );
     }
     let native = socket::server(game);
-    (s.debug_auth_response)(native);
+    debug!(
+        net,
+        9,
+        "client[{}] Receive_CLIENT_AUTH_RESPONSE()",
+        (s.client_id)(native)
+    );
     let owner = (f.auth_owner)((s.auth)(native));
     let method = unsafe { auth::openttd_rust_auth_handler_method(owner) };
     match unsafe { auth::openttd_rust_auth_handler_receive_response(owner, p) } {
@@ -138,7 +154,12 @@ pub(crate) fn receive_response(
             );
         }
     }
-    (s.debug_enable_encryption)(native);
+    debug!(
+        net,
+        9,
+        "client[{}] SendEnableEncryption()",
+        (s.client_id)(native)
+    );
     if socket::status(game) != server::AUTH_GAME {
         return socket::specialized_close(f, game, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
     }
@@ -151,7 +172,12 @@ pub(crate) fn receive_response(
     let receive = unsafe { auth::openttd_rust_auth_stream_new(owner, 0) };
     let send = unsafe { auth::openttd_rust_auth_stream_new(owner, 1) };
     (s.enable_encryption)(native, peer, receive, send);
-    (s.debug_identified)(native);
+    debug!(
+        net,
+        9,
+        "client[{}] status = IDENTIFY",
+        (s.client_id)(native)
+    );
     write_field!(game, status, server::IDENTIFY);
     crate::network_connection::reset_lag(s, game);
     NETWORK_RECV_STATUS_OKAY

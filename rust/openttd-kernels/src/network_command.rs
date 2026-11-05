@@ -6,6 +6,7 @@
 //! No queue borrow survives a native leaf; entries address queued packets by raw pointer.
 #![allow(unsafe_code, missing_docs)]
 
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::network_socket as socket;
 use crate::services::ByteSpan;
@@ -155,11 +156,6 @@ pub struct Services {
     pub console_server_only: extern "C" fn(*mut c_void, u8),
     pub console_spectator: extern "C" fn(*mut c_void, u8),
     pub control_action: extern "C" fn(ByteSpan) -> u8,
-    pub debug_receive_client: extern "C" fn(*mut c_void),
-    pub debug_receive_server: extern "C" fn(u8, u32),
-    pub debug_send_client: extern "C" fn(u8),
-    pub debug_send_server: extern "C" fn(*mut c_void, u8),
-    pub debug_unknown_callback: extern "C" fn(u8),
     pub execute: extern "C" fn(*const CommandPacket, usize),
     pub execute_past: extern "C" fn(),
     pub has_unpack: extern "C" fn(u8, usize) -> bool,
@@ -415,10 +411,16 @@ fn send_packet(
     use crate::network_frame::{packet_check, packet_new, packet_send};
     let s = f.command;
     let kind = if server {
-        (s.debug_send_server)(socket::server(game), cp.cmd);
+        debug!(
+            net,
+            9,
+            "client[{}] SendCommand(): cmd={}",
+            (f.connection.client_id)(socket::server(game)),
+            cp.cmd
+        );
         crate::tcp_game::PACKET_SERVER_COMMAND
     } else {
-        (s.debug_send_client)(cp.cmd);
+        debug!(net, 9, "Client::SendCommand(): cmd={}", cp.cmd);
         crate::tcp_game::PACKET_CLIENT_COMMAND
     };
     let mut p = packet_new(f, game, kind);
@@ -429,7 +431,10 @@ fn send_packet(
     p.send_buffer(cp.data.as_slice(), check);
     let mut callback = callback_index(s, cp.callback);
     if callback > usize::from(u8::MAX) || !(s.has_unpack)(cp.cmd, callback) {
-        (s.debug_unknown_callback)(cp.cmd);
+        debug!(
+            net,
+            0, "Unknown callback for command; no callback sent (command: {})", cp.cmd
+        );
         callback = 0;
     }
     p.send_uint8(callback as u8, check);
@@ -505,7 +510,10 @@ pub(crate) fn receive_server(
     let err = receive_packet(f, p, &mut cp);
     cp.frame = unsafe { crate::packet::recv_uint32(p, f.packet) };
     cp.my_cmd = unsafe { crate::packet::recv_bool(p, f.packet) };
-    (f.command.debug_receive_server)(cp.cmd, cp.frame);
+    debug!(
+        net,
+        9, "Client::Receive_SERVER_COMMAND(): cmd={}, frame={}", cp.cmd, cp.frame
+    );
     if err != DecodeError::None {
         (f.command.console_bad_server)(err);
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
@@ -555,7 +563,12 @@ pub(crate) fn receive_client(
         return fail(NETWORK_ERROR_TOO_MANY_COMMANDS);
     }
     let shell = socket::server(game);
-    (s.debug_receive_client)(shell);
+    debug!(
+        net,
+        9,
+        "client[{}] Receive_CLIENT_COMMAND()",
+        (f.connection.client_id)(shell)
+    );
     let mut cp = empty_packet();
     let err = receive_packet(f, p, &mut cp);
     if crate::network_frame::socket_has_quit(f, game) {
@@ -680,11 +693,6 @@ crate::abi::layouts! {
         console_server_only,
         console_spectator,
         control_action,
-        debug_receive_client,
-        debug_receive_server,
-        debug_send_client,
-        debug_send_server,
-        debug_unknown_callback,
         execute,
         execute_past,
         has_unpack,

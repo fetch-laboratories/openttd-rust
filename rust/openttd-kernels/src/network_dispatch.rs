@@ -3,6 +3,7 @@
 //! action frame, including the previous packet during the next receive, as in `ReceivePackets`.
 //! Native retained handlers use that frame for exceptions and temporary strings/load arguments.
 #![allow(unsafe_code, missing_docs)]
+use crate::debug::debug;
 use crate::network_action::{Actions, Resume};
 use crate::network_frame::Services as Network;
 use crate::network_socket::{self as socket, GameSocket};
@@ -28,12 +29,10 @@ use crate::tcp_game::{
 #[repr(C)]
 pub struct Services {
     pub client_chat: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
+    pub client_id: extern "C" fn(*mut GameSocket) -> u32,
     pub client_move: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub client_rcon: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub client_set_name: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
-    pub illegal_packet: extern "C" fn(*mut GameSocket, u8),
-    pub invalid_packet: extern "C" fn(*mut GameSocket),
-    pub invalid_type: extern "C" fn(*mut GameSocket, u8),
     pub map_load_args: extern "C" fn(*mut Frame) -> *mut crate::session::Load,
     pub packet_end: extern "C" fn(*mut Frame),
     pub server_banned: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
@@ -50,7 +49,13 @@ pub struct Services {
 }
 
 fn illegal(s: &Network, game: *mut GameSocket, kind: u8) -> u8 {
-    (s.dispatch.illegal_packet)(game, kind);
+    debug!(
+        net,
+        0,
+        "[tcp/game] Received illegal packet type {} from client {}",
+        kind,
+        (s.dispatch.client_id)(game)
+    );
     NETWORK_RECV_STATUS_MALFORMED_PACKET
 }
 
@@ -67,7 +72,12 @@ fn handle(
     let p = (s.tcp.packet_record)(shell);
     let kind = unsafe { packet::recv_uint8(p, s.packet) };
     if crate::network_frame::socket_has_quit(s, game) {
-        (s.dispatch.invalid_packet)(game);
+        debug!(
+            net,
+            0,
+            "[tcp/game] Received invalid packet from client {}",
+            (s.dispatch.client_id)(game)
+        );
         socket::close(s, game, work);
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
@@ -274,7 +284,13 @@ fn handle(
             _ => illegal(s, game, kind),
         },
         _ => {
-            (s.dispatch.invalid_type)(game, kind);
+            debug!(
+                net,
+                0,
+                "[tcp/game] Received invalid packet type {} from client {}",
+                kind,
+                (s.dispatch.client_id)(game)
+            );
             socket::close(s, game, work);
             NETWORK_RECV_STATUS_MALFORMED_PACKET
         }
@@ -303,7 +319,10 @@ fn receive_one(s: &Network, game: *mut GameSocket, work: Actions) -> *mut Packet
     }
     let p = (s.tcp.receive_packet)(socket::tcp(game));
     if !unsafe { packet::prepare_to_read(p, s.packet) } {
-        (s.tcp.invalid_packet)();
+        debug!(
+            net,
+            0, "Invalid packet received (too small / decryption error)"
+        );
         socket::close(s, game, work);
         return std::ptr::null_mut();
     }
@@ -391,12 +410,10 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkDispatchServices" ["probe"] => Services {
         client_chat,
+        client_id,
         client_move,
         client_rcon,
         client_set_name,
-        illegal_packet,
-        invalid_packet,
-        invalid_type,
         map_load_args,
         packet_end,
         server_banned,

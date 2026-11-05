@@ -2,6 +2,7 @@
 /** @file network_tcp_ffi.h Common TCP transfer leaves and native continuation results. */
 #ifndef RUST_NETWORK_TCP_FFI_H
 #define RUST_NETWORK_TCP_FFI_H
+#include "byte_span_ffi.h"
 #include "packet_ffi.h"
 #include "abi-record-probe.h"
 class NetworkTCPSocketHandler;
@@ -12,11 +13,9 @@ struct OpenTTDNetworkTcpServices {
 	bool (*can_send_receive)(NetworkTCPSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(can_send_receive);
 	NetworkError *(*error_begin)(OpenTTDTcpErrorStorage *) noexcept OPENTTD_SERVICE_DEFAULT(error_begin);
 	void (*error_end)(NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_end);
-	void (*error_receive)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_receive);
 	bool (*error_reset)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_reset);
-	void (*error_send)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_send);
+	OpenTTDByteSpan (*error_text)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_text);
 	bool (*error_would_block)(const NetworkError *) noexcept OPENTTD_SERVICE_DEFAULT(error_would_block);
-	void (*invalid_packet)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_packet);
 	const OpenTTDPacketServices *packet;
 	void (*packet_delete_shell)(Packet *) noexcept OPENTTD_SERVICE_DEFAULT(packet_delete_shell);
 	OpenTTDPacketState *(*packet_record)(Packet *) noexcept OPENTTD_SERVICE_DEFAULT(packet_record);

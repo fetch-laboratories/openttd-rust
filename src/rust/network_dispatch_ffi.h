@@ -8,12 +8,10 @@ struct OpenTTDSessionLoad;
 struct Packet;
 struct OpenTTDNetworkDispatchServices {
 	uint8_t (*client_chat)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_chat);
+	uint32_t (*client_id)(OpenTTDNetworkGameSocket *) noexcept OPENTTD_SERVICE_DEFAULT(client_id);
 	uint8_t (*client_move)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_move);
 	uint8_t (*client_rcon)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_rcon);
 	uint8_t (*client_set_name)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_set_name);
-	void (*illegal_packet)(OpenTTDNetworkGameSocket *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(illegal_packet);
-	void (*invalid_packet)(OpenTTDNetworkGameSocket *) noexcept OPENTTD_SERVICE_DEFAULT(invalid_packet);
-	void (*invalid_type)(OpenTTDNetworkGameSocket *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_type);
 	OpenTTDSessionLoad *(*map_load_args)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(map_load_args);
 	void (*packet_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(packet_end);
 	uint8_t (*server_banned)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_banned);

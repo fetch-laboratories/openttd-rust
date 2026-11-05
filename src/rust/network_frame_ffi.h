@@ -34,13 +34,6 @@ struct OpenTTDNetworkFrameServices {
 	void (*console_lagging)(void *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(console_lagging);
 	void (*console_password_timeout)(void *) noexcept OPENTTD_SERVICE_DEFAULT(console_password_timeout);
 	void (*console_slow)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(console_slow);
-	void (*debug_ack_sent)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_ack_sent);
-	void (*debug_active)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_active);
-	void (*debug_missed_sync)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_missed_sync);
-	void (*debug_receive_ack)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_receive_ack);
-	void (*debug_receive_sync)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_receive_sync);
-	void (*debug_send_ack)() noexcept OPENTTD_SERVICE_DEFAULT(debug_send_ack);
-	void (*debug_send_sync)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_sync);
 	const OpenTTDNetworkDispatchServices *dispatch;
 	uint8_t (*frame_freq)() noexcept OPENTTD_SERVICE_DEFAULT(frame_freq);
 	uint32_t (*interactive_random_range)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(interactive_random_range);
@@ -69,6 +62,7 @@ struct OpenTTDNetworkFrameServices {
 	const OpenTTDNetworkTcpServices *tcp;
 	void (*text_append)(void *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(text_append);
 	void (*text_reset)(void *) noexcept OPENTTD_SERVICE_DEFAULT(text_reset);
+	OpenTTDByteSpan (*text_view)(void *) noexcept OPENTTD_SERVICE_DEFAULT(text_view);
 };
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 void RustNetworkCompleteActions(OpenTTDSessionFrame *);

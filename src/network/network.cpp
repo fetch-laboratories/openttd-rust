@@ -963,13 +963,6 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.console_slow = [](void *cs, uint32_t frame) noexcept {
 			IConsolePrint(CC_WARNING, "[{}] Client #{} is slow, try increasing [network.]frame_freq to a higher value!", frame, static_cast<NetworkClientSocket *>(cs)->client_id);
 		},
-		.debug_ack_sent = [](uint32_t frame) noexcept { Debug(net, 7, "Sent ACK at {}", frame); },
-		.debug_active = [](void *game) noexcept { Debug(net, 9, "client[{}] status = ACTIVE", static_cast<NetworkGameSocketHandler *>(game)->client_id); },
-		.debug_missed_sync = [](uint32_t sync_frame, uint32_t frame) noexcept { Debug(net, 1, "Missed frame for sync-test: {} / {}", sync_frame, frame); },
-		.debug_receive_ack = [](void *game, uint32_t frame) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_ACK(): frame={}", static_cast<NetworkGameSocketHandler *>(game)->client_id, frame); },
-		.debug_receive_sync = [](uint32_t sync_frame, uint32_t seed) noexcept { Debug(net, 9, "Client::Receive_SERVER_SYNC(): sync_frame={}, sync_seed_1={}", sync_frame, seed); },
-		.debug_send_ack = []() noexcept { Debug(net, 9, "Client::SendAck()"); },
-		.debug_send_sync = [](void *game, uint32_t frame, uint32_t seed) noexcept { Debug(net, 9, "client[{}] SendSync(), frame_counter={}, sync_seed_1={}", static_cast<NetworkGameSocketHandler *>(game)->client_id, frame, seed); },
 		.dispatch = &GetRustNetworkDispatchServices(),
 		.frame_freq = RustNetworkFrameFreq,
 		.interactive_random_range = [](uint32_t limit) noexcept { return InteractiveRandomRange(limit); },
@@ -1014,6 +1007,7 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.tcp = &GetRustNetworkTcpServices(),
 		.text_append = RustStringAppend,
 		.text_reset = [](void *text) noexcept { *static_cast<std::string *>(text) = {}; },
+		.text_view = [](void *text) noexcept { const auto &s = *static_cast<std::string *>(text); return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(s.data()), s.size()}; },
 	};
 	return services;
 }
@@ -1105,7 +1099,6 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 		.check_names = []() noexcept { CheckClientAndServerName(); },
 		.close_admin_listeners = []() noexcept { ServerNetworkAdminSocketHandler::CloseListeners(); },
 		.close_client_listeners = []() noexcept { ServerNetworkGameSocketHandler::CloseListeners(); },
-		.connect_debug = [](OpenTTDByteSpan connection) noexcept { Debug(net, 9, "NetworkClientConnectGame(): connection_string={}", std::string_view(reinterpret_cast<const char *>(connection.data), connection.size)); },
 		.connect_text_begin = [](OpenTTDSessionFrame *f, bool resolved) noexcept -> void * {
 			if (!f->reconnect) f->reconnect.emplace();
 			return resolved ? &f->reconnect->second : &f->reconnect->first;
@@ -1115,10 +1108,6 @@ const OpenTTDNetworkLifecycleServices &GetRustNetworkLifecycleServices() noexcep
 		.coordinator_close_server = []() noexcept { _network_coordinator_client.CloseConnection(); },
 		.coordinator_register = []() noexcept { _network_coordinator_client.Register(); },
 		.create_client_connecter = []() noexcept { TCPConnecter::Create<TCPClientConnecter>(_network_join.connection_string); },
-		.debug_connecting = []() noexcept { Debug(net, 9, "status = CONNECTING"); },
-		.debug_listen_admins = []() noexcept { Debug(net, 5, "Starting listeners for admins"); },
-		.debug_listen_clients = []() noexcept { Debug(net, 5, "Starting listeners for clients"); },
-		.debug_listen_queries = []() noexcept { Debug(net, 5, "Starting listeners for incoming server queries"); },
 		.fill_game_info = []() noexcept { FillStaticNetworkServerGameInfo(); },
 		.initialize_pools = [](bool close_admins) noexcept { InitializeNetworkPools(close_admins); },
 		.join_connection = []() noexcept -> OpenTTDByteSpan { const auto &connection = _network_join.connection_string; return {reinterpret_cast<const uint8_t *>(connection.data()), connection.size()}; },

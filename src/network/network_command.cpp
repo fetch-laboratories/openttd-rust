@@ -221,11 +221,6 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 			IConsolePrint(CC_WARNING, "Kicking client #{} (IP: {}) due to calling a non-spectator command {}.", cs->GetInfo()->client_id, cs->GetClientIP(), static_cast<Commands>(cmd));
 		},
 		.control_action = [](OpenTTDByteSpan data) noexcept { return static_cast<uint8_t>(std::get<0>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_CTRL>::Args>(std::span(data.data, data.size)))); },
-		.debug_receive_client = [](void *owner) noexcept { Debug(net, 9, "client[{}] Receive_CLIENT_COMMAND()", static_cast<NetworkClientSocket *>(owner)->client_id); },
-		.debug_receive_server = [](uint8_t cmd, uint32_t frame) noexcept { Debug(net, 9, "Client::Receive_SERVER_COMMAND(): cmd={}, frame={}", cmd, frame); },
-		.debug_send_client = [](uint8_t cmd) noexcept { Debug(net, 9, "Client::SendCommand(): cmd={}", cmd); },
-		.debug_send_server = [](void *owner, uint8_t cmd) noexcept { Debug(net, 9, "client[{}] SendCommand(): cmd={}", static_cast<NetworkClientSocket *>(owner)->client_id, cmd); },
-		.debug_unknown_callback = [](uint8_t cmd) noexcept { Debug(net, 0, "Unknown callback for command; no callback sent (command: {})", cmd); },
 		.execute = [](const OpenTTDCommandPacket *cp, size_t cb_index) noexcept {
 			assert(cb_index < _callback_tuple_size);
 			assert(_cmd_dispatch[cp->cmd].Unpack[cb_index] != nullptr);

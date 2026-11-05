@@ -18,17 +18,12 @@ struct OpenTTDNetworkLifecycleServices {
 	void (*check_names)() noexcept OPENTTD_SERVICE_DEFAULT(check_names);
 	void (*close_admin_listeners)() noexcept OPENTTD_SERVICE_DEFAULT(close_admin_listeners);
 	void (*close_client_listeners)() noexcept OPENTTD_SERVICE_DEFAULT(close_client_listeners);
-	void (*connect_debug)(OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(connect_debug);
 	void * (*connect_text_begin)(OpenTTDSessionFrame *, bool) noexcept OPENTTD_SERVICE_DEFAULT(connect_text_begin);
 	void (*connect_text_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(connect_text_end);
 	void (*coordinator_close_client)() noexcept OPENTTD_SERVICE_DEFAULT(coordinator_close_client);
 	void (*coordinator_close_server)() noexcept OPENTTD_SERVICE_DEFAULT(coordinator_close_server);
 	void (*coordinator_register)() noexcept OPENTTD_SERVICE_DEFAULT(coordinator_register);
 	void (*create_client_connecter)() noexcept OPENTTD_SERVICE_DEFAULT(create_client_connecter);
-	void (*debug_connecting)() noexcept OPENTTD_SERVICE_DEFAULT(debug_connecting);
-	void (*debug_listen_admins)() noexcept OPENTTD_SERVICE_DEFAULT(debug_listen_admins);
-	void (*debug_listen_clients)() noexcept OPENTTD_SERVICE_DEFAULT(debug_listen_clients);
-	void (*debug_listen_queries)() noexcept OPENTTD_SERVICE_DEFAULT(debug_listen_queries);
 	void (*fill_game_info)() noexcept OPENTTD_SERVICE_DEFAULT(fill_game_info);
 	void (*initialize_pools)(bool) noexcept OPENTTD_SERVICE_DEFAULT(initialize_pools);
 	OpenTTDByteSpan (*join_connection)() noexcept OPENTTD_SERVICE_DEFAULT(join_connection);

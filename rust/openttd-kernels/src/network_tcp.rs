@@ -3,6 +3,7 @@
 //! allocation. A requested virtual close or native decryption runs after the entry returns.
 //! Packet pointers are live until removal; field/byte borrows end before every leaf.
 #![allow(unsafe_code, missing_docs)]
+use crate::debug::{Bytes, debug};
 use crate::packet::{self, State};
 
 pub struct NetworkTCPSocketHandler {
@@ -27,11 +28,9 @@ pub struct Services {
     pub can_send_receive: extern "C" fn(*mut NetworkTCPSocketHandler) -> bool,
     pub error_begin: extern "C" fn(*mut TcpErrorStorage) -> *mut NetworkError,
     pub error_end: extern "C" fn(*mut NetworkError),
-    pub error_receive: extern "C" fn(*const NetworkError),
     pub error_reset: extern "C" fn(*const NetworkError) -> bool,
-    pub error_send: extern "C" fn(*const NetworkError),
+    pub error_text: extern "C" fn(*const NetworkError) -> crate::services::ByteSpan,
     pub error_would_block: extern "C" fn(*const NetworkError) -> bool,
-    pub invalid_packet: extern "C" fn(),
     pub packet: &'static packet::Services,
     pub packet_delete_shell: extern "C" fn(*mut Packet),
     pub packet_record: extern "C" fn(*mut Packet) -> *mut State,
@@ -101,7 +100,12 @@ pub unsafe extern "C" fn openttd_rust_tcp_send(
             let error = (s.error_begin)(storage.as_mut_ptr());
             let blocked = (s.error_would_block)(error);
             if !blocked && !closing {
-                (s.error_send)(error);
+                debug!(
+                    net,
+                    0,
+                    "Send failed: {}",
+                    Bytes(unsafe { (s.error_text)(error).bytes() })
+                );
             }
             (s.error_end)(error);
             return if blocked {
@@ -146,7 +150,12 @@ unsafe fn read_bytes(
             let error = (s.error_begin)(storage.as_mut_ptr());
             let blocked = (s.error_would_block)(error);
             if !blocked && !(s.error_reset)(error) {
-                (s.error_receive)(error);
+                debug!(
+                    net,
+                    0,
+                    "Recv failed: {}",
+                    Bytes(unsafe { (s.error_text)(error).bytes() })
+                );
             }
             (s.error_end)(error);
             return if blocked {
@@ -208,8 +217,7 @@ pub(crate) fn destroy_packet(s: &Services, packet: *mut Packet) {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkTcpServices" ["probe"] => Services {
-        base_socket, can_send_receive, error_begin, error_end, error_receive, error_reset, error_send,
-        error_would_block, invalid_packet, packet, packet_delete_shell, packet_record,
+        base_socket, can_send_receive, error_begin, error_end, error_reset, error_text, error_would_block, packet, packet_delete_shell, packet_record,
         receive_bytes, receive_create, receive_packet, receive_take, send_bytes, send_front,
         send_pop, valid, writable,
     };
@@ -267,8 +275,13 @@ mod tests {
         null_mut()
     }
     extern "C" fn error_end(_: *mut NetworkError) {}
-    extern "C" fn error_send(_: *const NetworkError) {
+    /// The send failure message renders the error text; each render is one log.
+    extern "C" fn error_text(_: *const NetworkError) -> crate::services::ByteSpan {
         with(|f| f.logs += 1);
+        crate::services::ByteSpan {
+            data: std::ptr::null(),
+            size: 0,
+        }
     }
     extern "C" fn send_bytes(
         _: *mut NetworkTCPSocketHandler,
@@ -334,11 +347,9 @@ mod tests {
             can_send_receive: unused1,
             error_begin,
             error_end,
-            error_receive: unused1,
             error_reset: unused1,
-            error_send,
+            error_text,
             error_would_block: blocked,
-            invalid_packet: invalid,
             packet: packet::test_services(),
             packet_delete_shell: unused1,
             packet_record: unused1,
@@ -352,9 +363,6 @@ mod tests {
             valid,
             writable,
         }
-    }
-    extern "C" fn invalid() {
-        panic!("unexpected invalid packet log");
     }
 
     #[test]

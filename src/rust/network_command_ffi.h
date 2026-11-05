@@ -25,11 +25,6 @@ struct OpenTTDNetworkCommandServices {
 	void (*console_server_only)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(console_server_only);
 	void (*console_spectator)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(console_spectator);
 	uint8_t (*control_action)(OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(control_action);
-	void (*debug_receive_client)(void *) noexcept OPENTTD_SERVICE_DEFAULT(debug_receive_client);
-	void (*debug_receive_server)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_receive_server);
-	void (*debug_send_client)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_client);
-	void (*debug_send_server)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_send_server);
-	void (*debug_unknown_callback)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(debug_unknown_callback);
 	void (*execute)(const OpenTTDCommandPacket *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(execute);
 	void (*execute_past)() noexcept OPENTTD_SERVICE_DEFAULT(execute_past);
 	bool (*has_unpack)(uint8_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(has_unpack);

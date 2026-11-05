@@ -4,6 +4,7 @@
 //! All scalar pointers address canonical native fields. Reconnect constructs native strings in
 //! call-local u64 arrays whose size/alignment is checked natively; no state borrow spans a leaf.
 #![allow(unsafe_code, missing_docs)]
+use crate::debug::{Bytes, debug};
 use crate::network_action::{Actions, Resume};
 use crate::network_command::next_client;
 use crate::network_frame::Services as FrameServices;
@@ -29,17 +30,12 @@ pub struct Services {
     pub check_names: extern "C" fn(),
     pub close_admin_listeners: extern "C" fn(),
     pub close_client_listeners: extern "C" fn(),
-    pub connect_debug: extern "C" fn(crate::services::ByteSpan),
     pub connect_text_begin: extern "C" fn(*mut crate::session::Frame, bool) -> *mut c_void,
     pub connect_text_end: extern "C" fn(*mut crate::session::Frame),
     pub coordinator_close_client: extern "C" fn(),
     pub coordinator_close_server: extern "C" fn(),
     pub coordinator_register: extern "C" fn(),
     pub create_client_connecter: extern "C" fn(),
-    pub debug_connecting: extern "C" fn(),
-    pub debug_listen_admins: extern "C" fn(),
-    pub debug_listen_clients: extern "C" fn(),
-    pub debug_listen_queries: extern "C" fn(),
     pub fill_game_info: extern "C" fn(),
     pub initialize_pools: extern "C" fn(bool),
     pub join_connection: extern "C" fn() -> crate::services::ByteSpan,
@@ -84,17 +80,12 @@ crate::abi::layouts! {
         check_names,
         close_admin_listeners,
         close_client_listeners,
-        connect_debug,
         connect_text_begin,
         connect_text_end,
         coordinator_close_client,
         coordinator_close_server,
         coordinator_register,
         create_client_connecter,
-        debug_connecting,
-        debug_listen_admins,
-        debug_listen_clients,
-        debug_listen_queries,
         fill_game_info,
         initialize_pools,
         join_connection,
@@ -167,7 +158,7 @@ pub(crate) fn close_clients(
 
 fn close_client(s: &Services, f: &FrameServices) {
     if !(f.client_game)().is_null() {
-        crate::network_client::send_quit(f.client, f);
+        crate::network_client::send_quit(f);
         crate::network_client::openttd_rust_network_client_close(
             f.client,
             f,
@@ -275,7 +266,7 @@ pub(crate) fn join_game(s: &Services, f: &FrameServices, work: Actions) {
 pub(crate) fn join_end(s: &Services, f: &FrameServices) {
     initialize(s, f, true);
     (s.remember_joined_server)((s.join_connection)());
-    (s.debug_connecting)();
+    debug!(net, 9, "status = CONNECTING");
     unsafe {
         f.client
             .join_status
@@ -296,7 +287,12 @@ fn connect_game(
     resolved: *mut c_void,
     work: Actions,
 ) -> bool {
-    (s.connect_debug)(connection);
+    debug!(
+        net,
+        9,
+        "NetworkClientConnectGame(): connection_string={}",
+        Bytes(unsafe { connection.bytes() })
+    );
     (s.parse_connection)(connection, &raw mut company, resolved);
     if !(session.network_available)() || !(s.validate_client_name)() {
         return false;
@@ -357,17 +353,17 @@ pub(crate) fn server_start_after_close(
 ) -> Result<bool, ()> {
     initialize(s, f, false);
     (s.udp_initialize)();
-    (s.debug_listen_clients)();
+    debug!(net, 5, "Starting listeners for clients");
     if !(s.listen_clients)((s.server_port)()) {
         return Ok(false);
     }
     if (s.admin_auth_configured)() {
-        (s.debug_listen_admins)();
+        debug!(net, 5, "Starting listeners for admins");
         if !(s.listen_admins)((s.admin_port)()) {
             return Ok(false);
         }
     }
-    (s.debug_listen_queries)();
+    debug!(net, 5, "Starting listeners for incoming server queries");
     (s.udp_listen)();
     (s.set_network_server)(true);
     (s.set_networking)(true);

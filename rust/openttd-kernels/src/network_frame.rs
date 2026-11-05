@@ -8,6 +8,7 @@
 //! developer-only and outside this owner.
 #![allow(unsafe_code, missing_docs)]
 
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::gfx_type::MILLISECONDS_PER_TICK;
 use crate::network_action::{Actions, Resume};
@@ -102,13 +103,6 @@ pub struct Services {
     pub console_lagging: extern "C" fn(*mut c_void, u32, bool),
     pub console_password_timeout: extern "C" fn(*mut c_void),
     pub console_slow: extern "C" fn(*mut c_void, u32),
-    pub debug_ack_sent: extern "C" fn(u32),
-    pub debug_active: extern "C" fn(*mut c_void),
-    pub debug_missed_sync: extern "C" fn(u32, u32),
-    pub debug_receive_ack: extern "C" fn(*mut c_void, u32),
-    pub debug_receive_sync: extern "C" fn(u32, u32),
-    pub debug_send_ack: extern "C" fn(),
-    pub debug_send_sync: extern "C" fn(*mut c_void, u32, u32),
     pub dispatch: &'static crate::network_dispatch::Services,
     pub frame_freq: extern "C" fn() -> u8,
     pub interactive_random_range: extern "C" fn(u32) -> u32,
@@ -141,6 +135,7 @@ pub struct Services {
     pub tcp: &'static crate::network_tcp::Services,
     pub text_append: extern "C" fn(*mut c_void, *const u8, usize),
     pub text_reset: extern "C" fn(*mut c_void),
+    pub text_view: extern "C" fn(*mut c_void) -> crate::services::ByteSpan,
 }
 
 pub(crate) fn socket_has_quit(s: &Services, game: *mut socket::GameSocket) -> bool {
@@ -285,7 +280,14 @@ pub(crate) unsafe fn send_frame(
 
 /// `ServerNetworkGameSocketHandler::SendSync`.
 pub(crate) fn send_sync(s: &Services, game: *mut socket::GameSocket) -> u8 {
-    (s.debug_send_sync)(socket::shell(game), frame_counter(), state!(sync_seed_1));
+    debug!(
+        net,
+        9,
+        "client[{}] SendSync(), frame_counter={}, sync_seed_1={}",
+        (s.dispatch.client_id)(game),
+        frame_counter(),
+        state!(sync_seed_1)
+    );
     let mut p = packet_new(s, game, PACKET_SERVER_SYNC);
     p.send_uint32(frame_counter(), packet_check(s));
     p.send_uint32(state!(sync_seed_1), packet_check(s));
@@ -310,13 +312,24 @@ pub(crate) unsafe fn receive_ack(
         return send_error(s, socket, NETWORK_ERROR_NOT_AUTHORIZED, work);
     }
     let frame = unsafe { packet::recv_uint32(p, s.packet) };
-    (s.debug_receive_ack)(socket::shell(socket), frame);
+    debug!(
+        net,
+        9,
+        "client[{}] Receive_CLIENT_ACK(): frame={}",
+        (s.dispatch.client_id)(socket),
+        frame
+    );
     // The client is catching up with the server.
     if socket::status(socket) == PRE_ACTIVE {
         if frame.wrapping_add(DAY_TICKS as u32) < frame_counter() {
             return NETWORK_RECV_STATUS_OKAY;
         }
-        (s.debug_active)(socket::shell(socket));
+        debug!(
+            net,
+            9,
+            "client[{}] status = ACTIVE",
+            (s.dispatch.client_id)(socket)
+        );
         write_field!(socket, status, ACTIVE);
         write_field!(sync, last_token_frame, frame_counter());
         if !(s.on_server_connect)(session_frame) {
@@ -336,7 +349,7 @@ pub(crate) unsafe fn receive_ack(
 
 /// `ClientNetworkGameSocketHandler::SendAck`.
 fn send_ack(s: &Services) {
-    (s.debug_send_ack)();
+    debug!(net, 9, "Client::SendAck()");
     let game = (s.client_game)();
     let mut p = packet_new(s, game, PACKET_CLIENT_ACK);
     p.send_uint32(frame_counter(), packet_check(s));
@@ -366,7 +379,7 @@ pub(crate) unsafe fn receive_frame(
     // Acknowledge once per day to save bandwidth.
     if !state!(network_first_time) && state!(last_ack_frame) < frame_counter() {
         state!(last_ack_frame = frame_counter().wrapping_add(DAY_TICKS as u32));
-        (s.debug_ack_sent)(frame_counter());
+        debug!(net, 7, "Sent ACK at {}", frame_counter());
         send_ack(s);
     }
     NETWORK_RECV_STATUS_OKAY
@@ -379,7 +392,13 @@ pub(crate) fn receive_sync(s: &Services, status: u8, p: *mut PacketState) -> u8 
     }
     state!(sync_frame = unsafe { packet::recv_uint32(p, s.packet) });
     state!(sync_seed_1 = unsafe { packet::recv_uint32(p, s.packet) });
-    (s.debug_receive_sync)(state!(sync_frame), state!(sync_seed_1));
+    debug!(
+        net,
+        9,
+        "Client::Receive_SERVER_SYNC(): sync_frame={}, sync_seed_1={}",
+        state!(sync_frame),
+        state!(sync_seed_1)
+    );
     NETWORK_RECV_STATUS_OKAY
 }
 
@@ -448,7 +467,13 @@ fn client_game_loop(
             }
             state!(sync_frame = 0);
         } else if sync_frame < frame_counter() {
-            (s.debug_missed_sync)(sync_frame, frame_counter());
+            debug!(
+                net,
+                1,
+                "Missed frame for sync-test: {} / {}",
+                sync_frame,
+                frame_counter()
+            );
             state!(sync_frame = 0);
         }
     }
@@ -691,13 +716,6 @@ crate::abi::layouts! {
         console_lagging,
         console_password_timeout,
         console_slow,
-        debug_ack_sent,
-        debug_active,
-        debug_missed_sync,
-        debug_receive_ack,
-        debug_receive_sync,
-        debug_send_ack,
-        debug_send_sync,
         dispatch,
         frame_freq,
         interactive_random_range,
@@ -726,5 +744,6 @@ crate::abi::layouts! {
         tcp,
         text_append,
         text_reset,
+        text_view,
     };
 }

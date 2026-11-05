@@ -2,6 +2,7 @@
 //! Client admission, map transfer and disconnect decisions. Save filters, presentation and
 //! socket transport stay native. Raw field accesses end before callbacks, including map loads.
 #![allow(unsafe_code, missing_docs)]
+use crate::debug::debug;
 use crate::network_frame::Services as FrameServices;
 use crate::network_frame::{
     packet_check, packet_new, packet_recv_string, packet_send, packet_send_string,
@@ -33,44 +34,6 @@ pub struct Services {
     pub auth_create: extern "C" fn(*mut c_void),
     pub check_grf: extern "C" fn(u32, *const u8) -> bool,
     pub client_name: extern "C" fn() -> crate::services::ByteSpan,
-    pub debug_auth_game: extern "C" fn(),
-    pub debug_auth_request: extern "C" fn(),
-    pub debug_banned: extern "C" fn(),
-    pub debug_close: extern "C" fn(*mut c_void),
-    pub debug_connected: extern "C" fn(),
-    pub debug_enable_encryption: extern "C" fn(),
-    pub debug_encrypted: extern "C" fn(),
-    pub debug_error: extern "C" fn(u8),
-    pub debug_error_quit: extern "C" fn(u32),
-    pub debug_full: extern "C" fn(),
-    pub debug_grfs: extern "C" fn(u32),
-    pub debug_join: extern "C" fn(u32),
-    pub debug_join_authorizing: extern "C" fn(),
-    pub debug_join_downloading: extern "C" fn(),
-    pub debug_join_processing: extern "C" fn(),
-    pub debug_join_registering: extern "C" fn(),
-    pub debug_join_waiting: extern "C" fn(),
-    pub debug_map_begin: extern "C" fn(u32),
-    pub debug_map_done: extern "C" fn(),
-    pub debug_map_size: extern "C" fn(u32),
-    pub debug_newgame: extern "C" fn(),
-    pub debug_quit: extern "C" fn(u32),
-    pub debug_send_auth_response: extern "C" fn(),
-    pub debug_send_error: extern "C" fn(u8),
-    pub debug_send_getmap: extern "C" fn(),
-    pub debug_send_grfs_ok: extern "C" fn(),
-    pub debug_send_identify: extern "C" fn(),
-    pub debug_send_join: extern "C" fn(),
-    pub debug_send_map_ok: extern "C" fn(),
-    pub debug_send_quit: extern "C" fn(),
-    pub debug_shutdown: extern "C" fn(),
-    pub debug_status_active: extern "C" fn(),
-    pub debug_status_authorized: extern "C" fn(),
-    pub debug_status_join: extern "C" fn(),
-    pub debug_status_map: extern "C" fn(),
-    pub debug_status_map_wait: extern "C" fn(),
-    pub debug_wait: extern "C" fn(),
-    pub debug_welcome: extern "C" fn(u32),
     pub delete_info: extern "C" fn(*mut c_void),
     pub dirty_join: extern "C" fn(),
     pub emergency_save: extern "C" fn(),
@@ -103,7 +66,6 @@ pub struct Services {
     pub show_savegame_error: extern "C" fn(),
     pub show_server_error: extern "C" fn(u8, *mut c_void),
     pub show_shutdown: extern "C" fn(),
-    pub unknown_quit: extern "C" fn(u32),
     pub wait_for_quit_packets: extern "C" fn(),
 }
 crate::abi::layouts! {
@@ -113,44 +75,6 @@ crate::abi::layouts! {
         auth_create,
         check_grf,
         client_name,
-        debug_auth_game,
-        debug_auth_request,
-        debug_banned,
-        debug_close,
-        debug_connected,
-        debug_enable_encryption,
-        debug_encrypted,
-        debug_error,
-        debug_error_quit,
-        debug_full,
-        debug_grfs,
-        debug_join,
-        debug_join_authorizing,
-        debug_join_downloading,
-        debug_join_processing,
-        debug_join_registering,
-        debug_join_waiting,
-        debug_map_begin,
-        debug_map_done,
-        debug_map_size,
-        debug_newgame,
-        debug_quit,
-        debug_send_auth_response,
-        debug_send_error,
-        debug_send_getmap,
-        debug_send_grfs_ok,
-        debug_send_identify,
-        debug_send_join,
-        debug_send_map_ok,
-        debug_send_quit,
-        debug_shutdown,
-        debug_status_active,
-        debug_status_authorized,
-        debug_status_join,
-        debug_status_map,
-        debug_status_map_wait,
-        debug_wait,
-        debug_welcome,
         delete_info,
         dirty_join,
         emergency_save,
@@ -182,7 +106,6 @@ crate::abi::layouts! {
         show_savegame_error,
         show_server_error,
         show_shutdown,
-        unknown_quit,
         wait_for_quit_packets,
     };
 }
@@ -217,11 +140,11 @@ fn empty_packet(f: &FrameServices, game: *mut socket::GameSocket, kind: u8) -> u
 }
 
 pub(crate) fn send_join(s: &Services, f: &FrameServices) -> u8 {
-    (s.debug_send_join)();
-    (s.debug_status_join)();
+    debug!(net, 9, "Client::SendJoin()");
+    debug!(net, 9, "Client::status = JOIN");
     let game = (f.client_game)();
     set_status(s, game, status::JOIN);
-    (s.debug_join_authorizing)();
+    debug!(net, 9, "Client::join_status = AUTHORIZING");
     set_join_status(s, NETWORK_JOIN_STATUS_AUTHORIZING);
     (s.dirty_join)();
     let mut p = packet_new(f, game, PACKET_CLIENT_JOIN);
@@ -232,7 +155,7 @@ pub(crate) fn send_join(s: &Services, f: &FrameServices) -> u8 {
 }
 
 pub(crate) fn send_identify(s: &Services, f: &FrameServices) -> u8 {
-    (s.debug_send_identify)();
+    debug!(net, 9, "Client::SendIdentify()");
     let game = (f.client_game)();
     let mut p = packet_new(f, game, PACKET_CLIENT_IDENTIFY);
     packet_send_string(f, &mut p, (s.client_name)());
@@ -241,27 +164,27 @@ pub(crate) fn send_identify(s: &Services, f: &FrameServices) -> u8 {
     NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn send_grfs_ok(s: &Services, f: &FrameServices) -> u8 {
-    (s.debug_send_grfs_ok)();
+pub(crate) fn send_grfs_ok(f: &FrameServices) -> u8 {
+    debug!(net, 9, "Client::SendNewGRFsOk()");
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_NEWGRFS_CHECKED)
 }
 
 pub(crate) fn send_getmap(s: &Services, f: &FrameServices) -> u8 {
-    (s.debug_send_getmap)();
-    (s.debug_status_map_wait)();
+    debug!(net, 9, "Client::SendGetMap()");
+    debug!(net, 9, "Client::status = MAP_WAIT");
     set_status(s, (f.client_game)(), status::MAP_WAIT);
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_GETMAP)
 }
 
 pub(crate) fn send_map_ok(s: &Services, f: &FrameServices) -> u8 {
-    (s.debug_send_map_ok)();
-    (s.debug_status_active)();
+    debug!(net, 9, "Client::SendMapOk()");
+    debug!(net, 9, "Client::status = ACTIVE");
     set_status(s, (f.client_game)(), status::ACTIVE);
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_MAP_OK)
 }
 
-pub(crate) fn send_error(s: &Services, f: &FrameServices, error: u8) -> u8 {
-    (s.debug_send_error)(error);
+pub(crate) fn send_error(f: &FrameServices, error: u8) -> u8 {
+    debug!(net, 9, "Client::SendError(): errorno={}", error);
     let game = (f.client_game)();
     let mut p = packet_new(f, game, PACKET_CLIENT_ERROR);
     p.send_uint8(error, packet_check(f));
@@ -269,13 +192,13 @@ pub(crate) fn send_error(s: &Services, f: &FrameServices, error: u8) -> u8 {
     NETWORK_RECV_STATUS_OKAY
 }
 
-pub(crate) fn send_quit(s: &Services, f: &FrameServices) -> u8 {
-    (s.debug_send_quit)();
+pub(crate) fn send_quit(f: &FrameServices) -> u8 {
+    debug!(net, 9, "Client::SendQuit()");
     empty_packet(f, (f.client_game)(), PACKET_CLIENT_QUIT)
 }
 
 pub(crate) fn receive_full(s: &Services, _f: &FrameServices, _game: *mut socket::GameSocket) -> u8 {
-    (s.debug_full)();
+    debug!(net, 9, "Client::Receive_SERVER_FULL()");
     (s.show_full)();
     NETWORK_RECV_STATUS_SERVER_FULL
 }
@@ -285,7 +208,7 @@ pub(crate) fn receive_banned(
     _f: &FrameServices,
     _game: *mut socket::GameSocket,
 ) -> u8 {
-    (s.debug_banned)();
+    debug!(net, 9, "Client::Receive_SERVER_BANNED()");
     (s.show_banned)();
     NETWORK_RECV_STATUS_SERVER_BANNED
 }
@@ -298,7 +221,7 @@ pub(crate) fn receive_error(
     text: *mut c_void,
 ) -> u8 {
     let error = unsafe { packet::recv_uint8(p, f.packet) };
-    (s.debug_error)(error);
+    debug!(net, 9, "Client::Receive_SERVER_ERROR(): error={}", error);
     if error == NETWORK_ERROR_KICKED && unsafe { packet::can_read(p, f.packet, 1, false) } {
         packet_recv_string(f, p, text, crate::network_config::NETWORK_CHAT_LENGTH);
         (s.show_server_error)(error, text);
@@ -321,10 +244,13 @@ pub(crate) fn receive_grfs(
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let count = u32::from(unsafe { packet::recv_uint8(p, f.packet) });
-    (s.debug_grfs)(count);
+    debug!(
+        net,
+        9, "Client::Receive_SERVER_CHECK_NEWGRFS(): grf_count={}", count
+    );
     let result = check_grfs(f.packet, p, count, s.check_grf);
     if result == NETWORK_RECV_STATUS_OKAY {
-        return send_grfs_ok(s, f);
+        return send_grfs_ok(f);
     }
     (s.show_newgrf_mismatch)();
     result
@@ -339,10 +265,15 @@ pub(crate) fn receive_welcome(
     if status(s, game) < status::ENCRYPTED || status(s, game) >= status::AUTHORIZED {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    (s.debug_status_authorized)();
+    debug!(net, 9, "Client::status = AUTHORIZED");
     set_status(s, game, status::AUTHORIZED);
     unsafe { s.own_client_id.write(packet::recv_uint32(p, f.packet)) };
-    (s.debug_welcome)(unsafe { s.own_client_id.read() });
+    debug!(
+        net,
+        9,
+        "Client::Receive_SERVER_WELCOME(): client_id={}",
+        unsafe { s.own_client_id.read() }
+    );
     send_getmap(s, f)
 }
 
@@ -355,8 +286,8 @@ pub(crate) fn receive_wait(
     if status(s, game) != status::MAP_WAIT {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    (s.debug_wait)();
-    (s.debug_join_waiting)();
+    debug!(net, 9, "Client::Receive_SERVER_WAIT()");
+    debug!(net, 9, "Client::join_status = WAITING");
     set_join_status(s, NETWORK_JOIN_STATUS_WAITING);
     unsafe { s.join_waiting.write(packet::recv_uint8(p, f.packet)) };
     (s.dirty_join)();
@@ -372,19 +303,24 @@ pub(crate) fn receive_map_begin(
     if status(s, game) < status::AUTHORIZED || status(s, game) >= status::MAP {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    (s.debug_status_map)();
+    debug!(net, 9, "Client::status = MAP");
     set_status(s, game, status::MAP);
     if (s.map_exists)(socket::shell(game)) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     (s.map_create)(socket::shell(game));
     crate::network_frame::map_begin(unsafe { packet::recv_uint32(p, f.packet) });
-    (s.debug_map_begin)(crate::network_frame::frame_counter());
+    debug!(
+        net,
+        9,
+        "Client::Receive_SERVER_MAP_BEGIN(): frame_counter={}",
+        crate::network_frame::frame_counter()
+    );
     unsafe {
         s.join_bytes.write(0);
         s.join_bytes_total.write(0);
     }
-    (s.debug_join_downloading)();
+    debug!(net, 9, "Client::join_status = DOWNLOADING");
     set_join_status(s, NETWORK_JOIN_STATUS_DOWNLOADING);
     (s.dirty_join)();
     NETWORK_RECV_STATUS_OKAY
@@ -401,7 +337,12 @@ pub(crate) fn receive_map_size(
     }
     unsafe { s.join_bytes_total.write(packet::recv_uint32(p, f.packet)) };
     (s.dirty_join)();
-    (s.debug_map_size)(unsafe { s.join_bytes_total.read() });
+    debug!(
+        net,
+        9,
+        "Client::Receive_SERVER_MAP_SIZE(): bytes_total={}",
+        unsafe { s.join_bytes_total.read() }
+    );
     NETWORK_RECV_STATUS_OKAY
 }
 
@@ -440,8 +381,8 @@ pub(crate) fn receive_map_done(
     if status(s, game) != status::MAP || !(s.map_exists)(socket::shell(game)) {
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    (s.debug_map_done)();
-    (s.debug_join_processing)();
+    debug!(net, 9, "Client::Receive_SERVER_MAP_DONE()");
+    debug!(net, 9, "Client::join_status = PROCESSING");
     set_join_status(s, NETWORK_JOIN_STATUS_PROCESSING);
     (s.dirty_join)();
     (s.map_load_prepare)(socket::shell(game), load);
@@ -485,7 +426,7 @@ pub(crate) fn map_loaded(
             crate::company_type::CompanyID::SPECTATOR,
         );
         if join_company(s) != crate::company_type::COMPANY_SPECTATOR {
-            (s.debug_join_registering)();
+            debug!(net, 9, "Client::join_status = REGISTERING");
             set_join_status(s, NETWORK_JOIN_STATUS_REGISTERING);
             (s.show_join_window)();
             crate::command_post::new_company(f.command.company.shared, unsafe {
@@ -512,7 +453,10 @@ pub(crate) fn receive_error_quit(
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let id = unsafe { packet::recv_uint32(p, f.packet) };
-    (s.debug_error_quit)(id);
+    debug!(
+        net,
+        9, "Client::Receive_SERVER_ERROR_QUIT(): client_id={}", id
+    );
     let info = (f.command.company.shared.network_client_info)(id);
     if !info.is_null() {
         (s.leave_error)(info, unsafe { packet::recv_uint8(p, f.packet) });
@@ -532,10 +476,10 @@ pub(crate) fn receive_quit(
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let id = unsafe { packet::recv_uint32(p, f.packet) };
-    (s.debug_quit)(id);
+    debug!(net, 9, "Client::Receive_SERVER_QUIT(): client_id={}", id);
     let info = (f.command.company.shared.network_client_info)(id);
     if info.is_null() {
-        (s.unknown_quit)(id);
+        debug!(net, 1, "Unknown client ({}) is leaving the game", id);
     } else {
         (s.leave)(info);
         (s.delete_info)(info);
@@ -554,7 +498,7 @@ pub(crate) fn receive_join(
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
     let id = unsafe { packet::recv_uint32(p, f.packet) };
-    (s.debug_join)(id);
+    debug!(net, 9, "Client::Receive_SERVER_JOIN(): client_id={}", id);
     let info = (f.command.company.shared.network_client_info)(id);
     if !info.is_null() {
         (s.join)(info);
@@ -568,7 +512,7 @@ pub(crate) fn receive_shutdown(
     _f: &FrameServices,
     game: *mut socket::GameSocket,
 ) -> u8 {
-    (s.debug_shutdown)();
+    debug!(net, 9, "Client::Receive_SERVER_SHUTDOWN()");
     if status(s, game) >= status::JOIN {
         (s.show_shutdown)();
     }
@@ -583,7 +527,7 @@ pub(crate) fn receive_newgame(
     _f: &FrameServices,
     game: *mut socket::GameSocket,
 ) -> u8 {
-    (s.debug_newgame)();
+    debug!(net, 9, "Client::Receive_SERVER_NEWGAME()");
     if status(s, game) >= status::JOIN {
         #[allow(clippy::cast_possible_truncation)]
         unsafe {
@@ -604,7 +548,12 @@ fn close(s: &Services, f: &FrameServices, game: *mut socket::GameSocket, result:
     }
     crate::movement::native_assert(f.command.company.shared, (f.tcp.valid)(socket::tcp(game)));
     if !crate::network_frame::socket_has_quit(f, game) {
-        (s.debug_close)(socket::shell(game));
+        debug!(
+            net,
+            3,
+            "Closed client connection {}",
+            (f.dispatch.client_id)(game)
+        );
         socket::send_closing(f, game);
         (s.wait_for_quit_packets)();
     }
@@ -652,7 +601,7 @@ pub(crate) fn client_error(
     ) {
         close(s, f, game, result);
     } else {
-        send_error(s, f, error);
+        send_error(f, error);
         close(s, f, game, result);
         (s.emergency_save)();
     }
@@ -701,7 +650,7 @@ pub extern "C" fn openttd_rust_network_client_is_connected_abi(
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_client_connected(s: &Services, f: &FrameServices) {
     crate::network_frame::client_connected();
-    (s.debug_connected)();
+    debug!(net, 9, "Client::NetworkClient_Connected()");
     send_join(s, f);
 }
 

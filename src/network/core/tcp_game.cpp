@@ -89,12 +89,10 @@ const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept
 {
 	static const OpenTTDNetworkDispatchServices services{
 		.client_chat = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_CHAT>,
+		.client_id = [](OpenTTDNetworkGameSocket *socket) noexcept -> uint32_t { return static_cast<NetworkGameSocketHandler *>(socket->game)->client_id; },
 		.client_move = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_MOVE>,
 		.client_rcon = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_RCON>,
 		.client_set_name = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_SET_NAME>,
-		.illegal_packet = [](OpenTTDNetworkGameSocket *socket, uint8_t kind) noexcept { Debug(net, 0, "[tcp/game] Received illegal packet type {} from client {}", kind, static_cast<NetworkGameSocketHandler *>(socket->game)->client_id); },
-		.invalid_packet = [](OpenTTDNetworkGameSocket *socket) noexcept { Debug(net, 0, "[tcp/game] Received invalid packet from client {}", static_cast<NetworkGameSocketHandler *>(socket->game)->client_id); },
-		.invalid_type = [](OpenTTDNetworkGameSocket *socket, uint8_t kind) noexcept { Debug(net, 0, "[tcp/game] Received invalid packet type {} from client {}", kind, static_cast<NetworkGameSocketHandler *>(socket->game)->client_id); },
 		.map_load_args = [](OpenTTDSessionFrame *frame) noexcept -> OpenTTDSessionLoad * { return &frame->packet_load.emplace().args; },
 		.packet_end = [](OpenTTDSessionFrame *frame) noexcept { frame->packet_load.reset(); frame->packet_text.reset(); },
 		.server_banned = ReceiveGamePacket<QueryNetworkGameSocketHandler, &QueryNetworkGameSocketHandler::Receive_SERVER_BANNED>,
