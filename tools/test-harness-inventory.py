@@ -2,6 +2,8 @@
 """Exercise each harness inventory guard on the tree and on constructed losses."""
 
 import copy
+import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -74,6 +76,46 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(self.errors(), [])
         self.recorded["masks"] = RECORDED["masks"]
         self.assertIn("only in the inventory", " ".join(self.errors()))
+
+    def test_record_rejects_empty_or_zero_runs_before_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = root / "tools"
+            tools.mkdir()
+            for name in (
+                "run-comparisons.py",
+                "harness_inventory.py",
+                "validation_execution.py",
+            ):
+                shutil.copyfile(ROOT / "tools" / name, tools / name)
+            inventory = root / hi.INVENTORY
+            inventory.parent.mkdir()
+            driver = "fixture-comparison.py"
+            recorded = copy.deepcopy(RECORDED)
+            recorded["comparisons"] = {driver: ["Fixture passed: 3 cases"]}
+            original = json.dumps(recorded)
+            for line, code in (
+                ("", 1),
+                ("Fixture passed: 0 cases", 1),
+                ("Fixture passed: 2 cases", 0),
+            ):
+                with self.subTest(line=line):
+                    inventory.write_text(original)
+                    (tools / driver).write_text(f"print({line!r})\n")
+                    run = subprocess.run(
+                        [sys.executable, str(tools / "run-comparisons.py"), "--record"],
+                        cwd=root,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(run.returncode, code, run.stdout + run.stderr)
+                    if code:
+                        self.assertEqual(inventory.read_text(), original)
+                    else:
+                        self.assertEqual(
+                            hi.load(inventory.read_text())["comparisons"],
+                            {driver: [line]},
+                        )
 
     def test_new_known_failure_names_an_open_issue(self) -> None:
         for issue, message in (("#1", None), ("#2", "open issue"), ("x", "open")):

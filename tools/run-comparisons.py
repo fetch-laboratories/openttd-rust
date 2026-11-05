@@ -91,13 +91,15 @@ def main():
     if failed:
         sys.exit(f"{len(failed)} of {len(tools)} comparisons failed")
     inventory = harness_inventory.load((ROOT / harness_inventory.INVENTORY).read_text())
-    errors = harness_inventory.case_errors(inventory["comparisons"], printed)
+    errors = harness_inventory.case_errors(
+        {} if args.record else inventory["comparisons"], printed
+    )
+    if errors:
+        print("\n".join(errors))
+        sys.exit(f"Case inventory check failed; see {harness_inventory.INVENTORY}")
     if args.record:
         inventory["comparisons"].update(printed)
         harness_inventory.write(inventory)
-    elif errors:
-        print("\n".join(errors))
-        sys.exit(f"Case inventory check failed; see {harness_inventory.INVENTORY}")
     print(f"All {len(tools)} comparisons passed")
 
 
