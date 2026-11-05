@@ -359,6 +359,7 @@ add_files(
     rust/newgrf_spritegroup_ffi.h
     rust/newgrf_global_ffi.h
     rust/newgrf_storage_services.cpp
+    rust/grf_bindings.cpp
     rust/industry_definition_services.cpp
     rust/industry_property_services.cpp
     rust/newgrf_storage_ffi.h

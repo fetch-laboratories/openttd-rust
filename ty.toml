@@ -9,6 +9,7 @@ include = [
     "tools/test-ffi-bool-returns.py",
     "tools/auth-comparison.py",
     "tools/test-seasonal-snow.py",
+    "tools/simulation/newgrf_loading.py",
     "tools/rust-only.py",
     "tools/test-rust-only.py",
     "tools/simulation/console_adapter.py",

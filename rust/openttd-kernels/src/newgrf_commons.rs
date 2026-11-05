@@ -74,3 +74,13 @@ pub struct SubstituteSpecIdentity {
 pub(crate) fn airport_tile_check_valid_new_id(id: u16) -> bool {
     id != 0xff
 }
+
+/// Keys of `StandardGRFFileProps`.
+#[repr(u8)]
+#[derive(Clone, Copy)]
+pub enum StandardSpriteGroup {
+    /// Binding used by existing entities.
+    Default = 0,
+    /// Binding used by the purchase list.
+    Purchase = 1,
+}
