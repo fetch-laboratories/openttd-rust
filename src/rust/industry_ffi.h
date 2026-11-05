@@ -90,13 +90,6 @@ typedef struct OpenTTDIndustryMap {
 	uint32_t size_x, size_y;
 	uint8_t landscape;
 } OpenTTDIndustryMap;
-/** Per-tick record read once by the facade: tick counter, map, inverse-scaled callback interval, ambient sound and editor mode. */
-typedef struct OpenTTDIndustryTickRecord {
-	uint64_t counter;
-	OpenTTDIndustryMap map;
-	uint32_t interval;
-	uint8_t ambient, editor;
-} OpenTTDIndustryTickRecord;
 /** Next pool industry from an index; industry is null at the end. */
 typedef struct OpenTTDIndustryEntry {
 	void *industry;

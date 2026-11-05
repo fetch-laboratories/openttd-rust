@@ -380,16 +380,6 @@ pub struct Map {
     pub size_y: u32,
     pub landscape: u8,
 }
-/// Values the original tick reads inline; constant for the whole tick.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TickRecord {
-    pub counter: u64,
-    pub map: Map,
-    pub interval: u32,
-    pub ambient: u8,
-    pub editor: u8,
-}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Entry {
@@ -620,7 +610,7 @@ fn helper(owner: *mut Industry, s: &Services, scale: bool) {
         }
     }
 }
-fn produce(e: Entry, t: &TickRecord, s: &Services, builder: *mut Builder) {
+fn produce(e: Entry, s: &Services, builder: *mut Builder) {
     let (i, owner) = (e.industry, e.owner);
     let f = fields(owner);
     if unsafe { (*f).counter.is_multiple_of(64) } {
@@ -628,7 +618,7 @@ fn produce(e: Entry, t: &TickRecord, s: &Services, builder: *mut Builder) {
         if chance16_i(1, 14, r) {
             let sounds = unsafe { (s.sound_count)(i) };
             if sounds != 0
-                && t.ambient != 0
+                && unsafe { s.shared().settings().ambient.read() }
                 && (0..produced_count(owner)).any(|n| unsafe {
                     (*produced(owner, n)).history[usize::from(LAST_MONTH)].first > 0
                 })
@@ -641,7 +631,16 @@ fn produce(e: Entry, t: &TickRecord, s: &Services, builder: *mut Builder) {
         (*f).counter = (*f).counter.wrapping_sub(1);
     }
     let callback = e.callbacks & 4 != 0;
-    if callback && unsafe { u32::from((*f).counter) % t.interval == 0 } {
+    if callback
+        && unsafe {
+            u32::from((*f).counter)
+                % crate::economy_func::scale_by_inverse_cargo_scale(
+                    crate::timer_game_tick::INDUSTRY_PRODUCE_TICKS,
+                    s.shared().settings().industry_cargo_scale.read(),
+                )
+                == 0
+        }
+    {
         unsafe { (s.production_callback)(i, 1) };
         helper(owner, s, false);
     }
@@ -671,42 +670,37 @@ fn produce(e: Entry, t: &TickRecord, s: &Services, builder: *mut Builder) {
         };
         if act {
             if parameter == 0 {
-                farm(i, e.id, t.map, s);
+                farm(i, e.id, tick_map(s), s);
             } else {
-                chop(i, owner, t.map, s, builder);
+                chop(i, owner, tick_map(s), s, builder);
             }
         }
     }
     unsafe { (s.tick_trigger)(i) };
 }
 /// # Safety
-/// Live builder, tick record and synchronous services; C++ supplies serial world
+/// Live builder and synchronous services; C++ supplies serial world
 /// access and terminating noexcept environmental failures. No borrowed owner
 /// reference survives a service, including recursive production on construction.
-pub(crate) unsafe fn tick(
-    builder: *mut Builder,
-    record: *const TickRecord,
-    services: *const Services,
-) {
+pub(crate) unsafe fn tick(builder: *mut Builder, services: *const Services) {
     let s = unsafe { &*services };
-    let t = unsafe { *record };
     let b = build_fields(builder);
     unsafe {
         if (*b).sound_ctr != 0 {
             (*b).sound_ctr = (*b).sound_ctr.wrapping_add(1);
             if (*b).sound_ctr == 75 {
-                if t.ambient != 0 {
+                if s.shared().settings().ambient.read() {
                     (s.play_sound)(SND_37_LUMBER_MILL_2, (*b).sound_tile);
                 }
             } else if (*b).sound_ctr == 160 {
                 (*b).sound_ctr = 0;
-                if t.ambient != 0 {
+                if s.shared().settings().ambient.read() {
                     (s.play_sound)(SND_36_LUMBER_MILL_3, (*b).sound_tile);
                 }
             }
         }
     }
-    if t.editor != 0 {
+    if crate::session::mode() == crate::openttd::GameMode::EDITOR {
         return;
     }
     let mut from = 0;
@@ -716,8 +710,8 @@ pub(crate) unsafe fn tick(
             break;
         }
         from = u32::from(e.id) + 1;
-        produce(e, &t, s, builder);
-        if t.counter.wrapping_add(u64::from(e.id)) % DAY_TICKS as u64 == 0 {
+        produce(e, s, builder);
+        if (s.shared().tick_counter)().wrapping_add(u64::from(e.id)) % DAY_TICKS as u64 == 0 {
             for n in 0..accepted_count(e.owner) {
                 let a = accepted(e.owner, n);
                 unsafe {
@@ -1498,9 +1492,18 @@ fn farm_with_landscape(
         plant(tile, id, map, s, landscape);
     }
 }
+fn tick_map(s: &Services) -> Map {
+    let world = crate::map_func::World::new(s.shared());
+    Map {
+        size_x: world.dimensions.size_x(),
+        size_y: world.size_y(),
+        landscape: unsafe { s.shared().settings().climate.read() },
+    }
+}
 fn farm(i: *mut c_void, id: u16, map: Map, s: &Services) {
-    // Preserve the earlier production tick's captured landscape until #168.
-    farm_with_landscape(i, id, map, s, &|| map.landscape);
+    farm_with_landscape(i, id, map, s, &|| unsafe {
+        s.shared().settings().climate.read()
+    });
 }
 /// # Safety
 /// Live industry, synchronous map/RNG services. No owner references cross calls.
@@ -2293,13 +2296,6 @@ crate::abi::layouts! {
         size_x,
         size_y,
         landscape,
-    };
-    "OpenTTDIndustryTickRecord" ["industry"] => TickRecord {
-        counter,
-        map,
-        interval,
-        ambient,
-        editor,
     };
     "OpenTTDIndustryEntry" ["industry"] => Entry {
         industry,

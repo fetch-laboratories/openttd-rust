@@ -66,12 +66,6 @@ const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
 	return services;
 }
 
-/**
- * Check the capacity of all vehicles in a chain and spread cargo if needed.
- * @param v The vehicle to check.
- * @pre You can only do this if the consist is not loading or unloading. It
- *      must not carry reserved cargo, nor cargo to be unloaded or transferred.
- */
 
 /**
  * Transfer cargo from a single (articulated )old vehicle to the new vehicle chain
@@ -88,12 +82,7 @@ static void TransferCargo(Vehicle *old_veh, Vehicle *new_head, bool part_of_chai
 	if (openttd_rust_cargo_capacity(&services, old_veh, new_head, 1, part_of_chain) != 0) Train::From(new_head)->ConsistChanged(CCF_LOADUNLOAD);
 }
 
-/**
- * Tests whether refit orders that applied to v will also apply to the new vehicle type
- * @param v The vehicle to be replaced
- * @param engine_type The type we want to replace with
- * @return true iff all refit orders stay valid
- */
+
 #include "rust/fleet_transaction_services.hpp"
 const OpenTTDFleetTransactionServices &FleetTransactionServices() { return _fleet_transaction_services; }
 

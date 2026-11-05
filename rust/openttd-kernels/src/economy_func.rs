@@ -13,3 +13,12 @@
 pub(crate) fn get_price(index: u32, cost_factor: u32, grf_shift: i32, shift: i32) -> i64 {
     crate::company::openttd_rust_economy_price(index, cost_factor, shift.wrapping_add(grf_shift))
 }
+
+/// `ScaleByInverseCargoScale`, with the percentage observed by the caller.
+pub(crate) fn scale_by_inverse_cargo_scale(num: u32, percentage: u16) -> u32 {
+    if percentage == 100 {
+        num
+    } else {
+        (num.wrapping_mul(100) / u32::from(percentage)).max(1)
+    }
+}

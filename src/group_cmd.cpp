@@ -161,29 +161,6 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
 	openttd_rust_fleet_update_autoreplace(&FleetGroupServices(), company.base());
 }
 
-/**
- * Update the num engines of a groupID. Decrease the old one and increase the new one
- * @note called in SetTrainGroupID and UpdateTrainGroupID
- * @param v     Vehicle we have to update
- * @param old_g index of the old group
- * @param new_g index of the new group
- */
-
-
-
-
-/**
- * Propagate a livery change to a group's children, and optionally update cached vehicle colourmaps.
- * @param g Group to propagate colours to children.
- * @param reset_cache Reset colourmap of vehicles in this group.
- */
-
-/**
- * Update group liveries for a company. This is called when the LS_DEFAULT scheme is changed, to update groups with
- * colours set to default.
- * @param c Company to update.
- */
-
 
 /**
  * Create a new vehicle group.
@@ -225,12 +202,6 @@ CommandCost CmdAlterGroup(DoCommandFlags flags, AlterGroupMode mode, GroupID gro
 	return FleetGroupResult(openttd_rust_fleet_alter_group(&FleetGroupServices(), flags.base(), to_underlying(mode), group_id.base(), parent_id.base(), reinterpret_cast<const uint8_t *>(text.data()), text.size()));
 }
 
-
-/**
- * Do add a vehicle to a group.
- * @param v Vehicle to add.
- * @param new_g Group to add to.
- */
 
 /**
  * Add a vehicle to a group
@@ -284,11 +255,6 @@ CommandCost CmdSetGroupLivery(DoCommandFlags flags, GroupID group_id, bool prima
 	return FleetGroupResult(openttd_rust_fleet_set_livery(&FleetGroupServices(), flags.base(), group_id.base(), primary, colour));
 }
 
-/**
- * Set group flag for a group and its sub-groups.
- * @param g initial group.
- * @param set 1 to set or 0 to clear protection.
- */
 
 /**
  * (Un)set group flag from a group

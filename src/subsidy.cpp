@@ -72,16 +72,6 @@ StringID Source::GetFormat() const
 	}
 }
 
-/**
- * Marks subsidy as awarded, creates news and AI event
- * @param company awarded company
- */
-
-/**
- * Sets a flag indicating that given town/industry is part of subsidised route.
- * @param source actual source
- * @param flag flag to set
- */
 
 /** Perform a full rebuild of the subsidies cache. */
 void RebuildSubsidisedSourceAndDestinationCache()
@@ -89,25 +79,6 @@ void RebuildSubsidisedSourceAndDestinationCache()
 	openttd_rust_subsidy_rebuild(&GetRustSubsidyServices());
 }
 
-/**
- * Delete the subsidies associated with a given cargo source type and id.
- * @param source The source to look for.
- */
-
-/**
- * Check whether a specific subsidy already exists.
- * @param cargo Cargo type.
- * @param src The source.
- * @param dst The destination.
- * @return \c true if the subsidy already exists, \c false if not.
- */
-
-/**
- * Creates a subsidy with the given parameters.
- * @param cargo_type Subsidised cargo.
- * @param src Source of cargo.
- * @param dst Destination of cargo.
- */
 
 /**
  * Create a new subsidy.
@@ -122,29 +93,6 @@ CommandCost CmdCreateSubsidy(DoCommandFlags flags, CargoType cargo_type, Source 
 	return openttd_rust_subsidy_command(&GetRustSubsidyServices(), flags.base(), cargo_type, src, dst) ? CommandCost() : CMD_ERROR;
 }
 
-/**
- * Tries to create a passenger subsidy between two towns.
- * @return True iff the subsidy was created.
- */
-
-
-
-/**
- * Tries to create a cargo subsidy with a town as source.
- * @return True iff the subsidy was created.
- */
-
-/**
- * Tries to create a cargo subsidy with an industry as source.
- * @return True iff the subsidy was created.
- */
-
-/**
- * Tries to find a suitable destination for the given source and cargo.
- * @param cargo_type Subsidized cargo.
- * @param src Source of cargo.
- * @return True iff the subsidy was created.
- */
 
 /** Perform the economy monthly update of open subsidies, and try to create a new one. */
 

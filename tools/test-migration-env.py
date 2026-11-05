@@ -6,6 +6,7 @@ import io
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,10 @@ class MigrationEnvTests(unittest.TestCase):
             patch = mock.patch.object(migration, name, self.local)
             patch.start()
             self.addCleanup(patch.stop)
+        self.build = self.local / "build-rust"
+        patch = mock.patch.object(migration, "CANDIDATE_BUILD", self.build)
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def bootstrap(self) -> None:
         for directory in ("cargo/bin", "rustup", "deps/usr/bin", LIBRARIES):
@@ -102,8 +107,28 @@ class MigrationEnvTests(unittest.TestCase):
         for name, value in exports.items():
             self.assertEqual(evaluated.get(name), value, name)
 
-    def test_nothing_exported_without_bootstrap(self) -> None:
-        self.assertEqual(self.exports(), {})
+    def test_generated_headers_exported_without_bootstrap(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                self.exports(), {"CPATH": str(self.build / "generated-abi")}
+            )
+
+    @unittest.skipUnless(shutil.which("c++"), "needs a C++ compiler")
+    def test_fork_header_finds_generated_record_with_reference_flags(self) -> None:
+        generated = self.build / "generated-abi"
+        generated.mkdir(parents=True)
+        (generated / "abi-record-settings.h").write_text("struct Settings {};\n")
+        fork = self.local / "fork"
+        fork.mkdir()
+        (fork / "services_ffi.h").write_text('#include "abi-record-settings.h"\n')
+        source = self.local / "probe.cpp"
+        source.write_text('#include "services_ffi.h"\nSettings settings;\n')
+        subprocess.run(
+            ["c++", "-fsyntax-only", "-I", str(fork), str(source)],
+            env=migration.environment(),
+            check=True,
+            capture_output=True,
+        )
 
     def test_build_rpath_follows_bootstrapped_libraries(self) -> None:
         self.assertEqual(migration.deps_build_options(), [])

@@ -105,7 +105,6 @@ static void Station562TileLoop(TileIndex tile)
 	RustGenerationLoop loop;
 	SessionFixture fixture;
 	fixture.shared.map = &_rust_map_statics;
-	fixture.services.map_log_y = OpenTTDMapLogY;
 	fixture.loop = loop.view;
 	StationNeed(fixture.Run(_game_mode), __LINE__);
 #else

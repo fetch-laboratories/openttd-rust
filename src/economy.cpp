@@ -85,17 +85,6 @@
 CargoPaymentPool _cargo_payment_pool("CargoPayment");
 INSTANTIATE_POOL_METHODS(CargoPayment)
 
-/**
- * Multiply two integer values and shift the results to right.
- *
- * This function multiplies two integer values. The result is
- * shifted by the amount of shift to right.
- *
- * @param a The first integer
- * @param b The second integer
- * @param shift The amount to shift the value to right.
- * @return The shifted result
- */
 
 /**
  * Score info, values used for computing the detailed performance rating.
@@ -136,12 +125,6 @@ OpenTTDEconomySettings RustEconomySettings() noexcept
 		.vehicle_costs = d.vehicle_costs, .construction_cost = d.construction_cost, .inflation = _settings_game.economy.inflation};
 }
 
-/**
- * Calculate the value of the assets of a company.
- *
- * @param c The company to calculate the value of.
- * @return The value of the assets of the company.
- */
 
 /**
  * Calculate the value of the company. That is the value of all
@@ -202,15 +185,6 @@ void ChangeOwnershipOfCompanyItems(Owner old_owner, Owner new_owner)
 	openttd_rust_company_change_ownership(&GetRustCompanyServices(), &ownership.view, old_owner.base(), new_owner.base());
 }
 
-/**
- * Check for bankruptcy of a company. Called every three months.
- * @param c Company to check.
- */
-
-/**
- * Update the finances of all companies.
- * Pay for the stations, update the history graph, update ratings and company values, and deal with bankruptcy.
- */
 
 /**
  * Add monthly inflation
@@ -230,9 +204,6 @@ void RecomputePrices()
 	const OpenTTDEconomySettings settings = RustEconomySettings();
 	openttd_rust_economy_recompute_prices(&GetRustCompanyServices(), &settings);
 }
-
-/** Let all companies pay the monthly interest on their loan. */
-
 
 
 /**
@@ -656,10 +627,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 };
 
-/**
- * Prepare the vehicle to be unloaded.
- * @param front_v the vehicle to be unloaded
- */
 
 /**
  * Load/unload the vehicles in this station according to the order
@@ -690,7 +657,6 @@ static const IntervalTimer<TimerGameCalendar> _calendar_inflation_monthly({Timer
  * Every economy month update of company economic data, plus economy fluctuations.
  */
 static const IntervalTimer<TimerGameEconomy> _economy_companies_monthly({ TimerGameEconomy::MONTH, TimerGameEconomy::Priority::COMPANY }, RustClockCallback{openttd_rust_clock_economy_month, &GetRustClockCompanyServices()});
-
 
 
 /**

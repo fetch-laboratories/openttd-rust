@@ -135,7 +135,6 @@ bool IsHangar(Tile t)
  */
 
 
-
 /**
  * Find the closest deleted station of the current company
  * @param tile the tile to search from.
@@ -423,23 +422,6 @@ void UpdateStationAcceptance(Station *st, bool show_msg)
 
 
 /**
- * Common part of building various station parts and possibly attaching them to an existing one.
- * @param[in,out] st Station to attach to
- * @param flags Command flags
- * @param reuse Whether to try to reuse a deleted station (gray sign) if possible
- * @param area Area occupied by the new part
- * @param name_class Station naming class to use to generate the new station's name
- * @return Command error that occurred, if any
- */
-
-/**
- * This is called right after a station was deleted.
- * It checks if the whole station is free of substations, and if so, the station will be
- * deleted after a little while.
- * @param st Station
- */
-
-/**
  * After adding/removing tiles to station, update some station-related stuff.
  * @param adding True if adding tiles, false if removing them.
  * @param type StationType being modified.
@@ -467,18 +449,6 @@ CommandCost CheckBuildableTile(TileIndex tile, DiagDirections invalid_dirs, int 
 	return cost;
 }
 
-/**
- * Checks if an airport can be built at the given location and clear the area.
- * @param tile_iter Airport tile iterator.
- * @param flags Operation to perform.
- * @return The cost in case of success, or an error code if it failed.
- */
-
-/**
- * Get station-type-specific string for a bridge that is too low.
- * @param type Station type.
- * @return bridge too low string.
- */
 
 /**
  * Get bridgeable tile information for a station type.
@@ -490,14 +460,6 @@ static std::span<const BridgeableTileInfo> GetStationBridgeableTileInfo(StationT
 	return _station_bridgeable_info[to_underlying(type)];
 }
 
-/**
- * Test if a rail station can be built below a bridge.
- * @param tile Tile to test.
- * @param spec Custom station spec to test.
- * @param type Type of rail station.
- * @param layout Layout piece of station to test.
- * @return Command result.
- */
 
 /**
  * Test if a road station can be built below a bridge.
@@ -514,50 +476,6 @@ CommandCost IsRoadStationBridgeAboveOk(TileIndex tile, const RoadStopSpec *spec,
 	return cost;
 }
 
-/**
- * Test if a dock can be built below a bridge.
- * @param tile Tile to test.
- * @param layout Layout piece of station to test.
- * @return Command result.
- */
-
-/**
- * Test if a buoy can be built below a bridge.
- * @param tile Tile to test.
- * @return Command result.
- */
-
-/**
- * Checks if a rail station can be built at the given tile.
- * @param tile_cur Tile to check.
- * @param north_tile North tile of the area being checked.
- * @param allowed_z Height allowed for the tile. If allowed_z is negative, it will be set to the height of this tile.
- * @param flags Operation to perform.
- * @param axis Rail station axis.
- * @param station StationID to be queried and returned if available.
- * @param rt The rail type to check for (overbuilding rail stations over rail).
- * @param affected_vehicles List of trains with PBS reservations on the tiles
- * @param spec_class Station class.
- * @param spec_index Index into the station class.
- * @param plat_len Platform length.
- * @param numtracks Number of platforms.
- * @return The cost in case of success, or an error code if it failed.
- */
-
-/**
- * Checks if a road stop can be built at the given tile.
- * @param cur_tile Tile to check.
- * @param allowed_z Height allowed for the tile. If allowed_z is negative, it will be set to the height of this tile.
- * @param spec Spec of road stop to be built.
- * @param flags Operation to perform.
- * @param invalid_dirs Prohibited directions (set of DiagDirections).
- * @param is_drive_through True if trying to build a drive-through station.
- * @param station_type Station type (bus, truck or road waypoint).
- * @param axis Axis of a drive-through road stop.
- * @param station StationID to be queried and returned if available.
- * @param rt Road type to build, may be INVALID_ROADTYPE if an existing road is required.
- * @return The cost in case of success, or an error code if it failed.
- */
 
 /**
  * Check whether we can expand the rail part of the given station.
@@ -612,38 +530,6 @@ StationGfx RailStationTileLayout::Iterator::operator*() const
  * @return command cost with the error or 'okay'
  */
 
-/**
- * Find a nearby station that joins this station.
- * @param existing_station an existing station we build over
- * @param station_to_join the station to join to
- * @param adjacent whether adjacent stations are allowed
- * @param ta the area of the newly build station
- * @param st 'return' pointer for the found station
- * @return command cost with the error or 'okay'
- */
-
-/**
- * Find a nearby waypoint that joins this waypoint.
- * @param existing_waypoint an existing waypoint we build over
- * @param waypoint_to_join the waypoint to join to
- * @param adjacent whether adjacent waypoints are allowed
- * @param ta the area of the newly build waypoint
- * @param wp 'return' pointer for the found waypoint
- * @param is_road whether to find a road waypoint
- * @return command cost with the error or 'okay'
- */
-
-/**
- * Clear platform reservation during station building/removing.
- * @param v vehicle which holds reservation
- */
-
-/**
- * Get station tile flags for the given StationGfx.
- * @param gfx StationGfx of station tile.
- * @param statspec Station spec of station tile.
- * @return Tile flags to apply.
- */
 
 /**
  * Set rail station tile flags for the given tile.
@@ -675,11 +561,6 @@ CommandCost CmdBuildRailStation(DoCommandFlags flags, TileIndex tile_org, RailTy
 	openttd_rust_station_build_rail(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile_org.base(), rt, axis, numtracks, plat_len, spec_class, spec_index, station_to_join.base(), adjacent);
 	return cost;
 }
-
-
-
-
-
 
 
 /**
@@ -735,52 +616,6 @@ CommandCost CmdRemoveFromRailWaypoint(DoCommandFlags flags, TileIndex start, Til
  * @return cost or failure of operation
  */
 
-/**
- * Remove a rail station
- * @param tile Tile of the station.
- * @param flags operation to perform
- * @return cost or failure of operation
- */
-
-/**
- * Remove a rail waypoint
- * @param tile Tile of the waypoint.
- * @param flags operation to perform
- * @return cost or failure of operation
- */
-
-
-/**
- * @param truck_station Determines whether a stop is #RoadStopType::Bus or #RoadStopType::Truck
- * @param st The Station to do the whole procedure for
- * @return a pointer to where to link a new RoadStop*
- */
-
-
-/**
- * Find a nearby station that joins this road stop.
- * @param existing_stop an existing road stop we build over
- * @param station_to_join the station to join to
- * @param adjacent whether adjacent stations are allowed
- * @param ta the area of the newly build station
- * @param st 'return' pointer for the found station
- * @return command cost with the error or 'okay'
- */
-
-/**
- * Calculates cost of new road stops within the area.
- * @param tile_area Area to check.
- * @param flags Operation to perform.
- * @param is_drive_through True if trying to build a drive-through station.
- * @param station_type Station type (bus, truck or road waypoint).
- * @param roadstopspec Spec of road stop being built.
- * @param axis Axis of a drive-through road stop.
- * @param ddir Entrance direction (#DiagDirection) for normal stops. Converted to the axis for drive-through stops.
- * @param station StationID to be queried and returned if available.
- * @param rt Road type to build, may be INVALID_ROADTYPE if an existing road is required.
- * @param unit_cost The cost to build one road stop of the current type.
- * @return The cost in case of success, or an error code if it failed.
- */
 
 /**
  * Build a bus or truck stop.
@@ -806,30 +641,6 @@ CommandCost CmdBuildRoadStop(DoCommandFlags flags, TileIndex tile, uint8_t width
 	return cost;
 }
 
-/**
- * Remove a bus station/truck stop
- * @param tile TileIndex been queried
- * @param flags operation to perform
- * @param replacement_spec_index replacement spec index to avoid deallocating, if < 0, tile is not being replaced
- * @return cost or failure of operation
- */
-
-/**
- * Remove a road waypoint
- * @param tile TileIndex been queried
- * @param flags operation to perform
- * @param replacement_spec_index replacement spec index to avoid deallocating, if < 0, tile is not being replaced
- * @return cost or failure of operation
- */
-
-/**
- * Remove a tile area of road stop or road waypoints
- * @param flags operation to perform
- * @param roadstop_area tile area of road stop or road waypoint tiles to remove
- * @param road_waypoint Whether to remove road waypoints or road stops
- * @param remove_road Remove roads of drive-through stops?
- * @return the cost of this operation or an error
- */
 
 /**
  * Remove bus or truck stops.
@@ -922,12 +733,6 @@ CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airpor
 	return cost;
 }
 
-/**
- * Remove an airport
- * @param tile TileIndex been queried
- * @param flags operation to perform
- * @return cost or failure of operation
- */
 
 /**
  * Open/close an airport to incoming aircraft.
@@ -984,18 +789,6 @@ void ClearDockingTilesCheckingNeighbours(TileIndex tile)
 	openttd_rust_station_clear_docking_neighbours(&GetRustStationCommandServices(), tile.base());
 }
 
-/**
- * Find the part of a dock that is land-based
- * @param t Dock tile to find land part of
- * @return tile of land part of dock
- */
-
-/**
- * Remove a dock
- * @param tile TileIndex been queried
- * @param flags operation to perform
- * @return cost or failure of operation
- */
 
 /**
  * Get station tile layout for a station type and its station gfx.
@@ -1457,7 +1250,6 @@ void StationPickerDrawSprite(int x, int y, StationType st, RailType railtype, Ro
 }
 
 
-
 static void FillTileDescRoadStop(TileIndex tile, TileDesc &td)
 {
 	RoadType road_rt = GetRoadTypeRoad(tile);
@@ -1568,12 +1360,6 @@ static void GetTileDesc_Station(TileIndex tile, TileDesc &td)
 }
 
 
-
-
-
-
-
-
 static bool ClickTile_Station(TileIndex tile)
 {
 	const BaseStation *bst = BaseStation::GetByTile(tile);
@@ -1598,7 +1384,6 @@ void TriggerWatchedCargoCallbacks(Station *st)
 {
 	openttd_rust_station_watched(st, &_rust_station_services);
 }
-
 
 
 /**
@@ -1628,12 +1413,8 @@ void DeleteStaleLinks(Station *from)
 }
 
 
-
-
 /** Economy monthly loop for stations. */
 static const IntervalTimer<TimerGameEconomy> _economy_stations_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::STATION}, RustClockCallback{openttd_rust_clock_station_monthly, &_rust_station_services});
-
-
 
 
 /**
@@ -1679,9 +1460,6 @@ void CcMoveStationName(Commands, const CommandCost &result, StationID station_id
 	}
 
 
-
-
-
 void UpdateStationDockingTiles(Station *st)
 {
 	openttd_rust_station_update_docking(&GetRustStationCommandServices(), st);
@@ -1698,15 +1476,6 @@ void DeleteOilRig(TileIndex tile)
 	openttd_rust_station_delete_oilrig(&GetRustStationCommandServices(), tile.base());
 }
 
-
-/**
- * Check if a drive-through road stop tile can be cleared.
- * Road stops built on town-owned roads check the conditions
- * that would allow clearing of the original road.
- * @param tile The road stop tile to check.
- * @param flags Command flags.
- * @return A succeeded command if the road can be removed, a failed command with the relevant error message otherwise.
- */
 
 /**
  * Clear a single tile of a station.

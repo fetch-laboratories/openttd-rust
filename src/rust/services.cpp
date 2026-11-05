@@ -223,6 +223,32 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 
 static void DestroySnowLine(SnowLine *record) noexcept { delete record; }
 
+static_assert(std::is_same_v<std::underlying_type_t<Colours>, uint8_t>);
+static_assert(std::is_same_v<std::underlying_type_t<LandscapeType>, uint8_t>);
+static_assert(LS_DEFAULT == 0);
+static const OpenTTDSettingAddresses _rust_setting_addresses{
+	.allow_town_roads = &_settings_game.economy.allow_town_roads,
+	.ambient = &_settings_client.sound.ambient,
+	.climate = reinterpret_cast<const uint8_t *>(&_settings_game.game_creation.landscape),
+	.competitor_interval = &_settings_game.difficulty.competitors_interval,
+	.construction_limits = &_settings_game.construction.limits,
+	.disable_elrails = &_settings_game.vehicle.disable_elrails,
+	.extra_tree_placement = &_settings_game.construction.extra_tree_placement,
+	.generation_seed = &_settings_game.game_creation.generation_seed,
+	.height_limit = &_settings_game.construction.map_height_limit,
+	.industry_cargo_scale = &_settings_game.economy.industry_cargo_scale,
+	.map_x = &_settings_game.game_creation.map_x,
+	.map_y = &_settings_game.game_creation.map_y,
+	.max_bridge_length = &_settings_game.construction.max_bridge_length,
+	.max_companies = &_settings_client.network.max_companies,
+	.max_competitors = &_settings_game.difficulty.max_no_competitors,
+	.never_expire_airports = &_settings_game.station.never_expire_airports,
+	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
+	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
+	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
+	.station_noise = &_settings_game.economy.station_noise_level,
+	.used_liveries = &_loaded_newgrf_features.used_liveries,
+};
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
 
 extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept
@@ -431,6 +457,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.is_sea = Shared_is_sea,
 	.is_water_tile = MapSvcIsWaterTile,
 	.map = &_rust_map_statics,
+	.settings = &_rust_setting_addresses,
 	.map_max_x = SharedMapMaxX,
 	.map_max_y = SharedMapMaxY,
 	.mark_bridge_dirty = SharedMarkBridgeDirty,
@@ -523,6 +550,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.grf_cargo_map = RustGRFCargoMap,
 	.grf_file_at_or_null = RustGRFFileAtOrNull,
 	.grf_file_id = RustGRFFileID,
+	.grf_parameter = RustGRFParameter,
 	.newgrf_specs = &_rust_newgrf_specs,
 	.resolver_grf_file = RustResolverGRFFile,
 	.resolver_grf_file_id = RustResolverGRFFileID,

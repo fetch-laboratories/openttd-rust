@@ -36,7 +36,7 @@ python3 tools/migration.py simulate --instructions --jobs 2
 - Profiles six scenarios with witnesses off and `-r 64x64`; canonical exit states and full logs are compared, including on reference-count cache hits.
 - Exact Callgrind selectors: `StateGameLoop()` and, for generation, `_GenerateWorld()`. Never use a wildcard: it toggles off collection in the nested link-graph pause helper. Loading, saving and early generation setup are excluded.
 - The driver verifies release `line-tables-only` debug information. It caches only reference Ir; profile times do not enter `plain_speed`.
-- The current anchors require the main checkout's pinned zlib and lzma runtime. Prefix profiles and speed passes with `LD_LIBRARY_PATH=<main>/.local/tip-profile-anchored-runtime-zlib-20261023/runtime/usr/lib/x86_64-linux-gnu`.
+- Anchors and pass history before 2026-11-05 came from the previous Ubuntu 26.04 host. Its Ir counts, ratios and pinned zlib and lzma runtime do not carry to this Ubuntu 24.04 host, whose compiler and CPU differ, and `simulate --instructions` rejects their identity. The first quiet pass here replaces every anchor and records the runtime it pins in this bullet. The three-pass record restarts with it: until a scenario has three passes on this host, ceiling and band decisions use the mean of those it has (provisional, an exception to the three-pass rule above).
 
 ## Wall timing
 

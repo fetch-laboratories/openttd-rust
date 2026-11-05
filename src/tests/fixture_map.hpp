@@ -17,14 +17,16 @@ struct OpenTTDFixtureMap {
 	std::unique_ptr<TileExtendedStorage[]> extended;
 	uint32_t size = 0;
 	uint32_t log_x = 0;
-	OpenTTDMapStatics statics{&this->base, &this->extended, &this->size, &this->log_x, true};
-	explicit OpenTTDFixtureMap(uint32_t log_x, uint32_t size = 0) : base(std::make_unique<TileBaseStorage[]>(size)), extended(std::make_unique<TileExtendedStorage[]>(size)), size(size), log_x(log_x) {}
+	uint32_t log_y = 0;
+	OpenTTDMapStatics statics{&this->base, &this->extended, &this->size, &this->log_x, &this->log_y, true};
+	explicit OpenTTDFixtureMap(uint32_t log_x, uint32_t size = 0) : base(std::make_unique<TileBaseStorage[]>(size)), extended(std::make_unique<TileExtendedStorage[]>(size)), size(size), log_x(log_x), log_y(size == 0 ? log_x : std::countr_zero(size) - log_x) {}
 	void Resize(uint32_t log_x, uint32_t size)
 	{
 		this->base = std::make_unique<TileBaseStorage[]>(size);
 		this->extended = std::make_unique<TileExtendedStorage[]>(size);
 		this->size = size;
 		this->log_x = log_x;
+		this->log_y = size == 0 ? log_x : std::countr_zero(size) - log_x;
 	}
 	OpenTTDFixtureMap(const OpenTTDFixtureMap &) = delete;
 	OpenTTDFixtureMap &operator=(const OpenTTDFixtureMap &) = delete;

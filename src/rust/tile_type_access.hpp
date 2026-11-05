@@ -23,12 +23,16 @@ struct OpenTTDNativeTileTypeAccess {
 	static_assert(uint64_t{MAX_MAP_SIZE} * MAX_MAP_SIZE * sizeof(BaseTile) <= INT32_MAX);
 	/* Rust loads each array pointer as the unique_ptr's sole representation. */
 	static_assert(sizeof(Tile::base_tiles) == sizeof(BaseTile *) && sizeof(Tile::extended_tiles) == sizeof(ExtendedTile *));
-	static_assert(std::is_same_v<decltype(Map::size), uint32_t> && std::is_same_v<decltype(Map::log_x), uint32_t>);
+	static_assert(std::is_same_v<decltype(Map::size), uint32_t> && std::is_same_v<decltype(Map::log_x), uint32_t> && std::is_same_v<decltype(Map::log_y), uint32_t>);
 
 	static constexpr OpenTTDMapStatics Statics() noexcept
 	{
 		return {
-			.base = &Tile::base_tiles, .extended = &Tile::extended_tiles, .size = &Map::size, .log_x = &Map::log_x,
+			.base = &Tile::base_tiles,
+			.extended = &Tile::extended_tiles,
+			.size = &Map::size,
+			.log_x = &Map::log_x,
+			.log_y = &Map::log_y,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 			.assertions = true,
 #else

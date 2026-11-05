@@ -62,7 +62,7 @@ movement calls remain for later #565 batches; #560 owns the complete follower.
 
 ## Transferring shared storage
 
-Storage ports move every pool, then map arrays (user, 2026-10-28); vehicles are first (#563). Move each canonical owner, accessors, allocation/reset and destruction together. See [storage ports](../porting.md#storage-ports). A polymorphic C++ shell stays opaque to Rust and holds fields not yet migrated; each design places its shared record in or beside it. The map storage port moves the allocation without replacing C++ tile references. Pools retain ID, first-free, iteration and hook behavior; a compacting arena or generational IDs would change it. #566 measures drawing, which reads records every frame.
+Storage ports move every pool, then map arrays (user, 2026-10-28); vehicles are first (#563). Move each canonical owner, accessors, allocation/reset and destruction together. See [storage ports](../porting.md#storage-ports). A polymorphic C++ shell stays opaque to Rust and holds fields not yet migrated; each design places its shared record in or beside it. The map storage port moves the allocation without replacing C++ tile references. Pools retain ID, first-free, iteration and hook behavior; a compacting arena or generational IDs would change it. #566 measures drawing, which reads records every frame. A pool's storage is moved only when no Rust code reaches any of its fields through a service ([storage ports](../porting.md#storage-ports)); #656 moves the vehicle fields #570 leaves.
 
 ## Saves and evidence
 

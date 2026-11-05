@@ -163,7 +163,6 @@ pub struct Services {
     native: unsafe extern "C" fn(Handle, Resolver) -> ResultValue,
     node: unsafe extern "C" fn(Handle, *mut Node),
     object: *const crate::objects::ObjectServices,
-    parameter: unsafe extern "C" fn(Handle, u32) -> u32,
     profile_end: unsafe extern "C" fn(Resolver, *const ResultValue),
     profile_enter: unsafe extern "C" fn(Resolver, bool) -> Resolver,
     random_bits: unsafe extern "C" fn(Handle) -> u32,
@@ -589,7 +588,7 @@ impl<'a> Invocation<'a> {
                     if self.file.is_null() {
                         0
                     } else {
-                        (self.s.parameter)(self.file, parameter)
+                        ((*(*self.s.global).shared).grf_parameter)(self.file, parameter)
                     }
                 }
                 _ => {
@@ -977,7 +976,7 @@ crate::abi::layouts! {
     "OpenTTDGroupNode" ["storage"] => Node { data, kind };
     "OpenTTDGroupAdjust" ["storage"] => Adjust { subroutine, and_mask, add_val, divmod_val, operation, kind => type, variable, parameter, shift_num };
     "OpenTTDGroupRange" ["storage"] => Range { result, low, high };
-    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, airport, global, house, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, parameter, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
+    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, airport, global, house, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, roadstop, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
 }
 
 pub(crate) const DSG_SIZE_DWORD: u8 = 2;
