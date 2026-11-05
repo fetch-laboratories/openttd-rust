@@ -47,4 +47,6 @@ include = [
     "tools/test-migration-env.py",
     "tools/test-multiplayer.py",
     "tools/test-sanitizers.py",
+    "tools/harness_inventory.py",
+    "tools/test-harness-inventory.py",
 ]
