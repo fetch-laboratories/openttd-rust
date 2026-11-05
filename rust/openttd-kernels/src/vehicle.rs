@@ -48,7 +48,7 @@ impl RailVehicleTypes {
 
 /// Non-null live vehicle handle; `Option<VehicleRef>` crosses as a nullable pointer.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleRef(pub NonNull<OpenTTDVehicle>);
 
 // A VehicleRef and its record are live and serialized at every field access.
