@@ -28,7 +28,6 @@ class RustAuthenticationClientHandler : public NetworkAuthenticationClientHandle
 	std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password_handler;
 protected:
 	RustAuthHandler handler;
-	RustAuthenticationClientHandler(const X25519SecretKey &secret, uint8_t method, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password = {});
 public:
 	RustAuthenticationClientHandler(const X25519SecretKey &secret, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password);
 	RequestResult ReceiveRequest(Packet &p) override;
@@ -43,7 +42,6 @@ public:
 class RustAuthenticationServerHandler : public NetworkAuthenticationServerHandler {
 protected:
 	RustAuthHandler handler;
-	RustAuthenticationServerHandler(const X25519SecretKey &secret, uint8_t method, const NetworkAuthenticationPasswordProvider *password = nullptr, const NetworkAuthenticationAuthorizedKeyHandler *authorized = nullptr);
 public:
 	RustAuthenticationServerHandler(const NetworkAuthenticationPasswordProvider *password, const NetworkAuthenticationAuthorizedKeyHandler *authorized, NetworkAuthenticationMethodMask mask);
 	void SendRequest(Packet &p) override;
@@ -57,29 +55,9 @@ public:
 	std::unique_ptr<NetworkEncryptionHandler> CreateServerToClientEncryptionHandler() const override;
 };
 
-class X25519KeyExchangeOnlyClientHandler : public RustAuthenticationClientHandler {
+/** Client key helper of the original authorized-key handler; the handlers themselves are Rust owners. */
+class X25519AuthorizedKeyClientHandler {
 public:
-	X25519KeyExchangeOnlyClientHandler(const X25519SecretKey &secret) : RustAuthenticationClientHandler(secret, 0) {}
-};
-class X25519KeyExchangeOnlyServerHandler : public RustAuthenticationServerHandler {
-public:
-	X25519KeyExchangeOnlyServerHandler(const X25519SecretKey &secret) : RustAuthenticationServerHandler(secret, 0) {}
-};
-class X25519PAKEClientHandler : public RustAuthenticationClientHandler {
-public:
-	X25519PAKEClientHandler(const X25519SecretKey &secret, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password) : RustAuthenticationClientHandler(secret, 1, std::move(password)) {}
-};
-class X25519PAKEServerHandler : public RustAuthenticationServerHandler {
-public:
-	X25519PAKEServerHandler(const X25519SecretKey &secret, const NetworkAuthenticationPasswordProvider *password) : RustAuthenticationServerHandler(secret, 1, password) {}
-};
-class X25519AuthorizedKeyClientHandler : public RustAuthenticationClientHandler {
-public:
-	X25519AuthorizedKeyClientHandler(const X25519SecretKey &secret) : RustAuthenticationClientHandler(secret, 2) {}
 	static X25519SecretKey GetValidSecretKeyAndUpdatePublicKey(std::string &secret_key, std::string &public_key);
-};
-class X25519AuthorizedKeyServerHandler : public RustAuthenticationServerHandler {
-public:
-	X25519AuthorizedKeyServerHandler(const X25519SecretKey &secret, const NetworkAuthenticationAuthorizedKeyHandler *authorized) : RustAuthenticationServerHandler(secret, 2, nullptr, authorized) {}
 };
 #endif /* NETWORK_CRYPTO_INTERNAL_H */

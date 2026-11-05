@@ -83,12 +83,20 @@ static void TestAuthentication(NetworkAuthenticationServerHandler &server, Netwo
 }
 
 
+/* The single-method handlers are reached through the production factories with a one-method mask. */
+static std::unique_ptr<NetworkAuthenticationClientHandler> CreateClient(const X25519SecretKey &secret_key, std::shared_ptr<NetworkAuthenticationPasswordRequestHandler> password_handler = {})
+{
+	std::string secret_key_str = FormatArrayAsHex(secret_key);
+	std::string public_key_str;
+	return NetworkAuthenticationClientHandler::Create(std::move(password_handler), secret_key_str, public_key_str);
+}
+
 TEST_CASE("Authentication_KeyExchangeOnly")
 {
-	X25519KeyExchangeOnlyServerHandler server(X25519SecretKey::CreateRandom());
-	X25519KeyExchangeOnlyClientHandler client(X25519SecretKey::CreateRandom());
+	auto server = NetworkAuthenticationServerHandler::Create(nullptr, nullptr, NetworkAuthenticationMethodMask{NetworkAuthenticationMethod::X25519_KeyExchangeOnly});
+	auto client = CreateClient(X25519SecretKey::CreateRandom());
 
-	TestAuthentication(server, client, NetworkAuthenticationServerHandler::ResponseResult::Authenticated, NetworkAuthenticationClientHandler::RequestResult::ReadyForResponse);
+	TestAuthentication(*server, *client, NetworkAuthenticationServerHandler::ResponseResult::Authenticated, NetworkAuthenticationClientHandler::RequestResult::ReadyForResponse);
 }
 
 
@@ -96,10 +104,10 @@ static void TestAuthenticationPAKE(std::string server_password, std::string clie
 		NetworkAuthenticationServerHandler::ResponseResult expected_response_result)
 {
 	NetworkAuthenticationDefaultPasswordProvider server_password_provider(server_password);
-	X25519PAKEServerHandler server(X25519SecretKey::CreateRandom(), &server_password_provider);
-	X25519PAKEClientHandler client(X25519SecretKey::CreateRandom(), std::make_shared<TestPasswordRequestHandler>(client_password));
+	auto server = NetworkAuthenticationServerHandler::Create(&server_password_provider, nullptr, NetworkAuthenticationMethodMask{NetworkAuthenticationMethod::X25519_PAKE});
+	auto client = CreateClient(X25519SecretKey::CreateRandom(), std::make_shared<TestPasswordRequestHandler>(client_password));
 
-	TestAuthentication(server, client, expected_response_result, NetworkAuthenticationClientHandler::RequestResult::AwaitUserInput);
+	TestAuthentication(*server, *client, expected_response_result, NetworkAuthenticationClientHandler::RequestResult::AwaitUserInput);
 }
 
 TEST_CASE("Authentication_PAKE")
@@ -108,9 +116,7 @@ TEST_CASE("Authentication_PAKE")
 		TestAuthenticationPAKE("sikrit", "sikrit", NetworkAuthenticationServerHandler::ResponseResult::Authenticated);
 	}
 
-	SECTION("Empty password") {
-		TestAuthenticationPAKE("", "", NetworkAuthenticationServerHandler::ResponseResult::Authenticated);
-	}
+	/* "Empty password" is in the Rust auth tests: the factory never offers PAKE without a password. */
 
 	SECTION("Wrong password") {
 		TestAuthenticationPAKE("sikrit", "secret", NetworkAuthenticationServerHandler::ResponseResult::NotAuthenticated);
@@ -125,10 +131,10 @@ static void TestAuthenticationAuthorizedKey(const X25519SecretKey &client_secret
 	authorized_keys.Add(FormatArrayAsHex(server_expected_public_key));
 
 	NetworkAuthenticationDefaultAuthorizedKeyHandler authorized_key_handler(authorized_keys);
-	X25519AuthorizedKeyServerHandler server(X25519SecretKey::CreateRandom(), &authorized_key_handler);
-	X25519AuthorizedKeyClientHandler client(client_secret_key);
+	auto server = NetworkAuthenticationServerHandler::Create(nullptr, &authorized_key_handler, NetworkAuthenticationMethodMask{NetworkAuthenticationMethod::X25519_AuthorizedKey});
+	auto client = CreateClient(client_secret_key);
 
-	TestAuthentication(server, client, expected_response_result, NetworkAuthenticationClientHandler::RequestResult::ReadyForResponse);
+	TestAuthentication(*server, *client, expected_response_result, NetworkAuthenticationClientHandler::RequestResult::ReadyForResponse);
 }
 
 TEST_CASE("Authentication_AuthorizedKey")
@@ -247,8 +253,10 @@ static void CheckEncryption(MockNetworkSocketHandler *sending_socket_handler, Mo
 
 TEST_CASE("Encryption handling")
 {
-	X25519KeyExchangeOnlyServerHandler server(X25519SecretKey::CreateRandom());
-	X25519KeyExchangeOnlyClientHandler client(X25519SecretKey::CreateRandom());
+	auto server_handler = NetworkAuthenticationServerHandler::Create(nullptr, nullptr, NetworkAuthenticationMethodMask{NetworkAuthenticationMethod::X25519_KeyExchangeOnly});
+	auto client_handler = CreateClient(X25519SecretKey::CreateRandom());
+	auto &server = *server_handler;
+	auto &client = *client_handler;
 
 	TestAuthentication(server, client, NetworkAuthenticationServerHandler::ResponseResult::Authenticated, NetworkAuthenticationClientHandler::RequestResult::ReadyForResponse);
 
