@@ -103,7 +103,6 @@ struct SessionFixture {
 		clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
 		clock.using_wallclock_units = [](bool) noexcept { return true; };
 		services.clock = &clock;
-		world.desync_level = []() noexcept -> int32_t { return 0; };
 		services.check_caches = Nothing;
 		services.company_begin = FrameNothing;
 		services.company_restore = FrameNothing;
