@@ -20,7 +20,7 @@ ROOT = probe.ROOT
 REFERENCE = probe.REFERENCE
 
 
-def main():
+def main() -> None:
     out = probe.output("script-list-comparison")
     squirrel = (REFERENCE / "src/script/squirrel.cpp").read_text()
     allocator_body = probe.body(squirrel, "struct ScriptAllocator {") + ";"
@@ -133,7 +133,7 @@ def main():
         if source.read_bytes() != (ROOT / source.relative_to(REFERENCE)).read_bytes():
             raise RuntimeError("Bundled VM source changed")
 
-    def compile(command, name):
+    def compile(command: list[str], name: str) -> None:
         probe.compile(command, out / f"{name}-compile.log")
 
     # The inherited export parser tracks access markers without recognizing an
@@ -143,7 +143,7 @@ def main():
         raise RuntimeError("Original binding generator changed")
 
     for apilc, apiuc in (("ai", "AI"), ("game", "GS"), ("template", "Template")):
-        generated = []
+        generated: list[bytes] = []
         for label, source in (("reference", REFERENCE), ("candidate", ROOT)):
             target = out / f"bindings-{label}-{apilc}.sq.hpp"
             compile(
@@ -180,7 +180,7 @@ def main():
         "-I",
         str(ROOT / "build-rust/generated-abi"),
     ]
-    objects = {}
+    objects: dict[str, list[Path]] = {}
     for group, source_root in (("reference", REFERENCE), ("rust", ROOT)):
         objects[group] = []
         group_flags = flags + (["-DWITH_RUST"] if group == "rust" else [])
@@ -208,7 +208,7 @@ def main():
     fixture = ROOT / "tools/migration/script-list-comparison.cpp"
     for mode in ("O0", "O2"):
 
-        def command(label, source, mode=mode):
+        def command(label: str, source: Path, mode: str = mode) -> list[probe.Argument]:
             return [
                 *flags,
                 "-" + mode,

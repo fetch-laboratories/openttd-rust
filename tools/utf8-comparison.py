@@ -7,6 +7,8 @@ bounded C++ append failure, not arbitrary allocator failure. Packet text loops
 and other string algorithms remain unchanged.
 """
 
+from pathlib import Path
+
 import probe
 
 SOURCES = (
@@ -17,13 +19,15 @@ SOURCES = (
 )
 
 
-def main():
+def main() -> None:
     out = probe.output("utf8-comparison")
     fixture = probe.ROOT / "tools/migration/utf8-comparison.cpp"
-    counts = {}
+    counts: dict[str, int] = {}
     for mode, flags in (("asserts", []), ("ndebug", ["-DNDEBUG"])):
 
-        def command(label, source, flags=flags):
+        def command(
+            label: str, source: Path, flags: list[str] = flags
+        ) -> list[probe.Argument]:
             return [
                 probe.compiler(),
                 "-std=c++20",

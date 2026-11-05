@@ -27,7 +27,7 @@ TIMEOUT_SECONDS = 1200
 INVENTORY = re.compile(r"^(?![^\s:]+:\d+:)[A-Za-z].*(?:\bpassed\b|cases: \d+$)")
 
 
-def run(tool):
+def run(tool: Path) -> tuple[Path, int, float, Path]:
     log = LOGS / f"{tool.stem}.log"
     start = time.monotonic()
     try:
@@ -46,7 +46,7 @@ def run(tool):
     return tool, code, time.monotonic() - start, log
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument(
@@ -66,7 +66,8 @@ def main():
     if not tools:
         sys.exit("No comparison tools selected")
     LOGS.mkdir(parents=True, exist_ok=True)
-    failed, printed = [], {}
+    failed: list[Path] = []
+    printed: dict[str, list[str]] = {}
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         futures = [pool.submit(run, tool) for tool in tools]
         for future in as_completed(futures):
