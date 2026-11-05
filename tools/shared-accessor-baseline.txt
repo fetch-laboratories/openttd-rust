@@ -125,7 +125,6 @@ write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shel
 write | src/rust/ship_control_services.h | Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept | 680b8e84edac38d1 | 1
 write | src/rust/train_services.h | TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | aebb225d48856496 | 1
 write | src/rust/session_services.inc | []() noexcept | 56bc9a312836fcd1 | 1
-src/rust/session_services.inc | [=] | bd9340cb404adf2f | 1
 src/rust/session_services.inc | [](OpenTTDSessionFrame *f) noexcept | 309fd0e09c3b557e | 1
 src/rust/session_services.inc | []() noexcept | 5910eb80ec425d16 | 1
 src/rust/session_services.inc | []() noexcept | 819ee15bd28ec7c1 | 1
