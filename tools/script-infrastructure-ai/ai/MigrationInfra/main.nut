@@ -14,6 +14,8 @@ class MigrationInfra extends AIController {
 	function Start() {
 		/* One full tile-loop cycle settles snow and desert ground first. */
 		this.Sleep(300);
+		/* Levelling and building in every climate needs the full loan. */
+		AICompany.SetLoanAmount(AICompany.GetMaxLoanAmount());
 		local free = Free();
 		/* Company-owned single-bit road pieces and a company road owner. */
 		AIRoad.SetCurrentRoadType(AIRoadTypeList(AIRoad.ROADTRAMTYPES_ROAD).Begin());
