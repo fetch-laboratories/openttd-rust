@@ -11,6 +11,7 @@
 #include "abi-record-settings.h"
 #include "byte_span_ffi.h"
 #include "../tile_storage_type.h"
+#include "../newgrf_badge_type.h"
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>

@@ -16,7 +16,7 @@
 #include "../rust/industry_resolver_ffi.h"
 #include "../rust/override_manager_ffi.h"
 #include "../rust/industry_definition_ffi.h"
-#include "../rust/industry_property_ffi.h"
+#include "../rust/spec_identity.h"
 #include "../rust/newgrf_bytereader_services.h"
 #include "../rust/newgrf_loading_ffi.h"
 #include "../rust/movement_ffi.h"
@@ -45,7 +45,11 @@ static_assert(sizeof(TimerGameCalendar::Date) == sizeof(int32_t));
 TEST_CASE("Industry - canonical native layouts")
 {
 	ABI_LAYOUT_CHECK;
+/* SubstituteGRFFileProps derives from a base with fields, so offsetof is conditionally supported. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #include "abi-layout-industry.inc"
+#pragma GCC diagnostic pop
 
 	REQUIRE(std::size(OpenTTDIndustryBuilderFields{}.builddata) == NUM_INDUSTRYTYPES);
 	REQUIRE(HISTORY_RECORDS == 61);
@@ -148,14 +152,15 @@ TEST_CASE("NewGRF - temporary managers preserve canonical tile owner")
 {
 	std::vector<EntityIDMapping> saved(_industile_mngr.mappings.begin(), _industile_mngr.mappings.end());
 	_industile_mngr.ResetMapping();
-	GRFFile file;
+	/* Static: Rust keys per-file specs by the file's address, which must not alias a later test's file. */
+	static GRFFile file;
 	file.grfid = 0x475475;
 	const OpenTTDIndustryPropertyContext context{&file, file.grfid, 8, 0};
 	const uint8_t substitute = 0;
 	auto define = [&](uint32_t id) {
 		ByteReader reader(&substitute, 1);
 		int32_t result = CIR_UNKNOWN;
-		CHECK(openttd_rust_industry_tile_properties(id, id + 1, 8, &reader, &context, &GetRustByteReaderServices(), &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &GetRustGrfLoadingServices(), &result));
+		CHECK(openttd_rust_industry_tile_properties(id, id + 1, 8, &reader, &context, &GetRustByteReaderServices(), &GetRustGrfLoadingServices(), &result));
 		CHECK(result == CIR_SUCCESS);
 		CHECK(_industile_mngr.GetID(id, file.grfid) == NEW_INDUSTRYTILEOFFSET + id);
 	};
