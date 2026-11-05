@@ -12,6 +12,7 @@
 
 #include "script_object.hpp"
 #include "../../tile_type.h"
+#include "../../rust/script_tile_ffi.h"
 
 /**
  * Class that handles all map related functions.
@@ -26,28 +27,28 @@ public:
 	 * @param tile The tile to check.
 	 * @return True is the tile it within the boundaries of the map.
 	 */
-	static bool IsValidTile(TileIndex tile);
+	static bool IsValidTile(TileIndex tile) { return openttd_rust_script_map_is_valid_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Gets the number of tiles in the map.
 	 * @return The size of the map in tiles.
 	 * @post Return value is always positive.
 	 */
-	static SQInteger GetMapSize();
+	static SQInteger GetMapSize() { return openttd_rust_script_map_size(&GetRustScriptHostServices()); }
 
 	/**
 	 * Gets the amount of tiles along the SW and NE border.
 	 * @return The length along the SW and NE borders.
 	 * @post Return value is always positive.
 	 */
-	static SQInteger GetMapSizeX();
+	static SQInteger GetMapSizeX() { return openttd_rust_script_map_size_x(&GetRustScriptHostServices()); }
 
 	/**
 	 * Gets the amount of tiles along the SE and NW border.
 	 * @return The length along the SE and NW borders.
 	 * @post Return value is always positive.
 	 */
-	static SQInteger GetMapSizeY();
+	static SQInteger GetMapSizeY() { return openttd_rust_script_map_size_y(&GetRustScriptHostServices()); }
 
 	/**
 	 * Gets the place along the SW/NE border (X-value).
@@ -56,7 +57,7 @@ public:
 	 * @return The X-value.
 	 * @post Return value is always lower than GetMapSizeX().
 	 */
-	static SQInteger GetTileX(TileIndex tile);
+	static SQInteger GetTileX(TileIndex tile) { return openttd_rust_script_map_tile_x(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Gets the place along the SE/NW border (Y-value).
@@ -65,7 +66,7 @@ public:
 	 * @return The Y-value.
 	 * @post Return value is always lower than GetMapSizeY().
 	 */
-	static SQInteger GetTileY(TileIndex tile);
+	static SQInteger GetTileY(TileIndex tile) { return openttd_rust_script_map_tile_y(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Gets the TileIndex given a x,y-coordinate.
@@ -76,7 +77,7 @@ public:
 	 *       Otherwise it may be invalid, but could be used to calculated neighbouring tiles, e.g. tile + AIMap.GetTileIndex(-1, -1) gets
 	 *       the tile index of the tile to the north. But be aware that even when tile is a valid tile, the result might not be a valid tile.
 	 */
-	static TileIndex GetTileIndex(SQInteger x, SQInteger y);
+	static TileIndex GetTileIndex(SQInteger x, SQInteger y) { return TileIndex(openttd_rust_script_map_tile_index(&GetRustScriptHostServices(), x, y)); }
 
 	/**
 	 * Calculates the Manhattan distance; the difference of
@@ -87,7 +88,7 @@ public:
 	 * @pre IsValidTile(tile_to).
 	 * @return The Manhattan distance between the tiles.
 	 */
-	static SQInteger DistanceManhattan(TileIndex tile_from, TileIndex tile_to);
+	static SQInteger DistanceManhattan(TileIndex tile_from, TileIndex tile_to) { return openttd_rust_script_map_distance_manhattan(&GetRustScriptHostServices(), tile_from.base(), tile_to.base()); }
 
 	/**
 	 * Calculates the distance between two tiles via 1D calculation.
@@ -99,7 +100,7 @@ public:
 	 * @pre IsValidTile(tile_to).
 	 * @return The maximum distance between the tiles.
 	 */
-	static SQInteger DistanceMax(TileIndex tile_from, TileIndex tile_to);
+	static SQInteger DistanceMax(TileIndex tile_from, TileIndex tile_to) { return openttd_rust_script_map_distance_max(&GetRustScriptHostServices(), tile_from.base(), tile_to.base()); }
 
 	/**
 	 * The squared distance between the two tiles.
@@ -111,7 +112,7 @@ public:
 	 * @pre IsValidTile(tile_to).
 	 * @return The squared distance between the tiles.
 	 */
-	static SQInteger DistanceSquare(TileIndex tile_from, TileIndex tile_to);
+	static SQInteger DistanceSquare(TileIndex tile_from, TileIndex tile_to) { return openttd_rust_script_map_distance_square(&GetRustScriptHostServices(), tile_from.base(), tile_to.base()); }
 
 	/**
 	 * Calculates the shortest distance to the edge.
@@ -119,7 +120,7 @@ public:
 	 * @pre IsValidTile(tile).
 	 * @return The distances to the closest edge.
 	 */
-	static SQInteger DistanceFromEdge(TileIndex tile);
+	static SQInteger DistanceFromEdge(TileIndex tile) { return openttd_rust_script_map_distance_from_edge(&GetRustScriptHostServices(), tile.base()); }
 };
 
 #endif /* SCRIPT_MAP_HPP */

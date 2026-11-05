@@ -26,13 +26,13 @@ use crate::openttd::GameMode;
 use crate::random_func::chance16_i;
 use crate::services::Services;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
+use crate::tree_map::TREE_GROUND_SHORE as GROUND_SHORE;
 
 use crate::landscape_type::{ARCTIC, TROPIC};
 const TOYLAND: u8 = 3;
 const GROUND_GRASS: u8 = 0;
 const GROUND_ROUGH: u8 = 1;
 const GROUND_SNOW_DESERT: u8 = 2;
-const GROUND_SHORE: u8 = 3;
 const GROUND_ROUGH_SNOW: u8 = 4;
 const ZONE_NORMAL: u8 = 0;
 const ZONE_DESERT: u8 = 1;

@@ -254,7 +254,6 @@ add_files(
     script_league.cpp
     script_list.cpp
     script_log.cpp
-    script_map.cpp
     script_marine.cpp
     script_newgrf.cpp
     script_news.cpp

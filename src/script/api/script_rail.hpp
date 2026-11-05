@@ -15,6 +15,9 @@
 #include "../../signal_type.h"
 #include "../../station_type.h"
 #include "../../track_type.h"
+#include "../../rust/ground_vehicle_ffi.h"
+#include "../../rust/rail_command_ffi.h"
+#include "../../rust/script_rail_ffi.h"
 
 /**
  * Class that handles all rail related functions.
@@ -114,14 +117,14 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has rail.
 	 */
-	static bool IsRailTile(TileIndex tile);
+	static bool IsRailTile(TileIndex tile) { return openttd_rust_script_rail_is_rail_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether there is a road / rail crossing on a tile.
 	 * @param tile The tile to check.
 	 * @return True if and only if there is a road / rail crossing.
 	 */
-	static bool IsLevelCrossingTile(TileIndex tile);
+	static bool IsLevelCrossingTile(TileIndex tile) { return openttd_rust_script_rail_is_level_crossing_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a rail depot.
@@ -129,7 +132,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a rail depot.
 	 */
-	static bool IsRailDepotTile(TileIndex tile);
+	static bool IsRailDepotTile(TileIndex tile) { return openttd_rust_script_rail_is_depot_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a rail station.
@@ -137,7 +140,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a rail station.
 	 */
-	static bool IsRailStationTile(TileIndex tile);
+	static bool IsRailStationTile(TileIndex tile) { return openttd_rust_script_rail_is_station_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a rail waypoint.
@@ -145,26 +148,26 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a rail waypoint.
 	 */
-	static bool IsRailWaypointTile(TileIndex tile);
+	static bool IsRailWaypointTile(TileIndex tile) { return openttd_rust_script_rail_is_waypoint_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if a given RailType is available.
 	 * @param rail_type The RailType to check for.
 	 * @return True if this RailType can be used.
 	 */
-	static bool IsRailTypeAvailable(RailType rail_type);
+	static bool IsRailTypeAvailable(RailType rail_type) { return openttd_rust_script_rail_is_type_available(&GetRustScriptHostServices(), static_cast<uint32_t>(rail_type)); }
 
 	/**
 	 * Get the current RailType set for all ScriptRail functions.
 	 * @return The RailType currently set.
 	 */
-	static RailType GetCurrentRailType();
+	static RailType GetCurrentRailType() { return static_cast<RailType>(openttd_rust_script_rail_current_type()); }
 
 	/**
 	 * Set the RailType for all further ScriptRail functions.
 	 * @param rail_type The RailType to set.
 	 */
-	static void SetCurrentRailType(RailType rail_type);
+	static void SetCurrentRailType(RailType rail_type) { openttd_rust_script_rail_set_current_type(&GetRustScriptHostServices(), static_cast<uint32_t>(rail_type)); }
 
 	/**
 	 * Check if a train build for a rail type can run on another rail type.
@@ -176,7 +179,7 @@ public:
 	 * @note Even if a train can run on a RailType that doesn't mean that it'll be
 	 *   able to power the train. Use TrainHasPowerOnRail for that.
 	 */
-	static bool TrainCanRunOnRail(ScriptRail::RailType engine_rail_type, ScriptRail::RailType track_rail_type);
+	static bool TrainCanRunOnRail(ScriptRail::RailType engine_rail_type, ScriptRail::RailType track_rail_type) { return openttd_rust_script_rail_train_can_run(&GetRustScriptHostServices(), static_cast<uint32_t>(engine_rail_type), static_cast<uint32_t>(track_rail_type)); }
 
 	/**
 	 * Check if a train build for a rail type has power on another rail type.
@@ -186,7 +189,7 @@ public:
 	 * @pre ScriptRail::IsRailTypeAvailable(track_rail_type).
 	 * @return Whether a train build for 'engine_rail_type' has power on 'track_rail_type'.
 	 */
-	static bool TrainHasPowerOnRail(ScriptRail::RailType engine_rail_type, ScriptRail::RailType track_rail_type);
+	static bool TrainHasPowerOnRail(ScriptRail::RailType engine_rail_type, ScriptRail::RailType track_rail_type) { return openttd_rust_script_rail_train_has_power(&GetRustScriptHostServices(), &GetRustRailCommandServices(), static_cast<uint32_t>(engine_rail_type), static_cast<uint32_t>(track_rail_type)); }
 
 	/**
 	 * Get the RailType that is used on a tile.
@@ -194,7 +197,7 @@ public:
 	 * @pre ScriptTile::HasTransportType(tile, ScriptTile.TRANSPORT_RAIL).
 	 * @return The RailType that is used on a tile.
 	 */
-	static RailType GetRailType(TileIndex tile);
+	static RailType GetRailType(TileIndex tile) { return static_cast<RailType>(openttd_rust_script_rail_type(&GetRustScriptHostServices(), tile.base())); }
 
 	/**
 	 * Convert the tracks on all tiles within a rectangle to another RailType.
@@ -216,7 +219,7 @@ public:
 	 * @pre IsRailDepotTile(depot).
 	 * @return The tile in front of the depot.
 	 */
-	static TileIndex GetRailDepotFrontTile(TileIndex depot);
+	static TileIndex GetRailDepotFrontTile(TileIndex depot) { return TileIndex(openttd_rust_script_rail_depot_front_tile(&GetRustScriptHostServices(), depot.base())); }
 
 	/**
 	 * Gets the direction of a rail station tile.
@@ -224,7 +227,7 @@ public:
 	 * @pre IsRailStationTile(tile).
 	 * @return The direction of the station (either RAILTRACK_NE_SW or RAILTRACK_NW_SE).
 	 */
-	static RailTrack GetRailStationDirection(TileIndex tile);
+	static RailTrack GetRailStationDirection(TileIndex tile) { return static_cast<RailTrack>(openttd_rust_script_rail_station_direction(&GetRustScriptHostServices(), tile.base())); }
 
 	/**
 	 * Builds a rail depot.
@@ -354,7 +357,7 @@ public:
 	 * @pre IsRailTile(tile).
 	 * @return A bitmask of RailTrack with all RailTracks on the tile.
 	 */
-	static uint GetRailTracks(TileIndex tile);
+	static uint GetRailTracks(TileIndex tile) { return openttd_rust_script_rail_tracks(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Build rail on the given tile.
@@ -398,7 +401,7 @@ public:
 	 * @pre ScriptMap::DistanceManhattan(to, tile) == 1.
 	 * @return True if 'tile' connects 'from' and 'to'.
 	 */
-	static bool AreTilesConnected(TileIndex from, TileIndex tile, TileIndex to);
+	static bool AreTilesConnected(TileIndex from, TileIndex tile, TileIndex to) { return openttd_rust_script_rail_tiles_connected(&GetRustScriptHostServices(), from.base(), tile.base(), to.base()); }
 
 	/**
 	 * Build a rail connection between two tiles.
@@ -449,7 +452,7 @@ public:
 	 * @param front The tile in front of 'tile'.
 	 * @return The SignalType of the signal on 'tile' facing to 'front'.
 	 */
-	static SignalType GetSignalType(TileIndex tile, TileIndex front);
+	static SignalType GetSignalType(TileIndex tile, TileIndex front) { return static_cast<SignalType>(openttd_rust_script_rail_signal_type(&GetRustScriptHostServices(), tile.base(), front.base())); }
 
 	/**
 	 * Build a signal on a tile.
@@ -483,7 +486,7 @@ public:
 	 * @pre IsRailTypeAvailable(railtype)
 	 * @return The baseprice of building the given object.
 	 */
-	static Money GetBuildCost(RailType railtype, BuildType build_type);
+	static Money GetBuildCost(RailType railtype, BuildType build_type) { return openttd_rust_script_rail_build_cost(&GetRustScriptHostServices(), &GetRustRailCommandServices(), static_cast<uint32_t>(railtype), static_cast<uint32_t>(build_type)); }
 
 	/**
 	 * Get the maximum speed of trains running on this railtype.
@@ -495,7 +498,7 @@ public:
 	 *       This is mph / 1.6, which is roughly km/h.
 	 *       To get km/h multiply this number by 1.00584.
 	 */
-	static SQInteger GetMaxSpeed(RailType railtype);
+	static SQInteger GetMaxSpeed(RailType railtype) { return openttd_rust_script_rail_max_speed(&GetRustScriptHostServices(), &GetRustGroundPhysicsServices(), static_cast<uint32_t>(railtype)); }
 
 	/**
 	 * Get the maintenance cost factor of a railtype.
