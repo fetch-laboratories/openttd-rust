@@ -692,7 +692,6 @@ impl Game<'_> {
             (if over { 512 } else { 256 }, 0)
         };
         let distance = crate::ground_vehicle::update_speed(
-            self.gs.physics,
             front.v,
             accel,
             min,
@@ -798,7 +797,7 @@ impl Game<'_> {
         }
         self.vs.any_on_tile(tile, |w| {
             w.vehicle_type() == crate::vehicle::VehicleType::ROAD.0
-                && (self.gs.physics.first)(w) == w
+                && w.first() == w
                 && w != u
                 && w != v.v
         })
@@ -1609,10 +1608,7 @@ impl Game<'_> {
                         if s.front {
                             self.update_cache(v, false);
                         }
-                        crate::ground_vehicle::cargo_changed(
-                            self.gs.physics,
-                            (self.gs.physics.first)(v.v),
-                        );
+                        crate::ground_vehicle::cargo_changed(self.gs.physics, v.v.first());
                     }
                 }
                 if new_dir != s.direction {

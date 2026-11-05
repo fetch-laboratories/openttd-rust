@@ -226,7 +226,7 @@ static void RoadBoundary()
 	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 	movement.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementVehicle { return {.train = {}, .road = road_abi_probe->state, .ship = nullptr, .kind = static_cast<VehicleType>(1)}; };
 	movement.is_tunnel = [](uint32_t) noexcept { return true; };
-	movement.pose = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementPose { return {.z = 10, .direction = 1}; };
+	road_abi_vehicle.z_pos = 10; road_abi_vehicle.direction = 1;
 	t.shared.movement = &movement;
 	t.shared.map = &map.statics;
 
@@ -270,6 +270,7 @@ static void RoadBoundary()
 		CHECK(p.visual_stage == 1 && p.visual_eligible && event == VSE_VISUAL_EFFECT); p.visual_stage = 3;
 		openttd_rust_road_set(p.state, 3, 1);
 		openttd_rust_road_set_dest(u, p.state, 100);
+		p.speed = 0; road_abi_vehicle.subspeed = 0;
 		p.post_effect_max = 40; p.ground.state->cache.cached_max_track_speed = 40; ++p.nested; return false;
 	};
 	auto emission_shared = t.shared;
@@ -293,9 +294,9 @@ static void RoadBoundary()
 
 	// Ground speed now executes instead of being stubbed: original model gives
 	// speed 2/distance 1; realistic kickoff gives speed 4/distance 3.
-	t.physics.speed_input = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundSpeedInput { CHECK(road_abi_probe->visual_stage == (road_abi_probe->visual_eligible ? 3U : 1U));
-		road_abi_probe->visual_stage = 4; return {0, 0}; };
-	t.physics.acceleration_input = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundAccelerationInput { return {0, 0, 0, RoadType{0}}; };
+	static OpenTTDVehicleResolverServices physics_resolver{};
+	physics_resolver.roadtype = [](OpenTTDVehicle *) noexcept { return RoadType{0}; };
+	t.physics_vehicle.newgrf = []() noexcept { return &physics_resolver; };
 	probe.ground.state->cache.cached_weight = 1;
 	t.physics_vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.ground.update_viewport = [](OpenTTDVehicle *part) noexcept {

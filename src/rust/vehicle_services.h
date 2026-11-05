@@ -352,7 +352,6 @@ const OpenTTDGroundServices &GetRustGroundServices() noexcept
 	return _rust_ground_services<T>;
 }
 
-inline OpenTTDVehicle *RustGroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 
 inline void RustVehicleDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(shell)->index); }
 

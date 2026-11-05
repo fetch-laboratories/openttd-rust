@@ -822,7 +822,6 @@ impl Game<'_> {
         let max = self.current_max_speed(id);
         if (self.leaves.acc_model)(id) == 0 {
             crate::ground_vehicle::update_speed(
-                self.leaves.physics,
                 id.vehicle(),
                 (i64::from(i32::from(v_acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
                 0,
@@ -831,7 +830,6 @@ impl Game<'_> {
             .distance as i32
         } else {
             crate::ground_vehicle::update_speed(
-                self.leaves.physics,
                 id.vehicle(),
                 crate::ground_vehicle::acceleration(self.leaves.physics, id.vehicle()) as u32,
                 (u64::from(!braking) * 2) as i32,
