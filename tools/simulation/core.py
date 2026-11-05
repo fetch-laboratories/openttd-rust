@@ -292,12 +292,14 @@ SHARED_HOOKS: dict[str, tuple[Hook, ...]] = {
     "engines": ("game_environment", "prepare", "check"),
     # effects-emission* fleets
     "fleet": ("prepare",),
-    # disaster and play-save witnesses
-    "aircraft": ("game_environment", "check"),
+    # unnamed controller setup inputs; disaster and play-save witnesses
+    "aircraft": ("install", "game_args", "game_environment", "check"),
     # cargo storage, industry and station economies; engine monitors
     "economy": ("prepare", "check"),
     # industry-company-* companies
     "companies": ("install", "prepare", "check"),
+    # unnamed reference road-construction inputs
+    "roads": ("install",),
     # vehicle witnesses of aircraft, effects, fleet, play saves, rails, roads, ships
     "vehicles": ("game_environment", "check"),
 }
