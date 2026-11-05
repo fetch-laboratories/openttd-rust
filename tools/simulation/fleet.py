@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NotRequired
 
-from . import core
+from . import core, effects
 from .console_adapter import prepared_console
 from .core import (
     ROOT,
@@ -36,12 +36,10 @@ BRANCHES = {
 }
 
 
-class Scenario(core.Scenario):
-    fleet: NotRequired[str]
+# effects.Scenario declares `fleet` and the effect-emission keys that `prepare`
+# handles and `effects.check` reads on the effects-emission* fleets.
+class Scenario(effects.Scenario):
     engines: NotRequired[str]  # engines.Scenario's key on fleet-engine-loading
-    # effects.Scenario's keys on the effects-emission* fleets prepare handles.
-    effect_emission: NotRequired[bool | str]
-    effect_emission_reload: NotRequired[bool]
 
 
 def scenarios(soak: bool) -> list[Scenario]:
