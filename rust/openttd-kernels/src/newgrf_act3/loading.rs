@@ -2,6 +2,7 @@
 //! Action 3 dispatch and ordered sprite bindings. Engine history is process-wide
 //! and survives loader resets. No history borrow spans native engine operations.
 #![allow(clippy::cast_possible_truncation, clippy::too_many_lines)]
+use crate::debug::grf_msg;
 use crate::engine_type::EngineID;
 use crate::game_state::GameState;
 use crate::newgrf::{
@@ -28,12 +29,11 @@ unsafe fn remember_last(index: usize, engine: EngineID) {
 unsafe fn group(id: u16) -> *const c_void {
     unsafe { (*loading::openttd_rust_grf_execution()).spritegroups[usize::from(id)] }
 }
-unsafe fn valid_group(s: &Services, id: u16, function: &str) -> bool {
+unsafe fn valid_group(id: u16, function: &str) -> bool {
     if u32::from(id) > crate::newgrf_internal::MAX_SPRITEGROUP || unsafe { group(id) }.is_null() {
-        unsafe { &*s.text }.log(
+        grf_msg!(
             1,
-            format!("{function}: Spritegroup 0x{id:04X} out of range or empty, skipping.")
-                .as_bytes(),
+            "{function}: Spritegroup 0x{id:04X} out of range or empty, skipping."
         );
         false
     } else {
@@ -47,23 +47,21 @@ unsafe fn vehicle_map(
     mut count: u8,
 ) -> Result<(), ReadBounds> {
     unsafe {
-        let text = &*s.text;
         let bindings = &*s.bindings;
         let override_wagon = count & 0x80 != 0;
         if override_wagon {
             count &= 0x7f;
             let size = (&*LAST_ENGINES.get()).len();
             if size == 0 {
-                text.log(
+                grf_msg!(
                     0,
-                    b"VehicleMapSpriteGroup: WagonOverride: No engine to do override with",
+                    "VehicleMapSpriteGroup: WagonOverride: No engine to do override with"
                 );
                 return Ok(());
             }
-            text.log(
+            grf_msg!(
                 6,
-                format!("VehicleMapSpriteGroup: WagonOverride: {size} engines, {count} wagons")
-                    .as_bytes(),
+                "VehicleMapSpriteGroup: WagonOverride: {size} engines, {count} wagons"
             );
         } else {
             resize_last(count);
@@ -89,19 +87,19 @@ unsafe fn vehicle_map(
         for cargo_index in 0..cargos {
             let cargo = buf.byte()?;
             let id = buf.word()?;
-            if !valid_group(s, id, "VehicleMapSpriteGroup") {
+            if !valid_group(id, "VehicleMapSpriteGroup") {
                 continue;
             }
-            text.log(8, format!("VehicleMapSpriteGroup: * [{cargo_index}] Cargo type 0x{cargo:X}, group id 0x{id:02X}").as_bytes());
+            grf_msg!(
+                8,
+                "VehicleMapSpriteGroup: * [{cargo_index}] Cargo type 0x{cargo:X}, group id 0x{id:02X}"
+            );
             let cargo = super::translate_cargo(feature, cargo, file);
             if !crate::cargo_type::is_valid_cargo_type(cargo) {
                 continue;
             }
             for (i, engine) in engines.iter().enumerate() {
-                text.log(
-                    7,
-                    format!("VehicleMapSpriteGroup: [{i}] Engine {}...", engine.0).as_bytes(),
-                );
+                grf_msg!(7, "VehicleMapSpriteGroup: [{i}] Engine {}...", engine.0);
                 if override_wagon {
                     let (last, len) = {
                         let last = &mut *LAST_ENGINES.get();
@@ -114,10 +112,10 @@ unsafe fn vehicle_map(
             }
         }
         let id = buf.word()?;
-        if !valid_group(s, id, "VehicleMapSpriteGroup") {
+        if !valid_group(id, "VehicleMapSpriteGroup") {
             return Ok(());
         }
-        text.log(8, format!("-- Default group id 0x{id:04X}").as_bytes());
+        grf_msg!(8, "-- Default group id 0x{id:04X}");
         for engine in engines {
             if override_wagon {
                 let (last, len) = {
@@ -134,7 +132,6 @@ unsafe fn vehicle_map(
     }
 }
 fn bind_standard<S, T>(
-    s: &Services,
     table: &SpecServices<S, T>,
     spec: *mut S,
     local: u16,
@@ -142,10 +139,7 @@ fn bind_standard<S, T>(
     group: *const c_void,
 ) {
     if spec.is_null() {
-        unsafe { &*s.text }.log(
-            1,
-            format!("MapSpriteGroup: {local} undefined, skipping.").as_bytes(),
-        );
+        grf_msg!(1, "MapSpriteGroup: {local} undefined, skipping.");
     } else if cargo.is_some() {
         (table.standard().set_sprite_group)(spec, StandardSpriteGroup::Purchase as u8, group);
     } else {
@@ -164,7 +158,6 @@ unsafe fn map_binding(
     unsafe {
         let file = loading::file();
         let bindings = &*s.bindings;
-        let text = &*s.text;
         let specs = s.shared().specs();
         if matches!(
             feature,
@@ -176,13 +169,10 @@ unsafe fn map_binding(
                 | GSF_OBJECTS
         ) && cargo.is_some_and(|c| c != 0xff)
         {
-            text.log(
+            grf_msg!(
                 1,
-                format!(
-                    "MapSpriteGroup: Invalid cargo bitnum {}, skipping.",
-                    cargo.unwrap()
-                )
-                .as_bytes(),
+                "MapSpriteGroup: Invalid cargo bitnum {}, skipping.",
+                cargo.unwrap()
             );
             return;
         }
@@ -194,7 +184,7 @@ unsafe fn map_binding(
                 } else {
                     (owner.local)(file, usize::from(local)).cast_mut().cast()
                 };
-                bind_standard(s, specs.house(), spec, local, cargo, group);
+                bind_standard(specs.house(), spec, local, cargo, group);
             }
             GSF_INDUSTRIES => {
                 let owner = &*s.industry;
@@ -203,7 +193,7 @@ unsafe fn map_binding(
                 } else {
                     (owner.file_industry)(file, usize::from(local))
                 };
-                bind_standard(s, specs.industry(), spec, local, cargo, group);
+                bind_standard(specs.industry(), spec, local, cargo, group);
             }
             GSF_INDUSTRYTILES => {
                 let owner = &*s.industry;
@@ -212,7 +202,7 @@ unsafe fn map_binding(
                 } else {
                     (owner.file_tile)(file, usize::from(local))
                 };
-                bind_standard(s, specs.industry_tile(), spec, local, cargo, group);
+                bind_standard(specs.industry_tile(), spec, local, cargo, group);
             }
             GSF_AIRPORTS => {
                 let owner = &*s.airports;
@@ -221,7 +211,7 @@ unsafe fn map_binding(
                 } else {
                     (owner.airport_get)(file, usize::from(local))
                 };
-                bind_standard(s, specs.airport(), spec, local, cargo, group);
+                bind_standard(specs.airport(), spec, local, cargo, group);
             }
             GSF_AIRPORTTILES => {
                 let owner = &*s.airports;
@@ -230,10 +220,9 @@ unsafe fn map_binding(
                 } else {
                     (owner.tile_get)(file, usize::from(local))
                 };
-                bind_standard(s, specs.airport_tile(), spec, local, cargo, group);
+                bind_standard(specs.airport_tile(), spec, local, cargo, group);
             }
             GSF_OBJECTS => bind_standard(
-                s,
                 specs.object(),
                 (bindings.object_spec)(file, local),
                 local,
@@ -263,12 +252,9 @@ unsafe fn map_binding(
             GSF_CANALS => {
                 if cargo.is_none() {
                     if local >= CF_END {
-                        text.log(
+                        grf_msg!(
                             1,
-                            format!(
-                                "CanalMapSpriteGroup: Canal subset {local} out of range, skipping"
-                            )
-                            .as_bytes(),
+                            "CanalMapSpriteGroup: Canal subset {local} out of range, skipping"
                         );
                     } else {
                         (bindings.canal_bind)(local as u8, file, group);
@@ -278,12 +264,9 @@ unsafe fn map_binding(
             GSF_CARGOES => {
                 if cargo.is_none() {
                     if local >= u16::from(crate::cargo_type::NUM_CARGO) {
-                        text.log(
+                        grf_msg!(
                             1,
-                            format!(
-                                "CargoMapSpriteGroup: Cargo type {local} out of range, skipping"
-                            )
-                            .as_bytes(),
+                            "CargoMapSpriteGroup: Cargo type {local} out of range, skipping"
                         );
                     } else {
                         (bindings.cargo_bind)(local as u8, file, group);
@@ -331,11 +314,7 @@ unsafe fn map_binding(
                     return;
                 }
                 if !(bindings.badge_bind)(file, local, cargo.unwrap_or(GSF_DEFAULT), group) {
-                    text.log(
-                        1,
-                        format!("BadgeMapSpriteGroup: Badge {local} undefined, skipping")
-                            .as_bytes(),
-                    );
+                    grf_msg!(1, "BadgeMapSpriteGroup: Badge {local} undefined, skipping");
                 }
             }
             _ => unreachable!(),
@@ -358,7 +337,7 @@ unsafe fn map_sprite_group(
         for _ in 0..cargos {
             let cargo = buf.byte()?;
             let id = buf.word()?;
-            if !valid_group(s, id, "MapSpriteGroup") {
+            if !valid_group(id, "MapSpriteGroup") {
                 continue;
             }
             for &local in ids {
@@ -366,7 +345,7 @@ unsafe fn map_sprite_group(
             }
         }
         let id = buf.word()?;
-        if valid_group(s, id, "MapSpriteGroup") {
+        if valid_group(id, "MapSpriteGroup") {
             for &local in ids {
                 map_binding(s, feature, local, None, group(id));
             }
@@ -381,29 +360,30 @@ pub(crate) unsafe fn feature_map_sprite_group(
     unsafe {
         let feature = buf.byte()?;
         let count = buf.byte()?;
-        let text = &*s.text;
         if feature >= GSF_END {
-            text.log(
+            grf_msg!(
                 1,
-                format!("FeatureMapSpriteGroup: Unsupported feature 0x{feature:02X}, skipping")
-                    .as_bytes(),
+                "FeatureMapSpriteGroup: Unsupported feature 0x{feature:02X}, skipping"
             );
             return Ok(());
         }
         if count == 0 {
             buf.byte()?;
             let id = buf.word()?;
-            if !valid_group(s, id, "FeatureMapSpriteGroup") {
+            if !valid_group(id, "FeatureMapSpriteGroup") {
                 return Ok(());
             }
-            text.log(6, format!("FeatureMapSpriteGroup: Adding generic feature callback for feature 0x{feature:02X}").as_bytes());
+            grf_msg!(
+                6,
+                "FeatureMapSpriteGroup: Adding generic feature callback for feature 0x{feature:02X}"
+            );
             crate::newgrf_generic::openttd_rust_generic_add(feature, loading::file(), group(id));
             return Ok(());
         }
         ((*s.bindings).mark_feature)(loading::file(), feature);
-        text.log(
+        grf_msg!(
             6,
-            format!("FeatureMapSpriteGroup: Feature 0x{feature:02X}, {count} ids").as_bytes(),
+            "FeatureMapSpriteGroup: Feature 0x{feature:02X}, {count} ids"
         );
         match feature {
             GSF_TRAINS | GSF_ROADVEHICLES | GSF_SHIPS | GSF_AIRCRAFT => {
@@ -415,10 +395,9 @@ pub(crate) unsafe fn feature_map_sprite_group(
                 map_sprite_group(s, buf, feature, count)
             }
             _ => {
-                text.log(
+                grf_msg!(
                     1,
-                    format!("FeatureMapSpriteGroup: Unsupported feature 0x{feature:02X}, skipping")
-                        .as_bytes(),
+                    "FeatureMapSpriteGroup: Unsupported feature 0x{feature:02X}, skipping"
                 );
                 Ok(())
             }

@@ -190,7 +190,7 @@ macro_rules! grf_msg {
 pub(crate) use grf_msg;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::{Bytes, Char, Services, format};
     use std::cell::RefCell;
     use std::ffi::c_int;
@@ -242,7 +242,9 @@ mod tests {
         sprite: &raw const OTHER,
         yapf: &raw const OTHER,
     };
-    fn take() -> Vec<(String, c_int, Vec<u8>)> {
+    /// Bind the recording table once; return and clear this thread's recorded lines.
+    /// `GrfMsg` lines carry the category `GrfMsgI`; recorded levels: grf 5, misc 0, net 9.
+    pub(crate) fn take() -> Vec<(String, c_int, Vec<u8>)> {
         static BIND: Once = Once::new();
         BIND.call_once(|| unsafe { super::openttd_rust_debug_bind(&raw const TABLE) });
         LINES.with(|l| std::mem::take(&mut *l.borrow_mut()))
