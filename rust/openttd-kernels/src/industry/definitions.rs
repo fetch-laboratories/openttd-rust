@@ -223,7 +223,7 @@ pub unsafe fn finalise(s: &Services) {
 /// `ResetIndustries` with the override managers.
 pub(crate) unsafe fn reset(climate: u8, s: &Services) {
     unsafe {
-        industrytype::reset(climate, s.origin, s.origin_tiles);
+        industrytype::reset(s.shared, climate, s.origin, s.origin_tiles);
         override_manager::openttd_rust_override_reset(override_manager::tile());
         override_manager::openttd_rust_override_reset(override_manager::industry());
     }

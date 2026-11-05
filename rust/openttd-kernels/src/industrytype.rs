@@ -296,15 +296,32 @@ pub(crate) struct FileSpecs {
 }
 static FILES: GameState<BTreeMap<usize, FileSpecs>> = GameState::new(BTreeMap::new());
 
-/// `&_industry_specs[id]`; `id` is below `NUM_INDUSTRYTYPES`.
-pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
-    // SAFETY: serialized storage; the element pointer carries no borrow.
-    unsafe { &raw mut (*SPECS.get())[usize::from(id)] }
+/// The native assertion policy used by the original spec accessors, installed at reset.
+static SHARED: GameState<*const crate::services::Services> = GameState::new(std::ptr::null());
+
+fn spec_index<T>(base: *mut T, id: u16, count: u16, assert: impl FnOnce(bool)) -> *mut T {
+    if id >= count {
+        assert(false);
+    }
+    // With native assertions disabled, the original accessor adds no bounds rejection.
+    base.wrapping_add(usize::from(id))
 }
-/// `&_industry_tile_specs[gfx]`; `gfx` is below `NUM_INDUSTRYTILES`.
+fn spec_assert(ok: bool) {
+    // SAFETY: production resets the specs with the process-lifetime shared table before use.
+    crate::movement::native_assert(unsafe { SHARED.table() }, ok);
+}
+/// `GetIndustrySpec`, including its native assertion policy.
+pub(crate) fn industry(id: u16) -> *mut IndustrySpec {
+    spec_index(
+        SPECS.get().cast(),
+        id,
+        u16::from(NUM_INDUSTRYTYPES),
+        spec_assert,
+    )
+}
+/// `GetIndustryTileSpec`, including its native assertion policy.
 pub(crate) fn tile(gfx: u16) -> *mut IndustryTileSpec {
-    // SAFETY: as for `industry`.
-    unsafe { &raw mut (*TILES.get())[usize::from(gfx)] }
+    spec_index(TILES.get().cast(), gfx, NUM_INDUSTRYTILES, spec_assert)
 }
 /// The per-file specs of `file`, created empty on first use.
 ///
@@ -321,18 +338,20 @@ pub(crate) fn clear_file(file: *const c_void) {
     }
 }
 
-/// `ResetIndustries`: copy the original tables and clear the NewGRF slots. Every
+/// `ResetIndustries`: copy the original tables and clear the `NewGRF` slots. Every
 /// `GRFFile` is destroyed with the same reset, so its specs go too.
 ///
 /// # Safety
 /// `origin` and `origin_tiles` address the native tables of `NEW_INDUSTRYOFFSET` and
 /// `NEW_INDUSTRYTILEOFFSET` records.
 pub(crate) unsafe fn reset(
+    shared: *const crate::services::Services,
     climate: u8,
     origin: *const IndustrySpec,
     origin_tiles: *const IndustryTileSpec,
 ) {
     use crate::industry_type::{NEW_INDUSTRYOFFSET, NEW_INDUSTRYTILEOFFSET};
+    SHARED.exchange(shared);
     let specs = unsafe { &mut *SPECS.get() };
     for (id, spec) in specs.iter_mut().enumerate() {
         *spec = if id < usize::from(NEW_INDUSTRYOFFSET) {
@@ -452,4 +471,32 @@ crate::abi::layouts! {
     "RustVector<uint8_t>" ["industry_spec"] => NativeVec<u8> { items, count, capacity };
     "SubstituteGRFFileProps" ["industry_spec"] => SubstituteProps { local_id, grfid, grffile, spritegroups, subst_id, override_id };
     "AnimationInfo<IndustryAnimationTriggers>" ["industry_spec"] => AnimationInfo { frames, status, speed, triggers };
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn spec_indices_follow_native_assertion_policy() {
+        let mut values = [0_u8; 2];
+        let base = values.as_mut_ptr();
+        let mut assertions = 0;
+        assert_eq!(
+            super::spec_index(base, 1, 2, |_| assertions += 1),
+            base.wrapping_add(1)
+        );
+        assert_eq!(assertions, 0);
+        // A returning native handler models WITH_ASSERT off; do not dereference the invalid pointer.
+        assert_eq!(
+            super::spec_index(base, 2, 2, |ok| {
+                assert!(!ok);
+                assertions += 1;
+            }),
+            base.wrapping_add(2)
+        );
+        assert_eq!(assertions, 1);
+        assert_eq!(
+            super::spec_index(base, u16::MAX, 2, |_| {}),
+            base.wrapping_add(usize::from(u16::MAX))
+        );
+    }
 }
