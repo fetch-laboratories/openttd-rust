@@ -18,6 +18,7 @@ from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
+from code_lines import without_comments
 from simulation import (
     community_ai,
     engines,
@@ -709,7 +710,7 @@ class SimulationRuntimeTests(unittest.TestCase):
 
 
 class SimulationSpeedTests(unittest.TestCase):
-    def test_candidate_profile_entries_name_rust_functions(self):
+    def test_candidate_profile_entries_name_rust_functions(self) -> None:
         # A renamed export toggles no collection, so every profile reports zero loop Ir.
         source = simulate.ROOT / "rust/openttd-kernels/src"
         for entry in ir.CANDIDATE_ENTRIES:
@@ -720,10 +721,24 @@ class SimulationSpeedTests(unittest.TestCase):
                 if module
                 else sorted(source.rglob("*.rs"))
             )
-            text = "".join(path.read_text() for path in files if path.is_file())
+            functions: set[str] = set()
+            for path in files:
+                if not path.is_file():
+                    continue
+                text = path.read_text()
+                if name not in text:
+                    continue
+                text = without_comments(text, str(path), strings=True)
+                depth = 0
+                for token in re.finditer(r"[{}]|\bfn\s+(\w+)\s*[<(]", text):
+                    if token[0] == "{":
+                        depth += 1
+                    elif token[0] == "}":
+                        depth -= 1
+                    elif depth == 0:
+                        functions.add(token[1])
             with self.subTest(entry=entry):
-                found = re.search(rf"\bfn {re.escape(name)}\s*[<(]", text)
-                self.assertIsNotNone(found, f"no Rust function {name} for {entry}")
+                self.assertIn(name, functions, f"no Rust module function for {entry}")
 
     def test_record_and_fixed_ceilings(self):
         from math import inf, nextafter
