@@ -2,34 +2,18 @@
 
 import shutil
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import NotRequired
 
 from . import core, objects
 from .console_adapter import prepared_console
 from .core import SNAPSHOT_TICKS, TICKS_PER_DAY
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
-    ticks: int
-    test: NotRequired[str]
-    seed: NotRequired[int]
-    map_log2: NotRequired[int]
-    map_log2_y: NotRequired[int]
-    land_generator: NotRequired[int]
+class Scenario(core.Scenario):
     generation_owner: NotRequired[str]
-    settings: NotRequired[dict[str, dict[str, str | int]]]
-    witnesses: NotRequired[list[str]]
-    executables: NotRequired[dict[str, Path]]
-    console: NotRequired[list[str]]
 
 
-class Run(TypedDict):
-    log: list[str]
-
-
-class Result(TypedDict, total=False):
+class Result(core.Result, total=False):
     generation_witnesses: dict[str, dict[str, int]]
 
 
@@ -250,7 +234,9 @@ def prepare(
     }
 
 
-def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) -> None:
+def check(
+    scenario: Scenario, run: core.Run, mode: core.Mode, role: core.Role, result: Result
+) -> None:
     if not scenario.get("generation_owner"):
         return
     lines = [line for line in run["log"] if line.startswith("GENERATION ")]

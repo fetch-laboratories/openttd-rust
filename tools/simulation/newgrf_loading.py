@@ -4,7 +4,7 @@ import calendar
 import struct
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import NotRequired, TypedDict, cast
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
@@ -32,7 +32,7 @@ class Run(TypedDict):
 class Result(TypedDict, total=False):
     loading_input: object
     problems: list[str]
-    differences: list[str]
+    differences: list[core.Difference]
 
 
 ADAPTER = core.ROOT / "tools/simulation/newgrf-loading-console.cpp"
@@ -371,11 +371,18 @@ def prepare(
         }
     saves = {role: folder / role / "loaded.sav" for role in executables}
     captures = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            save=str(normalized),
-            console=['debug_level "grf=8"', command + f' "{saves[role]}"', "unpause"],
-            ticks=1,
+        lambda role: cast(
+            core.Scenario,
+            dict(
+                scenario,
+                save=str(normalized),
+                console=[
+                    'debug_level "grf=8"',
+                    command + f' "{saves[role]}"',
+                    "unpause",
+                ],
+                ticks=1,
+            ),
         ),
         executables,
         builds,
