@@ -154,17 +154,16 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 			continue;
 		}
 		// ChooseRailTrack obtains its origin through FollowTrainReservation.
-		std::string expected = kind == 0 ? "rf" : "";
+		std::string expected = kind == 0 ? "r" : "";
 		if (fail) {
-			expected += "fs"; // One failed search-node follow; no child segments.
+			expected += "s"; // One failed search-node follow; no child segments.
 		} else {
 			// max_nodes=1 expands two search nodes, each with three reachable
 			// child trackdirs. PfFollowNode masks only the search-node follow;
 			// PfCalcCost follows each child segment without reservation masking.
 			for (unsigned round = 0; round < 2; ++round) {
-				if (kind == 3) expected += 'f'; // IsSafeWaitingPosition probe.
-				expected += kind == 3 ? "frs" : "fs";
-				for (unsigned child = 0; child < 3; ++child) expected += "fs";
+				expected += kind == 3 ? "rs" : "s";
+				for (unsigned child = 0; child < 3; ++child) expected += "s";
 			}
 		}
 		CHECK(std::string(reads.begin(), reads.end()) == expected);

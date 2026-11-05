@@ -51,7 +51,8 @@ pub struct TransactionServices {
 unsafe fn unique_name(s: &TransactionServices, name: ByteSpan) -> bool {
     let mut from = 0;
     loop {
-        let v = unsafe { (s.groups.next_vehicle)(from) };
+        let v =
+            crate::vehicle::VehicleRef::shell_from_record(unsafe { (s.groups.next_vehicle)(from) });
         if v.is_null() {
             return true;
         }
@@ -148,7 +149,8 @@ pub unsafe extern "C" fn openttd_rust_vehicle_service_interval(
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        interval = s.interval_default(owner, unsafe { (s.groups.vehicle_type)(v) }) as u16;
+        interval =
+            s.interval_default(owner, crate::fleet::record(s.groups, v).vehicle_type()) as u16;
     }
     if flags & DoCommandFlag::EXECUTE != 0 {
         (s.set_interval)(v, interval, custom, percent);
@@ -182,7 +184,7 @@ unsafe fn vehicle_set(
     mut count: u8,
     mut emit: impl FnMut(u32),
 ) {
-    if unsafe { (s.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
+    if crate::fleet::record(s.groups, v).vehicle_type() != VehicleType::TRAIN.0 {
         return;
     }
     v = (s.first_engine_part)(v);
@@ -192,9 +194,11 @@ unsafe fn vehicle_set(
             if (s.multiheaded)(v) {
                 emit(unsafe { (s.groups.vehicle_id)((s.other_multihead)(v)) });
             }
-            let handle = crate::vehicle::VehicleRef(std::ptr::NonNull::new(v.cast()).unwrap());
-            v = (s.vehicles.next)(handle).map_or(std::ptr::null_mut(), |v| v.0.as_ptr().cast());
-            if v.is_null() || !unsafe { (s.transactions.articulated)(v) } {
+            let handle = unsafe { vehicle_ref(v, s.vehicles) };
+            v = (handle)
+                .next()
+                .map_or(std::ptr::null_mut(), |v| v.shell().cast());
+            if v.is_null() || !crate::fleet::transactions::articulated(s.transactions, v) {
                 break;
             }
         }
@@ -236,15 +240,20 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
     ) {
         // Callback runs synchronously; emit mutates only caller-local selection.
         let c = unsafe { &mut *ctx.cast::<Visit<'_, F>>() };
-        let v = handle.0.as_ptr().cast();
-        if unsafe { (c.s.groups.vehicle_type)(v) } != c.kind || !(c.s.in_depot)(v) {
+        let v = handle.shell().cast();
+        if crate::fleet::record(c.s.groups, v).vehicle_type() != c.kind || !(c.s.in_depot)(v) {
             return;
         }
         if c.kind == VehicleType::TRAIN.0 {
-            if unsafe { (c.s.transactions.articulated)(v) || (c.s.transactions.rear)(v) } {
+            if crate::fleet::transactions::articulated(c.s.transactions, v)
+                || crate::ground_vehicle::is_rear_dualheaded(
+                    crate::fleet::transactions::record(c.s.transactions, v).subtype(),
+                )
+            {
                 return;
             }
-            if c.wagons && (c.s.free_wagon)(unsafe { (c.s.transactions.first)(v) }) {
+            if c.wagons && (c.s.free_wagon)(crate::fleet::transactions::first(c.s.transactions, v))
+            {
                 if c.individual || (c.s.free_wagon)(v) {
                     (c.emit)(v, true);
                 }
@@ -309,7 +318,9 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         }
         unsafe extern "C" fn vehicle<F>(ctx: *mut (), v: *const ()) -> u8 {
             let c = unsafe { &*ctx.cast::<Find<'_, F>>() };
-            u8::from(unsafe { (c.s.groups.vehicle_type)(v.cast_mut()) == c.vehicle_type })
+            u8::from(
+                crate::fleet::record(c.s.groups, v.cast_mut()).vehicle_type() == c.vehicle_type,
+            )
         }
         unsafe extern "C" fn order<F>(ctx: *mut (), o: *const ()) -> u8 {
             let c = unsafe { &*ctx.cast::<Find<'_, F>>() };
@@ -350,7 +361,10 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     if kind == VL_SHARED_ORDERS {
         let mut v = unsafe { (s.groups.vehicle)(index) };
         if v.is_null()
-            || unsafe { (s.groups.vehicle_type)(v) != vehicle_type || !(s.groups.primary)(v) }
+            || unsafe {
+                crate::fleet::record(s.groups, v).vehicle_type() != vehicle_type
+                    || !(s.groups.primary)(v)
+            }
         {
             return false;
         }
@@ -365,16 +379,17 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     }
     let mut from = 0;
     loop {
-        let v = unsafe { (s.groups.next_vehicle)(from) }.cast::<()>();
+        let v =
+            crate::vehicle::VehicleRef::shell_from_record(unsafe { (s.groups.next_vehicle)(from) });
         if v.is_null() {
             break;
         }
         // Preserve the distinct predicate order of group and standard lists.
-        if unsafe { (s.groups.vehicle_type)(v) } == vehicle_type {
+        if crate::fleet::record(s.groups, v).vehicle_type() == vehicle_type {
             let selected = if kind == VL_GROUP_LIST && index as u16 != crate::fleet::ALL_GROUP {
                 unsafe {
                     (s.groups.primary)(v)
-                        && (s.groups.vehicle_owner)(v) == company
+                        && crate::fleet::record(s.groups, v).owner() == company
                         && (crate::fleet::openttd_rust_fleet_contains_abi(
                             s.groups,
                             (s.groups.vehicle_group)(v),
@@ -382,7 +397,9 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
                         ) != 0)
                 }
             } else {
-                unsafe { (s.groups.vehicle_owner)(v) == company && (s.groups.primary)(v) }
+                unsafe {
+                    crate::fleet::record(s.groups, v).owner() == company && (s.groups.primary)(v)
+                }
             };
             if selected {
                 emit(v);
@@ -457,8 +474,11 @@ pub struct CommonServices {
 }
 /// # Safety
 /// `v` denotes a live shell, established by the caller's source preconditions.
-unsafe fn vehicle_ref(v: *mut ()) -> crate::vehicle::VehicleRef {
-    crate::vehicle::VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast()) })
+unsafe fn vehicle_ref(
+    v: *mut (),
+    services: &crate::vehicle::VehicleServices,
+) -> crate::vehicle::VehicleRef {
+    unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), services) }
 }
 pub(crate) unsafe fn sell(
     s: &CommonServices,
@@ -474,24 +494,28 @@ pub(crate) unsafe fn sell(
     if v.is_null() {
         return (b.cost.error)(cost, ERROR);
     }
-    let front = unsafe { (s.transactions.first)(v) };
+    let front = crate::fleet::transactions::first(s.transactions, v);
     unsafe {
         b.commands
-            .ownership(cost, (b.groups.vehicle_owner)(front), 0);
+            .ownership(cost, crate::fleet::record(b.groups, front).owner(), 0);
     };
     if !(b.cost.success)(cost) {
         return;
     }
-    if unsafe { (s.transactions.crashed)(front) } {
+    if crate::fleet::transactions::record(s.transactions, front).status()
+        & crate::vehicle_base::VS_CRASHED
+        != 0
+    {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
     if !unsafe { (s.transactions.stopped_in_depot)(front) } {
         return (b.cost.error)(
             cost,
-            s.strings.stopped_in_depot + u32::from(unsafe { (b.groups.vehicle_type)(front) }),
+            s.strings.stopped_in_depot
+                + u32::from(crate::fleet::record(b.groups, front).vehicle_type()),
         );
     }
-    if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0 {
+    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0 {
         // The build root is late-bound through the fleet table, as autoreplace does.
         let root = (s.transactions.build_services)();
         unsafe { rail::sell(root, cost, flags, v, chain, backup, client) };
@@ -507,7 +531,7 @@ pub(crate) unsafe fn sell(
             unsafe { crate::orders::openttd_rust_backup_create(front.cast(), client, s.orders) };
         }
         // No owner access or retained reference crosses the deleting callback.
-        (s.vehicles.destroy)(unsafe { vehicle_ref(front) });
+        (s.vehicles.destroy)(unsafe { vehicle_ref(front, s.vehicles) });
     }
 }
 pub(crate) unsafe fn startstop(
@@ -525,12 +549,12 @@ pub(crate) unsafe fn startstop(
     if v.is_null() {
         return;
     }
-    let handle = unsafe { vehicle_ref(v) };
-    let status = (s.vehicles.status)(handle);
+    let handle = unsafe { vehicle_ref(v, s.vehicles) };
+    let status = (handle).status();
     if status & crate::vehicle_base::VS_CRASHED != 0 {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
-    match VehicleType(unsafe { (b.groups.vehicle_type)(v) }) {
+    match VehicleType(crate::fleet::record(b.groups, v).vehicle_type()) {
         VehicleType::TRAIN => {
             if status & crate::vehicle_base::VS_STOPPED != 0 && (s.train_power)(v) == 0 {
                 return (b.cost.error)(cost, s.strings.no_power);
@@ -552,8 +576,8 @@ pub(crate) unsafe fn startstop(
         let callback = unsafe {
             crate::newgrf_vehicle::callback(
                 s.vehicles,
-                Some(vehicle_ref(v)),
-                (s.vehicles.engine_id)(vehicle_ref(v)),
+                Some(vehicle_ref(v, s.vehicles)),
+                (vehicle_ref(v, s.vehicles)).engine_id(),
                 crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
                 0,
                 std::ptr::null_mut(),
@@ -592,8 +616,8 @@ pub(crate) unsafe fn startstop(
             (s.waiting_news)(id);
         }
         (s.flip_stopped)(v);
-        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
-            (s.vehicles.write_speed)(handle, 0);
+        if crate::fleet::record(b.groups, v).vehicle_type() != VehicleType::TRAIN.0 {
+            (handle).write_speed(0);
         }
         (s.vehicles.reset_depot_unbunching)(handle);
         // Native presentation may reenter owners; no Rust owner borrow spans it.
@@ -663,7 +687,9 @@ crate::abi::layouts! {
 impl CommonServices {
     fn grf_text(&self, v: *mut (), string: u32) -> u32 {
         let cap = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
-        let e = (self.vehicles.engine)(unsafe { vehicle_ref(v) }).0.as_ptr();
+        let e = (self.vehicles.engine)(unsafe { vehicle_ref(v, self.vehicles) })
+            .0
+            .as_ptr();
         let grfid = unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(cap, e) };
         (self.grf_string)(grfid, string)
     }

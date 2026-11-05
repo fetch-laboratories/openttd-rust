@@ -85,7 +85,7 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
  */
 /* static */ GroupStatistics &GroupStatistics::Get(const Vehicle *v)
 {
-	return GroupStatistics::Get(v->owner, v->group_id, v->type);
+	return GroupStatistics::Get(v->GetOwner(), v->group_id, v->GetType());
 }
 
 /**
@@ -95,7 +95,7 @@ uint16_t GroupStatistics::GetNumEngines(EngineID engine) const
  */
 /* static */ GroupStatistics &GroupStatistics::GetAllGroup(const Vehicle *v)
 {
-	return GroupStatistics::Get(v->owner, ALL_GROUP, v->type);
+	return GroupStatistics::Get(v->GetOwner(), ALL_GROUP, v->GetType());
 }
 
 /**

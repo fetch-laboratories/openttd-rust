@@ -11,7 +11,6 @@
 #include "../rust/ground_ffi.h"
 #include "../core/enum_type.hpp"
 namespace GroundProbe {
-static inline uint32_t marker;
 inline bool Run()
 {
 	const OpenTTDGroundABICalls calls{
@@ -24,10 +23,6 @@ inline bool Run()
 		.road_snow = []() noexcept { return OpenTTDRoadSnowGround{.z = -123456, .snow = true}; },
 		.tunnel = []() noexcept { return OpenTTDTunnelGround{.z = 789, .snow = false}; },
 		.airport = []() noexcept { return OpenTTDAirportGround{.station = nullptr, .tile = 0x12345678, .width = 0xABCD, .height = 0xDCBA}; },
-		.victim = []() noexcept { return OpenTTDFloodVictim{.status = 233, .type = static_cast<VehicleType>(226)}; },
-		.aircraft = []() noexcept { return OpenTTDAircraftFloodPose{.tile = 0x87654321, .z = -789, .subtype = 232}; },
-		/* Marker is only an opaque nonnull pointer value; neither language dereferences it. */
-		.ground = []() noexcept { return OpenTTDGroundFloodPose{.z = 777, .first = reinterpret_cast<OpenTTDVehicle *>(&marker)}; },
 		.enums = [](ClearGround c, RailGroundType r, Slope s, TrackBits b, Track t, Foundation f, Roadside side, RoadBits rb, RoadType rt, TreeGround tree, WaterClass water, FloodingBehaviour flood, DiagDirection d, LandscapeType l, VehicleType v) noexcept {
 			return to_underlying(c) == 240 && to_underlying(r) == 239 && to_underlying(s) == 238 && to_underlying(b) == 237 && to_underlying(t) == 227 && to_underlying(f) == 228 && to_underlying(side) == 229 && to_underlying(rb) == 230 && to_underlying(rt) == 231 && to_underlying(tree) == 232 && to_underlying(water) == 233 && to_underlying(flood) == 234 && to_underlying(d) == 235 && to_underlying(l) == 236 && to_underlying(v) == 226;
 		},

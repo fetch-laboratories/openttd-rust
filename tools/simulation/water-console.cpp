@@ -1,6 +1,7 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 /** @file water-console.cpp Identical real-map water command and restoration inputs. */
 #include "stdafx.h"
+#include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "console_func.h"
 #include "command_func.h"
@@ -128,13 +129,13 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 		WaterCost("buoy-build", Command<CMD_BUILD_BUOY>::Do(DoCommandFlag::Execute, tile));
 		if (!IsBuoyTile(tile)) std::abort();
 		StationID id = GetStationIndex(tile); WaterState("buoy", tile);
-		Vehicle *v = nullptr; for (Vehicle *ship : Vehicle::Iterate()) if (ship->type == VEH_SHIP && !ship->vehstatus.Test(VehState::Hidden)) { v = ship; break; }
+		Vehicle *v = nullptr; for (Vehicle *ship : Vehicle::Iterate()) if (FIXTURE_GET(ship, Type, type) == VEH_SHIP && !FIXTURE_GET(ship, VehStatus, vehstatus).Test(VehState::Hidden)) { v = ship; break; }
 		if (v == nullptr) std::abort();
-		TileIndex old_tile = v->tile; int old_x = v->x_pos, old_y = v->y_pos, old_z = v->z_pos;
-		v->tile = tile; v->x_pos = TileX(tile) * TILE_SIZE + 8; v->y_pos = TileY(tile) * TILE_SIZE + 8; v->z_pos = GetTileZ(tile); v->UpdatePosition();
+		TileIndex old_tile = FIXTURE_GET(v, Tile, tile); int old_x = FIXTURE_FIELD(v, x_pos), old_y = FIXTURE_FIELD(v, y_pos), old_z = FIXTURE_FIELD(v, z_pos);
+		FIXTURE_SET(v, Tile, tile, tile); FIXTURE_FIELD(v, x_pos) = TileX(tile) * TILE_SIZE + 8; FIXTURE_FIELD(v, y_pos) = TileY(tile) * TILE_SIZE + 8; FIXTURE_FIELD(v, z_pos) = GetTileZ(tile); v->UpdatePosition();
 		WaterCost("buoy-occupied", Command<CMD_LANDSCAPE_CLEAR>::Do({}, tile));
 		WaterCost("buoy-bankrupt", Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, tile));
-		v->tile = old_tile; v->x_pos = old_x; v->y_pos = old_y; v->z_pos = old_z; v->UpdatePosition();
+		FIXTURE_SET(v, Tile, tile, old_tile); FIXTURE_FIELD(v, x_pos) = old_x; FIXTURE_FIELD(v, y_pos) = old_y; FIXTURE_FIELD(v, z_pos) = old_z; v->UpdatePosition();
 		if (!IsWaterTile(tile) || GetWaterClass(tile) != wc) std::abort();
 		WaterState("buoy-restored", tile);
 		WaterCost("buoy-reuse", Command<CMD_BUILD_BUOY>::Do(DoCommandFlag::Execute, tile));

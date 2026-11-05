@@ -7,6 +7,7 @@
 enum TriggerArea : uint8_t;
 TileArea GetRailTileArea(const BaseStation *, TileIndex, TriggerArea);
 #endif
+#include "vehicle-record-fixture.hpp"
 static void Station602Rebuild()
 {
 #ifdef WITH_RUST
@@ -77,7 +78,7 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	};
 	RoadVehicle *v = build(), *part = build();
 	auto cargo_before = v->cargo_type; auto compatible_before = v->compatible_roadtypes;
-	auto part_subtype = part->subtype;
+	auto part_subtype = FIXTURE_FIELD(part, subtype);
 	for (CargoType cargo : {CargoType{0}, CargoType{1}}) {
 		v->cargo_type = cargo;
 		for (bool incompatible : {false, true}) {
@@ -90,11 +91,11 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	v->cargo_type = 0; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
 	RoadStop *bay = st->bus_stops; auto status = bay->status; bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free); bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay1Free); bay->status.Set(RoadStop::RoadStopStatusFlag::EntryBusy);
 	StationNeed(Station602Primary(st, v) == bay, __LINE__);
-	part->subtype = 0; part->SetArticulatedPart(); v->SetNext(part);
+	FIXTURE_FIELD(part, subtype) = 0; part->SetArticulatedPart(); v->SetNext(part);
 	RoadStop *drive = Station602Primary(st, v);
 	StationNeed(drive != nullptr && IsDriveThroughStopTile(drive->xy) && Station602Next(drive, v) == nullptr, __LINE__);
 	fmt::print(stderr, "STCMD spatial602-stop occupied-articulated {} {}\n", bay->index.base(), drive->index.base());
-	v->SetNext(nullptr); part->subtype = part_subtype; bay->status = status;
+	v->SetNext(nullptr); FIXTURE_FIELD(part, subtype) = part_subtype; bay->status = status;
 	v->cargo_type = cargo_before; v->compatible_roadtypes = compatible_before;
 	for (RoadVehicle *vehicle : {part, v}) StationNeed(Command<CMD_SELL_VEHICLE>::Do(exec, vehicle->index, false, false, INVALID_CLIENT_ID).Succeeded(), __LINE__);
 	StationNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(exec, depot).Succeeded(), __LINE__);
@@ -263,23 +264,23 @@ static void Station602Crash(bool reload)
 {
 	if (reload) {
 		Station *st = nullptr; for (Station *s : Station::Iterate()) if (s->name == "Spatial602 crash") st = s;
-		fmt::print(stderr, "STCMD spatial602-crash-reload-state {} {} {}\n", st != nullptr, st == nullptr ? -1 : st->goods[0].rating, RoadVehicle::Get(VehicleID(21))->vehstatus.Test(VehState::Crashed));
-		StationNeed(st != nullptr && st->goods[0].rating == 40 && RoadVehicle::Get(VehicleID(21))->vehstatus.Test(VehState::Crashed), __LINE__);
+		fmt::print(stderr, "STCMD spatial602-crash-reload-state {} {} {}\n", st != nullptr, st == nullptr ? -1 : st->goods[0].rating, FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed));
+		StationNeed(st != nullptr && st->goods[0].rating == 40 && FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
 		fmt::print(stderr, "STCMD spatial602-crash-reload {}\n", st->goods[0].rating); return;
 	}
 	/* Same command-built crossing and live vehicles as roads-level-crossing. */
 	auto *train = Train::Get(VehicleID(17)); auto *bus = RoadVehicle::Get(VehicleID(21));
-	StationNeed(IsLevelCrossingTile(TileIndex(10005)) && !bus->vehstatus.Test(VehState::Crashed), __LINE__);
+	StationNeed(IsLevelCrossingTile(TileIndex(10005)) && !FIXTURE_GET(bus, VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
 	for (Vehicle *v : {static_cast<Vehicle *>(train), static_cast<Vehicle *>(bus)}) {
-		v->tile = TileIndex(10005); v->x_pos = 344; v->y_pos = 632; v->UpdatePosition();
+		FIXTURE_SET(v, Tile, tile, TileIndex(10005)); FIXTURE_FIELD(v, x_pos) = 344; FIXTURE_FIELD(v, y_pos) = 632; v->UpdatePosition();
 	}
-	train->vehstatus = VehStates(10); bus->direction = DIR_SE;
+	FIXTURE_SET(train, VehStatus, vehstatus, VehStates(10)); FIXTURE_SET(bus, Direction, direction, DIR_SE);
 #ifdef WITH_RUST
 	train->SetTrack(TRACK_BIT_X); bus->SetState(1);
 #else
 	train->track = TRACK_BIT_X; bus->state = 1;
 #endif
-	Station *st = Station562New(bus->tile, "Spatial602 crash"); st->owner = bus->owner;
+	Station *st = Station562New(FIXTURE_GET(bus, Tile, tile), "Spatial602 crash"); st->owner = FIXTURE_GET(bus, Owner, owner);
 	st->goods[0].status.Set(GoodsEntry::State::Acceptance); st->goods[0].rating = 200;
 	Backup<bool> sound(_settings_client.sound.disaster, true);
 	uint passengers = 0;
@@ -289,7 +290,7 @@ static void Station602Crash(bool reload)
 	_station602_crash_rng = _random; _station602_crash_victims = _station602_crash_rng.Next(passengers + 1) + 1;
 	fmt::print(stderr, "STCMD spatial602-crash-input {} {} {} {} {} {}\n", passengers, _station602_crash_victims, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 	_station602_crash_step = 0; _station602_other_events = 0; _station602_crash = st; StationNeed(bus->Tick(), __LINE__); _station602_crash = nullptr;
-	StationNeed(_station602_crash_step == 4 && st->goods[0].rating == 40 && bus->vehstatus.Test(VehState::Crashed), __LINE__);
+	StationNeed(_station602_crash_step == 4 && st->goods[0].rating == 40 && FIXTURE_GET(bus, VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
 	sound.Restore(); Station562Rng("spatial602-crash");
 }
 static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload)

@@ -43,4 +43,10 @@ inline void *RustSaveReferenceGet(size_t index) noexcept
 	}
 }
 
+/** Canonical record of the vehicle at an index, or nullptr when the index is invalid. */
+inline void *RustSaveReferenceVehicleRecord(size_t index) noexcept
+{
+	return RustVehicle(static_cast<Vehicle *>(RustSaveReferenceGet<Vehicle>(index)));
+}
+
 #endif /* RUST_SERVICES_SAVELOAD_H */

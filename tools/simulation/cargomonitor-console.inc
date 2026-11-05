@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Real facades/chunk handlers; malformed loads terminate before any further game work. */
 #include "cargomonitor.h"
+#include "vehicle-record-fixture.hpp"
 #include "saveload-codec-console.hpp"
 /* Monitors change only through final deliveries. The station's loaded catchment
  * supplies the nearby industry and the always-accepted passengers. */
@@ -32,7 +33,7 @@ static MonitorSite FindMonitorSite(CargoType pax)
 		for (const auto &entry : site.st->industries_near) listed |= entry.industry == ind;
 		if (!listed) { site.far = ind; break; }
 	}
-	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { site.front = v; break; }
+	for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { site.front = v; break; }
 	if (site.far == nullptr || site.front == nullptr) FixtureAbort(__LINE__);
 	return site;
 }
@@ -55,8 +56,8 @@ static bool MonitorScenario(std::span<std::string_view> args)
 	if (!IsValidCargoType(pax)) FixtureAbort(__LINE__);
 	MonitorSite site = FindMonitorSite(pax);
 	Station *st = site.st;
-	Backup<StationID> last(site.front->last_station_visited, st->index);
-	CompanyID company = site.front->owner;
+	Backup<FIXTURE_FIELD_TYPE(site.front, last_station_visited)> last(FIXTURE_FIELD(site.front, last_station_visited), FixtureRaw(st->index));
+	CompanyID company = FIXTURE_GET(site.front, Owner, owner);
 	auto town = EncodeCargoTownMonitor(company, pax, st->town->index);
 	Source source{st->town->index, SourceType::Town};
 	ClearCargoPickupMonitoring(); ClearCargoDeliveryMonitoring();

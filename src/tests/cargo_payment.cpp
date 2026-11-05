@@ -12,6 +12,7 @@
 #include "cargo_payment_stubs.hpp"
 #include "../company_base.h"
 #include "../rust/vehicle_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
 #include "../rust/services_ffi.h"
 #include "../economy_type.h"
 #include "../newgrf_sound.h"
@@ -37,13 +38,9 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 	s.finance = &finance;
 	s.vehicles = &vehicles;
 	s.detach_payment = [](OpenTTDVehicle *) noexcept { settlement.emplace_back(0, 0, 0); };
-	s.vehicle_owner = [](OpenTTDVehicle *) noexcept -> uint8_t { return 3; };
 	s.local_company = []() noexcept { settlement.emplace_back(5, 0, 0); return local; };
 	s.expense = [](OpenTTDVehicle *, bool income) noexcept { CHECK(income); return EXPENSES_TRAIN_REVENUE; };
 	s.profit = [](OpenTTDVehicle *) noexcept -> int64_t { return 1000; };
-	s.x = [](OpenTTDVehicle *) noexcept -> int32_t { return 11; };
-	s.y = [](OpenTTDVehicle *) noexcept -> int32_t { return 22; };
-	s.z = [](OpenTTDVehicle *) noexcept -> int32_t { return 33; };
 	OpenTTDSharedServices shared{};
 	s.shared = &shared;
 	shared.cost_animation = [](int32_t x, int32_t y, int32_t z, int64_t income) noexcept { CHECK(std::tuple{x, y, z} == std::tuple{11, 22, 33}); settlement.emplace_back(9, 0, income); };
@@ -55,8 +52,12 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 		local = is_local;
 		custom_sound = custom;
 		valid_company = valid;
-		int shell;
-		auto *front = reinterpret_cast<OpenTTDVehicle *>(&shell);
+		OpenTTDVehicle record{};
+		record.owner = 3;
+		record.x_pos = 11;
+		record.y_pos = 22;
+		record.z_pos = 33;
+		auto *front = &record;
 		auto *p = openttd_rust_cargo_payment_new(front, 42);
 		p->fields = {front, INT64_MIN, INT64_MIN, transfer ? INT64_MAX : 0};
 		CHECK(openttd_rust_cargo_payment_front(p) == front);

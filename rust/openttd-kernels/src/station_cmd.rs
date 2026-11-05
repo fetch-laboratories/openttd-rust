@@ -1172,7 +1172,7 @@ impl Ctx<'_> {
             let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_free(
                 handle,
-                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
+                handle.vehicle(),
                 self.s.reservation,
                 std::ptr::null_mut(),
             );
@@ -1187,7 +1187,7 @@ impl Ctx<'_> {
             let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_try_path(
                 handle,
-                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
+                handle.vehicle(),
                 1,
                 1,
                 self.s.reservation,
@@ -1200,10 +1200,8 @@ impl Ctx<'_> {
     fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
         let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
         // SAFETY: The reached platform update always supplies a live train shell.
-        let vehicle = unsafe {
-            crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast()))
-        };
-        let tile = (self.vehicle().tile)(vehicle);
+        let vehicle = handle.vehicle();
+        let tile = (vehicle).tile();
         if self.rail_station(tile) {
             // SAFETY: The shell and canonical immutable tables remain live for this call.
             let trackdir = unsafe {
@@ -1274,7 +1272,7 @@ impl Ctx<'_> {
                         {
                             let train = crate::pbs::Pbs::acquire(self.shared)
                                 .train_for(tile, track)
-                                .shell
+                                .shell()
                                 .cast::<crate::services::Train>();
                             if !train.is_null() {
                                 affected.push(train);
@@ -1581,7 +1579,7 @@ impl Ctx<'_> {
                 if self.rail_station(t) && (self.s.reserved)(t) {
                     let train = crate::pbs::Pbs::acquire(self.shared)
                         .train_for(t, self.station_axis(t))
-                        .shell
+                        .shell()
                         .cast::<crate::services::Train>();
                     if !train.is_null() {
                         affected.push(train);
@@ -1834,7 +1832,7 @@ impl Ctx<'_> {
             if (self.s.reserved)(tile) {
                 train = crate::pbs::Pbs::acquire(self.shared)
                     .train_for(tile, track)
-                    .shell
+                    .shell()
                     .cast::<crate::services::Train>();
                 if !train.is_null() {
                     self.free_reservation(train);
@@ -2562,7 +2560,7 @@ impl Ctx<'_> {
             }
             // A live order list has a first shared vehicle, as in the original helper.
             let mut vehicle = unsafe { (self.links().order_vehicle)(list).unwrap_unchecked() };
-            if (self.vehicle().vehicle_type)(vehicle) != 1 {
+            if vehicle.vehicle_type() != 1 {
                 continue;
             }
             for index in 0..(self.links().order_count)(list) {
@@ -2571,9 +2569,7 @@ impl Ctx<'_> {
                     continue;
                 }
                 loop {
-                    if (self.vehicle().order_type)(vehicle) == 1
-                        && (self.vehicle().dest_tile)(vehicle) == tile
-                    {
+                    if (self.vehicle().order_type)(vehicle) == 1 && (vehicle).dest_tile() == tile {
                         let destination = (self.s.order_station_location)(vehicle, station);
                         (self.vehicle().set_dest_tile)(vehicle, destination);
                     }
@@ -2635,7 +2631,7 @@ impl Ctx<'_> {
         } else if (self.shared.is_drive_through_stop)(tile) && flags & 32 != 0 {
             if flags & 1 != 0 {
                 self.vehicle().for_each_on_tile(tile, |vehicle| {
-                    if (self.vehicle().vehicle_type)(vehicle) == 1 {
+                    if vehicle.vehicle_type() == 1 {
                         let state = (self.s.road_vehicle_owner)(vehicle);
                         // SAFETY: Live road owner; no borrow crosses this access.
                         unsafe { crate::road::clear_removed_drive_stop(state) };
@@ -3207,7 +3203,7 @@ impl Ctx<'_> {
         while let Some(v) = (self.shared.vehicle_next)(from) {
             let identity = (self.s.aircraft_vehicle)(v);
             from = identity.id + 1;
-            if (self.vehicle().vehicle_type)(v) != 3 || (self.vehicle().subtype)(v) > 2 {
+            if v.vehicle_type() != 3 || v.subtype() > 2 {
                 continue;
             }
             let target = unsafe { (&raw const (*identity.state).targetairport).read() };
@@ -3666,13 +3662,11 @@ impl Ctx<'_> {
             while let Some(v) = (self.shared.vehicle_next)(from) {
                 let identity = (self.s.aircraft_vehicle)(v);
                 from = identity.id + 1;
-                if (self.vehicle().vehicle_type)(v) != 2
-                    || (self.vehicle().order_destination)(v) != id
-                {
+                if v.vehicle_type() != 2 || (self.vehicle().order_destination)(v) != id {
                     continue;
                 }
                 if (self.vehicle().order_type)(v) == 3 {
-                    let tile = (self.vehicle().tile)(v);
+                    let tile = (v).tile();
                     if !((self.shared.docking_tile)(tile)
                         && unsafe {
                             crate::ship_control::openttd_rust_ship_is_destination_abi(
@@ -3797,7 +3791,7 @@ impl Ctx<'_> {
                 continue;
             }
             let v = unsafe { (self.links().order_vehicle)(list).unwrap_unchecked() };
-            if ((self.vehicle().owner)(v) == company) != include_company {
+            if (v.owner() == company) != include_company {
                 continue;
             }
             for index in 0..(self.links().order_count)(list) {

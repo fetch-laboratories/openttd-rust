@@ -147,7 +147,7 @@ pub(crate) unsafe fn build(
                 unsafe {
                     crate::ship_control::ship_build(
                         id,
-                        crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(v.cast())),
+                        super::vehicle_ref(v, r.common.vehicles),
                         u32::from(engine),
                         r.ship,
                         b.shared,

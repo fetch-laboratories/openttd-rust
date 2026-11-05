@@ -52,16 +52,12 @@ static OpenTTDDisasterRoadTarget DisasterRoadHandle(RoadVehicle *v) noexcept
 {
 	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->GetRustState(), .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
-static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextPart(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *next = RustVehicleNext(VehicleOf(v));
-	return DisasterHandle(static_cast<DisasterVehicle *>(next));
-}
+static OpenTTDDisasterState *OPENTTD_RUST_CALL DisasterOwner(OpenTTDVehicle *v) noexcept { return static_cast<DisasterVehicle *>(VehicleOf(v))->rust_state.get(); }
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterResolve(uint32_t id) noexcept { return DisasterBaseHandle(Vehicle::Get(id)); }
 static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterRoadTarget(uint32_t id) noexcept
 {
 	RoadVehicle *target = RoadVehicle::Get(id);
-	assert(target != nullptr && target->type == VEH_ROAD && target->IsFrontEngine());
+	assert(target != nullptr && target->GetType() == VEH_ROAD && target->IsFrontEngine());
 	return DisasterRoadHandle(target);
 }
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNext(uint32_t from) noexcept
@@ -115,8 +111,8 @@ static void OPENTTD_RUST_CALL DisasterZeppelinCleared(uint32_t tile, uint16_t st
 static void OPENTTD_RUST_CALL DisasterRoadCrashed(OpenTTDVehicle *shell, uint32_t victims) noexcept
 {
 	const Vehicle *target = VehicleOf(shell);
-	AI::NewEvent(target->owner, new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->owner));
-	Game::NewEvent(new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->owner));
+	AI::NewEvent(target->GetOwner(), new ScriptEventVehicleCrashed(target->index, target->GetTile(), ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->GetOwner()));
+	Game::NewEvent(new ScriptEventVehicleCrashed(target->index, target->GetTile(), ScriptEventVehicleCrashed::CRASH_RV_UFO, victims, target->GetOwner()));
 }
 static void OPENTTD_RUST_CALL DisasterZeppelinNews(uint32_t tile, uint16_t station) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_ZEPPELIN, station), NewsType::Accident, TileIndex{tile}); }
 static void OPENTTD_RUST_CALL DisasterSmallUfoNews(uint32_t tile) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_SMALL_UFO), NewsType::Accident, TileIndex{tile}); }
@@ -147,12 +143,8 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.age = RustVehicleRead<int32_t, RustVehicleAgeValue>,
 		.write_age = RustVehicleInvoke<RustWriteVehicleAge, int32_t>,
 		.write_sprite = RustVehicleInvoke<RustWriteVehicleSpriteSequence, SpriteID>,
-		.first_sprite = RustVehicleRead<SpriteID, RustVehicleFirstSprite>,
 		.write_first_sprite = RustVehicleInvoke<RustWriteVehicleFirstSprite, SpriteID>,
-		.write_subtype = RustVehicleInvoke<RustVehicleSetSubtype, uint8_t>,
-		.write_owner = RustVehicleSetOwner,
-		.set_next = RustTypedVehicleSetNext,
-		.next_part = DisasterNextPart,
+		.owner = DisasterOwner,
 		.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
 		.toward = RustVehicleDirectionTowards,
 		.create = DisasterCreate,
@@ -160,13 +152,9 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.next_disaster = DisasterNext,
 		.next_road = DisasterNextRoad,
 		.road_target = DisasterRoadTarget,
-		.front = RustVehicleRead<bool, RustVehicleFront>,
 		.road_disaster = RustVehicleRead<uint32_t, RustRoadDisasterTarget>,
-		.breakdown_counter = RustVehicleRead<uint8_t, RustVehicleBreakdownCounter>,
 		.write_road_disaster = RustVehicleInvoke<RustWriteRoadDisasterTarget, uint32_t>,
-		.write_breakdown = RustVehicleInvoke<RustVehicleWriteBreakdown, uint8_t, uint8_t>,
 		.next_vehicle = DisasterNextVehicle,
-		.ground = RustVehicleRead<bool, RustVehicleIsGround>,
 		.next_train = DisasterNextTrain,
 		.road_count = DisasterRoadCount,
 		.human = RustCompanyIsHuman,
@@ -210,7 +198,7 @@ void ReleaseDisasterVehicle(VehicleID vehicle)
 {
 	DisasterVehicle *v = DisasterVehicle::GetIfValid(vehicle);
 	if (v == nullptr) return;
-	assert(v->subtype == ST_SMALL_UFO);
+	assert(v->Record().subtype == ST_SMALL_UFO);
 	assert(v->State() != 0);
 	openttd_rust_disaster_release_vehicle(&DisasterServices(), DisasterHandle(v));
 }

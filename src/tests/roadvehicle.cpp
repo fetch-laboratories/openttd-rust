@@ -186,33 +186,35 @@ TEST_CASE("Road vehicles - canonical path, nested save staging and indexed pool 
 }
 
 namespace {
-OpenTTDRoadSpeedPart speed_parts[2];
 int bridge_reads;
-OpenTTDRoadSpeedPart SpeedPart(OpenTTDVehicle *v) noexcept { return speed_parts[reinterpret_cast<uintptr_t>(v) - 1]; }
 uint16_t BridgeSpeed(uint32_t) noexcept { ++bridge_reads; return 37; }
 }
 TEST_CASE("Road max speed - front reversal, later curve assignment and hidden bridges")
 {
 	auto *front = openttd_rust_road_new(), *tail = openttd_rust_road_new();
-	auto *v = reinterpret_cast<OpenTTDVehicle *>(1);
+	OpenTTDVehicle record{}, tail_record{};
+	OpenTTDGroundState ground{};
+	OpenTTDVehicleOrderState orders{};
+	record.ground = &ground; record.orders = &orders; record.road = front;
+	tail_record.road = tail;
+	auto *v = &record;
 	auto shared = OpenTTDSharedServices{};
 	shared.bridge_speed = BridgeSpeed;
 	auto leaves = OpenTTDRoadLeaves{};
 	leaves.shared = &shared;
-	leaves.speed_part = SpeedPart;
 	for (uint16_t model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
 		for (uint8_t hidden : {0, 1, 2, 3}) for (uint8_t direction : {0, 1}) {
 			openttd_rust_road_set(front, 0, state); openttd_rust_road_set(tail, 0, tail_state);
-			OpenTTDRoadMaxSpeedRead r{};
-			r.next = v;
-			r.next_state = tail;
+			struct { uint16_t max_track_speed, order_max_speed; } r{};
+			record.next = &tail_record;
+			tail_record.next = nullptr;
 			r.max_track_speed = static_cast<uint16_t>(tail_state * 257);
 			r.order_max_speed = static_cast<uint16_t>(state * 257);
-			r.direction = 1;
-			r.status = static_cast<uint8_t>((hidden & 1) | 128);
-			speed_parts[0] = {};
-			speed_parts[0].direction = direction;
-			speed_parts[0].status = static_cast<uint8_t>((hidden >> 1) | 64);
+			record.direction = 1;
+			record.vehstatus = static_cast<uint8_t>((hidden & 1) | 128);
+			ground.cache.cached_max_track_speed = r.max_track_speed; orders.current.max_speed = r.order_max_speed;
+			tail_record.direction = direction;
+			tail_record.vehstatus = static_cast<uint8_t>((hidden >> 1) | 64);
 			/* Pinned GetCurrentMaxSpeed loop: this->state, assignment (not min), then bridge. */
 			int expected = r.max_track_speed, reads = 0;
 			auto part_hidden = hidden & 1;
@@ -225,7 +227,7 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 				part_hidden = hidden >> 1;
 			}
 			bridge_reads = 0;
-			CHECK(openttd_rust_road_max_speed(v, front, model, &r, &leaves) == std::min(expected, r.order_max_speed * 2));
+			CHECK(openttd_rust_road_max_speed(v, front, model, &leaves) == std::min(expected, r.order_max_speed * 2));
 			CHECK(bridge_reads == reads);
 		}
 	}
@@ -237,7 +239,7 @@ TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
 	auto check = [](auto *v) {
 		CHECK(&v->gcache == &v->rust_ground.state->cache);
 		CHECK(&v->gv_flags == &v->rust_ground.state->flags);
-		CHECK(v->gcache.first_engine == EngineID::Invalid());
+		CHECK(v->gcache.first_engine == EngineID::Invalid().base());
 		v->gv_flags = 0x8003;
 		CHECK(v->rust_ground.state->flags == 0x8003);
 		v->gcache.last_speed = 65535;
@@ -246,6 +248,29 @@ TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
 	REQUIRE(Vehicle::CanAllocateItem());
 	check(new RoadVehicle());
 	check(new (VehicleID(37)) Train());
+	_vehicle_pool.CleanPool();
+}
+TEST_CASE("Train record - native fields, canonical multihead links and indexed reuse")
+{
+	REQUIRE(Vehicle::CanAllocateItem());
+	Train *front = new Train();
+	Train *rear = new (VehicleID(37)) Train();
+	CHECK(front->GetTrainFlags().base() == 0);
+	CHECK(front->GetOtherMultiheadedPart() == nullptr);
+	front->SetOtherMultiheadedPart(rear);
+	rear->SetOtherMultiheadedPart(front);
+	CHECK(front->GetRustState()->other_multiheaded_part == rear->record);
+	CHECK(rear->GetOtherMultiheadedPart() == front);
+	front->GetRustState()->flags = 0x8001;
+	front->GetRustState()->cached_curve_speed_mod = -32768;
+	CHECK(front->GetTrainFlags().base() == 0x8001);
+	CHECK(front->GetCachedCurveSpeedMod() == -32768);
+	front->SetCrashAnimPos(65535);
+	CHECK(front->GetRustState()->crash_anim_pos == 65535);
+	_vehicle_pool.CleanPool();
+	rear = new (VehicleID(37)) Train();
+	CHECK(rear->GetOtherMultiheadedPart() == nullptr);
+	CHECK(rear->GetRustState()->crash_anim_pos == 0);
 	_vehicle_pool.CleanPool();
 }
 TEST_CASE("Vehicle resolver - boundary layouts and complete service table")
@@ -292,29 +317,18 @@ TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 {
 	REQUIRE(Vehicle::CanAllocateItem());
 	auto *v = new RoadVehicle();
-	v->subtype = 1 << GVSF_FRONT;
-	{
-		const auto read = RustRoadTickRead(v);
-		static_assert(std::is_same_v<decltype(read.status), const uint8_t *>);
-		static_assert(std::is_same_v<decltype(read.running), const decltype(v->running_ticks) *>);
-		static_assert(std::is_same_v<decltype(read.order_time), const std::remove_reference_t<decltype(v->current_order_time)> *>);
-		CHECK(read.movement.ground == v->rust_ground.state);
-		CHECK(static_cast<void *>(read.movement.ground) != static_cast<void *>(v->GetRustState()));
-		CHECK(read.status == v->vehstatus.base_address());
-		CHECK(read.running == &v->running_ticks);
-		CHECK(read.order_time == &v->current_order_time);
-		v->running_ticks = UINT8_MAX;
-		v->current_order_time = INT32_MAX;
-		v->vehstatus = {VehState::Stopped};
-		CHECK(*read.running == RustVehicleRunning(v));
-		CHECK(*read.order_time == RustVehicleOrderTime(v));
-		CHECK(*read.status == RustVehicleStatus(v));
-	}
-	v->subtype = 0;
-	v->tick_counter = UINT8_MAX;
+	v->Record().subtype = 1 << GVSF_FRONT;
+	CHECK(v->record->ground == v->rust_ground.state);
+	CHECK(v->record->road == v->GetRustState());
+	CHECK(v->record->consist == v->rust_orders.get());
+	v->Record().running_ticks = UINT8_MAX;
+	v->current_order_time = INT32_MAX;
+
+	v->Record().subtype = 0;
+	v->Record().tick_counter = UINT8_MAX;
 	CHECK(v->Tick()); // Actual nonfront entry consumes no front-only place or callback.
-	CHECK(v->tick_counter == 0);
-	CHECK(v->running_ticks == UINT8_MAX);
+	CHECK(v->Record().tick_counter == 0);
+	CHECK(v->Record().running_ticks == UINT8_MAX);
 	CHECK(v->current_order_time == INT32_MAX);
 	_vehicle_pool.CleanPool();
 }
@@ -324,28 +338,24 @@ TEST_CASE("Road links - ground owners follow the current consist")
 	auto *front = new RoadVehicle();
 	auto *a = new RoadVehicle();
 	auto *b = new RoadVehicle();
-	const auto &leaves = GetRustRoadLeaves();
 	for (auto *tail : {a, b}) {
 		front->SetNext(tail);
-		const auto link = leaves.link(RustVehicle(front));
-		CHECK(link.next == RustVehicle(tail));
-		CHECK(link.next_state == tail->GetRustState());
-		CHECK(link.next_ground == tail->rust_ground.state);
-		CHECK(static_cast<void *>(link.next_ground) != static_cast<void *>(link.next_state));
-		const auto tile = leaves.link_tile(RustVehicle(front));
-		CHECK(tile.link.next_ground == tail->rust_ground.state);
+		CHECK(front->record->next == tail->record);
+		CHECK(front->record->next->road == tail->GetRustState());
+		CHECK(front->record->next->ground == tail->rust_ground.state);
+		CHECK(static_cast<void *>(tail->record->ground) != static_cast<void *>(tail->record->road));
 	}
 	front->SetNext(nullptr);
-	CHECK(leaves.link(RustVehicle(front)).next_ground == nullptr);
+	CHECK(front->record->next == nullptr);
 	_vehicle_pool.CleanPool();
 }
 TEST_CASE("Road visual eligibility precedes maximum-speed lookup")
 {
 	REQUIRE(Vehicle::CanAllocateItem());
-	auto *road = new RoadVehicle(); road->subtype = 1 << GVSF_FRONT;
+	auto *road = new RoadVehicle(); road->Record().subtype = 1 << GVSF_FRONT;
 	const auto saved_smoke = _settings_game.vehicle.smoke_amount;
 	for (uint8_t smoke : {0, 1, 2}) for (uint8_t status : {0, 1, 2, 16, 128}) for (uint16_t speed : {0, 1, 2}) {
-		_settings_game.vehicle.smoke_amount = smoke; road->vehstatus = VehStates{status}; road->cur_speed = speed;
+		_settings_game.vehicle.smoke_amount = smoke; road->SetVehStatus(VehStates{status}); road->Record().cur_speed = speed;
 		CHECK(road->VisualEffectEligible() == (smoke != 0 && (status & 18) == 0 && speed >= 2));
 	}
 	_settings_game.vehicle.smoke_amount = saved_smoke; _vehicle_pool.CleanPool();

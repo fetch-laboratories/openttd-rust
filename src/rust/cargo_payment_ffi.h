@@ -60,17 +60,12 @@ struct OpenTTDCargoServices {
 	const OpenTTDIndustryResolverServices *resolver;
 	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
 	const OpenTTDIndustryDeliveryServices *industry_delivery;
-	uint16_t (OPENTTD_RUST_CALL *last_station)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_station);
-	uint8_t (OPENTTD_RUST_CALL *vehicle_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_owner);
 	void (OPENTTD_RUST_CALL *detach_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(detach_payment);
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDVehicleServices *vehicles;
 	bool (OPENTTD_RUST_CALL *local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	ExpensesType (OPENTTD_RUST_CALL *expense)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(expense);
 	int64_t (OPENTTD_RUST_CALL *profit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit);
-	int32_t (OPENTTD_RUST_CALL *x)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(x);
-	int32_t (OPENTTD_RUST_CALL *y)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(y);
-	int32_t (OPENTTD_RUST_CALL *z)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(z);
 	const OpenTTDSharedServices *shared;
 	void (OPENTTD_RUST_CALL *feeder_animation)(int32_t, int32_t, int32_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(feeder_animation);
 	uint8_t (OPENTTD_RUST_CALL *subsidy_multiplier)() noexcept OPENTTD_SERVICE_DEFAULT(subsidy_multiplier);
@@ -80,7 +75,7 @@ extern "C" {
 OpenTTDCargoPayment *OPENTTD_RUST_CALL openttd_rust_cargo_payment_new(OpenTTDVehicle *, uint16_t);
 void OPENTTD_RUST_CALL openttd_rust_cargo_payment_destroy(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t);
 OpenTTDVehicle *OPENTTD_RUST_CALL openttd_rust_cargo_payment_front(const OpenTTDCargoPayment *);
-void OPENTTD_RUST_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *, const OpenTTDCargoServices *);
+void OPENTTD_RUST_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *);
 int64_t OPENTTD_RUST_CALL openttd_rust_cargo_payment_transfer(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t, const OpenTTDCargoPacket *, uint32_t, uint32_t, uint16_t);
 void OPENTTD_RUST_CALL openttd_rust_cargo_payment_final(OpenTTDCargoPayment *, OpenTTDCargoDelivery *, const OpenTTDCargoServices *, uint8_t, const OpenTTDCargoPacket *, uint32_t, uint32_t, uint16_t, Source, const OpenTTDCargoMonitorServices *);
 int64_t OPENTTD_RUST_CALL openttd_rust_cargo_income(const OpenTTDCargoServices *, uint32_t, uint32_t, uint16_t, uint8_t);

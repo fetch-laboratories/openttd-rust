@@ -5,8 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared vehicle boundary: one opaque handle (a live `Vehicle *`, valid until the service that
-//! deletes it), the base-`Vehicle` and `GroundVehicle` service tables and constants. The tables
+//! Shared vehicle boundary: one canonical record handle (valid until its shell is
+//! deleted), the base-`Vehicle` and `GroundVehicle` service tables and constants. The tables
 //! are declared in `src/rust/vehicle_ffi.h` and filled in `src/rust/vehicle_services.cpp`.
 //! Callers end every owner borrow before a service that can reenter Rust.
 pub(crate) mod maintenance;
@@ -20,7 +20,7 @@ use crate::timer_game_common::DAYS_IN_YEAR;
 use crate::timer_game_tick::DAY_TICKS;
 use std::ptr::NonNull;
 
-/// Opaque C++ `Vehicle`.
+/// Shared Rust-owned record of a C++ `Vehicle` shell.
 pub use crate::vehicle_type::OpenTTDVehicle;
 
 /// Native `VehicleType : uint8_t`. A transparent carrier preserves every byte,
@@ -48,8 +48,38 @@ impl RailVehicleTypes {
 
 /// Non-null live vehicle handle; `Option<VehicleRef>` crosses as a nullable pointer.
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VehicleRef(pub NonNull<OpenTTDVehicle>);
+
+// A VehicleRef and its record are live and serialized at every field access.
+#[allow(unsafe_code)]
+impl VehicleRef {
+    /// Native shell identity for legacy opaque contexts.
+    pub(crate) fn shell(self) -> *mut std::ffi::c_void {
+        crate::raw_field::read_field!(self.0.as_ptr(), shell).cast()
+    }
+
+    /// A live, non-null canonical record pointer.
+    pub(crate) fn of(record: *mut OpenTTDVehicle) -> Self {
+        Self(NonNull::new(record).unwrap())
+    }
+
+    /// Convert a nullable canonical record to a legacy native context.
+    pub(crate) fn shell_from_record(record: *mut OpenTTDVehicle) -> *mut () {
+        NonNull::new(record).map_or(std::ptr::null_mut(), |record| Self(record).shell().cast())
+    }
+
+    /// Resolve a legacy native shell under the caller's original lifetime rules.
+    ///
+    /// # Safety
+    /// `shell` is a live non-null vehicle shell for this serialized entry.
+    pub(crate) unsafe fn from_shell(
+        shell: *mut std::ffi::c_void,
+        services: &VehicleServices,
+    ) -> Self {
+        Self(unsafe { NonNull::new_unchecked((services.record_from_shell)(shell)) })
+    }
+}
 
 /// Opaque immutable C++ engine context captured before a callback.
 pub use crate::engine_type::OpenTTDEngine;
@@ -102,91 +132,16 @@ pub struct Breakdown {
     pub status: u8,
 }
 
-/// Previous chain tile observed for the follower step.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct PreviousTile {
-    pub tile: u32,
-    pub exists: bool,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Coordinates {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct XY {
-    pub x: i32,
-    pub y: i32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct SpeedInputs {
-    pub speed: u16,
-    pub max_speed: u16,
-    pub acceleration: u8,
-    pub status: u8,
-    pub subspeed: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct DirectionProgress {
-    pub direction: u8,
-    pub progress: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TickStatus {
-    pub tick: u8,
-    pub status: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct DayCost {
-    pub profit: i64,
-    pub running: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct AltitudeInputs {
-    pub max_speed: u16,
-    pub direction: u8,
-}
-
-/// Native Direction's complete uint8 domain, without a Rust enum validity rule.
-#[repr(transparent)]
-pub struct Direction(pub u8);
-/// Stack-only descriptors of actual named members, never a Vehicle layout.
-#[repr(C)]
-pub struct PositionObservations {
-    pub subtype: *const u8,
-    pub z: *const i32,
-}
-#[repr(C)]
-pub struct MovementObservations {
-    pub position: PositionObservations,
-    pub x: *const i32,
-    pub y: *const i32,
-    pub speed: *const u16,
-    pub direction: *const Direction,
-}
-
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
+    pub assert_next: extern "C" fn(*mut OpenTTDVehicle, *mut OpenTTDVehicle),
+    /// Resolve a legacy opaque native shell to its canonical record.
+    pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
-    pub occupancy_update: extern "C" fn(VehicleRef) -> occupancy::UpdateObservation,
-    pub occupancy_near: extern "C" fn(VehicleRef) -> occupancy::NearObservation,
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
-    /// Consecutive `tick_counter`, `running_ticks` and `current_order_time` stores.
-    pub write_counters: extern "C" fn(VehicleRef, u8, u8, i32),
     pub waiting_for_unbunching: extern "C" fn(VehicleRef) -> bool,
     pub leave_unbunching_depot: extern "C" fn(VehicleRef),
     pub reset_depot_unbunching: extern "C" fn(VehicleRef),
@@ -194,8 +149,6 @@ pub struct VehicleServices {
     pub enter_depot: unsafe extern "C" fn(VehicleRef, *const visits::Services),
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
     pub new_position: extern "C" fn(VehicleRef) -> NewPosition,
-    /// Store canonical native x/y. The Rust caller updates the tile index.
-    pub write_xy: extern "C" fn(VehicleRef, i32, i32),
     /// `Vehicle::UpdateViewport(true)`.
     pub base_viewport: extern "C" fn(VehicleRef),
     /// Immutable process-wide vehicle resolver services.
@@ -217,75 +170,22 @@ pub struct VehicleServices {
     pub start_stop_dirty: extern "C" fn(VehicleRef),
     /// `delete v`; the handle and its owner are dead afterwards.
     pub destroy: extern "C" fn(VehicleRef),
-    /// `CheckOrders(v)`, then observe `running_ticks`.
-    pub check_orders: extern "C" fn(VehicleRef) -> u8,
-    pub day: extern "C" fn(VehicleRef) -> u8,
-    pub write_day: extern "C" fn(VehicleRef, u8),
-    pub write_direction: extern "C" fn(VehicleRef, u8),
-    pub write_speed: extern "C" fn(VehicleRef, u16),
-    /// Shared last visited station read, before station discovery callbacks.
-    pub last_station: extern "C" fn(VehicleRef) -> u16,
-    pub write_last_station: extern "C" fn(VehicleRef, u16),
     /// Original virtual `SetDestTile`; may reenter the vehicle owner.
     pub set_dest_tile: extern "C" fn(VehicleRef, u32),
-    pub write_dest: extern "C" fn(VehicleRef, u32),
-    pub write_progress: extern "C" fn(VehicleRef, u8),
-    pub write_max_speed: extern "C" fn(VehicleRef, u16),
-    pub previous_tile: extern "C" fn(VehicleRef) -> PreviousTile,
-    pub detach_last: extern "C" fn(VehicleRef, VehicleRef, VehicleRef),
-    pub next: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
-    pub engine_id: extern "C" fn(VehicleRef) -> u16,
     /// Only the current engine, for callers that do not consume its GRF version.
     pub engine: extern "C" fn(VehicleRef) -> EngineRef,
     pub engine_for_length: extern "C" fn(VehicleRef) -> EngineForLength,
-    pub write_tick: extern "C" fn(VehicleRef, u8),
-    pub direction: extern "C" fn(VehicleRef) -> u8,
-    pub status: extern "C" fn(VehicleRef) -> u8,
-    pub tile: extern "C" fn(VehicleRef) -> u32,
-    pub progress: extern "C" fn(VehicleRef) -> u8,
-    pub dest_tile: extern "C" fn(VehicleRef) -> u32,
     pub order_type: extern "C" fn(VehicleRef) -> u8,
     pub order_destination: extern "C" fn(VehicleRef) -> u16,
     pub order_nonstop: extern "C" fn(VehicleRef) -> u8,
-    pub subtype: extern "C" fn(VehicleRef) -> u8,
-    pub x: extern "C" fn(VehicleRef) -> i32,
-    pub y: extern "C" fn(VehicleRef) -> i32,
-    pub z: extern "C" fn(VehicleRef) -> i32,
-    pub tick: extern "C" fn(VehicleRef) -> u8,
-    pub owner: extern "C" fn(VehicleRef) -> u8,
-    pub speed: extern "C" fn(VehicleRef) -> u16,
-    pub subspeed: extern "C" fn(VehicleRef) -> u8,
-    pub running: extern "C" fn(VehicleRef) -> u8,
-    pub order_time: extern "C" fn(VehicleRef) -> i32,
-    pub vehicle_type: extern "C" fn(VehicleRef) -> u8,
-    pub write_x: extern "C" fn(VehicleRef, i32),
-    pub write_y: extern "C" fn(VehicleRef, i32),
-    pub write_z: extern "C" fn(VehicleRef, i32),
-    pub write_tile: extern "C" fn(VehicleRef, u32),
-    pub write_status: extern "C" fn(VehicleRef, u8),
-    pub write_subspeed: extern "C" fn(VehicleRef, u8),
-    pub write_breakdown_counter: extern "C" fn(VehicleRef, u8),
-    pub write_running: extern "C" fn(VehicleRef, u8),
-    pub write_order_time: extern "C" fn(VehicleRef, i32),
     pub write_profit: extern "C" fn(VehicleRef, i64),
     pub write_economy_service: extern "C" fn(VehicleRef, i32),
     pub write_calendar_service: extern "C" fn(VehicleRef, i32),
     pub write_breakdowns: extern "C" fn(VehicleRef, u8),
     pub write_reliability: extern "C" fn(VehicleRef, u16),
-    pub write_cargo_age: extern "C" fn(VehicleRef, u16),
-    pub coordinates: extern "C" fn(VehicleRef) -> Coordinates,
-    pub xy: extern "C" fn(VehicleRef) -> XY,
-    pub speed_inputs: extern "C" fn(VehicleRef) -> SpeedInputs,
-    pub direction_progress: extern "C" fn(VehicleRef) -> DirectionProgress,
-    pub tick_status: extern "C" fn(VehicleRef) -> TickStatus,
-    pub day_cost: extern "C" fn(VehicleRef) -> DayCost,
+    pub profit: extern "C" fn(VehicleRef) -> i64,
     pub make_dummy: extern "C" fn(VehicleRef),
     pub check_orders_only: extern "C" fn(VehicleRef),
-    pub write_coordinates: extern "C" fn(VehicleRef, i32, i32, i32),
-    pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,
-    pub position_observations: extern "C" fn(VehicleRef) -> PositionObservations,
-    pub movement_observations: extern "C" fn(VehicleRef) -> MovementObservations,
-    pub max_speed: extern "C" fn(VehicleRef) -> u16,
     pub maintenance: *const maintenance::Services,
     /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
     pub visits: extern "C" fn() -> *const visits::Services,
@@ -293,10 +193,42 @@ pub struct VehicleServices {
     pub orders: extern "C" fn() -> *const crate::orders::Leaves,
     /// Strict `Ship::Get`, never a nullable pool lookup.
     pub ship_get: extern "C" fn(u32) -> VehicleRef,
+    pub first_sprite: extern "C" fn(VehicleRef) -> u32,
 }
 // The visit table and its entries are native-supplied static Rust functions.
 #[allow(unsafe_code)]
 impl VehicleServices {
+    /// `Vehicle::SetNext` for legacy native shell contexts.
+    ///
+    /// # Safety
+    /// `shell` and non-null `next` and their linked records remain live.
+    pub(crate) unsafe fn set_next_shell(
+        &self,
+        shell: *mut std::ffi::c_void,
+        next: *mut std::ffi::c_void,
+    ) {
+        let record = (self.record_from_shell)(shell);
+        let next = (self.record_from_shell)(next);
+        // SAFETY: The caller preserves both resolved records.
+        unsafe { self.set_next_record(record, next) };
+    }
+
+    /// Complete chain operation on canonical records.
+    ///
+    /// # Safety
+    /// `record`, non-null `next` and all reachable links remain live.
+    pub(crate) unsafe fn set_next_record(
+        &self,
+        record: *mut OpenTTDVehicle,
+        next: *mut OpenTTDVehicle,
+    ) {
+        if record == next {
+            (self.assert_next)(record, next);
+        }
+        // SAFETY: The caller preserves the records and native assertion policy.
+        unsafe { crate::vehicle_base::set_next(record, next) };
+    }
+
     /// The static station/depot visit table.
     pub(crate) fn visits(&self) -> &'static visits::Services {
         // SAFETY: the getter returns the immutable process-wide visit table.
@@ -331,30 +263,12 @@ impl VehicleServices {
     }
 }
 
-/// Post-viewport link; progress is consumed only when this link ends the loop.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct ViewportNext {
-    pub next: Option<VehicleRef>,
-    pub final_progress: u8,
-}
-
 /// `GroundVehicle<T>` members, one C++ template instance per vehicle type.
 #[repr(C)]
 pub struct GroundServices {
     pub physics: &'static crate::ground_vehicle::Services,
-    /// Invalidate the chain `NewGRF` cache, then reset total length.
-    pub cache_begin: extern "C" fn(VehicleRef),
-    /// `UpdateViewport(force, delta)`.
-    pub update_viewport_then_next: extern "C" fn(VehicleRef, VehicleRef) -> ViewportNext,
-    /// Store the direction, then `UpdateViewport(true, true)`.
-    pub turn: extern "C" fn(VehicleRef, u8),
-    /// Set `GVF_SUPPRESS_IMPLICIT_ORDERS`, then `MakeGoToDepot(depot, Service)`.
-    pub go_to_depot_service: extern "C" fn(VehicleRef, u16),
-    pub write_first_engine: extern "C" fn(VehicleRef, u16),
-    /// Store `u` length and `v` total length.
-    pub write_length: extern "C" fn(VehicleRef, u8, VehicleRef, u16),
-    pub cached_length: extern "C" fn(VehicleRef) -> u8,
+    /// `UpdateViewport(false, false)`.
+    pub update_viewport: extern "C" fn(VehicleRef),
     pub has_articulated: extern "C" fn(VehicleRef) -> bool,
 }
 
@@ -388,20 +302,18 @@ crate::abi::layouts! {
         tile,
     };
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
+        assert_next,
+        record_from_shell,
         tile_links,
-        occupancy_update,
-        occupancy_near,
         map_log_x,
         assertions,
         train_handle,
-        write_counters,
         waiting_for_unbunching,
         leave_unbunching_depot,
         reset_depot_unbunching,
         enter_depot,
         pathfinding_result,
         new_position,
-        write_xy,
         base_viewport,
         newgrf,
         property,
@@ -414,145 +326,38 @@ crate::abi::layouts! {
         order_dummy,
         start_stop_dirty,
         destroy,
-        check_orders,
-        day,
-        write_day,
-        write_direction,
-        write_speed,
-        last_station,
-        write_last_station,
         set_dest_tile,
-        write_dest,
-        write_progress,
-        write_max_speed,
-        previous_tile,
-        detach_last,
-        next,
-        engine_id,
         engine,
         engine_for_length,
-        write_tick,
-        direction,
-        status,
-        tile,
-        progress,
-        dest_tile,
         order_type,
         order_destination,
         order_nonstop,
-        subtype,
-        x,
-        y,
-        z,
-        tick,
-        owner,
-        speed,
-        subspeed,
-        running,
-        order_time,
-        vehicle_type,
-        write_x,
-        write_y,
-        write_z,
-        write_tile,
-        write_status,
-        write_subspeed,
-        write_breakdown_counter,
-        write_running,
-        write_order_time,
         write_profit,
         write_economy_service,
         write_calendar_service,
         write_breakdowns,
         write_reliability,
-        write_cargo_age,
-        coordinates,
-        xy,
-        speed_inputs,
-        direction_progress,
-        tick_status,
-        day_cost,
+        profit,
         make_dummy,
         check_orders_only,
-        write_coordinates,
-        altitude_inputs,
-        position_observations,
-        movement_observations,
-        max_speed,
         maintenance,
         visits,
         orders,
         ship_get,
+        first_sprite,
     };
 
 
 
 
     "OpenTTDGroundServices" ["probe"] => GroundServices {
-        cache_begin,
-        update_viewport_then_next,
-        turn,
-        go_to_depot_service,
-        write_first_engine,
-        write_length,
-        cached_length,
+        update_viewport,
         has_articulated,
         physics,
-    };
-    "OpenTTDVehiclePreviousTile" ["probe"] => PreviousTile {
-        tile,
-        exists,
-    };
-    "OpenTTDGroundViewportNext" ["probe"] => ViewportNext {
-        next,
-        final_progress,
     };
     "OpenTTDEngineForLength" ["probe"] => EngineForLength {
         engine,
         grf_version,
-    };
-    "OpenTTDVehicleCoordinates" ["probe"] => Coordinates {
-        x,
-        y,
-        z,
-    };
-    "OpenTTDVehicleXY" ["probe"] => XY {
-        x,
-        y,
-    };
-    "OpenTTDVehicleSpeedInputs" ["probe"] => SpeedInputs {
-        speed,
-        max_speed,
-        acceleration,
-        status,
-        subspeed,
-    };
-    "OpenTTDVehicleDirectionProgress" ["probe"] => DirectionProgress {
-        direction,
-        progress,
-    };
-    "OpenTTDVehicleTickStatus" ["probe"] => TickStatus {
-        tick,
-        status,
-    };
-    "OpenTTDVehicleDayCost" ["probe"] => DayCost {
-        profit,
-        running,
-    };
-    "OpenTTDVehiclePositionObservations" ["probe"] => PositionObservations {
-        subtype,
-        z,
-    } width z: *const i32;
-    "OpenTTDVehicleMovementObservations" ["probe"] => MovementObservations {
-        position,
-        x,
-        y,
-        speed,
-        direction,
-    } width direction: *const crate::vehicle::Direction;
-    "OpenTTDVehicleAltitudeInputs" ["probe"] => AltitudeInputs {
-        max_speed,
-        direction,
     };
     "OrderType" ["maintenance"] => OrderType {
     };

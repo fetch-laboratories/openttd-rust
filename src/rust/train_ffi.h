@@ -18,253 +18,22 @@ struct OpenTTDEngineCapabilitiesServices;
 #include "signal_ffi.h"
 struct OpenTTDVehicleServices;
 struct OpenTTDGroundPhysicsServices;
-/* Each shell owns one Rust state allocation. A resolved handle copies native identity and its
- * owner once per entry or topology read; records hold only the fields the policy consumes.
- * Native visitors keep container order and filter non-trains before Rust policy. Destruction
- * invalidates both handle pointers; policy never reads them after the original deletion point. */
+/* Handles carry the canonical record and train owner. Both remain live until
+ * their source deletion point; no Rust borrow spans a native callback. */
 struct OpenTTDTrainDepot { uint32_t tile, length; };
 struct Train;
 struct OpenTTDTrainServices;
 const OpenTTDTrainServices &GetTrainServices() noexcept;
 OpenTTDTrainHandle TrainHandle(const Train *) noexcept;
 extern "C" {
-struct OpenTTDTrainConsistChangedRead {
-	uint16_t engine;
-	uint8_t front;
-};
-struct OpenTTDTrainConsistChanged1Read {
-	uint16_t engine;
-	uint8_t engine_part;
-};
-struct OpenTTDTrainConsistChanged2Read {
-	uint16_t cargo_cap;
-};
-struct OpenTTDTrainCurveLimitRead {
-	OpenTTDTrainHandle next;
-	uint8_t direction;
-};
-struct OpenTTDTrainStopLocationRead {
-	uint16_t length;
-	uint16_t total_length;
-	uint16_t order_destination;
-	uint8_t order;
-};
-struct OpenTTDTrainCurrentMaxSpeedRead {
-	uint32_t tile;
-	uint16_t max_track_speed;
-	uint16_t speed;
-};
-struct OpenTTDTrainUpdateAccelerationRead {
-	uint32_t power;
-	uint32_t weight;
-};
-struct OpenTTDTrainUpdateSpeedRead {
-	uint8_t status;
-	uint8_t acceleration;
-};
-struct OpenTTDTrainTrackdirRead {
-	uint32_t tile;
-	uint8_t direction;
-	uint8_t status;
-};
-struct OpenTTDTrainCanLeaveRead {
-	uint32_t tile;
-	uint8_t direction;
-};
-struct OpenTTDTrainCrossingApproachRead {
-	uint8_t status;
-	uint8_t front;
-};
-struct OpenTTDTrainNextOffsetRead {
-	OpenTTDTrainHandle next;
-	uint16_t length;
-};
-struct OpenTTDTrainAfterSwapRead {
-	uint32_t tile;
-	int32_t x;
-	int32_t y;
-};
-struct OpenTTDTrainReverseSwapRead {
-	uint32_t tile;
-	int32_t x;
-	int32_t y;
-	int32_t z;
-	uint8_t direction;
-	uint8_t status;
-};
-struct OpenTTDTrainApproachingEndRead {
-	int32_t x;
-	int32_t y;
-	uint16_t length;
-	uint16_t speed;
-	uint8_t direction;
-};
-struct OpenTTDTrainLineEndsRead {
-	uint32_t tile;
-	uint16_t speed;
-	uint8_t breakdown;
-};
-struct OpenTTDTrainSpeedZRead {
-	int32_t z;
-	uint16_t max_track_speed;
-	uint16_t speed;
-};
-struct OpenTTDTrainMoveVehicleRead {
-	uint32_t tile;
-	int32_t x;
-	int32_t y;
-	uint8_t direction;
-	uint8_t front;
-	uint8_t articulated;
-};
-struct OpenTTDTrainMoveVehicle20Read {
-	uint16_t speed;
-	uint8_t status;
-	uint8_t front;
-};
-struct OpenTTDTrainCollisionOneRead {
-	OpenTTDTrainHandle first;
-	int32_t x;
-	int32_t y;
-	int32_t z;
-	uint16_t length;
-	uint8_t owner;
-};
-struct OpenTTDTrainCollisionOne22Read {
-	int32_t x;
-	int32_t y;
-	int32_t z;
-	uint16_t length;
-	uint8_t owner;
-};
-struct OpenTTDTrainDeleteLastRead {
-	uint32_t tile;
-	uint8_t owner;
-};
-struct OpenTTDTrainStayDepotRead {
-	uint32_t tile;
-	uint32_t power;
-};
-struct OpenTTDTrainLocoRead {
-	uint16_t speed;
-	uint8_t status;
-	uint8_t order;
-};
-struct OpenTTDTrainLoco26Read {
-	uint32_t tile;
-	uint16_t order_destination;
-	uint8_t order;
-	uint8_t nonstop;
-};
-struct OpenTTDTrainTickRead {
-	uint16_t speed;
-	uint8_t status;
-	uint8_t running;
-	uint8_t front;
-	uint8_t free_wagon;
-};
-struct OpenTTDTrainNeedsServiceRead {
-	uint16_t order_destination;
-	uint8_t order;
-};
-struct OpenTTDTrainNextForceRead {
-	uint32_t tile;
-	uint8_t status;
-};
-struct OpenTTDTrainReverseCommandRead {
-	uint8_t status;
-	uint8_t breakdown;
-	uint8_t front;
-};
 struct OpenTTDTrainServices {
 	const OpenTTDGroundPhysicsServices *physics;
-	OpenTTDTrainHandle (*read_first)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_first);
-	OpenTTDTrainHandle (*read_next)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_next);
-	OpenTTDTrainHandle (*read_previous)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_previous);
-	OpenTTDTrainHandle (*read_next_unit)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_next_unit);
-	OpenTTDTrainHandle (*read_last)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_last);
-	uint32_t (*read_tile)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_tile);
-	uint32_t (*read_dest)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_dest);
-	int32_t (*read_order_time)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_order_time);
-	uint16_t (*read_length)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_length);
-	uint16_t (*read_total_length)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_total_length);
-	uint16_t (*read_max_track_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_max_track_speed);
-	uint16_t (*read_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_speed);
-	uint16_t (*read_gv_flags)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_gv_flags);
-	uint16_t (*read_refit_cap)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_refit_cap);
-	uint16_t (*read_last_station)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_last_station);
-	uint8_t (*read_direction)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_direction);
-	uint8_t (*read_status)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_status);
-	uint8_t (*read_tick)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_tick);
-	uint8_t (*read_running)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_running);
-	uint8_t (*read_day)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_day);
-	uint8_t (*read_progress)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_progress);
-	uint8_t (*read_order)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_order);
-	uint8_t (*read_front)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_front);
-	uint8_t (*read_articulated)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_articulated);
-	uint8_t (*read_multiheaded)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_multiheaded);
-	uint8_t (*read_owner)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_owner);
-	uint8_t (*read_vis_effect)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_vis_effect);
-	OpenTTDTrainConsistChangedRead (*read_consist_changed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_consist_changed);
-	OpenTTDTrainConsistChanged1Read (*read_consist_changed_1)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_consist_changed_1);
-	OpenTTDTrainConsistChanged2Read (*read_consist_changed_2)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_consist_changed_2);
-	OpenTTDTrainCurveLimitRead (*read_curve_limit)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_curve_limit);
-	OpenTTDTrainStopLocationRead (*read_stop_location)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_stop_location);
-	OpenTTDTrainCurrentMaxSpeedRead (*read_current_max_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_current_max_speed);
-	OpenTTDTrainUpdateAccelerationRead (*read_update_acceleration)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_update_acceleration);
-	OpenTTDTrainUpdateSpeedRead (*read_update_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_update_speed);
-	OpenTTDTrainTrackdirRead (*read_trackdir)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_trackdir);
-	OpenTTDTrainCanLeaveRead (*read_can_leave)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_can_leave);
-	OpenTTDTrainCrossingApproachRead (*read_crossing_approach)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_crossing_approach);
-	OpenTTDTrainNextOffsetRead (*read_next_offset)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_next_offset);
-	OpenTTDTrainAfterSwapRead (*read_after_swap)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_after_swap);
-	OpenTTDTrainReverseSwapRead (*read_reverse_swap)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_reverse_swap);
-	OpenTTDTrainApproachingEndRead (*read_approaching_end)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_approaching_end);
-	OpenTTDTrainLineEndsRead (*read_line_ends)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_line_ends);
-	OpenTTDTrainSpeedZRead (*read_speed_z)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_speed_z);
-	OpenTTDTrainMoveVehicleRead (*read_move_vehicle)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_move_vehicle);
-	OpenTTDTrainMoveVehicle20Read (*read_move_vehicle_20)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_move_vehicle_20);
-	OpenTTDTrainCollisionOneRead (*read_collision_one)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_collision_one);
-	OpenTTDTrainCollisionOne22Read (*read_collision_one_22)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_collision_one_22);
-	OpenTTDTrainDeleteLastRead (*read_delete_last)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_delete_last);
-	OpenTTDTrainStayDepotRead (*read_stay_depot)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_stay_depot);
-	OpenTTDTrainLocoRead (*read_loco)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_loco);
-	OpenTTDTrainLoco26Read (*read_loco_26)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_loco_26);
-	OpenTTDTrainTickRead (*read_tick_state)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_tick_state);
-	OpenTTDTrainNeedsServiceRead (*read_needs_service)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_needs_service);
-	OpenTTDTrainNextForceRead (*read_next_force)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_next_force);
-	OpenTTDTrainReverseCommandRead (*read_reverse_command)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_reverse_command);
 
-	void (*write_tile)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_tile);
-	void (*write_dest)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_dest);
-	void (*write_x)(OpenTTDTrainHandle, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_x);
-	void (*write_y)(OpenTTDTrainHandle, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_y);
-	void (*write_z)(OpenTTDTrainHandle, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_z);
-	void (*write_direction)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_direction);
-	void (*write_speed)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_speed);
-	void (*write_tick)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_tick);
-	void (*write_running)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_running);
-	void (*write_day)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_day);
-	void (*write_order_time)(OpenTTDTrainHandle, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_order_time);
-	void (*write_progress)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_progress);
-	void (*write_subspeed)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_subspeed);
-	void (*write_gv_flags)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_gv_flags);
-	void (*write_acceleration)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_acceleration);
-	void (*write_length)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_length);
-	void (*write_total_length)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_total_length);
-	void (*write_first_engine)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_engine);
-	void (*write_max_speed)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_max_speed);
-	void (*write_cargo_cap)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_cargo_cap);
-	void (*write_refit_cap)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_refit_cap);
-	void (*write_cargo_age)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_cargo_age);
-	void (*write_last_station)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_last_station);
 	void (*write_colourmap)(OpenTTDTrainHandle, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(write_colourmap);
-	void (*write_status)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_status);
 
 	uint64_t (*acc_model)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(acc_model);
 	uint64_t (*advance_distance)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(advance_distance);
 	uint64_t (*all_powered)(OpenTTDTrainHandle, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_powered);
-	uint64_t (*ambient_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(ambient_sound);
 	void (*arrival_news)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
 
 	uint64_t (*axis_diag)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(axis_diag);
@@ -352,7 +121,6 @@ struct OpenTTDTrainServices {
 	void (*running_windows)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(running_windows);
 	uint64_t (*servint)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(servint);
 	void (*set_depot_res)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot_res);
-	void (*set_next)(OpenTTDTrainHandle, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(set_next);
 	void (*set_signal_state)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
 	void (*set_tunnel_res)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tunnel_res);
 	uint64_t (*show_reservation)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(show_reservation);
@@ -407,7 +175,7 @@ struct OpenTTDTrainServices {
 void openttd_rust_train_consist_changed(OpenTTDTrainHandle, uint8_t, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 uint16_t openttd_rust_train_curve_limit(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 int32_t openttd_rust_train_current_max_speed(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
-void openttd_rust_train_update_acceleration(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
+void openttd_rust_train_update_acceleration(OpenTTDTrainHandle);
 int32_t openttd_rust_train_update_speed(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 void openttd_rust_train_mark_dirty(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_train_tick(OpenTTDTrainHandle, const OpenTTDTrainServices *, const OpenTTDSharedServices *);
