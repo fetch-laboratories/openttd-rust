@@ -18,16 +18,16 @@ struct OpenTTDTestFollowerOutput {
 	bool is_tunnel, is_bridge, is_station;
 	uint8_t err;
 };
-OpenTTDTestFollower *openttd_test_follower_new(const OpenTTDSharedServices *, uint8_t, Vehicle *, uint8_t, uint64_t, bool, bool);
+OpenTTDTestFollower *openttd_test_follower_new(const OpenTTDSharedServices *, uint8_t, OpenTTDVehicle *, uint8_t, uint64_t, bool, bool);
 void openttd_test_follower_delete(OpenTTDTestFollower *);
 OpenTTDTestFollowerOutput openttd_test_follower_follow(const OpenTTDSharedServices *, OpenTTDTestFollower *, uint32_t, uint8_t);
 OpenTTDTestFollowerOutput openttd_test_follower_mask(const OpenTTDSharedServices *, OpenTTDTestFollower *);
-int32_t openttd_test_follower_speed(const OpenTTDSharedServices *, uint8_t, Vehicle *, uint32_t);
+int32_t openttd_test_follower_speed(const OpenTTDSharedServices *, uint8_t, OpenTTDVehicle *, uint32_t);
 uint32_t openttd_test_platform_length(const OpenTTDSharedServices *, BaseStation *, uint32_t, uint8_t, bool);
 }
 using OpenTTDTestFollowerPtr = std::unique_ptr<OpenTTDTestFollower, decltype(&openttd_test_follower_delete)>;
-/** A production follower over `shared`, constructed from a vehicle or an owner. */
-inline OpenTTDTestFollowerPtr OpenTTDTestFollowerNew(const OpenTTDSharedServices &shared, TransportType mode, Vehicle *v, uint8_t owner, uint64_t types, bool allow90, bool from_vehicle)
+/** A production follower over `shared`, constructed from a vehicle record handle or an owner. */
+inline OpenTTDTestFollowerPtr OpenTTDTestFollowerNew(const OpenTTDSharedServices &shared, TransportType mode, OpenTTDVehicle *v, uint8_t owner, uint64_t types, bool allow90, bool from_vehicle)
 {
 	return {openttd_test_follower_new(&shared, mode, v, owner, types, allow90, from_vehicle), openttd_test_follower_delete};
 }
@@ -37,7 +37,7 @@ struct OpenTTDTestFollow {
 	TrackdirBits new_td_bits;
 	int tiles_skipped;
 };
-inline OpenTTDTestFollow OpenTTDTestFollowOnce(const OpenTTDSharedServices &shared, TransportType mode, Vehicle *v, uint8_t owner, uint64_t types, bool from_vehicle, uint32_t tile, uint8_t td)
+inline OpenTTDTestFollow OpenTTDTestFollowOnce(const OpenTTDSharedServices &shared, TransportType mode, OpenTTDVehicle *v, uint8_t owner, uint64_t types, bool from_vehicle, uint32_t tile, uint8_t td)
 {
 	const auto out = openttd_test_follower_follow(&shared, OpenTTDTestFollowerNew(shared, mode, v, owner, types, true, from_vehicle).get(), tile, td);
 	return {TileIndex{out.new_tile}, out.followed ? static_cast<TrackdirBits>(out.new_td_bits) : TRACKDIR_BIT_NONE, out.tiles_skipped};
@@ -62,10 +62,10 @@ struct FollowerProbeT {
 	}
 	void Init(const VehicleType *v, RailTypes types) {
 		this->veh = v;
-		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), const_cast<Vehicle *>(this->veh), 0, types.base(), Allow90degTurns(), true);
+		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), this->veh == nullptr ? nullptr : this->veh->record, 0, types.base(), Allow90degTurns(), true);
 	}
 	void Init(Owner owner, RailTypes types) {
-		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), const_cast<Vehicle *>(this->veh), owner.base(), types.base(), Allow90degTurns(), false);
+		this->state = OpenTTDTestFollowerNew(GetRustSharedServices(), TT(), this->veh == nullptr ? nullptr : this->veh->record, owner.base(), types.base(), Allow90degTurns(), false);
 	}
 	static constexpr TransportType TT() { return Ttr_type_; }
 	static constexpr bool IsWaterTT() { return TT() == TRANSPORT_WATER; }
@@ -77,7 +77,7 @@ struct FollowerProbeT {
 	bool MaskReservedTracks() { return !DoTrackMasking() || this->Read(openttd_test_follower_mask(&GetRustSharedServices(), this->state.get())); }
 	int GetSpeedLimit(int *min = nullptr) const { return GetSpeedLimit(this->old_tile, static_cast<const VehicleType *>(this->veh), min); }
 	static int GetSpeedLimit(TileIndex tile, const VehicleType *v, int *min = nullptr) {
-		int max = openttd_test_follower_speed(&GetRustSharedServices(), TT(), const_cast<Vehicle *>(static_cast<const Vehicle *>(v)), tile.base());
+		int max = openttd_test_follower_speed(&GetRustSharedServices(), TT(), v == nullptr ? nullptr : v->record, tile.base());
 		if (min != nullptr) *min = 0;
 		return max;
 	}

@@ -24,7 +24,7 @@ extern CargoPaymentPool _cargo_payment_pool;
 struct CargoPayment : CargoPaymentPool::PoolItem<&_cargo_payment_pool> {
 	OpenTTDCargoPayment *rust_state; ///< Sole owner of payment state.
 	/* Aliases into the repr(C) Rust payment, used by the CAPY descriptors. */
-	Vehicle *&front = reinterpret_cast<Vehicle *&>(this->rust_state->fields.front);
+	OpenTTDVehicle *&front = this->rust_state->fields.front;
 	Money &route_profit = *reinterpret_cast<Money *>(&this->rust_state->fields.route_profit);
 	Money &visual_profit = *reinterpret_cast<Money *>(&this->rust_state->fields.visual_profit);
 	Money &visual_transfer = *reinterpret_cast<Money *>(&this->rust_state->fields.visual_transfer);

@@ -68,24 +68,9 @@ pub struct PoolStop {
     pub xy: u32,
     pub index: u32,
 }
-/// Drive-through entry inputs of a road vehicle.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct DriveRead {
-    pub total_length: u16,
-    pub direction: u8,
-}
-/// Rebuild inputs of one vehicle on a stop tile; road fields are zero for
-/// other vehicle types.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RebuildRead {
-    pub road: *mut RoadState,
-    pub total_length: u16,
-    pub vehicle_type: VehicleType,
-    pub direction: u8,
-    pub status: u8,
-    pub primary: bool,
+/// `GroundVehicleCache::cached_total_length` of a live road record.
+fn total_length(v: VehicleRef) -> u16 {
+    crate::raw_field::read_field!(v.ground_cache(), cached_total_length)
 }
 
 /// Native road stop services, reached through the shared table.
@@ -109,10 +94,6 @@ pub struct RoadStopServices {
     pub state: extern "C" fn(*const Stop) -> *mut State,
     /// First live `RoadStop::Iterate(index)` item.
     pub pool_next: extern "C" fn(u32) -> PoolStop,
-    /// Drive-through `Enter`/`Leave` read of a road vehicle.
-    pub drive_read: extern "C" fn(VehicleRef) -> DriveRead,
-    /// Rebuild filter read of any vehicle in the tile hash.
-    pub rebuild_read: extern "C" fn(VehicleRef) -> RebuildRead,
 }
 
 /// Map dimensions read at the entry's use.
@@ -373,14 +354,13 @@ pub(crate) unsafe fn enter(
         return true;
     }
     crate::witness::hit(crate::witness::ROAD_STOP_ENTER_DRIVE);
-    let r = (t.drive_read)(v);
     let e = entry(
         state,
-        dir_to_diag_dir(r.direction, |ok| {
+        dir_to_diag_dir(v.direction(), |ok| {
             crate::movement::native_assert(s, ok);
         }),
     );
-    enter_entry(e, r.total_length);
+    enter_entry(e, total_length(v));
     // SAFETY: Caller's live road owner; no service runs during the store.
     unsafe {
         crate::road::set_state(road, crate::road::get_state(road) | IN_DT_ROAD_STOP);
@@ -406,26 +386,20 @@ pub(crate) unsafe fn leave(
         set_entrance_busy(state, false);
     } else {
         crate::witness::hit(crate::witness::ROAD_STOP_LEAVE_DRIVE);
-        let r = (table(s).drive_read)(v);
         let e = entry(
             state,
-            dir_to_diag_dir(r.direction, |ok| {
+            dir_to_diag_dir(v.direction(), |ok| {
                 crate::movement::native_assert(s, ok);
             }),
         );
-        leave_entry(e, r.total_length);
+        leave_entry(e, total_length(v));
     }
 }
 /// `RoadStop::GetByTile(v->tile, GetRoadStopType(v->tile))->Leave(v)`.
 /// # Safety
 /// Live serialized road owner of the front vehicle `v`.
-pub(crate) unsafe fn leave_vehicle(
-    s: &Services,
-    vehicle: &VehicleServices,
-    v: VehicleRef,
-    road: *mut RoadState,
-) {
-    let tile = (vehicle.tile)(v);
+pub(crate) unsafe fn leave_vehicle(s: &Services, v: VehicleRef, road: *mut RoadState) {
+    let tile = v.tile();
     // SAFETY: Caller's contract.
     unsafe { leave(s, at(s, tile), tile, v, road) };
 }
@@ -466,25 +440,25 @@ fn rebuild_entry(s: &Services, xy: u32, state: *mut State, east: bool) -> Entry 
     while continuation(s, xy, tile) {
         length = length.wrapping_add(TILE_UNITS);
         vehicle.for_each_on_tile(tile, |v| {
-            let r = (t.rebuild_read)(v);
             // Not a RV or not in the right direction or crashed :(
-            if r.vehicle_type != VehicleType::ROAD
-                || dir_to_diag_dir(r.direction, |ok| {
+            if v.vehicle_type() != VehicleType::ROAD.0
+                || dir_to_diag_dir(v.direction(), |ok| {
                     crate::movement::native_assert(s, ok);
                 }) != entry_dir
-                || !r.primary
-                || r.status & VS_CRASHED != 0
+                || !v.is_front_engine()
+                || v.status() & VS_CRASHED != 0
             {
                 return;
             }
             // Don't add ones not in a road stop.
             // SAFETY: Live road owner of this road vehicle shell.
-            if unsafe { crate::road::get_state(r.road) } < IN_ROAD_STOP {
+            let road = crate::raw_field::read_field!(v.0.as_ptr(), road).cast();
+            if unsafe { crate::road::get_state(road) } < IN_ROAD_STOP {
                 return;
             }
             crate::witness::hit(crate::witness::ROAD_STOP_REBUILD_VEHICLE);
             if !vehicles.iter().any(|&(u, _)| u == v) {
-                vehicles.push((v, r.total_length));
+                vehicles.push((v, total_length(v)));
             }
         });
         tile = tile.wrapping_add(offset);
@@ -718,7 +692,7 @@ pub unsafe extern "C" fn openttd_rust_road_stop_leave(
     // SAFETY: Caller's contract; the road stop table's vehicle table is static.
     unsafe {
         let s = &*s;
-        leave_vehicle(s, &*table(s).vehicle, v, road);
+        leave_vehicle(s, v, road);
     }
 }
 /// `rs->GetEntry(dir).CheckIntegrity(rs)`.
@@ -771,15 +745,6 @@ pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDRoadStopRebuildRead" ["probe"] => crate::road_stop::RebuildRead {
-        road,
-        total_length,
-        vehicle_type,
-        direction,
-        status,
-        primary,
-    };
-    "OpenTTDRoadStopDriveRead" ["probe"] => crate::road_stop::DriveRead { total_length, direction, };
     "OpenTTDRoadStopEntry" ["probe"] => crate::road_stop::Entry { length, occupied, };
     "OpenTTDRoadStopPoolItem" ["probe"] => crate::road_stop::PoolStop { state, xy, index, };
     "OpenTTDRoadStopEntries" ["probe"] => crate::road_stop::Entries { east, west, };
@@ -794,7 +759,5 @@ crate::abi::layouts! {
         tile,
         state,
         pool_next,
-        drive_read,
-        rebuild_read,
     };
 }

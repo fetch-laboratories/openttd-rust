@@ -106,7 +106,7 @@ fn vehicles(s: &Services) -> impl Iterator<Item = VehicleRef> + '_ {
     let mut from = 0u32;
     std::iter::from_fn(move || {
         let v = (s.shared.vehicle_next)(from)?;
-        from = (s.clock.vehicle_id)(v.0.as_ptr().cast()).wrapping_add(1);
+        from = (s.clock.vehicle_id)(v.shell().cast()).wrapping_add(1);
         Some(v)
     })
 }
@@ -122,10 +122,9 @@ fn train_leaves(s: &Services) -> *const crate::train::Leaves {
 
 /// `Train::Iterate()` with `IsFrontEngine()` and `IsFreeWagon()` read at the source points.
 fn trains(s: &Services, mut each: impl FnMut(VehicleRef, u8)) {
-    let vs = vehicle_services(s);
     for v in vehicles(s) {
-        if (vs.vehicle_type)(v) == VEH_TRAIN {
-            each(v, (vs.subtype)(v));
+        if v.vehicle_type() == VEH_TRAIN {
+            each(v, v.subtype());
         }
     }
 }
@@ -301,7 +300,7 @@ fn train_acceleration_model_changed(s: &Services) {
             id.set_cached_max_curve_speed(u64::from(limit));
             // SAFETY: As above.
             unsafe {
-                crate::train::openttd_rust_train_update_acceleration(id, train_leaves(s), s.shared);
+                crate::train::openttd_rust_train_update_acceleration(id);
             }
         }
     });
@@ -324,11 +323,8 @@ fn train_slope_steepness_changed(s: &Services) {
 
 /// `RoadVehicle::Iterate()` front engines.
 fn road_front_engines(s: &Services, mut each: impl FnMut(VehicleRef)) {
-    let vs = vehicle_services(s);
     for v in vehicles(s) {
-        if (vs.vehicle_type)(v) == VEH_ROAD
-            && crate::vehicle_base::is_front_engine(true, (vs.subtype)(v))
-        {
+        if v.vehicle_type() == VEH_ROAD && crate::vehicle_base::is_front_engine(true, v.subtype()) {
             each(v);
         }
     }
@@ -365,9 +361,10 @@ fn difficulty_noise_change(s: &Services) {
 }
 
 fn check_road_side(s: &Services) -> bool {
-    let vs = vehicle_services(s);
     let allowed = menu()
-        || !crate::road_cmd::road_vehicles_are_built(vehicles(s).map(|v| (vs.vehicle_type)(v)));
+        || !crate::road_cmd::road_vehicles_are_built(
+            vehicles(s).map(crate::vehicle::VehicleRef::vehicle_type),
+        );
     if !allowed {
         hit(witness::SETTINGS_ROAD_SIDE_REFUSED);
     }
@@ -385,12 +382,11 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
     }
     let map = s.shared.map();
     if new_value != 0 {
-        let vs = vehicle_services(s);
         for v in vehicles(s) {
-            if (vs.vehicle_type)(v) != VEH_SHIP {
+            if v.vehicle_type() != VEH_SHIP {
                 continue;
             }
-            let tile = (vs.tile)(v);
+            let tile = (v).tile();
             if map.tile_x(tile) == 0 || map.tile_y(tile) == 0 {
                 hit(witness::SETTINGS_EDGES_OCCUPIED);
                 return refuse(s, s.edges_not_empty);

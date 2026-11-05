@@ -18,16 +18,18 @@
 #include "gfx_type.h"
 #include "newgrf_spritegroup.h"
 #include "rust/newgrf_vehicle_ffi.h"
+#include "rust/vehicle_record_ffi.h"
 
 /** Resolver for a vehicle scope. */
 struct VehicleScopeResolver : public ScopeResolver {
 	OpenTTDVehicleScopeState &state;
-	const Vehicle *&v;
+	const OpenTTDVehicle *&v;
 	uint16_t &self_type;
 	bool &rotor_in_gui;
 	VehicleScopeResolver(ResolverObject &ro, OpenTTDVehicleScopeState &state)
 		: ScopeResolver(ro), state(state), v(state.v), self_type(state.self_type), rotor_in_gui(state.rotor_in_gui) {}
-	void SetVehicle(const Vehicle *v) { openttd_rust_vehicle_scope_set(&this->state, v); }
+	void SetVehicle(const Vehicle *v);
+	const Vehicle *GetVehicle() const { return VehicleFromRecord(this->v); }
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const override;

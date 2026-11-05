@@ -18,20 +18,13 @@ struct OpenTTDGroundState;
 struct OpenTTDRoadLeaves;
 struct OpenTTDRoadState;
 struct OpenTTDGroundOwner { OpenTTDGroundState *state; OpenTTDTrainHandle train; OpenTTDRoadState *road; VehicleType kind; };
-struct OpenTTDGroundPowerInput { uint32_t tile; uint8_t subtype; };
 struct OpenTTDGroundWeightInput { const CargoSpec *cargo; OpenTTDCargoList *owner; };
-struct OpenTTDGroundAccelerationInput { uint32_t tile; uint16_t speed; uint8_t status; RoadType roadtype; };
-struct OpenTTDGroundSpeedInput { uint16_t speed; uint8_t subspeed; };
 struct OpenTTDGroundPhysicsServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDRoadLeaves *road;
 	bool assertions;
 	OpenTTDGroundOwner (*resolve)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
-	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
-	OpenTTDGroundPowerInput (*power_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(power_input);
 	OpenTTDGroundWeightInput (*weight_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(weight_input);
-	OpenTTDGroundAccelerationInput (*acceleration_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(acceleration_input);
-	OpenTTDGroundSpeedInput (*speed_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_input);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint64_t (*cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);
 	uint64_t (*train_cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo_weight);
@@ -55,13 +48,13 @@ struct OpenTTDGroundPhysicsServices {
 };
 const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept;
 extern "C" {
-void openttd_rust_ground_power_changed(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-void openttd_rust_ground_cargo_changed(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-int32_t openttd_rust_ground_acceleration(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint8_t openttd_rust_ground_chain_in_depot_abi(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-extern "C++" inline bool openttd_rust_ground_chain_in_depot(const OpenTTDGroundPhysicsServices *a0, const Vehicle *a1) { return openttd_rust_ground_chain_in_depot_abi(a0, a1) != 0; }
-uint32_t openttd_rust_ground_crash(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool);
-uint16_t openttd_rust_ground_weight(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool);
-VehicleAccelerationModel openttd_rust_ground_acceleration_type(const OpenTTDGroundPhysicsServices *, const Vehicle *);
+void openttd_rust_ground_power_changed(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
+void openttd_rust_ground_cargo_changed(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
+int32_t openttd_rust_ground_acceleration(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
+uint8_t openttd_rust_ground_chain_in_depot_abi(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
+extern "C++" inline bool openttd_rust_ground_chain_in_depot(const OpenTTDGroundPhysicsServices *a0, const OpenTTDVehicle *a1) { return openttd_rust_ground_chain_in_depot_abi(a0, a1) != 0; }
+uint32_t openttd_rust_ground_crash(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *, bool);
+uint16_t openttd_rust_ground_weight(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *, bool);
+VehicleAccelerationModel openttd_rust_ground_acceleration_type(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
 }
 #endif /* RUST_GROUND_VEHICLE_FFI_H */

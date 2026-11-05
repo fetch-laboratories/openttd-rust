@@ -67,7 +67,7 @@ static const NIVariable _niv_vehicles[] = {
 
 class NIHVehicle : public NIHelper {
 	bool IsInspectable(uint index) const override        { return Vehicle::Get(index)->GetGRF() != nullptr; }
-	uint GetParent(uint index) const override            { const Vehicle *first = Vehicle::Get(index)->First(); return GetInspectWindowNumber(GetGrfSpecFeature(first->type), first->index); }
+	uint GetParent(uint index) const override            { const Vehicle *first = Vehicle::Get(index)->First(); return GetInspectWindowNumber(GetGrfSpecFeature(first->GetType()), first->index); }
 	const void *GetInstance(uint index)const override    { return Vehicle::Get(index); }
 	const void *GetSpec(uint index) const override       { return Vehicle::Get(index)->GetEngine(); }
 	std::string GetName(uint index) const override       { return GetString(STR_VEHICLE_NAME, index); }
@@ -77,7 +77,7 @@ class NIHVehicle : public NIHelper {
 	uint Resolve(uint index, uint var, uint param, bool &avail) const override
 	{
 		Vehicle *v = Vehicle::Get(index);
-		VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_CACHED);
+		VehicleResolverObject ro(v->GetEngineType(), v, VehicleResolverObject::WO_CACHED);
 		return ro.GetScope(VSG_SCOPE_SELF)->GetVariable(var, param, avail);
 	}
 };

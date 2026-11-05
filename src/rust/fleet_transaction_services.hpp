@@ -31,13 +31,7 @@ static void FleetTransaction_cost_amount(void *out, int64_t amount) noexcept { G
 static bool FleetTransaction_success(void *out) noexcept { return GetRustCommandCostServices().success(RustCommandCost(static_cast<CommandCost *>(out))); }
 static uint32_t FleetTransaction_error(void *out) noexcept { return GetRustCommandCostServices().error_message(RustCommandCost(static_cast<CommandCost *>(out))); }
 static int64_t FleetTransaction_money(void *out) noexcept { return GetRustCommandCostServices().money(RustCommandCost(static_cast<CommandCost *>(out))); }
-static bool FleetTransaction_rear(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->IsRearDualheaded(); }
-static bool FleetTransaction_crashed(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->vehstatus.Test(VehState::Crashed); }
-static bool FleetTransaction_stopped(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->vehstatus.Test(VehState::Stopped); }
 static bool FleetTransaction_chain_depot(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsChainInDepot(); }
-static void * FleetTransaction_next_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetNextUnit(); }
-static void * FleetTransaction_prev_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetPrevUnit(); }
-static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustGroundCachedTotalLength(&Train::From(v)->gcache); }
 static bool FleetTransaction_stopped_in_depot(void *shell) noexcept { return static_cast<Vehicle *>(shell)->IsStoppedInDepot(); }
 static uint8_t FleetTransaction_max_length() noexcept { return _settings_game.vehicle.max_train_length; }
 /* Original assertion sites; Rust evaluates their conditions only when assertions is set. */
@@ -58,15 +52,14 @@ static void * FleetTransaction_order_at(void *orders, size_t index) noexcept { r
 static bool FleetTransaction_order_refit(void *order) noexcept { return static_cast<Order *>(order)->IsRefit(); }
 static bool FleetTransaction_order_auto(void *order) noexcept { return static_cast<Order *>(order)->IsAutoRefit(); }
 static uint8_t FleetTransaction_order_cargo(void *order) noexcept { return static_cast<Order *>(order)->GetRefitCargo(); }
-static void FleetTransaction_refit_news(void *shell, int32_t order) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id = (v->type == VEH_TRAIN) ? RustVehicleFirst(v)->index : v->index; EncodedString headline = order != -1 ? GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_REFIT, order + 1) : GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_CARGO, RustCargoSpec(v->cargo_type)->name); AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, std::move(headline), id); }
+static void FleetTransaction_refit_news(void *shell, int32_t order) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id = (v->GetType() == VEH_TRAIN) ? RustVehicleFirst(v)->index : v->index; EncodedString headline = order != -1 ? GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_REFIT, order + 1) : GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_CARGO, RustCargoSpec(v->cargo_type)->name); AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, std::move(headline), id); }
 static uint8_t FleetTransaction_subtype(void *old, void *replacement, uint8_t cargo) noexcept { return GetBestFittingSubType(static_cast<Vehicle *>(old), static_cast<Vehicle *>(replacement), cargo); }
 static void FleetTransaction_reverse(void *shell) noexcept { Command<CMD_REVERSE_TRAIN_DIRECTION>::Do(DoCommandFlag::Execute, static_cast<Vehicle *>(shell)->index, true); }
 static void FleetTransaction_copy_configuration(void *old, void *replacement) noexcept { static_cast<Vehicle *>(replacement)->CopyVehicleConfigAndStatistics(static_cast<Vehicle *>(old)); }
 static void FleetTransaction_viewports(void *old, void *replacement) noexcept { ChangeVehicleViewports(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
 static void FleetTransaction_view_window(void *old, void *replacement) noexcept { ChangeVehicleViewWindow(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
 static void FleetTransaction_news(void *old, void *replacement) noexcept { ChangeVehicleNews(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
-static void FleetTransaction_transfer_cargo(void *old, void *replacement, bool chain) noexcept { TransferCargo(static_cast<Vehicle *>(old), static_cast<Vehicle *>(replacement), chain); }
-static void FleetTransaction_event(void *old, void *replacement) noexcept { auto *v = static_cast<Vehicle *>(old); AI::NewEvent(v->owner, new ScriptEventVehicleAutoReplaced(v->index, static_cast<Vehicle *>(replacement)->index)); }
+static void FleetTransaction_event(void *old, void *replacement) noexcept { auto *v = static_cast<Vehicle *>(old); AI::NewEvent(v->GetOwner(), new ScriptEventVehicleAutoReplaced(v->index, static_cast<Vehicle *>(replacement)->index)); }
 static void FleetTransaction_save_rng(void *seeds) noexcept { *static_cast<SavedRandomSeeds *>(seeds) = std::bit_cast<SavedRandomSeeds>(GetRustRandomServices().save()); }
 static void FleetTransaction_restore_rng(void *seeds) noexcept { GetRustRandomServices().restore(std::bit_cast<OpenTTDRandomSeeds>(*static_cast<SavedRandomSeeds *>(seeds))); }
 static void FleetTransaction_rule_window(uint16_t engine, uint16_t group) noexcept { InvalidateAutoreplaceWindow(EngineID(engine), GroupID(group)); }
@@ -84,15 +77,8 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.error = FleetTransaction_error,
 	.money = FleetTransaction_money,
 	.commands = &GetRustCommandServices(),
-	.rear = FleetTransaction_rear,
-	.articulated = RustOpaqueVehicleRead<bool, RustVehicleArticulated>,
-	.crashed = FleetTransaction_crashed,
-	.stopped = FleetTransaction_stopped,
 	.chain_depot = FleetTransaction_chain_depot,
-	.first = RustVehicleFirstOpaque,
-	.next_unit = FleetTransaction_next_unit,
-	.prev_unit = FleetTransaction_prev_unit,
-	.length = FleetTransaction_length,
+	.vehicles = &GetRustVehicleServices(),
 	.cargo_type = RustOpaqueHandleRead<uint8_t, RustVehicleCargoType>,
 	.capabilities = &GetRustEngineCapabilitiesServices(),
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,
@@ -122,7 +108,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.viewports = FleetTransaction_viewports,
 	.view_window = FleetTransaction_view_window,
 	.news = FleetTransaction_news,
-	.transfer_cargo = FleetTransaction_transfer_cargo,
 	.event = FleetTransaction_event,
 	.save_rng = FleetTransaction_save_rng,
 	.restore_rng = FleetTransaction_restore_rng,

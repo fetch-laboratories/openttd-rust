@@ -55,17 +55,12 @@ pub struct Services {
     pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub(crate) industry_delivery: *const crate::industry::DeliveryServices,
-    pub(crate) last_station: extern "C" fn(*mut OpenTTDVehicle) -> StationID,
-    pub(crate) vehicle_owner: extern "C" fn(*mut OpenTTDVehicle) -> CompanyID,
     pub(crate) detach_payment: extern "C" fn(*mut OpenTTDVehicle),
     pub(crate) finance: *const crate::company::FinanceServices,
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
     pub(crate) local_company: extern "C" fn() -> bool,
     pub(crate) expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> crate::services::ExpenseType,
     pub(crate) profit: extern "C" fn(*mut OpenTTDVehicle) -> i64,
-    pub(crate) x: extern "C" fn(*mut OpenTTDVehicle) -> i32,
-    pub(crate) y: extern "C" fn(*mut OpenTTDVehicle) -> i32,
-    pub(crate) z: extern "C" fn(*mut OpenTTDVehicle) -> i32,
     pub(crate) shared: *const crate::services::Services,
     pub(crate) feeder_animation: extern "C" fn(i32, i32, i32, i64, i64),
     pub(crate) subsidy_multiplier: extern "C" fn() -> u8,
@@ -252,6 +247,10 @@ pub extern "C" fn openttd_rust_cargo_payment_new(
         station,
     }))
 }
+/// The payment's live front record.
+fn record(front: *mut OpenTTDVehicle) -> crate::vehicle::VehicleRef {
+    crate::vehicle::VehicleRef(std::ptr::NonNull::new(front).unwrap())
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_payment_front(
     p: *const Payment,
@@ -259,10 +258,9 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_front(
     unsafe { (*p).fields.front }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_payment_afterload(p: *mut Payment, s: *const Services) {
-    let s = unsafe { &*s };
+pub unsafe extern "C" fn openttd_rust_cargo_payment_afterload(p: *mut Payment) {
     let front = unsafe { (*p).fields.front };
-    let station = (s.last_station)(front);
+    let station = StationID(record(front).last_station());
     unsafe {
         (*p).station = station;
     }
@@ -281,7 +279,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
             let finance = unsafe { &*s.finance };
             let vehicles = unsafe { &*s.vehicles };
             let old_company = CompanyID((finance.current_company)());
-            let company = (s.vehicle_owner)(fields.front);
+            let company = CompanyID(record(fields.front).owner());
             (finance.set_current_company)(company.0);
             let expense = (s.expense)(fields.front, true);
             let finances = (finance.company_finances)(company.0);
@@ -314,9 +312,8 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
             {
                 (vehicles.play_sound)(front, crate::sound_type::SND_14_CASHTILL);
             }
-            let x_pos = (s.x)(fields.front);
-            let y_pos = (s.y)(fields.front);
-            let z_pos = (s.z)(fields.front);
+            let front = record(fields.front);
+            let (x_pos, y_pos, z_pos) = (front.x(), front.y(), front.z());
             if fields.visual_transfer != 0 {
                 (s.feeder_animation)(
                     x_pos,
@@ -380,7 +377,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     let s = unsafe { &*s };
     let front = unsafe { (*p).fields.front };
     let station = unsafe { (*p).station };
-    let company = (s.vehicle_owner)(front);
+    let company = CompanyID(record(front).owner());
     let profit = deliver(
         d,
         s,
@@ -474,17 +471,12 @@ crate::abi::layouts! {
         resolver,
         subsidies,
         industry_delivery,
-        last_station,
-        vehicle_owner,
         detach_payment,
         finance,
         vehicles,
         local_company,
         expense,
         profit,
-        x,
-        y,
-        z,
         shared,
         feeder_animation,
         subsidy_multiplier,

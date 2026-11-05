@@ -44,3 +44,8 @@ pub const OUFB_UNLOAD: u8 = 1;
 pub const OUFB_TRANSFER: u8 = 2;
 /// `OrderUnloadType::NoUnload`.
 pub const OUFB_NO_UNLOAD: u8 = 4;
+
+/// `OrderDepotTypeFlag::Service`.
+pub const ODTF_SERVICE: u8 = 1 << 0;
+/// `OrderNonStopFlag::NoIntermediate`.
+pub const ONSF_NO_INTERMEDIATE: u8 = 1 << 0;

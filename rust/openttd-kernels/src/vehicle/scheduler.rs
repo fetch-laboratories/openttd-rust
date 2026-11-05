@@ -28,7 +28,7 @@ const ENGINE: u8 = 1 << GVSF_ENGINE;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PoolCursor {
-    pub slots: *const Option<VehicleRef>,
+    pub slots: *const *mut crate::vehicle_base::OpenTTDVehicleShell,
     pub slots_len: usize,
     pub first_unused: *const usize,
 }
@@ -46,11 +46,6 @@ pub struct PostTick {
     pub status: *const u8,
 }
 #[repr(C)]
-pub struct DayCallback {
-    pub day: u8,
-    pub has_engine: bool,
-}
-#[repr(C)]
 pub struct SchedulerServices {
     pub pool: extern "C" fn() -> PoolCursor,
     pub assertions: bool,
@@ -59,8 +54,6 @@ pub struct SchedulerServices {
     pub tick: unsafe extern "C" fn(VehicleRef, *mut PostTick) -> bool,
     pub calendar_day: extern "C" fn(VehicleRef),
     pub economy_day: extern "C" fn(VehicleRef),
-    pub day_callback_read: extern "C" fn(VehicleRef) -> DayCallback,
-    pub first_dirty: extern "C" fn(VehicleRef),
     pub cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
     /// Base vehicle and shared tables, immutable for the process.
     pub vehicle: *const VehicleServices,
@@ -117,8 +110,9 @@ unsafe fn next<const COUNTED: bool>(
     while *from < unsafe { extent::<COUNTED>(s, pool) } {
         let vehicle = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(*from)) };
         *from += 1;
-        if vehicle.is_some() {
-            return vehicle;
+        if !vehicle.is_null() {
+            // SAFETY: A native slot holds a live shell, resolved once for this visit.
+            return Some(unsafe { VehicleRef::from_shell(vehicle.cast(), &*s.vehicle) });
         }
     }
     None
@@ -144,43 +138,44 @@ unsafe fn day<const COUNTED: bool>(
     while id < unsafe { extent::<COUNTED>(s, &mut pool) } {
         let vehicle = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(id)) };
         id += DAY_TICKS as usize;
-        let Some(vehicle) = vehicle else {
+        if vehicle.is_null() {
             continue;
-        };
+        }
+        // SAFETY: A native slot holds a live shell for this day callback.
+        let vehicle = unsafe { VehicleRef::from_shell(vehicle.cast(), &*s.vehicle) };
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }
-        if !calendar {
-            let callback_state = svc!(COUNTED, s.day_callback_read, vehicle);
-            if callback_state.day & 0x1f == 0 && callback_state.has_engine {
-                if COUNTED {
-                    crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
+        if !calendar && vehicle.day() & 0x1f == 0 && vehicle.has_engine_type() {
+            if COUNTED {
+                crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
+            }
+            let vs = unsafe { &*s.vehicle };
+            let callback = svc!(
+                COUNTED,
+                vs.callback,
+                (vs.newgrf)(),
+                vehicle,
+                CBID_VEHICLE_32DAY_CALLBACK
+            );
+            if callback != CALLBACK_FAILED {
+                if callback & 1 != 0 {
+                    unsafe {
+                        crate::newgrf_vehicle::trigger(
+                            vs,
+                            vehicle,
+                            crate::newgrf_vehicle::Trigger::Callback32,
+                        );
+                    };
                 }
-                let vs = unsafe { &*s.vehicle };
-                let callback = svc!(
-                    COUNTED,
-                    vs.callback,
-                    (vs.newgrf)(),
-                    vehicle,
-                    CBID_VEHICLE_32DAY_CALLBACK
-                );
-                if callback != CALLBACK_FAILED {
-                    if callback & 1 != 0 {
-                        unsafe {
-                            crate::newgrf_vehicle::trigger(
-                                vs,
-                                vehicle,
-                                crate::newgrf_vehicle::Trigger::Callback32,
-                            );
-                        };
-                    }
-                    if callback != 0 {
-                        svc!(COUNTED, s.first_dirty, vehicle);
-                    }
-                    if callback & !3 != 0 {
-                        let engine = svc!(COUNTED, vs.engine, vehicle);
-                        vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
-                    }
+                if callback != 0 {
+                    // SAFETY: The immutable maintenance table lives for this entry.
+                    let maintenance = unsafe { &*vs.maintenance };
+                    svc!(COUNTED, maintenance.mark_dirty, vehicle.first());
+                }
+                if callback & !3 != 0 {
+                    let engine = svc!(COUNTED, vs.engine, vehicle);
+                    vs.unknown_callback_result(engine, CBID_VEHICLE_32DAY_CALLBACK, callback);
                 }
             }
         }
@@ -419,6 +414,7 @@ unsafe fn run_ticks<const COUNTED: bool>(
         let mut id = 0;
         while let Some(vehicle) = unsafe { next::<COUNTED>(s, &mut pool, &mut id) } {
             let current_id = id - 1;
+            let shell = vehicle.shell();
             if COUNTED {
                 crate::witness::hit(crate::witness::VEHICLE_OUTER_VISITS);
             }
@@ -430,7 +426,14 @@ unsafe fn run_ticks<const COUNTED: bool>(
             if s.assertions {
                 let _ = unsafe { extent::<COUNTED>(s, &mut pool) };
                 let actual = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(current_id)) };
-                assert!(actual == if survives { Some(vehicle) } else { None });
+                assert!(
+                    actual
+                        == if survives {
+                            shell.cast()
+                        } else {
+                            std::ptr::null_mut()
+                        }
+                );
             }
             if !survives {
                 if COUNTED {
@@ -472,18 +475,12 @@ crate::abi::layouts! {
         front_status,
         status,
     };
-    "OpenTTDVehicleDayCallback" ["scheduler"] => DayCallback {
-        day,
-        has_engine,
-    };
     "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
         pool,
         assertions,
         tick,
         calendar_day,
         economy_day,
-        day_callback_read,
-        first_dirty,
         cargo_owner,
         vehicle,
         shared,

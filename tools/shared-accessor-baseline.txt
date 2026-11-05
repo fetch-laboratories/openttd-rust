@@ -11,7 +11,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2f3fe8935519
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 42b3050e03485e2d | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 45992d52fc0daa85 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | b47b72a3c9ac9c98 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint64_t | 64e8426b85c95e58 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cb5a659cbe6a8f4 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | 7cf059c2aa94086f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle, bool value) noexcept -> void | b837556a01baf950 | 1
@@ -34,18 +33,10 @@ src/industry_cmd.cpp | []() noexcept -> uint8_t | bf71454f2d308e6c | 1
 src/industry_cmd.cpp | []() noexcept -> uint8_t | eb526c61b6569eeb | 1
 src/order_cmd.cpp | [](void *v) noexcept | 3ad12ea0c58a2761 | 1
 src/order_cmd.cpp | [](void *v) noexcept | 5e35106910478995 | 1
-src/order_cmd.cpp | openttd_orders_at_station(void *ctx) noexcept | b6dc88afccb1a28d | 1
 src/order_cmd.cpp | openttd_orders_base_station_tile(uint16_t destination) noexcept | f52aefaf0d9f0408 | 1
 src/order_cmd.cpp | openttd_orders_change_timetable_command(void *ctx, uint8_t index, uint8_t field, uint16_t value) noexcept | cf29f5653494b2b0 | 1
-src/order_cmd.cpp | openttd_orders_close_shared_window(void *ctx, uint32_t window) noexcept | 8a2de07e86ed3a46 | 1
 src/order_cmd.cpp | openttd_orders_delete_order_news(void *ctx) noexcept | c1738e0dbc9d4eb4 | 1
-src/order_cmd.cpp | openttd_orders_destination_tile(void *ctx) noexcept | 0b76ca810f4b4e15 | 1
-src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | 8876801f39931566 | 1
 src/order_cmd.cpp | openttd_orders_economy_fraction() noexcept | 1d0bc137e6e8cdeb | 1
-src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | cb66b8a463e43dbf | 1
-src/order_cmd.cpp | openttd_orders_invalidate_vehicle_list(void *ctx) noexcept | 1a5042d4ba5f5c18 | 1
-src/order_cmd.cpp | openttd_orders_last_station(void *ctx) noexcept | 37d09a120f34bb0c | 1
-src/order_cmd.cpp | openttd_orders_local_owner(void *ctx) noexcept | a3e1ec70f0a18e8e | 1
 src/order_cmd.cpp | openttd_orders_reverse_train(void *ctx) noexcept | 23ee8c2c4d232dff | 1
 src/order_cmd.cpp | openttd_orders_review_setting() noexcept | 1419e52784b2f36e | 1
 src/order_cmd.cpp | openttd_orders_station_owner(uint16_t destination) noexcept | c181e3b70687df7f | 1
@@ -54,17 +45,11 @@ src/order_cmd.cpp | openttd_orders_timetable_dirty(void *ctx) noexcept | 46e7dd5
 src/order_cmd.cpp | openttd_orders_timetable_year_limit() noexcept | 65f1171d2d4fe3ef | 1
 src/order_cmd.cpp | openttd_orders_vehicle_group(void *ctx) noexcept | d932fd412582f2de | 1
 src/order_cmd.cpp | openttd_orders_vehicle_id(void *ctx) noexcept | 8a72932b898fb672 | 1
-src/order_cmd.cpp | openttd_orders_vehicle_status(void *ctx) noexcept | 0666ba99af5a091d | 1
-src/order_cmd.cpp | openttd_orders_vehicle_tile(void *ctx) noexcept | f946d116807a3631 | 1
-src/order_cmd.cpp | openttd_orders_vehicle_type(void *ctx) noexcept | 548f4cd5cae79f9e | 1
 src/pathfinder/water_regions.cpp | CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch) | 43ab4b50224ccf7a | 1
 src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
-src/rust/aircraft_adapter.hpp | Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept | ab16a3a16a30787d | 1
-src/rust/aircraft_adapter.hpp | Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept | a6cd81a57940c095 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) noexcept | 20ea2629b76c3ff3 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept | c2837c0411ced584 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
-src/rust/aircraft_adapter.hpp | Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept | 0841847ee09aa8ff | 1
 src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a0e1036f160164 | 1
 src/rust/company_adapter.cpp | Co_map_size() noexcept | b49ebe1aff917479 | 1
 src/rust/company_adapter.cpp | Co_station_facility_count(uint32_t id) noexcept | 19b651266161c5ee | 1
@@ -73,18 +58,13 @@ src/rust/company_adapter.cpp | [](const Station *st) | 7599e8780f547b28 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_head(uint8_t company) noexcept | f3fae9779eabda33 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_keep_length(uint8_t owner) noexcept | ad49c9eeaeecb3c1 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept | e0e39efee41a55f6 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_vehicle_engine(void *shell) noexcept | 15a8b70a0fe4aa33 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_vehicle_group(void *shell) noexcept | a12f8a6d547d1ae7 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_vehicle_type(void *shell) noexcept | 725e4daef5bcf650 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_viewport(void *shell) noexcept | 5fe83f6e19b74226 | 1
-src/rust/fleet_pending_services.hpp | FleetPending_restart(void *shell) noexcept | 88efe79b36574162 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_copy_configuration(void *old, void *replacement) noexcept | 727c7c448c7843d3 | 1
-src/rust/fleet_transaction_services.hpp | FleetTransaction_crashed(void *shell) noexcept | 4e8240e91be2f979 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_max_length() noexcept | 27d4365792c77eba | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_needs_renew(void *shell, bool settings) noexcept | 0c9267b6cb5b5b22 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_orders(void *shell) noexcept | fad29c81879d9cca | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) noexcept | fc5bd727a0ec52f9 | 1
-src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped(void *shell) noexcept | 3b5f024ebad01d63 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void *shell) noexcept | 7eb686328ee6a83e | 1
 src/rust/road_services.h | RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept | 0e64e34569c25c86 | 1
 src/rust/ship_control_services.h | Ship_max_distance() noexcept | c2ad3baba34d9449 | 1
@@ -114,16 +94,20 @@ src/town_cmd.cpp | RustTownCouncilTolerance() noexcept | cddd8d4718f9a2cd | 1
 src/town_cmd.cpp | RustTown_allow_crossings() noexcept | 1f8c8aa2e0af5a02 | 1
 src/town_cmd.cpp | RustTown_growth_rate() noexcept | 6c32e2c93ccbb6f1 | 1
 binding | IndustryCommandDeity | 2
-binding | TrainReadLastStation | 2
-binding | TrainReadNext | 2
 write | src/economy.cpp | [](OpenTTDVehicle *handle, int64_t value) noexcept -> void | e49661d6b53b5cb0 | 1
 write | src/economy.cpp | [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void | cebe9268db3802a2 | 1
-write | src/order_cmd.cpp | openttd_orders_last_station_write(void *ctx, uint16_t station) noexcept | 5b7a6c4866ddd3da | 1
 write | src/rust/company_adapter.cpp | Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept | d8f0ad7c93f2f046 | 1
 write | src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t owner) noexcept | b1bc0135df3a7a84 | 1
 write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shell, uint16_t id) noexcept | 1b6edd36dbec0c7a | 1
 write | src/rust/ship_control_services.h | Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept | 680b8e84edac38d1 | 1
 write | src/rust/train_services.h | TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | aebb225d48856496 | 1
+src/order_cmd.cpp | openttd_orders_last_station_write(void *ctx, uint16_t station) noexcept | 7555d996b4dac6a0 | 1
+src/order_cmd.cpp | openttd_orders_close_shared_window(void *ctx, uint32_t window) noexcept | 4cbabab054f97649 | 1
+src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | dfa9c3318c4343db | 1
+src/order_cmd.cpp | openttd_orders_invalidate_vehicle_list(void *ctx) noexcept | e9676e057ddefeff | 1
+src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | b1d6dbf295840283 | 1
+src/script/api/script_vehiclelist.cpp | [vehicle_type](const Vehicle *v) | 24bdc2b99efbbacb | 1
+src/order_cmd.cpp | openttd_orders_shared_window(void *ctx, void *first) noexcept | 3755ddc11f656e07 | 1
 write | src/rust/session_services.inc | []() noexcept | 56bc9a312836fcd1 | 1
 src/rust/session_services.inc | [](OpenTTDSessionFrame *f) noexcept | 309fd0e09c3b557e | 1
 src/rust/session_services.inc | []() noexcept | 5910eb80ec425d16 | 1

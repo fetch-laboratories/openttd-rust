@@ -118,14 +118,11 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.engine_misc = RustEngineMiscFlags,
 	.aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype,
 	.vehicle_cargo = GetRustEngineCapabilitiesServices().vehicle_cargo,
-	.vehicle_first = GetRustVehicleResolverServices().first,
-	.articulated = GetRustVehicleResolverServices().articulated,
 	.wagon_override = RustVehicleRead<bool, RustVehicleUsesWagonOverride>,
 	.cargo_freight = Identity_cargo_freight,
 	.cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes,
 	.vehicle_id = RustVehicleRead<uint32_t, RustVehicleIndexOpaque>,
 	.invalidate_vehicle = RustVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
-	.vehicle_owner = GetRustVehicleServices().owner,
 	};
 	return services;
 }

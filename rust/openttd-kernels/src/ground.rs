@@ -822,9 +822,6 @@ pub struct ABICalls {
     pub road_snow: extern "C" fn() -> RoadSnowGround,
     pub tunnel: extern "C" fn() -> TunnelGround,
     pub airport: extern "C" fn() -> crate::water::AirportGround,
-    pub victim: extern "C" fn() -> crate::water::FloodVictim,
-    pub aircraft: extern "C" fn() -> crate::water::AircraftFloodPose,
-    pub ground: extern "C" fn() -> crate::water::GroundFloodPose,
     pub enums: extern "C" fn(
         ClearGroundType,
         RailGroundType,
@@ -859,9 +856,6 @@ pub(crate) unsafe fn abi_calls(calls: *const ABICalls) -> u8 {
     let road = (c.road_snow)();
     let tunnel = (c.tunnel)();
     let airport = (c.airport)();
-    let victim = (c.victim)();
-    let aircraft = (c.aircraft)();
-    let ground = (c.ground)();
     u8::from(
         fences.ne == 0xfedc_ba98
             && fences.se == 0x89ab_cdef
@@ -889,13 +883,6 @@ pub(crate) unsafe fn abi_calls(calls: *const ABICalls) -> u8 {
             && airport.tile == 0x1234_5678
             && airport.width == 0xabcd
             && airport.height == 0xdcba
-            && victim.status == 233
-            && victim.kind.0 == 226
-            && aircraft.tile == 0x8765_4321
-            && aircraft.z == -789
-            && aircraft.subtype == 232
-            && ground.z == 777
-            && ground.first.addr() != 0
             && (c.enums)(
                 ClearGroundType(240),
                 RailGroundType(239),
@@ -911,7 +898,7 @@ pub(crate) unsafe fn abi_calls(calls: *const ABICalls) -> u8 {
                 crate::services::FloodingBehaviour(234),
                 DiagDirection(235),
                 LandscapeType(236),
-                victim.kind,
+                crate::vehicle_type::VehicleType(226),
             ),
     )
 }
@@ -1009,9 +996,6 @@ crate::abi::layouts! {
         road_snow,
         tunnel,
         airport,
-        victim,
-        aircraft,
-        ground,
         enums,
     };
 }

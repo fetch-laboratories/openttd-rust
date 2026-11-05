@@ -74,6 +74,10 @@ pub(crate) const REF_ORDERLIST: u32 = 8;
 pub(crate) const REF_STORAGE: u32 = 9;
 pub(crate) const REF_LINK_GRAPH: u32 = 10;
 pub(crate) const REF_LINK_GRAPH_JOB: u32 = 11;
+/// Internal kinds for a reference held as a `VehicleRecord`, encoded as
+/// `REF_VEHICLE` and `REF_VEHICLE_OLD`.
+pub(crate) const REF_VEHICLE_RECORD: u32 = 12;
+pub(crate) const REF_VEHICLE_RECORD_OLD: u32 = 13;
 
 /// `VarTypes` in `saveload.h`.
 pub(crate) const SLE_FILE_END: u32 = 0;
@@ -204,6 +208,8 @@ pub struct OpenTTDSaveLoadServices {
     pub town_index: extern "C" fn(obj: *const c_void) -> u32,
     pub vehicle_get: extern "C" fn(index: usize) -> *mut c_void,
     pub vehicle_index: extern "C" fn(obj: *const c_void) -> u32,
+    /// The record of the live vehicle at `index`, or null.
+    pub vehicle_record_get: extern "C" fn(index: usize) -> *mut c_void,
     /// `std::string` at `ptr`: `resize(length)`, then `data()`.
     pub string_resize: extern "C" fn(ptr: *mut c_void, length: usize, data: *mut *mut u8) -> bool,
     /// Replay native diagnostics/assertions and copy the borrowed encoded output into `*str`.
@@ -933,6 +939,11 @@ fn reference_to_int(services: &OpenTTDSaveLoadServices, obj: *const c_void, rt: 
 
     // Old vehicles are saved as new ones.
     let index = match rt {
+        REF_VEHICLE_RECORD_OLD | REF_VEHICLE_RECORD => {
+            // SAFETY: A non-null record reference is a live record of a live shell.
+            let shell = unsafe { (*obj.cast::<crate::vehicle_base::VehicleRecord>()).shell };
+            return (services.vehicle_index)(shell.cast()) as usize + 1;
+        }
         REF_VEHICLE_OLD | REF_VEHICLE => services.vehicle_index,
         REF_STATION => services.station_index,
         REF_TOWN => services.town_index,
@@ -956,6 +967,16 @@ fn int_to_reference(
 ) -> Result<*mut c_void, OpenTTDRustSaveLoadStatus> {
     (services.native_assert)(shared(|s| s.action) == SLA_PTRS);
 
+    // Record references follow the vehicle encoding, then resolve to the shell's record.
+    let record = matches!(rt, REF_VEHICLE_RECORD | REF_VEHICLE_RECORD_OLD);
+    if record {
+        rt = if rt == REF_VEHICLE_RECORD {
+            REF_VEHICLE
+        } else {
+            REF_VEHICLE_OLD
+        };
+    }
+
     // From 4.4, REF_VEHICLE_OLD is saved as REF_VEHICLE.
     if rt == REF_VEHICLE_OLD && !version_before_minor(SLV_4, 4) {
         rt = REF_VEHICLE;
@@ -972,6 +993,7 @@ fn int_to_reference(
 
     let (get, kind) = match rt {
         REF_ORDERLIST => (services.order_list_get, "OrderList"),
+        REF_VEHICLE_OLD | REF_VEHICLE if record => (services.vehicle_record_get, "Vehicle"),
         REF_VEHICLE_OLD | REF_VEHICLE => (services.vehicle_get, "Vehicle"),
         REF_STATION => (services.station_get, "Station"),
         REF_TOWN => (services.town_get, "Town"),
@@ -1649,6 +1671,7 @@ crate::abi::layouts! {
         town_index,
         vehicle_get,
         vehicle_index,
+        vehicle_record_get,
         string_resize,
         apply_encoded,
         autolength,
@@ -1727,6 +1750,7 @@ mod tests {
         town_index: unused_index,
         vehicle_get: unused_get,
         vehicle_index: unused_index,
+        vehicle_record_get: unused_get,
         string_resize: unused_resize,
         apply_encoded: unused_apply,
         autolength: unused_autolength,

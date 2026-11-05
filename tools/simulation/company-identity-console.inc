@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file company-identity-console.inc Company identity production-command witnesses. */
 #include "company_cmd.h"
+#include "vehicle-record-fixture.hpp"
 #include "company_manager_face.h"
 #include "core/string_consumer.hpp"
 
@@ -21,9 +22,9 @@ static void CompanyIdentityInspect()
 		fmt::print(stderr, "COMPANY-IDENTITY engine-scheme {} {}\n", e->index.base(), to_underlying(GetEngineLiveryScheme(e->index, EngineID::Invalid(), nullptr)));
 	}
 	for (const Vehicle *v : Vehicle::Iterate()) {
-		if (!IsCompanyBuildableVehicleType(v->type) || !Engine::IsValidID(v->engine_type)) continue;
-		EngineID parent = v == v->First() ? EngineID::Invalid() : v->First()->engine_type;
-		fmt::print(stderr, "COMPANY-IDENTITY vehicle-scheme {} {}\n", v->index.base(), to_underlying(GetEngineLiveryScheme(v->engine_type, parent, v)));
+		if (!IsCompanyBuildableVehicleType(FIXTURE_GET(v, Type, type)) || !Engine::IsValidID(FIXTURE_GET(v, EngineType, engine_type))) continue;
+		EngineID parent = v == v->First() ? EngineID::Invalid() : FIXTURE_GET(v->First(), EngineType, engine_type);
+		fmt::print(stderr, "COMPANY-IDENTITY vehicle-scheme {} {}\n", v->index.base(), to_underlying(GetEngineLiveryScheme(FIXTURE_GET(v, EngineType, engine_type), parent, v)));
 	}
 	fmt::print(stderr, "COMPANY-IDENTITY rng {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 }

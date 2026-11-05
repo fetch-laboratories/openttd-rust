@@ -33,6 +33,7 @@ class GeneratedAbiTests(unittest.TestCase):
             rust = root / "rust/openttd-kernels/src"
             rust.mkdir(parents=True)
             (rust / "record.rs").write_text(
+                'layouts! { "Other" ["test"] => Other {}; }\n'
                 "shared_records! {\n    fn abi_record;\n"
                 '    "AContainer" ["test"] => pub struct Container {\n'
                 "        pub value: Value,\n        pub context: *mut c_void,\n"
@@ -123,6 +124,43 @@ class GeneratedAbiTests(unittest.TestCase):
                 {path.name: path.read_text() for path in Path(directory).iterdir()},
             )
         self.assertFalse(list((ROOT / "src").rglob("abi-layout-*.inc")))
+
+    def test_nested_shared_record_is_complete_before_its_value_use(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            (rust / "records.rs").write_text(
+                'layouts! { "LegacyRecord" ["nested"] => Legacy {}; }\n'
+                "shared_records! { fn abi_record;\n"
+                '"AParent" ["nested"] => pub struct Parent {\n'
+                "pub child: Child, pub tail: u16, pub link: *const External, pub legacy: *mut Legacy,\n    }\n"
+                '"ZChild" ["nested"] => pub struct Child {\n'
+                "pub field: u32,\n    }\n"
+                '"External" ["external"] => pub struct External { pub value: u8, }\n}\n'
+            )
+            fragments = GENERATOR["generate"](root)
+            header = root / "abi-record-nested.h"
+            header.write_text(fragments[header.name])
+            subprocess.run(
+                [
+                    os.environ.get("CXX", "c++"),
+                    "-std=c++20",
+                    "-x",
+                    "c++",
+                    "-fsyntax-only",
+                    "-",
+                ],
+                input=(
+                    f'#include "{header}"\n#include <type_traits>\n'
+                    "static_assert(std::is_same_v<decltype(AParent::child), ZChild>);\n"
+                    "static_assert(offsetof(AParent, tail) == sizeof(ZChild));\n"
+                    "static_assert(std::is_same_v<decltype(AParent::link), const External *>);\n"
+                    "static_assert(std::is_same_v<decltype(AParent::legacy), LegacyRecord *>);\n"
+                ),
+                text=True,
+                check=True,
+            )
 
     def test_shared_record_opaque_pointer_class_keys(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

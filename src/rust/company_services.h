@@ -21,8 +21,8 @@ inline UnitID RustCompanyUseVehicleUnit(CompanyID owner, VehicleType type, UnitI
 inline void RustCompanyAssignVehicleUnit(uint32_t id, uint8_t company) noexcept
 {
 	Vehicle *v = Vehicle::Get(id);
-	auto &units = Company::Get(CompanyID(company))->freeunits[v->type];
-	v->unitnumber = RustCompanyUseVehicleUnit(CompanyID(company), v->type, units.NextID());
+	auto &units = Company::Get(CompanyID(company))->freeunits[v->GetType()];
+	v->unitnumber = RustCompanyUseVehicleUnit(CompanyID(company), v->GetType(), units.NextID());
 }
 inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
 inline bool RustCompanyIsHuman(uint8_t company) noexcept { return Company::IsHumanID(CompanyID{company}); }

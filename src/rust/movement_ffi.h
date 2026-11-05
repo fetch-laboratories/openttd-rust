@@ -25,10 +25,6 @@ struct OpenTTDTunnelBridgeServices;
  * Shells survive the selected depot/admission/sound/viewport calls. No pointer
  * is retained after this synchronous entry and no Rust borrow crosses a call. */
 struct OpenTTDMovementVehicle { OpenTTDTrainHandle train; OpenTTDRoadState *road; OpenTTDShipState *ship; VehicleType kind; };
-struct OpenTTDMovementPose { int32_t z; uint8_t direction; };
-struct OpenTTDMovementDepotPosition { uint32_t tile; int32_t x, y; };
-struct OpenTTDMovementIncline { int32_t z; uint16_t flags; };
-struct OpenTTDMovementFirstSpeed { OpenTTDVehicle *first; uint16_t speed; };
 struct OpenTTDMovementServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDOrdersLeaves *orders;
@@ -43,12 +39,6 @@ struct OpenTTDMovementServices {
 	RoadTramType (*road_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
 	const OpenTTDRoadLeaves *road_vehicle;
 	OpenTTDMovementVehicle (*resolve)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
-	OpenTTDMovementPose (*pose)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(pose);
-	OpenTTDMovementDepotPosition (*depot_position)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(depot_position);
-	OpenTTDMovementIncline (*incline)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(incline);
-	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
-	OpenTTDMovementFirstSpeed (*first_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_speed);
-	void (*write_ground_flags)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_ground_flags);
 	uint8_t (*train_engine_class)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_engine_class);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);

@@ -325,17 +325,6 @@ pub unsafe extern "C" fn openttd_test_flat_empty_world(
     unsafe { crate::landscape_generation::flat_empty_world(a, height, freeform, max_height) }
 }
 
-/// Seed a fixture train's `cached_max_curve_speed`; production writes stay in Rust owners.
-/// # Safety
-/// `state` is a live, exclusively accessed train state.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_train_state_set_cached_max_curve_speed(
-    state: *mut crate::train_state::State,
-    value: u16,
-) {
-    crate::raw_field::write_field!(state, cached_max_curve_speed, value);
-}
-
 /// `LoadTownData` coordinate policy, compared with the original native expression.
 /// # Safety
 /// Live shared services and map for the synchronous call.
@@ -425,6 +414,17 @@ pub unsafe extern "C" fn openttd_test_station_modify_rating(
         crate::station_service::modify_rating(st, amount);
     }
 }
+/// Exercise production unload preparation with native fixture callback frames.
+/// # Safety
+/// The live record and immutable tables meet `prepare_unload`'s entry contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_prepare(
+    front: VehicleRef,
+    world: *const crate::station_service::World,
+    loading: *const crate::station_service::Loading,
+) {
+    crate::station_service::prepare_unload(front, unsafe { &*world }, unsafe { &*loading });
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_primary_stop(
     s: *const Services,
@@ -489,19 +489,6 @@ pub unsafe extern "C" fn openttd_test_station_tree_sequence(
     observe(&tree, 43);
     tree.insert(12, &xy, &split);
     observe(&tree, 44);
-}
-
-/// Exercise the production pending-replacement drain with native fixture tables.
-/// # Safety
-/// Live serialized service tables and caller-owned cost, as in the scheduler.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_test_fleet_pending_drain(
-    pending: *const crate::fleet::pending::Services,
-    transaction: *const crate::fleet::transactions::Services,
-    group: *const crate::fleet::GroupServices,
-    cost: *mut (),
-) {
-    unsafe { crate::fleet::pending::drain(pending, transaction, group, cost) }
 }
 
 // Mixed widths force padding; the recursive pointer checks the generated native type.

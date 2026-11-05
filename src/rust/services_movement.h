@@ -30,33 +30,11 @@ static_assert(sizeof(decltype(TileIndex{}.base())) == sizeof(uint32_t) && sizeof
 inline OpenTTDMovementVehicle RustMovementResolve(OpenTTDVehicle *handle) noexcept
 {
 	Vehicle *v = VehicleOf(handle);
-	return {.train = v->type == VEH_TRAIN ? TrainHandle(Train::From(v)) : OpenTTDTrainHandle{},
-		.road = v->type == VEH_ROAD ? RoadStateOf(RoadVehicle::From(v)) : nullptr,
-		.ship = v->type == VEH_SHIP ? RustVehicleShipOwner(v) : nullptr, .kind = v->type};
+	return {.train = v->GetType() == VEH_TRAIN ? TrainHandle(Train::From(v)) : OpenTTDTrainHandle{},
+		.road = v->GetType() == VEH_ROAD ? RoadStateOf(RoadVehicle::From(v)) : nullptr,
+		.ship = v->GetType() == VEH_SHIP ? RustVehicleShipOwner(v) : nullptr, .kind = v->GetType()};
 }
 inline RoadTramType RustMovementRoadKind(OpenTTDVehicle *handle) noexcept { return RustRoadTramType(RustRoadVehicleType(RoadVehicle::From(VehicleOf(handle)))); }
-inline OpenTTDMovementPose RustMovementPose(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.z = RustVehicleZ(v), .direction = RustVehicleDirection(v)};
-}
-inline OpenTTDMovementDepotPosition RustMovementDepotPosition(OpenTTDTrainHandle handle) noexcept
-{
-	const Train *v = static_cast<const Train *>(handle.shell);
-	return {.tile = RustVehicleTile(v), .x = RustVehicleX(v), .y = RustVehicleY(v)};
-}
-inline OpenTTDMovementIncline RustMovementIncline(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.z = RustVehicleZ(v), .flags = v->GetGroundVehicleFlags()};
-}
-inline void RustMovementWriteGroundFlags(OpenTTDVehicle *handle, uint16_t flags) noexcept { VehicleOf(handle)->GetGroundVehicleFlags() = flags; }
-inline OpenTTDVehicle *RustMovementFirst(OpenTTDVehicle *handle) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(handle))); }
-inline OpenTTDMovementFirstSpeed RustMovementFirstSpeed(OpenTTDVehicle *handle) noexcept
-{
-	Vehicle *first = RustVehicleFirst(VehicleOf(handle));
-	return {.first = RustVehicle(first), .speed = RustVehicleSpeed(first)};
-}
-inline uint8_t RustMovementTrainEngineClass(OpenTTDVehicle *handle) noexcept { return RustRailEngineClass(RailVehInfo(VehicleOf(handle)->engine_type)); }
+inline uint8_t RustMovementTrainEngineClass(OpenTTDVehicle *handle) noexcept { return RustRailEngineClass(RailVehInfo(VehicleOf(handle)->GetEngineType())); }
 inline void RustMovementDepotInvalidate(OpenTTDVehicle *handle) noexcept { RustVehicleInvalidateDepot(VehicleOf(handle)); }
 #endif

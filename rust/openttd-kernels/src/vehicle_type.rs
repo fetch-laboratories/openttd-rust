@@ -23,11 +23,8 @@ pub const VEH_COMPANY_END: u8 = VehicleType::COMPANY_END.0;
 /// Native `VEH_INVALID`.
 pub const VEH_INVALID: u8 = u8::MAX;
 
-/// Opaque native `Vehicle`; valid only while its native pool shell lives.
-#[repr(C)]
-pub struct OpenTTDVehicle {
-    _private: [u8; 0],
-}
+/// A vehicle's shared record (`VehicleRef`'s target); live while its native shell lives.
+pub use crate::vehicle_base::VehicleRecord as OpenTTDVehicle;
 
 /// Native `VehicleType`, including unnamed uint8 values.
 #[repr(transparent)]

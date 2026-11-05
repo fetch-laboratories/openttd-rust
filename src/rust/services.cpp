@@ -374,6 +374,7 @@ static_assert(OT_NOTHING == 0 && OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && O
 static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
 static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
 static_assert(to_underlying(StationType::Rail) == 0 && to_underlying(StationType::Airport) == 1 && to_underlying(StationType::Oilrig) == 4 && to_underlying(StationType::Dock) == 5);
+static_assert(CARGO_NO_REFIT == 0xFE && static_cast<uint8_t>(OrderDepotTypeFlag::Service) == 0 && static_cast<uint8_t>(OrderNonStopFlag::NoIntermediate) == 0);
 static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
 static_assert(LinkGraph::MIN_TIMEOUT_DISTANCE == 32 && LinkGraph::STALE_LINK_DEPOT_TIMEOUT.base() == 1024 && LinkGraph::COMPRESSION_INTERVAL.base() == 256);
 static_assert(EconomyTime::INVALID_DATE.base() == -1 && INVALID_NODE == UINT16_MAX && LinkGraphID::Invalid().base() == UINT16_MAX);

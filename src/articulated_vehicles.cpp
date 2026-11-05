@@ -135,7 +135,7 @@ CargoTypes GetUnionOfArticulatedRefitMasks(EngineID engine, bool include_initial
  */
 CargoTypes GetCargoTypesOfArticulatedVehicle(const Vehicle *v, CargoType *cargo_type)
 {
-	return openttd_rust_articulated_live_cargoes(&GetRustEngineCapabilitiesServices(), v, cargo_type);
+	return openttd_rust_articulated_live_cargoes(&GetRustEngineCapabilitiesServices(), RustVehicle(v), cargo_type);
 }
 
 #include "rust/vehicle_articulated_services.hpp"

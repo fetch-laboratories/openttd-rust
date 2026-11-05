@@ -147,7 +147,6 @@ pub struct Services {
     pub breakdown_trigger: extern "C" fn(VehicleRef) -> BreakdownTrigger,
     pub chance_write: extern "C" fn(VehicleRef, u8),
     pub trigger: extern "C" fn(VehicleRef, u8, u8),
-    pub breakdown_counter: extern "C" fn(VehicleRef) -> u8,
     pub breakdown_probe: extern "C" fn(VehicleRef) -> BreakdownProbe,
     pub breakdown_start: extern "C" fn(VehicleRef) -> BreakdownStart,
     pub breakdown_start_write: extern "C" fn(VehicleRef, u8, u8),
@@ -233,7 +232,7 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
         svc!(C, base.write_reliability, v, r.reliability);
         svc!(C, s.chance_write, v, chance);
         branch!(C, VEHICLE_MAINT_RESET);
-        let Some(next) = svc!(C, base.next, v) else {
+        let Some(next) = v.next() else {
             break;
         };
         if !svc!(C, s.has_engine, next) {
@@ -253,7 +252,7 @@ unsafe fn available_money(s: &Services, company: *const OpenTTDCompany) -> i64 {
 }
 unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     let s = unsafe { &*base.maintenance };
-    if svc!(C, base.status, v) & (VS_STOPPED | VS_CRASHED) != 0 {
+    if (v).status() & (VS_STOPPED | VS_CRASHED) != 0 {
         return false;
     }
     let r = svc!(C, s.interval, v);
@@ -294,10 +293,8 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
         if unsafe { replacement_needed::<C>(unit, base, r.company, &mut needed, &mut pending) } {
             return false;
         }
-        current = if svc!(C, base.vehicle_type, unit) == VehicleType::TRAIN.0 {
-            let t = unsafe { &*s.transaction };
-            let next = unsafe { svc!(C, t.next_unit, unit.0.as_ptr().cast()) };
-            std::ptr::NonNull::new(next.cast()).map(VehicleRef)
+        current = if unit.vehicle_type() == VehicleType::TRAIN.0 {
+            unit.next_unit()
         } else {
             None
         };
@@ -471,7 +468,7 @@ unsafe fn breakdown_state<const C: bool>(
                 svc!(C, s.aircraft_broken, v);
                 branch!(C, VEHICLE_MAINT_AIRCRAFT);
             } else {
-                svc!(C, base.write_speed, v, 0);
+                (v).write_speed(0);
                 if !svc!(C, base.play_vehicle_sound, v, VSE_BREAKDOWN) {
                     let train_ship =
                         start.kind == VehicleType::TRAIN || start.kind == VehicleType::SHIP;
@@ -486,7 +483,7 @@ unsafe fn breakdown_state<const C: bool>(
                     };
                     svc!(C, base.play_sound, v, sound);
                 }
-                if svc!(C, base.status, v) & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v) {
+                if (v).status() & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v) {
                     let smoke = crate::effect::openttd_rust_effect_create_rel(
                         v.0.as_ptr(),
                         4,
@@ -511,12 +508,7 @@ unsafe fn breakdown_state<const C: bool>(
             if countdown.order_type.0 == OT_LOADING {
                 branch!(C, VEHICLE_MAINT_LOADING);
             } else {
-                svc!(
-                    C,
-                    base.write_breakdown_counter,
-                    v,
-                    countdown.counter.wrapping_sub(1)
-                );
+                (v).write_breakdown_counter(countdown.counter.wrapping_sub(1));
                 branch!(C, VEHICLE_MAINT_COUNTDOWN);
             }
             return false;
@@ -538,7 +530,7 @@ unsafe fn breakdown_state<const C: bool>(
         svc!(C, s.breakdown_delay_write, v, delay);
         branch!(C, VEHICLE_MAINT_DELAY);
         if delay == 0 {
-            svc!(C, base.write_breakdown_counter, v, 0);
+            (v).write_breakdown_counter(0);
             svc!(C, s.mark_dirty, v);
             svc!(C, s.view_dirty, v);
             branch!(C, VEHICLE_MAINT_ENDED);
@@ -558,7 +550,7 @@ unsafe fn breakdown_result<const C: bool>(v: VehicleRef, base: &VehicleServices)
     let broken = unsafe { breakdown_state::<C>(v, base, probe.counter) };
     Breakdown {
         broken,
-        status: svc!(C, base.status, v),
+        status: (v).status(),
     }
 }
 /// Direct shared Rust policy for controllers that consume both source results.
@@ -594,9 +586,8 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         svc!(C, s.age_write, v, CalendarDate(age));
     }
     let g = unsafe { &*s.group };
-    if !unsafe { svc!(C, g.primary, v.0.as_ptr().cast()) }
-        && (svc!(C, base.vehicle_type, v) != VehicleType::TRAIN.0
-            || svc!(C, base.subtype, v) & 8 == 0)
+    if !unsafe { svc!(C, g.primary, v.shell().cast()) }
+        && (v.vehicle_type() != VehicleType::TRAIN.0 || v.subtype() & 8 == 0)
     {
         return;
     }
@@ -645,7 +636,7 @@ unsafe fn economy_age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         let age = EconomyDate(r.0 + 1);
         svc!(C, s.economy_age_write, v, age);
         let g = unsafe { &*s.group };
-        if unsafe { svc!(C, g.primary, v.0.as_ptr().cast()) } && age.0 == s.profit_min_age.0 + 1 {
+        if unsafe { svc!(C, g.primary, v.shell().cast()) } && age.0 == s.profit_min_age.0 + 1 {
             svc!(C, s.reached_min_age, v);
             branch!(C, VEHICLE_MAINT_PROFIT_AGE);
         }
@@ -759,15 +750,11 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_automatic_service_abi(
 /// # Safety
 /// As the direct maintenance calls.
 pub(crate) unsafe fn vehicle_handle_breakdown(v: VehicleRef, base: &VehicleServices) -> bool {
-    let s = unsafe { &*base.maintenance };
+    let counter = v.breakdown_counter();
     if crate::witness::enabled() {
-        const C: bool = true;
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        let counter = svc!(C, s.breakdown_counter, v);
         unsafe { breakdown_state::<true>(v, base, counter) }
     } else {
-        const C: bool = false;
-        let counter = svc!(C, s.breakdown_counter, v);
         unsafe { breakdown_state::<false>(v, base, counter) }
     }
 }
@@ -888,7 +875,6 @@ crate::abi::layouts! {
         breakdown_trigger,
         chance_write,
         trigger,
-        breakdown_counter,
         breakdown_probe,
         breakdown_start,
         breakdown_start_write,

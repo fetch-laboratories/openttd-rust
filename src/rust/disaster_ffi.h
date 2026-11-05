@@ -52,12 +52,8 @@ struct OpenTTDDisasterServices {
 	int32_t (OPENTTD_RUST_CALL *age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);
 	void (OPENTTD_RUST_CALL *write_age)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_age);
 	void (OPENTTD_RUST_CALL *write_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_sprite);
-	uint32_t (OPENTTD_RUST_CALL *first_sprite)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_sprite);
 	void (OPENTTD_RUST_CALL *write_first_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_sprite);
-	void (OPENTTD_RUST_CALL *write_subtype)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_subtype);
-	void (OPENTTD_RUST_CALL *write_owner)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_owner);
-	void (OPENTTD_RUST_CALL *set_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(set_next);
-	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *next_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_part);
+	OpenTTDDisasterState *(OPENTTD_RUST_CALL *owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	void (OPENTTD_RUST_CALL *update_delta)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	uint8_t (OPENTTD_RUST_CALL *toward)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(toward);
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *create)(int32_t, int32_t, uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(create);
@@ -65,13 +61,9 @@ struct OpenTTDDisasterServices {
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *next_disaster)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_disaster);
 	OpenTTDDisasterRoadTarget (OPENTTD_RUST_CALL *next_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_road);
 	OpenTTDDisasterRoadTarget (OPENTTD_RUST_CALL *road_target)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_target);
-	bool (OPENTTD_RUST_CALL *front)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(front);
 	uint32_t (OPENTTD_RUST_CALL *road_disaster)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_disaster);
-	uint8_t (OPENTTD_RUST_CALL *breakdown_counter)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_counter);
 	void (OPENTTD_RUST_CALL *write_road_disaster)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_road_disaster);
-	void (OPENTTD_RUST_CALL *write_breakdown)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_breakdown);
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *next_vehicle)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
-	bool (OPENTTD_RUST_CALL *ground)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ground);
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *next_train)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_train);
 	uint16_t (OPENTTD_RUST_CALL *road_count)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
 	bool (OPENTTD_RUST_CALL *human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(human);

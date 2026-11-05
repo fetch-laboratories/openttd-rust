@@ -319,7 +319,7 @@ pub struct Services {
     pub depot_index: extern "C" fn(u32) -> u16,
     /// Original native `disallowed_road_directions` map observation.
     pub disallowed_road_directions: extern "C" fn(u32) -> u8,
-    /// Shared live disaster sound observation.
+    /// Shared live disaster sound setting.
     pub disaster_sound: extern "C" fn() -> bool,
     /// Original native `drive_through_axis` map observation.
     pub drive_through_axis: extern "C" fn(u32) -> u8,

@@ -23,6 +23,7 @@ struct OpenTTDEngineCapabilitiesServices {
 	uint8_t (*mail_capacity)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(mail_capacity);
 	EngineClass (OPENTTD_RUST_CALL *train_class)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(train_class);
 	uint8_t (OPENTTD_RUST_CALL *aircraft_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_subtype);
+	uint16_t (*road_sound)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_sound);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	const GRFFile *(*grf)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(grf);
 	const OpenTTDEngineLoadingServices *(*loading)() noexcept OPENTTD_SERVICE_DEFAULT(loading);
@@ -31,14 +32,9 @@ struct OpenTTDEngineCapabilitiesServices {
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	OpenTTDVehicle *(*new_temporary)() noexcept OPENTTD_SERVICE_DEFAULT(new_temporary);
 	void (*destroy_temporary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy_temporary);
-	void (*set_engine)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_engine);
-	void (*set_owner)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_owner);
-	uint16_t (*vehicle_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_engine);
 	const OpenTTDEngine *(*vehicle_engine_object)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_engine_object);
 	uint8_t (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	uint8_t (*vehicle_subtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_subtype);
-	bool (*has_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
-	OpenTTDVehicle *(*next_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_articulated);
 	const OpenTTDSharedServices *shared;
 	bool assertions;
 	uint8_t (*aircraft_cost)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_cost);
@@ -67,7 +63,7 @@ uint16_t openttd_rust_engine_range(const OpenTTDEngineCapabilitiesServices *, co
 int64_t openttd_rust_engine_vehicle_running_cost(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *, OpenTTDVehicle *);
 uint8_t openttd_rust_engine_can_carry_abi(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *);
 extern "C++" inline bool openttd_rust_engine_can_carry(const OpenTTDEngineCapabilitiesServices *a0, const OpenTTDEngine *a1) { return openttd_rust_engine_can_carry_abi(a0, a1) != 0; }
-uint32_t openttd_rust_engine_capacity(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *, const Vehicle *, uint16_t *);
+uint32_t openttd_rust_engine_capacity(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *, const OpenTTDVehicle *, uint16_t *);
 uint8_t openttd_rust_engine_refittable_abi(const OpenTTDEngineCapabilitiesServices *, uint16_t);
 extern "C++" inline bool openttd_rust_engine_refittable(const OpenTTDEngineCapabilitiesServices *a0, uint16_t a1) { return openttd_rust_engine_refittable_abi(a0, a1) != 0; }
 uint8_t openttd_rust_articulated_is_abi(const OpenTTDEngineCapabilitiesServices *, uint16_t);
@@ -79,6 +75,6 @@ uint8_t openttd_rust_articulated_refittable_abi(const OpenTTDEngineCapabilitiesS
 extern "C++" inline bool openttd_rust_articulated_refittable(const OpenTTDEngineCapabilitiesServices *a0, uint16_t a1) { return openttd_rust_articulated_refittable_abi(a0, a1) != 0; }
 void openttd_rust_articulated_refit_masks(const OpenTTDEngineCapabilitiesServices *, uint16_t, bool, uint64_t *, uint64_t *);
 uint64_t openttd_rust_articulated_refit_union(const OpenTTDEngineCapabilitiesServices *, uint16_t, bool);
-uint64_t openttd_rust_articulated_live_cargoes(const OpenTTDEngineCapabilitiesServices *, const Vehicle *, uint8_t *);
+uint64_t openttd_rust_articulated_live_cargoes(const OpenTTDEngineCapabilitiesServices *, const OpenTTDVehicle *, uint8_t *);
 }
 #endif

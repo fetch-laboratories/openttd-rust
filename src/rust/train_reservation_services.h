@@ -22,7 +22,7 @@ static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle id, uint32_t 
 
 static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return RustAllCompatibleRailTypes(RustTrainRailTypes(v));
 }
 static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a) noexcept
@@ -32,7 +32,7 @@ static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a)
 
 static uint64_t TrainReservationCheckReverse(void *, OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return YapfTrainCheckReverse(v);
 }
 static uint64_t TrainReservationCompatStation(void *, OpenTTDTrainHandle, uint32_t a, uint32_t b) noexcept
@@ -42,12 +42,12 @@ static uint64_t TrainReservationCompatStation(void *, OpenTTDTrainHandle, uint32
 }
 static uint64_t TrainReservationConditional(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return ProcessConditionalOrder(v->GetOrder(static_cast<VehicleOrderID>(a)), v);
 }
 static void TrainReservationCopyOrder(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	v->current_order = *v->GetOrder(static_cast<VehicleOrderID>(a));
 }
 static uint64_t TrainReservationCrossDirs(void *, OpenTTDTrainHandle, uint8_t a) noexcept
@@ -79,7 +79,7 @@ static uint64_t TrainReservationExitDir(void *, OpenTTDTrainHandle, uint8_t a) n
 
 static void TrainReservationIncrementOrder(void *, OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	v->IncrementRealOrderIndex();
 }
 
@@ -100,13 +100,13 @@ static uint64_t TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept
 
 static uint64_t TrainReservationOrderService(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return v->GetOrder(static_cast<VehicleOrderID>(a))->GetDepotOrderType().Test(OrderDepotTypeFlag::Service);
 }
 
 static uint64_t TrainReservationOrderType(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return v->GetOrder(static_cast<VehicleOrderID>(a))->GetType();
 }
 static uint64_t TrainReservationOverlap(void *, OpenTTDTrainHandle, uint8_t a) noexcept
@@ -115,7 +115,7 @@ static uint64_t TrainReservationOverlap(void *, OpenTTDTrainHandle, uint8_t a) n
 }
 static void TrainReservationPathResult(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	v->HandlePathfindingResult(a != 0);
 }
 static uint64_t TrainReservationReachDirs(void *, OpenTTDTrainHandle, uint8_t a) noexcept
@@ -128,30 +128,16 @@ static uint64_t TrainReservationReachTracks(void *, OpenTTDTrainHandle, uint8_t 
 }
 /* Order has the existing OrderFields layout and trivial copy/destruction. Rust
  * owns each nested snapshot on its stack; no native context survives a call. */
-static void TrainReservationRestoreOrder(OpenTTDTrainHandle id, const OpenTTDOrderFields *order) noexcept
-{
-	static_cast<Train *>(id.shell)->current_order = std::bit_cast<Order>(*order);
-}
-static OpenTTDOrderFields TrainReservationSaveOrder(OpenTTDTrainHandle id) noexcept
-{
-	return std::bit_cast<OpenTTDOrderFields>(static_cast<Train *>(id.shell)->current_order);
-}
 static void TrainReservationService(void *, OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	CheckIfTrainNeedsService(v);
-}
-static void TrainReservationSetDepotDest(void *, OpenTTDTrainHandle id, uint32_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	TileIndex t(static_cast<uint32_t>(a));
-	v->current_order.SetDestination(GetDepotIndex(t));
 }
 
 
 static void TrainReservationStartStop(void *, OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
 }
 static uint64_t TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept
@@ -164,7 +150,7 @@ static uint64_t TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a
 }
 static void TrainReservationStuck(void *, OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	MarkTrainAsStuck(v);
 }
 
@@ -174,68 +160,21 @@ static uint64_t TrainReservationTileOffset(void *, OpenTTDTrainHandle, uint8_t a
 }
 static uint64_t TrainReservationTrackdir(void *, OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
+	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return GetRustSharedServices().train_trackdir(v);
-}
-static void TrainReservationWriteDest(void *, OpenTTDTrainHandle id, uint32_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	TileIndex t(static_cast<uint32_t>(a));
-	v->dest_tile = t;
-}
-static void TrainReservationWriteLast(void *, OpenTTDTrainHandle id, uint16_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->last_station_visited = StationID(static_cast<uint16_t>(a));
-}
-static void TrainReservationWriteSuppress(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	AssignBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS, a != 0);
 }
 
 
 
 static OpenTTDTrainReservationSearch TrainReservationPathfind(OpenTTDTrainHandle id, uint32_t tile, uint8_t dir, uint8_t tracks, uint8_t reserve, uint8_t want_final) noexcept
 {
-	Train *v=static_cast<Train *>(id.shell); bool found=true; PBSTileInfo dest; TileIndex final_dest=INVALID_TILE;
+	Train *v=static_cast<Train *>(VehicleFromRecord(id.record)); bool found=true; PBSTileInfo dest; TileIndex final_dest=INVALID_TILE;
 	Track track=YapfTrainChooseTrack(v,TileIndex(tile),static_cast<DiagDirection>(dir),static_cast<TrackBits>(tracks),found,reserve != 0,&dest,want_final ? &final_dest:nullptr);
 	OpenTTDTrainReservationSearch result{}; result.track=track;result.found=found;result.tile=dest.tile.base();result.td=dest.trackdir;result.okay=dest.okay;result.final_dest=final_dest.base();return result;
 }
 static uint8_t TrainReservationSafeTrack(OpenTTDTrainHandle id, uint32_t tile, uint8_t td, uint8_t override_types) noexcept
-{return YapfTrainFindNearestSafeTile(static_cast<Train *>(id.shell),TileIndex(tile),static_cast<Trackdir>(td),override_types != 0);}
+{return YapfTrainFindNearestSafeTile(static_cast<Train *>(VehicleFromRecord(id.record)),TileIndex(tile),static_cast<Trackdir>(td),override_types != 0);}
 static uint8_t TrainReservationProcessOrders(OpenTTDTrainHandle id) noexcept
-{return ProcessOrders(static_cast<Train *>(id.shell));}
+{return ProcessOrders(static_cast<Train *>(VehicleFromRecord(id.record)));}
 static uint8_t TrainReservationUpdateOrderDest(OpenTTDTrainHandle id, uint8_t index) noexcept
-{Train *v=static_cast<Train *>(id.shell);return UpdateOrderDest(v,v->GetOrder(static_cast<VehicleOrderID>(index)),0,true);}
-
-static OpenTTDTrainReservationFreeRead TrainReservationReadFree(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleTile(v)};
-}
-static OpenTTDTrainReservationFree1Read TrainReservationReadFree1(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleTile(v), TrainHandle(static_cast<Train *>(RustVehicleNext(v)))};
-}
-static OpenTTDTrainReservationNewRead TrainReservationReadNew(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleDestTile(v), v->last_station_visited.base(), RustVehicleRealOrderIndex(v), static_cast<uint8_t>(HasBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS))};
-}
-static OpenTTDTrainReservationChooseRead TrainReservationReadChoose(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleTile(v), RustVehicleDestTile(v), RustVehicleOrderDestination(v), RustVehicleOrderType(v)};
-}
-static OpenTTDTrainReservationChoose4Read TrainReservationReadChoose4(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleOrderType(v), static_cast<uint8_t>(v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot))};
-}
-static OpenTTDTrainReservationCheckNextRead TrainReservationReadCheckNext(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleTile(v), RustVehicleDestTile(v), RustVehicleOrderDestination(v), RustVehicleOrderType(v), RustVehicleNumOrders(v)};
-}
+{Train *v=static_cast<Train *>(VehicleFromRecord(id.record));return UpdateOrderDest(v,v->GetOrder(static_cast<VehicleOrderID>(index)),0,true);}

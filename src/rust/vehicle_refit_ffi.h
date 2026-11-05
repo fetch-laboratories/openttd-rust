@@ -50,10 +50,6 @@ struct OpenTTDVehicleRefitServices {
 	ExpensesType (*expense)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(expense);
 	void (*invalidate_chain)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_chain);
 	OpenTTDRefitCommit (*commit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(commit);
-	void (*set_refit_cap)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_refit_cap);
-	uint16_t (*refit_cap)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(refit_cap);
-	uint16_t (*cargo_cap)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_cap);
-	void (*set_capacity)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_capacity);
 	void (*write_refit)(OpenTTDVehicle *, uint8_t, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_refit);
 	OpenTTDTrainHandle (*train_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_handle);
 	OpenTTDRoadState *(*road_state)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_state);
@@ -68,8 +64,8 @@ struct OpenTTDVehicleArticulatedServices {
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	void *(*prepare_previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_previous);
-	void *(*new_train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_train);
-	void *(*new_road)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_road);
+	void *(*new_train)() noexcept OPENTTD_SERVICE_DEFAULT(new_train);
+	void *(*new_road)() noexcept OPENTTD_SERVICE_DEFAULT(new_road);
 	void (*road_length)(void *) noexcept OPENTTD_SERVICE_DEFAULT(road_length);
 	void (*copy_roadtype)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(copy_roadtype);
 	OpenTTDArticulatedPart (*train_info)(const OpenTTDEngine *, bool) noexcept OPENTTD_SERVICE_DEFAULT(train_info);
@@ -121,15 +117,6 @@ struct OpenTTDRailConstructionServices {
 	void (*engine_dates)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_dates);
 	void *(*new_rear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_rear);
 	void (*link_multihead)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(link_multihead);
-	uint8_t (*subtype)(void *) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
-	void (*set_subtype)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_subtype);
-	void *(*previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
-	void *(*last)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last);
-	void (*set_next)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(set_next);
-	void *(*next_vehicle)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
-	void *(*last_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last_engine_part);
-	const OpenTTDGroundServices *ground;
-	uint16_t (*first_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine);
 	void (*invalidate_grf)(void *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
 	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
 	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);

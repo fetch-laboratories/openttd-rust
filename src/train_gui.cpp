@@ -35,7 +35,7 @@ void CcBuildWagon(Commands, const CommandCost &result, VehicleID new_veh_id, uin
 	/* The non-deterministic order returned from VehiclesOnTile() does not
 	 * matter here as there must only be one locomotive for anything to happen. */
 	for (const Vehicle *v : VehiclesOnTile(tile)) {
-		if (v->type != VEH_TRAIN) continue;
+		if (v->GetType() != VEH_TRAIN) continue;
 
 		const Train *t = Train::From(v);
 		if (t->IsFrontEngine() && t->IsStoppedInDepot()) {
@@ -48,7 +48,7 @@ void CcBuildWagon(Commands, const CommandCost &result, VehicleID new_veh_id, uin
 	if (found != nullptr) {
 		found = found->Last();
 		/* put the new wagon at the end of the loco. */
-		Command<CMD_MOVE_RAIL_VEHICLE>::Post(found->tile, new_veh_id, found->index, false);
+		Command<CMD_MOVE_RAIL_VEHICLE>::Post(found->GetTile(), new_veh_id, found->index, false);
 		InvalidateWindowClassesData(WC_TRAINS_LIST, 0);
 	}
 }
@@ -131,10 +131,10 @@ void DrawTrainImage(const Train *v, const Rect &r, VehicleID selection, EngineIm
 			int width = Train::From(v)->GetDisplayImageWidth(&offset);
 
 			if (rtl ? px + width > 0 : px - width < max_width) {
-				PaletteID pal = v->vehstatus.Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(v);
+				PaletteID pal = v->GetVehStatus().Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(v);
 				VehicleSpriteSeq seq;
 				v->GetImage(dir, image_type, &seq);
-				seq.Draw(px + (rtl ? -offset.x : offset.x), y + offset.y, pal, v->vehstatus.Test(VehState::Crashed));
+				seq.Draw(px + (rtl ? -offset.x : offset.x), y + offset.y, pal, v->GetVehStatus().Test(VehState::Crashed));
 			}
 
 			if (!v->IsArticulatedPart()) sel_articulated = false;
@@ -233,10 +233,10 @@ static void TrainDetailsCargoTab(const CargoSummaryItem *item, int left, int rig
 static void TrainDetailsInfoTab(const Vehicle *v, int left, int right, int y)
 {
 	std::string str;
-	if (RailVehInfo(v->engine_type)->railveh_type == RAILVEH_WAGON) {
-		str = GetString(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE, PackEngineNameDParam(v->engine_type, EngineNameContext::VehicleDetails), v->value);
+	if (RailVehInfo(v->GetEngineType())->railveh_type == RAILVEH_WAGON) {
+		str = GetString(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->value);
 	} else {
-		str = GetString(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE, PackEngineNameDParam(v->engine_type, EngineNameContext::VehicleDetails), v->build_year, v->value);
+		str = GetString(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->build_year, v->value);
 	}
 	DrawString(left, right, y, str);
 }
@@ -275,7 +275,7 @@ static void GetCargoSummaryOfArticulatedVehicle(const Train *v, CargoSummary &su
 		if (!v->GetEngine()->CanCarryCargo()) continue;
 
 		CargoSummaryItem new_item;
-		new_item.cargo = v->cargo_cap > 0 ? v->cargo_type : INVALID_CARGO;
+		new_item.cargo = v->Record().cargo_cap > 0 ? v->cargo_type : INVALID_CARGO;
 		new_item.subtype = GetCargoSubtypeText(v);
 		if (!IsValidCargoType(new_item.cargo) && new_item.subtype == STR_EMPTY) continue;
 
@@ -289,7 +289,7 @@ static void GetCargoSummaryOfArticulatedVehicle(const Train *v, CargoSummary &su
 			item->source = StationID::Invalid();
 		}
 
-		item->capacity += v->cargo_cap;
+		item->capacity += v->Record().cargo_cap;
 		item->amount += v->cargo.StoredCount();
 		if (item->source == StationID::Invalid()) item->source = v->cargo.GetFirstStation();
 	} while ((v = v->Next()) != nullptr && v->IsArticulatedPart());
@@ -324,7 +324,7 @@ int GetTrainDetailsWndVScroll(VehicleID veh_id, TrainDetailsWindowTabs det_tab)
 	if (det_tab == TDW_TAB_TOTALS) { // Total cargo tab
 		CargoArray max_cargo{};
 		for (const Vehicle *v = Vehicle::Get(veh_id); v != nullptr; v = v->Next()) {
-			max_cargo[v->cargo_type] += v->cargo_cap;
+			max_cargo[v->cargo_type] += v->Record().cargo_cap;
 		}
 
 		num = max_cargo.GetCount();
@@ -374,14 +374,14 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 				int width = u->GetDisplayImageWidth(&offset);
 				if (vscroll_pos <= 0 && vscroll_pos > -vscroll_cap) {
 					int pitch = 0;
-					const Engine *e = Engine::Get(v->engine_type);
+					const Engine *e = Engine::Get(v->GetEngineType());
 					if (e->GetGRF() != nullptr) {
 						pitch = ScaleSpriteTrad(e->GetGRF()->traininfo_vehicle_pitch);
 					}
-					PaletteID pal = v->vehstatus.Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(u);
+					PaletteID pal = v->GetVehStatus().Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(u);
 					VehicleSpriteSeq seq;
 					u->GetImage(dir, EIT_IN_DETAILS, &seq);
-					seq.Draw(px + (rtl ? -offset.x : offset.x), r.top - line_height * vscroll_pos + sprite_y_offset + pitch, pal, v->vehstatus.Test(VehState::Crashed));
+					seq.Draw(px + (rtl ? -offset.x : offset.x), r.top - line_height * vscroll_pos + sprite_y_offset + pitch, pal, v->GetVehStatus().Test(VehState::Crashed));
 				}
 				px += rtl ? -width : width;
 				dx += width;
@@ -438,7 +438,7 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 
 		for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
 			act_cargo[u->cargo_type] += u->cargo.StoredCount();
-			max_cargo[u->cargo_type] += u->cargo_cap;
+			max_cargo[u->cargo_type] += u->Record().cargo_cap;
 			feeder_share             += u->cargo.GetFeederShare();
 		}
 

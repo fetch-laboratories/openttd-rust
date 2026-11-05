@@ -31,7 +31,7 @@ void DrawRoadVehDetails(const Vehicle *v, const Rect &r)
 	int y = r.top + (v->HasArticulatedPart() ? ScaleSpriteTrad(15) : 0); // Draw the first line below the sprite of an articulated RV instead of after it.
 	Money feeder_share = 0;
 
-	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(v->engine_type, EngineNameContext::VehicleDetails), v->build_year, v->value));
+	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->build_year, v->value));
 	y += GetCharacterHeight(FS_NORMAL);
 
 	if (v->HasArticulatedPart()) {
@@ -39,8 +39,8 @@ void DrawRoadVehDetails(const Vehicle *v, const Rect &r)
 		std::array<StringID, NUM_CARGO> subtype_text{};
 
 		for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
-			max_cargo[u->cargo_type] += u->cargo_cap;
-			if (u->cargo_cap > 0) {
+			max_cargo[u->cargo_type] += u->Record().cargo_cap;
+			if (u->Record().cargo_cap > 0) {
 				StringID text = GetCargoSubtypeText(u);
 				if (text != STR_EMPTY) subtype_text[u->cargo_type] = text;
 			}
@@ -70,7 +70,7 @@ void DrawRoadVehDetails(const Vehicle *v, const Rect &r)
 		y += GetCharacterHeight(FS_NORMAL) + WidgetDimensions::scaled.vsep_normal;
 
 		for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
-			if (u->cargo_cap == 0) continue;
+			if (u->Record().cargo_cap == 0) continue;
 
 			std::string str;
 			if (u->cargo.StoredCount() > 0) {
@@ -84,7 +84,7 @@ void DrawRoadVehDetails(const Vehicle *v, const Rect &r)
 		}
 		y += WidgetDimensions::scaled.vsep_normal;
 	} else {
-		DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->cargo_type, v->cargo_cap, GetCargoSubtypeText(v)));
+		DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->cargo_type, v->Record().cargo_cap, GetCargoSubtypeText(v)));
 		y += GetCharacterHeight(FS_NORMAL) + WidgetDimensions::scaled.vsep_normal;
 
 		std::string str;
@@ -134,10 +134,10 @@ void DrawRoadVehImage(const Vehicle *v, const Rect &r, VehicleID selection, Engi
 		int width = u->GetDisplayImageWidth(&offset);
 
 		if (rtl ? px + width > 0 : px - width < max_width) {
-			PaletteID pal = u->vehstatus.Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(u);
+			PaletteID pal = u->GetVehStatus().Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(u);
 			VehicleSpriteSeq seq;
 			u->GetImage(dir, image_type, &seq);
-			seq.Draw(px + (rtl ? -offset.x : offset.x), y + offset.y, pal, u->vehstatus.Test(VehState::Crashed));
+			seq.Draw(px + (rtl ? -offset.x : offset.x), y + offset.y, pal, u->GetVehStatus().Test(VehState::Crashed));
 		}
 
 		if (do_overlays) AddCargoIconOverlay(overlays, px, width, u);
