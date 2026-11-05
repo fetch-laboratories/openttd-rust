@@ -132,7 +132,7 @@ OpenTTDRoadYapfTile ProbeTile(const OpenTTDVehicle *, uint32_t tile, uint8_t, bo
 }
 OpenTTDTestFollow Follow(uint32_t tile, uint8_t td)
 {
-	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, tile, td);
+	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_ROAD, FollowerFixture::active->Vehicle(), 0, 0, true, tile, td);
 }
 struct Follower {};
 class Search;
