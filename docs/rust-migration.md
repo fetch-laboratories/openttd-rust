@@ -33,7 +33,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
   libfontconfig-dev libharfbuzz-dev libicu-dev liblzo2-dev openttd-opengfx
 ```
 
-On this Ubuntu 26.04 x86-64 host without administrator access, `python3 tools/bootstrap-local.py` downloads packages to `.local/downloads`, extracts them to `.local/deps`, and installs Rust in `.local/cargo` and `.local/rustup`. It changes no shell profiles or system packages. It depends on host libraries and package names; it is not a portable installer.
+This host runs Ubuntu 24.04 x86-64, the release CI's `ubuntu-24.04` runners use, with the packages above plus `valgrind`, `ccache`, `unifdef` and `gdb` from apt (moved 2026-11-05). Keep `.local/deps` absent here: the driver puts it ahead of system packages on every compiler, library and pkg-config path. `python3 tools/bootstrap-local.py` is for an Ubuntu 26.04 host without administrator access; it extracts that release's packages to `.local/deps` and installs Rust in `.local/cargo` and `.local/rustup`, changing no shell profile or system package. Output built on the previous Ubuntu 26.04 host needs glibc 2.43; it is kept unused at `/mnt/storage/openttd-rust/old-host-ubuntu2604-20261105/`.
 
 | Command | What it does |
 | --- | --- |
@@ -172,8 +172,8 @@ Metrics count code lines, excluding comments, directives, blank lines and Python
 `WITH_RUST` stays defined by CMake for dual-build harnesses under `tools/`.
 The pinned original remains the oracle; do not sweep its worktree or `tools/`.
 
-Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). On the
-Ubuntu 26.04 host without administrator access, obtain package 2.12-1:
+Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). Without administrator access on
+Ubuntu, obtain package 2.12-1:
 
 ```sh
 mkdir -p .local/unifdef
