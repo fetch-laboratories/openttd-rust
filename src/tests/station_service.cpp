@@ -74,7 +74,7 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 		const auto Create = [](uint32_t id) {
 			REQUIRE(BaseStation::CanAllocateItem());
 			auto *st = new (StationID(id)) Station(TileIndex(1));
-			st->owner = OWNER_NONE;
+			st->SetOwner(OWNER_NONE);
 			openttd_test_station_insert(&GetRustSharedServices(), st);
 		};
 		for (uint32_t id : {0, 2, 4, 5}) Create(id);
@@ -404,12 +404,12 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	MockEnvironment::Instance();
 	REQUIRE(BaseStation::CanAllocateItem());
 	auto *st = new Station(TileIndex(1));
-	st->owner = OWNER_NONE;
+	st->SetOwner(OWNER_NONE);
 	openttd_test_station_insert(&GetRustSharedServices(), st);
 	StationID id = st->index;
-	st->GetGoods(63).rating = 1;
-	st->GetGoods(63).amount_fract = 255;
-	st->delete_ctr = 7;
+	st->GetGoods(63).Record().rating = 1;
+	st->GetGoods(63).Record().amount_fract = 255;
+	st->Record().delete_ctr = 7;
 	const auto old_counter = TimerGameTick::counter;
 	const auto old_mode = _game_mode;
 	TimerGameTick::counter = (250 - id.base() % 250) % 250;
@@ -419,18 +419,18 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	REQUIRE(BaseStation::CanAllocateItem());
 	st = new Station(TileIndex(1));
 	CHECK(st->index == id);
-	CHECK(st->delete_ctr == 0);
-	CHECK(st->GetGoods(63).rating == 175);
-	CHECK(st->GetGoods(63).amount_fract == 0);
+	CHECK(st->Record().delete_ctr == 0);
+	CHECK(st->GetGoods(63).Record().rating == 175);
+	CHECK(st->GetGoods(63).Record().amount_fract == 0);
 	CHECK(st->loading_vehicles.empty());
-	CHECK(st->time_since_load == 255);
+	CHECK(st->Record().time_since_load == 255);
 	auto *indexed = new (StationID(17)) Station(TileIndex(2));
 	CHECK(indexed->index == StationID(17));
-	CHECK(indexed->GetGoods(0).time_since_pickup == 255);
-	CHECK(indexed->last_vehicle_type == VEH_INVALID);
+	CHECK(indexed->GetGoods(0).Record().time_since_pickup == 255);
+	CHECK(indexed->Record().last_vehicle_type == VEH_INVALID);
 	auto *waypoint = new (StationID(19)) Waypoint(TileIndex(3));
-	CHECK(waypoint->delete_ctr == 0);
-	indexed->GetGoods(0).last_speed = 255;
+	CHECK(waypoint->Record().delete_ctr == 0);
+	indexed->GetGoods(0).Record().last_speed = 255;
 	_station_pool.CleanPool(); // Derived cleanup early returns still drop owners.
 	openttd_rust_station_rebuild_index(&GetRustSharedServices());
 	TimerGameTick::counter = old_counter;
