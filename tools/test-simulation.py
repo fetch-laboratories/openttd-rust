@@ -21,6 +21,7 @@ from unittest.mock import patch
 from code_lines import without_comments
 from simulation import (
     community_ai,
+    community_newgrf,
     engines,
     newgrf_loading,
     newgrf_sets,
@@ -1964,6 +1965,88 @@ class CommunityInputTests(unittest.TestCase):
                         community_ai.activity(run)
                 else:
                     community_ai.activity(run)
+
+
+class CommunityNewGRFSaveTests(unittest.TestCase):
+    def test_reload_requires_the_complete_package_manifest(self) -> None:
+        scenario = community_newgrf.scenarios(False)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = root / "packages.json"
+            original = json.loads((community_ai.INPUTS / manifest.name).read_text())
+            for change in ("none", "newgrf", "ai"):
+                rows = json.loads(json.dumps(original))
+                if change != "none":
+                    next(r for r in rows if r["kind"] == change)["sha256"] = "0" * 64
+                manifest.write_text(json.dumps(rows, indent=2) + "\n")
+                with (
+                    self.subTest(change=change),
+                    patch.object(community_ai, "INPUTS", root),
+                ):
+                    if change == "none":
+                        community_newgrf.prepare(scenario, {}, {}, root, 1, {}, {})
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "packages differ"):
+                            community_newgrf.prepare(scenario, {}, {}, root, 1, {}, {})
+
+    def test_fixture_records_its_saved_newgrf_identities(self) -> None:
+        provenance = json.loads(
+            community_newgrf.FIXTURE.with_suffix(".json").read_text()
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            source, _ = simulate.normalize(community_newgrf.FIXTURE, Path(directory))
+            saved = community_newgrf.saved_newgrfs(source)
+        self.assertEqual(
+            saved, [community_newgrf.NewGRF(**row) for row in provenance["newgrfs"]]
+        )
+        self.assertEqual(
+            sorted(grf.filename for grf in saved), sorted(newgrf_sets.GRFS)
+        )
+
+    def test_install_places_both_ais_and_sets(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "fixture.tar.gz"
+            archive.write_bytes(gzip.compress(b"package"))
+            packages = [
+                community_ai.Package(
+                    name=kind,
+                    version="1",
+                    kind=kind,
+                    uid="12345678",
+                    md5="1" * 32,
+                    sha256="0" * 64,
+                    license="test",
+                    metadata="test",
+                    publisher="test",
+                    dependencies=[],
+                )
+                for kind in ("ai", "ai-library", "newgrf")
+            ]
+            run = root / "run"
+            with (
+                patch.object(
+                    community_ai,
+                    "fetch",
+                    return_value={p.filename: archive for p in packages},
+                ),
+                patch.object(community_ai, "packages", return_value=packages),
+            ):
+                community_newgrf.install(community_newgrf.scenarios(False)[0], run)
+            installed = sorted(
+                str(p.relative_to(run).parent) for p in run.rglob("*.tar")
+            )
+        self.assertEqual(
+            installed,
+            [
+                ".openttd-rust/newgrf",
+                ".openttd/newgrf",
+                "ai",
+                "ai/library",
+                "xdg-data/openttd-rust/newgrf",
+                "xdg-data/openttd/newgrf",
+            ],
+        )
 
 
 if __name__ == "__main__":

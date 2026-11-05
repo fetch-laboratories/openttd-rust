@@ -1,0 +1,68 @@
+{
+  "reference_commit": "14ec60f248547d4d062a1160f0fc26d742319888",
+  "license": "GPL-2.0-only",
+  "scenario": {
+    "name": "community-newgrf-arctic",
+    "kind": "generate",
+    "community_ai": "arctic",
+    "seed": 507,
+    "map_log2": 8,
+    "land_generator": 1,
+    "ticks": 1354200,
+    "console": [
+      "start_ai SimpleAI",
+      "start_ai AdmiralAI use_trains=0",
+      "start_ai trAIns",
+      "start_ai ShipAI",
+      "unpause"
+    ],
+    "settings": {
+      "game_creation": {
+        "landscape": "arctic",
+        "starting_year": 1950
+      },
+      "difficulty": {
+        "terrain_type": 1,
+        "quantity_sea_lakes": 0
+      },
+      "pf": {
+        "forbid_90_deg": "false"
+      },
+      "construction": {
+        "build_on_slopes": "true"
+      },
+      "newgrf": {
+        "4f472b31-OpenGFX_Trains-0.3.0.tar/OpenGFX_Trains-0.3.0/ogfx-trains.grf": "0 14 0 0",
+        "4f472b32-OpenGFX_Road_Vehicles-0.4.1.tar/OpenGFX_Road_Vehicles-0.4.1/ogfx-rv.grf": "0 9 9 1 1 1",
+        "4f472b33-OpenGFX_Industries-VERSION.tar/OpenGFX_Industries-VERSION/ogfx-industries.grf": "16 0 0 0 0 0 0 0 0 0"
+      }
+    },
+    "community_newgrf": true
+  },
+  "sha256": "658e1406d31a2b6315eeb14da175b50abd1eb8b258d0e65bf99524cb87808d3d",
+  "packages_sha256": "11d2eb7ba6ca032886dd17d650b7ac71c028ae55cc9b011bf1fe3e6840df84c4",
+  "command": "python3 -m tools.simulation.community_newgrf generate",
+  "end_moment": [
+    730523,
+    0,
+    1355480
+  ],
+  "wall_seconds": 1833,
+  "newgrfs": [
+    {
+      "filename": "4f472b33-OpenGFX_Industries-VERSION.tar/OpenGFX_Industries-VERSION/ogfx-industries.grf",
+      "grfid": "332b474f",
+      "md5sum": "437e4f6bda52eb5ca9615196291514ca"
+    },
+    {
+      "filename": "4f472b32-OpenGFX_Road_Vehicles-0.4.1.tar/OpenGFX_Road_Vehicles-0.4.1/ogfx-rv.grf",
+      "grfid": "322b474f",
+      "md5sum": "b46f2d7781158dd122f2e4b2afc9f38f"
+    },
+    {
+      "filename": "4f472b31-OpenGFX_Trains-0.3.0.tar/OpenGFX_Trains-0.3.0/ogfx-trains.grf",
+      "grfid": "312b474f",
+      "md5sum": "4e0b2d42462f295f36afba90d239a323"
+    }
+  ]
+}

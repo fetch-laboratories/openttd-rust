@@ -15,8 +15,11 @@ import statistics
 import sys
 import threading
 import time
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Any, NoReturn, cast
 
 from deep import LOCK_NAME
 from validation_execution import file_lock
@@ -56,11 +59,11 @@ def profile_passed(report: dict[str, Any]) -> bool:
     )
 
 
-def speed_scenarios():
+def speed_scenarios() -> list[core.Scenario]:
     return [s for s in core.scenario_list(False) if s["name"] in instructions.PROFILED]
 
 
-def prepare(out, profile, migration):
+def prepare(out: Path, profile: Path | None, migration: ModuleType) -> int:
     """Freeze runtimes and record identities; preparation hooks may run no game."""
     head = migration.git("rev-parse", "HEAD")
     if migration.git("status", "--short"):
@@ -87,7 +90,7 @@ def prepare(out, profile, migration):
         # --frozen-runtimes copies every adapter folder; speed scenarios use none.
         for module in core.adapter_modules():
             (builds[role] / module.__name__.rsplit(".", 1)[1]).mkdir()
-    records = {}
+    records: dict[str, Any] = {}
     if profile:
         report = json.loads(profile.read_text())
         if not profile_passed(report) or report["candidate_commit"] != head:
@@ -117,29 +120,39 @@ def prepare(out, profile, migration):
     return 0
 
 
-def prepare_inputs(out, binaries, builds, env):
+def prepare_inputs(
+    out: Path,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    env: dict[str, str],
+) -> tuple[list[core.Scenario], dict[str, dict[str, Any]]]:
     """Resolve the exact profiled inputs without running any preparation game."""
-    scenarios, identities = [], {}
+    scenarios: list[core.Scenario] = []
+    identities: dict[str, dict[str, Any]] = {}
 
-    def no_game(*args, **kwargs):
+    def no_game(*args: object, **kwargs: object) -> NoReturn:
         raise RuntimeError("speed preparation runs no game")
 
     games = [m for m in (core, *core.scenario_modules()) if hasattr(m, "run_game")]
-    saved = [m.run_game for m in games]
+    saved: list[Callable[..., core.Run]] = [m.run_game for m in games]
     for module in games:
-        module.run_game = no_game
+        cast(Any, module).run_game = no_game
     try:
         for scenario in speed_scenarios():
-            name, identity = scenario["name"], {}
+            name = scenario["name"]
+            identity: dict[str, Any] = {}
             scenario = core.prepare_scenario(
-                scenario, binaries, builds, out, 0, env, {}
+                scenario, binaries, builds, out, 0, env, cast(core.Result, {})
             )
             for role in ROLES:
                 # The per-role scenario run_scenario passes to run_game.
-                setup = dict(
-                    scenario,
-                    **scenario.get("role_inputs", {}).get(role, {}),
-                    witnesses=False,
+                setup = cast(
+                    core.Scenario,
+                    dict(
+                        scenario,
+                        **scenario.get("role_inputs", {}).get(role, {}),
+                        witnesses=False,
+                    ),
                 )
                 folder = out / name / "plain" / role
                 core.prepare_run_dir(setup, builds[role], folder)
@@ -160,13 +173,13 @@ def prepare_inputs(out, binaries, builds, env):
             scenarios.append(scenario)
     finally:
         for module, run_game in zip(games, saved, strict=True):
-            module.run_game = run_game
+            cast(Any, module).run_game = run_game
     return scenarios, identities
 
 
-def processes():
+def processes() -> dict[int, dict[str, Any]]:
     """Live processes by pid: comm, state, parent, owner and CPU ticks."""
-    found = {}
+    found: dict[int, dict[str, Any]] = {}
     for entry in Path("/proc").iterdir():
         try:
             raw = (entry / "stat").read_text()
@@ -186,15 +199,22 @@ def processes():
 class Hold:
     """Stop other builds, links, profiles and games; resume them on release."""
 
-    def __init__(self, log):
-        self.log, self.stopped, self.done = log, set(), threading.Event()
-        self.hz, self.thread = os.sysconf("SC_CLK_TCK"), None
-        self.error = None
+    def __init__(self, log: Path) -> None:
+        self.log, self.done = log, threading.Event()
+        self.stopped: set[int] = set()
+        self.hz = os.sysconf("SC_CLK_TCK")
+        self.thread: threading.Thread | None = None
+        self.error: Exception | None = None
 
-    def scan(self, before, elapsed, quiescing=False):
+    def scan(
+        self,
+        before: dict[int, dict[str, Any]],
+        elapsed: float,
+        quiescing: bool = False,
+    ) -> dict[int, dict[str, Any]]:
         table = processes()
 
-        def ours(pid):  # The collector and its timed games.
+        def ours(pid: int) -> bool:  # The collector and its timed games.
             while pid > 1 and pid != os.getpid():
                 pid = table.get(pid, {}).get("parent", 0)
             return pid == os.getpid()
@@ -244,10 +264,10 @@ class Hold:
             log.write(json.dumps(entry) + "\n")
         return table
 
-    def start(self):
+    def start(self) -> None:
         before, started = self.scan({}, 1, True), time.monotonic()
 
-        def watch():
+        def watch() -> None:
             nonlocal before, started
             try:
                 while not self.done.wait(2):
@@ -260,7 +280,7 @@ class Hold:
         self.thread = threading.Thread(target=watch, daemon=True)
         self.thread.start()
 
-    def release(self):
+    def release(self) -> None:
         if self.done.is_set():
             return
         self.done.set()
@@ -276,12 +296,12 @@ class Hold:
             raise RuntimeError("speed-pass process observation failed") from self.error
 
 
-def collection_lock(migration):
+def collection_lock(migration: ModuleType) -> AbstractContextManager[None]:
     """Wait for any deep run (tools/deep.py) and keep it out until released."""
     return file_lock(migration.COMMON_LOCAL / LOCK_NAME, label="deep check")
 
 
-def collect(out, migration):
+def collect(out: Path, migration: ModuleType) -> int:
     manifest = json.loads((out / "manifest.json").read_text())
     if not manifest["profile"]:
         sys.exit("collect needs a bundle prepared with --profile for anchor Ir")
@@ -312,17 +332,26 @@ def collect(out, migration):
     return summarize(out, manifest, [s["name"] for s in scenarios], GROUPS)
 
 
-def collect_games(out, scenarios, binaries, builds, env):
+def collect_games(
+    out: Path,
+    scenarios: list[core.Scenario],
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    env: dict[str, str],
+) -> None:
     """Prepare every launch before the hold; compare every pair after release."""
-    plans = {}
+    plans: dict[tuple[int, str, int, str], core.Plan] = {}
     for group in range(GROUPS):
         for scenario in scenarios:
             for pair in range(PAIRS):
                 for role in ROLES:
-                    setup = dict(
-                        scenario,
-                        **scenario.get("role_inputs", {}).get(role, {}),
-                        witnesses=False,
+                    setup = cast(
+                        core.Scenario,
+                        dict(
+                            scenario,
+                            **scenario.get("role_inputs", {}).get(role, {}),
+                            witnesses=False,
+                        ),
                     )
                     folder = (
                         out / f"group-{group}" / scenario["name"] / str(pair) / role
@@ -337,7 +366,8 @@ def collect_games(out, scenarios, binaries, builds, env):
                         False,
                         isolate=True,
                     )
-    hold, runs = Hold(out / "observations.jsonl"), {}
+    hold = Hold(out / "observations.jsonl")
+    runs: dict[tuple[int, str, int, str], core.Executed] = {}
     try:
         hold.start()
         for group in range(GROUPS):
@@ -377,11 +407,13 @@ def collect_games(out, scenarios, binaries, builds, env):
         )
 
 
-def summarize(out, manifest, names, groups):
+def summarize(
+    out: Path, manifest: dict[str, Any], names: list[str], groups: int
+) -> int:
     """Parse after release; refuse anchors from incomplete or failing groups."""
     profile = json.loads(Path(manifest["profile"]).read_text())
     counts = {r["scenario"]: r["instruction_speed"] for r in profile["results"]}
-    medians = {name: [] for name in names}
+    medians: dict[str, list[float]] = {name: [] for name in names}
     for group in range(groups):
         for result in json.loads((out / f"group-{group}.json").read_text())["results"]:
             speed = result["plain_speed"]
@@ -426,7 +458,7 @@ def summarize(out, manifest, names, groups):
     return 0
 
 
-def main(argv):
+def main(argv: list[str]) -> int:
     import migration
 
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])

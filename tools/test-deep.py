@@ -13,7 +13,7 @@ import unittest
 from collections.abc import Sequence
 from functools import partial
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import TypedDict, cast
 from unittest.mock import patch
 
@@ -198,7 +198,7 @@ class DeepTests(unittest.TestCase):
         self.assertFalse((self.drop / "priority.json").exists())
 
     def test_deep_skips_while_a_speed_collection_holds_the_lock(self) -> None:
-        driver = SimpleNamespace(COMMON_LOCAL=self.common)
+        driver = cast(ModuleType, SimpleNamespace(COMMON_LOCAL=self.common))
         with speed.collection_lock(driver):
             code, output = self.run_deep()
         self.assertEqual(code, 0)
@@ -207,7 +207,7 @@ class DeepTests(unittest.TestCase):
         self.assertFalse((self.drop / "priority.json").exists())
 
     def test_speed_collection_waits_while_deep_runs(self) -> None:
-        driver = SimpleNamespace(COMMON_LOCAL=self.common)
+        driver = cast(ModuleType, SimpleNamespace(COMMON_LOCAL=self.common))
         started, entered = threading.Event(), threading.Event()
 
         def collect() -> None:

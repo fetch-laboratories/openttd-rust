@@ -5,7 +5,9 @@ import json
 import struct
 import threading
 from pathlib import Path
+from typing import Any, Literal, NotRequired, cast
 
+from . import core
 from .core import (
     FILE_TYPES,
     ROOT,
@@ -18,6 +20,16 @@ from .core import (
     strip_glog,
 )
 from .play_saves import PLAY_SAVES
+
+
+class Scenario(core.Scenario):
+    effects: NotRequired[str]
+    effect_assignments: NotRequired[list[list[Any]]]
+    effect_road: NotRequired[list[int] | None]
+    effect_emission: NotRequired[bool | str]
+    effect_emission_reload: NotRequired[bool]
+    fleet: NotRequired[str]
+
 
 EFFECT_PREPARE_LOCK = threading.Lock()
 
@@ -44,9 +56,9 @@ EFFECT_SPRITES = (
 )
 
 
-def effect_rows(path):
+def effect_rows(path: Path) -> dict[int, core.Row]:
     chunk = read_save(path)["VEHS"]
-    rows = {}
+    rows: dict[int, core.Row] = {}
     for index, body in chunk["elements"]:
         fields = decode_element(chunk, body)
         if fields is None:
@@ -60,14 +72,22 @@ def effect_rows(path):
     return rows
 
 
-def prepare_effects(scenario, binaries, builds, out, timeout, env):
-    setup = dict(scenario, ticks=600)
+def prepare_effects(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+) -> tuple[Scenario, dict[str, Any]]:
+    setup: Scenario = {**scenario, "ticks": 600}
     if scenario["effects"] == "breakdown":
-        setup.update(
-            ticks=6000,
-            kind="save",
-            save=str(ROOT / "migration/saves" / f"{PLAY_SAVES[0]}.sav"),
-            console=[
+        setup = {
+            **setup,
+            "ticks": 6000,
+            "kind": "save",
+            "save": str(ROOT / "migration/saves" / f"{PLAY_SAVES[0]}.sav"),
+            "console": [
                 f"setting linkgraph.distribution_{cargo} 0"
                 for cargo in ("pax", "mail", "default", "armoured")
             ]
@@ -76,25 +96,26 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
                 "setting linkgraph.recalc_interval 4",
                 "unpause",
             ],
-        )
+        }
     # The scenarios share three immutable reference outputs; each prepares its
     # own patched input below. Serial creation avoids races and repeated road runs.
     folder = (
         "road"
         if scenario["effects"] == "breakdown"
-        else setup["settings"]["game_creation"]["landscape"]
+        else cast(str, setup["settings"]["game_creation"]["landscape"])
     )
     cache = out / "effect-fixtures" / folder
     fixture = cache / "save/autosave/exit.sav"
     preparation = cache / "preparation.json"
     with EFFECT_PREPARE_LOCK:
         if not preparation.is_file():
-            attempts = []
+            attempts: list[dict[str, Any]] = []
             for iterations in (
                 (6000, 12000, 24000) if scenario["effects"] == "breakdown" else (600,)
             ):
+                attempt: Scenario = {**setup, "ticks": iterations}
                 run = run_game(
-                    dict(setup, ticks=iterations),
+                    attempt,
                     binaries["reference"],
                     builds["reference"],
                     cache,
@@ -106,8 +127,10 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
                     raise RuntimeError("effect reference preparation failed")
                 prepared = read_save(fixture)
                 deadlines = [
-                    decode_element(prepared["LGRJ"], body)["join_date"]
-                    for _, body in prepared.get("LGRJ", {}).get("elements", [])
+                    cast(core.Row, decode_element(prepared["LGRJ"], body))["join_date"]
+                    for _, body in (
+                        prepared["LGRJ"]["elements"] if "LGRJ" in prepared else []
+                    )
                 ]
                 attempts.append(
                     {
@@ -120,7 +143,7 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
                 # Old loaded jobs can stall null-driver iterations. Drain them
                 # through the unchanged game; never patch their dates or state.
                 if scenario["effects"] != "breakdown" or all(
-                    decode_element(prepared["LGRJ"], body)["join_date"]
+                    cast(core.Row, decode_element(prepared["LGRJ"], body))["join_date"]
                     > save_moment(fixture)[0] + 56
                     for _, body in prepared["LGRJ"]["elements"]
                 ):
@@ -133,7 +156,9 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
     chunks, source = read_save(fixture), fixture.read_bytes()
     vehicles = chunks["VEHS"]
     effect_header = next(
-        f["fields"] for f in vehicles["header"] if f["key"] == "effect"
+        f["fields"]
+        for f in cast(list[core.Field], vehicles["header"])
+        if f["key"] == "effect"
     )
     if vehicles["kind"] != 4 or effect_header != [
         {"key": key, "type": kind} for key, kind in EFFECT_SCHEMA
@@ -151,9 +176,11 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
         row["animation_substate"] for row in natural.values() if row["subtype"] == 9
     } != {0, 1, 2, 3}:
         raise RuntimeError("natural industry bubble caller omitted direction bytes")
-    data, patches, assignments = bytearray(source), [], []
-    road_position = None
-    variants = []
+    data = bytearray(source)
+    patches: list[list[object]] = []
+    assignments: list[list[Any]] = []
+    road_position: list[int] | None = None
+    variants: list[tuple[str, dict[str, int]]] = []
     if scenario["effects"] in ("controllers", "reload"):
         variants = [
             (
@@ -259,7 +286,9 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
         ]
         width = struct.unpack(">II", chunks["MAPS"]["elements"][0][1])[0]
         animation = chunks["ANIT"]
-        animated = decode_element(animation, animation["elements"][0][1])["tiles"]
+        animated = cast(
+            core.Row, decode_element(animation, animation["elements"][0][1])
+        )["tiles"]
         catcher = next(
             i
             for i, kind in enumerate(chunks["MAPT"]["raw"])
@@ -289,8 +318,8 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
         begin = reader.pos
         if reader.take(length - (begin - element_begin)) != body:
             raise RuntimeError("unexpected sparse VEHS body")
-        fields = decode_element(vehicles, body)
-        label, values = "", {}
+        fields = cast(core.Row, decode_element(vehicles, body))
+        label, values = "", cast(dict[str, int], {})
         if fields["type"] == 4:
             label, values = next(pending, ("", {}))
             values = {"effect[0]/" + key: value for key, value in values.items()}
@@ -310,7 +339,7 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
                 "roadveh[0]/common[0]/breakdown_ctr": 2,
                 "roadveh[0]/common[0]/breakdown_delay": 37,
             }
-        spans = field_spans(body, vehicles["header"])
+        spans = field_spans(body, cast(list[core.Field], vehicles["header"]))
         for key, value in values.items():
             start, end, kind = spans[key]
             raw = struct.pack(FILE_TYPES[kind & 15][0], value)
@@ -334,7 +363,7 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
     normalized = out / scenario["name"] / "prepare/effect-input.sav"
     strip_glog(data, normalized)
     normalized_data = normalized.read_bytes()
-    record = {
+    record: dict[str, Any] = {
         "reference": str(fixture),
         "normalized": str(normalized),
         "reference_sha256": hashlib.sha256(source).hexdigest(),
@@ -348,8 +377,14 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
     }
     if scenario["effects"] == "reload":
         # Capture still-live private state through the unchanged reference only.
+        reload: Scenario = {
+            **scenario,
+            "kind": "save",
+            "save": str(normalized),
+            "ticks": 16,
+        }
         live = run_game(
-            dict(scenario, kind="save", save=str(normalized), ticks=16),
+            reload,
             binaries["reference"],
             builds["reference"],
             out / scenario["name"] / "reload",
@@ -373,16 +408,16 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
             "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
             "effects": effect_rows(normalized),
         }
-    return dict(
-        scenario,
-        kind="save",
-        save=str(normalized),
-        effect_assignments=assignments,
-        effect_road=road_position,
-    ), record
+    return {
+        **scenario,
+        "kind": "save",
+        "save": str(normalized),
+        "effect_assignments": assignments,
+        "effect_road": road_position,
+    }, record
 
 
-def check_effects(scenario, path):
+def check_effects(scenario: Scenario, path: Path) -> dict[str, Any]:
     before, after = effect_rows(Path(scenario["save"])), effect_rows(path)
     elapsed = save_moment(path)[2] - save_moment(Path(scenario["save"]))[2]
     if elapsed != scenario["ticks"]:
@@ -393,9 +428,9 @@ def check_effects(scenario, path):
     if not changed:
         raise RuntimeError("effect checkpoint observed no transition")
 
-    def animated_tiles(save):
+    def animated_tiles(save: Path) -> tuple[int, ...]:
         chunk = read_save(save)["ANIT"]
-        return decode_element(chunk, chunk["elements"][0][1])["tiles"]
+        return cast(core.Row, decode_element(chunk, chunk["elements"][0][1]))["tiles"]
 
     added_animation = sorted(
         set(animated_tiles(path)) - set(animated_tiles(Path(scenario["save"])))
@@ -467,7 +502,7 @@ def check_effects(scenario, path):
             "road breakdown constructor/duration setter was not observed"
         )
     date = read_save(path)["DATE"]
-    fields = decode_element(date, date["elements"][0][1])
+    fields = cast(core.Row, decode_element(date, date["elements"][0][1]))
     return {
         "elapsed_ticks": elapsed,
         "added_animated_tiles": added_animation,
@@ -482,8 +517,8 @@ def check_effects(scenario, path):
     }
 
 
-def scenarios(soak):
-    scenarios = []
+def scenarios(soak: bool) -> list[Scenario]:
+    scenarios: list[Scenario] = []
     # Exit checkpoints observe effects that disappear before the 32-day hook.
     for kind in ("controllers", "reload", "chimney", "bubble", "breakdown"):
         horizons = (
@@ -527,40 +562,58 @@ def scenarios(soak):
         }
     )
     scenarios.append(
-        dict(scenarios[-1], name="effects-emission-reload", effect_emission_reload=True)
+        {
+            **scenarios[-1],
+            "name": "effects-emission-reload",
+            "effect_emission_reload": True,
+        }
     )
     scenarios.append(
-        dict(
-            scenarios[-1],
-            name="effects-emission-train",
-            effect_emission="train",
-            effect_emission_reload=False,
-            fleet="effect-emission-train",
-            save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
-            console=["fleet_scenario effect-emission-train", "unpause"],
-        )
+        {
+            **scenarios[-1],
+            "name": "effects-emission-train",
+            "effect_emission": "train",
+            "effect_emission_reload": False,
+            "fleet": "effect-emission-train",
+            "save": str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            "console": ["fleet_scenario effect-emission-train", "unpause"],
+        }
     )
     return scenarios
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "effects" in scenario:
-        scenario, result["effect_input"] = prepare_effects(
+        scenario, core.findings(result)["effect_input"] = prepare_effects(
             scenario, binaries, builds, out, timeout, env
         )
     return scenario
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode | Literal["capture"],
+    role: str,
+    result: core.Result,
+) -> None:
     if scenario.get("effect_emission"):
         observations = [line for line in run["log"] if line.startswith("FLEET effect-")]
         key = f"{mode}_effect_emission"
-        if result.setdefault(key, observations) != observations:
+        if core.findings(result).setdefault(key, observations) != observations:
             raise RuntimeError(
                 f"{mode}/{role}: effect IDs, cache or emission records differ"
             )
     if scenario.get("effect_emission") == "train":
-        expected = {
+        expected: dict[str, tuple[int, int, int] | None] = {
             "stock-flipped": (6, 0, 10),
             "advanced-flipped": (3, 3, -2),
             "advanced-center": (4, 3, -2),
@@ -644,12 +697,12 @@ def check(scenario, run, mode, role, result):
             ]
             if created != ([[kind, 0, 0, 10]] if kind else []):
                 raise RuntimeError(f"{mode}/{role}: stock effect positions {created}")
-        expected = {
+        advanced: dict[int, list[tuple[int, int, int, int]]] = {
             8195: [(1, -5, -3, -2), (2, 1, 2, 4), (3, -2, -1, 6)],
             0: [],
             16385: [(1, -4, 3, -2)],
         }
-        for callback, positions in expected.items():
+        for callback, positions in advanced.items():
             marker = f"FLEET effect-emission {callback} cache 65 independent true callbacks 1 sound 1 rng true"
             if marker not in run["log"]:
                 raise RuntimeError(
@@ -668,7 +721,9 @@ def check(scenario, run, mode, role, result):
                 raise RuntimeError("missing exact advanced creation count")
 
     if "effects" in scenario:
-        result[f"{mode}_{role}_effects"] = check_effects(scenario, run["snapshots"][-1])
+        core.findings(result)[f"{mode}_{role}_effects"] = check_effects(
+            scenario, run["snapshots"][-1]
+        )
 
 
 PREPARE_ORDER = 0
