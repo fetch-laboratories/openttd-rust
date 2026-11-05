@@ -317,10 +317,6 @@ static void RoadBoundary()
 	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == INT32_MIN && probe.running == 0 && probe.progress == 7 && world.draws == 0);
 
 	/* Stopped parts preserve running ticks; later status resets must survive the entry. */
-	const auto breakdown_probe = _vehicle_maintenance_probe.breakdown_probe;
-	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = road_abi_probe->status};
-	};
 	const auto last_speed_dirty = t.physics_vehicle.start_stop_dirty;
 	probe.ground.state->cache.last_speed = UINT16_MAX;
 	t.physics_vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {
@@ -332,7 +328,6 @@ static void RoadBoundary()
 	probe.progress = 0;
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	CHECK(probe.running == UINT8_MAX && probe.order_time == INT32_MIN && probe.status == 0);
-	_vehicle_maintenance_probe.breakdown_probe = breakdown_probe;
 	t.physics_vehicle.start_stop_dirty = last_speed_dirty;
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
@@ -453,7 +448,6 @@ static void RoadServiceBoundary()
 	};
 	maintenance.breakdown_guard = [](OpenTTDVehicle *) noexcept {
 		OpenTTDVehicleMaintenanceBreakdownGuard r{};
-		r.counter = 1;
 		return r;
 	};
 	maintenance.automatic = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceAutomatic{}; };
@@ -463,9 +457,7 @@ static void RoadServiceBoundary()
 		return r;
 	};
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
-	/* The tail record is linked; its part has no engine type, so only the head is serviced. */
-	maintenance.has_engine = [](OpenTTDVehicle *) noexcept { return false; };
-	maintenance.reset = [](OpenTTDVehicle *) noexcept { ++road_service_probe->services; return OpenTTDVehicleMaintenanceReset{}; };
+	maintenance.reset = [](OpenTTDVehicle *record) noexcept { if (record == RoadServiceHandle(0)) ++road_service_probe->services; return OpenTTDVehicleMaintenanceReset{}; };
 	t.vehicle.write_economy_service = t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t) noexcept {};
 	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t) noexcept {};
 	t.vehicle.write_reliability = [](OpenTTDVehicle *, uint16_t) noexcept {};

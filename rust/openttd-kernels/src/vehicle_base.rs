@@ -322,6 +322,14 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn is_articulated_part(self) -> bool {
         is_articulated_part(is_ground_vehicle(self.vehicle_type()), self.subtype())
     }
+    /// `Vehicle::HasEngineType`.
+    pub(crate) fn has_engine_type(self) -> bool {
+        match VehicleType(self.vehicle_type()) {
+            VehicleType::AIRCRAFT => crate::aircraft::is_normal_aircraft(self.subtype()),
+            VehicleType::TRAIN | VehicleType::ROAD | VehicleType::SHIP => true,
+            _ => false,
+        }
+    }
     /// `Vehicle::IsFrontEngine`.
     pub(crate) fn is_front_engine(self) -> bool {
         is_front_engine(is_ground_vehicle(self.vehicle_type()), self.subtype())

@@ -8,7 +8,7 @@
 #include "rust/engine_capabilities_ffi.h"
 #include "rust/fleet_ffi.h"
 
-/* Explicit trivial Date and actual VehicleType carriers and aggregate return/write call ABI. Opaque
+/* Explicit trivial Date carriers and aggregate return/write call ABI. Opaque
  * shells are never dereferenced; the game target checks real member stores. */
 static void VehicleMaintenanceBoundary()
 {
@@ -17,7 +17,6 @@ static void VehicleMaintenanceBoundary()
 	static size_t values;
 	dirty = resets = values = 0;
 	auto &maintenance = _vehicle_maintenance_probe;
-	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceBreakdownProbe { return {.counter = 0, .status = 0}; };
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept { dirty++; };
 	maintenance.reset = [](OpenTTDVehicle *) noexcept {
 		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .reliability = 0x9876, .chance = 12, .breakdowns = 2};
@@ -26,7 +25,7 @@ static void VehicleMaintenanceBoundary()
 	maintenance.value = [](OpenTTDVehicle *) noexcept { return int64_t{-257}; };
 	maintenance.value_write = [](OpenTTDVehicle *, int64_t value) noexcept { CHECK(value == -255); values++; };
 	maintenance.renewal = [](OpenTTDVehicle *, const Company *) noexcept {
-		return OpenTTDVehicleMaintenanceRenewal{.age = OpenTTDCalendarDate{100}, .max_age = OpenTTDCalendarDate{100}, .months = -4, .enabled = false, .kind = static_cast<VehicleType>(254), .subtype = 0};
+		return OpenTTDVehicleMaintenanceRenewal{.age = OpenTTDCalendarDate{100}, .max_age = OpenTTDCalendarDate{100}, .months = -4, .enabled = false};
 	};
 	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
 	RoadTestTables tables(&shared);

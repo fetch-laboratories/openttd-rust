@@ -44,7 +44,6 @@ static void AircraftDirectBoundary()
 	auto &leaves = p.leaves;
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_owner->vehicle->current.type; };
 	vehicle.maintenance = &_vehicle_maintenance_probe;
-	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * {
 		auto &o = *aircraft_probe.order_owner;
 		CHECK(o.vehicle->current.type == 3 || o.vehicle->current.type == 5);
@@ -165,7 +164,6 @@ static void AircraftPhaseBoundary()
 	resolver.id = [](OpenTTDVehicle *record) noexcept -> uint32_t { return record == &aircraft_probe.shadow ? 18 : 19; };
 	v.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	v.maintenance = &_vehicle_maintenance_probe;
-	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	p.order_owner = std::make_unique<ControllerOrders>(&v);
 	v.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &aircraft_probe.order_owner->services; };
 	p.order_owner->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
