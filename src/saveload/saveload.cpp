@@ -172,7 +172,7 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.town_index = &RustSaveReferenceIndex<Town>,
 	.vehicle_get = &RustSaveReferenceGet<Vehicle>,
 	.vehicle_index = &RustSaveReferenceIndex<Vehicle>,
-	.vehicle_record_get = [](size_t index) noexcept -> void * { Vehicle *v = static_cast<Vehicle *>(RustSaveReferenceGet<Vehicle>(index)); return v == nullptr ? nullptr : v->record; },
+	.vehicle_record_get = &RustSaveReferenceVehicleRecord,
 	.string_data = [](const void *ptr, size_t *length) noexcept {
 		const std::string &str = *static_cast<const std::string *>(ptr);
 		*length = str.size();
