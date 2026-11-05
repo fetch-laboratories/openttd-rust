@@ -84,7 +84,7 @@ impl Services {
     fn map_access(&self) -> TileTypeAccess {
         crate::map_func::World::new(self.shared).types
     }
-    fn spec(&self, kind: u8) -> *const IndustrySpec {
+    fn spec(kind: u8) -> *const IndustrySpec {
         industrytype::industry(u16::from(kind))
     }
 }
@@ -130,7 +130,7 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
         crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
     let owner = (s.catchment.industry_owner)(shell);
     let kind = unsafe { (*crate::industry::openttd_rust_industry_metadata(owner)).kind };
-    if unsafe { (*s.spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE == 0 {
+    if unsafe { (*Services::spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE == 0 {
         return false;
     }
     let mut result = false;
@@ -173,10 +173,10 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         let kind = (s.industry_type)(other);
         if kind != IT_INVALID {
             info.industries[usize::from(kind)] = true;
-            let name = unsafe { (*s.spec(kind)).station_name };
+            let name = unsafe { (*Services::spec(kind)).station_name };
             if name != n.undefined {
                 for it in 0..NUM_INDUSTRYTYPES {
-                    let spec = s.spec(it);
+                    let spec = Services::spec(it);
                     if unsafe { (*spec).enabled && (*spec).station_name == name } {
                         info.industries[usize::from(it)] = true;
                     }
@@ -204,7 +204,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             s.catchment.industry_owner,
             s.check(),
         );
-        let spec = s.spec(kind);
+        let spec = Services::spec(kind);
         if unsafe { (*spec).station_name } == n.undefined {
             continue;
         }
