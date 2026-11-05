@@ -46,8 +46,6 @@ pub struct LocationResult {
 }
 #[repr(C)]
 pub struct TransactionServices {
-    pub layout_count: unsafe extern "C" fn(*const SpecHandle) -> usize,
-    pub layout: unsafe extern "C" fn(*const SpecHandle, usize) -> *const LayoutHandle,
     pub raw_setting: unsafe extern "C" fn() -> u8,
     pub check_proc: unsafe extern "C" fn(*const SpecHandle) -> u8,
     pub conflicting: unsafe extern "C" fn(*const SpecHandle) -> ConflictKinds,
@@ -287,8 +285,8 @@ impl Engine<'_> {
     }
     fn free(&self, tile: u32, layout: *const LayoutHandle, kind: u8) -> bool {
         let behaviour = unsafe { (self.g.spec_behaviour)((self.g.spec)(kind)) };
-        for n in 0..unsafe { (self.c.layout_size)(layout) } {
-            let part = unsafe { (self.c.layout_tile)(layout, n) };
+        for n in 0..unsafe { (*layout).len() } {
+            let part = super::layout_tile(layout, n);
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
             let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if current == u32::MAX {
@@ -366,8 +364,8 @@ impl Engine<'_> {
     ) -> bool {
         let mut refused = false;
         let mut custom_shape = false;
-        for n in 0..unsafe { (self.c.layout_size)(layout) } {
-            let part = unsafe { (self.c.layout_tile)(layout, n) };
+        for n in 0..unsafe { (*layout).len() } {
+            let part = super::layout_tile(layout, n);
             let gfx = unsafe { (self.c.translated_gfx)(part.gfx) };
             let current = self.tile_add_wrap(tile, i32::from(part.x), i32::from(part.y));
             if gfx != crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
@@ -443,8 +441,8 @@ impl Engine<'_> {
     }
     fn level(&self, tile: u32, flags: u16, layout: *const LayoutHandle) -> bool {
         let (mut max_x, mut max_y) = (0_i32, 0_i32);
-        for n in 0..unsafe { (self.c.layout_size)(layout) } {
-            let part = unsafe { (self.c.layout_tile)(layout, n) };
+        for n in 0..unsafe { (*layout).len() } {
+            let part = super::layout_tile(layout, n);
             if part.gfx == crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 continue;
             }
@@ -592,7 +590,7 @@ impl Engine<'_> {
         creation: u8,
         industry: *mut *mut ShellHandle,
     ) -> bool {
-        let layout = unsafe { (self.x.layout)(spec, layout_index) };
+        let layout = unsafe { &raw const (*spec).layouts.as_slice()[layout_index] };
         unsafe { *industry = ptr::null_mut() };
         if !self.conflict(tile, kind) {
             return false;
@@ -846,7 +844,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     // Its returned second word is rotr(seed, 3) - 1; the updated first word is unused.
     let bits = seed as u16;
     let random = seed.rotate_right(3).wrapping_sub(1);
-    let count = unsafe { (e.x.layout_count)(spec) };
+    let count = unsafe { (*spec).layouts.len() };
     e.fail(e.e.site);
     let deity_prospect = e.company() == 18 && !fund;
     let mut industry = ptr::null_mut();
@@ -952,7 +950,7 @@ pub unsafe extern "C" fn openttd_rust_industry_create(
     let spec = unsafe { (e.g.spec)(kind) };
     let random = e.s.shared().random();
     let second = e.s.shared().random();
-    let count = unsafe { (e.x.layout_count)(spec) };
+    let count = unsafe { (*spec).layouts.len() };
     let layout = e.s.shared().random_range(count as u32) as usize;
     e.create(
         tile,

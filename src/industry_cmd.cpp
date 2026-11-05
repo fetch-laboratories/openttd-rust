@@ -989,11 +989,6 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 		},
 		.callback_error = RustSpecCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.grf_version = RustSpecGRFVersion<IndustrySpec, OpenTTDIndustrySpecHandle>,
-		.layout_size = [](const OpenTTDIndustryLayoutHandle *layout) noexcept -> size_t { return reinterpret_cast<const IndustryTileLayout *>(layout)->size(); },
-		.layout_tile = [](const OpenTTDIndustryLayoutHandle *layout, size_t index) noexcept -> OpenTTDIndustryLayoutTile {
-			const auto &tile = (*reinterpret_cast<const IndustryTileLayout *>(layout))[index];
-			return {tile.ti.x, tile.ti.y, tile.gfx};
-		},
 		.water_class = [](uint32_t tile) noexcept -> uint8_t { return IsWaterTile(TileIndex(tile)) ? to_underlying(RustWaterClass(tile)) : to_underlying(WaterClass::Invalid); },
 		.clear_tile = [](uint32_t tile, uint16_t flags) noexcept { Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags{flags}, TileIndex(tile)); },
 		.make_industry = [](uint32_t tile, uint16_t industry, uint16_t gfx, uint32_t random, uint8_t water) noexcept { MakeIndustry(TileIndex(tile), IndustryID(industry), gfx, random, static_cast<WaterClass>(water)); },
@@ -1091,8 +1086,6 @@ const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcep
 static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices()
 {
 	static const OpenTTDIndustryTransactionServices services = {
-		.layout_count = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> size_t { return reinterpret_cast<const IndustrySpec *>(spec)->layouts.size(); },
-		.layout = [](const OpenTTDIndustrySpecHandle *spec, size_t index) noexcept -> const OpenTTDIndustryLayoutHandle * { return reinterpret_cast<const OpenTTDIndustryLayoutHandle *>(&reinterpret_cast<const IndustrySpec *>(spec)->layouts[index]); },
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },
 		.check_proc = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint8_t { return reinterpret_cast<const IndustrySpec *>(spec)->check_proc; },
 		.conflicting = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> OpenTTDIndustryConflictKinds { OpenTTDIndustryConflictKinds result; std::ranges::copy(reinterpret_cast<const IndustrySpec *>(spec)->conflicting, result.kinds); return result; },

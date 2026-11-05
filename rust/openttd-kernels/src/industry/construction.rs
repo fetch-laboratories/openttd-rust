@@ -16,9 +16,16 @@ use crate::newgrf_callbacks::CALLBACK_FAILED;
 use std::ffi::c_void;
 
 pub use crate::town_type::TownHandle;
-#[repr(C)]
-pub struct LayoutHandle {
-    _private: [u8; 0],
+/// One `IndustrySpec::layouts` entry, read in place.
+pub use crate::industrytype::Layout as LayoutHandle;
+/// Tile `n` of a layout as an offset and gfx.
+pub(crate) fn layout_tile(layout: *const LayoutHandle, n: usize) -> LayoutTile {
+    let tile = unsafe { (*layout).as_slice()[n] };
+    LayoutTile {
+        x: tile.ti.x,
+        y: tile.ti.y,
+        gfx: tile.gfx,
+    }
 }
 pub use crate::station_type::Station as StationHandle;
 #[repr(C)]
@@ -55,8 +62,6 @@ pub struct ConstructionServices {
     pub callback: unsafe extern "C" fn(*mut c_void, u16, u32, u32) -> u16,
     pub callback_error: unsafe extern "C" fn(*const SpecHandle, u16, u16),
     pub grf_version: unsafe extern "C" fn(*const SpecHandle) -> u8,
-    pub layout_size: unsafe extern "C" fn(*const LayoutHandle) -> usize,
-    pub layout_tile: unsafe extern "C" fn(*const LayoutHandle, usize) -> LayoutTile,
     pub water_class: unsafe extern "C" fn(u32) -> u8,
     pub clear_tile: unsafe extern "C" fn(u32, u16),
     pub make_industry: unsafe extern "C" fn(u32, u16, u16, u32, u8),
@@ -410,9 +415,9 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     if callbacks & (1 << 13) != 0 {
         cargo_callbacks(industry, owner, spec, &lists, true, g, c);
     }
-    let count = unsafe { (c.layout_size)(r.layout) };
+    let count = unsafe { (*r.layout).len() };
     for n in 0..count {
-        let layout = unsafe { (c.layout_tile)(r.layout, n) };
+        let layout = layout_tile(r.layout, n);
         let tile = r.tile.wrapping_add(
             (i32::from(layout.y)
                 .wrapping_mul(r.size_x as i32)

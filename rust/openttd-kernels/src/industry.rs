@@ -1939,8 +1939,6 @@ crate::abi::layouts! {
         too_many,
     };
     "OpenTTDIndustryTransactionServices" ["industry"] => crate::industry::TransactionServices {
-        layout_count,
-        layout,
         raw_setting,
         check_proc,
         conflicting,
@@ -2081,8 +2079,6 @@ crate::abi::layouts! {
         callback,
         callback_error,
         grf_version,
-        layout_size,
-        layout_tile,
         water_class,
         clear_tile,
         make_industry,
