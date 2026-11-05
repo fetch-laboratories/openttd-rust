@@ -12,7 +12,6 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.vehicle = &GetRustVehicleServices(),
 		.shared = &GetRustSharedServices(),
 		.smoke = RustVehicleSmokeAmount,
-		.primary = RustVehicleRead<bool, RustVehiclePrimary>,
 		.engine = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualEngine {
 			const Engine *e = EngineOf(RustVehicleGetEngine(shell));
 			OpenTTDVisualEngine result{.engine = RustEngine(e), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = VehicleCallbackMasks(RustEngineCallbackMask(RustEngine(e))).Test(VehicleCallbackMask::VisualEffect)};

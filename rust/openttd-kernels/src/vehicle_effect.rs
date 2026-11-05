@@ -90,7 +90,6 @@ pub struct Services {
     shared: &'static Shared,
     /// `_settings_client.gui.smoke_amount`.
     smoke: extern "C" fn() -> u8,
-    primary: extern "C" fn(VehicleRef) -> bool,
     engine: extern "C" fn(VehicleRef) -> Engine,
     defaults: extern "C" fn(*const OpenTTDEngine) -> Defaults,
     grf_version: extern "C" fn(*const OpenTTDEngine) -> u8,
@@ -198,7 +197,8 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
 pub extern "C" fn openttd_rust_visual_eligible_abi(v: VehicleRef) -> u8 {
     let s = services();
     if s.vehicle.assertions {
-        assert!((s.primary)(v));
+        // SAFETY: The shared orders table and live shell obey the vehicle entry contract.
+        assert!(unsafe { (s.vehicle.orders().primary_vehicle)(v.shell()) } != 0);
     }
     u8::from(
         (s.smoke)() != 0 && v.status() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && v.speed() >= 2,
@@ -442,5 +442,5 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVisualEngine" ["probe"] => Engine { engine, kind, visual, callback, };
     "OpenTTDVisualDefaults" ["probe"] => Defaults { rail_kind, engclass, };
-    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, smoke, primary, engine, defaults, grf_version, power_error, station, depot, tunnel, tile_rail, powered, };
+    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, smoke, engine, defaults, grf_version, power_error, station, depot, tunnel, tile_rail, powered, };
 }

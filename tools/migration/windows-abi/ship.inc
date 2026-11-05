@@ -82,7 +82,7 @@ static void ShipBoundary()
 		.path_clear = ShipProbeUnused<void, uint32_t>,
 		.viewport = ShipProbeUnused<void, uint32_t, bool, bool>,
 		.base_viewport = ShipProbeUnused<void, uint32_t>,
-		.cache = ShipProbeUnused<void, uint32_t>, .play_sound = ShipProbeUnused<void, uint32_t>,
+		.play_sound = ShipProbeUnused<void, uint32_t>,
 		.yapf_reverse = ShipProbeUnused<OpenTTDShipReverseResult, uint32_t, bool>, .yapf_choose = ShipProbeUnused<OpenTTDShipTrackResult, uint32_t, uint32_t>,
 		.update_delta = ShipProbeUnused<void, uint32_t>, .build_owner = ShipProbeUnused<void, uint32_t>,
 		.build_z = ShipProbeUnused<void, uint32_t>, .build_properties = ShipProbeUnused<void, uint32_t, uint32_t>,

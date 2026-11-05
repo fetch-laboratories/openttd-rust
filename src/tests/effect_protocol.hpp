@@ -24,6 +24,7 @@ struct EffectTestView {
 struct EffectTestWorld {
 	EffectTestView view{};
 	OpenTTDVehicle record{};
+	OpenTTDEffectState *owner = nullptr;
 	EffectTestWorld() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); }
 	uint32_t random = UINT32_MAX, draws = 0, industry = 0, queries = 0, writes = 0, viewports = 0, animated = 0;
 	uint8_t sound = 0; ///< Last sound played: 1 + success, or 0 for none.
@@ -92,6 +93,15 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	RustAnimationScope animation_scope(animation);
 
 	auto owner = std::unique_ptr<OpenTTDEffectState, decltype(&openttd_rust_effect_destroy)>(openttd_rust_effect_new(), openttd_rust_effect_destroy);
+	w.owner = owner.get();
+	const OpenTTDEffectCreationServices creation{
+		.effect = &leaves,
+		.shared = &services,
+		.can_allocate = [](size_t) noexcept { return true; },
+		.allocate = []() noexcept { auto &w = *effect_test_world; return OpenTTDEffectAllocation{&w, &w.record, w.owner}; },
+		.delta = [](void *) noexcept {},
+	};
+	const auto *previous_creation = openttd_rust_effect_bind(&creation);
 	check(openttd_rust_effect_get_animation(owner.get()) == 0 && openttd_rust_effect_get_substate(owner.get()) == 0);
 	openttd_rust_effect_set_animation(owner.get(), 65535);
 	openttd_rust_effect_set_substate(owner.get(), static_cast<uint8_t>(511));
@@ -103,7 +113,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 		w.record.x_pos = w.view.x; w.record.y_pos = w.view.y; w.record.z_pos = w.view.z;
 		w.record.progress = w.view.progress; w.record.subtype = w.view.subtype;
 		uint8_t alive = 1;
-		if (init != 0) openttd_rust_effect_initialize(owner.get(), &w.record, w.view.subtype, &leaves, &services);
+		if (init != 0) check(openttd_rust_effect_create(w.view.x, w.view.y, w.view.z, w.view.subtype) == reinterpret_cast<OpenTTDEffectVehicle *>(&w));
 		else alive = openttd_rust_effect_run(owner.get(), &w.record, &leaves, &services);
 		w.view.x = w.record.x_pos; w.view.y = w.record.y_pos; w.view.z = w.record.z_pos;
 		w.view.progress = w.record.progress;
@@ -151,6 +161,7 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	openttd_rust_effect_set_animation(owner.get(), 3);
 	check(run() == 0);
 	owner.reset();
+	openttd_rust_effect_bind(previous_creation);
 	effect_test_world = nullptr;
 }
 #endif /* EFFECT_PROTOCOL_HPP */

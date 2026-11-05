@@ -197,8 +197,6 @@ void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept;
 void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept;
 void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept;
 ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
-template <class T>
-inline uint8_t RustGroundCachedLength(const T *v) noexcept { return v->gcache.cached_veh_length; }
 /** Canonical cached consist length, shared by narrow and compound observations. */
 inline uint16_t RustGroundCachedTotalLength(const GroundVehicleCache *cache) noexcept { return cache->cached_total_length; }
 template <class T>
@@ -285,48 +283,6 @@ inline void OPENTTD_RUST_CALL GroundSvcUpdateViewport(OpenTTDVehicle *part) noex
 	RustVehicleUpdateViewport(T::From(VehicleOf(part)), false, false);
 }
 template <class T>
-inline void OPENTTD_RUST_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direction) noexcept
-{
-	T *u = T::From(VehicleOf(v));
-	u->SetDirection(static_cast<Direction>(direction));
-	RustVehicleUpdateViewport(u, true, true);
-}
-template <class T>
-inline void OPENTTD_RUST_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept
-{
-	T *u = T::From(VehicleOf(v));
-	SetBit(u->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS);
-	u->current_order.MakeGoToDepot(DepotID(depot), OrderDepotTypeFlag::Service);
-}
-template <class T>
-inline void OPENTTD_RUST_CALL GroundSvcWriteFirstEngine(OpenTTDVehicle *v, uint16_t engine) noexcept
-{
-	RustGroundSetFirstEngine(&T::From(VehicleOf(v))->gcache, EngineID(engine));
-}
-template <class T>
-inline void OPENTTD_RUST_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint8_t length, OpenTTDVehicle *front, uint16_t total_length) noexcept
-{
-	T *u = T::From(VehicleOf(part));
-	u->gcache.cached_veh_length = length;
-	T::From(VehicleOf(front))->gcache.cached_total_length = total_length;
-}
-
-template <class T>
-/** The head of `RoadVehUpdateCache`. */
-inline void OPENTTD_RUST_CALL GroundSvcCacheBegin(OpenTTDVehicle *v) noexcept
-{
-	T *u = T::From(VehicleOf(v));
-	u->InvalidateNewGRFCacheOfChain();
-	u->gcache.cached_total_length = 0;
-}
-
-template <class T>
-inline uint8_t OPENTTD_RUST_CALL GroundSvcCachedLength(OpenTTDVehicle *v) noexcept
-{
-	return RustGroundCachedLength(T::From(VehicleOf(v)));
-}
-
-template <class T>
 inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
 {
 	return RustGroundHasArticulated(T::From(VehicleOf(v)));
@@ -336,13 +292,7 @@ inline bool OPENTTD_RUST_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcep
 template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
 	.physics = &GetRustGroundPhysicsServices(),
-	.cache_begin = GroundSvcCacheBegin<T>,
 	.update_viewport = GroundSvcUpdateViewport<T>,
-	.turn = GroundSvcTurn<T>,
-	.go_to_depot_service = GroundSvcGoToDepotService<T>,
-	.write_first_engine = GroundSvcWriteFirstEngine<T>,
-	.write_length = GroundSvcWriteLength<T>,
-	.cached_length = GroundSvcCachedLength<T>,
 	.has_articulated = GroundSvcHasArticulated<T>,
 };
 
@@ -352,7 +302,6 @@ const OpenTTDGroundServices &GetRustGroundServices() noexcept
 	return _rust_ground_services<T>;
 }
 
-inline OpenTTDVehicle *RustGroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 
 inline void RustVehicleDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(shell)->index); }
 

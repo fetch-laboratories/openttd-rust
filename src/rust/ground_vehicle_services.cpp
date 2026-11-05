@@ -26,10 +26,7 @@ static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 	if (v->GetType() == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, TrainHandle(t), nullptr, v->GetType()}; }
 	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->GetType()};
 }
-static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->GetType() == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSubtype(v)}; }
 static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {RustCargoSpec(v->cargo_type), RustVehicleCargoOwner(v)}; }
-static OpenTTDGroundAccelerationInput GroundAccelerationInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->GetType() == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSpeed(v), RustVehicleStatus(v), v->GetType() == VEH_ROAD ? RustRoadVehicleType(RoadVehicle::From(v)) : RoadType{0}}; }
-static OpenTTDGroundSpeedInput GroundSpeedInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), RustVehicleSubspeed(v)}; }
 static uint64_t GroundCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnits(count); }
 static uint64_t GroundTrainCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnitsInTrain(count); }
 static uint16_t GroundRoadSpeed(OpenTTDVehicle *shell) noexcept { const RoadVehicle *v = RoadVehicle::From(VehicleOf(shell)); return RustRoadTypeMaxSpeed(RustRoadTileType(v->GetTile().base(), RustRoadTramType(RustRoadVehicleType(v)))); }
@@ -48,11 +45,7 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.assertions = false,
 #endif
 		.resolve = GroundResolve,
-		.first = RustGroundFirst,
-		.power_input = GroundPowerInput,
 		.weight_input = GroundWeightInput,
-		.acceleration_input = GroundAccelerationInput,
-		.speed_input = GroundSpeedInput,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_weight = GroundCargoWeight,
 		.train_cargo_weight = GroundTrainCargoWeight,
@@ -77,7 +70,7 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 	return services;
 }
 static_assert(TRACK_BIT_X == 1 && TRACK_BIT_Y == 2 && TRACK_BIT_WORMHOLE == 0x40 && TRACK_BIT_DEPOT == 0x80 && TRACK_BIT_MASK == 0x3f && TRACKDIR_BIT_MASK == 0x3f3f);
-static_assert(GROUND_ACCELERATION == 9800 && GVF_GOINGUP_BIT == 0 && GVF_GOINGDOWN_BIT == 1);
+static_assert(GROUND_ACCELERATION == 9800 && GVF_GOINGUP_BIT == 0 && GVF_GOINGDOWN_BIT == 1 && GVF_SUPPRESS_IMPLICIT_ORDERS == 2);
 static_assert(PROP_TRAIN_POWER == 0x0B && PROP_TRAIN_WEIGHT == 0x16 && PROP_TRAIN_TRACTIVE_EFFORT == 0x1F);
 static_assert(PROP_ROADVEH_POWER == 0x13 && PROP_ROADVEH_WEIGHT == 0x14 && PROP_ROADVEH_TRACTIVE_EFFORT == 0x18);
 static_assert(to_underlying(VehicleAccelerationModel::Normal) == 0 && to_underlying(VehicleAccelerationModel::Maglev) == 2);

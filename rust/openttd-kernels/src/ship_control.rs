@@ -221,7 +221,6 @@ pub struct Leaves {
     pub path_clear: extern "C" fn(u32),
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
-    pub cache: extern "C" fn(u32),
     pub play_sound: extern "C" fn(u32),
     pub yapf_reverse: extern "C" fn(u32, bool) -> ReverseResult,
     pub yapf_choose: extern "C" fn(u32, u32) -> TrackResult,
@@ -810,7 +809,7 @@ impl Game<'_> {
                             != (self.leaves.water_class)(new_tile)
                         {
                             crate::witness::hit(crate::witness::SHIP_WATER_CHANGE);
-                            (self.leaves.cache)(id);
+                            self.cache(id, v);
                         }
                     }
                     let diff = u32::from(direction)
@@ -963,7 +962,8 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     if ticks != 0 {
         let cost = unsafe { game.vs().running_cost(vehicle) };
         let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
-        // `running_ticks = 0` precedes the company payment; nothing between observes it.
+        let profit = (game.vs().profit)(vehicle).saturating_sub(cost);
+        (game.vs().write_profit)(vehicle, profit);
         game.vehicle().write_running(0);
         (game.leaves.pay_running)(id, cost);
         // SAFETY: The base table names its immutable maintenance table.
@@ -1119,7 +1119,7 @@ pub(crate) unsafe fn ship_build(
     (game.leaves.build_dates)(id);
     (game.leaves.build_random)(id, game.services.random() as u16);
     (game.leaves.build_acceleration)(id, engine);
-    (game.leaves.cache)(id);
+    game.cache(id, v);
     if (game.leaves.build_flag)(engine) {
         (game.leaves.build_prototype)(id);
     }
@@ -1216,7 +1216,6 @@ crate::abi::layouts! {
         path_clear,
         viewport,
         base_viewport,
-        cache,
         play_sound,
         yapf_reverse,
         yapf_choose,

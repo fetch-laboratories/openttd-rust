@@ -267,18 +267,8 @@ impl VehicleServices {
 #[repr(C)]
 pub struct GroundServices {
     pub physics: &'static crate::ground_vehicle::Services,
-    /// Invalidate the chain `NewGRF` cache, then reset total length.
-    pub cache_begin: extern "C" fn(VehicleRef),
-    /// `UpdateViewport(force, delta)`.
+    /// `UpdateViewport(false, false)`.
     pub update_viewport: extern "C" fn(VehicleRef),
-    /// Store the direction, then `UpdateViewport(true, true)`.
-    pub turn: extern "C" fn(VehicleRef, u8),
-    /// Set `GVF_SUPPRESS_IMPLICIT_ORDERS`, then `MakeGoToDepot(depot, Service)`.
-    pub go_to_depot_service: extern "C" fn(VehicleRef, u16),
-    pub write_first_engine: extern "C" fn(VehicleRef, u16),
-    /// Store `u` length and `v` total length.
-    pub write_length: extern "C" fn(VehicleRef, u8, VehicleRef, u16),
-    pub cached_length: extern "C" fn(VehicleRef) -> u8,
     pub has_articulated: extern "C" fn(VehicleRef) -> bool,
 }
 
@@ -361,13 +351,7 @@ crate::abi::layouts! {
 
 
     "OpenTTDGroundServices" ["probe"] => GroundServices {
-        cache_begin,
         update_viewport,
-        turn,
-        go_to_depot_service,
-        write_first_engine,
-        write_length,
-        cached_length,
         has_articulated,
         physics,
     };

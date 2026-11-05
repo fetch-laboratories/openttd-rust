@@ -152,30 +152,9 @@ pub struct Owner {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct PowerInput {
-    pub tile: u32,
-    pub subtype: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct WeightInput {
     pub cargo: *const std::ffi::c_void,
     pub owner: *mut crate::cargo_storage::List,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct AccelerationInput {
-    pub tile: u32,
-    pub speed: u16,
-    pub status: u8,
-    pub roadtype: RoadType,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct SpeedInput {
-    pub speed: u16,
-    pub subspeed: u8,
 }
 
 /// Immutable process-wide typed services. No owner borrow crosses any service;
@@ -186,11 +165,7 @@ pub struct Services {
     pub road: &'static crate::road::Leaves,
     pub assertions: bool,
     pub resolve: extern "C" fn(VehicleRef) -> Owner,
-    pub first: extern "C" fn(VehicleRef) -> VehicleRef,
-    pub power_input: extern "C" fn(VehicleRef) -> PowerInput,
     pub weight_input: extern "C" fn(VehicleRef) -> WeightInput,
-    pub acceleration_input: extern "C" fn(VehicleRef) -> AccelerationInput,
-    pub speed_input: extern "C" fn(VehicleRef) -> SpeedInput,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
     pub train_cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
@@ -232,11 +207,12 @@ impl Owner {
 }
 
 fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
-    let r = (s.power_input)(v);
-    if is_articulated_part(true, r.subtype) {
+    let tile = if o.rail() { v.tile() } else { 0 };
+    let subtype = v.subtype();
+    if is_articulated_part(true, subtype) {
         return 0;
     }
-    if o.rail() && !(s.powered)(o.train.get_railtypes(), (s.rail_type)(r.tile)) {
+    if o.rail() && !(s.powered)(o.train.get_railtypes(), (s.rail_type)(tile)) {
         return 0;
     }
     let p = (s.vehicle.property)(
@@ -401,7 +377,7 @@ pub(crate) fn power_changed(s: &Services, v: VehicleRef) {
 }
 fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
     if s.assertions {
-        assert!((s.first)(v) == v);
+        assert!(v.first() == v);
     }
     hit(if o.rail() {
         witness::GROUND_RAIL_POWER
@@ -470,7 +446,7 @@ fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
 }
 pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
     if s.assertions {
-        assert!((s.first)(v) == v);
+        assert!(v.first() == v);
     }
     let o = (s.resolve)(v);
     hit(if o.rail() {
@@ -522,12 +498,20 @@ pub(crate) fn acceleration(s: &Services, v: VehicleRef) -> i32 {
     acceleration_owned(s, v, (s.resolve)(v))
 }
 pub(crate) fn acceleration_owned(s: &Services, v: VehicleRef, o: Owner) -> i32 {
-    let r = (s.acceleration_input)(v);
-    let speed = i64::from(current_speed_for(o, r.speed));
+    let tile = if o.rail() { v.tile() } else { 0 };
+    let current_speed = v.speed();
+    let status = v.status();
+    let roadtype = if o.rail() {
+        RoadType(0)
+    } else {
+        // SAFETY: The shared resolver reads the live shell's unmoved road type.
+        unsafe { ((*((s.vehicle.newgrf)())).roadtype)(v.0.as_ptr()) }
+    };
+    let speed = i64::from(current_speed_for(o, current_speed));
     let mass = i64::from(unsafe { (*o.state).cache.cached_weight });
     let power = i64::from(unsafe { (*o.state).cache.cached_power }) * 746;
-    let maglev = acceleration_type_for(s, o, r.tile) == ACCELERATION_MAGLEV;
-    let area = i64::from(air_drag_area_for(o, r.status));
+    let maglev = acceleration_type_for(s, o, tile) == ACCELERATION_MAGLEV;
+    let area = i64::from(air_drag_area_for(o, status));
     let mut resistance = if maglev {
         0
     } else {
@@ -535,14 +519,14 @@ pub(crate) fn acceleration_owned(s: &Services, v: VehicleRef, o: Owner) -> i32 {
             + mass
                 * i64::from(rolling_friction_for(
                     o,
-                    r.roadtype,
-                    current_speed_for(o, r.speed),
+                    roadtype,
+                    current_speed_for(o, current_speed),
                 ))
     };
     resistance +=
         area * i64::from(unsafe { (*o.state).cache.cached_air_drag }) * speed * speed / 1000;
     resistance += slope_resistance(s, v, o);
-    let mode = acceleration_status_for(o, r.status);
+    let mode = acceleration_status_for(o, status);
     hit(if mode == AS_ACCEL {
         witness::GROUND_ACCELERATE
     } else {
@@ -584,7 +568,7 @@ pub(crate) fn acceleration_owned(s: &Services, v: VehicleRef, o: Owner) -> i32 {
     }
 }
 pub(crate) fn chain_in_depot(s: &Services, v: VehicleRef) -> bool {
-    let first = (s.first)(v);
+    let first = v.first();
     let o = (s.resolve)(v);
     if !(s.depot_tile)((first).tile(), o.kind.0) || (first).speed() != 0 {
         return false;
@@ -735,27 +719,26 @@ pub(crate) struct SpeedResult {
 }
 #[inline]
 pub(crate) fn update_speed(
-    s: &Services,
     v: VehicleRef,
     accel: u32,
     min_speed: i32,
     max_speed: i32,
 ) -> SpeedResult {
     hit(witness::GROUND_SPEED);
-    let r = (s.speed_input)(v);
-    let mut spd = u32::from(r.subspeed).wrapping_add(accel);
+    let current_speed = v.speed();
+    let subspeed = v.subspeed();
+    let mut spd = u32::from(subspeed).wrapping_add(accel);
     (v).write_subspeed(spd as u8);
-    let tempmax = if i32::from(r.speed) > max_speed {
-        (i32::from(r.speed) - i32::from(r.speed / 10) - 1).max(max_speed)
+    let tempmax = if i32::from(current_speed) > max_speed {
+        (i32::from(current_speed) - i32::from(current_speed / 10) - 1).max(max_speed)
     } else {
         max_speed
     };
-    spd = (i32::from(r.speed)
+    spd = (i32::from(current_speed)
         .wrapping_add((spd as i32) >> 8)
         .min(tempmax)
         .max(min_speed)) as u32;
-    // Native speed/subspeed stores and progress read/reset are scalar leaves;
-    // none reenters or changes cur_speed after this store (vehicle_services.cpp).
+    // Scalar stores retain the source speed write before the progress read/reset.
     let stored_speed = spd as u16;
     (v).write_speed(stored_speed);
     let scaled = crate::vehicle::advance_speed(spd) as i32;
@@ -839,7 +822,7 @@ fn in_depot(o: Owner) -> bool {
     }
 }
 fn reversing(s: &Services, v: VehicleRef) -> bool {
-    let first = (s.first)(v);
+    let first = v.first();
     let o = (s.resolve)(first);
     let direction = (v).direction();
     // SAFETY: the shared slope predicate gets live owners and immutable services.
@@ -848,10 +831,7 @@ fn reversing(s: &Services, v: VehicleRef) -> bool {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGroundAccelerationInput" ["probe"] => crate::ground_vehicle::AccelerationInput { tile, speed, status, roadtype, };
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
-    "OpenTTDGroundSpeedInput" ["probe"] => crate::ground_vehicle::SpeedInput { speed, subspeed, };
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, acceleration_input, speed_input, capabilities, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, weight_input, capabilities, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
     "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
-    "OpenTTDGroundPowerInput" ["probe"] => crate::ground_vehicle::PowerInput { tile, subtype, };
 }

@@ -150,7 +150,7 @@ pub struct Services {
     pub write_age: extern "C" fn(VehicleRef, i32),
     pub write_sprite: extern "C" fn(VehicleRef, u32),
     pub write_first_sprite: extern "C" fn(VehicleRef, u32),
-    pub next_part: extern "C" fn(VehicleRef) -> Vehicle,
+    pub owner: extern "C" fn(VehicleRef) -> *mut State,
     pub update_delta: extern "C" fn(VehicleRef),
     pub toward: extern "C" fn(VehicleRef, i32, i32) -> u8,
     pub create: extern "C" fn(i32, i32, u8, u8, u32) -> Vehicle,
@@ -307,13 +307,20 @@ impl<'a> World<'a> {
         }
         (self.s.write_sprite)(v.vehicle(), image);
     }
+    fn next_part(&self, v: VehicleRef) -> Option<Vehicle> {
+        v.next().map(|next| Vehicle {
+            handle: next.0.as_ptr(),
+            state: (self.s.owner)(next),
+            // SAFETY: The live next part and immutable resolver table survive this ID read.
+            id: unsafe { ((*((self.v.newgrf)())).id)(next.0.as_ptr()) },
+        })
+    }
     fn update_position(&self, v: Vehicle, x: i32, y: i32, z: i32) {
         (v.vehicle()).write_coordinates(x, y, z);
         (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
         self.update_image(v);
         self.viewport(v);
-        let u = (self.s.next_part)(v.vehicle());
-        if !u.handle.is_null() {
+        if let Some(u) = self.next_part(v.vehicle()) {
             let safe_x = x.clamp(0, self.map().max_x() as i32 * TILE_SIZE as i32);
             let safe_y = y
                 .wrapping_sub(1)
@@ -328,8 +335,7 @@ impl<'a> World<'a> {
             (u.vehicle()).write_direction((v.vehicle()).direction());
             self.update_image(u);
             self.viewport(u);
-            let rotor = (self.s.next_part)(u.vehicle());
-            if !rotor.handle.is_null() {
+            if let Some(rotor) = self.next_part(u.vehicle()) {
                 rotor.vehicle().write_coordinates(
                     x,
                     y,
@@ -1263,7 +1269,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, write_first_sprite, next_part, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
 }
 
 #[cfg(test)]

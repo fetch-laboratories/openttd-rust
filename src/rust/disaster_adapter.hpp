@@ -52,11 +52,7 @@ static OpenTTDDisasterRoadTarget DisasterRoadHandle(RoadVehicle *v) noexcept
 {
 	return {.handle = RustVehicle(v), .state = v == nullptr ? nullptr : v->GetRustState(), .id = v == nullptr ? VehicleID::Invalid().base() : RustVehicleIndexOpaque(v)};
 }
-static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextPart(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *next = RustVehicleNext(VehicleOf(v));
-	return DisasterHandle(static_cast<DisasterVehicle *>(next));
-}
+static OpenTTDDisasterState *OPENTTD_RUST_CALL DisasterOwner(OpenTTDVehicle *v) noexcept { return static_cast<DisasterVehicle *>(VehicleOf(v))->rust_state.get(); }
 static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterResolve(uint32_t id) noexcept { return DisasterBaseHandle(Vehicle::Get(id)); }
 static OpenTTDDisasterRoadTarget OPENTTD_RUST_CALL DisasterRoadTarget(uint32_t id) noexcept
 {
@@ -148,7 +144,7 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.write_age = RustVehicleInvoke<RustWriteVehicleAge, int32_t>,
 		.write_sprite = RustVehicleInvoke<RustWriteVehicleSpriteSequence, SpriteID>,
 		.write_first_sprite = RustVehicleInvoke<RustWriteVehicleFirstSprite, SpriteID>,
-		.next_part = DisasterNextPart,
+		.owner = DisasterOwner,
 		.update_delta = RustVehicleUpdateDelta<OpenTTDVehicle *>,
 		.toward = RustVehicleDirectionTowards,
 		.create = DisasterCreate,
