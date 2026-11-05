@@ -163,9 +163,12 @@ def check(
         return
     community_ai.check(scenario, run, mode, role, cast(dict[str, object], result))
     provenance = json.loads(FIXTURE.with_suffix(".json").read_text())
-    expected = [NewGRF(**row) for row in provenance["newgrfs"]]
+    # Loading resolves each saved identity against the scanned packages and saves
+    # the scanned path, which the original lowercases; the identity is ID and MD5.
+    expected = [(row["grfid"], row["md5sum"]) for row in provenance["newgrfs"]]
     for snapshot in run["snapshots"]:
-        if saved_newgrfs(snapshot) != expected:
+        saved = [(grf.grfid, grf.md5sum) for grf in saved_newgrfs(snapshot)]
+        if saved != expected:
             raise RuntimeError(f"{snapshot.name} lost the save's NewGRF identities")
     for prefix, required in newgrf_sets.REQUIRED.items():
         if counts := core.branch_witnesses(scenario, run, role, prefix, required):
