@@ -5,7 +5,7 @@ import json
 import struct
 import threading
 from pathlib import Path
-from typing import Any, NotRequired, cast
+from typing import Any, Literal, NotRequired, cast
 
 from . import core
 from .core import (
@@ -601,8 +601,8 @@ def prepare(
 def check(
     scenario: Scenario,
     run: core.Run,
-    mode: core.Mode,
-    role: core.Role,
+    mode: core.Mode | Literal["capture"],
+    role: str,
     result: core.Result,
 ) -> None:
     if scenario.get("effect_emission"):
