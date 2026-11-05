@@ -110,6 +110,10 @@ include = [
     "tools/simulation/rails.py",
     "tools/simulation/stations.py",
     "tools/simulation/towns.py",
+    "tools/shared-accessors.py",
+    "tools/test-shared-accessors.py",
+    "tools/test-simulation.py",
+    "tools/train-edge-comparison.py",
 ]
 
 [analysis]
