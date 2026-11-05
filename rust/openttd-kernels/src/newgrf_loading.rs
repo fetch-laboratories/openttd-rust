@@ -89,12 +89,12 @@ pub unsafe extern "C" fn openttd_rust_grf_add_sets(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_has_sets(feature: u8) -> bool {
-    unsafe { !(*STATE.get()).spritesets[usize::from(feature)].is_empty() }
+pub unsafe extern "C" fn openttd_rust_grf_has_sets_abi(feature: u8) -> u8 {
+    u8::from(unsafe { !(*STATE.get()).spritesets[usize::from(feature)].is_empty() })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_has_set(feature: u8, set: u32) -> bool {
-    unsafe { (*STATE.get()).spritesets[usize::from(feature)].contains_key(&set) }
+pub unsafe extern "C" fn openttd_rust_grf_has_set_abi(feature: u8, set: u32) -> u8 {
+    u8::from(unsafe { (*STATE.get()).spritesets[usize::from(feature)].contains_key(&set) })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_set_sprite(feature: u8, set: u32) -> u32 {
@@ -106,7 +106,7 @@ pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { global, cargo, engine, houses, industry, airports, types, action2, engine_range, parameter, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, param_count, set_parameter, find_config, find_file, file_for_config, error, error_name, error_property, networking, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, feature_map_sprite_group, feature_new_name, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, translate_grf_strings, static_grf_info, never_expire_airports, max_bridge_length, never_expire_vehicles, station_noise, gradual_loading, signal_side, disable_elrails, build_on_slopes, freight_trains, wagon_speed_limits, allow_town_roads, generating_world, improved_load, dynamic_engines, inflation, starting_year, plane_speed, height_limit, generation_seed, log_x, log_y, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite , generic, clock, set_clock, using_wallclock_units, config_at, exists, init_file, too_many, clear_errors, cleanup_strings, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir , assert_override_size, assert_file_match, unexpected_large, unexpected_real, missing_file, sprite_grm_failed, grm_failure, unknown_operation, id_mismatch, invalid_version , null_error, unknown_action, handling_action, preloaded_sprite, unexpected_data, unexpected_import, read_bounds_error, reading_file, invalid_format, unsupported_compression, loaded_sprites, unsupported_variable, cfg_real, cfg_unset, cfg_applying, skip_undefined, skip_test, skip_condition, skip_grf_condition, skip_unknown_grf, skip_false, skip_jump, skip_count, loaded_info, inhibiting, defined_label, unknown_patch, grm_reserved, param_defined, sprites_allocated, sprites_using, sprite_operation, grm_feature, unimplemented_target, unknown_target, translate_text, add_string, undefined, town_definition, town_lang, town_parts, town_part, town_missing, town_reference, town_text, town_total };
+    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, engine_range, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, feature_map_sprite_group, feature_new_name, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, translate_grf_strings, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite , generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, cleanup_strings, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir , assert_override_size, assert_file_match, unexpected_large, unexpected_real, missing_file, sprite_grm_failed, grm_failure, unknown_operation, id_mismatch, invalid_version , null_error, unknown_action, handling_action, preloaded_sprite, unexpected_data, unexpected_import, read_bounds_error, reading_file, invalid_format, unsupported_compression, loaded_sprites, unsupported_variable, cfg_real, cfg_unset, cfg_applying, skip_undefined, skip_test, skip_condition, skip_grf_condition, skip_unknown_grf, skip_false, skip_jump, skip_count, loaded_info, inhibiting, defined_label, unknown_patch, grm_reserved, param_defined, sprites_allocated, sprites_using, sprite_operation, grm_feature, unimplemented_target, unknown_target, translate_text, add_string, undefined, town_definition, town_lang, town_parts, town_part, town_missing, town_reference, town_text, town_total };
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
     "OpenTTDGrfClock" ["grf_loading"] => Clock { ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
@@ -116,6 +116,8 @@ crate::abi::layouts! {
 
 #[repr(C)]
 pub struct Services {
+    clocks: &'static crate::timer_game_common::ClockServices,
+    finance: &'static crate::company::FinanceServices,
     pub(crate) global: *const crate::newgrf::Services,
     cargo: *const crate::cargo_registry::Services,
     engine: *const crate::engine_loading::Services,
@@ -125,7 +127,6 @@ pub struct Services {
     types: *const crate::type_registry::Services,
     action2: *const crate::newgrf_act2::Services,
     engine_range: unsafe extern "C" fn(u8) -> EngineRange,
-    parameter: unsafe extern "C" fn(*const c_void, u32) -> u32,
     config_id: unsafe extern "C" fn(*const c_void) -> u32,
     config_status: unsafe extern "C" fn(*const c_void) -> u8,
     config_flags: unsafe extern "C" fn(*const c_void) -> u8,
@@ -137,12 +138,10 @@ pub struct Services {
     param_count: unsafe extern "C" fn(*const c_void) -> usize,
     set_parameter: unsafe extern "C" fn(*mut c_void, u8, u32),
     find_config: unsafe extern "C" fn(u32, u32) -> *mut c_void,
-    find_file: unsafe extern "C" fn(u32) -> *mut c_void,
     file_for_config: unsafe extern "C" fn(*const c_void) -> *mut c_void,
     error: unsafe extern "C" fn(*mut c_void, u32, u32, bool) -> *mut c_void,
     error_name: unsafe extern "C" fn(*mut c_void, *const c_void),
     error_property: unsafe extern "C" fn(*mut c_void, u32),
-    networking: unsafe extern "C" fn() -> bool,
     read_byte: unsafe extern "C" fn(*mut c_void) -> u8,
     read_word: unsafe extern "C" fn(*mut c_void) -> u16,
     read_dword: unsafe extern "C" fn(*mut c_void) -> u32,
@@ -180,27 +179,14 @@ pub struct Services {
     load_font_glyph: unsafe extern "C" fn(*const u8, usize) -> bool,
     translate_grf_strings: unsafe extern "C" fn(*const u8, usize) -> bool,
     static_grf_info: unsafe extern "C" fn(*const u8, usize) -> bool,
-    never_expire_airports: unsafe extern "C" fn() -> bool,
-    max_bridge_length: unsafe extern "C" fn() -> u16,
-    never_expire_vehicles: unsafe extern "C" fn() -> bool,
-    station_noise: unsafe extern "C" fn() -> bool,
     gradual_loading: unsafe extern "C" fn() -> bool,
     signal_side: unsafe extern "C" fn() -> u8,
-    disable_elrails: unsafe extern "C" fn() -> bool,
-    build_on_slopes: unsafe extern "C" fn() -> bool,
     freight_trains: unsafe extern "C" fn() -> u8,
     wagon_speed_limits: unsafe extern "C" fn() -> bool,
-    allow_town_roads: unsafe extern "C" fn() -> bool,
-    generating_world: unsafe extern "C" fn() -> bool,
     improved_load: unsafe extern "C" fn() -> bool,
-    dynamic_engines: unsafe extern "C" fn() -> bool,
     inflation: unsafe extern "C" fn() -> bool,
     starting_year: unsafe extern "C" fn() -> i32,
     plane_speed: unsafe extern "C" fn() -> u8,
-    height_limit: unsafe extern "C" fn() -> u8,
-    generation_seed: unsafe extern "C" fn() -> u32,
-    log_x: unsafe extern "C" fn() -> u32,
-    log_y: unsafe extern "C" fn() -> u32,
     read_bounds: u32,
     unexpected_sprite: u32,
     multiple_action8: u32,
@@ -215,7 +201,6 @@ pub struct Services {
     generic: *const crate::newgrf_generic::Services,
     clock: unsafe extern "C" fn() -> Clock,
     set_clock: unsafe extern "C" fn(*const Clock),
-    using_wallclock_units: unsafe extern "C" fn(bool) -> bool,
     config_at: unsafe extern "C" fn(usize) -> *mut c_void,
     exists: unsafe extern "C" fn(*const c_void, u8) -> bool,
     init_file: unsafe extern "C" fn(*const c_void),
@@ -383,12 +368,12 @@ unsafe fn openttd_rust_grf_clear_grm_sprites() {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_grf_reserved_sprite(
+pub unsafe extern "C" fn openttd_rust_grf_reserved_sprite_abi(
     grfid: u32,
     first: u32,
     count: u16,
-) -> bool {
-    unsafe {
+) -> u8 {
+    u8::from(unsafe {
         (*GRM_SPRITES.get())
             .iter()
             .any(|(&(id, _), &(sprite, num))| {
@@ -396,7 +381,7 @@ pub unsafe extern "C" fn openttd_rust_grf_reserved_sprite(
                     && sprite <= first
                     && sprite.wrapping_add(u32::from(num)) >= first.wrapping_add(u32::from(count))
             })
-    }
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_grf_disable(
@@ -409,7 +394,7 @@ pub unsafe extern "C" fn openttd_rust_grf_disable(
             c = config();
             file()
         } else {
-            (s.find_file)((s.config_id)(c))
+            ((*s.engine).find_file)((s.config_id)(c))
         };
         (s.set_status)(c, GCS_DISABLED);
         if !f.is_null() {
@@ -457,12 +442,13 @@ pub unsafe extern "C" fn openttd_rust_grf_unsafe(s: &Services) {
 unsafe fn openttd_rust_grf_param(s: &Services, param: u8, cond: *mut u32) -> u32 {
     unsafe {
         let mut value = 0;
-        if crate::newgrf::openttd_rust_global_variable(
+        if crate::newgrf::openttd_rust_global_variable_abi(
             &*s.global,
             param.wrapping_sub(0x80),
             &raw mut value,
             file(),
-        ) {
+        ) != 0
+        {
             return value;
         }
         match param {
@@ -484,7 +470,7 @@ unsafe fn openttd_rust_grf_param(s: &Services, param: u8, cond: *mut u32) -> u32
                 value
             }
             0x88 => 0,
-            p if p < 0x80 => (s.parameter)(file(), u32::from(p)),
+            p if p < 0x80 => (s.shared().grf_parameter)(file(), u32::from(p)),
             _ => {
                 (s.unsupported_variable)(param);
                 u32::MAX
@@ -616,7 +602,11 @@ unsafe fn skip_if(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> {
             }
         } else if pn == 0x88 {
             let mut c = (s.find_config)(value, mask);
-            if !c.is_null() && is_static(s, c) && !is_static(s, config()) && (s.networking)() {
+            if !c.is_null()
+                && is_static(s, c)
+                && !is_static(s, config())
+                && (s.finance.networking)()
+            {
                 static_desync(s, c);
                 c = ptr::null_mut();
             }
@@ -790,8 +780,8 @@ unsafe fn patch_variable(s: &Services, pn: u8) -> u32 {
             },
             0x11 => s.colourmap_sprite,
             0x13 => {
-                let x = (s.log_x)().wrapping_sub(6) as u8;
-                let y = (s.log_y)().wrapping_sub(6) as u8;
+                let x = u32::from(s.shared().map().log_x).wrapping_sub(6) as u8;
+                let y = s.shared().map_log_y().wrapping_sub(6) as u8;
                 let bits = if x == y {
                     1
                 } else if y > x {
@@ -806,10 +796,10 @@ unsafe fn patch_variable(s: &Services, pn: u8) -> u32 {
                     | (u32::from(y) << 8)
                     | (u32::from(x) + u32::from(y))
             }
-            0x14 => u32::from((s.height_limit)()),
+            0x14 => u32::from(s.shared().settings().height_limit.read()),
             0x15 => s.slopes_sprite,
             0x16 => s.shore_sprite,
-            0x17 => (s.generation_seed)(),
+            0x17 => s.shared().settings().generation_seed.read(),
             _ => {
                 (s.unknown_patch)(pn);
                 0
@@ -828,11 +818,11 @@ unsafe fn perform_grm(
     unsafe {
         if op == 6 {
             return grm
-                .add((s.parameter)(file(), u32::from(target)) as usize)
+                .add((s.shared().grf_parameter)(file(), u32::from(target)) as usize)
                 .read();
         }
         let mut start = if op == 2 || op == 3 {
-            (s.parameter)(file(), u32::from(target))
+            (s.shared().grf_parameter)(file(), u32::from(target))
         } else {
             0
         };
@@ -914,7 +904,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                     } else if stage() == GLS_ACTIVATION {
                         match feature {
                             0..=3 => {
-                                if !(s.dynamic_engines)() {
+                                if !((*s.engine).dynamic)() {
                                     let range = (s.engine_range)(feature);
                                     let start = range.offset;
                                     src1 = perform_grm(
@@ -930,7 +920,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                                     }
                                 } else {
                                     src1 = if operation == 2 || operation == 3 {
-                                        (s.parameter)(file(), u32::from(target))
+                                        (s.shared().grf_parameter)(file(), u32::from(target))
                                     } else {
                                         0
                                     };
@@ -976,9 +966,13 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                     }
                 }
             } else {
-                let f = (s.find_file)(data);
+                let f = ((*s.engine).find_file)(data);
                 let c = (s.find_config)(data, u32::MAX);
-                if !c.is_null() && is_static(s, c) && !is_static(s, config()) && (s.networking)() {
+                if !c.is_null()
+                    && is_static(s, c)
+                    && !is_static(s, config())
+                    && (s.finance.networking)()
+                {
                     static_desync(s, c);
                     src1 = 0;
                 } else if f.is_null() || c.is_null() || (s.config_status)(c) == GCS_DISABLED {
@@ -986,7 +980,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                 } else if src1 == 0xFE {
                     src1 = (s.config_version)(c);
                 } else {
-                    src1 = (s.parameter)(f, src1);
+                    src1 = (s.shared().grf_parameter)(f, src1);
                 }
             }
         } else {
@@ -1062,7 +1056,7 @@ unsafe fn param_set(s: &Services, b: &mut ByteReader) -> Result<(), ReadBounds> 
                     RAILTYPE_ELECTRIC, RAILTYPE_MAGLEV, RAILTYPE_MONO, RAILTYPE_RAIL,
                 };
                 (s.set_rail_cost)(RAILTYPE_RAIL, u16::from(result as u8));
-                if (s.disable_elrails)() {
+                if s.shared().settings().disable_elrails.read() {
                     (s.set_rail_cost)(RAILTYPE_ELECTRIC, u16::from(result as u8));
                     (s.set_rail_cost)(RAILTYPE_MONO, u16::from((result >> 8) as u8));
                 } else {
@@ -1107,23 +1101,25 @@ pub struct EngineRange {
 unsafe fn openttd_rust_grf_patch_flags(s: &Services) {
     unsafe {
         (*PATCH_FLAGS.get())[0] = 0x680C_6000
-            | (u32::from((s.never_expire_airports)()) << 0x0C)
-            | (u32::from((s.max_bridge_length)() > 16) << 0x0F)
-            | (u32::from((s.never_expire_vehicles)()) << 0x16);
+            | (u32::from(s.shared().settings().never_expire_airports.read()) << 0x0C)
+            | (u32::from(s.shared().settings().max_bridge_length.read() > 16) << 0x0F)
+            | (u32::from(s.shared().settings().never_expire_vehicles.read()) << 0x16);
         (*PATCH_FLAGS.get())[1] = 0x07DC_0300
-            | (u32::from((s.station_noise)()) << 0x07)
+            | (u32::from(s.shared().settings().station_noise.read()) << 0x07)
             | (u32::from((s.gradual_loading)()) << 0x0C)
             | (u32::from((s.signal_side)() == 1) << 0x1B)
-            | (u32::from(!((s.disable_elrails)())) << 0x1C);
+            | (u32::from(!(s.shared().settings().disable_elrails.read())) << 0x1C);
         (*PATCH_FLAGS.get())[2] = 0x5EDC_C40A
-            | (u32::from((s.build_on_slopes)()) << 0x0D)
-            | (u32::from((s.build_on_slopes)()) << 0x15)
+            | (u32::from((s.shared().build_on_slopes)()) << 0x0D)
+            | (u32::from((s.shared().build_on_slopes)()) << 0x15)
             | (u32::from((s.freight_trains)() > 1) << 0x18)
             | (u32::from((s.wagon_speed_limits)()) << 0x1D);
         (*PATCH_FLAGS.get())[3] = 0xC0D7_F8EA
-            | (u32::from(!((s.allow_town_roads)() || (s.generating_world)())) << 0x02)
+            | (u32::from(
+                !(s.shared().settings().allow_town_roads.read() || crate::genworld::generating()),
+            ) << 0x02)
             | (u32::from((s.improved_load)()) << 0x08)
-            | (u32::from((s.dynamic_engines)()) << 0x18);
+            | (u32::from(((*s.engine).dynamic)()) << 0x18);
         (*PATCH_FLAGS.get())[4] = 0x0000_0005 | (u32::from((s.inflation)()) << 0x01);
     }
 }
@@ -1150,7 +1146,7 @@ unsafe fn dispatch(
             }
             (13, GLS_INIT | GLS_RESERVE | GLS_ACTIVATION) => return param_set(s, b),
             (2, GLS_ACTIVATION) => {
-                return if crate::newgrf_act2::openttd_rust_action2_parse(&*s.action2, s, b) {
+                return if crate::newgrf_act2::parse_action(&*s.action2, s, b) {
                     Ok(())
                 } else {
                     Err(ReadBounds)
@@ -1477,7 +1473,7 @@ unsafe fn after_load(s: &Services) {
 pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, num_baseset: u32) {
     unsafe {
         let saved = SavedClock::read(s);
-        if (s.networking)() {
+        if (s.finance.networking)() {
             let year = (s.starting_year)();
             let clock = SavedClock {
                 year: crate::timer_game_calendar::CalendarYear(year),
@@ -1490,7 +1486,7 @@ pub unsafe extern "C" fn openttd_rust_grf_load(s: &Services, load_index: u32, nu
                     year,
                     0,
                     1,
-                    (s.using_wallclock_units)(false),
+                    (s.clocks.using_wallclock_units)(false),
                 )),
                 economy_date_fract: 0,
                 native: Clock {

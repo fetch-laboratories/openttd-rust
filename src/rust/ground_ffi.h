@@ -141,7 +141,8 @@ struct OpenTTDWaterGroundServices {
 const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept;
 extern "C" {
 void openttd_rust_water_tile_loop(uint32_t, uint32_t, uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
-bool openttd_rust_flood_halftile(uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
+uint8_t openttd_rust_flood_halftile_abi(uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
+extern "C++" inline bool openttd_rust_flood_halftile(uint32_t a0, OpenTTDGroundCall *a1, const OpenTTDWaterGroundServices *a2, const OpenTTDSharedServices *a3) { return openttd_rust_flood_halftile_abi(a0, a1, a2, a3) != 0; }
 FloodingBehaviour openttd_rust_flooding_behaviour(uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 void openttd_rust_clear_neighbour_flooding(uint32_t, uint32_t, uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 }
@@ -159,7 +160,7 @@ struct OpenTTDGroundABICalls {
 	OpenTTDAirportGround (*airport)() noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*enums)(ClearGround, RailGroundType, Slope, TrackBits, Track, Foundation, Roadside, RoadBits, RoadType, TreeGround, WaterClass, FloodingBehaviour, DiagDirection, LandscapeType, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(enums);
 };
-extern "C" bool openttd_rust_ground_abi_calls(const OpenTTDGroundABICalls *);
+extern "C" uint8_t openttd_test_ground_abi_calls(const OpenTTDGroundABICalls *);
 extern "C" void openttd_rust_water_restore(uint32_t, uint8_t, const OpenTTDSharedServices *, const OpenTTDWaterGroundServices *, const OpenTTDWaterRestorationServices *);
 extern "C" void openttd_rust_clear_square(uint32_t, const OpenTTDSharedServices *);
 #endif /* RUST_GROUND_FFI_H */

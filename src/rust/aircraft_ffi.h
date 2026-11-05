@@ -107,7 +107,8 @@ struct OpenTTDAircraftLeaves {
 	OpenTTDAircraftRouteNode (OPENTTD_RUST_CALL *route_node)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(route_node);
 	OpenTTDAircraftBlockChoice (OPENTTD_RUST_CALL *block_choice)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(block_choice);
 };
-bool OPENTTD_RUST_CALL openttd_rust_aircraft_tick(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
+uint8_t OPENTTD_RUST_CALL openttd_rust_aircraft_tick_abi(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_aircraft_tick(const OpenTTDAircraftLeaves *a0, OpenTTDAircraftVehicle a1) { return openttd_rust_aircraft_tick_abi(a0, a1) != 0; }
 void OPENTTD_RUST_CALL openttd_rust_aircraft_calendar_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_economy_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_position(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t, int32_t, int32_t);
@@ -123,7 +124,7 @@ void OPENTTD_RUST_CALL openttd_rust_aircraft_leave_hangar(const OpenTTDAircraftL
 void OPENTTD_RUST_CALL openttd_rust_aircraft_order_location(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_replacement(const OpenTTDAircraftLeaves *, uint16_t);
 uint16_t OPENTTD_RUST_CALL openttd_rust_aircraft_closest_depot(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
-bool OPENTTD_RUST_CALL openttd_rust_aircraft_event(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
+uint8_t OPENTTD_RUST_CALL openttd_test_aircraft_event(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
 void OPENTTD_RUST_CALL openttd_rust_aircraft_release_blocks(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 OpenTTDAircraftState *OPENTTD_RUST_CALL openttd_rust_aircraft_state_new();
 void OPENTTD_RUST_CALL openttd_rust_aircraft_state_destroy(OpenTTDAircraftState *);

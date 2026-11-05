@@ -90,13 +90,6 @@ typedef struct OpenTTDIndustryMap {
 	uint32_t size_x, size_y;
 	uint8_t landscape;
 } OpenTTDIndustryMap;
-/** Per-tick record read once by the facade: tick counter, map, inverse-scaled callback interval, ambient sound and editor mode. */
-typedef struct OpenTTDIndustryTickRecord {
-	uint64_t counter;
-	OpenTTDIndustryMap map;
-	uint32_t interval;
-	uint8_t ambient, editor;
-} OpenTTDIndustryTickRecord;
 /** Next pool industry from an index; industry is null at the end. */
 typedef struct OpenTTDIndustryEntry {
 	void *industry;
@@ -178,10 +171,14 @@ typedef struct OpenTTDIndustryServices {
 	bool (*fund_only)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(fund_only);
 	bool (*deity)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(deity);
 } OpenTTDIndustryServices;
-bool openttd_rust_industry_forest(uint32_t, const OpenTTDIndustryServices *);
-bool openttd_rust_industry_spec_raw(uint8_t life);
-bool openttd_rust_industry_spec_processing(uint8_t life, uint32_t behaviour);
-bool openttd_rust_industry_original_economy(uint16_t callbacks, uint8_t economy);
+uint8_t openttd_rust_industry_forest_abi(uint32_t, const OpenTTDIndustryServices *);
+extern "C++" inline bool openttd_rust_industry_forest(uint32_t a0, const OpenTTDIndustryServices *a1) { return openttd_rust_industry_forest_abi(a0, a1) != 0; }
+uint8_t openttd_rust_industry_spec_raw_abi(uint8_t life);
+extern "C++" inline bool openttd_rust_industry_spec_raw(uint8_t a0) { return openttd_rust_industry_spec_raw_abi(a0) != 0; }
+uint8_t openttd_rust_industry_spec_processing_abi(uint8_t life, uint32_t behaviour);
+extern "C++" inline bool openttd_rust_industry_spec_processing(uint8_t a0, uint32_t a1) { return openttd_rust_industry_spec_processing_abi(a0, a1) != 0; }
+uint8_t openttd_rust_industry_original_economy_abi(uint16_t callbacks, uint8_t economy);
+extern "C++" inline bool openttd_rust_industry_original_economy(uint16_t a0, uint8_t a1) { return openttd_rust_industry_original_economy_abi(a0, a1) != 0; }
 int64_t openttd_rust_industry_construction_cost(uint8_t multiplier, uint8_t life, uint8_t raw_setting);
 struct OpenTTDIndustryPair { uint16_t first, second; };
 OpenTTDIndustryPair openttd_rust_industry_sum_history(const OpenTTDIndustryPair *, size_t);
@@ -224,8 +221,10 @@ typedef struct OpenTTDIndustryLifecycleServices {
 void openttd_rust_industry_cleanup(void *, OpenTTDIndustry *, OpenTTDIndustryBuilder *, uint16_t, bool, OpenTTDIndustryMap, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
 void openttd_rust_industry_randomise_tile(uint32_t, uint8_t, void *, OpenTTDIndustry *, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
 void openttd_rust_industry_randomise(void *, OpenTTDIndustry *, uint16_t, uint8_t, uint32_t, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
-bool openttd_rust_industry_animate_tile(uint32_t, uint8_t, uint32_t, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
-bool openttd_rust_industry_animate(OpenTTDIndustry *, uint16_t, uint8_t, uint32_t, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
+uint8_t openttd_rust_industry_animate_tile_abi(uint32_t, uint8_t, uint32_t, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
+extern "C++" inline bool openttd_rust_industry_animate_tile(uint32_t a0, uint8_t a1, uint32_t a2, const OpenTTDIndustryServices *a3, const OpenTTDIndustryLifecycleServices *a4) { return openttd_rust_industry_animate_tile_abi(a0, a1, a2, a3, a4) != 0; }
+uint8_t openttd_rust_industry_animate_abi(OpenTTDIndustry *, uint16_t, uint8_t, uint32_t, const OpenTTDIndustryServices *, const OpenTTDIndustryLifecycleServices *);
+extern "C++" inline bool openttd_rust_industry_animate(OpenTTDIndustry *a0, uint16_t a1, uint8_t a2, uint32_t a3, const OpenTTDIndustryServices *a4, const OpenTTDIndustryLifecycleServices *a5) { return openttd_rust_industry_animate_abi(a0, a1, a2, a3, a4, a5) != 0; }
 typedef struct OpenTTDIndustrySpecHandle OpenTTDIndustrySpecHandle;
 typedef struct OpenTTDIndustryGenerationContext OpenTTDIndustryGenerationContext;
 typedef struct OpenTTDIndustryGenerationInfo {
@@ -248,7 +247,8 @@ typedef struct OpenTTDIndustryGenerationServices {
 	bool (*increase_progress)(OpenTTDIndustryGenerationContext *, bool) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(increase_progress);
 	void (*missing_warning)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(missing_warning);
 } OpenTTDIndustryGenerationServices;
-bool openttd_rust_industry_generate(OpenTTDIndustryBuilder *, OpenTTDIndustryGenerationContext *, const OpenTTDIndustryServices *, const OpenTTDIndustryGenerationServices *);
+uint8_t openttd_rust_industry_generate_abi(OpenTTDIndustryBuilder *, OpenTTDIndustryGenerationContext *, const OpenTTDIndustryServices *, const OpenTTDIndustryGenerationServices *);
+extern "C++" inline bool openttd_rust_industry_generate(OpenTTDIndustryBuilder *a0, OpenTTDIndustryGenerationContext *a1, const OpenTTDIndustryServices *a2, const OpenTTDIndustryGenerationServices *a3) { return openttd_rust_industry_generate_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_industry_check(const OpenTTDIndustryServices *, const OpenTTDIndustryGenerationServices *);
 typedef struct OpenTTDTownHandle OpenTTDTownHandle;
 typedef struct OpenTTDIndustryLayoutHandle OpenTTDIndustryLayoutHandle;
@@ -283,7 +283,8 @@ typedef struct OpenTTDIndustryConstructionServices {
 	void (*build_window_dirty)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(build_window_dirty);
 	bool (*serve_neutral)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(serve_neutral);
 } OpenTTDIndustryConstructionServices;
-bool openttd_rust_industry_transport(void *industry, OpenTTDIndustry *owner, uint8_t minimal_cargo, bool recession, const OpenTTDIndustryServices *services);
+uint8_t openttd_rust_industry_transport_abi(void *industry, OpenTTDIndustry *owner, uint8_t minimal_cargo, bool recession, const OpenTTDIndustryServices *services);
+extern "C++" inline bool openttd_rust_industry_transport(void *a0, OpenTTDIndustry *a1, uint8_t a2, bool a3, const OpenTTDIndustryServices *a4) { return openttd_rust_industry_transport_abi(a0, a1, a2, a3, a4) != 0; }
 void openttd_rust_industry_farm(void *industry, uint16_t id, OpenTTDIndustryMap map, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_recompute(void *industry, OpenTTDIndustry *owner, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_daily_start(OpenTTDIndustryBuilder *builder, uint32_t map_bits, uint8_t init_counter);
@@ -320,10 +321,14 @@ typedef struct OpenTTDIndustryCommandServices {
 	bool (*valid_company)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(valid_company);
 	void (*invalidate_view)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(invalidate_view);
 } OpenTTDIndustryCommandServices;
-bool openttd_rust_industry_set_flags_command(uint16_t id, bool execute, uint8_t value, const OpenTTDIndustryCommandServices *);
-bool openttd_rust_industry_set_production_command(uint16_t id, bool execute, uint8_t level, const OpenTTDIndustryCommandServices *, const OpenTTDIndustryServices *);
-bool openttd_rust_industry_set_exclusivity_command(uint16_t id, bool execute, uint8_t company, bool consumer, const OpenTTDIndustryCommandServices *);
-bool openttd_rust_industry_set_text_command(uint16_t id, bool execute, OpenTTDByteSpan text, const OpenTTDIndustryCommandServices *);
+uint8_t openttd_rust_industry_set_flags_command_abi(uint16_t id, bool execute, uint8_t value, const OpenTTDIndustryCommandServices *);
+extern "C++" inline bool openttd_rust_industry_set_flags_command(uint16_t a0, bool a1, uint8_t a2, const OpenTTDIndustryCommandServices *a3) { return openttd_rust_industry_set_flags_command_abi(a0, a1, a2, a3) != 0; }
+uint8_t openttd_rust_industry_set_production_command_abi(uint16_t id, bool execute, uint8_t level, const OpenTTDIndustryCommandServices *, const OpenTTDIndustryServices *);
+extern "C++" inline bool openttd_rust_industry_set_production_command(uint16_t a0, bool a1, uint8_t a2, const OpenTTDIndustryCommandServices *a3, const OpenTTDIndustryServices *a4) { return openttd_rust_industry_set_production_command_abi(a0, a1, a2, a3, a4) != 0; }
+uint8_t openttd_rust_industry_set_exclusivity_command_abi(uint16_t id, bool execute, uint8_t company, bool consumer, const OpenTTDIndustryCommandServices *);
+extern "C++" inline bool openttd_rust_industry_set_exclusivity_command(uint16_t a0, bool a1, uint8_t a2, bool a3, const OpenTTDIndustryCommandServices *a4) { return openttd_rust_industry_set_exclusivity_command_abi(a0, a1, a2, a3, a4) != 0; }
+uint8_t openttd_rust_industry_set_text_command_abi(uint16_t id, bool execute, OpenTTDByteSpan text, const OpenTTDIndustryCommandServices *);
+extern "C++" inline bool openttd_rust_industry_set_text_command(uint16_t a0, bool a1, OpenTTDByteSpan a2, const OpenTTDIndustryCommandServices *a3) { return openttd_rust_industry_set_text_command_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_industry_build_reset(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_build_monthly(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_build_targets(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
@@ -452,7 +457,8 @@ void openttd_rust_industry_build(OpenTTDIndustryCost *, uint32_t tile, uint8_t t
 void openttd_rust_industry_create(OpenTTDIndustryCost *, OpenTTDIndustryShell **industry, uint32_t tile, uint8_t type, uint8_t creation_type, const OpenTTDIndustryTransactionContext *);
 void openttd_rust_industry_location_check(OpenTTDIndustryCost *, uint32_t tile, uint8_t type, size_t layout, uint32_t random, uint16_t bits, uint8_t founder, uint8_t creation, const OpenTTDIndustryTransactionContext *);
 void openttd_rust_industry_shape_check(OpenTTDIndustryCost *, uint32_t tile, uint32_t current, const OpenTTDIndustryTileSpec *, uint8_t type, uint16_t gfx, size_t layout, uint16_t bits, uint8_t founder, uint8_t creation, const OpenTTDIndustryTransactionContext *);
-bool openttd_rust_industry_slope_refused(uint8_t current, uint8_t refused);
+uint8_t openttd_rust_industry_slope_refused_abi(uint8_t current, uint8_t refused);
+extern "C++" inline bool openttd_rust_industry_slope_refused(uint8_t a0, uint8_t a1) { return openttd_rust_industry_slope_refused_abi(a0, a1) != 0; }
 #ifdef __cplusplus
 }
 #endif

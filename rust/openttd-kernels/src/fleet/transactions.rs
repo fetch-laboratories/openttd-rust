@@ -1169,14 +1169,14 @@ unsafe fn set_rule(
 /// # Safety
 /// Live static noexcept services, valid engines and serial game-thread access.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_valid(
+pub unsafe extern "C" fn openttd_rust_fleet_valid_abi(
     w: *const Services,
     gw: *const GroupServices,
     from: u16,
     to: u16,
     company: u8,
-) -> bool {
-    unsafe { valid(&*w, &*gw, from, to, company) }
+) -> u8 {
+    u8::from(unsafe { valid(&*w, &*gw, from, to, company) })
 }
 /// Entire speculative/execute autoreplacement and rollback with native cost lifetimes.
 /// # Safety

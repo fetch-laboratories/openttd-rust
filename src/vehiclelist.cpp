@@ -16,9 +16,9 @@
 
 #include "rust/vehicle_transaction_ffi.h"
 #include "rust/vehicle_services.h"
-static void SelectionWithOrders(void *ctx, bool (*vehicle)(void *, const Vehicle *), bool (*order)(void *, const Order *), void (*visit)(void *, const Vehicle *)) noexcept
+static void SelectionWithOrders(void *ctx, uint8_t (*vehicle)(void *, const Vehicle *), uint8_t (*order)(void *, const Order *), void (*visit)(void *, const Vehicle *)) noexcept
 {
-	FindVehiclesWithOrder([&](const Vehicle *v) { return vehicle(ctx, v); }, [&](const Order *o) { return order(ctx, o); }, [&](const Vehicle *v) { visit(ctx, v); });
+	FindVehiclesWithOrder([&](const Vehicle *v) { return vehicle(ctx, v) != 0; }, [&](const Order *o) { return order(ctx, o) != 0; }, [&](const Vehicle *v) { visit(ctx, v); });
 }
 static void SelectionListClear(void *list) noexcept { static_cast<VehicleList *>(list)->clear(); }
 static void SelectionListPush(void *list, void *v) noexcept { static_cast<VehicleList *>(list)->push_back(static_cast<Vehicle *>(v)); }

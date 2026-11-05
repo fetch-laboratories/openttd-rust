@@ -73,8 +73,10 @@ extern "C" {
 uint8_t *OPENTTD_RUST_CALL openttd_rust_company_colours();
 void OPENTTD_RUST_CALL openttd_rust_company_reset_livery(const OpenTTDCompanyIdentityServices *, Company *);
 void OPENTTD_RUST_CALL openttd_rust_company_update_liveries(const OpenTTDCompanyIdentityServices *, Company *);
-bool OPENTTD_RUST_CALL openttd_rust_company_manager_face(const OpenTTDCompanyIdentityServices *, uint32_t, uint32_t, bool);
-bool OPENTTD_RUST_CALL openttd_rust_company_colour(const OpenTTDCompanyIdentityServices *, LiveryScheme, bool, Colours, bool);
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_manager_face_abi(const OpenTTDCompanyIdentityServices *, uint32_t, uint32_t, bool);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_manager_face(const OpenTTDCompanyIdentityServices *a0, uint32_t a1, uint32_t a2, bool a3) { return openttd_rust_company_manager_face_abi(a0, a1, a2, a3) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_colour_abi(const OpenTTDCompanyIdentityServices *, LiveryScheme, bool, Colours, bool);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_colour(const OpenTTDCompanyIdentityServices *a0, LiveryScheme a1, bool a2, Colours a3, bool a4) { return openttd_rust_company_colour_abi(a0, a1, a2, a3, a4) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_company_rename(const OpenTTDCompanyIdentityServices *, OpenTTDByteSpan, bool);
 uint8_t OPENTTD_RUST_CALL openttd_rust_president_rename(const OpenTTDCompanyIdentityServices *, OpenTTDByteSpan, bool);
 LiveryScheme OPENTTD_RUST_CALL openttd_rust_engine_livery_scheme(const OpenTTDCompanyIdentityServices *, uint16_t, uint16_t, OpenTTDVehicle *);

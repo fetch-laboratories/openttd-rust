@@ -279,10 +279,11 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                         if handle(v).vehicle_type() == 0 {
                             user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
                         }
-                        if crate::engine_capabilities::openttd_rust_engine_can_carry(
+                        if crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                             s.capabilities,
                             (s.vehicle.engine)(handle(u)).0.as_ptr(),
-                        ) {
+                        ) != 0
+                        {
                             let cargo_type = (s.cargo_type)(u);
                             classes |= (s.cargo_classes)(cargo_type) as u8;
                             cargoes[cargo_type as usize] =
@@ -296,10 +297,10 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     while !u.is_null() {
                         let cargo_type = (s.cargo_type)(u);
                         if cargo_type == cargo
-                            && crate::engine_capabilities::openttd_rust_engine_can_carry(
+                            && (crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                                 s.capabilities,
                                 (s.vehicle.engine)(handle(u)).0.as_ptr(),
-                            )
+                            ) != 0)
                         {
                             let subtype = usize::from((s.cargo_subtype)(u));
                             subtypes[subtype] = subtypes[subtype].wrapping_add(1);

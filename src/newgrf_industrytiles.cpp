@@ -26,27 +26,6 @@
 #include "rust/industry_resolver_ffi.h"
 #include "safeguards.h"
 
-/**
- * Based on newhouses equivalent, but adapted for newindustries
- * @param parameter from callback.  It's in fact a pair of coordinates
- * @param tile TileIndex from which the callback was initiated
- * @param index of the industry been queried for
- * @param signed_offsets Are the x and y offset encoded in parameter signed?
- * @param grf_version8 True, if we are dealing with a new NewGRF which uses GRF version >= 8.
- * @return a construction of bits obeying the newgrf format
- */
-
-/**
- * This is the position of the tile relative to the northernmost tile of the industry.
- * Format: 00yxYYXX
- * Variable  Content
- * x         the x offset from the northernmost tile
- * XX        same, but stored in a byte instead of a nibble
- * y         the y offset from the northernmost tile
- * YY        same, but stored in a byte instead of a nibble
- * @param tile TileIndex of the tile to evaluate
- * @param ind_tile northernmost tile of the industry
- */
 
 /* virtual */ uint32_t IndustryTileScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
@@ -221,19 +200,6 @@ bool TriggerIndustryAnimation(const Industry *ind, IndustryAnimationTrigger iat)
 	return openttd_rust_industry_animate(ind->production_owner.get(), ind->index.base(), to_underlying(iat), Map::SizeX(), &GetIndustryRustServices(), &GetIndustryLifecycleRustServices());
 }
 
-/**
- * Trigger random triggers for an industry tile and reseed its random bits.
- * @param tile Industry tile to trigger.
- * @param trigger Trigger to trigger.
- * @param ind Industry of the tile.
- * @param[in,out] reseed_industry Collects bits to reseed for the industry.
- */
-
-/**
- * Reseeds the random bits of an industry.
- * @param ind Industry.
- * @param reseed Bits to reseed.
- */
 
 /**
  * Trigger a random trigger for a single industry tile.

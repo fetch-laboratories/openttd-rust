@@ -286,19 +286,19 @@ unsafe fn bmp_image_data(map: &mut [u8], bmp: &Bmp) {
 /// # Safety
 /// A live native input for one synchronous read and writable outputs.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_heightmap_dimensions(
+pub unsafe extern "C" fn openttd_rust_heightmap_dimensions_abi(
     input: *const Input,
     x: *mut u32,
     y: *mut u32,
-) -> bool {
+) -> u8 {
     let Some(image) = (unsafe { &*input }).read(false) else {
-        return false;
+        return u8::from(false);
     };
     unsafe {
         *x = image.width;
         *y = image.height;
     }
-    true
+    u8::from(true)
 }
 
 crate::abi::layouts! {

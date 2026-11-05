@@ -446,7 +446,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         r.size_x,
         |tile| unsafe {
             if (l.belongs)(tile, r.id) {
-                super::openttd_rust_industry_animate_tile(tile, 0, 0x100, s, l);
+                super::openttd_rust_industry_animate_tile_abi(tile, 0, 0x100, s, l);
             }
         },
     );

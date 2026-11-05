@@ -72,7 +72,6 @@ void SetEngineGRF(EngineID engine, const GRFFile *file)
 }
 
 
-
 /* virtual */ uint32_t VehicleScopeResolver::GetRandomBits() const
 {
 	return openttd_rust_vehicle_scope_random(&GetRustVehicleResolverServices(), &this->state, false);
@@ -94,15 +93,6 @@ void SetEngineGRF(EngineID engine, const GRFFile *file)
 	}
 }
 
-/**
- * Determines the livery of an engine.
- *
- * This always uses dual company colours independent of GUI settings. So it is desync-safe.
- *
- * @param engine Engine type
- * @param v Vehicle, nullptr in purchase list.
- * @return Livery to use
- */
 
 void VehicleScopeResolver::SetVehicle(const Vehicle *v) { openttd_rust_vehicle_scope_set(&this->state, RustVehicle(v)); }
 

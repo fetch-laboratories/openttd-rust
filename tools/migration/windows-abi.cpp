@@ -103,6 +103,7 @@ static void Layouts()
 #include "abi-layout-landscape.inc"
 #include "abi-layout-genworld.inc"
 #include "abi-layout-session.inc"
+#include "abi-layout-settings.inc"
 #include "abi-layout-script.inc"
 #include "abi-layout-vehicle.inc"
 #include "abi-layout-ground.inc"

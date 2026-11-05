@@ -53,10 +53,10 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
     let g = c.base.groups;
     let kind = VehicleType(crate::fleet::record(g, first).vehicle_type());
     if !unsafe {
-        crate::engine_capabilities::openttd_rust_articulated_is(
+        crate::engine_capabilities::openttd_rust_articulated_is_abi(
             r.capabilities,
             crate::fleet::record(g, first).engine_id(),
-        )
+        ) != 0
     } {
         return;
     }
@@ -121,8 +121,9 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
             }
             _ => unreachable!("articulated vehicles are ground vehicles"),
         };
-        let can_carry =
-            unsafe { crate::engine_capabilities::openttd_rust_engine_can_carry(r.capabilities, e) };
+        let can_carry = unsafe {
+            crate::engine_capabilities::openttd_rust_engine_can_carry_abi(r.capabilities, e) != 0
+        };
         let info = if kind == VehicleType::TRAIN {
             (s.train_info)(e, can_carry)
         } else {

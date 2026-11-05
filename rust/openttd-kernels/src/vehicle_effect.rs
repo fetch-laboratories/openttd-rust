@@ -195,12 +195,14 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
     }
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_visual_eligible(v: VehicleRef) -> bool {
+pub extern "C" fn openttd_rust_visual_eligible_abi(v: VehicleRef) -> u8 {
     let s = services();
     if s.vehicle.assertions {
         assert!((s.primary)(v));
     }
-    (s.smoke)() != 0 && v.status() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && v.speed() >= 2
+    u8::from(
+        (s.smoke)() != 0 && v.status() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && v.speed() >= 2,
+    )
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {

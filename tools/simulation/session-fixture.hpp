@@ -15,6 +15,12 @@ struct SessionFixture {
 	static inline SessionFixture *active = nullptr;
 	SessionFixture *previous = active;
 	OpenTTDFixtureMap map{6};
+	OpenTTDConstructionLimits limits{};
+	OpenTTDSettingAddresses settings{};
+	uint8_t climate = 0, extra_tree_placement = 0, max_competitors = 0, max_companies = 15;
+	uint16_t competitor_interval = 0;
+	uint16_t recalc_interval = 4, industry_cargo_scale = 100;
+	bool ambient = false;
 	OpenTTDSharedServices shared{};
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
@@ -35,6 +41,7 @@ struct SessionFixture {
 	OpenTTDIndustryServices industries{};
 	OpenTTDWorldServices world{};
 	OpenTTDCompanyServices companies{};
+	OpenTTDCompanyFinanceServices finance{};
 	OpenTTDScheduleServices schedule{};
 	OpenTTDSessionServices services{};
 	OpenTTDIndustryBuilder *builder = openttd_rust_industry_builder_new();
@@ -50,6 +57,16 @@ struct SessionFixture {
 	SessionFixture()
 	{
 		active = this;
+		settings.construction_limits = &limits;
+		settings.climate = &climate;
+		settings.max_companies = &max_companies;
+		settings.max_competitors = &max_competitors;
+		settings.competitor_interval = &competitor_interval;
+		settings.ambient = &ambient;
+		settings.industry_cargo_scale = &industry_cargo_scale;
+		settings.recalc_interval = &recalc_interval;
+		settings.extra_tree_placement = &extra_tree_placement;
+		shared.settings = &settings;
 		shared.map = &map.statics;
 		shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 5; };
 		tiles.shared = &shared;
@@ -74,13 +91,19 @@ struct SessionFixture {
 		tables.group = &group;
 		towns.environment.editor = []() noexcept { return true; };
 		stations.environment.editor = []() noexcept { return true; };
+		companies.shared = &shared;
+		companies.finance = &finance;
+		companies.competitor_fired = []() noexcept { return false; };
+		finance.company_finances = [](uint8_t) noexcept -> CompanyFinances * { return nullptr; };
 		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, UINT32_MAX}; };
+		industries.shared = &shared;
+		industries.next_tick = [](uint32_t) noexcept { return OpenTTDIndustryEntry{}; };
 		world.industry = &industries;
 		clock.shared = &shared;
 		clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
 		clock.using_wallclock_units = [](bool) noexcept { return true; };
 		services.clock = &clock;
-		services.desync_level = []() noexcept -> int32_t { return 0; };
+		world.desync_level = []() noexcept -> int32_t { return 0; };
 		services.check_caches = Nothing;
 		services.company_begin = FrameNothing;
 		services.company_restore = FrameNothing;
@@ -92,15 +115,14 @@ struct SessionFixture {
 		services.shared = &shared;
 		services.schedule = &schedule;
 		services.world = []() noexcept -> const OpenTTDWorldServices * { return &active->world; };
-		services.networking = []() noexcept { return true; };
-		services.network_server = []() noexcept { return false; };
-		services.modal = []() noexcept { return false; };
+		finance.networking = []() noexcept { return true; };
+		companies.network_server = []() noexcept { return false; };
+		world.modal = []() noexcept { return false; };
 		services.state_frame_begin = [](OpenTTDSessionFrameStorage *p) noexcept { return reinterpret_cast<OpenTTDSessionFrame *>(p); };
 		services.state_frame_end = [](OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept { return true; };
 		services.state_begin = FrameNothing;
 		services.tile_loop_begin = [](OpenTTDSessionFrame *) noexcept -> const OpenTTDGenerationLoop * { active->in_loop = true; return &active->loop; };
 		services.tile_loop_end = FrameNothing;
-		services.map_log_y = []() noexcept -> uint32_t { return 6; };
 		services.vehicle_tables = [](OpenTTDSessionFrame *, bool) noexcept { return active->tables; };
 		services.vehicle_cost = [](OpenTTDSessionFrame *) noexcept -> OpenTTDCommandCost * { return nullptr; };
 		services.vehicle_end = FrameNothing;
@@ -124,18 +146,9 @@ struct SessionFixture {
 		services.station = &stations;
 		services.links = &links;
 		services.visits = &visits;
-		services.tree_tick = []() noexcept { return OpenTTDTreeTickSettings{.tick_counter = 0, .size = 0, .climate = 0, .extra = 0}; };
-		services.industry_builder = []() noexcept { return active->builder; };
-		services.industry_tick = []() noexcept { return OpenTTDIndustryTickRecord{.counter = 0, .map = {}, .interval = 0, .ambient = 0, .editor = 1}; };
-		services.company_tick = []() noexcept {
-			OpenTTDCompanyTick tick{};
-			tick.editor = true;
-			return tick;
-		};
-		services.schedule_time = []() noexcept { return OpenTTDScheduleTime{0, 0, 4}; };
+		services.industry_builder = builder;
 		services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept -> void * { return nullptr; };
 		services.schedule_end = FrameNothing;
-		services.landscaping = []() noexcept { return OpenTTDCompanyLandscaping{}; };
 		services.window_tick = Nothing;
 		services.news = Nothing;
 		services.assert_local_company = Nothing;
@@ -157,6 +170,7 @@ struct SessionFixture {
 		if (mode != GM_EDITOR) { TimerGameEconomy::date_fract = 0; TimerGameCalendar::date_fract = 0; }
 		const auto saved_cursor = *openttd_rust_tile_loop_cursor();
 		if (saved_cursor == 0) *openttd_rust_tile_loop_cursor() = 1;
+		const auto saved_company_tick = *openttd_rust_company_tick();
 		const auto saved_mode = _game_mode;
 		const auto saved_pause = _pause_mode;
 		_game_mode = mode;
@@ -171,6 +185,8 @@ struct SessionFixture {
 		_game_mode = saved_mode;
 		_pause_mode = saved_pause;
 		if (loop.services == &tiles || saved_cursor == 0) *openttd_rust_tile_loop_cursor() = saved_cursor;
+		/* The live-mode company tick advances the process-wide OnTick_Companies cursor even with the empty company table. */
+		if (services.company == &companies) *openttd_rust_company_tick() = saved_company_tick;
 		return result;
 	}
 };

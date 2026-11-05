@@ -10,6 +10,7 @@
 #ifndef SETTINGS_TYPE_H
 #define SETTINGS_TYPE_H
 
+#include "abi-record-settings.h"
 #include "command_type.h"
 #include "timer/timer_game_calendar.h"
 #include "economy_type.h"
@@ -424,14 +425,7 @@ struct ConstructionSettings {
 	uint8_t  extra_tree_placement;             ///< (dis)allow building extra trees in-game
 	CommandPauseLevel command_pause_level; ///< level/amount of commands that can't be executed while paused
 
-	uint32_t terraform_per_64k_frames;         ///< how many tile heights may, over a long period, be terraformed per 65536 frames?
-	uint16_t terraform_frame_burst;            ///< how many tile heights may, over a short period, be terraformed?
-	uint32_t clear_per_64k_frames;             ///< how many tiles may, over a long period, be cleared per 65536 frames?
-	uint16_t clear_frame_burst;                ///< how many tiles may, over a short period, be cleared?
-	uint32_t tree_per_64k_frames;              ///< how many trees may, over a long period, be planted per 65536 frames?
-	uint16_t tree_frame_burst;                 ///< how many trees may, over a short period, be planted?
-	uint32_t build_object_per_64k_frames;      ///< how many tiles may, over a long period, be purchased or have objects built on them per 65536 frames?
-	uint16_t build_object_frame_burst;         ///< how many tiles may, over a short period, be purchased or have objects built on them?
+	OpenTTDConstructionLimits limits;
 };
 
 /** Settings related to the AI. */

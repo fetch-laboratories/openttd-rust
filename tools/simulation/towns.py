@@ -239,7 +239,9 @@ def tunnel_reference_gap(out, archive=None):
     (out / "town-tunnel-original.hpp").write_text("\n\n".join(bodies.values()) + "\n")
     build = ROOT / "build-rust"
     configuration = migration.rust_configuration(build)
-    archive = archive or migration.rust_archive(build)
+    archive = archive or migration.rust_archive(
+        build, target_dir=build / "cargo-native-test-support"
+    )
     compiler = probe.compiler(build)
     fixture = Path(__file__).with_name("town-reference-gaps.cpp")
     binary = out / "town-reference-gaps"

@@ -31,7 +31,7 @@ static bool ThreadedStart(std::span<std::string_view>)
 #else
 		const auto &f = *c;
 #endif
-		const auto &s = _settings_game.construction;
+		const auto &s = _settings_game.construction.limits;
 		credits &= f.terraform_limit == uint32_t(s.terraform_frame_burst) << 16;
 		credits &= f.clear_limit == uint32_t(s.clear_frame_burst) << 16;
 		credits &= f.tree_limit == uint32_t(s.tree_frame_burst) << 16;

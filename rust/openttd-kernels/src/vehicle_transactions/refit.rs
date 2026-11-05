@@ -288,8 +288,9 @@ unsafe fn refit_chain(
                 .0
                 .as_ptr(),
         );
-        if !unsafe { crate::engine_capabilities::openttd_rust_engine_can_carry(s.capabilities, e) }
-        {
+        if !unsafe {
+            crate::engine_capabilities::openttd_rust_engine_can_carry_abi(s.capabilities, e) != 0
+        } {
             v = if only {
                 ptr::null_mut()
             } else {

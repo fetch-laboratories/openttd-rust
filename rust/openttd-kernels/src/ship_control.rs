@@ -665,7 +665,7 @@ impl Game<'_> {
         if self.stay_depot(id, v) {
             return;
         }
-        if crate::vehicle_effect::openttd_rust_visual_eligible(v) {
+        if crate::vehicle_effect::openttd_rust_visual_eligible_abi(v) != 0 {
             let maximum = current_max_speed(
                 (u32::from(self.vehicle().max_speed())) as u16,
                 (self.leaves.order_max_speed)(id) as u16,
@@ -906,12 +906,12 @@ macro_rules! entry_game {
     }};
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_tick(
+pub unsafe extern "C" fn openttd_rust_ship_tick_abi(
     id: u32,
     vehicle: VehicleRef,
     leaves: *const Leaves,
     services: *const Services,
-) -> bool {
+) -> u8 {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(vehicle));
     let observed_running = u32::from(game.vehicle().running());
     let observed_status = u32::from(game.vehicle().status());
@@ -920,7 +920,7 @@ pub unsafe extern "C" fn openttd_rust_ship_tick(
             .write_running(observed_running.wrapping_add(1) as u8);
     }
     game.controller(id, vehicle);
-    true
+    u8::from(true)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_calendar_day(
@@ -1017,14 +1017,14 @@ pub unsafe extern "C" fn openttd_rust_ship_find_depot(
         })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_is_destination(
+pub unsafe extern "C" fn openttd_rust_ship_is_destination_abi(
     tile: u32,
     station: u32,
     leaves: *const Leaves,
     services: *const Services,
-) -> bool {
+) -> u8 {
     let game = entry_game!(leaves, services, std::ptr::null_mut(), None);
-    game.destination_station(tile, station)
+    u8::from(game.destination_station(tile, station))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_station_destination(

@@ -80,7 +80,7 @@ static void AircraftDirectBoundary()
 	p.vehicle = {&p.record, openttd_rust_aircraft_state_new(), 17};
 	p.record.aircraft = p.shadow.aircraft = p.vehicle.state;
 	resolver.id = [](OpenTTDVehicle *) noexcept -> uint32_t { return 18; };
-	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
+	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.orders == 1 && p.vehicle.state->pos == 19 && p.vehicle.state->cached_max_range == 41 && p.vehicle.state->cached_max_range_sqr == 1681);
 	CHECK(p.record.cached_max_speed == 2560 && p.record.cached_cargo_age_period == 71);
 	/* A ProcessOrders callback replaces the order with OT_DUMMY. HandleLoading
@@ -96,7 +96,7 @@ static void AircraftDirectBoundary()
 			aircraft_probe.order_owner->vehicle->current.type = 3;
 		}
 	};
-	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, true));
+	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, true));
 	CHECK(p.order_owner->consist.real_index == 1 && p.order_owner->consist.implicit_index == 1);
 	leaves.station = [](uint16_t) noexcept -> const OpenTTDStation * { CHECK(aircraft_probe.live); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
 	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{7}; };
@@ -118,7 +118,7 @@ static void AircraftDirectBoundary()
 	p.record.vehstatus = 128;
 	p.vehicle.state->targetairport = 7;
 	p.vehicle.state->crashed_counter = 9999;
-	CHECK(!openttd_rust_aircraft_event(&leaves, p.vehicle, false));
+	CHECK(!openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(!p.live && p.deleted == 1);
 	/* A disaster has its own flags and no Aircraft state, even with subtype zero. */
 	static OpenTTDFixtureMap disaster_map{6};
@@ -211,7 +211,7 @@ static void AircraftPhaseBoundary()
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
 	v.map_log_x = []() noexcept { return uint32_t{6}; };
-	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
+	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.record.x_pos == 1 && p.record.y_pos == 0 && p.record.progress == 1);
 	p.record.subtype = 2; p.record.z_pos = 1;
 	openttd_rust_aircraft_position(&leaves, p.vehicle, 1, 0, 1);

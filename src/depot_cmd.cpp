@@ -60,11 +60,6 @@ static const OpenTTDDepotServices &GetRustDepotServices() noexcept
 	return services;
 }
 
-/**
- * Check whether the given name is globally unique amongst depots.
- * @param name The name to check.
- * @return True if there is no depot with the given name.
- */
 
 /**
  * Rename a depot.

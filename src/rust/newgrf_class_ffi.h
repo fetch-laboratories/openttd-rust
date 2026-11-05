@@ -24,7 +24,8 @@ template <typename T> struct OpenTTDGRFClassServices {
 	bool insert_empty;
 };
 extern "C" uint16_t openttd_rust_station_layout_key(uint8_t, uint8_t);
-extern "C" bool openttd_rust_is_waypoint_class(uint32_t);
+extern "C" uint8_t openttd_rust_is_waypoint_class_abi(uint32_t);
+extern "C++" inline bool openttd_rust_is_waypoint_class(uint32_t a0) { return openttd_rust_is_waypoint_class_abi(a0) != 0; }
 using OpenTTDStationClassServices = OpenTTDGRFClassServices<StationSpec>;
 using OpenTTDRoadStopClassServices = OpenTTDGRFClassServices<RoadStopSpec>;
 using OpenTTDAirportClassServices = OpenTTDGRFClassServices<AirportSpec>;

@@ -312,9 +312,12 @@ def finish(runs, result):
     )
     info = runs["reference"]["instructions"]
     info["cache"].parent.mkdir(parents=True, exist_ok=True)
-    temporary = runs["reference"]["dir"] / "reference-Ir.json"
-    temporary.write_text(json.dumps(measurements["reference"]["Ir"]))
-    temporary.replace(info["cache"])
+    # Run folders and the cache may sit on different disks; rename within one.
+    with tempfile.NamedTemporaryFile(
+        "w", dir=info["cache"].parent, suffix=".tmp", delete=False
+    ) as temporary:
+        temporary.write(json.dumps(measurements["reference"]["Ir"]))
+    Path(temporary.name).replace(info["cache"])
     ratio = measurements["candidate"]["Ir"] / measurements["reference"]["Ir"]
     return dict(measurements, Ir_ratio=ratio)
 

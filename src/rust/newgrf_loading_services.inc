@@ -1,6 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file newgrf_loading_services.inc Typed native loading services. */
 #include "newgrf_loading_ffi.h"
+#include "clock_ffi.h"
+#include "company_adapter.h"
 #include "newgrf_act2_ffi.h"
 #include "industry_definition_ffi.h"
 #include "airport_definitions_ffi.h"
@@ -27,6 +29,8 @@ static bool ParseGrfAction(const uint8_t *data, size_t size) noexcept
 const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 {
 	static const OpenTTDGrfLoadingServices services{
+		.clocks = &GetRustClockServices(),
+		.finance = &GetRustCompanyFinanceServices(),
 		.global = &GetRustGlobalVariableServices(),
 		.cargo = &GetRustCargoRegistryServices(),
 		.engine = &GetRustEngineLoadingServices(),
@@ -36,7 +40,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.types = &GetRustTypeRegistryServices(),
 		.action2 = &GetRustAction2Services(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
-		.parameter = RustGRFParameter,
 		.config_id = [](const GRFConfig *c) noexcept { return c->ident.grfid; },
 		.config_status = [](const GRFConfig *c) noexcept { return c->status; },
 		.config_flags = [](const GRFConfig *c) noexcept { return c->flags.base(); },
@@ -48,12 +51,10 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.param_count = [](const GRFFile *f) noexcept { return f->param.size(); },
 		.set_parameter = [](GRFFile *f, uint8_t target, uint32_t value) noexcept { if (target >= f->param.size()) f->param.resize(target + 1); f->param[target] = value; },
 		.find_config = [](uint32_t id, uint32_t mask) noexcept { return GetGRFConfig(id, mask); },
-		.find_file = RustGRFFileByID,
 		.file_for_config = [](const GRFConfig *c) noexcept { auto *f = GetFileByFilename(c->filename); if (f == nullptr) UserError("File '{}' lost in cache.\n", c->filename); return f; },
 		.error = [](GRFConfig *c, uint32_t line, StringID message, bool current) noexcept { auto it = std::ranges::find(c->errors, line, &GRFError::nfo_line); if (it == c->errors.end()) it = c->errors.emplace(it, STR_NEWGRF_ERROR_MSG_FATAL, line, message); if (current) it->param_value[0] = line; return &*it; },
 		.error_name = [](GRFError *e, const GRFConfig *c) noexcept { e->data = c->GetName(); },
 		.error_property = RustGRFErrorProperty,
-		.networking = RustNetworking,
 		.read_byte = [](SpriteFile *f) noexcept { return f->ReadByte(); },
 		.read_word = [](SpriteFile *f) noexcept { return f->ReadWord(); },
 		.read_dword = [](SpriteFile *f) noexcept { return f->ReadDword(); },
@@ -91,27 +92,14 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.load_font_glyph = ParseGrfAction<&GrfActionHandler<0x12>::Activation>,
 		.translate_grf_strings = ParseGrfAction<&GrfActionHandler<0x13>::Activation>,
 		.static_grf_info = ParseGrfAction<&GrfActionHandler<0x14>::FileScan>,
-		.never_expire_airports = RustNeverExpireAirports,
-		.max_bridge_length = RustMaxBridgeLength,
-		.never_expire_vehicles = RustNeverExpireVehicles,
-		.station_noise = RustStationNoiseEnabled,
 		.gradual_loading = RustGradualLoading,
 		.signal_side = RustTrainSignalSide,
-		.disable_elrails = RustDisableElrails,
-		.build_on_slopes = RustBuildOnSlopes,
 		.freight_trains = RustFreightTrains,
 		.wagon_speed_limits = RustWagonSpeedLimits,
-		.allow_town_roads = RustAllowTownRoads,
-		.generating_world = OpenTTDGeneratingWorld,
 		.improved_load = RustImprovedLoad,
-		.dynamic_engines = RustDynamicEngines,
 		.inflation = RustInflation,
 		.starting_year = RustStartingYear,
 		.plane_speed = RustPlaneSpeed,
-		.height_limit = RustMapHeightLimit,
-		.generation_seed = RustGenerationSeed,
-		.log_x = OpenTTDMapLogX,
-		.log_y = OpenTTDMapLogY,
 		.read_bounds = STR_NEWGRF_ERROR_READ_BOUNDS,
 		.unexpected_sprite = STR_NEWGRF_ERROR_UNEXPECTED_SPRITE,
 		.multiple_action8 = STR_NEWGRF_ERROR_MULTIPLE_ACTION_8,
@@ -126,7 +114,6 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.generic = &GetRustGenericServices(),
 		.clock = []() noexcept { return OpenTTDGrfClock{TimerGameTick::counter, _display_opt}; },
 		.set_clock = [](const OpenTTDGrfClock *c) noexcept { TimerGameTick::counter = c->ticks; _display_opt = c->display; },
-		.using_wallclock_units = RustUsingWallclockUnits,
 		.config_at = [](size_t i) noexcept { return i < _grfconfig.size() ? _grfconfig[i].get() : nullptr; },
 		.exists = [](const GRFConfig *c, Subdirectory subdir) noexcept { return FioCheckFileExists(c->filename, subdir); },
 		.init_file = [](const GRFConfig *c) noexcept { InitNewGRFFile(*c); },

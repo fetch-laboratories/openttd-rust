@@ -74,9 +74,12 @@ struct OpenTTDRoadLeaves {
 };
 const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept;
 extern "C" {
-bool OPENTTD_RUST_CALL openttd_rust_road_tick(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadEntry *, const OpenTTDRoadLeaves *, OpenTTDRoadCommandSlot *);
-bool OPENTTD_RUST_CALL openttd_rust_road_individual(OpenTTDVehicle *, OpenTTDRoadState *, OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadEntry *, const OpenTTDRoadLeaves *, OpenTTDRoadCommandSlot *);
-bool OPENTTD_RUST_CALL openttd_rust_road_leave_depot(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadEntry *, const OpenTTDRoadLeaves *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_road_tick_abi(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadEntry *, const OpenTTDRoadLeaves *, OpenTTDRoadCommandSlot *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_road_tick(OpenTTDVehicle *a0, OpenTTDRoadState *a1, const OpenTTDRoadEntry *a2, const OpenTTDRoadLeaves *a3, OpenTTDRoadCommandSlot *a4) { return openttd_rust_road_tick_abi(a0, a1, a2, a3, a4) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_road_individual_abi(OpenTTDVehicle *, OpenTTDRoadState *, OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadEntry *, const OpenTTDRoadLeaves *, OpenTTDRoadCommandSlot *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_road_individual(OpenTTDVehicle *a0, OpenTTDRoadState *a1, OpenTTDVehicle *a2, OpenTTDRoadState *a3, const OpenTTDRoadEntry *a4, const OpenTTDRoadLeaves *a5, OpenTTDRoadCommandSlot *a6) { return openttd_rust_road_individual_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_road_leave_depot_abi(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadEntry *, const OpenTTDRoadLeaves *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_road_leave_depot(OpenTTDVehicle *a0, OpenTTDRoadState *a1, bool a2, const OpenTTDRoadEntry *a3, const OpenTTDRoadLeaves *a4) { return openttd_rust_road_leave_depot_abi(a0, a1, a2, a3, a4) != 0; }
 uint32_t OPENTTD_RUST_CALL openttd_rust_road_crash(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
 void OPENTTD_RUST_CALL openttd_rust_road_update_cache(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
 void OPENTTD_RUST_CALL openttd_rust_road_calendar_day(OpenTTDVehicle *, bool, const OpenTTDRoadLeaves *);
@@ -84,7 +87,8 @@ void OPENTTD_RUST_CALL openttd_rust_road_economy_day(OpenTTDVehicle *, OpenTTDRo
 int64_t OPENTTD_RUST_CALL openttd_rust_road_running_cost(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
 int32_t OPENTTD_RUST_CALL openttd_rust_road_max_speed(OpenTTDVehicle *, OpenTTDRoadState *, uint8_t, const OpenTTDRoadLeaves *);
 void OPENTTD_RUST_CALL openttd_rust_road_set_dest(OpenTTDVehicle *, OpenTTDRoadState *, uint32_t);
-bool OPENTTD_RUST_CALL openttd_rust_road_turn(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_road_turn_abi(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_road_turn(OpenTTDVehicle *a0, OpenTTDRoadState *a1, bool a2, const OpenTTDRoadLeaves *a3) { return openttd_rust_road_turn_abi(a0, a1, a2, a3) != 0; }
 uint8_t OPENTTD_RUST_CALL openttd_rust_road_trackdir(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
 /* Each ordinary or indexed-load shell owns one zero-created state, destroyed once after
  * PreDestructor, also during pool cleanup. Scalars 0..6: state:u8, frame:u8, blocked:u16,

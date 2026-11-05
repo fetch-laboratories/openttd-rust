@@ -31,7 +31,8 @@ const OpenTTDVisualServices &GetRustVisualServices();
 extern "C" {
 const OpenTTDVisualServices *openttd_rust_visual_bind(const OpenTTDVisualServices *);
 void openttd_rust_visual_update(OpenTTDVehicle *, bool);
-bool openttd_rust_visual_eligible(OpenTTDVehicle *);
+uint8_t openttd_rust_visual_eligible_abi(OpenTTDVehicle *);
+extern "C++" inline bool openttd_rust_visual_eligible(OpenTTDVehicle *a0) { return openttd_rust_visual_eligible_abi(a0) != 0; }
 void openttd_rust_visual_show(OpenTTDVehicle *, uint32_t);
 }
 #endif

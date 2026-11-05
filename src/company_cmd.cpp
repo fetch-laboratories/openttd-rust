@@ -80,7 +80,7 @@ Company::Company(StringID name_1, bool is_ai)
 {
 	this->name_1 = name_1;
 	this->is_ai = is_ai;
-	openttd_rust_company_initialize(&this->Finances(), static_cast<uint32_t>(_settings_game.construction.terraform_frame_burst), static_cast<uint32_t>(_settings_game.construction.clear_frame_burst), static_cast<uint32_t>(_settings_game.construction.tree_frame_burst), static_cast<uint32_t>(_settings_game.construction.build_object_frame_burst));
+	openttd_rust_company_initialize(&this->Finances(), static_cast<uint32_t>(_settings_game.construction.limits.terraform_frame_burst), static_cast<uint32_t>(_settings_game.construction.limits.clear_frame_burst), static_cast<uint32_t>(_settings_game.construction.limits.tree_frame_burst), static_cast<uint32_t>(_settings_game.construction.limits.build_object_frame_burst));
 
 	InvalidateWindowData(WC_PERFORMANCE_DETAIL, 0, CompanyID::Invalid());
 }
@@ -234,11 +234,6 @@ bool CheckCompanyHasMoney(CommandCost &cost)
 	return openttd_rust_command_check_money(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost));
 }
 
-/**
- * Deduct costs of a command from the money of a company.
- * @param c Company to pay the bill.
- * @param cost Money to pay.
- */
 
 /**
  * Subtract money from the #_current_company, if the company is valid.
@@ -259,19 +254,6 @@ void SubtractMoneyFromCompanyFract(CompanyID company, const CommandCost &cst)
 	openttd_rust_company_subtract_fraction(&GetRustCompanyFinanceServices(), &Company::Get(company)->Finances(), company.base(), cst.GetCost().base(), cst.GetExpensesType());
 }
 
-
-OpenTTDCompanyLandscaping RustLandscapingRates() noexcept
-{
-	const auto &cs = _settings_game.construction;
-	return {
-		.terraform_per_64k = cs.terraform_per_64k_frames, .clear_per_64k = cs.clear_per_64k_frames,
-		.tree_per_64k = cs.tree_per_64k_frames, .object_per_64k = cs.build_object_per_64k_frames,
-		.terraform_burst = cs.terraform_frame_burst, .clear_burst = cs.clear_frame_burst,
-		.tree_burst = cs.tree_frame_burst, .object_burst = cs.build_object_frame_burst,
-	};
-}
-
-/** Update the landscaping limits per company. */
 
 /**
  * Set the right DParams for STR_ERROR_OWNED_BY.
@@ -323,21 +305,6 @@ CommandCost CheckTileOwnership(TileIndex tile)
 	return result;
 }
 
-/**
- * Generate the name of a company from the last build coordinate.
- * @param c Company to give a name.
- */
-
-
-/**
- * Generate a company colour.
- * @return Generated company colour.
- */
-
-/**
- * Generate a random president name of a company.
- * @param c Company that needs a new president name.
- */
 
 /**
  * Reset the livery schemes to the company's primary colour.
@@ -399,28 +366,6 @@ bool CheckTakeoverVehicleLimit(CompanyID cbig, CompanyID csmall)
 	return openttd_rust_company_takeover_allowed(&GetRustCompanyServices(), cbig.base(), csmall.base());
 }
 
-/**
- * Handle the bankruptcy take over of a company.
- * Companies going bankrupt will ask the other companies in order of their
- * performance rating, so better performing companies get the 'do you want to
- * merge with Y' question earlier. The question will then stay till either the
- * company has gone bankrupt or got merged with a company.
- *
- * @param c the company that is going bankrupt.
- */
-
-OpenTTDCompanyTick RustCompanyTick() noexcept
-{
-	Company *c = Company::GetIfValid(_cur_company_tick_index);
-	return {
-		.finances = c == nullptr ? nullptr : &c->Finances(), .num_companies = Company::GetNumItems(),
-		.index = 0, .timeout = 0, .interval = _settings_game.difficulty.competitors_interval,
-		.editor = _game_mode == GM_EDITOR, .named = c != nullptr && c->name_1 != 0,
-		.competitor_due = _new_competitor_timeout.HasFired() && _game_mode != GM_MENU && AI::CanStartNew(),
-		.networking = _networking, .max_companies = _settings_client.network.max_companies,
-		.max_competitors = _settings_game.difficulty.max_no_competitors, .num_ais = 0, .stage = 0,
-	};
-}
 
 /** Called every tick for updating some company info. */
 
@@ -548,11 +493,6 @@ CommandCost CmdSetCompanyColour(DoCommandFlags flags, LiveryScheme scheme, bool 
 	return openttd_rust_company_colour(&GetRustCompanyIdentityServices(), scheme, primary, colour, flags.Test(DoCommandFlag::Execute)) ? CommandCost() : CMD_ERROR;
 }
 
-/**
- * Is the given name in use as name of a company?
- * @param name Name to search.
- * @return \c true if the name us unique (that is, not in use), else \c false.
- */
 
 /**
  * Change the name of the company.
@@ -566,11 +506,6 @@ CommandCost CmdRenameCompany(DoCommandFlags flags, const std::string &text)
 	return result == 0 ? CommandCost() : result == 2 ? CommandCost(STR_ERROR_NAME_MUST_BE_UNIQUE) : CMD_ERROR;
 }
 
-/**
- * Is the given name in use as president name of a company?
- * @param name Name to search.
- * @return \c true if the name us unique (that is, not in use), else \c false.
- */
 
 /**
  * Change the name of the president.

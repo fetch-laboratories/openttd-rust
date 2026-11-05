@@ -65,11 +65,11 @@ pub(crate) fn has_bridge_flat_ramp(s: &Services, slope: u8, axis: u8) -> bool {
 /// # Safety
 /// The native facade supplies its immutable process-lifetime shared table.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_bridge_flat_ramp(
+pub unsafe extern "C" fn openttd_rust_bridge_flat_ramp_abi(
     s: *const Services,
     slope: u8,
     axis: Axis,
-) -> bool {
+) -> u8 {
     // SAFETY: canonical immutable table from the native facade.
-    has_bridge_flat_ramp(unsafe { &*s }, slope, axis.0)
+    u8::from(has_bridge_flat_ramp(unsafe { &*s }, slope, axis.0))
 }

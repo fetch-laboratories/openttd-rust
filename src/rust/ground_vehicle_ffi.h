@@ -58,7 +58,8 @@ extern "C" {
 void openttd_rust_ground_power_changed(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
 void openttd_rust_ground_cargo_changed(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
 int32_t openttd_rust_ground_acceleration(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
-bool openttd_rust_ground_chain_in_depot(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
+uint8_t openttd_rust_ground_chain_in_depot_abi(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);
+extern "C++" inline bool openttd_rust_ground_chain_in_depot(const OpenTTDGroundPhysicsServices *a0, const OpenTTDVehicle *a1) { return openttd_rust_ground_chain_in_depot_abi(a0, a1) != 0; }
 uint32_t openttd_rust_ground_crash(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *, bool);
 uint16_t openttd_rust_ground_weight(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *, bool);
 VehicleAccelerationModel openttd_rust_ground_acceleration_type(const OpenTTDGroundPhysicsServices *, const OpenTTDVehicle *);

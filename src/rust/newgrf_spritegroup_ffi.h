@@ -72,7 +72,6 @@ struct OpenTTDSpriteGroupServices {
 	OpenTTDResolverResult (*native)(const SpriteGroup *, ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(native);
 	void (*node)(const SpriteGroup *, OpenTTDGroupNode *) noexcept OPENTTD_SERVICE_DEFAULT(node);
 	const OpenTTDObjectServices *object;
-	uint32_t (*parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(parameter);
 	void (*profile_end)(NewGRFProfiler *, const OpenTTDResolverResult *) noexcept OPENTTD_SERVICE_DEFAULT(profile_end);
 	NewGRFProfiler *(*profile_enter)(ResolverObject *, bool) noexcept OPENTTD_SERVICE_DEFAULT(profile_enter);
 	uint32_t (*random_bits)(const ScopeResolver *) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);

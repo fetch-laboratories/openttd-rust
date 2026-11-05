@@ -1,4 +1,4 @@
-"""Pinned community scripts and a vanilla long-game save for #507."""
+"""Pinned community inputs and a vanilla long-game save for #507."""
 
 import argparse
 import gzip
@@ -12,7 +12,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, cast
 
 from . import core
 
@@ -34,34 +34,22 @@ class Package:
     metadata: str
     publisher: str
     dependencies: list[str]
+    archive_filename: str = ""
 
     @property
     def filename(self) -> str:
-        return f"{self.uid}-{self.name}-{self.version}.tar.gz"
+        return self.archive_filename or f"{self.uid}-{self.name}-{self.version}.tar.gz"
 
     @property
     def url(self) -> str:
         return f"https://bananas-cdn.openttd.org/{self.kind}/{self.uid}/{self.md5}/{self.filename}"
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
+class Scenario(core.Scenario):
     community_ai: str
-    ticks: int
-    console: list[str]
-    save: NotRequired[str]
-    seed: NotRequired[int]
-    map_log2: NotRequired[int]
-    land_generator: NotRequired[int]
-    settings: NotRequired[dict[str, dict[str, int | str]]]
 
 
-class Run(TypedDict):
-    dir: Path
-    exit: int | str
-    snapshots: list[Path]
-    log: list[str]
+Run = core.Run
 
 
 @dataclass
@@ -81,8 +69,15 @@ def packages() -> list[Package]:
     ]
 
 
+def ai_packages_sha256() -> str:
+    """The vanilla save pins AI inputs independently of the NewGRF corpus."""
+    rows = json.loads((INPUTS / "packages.json").read_text())
+    scripts = [row for row in rows if row["kind"] != "newgrf"]
+    return hashlib.sha256((json.dumps(scripts, indent=2) + "\n").encode()).hexdigest()
+
+
 def fetch() -> dict[str, Path]:
-    """Keep complete source archives; reject corrupted cache entries before use."""
+    """Keep complete archives; reject corrupted cache entries before use."""
     cache = core.ROOT / ".local/community-ai"
     cache.mkdir(parents=True, exist_ok=True)
     paths = {}
@@ -169,6 +164,8 @@ def install(scenario: Mapping[str, Any], run_dir: Path) -> None:
         return
     paths = fetch()
     for package in packages():
+        if package.kind == "newgrf":
+            continue
         destination = (
             run_dir / "ai" / ("library" if package.kind == "ai-library" else "")
         )
@@ -199,10 +196,7 @@ def prepare(
     provenance = json.loads(FIXTURE.with_suffix(".json").read_text())
     if record["source_sha256"] != provenance["sha256"]:
         raise RuntimeError("community save differs from its provenance")
-    if (
-        hashlib.sha256((INPUTS / "packages.json").read_bytes()).hexdigest()
-        != provenance["packages_sha256"]
-    ):
+    if ai_packages_sha256() != provenance["packages_sha256"]:
         raise RuntimeError("community packages differ from the save's provenance")
     result["community_input"] = record
     return dict(scenario, save=str(path))
@@ -221,7 +215,7 @@ def activity(run: Run, source: Path | None = None) -> Activity:
                 raise RuntimeError(f"community AI {cid} missing from {path.name}")
             reader = core.Reader(dict(chunk["elements"])[cid])
             # SaveReal_AIPL writes slot configuration before the running AI.
-            core.read_object(reader, chunk["header"], "", {})
+            core.read_object(reader, cast(list[core.Field], chunk["header"]), "", {})
             if reader.take(reader.gamma()).decode() != SCRIPTS[cid]:
                 raise RuntimeError(f"community AI {cid} was replaced")
             observed.loans.setdefault(cid, []).append(company["current_loan"])
@@ -360,9 +354,7 @@ def generate_fixture(destination: Path, timeout: int) -> None:
         license="GPL-2.0-only",
         scenario=scenario,
         sha256=hashlib.sha256(packed).hexdigest(),
-        packages_sha256=hashlib.sha256(
-            (INPUTS / "packages.json").read_bytes()
-        ).hexdigest(),
+        packages_sha256=ai_packages_sha256(),
         command="python3 -m tools.simulation.community_ai generate",
         end_moment=core.save_moment(run["snapshots"][-1]),
     )
@@ -378,7 +370,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=7200)
     args = parser.parse_args()
     if args.action == "fetch":
-        print(f"Validated {len(fetch())} community source packages")
+        print(f"Validated {len(fetch())} community input packages")
     else:
         generate_fixture(FIXTURE, args.timeout)
 

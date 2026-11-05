@@ -8,6 +8,7 @@
 /** @file services_ffi.h Synchronous shared game services for Rust owners. */
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
+#include "abi-record-settings.h"
 #include "../tile_storage_type.h"
 #include "service_defaults.hpp"
 #include <cstdint>
@@ -44,6 +45,7 @@ struct OpenTTDMapStatics {
 	const std::unique_ptr<TileExtendedStorage[]> *extended;
 	const uint32_t *size;
 	const uint32_t *log_x;
+	const uint32_t *log_y;
 	bool assertions;
 };
 extern const OpenTTDMapStatics _rust_map_statics;
@@ -124,6 +126,7 @@ struct OpenTTDSharedServices {
 	bool (*is_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_sea);
 	bool (*is_water_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_water_tile);
 	const OpenTTDMapStatics *map = nullptr;
+	const OpenTTDSettingAddresses *settings = nullptr;
 	uint32_t (*map_max_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_x);
 	uint32_t (*map_max_y)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_y);
 	void (*mark_bridge_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_bridge_dirty);
@@ -214,6 +217,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
 	GRFFile *(*grf_file_at_or_null)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_at_or_null);
 	uint32_t (*grf_file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_id);
+	uint32_t (*grf_parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_parameter);
 	const OpenTTDNewGRFSpecs *newgrf_specs = nullptr;
 	const GRFFile *(*resolver_grf_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file);
 	uint32_t (*resolver_grf_file_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file_id);

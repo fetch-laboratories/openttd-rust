@@ -117,13 +117,6 @@ IndustryBuildData _industry_builder; ///< In-game manager of industries.
 
 
 /**
- * This function initialize the spec arrays of both
- * industry and industry tiles.
- * It adjusts the enabling of the industry too, based on climate availability.
- * This will allow for clearer testings
- */
-
-/**
  * Retrieve the type for this industry.  Although it is accessed by a tile,
  * it will return the general type of industry, and not the sprite index
  * as would do GetIndustryGfx.
@@ -188,7 +181,6 @@ void Industry::PostDestructor(size_t)
  * Return a random valid industry.
  * @return random industry, nullptr if there are no industries
  */
-
 
 
 static void IndustryDrawSugarMine(const TileInfo *ti)
@@ -333,7 +325,6 @@ static void DrawTile_Industry(TileInfo *ti)
 }
 
 
-
 static void AddAcceptedCargo_Industry(TileIndex tile, CargoArray &acceptance, CargoTypes &always_accepted)
 {
 	openttd_rust_industry_tile_acceptance(tile.base(), acceptance.data(), &always_accepted, &GetIndustryTileServices());
@@ -369,8 +360,6 @@ static bool TransportIndustryGoods(TileIndex tile)
 }
 
 
-
-
 OpenTTDIndustryLoopServices GetRustIndustryLoopServices() noexcept
 {
 	return {
@@ -390,7 +379,6 @@ static bool ClickTile_Industry(TileIndex tile)
 }
 
 
-
 /**
  * Check whether the tile is a forest.
  * @param tile the tile to investigate.
@@ -407,23 +395,13 @@ void PlantRandomFarmField(const Industry *i)
 	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)}, &GetIndustryRustServices());
 }
 
-/**
- * Perform a circular search around the Lumber Mill in order to find trees to cut
- * @param i industry
- */
-
-OpenTTDIndustryTickRecord RustIndustryTickRecord() noexcept
-{
-	/* Values the original reads inline; none changes during the tick. */
-	return OpenTTDIndustryTickRecord{TimerGameTick::counter, {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)},
-		ScaleByInverseCargoScale(Ticks::INDUSTRY_PRODUCE_TICKS, false), _settings_client.sound.ambient, _game_mode == GM_EDITOR};
-}
-
 
 /**
  * Check the conditions of #CHECK_NOTHING (Always succeeds).
  * @return Succeeded or failed command.
  */
+
+static_assert(Ticks::INDUSTRY_PRODUCE_TICKS == 256);
 
 bool IsSlopeRefused(Slope current, Slope refused)
 {
@@ -450,40 +428,6 @@ static void RustIndustryOpeningNews(const Industry *ind) noexcept
 	AddIndustryNewsItem(std::move(headline), NewsType::IndustryOpen, ind->index);
 }
 
-/**
- * Populate an industry's list of nearby stations, and if it accepts any cargo, also
- * add the industry to each station's nearby industry list.
- * @param ind Industry
- */
-
-/**
- * Put an industry on the map.
- * @param i                   Just allocated poolitem, mostly empty.
- * @param tile                North tile of the industry.
- * @param type                Type of the industry.
- * @param layout              Industrylayout to build.
- * @param layout_index        Number of the industry layout.
- * @param t                   Nearest town.
- * @param founder             Founder of the industry; OWNER_NONE in case of random construction.
- * @param initial_random_bits Random bits for the industry.
- */
-
-/**
- * Helper function for Build/Fund an industry
- * @param tile tile where industry is built
- * @param type of industry to build
- * @param flags of operations to conduct
- * @param indspec pointer to industry specifications
- * @param layout_index the index of the itsepc to build/fund
- * @param random_var8f random seed (possibly) used by industries
- * @param random_initial_bits The random bits the industry is going to have after construction.
- * @param founder Founder of the industry
- * @param creation_type The circumstances the industry is created under.
- * @param[out] ip Pointer to store newly created industry.
- * @return Succeeded or failed command.
- *
- * @post \c *ip contains the newly created industry if all checks are successful and the \a flags request actual creation, else it contains \c nullptr afterwards.
- */
 
 /**
  * Build/Fund an industry
@@ -573,43 +517,6 @@ static Industry *CreateNewIndustry(TileIndex tile, IndustryType type, IndustryAv
 	assert(industry != nullptr || result.Failed());
 	return industry;
 }
-
-/**
- * Compute the appearance probability for an industry during map creation.
- * @param it Industry type to compute.
- * @param water Whether to get probability of land-based, water-based, (or both, if std::nullopt), industry types.
- * @param[out] force_at_least_one Returns whether at least one instance should be forced on map creation.
- * @return Relative probability for the industry to appear.
- */
-
-/**
- * Compute the probability for constructing a new industry during game play.
- * @param it Industry type to compute.
- * @param[out] min_number Minimal number of industries that should exist at the map.
- * @return Relative probability for the industry to appear.
- */
-
-
-/**
- * Try to place the industry in the game.
- * Since there is no feedback why placement fails, there is no other option
- * than to try a few times before concluding it does not work.
- * @param type     Industry type of the desired industry.
- * @param try_hard Try very hard to find a place. (Used to place at least one industry per type.)
- * @return Pointer to created industry, or \c nullptr if creation failed.
- */
-
-/**
- * Try to build a industry on the map.
- * @param type IndustryType of the desired industry
- * @param try_hard Try very hard to find a place. (Used to place at least one industry per type)
- */
-
-/**
- * Get total number of industries existing in the game.
- * @return Number of industries currently in the game.
- */
-
 
 
 /** Reset the entry. */
@@ -750,7 +657,6 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGam
 
 
 static const IntervalTimer<TimerGameEconomy> _economy_industries_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::INDUSTRY}, RustClockCallback{openttd_rust_clock_industry_monthly, &clock_industry});
-
 
 
 void InitializeIndustries()

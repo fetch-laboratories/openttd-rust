@@ -84,11 +84,11 @@ unsafe fn owned_primary(s: &TransactionServices, cost: *mut CommandCost, id: u32
 /// # Safety
 /// Immutable tables and readable name span live for this synchronous call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_unique_name(
+pub unsafe extern "C" fn openttd_rust_vehicle_unique_name_abi(
     s: &TransactionServices,
     name: ByteSpan,
-) -> bool {
-    unsafe { unique_name(s, name) }
+) -> u8 {
+    u8::from(unsafe { unique_name(s, name) })
 }
 /// # Safety
 /// Tables, caller-owned native cost and readable text remain live. No mutable
@@ -170,8 +170,8 @@ pub struct SelectionServices {
     pub other_multihead: extern "C" fn(*mut ()) -> *mut (),
     pub with_orders: extern "C" fn(
         *mut (),
-        unsafe extern "C" fn(*mut (), *const ()) -> bool,
-        unsafe extern "C" fn(*mut (), *const ()) -> bool,
+        unsafe extern "C" fn(*mut (), *const ()) -> u8,
+        unsafe extern "C" fn(*mut (), *const ()) -> u8,
         unsafe extern "C" fn(*mut (), *const ()),
     ),
     pub list_clear: extern "C" fn(*mut ()),
@@ -315,15 +315,17 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
             destination: u16,
             emit: F,
         }
-        unsafe extern "C" fn vehicle<F>(ctx: *mut (), v: *const ()) -> bool {
+        unsafe extern "C" fn vehicle<F>(ctx: *mut (), v: *const ()) -> u8 {
             let c = unsafe { &*ctx.cast::<Find<'_, F>>() };
-            crate::fleet::record(c.s.groups, v.cast_mut()).vehicle_type() == c.vehicle_type
+            u8::from(
+                crate::fleet::record(c.s.groups, v.cast_mut()).vehicle_type() == c.vehicle_type,
+            )
         }
-        unsafe extern "C" fn order<F>(ctx: *mut (), o: *const ()) -> bool {
+        unsafe extern "C" fn order<F>(ctx: *mut (), o: *const ()) -> u8 {
             let c = unsafe { &*ctx.cast::<Find<'_, F>>() };
             // Native Order is the aliased canonical Rust-owned scalar record.
             let o = crate::orders::OrderHandle(o.cast());
-            unsafe {
+            u8::from(unsafe {
                 if c.depot {
                     o.is_type(crate::vehicle::OT_GOTO_DEPOT)
                         && !o.nearest_depot()
@@ -334,7 +336,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
                         || o.is_type(OT_IMPLICIT))
                         && o.destination() == c.destination
                 }
-            }
+            })
         }
         unsafe extern "C" fn visit<F: FnMut(*mut ())>(ctx: *mut (), v: *const ()) {
             let c = unsafe { &mut *ctx.cast::<Find<'_, F>>() };
@@ -387,11 +389,11 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
                 unsafe {
                     (s.groups.primary)(v)
                         && crate::fleet::record(s.groups, v).owner() == company
-                        && crate::fleet::openttd_rust_fleet_contains(
+                        && (crate::fleet::openttd_rust_fleet_contains_abi(
                             s.groups,
                             (s.groups.vehicle_group)(v),
                             index as u16,
-                        )
+                        ) != 0)
                 }
             } else {
                 unsafe {
@@ -409,20 +411,20 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
 /// # Safety
 /// The native presentation list is live and remains valid across append leaves.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_generate_list(
+pub unsafe extern "C" fn openttd_rust_vehicle_generate_list_abi(
     s: &SelectionServices,
     list: *mut (),
     kind: u8,
     vehicle_type: u8,
     company: u8,
     index: u32,
-) -> bool {
+) -> u8 {
     (s.list_clear)(list);
-    unsafe {
+    u8::from(unsafe {
         generate_list(s, kind, vehicle_type, company, index, |v| {
             (s.list_push)(list, v);
         })
-    }
+    })
 }
 
 #[repr(transparent)]

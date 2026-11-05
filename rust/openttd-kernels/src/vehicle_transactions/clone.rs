@@ -311,7 +311,8 @@ unsafe fn clone(
             } else {
                 let e = (r.vehicle_engine)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
                 let initial = if unsafe {
-                    crate::engine_capabilities::openttd_rust_engine_can_carry(r.capabilities, e)
+                    crate::engine_capabilities::openttd_rust_engine_can_carry_abi(r.capabilities, e)
+                        != 0
                 } {
                     (s.build.default_cargo)(e)
                 } else {

@@ -125,7 +125,7 @@ TEST_CASE("Session tile fixtures restore storage mode across nested entries")
 	CHECK(fixture.Run());
 }
 extern "C" uint8_t openttd_rust_shared_tile_type(const OpenTTDMapStatics *, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
-extern "C" bool openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
+extern "C" uint8_t openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 {
 	for (const uint size : {64U, 128U}) {

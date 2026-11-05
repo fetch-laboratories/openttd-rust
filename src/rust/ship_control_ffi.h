@@ -132,13 +132,15 @@ void openttd_rust_ship_set_rotation_y(OpenTTDShipState *, int16_t);
  * Every service is noexcept; unexpected environmental exceptions terminate.
  * The selected services do not unwind through script VMs or save/load during play.
  * Depot search owns its inherent BFS scratch; neighbour output spans 320 entries. */
-bool openttd_rust_ship_tick(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+uint8_t openttd_rust_ship_tick_abi(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+extern "C++" inline bool openttd_rust_ship_tick(uint32_t a0, OpenTTDVehicle *a1, const OpenTTDShipLeaves *a2, const OpenTTDSharedServices *a3) { return openttd_rust_ship_tick_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_ship_calendar_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_economy_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_cache(OpenTTDVehicle *, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 OpenTTDShipDepotResult openttd_rust_ship_find_depot(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-bool openttd_rust_ship_is_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+uint8_t openttd_rust_ship_is_destination_abi(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+extern "C++" inline bool openttd_rust_ship_is_destination(uint32_t a0, uint32_t a1, const OpenTTDShipLeaves *a2, const OpenTTDSharedServices *a3) { return openttd_rust_ship_is_destination_abi(a0, a1, a2, a3) != 0; }
 uint32_t openttd_rust_ship_station_destination(uint32_t, uint32_t, const OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_ship_trackdir(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 }

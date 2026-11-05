@@ -165,8 +165,8 @@ pub(crate) fn forest(tile: u32, s: &Services) -> bool {
 /// # Safety
 /// Live world map, pool and static native table under the game-state mutex.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_forest(tile: u32, s: *const Services) -> bool {
-    forest(tile, unsafe { &*s })
+pub unsafe extern "C" fn openttd_rust_industry_forest_abi(tile: u32, s: *const Services) -> u8 {
+    u8::from(forest(tile, unsafe { &*s }))
 }
 pub(super) fn advertise(shell: *mut c_void, s: &Services) {
     unsafe {
@@ -178,19 +178,19 @@ pub(super) const fn spec_raw(life: u8) -> bool {
     life & (LIFE_EXTRACTIVE | LIFE_ORGANIC) != 0
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_spec_raw(life: u8) -> bool {
-    spec_raw(life)
+pub extern "C" fn openttd_rust_industry_spec_raw_abi(life: u8) -> u8 {
+    u8::from(spec_raw(life))
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_spec_processing(life: u8, behaviour: u32) -> bool {
-    life & LIFE_PROCESSING != 0 && behaviour & CUT_TREES == 0
+pub extern "C" fn openttd_rust_industry_spec_processing_abi(life: u8, behaviour: u32) -> u8 {
+    u8::from(life & LIFE_PROCESSING != 0 && behaviour & CUT_TREES == 0)
 }
 pub(super) const fn original_economy(callbacks: u16, economy: u8) -> bool {
     economy == 0 || callbacks & super::construction::ORIGINAL_CALLBACKS != 0
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_original_economy(callbacks: u16, economy: u8) -> bool {
-    original_economy(callbacks, economy)
+pub extern "C" fn openttd_rust_industry_original_economy_abi(callbacks: u16, economy: u8) -> u8 {
+    u8::from(original_economy(callbacks, economy))
 }
 pub(super) fn construction_cost(multiplier: u8, life: u8, raw_setting: u8) -> i64 {
     let price = if raw_setting == 1 && spec_raw(life) {

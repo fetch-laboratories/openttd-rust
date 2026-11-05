@@ -87,7 +87,7 @@ def main() -> int:
     files = {
         str(p.relative_to(ROOT)): p.read_text()
         for p in (ROOT / "src").rglob("*")
-        if p.is_file() and p.suffix in {".cpp", ".h", ".hpp"}
+        if p.is_file() and p.suffix in {".cpp", ".h", ".hpp", ".inc"}
     }
     hits = violations(files)
     baseline = set((ROOT / BASELINE).read_text().splitlines())

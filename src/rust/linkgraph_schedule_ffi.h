@@ -6,7 +6,6 @@
 enum class PauseMode : uint8_t;
 struct OpenTTDLiveGraph;
 class LinkGraphJob;
-struct OpenTTDScheduleTime { int32_t date; uint16_t fract, interval; };
 struct OpenTTDScheduleQueues {
 	LinkGraph *const *schedule; size_t schedule_len;
 	LinkGraphJob *const *running; size_t running_len;

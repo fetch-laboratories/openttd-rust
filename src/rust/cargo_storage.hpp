@@ -6,30 +6,13 @@
  */
 
 /** @file cargo_storage.hpp Pool services and native cargo ownership facade. */
+#include "services_ffi.h"
 static uint8_t CargoCanAllocate() noexcept { return CargoPacket::CanAllocateItem(); }
 static void *CargoCreate(const OpenTTDCargoPacketFields *fields) noexcept { return new CargoPacket(*fields); }
 static OpenTTDCargoPacket *CargoOwner(void *shell) noexcept { return static_cast<CargoPacket *>(shell)->RustOwner(); }
 static void CargoDestroy(void *shell) noexcept { delete static_cast<CargoPacket *>(shell); }
 static uint32_t CargoRandom(uint32_t limit) noexcept { return RandomRange(limit); }
 static uint32_t CargoCoordinate(uint32_t tile, uint8_t axis) noexcept { return axis == 0 ? TileX(TileIndex(tile)) : TileY(TileIndex(tile)); }
-static uint16_t CargoFlow(const void *context, uint8_t mode, uint16_t origin, [[maybe_unused]] uint16_t avoid, [[maybe_unused]] uint16_t avoid2, const uint16_t *, size_t, uint8_t *restricted) noexcept
-{
-	const GoodsEntry *ge = static_cast<const GoodsEntry *>(context);
-	if (mode == 4) return ge->HasData() && !ge->GetData().flows.empty();
-	if (!ge->HasData()) return StationID::Invalid().base();
-	const auto &flows = ge->GetData().flows;
-	if (mode == 3) return flows.begin()->first.base();
-	auto it = flows.find(StationID(origin));
-	if (it == flows.end()) return StationID::Invalid().base();
-	if (mode == 0) {
-		bool value = false;
-		StationID via = it->second.GetViaWithRestricted(value);
-		*restricted = value;
-		return via.base();
-	}
-	if (mode == 5) return it->second.GetVia().base();
-	NOT_REACHED();
-}
 static int64_t CargoPay(void *context, uint8_t final, uint8_t cargo, const void *shell, uint32_t amount, uint32_t tile) noexcept
 {
 	CargoPayment *payment = static_cast<CargoPayment *>(context);
@@ -51,7 +34,6 @@ static OpenTTDCargoFlowMap *CargoFlowMap(const void *context) noexcept
 	const GoodsEntry *ge = static_cast<const GoodsEntry *>(context);
 	return ge->HasData() ? ge->GetData().flows.RustState() : nullptr;
 }
-static uint32_t CargoRandomDraw() noexcept { return Random(); }
 static void *CargoNextPacket(void *shell) noexcept
 {
 	auto range = CargoPacket::Iterate(shell == nullptr ? 0 : static_cast<CargoPacket *>(shell)->index.base() + 1);
@@ -59,7 +41,17 @@ static void *CargoNextPacket(void *shell) noexcept
 	return it == range.end() ? nullptr : *it;
 }
 static const OpenTTDCargoStorageServices _cargo_storage_services = {
-	CargoCanAllocate, CargoCreate, CargoOwner, CargoDestroy, CargoRandom, CargoCoordinate, CargoFlow, CargoPay, CargoOrigin, CargoFlowMap, CargoRandomDraw, CargoNextPacket,
+	.can_allocate = CargoCanAllocate,
+	.create = CargoCreate,
+	.packet = CargoOwner,
+	.destroy = CargoDestroy,
+	.random = CargoRandom,
+	.coordinate = CargoCoordinate,
+	.pay = CargoPay,
+	.origin = CargoOrigin,
+	.flow_map = CargoFlowMap,
+	.shared = &_rust_shared_services,
+	.packet_next = CargoNextPacket,
 };
 
 CargoPacket::CargoPacket() : CargoPacket(OpenTTDCargoPacketFields{}) {}
