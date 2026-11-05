@@ -76,4 +76,8 @@ include = [
     "tools/simulation/economy.py",
     "tools/simulation/objects.py",
     "tools/simulation/trees.py",
+    "tools/simulation/signals.py",
+    "tools/simulation/landscape.py",
+    "tools/simulation/companies.py",
+    "tools/simulation/industries.py",
 ]

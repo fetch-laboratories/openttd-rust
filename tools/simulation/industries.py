@@ -2,7 +2,9 @@
 
 import shutil
 import struct
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, NotRequired, cast
 
 from . import companies, core, economy
 from .console_adapter import console_adapter, prepared_console
@@ -28,7 +30,16 @@ PROSPECT_FAILURES = {
 }
 
 
-def uses_ai(scenario):
+class Scenario(economy.Scenario, companies.Scenario):
+    industry: NotRequired[str]
+    industry_soak: NotRequired[bool]
+    industry_generation_empty: NotRequired[bool]
+    industry_water: NotRequired[str]
+    industry_target: NotRequired[int]
+    industry_definition_dir: NotRequired[str]
+
+
+def uses_ai(scenario: Scenario) -> bool:
     return scenario.get("industry") in (
         "lumber",
         "fund",
@@ -41,7 +52,7 @@ def uses_ai(scenario):
     )
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if source := scenario.get("industry_definition_dir"):
         for personal in (
             run_dir / ".openttd",
@@ -63,20 +74,20 @@ def install(scenario, run_dir):
         )
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return ["-d", "script=2"] if uses_ai(scenario) else []
 
 
-def scenarios(soak):
-    result = [
-        dict(
-            scenario,
-            name="industry-" + scenario["economy"],
-            industry="cargo",
-            ticks=scenario["ticks"]
+def scenarios(soak: bool) -> list[Scenario]:
+    result: list[Scenario] = [
+        {
+            **scenario,
+            "name": "industry-" + scenario["economy"],
+            "industry": "cargo",
+            "ticks": scenario["ticks"]
             if scenario["economy"] == "stockpile"
             else (16 if soak else 6) * SNAPSHOT_TICKS,
-        )
+        }
         for scenario in economy.scenarios(soak)
         if "economy" in scenario
     ]
@@ -176,8 +187,10 @@ def scenarios(soak):
     for scenario in result:
         if scenario.get("industry") in ("prospect-unlucky", "prospect-exhausted"):
             scenario.update(ticks=32, short_checkpoint=True)
-            scenario["settings"]["difficulty"].update(number_towns=4)
-            scenario["settings"]["game_creation"] = {
+            # These generate scenarios' settings are the plain dicts built above.
+            settings = cast(dict[str, dict[str, Any]], scenario["settings"])
+            settings["difficulty"].update(number_towns=4)
+            settings["game_creation"] = {
                 "custom_town_number": 1,
                 "tree_placer": 0,
             }
@@ -209,43 +222,43 @@ def scenarios(soak):
         for obstruction in ("depot", "lock")
     )
     result.extend(
-        dict(
-            scenario,
-            name="industry-company-" + scenario["companies"],
-            industry="transfer",
-        )
+        {
+            **scenario,
+            "name": "industry-company-" + scenario["companies"],
+            "industry": "transfer",
+        }
         for scenario in companies.scenarios(soak)
         if scenario["companies"] in ("acquire", "delete", "reuse")
     )
     result.append(
-        dict(
-            name="industry-resolver",
-            kind="save",
-            industry="resolver",
-            ticks=1,
-            short_checkpoint=True,
-            save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
-        )
+        {
+            "name": "industry-resolver",
+            "kind": "save",
+            "industry": "resolver",
+            "ticks": 1,
+            "short_checkpoint": True,
+            "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+        }
     )
     result.extend(
-        dict(
-            name="industry-" + mode,
-            kind="save",
-            save=str(ROOT / "migration/saves/grok-159-001.sav"),
-            industry=mode,
-            ticks=(8 if soak else 4) * SNAPSHOT_TICKS,
-            settings={
+        {
+            "name": "industry-" + mode,
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/grok-159-001.sav"),
+            "industry": mode,
+            "ticks": (8 if soak else 4) * SNAPSHOT_TICKS,
+            "settings": {
                 "construction": {"raw_industry_construction": 1},
                 "economy": {"multiple_industry_per_town": True},
             },
-        )
+        }
         for mode in ("definitions", "definitions-reload", "policy", "policy-reload")
     )
 
     return result
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     return (
         WITNESS_ENVIRONMENT
         if scenario.get("industry") == "resolver" and scenario.get("witnesses")
@@ -293,7 +306,15 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     mode = scenario.get("industry")
     if mode in ("definitions", "definitions-reload", "policy", "policy-reload"):
         return prepare_definitions(
@@ -305,12 +326,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         executables = prepared_console(
             "industries", adapter, binaries, builds, folder, env
         )
-        return dict(
-            scenario,
-            save=str(source),
-            executables=executables,
-            console=["industries_scenario", "unpause"],
-        )
+        return {
+            **scenario,
+            "save": str(source),
+            "executables": executables,
+            "console": ["industries_scenario", "unpause"],
+        }
     if mode == "transfer":
         # Company preparation runs first and builds real AI assets with the
         # unchanged reference. Both roles receive these same reachable settings.
@@ -318,7 +339,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         industries = core.rows(read_save(source), "INDY")
         chosen = next(i for i, row in industries.items() if row["prod_level"] >= 4)
         target = source.parent / "industry-transfer.sav"
-        result["industry_input"] = core.patch(
+        core.findings(result)["industry_input"] = core.patch(
             source,
             target,
             {
@@ -332,18 +353,18 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 }
             },
         )
-        result["industry_chosen"] = chosen
-        return dict(scenario, save=str(target))
+        core.findings(result)["industry_chosen"] = chosen
+        return {**scenario, "save": str(target)}
     if mode in ("clear", "terraform", "prospect-unlucky", "prospect-exhausted"):
         folder = out / scenario["name"] / "input"
-        setup = dict(
-            scenario,
-            industry="input",
-            ticks=2 * SNAPSHOT_TICKS,
-            console=[
+        setup: Scenario = {
+            **scenario,
+            "industry": "input",
+            "ticks": 2 * SNAPSHOT_TICKS,
+            "console": [
                 line for line in scenario["console"] if not line.startswith("start_ai")
             ],
-        )
+        }
         run = run_game(
             setup,
             binaries["reference"],
@@ -357,7 +378,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         source = run["snapshots"][-1]
         industries = core.rows(read_save(source), "INDY")
         chosen = next(index for index, row in industries.items() if row["type"] == 0)
-        edits = {"CHTS": {0: {"magic_bulldozer.value": int(mode == "clear")}}}
+        edits: dict[str, dict[int, dict[str, Any]]] = {
+            "CHTS": {0: {"magic_bulldozer.value": int(mode == "clear")}}
+        }
         if mode in PROSPECT_FAILURES:
             towns = core.rows(read_save(source), "CITY")
             if len(towns) != 1 or industries[chosen]["town"] != next(iter(towns)) + 1:
@@ -369,23 +392,23 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 0: {f"random_state[{i}]": word for i, word in enumerate(seed)}
             }
         target = folder / "input.sav"
-        result["industry_input"] = core.patch(source, target, edits)
-        result["industry_chosen"] = chosen
-        return dict(
-            scenario,
-            kind="save",
-            save=str(target),
-            industry_target=industries[chosen]["location.tile"],
-            console=["setting difficulty.industry_density 0", *scenario["console"]]
+        core.findings(result)["industry_input"] = core.patch(source, target, edits)
+        core.findings(result)["industry_chosen"] = chosen
+        return {
+            **scenario,
+            "kind": "save",
+            "save": str(target),
+            "industry_target": industries[chosen]["location.tile"],
+            "console": ["setting difficulty.industry_density 0", *scenario["console"]]
             if mode.startswith("prospect-")
             else scenario["console"],
-        )
+        }
     if mode == "lumber":
-        setup = dict(
-            scenario,
-            ticks=3 * SNAPSHOT_TICKS,
-            console=[*scenario["console"], "start_ai MigrationIndustries"],
-        )
+        setup: Scenario = {
+            **scenario,
+            "ticks": 3 * SNAPSHOT_TICKS,
+            "console": [*scenario["console"], "start_ai MigrationIndustries"],
+        }
         run = run_game(
             setup,
             binaries["reference"],
@@ -400,8 +423,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             raise RuntimeError("reference setup AI did not build the lumber mill")
         source = run["snapshots"][-1]
         target = out / scenario["name"] / "input" / "lumber.sav"
-        result["industry_input"] = core.patch(source, target, {})
-        return dict(scenario, kind="save", save=str(target))
+        core.findings(result)["industry_input"] = core.patch(source, target, {})
+        return {**scenario, "kind": "save", "save": str(target)}
     if mode not in (
         "original",
         "frozen",
@@ -412,7 +435,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     ):
         return scenario
     folder = out / scenario["name"] / "input"
-    setup = dict(scenario, ticks=2 * SNAPSHOT_TICKS)
+    setup: Scenario = {**scenario, "ticks": 2 * SNAPSHOT_TICKS}
     run = run_game(
         setup,
         binaries["reference"],
@@ -431,7 +454,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         for index, row in industries.items()
         if row.get("produced[0]/cargo", 255) < 64
     )
-    changes = {}
+    changes: dict[str, dict[int, dict[str, Any]]] = {}
     console = list(scenario.get("console", []))
     if mode in ("original", "frozen"):
         console.append("setting economy.type " + ("0" if mode == "original" else "2"))
@@ -442,8 +465,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             chosen = next(
                 index for index, row in industries.items() if row["type"] == 9
             )
-            result["industry_field_input"] = len(industry_fields(before, chosen))
-            if not result["industry_field_input"]:
+            core.findings(result)["industry_field_input"] = len(
+                industry_fields(before, chosen)
+            )
+            if not core.findings(result)["industry_field_input"]:
                 raise RuntimeError("reference farm has no associated fields to remove")
         changes["INDY"] = {chosen: {"prod_level": 0}}
         console.append("setting difficulty.industry_density 0")
@@ -458,12 +483,18 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         changes["ECMY"] = {0: {"industry_daily_change_counter": 512 << 16}}
     target = folder / "input.sav"
     target.parent.mkdir(parents=True, exist_ok=True)
-    result["industry_input"] = core.patch(source, target, changes)
-    result["industry_chosen"] = chosen
-    return dict(scenario, kind="save", save=str(target), console=console)
+    core.findings(result)["industry_input"] = core.patch(source, target, changes)
+    core.findings(result)["industry_chosen"] = chosen
+    return {**scenario, "kind": "save", "save": str(target), "console": console}
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     kind = scenario.get("industry")
     if kind in ("definitions", "definitions-reload"):
         check_definitions(scenario, run, mode, role, result)
@@ -542,7 +573,7 @@ def check(scenario, run, mode, role, result):
         return
     saved = [read_save(path) for path in run["snapshots"]]
     rows = [core.rows(chunks, "INDY") for chunks in saved]
-    facts = {
+    facts: dict[str, Any] = {
         "industries": len(rows[-1]),
         "produced_history": max(
             (
@@ -586,7 +617,7 @@ def check(scenario, run, mode, role, result):
     }
     facts["year_history"] = bool(facts["valid_history"] & (1 << 42))
     if kind == "transfer":
-        chosen = result["industry_chosen"]
+        chosen = core.findings(result)["industry_chosen"]
         expected = (2, 2, 2) if scenario["companies"] == "acquire" else (16, 255, 255)
         final = rows[-1].get(chosen, {})
         facts["ownership"] = tuple(
@@ -599,7 +630,7 @@ def check(scenario, run, mode, role, result):
             )
     if kind in ("temperate", "arctic"):
 
-        def fields(chunks):
+        def fields(chunks: core.Chunks) -> set[int]:
             return {
                 tile
                 for tile, value in enumerate(chunks["MAPT"]["raw"])
@@ -643,7 +674,7 @@ def check(scenario, run, mode, role, result):
         if kind in PROSPECT_FAILURES:
             before = core.rows(read_save(Path(scenario["save"])), "INDY")
 
-            def identity(sample):
+            def identity(sample: dict[int, core.Row]) -> dict[int, tuple[Any, ...]]:
                 return {
                     index: tuple(
                         row[key] for key in ("type", "town", "location.tile", "founder")
@@ -672,7 +703,7 @@ def check(scenario, run, mode, role, result):
                 )
         if kind == "clear":
             before = core.rows(read_save(Path(scenario["save"])), "INDY")
-            chosen = result["industry_chosen"]
+            chosen = core.findings(result)["industry_chosen"]
             facts["reused_id"] = (
                 chosen in rows[-1]
                 and rows[-1][chosen]["founder"] < 15
@@ -682,7 +713,7 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(
                     f"{mode}/{role}: industry ID not reused after clear"
                 )
-    result[f"{mode}_{role}_industry"] = facts
+    core.findings(result)[f"{mode}_{role}_industry"] = facts
     if kind == "generation":
         if bool(facts["industries"] == 0) != scenario["industry_generation_empty"]:
             result["problems"].append(
@@ -709,7 +740,7 @@ def check(scenario, run, mode, role, result):
         if facts["transported_history"] == 0 or facts["accepted_history"] == 0:
             result["problems"].append(f"{mode}/{role}: no transported/accepted history")
     if kind in ("closure", "farm-cleanup"):
-        chosen = result["industry_chosen"]
+        chosen = core.findings(result)["industry_chosen"]
         if chosen in rows[-1]:
             result["problems"].append(f"{mode}/{role}: selected industry did not close")
         if kind == "farm-cleanup":
@@ -734,7 +765,7 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(f"{mode}/{role}: no builder success/backoff")
 
 
-def industry_fields(chunks, industry):
+def industry_fields(chunks: core.Chunks, industry: int) -> set[int]:
     """Canonical packed field association, exposed by the existing save decoder."""
     import struct
 
@@ -747,7 +778,7 @@ def industry_fields(chunks, industry):
     }
 
 
-def production_gap():
+def production_gap() -> None:
     """Absent NewGRFs: unchanged version, repetition and native arithmetic policy."""
     import importlib.util
     import subprocess
@@ -757,6 +788,7 @@ def production_gap():
     spec = importlib.util.spec_from_file_location(
         "migration", ROOT / "tools/migration.py"
     )
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     out = ROOT / ".local/industry-production-gap"
@@ -794,7 +826,7 @@ def production_gap():
     subprocess.run([str(binary)], cwd=ROOT, check=True)
 
 
-def lifecycle_gap():
+def lifecycle_gap() -> None:
     """Absent custom industry GRFs: unchanged tile/parent RNG and animation."""
     import importlib.util
     import subprocess
@@ -806,6 +838,7 @@ def lifecycle_gap():
     spec = importlib.util.spec_from_file_location(
         "migration", ROOT / "tools/migration.py"
     )
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     out = ROOT / ".local/industry-lifecycle-gap"
@@ -825,7 +858,7 @@ def lifecycle_gap():
         "void TriggerIndustryTileRandomisation(",
         "void TriggerIndustryRandomisation(",
     )
-    bodies = []
+    bodies: list[str] = []
     for signature in signatures:
         bodies.append(probe.body(source, signature))
     (out / "industry-lifecycle-reference.inc").write_text("\n\n".join(bodies))
@@ -837,7 +870,7 @@ def lifecycle_gap():
     (out / "industry-acceptance-reference.inc").write_text(
         probe.body(tile_source, "static void AddAcceptedCargo_Industry(")
     )
-    animation = []
+    animation: list[str] = []
     for name in (
         "AnimateSugarSieve",
         "AnimateToffeeQuarry",
@@ -898,25 +931,27 @@ if __name__ == "__main__":
     lifecycle_gap()
 
 
-def definition_grfs(folder):
+def definition_grfs(folder: Path) -> None:
     """Write real GRF containers with independent property and layout expectations."""
     folder.mkdir(parents=True, exist_ok=True)
 
-    def action(feature, first, properties, count=1):
+    def action(
+        feature: int, first: int, properties: list[tuple[int, bytes]], count: int = 1
+    ) -> bytes:
         return bytes((0, feature, len(properties), count, first)) + b"".join(
             bytes((prop,)) + data for prop, data in properties
         )
 
-    def byte(value):
+    def byte(value: int) -> bytes:
         return bytes((value,))
 
-    def word(value):
+    def word(value: int) -> bytes:
         return struct.pack("<H", value)
 
-    def dword(value):
+    def dword(value: int) -> bytes:
         return struct.pack("<I", value)
 
-    def layout(*tables):
+    def layout(*tables: bytes) -> bytes:
         data = b"".join(tables)
         # A short declared size is warning-only; the table terminators control parsing.
         return byte(len(tables)) + dword(0) + data
@@ -1039,7 +1074,15 @@ def definition_grfs(folder):
         (folder / (name + ".grf")).write_bytes(payload + word(0))
 
 
-def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
+def prepare_definitions(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     folder = out / scenario["name"] / "input"
     source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
     policy = scenario["industry"].startswith("policy")
@@ -1052,28 +1095,32 @@ def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
         else f'industry_definitions run "{folder / "grfs"}"'
     )
     marker = "INDUSTRY-POLICY" if policy else "INDUSTRY-DEFINITIONS"
-    scenario = dict(
-        scenario,
-        executables=executables,
-        save=str(source),
-    )
+    scenario = {
+        **scenario,
+        "executables": executables,
+        "save": str(source),
+    }
     if policy:
         scenario.update(ticks=1, short_checkpoint=True)
     else:
         scenario["industry_definition_dir"] = str(folder / "grfs")
     if not scenario["industry"].endswith("-reload"):
-        return dict(
-            scenario,
-            console=[command, "setting difficulty.industry_density 0", "unpause"],
-        )
+        return {
+            **scenario,
+            "console": [command, "setting difficulty.industry_density 0", "unpause"],
+        }
     saves = {role: folder / role / "definitions.sav" for role in executables}
+
+    def capture(role: str) -> Scenario:
+        return {
+            **scenario,
+            "console": [command + f' "{saves[role]}"', "unpause"],
+            "ticks": 1,
+            "short_checkpoint": True,
+        }
+
     captures = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=[command + f' "{saves[role]}"', "unpause"],
-            ticks=1,
-            short_checkpoint=True,
-        ),
+        capture,
         executables,
         builds,
         folder,
@@ -1097,18 +1144,24 @@ def prepare_definitions(scenario, binaries, builds, out, timeout, env, result):
     if differences or captures["reference"]["log"] != captures["candidate"]["log"]:
         result["differences"].extend(differences)
         raise RuntimeError("industry captures differ")
-    return dict(
-        scenario,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=[
+    return {
+        **scenario,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": [
             "industry_policy inspect" if policy else "industry_definitions inspect",
             "setting difficulty.industry_density 0",
             "unpause",
         ],
-    )
+    }
 
 
-def check_definitions(scenario, run, mode, role, result):
+def check_definitions(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if run["exit"]:
         return
     marker = "INDUSTRY-DEFINITIONS complete true"
