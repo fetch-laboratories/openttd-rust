@@ -65,7 +65,6 @@ struct OpenTTDVehicleResolverServices {
 	const OpenTTDEngine * (*engine_by_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_by_id);
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	uint8_t (*engine_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_flags);
-	uint16_t (*local_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(local_id);
 	OpenTTDVehicleCargoInfo (*cargo_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_info);
 	int32_t (*build_year)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(build_year);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
@@ -112,7 +111,6 @@ struct OpenTTDVehicleResolverServices {
 	uint32_t (*rail_badge)(const ResolverObject *, RailType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_badge);
 	uint32_t (*road_badge)(const ResolverObject *, RoadType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_badge);
 	OpenTTDShipState * (*ship_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ship_owner);
-	void (*unhandled)(uint8_t, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	const OpenTTDAircraftLeaves * (*aircraft_leaves)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft_leaves);
 	const OpenTTDGroundPhysicsServices * (*ground)() noexcept OPENTTD_SERVICE_DEFAULT(ground);
 	const OpenTTDCargoStorageServices * (*cargo_services)() noexcept OPENTTD_SERVICE_DEFAULT(cargo_services);

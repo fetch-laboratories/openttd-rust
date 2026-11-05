@@ -141,7 +141,7 @@ static void SignalSetProbe()
 {
 	OpenTTDSignalSetTrace traces[3];
 #ifdef WITH_RUST
-	openttd_rust_signal_workset_probe(&_signal_services, traces);
+	openttd_rust_signal_workset_probe(traces);
 #else
 	traces[0] = SignalSetTrace<Trackdir, 64>("_tbuset");
 	traces[1] = SignalSetTrace<DiagDirection, 256>("_tbdset");

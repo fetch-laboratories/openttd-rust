@@ -102,7 +102,6 @@ static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 
 	RustStationMarkTilesDirty(Station::Get(v->GetLastStationVisited()), true);
 }
-static void VehicleVisitReservationLog() noexcept { Debug(misc, 1, "cancelling cargo reservation"); }
 static void VehicleVisitDepotWindows(OpenTTDVehicle *handle, bool invalidate) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -161,7 +160,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.set_loading_tick = RustVehicleSetLastLoadingTick,
 		.arrival_dirty = VehicleVisitArrivalDirty,
 		.station_cargo = RustStationCargoOwner,
-		.reservation_log = VehicleVisitReservationLog,
 		.hide_filling = RustVehicleHideFilling,
 		.set_occupancy = RustVehicleSetTripOccupancy,
 		.leave_sound = RustVehiclePlayLeaveSound,

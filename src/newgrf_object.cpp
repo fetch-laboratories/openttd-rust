@@ -373,7 +373,6 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.square = OpenTTDDistanceSquare,
 		.triggers = [](const ObjectSpec *s) noexcept { return s->animation.triggers.base(); },
 
-		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled object variable 0x{:X}", variable); },
 	};
 	return services;
 }

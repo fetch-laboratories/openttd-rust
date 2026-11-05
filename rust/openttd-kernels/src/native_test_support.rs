@@ -609,9 +609,8 @@ pub unsafe extern "C" fn openttd_test_town_tunnel(
 /// Immutable tables and settings satisfy the tree module's serialized entry contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_trees_generate(
-    settings: crate::trees::GenerateSettings,
     services: *const crate::trees::TreeServices,
     shared: *const crate::services::Services,
 ) -> u8 {
-    u8::from(unsafe { crate::trees::generate(settings, services, shared) })
+    u8::from(unsafe { crate::trees::generate(services, shared) })
 }

@@ -16,6 +16,7 @@
     clippy::too_many_arguments
 )]
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};
+use crate::debug::debug;
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_VEHICLE_BUILD_PROBABILITY, CBID_VEHICLE_MODIFY_PROPERTY,
 };
@@ -125,7 +126,6 @@ pub struct Services {
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
     default_cargo: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     engine_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
-    local_id: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     cargo_info: unsafe extern "C" fn(u8) -> CargoInfo,
     pub(crate) build_year: unsafe extern "C" fn(V) -> i32,
     last_service: unsafe extern "C" fn(V) -> i32,
@@ -177,7 +177,6 @@ pub struct Services {
     rail_badge: unsafe extern "C" fn(*const c_void, crate::services::RailType, u32) -> u32,
     road_badge: unsafe extern "C" fn(*const c_void, crate::services::RoadType, u32) -> u32,
     ship_owner: unsafe extern "C" fn(V) -> *mut crate::ship_control::State,
-    unhandled: unsafe extern "C" fn(u8, u8) -> (),
     aircraft_leaves: unsafe extern "C" fn() -> *const crate::aircraft::Leaves,
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
     cargo_services: unsafe extern "C" fn() -> *const crate::cargo_storage::Services,
@@ -1133,14 +1132,16 @@ unsafe fn variable(
             0x60 => {
                 if kind() != 0 {
                     return u32::from(
-                        u32::from((s.local_id)((s.vehicle.engine)(h).0.as_ptr())) == parameter,
+                        u32::from((s.shared.engine_local_id)((s.vehicle.engine)(h).0.as_ptr()))
+                            == parameter,
                     );
                 }
                 let mut count = 0u32;
                 let mut u = v;
                 while !u.is_null() {
-                    if u32::from((s.local_id)((s.vehicle.engine)(handle(u)).0.as_ptr()))
-                        == parameter
+                    if u32::from((s.shared.engine_local_id)(
+                        (s.vehicle.engine)(handle(u)).0.as_ptr(),
+                    )) == parameter
                     {
                         count = count.wrapping_add(1);
                     }
@@ -1404,7 +1405,11 @@ unsafe fn variable(
             0xc2 | 0xc3 => return high((s.max_age)(v).clamp(0, i32::from(u16::MAX)) as u32),
             0xc4 => return old_year((s.build_year)(v)),
             0xc5 => return u32::from((s.unit)(v)),
-            0xc6 | 0xc7 => return high(u32::from((s.local_id)((s.vehicle.engine)(h).0.as_ptr()))),
+            0xc6 | 0xc7 => {
+                return high(u32::from((s.shared.engine_local_id)(
+                    (s.vehicle.engine)(h).0.as_ptr(),
+                )));
+            }
             0xc8 => {
                 let sprite = (s.sprite)(v);
                 if kind() != 0 || sprite != crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM {
@@ -1510,7 +1515,13 @@ unsafe fn variable(
             },
             _ => {}
         }
-        (s.unhandled)(variable, kind());
+        debug!(
+            grf,
+            1,
+            "Unhandled vehicle variable 0x{:X}, type 0x{:X}",
+            variable,
+            u32::from(kind())
+        );
         *available = false;
         u32::MAX
     }
@@ -1562,8 +1573,14 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
             0x92 => service_date(crate::timer_game_common::calendar_date().0),
             0x93 => service_date(crate::timer_game_common::calendar_date().0) >> 8,
             0xc4 => old_year(crate::timer_game_common::calendar_year().0),
-            0xc6 => u32::from((s.local_id)((s.engine_by_id)((*scope).self_type))),
-            0xc7 => u32::from((s.local_id)((s.engine_by_id)((*scope).self_type))) >> 8,
+            0xc6 => u32::from((s.shared.engine_local_id)((s.engine_by_id)(
+                (*scope).self_type,
+            ))),
+            0xc7 => {
+                u32::from((s.shared.engine_local_id)((s.engine_by_id)(
+                    (*scope).self_type,
+                ))) >> 8
+            }
             0xda => crate::fleet::INVALID_VEHICLE,
             _ => {
                 *available = false;
@@ -1664,7 +1681,7 @@ crate::abi::layouts! {
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, local_id, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services
+        engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

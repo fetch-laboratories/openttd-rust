@@ -76,8 +76,21 @@ include = [
     "tools/simulation/economy.py",
     "tools/simulation/objects.py",
     "tools/simulation/trees.py",
+    "tools/ci_native.py",
+    "tools/test-ci-native.py",
+    "tools/check-rust-platform.py",
+    "tools/test-rust-platform.py",
+    "tools/bootstrap-local.py",
+    "tools/test-compiler-cache.py",
+    "tools/test-port-metrics.py",
+    "tools/test-validation-execution.py",
+    "tools/test-ci.py",
     "tools/simulation/signals.py",
     "tools/simulation/landscape.py",
     "tools/simulation/companies.py",
     "tools/simulation/industries.py",
 ]
+
+[analysis]
+# PyYAML is a system package that ty's isolated environment cannot see.
+allowed-unresolved-imports = ["yaml"]

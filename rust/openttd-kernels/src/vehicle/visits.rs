@@ -14,6 +14,7 @@
 // stored value) and its `Map::LogX()` byte; `if_not_else` keeps source order.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]
 use super::{VehicleRef, VehicleServices, VehicleType};
+use crate::debug::debug;
 use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{
     base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
@@ -100,8 +101,6 @@ pub struct Services {
     pub arrival_dirty: extern "C" fn(VehicleRef),
     /// `&st->goods[cargo].GetOrCreateData().cargo`.
     pub station_cargo: extern "C" fn(*mut Station, u8) -> *mut List,
-    /// `Debug(misc, 1, "cancelling cargo reservation")`.
-    pub reservation_log: extern "C" fn(),
     /// `HideFillingPercent(&v->fill_percent_te_id)`.
     pub hide_filling: extern "C" fn(VehicleRef),
     /// `v->trip_occupancy = value`.
@@ -192,7 +191,7 @@ pub(crate) fn increase_stats(
                 }
             } else {
                 witness::hit(witness::VISITS_GRAPH_FAILURE);
-                (l.graphs.allocation_failure)();
+                debug!(misc, 0, "Can't allocate link graph");
             }
         } else {
             graph = (l.graphs.get)(second_id);
@@ -716,7 +715,7 @@ pub(crate) fn cancel_reservation(front: VehicleRef, next: u16, st: *mut Station,
             > 0
         {
             witness::hit(witness::VISITS_RESERVATION);
-            (s.reservation_log)();
+            debug!(misc, 1, "cancelling cargo reservation");
             let destination = (s.station_cargo)(st, c.cargo);
             // `VehicleCargoList::Return(UINT_MAX, dest, next, v->tile)`.
             unsafe {
@@ -1178,7 +1177,6 @@ crate::abi::layouts! {
         set_loading_tick,
         arrival_dirty,
         station_cargo,
-        reservation_log,
         hide_filling,
         set_occupancy,
 

@@ -61,7 +61,6 @@ TEST_CASE("Animated tiles - ordered queue and partial native load publication")
 	auto clock = GetRustClockServices();
 	clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
 	fixture.services.clock = &clock;
-	fixture.world.desync_level = []() noexcept -> int32_t { return 0; };
 	fixture.services.check_caches = SessionFixture::Nothing;
 	fixture.services.company_begin = SessionFixture::FrameNothing;
 	fixture.services.console_exception = [](OpenTTDSessionFrame *) noexcept -> OpenTTDConsoleException * { return nullptr; };

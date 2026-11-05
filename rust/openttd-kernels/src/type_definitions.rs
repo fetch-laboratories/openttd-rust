@@ -9,6 +9,7 @@
     clippy::cast_possible_wrap,
     clippy::too_many_arguments
 )]
+use crate::debug::grf_msg;
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::services::RoadTramType;
 use crate::{
@@ -42,9 +43,6 @@ pub struct RailProperties {
     fallback: extern "C" fn(Handle, u8),
     acceleration: extern "C" fn(Handle, u8),
     badges: extern "C" fn(Handle) -> *mut BadgeList,
-    invalid_reserve: extern "C" fn(u32, usize),
-    invalid_change: extern "C" fn(u32, usize),
-    no_label: extern "C" fn(u32),
 }
 
 #[repr(C)]
@@ -67,17 +65,12 @@ pub struct RoadProperties {
     required: extern "C" fn(Handle, u8),
     introduces: extern "C" fn(Handle, u8),
     badges: extern "C" fn(Handle) -> *mut BadgeList,
-    invalid_reserve: extern "C" fn(u32, usize),
-    invalid_change: extern "C" fn(u32, usize),
-    no_label: extern "C" fn(u32),
-    reserve_mismatch: extern "C" fn(u32),
-    power_mismatch: extern "C" fn(u8, u8),
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDRailProperties" ["engine"] => RailProperties { toolbar_caption, menu_text, build_caption, replace_text, name, cost_multiplier, max_speed, map_colour, introduction_date, sorting_order, maintenance_multiplier, alternate_label, new_engine, flags, powered, required, introduces, compatible, curve_speed, fallback, acceleration, badges, invalid_reserve, invalid_change, no_label };
-    "OpenTTDRoadProperties" ["engine"] => RoadProperties { toolbar_caption, menu_text, build_caption, replace_text, name, cost_multiplier, max_speed, map_colour, introduction_date, sorting_order, maintenance_multiplier, alternate_label, new_engine, flags, powered, required, introduces, badges, invalid_reserve, invalid_change, no_label, reserve_mismatch, power_mismatch };
+    "OpenTTDRailProperties" ["engine"] => RailProperties { toolbar_caption, menu_text, build_caption, replace_text, name, cost_multiplier, max_speed, map_colour, introduction_date, sorting_order, maintenance_multiplier, alternate_label, new_engine, flags, powered, required, introduces, compatible, curve_speed, fallback, acceleration, badges };
+    "OpenTTDRoadProperties" ["engine"] => RoadProperties { toolbar_caption, menu_text, build_caption, replace_text, name, cost_multiplier, max_speed, map_colour, introduction_date, sorting_order, maintenance_multiplier, alternate_label, new_engine, flags, powered, required, introduces, badges };
 }
 
 fn skip_labels(reader: &mut Reader<'_>) -> Result<(), ReadError> {
@@ -97,7 +90,12 @@ fn rail_change(
     prop: i32,
 ) -> Result<i32, ReadError> {
     if last as usize > map.size {
-        (s.invalid_change)(last, map.size);
+        grf_msg!(
+            1,
+            "RailTypeChangeInfo: Rail type {} is invalid, max {}, ignoring",
+            last,
+            map.size
+        );
         return Ok(CIR_INVALID_ID);
     }
     let mut result = CIR_SUCCESS;
@@ -170,7 +168,12 @@ fn rail_reserve(
     prop: i32,
 ) -> Result<i32, ReadError> {
     if last as usize > map.size {
-        (s.invalid_reserve)(last, map.size);
+        grf_msg!(
+            1,
+            "RailTypeReserveInfo: Rail type {} is invalid, max {}, ignoring",
+            last,
+            map.size
+        );
         return Ok(CIR_INVALID_ID);
     }
     let mut result = CIR_SUCCESS;
@@ -192,7 +195,11 @@ fn rail_reserve(
             0x1d => {
                 let rt = unsafe { *map.data.add(id as usize) };
                 if rt == INVALID_RAILTYPE {
-                    (s.no_label)(id);
+                    grf_msg!(
+                        1,
+                        "RailTypeReserveInfo: Ignoring property 1D for rail type {} because no label was set",
+                        id
+                    );
                     skip_labels(reader)?;
                 } else {
                     let info = registry::rail_spec(rt);
@@ -255,7 +262,12 @@ fn road_change(
     rtt: RoadTramType,
 ) -> Result<i32, ReadError> {
     if last as usize > map.size {
-        (s.invalid_change)(last, map.size);
+        grf_msg!(
+            1,
+            "RoadTypeChangeInfo: Road type {} is invalid, max {}, ignoring",
+            last,
+            map.size
+        );
         return Ok(CIR_INVALID_ID);
     }
     let mut result = CIR_SUCCESS;
@@ -289,7 +301,12 @@ fn road_change(
                             if crate::road::get_road_tram_type(resolved).0 == rtt.0 {
                                 (s.powered)(info, resolved);
                             } else {
-                                (s.power_mismatch)(resolved, rt);
+                                grf_msg!(
+                                    1,
+                                    "RoadTypeChangeInfo: Powered road type list: Road type {} road/tram type does not match road type {}, ignoring",
+                                    resolved,
+                                    rt
+                                );
                             }
                         }
                         0x18 => (s.required)(info, resolved),
@@ -325,7 +342,12 @@ fn road_reserve(
     rtt: RoadTramType,
 ) -> Result<i32, ReadError> {
     if last as usize > map.size {
-        (s.invalid_reserve)(last, map.size);
+        grf_msg!(
+            1,
+            "RoadTypeReserveInfo: Road type {} is invalid, max {}, ignoring",
+            last,
+            map.size
+        );
         return Ok(CIR_INVALID_ID);
     }
     let mut result = CIR_SUCCESS;
@@ -337,7 +359,11 @@ fn road_reserve(
                 if rt == INVALID_ROADTYPE {
                     rt = registry::road_allocate(label, rtt);
                 } else if crate::road::get_road_tram_type(rt).0 != rtt.0 {
-                    (s.reserve_mismatch)(id);
+                    grf_msg!(
+                        1,
+                        "RoadTypeReserveInfo: Road type {} is invalid type (road/tram), ignoring",
+                        id
+                    );
                     return Ok(CIR_INVALID_ID);
                 }
                 unsafe {
@@ -350,7 +376,11 @@ fn road_reserve(
             0x1d => {
                 let rt = unsafe { *map.data.add(id as usize) };
                 if rt == INVALID_ROADTYPE {
-                    (s.no_label)(id);
+                    grf_msg!(
+                        1,
+                        "RoadTypeReserveInfo: Ignoring property 1D for road type {} because no label was set",
+                        id
+                    );
                     skip_labels(reader)?;
                 } else {
                     let info = registry::road_spec(rt);

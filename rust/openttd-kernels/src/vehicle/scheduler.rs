@@ -681,9 +681,6 @@ mod tests {
     extern "C" fn create(_: *const cargo_storage::Packet) -> *mut c_void {
         null_mut()
     }
-    extern "C" fn random(_: u32) -> u32 {
-        0
-    }
     extern "C" fn coordinate(_: u32, _: u8) -> u32 {
         0
     }
@@ -703,7 +700,6 @@ mod tests {
             create,
             packet,
             destroy,
-            random,
             coordinate,
             pay,
             origin,

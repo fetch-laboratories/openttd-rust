@@ -8,6 +8,7 @@
 //! Signal-block traversal and its process-wide fixed work sets. Occupancy and dirtying
 //! callbacks can reenter.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::collapsible_if)]
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::rail_map::is_pbs_signal as pbs;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
@@ -42,12 +43,6 @@ pub struct SignalServices {
     pub assert_wormhole_start: extern "C" fn(u32, u8),
     /// Direct Rust occupancy traversal, shared with the train controller.
     pub vehicles: *const crate::vehicle::VehicleServices,
-    /// Original to-be-updated set overflow log.
-    pub overflow_tbu: extern "C" fn(),
-    /// Original to-be-done set overflow log.
-    pub overflow_tbd: extern "C" fn(),
-    /// Original global set overflow log.
-    pub overflow_global: extern "C" fn(),
     /// Original `Company::IsValidID` assertion, retaining native build policy.
     pub assert_company: extern "C" fn(u8),
 }
@@ -139,26 +134,44 @@ fn reverse(dir: u8) -> u8 {
 fn presignal_exit(kind: u8) -> bool {
     kind == 2 || kind == 3
 }
-fn add_tbu(w: &World<'_>, item: Item) -> bool {
+fn overflow_tbu() {
+    debug!(
+        misc,
+        0, "SignalSegment too complex. Set _tbuset is full (maximum 64)"
+    );
+}
+fn overflow_tbd() {
+    debug!(
+        misc,
+        0, "SignalSegment too complex. Set _tbdset is full (maximum 256)"
+    );
+}
+fn overflow_global() {
+    debug!(
+        misc,
+        0, "SignalSegment too complex. Set _globset is full (maximum 128)"
+    );
+}
+fn add_tbu(item: Item) -> bool {
     let added = access(|s| s.tbu.add(item));
     if !added {
-        read!(w, native, overflow_tbu);
+        overflow_tbu();
         crate::witness::hit(crate::witness::SIGNAL_TBU_OVERFLOW);
     }
     added
 }
-fn add_tbd(w: &World<'_>, item: Item) -> bool {
+fn add_tbd(item: Item) -> bool {
     let added = access(|s| s.tbd.add(item));
     if !added {
-        read!(w, native, overflow_tbd);
+        overflow_tbd();
         crate::witness::hit(crate::witness::SIGNAL_TBD_OVERFLOW);
     }
     added
 }
-fn add_global(w: &World<'_>, item: Item) -> bool {
+fn add_global(item: Item) -> bool {
     let added = access(|s| s.global.add(item));
     if !added {
-        read!(w, native, overflow_global);
+        overflow_global();
         crate::witness::hit(crate::witness::SIGNAL_GLOBAL_OVERFLOW);
     }
     added
@@ -175,7 +188,7 @@ fn maybe_add(w: &World<'_>, next: Item, previous: Item) -> bool {
     });
     source_assert(w, access(|s| !s.tbd.contains(next)));
     let add = access(|s| !s.tbd.remove(previous));
-    !add || add_tbd(w, next)
+    !add || add_tbd(next)
 }
 fn occupied(w: &World<'_>, tile: u32, bits: Option<u8>) -> bool {
     // SAFETY: Static services and live shells; signal scans do not delete vehicles.
@@ -270,7 +283,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                                     crate::witness::hit(crate::witness::SIGNAL_MULTI_ENTER);
                                 }
                                 flags |= ENTER;
-                                if !add_tbu(w, Item { tile, dir: back }) {
+                                if !add_tbu(Item { tile, dir: back }) {
                                     return flags | FULL;
                                 }
                             }
@@ -396,15 +409,12 @@ fn update_around(w: &World<'_>, flags: u16) {
         }
         if new_state != read!(w, rail, signal_state, tile, td).0 {
             if presignal_exit(kind) {
-                add_global(
-                    w,
-                    Item {
-                        tile,
-                        dir: crate::track_func::trackdir_to_exitdir(
-                            crate::track_func::reverse_trackdir(td),
-                        ),
-                    },
-                );
+                add_global(Item {
+                    tile,
+                    dir: crate::track_func::trackdir_to_exitdir(
+                        crate::track_func::reverse_trackdir(td),
+                    ),
+                });
                 crate::witness::hit(crate::witness::SIGNAL_PROPAGATE);
             }
             read!(w, rail, set_signal_state, tile, td, new_state);
@@ -433,21 +443,15 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
             if w.native.assertions {
                 read!(w, native, assert_wormhole_start, tile, dir);
             }
-            add_tbd(
-                w,
-                Item {
-                    tile,
-                    dir: INVALID_DIAGDIR,
-                },
-            );
+            add_tbd(Item {
+                tile,
+                dir: INVALID_DIAGDIR,
+            });
             let other = read!(w, rail, other_tunnel_bridge_end, tile);
-            add_tbd(
-                w,
-                Item {
-                    tile: other,
-                    dir: INVALID_DIAGDIR,
-                },
-            );
+            add_tbd(Item {
+                tile: other,
+                dir: INVALID_DIAGDIR,
+            });
         } else if kind == MP_RAILWAY && read!(w, rail, is_rail_depot, tile) {
             if w.native.assertions {
                 source_assert(
@@ -455,13 +459,10 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                     dir == INVALID_DIAGDIR || dir == read!(w, rail, rail_depot_direction, tile).0,
                 );
             }
-            add_tbd(
-                w,
-                Item {
-                    tile,
-                    dir: INVALID_DIAGDIR,
-                },
-            );
+            add_tbd(Item {
+                tile,
+                dir: INVALID_DIAGDIR,
+            });
         } else if (kind == MP_RAILWAY || kind == MP_STATION || kind == MP_ROAD)
             && (track_bits(crate::movement::track_status(
                 w.shared,
@@ -472,14 +473,11 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
             )) & ENTER_TRACKS[usize::from(dir)])
                 != 0
         {
-            add_tbd(w, Item { tile, dir });
-            add_tbd(
-                w,
-                Item {
-                    tile: w.map.add_diag(tile, dir),
-                    dir: reverse(dir),
-                },
-            );
+            add_tbd(Item { tile, dir });
+            add_tbd(Item {
+                tile: w.map.add_diag(tile, dir),
+                dir: reverse(dir),
+            });
         } else {
             tile = w.map.add_diag(tile, dir);
             dir = reverse(dir);
@@ -495,7 +493,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                 crate::witness::hit(crate::witness::SIGNAL_NEIGHBOUR_CONTINUE);
                 continue;
             }
-            add_tbd(w, Item { tile, dir });
+            add_tbd(Item { tile, dir });
         }
         source_assert(w, access(|s| !s.tbd.overflowed));
         source_assert(w, access(|s| s.tbd.count != 0));
@@ -525,20 +523,14 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
 fn add_track(w: &World<'_>, tile: u32, track: u8, owner: u8) {
     source_assert(w, access(|s| s.global.count == 0 || owner == s.last_owner));
     access(|s| s.last_owner = owner);
-    add_global(
-        w,
-        Item {
-            tile,
-            dir: SEARCH_ONE[usize::from(track)],
-        },
-    );
-    add_global(
-        w,
-        Item {
-            tile,
-            dir: SEARCH_TWO[usize::from(track)],
-        },
-    );
+    add_global(Item {
+        tile,
+        dir: SEARCH_ONE[usize::from(track)],
+    });
+    add_global(Item {
+        tile,
+        dir: SEARCH_TWO[usize::from(track)],
+    });
     force_flush(w);
 }
 fn force_flush(w: &World<'_>) {
@@ -557,12 +549,12 @@ fn flush(w: &World<'_>) {
 fn add_side(w: &World<'_>, tile: u32, side: u8, owner: u8) {
     source_assert(w, access(|s| s.global.count == 0 || owner == s.last_owner));
     access(|s| s.last_owner = owner);
-    add_global(w, Item { tile, dir: side });
+    add_global(Item { tile, dir: side });
     force_flush(w);
 }
 fn segment(w: &World<'_>, tile: u32, side: u8, owner: u8) -> u8 {
     source_assert(w, access(|s| s.global.count == 0));
-    add_global(w, Item { tile, dir: side });
+    add_global(Item { tile, dir: side });
     update_buffer(w, owner)
 }
 fn both(w: &World<'_>, tile: u32, track: u8, owner: u8) {
@@ -768,9 +760,6 @@ crate::abi::layouts! {
         assert_condition,
         assert_wormhole_start,
         vehicles,
-        overflow_tbu,
-        overflow_tbd,
-        overflow_global,
         assert_company,
     };
     "OpenTTDSignalContext" ["probe"] => Context {
@@ -865,7 +854,7 @@ impl From<Item> for SignalItem {
         }
     }
 }
-fn probe_set<const N: usize>(overflow: extern "C" fn()) -> SetTrace {
+fn probe_set<const N: usize>(overflow: fn()) -> SetTrace {
     let mut set = SmallSet::<N>::new();
     let a = Item { tile: 1, dir: 0 };
     for item in [
@@ -931,19 +920,12 @@ fn probe_set<const N: usize>(overflow: extern "C" fn()) -> SetTrace {
 /// # Safety
 /// Native services are immutable and output holds three writable `SetTrace` values.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_signal_workset_probe(
-    native: *const SignalServices,
-    output: *mut SetTrace,
-) {
+pub unsafe extern "C" fn openttd_rust_signal_workset_probe(output: *mut SetTrace) {
     // SAFETY: caller supplies live immutable callbacks and three output records.
     unsafe {
-        output.write(probe_set::<64>((*native).overflow_tbu));
-        output
-            .add(1)
-            .write(probe_set::<256>((*native).overflow_tbd));
-        output
-            .add(2)
-            .write(probe_set::<128>((*native).overflow_global));
+        output.write(probe_set::<64>(overflow_tbu));
+        output.add(1).write(probe_set::<256>(overflow_tbd));
+        output.add(2).write(probe_set::<128>(overflow_global));
     }
 }
 

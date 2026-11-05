@@ -667,7 +667,6 @@ const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcep
 		.coast = [](uint32_t t) noexcept { return IsCoastTile(TileIndex{t}); },
 		.buoy = [](uint32_t t) noexcept { return IsBuoyTile(TileIndex{t}); },
 		.canal = RustIsCanal,
-		.height_limit = RustMapHeightLimit,
 		.max_bridge_height = RustMaxBridgeHeight,
 		.freeform_edges = OpenTTDFreeformEdges, .editor = OpenTTDEditor,
 		.exchange_generating = GetRustTownFoundingServices().exchange_generating,

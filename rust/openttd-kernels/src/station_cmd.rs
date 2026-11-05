@@ -16,6 +16,7 @@
     clippy::too_many_lines,
     clippy::too_many_arguments
 )]
+use crate::debug::debug;
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
@@ -260,7 +261,6 @@ pub struct CommandServicesTable {
     pub iterator_tile: extern "C" fn(*mut TileIterator) -> u32,
     pub iterator_next: extern "C" fn(*mut TileIterator),
     pub airport_noise: extern "C" fn(*const AirportSpec) -> u8,
-    pub noise_enabled: extern "C" fn() -> bool,
     pub town_max_noise: extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const crate::services::TownHandle,
     pub airport_tile: extern "C" fn(*const BaseStation) -> u32,
@@ -298,7 +298,6 @@ pub struct CommandServicesTable {
     pub water_infrastructure: extern "C" fn(u8, u32),
     pub make_dock: extern "C" fn(u32, u8, u16, u8, u8),
     pub neutral_for_tile: extern "C" fn(u32) -> *mut BaseStation,
-    pub oilrig_unavailable: extern "C" fn(u32),
     pub associate_industry: extern "C" fn(*mut BaseStation, u32),
     pub make_oilrig: extern "C" fn(u32, u16, u8),
     pub set_station_owner: extern "C" fn(*mut BaseStation, u8),
@@ -3085,7 +3084,7 @@ impl Ctx<'_> {
         let authority = unsafe { &*self.s.authority };
         let mut refused = std::ptr::null();
         let mut message = 0;
-        if (self.s.noise_enabled)() {
+        if unsafe { (*self.s.shared).settings().station_noise.read() } {
             if u32::from(unsafe { noise_ptr.read() }) + noise
                 > u32::from((self.s.town_max_noise)(nearest))
             {
@@ -3182,7 +3181,7 @@ impl Ctx<'_> {
         (self.s.airport_infrastructure)(owner, 1);
         self.tiles_changed(st, true, 1);
         (self.s.station_view_invalidate)(st, -1);
-        if (self.s.noise_enabled)() {
+        if unsafe { (*self.s.shared).settings().station_noise.read() } {
             (self.s.town_view_dirty)(nearest);
         }
     }
@@ -3233,7 +3232,7 @@ impl Ctx<'_> {
             unsafe {
                 ptr.write(ptr.read().wrapping_sub(u16::from(noise)));
             }
-            if (self.s.noise_enabled)() {
+            if unsafe { (*self.s.shared).settings().station_noise.read() } {
                 (self.s.town_view_dirty)(nearest);
             }
         }
@@ -3708,7 +3707,10 @@ impl Ctx<'_> {
     fn build_oilrig(&self, ret: Cost<'_>, tile: u32) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_OILRIG);
         if !(self.s.station_available)() {
-            (self.s.oilrig_unavailable)(tile);
+            debug!(
+                misc,
+                0, "Can't allocate station for oilrig at 0x{:X}, reverting to oilrig only", tile
+            );
             return;
         }
         let st = (self.s.new_station)(tile);
@@ -4324,7 +4326,6 @@ crate::abi::layouts! {
         iterator_tile,
         iterator_next,
         airport_noise,
-        noise_enabled,
         town_max_noise,
         station_town,
         airport_tile,
@@ -4358,7 +4359,6 @@ crate::abi::layouts! {
         water_infrastructure,
         make_dock,
         neutral_for_tile,
-        oilrig_unavailable,
         associate_industry,
         make_oilrig,
         set_station_owner,

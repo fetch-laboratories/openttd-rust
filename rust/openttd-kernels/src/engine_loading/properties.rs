@@ -16,6 +16,7 @@ use super::{
     openttd_rust_engine_translate_refit, openttd_rust_vehicle_order, temp,
 };
 use crate::bitmath_func::{assign_bit, has_bit, sb, set_bit64};
+use crate::debug::grf_msg;
 use crate::engine_type::{
     AIR_CTOL, AIR_HELI, EC_DIESEL, EC_ELECTRIC, EC_MAGLEV, EC_MONORAIL, EC_STEAM, VE_DEFAULT,
     VE_DISABLE_EFFECT, VE_TYPE_COUNT, VE_TYPE_START,
@@ -119,16 +120,10 @@ pub struct Properties {
     ship_image_valid: extern "C" fn(u8) -> bool,
     aircraft_image_valid: extern "C" fn(u8) -> bool,
     uses_2cc: extern "C" fn(bool),
-    invalid_sprite: extern "C" fn(u8, u8),
-    invalid_cargo: extern "C" fn(u8, u8),
-    invalid_track: extern "C" fn(u8),
-    invalid_weight: extern "C" fn(u8),
-    ai_rank: extern "C" fn(),
-    invalid_price: extern "C" fn(*const u8, usize, u32),
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVehicleProperties" ["engine_loading"] => Properties { loading, set_intro, set_decay, set_life, set_model_life, set_climates, set_load_amount, set_cargo_label, set_callbacks, set_refit_cost, set_retire, set_misc, set_extra, set_cargo_age, set_train_ai, set_train_speed, set_train_power, set_train_kind, set_train_running, set_train_price, set_train_image, set_train_capacity, set_train_weight, set_train_cost, set_train_class, set_train_wagon_power, set_train_te, set_train_drag, set_train_shorten, set_train_visual, set_train_wagon_weight, set_train_user, set_train_curve, set_road_running, set_road_price, set_road_image, set_road_capacity, set_road_cost, set_road_sound, set_road_power, set_road_weight, set_road_te, set_road_drag, set_road_visual, set_road_shorten, set_ship_image, set_ship_cost, set_ship_speed, set_ship_capacity, set_ship_running, set_ship_sound, set_ship_ocean, set_ship_canal, set_ship_visual, set_ship_acceleration, set_aircraft_image, set_aircraft_subtype, set_aircraft_cost, set_aircraft_speed, set_aircraft_acceleration, set_aircraft_running, set_aircraft_passengers, set_aircraft_mail, set_aircraft_sound, set_aircraft_range, id, callbacks, train_power, train_kind, train_weight, train_class, aircraft_subtype, badges, sound, train_image_valid, road_image_valid, ship_image_valid, aircraft_image_valid, uses_2cc, invalid_sprite, invalid_cargo, invalid_track, invalid_weight, ai_rank, invalid_price };
+    "OpenTTDVehicleProperties" ["engine_loading"] => Properties { loading, set_intro, set_decay, set_life, set_model_life, set_climates, set_load_amount, set_cargo_label, set_callbacks, set_refit_cost, set_retire, set_misc, set_extra, set_cargo_age, set_train_ai, set_train_speed, set_train_power, set_train_kind, set_train_running, set_train_price, set_train_image, set_train_capacity, set_train_weight, set_train_cost, set_train_class, set_train_wagon_power, set_train_te, set_train_drag, set_train_shorten, set_train_visual, set_train_wagon_weight, set_train_user, set_train_curve, set_road_running, set_road_price, set_road_image, set_road_capacity, set_road_cost, set_road_sound, set_road_power, set_road_weight, set_road_te, set_road_drag, set_road_visual, set_road_shorten, set_ship_image, set_ship_cost, set_ship_speed, set_ship_capacity, set_ship_running, set_ship_sound, set_ship_ocean, set_ship_canal, set_ship_visual, set_ship_acceleration, set_aircraft_image, set_aircraft_subtype, set_aircraft_cost, set_aircraft_speed, set_aircraft_acceleration, set_aircraft_running, set_aircraft_passengers, set_aircraft_mail, set_aircraft_sound, set_aircraft_range, id, callbacks, train_power, train_kind, train_weight, train_class, aircraft_subtype, badges, sound, train_image_valid, road_image_valid, ship_image_valid, aircraft_image_valid, uses_2cc };
 }
 
 fn common(s: &Properties, e: E, prop: i32, r: &mut Reader<'_>) -> Result<i32, ReadError> {
@@ -174,9 +169,21 @@ fn price(s: &Properties, e: E, kind: u8, value: u32) {
         } else {
             "RoadVehicleChangeInfo"
         };
-        (s.invalid_price)(name.as_ptr(), name.len(), value);
+        grf_msg!(
+            1,
+            "{}: Unsupported running cost base 0x{:04X}, ignoring",
+            name,
+            value
+        );
     }
 }
+/// Change-info handler names by vehicle type, as the messages name them.
+const PROPERTY_LOCATIONS: [&str; 4] = [
+    "RailVehicleChangeInfo",
+    "RoadVehicleChangeInfo",
+    "ShipVehicleChangeInfo",
+    "AircraftVehicleChangeInfo",
+];
 fn image(s: &Properties, kind: u8, value: u8) -> u8 {
     let mut index = value;
     if kind != VEH_TRAIN && index == 255 {
@@ -194,7 +201,12 @@ fn image(s: &Properties, kind: u8, value: u8) -> u8 {
     if valid {
         index
     } else {
-        (s.invalid_sprite)(kind, value);
+        grf_msg!(
+            1,
+            "{}: Invalid Sprite {} specified, ignoring",
+            PROPERTY_LOCATIONS[usize::from(kind)],
+            value
+        );
         0
     }
 }
@@ -236,7 +248,12 @@ unsafe fn default_cargo(
     } else {
         let cargo = openttd_rust_cargo_translate(value, file, false);
         if cargo == INVALID_CARGO {
-            (s.invalid_cargo)(kind, value);
+            grf_msg!(
+                2,
+                "{}: Invalid cargo type {}, using first refittable",
+                PROPERTY_LOCATIONS[usize::from(kind)],
+                value
+            );
         }
         cargo
     };
@@ -332,7 +349,11 @@ unsafe fn train(
                     1 => Some(RAILTYPE_LABEL_MONO),
                     2 => Some(RAILTYPE_LABEL_MAGLEV),
                     _ => {
-                        (s.invalid_track)(track);
+                        grf_msg!(
+                            1,
+                            "RailVehicleChangeInfo: Invalid track type {} specified, ignoring",
+                            track
+                        );
                         None
                     }
                 };
@@ -385,7 +406,10 @@ unsafe fn train(
         }
         p if p == i32::from(PROP_TRAIN_COST_FACTOR) => (s.set_train_cost)(e, r.byte()?),
         0x18 => {
-            (s.ai_rank)();
+            grf_msg!(
+                2,
+                "RailVehicleChangeInfo: Property 0x18 'AI rank' not used by NoAI, ignored."
+            );
             r.byte()?;
         }
         0x19 => {
@@ -428,7 +452,11 @@ unsafe fn train(
         0x24 => {
             let high = r.byte()?;
             if high > 4 {
-                (s.invalid_weight)(high);
+                grf_msg!(
+                    2,
+                    "RailVehicleChangeInfo: Nonsensical weight of {} tons, ignoring",
+                    u32::from(high) << 8
+                );
             } else {
                 let mut weight = u32::from((s.train_weight)(e));
                 sb(&mut weight, 8, 8, u32::from(high));
@@ -473,7 +501,11 @@ unsafe fn train(
                         (*temp(id)).labels.push(label);
                     }
                 } else {
-                    (s.invalid_track)(track);
+                    grf_msg!(
+                        1,
+                        "RailVehicleChangeInfo: Invalid track type {} specified, ignoring",
+                        track
+                    );
                 }
             }
         }
@@ -719,9 +751,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_properties(
 
 #[cfg(test)]
 pub(super) unsafe fn partial_read_tests() {
-    extern "C" fn unused0<R>() -> R {
-        panic!("unused property service")
-    }
     extern "C" fn unused1<A, R>(_: A) -> R {
         panic!("unused property service")
     }
@@ -835,12 +864,6 @@ pub(super) unsafe fn partial_read_tests() {
         ship_image_valid: unused1,
         aircraft_image_valid: unused1,
         uses_2cc: unused1,
-        invalid_sprite: unused2,
-        invalid_cargo: unused2,
-        invalid_track: unused1,
-        invalid_weight: unused1,
-        ai_rank: unused0,
-        invalid_price: unused3,
     };
     let reads = ReaderServices {
         has_data: unused2,

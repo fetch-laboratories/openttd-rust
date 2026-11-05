@@ -47,7 +47,6 @@ struct OpenTTDRailCommandServices {
 	int64_t (*rail_clear_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_clear_cost);
 	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_convert_cost);
 	bool (*crossing_with_competitor)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_with_competitor);
-	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	int32_t (*slope_z_in_corner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z_in_corner);
 	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(entrance_edge);
 	void (*build_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(build_rail);

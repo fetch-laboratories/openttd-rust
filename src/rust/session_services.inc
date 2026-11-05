@@ -85,7 +85,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.survey_ask = []() noexcept { return _settings_client.network.participate_survey == PS_ASK; },
 		.show_load_error = [](bool critical) noexcept { ShowErrorMessage(GetSaveLoadErrorType(), GetSaveLoadErrorMessage(), critical ? WL_CRITICAL : WL_ERROR); },
 		.social_mode = [](GameMode mode) noexcept { UpdateSocialIntegration(mode); },
-		.load_failed_debug = [](bool initial) noexcept { if (initial) { Debug(net, 0, "Loading requested map failed; closing server."); } else { Debug(net, 0, "Loading game failed, so a new (random) game will be started"); } },
 		.pause_query = RustAskUnsafeUnpause,
 		.pause_change = [](uint8_t prev, PauseMode mode) noexcept { NetworkHandlePauseChange(PauseModes{prev}, mode); },
 		.pause_dirty = []() noexcept { SetWindowDirty(WC_STATUS_BAR, 0); SetWindowDirty(WC_MAIN_TOOLBAR, 0); },

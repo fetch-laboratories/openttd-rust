@@ -106,11 +106,6 @@ pub struct BreakdownCountdown {
     pub counter: u8,
 }
 #[repr(C)]
-pub struct BreakdownSoundState {
-    pub kind: VehicleType,
-    pub landscape: services::LandscapeType,
-}
-#[repr(C)]
 pub struct Age {
     pub age: CalendarDate,
     pub max_age: CalendarDate,
@@ -157,7 +152,6 @@ pub struct Services {
     pub breakdown_start_write: extern "C" fn(VehicleRef, u8, u8),
     pub breakdown_active: extern "C" fn(VehicleRef) -> BreakdownActive,
     pub breakdown_countdown: extern "C" fn(VehicleRef) -> BreakdownCountdown,
-    pub breakdown_sound_state: extern "C" fn(VehicleRef) -> BreakdownSoundState,
     pub breakdown_delay_write: extern "C" fn(VehicleRef, u8),
     pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
     pub smoke_delay: extern "C" fn(VehicleRef) -> u8,
@@ -476,10 +470,10 @@ unsafe fn breakdown_state<const C: bool>(
             } else {
                 (v).write_speed(0);
                 if !svc!(C, base.play_vehicle_sound, v, VSE_BREAKDOWN) {
-                    let sound = svc!(C, s.breakdown_sound_state, v);
                     let train_ship =
-                        sound.kind == VehicleType::TRAIN || sound.kind == VehicleType::SHIP;
-                    let toyland = sound.landscape == services::LandscapeType::TOYLAND;
+                        start.kind == VehicleType::TRAIN || start.kind == VehicleType::SHIP;
+                    let climate = unsafe { (*s.shared).settings().climate.read() };
+                    let toyland = climate == services::LandscapeType::TOYLAND.0;
                     let sound = if toyland {
                         if train_ship { 58 } else { 53 }
                     } else if train_ship {
@@ -847,10 +841,6 @@ crate::abi::layouts! {
         order_type,
         counter,
     };
-    "OpenTTDVehicleMaintenanceBreakdownSoundState" ["maintenance"] => BreakdownSoundState {
-        kind,
-        landscape,
-    };
     "OpenTTDVehicleMaintenanceAge" ["maintenance"] => Age {
         age,
         max_age,
@@ -890,7 +880,6 @@ crate::abi::layouts! {
         breakdown_start_write,
         breakdown_active,
         breakdown_countdown,
-        breakdown_sound_state,
         breakdown_delay_write,
         smoke_disabled,
         smoke_delay,

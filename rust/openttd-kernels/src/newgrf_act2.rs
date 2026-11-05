@@ -17,6 +17,7 @@
     clippy::if_not_else, // Preserve the original branch order.
 )]
 use crate::bitmath_func::{clr_bit, gb, has_bit, has_exactly_one_bit, sb, set_bit};
+use crate::debug::grf_msg;
 use crate::game_state::GameState;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
@@ -147,26 +148,6 @@ pub struct Services {
     registers: unsafe extern "C" fn(*mut Layout, u32) -> *mut LayoutRegisters,
     assert_offsets: unsafe extern "C" fn(bool, bool, u32),
     error_data: unsafe extern "C" fn(*mut c_void, *const u8, usize),
-    missing_group: unsafe extern "C" fn(u8, u8, u16),
-    missing_set: unsafe extern "C" fn(u8, u8, u16),
-    unsupported_feature: unsafe extern "C" fn(u8),
-    reserved_type: unsafe extern "C" fn(u8),
-    random_count: unsafe extern "C" fn(),
-    no_sets: unsafe extern "C" fn(),
-    real_counts: unsafe extern "C" fn(u8, u8, u8),
-    real_empty: unsafe extern "C" fn(),
-    real_one: unsafe extern "C" fn(u16),
-    real_same: unsafe extern "C" fn(u16),
-    loaded_entry: unsafe extern "C" fn(u32, u16),
-    loading_entry: unsafe extern "C" fn(u32, u16),
-    production_version: unsafe extern "C" fn(u8),
-    sprite_set: unsafe extern "C" fn(u32),
-    palette_set: unsafe extern "C" fn(u32),
-    sprite_var10: unsafe extern "C" fn(),
-    palette_var10: unsafe extern "C" fn(),
-    register_var10: unsafe extern "C" fn(u8, u8),
-    ground_flags: unsafe extern "C" fn(u8),
-    unknown_flags: unsafe extern "C" fn(u8),
 }
 crate::abi::layouts! {
     fn abi_layout;
@@ -177,7 +158,7 @@ crate::abi::layouts! {
     "OpenTTDSequenceStorage" ["act2"] => SequenceStorage { image, x, y, z, extent_x, extent_y, extent_z };
     "OpenTTDPalSpriteStorage" ["act2"] => PalSpriteStorage { sprite, pal };
     "OpenTTDLayoutRegisters" ["act2"] => LayoutRegisters { flags, dodraw, sprite, palette, max_sprite_offset, max_palette_offset, delta, sprite_var10, palette_var10 };
-    "OpenTTDAction2Services" ["act2"] => Services { pal_sprite_storage, invalid_layout, invalid_production, callback_new, group_index, group_get, result_new, assert_loaded, deterministic_new, random_new, real_new, layout_new, production_new, adjust_begin, deterministic_default, deterministic_error, range_append, random_storage, random_reserve, random_append, loaded_reserve, loaded_append, loading_reserve, loading_append, production_storage, group_layout, layout_allocate, layout_storage, layout_sequence, sequence_storage, is_parent, has_registers, allocate_registers, registers, assert_offsets, error_data, missing_group, missing_set, unsupported_feature, reserved_type, random_count, no_sets, real_counts, real_empty, real_one, real_same, loaded_entry, loading_entry, production_version, sprite_set, palette_set, sprite_var10, palette_var10, register_var10, ground_flags, unknown_flags };
+    "OpenTTDAction2Services" ["act2"] => Services { pal_sprite_storage, invalid_layout, invalid_production, callback_new, group_index, group_get, result_new, assert_loaded, deterministic_new, random_new, real_new, layout_new, production_new, adjust_begin, deterministic_default, deterministic_error, range_append, random_storage, random_reserve, random_append, loaded_reserve, loaded_append, loading_reserve, loading_append, production_storage, group_layout, layout_allocate, layout_storage, layout_sequence, sequence_storage, is_parent, has_registers, allocate_registers, registers, assert_offsets, error_data };
 }
 
 const GROUPID_CALLBACK_FAILED: u16 = 0x7FFF;
@@ -228,7 +209,13 @@ unsafe fn group_ref(s: &Services, l: &LoadingServices, setid: u8, kind: u8, id: 
             ptr::null()
         };
         if group.is_null() {
-            (s.missing_group)(setid, kind, id);
+            grf_msg!(
+                1,
+                "GetGroupFromGroupID(0x{:02X}:0x{:02X}): Groupid 0x{:04X} does not exist, leaving empty",
+                setid,
+                kind,
+                id
+            );
         }
         group
     }
@@ -246,7 +233,13 @@ unsafe fn create_group(
             return callback(s, l, id);
         }
         if loading::openttd_rust_grf_has_set_abi(feature, u32::from(id)) == 0 {
-            (s.missing_set)(setid, kind, id);
+            grf_msg!(
+                1,
+                "CreateGroupFromGroupID(0x{:02X}:0x{:02X}): Sprite set {} invalid",
+                setid,
+                kind,
+                id
+            );
             return ptr::null();
         }
         let start = loading::openttd_rust_grf_set_sprite(feature, u32::from(id));
@@ -438,7 +431,10 @@ unsafe fn randomized<R: Read>(
         *fields.lowest_bit = b.byte()?;
         let count = b.byte()?;
         if !has_exactly_one_bit(count) {
-            (s.random_count)();
+            grf_msg!(
+                1,
+                "NewSpriteGroup: Random Action 2 nrand should be power of 2"
+            );
         }
         (s.random_reserve)(group, usize::from(count));
         for _ in 0..count {
@@ -460,19 +456,32 @@ unsafe fn real<R: Read>(
     unsafe {
         let num_loading = b.byte()?;
         if loading::openttd_rust_grf_has_sets_abi(feature) == 0 {
-            (s.no_sets)();
+            grf_msg!(0, "NewSpriteGroup: No sprite set to work on! Skipping");
             return Ok(None);
         }
-        (s.real_counts)(setid, kind, num_loading);
+        grf_msg!(
+            6,
+            "NewSpriteGroup: New SpriteGroup 0x{:02X}, {} loaded, {} loading",
+            setid,
+            kind,
+            num_loading
+        );
         match u16::from(kind) + u16::from(num_loading) {
             0 => {
-                (s.real_empty)();
+                grf_msg!(
+                    1,
+                    "NewSpriteGroup: no result, skipping invalid RealSpriteGroup"
+                );
                 return Ok(Some(ptr::null()));
             }
             1 => {
                 let id = b.word()?;
                 let group = create_group(s, l, feature, setid, kind, id);
-                (s.real_one)(id);
+                grf_msg!(
+                    8,
+                    "NewSpriteGroup: one result, skipping RealSpriteGroup = subset {}",
+                    id
+                );
                 return Ok(Some(group));
             }
             _ => (),
@@ -481,19 +490,33 @@ unsafe fn real<R: Read>(
         for i in 0..kind {
             let id = b.word()?;
             loaded.push(id);
-            (s.loaded_entry)(u32::from(i), id);
+            grf_msg!(
+                8,
+                "NewSpriteGroup: + rg->loaded[{}]  = subset {}",
+                u32::from(i),
+                id
+            );
         }
         let mut loading = Vec::with_capacity(usize::from(num_loading));
         for i in 0..num_loading {
             let id = b.word()?;
             loading.push(id);
-            (s.loading_entry)(u32::from(i), id);
+            grf_msg!(
+                8,
+                "NewSpriteGroup: + rg->loading[{}] = subset {}",
+                u32::from(i),
+                id
+            );
         }
         let loaded_same = !loaded.is_empty() && loaded.windows(2).all(|p| p[0] == p[1]);
         let loading_same = !loading.is_empty() && loading.windows(2).all(|p| p[0] == p[1]);
         if loaded_same && loading_same && loaded[0] == loading[0] {
             let group = create_group(s, l, feature, setid, kind, loaded[0]);
-            (s.real_same)(loaded[0]);
+            grf_msg!(
+                8,
+                "NewSpriteGroup: same result, skipping RealSpriteGroup = subset {}",
+                loaded[0]
+            );
             return Ok(Some(group));
         }
         let group = (s.real_new)(line);
@@ -533,7 +556,11 @@ unsafe fn production<R: Read>(
 ) -> Result<Option<Handle>, ReadError> {
     unsafe {
         if kind > 2 {
-            (s.production_version)(kind);
+            grf_msg!(
+                1,
+                "NewSpriteGroup: Unsupported industry production version {}, skipping",
+                kind
+            );
             return Ok(Some(ptr::null()));
         }
         let group = (s.production_new)(line);
@@ -656,7 +683,11 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                 && (loading::openttd_rust_grf_has_set_abi(feature, index) == 0
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
             {
-                (s.sprite_set)(index);
+                grf_msg!(
+                    1,
+                    "ReadSpriteLayoutSprite: Spritelayout uses undefined custom spriteset {}",
+                    index
+                );
                 *image.sprite = SPR_IMG_QUERY;
                 *image.pal = PAL_NONE;
             } else {
@@ -676,7 +707,10 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                 set_bit(&mut *image.sprite, SPRITE_MODIFIER_CUSTOM_SPRITE);
             }
         } else if flags & TLF_SPRITE_VAR10 != 0 && flags & TLF_SPRITE_REG_FLAGS == 0 {
-            (s.sprite_var10)();
+            grf_msg!(
+                1,
+                "ReadSpriteLayoutSprite: Spritelayout specifies var10 value for non-action-1 sprite"
+            );
             disable(s, l, s.invalid_layout, b"");
             return Ok(flags);
         }
@@ -686,7 +720,11 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                 && (loading::openttd_rust_grf_has_set_abi(feature, index) == 0
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
             {
-                (s.palette_set)(index);
+                grf_msg!(
+                    1,
+                    "ReadSpriteLayoutSprite: Spritelayout uses undefined custom spriteset {} for 'palette'",
+                    index
+                );
                 *image.pal = PAL_NONE;
             } else {
                 let sprite = if use_sets {
@@ -705,7 +743,10 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
                 set_bit(&mut *image.pal, SPRITE_MODIFIER_CUSTOM_SPRITE);
             }
         } else if flags & TLF_PALETTE_VAR10 != 0 && flags & TLF_PALETTE_REG_FLAGS == 0 {
-            (s.palette_var10)();
+            grf_msg!(
+                1,
+                "ReadSpriteLayoutRegisters: Spritelayout specifies var10 value for non-action-1 palette"
+            );
             disable(s, l, s.invalid_layout, b"");
         }
         Ok(flags)
@@ -758,7 +799,12 @@ unsafe fn layout_registers<R: Read>(
             let value = b.byte()?;
             (*regs).sprite_var10 = value;
             if value > TLR_MAX_VAR10 {
-                (s.register_var10)(value, TLR_MAX_VAR10);
+                grf_msg!(
+                    1,
+                    "ReadSpriteLayoutRegisters: Spritelayout specifies var10 ({}) exceeding the maximal allowed value {}",
+                    value,
+                    TLR_MAX_VAR10
+                );
                 disable(s, l, s.invalid_layout, b"");
                 return Ok(());
             }
@@ -767,7 +813,12 @@ unsafe fn layout_registers<R: Read>(
             let value = b.byte()?;
             (*regs).palette_var10 = value;
             if value > TLR_MAX_VAR10 {
-                (s.register_var10)(value, TLR_MAX_VAR10);
+                grf_msg!(
+                    1,
+                    "ReadSpriteLayoutRegisters: Spritelayout specifies var10 ({}) exceeding the maximal allowed value {}",
+                    value,
+                    TLR_MAX_VAR10
+                );
                 disable(s, l, s.invalid_layout, b"");
             }
         }
@@ -817,7 +868,11 @@ pub(crate) unsafe fn read_layout<R: Read>(
         }
         let invalid = flags & !(valid & !TLF_NON_GROUND_FLAGS);
         if invalid != 0 {
-            (s.ground_flags)(invalid);
+            grf_msg!(
+                1,
+                "ReadSpriteLayout: Spritelayout uses invalid flag 0x{:X} for ground sprite",
+                invalid
+            );
             disable(s, l, s.invalid_layout, b"");
             return Ok(true);
         }
@@ -844,7 +899,11 @@ pub(crate) unsafe fn read_layout<R: Read>(
                 return Ok(true);
             }
             if flags & !valid != 0 {
-                (s.unknown_flags)(flags & !valid);
+                grf_msg!(
+                    1,
+                    "ReadSpriteLayout: Spritelayout uses unknown flag 0x{:X}",
+                    flags & !valid
+                );
                 disable(s, l, s.invalid_layout, b"");
                 return Ok(true);
             }
@@ -902,7 +961,11 @@ unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result
     unsafe {
         let feature = b.byte()?;
         if feature >= GSF_END {
-            (s.unsupported_feature)(feature);
+            grf_msg!(
+                1,
+                "NewSpriteGroup: Unsupported feature 0x{:02X}, skipping",
+                feature
+            );
             return Ok(());
         }
         let setid = b.byte()?;
@@ -913,7 +976,11 @@ unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result
             0x80 | 0x83 | 0x84 => randomized(s, l, b, feature, setid, kind, line)?,
             _ => {
                 if kind >= 0x80 {
-                    (s.reserved_type)(kind);
+                    grf_msg!(
+                        0,
+                        "NewSpriteGroup: Reserved group type 0x{:02X}, skipping",
+                        kind
+                    );
                     return Ok(());
                 }
                 match feature {
@@ -951,7 +1018,11 @@ unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result
                         group
                     }
                     _ => {
-                        (s.unsupported_feature)(feature);
+                        grf_msg!(
+                            1,
+                            "NewSpriteGroup: Unsupported feature 0x{:02X}, skipping",
+                            feature
+                        );
                         ptr::null()
                     }
                 }

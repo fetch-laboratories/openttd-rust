@@ -60,7 +60,6 @@ pub struct Services {
     pub(crate) create: extern "C" fn(*const Packet) -> *mut c_void,
     pub(crate) packet: extern "C" fn(*mut c_void) -> *mut Packet,
     pub(crate) destroy: extern "C" fn(*mut c_void),
-    pub(crate) random: extern "C" fn(u32) -> u32,
     pub(crate) coordinate: extern "C" fn(u32, u8) -> u32,
     pub(crate) pay: extern "C" fn(*mut c_void, u8, u8, *const c_void, u32, u32) -> i64,
     pub(crate) origin: extern "C" fn(*mut c_void, u16, u32, u8),
@@ -205,7 +204,6 @@ crate::abi::layouts! {
         create,
         packet,
         destroy,
-        random,
         coordinate,
         pay,
         origin,
@@ -1219,7 +1217,9 @@ pub(crate) unsafe fn truncate_station(
         while let Some(current) = n {
             n = unsafe { after(l, current.token) };
             let p = unsafe { packet(s, current.shell) };
-            if previous > max_move && (s.random)(previous) < previous - max_move {
+            if previous > max_move
+                && unsafe { &*s.shared }.random_range(previous) < previous - max_move
+            {
                 if !origins.is_null() && loop_count == 0 {
                     (s.origin)(origins, p.first_station, u32::from(p.count), 0);
                 }
@@ -1725,9 +1725,6 @@ mod tests {
             drop(Box::from_raw(shell.cast::<Packet>()));
         }
     }
-    extern "C" fn random(limit: u32) -> u32 {
-        limit - 1
-    }
     extern "C" fn coordinate(tile: u32, axis: u8) -> u32 {
         if axis == 0 { tile & 255 } else { tile >> 8 }
     }
@@ -1787,7 +1784,6 @@ mod tests {
             create,
             packet: owner,
             destroy,
-            random,
             coordinate,
             pay,
             origin,

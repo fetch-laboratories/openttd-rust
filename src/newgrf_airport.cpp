@@ -66,7 +66,6 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.base_spec = RustAirportSpec<const AirportSpec *>,
 		.min_year = [](const AirportSpec *spec) noexcept { return spec->min_year.base(); },
 		.max_year = [](const AirportSpec *spec) noexcept { return spec->max_year.base(); },
-		.never_expire = RustNeverExpireAirports,
 		.station_layout = RustStationAirportLayout,
 		.random = RustStationRandomBits<BaseStation>,
 		.build_date = RustStationBuildDate<BaseStation>,
@@ -77,7 +76,6 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.base_scope = RustResolverBaseScope,
 		.town_scope = RustResolverTownScope<AirportResolverObject>,
 		.evaluate_tile = RustEvaluateAirportTile,
-		.unhandled = [](uint8_t var) noexcept { Debug(grf, 1, "Unhandled airport tile variable 0x{:X}", var); },
 	};
 	return services;
 }

@@ -35,8 +35,6 @@ const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcep
 		.availability = [](const IndustrySpec *spec) noexcept { return OpenTTDIndustryDefinitionAvailability{RustSpecEnabled<IndustrySpec>(spec), RustSpecHasGRFFile(spec)}; },
 		.publish = [](uint16_t id, IndustrySpec *spec) noexcept { _industry_specs[id] = std::move(*spec); },
 		.publish_tile = [](uint16_t id, IndustryTileSpec *spec) noexcept { _industry_tile_specs[id] = std::move(*spec); },
-		.industry_full = []() noexcept { GrfMsg(1, "Industry.SetEntitySpec: Too many industries allocated. Ignoring."); },
-		.tile_full = []() noexcept { GrfMsg(1, "IndustryTile.SetEntitySpec: Too many industry tiles allocated. Ignoring."); },
 		.reset_industry = [](uint16_t id) noexcept { _industry_specs[id] = _origin_industry_specs[id]; },
 		.clear_industry = [](uint16_t id) noexcept { _industry_specs[id] = IndustrySpec{}; },
 		.climate_available = [](const IndustrySpec *spec, uint8_t climate) noexcept { return spec->climate_availability.Test(static_cast<LandscapeType>(climate)); },

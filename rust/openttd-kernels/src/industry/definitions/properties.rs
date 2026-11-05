@@ -6,6 +6,7 @@ use super::{
 };
 use crate::bitmath_func::{gb, sb};
 use crate::cargo_type::INVALID_CARGO;
+use crate::debug::grf_msg;
 use crate::industry_map::GFX_WATERTILE_SPECIALCHECK;
 use crate::industry_type::{
     INDUSTRY_NUM_INPUTS, INDUSTRY_NUM_OUTPUTS, INDUSTRY_ORIGINAL_NUM_INPUTS,
@@ -127,9 +128,11 @@ unsafe fn layouts(
         let mut k = 0_u32;
         loop {
             if bytes_read >= definition_size {
-                unsafe {
-                    (p.layout_size_mismatch)(id);
-                }
+                grf_msg!(
+                    3,
+                    "IndustriesChangeInfo: Incorrect size for industry tile layout definition for industry {}.",
+                    id
+                );
                 definition_size = u32::MAX;
             }
             let mut tile = LayoutTile {
@@ -146,14 +149,22 @@ unsafe fn layouts(
                 bytes_read = bytes_read.wrapping_add(2);
                 if u16::from(kind) >= NEW_INDUSTRYOFFSET {
                     unsafe {
-                        (p.layout_import_type)(id);
+                        grf_msg!(
+                            1,
+                            "IndustriesChangeInfo: Invalid original industry number for layout import, industry {}",
+                            id
+                        );
                         newgrf_loading::disable_invalid_id(loading);
                     }
                     return Ok(DISABLED);
                 }
                 if usize::from(index) >= unsafe { (p.original_layout_count)(kind) } {
                     unsafe {
-                        (p.layout_import_index)(id);
+                        grf_msg!(
+                            1,
+                            "IndustriesChangeInfo: Invalid original industry layout index for layout import, industry {}",
+                            id
+                        );
                         newgrf_loading::disable_invalid_id(loading);
                     }
                     return Ok(DISABLED);
@@ -177,9 +188,12 @@ unsafe fn layouts(
                 let mapped =
                     unsafe { override_manager::get(override_manager::tile(), local, c.grfid) };
                 if mapped == INVALID_INDUSTRYTILE {
-                    unsafe {
-                        (p.layout_tile_undefined)(local, id);
-                    }
+                    grf_msg!(
+                        2,
+                        "IndustriesChangeInfo: Attempt to use industry tile {} with industry id {}, not yet defined. Ignoring.",
+                        local,
+                        id
+                    );
                 } else {
                     tile.gfx = mapped;
                 }
@@ -197,9 +211,11 @@ unsafe fn layouts(
         if valid_layout(&layout) {
             new_layouts.push(LayoutBuffer::new(layout.clone()));
         } else {
-            unsafe {
-                (p.layout_invalid)(id);
-            }
+            grf_msg!(
+                1,
+                "IndustriesChangeInfo: Invalid industry layout for industry id {}. Ignoring",
+                id
+            );
         }
     }
     unsafe {
@@ -218,9 +234,12 @@ unsafe fn tiles(
 ) -> Result<i32, ReadError> {
     let last = ids.end;
     if last > u32::from(NUM_INDUSTRYTILES_PER_GRF) {
-        unsafe {
-            (p.too_many_tiles)(last);
-        }
+        grf_msg!(
+            1,
+            "IndustryTilesChangeInfo: Too many industry tiles loaded ({}), max ({}). Ignoring.",
+            last,
+            NUM_INDUSTRYTILES_PER_GRF
+        );
         return Ok(INVALID_ID);
     }
     if unsafe { (s.tile_count)(c.file) } < last as usize {
@@ -239,9 +258,12 @@ unsafe fn tiles(
             0x08 => {
                 let substitute = r.byte()?;
                 if u16::from(substitute) >= NEW_INDUSTRYTILEOFFSET {
-                    unsafe {
-                        (p.tile_substitute_invalid)(substitute, id);
-                    }
+                    grf_msg!(
+                        2,
+                        "IndustryTilesChangeInfo: Attempt to use new industry tile {} as substitute industry tile for {}. Ignoring.",
+                        substitute,
+                        id
+                    );
                     continue;
                 }
                 if spec.is_null() {
@@ -257,9 +279,12 @@ unsafe fn tiles(
             0x09 => {
                 let override_id = r.byte()?;
                 if u16::from(override_id) >= NEW_INDUSTRYTILEOFFSET {
-                    unsafe {
-                        (p.tile_override_invalid)(override_id, id);
-                    }
+                    grf_msg!(
+                        2,
+                        "IndustryTilesChangeInfo: Attempt to override new industry tile {} with industry tile id {}. Ignoring.",
+                        override_id,
+                        id
+                    );
                     continue;
                 }
                 unsafe {
@@ -359,9 +384,12 @@ unsafe fn industries(
 ) -> Result<i32, ReadError> {
     let last = ids.end;
     if last > u32::from(NUM_INDUSTRYTYPES_PER_GRF) {
-        unsafe {
-            (p.too_many_industries)(last);
-        }
+        grf_msg!(
+            1,
+            "IndustriesChangeInfo: Too many industries loaded ({}), max ({}). Ignoring.",
+            last,
+            NUM_INDUSTRYTYPES_PER_GRF
+        );
         return Ok(INVALID_ID);
     }
     if unsafe { (s.industry_count)(c.file) } < last as usize {
@@ -389,9 +417,12 @@ unsafe fn industries(
                     continue;
                 }
                 if u16::from(substitute) >= NEW_INDUSTRYOFFSET {
-                    unsafe {
-                        (p.industry_substitute_invalid)(substitute, id);
-                    }
+                    grf_msg!(
+                        2,
+                        "_industry_specs: Attempt to use new industry {} as substitute industry for {}. Ignoring.",
+                        substitute,
+                        id
+                    );
                     continue;
                 }
                 if spec.is_null() {
@@ -406,9 +437,12 @@ unsafe fn industries(
             0x09 => {
                 let override_id = r.byte()?;
                 if u16::from(override_id) >= NEW_INDUSTRYOFFSET {
-                    unsafe {
-                        (p.industry_override_invalid)(override_id, id);
-                    }
+                    grf_msg!(
+                        2,
+                        "IndustriesChangeInfo: Attempt to override new industry {} with industry id {}. Ignoring.",
+                        override_id,
+                        id
+                    );
                     continue;
                 }
                 unsafe {

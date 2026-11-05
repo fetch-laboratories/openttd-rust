@@ -316,5 +316,33 @@ with tempfile.TemporaryDirectory() as directory:
             assert ("callee | GrfMsg(" in result.stdout) == copied, result.stdout
             assert bool(result.returncode) == copied, result.stdout
     port.write_text(original + seed)
+    assert check().returncode == 0, check().stdout
+    # Compiled `.inc` table fragments are native glue; a base that already had a hit
+    # under these rules may record it, but a new hit still may not.
+    fragment = root / "src/rust/fragment.inc"
+    fragment.write_text(
+        "OpenTTDFixtureServices f{.a = [](const Vehicle *v) noexcept { return v->owner; },\n};\n"
+    )
+    git("add", ".")
+    result = check()
+    assert "new shared accessor: src/rust/fragment.inc |" in result.stdout, (
+        result.stdout
+    )
+    git("commit", "-qm", "Add: Existing fragment copy")
+    base = git("rev-parse", "HEAD")
+    row = result.stdout.split("new shared accessor: ")[1].splitlines()[0]
+    baseline.write_text(row + "\n")
+    assert check().returncode == 0, check().stdout
+    fragment.write_text(
+        fragment.read_text()
+        + "OpenTTDFixtureServices g{.b = [](const Company *c) noexcept { return c->money; },\n};\n"
+    )
+    result = check()
+    assert "new shared accessor: src/rust/fragment.inc |" in result.stdout, (
+        result.stdout
+    )
+    added = result.stdout.split("new shared accessor: ")[1].splitlines()[0]
+    baseline.write_text(row + "\n" + added + "\n")
+    assert "addition forbidden: " + added in check().stdout
     baseline.unlink()
     assert check().returncode != 0

@@ -2,6 +2,7 @@
 //! House and shared-town query runtime. Stack contexts live with the native Action2 facades.
 use super::{BUILDING_COUNTS, Leaves, State, house};
 use crate::cargo_type::{CT_MAIL, CT_PASSENGERS, is_valid_cargo_type};
+use crate::debug::debug;
 use crate::game_state::GameState;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::newgrf_storage;
@@ -72,8 +73,6 @@ pub struct ResolverServices {
     base_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     evaluate: extern "C" fn(*const CallbackArgs, *mut i32, usize) -> u16,
     reseed: extern "C" fn(u16, u32, *mut TownHandle, u8) -> house::HouseReseed,
-    unhandled_house: extern "C" fn(u8),
-    unhandled_town: extern "C" fn(u8),
 }
 impl ResolverServices {
     pub(crate) fn shared(&self) -> &Services {
@@ -274,7 +273,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             0xD5 => u32::from(state.growth.funding),
             _ => {
                 // End the canonical borrow before diagnostics below.
-                (s.unhandled_town)(variable);
+                debug!(grf, 1, "Unhandled town variable 0x{:X}", variable);
                 *available = false;
                 return u32::MAX;
             }
@@ -399,7 +398,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             0x66 => u32::MAX,
             0x7A => (s.badges)(ro, scope.house, parameter),
             _ => {
-                (s.unhandled_house)(variable);
+                debug!(grf, 1, "Unhandled house variable 0x{:X}", variable);
                 unsafe { *available = false };
                 u32::MAX
             }
@@ -539,7 +538,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         }
         0x7A => (s.badges)(ro, scope.house, parameter),
         _ => {
-            (s.unhandled_house)(variable);
+            debug!(grf, 1, "Unhandled house variable 0x{:X}", variable);
             unsafe { *available = false };
             u32::MAX
         }
@@ -601,8 +600,7 @@ crate::abi::layouts! {
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
         towns, shared, storage, larger_towns, stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity,
-        badges, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
-    };
+        badges, root, spec_house, local_id, base_scope, evaluate, reseed, };
 }
 
 /// Immutable process-lifetime native leaves, installed on house-class reset

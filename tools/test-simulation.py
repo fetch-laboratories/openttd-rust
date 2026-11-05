@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
+from code_lines import without_comments
 from simulation import (
     community_ai,
     engines,
@@ -708,6 +710,36 @@ class SimulationRuntimeTests(unittest.TestCase):
 
 
 class SimulationSpeedTests(unittest.TestCase):
+    def test_candidate_profile_entries_name_rust_functions(self) -> None:
+        # A renamed export toggles no collection, so every profile reports zero loop Ir.
+        source = simulate.ROOT / "rust/openttd-kernels/src"
+        for entry in ir.CANDIDATE_ENTRIES:
+            *module, name = entry.split("::")
+            module = module[1:] if module[:1] == ["openttd_kernels"] else module
+            files = (
+                [source.joinpath(*module).with_suffix(".rs")]
+                if module
+                else sorted(source.rglob("*.rs"))
+            )
+            functions: set[str] = set()
+            for path in files:
+                if not path.is_file():
+                    continue
+                text = path.read_text()
+                if name not in text:
+                    continue
+                text = without_comments(text, str(path), strings=True)
+                depth = 0
+                for token in re.finditer(r"[{}]|\bfn\s+(\w+)\s*[<(]", text):
+                    if token[0] == "{":
+                        depth += 1
+                    elif token[0] == "}":
+                        depth -= 1
+                    elif depth == 0:
+                        functions.add(token[1])
+            with self.subTest(entry=entry):
+                self.assertIn(name, functions, f"no Rust module function for {entry}")
+
     def test_record_and_fixed_ceilings(self):
         from math import inf, nextafter
 
@@ -917,9 +949,9 @@ class InstructionSpeedTests(unittest.TestCase):
             rust = root / "probe.rs"
             rust.write_text(
                 'unsafe extern "C" {fn fixture_state_loop(); fn fixture_generate_world();}\n'
-                '#[unsafe(no_mangle)] pub extern "C" fn openttd_rust_session_state_loop(){unsafe{fixture_state_loop();}}\n'
+                '#[unsafe(no_mangle)] pub extern "C" fn openttd_rust_session_state_loop_abi(){unsafe{fixture_state_loop();}}\n'
                 "pub mod genworld {#[inline(never)] pub fn generate(){unsafe{super::fixture_generate_world();}}}\n"
-                "fn main(){genworld::generate(); openttd_rust_session_state_loop();}\n"
+                "fn main(){genworld::generate(); openttd_rust_session_state_loop_abi();}\n"
             )
             subprocess.run(
                 [

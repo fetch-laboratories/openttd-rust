@@ -18,6 +18,7 @@
     clippy::many_single_char_names,
     clippy::struct_field_names
 )]
+use crate::debug::debug;
 use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
@@ -290,7 +291,6 @@ pub struct GroupServices {
     pub(crate) company_livery: unsafe extern "C" fn(u8) -> *const Livery,
     pub(crate) keep_length: unsafe extern "C" fn(u8) -> bool,
     pub(crate) delete_group: unsafe extern "C" fn(u16),
-    pub(crate) invalid_parent: unsafe extern "C" fn(u16, u16),
     pub(crate) clear_backup: unsafe extern "C" fn(u16),
     pub(crate) remove_rule: unsafe extern "C" fn(u8, u16, u16, u32),
     pub(crate) remove_vehicles: unsafe extern "C" fn(u16, u32),
@@ -831,7 +831,7 @@ unsafe fn update_children(w: &GroupServices) {
             || read_field!(pg, owner) != read_field!(g, owner)
             || read_field!(pg, vehicle_type) != read_field!(g, vehicle_type)
         {
-            unsafe { (w.invalid_parent)(id as u16, parent) };
+            debug!(misc, 2, "Group {} has invalid parent {}", id as u16, parent);
             write_field!(g, parent, INVALID_GROUP);
         } else {
             unsafe { openttd_rust_fleet_child_change(pg.cast(), id, true) };
@@ -1723,7 +1723,6 @@ crate::abi::layouts! {
         company_livery,
         keep_length,
         delete_group,
-        invalid_parent,
         clear_backup,
         remove_rule,
         remove_vehicles,

@@ -1508,13 +1508,9 @@ fn farm(i: *mut c_void, id: u16, map: Map, s: &Services) {
 /// # Safety
 /// Live industry, synchronous map/RNG services. No owner references cross calls.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_farm(
-    i: *mut c_void,
-    id: u16,
-    map: Map,
-    s: *const Services,
-) {
-    farm(i, id, map, unsafe { &*s });
+pub unsafe extern "C" fn openttd_rust_industry_farm(i: *mut c_void, id: u16, s: *const Services) {
+    let s = unsafe { &*s };
+    farm(i, id, tick_map(s), s);
 }
 fn chop(i: *mut c_void, owner: *mut Industry, map: Map, s: &Services, builder: *mut Builder) {
     if produced_count(owner) == 0 || unsafe { !valid((*produced(owner, 0)).cargo) } {
@@ -2035,7 +2031,6 @@ crate::abi::layouts! {
         set_frame,
         animation_loop,
         set_animation_loop,
-
         construction_counter,
         construction_stage,
         completed,

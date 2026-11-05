@@ -19,7 +19,6 @@
 #include "../settings_type.h"
 #include "../landscape.h"
 
-inline int32_t RustDesyncLevel() noexcept { return _debug_desync_level; }
 inline bool RustNetworking() noexcept { return _networking; }
 inline bool RustNetworkServer() noexcept { return _network_server; }
 inline bool RustNetworkDedicated() noexcept { return _network_dedicated; }

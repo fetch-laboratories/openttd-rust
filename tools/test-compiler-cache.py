@@ -10,7 +10,7 @@ import migration
 
 
 class CompilerCacheTests(unittest.TestCase):
-    def test_provenance_and_ambient_policy_overrides(self):
+    def test_provenance_and_ambient_policy_overrides(self) -> None:
         original = {
             "PATH": "/bin",
             "CCACHE_SLOPPINESS": "time_macros",
@@ -41,7 +41,7 @@ class CompilerCacheTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             migration.compiler_cache_environment(original, "../reference")
 
-    def test_disabled_mode_clears_launchers_and_pch_override(self):
+    def test_disabled_mode_clears_launchers_and_pch_override(self) -> None:
         options = migration.compiler_cache_options(None)
         self.assertIn("-DCMAKE_C_COMPILER_LAUNCHER=", options)
         self.assertIn("-DCMAKE_CXX_COMPILER_LAUNCHER=", options)
@@ -59,7 +59,7 @@ class CompilerCacheTests(unittest.TestCase):
         shutil.which("ccache", path=migration.environment()["PATH"]),
         "ccache not installed",
     )
-    def test_cache_key_ignores_workflow_and_driver_edits(self):
+    def test_cache_key_ignores_workflow_and_driver_edits(self) -> None:
         identity = migration.compiler_cache_compatibility()
         self.assertEqual(set(identity["policy"]), {"migration/ccache.conf"})
         self.assertTrue(identity["prefix"].startswith("compiler-v1-"))

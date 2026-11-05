@@ -68,8 +68,8 @@ pub struct TileServices {
 fn chance(s: &Services, a: u32, b: u32) -> bool {
     crate::random_func::chance16_i(a, b, s.shared().random())
 }
-fn sound(tile: u32, sound: u16, s: &Services, t: &TileServices) {
-    if unsafe { ((*t.shared).ambient_sound)() } {
+fn sound(tile: u32, sound: u16, s: &Services) {
+    if unsafe { s.shared().settings().ambient.read() } {
         unsafe { (s.play_sound)(sound, tile) };
     }
 }
@@ -147,7 +147,7 @@ fn mine(tile: u32, s: &Services, t: &TileServices) {
             let frame = unsafe { (t.frame)(tile) };
             if frame & 0x40 == 0 {
                 unsafe { (t.set_frame)(tile, frame | 0x40) };
-                sound(tile, 9, s, t);
+                sound(tile, 9, s);
             }
             if state & 7 != 0 {
                 return;
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
     match gfx {
         174 if (s.shared().tick_counter)() & 1 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
-            if unsafe { ((*t.shared).ambient_sound)() } {
+            if unsafe { s.shared().settings().ambient.read() } {
                 match frame & 7 {
                     2 => unsafe { (s.play_sound)(45, tile) },
                     6 => unsafe { (s.play_sound)(41, tile) },
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
         165 if (s.shared().tick_counter)() & 3 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) };
             if unsafe { (t.toffee_offset)(frame) } == 0xff {
-                sound(tile, 48, s, t);
+                sound(tile, 48, s);
             }
             frame = frame.wrapping_add(1);
             if frame >= 70 {
@@ -247,9 +247,9 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
         143 if (s.shared().tick_counter)() & 1 == 0 => {
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             match frame {
-                1 => sound(tile, 44, s, t),
-                23 => sound(tile, 43, s, t),
-                28 => sound(tile, 42, s, t),
+                1 => sound(tile, 44, s),
+                23 => sound(tile, 43, s),
+                28 => sound(tile, 42, s),
                 _ => {
                     if frame >= 50 {
                         let mut count =
@@ -304,8 +304,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
         _ => {}
     }
 }
-fn bubble(tile: u32, s: &Services, map: crate::services::Map, t: &TileServices) {
-    sound(tile, 46, s, t);
+fn bubble(tile: u32, s: &Services, map: crate::services::Map) {
+    sound(tile, 46, s);
     let dir = (s.shared().random() & 3) as usize;
     let x = map
         .tile_x(tile)
@@ -447,7 +447,7 @@ pub(crate) unsafe fn tile_loop(
         }
         10 => {
             if chance(s, 1, 3) {
-                sound(tile, 10, s, t);
+                sound(tile, 10, s);
                 crate::animated_tile::openttd_rust_animation_add(tile, true);
             }
         }
@@ -471,7 +471,7 @@ pub(crate) unsafe fn tile_loop(
                 }
             }
         }
-        161 => bubble(tile, s, map, t),
+        161 => bubble(tile, s, map),
         165 => crate::animated_tile::openttd_rust_animation_add(tile, true),
         174 if chance(s, 1, 3) => {
             crate::animated_tile::openttd_rust_animation_add(tile, true);

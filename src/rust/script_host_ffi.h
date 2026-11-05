@@ -60,7 +60,6 @@ const OpenTTDScriptHostServices &GetRustScriptHostServices() noexcept;
  * caller's frame between these steps; no Rust borrow spans one. Predicates return 0 or 1. */
 extern "C" {
 OpenTTDScriptContext *OPENTTD_RUST_CALL openttd_rust_script_context();
-OpenTTDScriptHost *OPENTTD_RUST_CALL openttd_rust_script_activate(OpenTTDScriptHost *);
 OpenTTDScriptHost *OPENTTD_RUST_CALL openttd_rust_script_host_new(ScriptInstance *);
 void OPENTTD_RUST_CALL openttd_rust_script_host_free(OpenTTDScriptHost *, const OpenTTDScriptHostServices *);
 OpenTTDScriptStep OPENTTD_RUST_CALL openttd_rust_script_loop(OpenTTDScriptHost *, const OpenTTDScriptHostServices *);

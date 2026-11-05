@@ -9,7 +9,9 @@ import re
 import subprocess
 import tempfile
 import unittest
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 
 import ci
@@ -34,20 +36,20 @@ PULL = {
 }
 
 
-def workflow(filename):
+def workflow(filename: str) -> dict[str, Any]:
     return yaml.safe_load((WORKFLOWS / filename).read_text())
 
 
-def job(filename, name):
+def job(filename: str, name: str) -> dict[str, Any]:
     return workflow(filename)["jobs"][name]
 
 
-def script_for(filename, name):
+def script_for(filename: str, name: str) -> str:
     (step,) = [s for s in job(filename, name)["steps"] if "script" in s.get("with", {})]
     return step["with"]["script"]
 
 
-def node(harness):
+def node(harness: str) -> object:
     return json.loads(subprocess.check_output(["node", "-e", harness], text=True))
 
 
@@ -65,10 +67,16 @@ def javascript(expression: str | bool) -> str:
     return "".join(parts)
 
 
-def evaluate(expression, *, cancelled=False, interpolate=False, **contexts):
+def evaluate(
+    expression: str | bool,
+    *,
+    cancelled: bool = False,
+    interpolate: bool = False,
+    **contexts: dict[str, Any],
+) -> object:
     """Evaluate an `if:` expression, or interpolate `${{ }}` into a string."""
     if interpolate:
-        parts = re.split(r"\$\{\{(.*?)\}\}", expression)
+        parts = re.split(r"\$\{\{(.*?)\}\}", cast(str, expression))
         parts[::2] = map(json.dumps, parts[::2])
         parts[1::2] = [f"String({javascript(part)})" for part in parts[1::2]]
         expression = " + ".join(parts)
@@ -91,8 +99,8 @@ def evaluate(expression, *, cancelled=False, interpolate=False, **contexts):
     )
 
 
-def good_needs():
-    needs = {
+def good_needs() -> dict[str, dict[str, Any]]:
+    needs: dict[str, dict[str, Any]] = {
         name: {"result": "success", "outputs": {}}
         for name in ("plan", "quick", "native", "platform")
     }
@@ -109,23 +117,25 @@ def good_needs():
 
 
 def execute_script(
-    filename,
-    name,
-    pull,
+    filename: str,
+    name: str,
+    pull: object,
     *,
-    env=None,
-    event=None,
-    latest=None,
-    payload=None,
-    previous=(),
-    trees=None,
-    compare=None,
-):
+    env: Mapping[str, str] | None = None,
+    event: object = None,
+    latest: object = None,
+    payload: Mapping[str, object] | None = None,
+    previous: Iterable[object] = (),
+    trees: object = None,
+    compare: str | None = None,
+) -> dict[str, Any]:
     """Run a status writer; `previous` holds the statuses of the PREVIOUS head."""
     script = script_for(filename, name)
     payload = {"pull_request": event, **(payload or {})}
     compare = compare or "async () => ({data: {behind_by: 0}})"
-    return node(f"""
+    return cast(
+        dict[str, Any],
+        node(f"""
 const statuses = [], failures = [], outputs = {{}}, trees = {json.dumps(trees or {})};
 const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root',
   serverUrl: 'https://github.com', runId: 123, payload: {json.dumps(payload)}}};
@@ -148,10 +158,13 @@ const github = {{paginate: async (_method, args) => {{
 Object.assign(process.env, {json.dumps(env or {})});
 (async () => {{{script}}})().then(() => console.log(JSON.stringify({{statuses, failures, outputs}})))
   .catch(error => console.log(JSON.stringify({{error: error.message, statuses}})));
-""")
+"""),
+    )
 
 
-def execute_publisher(needs, pull, superseded=False):
+def execute_publisher(
+    needs: object, pull: object, superseded: bool = False
+) -> dict[str, Any]:
     latest = {
         "context": ci.CONTEXT,
         "target_url": RUN.replace("123", "999") if superseded else RUN,
@@ -165,9 +178,16 @@ def execute_publisher(needs, pull, superseded=False):
     )
 
 
-def execute_invalidator(event, pull, latest=None, **carry):
+def execute_invalidator(
+    event: object, pull: object, latest: object = None, **carry: object
+) -> list[dict[str, Any]]:
     return execute_script(
-        "ci-invalidate.yml", "invalidate", pull, event=event, latest=latest, **carry
+        "ci-invalidate.yml",
+        "invalidate",
+        pull,
+        event=event,
+        latest=latest,
+        **cast(dict[str, Any], carry),
     )["statuses"]
 
 
@@ -176,18 +196,20 @@ SYNCHRONIZE = {"action": "synchronize", "before": PREVIOUS}
 
 def run_policy(
     *,
-    event="push",
-    on_demand="true",
-    files=(),
-    trees=None,
-    pulls=(),
-    statuses=(),
-    compare=None,
-):
+    event: str = "push",
+    on_demand: str = "true",
+    files: object = (),
+    trees: object = None,
+    pulls: Iterable[object] = (),
+    statuses: Iterable[object] = (),
+    compare: str | None = None,
+) -> dict[str, Any]:
     """Run the actual policy script; `trees` maps the base and pushed tree SHAs."""
     script = script_for("ci-policy.yml", "policy")
     compare = compare or f"async () => ({{data: {{files: {json.dumps(files)}}}}})"
-    return node(f"""
+    return cast(
+        dict[str, Any],
+        node(f"""
 process.env.CI_ON_DEMAND = {json.dumps(on_demand)};
 const outputs = {{}}, delays = [], trees = {json.dumps(trees or {})};
 let calls = 0;
@@ -206,18 +228,27 @@ const github = {{paginate: async () => {json.dumps(list(pulls))}, rest: {{
 }}}};
 (async () => {{{script}}})().then(() => console.log(JSON.stringify({{outputs, calls, delays}})))
   .catch(error => console.log(JSON.stringify({{outputs, calls, delays, error: error.message}})));
-""")
+"""),
+    )
 
 
-def entry(path, sha=HEAD, mode="100644", kind="blob"):
+def entry(
+    path: str, sha: str = HEAD, mode: str = "100644", kind: str = "blob"
+) -> dict[str, str]:
     return {"path": path, "type": kind, "mode": mode, "sha": sha}
 
 
-def tree(*entries, **fields):
+def tree(*entries: dict[str, str], **fields: object) -> dict[str, object]:
     return {"truncated": False, "tree": list(entries), **fields}
 
 
-def validation(full="success", marker="success", run=RUN, marker_run=RUN, tree=TREE):
+def validation(
+    full: str = "success",
+    marker: str = "success",
+    run: str | None = RUN,
+    marker_run: str | None = RUN,
+    tree: str = TREE,
+) -> list[dict[str, object]]:
     """Full validation status and its Validated tree marker on a merged head."""
     return [
         {
@@ -240,7 +271,7 @@ CODE, DOC = entry("src/game.cpp"), entry("README.md", BASE)
 INVENTORY = tree(CODE, DOC)
 
 
-def inventory_cases():
+def inventory_cases() -> list[tuple[dict[str, object], str]]:
     """Trees compared with INVENTORY; "false" means the same non-Markdown inventory."""
     moved_doc = entry("docs/new.md", MERGE)
     return [
@@ -265,7 +296,7 @@ def inventory_cases():
     ]
 
 
-def runs(step, cache_only, steps):
+def runs(step: dict[str, Any], cache_only: bool, steps: dict[str, Any]) -> object:
     """Evaluate a ci-linux or ci-windows step condition on a protected push."""
     return evaluate(
         step.get("if", True),
@@ -281,7 +312,9 @@ def runs(step, cache_only, steps):
 
 
 class GateTests(unittest.TestCase):
-    def test_plan_checks_mergeability_and_marks_only_full_requests_pending(self):
+    def test_plan_checks_mergeability_and_marks_only_full_requests_pending(
+        self,
+    ) -> None:
         for mergeable, profile in itertools.product(
             (True, False, None), ("rust", "full")
         ):
@@ -298,7 +331,7 @@ class GateTests(unittest.TestCase):
                 states = [(s["sha"], s["state"]) for s in result["statuses"]]
                 self.assertEqual(states, pending)
 
-    def test_privileged_jobs_run_only_for_protected_full_requests(self):
+    def test_privileged_jobs_run_only_for_protected_full_requests(self) -> None:
         plan = job("ci-request.yml", "plan")["if"]
         repo = {"repo": {"full_name": "fork"}}
         same = {"label": {"name": "ci:full"}, "pull_request": {"head": repo}}
@@ -327,7 +360,7 @@ class GateTests(unittest.TestCase):
             needs = {"plan": {"result": result, "outputs": {"profile": profile}}}
             self.assertEqual(evaluate(publish, needs=needs), expected)
 
-    def test_publisher_requires_every_job_and_the_unchanged_head(self):
+    def test_publisher_requires_every_job_and_the_unchanged_head(self) -> None:
         cases = [("success", good_needs(), PULL, False, "success")]
         cases.append(("superseded", good_needs(), PULL, True, None))
         for name in good_needs():
@@ -374,7 +407,9 @@ class GateTests(unittest.TestCase):
                     ]
                     self.assertEqual(observed, [tree])
 
-    def test_status_writers_share_a_non_cancelling_per_pr_concurrency_group(self):
+    def test_status_writers_share_a_non_cancelling_per_pr_concurrency_group(
+        self,
+    ) -> None:
         groups = []
         for filename, name in (
             ("ci-request.yml", "plan"),
@@ -392,7 +427,7 @@ class GateTests(unittest.TestCase):
                 )
         self.assertEqual(groups, ["validation-status-170"] * 6)
 
-    def test_invalidation_only_marks_current_unvalidated_head_pending(self):
+    def test_invalidation_only_marks_current_unvalidated_head_pending(self) -> None:
         event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
         moved = dict(PULL, head={"sha": "c" * 40})
         # A delayed invalidation preserves a request started at or after the push.
@@ -411,7 +446,7 @@ class GateTests(unittest.TestCase):
                     observed, [(sha, "pending", ci.CONTEXT) for sha in expected]
                 )
 
-    def test_unchanged_non_markdown_tree_carries_the_previous_head_result(self):
+    def test_unchanged_non_markdown_tree_carries_the_previous_head_result(self) -> None:
         event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
         carried = [
             (HEAD, "success", ci.CONTEXT, RUN, None),
@@ -485,7 +520,7 @@ class GateTests(unittest.TestCase):
         carry = {"trees": {BASE: INVENTORY, TREE: tree(CODE)}, **good}
         self.assertEqual(execute_invalidator(event, PULL, latest, **carry), [])
 
-    def test_carry_and_post_merge_refresh_share_the_inventory_rule(self):
+    def test_carry_and_post_merge_refresh_share_the_inventory_rule(self) -> None:
         event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
         for after, expected in inventory_cases():
             for incomplete_side in (False, True):
@@ -503,7 +538,7 @@ class GateTests(unittest.TestCase):
                     state = "success" if expected == "false" else "pending"
                     self.assertEqual(statuses[0]["state"], state)
 
-    def test_write_jobs_never_check_out_or_run_candidate_code(self):
+    def test_write_jobs_never_check_out_or_run_candidate_code(self) -> None:
         # Structure is the behavior here: pull_request_target and workflow_run jobs,
         # and every job granted a write permission, execute only the github-script
         # body of the protected definition.
@@ -531,18 +566,23 @@ class GateTests(unittest.TestCase):
 
 
 class CacheTests(unittest.TestCase):
-    def prune(self, caches):
+    def prune(self, caches: object) -> dict[str, Any]:
         script = script_for("ci-cache.yml", "prune")
-        return node(f"""
+        return cast(
+            dict[str, Any],
+            node(f"""
 const deleted = [], failures = [], context = {{repo: {{}}}};
 const core = {{info: () => {{}}, setFailed: value => failures.push(value)}};
 const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
   getActionsCacheList: () => {{}}, deleteActionsCacheById: async value => deleted.push(value.cache_id)
 }}}}}};
 (async () => {{{script}}})().then(() => console.log(JSON.stringify({{deleted, failures}})));
-""")
+"""),
+        )
 
-    def test_actual_cache_controller_keeps_one_entry_per_prefix_and_eight_gib(self):
+    def test_actual_cache_controller_keeps_one_entry_per_prefix_and_eight_gib(
+        self,
+    ) -> None:
         gib = 1024**3
         prefixes = "compiler-v1-linux compiler-v1-linux ccache-linux-v2-gcc"
         prefixes += " ccache-macos-v2-arm64 ccache-msvc-v1-x64"
@@ -561,7 +601,7 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
         self.assertEqual(result["deleted"], [])
         self.assertTrue(result["failures"])
 
-    def test_pruning_follows_only_protected_push_runs(self):
+    def test_pruning_follows_only_protected_push_runs(self) -> None:
         predicate = job("ci-cache.yml", "prune")["if"]
         for event, branch, expected in (
             ("push", "rust-migration", True),
@@ -589,7 +629,7 @@ class PolicyTests(unittest.TestCase):
             ("", "", "push", "true", "", all_linux, both_windows, True),
             ("", "", "pull_request", "true", "", ["sdl2"], ["x64"], True),
         ):
-            contexts = {
+            contexts: dict[str, Any] = {
                 "inputs": {"checkout-ref": checkout, "profile": profile},
                 "github": {"event_name": event},
                 "needs": {"policy": {"outputs": {"heavy": heavy, "covered": covered}}},
@@ -651,7 +691,7 @@ class PolicyTests(unittest.TestCase):
                     selected and result == "success",
                 )
 
-    def test_platform_cache_refresh_is_only_a_covered_protected_push(self):
+    def test_platform_cache_refresh_is_only_a_covered_protected_push(self) -> None:
         build = workflow("ci-build.yml")["jobs"]
         protected = "refs/heads/rust-migration"
         for name in ("emscripten", "linux", "windows"):
@@ -679,7 +719,7 @@ class PolicyTests(unittest.TestCase):
                 )
                 self.assertEqual(result, expected)
 
-    def test_cache_refresh_skips_exactly_the_test_and_evidence_steps(self):
+    def test_cache_refresh_skips_exactly_the_test_and_evidence_steps(self) -> None:
         windows = {
             "Rust checks for actual selected target",
             "Test",
@@ -759,8 +799,8 @@ class PolicyTests(unittest.TestCase):
                         )
                         self.assertEqual(result, expected)
 
-    def test_protected_push_groups(self):
-        def groups(filename, event="push"):
+    def test_protected_push_groups(self) -> None:
+        def groups(filename: str, event: str = "push") -> list[object]:
             github = {"workflow": filename, "event_name": event, "run_id": 1}
             github["ref"] = "refs/heads/rust-migration"
             group = workflow(filename)["concurrency"]["group"]
@@ -852,7 +892,7 @@ class PolicyTests(unittest.TestCase):
 
     def test_coverage_lookup_retries_transients_and_falls_back_only_after_exhaustion(
         self,
-    ):
+    ) -> None:
         source = tree(entry("src/main.cpp"))
         for failure, recover, expected_calls, expected in (
             ({"status": 500}, True, 2, {"heavy": "false"}),
@@ -874,7 +914,7 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(result["delays"], [1000, 2000][: expected_calls - 1])
                 self.assertEqual("error" in result, not expected)
 
-    def test_bootstrap_on_demand_and_docs_classification(self):
+    def test_bootstrap_on_demand_and_docs_classification(self) -> None:
         readme = tree(entry("README.md"))
         renamed = {"filename": "README.md", "previous_filename": "tools/tool.py"}
         for on_demand, event, files, expected in (
@@ -896,7 +936,7 @@ class PolicyTests(unittest.TestCase):
                 )
                 self.assertEqual(result["outputs"]["heavy"], expected)
 
-    def test_docs_fast_path_checks_tree_types_and_complete_inventories(self):
+    def test_docs_fast_path_checks_tree_types_and_complete_inventories(self) -> None:
         code = entry("src/game.cpp")
         link = entry("module.md", mode="160000", kind="commit")
         doc = entry("module.md")
@@ -920,7 +960,7 @@ class PolicyTests(unittest.TestCase):
                 result = run_policy(files=changed, trees={BASE: left, TREE: right})
                 self.assertEqual(result["outputs"]["heavy"], expected)
 
-    def test_only_matching_successful_merged_tree_skips_validation(self):
+    def test_only_matching_successful_merged_tree_skips_validation(self) -> None:
         bad_runs = (None, "", "run", RUN + "/extra", RUN.replace("fork", "other"))
         for full, marker, same_run, tree_sha, merged, run, expected in (
             ("success", "success", True, TREE, True, RUN, "false"),
@@ -941,7 +981,7 @@ class PolicyTests(unittest.TestCase):
                 result = run_policy(files=files, pulls=[pull], statuses=statuses)
                 self.assertEqual(result["outputs"]["heavy"], expected)
 
-    def test_markdown_tree_differences_require_complete_inventories(self):
+    def test_markdown_tree_differences_require_complete_inventories(self) -> None:
         for after, expected in inventory_cases():
             for incomplete_side in (False, True):
                 left, right = (
@@ -959,7 +999,9 @@ class PolicyTests(unittest.TestCase):
                     self.assertEqual(outputs.get("covered"), covered)
 
 
-def pull_and_statuses(statuses):
+def pull_and_statuses(
+    statuses: object,
+) -> Callable[[str, str], object]:
     """Answer `ci.api` with the PR for pull paths and `statuses` for commit paths."""
     return lambda _repository, path: (
         PULL if path.startswith("pulls/") else {"statuses": statuses}
@@ -967,7 +1009,7 @@ def pull_and_statuses(statuses):
 
 
 class RequestTests(unittest.TestCase):
-    def test_each_profile_dispatches_captured_head_on_protected_ref(self):
+    def test_each_profile_dispatches_captured_head_on_protected_ref(self) -> None:
         for profile in ci.PROFILES:
             with tempfile.TemporaryDirectory() as directory:
                 args = argparse.Namespace(
@@ -988,12 +1030,12 @@ class RequestTests(unittest.TestCase):
                 self.assertEqual(
                     invocation[invocation.index("--ref") + 1], "rust-migration"
                 )
-                record = json.loads(request_path.read_text())
+                record = json.loads(cast(Path, request_path).read_text())
                 self.assertEqual(record["head"], HEAD)
                 self.assertEqual(record["base"], BASE)
                 self.assertEqual(len(record["request"]), 32)
 
-    def test_full_request_stops_on_a_head_that_already_passed(self):
+    def test_full_request_stops_on_a_head_that_already_passed(self) -> None:
         passed = {
             "context": ci.CONTEXT,
             "state": "success",
@@ -1043,7 +1085,7 @@ class RequestTests(unittest.TestCase):
                 self.assertEqual(bool(writes), dispatched)
                 self.assertEqual(path is not None, dispatched)
 
-    def test_run_discovery_uses_unique_request_identity(self):
+    def test_run_discovery_uses_unique_request_identity(self) -> None:
         record = {
             "profile": "rust",
             "pr": 170,
@@ -1062,11 +1104,11 @@ class RequestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ci.find_run(record, [run, dict(run, id=3)])
 
-    def test_push_invalidates_record_head(self):
+    def test_push_invalidates_record_head(self) -> None:
         with self.assertRaisesRegex(ValueError, "head changed"):
             ci.validate_pull(PULL, "c" * 40)
 
-    def test_base_advance_during_run_keeps_waiting_on_unchanged_head(self):
+    def test_base_advance_during_run_keeps_waiting_on_unchanged_head(self) -> None:
         run = {
             "id": 123,
             "status": "completed",
@@ -1106,7 +1148,9 @@ class RequestTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "head changed"):
                         ci.status(path)
 
-    def test_status_and_wait_report_failed_child_while_other_jobs_continue(self):
+    def test_status_and_wait_report_failed_child_while_other_jobs_continue(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "request.json"
             record = {
@@ -1137,7 +1181,7 @@ class RequestTests(unittest.TestCase):
                 patch.object(ci, "api", side_effect=[PULL, run]),
                 patch.object(ci, "gh", return_value=json.dumps(pages)) as gh,
             ):
-                _, observed = ci.status(path)
+                _, observed = cast(tuple[dict, dict[str, Any]], ci.status(path))
                 self.assertIn("--paginate", gh.call_args.args)
                 self.assertIn("filter=latest", gh.call_args.args[-1])
             self.assertEqual(observed["failed_jobs"], [failed])
@@ -1194,7 +1238,7 @@ class RequestTests(unittest.TestCase):
                 self.assertLess(waited.call_args.args[1], 600)
                 printed.assert_called_once()
 
-    def test_successful_run_without_full_status_is_rejected(self):
+    def test_successful_run_without_full_status_is_rejected(self) -> None:
         record = {
             "repository": "example/fork",
             "pr": 170,

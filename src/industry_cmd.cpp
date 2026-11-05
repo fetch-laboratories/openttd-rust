@@ -392,7 +392,7 @@ bool IsTileForestIndustry(TileIndex tile)
 
 void PlantRandomFarmField(const Industry *i)
 {
-	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)}, &GetIndustryRustServices());
+	openttd_rust_industry_farm(const_cast<Industry *>(i), i->index.base(), &GetIndustryRustServices());
 }
 
 

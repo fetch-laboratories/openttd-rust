@@ -8,8 +8,7 @@ struct OpenTTDTranslationServices {
 	void (*append)(GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(append);
 	void (*copy)(GRFFile *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(copy);
 	GRFFile *(*override_file)() noexcept OPENTTD_SERVICE_DEFAULT(override_file);
-	void (*invalid_first)(const char *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(invalid_first);
-	void (*log_override)(const char *, size_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(log_override);
+	const struct OpenTTDSharedServices *shared;
 };
 extern "C" int32_t openttd_rust_load_translation(const OpenTTDTranslationServices *, const OpenTTDByteReaderServices *, GRFFile *, uint32_t, uint32_t, ByteReader *, const char *, size_t);
 #endif
