@@ -127,7 +127,7 @@ pub struct Services {
     engine_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     local_id: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     cargo_info: unsafe extern "C" fn(u8) -> CargoInfo,
-    build_year: unsafe extern "C" fn(V) -> i32,
+    pub(crate) build_year: unsafe extern "C" fn(V) -> i32,
     last_service: unsafe extern "C" fn(V) -> i32,
     primary: unsafe extern "C" fn(V) -> bool,
     train_services: unsafe extern "C" fn() -> *const crate::train::Leaves,
