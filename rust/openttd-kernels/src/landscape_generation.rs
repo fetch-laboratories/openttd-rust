@@ -37,6 +37,7 @@ use crate::slope_func::{
     is_slope_with_three_corners_raised, is_steep_slope,
 };
 use crate::slope_func::{SLOPE_FLAT, SLOPE_STEEP, is_slope_with_one_corner_raised};
+use crate::tile_map::{is_inner_tile, set_tile_height, tile_height_in};
 use crate::tile_type::{INVALID_TILE, MP_WATER};
 use crate::tile_type::{
     MAX_TILE_HEIGHT, TROPICZONE_DESERT, TROPICZONE_NORMAL, TROPICZONE_RAINFOREST,
@@ -111,9 +112,6 @@ pub struct GenerationServices {
     pub sea_size: extern "C" fn(*mut Frame) -> usize,
     pub sea_first: extern "C" fn(*mut Frame) -> u32,
     pub sea_next: extern "C" fn(*mut Frame) -> u32,
-    pub set_height: extern "C" fn(u32, u32),
-    pub inner_tile: extern "C" fn(u32) -> bool,
-    pub make_void: extern "C" fn(u32),
     pub set_freeform: extern "C" fn(bool),
     pub clear_bridge_middle: extern "C" fn(u32),
 }
@@ -141,26 +139,40 @@ impl<'a> World<'a> {
             size_y: (s.map_max_y)() + 1,
         }
     }
+    /// The canonical map view, loaded at each use: generation yields the
+    /// game-state mutex only at progress calls, which no view spans.
+    fn view(&self) -> crate::map_func::World<'a> {
+        crate::map_func::World::new(self.s)
+    }
+    /// `_settings_game.construction.freeform_edges`, read at the observation point.
+    pub(crate) fn freeform_edges(&self) -> bool {
+        unsafe { self.s.settings().freeform_edges.read() }
+    }
+    fn make_void(&self, view: &crate::map_func::World<'_>, tile: u32) {
+        crate::void_map::make_void(view, tile, || self.freeform_edges());
+    }
     fn initialize(&self, freeform: bool) {
         w::hit(w::GENERATION_INITIALIZE);
+        let view = self.view();
         for y in u32::from(freeform)..self.size_y - 1 {
             for x in u32::from(freeform)..self.map.max_x() {
                 let tile = self.map.tile_xy(x, y);
                 (self.clear.make_clear)(tile, ClearGroundType(CLEAR_GRASS), 3);
-                (self.a.set_height)(tile, 0);
+                set_tile_height(&view, tile, 0);
                 (self.s.set_tropic_zone)(tile, TROPICZONE_NORMAL);
                 (self.a.clear_bridge_middle)(tile);
             }
         }
         for x in 0..self.map.size_x() {
-            (self.a.make_void)(self.map.tile_xy(x, self.size_y - 1));
+            self.make_void(&view, self.map.tile_xy(x, self.size_y - 1));
         }
         for y in 0..self.size_y {
-            (self.a.make_void)(self.map.tile_xy(self.map.max_x(), y));
+            self.make_void(&view, self.map.tile_xy(self.map.max_x(), y));
         }
     }
     fn fix_slopes(&self, max_height: u8) {
         w::hit(w::GENERATION_FIX_SLOPES);
+        let view = self.view();
         // Two source-ordered passes. Heights are re-read at each source observation.
         for reverse in [false, true] {
             for row in 0..self.size_y {
@@ -169,24 +181,27 @@ impl<'a> World<'a> {
                     let x = if reverse { self.map.max_x() - col } else { col };
                     let mut current = MAX_TILE_HEIGHT;
                     if (!reverse && x != 0) || (reverse && x != self.map.max_x()) {
-                        current = (self.s.tile_height)(
+                        current = tile_height_in(
+                            &view,
                             self.map.tile_xy(if reverse { x + 1 } else { x - 1 }, y),
                         );
                     }
                     if (!reverse && y != 0) || (reverse && y != self.size_y - 1) {
-                        let h = (self.s.tile_height)(
+                        let h = tile_height_in(
+                            &view,
                             self.map.tile_xy(x, if reverse { y + 1 } else { y - 1 }),
                         );
                         if h < current {
-                            current = (self.s.tile_height)(
+                            current = tile_height_in(
+                                &view,
                                 self.map.tile_xy(x, if reverse { y + 1 } else { y - 1 }),
                             );
                         }
                     }
                     let tile = self.map.tile_xy(x, y);
-                    if (self.s.tile_height)(tile) >= current + 2 {
-                        (self.a.set_height)(tile, current + 1);
-                        if (self.a.inner_tile)(tile)
+                    if tile_height_in(&view, tile) >= current + 2 {
+                        set_tile_height(&view, tile, current + 1);
+                        if is_inner_tile(&view, tile, self.freeform_edges())
                             && self.s.random_range(u32::from(max_height)) <= current
                         {
                             (self.clear.make_clear)(tile, ClearGroundType(CLEAR_ROCKS), 3);
@@ -210,10 +225,10 @@ impl World<'_> {
     fn convert_ground_water(&self) {
         w::hit(w::GENERATION_WATERING);
         let water = unsafe { &*self.a.water };
+        let view = self.view();
         for tile in 0..self.map.size_x() * self.size_y {
-            let slope_z = (self.s.tile_slope_z)(tile);
-            let slope = slope_z.slope.0;
-            if (self.s.tile_type)(tile) != MP_CLEAR || slope_z.z != 0 {
+            let (slope, z) = view.tile_slope_z(tile);
+            if (self.s.tile_type)(tile) != MP_CLEAR || z != 0 {
                 continue;
             }
             if slope == SLOPE_FLAT {
@@ -242,9 +257,10 @@ impl World<'_> {
     fn flat_empty_world(&self, height: u8, freeform: bool, max_height: u8) {
         w::hit(w::GENERATION_FLAT);
         let edge = if freeform { 0 } else { 2 };
+        let view = self.view();
         for y in edge..self.size_y - edge {
             for x in edge..self.map.size_x() - edge {
-                (self.a.set_height)(self.map.tile_xy(x, y), u32::from(height));
+                set_tile_height(&view, self.map.tile_xy(x, y), u32::from(height));
             }
         }
         self.fix_slopes(max_height);
@@ -271,6 +287,7 @@ impl World<'_> {
         if freeform {
             self.void_top_edges();
         }
+        let view = self.view();
         for row in 0..height {
             for col in 0..width {
                 let tile = if rotation == HM_COUNTER_CLOCKWISE {
@@ -284,7 +301,7 @@ impl World<'_> {
                     || col < col_pad
                     || col >= width - col_pad - u32::from(!freeform)
                 {
-                    (self.a.set_height)(tile, 0);
+                    set_tile_height(&view, tile, 0);
                 } else {
                     let img_row = (row - row_pad) * DIV / scale;
                     let img_col = if rotation == HM_COUNTER_CLOCKWISE {
@@ -299,20 +316,21 @@ impl World<'_> {
                     if level > 0 {
                         level = 1 + (level - 1) * u32::from(heightmap_height) / 255;
                     }
-                    (self.a.set_height)(tile, level);
+                    set_tile_height(&view, tile, level);
                 }
-                if (self.a.inner_tile)(tile) {
+                if is_inner_tile(&view, tile, self.freeform_edges()) {
                     (self.clear.make_clear)(tile, ClearGroundType(CLEAR_GRASS), 3);
                 }
             }
         }
     }
     pub(crate) fn void_top_edges(&self) {
+        let view = self.view();
         for x in 0..self.map.size_x() {
-            (self.a.make_void)(self.map.tile_xy(x, 0));
+            self.make_void(&view, self.map.tile_xy(x, 0));
         }
         for y in 0..self.size_y {
-            (self.a.make_void)(self.map.tile_xy(0, y));
+            self.make_void(&view, self.map.tile_xy(0, y));
         }
     }
     fn load_heightmap(
@@ -495,12 +513,13 @@ impl World<'_> {
         };
         let mut position = 0;
         let mut remaining = outer;
+        let view = self.view();
         loop {
             let mut current = tile;
             for _ in 0..inner {
                 let level = u32::from(unsafe { *template.data.add(position) } & 15);
-                if level >= (self.s.tile_height)(current) {
-                    (self.a.set_height)(current, level);
+                if level >= tile_height_in(&view, current) {
+                    set_tile_height(&view, current, level);
                 }
                 position += 1;
                 current = current.wrapping_add(step);
@@ -734,22 +753,23 @@ impl World<'_> {
             self.a.shared(),
             self.map.distance_manhattan(begin, end) == 1,
         );
-        let last = (self.s.tile_slope_z)(end);
-        if last.slope.0 != SLOPE_FLAT && !is_inclined_slope(last.slope.0) {
+        let view = self.view();
+        let (last_slope, last_z) = view.tile_slope_z(end);
+        if last_slope != SLOPE_FLAT && !is_inclined_slope(last_slope) {
             return false;
         }
-        let first = (self.s.tile_slope_z)(begin);
-        if last.z > first.z {
+        let (first_slope, first_z) = view.tile_slope_z(begin);
+        if last_z > first_z {
             return false;
         }
-        if last.slope.0 == first.slope.0 && last.z < first.z {
+        if last_slope == first_slope && last_z < first_z {
             return true;
         }
-        last.slope.0 == SLOPE_FLAT || first.slope.0 == SLOPE_FLAT
+        last_slope == SLOPE_FLAT || first_slope == SLOPE_FLAT
     }
     fn connected_sea(&self, frame: *mut Frame, tile: u32, limit: usize) -> bool {
         if !self.water(tile)
-            || (self.clear.water_class)(tile) != WATER_CLASS_SEA
+            || self.view().water_class(tile) != WATER_CLASS_SEA.0
             || !self.flat(tile)
         {
             return false;
@@ -801,7 +821,7 @@ impl World<'_> {
             if flat.flat
                 && (flat.height < begin_height || (flat.height == begin_height && self.water(end)))
             {
-                if self.water(end) && (self.clear.water_class)(end) == WATER_CLASS_SEA {
+                if self.water(end) && self.view().water_class(end) == WATER_CLASS_SEA.0 {
                     const MAX_SEA_SIZE_THRESHOLD: usize = 1024;
                     let threshold = (2.0 * f64::from(self.size()).sqrt()) as usize;
                     let threshold = threshold.min(MAX_SEA_SIZE_THRESHOLD);
@@ -1355,6 +1375,6 @@ crate::abi::layouts! {
     "OpenTTDGenerationLoop" ["landscape"] => crate::landscape_generation::Loop {settings,services,};
     "OpenTTDLandscapeGenerationSettings" ["landscape"] => crate::landscape_generation::Settings {max_search_nodes,climate,generator,rivers,min_river_length,route_random,terrain,sea,snow_coverage,desert_coverage,tree_placer,height_limit,rotation,heightmap_height,freeform,};
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, set_freeform, clear_bridge_middle,
+        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, tgp_settings, terrain_template, flat_height, river, set_snow_line, river_debug, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_freeform, clear_bridge_middle,
     };
 }

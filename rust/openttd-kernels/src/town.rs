@@ -1275,7 +1275,9 @@ impl Engine<'_> {
                     && (slope != 0 || !(self.services.is_sea)(end)))
                     || (self.services.is_plain_rail)(end)
                     || ((self.services.is_normal_road_tile)(end)
-                        && (self.services.disallowed_road_directions)(end) != 0))
+                        && crate::map_func::World::new(self.services)
+                            .disallowed_road_directions(end)
+                            != 0))
             {
                 break;
             }

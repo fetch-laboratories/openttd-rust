@@ -182,9 +182,7 @@ impl<'a> World<'a> {
         get_tunnel_bridge_length(self.map, start, end)
     }
     fn slope_z(&self, tile: u32) -> (u8, i32) {
-        // SAFETY: immutable water table; no world borrow crosses the call.
-        let value = (self.s.tile_slope_z)(tile);
-        (value.slope.0, value.z)
+        crate::map_func::World::new(self.s).tile_slope_z(tile)
     }
     fn editor(&self) -> bool {
         (self.town.environment.editor)()

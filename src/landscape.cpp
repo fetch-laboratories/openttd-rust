@@ -740,9 +740,6 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.sea_size = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.Size(); },
 		.sea_first = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.First(); },
 		.sea_next = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.Next(); },
-		.set_height = RustSetTileHeight,
-		.inner_tile = RustInnerTile,
-		.make_void = [](uint32_t t) noexcept { MakeVoid(TileIndex{t}); },
 		.set_freeform = RustSetFreeformEdges,
 		.clear_bridge_middle = RustClearBridgeMiddle,
 	};

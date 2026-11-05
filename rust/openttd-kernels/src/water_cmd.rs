@@ -139,7 +139,7 @@ impl World<'_> {
         Cost(ret, self.c)
     }
     fn class(&self, t: u32) -> u8 {
-        unsafe { ((*self.water.clear).water_class)(t).0 }
+        crate::map_func::World::new(self.s).water_class(t)
     }
     fn rail(&self) -> &crate::rail_cmd::RailCommandServices {
         // SAFETY: native getter supplies an immutable process-lifetime table.

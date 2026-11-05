@@ -55,7 +55,6 @@ struct OpenTTDClearServices {
 	OpenTTDFieldFences (*fences)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fences);
 	OpenTTDFieldGround (*field)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(field);
 	void (*set_field)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_field);
-	WaterClass (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
 };
 struct OpenTTDRailSnowGround { int32_t z; Slope slope; TrackBits tracks; bool plain; };
 struct OpenTTDRailFenceGround { TrackBits tracks; uint8_t owner; bool plain; };

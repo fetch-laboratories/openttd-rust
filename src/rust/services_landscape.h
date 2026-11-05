@@ -38,7 +38,6 @@
 
 inline OpenTTDFlatTileHeight RustFlatTileHeight(uint32_t tile) noexcept { int height = 0; bool flat = RustIsTileFlat(tile, &height); return {.height = height, .flat = flat}; }
 inline void RustSetTileHeight(uint32_t tile, uint32_t height) noexcept { SetTileHeight(TileIndex{tile}, height); }
-inline bool RustInnerTile(uint32_t tile) noexcept { return IsInnerTile(TileIndex{tile}); }
 inline OpenTTDFoundationSlope RustTileSlopeZ(uint32_t tile) noexcept { auto [slope, z] = GetTileSlopeZ(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline OpenTTDFoundationSlope RustApplyFoundation(Foundation foundation, Slope slope) noexcept { int z = ApplyFoundationToSlope(foundation, slope); return {.z = z, .slope = slope}; }
 inline uint8_t RustTileOwnerValue(uint32_t tile) noexcept { return GetTileOwner(TileIndex{tile}).base(); }

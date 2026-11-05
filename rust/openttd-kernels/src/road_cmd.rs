@@ -324,7 +324,9 @@ impl<'a> Ctx<'a> {
         (self.shared.tile_type)(tile)
     }
     fn kind(&self, tile: u32) -> u8 {
-        (self.shared.road_tile_kind)(tile).0
+        crate::map_func::World::new(self.shared)
+            .road_tile_type(tile)
+            .0
     }
     fn rt(&self, tile: u32, rtt: u8) -> u8 {
         if rtt == 0 {
@@ -341,7 +343,7 @@ impl<'a> Ctx<'a> {
         }
     }
     fn bits(&self, tile: u32, rtt: u8) -> u8 {
-        (self.shared.normal_road_bits)(tile, rtt).0
+        crate::map_func::World::new(self.shared).road_bits(tile, rtt != 0)
     }
     fn any_bits(&self, tile: u32, rtt: u8) -> u8 {
         (self.shared.road_bits)(tile, rtt, false)
@@ -592,7 +594,7 @@ impl<'a> Ctx<'a> {
                 let foundation = crate::movement::road_foundation(slope, present, |ok| {
                     crate::movement::native_assert(self.shared, ok);
                 });
-                if (self.shared.has_road_works)(tile)
+                if crate::map_func::World::new(self.shared).has_road_works(tile)
                     && (self.shared.current_company)() != OWNER_WATER
                 {
                     cost.error(self.r.strings.road_works);
@@ -617,7 +619,7 @@ impl<'a> Ctx<'a> {
                     return;
                 }
                 if flags & DoCommandFlag::EXECUTE != 0 {
-                    if (self.shared.has_road_works)(tile) {
+                    if crate::map_func::World::new(self.shared).has_road_works(tile) {
                         debug_assert_eq!((self.shared.current_company)(), OWNER_WATER);
                         w::hit(w::ROAD_COMMANDS_FLOOD_WORKS);
                         let mut from = 0;
@@ -831,7 +833,7 @@ impl<'a> Ctx<'a> {
         match self.tile_type(tile) {
             MP_ROAD => match self.kind(tile) {
                 0 => {
-                    if (self.shared.has_road_works)(tile) {
+                    if crate::map_func::World::new(self.shared).has_road_works(tile) {
                         cost.error(self.r.strings.road_works);
                         return;
                     }
@@ -839,7 +841,10 @@ impl<'a> Ctx<'a> {
                     if self.rt(tile, rtt) != INVALID {
                         existing = self.bits(tile, rtt);
                         if rtt == 0
-                            && ((self.shared.disallowed_road_directions)(tile) != 0 || toggle != 0)
+                            && (crate::map_func::World::new(self.shared)
+                                .disallowed_road_directions(tile)
+                                != 0
+                                || toggle != 0)
                             && !straight(existing | pieces)
                         {
                             cost.error(self.s.strings.junction);
@@ -856,7 +861,8 @@ impl<'a> Ctx<'a> {
                                         return;
                                     }
                                 }
-                                let old = (self.shared.disallowed_road_directions)(tile);
+                                let old = crate::map_func::World::new(self.shared)
+                                    .disallowed_road_directions(tile);
                                 let new = old ^ toggle;
                                 if old.count_ones() <= new.count_ones() {
                                     ret.no_vehicle(self.commands, tile);
@@ -1163,7 +1169,8 @@ impl<'a> Ctx<'a> {
                 (self.shared.set_road_directions)(
                     tile,
                     if straight(existing) {
-                        (self.shared.disallowed_road_directions)(tile) ^ toggle
+                        crate::map_func::World::new(self.shared).disallowed_road_directions(tile)
+                            ^ toggle
                     } else {
                         0
                     },

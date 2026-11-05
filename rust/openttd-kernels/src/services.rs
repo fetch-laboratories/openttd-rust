@@ -307,8 +307,6 @@ pub struct Services {
     pub current_company: extern "C" fn() -> u8,
     /// `GetDepotIndex`.
     pub depot_index: extern "C" fn(u32) -> u16,
-    /// Original native `disallowed_road_directions` map observation.
-    pub disallowed_road_directions: extern "C" fn(u32) -> u8,
     /// Shared live disaster sound setting.
     pub disaster_sound: extern "C" fn() -> bool,
     /// Original native `drive_through_axis` map observation.
@@ -319,8 +317,6 @@ pub struct Services {
     pub free_train_reservation: unsafe extern "C" fn(*const Train),
     /// Original native `has_road_type` map observation.
     pub has_road_type: extern "C" fn(u32) -> bool,
-    /// Original normal-road works predicate.
-    pub has_road_works: extern "C" fn(u32) -> bool,
     /// Original native `has_water_ground` map observation.
     pub has_water_ground: extern "C" fn(u32) -> bool,
     /// `TileVirtXY` query: 0 not industry, 1 industry, 2 bubble catcher; writes tile.
@@ -361,8 +357,6 @@ pub struct Services {
     pub next_company: extern "C" fn(u8) -> u8,
     /// Shared live no jetcrash observation.
     pub no_jetcrash: extern "C" fn() -> bool,
-    /// Original `GetRoadBits`; only called for a normal road tile.
-    pub normal_road_bits: extern "C" fn(u32, u8) -> RoadBits,
     /// Original native `other_tunnel_end` map observation.
     pub other_tunnel_end: extern "C" fn(u32) -> u32,
     /// Shared live plane crashes observation.
@@ -387,8 +381,6 @@ pub struct Services {
     pub set_crossing_reserved: extern "C" fn(u32, bool),
     /// Original `MayHaveRoad`, including road-stop and transport guards.
     pub may_have_road: extern "C" fn(u32) -> bool,
-    /// Canonical native `road_tile_kind` service.
-    pub road_tile_kind: extern "C" fn(u32) -> RoadTileKind,
     /// Canonical native `set_road_bits` service.
     pub set_road_bits: extern "C" fn(u32, u8, u8),
     /// Canonical native `set_road_type` service.
@@ -459,8 +451,6 @@ pub struct Services {
     pub tile_type: extern "C" fn(u32) -> u8,
     /// Original native `tile_valid` map observation.
     pub tile_valid: extern "C" fn(u32) -> bool,
-    /// Original `GetTileSlopeZ`, observed together at the source call.
-    pub tile_slope_z: extern "C" fn(u32) -> FoundationSlope,
     /// `GetTileZ`.
     pub tile_z: extern "C" fn(u32) -> i32,
     /// Original native `town_index` map observation.
@@ -811,13 +801,11 @@ crate::abi::layouts! {
         crossing_road_bits,
         current_company,
         depot_index,
-        disallowed_road_directions,
         disaster_sound,
         drive_through_axis,
         forbid_90_deg,
         free_train_reservation,
         has_road_type,
-        has_road_works,
         has_water_ground,
         industry,
         is_any_road_stop,
@@ -838,7 +826,6 @@ crate::abi::layouts! {
         mark_dirty,
         next_company,
         no_jetcrash,
-        normal_road_bits,
         other_tunnel_end,
         plane_crashes,
         plane_speed,
@@ -851,7 +838,6 @@ crate::abi::layouts! {
         crossing_reserved,
         set_crossing_reserved,
         may_have_road,
-        road_tile_kind,
         set_road_bits,
         set_road_type,
         set_road_owner,
@@ -886,7 +872,6 @@ crate::abi::layouts! {
         tile_slope,
         tile_type,
         tile_valid,
-        tile_slope_z,
         tile_z,
         town_index,
         town_owner,
@@ -1017,17 +1002,8 @@ pub fn fixture(
     extern "C" fn apply_foundation(_: Foundation, slope: Slope) -> FoundationSlope {
         FoundationSlope { z: 0, slope }
     }
-    extern "C" fn foundation(_: u32) -> FoundationSlope {
-        FoundationSlope {
-            z: 0,
-            slope: Slope(0),
-        }
-    }
     extern "C" fn set_reserved(_: u32, _: bool) {}
     extern "C" fn set_three(_: u32, _: u8, _: u8) {}
-    extern "C" fn road_kind(_: u32) -> RoadTileKind {
-        RoadTileKind(0)
-    }
     extern "C" fn two_types(_: u8, _: u8) -> bool {
         false
     }
@@ -1103,13 +1079,11 @@ pub fn fixture(
         crossing_road_bits: fixture_crossing_road_bits,
         current_company: unused_current_company,
         depot_index: short,
-        disallowed_road_directions: byte,
         disaster_sound: flag0,
         drive_through_axis: byte,
         forbid_90_deg: flag0,
         free_train_reservation: train,
         has_road_type: flag,
-        has_road_works: flag,
         has_water_ground: flag,
         industry,
         is_any_road_stop: flag,
@@ -1130,7 +1104,6 @@ pub fn fixture(
         mark_dirty: tile,
         next_company: unused_next_company,
         no_jetcrash: flag0,
-        normal_road_bits: fixture_normal_road_bits,
         other_tunnel_end: word,
         plane_crashes: zero_byte,
         plane_speed: zero_byte,
@@ -1143,7 +1116,6 @@ pub fn fixture(
         crossing_reserved: flag,
         set_crossing_reserved: set_reserved,
         may_have_road: flag,
-        road_tile_kind: road_kind,
         set_road_bits: set_three,
         set_road_type: set_three,
         set_road_owner: set_three,
@@ -1181,7 +1153,6 @@ pub fn fixture(
         tile_slope: byte,
         tile_type: byte,
         tile_valid: flag,
-        tile_slope_z: foundation,
         tile_z: height,
         town_index: index,
         town_owner: unused_town_owner,
@@ -1213,10 +1184,6 @@ pub fn fixture(
 #[cfg(test)]
 extern "C" fn fixture_tram_type(_: u32) -> RoadType {
     RoadType(0)
-}
-#[cfg(test)]
-extern "C" fn fixture_normal_road_bits(_: u32, _: u8) -> RoadBits {
-    RoadBits(0)
 }
 #[cfg(test)]
 extern "C" fn fixture_crossing_road_bits(_: u32) -> RoadBits {

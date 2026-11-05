@@ -1526,14 +1526,17 @@ impl Game<'_> {
                     v.set(OVERTAKING, 0);
                     if s.tram {
                         let needed: u8 = [2, 1, 8, 4][usize::from(((dir >> 2) & 2) | (dir & 1))];
-                        let big =
-                            v.v.previous()
-                                .is_some_and(|previous| previous.tile() == tile)
-                                || (s.front
-                                    && service!(self.ss.is_normal_road_tile)(tile)
-                                    && !service!(self.ss.has_road_works)(tile)
-                                    && self.has_road(v.v, tile)
-                                    && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
+                        let big = v
+                            .v
+                            .previous()
+                            .is_some_and(|previous| previous.tile() == tile)
+                            || (s.front
+                                && service!(self.ss.is_normal_road_tile)(tile)
+                                && !crate::map_func::World::new(self.ss).has_road_works(tile)
+                                && self.has_road(v.v, tile)
+                                && needed
+                                    & crate::map_func::World::new(self.ss).road_bits(tile, true)
+                                    != 0);
                         if !big {
                             if !s.front
                                 || !self.can_build_tram(v.v, tile, needed)

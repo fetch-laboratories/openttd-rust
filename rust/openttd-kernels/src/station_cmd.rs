@@ -2143,8 +2143,8 @@ impl Ctx<'_> {
             let normal = (self.shared.is_normal_road_tile)(tile);
             let build_over = drive && normal;
             let rb = if normal {
-                (self.shared.normal_road_bits)(tile, 0).0
-                    | (self.shared.normal_road_bits)(tile, 1).0
+                crate::map_func::World::new(self.shared).road_bits(tile, false)
+                    | crate::map_func::World::new(self.shared).road_bits(tile, true)
             } else {
                 0
             };
@@ -2172,14 +2172,17 @@ impl Ctx<'_> {
                             return cost.take(ret);
                         }
                     }
-                    let pieces = (self.shared.normal_road_bits)(tile, 0).0.count_ones();
+                    let pieces = crate::map_func::World::new(self.shared)
+                        .road_bits(tile, false)
+                        .count_ones();
                     if rt != 63
                         && crate::road::road_type_is_road(rt)
                         && !(self.shared.road_powered)(rt, road)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
                     }
-                    if (self.shared.disallowed_road_directions)(tile) != 0
+                    if crate::map_func::World::new(self.shared).disallowed_road_directions(tile)
+                        != 0
                         && owner != 0x0f
                         && owner != 0x10
                     {
@@ -2200,7 +2203,7 @@ impl Ctx<'_> {
                 let tram = self.road_type(tile, true);
                 if tram != 63 {
                     let owner = self.road_owner(tile, true);
-                    let bits = (self.shared.normal_road_bits)(tile, 1).0;
+                    let bits = crate::map_func::World::new(self.shared).road_bits(tile, true);
                     if (self.shared.company_valid)(owner)
                         && (!(self.s.stop_on_competitor_road)() || bits.is_power_of_two())
                     {
@@ -2211,7 +2214,9 @@ impl Ctx<'_> {
                             return cost.take(ret);
                         }
                     }
-                    let pieces = (self.shared.normal_road_bits)(tile, 1).0.count_ones();
+                    let pieces = crate::map_func::World::new(self.shared)
+                        .road_bits(tile, true)
+                        .count_ones();
                     if rt != 63
                         && crate::road::get_road_tram_type(rt).0
                         && !(self.shared.road_powered)(rt, tram)
@@ -2500,12 +2505,16 @@ impl Ctx<'_> {
                     self.road_infrastructure(
                         road,
                         road_owner,
-                        -((self.shared.normal_road_bits)(tile, 0).0.count_ones() as i32),
+                        -(crate::map_func::World::new(self.shared)
+                            .road_bits(tile, false)
+                            .count_ones() as i32),
                     );
                     self.road_infrastructure(
                         tram,
                         tram_owner,
-                        -((self.shared.normal_road_bits)(tile, 1).0.count_ones() as i32),
+                        -(crate::map_func::World::new(self.shared)
+                            .road_bits(tile, true)
+                            .count_ones() as i32),
                     );
                 }
                 if road == 63 && crate::road::road_type_is_road(rt) {
@@ -3510,7 +3519,7 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        let water = (unsafe { &*self.s.clear }.water_class)(flat).0;
+        let water = crate::map_func::World::new(self.shared).water_class(flat);
         let add_cost = !(self.shared.is_water_tile)(flat);
         crate::landscape_cmd::clear_command(self.command, ret.0, flat, flags);
         if !ret.ok() {
@@ -3561,7 +3570,7 @@ impl Ctx<'_> {
             let owner = (self.world().station_owner)(st);
             if water == 1
                 && !((self.shared.has_water_class)(flat)
-                    && (unsafe { &*self.s.clear }.water_class)(flat).0 == 1
+                    && crate::map_func::World::new(self.shared).water_class(flat) == 1
                     && (self.shared.tile_owner)(flat) == (self.shared.current_company)())
             {
                 (self.s.water_infrastructure)(owner, 1);
@@ -3728,7 +3737,7 @@ impl Ctx<'_> {
         (self.s.make_oilrig)(
             tile,
             (self.links().graphs.station_id)(st),
-            (unsafe { &*self.s.clear }.water_class)(tile).0,
+            crate::map_func::World::new(self.shared).water_class(tile),
         );
         (self.s.set_station_owner)(st, 0x10);
         (self.s.set_airport_kind_rotation)(st, 9, 0);
@@ -4093,7 +4102,7 @@ impl Ctx<'_> {
                         (self.rail().rail_infrastructure)(new, rt, 1);
                     }
                 }
-                5 | 6 if (unsafe { &*self.s.clear }.water_class)(tile).0 == 1 => {
+                5 | 6 if crate::map_func::World::new(self.shared).water_class(tile) == 1 => {
                     (self.s.water_infrastructure)(old, u32::MAX);
                     (self.s.water_infrastructure)(new, 1);
                 }

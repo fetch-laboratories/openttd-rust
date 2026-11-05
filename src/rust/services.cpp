@@ -289,7 +289,6 @@ static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(Til
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(TileIndex{tile}); }
-static RoadTileType Shared_road_tile_kind(uint32_t tile) noexcept { return GetRoadTileType(TileIndex{tile}); }
 static void Shared_set_road_bits(uint32_t tile, uint8_t bits, uint8_t rtt) noexcept { SetRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadTramType>(rtt)); }
 static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { RustSetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
@@ -398,7 +397,6 @@ static void SharedMarkBridgeDirty(uint32_t tile) noexcept { MarkBridgeDirty(Tile
 static Trackdir SharedTrainTrackdir(const Train *v) noexcept { return v->GetVehicleTrackdir(); }
 static RoadType SharedTramType(uint32_t tile) noexcept { return GetRoadTypeTram(TileIndex{tile}); }
 static uint8_t SharedTramOwner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_TRAM).base(); }
-static RoadBits SharedNormalRoadBits(uint32_t tile, uint8_t type) noexcept { return GetRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type)); }
 static RoadBits SharedCrossingRoadBits(uint32_t tile) noexcept { return GetCrossingRoadBits(TileIndex{tile}); }
 static uint32_t SharedMapMaxX() noexcept { return Map::MaxX(); }
 static uint32_t SharedMapMaxY() noexcept { return Map::MaxY(); }
@@ -447,13 +445,11 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.crossing_road_bits = SharedCrossingRoadBits,
 	.current_company = RustCurrentCompanyID,
 	.depot_index = MapSvcDepotIndex,
-	.disallowed_road_directions = Shared_disallowed_road_directions,
 	.disaster_sound = SharedDisasterSound,
 	.drive_through_axis = Shared_drive_through_axis,
 	.forbid_90_deg = RustForbid90Deg,
 	.free_train_reservation = SharedFreeTrainReservation,
 	.has_road_type = Shared_has_road_type,
-	.has_road_works = SharedHasRoadWorks,
 	.has_water_ground = Shared_has_water_ground,
 	.industry = SharedIndustry,
 	.is_any_road_stop = Shared_is_any_road_stop,
@@ -474,7 +470,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.mark_dirty = RustMarkTileDirty,
 	.next_company = SharedNextCompany,
 	.no_jetcrash = SharedNoJetcrash,
-	.normal_road_bits = SharedNormalRoadBits,
 	.other_tunnel_end = RustOtherTunnelBridgeEnd,
 	.plane_crashes = SharedPlaneCrashes,
 	.plane_speed = SharedPlaneSpeed,
@@ -487,7 +482,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.crossing_reserved = RustCrossingReserved,
 	.set_crossing_reserved = RustSetCrossingReserved,
 	.may_have_road = Shared_may_have_road,
-	.road_tile_kind = Shared_road_tile_kind,
 	.set_road_bits = Shared_set_road_bits,
 	.set_road_type = Shared_set_road_type,
 	.set_road_owner = RustSetRoadOwner,
@@ -523,7 +517,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_slope = SharedTileSlope,
 	.tile_type = SharedTileType,
 	.tile_valid = Shared_tile_valid,
-	.tile_slope_z = RustTileSlopeZ,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
 	.town_owner = SharedTownOwner,

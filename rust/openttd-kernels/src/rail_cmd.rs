@@ -583,10 +583,12 @@ impl<'a> Ctx<'a> {
                 }
                 let mut built = false;
                 if (self.shared.is_normal_road_tile)(tile) {
-                    if (self.shared.has_road_works)(tile) {
+                    if crate::map_func::World::new(self.shared).has_road_works(tile) {
                         return cost.error(strings.road_works);
                     }
-                    if (self.shared.disallowed_road_directions)(tile) != 0 {
+                    if crate::map_func::World::new(self.shared).disallowed_road_directions(tile)
+                        != 0
+                    {
                         return cost.error(strings.oneway_road);
                     }
                     if (self.s.rail_no_crossings)(railtype) {
@@ -603,8 +605,8 @@ impl<'a> Ctx<'a> {
                     let road = NormalRoad {
                         road_type,
                         tram_type,
-                        road_bits: (self.shared.normal_road_bits)(tile, 0).0,
-                        tram_bits: (self.shared.normal_road_bits)(tile, 1).0,
+                        road_bits: crate::map_func::World::new(self.shared).road_bits(tile, false),
+                        tram_bits: crate::map_func::World::new(self.shared).road_bits(tile, true),
                     };
                     let bits = road.road_bits | road.tram_bits;
                     if (track == TRACK_X && bits & ROAD_X == 0)

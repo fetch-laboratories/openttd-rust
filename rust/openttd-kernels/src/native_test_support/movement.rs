@@ -6,7 +6,6 @@
  */
 
 //! Native oracle for the private production movement context.
-use super::{Context, table};
 use crate::services::Services;
 use crate::tile_type::{MP_ROAD, MP_STATION, TileIndex};
 
@@ -24,8 +23,6 @@ pub(crate) fn map_read_probe(
         shared,
         dimensions: shared.map(),
     };
-    let s = table(shared);
-    let context = Context { s, world: &world };
     for pass in 0..2 {
         let kind = (shared.tile_type)(tile);
         if world.kind(tile) != kind {
@@ -44,33 +41,16 @@ pub(crate) fn map_read_probe(
         } else if world.types.assertions() == station.is_some() {
             return false;
         }
-        if kind == MP_ROAD && (shared.is_normal_road_tile)(tile) {
-            if world.disallowed_road_directions(tile) != (shared.disallowed_road_directions)(tile)
-                || world.has_road_works(tile) != (shared.has_road_works)(tile)
-            {
-                return false;
-            }
-            for kind in [crate::road_type::RTT_ROAD, crate::road_type::RTT_TRAM] {
-                if world.road_bits(tile, kind.0)
-                    != (shared.normal_road_bits)(tile, u8::from(kind.0)).0
-                {
-                    return false;
-                }
-            }
-        } else if world.types.assertions()
+        if !(kind == MP_ROAD && (shared.is_normal_road_tile)(tile))
+            && world.types.assertions()
             && (crate::road_map::get_road_bits(&world.types, tile, crate::road_type::RTT_ROAD)
                 .is_some()
                 || crate::road_map::get_disallowed_road_directions(&world.types, tile).is_some())
         {
             return false;
         }
-        if (shared.may_have_road)(tile) {
-            for kind in [crate::road_type::RTT_ROAD, crate::road_type::RTT_TRAM] {
-                if context.has_tile_road_type(tile, kind) != (s.has_tile_road_type)(tile, kind) {
-                    return false;
-                }
-            }
-        } else if world.types.assertions()
+        if !(shared.may_have_road)(tile)
+            && world.types.assertions()
             && crate::road_map::has_tile_road_type(&world.types, tile, crate::road_type::RTT_ROAD)
                 .is_some()
         {

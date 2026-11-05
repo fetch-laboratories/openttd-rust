@@ -319,7 +319,6 @@ pub struct ObjectServices {
     pub progress_increase: unsafe extern "C" fn(*mut GenerationFrame) -> bool,
     pub normal: unsafe extern "C" fn() -> bool,
     pub bulldozer: unsafe extern "C" fn() -> bool,
-    pub water_class: unsafe extern "C" fn(u32) -> WaterClass,
     pub restoration: *const crate::water::RestorationServices,
     pub set_owner: unsafe extern "C" fn(u32, u8) -> (),
     pub scale_size_1d: unsafe extern "C" fn(u32) -> u32,
@@ -754,7 +753,9 @@ impl<'a> World<'a> {
                     (&*(self.shared.water_services)()).invalidate_region(t, self.shared);
                 }
                 let wc = if (self.shared.is_water_tile)(t) {
-                    (self.s.water_class)(t)
+                    crate::services::WaterClass(
+                        crate::map_func::World::new(self.shared).water_class(t),
+                    )
                 } else {
                     INVALID_WATER_CLASS
                 };
@@ -1056,9 +1057,8 @@ impl<'a> World<'a> {
                         }
                     }
                 }
-                let slope_z = (self.shared.tile_slope_z)(tile);
-                let mut z = slope_z.z;
-                if slope_z.slope.0 != 0 {
+                let (slope, mut z) = crate::map_func::World::new(self.shared).tile_slope_z(tile);
+                if slope != 0 {
                     z += 1;
                 }
                 for t in self.tiles(area) {
@@ -1387,7 +1387,7 @@ impl World<'_> {
             let mut clear = false;
             if (kind == OWNED || kind >= NEW_OBJECT_OFFSET) && new != INVALID_OWNER {
                 (self.s.set_owner)(tile, new);
-                if (self.s.water_class)(tile).0 == 1 {
+                if crate::map_func::World::new(self.shared).water_class(tile) == 1 {
                     ((*self.s.restoration).infrastructure)(old, u32::MAX);
                     ((*self.s.restoration).infrastructure)(new, 1);
                 }
@@ -1594,7 +1594,9 @@ impl World<'_> {
         };
         let mut tile = x + y * self.map.size_x();
         unsafe {
-            if (self.shared.tile_type)(tile) != MP_WATER || (self.s.water_class)(tile).0 != 0 {
+            if (self.shared.tile_type)(tile) != MP_WATER
+                || crate::map_func::World::new(self.shared).water_class(tile) != 0
+            {
                 return false;
             }
             for _ in 0..19 {
@@ -2533,7 +2535,6 @@ crate::abi::layouts! {
         progress_increase,
         normal,
         bulldozer,
-        water_class,
         restoration,
         set_owner,
         scale_size_1d,

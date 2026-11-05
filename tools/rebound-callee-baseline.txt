@@ -11,7 +11,6 @@ forwarded | src/object_cmd.cpp | bulldozer = GetRustTownAuthorityServices().bull
 forwarded | src/object_cmd.cpp | industry_tiles = GetRustIndustryLoopServices().tiles
 forwarded | src/object_cmd.cpp | scale_size_1d = GetRustIndustryLoopServices().generation->scale_by_size_1d
 forwarded | src/object_cmd.cpp | set_owner = GetRustSharedServices().set_tile_owner
-forwarded | src/object_cmd.cpp | water_class = GetRustClearServices().water_class
 forwarded | src/rust/company_identity_adapter.cpp | aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
 forwarded | src/rust/company_identity_adapter.cpp | cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes
 forwarded | src/rust/company_identity_adapter.cpp | engine = GetRustEngineCapabilitiesServices().engine
@@ -246,8 +245,6 @@ rebound | RustSetCurrentCompanyID | src/rust/company_adapter.cpp | set_current_c
 rebound | RustSetCurrentCompanyID | src/rust/fleet_pending_services.hpp | set_current
 rebound | RustSetRailStationReservation | src/pbs.cpp | set_station
 rebound | RustSetRailStationReservation | src/rust/station_command_services.hpp | set_rail_station_reservation
-rebound | RustSetTileHeight | src/landscape.cpp | set_height
-rebound | RustSetTileHeight | src/landscape.cpp | set_height | 2
 rebound | RustSetTunnelBridgeReservation | src/pbs.cpp | set_wormhole
 rebound | RustSetTunnelBridgeReservation | src/tunnelbridge_cmd.cpp | set_reservation
 rebound | RustSpecGRFVersion8 | src/newgrf_airporttiles.cpp | version8
@@ -349,14 +346,10 @@ rebound | RustVehicleUpdateDelta | src/effectvehicle.cpp | delta
 rebound | RustVehicleUpdateDelta | src/rust/aircraft_adapter.hpp | update_delta
 rebound | RustVehicleUpdateDelta | src/rust/disaster_adapter.hpp | update_delta
 rebound | RustVehicleUpdateDelta | src/train_cmd.cpp | update_delta
-rebound | RustWaterClass | src/clear_cmd.cpp | water_class
-rebound | RustWaterClass | src/newgrf_generic.cpp | water_class
 rebound | SharedIsDepotTile | src/rust/vehicle_effect_services.hpp | depot
 rebound | SharedIsDepotTile | src/vehicle_cmd.cpp | is_depot
 rebound | Shared_bay_stop_direction | src/rust/road_services.h | bay_direction
 rebound | Shared_bay_stop_direction | src/rust/services.cpp | bay_stop_direction
-rebound | Shared_disallowed_road_directions | src/rust/road_services.h | disallowed_directions
-rebound | Shared_disallowed_road_directions | src/rust/services.cpp | disallowed_road_directions
 rebound | Shared_is_bay_stop | src/rust/road_services.h | is_bay_stop
 rebound | Shared_is_bay_stop | src/rust/services.cpp | is_bay_stop
 rebound | Shared_is_drive_through_stop | src/rust/road_services.h | is_drive_through

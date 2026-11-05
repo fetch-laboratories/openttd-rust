@@ -113,7 +113,6 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
             if crate::water_map::is_coast(&map, tile) != Some((water.coast)(tile))
                 || crate::water_map::is_non_flooding_water_tile(&map, tile)
                     != Some((water.non_flooding)(tile))
-                || crate::water_map::get_water_class(&map, tile) != Some((c.water_class)(tile).0)
             {
                 return u8::from(false);
             }

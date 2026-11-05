@@ -213,7 +213,6 @@ pub struct ClearServices {
     pub fences: extern "C" fn(u32) -> FieldFences,
     pub field: extern "C" fn(u32) -> FieldGround,
     pub set_field: extern "C" fn(u32, u32),
-    pub water_class: extern "C" fn(u32) -> WaterClass,
 }
 #[repr(C)]
 pub struct RailSnowGround {
@@ -344,16 +343,10 @@ pub(crate) unsafe fn clear_tile_loop(
         {
             let normal = (0..4).any(|direction| {
                 let t = diagonal(tile, direction, size_x);
-                crate::tile_map::is_valid_tile(map, t, map.count())
-                    .unwrap_or_else(|| (s.tile_valid)(t))
-                    && (crate::tile_map::get_tropic_zone(map, t)
-                        .unwrap_or_else(|| (s.tropic_zone)(t))
-                        != 1
-                        || (crate::water_map::has_tile_water_class(map, t)
-                            .unwrap_or_else(|| (s.has_water_class)(t))
-                            && crate::water_map::get_water_class(map, t)
-                                .unwrap_or_else(|| (c.water_class)(t).0)
-                                == 0))
+                map.asserted(s, |m| crate::tile_map::is_valid_tile(m, t, m.count()))
+                    && (map.asserted(s, |m| crate::tile_map::get_tropic_zone(m, t)) != 1
+                        || (map.asserted(s, |m| crate::water_map::has_tile_water_class(m, t))
+                            && map.asserted(s, |m| crate::water_map::get_water_class(m, t)) == 0))
             });
             expected = if normal { 1 } else { 3 };
         }
@@ -956,7 +949,6 @@ crate::abi::layouts! {
         fences,
         field,
         set_field,
-        water_class,
     };
     "OpenTTDRailSnowGround" ["landscape"] => RailSnowGround {
         z,

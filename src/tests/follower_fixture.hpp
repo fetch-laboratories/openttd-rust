@@ -49,10 +49,7 @@ struct FollowerFixture {
 		shared.mark_dirty = [](uint32_t) noexcept {};
 		shared.movement = &movement;
 		shared.pbs_services = [](const OpenTTDSharedServices *) noexcept -> const OpenTTDPbsServices * { return &active->pbs; };
-		shared.normal_road_bits = [](uint32_t t, uint8_t tram) noexcept { return static_cast<RoadBits>((tram ? active->tiles.base[t].m3 : active->tiles.base[t].m5) & 15); };
-		shared.road_tile_kind = [](uint32_t t) noexcept { return static_cast<RoadTileType>(active->tiles.base[t].m5 >> 6); };
 		shared.road_depot_direction = [](uint32_t t) noexcept -> uint8_t { return active->tiles.base[t].m5 & 3; };
-		shared.has_road_works = [](uint32_t) noexcept { return false; };
 		shared.may_have_road = [](uint32_t) noexcept { return true; };
 		movement.native_assert = [](bool okay) noexcept { if (!okay) std::abort(); };
 		movement.shared = &shared; movement.vehicle = &vehicle; movement.train = &train;

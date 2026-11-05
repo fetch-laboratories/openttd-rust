@@ -106,13 +106,11 @@ struct OpenTTDSharedServices {
 	RoadBits (*crossing_road_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_bits);
 	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	uint16_t (*depot_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_index);
-	uint8_t (*disallowed_road_directions)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(disallowed_road_directions);
 	bool (*disaster_sound)() noexcept OPENTTD_SERVICE_DEFAULT(disaster_sound);
 	uint8_t (*drive_through_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(drive_through_axis);
 	bool (*forbid_90_deg)() noexcept OPENTTD_SERVICE_DEFAULT(forbid_90_deg);
 	void (*free_train_reservation)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(free_train_reservation);
 	bool (*has_road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road_type);
-	bool (*has_road_works)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road_works);
 	bool (*has_water_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_ground);
 	uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(industry);
 	bool (*is_any_road_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_any_road_stop);
@@ -133,7 +131,6 @@ struct OpenTTDSharedServices {
 	void (*mark_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty);
 	uint8_t (*next_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
 	bool (*no_jetcrash)() noexcept OPENTTD_SERVICE_DEFAULT(no_jetcrash);
-	RoadBits (*normal_road_bits)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(normal_road_bits);
 	uint32_t (*other_tunnel_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_end);
 	uint8_t (*plane_crashes)() noexcept OPENTTD_SERVICE_DEFAULT(plane_crashes);
 	uint8_t (*plane_speed)() noexcept OPENTTD_SERVICE_DEFAULT(plane_speed);
@@ -146,7 +143,6 @@ struct OpenTTDSharedServices {
 	bool (*crossing_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_reserved);
 	void (*set_crossing_reserved)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_crossing_reserved);
 	bool (*may_have_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_have_road);
-	RoadTileType (*road_tile_kind)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tile_kind);
 	void (*set_road_bits)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_bits);
 	void (*set_road_type)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_type);
 	void (*set_road_owner)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_owner);
@@ -181,7 +177,6 @@ struct OpenTTDSharedServices {
 	uint8_t (*tile_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope);
 	uint8_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
-	OpenTTDFoundationSlope (*tile_slope_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope_z);
 	int32_t (*tile_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_z);
 	uint16_t (*town_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
 	OpenTTDTownState *(*town_owner)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_owner);

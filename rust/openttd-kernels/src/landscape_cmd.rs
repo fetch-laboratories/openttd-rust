@@ -323,7 +323,6 @@ impl<'a> World<'a> {
     fn clear(&self, out: Cost<'_>, tile: u32, flags: u16) {
         out.set(0);
         let water = unsafe { &*(self.s.water_services)() };
-        let native = unsafe { &*water.clear };
         let mut do_clear = false;
         if flags & F::FORCE_CLEAR_TILE != 0
             && (self.s.has_water_class)(tile)
@@ -331,14 +330,14 @@ impl<'a> World<'a> {
             && !(self.s.is_water_tile)(tile)
             && !(self.a.coast)(tile)
         {
-            let class = (native.water_class)(tile);
-            if flags & F::AUTO != 0 && class == WATER_CLASS_CANAL {
+            let class = crate::map_func::World::new(self.s).water_class(tile);
+            if flags & F::AUTO != 0 && class == WATER_CLASS_CANAL.0 {
                 out.error(self.a.strings.canal);
                 return;
             }
             if !(self.a.buoy)(tile) || (self.s.tile_owner)(tile) == (self.s.current_company)() {
                 do_clear = true;
-                out.add_money(crate::company::price(if class == WATER_CLASS_CANAL {
+                out.add_money(crate::company::price(if class == WATER_CLASS_CANAL.0 {
                     crate::economy_type::PR_CLEAR_CANAL
                 } else {
                     crate::economy_type::PR_CLEAR_WATER
