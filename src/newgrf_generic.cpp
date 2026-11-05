@@ -43,7 +43,6 @@ const OpenTTDGenericServices &GetRustGenericServices() noexcept
 		.evaluate = EvaluateGeneric,
 		.common = &GetRustSpriteGroupServices(),
 		.enabled = RustAmbientSoundEnabled,
-		.ambient = OpenTTDAmbientSound,
 		.water_class = RustWaterClass,
 		.sound = RustGRFPlayTileSound,
 	};

@@ -46,7 +46,6 @@ inline const OpenTTDHouseDefinitionServices &GetHouseDefinitionServices() noexce
 		.resize_specs = [](size_t count) noexcept { HouseSpec::Specs().resize(count); },
 		.move_spec = [](const HouseSpec *spec, uint16_t id) noexcept { HouseSpec::Specs()[id] = std::move(*MutableHouse(spec)); },
 		.set_override = [](const HouseSpec *spec, uint16_t id) noexcept { RustSpecSetOverride(MutableHouse(spec), id); },
-		.landscape = OpenTTDLandscape,
 		.set_enabled = [](const HouseSpec *spec, bool value) noexcept { RustSpecSetEnabled(MutableHouse(spec), value); },
 		.set_flags = [](const HouseSpec *spec, uint8_t value) noexcept { MutableHouse(spec)->building_flags = BuildingFlags{value}; },
 		.set_min_year = [](const HouseSpec *spec, int32_t value) noexcept { MutableHouse(spec)->min_year = TimerGameCalendar::Year{value}; },

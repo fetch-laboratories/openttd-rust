@@ -76,7 +76,6 @@ pub struct Services {
     base_spec: extern "C" fn(u16) -> *const AirportSpec,
     min_year: extern "C" fn(*const AirportSpec) -> i32,
     max_year: extern "C" fn(*const AirportSpec) -> i32,
-    never_expire: extern "C" fn() -> bool,
     station_layout: extern "C" fn(*const BaseStation) -> u8,
     random: extern "C" fn(*mut BaseStation) -> u16,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
@@ -189,7 +188,7 @@ pub(crate) fn available(spec: *const AirportSpec, s: &Services) -> bool {
     if crate::timer_game_common::calendar_year().0 < (s.min_year)(spec) {
         return false;
     }
-    if (s.never_expire)() {
+    if unsafe { s.shared().settings().never_expire_airports.read() } {
         return true;
     }
     crate::timer_game_common::calendar_year().0 <= (s.max_year)(spec)
@@ -555,7 +554,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, never_expire, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]

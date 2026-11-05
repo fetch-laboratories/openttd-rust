@@ -29,7 +29,6 @@ struct OpenTTDLandscapeCommandServices {
 	bool (*coast)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(coast);
 	bool (*buoy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(buoy);
 	bool (*canal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal);
-	uint8_t (*height_limit)() noexcept OPENTTD_SERVICE_DEFAULT(height_limit);
 	uint8_t (*max_bridge_height)() noexcept OPENTTD_SERVICE_DEFAULT(max_bridge_height);
 	bool (*freeform_edges)() noexcept OPENTTD_SERVICE_DEFAULT(freeform_edges);
 	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);

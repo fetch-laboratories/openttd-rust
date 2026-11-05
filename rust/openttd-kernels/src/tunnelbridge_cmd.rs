@@ -96,7 +96,6 @@ pub struct TunnelBridgeServices {
     pub availability: extern "C" fn(u32) -> Availability,
     pub speed: extern "C" fn(u32) -> u16,
     pub price: extern "C" fn(u32) -> u16,
-    pub max_bridge_length: extern "C" fn() -> u16,
     pub max_bridge_height: extern "C" fn() -> u8,
     pub max_tunnel_length: extern "C" fn() -> u16,
     pub crossing_tunnels: extern "C" fn() -> bool,
@@ -271,7 +270,7 @@ impl<'a> World<'a> {
     fn available(&self, out: Cost<'_>, bridge_type: u32, length: u32, flags: u16) {
         out.zero();
         if flags & DoCommandFlag::QUERY_COST != 0 {
-            if length > u32::from((self.a.max_bridge_length)()) {
+            if length > u32::from(unsafe { (*self.r.shared).settings().max_bridge_length.read() }) {
                 out.error(self.a.strings.too_long);
             }
             return;
@@ -283,7 +282,7 @@ impl<'a> World<'a> {
         if b.year > crate::timer_game_common::calendar_year().0 {
             return Self::error(out);
         }
-        let maximum = b.max.min((self.a.max_bridge_length)());
+        let maximum = b.max.min(unsafe { (*self.r.shared).settings().max_bridge_length.read() });
         if u32::from(b.min) > length {
             return Self::error(out);
         }
@@ -444,7 +443,7 @@ impl<'a> World<'a> {
             if !ret.ok() {
                 return cost.take(ret);
             }
-        } else if length > u32::from((self.a.max_bridge_length)()) {
+        } else if length > u32::from(unsafe { (*self.r.shared).settings().max_bridge_length.read() }) {
             return cost.error(self.a.strings.too_long);
         }
         length = length.wrapping_add(2);
@@ -1473,7 +1472,6 @@ crate::abi::layouts! {
         availability,
         speed,
         price,
-        max_bridge_length,
         max_bridge_height,
         max_tunnel_length,
         crossing_tunnels,

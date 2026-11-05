@@ -159,8 +159,6 @@ pub struct RailCommandServices {
     /// `RoadBuildCost`.
     /// `construction.crossing_with_competitor`.
     pub crossing_with_competitor: extern "C" fn() -> bool,
-    /// `vehicle.disable_elrails`.
-    pub disable_elrails: extern "C" fn() -> bool,
     /// `GetSlopeZInCorner`.
     pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
     /// `AutoslopeCheckForEntranceEdge`.
@@ -1738,7 +1736,9 @@ impl<'a> Ctx<'a> {
         }
         let kind = (self.rail.rail_type)(tile).0;
         if kind == totype
-            || ((self.s.disable_elrails)() && totype == RAILTYPE_RAIL && kind == RAILTYPE_ELECTRIC)
+            || (unsafe { self.shared.settings().disable_elrails.read() }
+                && totype == RAILTYPE_RAIL
+                && kind == RAILTYPE_ELECTRIC)
         {
             return false;
         }
@@ -2454,7 +2454,6 @@ crate::abi::layouts! {
         rail_clear_cost,
         rail_convert_cost,
         crossing_with_competitor,
-        disable_elrails,
         slope_z_in_corner,
         entrance_edge,
         build_rail,

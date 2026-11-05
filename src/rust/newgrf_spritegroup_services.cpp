@@ -176,9 +176,6 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 {
 	static const OpenTTDGlobalVariableServices services{
-		.climate = OpenTTDLandscapeValue,
-		.disable_elrails = RustDisableElrails,
-		.height_limit = RustMapHeightLimit,
 		.misc_bits = RustGRFMiscBits,
 		.newgrf_version = RustNewGRFVersion,
 		.palette = RustGRFPalette,

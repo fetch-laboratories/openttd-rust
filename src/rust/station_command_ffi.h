@@ -159,7 +159,6 @@ struct OpenTTDStationCommandServices {
 	uint32_t (*iterator_tile)(TileIterator *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_tile);
 	void (*iterator_next)(TileIterator *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_next);
 	uint8_t (*airport_noise)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_noise);
-	bool (*noise_enabled)() noexcept OPENTTD_SERVICE_DEFAULT(noise_enabled);
 	uint16_t (*town_max_noise)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_max_noise);
 	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	uint32_t (*airport_tile)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);

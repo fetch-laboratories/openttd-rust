@@ -167,7 +167,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.iterator_tile = [](TileIterator *it) noexcept { return (**it).base(); },
 		.iterator_next = [](TileIterator *it) noexcept { ++(*it); },
 		.airport_noise = [](const AirportSpec *spec) noexcept { return spec->noise_level; },
-		.noise_enabled = RustStationNoiseEnabled,
 		.town_max_noise = [](const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->MaxTownNoise(); },
 		.station_town = RustStationStationTown,
 		.airport_tile = RustStationAirportTile,

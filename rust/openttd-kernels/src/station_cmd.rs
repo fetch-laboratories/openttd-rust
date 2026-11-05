@@ -261,7 +261,6 @@ pub struct CommandServicesTable {
     pub iterator_tile: extern "C" fn(*mut TileIterator) -> u32,
     pub iterator_next: extern "C" fn(*mut TileIterator),
     pub airport_noise: extern "C" fn(*const AirportSpec) -> u8,
-    pub noise_enabled: extern "C" fn() -> bool,
     pub town_max_noise: extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const crate::services::TownHandle,
     pub airport_tile: extern "C" fn(*const BaseStation) -> u32,
@@ -3089,7 +3088,7 @@ impl Ctx<'_> {
         let authority = unsafe { &*self.s.authority };
         let mut refused = std::ptr::null();
         let mut message = 0;
-        if (self.s.noise_enabled)() {
+        if unsafe { (*self.s.shared).settings().station_noise.read() } {
             if u32::from(unsafe { noise_ptr.read() }) + noise
                 > u32::from((self.s.town_max_noise)(nearest))
             {
@@ -3186,7 +3185,7 @@ impl Ctx<'_> {
         (self.s.airport_infrastructure)(owner, 1);
         self.tiles_changed(st, true, 1);
         (self.s.station_view_invalidate)(st, -1);
-        if (self.s.noise_enabled)() {
+        if unsafe { (*self.s.shared).settings().station_noise.read() } {
             (self.s.town_view_dirty)(nearest);
         }
     }
@@ -3237,7 +3236,7 @@ impl Ctx<'_> {
             unsafe {
                 ptr.write(ptr.read().wrapping_sub(u16::from(noise)));
             }
-            if (self.s.noise_enabled)() {
+            if unsafe { (*self.s.shared).settings().station_noise.read() } {
                 (self.s.town_view_dirty)(nearest);
             }
         }
@@ -4333,7 +4332,6 @@ crate::abi::layouts! {
         iterator_tile,
         iterator_next,
         airport_noise,
-        noise_enabled,
         town_max_noise,
         station_town,
         airport_tile,

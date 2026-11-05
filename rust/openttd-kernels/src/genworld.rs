@@ -151,7 +151,6 @@ pub struct WorldServices {
     pub session: *const crate::session::Services,
     pub session_frame: extern "C" fn(*mut Frame) -> *mut crate::session::Frame,
     pub session_end: extern "C" fn(*mut Frame) -> bool,
-    pub seed: extern "C" fn() -> u32,
     pub set_seed: extern "C" fn(u32),
     pub interactive_random: extern "C" fn() -> u32,
     pub random_seed: extern "C" fn(u32),
@@ -203,7 +202,6 @@ pub struct WorldServices {
     pub dedicated: extern "C" fn() -> bool,
     pub exit_game: extern "C" fn() -> bool,
     pub set_exit: extern "C" fn(),
-    pub desync_level: extern "C" fn() -> i32,
     pub save: extern "C" fn(*mut Frame) -> bool,
 }
 
@@ -308,7 +306,7 @@ pub(crate) unsafe fn setup(
                 .clamp(MAP_HEIGHT_LIMIT_AUTO_MINIMUM, MAX_MAP_HEIGHT_LIMIT) as u8,
         );
     }
-    if (s.seed)() == GENERATE_NEW_SEED {
+    if generation_seed(s) == GENERATE_NEW_SEED {
         (s.set_seed)((s.interactive_random)());
     }
     if !(s.load_sprites)(frame) {
@@ -528,7 +526,7 @@ impl World<'_> {
         if (s.dedicated)() {
             debug!(net, 3, "Generating map, please wait...");
         }
-        (s.random_seed)((s.seed)());
+        (s.random_seed)(generation_seed(s));
         self.set_progress(GWP_MAP_INIT, 2)?;
         (s.place_cursor)();
         (s.randomizers)();
@@ -642,8 +640,8 @@ impl World<'_> {
         if (s.dedicated)() {
             debug!(net, 3, "Map generated, starting game");
         }
-        debug!(desync, 1, "new_map: {:08x}", (s.seed)());
-        if (s.desync_level)() > 0 {
+        debug!(desync, 1, "new_map: {:08x}", generation_seed(s));
+        if crate::debug::level(|l| l.desync) > 0 {
             native((s.save)(self.frame))?;
         }
         Ok(())
@@ -681,6 +679,10 @@ fn run(s: &WorldServices, frame: *mut Frame) -> u8 {
     }
 }
 
+/// `_settings_game.game_creation.generation_seed`, read through the shared catalog.
+fn generation_seed(s: &WorldServices) -> u32 {
+    unsafe { (*(*s.landscape).shared).settings().generation_seed.read() }
+}
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDWorldSettings" ["genworld"] => Settings { height_limit, flat_height, heightmap_height, generator, };
@@ -705,7 +707,6 @@ crate::abi::layouts! {
         session,
         session_frame,
         session_end,
-        seed,
         set_seed,
         interactive_random,
         random_seed,
@@ -757,7 +758,6 @@ crate::abi::layouts! {
         dedicated,
         exit_game,
         set_exit,
-        desync_level,
         save,
     };
 }

@@ -41,7 +41,6 @@ struct OpenTTDAirportResolverServices {
 	const AirportSpec *(*base_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(base_spec);
 	int32_t (*min_year)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(min_year);
 	int32_t (*max_year)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(max_year);
-	bool (*never_expire)() noexcept OPENTTD_SERVICE_DEFAULT(never_expire);
 	uint8_t (*station_layout)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_layout);
 	uint16_t (*random)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	int32_t (*build_date)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);

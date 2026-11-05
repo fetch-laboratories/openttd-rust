@@ -38,7 +38,6 @@ struct OpenTTDWorldServices {
 	const OpenTTDSessionServices *session;
 	OpenTTDSessionFrame *(*session_frame)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(session_frame);
 	bool (*session_end)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(session_end);
-	uint32_t (*seed)() noexcept OPENTTD_SERVICE_DEFAULT(seed);
 	void (*set_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_seed);
 	uint32_t (*interactive_random)() noexcept OPENTTD_SERVICE_DEFAULT(interactive_random);
 	void (*random_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_seed);
@@ -90,7 +89,6 @@ struct OpenTTDWorldServices {
 	bool (*dedicated)() noexcept OPENTTD_SERVICE_DEFAULT(dedicated);
 	bool (*exit_game)() noexcept OPENTTD_SERVICE_DEFAULT(exit_game);
 	void (*set_exit)() noexcept OPENTTD_SERVICE_DEFAULT(set_exit);
-	int32_t (*desync_level)() noexcept OPENTTD_SERVICE_DEFAULT(desync_level);
 	bool (*save)(OpenTTDWorldFrame *) noexcept OPENTTD_SERVICE_DEFAULT(save);
 };
 const OpenTTDWorldServices &GetRustWorldServices() noexcept;

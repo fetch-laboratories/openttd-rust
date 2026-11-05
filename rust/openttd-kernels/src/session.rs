@@ -705,7 +705,7 @@ impl<'a> Session<'a> {
             (s.window_tick)();
             (s.news)();
         } else {
-            if (self.world().desync_level)() > 2
+            if crate::debug::level(|l| l.desync) > 2
                 && crate::timer_game_common::economy_fraction() == 0
                 && crate::timer_game_common::economy_date().0 & 0x1f == 0
             {

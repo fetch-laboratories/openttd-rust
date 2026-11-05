@@ -26,7 +26,7 @@ struct OpenTTDEngineStartup { int32_t base_intro; int32_t base_life; uint8_t dec
 struct OpenTTDEngineSeed { int32_t base_intro, lifelength; uint8_t decay_speed; int8_t retire_early; };
 struct OpenTTDEngineYear { int32_t base_intro, lifelength; };
 using OpenTTDEngineYMD = OpenTTDCalendarYMD;
-struct OpenTTDEngineStartSettings { uint32_t generation_seed; int32_t starting_year, date; };
+struct OpenTTDEngineStartSettings { int32_t starting_year, date; };
 struct OpenTTDEngineCompany { const Company *shell; uint8_t id; };
 struct OpenTTDEngineCompanyPreview { uint8_t blocked; int32_t performance; };
 struct OpenTTDEngineVehicle { OpenTTDVehicle *shell; uint32_t id; uint8_t owner; VehicleType type; };
@@ -56,7 +56,6 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineSeed (*seed_config)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(seed_config);
 	int32_t (*base_intro)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(base_intro);
 	OpenTTDEngineYear (*aging_year)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aging_year);
-	bool (*never_expire)() noexcept OPENTTD_SERVICE_DEFAULT(never_expire);
 	OpenTTDEngineStartSettings (*start_settings)() noexcept OPENTTD_SERVICE_DEFAULT(start_settings);
 	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
 	uint16_t (*road_limit)() noexcept OPENTTD_SERVICE_DEFAULT(road_limit);

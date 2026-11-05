@@ -63,7 +63,6 @@ static inline bool TownProtocol_editor() noexcept { return false; }
 static inline bool TownProtocol_generating_world() noexcept { return false; }
 static inline bool TownProtocol_allow_crossings() noexcept { return false; }
 static inline uint8_t TownProtocol_climate() noexcept { return 0; }
-static inline bool TownProtocol_allow_roads() noexcept { return false; }
 static inline uint8_t TownProtocol_road_flags(uint8_t) noexcept { return 0; }
 static inline OpenTTDTownHouseAvailability TownProtocol_house_availability(uint16_t) noexcept { return {.zones = 0xFFFF, .override_id = UINT16_MAX, .class_id = town_protocol_world->house_class, .probability = 1, .enabled = true}; }
 static inline uint8_t TownProtocol_house_flags(uint16_t id) noexcept { return id == 0 || id == 2 ? 1 : 16; }
@@ -165,7 +164,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.generating_world = TownProtocol_generating_world,
 		.allow_crossings = TownProtocol_allow_crossings,
 		.climate = TownProtocol_climate,
-		.allow_roads = TownProtocol_allow_roads,
 		.road_flags = TownProtocol_road_flags,
 		.house_availability = TownProtocol_house_availability,
 		.house_placement = TownProtocol_house_placement,

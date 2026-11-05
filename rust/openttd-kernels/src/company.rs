@@ -193,17 +193,6 @@ pub(crate) struct Tick {
     num_ais: u8,
     stage: u8,
 }
-/// Inputs of the competitor timeout; the entry returns whether to Post.
-#[repr(C)]
-pub struct Competitors {
-    pub num_companies: usize,
-    pub interval: u16,
-    pub menu: bool,
-    pub can_start: bool,
-    pub networking: bool,
-    pub max_companies: u8,
-    pub max_competitors: u8,
-}
 /// Settings of the economy-month entry.
 #[repr(C)]
 pub struct Month {
@@ -1945,15 +1934,20 @@ pub extern "C" fn openttd_rust_company_startup_abi(s: &Services, f: &mut Startup
 }
 /// Competitor timeout callback; `true` asks the caller to Post `CCA_NEW_AI`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services, r: &Competitors) -> u8 {
-    if r.menu
-        || !r.can_start
-        || (r.networking && r.num_companies >= usize::from(r.max_companies))
-        || r.interval == 0
+pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services) -> u8 {
+    let settings = s.shared.settings();
+    if crate::session::mode() == crate::openttd::GameMode::MENU || !(s.ai_can_start)() {
+        return u8::from(false);
+    }
+    if (s.finance.networking)()
+        && (s.company_count)() >= usize::from(unsafe { settings.max_companies.read() })
     {
         return u8::from(false);
     }
-    u8::from(count_ais(s) < r.max_competitors)
+    if unsafe { settings.competitor_interval.read() } == 0 {
+        return u8::from(false);
+    }
+    u8::from(count_ais(s) < unsafe { settings.max_competitors.read() })
 }
 /// `OnTick_Companies`; `true` asks the caller to Post `CCA_NEW_AI` and call again.
 /// # Safety
@@ -2383,15 +2377,6 @@ crate::abi::layouts! {
         reason,
         execute,
         stage,
-    };
-    "OpenTTDCompanyCompetitors" ["company_economy"] => Competitors {
-        num_companies,
-        interval,
-        menu,
-        can_start,
-        networking,
-        max_companies,
-        max_competitors,
     };
     "OpenTTDEconomyMonth" ["company_economy"] => Month {
         month,

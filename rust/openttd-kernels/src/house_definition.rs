@@ -94,7 +94,6 @@ pub struct Services {
     resize_specs: extern "C" fn(usize),
     move_spec: extern "C" fn(Spec, u16),
     set_override: extern "C" fn(Spec, u16),
-    landscape: extern "C" fn() -> u8,
     set_enabled: extern "C" fn(Spec, bool),
     set_flags: extern "C" fn(Spec, u8),
     set_min_year: extern "C" fn(Spec, i32),
@@ -120,7 +119,7 @@ crate::abi::layouts! {
     "OpenTTDHouseDefinitionPart" ["house_definition"] => Part { flags, population, enabled };
     "OpenTTDHouseDefinitionEarly" ["house_definition"] => Early { year, availability, enabled };
     "OpenTTDHouseDefinitionCargo" ["house_definition"] => Cargo { label, cargo };
-    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, landscape, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
+    "OpenTTDHouseDefinitionServices" ["house_definition"] => Services { resolver, get, count, clear_specs, reserve_specs, append_default, file_count, file_at, local_count, resize_local, local, clear_local, copy_substitute, set_identity, identity, validity, part, flags, early, cargo, set_cargo, set_label, set_acceptance, set_colour, callbacks, watched, map_string, set_animation, badges, resize_specs, move_spec, set_override, set_enabled, set_flags, set_min_year, set_max_year, set_population, set_mail, set_rating, set_removal, set_availability, set_callbacks, set_processing, set_probability, set_extra, set_animation_speed, set_class_id, set_minimum_life, set_watched };
 }
 
 fn ignore_property(prop: i32, reader: &mut Reader<'_>) -> Result<u8, ReadError> {
@@ -243,7 +242,7 @@ fn property(
             0x0d | 0x0e => (s.set_acceptance)(spec, (prop - 0x0d) as u8, reader.byte()?),
             0x0f => {
                 let mut goods = i16::from(reader.byte()? as i8);
-                let toyland = (s.landscape)() == crate::landscape_type::TOYLAND;
+                let toyland = unsafe { (*s.resolver).shared().settings().climate.read() } == crate::landscape_type::TOYLAND;
                 let label = if goods >= 0 {
                     if toyland { CT_CANDY } else { CT_GOODS }
                 } else if toyland {
@@ -621,7 +620,7 @@ pub fn finalise(s: &Services) {
         }
         id += 1;
     }
-    let climates = crate::house::climate_mask((s.landscape)());
+    let climates = crate::house::climate_mask(unsafe { (*s.resolver).shared().settings().climate.read() });
     for climate in 0..16 {
         if climates & (1 << climate) != 0 {
             for zone in 0..16 {

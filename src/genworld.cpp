@@ -125,7 +125,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.session = &GetRustSessionServices(),
 		.session_frame = [](OpenTTDWorldFrame *f) noexcept { return &f->session.emplace(); },
 		.session_end = [](OpenTTDWorldFrame *f) noexcept { f->cancellation = f->session->exception; f->session.reset(); return !f->cancellation; },
-		.seed = RustGenerationSeed,
 		.set_seed = RustSetGenerationSeed,
 		.interactive_random = []() noexcept { return InteractiveRandom(); },
 		.random_seed = [](uint32_t value) noexcept { _random.SetSeed(value); },
@@ -181,7 +180,6 @@ const OpenTTDWorldServices &GetRustWorldServices() noexcept
 		.dedicated = RustNetworkDedicated,
 		.exit_game = RustExitGame,
 		.set_exit = RustSetExitGame,
-		.desync_level = RustDesyncLevel,
 		.save = [](OpenTTDWorldFrame *f) noexcept { return WorldException(f, RustSaveDesyncGame); },
 	};
 	return services;
