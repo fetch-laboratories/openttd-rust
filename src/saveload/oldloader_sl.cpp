@@ -733,12 +733,12 @@ static uint8_t  _cargo_periods;
 
 static const OldChunks goods_chunk[] = {
 	OCL_VAR ( OC_UINT16, 1,          &_waiting_acceptance ),
-	OCL_SVAR(  OC_UINT8, GoodsEntry, time_since_pickup ),
-	OCL_SVAR(  OC_UINT8, GoodsEntry, rating ),
+	OCL_SVAR(  OC_UINT8, OpenTTDGoodsEntry, time_since_pickup ),
+	OCL_SVAR(  OC_UINT8, OpenTTDGoodsEntry, rating ),
 	OCL_VAR (  OC_UINT8, 1,          &_cargo_source ),
 	OCL_VAR (  OC_UINT8, 1,          &_cargo_periods ),
-	OCL_SVAR(  OC_UINT8, GoodsEntry, last_speed ),
-	OCL_SVAR(  OC_UINT8, GoodsEntry, last_age ),
+	OCL_SVAR(  OC_UINT8, OpenTTDGoodsEntry, last_speed ),
+	OCL_SVAR(  OC_UINT8, OpenTTDGoodsEntry, last_age ),
 
 	OCL_END()
 };
@@ -749,12 +749,13 @@ static bool LoadOldGood(LoadgameState &ls, int num)
 	if (_savegame_type == SGT_TTO && num == 11) return true;
 
 	Station *st = Station::Get(_current_station_id);
-	GoodsEntry *ge = &st->goods[num];
+	GoodsEntry view = st->GetGoods(num);
+	GoodsEntry *ge = &view;
 
-	if (!LoadChunk(ls, ge, goods_chunk)) return false;
+	if (!LoadChunk(ls, &ge->Record(), goods_chunk)) return false;
 
-	ge->status.Set(GoodsEntry::State::Acceptance, HasBit(_waiting_acceptance, 15));
-	ge->status.Set(GoodsEntry::State::Rating, _cargo_source != 0xFF);
+	ge->SetStatus(ge->GetStatus().Set(GoodsEntry::State::Acceptance, HasBit(_waiting_acceptance, 15)));
+	ge->SetStatus(ge->GetStatus().Set(GoodsEntry::State::Rating, _cargo_source != 0xFF));
 	if (GB(_waiting_acceptance, 0, 12) != 0 && CargoPacket::CanAllocateItem()) {
 		ge->GetOrCreateData().cargo.Append(new CargoPacket(GB(_waiting_acceptance, 0, 12), _cargo_periods, (_cargo_source == 0xFF) ? StationID::Invalid() : StationID{_cargo_source}, INVALID_TILE, 0),
 				StationID::Invalid());
@@ -764,14 +765,14 @@ static bool LoadOldGood(LoadgameState &ls, int num)
 }
 
 static const OldChunks station_chunk[] = {
-	OCL_SVAR(   OC_TILE, Station, xy ),
+	OCL_SVAR(   OC_TILE, Station, Record().xy ),
 	OCL_VAR ( OC_UINT32,   1, &_old_town_index ),
 
 	OCL_NULL( 4 ), ///< bus/lorry tile
-	OCL_SVAR(   OC_TILE, Station, train_station.tile ),
-	OCL_SVAR(   OC_TILE, Station, airport.tile ),
+	OCL_SVAR(   OC_TILE, Station, Record().train_station.tile ),
+	OCL_SVAR(   OC_TILE, Station, Record().airport.area.tile ),
 	OCL_NULL( 2 ), ///< dock tile
-	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Station, train_station.w ),
+	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Station, Record().train_station.w ),
 
 	OCL_NULL( 1 ),         ///< sort-index, no longer in use
 	OCL_NULL( 2 ),         ///< sign-width, no longer in use
@@ -780,20 +781,20 @@ static const OldChunks station_chunk[] = {
 
 	OCL_NULL( 4 ),         ///< sign left/top, no longer in use
 
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_U8, Station, had_vehicle_of_type ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_U8, Station, Record().had_vehicle_of_type ),
 
 	OCL_CHUNK( 12, LoadOldGood ),
 
-	OCL_SVAR(  OC_UINT8, Station, time_since_load ),
-	OCL_SVAR(  OC_UINT8, Station, time_since_unload ),
-	OCL_SVAR(  OC_UINT8, Station, delete_ctr ),
-	OCL_SVAR(  OC_UINT8, Station, owner ),
-	OCL_SVAR(  OC_UINT8, Station, facilities ),
-	OCL_SVAR( OC_TTD | OC_UINT8, Station, airport.type ),
-	OCL_SVAR( OC_TTO | OC_FILE_U16 | OC_VAR_U64, Station, airport.blocks ),
+	OCL_SVAR(  OC_UINT8, Station, Record().time_since_load ),
+	OCL_SVAR(  OC_UINT8, Station, Record().time_since_unload ),
+	OCL_SVAR(  OC_UINT8, Station, Record().delete_ctr ),
+	OCL_SVAR(  OC_UINT8, Station, Record().owner ),
+	OCL_SVAR(  OC_UINT8, Station, Record().facilities ),
+	OCL_SVAR( OC_TTD | OC_UINT8, Station, Record().airport.type ),
+	OCL_SVAR( OC_TTO | OC_FILE_U16 | OC_VAR_U64, Station, Record().airport.blocks ),
 	OCL_NULL( 3 ),          ///< bus/truck status, blocked months, no longer in use
 	OCL_CNULL( OC_TTD, 1 ), ///< unknown
-	OCL_SVAR( OC_TTD | OC_FILE_U16 | OC_VAR_U64, Station, airport.blocks ),
+	OCL_SVAR( OC_TTD | OC_FILE_U16 | OC_VAR_U64, Station, Record().airport.blocks ),
 	OCL_CNULL( OC_TTD, 2 ), ///< last_vehicle. now last_vehicle_type
 	OCL_CNULL( OC_TTD, 4 ), ///< junk at end of chunk
 
@@ -807,25 +808,25 @@ static bool LoadOldStation(LoadgameState &ls, int num)
 
 	if (!LoadChunk(ls, st, station_chunk)) return false;
 
-	if (st->xy != 0) {
-		st->town = RemapTown(st->xy);
+	if (st->GetXY() != 0) {
+		st->Record().town = RemapTown(st->GetXY());
 
 		if (_savegame_type == SGT_TTO) {
 			if (IsInsideBS(_old_string_id, 0x180F, 32)) {
-				st->string_id = STR_SV_STNAME + (_old_string_id - 0x180F); // automatic name
+				st->Record().string_id = STR_SV_STNAME + (_old_string_id - 0x180F); // automatic name
 			} else {
-				st->string_id = _old_string_id + 0x2800; // custom name
+				st->Record().string_id = _old_string_id + 0x2800; // custom name
 			}
 
-			if (st->airport.blocks.Test(AirportBlock{8})) {
-				st->airport.type = 1; // large airport
-			} else if (st->airport.blocks.Test(AirportBlock{6})) {
-				st->airport.type = 3; // oil rig
+			if (st->GetAirport().GetBlocks().Test(AirportBlock{8})) {
+				st->Record().airport.type = 1; // large airport
+			} else if (st->GetAirport().GetBlocks().Test(AirportBlock{6})) {
+				st->Record().airport.type = 3; // oil rig
 			} else {
-				st->airport.type = 0; // small airport
+				st->Record().airport.type = 0; // small airport
 			}
 		} else {
-			st->string_id = RemapOldStringID(_old_string_id);
+			st->Record().string_id = RemapOldStringID(_old_string_id);
 		}
 	} else {
 		delete st;
@@ -1418,7 +1419,7 @@ bool LoadOldVehicle(LoadgameState &ls, int num)
 
 		if (_cargo_count != 0 && CargoPacket::CanAllocateItem()) {
 			StationID source =    (_cargo_source == 0xFF) ? StationID::Invalid() : StationID{_cargo_source};
-			TileIndex source_xy = (source != StationID::Invalid()) ? Station::Get(source)->xy : (TileIndex)0;
+			TileIndex source_xy = (source != StationID::Invalid()) ? Station::Get(source)->GetXY() : (TileIndex)0;
 			v->cargo.Append(new CargoPacket(_cargo_count, _cargo_periods, source, source_xy, 0));
 		}
 	}
