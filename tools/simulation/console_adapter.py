@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 import subprocess
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 
@@ -131,14 +132,21 @@ def interposed_archive(
     return copy
 
 
-def prepared_console(kind, build_adapter, binaries, builds, folder, env):
+def prepared_console(
+    kind: str,
+    build_adapter: Callable[[Path, Path, dict[str, str]], Path],
+    binaries: Mapping[str, Path],
+    builds: Mapping[str, Path],
+    folder: Path,
+    env: dict[str, str],
+) -> dict[str, Path]:
     """Reuse a prepared console, or relink under its existing native build lock."""
     import migration
 
     from .core import RUNTIME_DIRECTORIES
     from .runtime import prepared_adapter
 
-    executables = {}
+    executables: dict[str, Path] = {}
     for role in ("reference", "candidate"):
         target = folder / role
         executable = prepared_adapter(kind, role, builds, target)
