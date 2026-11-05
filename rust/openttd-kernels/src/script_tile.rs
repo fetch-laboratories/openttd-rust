@@ -69,16 +69,21 @@ fn enforce(condition: bool, error: u32) -> bool {
 }
 
 fn enforce_company(s: &Services) -> bool {
-    enforce(company_mode_valid(s), script_host::ERR_PRECONDITION_INVALID_COMPANY)
+    enforce(
+        company_mode_valid(s),
+        script_host::ERR_PRECONDITION_INVALID_COMPANY,
+    )
 }
 
 fn enforce_deity_or_company(s: &Services) -> bool {
-    enforce(deity_or_company_mode_valid(s), script_host::ERR_PRECONDITION_INVALID_COMPANY)
+    enforce(
+        deity_or_company_mode_valid(s),
+        script_host::ERR_PRECONDITION_INVALID_COMPANY,
+    )
 }
 
 /// `ScriptMap::IsValidTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_map_is_valid_tile(s: &Services, tile: u32) -> bool {
+fn is_valid_tile(s: &Services, tile: u32) -> bool {
     valid(&world(s), tile)
 }
 
@@ -165,8 +170,7 @@ pub extern "C" fn openttd_rust_script_map_distance_from_edge(s: &Services, tile:
 }
 
 /// `ScriptTile::IsBuildable`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_buildable(s: &Services, tile: u32) -> bool {
+fn is_buildable(s: &Services, tile: u32) -> bool {
     if !enforce_deity_or_company(s) {
         return false;
     }
@@ -183,14 +187,14 @@ pub extern "C" fn openttd_rust_script_tile_is_buildable(s: &Services, tile: u32)
                 return false;
             }
             /* Depots and crossings aren't considered buildable */
-            if w.asserted(|m| crate::road_map::get_road_tile_type(m, tile)).0
+            if w.asserted(|m| crate::road_map::get_road_tile_type(m, tile))
+                .0
                 != crate::road_map::ROAD_TILE_NORMAL
             {
                 return false;
             }
-            let bits = w.asserted(|m| {
-                crate::road_map::get_road_bits(m, tile, crate::road_type::RTT_ROAD)
-            });
+            let bits =
+                w.asserted(|m| crate::road_map::get_road_bits(m, tile, crate::road_type::RTT_ROAD));
             if !crate::bitmath_func::has_exactly_one_bit(bits.0) {
                 return false;
             }
@@ -205,14 +209,8 @@ pub extern "C" fn openttd_rust_script_tile_is_buildable(s: &Services, tile: u32)
 
 /// `ScriptTile::IsBuildableRectangle`. The bounds compare `SQInteger` sums with
 /// `uint` coordinates that wrap, as the original loop does.
-#[unsafe(no_mangle)]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-pub extern "C" fn openttd_rust_script_tile_is_buildable_rectangle(
-    s: &Services,
-    tile: u32,
-    width: i64,
-    height: i64,
-) -> bool {
+fn is_buildable_rectangle(s: &Services, tile: u32, width: i64, height: i64) -> bool {
     /* Check whether we can extract valid X and Y */
     if !valid(&world(s), tile) || width < 1 || height < 1 {
         return false;
@@ -224,7 +222,7 @@ pub extern "C" fn openttd_rust_script_tile_is_buildable_rectangle(
         let mut y = ty;
         while i64::from(y) < height.wrapping_add(i64::from(ty)) {
             let index = openttd_rust_script_map_tile_index(s, i64::from(x), i64::from(y));
-            if !openttd_rust_script_tile_is_buildable(s, index) {
+            if !is_buildable(s, index) {
                 return false;
             }
             y = y.wrapping_add(1);
@@ -241,32 +239,28 @@ fn on_valid(s: &Services, tile: u32, read: impl Fn(&World<'_>) -> bool) -> bool 
 }
 
 /// `ScriptTile::IsSeaTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_sea(s: &Services, tile: u32) -> bool {
+fn is_sea(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         is_type(w, tile, MP_WATER) && w.asserted(|m| crate::water_map::is_sea(m, tile))
     })
 }
 
 /// `ScriptTile::IsRiverTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_river(s: &Services, tile: u32) -> bool {
+fn is_river(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         is_type(w, tile, MP_WATER) && w.asserted(|m| crate::water_map::is_river(m, tile))
     })
 }
 
 /// `ScriptTile::IsWaterTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_water(s: &Services, tile: u32) -> bool {
+fn is_water(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         is_type(w, tile, MP_WATER) && !w.asserted(|m| crate::water_map::is_coast(m, tile))
     })
 }
 
 /// `ScriptTile::IsCoastTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_coast(s: &Services, tile: u32) -> bool {
+fn is_coast(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         (is_type(w, tile, MP_WATER) && w.asserted(|m| crate::water_map::is_coast(m, tile)))
             || (is_type(w, tile, MP_TREES)
@@ -275,8 +269,7 @@ pub extern "C" fn openttd_rust_script_tile_is_coast(s: &Services, tile: u32) -> 
 }
 
 /// `ScriptTile::IsStationTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_station(s: &Services, tile: u32) -> bool {
+fn is_station(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| is_type(w, tile, MP_STATION))
 }
 
@@ -288,20 +281,17 @@ fn game_slope(slope: u32) -> Option<u8> {
 }
 
 /// `ScriptTile::IsSteepSlope`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_steep_slope(slope: u32) -> bool {
+fn script_is_steep_slope(slope: u32) -> bool {
     game_slope(slope).is_some_and(is_steep_slope)
 }
 
 /// `ScriptTile::IsHalftileSlope`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_halftile_slope(slope: u32) -> bool {
+fn script_is_halftile_slope(slope: u32) -> bool {
     game_slope(slope).is_some_and(is_halftile_slope)
 }
 
 /// `ScriptTile::HasTreeOnTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_has_tree(s: &Services, tile: u32) -> bool {
+fn has_tree(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| is_type(w, tile, MP_TREES))
 }
 
@@ -314,40 +304,34 @@ fn clear_ground(s: &Services, tile: u32, ground: u8) -> bool {
 }
 
 /// `ScriptTile::IsFarmTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_farm(s: &Services, tile: u32) -> bool {
+fn is_farm(s: &Services, tile: u32) -> bool {
     clear_ground(s, tile, crate::clear_map::CLEAR_FIELDS)
 }
 
 /// `ScriptTile::IsRockTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_rock(s: &Services, tile: u32) -> bool {
+fn is_rock(s: &Services, tile: u32) -> bool {
     clear_ground(s, tile, crate::clear_map::CLEAR_ROCKS)
 }
 
 /// `ScriptTile::IsRoughTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_rough(s: &Services, tile: u32) -> bool {
+fn is_rough(s: &Services, tile: u32) -> bool {
     clear_ground(s, tile, crate::clear_map::CLEAR_ROUGH)
 }
 
 /// `ScriptTile::IsSnowTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_snow(s: &Services, tile: u32) -> bool {
+fn is_snow(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| {
         is_type(w, tile, MP_CLEAR) && w.asserted(|m| crate::clear_map::is_snow_tile(m, tile))
     })
 }
 
 /// `ScriptTile::IsDesertTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_desert(s: &Services, tile: u32) -> bool {
+fn is_desert(s: &Services, tile: u32) -> bool {
     clear_ground(s, tile, crate::clear_map::CLEAR_DESERT)
 }
 
 /// `ScriptTile::IsHouseTile`.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_is_house(s: &Services, tile: u32) -> bool {
+fn is_house(s: &Services, tile: u32) -> bool {
     on_valid(s, tile, |w| is_type(w, tile, MP_HOUSE))
 }
 
@@ -413,7 +397,11 @@ pub extern "C" fn openttd_rust_script_tile_max_height(s: &Services, tile: u32) -
 /// `ScriptTile::GetCornerHeight`; `(::Corner)corner` truncates to the `uint8_t` enum.
 #[unsafe(no_mangle)]
 #[allow(clippy::cast_possible_truncation)]
-pub extern "C" fn openttd_rust_script_tile_corner_height(s: &Services, tile: u32, corner: u32) -> i64 {
+pub extern "C" fn openttd_rust_script_tile_corner_height(
+    s: &Services,
+    tile: u32,
+    corner: u32,
+) -> i64 {
     let corner = corner as u8;
     let map = world(s);
     if !valid(&map, tile) || !crate::slope_func::is_valid_corner(corner) {
@@ -422,7 +410,9 @@ pub extern "C" fn openttd_rust_script_tile_corner_height(s: &Services, tile: u32
     let (size_x, size_y) = map.size();
     let (slope, z) = map.asserted(|m| crate::tile_map::get_tile_slope_z(m, tile, size_x, size_y));
     let check = |condition| map.check(condition);
-    i64::from(z.wrapping_add(crate::landscape::get_slope_z_in_corner(slope, corner, check)))
+    i64::from(z.wrapping_add(crate::landscape::get_slope_z_in_corner(
+        slope, corner, check,
+    )))
 }
 
 /// `ScriptTile::GetOwner`.
@@ -461,13 +451,8 @@ fn resolve_company_id(s: &Services, company: i32) -> i32 {
 }
 
 /// `ScriptTile::HasTransportType`; `(::TransportType)` truncates to the `uint8_t` enum.
-#[unsafe(no_mangle)]
 #[allow(clippy::cast_possible_truncation)]
-pub extern "C" fn openttd_rust_script_tile_has_transport_type(
-    s: &Services,
-    tile: u32,
-    transport_type: u32,
-) -> bool {
+fn has_transport_type(s: &Services, tile: u32, transport_type: u32) -> bool {
     use crate::track_func::track_status_to_trackdir_bits;
     if !valid(&world(s), tile) {
         return false;
@@ -476,7 +461,8 @@ pub extern "C" fn openttd_rust_script_tile_has_transport_type(
     let side = crate::direction_type::INVALID_DIAGDIR;
     let status = |sub| crate::movement::track_status(s.command.shared, tile, mode, sub, side);
     if transport_type == TRANSPORT_ROAD {
-        track_status_to_trackdir_bits(status(0)) != 0 || track_status_to_trackdir_bits(status(1)) != 0
+        track_status_to_trackdir_bits(status(0)) != 0
+            || track_status_to_trackdir_bits(status(1)) != 0
     } else {
         track_status_to_trackdir_bits(status(0)) != 0
     }
@@ -509,28 +495,24 @@ pub extern "C" fn openttd_rust_script_tile_build_cost(build_type: u32) -> i64 {
 }
 
 /// `ScriptTile::RaiseTile` and `LowerTile` preconditions.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_terraform(s: &Services, tile: u32) -> bool {
+fn terraform(s: &Services, tile: u32) -> bool {
     enforce_company(s) && enforce(tile < s.command.shared.map_size(), ERR_PRECONDITION_FAILED)
 }
 
 /// `ScriptTile::LevelTiles` preconditions.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_level(s: &Services, start: u32, end: u32) -> bool {
+fn level(s: &Services, start: u32, end: u32) -> bool {
     enforce_company(s)
         && enforce(start < s.command.shared.map_size(), ERR_PRECONDITION_FAILED)
         && enforce(end < s.command.shared.map_size(), ERR_PRECONDITION_FAILED)
 }
 
 /// `ScriptTile::DemolishTile` preconditions.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_demolish(s: &Services, tile: u32) -> bool {
+fn demolish(s: &Services, tile: u32) -> bool {
     enforce_deity_or_company(s) && enforce(valid(&world(s), tile), ERR_PRECONDITION_FAILED)
 }
 
 /// `ScriptTile::PlantTree` preconditions.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_plant_tree(s: &Services, tile: u32) -> bool {
+fn plant_tree(s: &Services, tile: u32) -> bool {
     enforce_company(s) && enforce(valid(&world(s), tile), ERR_PRECONDITION_FAILED)
 }
 
@@ -544,7 +526,7 @@ pub extern "C" fn openttd_rust_script_tile_plant_tree_rectangle(
     height: i64,
 ) -> u32 {
     let refused = crate::tile_type::INVALID_TILE;
-    if !openttd_rust_script_tile_plant_tree(s, tile)
+    if !plant_tree(s, tile)
         || !enforce((1..=20).contains(&width), ERR_PRECONDITION_FAILED)
         || !enforce((1..=20).contains(&height), ERR_PRECONDITION_FAILED)
     {
@@ -565,4 +547,145 @@ pub extern "C" fn openttd_rust_script_tile_plant_tree_rectangle(
     } else {
         refused
     }
+}
+
+/// `is_valid_tile` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_map_is_valid_tile(s: &Services, tile: u32) -> u8 {
+    u8::from(is_valid_tile(s, tile))
+}
+
+/// `is_buildable` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_buildable(s: &Services, tile: u32) -> u8 {
+    u8::from(is_buildable(s, tile))
+}
+
+/// `is_buildable_rectangle` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_buildable_rectangle(
+    s: &Services,
+    tile: u32,
+    width: i64,
+    height: i64,
+) -> u8 {
+    u8::from(is_buildable_rectangle(s, tile, width, height))
+}
+
+/// `is_sea` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_sea(s: &Services, tile: u32) -> u8 {
+    u8::from(is_sea(s, tile))
+}
+
+/// `is_river` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_river(s: &Services, tile: u32) -> u8 {
+    u8::from(is_river(s, tile))
+}
+
+/// `is_water` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_water(s: &Services, tile: u32) -> u8 {
+    u8::from(is_water(s, tile))
+}
+
+/// `is_coast` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_coast(s: &Services, tile: u32) -> u8 {
+    u8::from(is_coast(s, tile))
+}
+
+/// `is_station` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_station(s: &Services, tile: u32) -> u8 {
+    u8::from(is_station(s, tile))
+}
+
+/// `script_is_steep_slope` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_steep_slope(slope: u32) -> u8 {
+    u8::from(script_is_steep_slope(slope))
+}
+
+/// `script_is_halftile_slope` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_halftile_slope(slope: u32) -> u8 {
+    u8::from(script_is_halftile_slope(slope))
+}
+
+/// `has_tree` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_has_tree(s: &Services, tile: u32) -> u8 {
+    u8::from(has_tree(s, tile))
+}
+
+/// `is_farm` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_farm(s: &Services, tile: u32) -> u8 {
+    u8::from(is_farm(s, tile))
+}
+
+/// `is_rock` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_rock(s: &Services, tile: u32) -> u8 {
+    u8::from(is_rock(s, tile))
+}
+
+/// `is_rough` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_rough(s: &Services, tile: u32) -> u8 {
+    u8::from(is_rough(s, tile))
+}
+
+/// `is_snow` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_snow(s: &Services, tile: u32) -> u8 {
+    u8::from(is_snow(s, tile))
+}
+
+/// `is_desert` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_desert(s: &Services, tile: u32) -> u8 {
+    u8::from(is_desert(s, tile))
+}
+
+/// `is_house` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_is_house(s: &Services, tile: u32) -> u8 {
+    u8::from(is_house(s, tile))
+}
+
+/// `has_transport_type` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_has_transport_type(
+    s: &Services,
+    tile: u32,
+    transport_type: u32,
+) -> u8 {
+    u8::from(has_transport_type(s, tile, transport_type))
+}
+
+/// `terraform` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_terraform(s: &Services, tile: u32) -> u8 {
+    u8::from(terraform(s, tile))
+}
+
+/// `level` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_level(s: &Services, start: u32, end: u32) -> u8 {
+    u8::from(level(s, start, end))
+}
+
+/// `demolish` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_demolish(s: &Services, tile: u32) -> u8 {
+    u8::from(demolish(s, tile))
+}
+
+/// `plant_tree` as a C byte.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_script_tile_plant_tree(s: &Services, tile: u32) -> u8 {
+    u8::from(plant_tree(s, tile))
 }
