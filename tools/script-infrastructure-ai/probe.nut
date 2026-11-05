@@ -130,6 +130,19 @@ function TilePredicates() {
 			}
 			return v;
 		}],
+		["IsBridgeTile", function(t) { return ApiBridge.IsBridgeTile(t); }],
+		["GetBridgeType", function(t) { return ApiBridge.GetBridgeType(t); }],
+		["GetOtherBridgeEnd", function(t) { return ApiBridge.GetOtherBridgeEnd(t); }],
+		["IsTunnelTile", function(t) { return ApiTunnel.IsTunnelTile(t); }],
+		["GetOtherTunnelEnd", function(t) { return ApiTunnel.GetOtherTunnelEnd(t); }],
+		["IsWaterDepotTile", function(t) { return ApiMarine.IsWaterDepotTile(t); }],
+		["IsDockTile", function(t) { return ApiMarine.IsDockTile(t); }],
+		["IsBuoyTile", function(t) { return ApiMarine.IsBuoyTile(t); }],
+		["IsLockTile", function(t) { return ApiMarine.IsLockTile(t); }],
+		["IsCanalTile", function(t) { return ApiMarine.IsCanalTile(t); }],
+		["AreWaterTilesConnectedX", function(t) { return ApiMarine.AreWaterTilesConnected(t, t + 1); }],
+		["AreWaterTilesConnectedY", function(t) { return ApiMarine.AreWaterTilesConnected(t, t + ApiMap.GetMapSizeX()); }],
+		["AreWaterTilesConnectedBack", function(t) { return ApiMarine.AreWaterTilesConnected(t, t - 1); }],
 	];
 }
 
@@ -362,6 +375,91 @@ function ProbeRoad(who, d) {
 	Command(who, "road-remove-station", function() : (d, sx) { return ApiRoad.RemoveRoadStation(d + 6 - sx); });
 }
 
+/* The items of a list in its iteration order, and its count. */
+function ListText(list) {
+	local text = list.Count() + ":";
+	foreach (item, value in list) text += " " + item;
+	return text;
+}
+
+/* Bridge specifications, prices, lengths and the bridge, type and tile lists. */
+function ProbeLists(who) {
+	local text = "";
+	foreach (bt in [-1, 0, 1, 2, 5, 9, 12, 13, 14, 255, 256, 0x100000001]) {
+		text += " " + bt + ":" + Num(ApiBridge.IsValidBridge(bt)) + "," + ApiBridge.GetMaxSpeed(bt) + "," + ApiBridge.GetMinLength(bt) + "," + ApiBridge.GetMaxLength(bt);
+		foreach (length in [-1, 0, 1, 5, 100, 0x7FFFFFFF, 0x10000000000]) text += "," + ApiBridge.GetPrice(bt, length);
+	}
+	Record(who, "bridge.specs", text);
+	Record(who, "list.bridge", ListText(ApiBridgeList()));
+	foreach (length in [-1, 0, 1, 2, 3, 4, 5, 10, 100, 0x100000000]) Record(who, "list.bridge-length " + length, ListText(ApiBridgeList_Length(length)));
+	Record(who, "list.railtype", ListText(ApiRailTypeList()) + " " + ApiError.GetLastErrorString());
+	foreach (rtts in [0, 1, 2, 3, 8, -1]) Record(who, "list.roadtype " + rtts, ListText(ApiRoadTypeList(rtts)) + " " + ApiError.GetLastErrorString());
+	local sx = ApiMap.GetMapSizeX();
+	local size = ApiMap.GetMapSize();
+	local cases = [
+		["rect", 1 + sx, 4 + 3 * sx], ["rect-swapped", 4 + 3 * sx, 1 + sx], ["rect-anti", 4 + sx, 1 + 3 * sx],
+		["rect-one", 5 + 5 * sx, 5 + 5 * sx], ["rect-void", 0, 3 + 3 * sx], ["rect-invalid", 1 + sx, size],
+		["rect-edge", size - sx - 4, size - 2 * sx - 2],
+	];
+	foreach (c in cases) {
+		local list = ApiTileList();
+		list.AddRectangle(c[1], c[2]);
+		local added = ListText(list);
+		list.RemoveRectangle(c[1] + 1, c[2]);
+		list.RemoveTile(c[1]);
+		list.AddTile(c[2] + sx);
+		list.AddTile(size);
+		list.AddTile(0);
+		list.RemoveTile(-1);
+		Record(who, "list.tile " + c[0], added + " | " + ListText(list));
+	}
+}
+
+/* Bridge, tunnel and marine command preconditions and results in a free block. */
+function ProbeWater(who, b) {
+	local sx = ApiMap.GetMapSizeX();
+	local size = ApiMap.GetMapSize();
+	Command(who, "bridge-same", function() : (b) { return ApiBridge.BuildBridge(1, 0, b, b); });
+	Command(who, "bridge-invalid", function() : (b, size) { return ApiBridge.BuildBridge(1, 0, b, size); });
+	Command(who, "bridge-skew", function() : (b, sx) { return ApiBridge.BuildBridge(1, 0, b, b + 3 + 3 * sx); });
+	Command(who, "bridge-vehicle", function() : (b, sx) { return ApiBridge.BuildBridge(3, 0, b + sx, b + 5 * sx); });
+	Command(who, "bridge-type", function() : (b, sx) { return ApiBridge.BuildBridge(1, 13, b + 1, b + 1 + 5 * sx); });
+	Command(who, "bridge-road", function() : (b, sx) { return ApiBridge.BuildBridge(1, 0, b + 1, b + 1 + 5 * sx); });
+	Command(who, "bridge-rail", function() : (b, sx) { return ApiBridge.BuildBridge(0, 0, b + 3 + 5 * sx, b + 3); });
+	Command(who, "bridge-water", function() : (b, sx) { return ApiBridge.BuildBridge(2, 0, b + 5, b + 5 + 5 * sx); });
+	Record(who, "bridge-ends", ApiBridge.GetOtherBridgeEnd(b + 1) + " " + ApiBridge.GetOtherBridgeEnd(b + 3) + " " + ApiBridge.GetBridgeType(b + 1));
+	Command(who, "bridge-remove-bare", function() : (b, sx) { return ApiBridge.RemoveBridge(b + 7 + 7 * sx); });
+	Command(who, "bridge-remove", function() : (b) { return ApiBridge.RemoveBridge(b + 3); });
+	local slope = -1;
+	for (local t = 0; t < size && slope == -1; t++) {
+		if (ApiTile.IsBuildable(t) && ApiTunnel.GetOtherTunnelEnd(t) != ApiMap.TILE_INVALID) slope = t;
+	}
+	Record(who, "tunnel-start", slope + " " + ApiTunnel.GetOtherTunnelEnd(slope));
+	Command(who, "tunnel-invalid", function() : (size) { return ApiTunnel.BuildTunnel(1, size); });
+	Command(who, "tunnel-water", function() : (slope) { return ApiTunnel.BuildTunnel(2, slope); });
+	Command(who, "tunnel-flat", function() : (b, sx) { return ApiTunnel.BuildTunnel(1, b + 6 * sx); });
+	Command(who, "tunnel-rail", function() : (slope) { return ApiTunnel.BuildTunnel(0, slope); });
+	Command(who, "tunnel-road", function() : (slope) { return ApiTunnel.BuildTunnel(1, slope); });
+	Record(who, "tunnel-ends", Num(ApiTunnel.IsTunnelTile(slope)) + " " + ApiTunnel.GetOtherTunnelEnd(slope));
+	Command(who, "tunnel-remove-bare", function() : (b, sx) { return ApiTunnel.RemoveTunnel(b + 7 + 7 * sx); });
+	Command(who, "tunnel-remove", function() : (slope) { return ApiTunnel.RemoveTunnel(slope); });
+	Command(who, "canal", function() : (b, sx) { return ApiMarine.BuildCanal(b + 6 + 6 * sx); });
+	Command(who, "canal-2", function() : (b, sx) { return ApiMarine.BuildCanal(b + 7 + 6 * sx); });
+	Command(who, "canal-3", function() : (b, sx) { return ApiMarine.BuildCanal(b + 6 + 7 * sx); });
+	Command(who, "canal-invalid", function() : (size) { return ApiMarine.BuildCanal(size); });
+	Command(who, "depot-same", function() : (b, sx) { return ApiMarine.BuildWaterDepot(b + 6 + 6 * sx, b + 6 + 6 * sx); });
+	Command(who, "depot-diagonal", function() : (b, sx) { return ApiMarine.BuildWaterDepot(b + 6 + 6 * sx, b + 7 + 7 * sx); });
+	Command(who, "depot-invalid", function() : (b, sx, size) { return ApiMarine.BuildWaterDepot(b + 6 + 6 * sx, size); });
+	Command(who, "depot", function() : (b, sx) { return ApiMarine.BuildWaterDepot(b + 6 + 6 * sx, b + 7 + 6 * sx); });
+	Command(who, "buoy", function() : (b, sx) { return ApiMarine.BuildBuoy(b + 6 + 7 * sx); });
+	Command(who, "lock", function() : (slope) { return ApiMarine.BuildLock(slope); });
+	Command(who, "dock", function() : (slope) { return ApiMarine.BuildDock(slope, ApiStation.STATION_NEW); });
+	Record(who, "water-connected", Num(ApiMarine.AreWaterTilesConnected(b + 6 + 6 * sx, b + 7 + 6 * sx)) + Num(ApiMarine.AreWaterTilesConnected(b + 6 + 6 * sx, b + 6 + 7 * sx)) + Num(ApiMarine.AreWaterTilesConnected(b + 6 + 6 * sx, b + 8 + 6 * sx)));
+	Command(who, "depot-remove-bare", function() : (b) { return ApiMarine.RemoveWaterDepot(b); });
+	Command(who, "buoy-remove", function() : (b, sx) { return ApiMarine.RemoveBuoy(b + 6 + 7 * sx); });
+	Command(who, "canal-remove", function() : (b, sx) { return ApiMarine.RemoveCanal(b + 7 + 6 * sx); });
+}
+
 function ProbeAll(who, free) {
 	Record(who, "free", free);
 	ProbeMap(who);
@@ -371,18 +469,25 @@ function ProbeAll(who, free) {
 	Record(who, "rail-area", rail);
 	local road = FreeBlock(rail + 10);
 	Record(who, "road-area", road);
+	local water = FreeBlock(road + 10);
+	Record(who, "water-area", water);
 	ProbeRailTypes(who);
 	ProbeRoadTypes(who);
+	ProbeLists(who);
 	local mode = ApiTestMode();
 	ProbeCommands(who + ".test", free);
 	ProbeRail(who + ".test", rail);
 	ProbeRoad(who + ".test", road);
+	ProbeWater(who + ".test", water);
 	mode = null;
 	ProbeCommands(who + ".exec", free);
 	Command(who + ".exec", "rail-level", function() : (rail) { return ApiTile.LevelTiles(rail, rail + 8 + 7 * ApiMap.GetMapSizeX()); });
 	ProbeRail(who + ".exec", rail);
 	Command(who + ".exec", "road-level", function() : (road) { return ApiTile.LevelTiles(road, road + 8 + 7 * ApiMap.GetMapSizeX()); });
 	ProbeRoad(who + ".exec", road);
+	Command(who + ".exec", "water-level", function() : (water) { return ApiTile.LevelTiles(water, water + 8 + 7 * ApiMap.GetMapSizeX()); });
+	ProbeWater(who + ".exec", water);
+	ProbeLists(who + ".after");
 	ProbeTiles(who + ".after");
 	Record(who, "done", ApiController.GetTick());
 }
