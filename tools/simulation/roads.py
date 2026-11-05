@@ -133,9 +133,8 @@ def check_tram(
         )
     }
     vehicle, tile = ends.get(4, (None, None))
-    final = (
-        rows(run["snapshots"][-1]).get(cast(int, vehicle)) if run["snapshots"] else None
-    )
+    vehicles = rows(run["snapshots"][-1]) if run["snapshots"] else {}
+    final = vehicles.get(vehicle) if vehicle is not None else None
     pose = final and (
         final[COMMON + "tile"],
         final[ROAD + "state"],
