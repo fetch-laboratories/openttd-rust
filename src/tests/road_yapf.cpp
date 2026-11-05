@@ -49,13 +49,6 @@ const OpenTTDSharedServices *MovementWorld()
 	world.map = &movement_map.statics;
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
 	world.map_max_y = []() noexcept -> uint32_t { return 63; };
-	world.road_tile_kind = [](uint32_t) noexcept { return static_cast<RoadTileType>(0); };
-	world.normal_road_bits = [](uint32_t, uint8_t) noexcept -> RoadBits {
-		constexpr RoadBits bits[]{static_cast<RoadBits>(10), static_cast<RoadBits>(5), static_cast<RoadBits>(9), static_cast<RoadBits>(6), static_cast<RoadBits>(3), static_cast<RoadBits>(12)};
-		return bits[std::countr_zero(static_cast<unsigned>(fixture_dirs)) & 7];
-	};
-	world.disallowed_road_directions = [](uint32_t) noexcept -> uint8_t { return fixture_dirs > 255 ? 1 : 2; };
-	world.has_road_works = [](uint32_t) noexcept { return false; };
 	movement.shared = &world;
 	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
 	SetFixtureDirs(fixture_dirs);
