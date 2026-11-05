@@ -16,7 +16,6 @@ struct OpenTTDVisualServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDSharedServices *shared;
 	uint8_t (*smoke)() noexcept OPENTTD_SERVICE_DEFAULT(smoke);
-	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	OpenTTDVisualEngine (*engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	OpenTTDVisualDefaults (*defaults)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(defaults);
 	uint8_t (*grf_version)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
