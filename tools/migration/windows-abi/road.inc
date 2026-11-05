@@ -80,8 +80,9 @@ static void RoadBoundary()
 	static uint8_t cache_visual_byte = 0;
 	OpenTTDVisualServices cache_visual{
 		.vehicle = &t.vehicle, .shared = &t.shared,
-		.engine = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualEngine { return {.engine = nullptr, .cache = &cache_visual_byte, .id = 0, .kind = VEH_ROAD, .visual = 0x40, .callback = false}; },
+		.engine = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualEngine { return {.engine = nullptr, .kind = VEH_ROAD, .visual = 0x40, .callback = false}; },
 	};
+	road_abi_vehicle.visual = road_abi_second.visual = road_abi_hidden.visual = &cache_visual_byte;
 	auto previous_visual = openttd_rust_visual_bind(&cache_visual);
 	probe.leaves = &t.leaves;
 	OpenTTDVehicle *v = RoadAbiHandle();
@@ -137,7 +138,7 @@ static void RoadBoundary()
 	capabilities.grf = [](const OpenTTDEngine *e) noexcept -> const GRFFile * { CHECK(e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_new_engine)); return nullptr; };
 	capabilities.loading = []() noexcept -> const OpenTTDEngineLoadingServices * { return &loading; };
 	loading.unknown_refit = [](uint32_t grfid, uint16_t callback, uint16_t result) noexcept { CHECK(grfid == 0 && callback == 0x11 && result == 9); };
-	t.leaves.default_max_speed = [](OpenTTDVehicle *) noexcept -> uint16_t {
+	t.leaves.default_max_speed = [](uint16_t) noexcept -> uint16_t {
 		CHECK(road_abi_probe->fallback_cache && road_abi_probe->cache_properties == 3);
 		return 99;
 	};
@@ -279,16 +280,16 @@ static void RoadBoundary()
 	static uint8_t emission_cache = 0x11;
 	OpenTTDVisualServices emission{
 		.vehicle = &emission_vehicle, .shared = &emission_shared,
-		.gate = [](OpenTTDVehicle *, OpenTTDVisualGate *gate) noexcept {
+		/* Eligibility and emission both read the smoke setting before the sound. */
+		.smoke = []() noexcept -> uint8_t {
 			auto &p = *road_abi_probe; p.visual_stage = 1;
-			*gate = {.speed = 2, .status = 0, .smoke = uint8_t(p.visual_eligible ? 2 : 0), .primary = true};
+			return p.visual_eligible ? 2 : 0;
 		},
-		.show = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualShow { return {2, VEH_ROAD, 2}; },
-		.part = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualPart { return {.tile = 100, .kind = VEH_ROAD, .status = 0, .tick = 0, .cache = emission_cache}; },
-		.offset = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualOffset { return {DIR_NE, 8}; },
+		.primary = [](OpenTTDVehicle *) noexcept { return true; },
 		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },
 	};
 	openttd_rust_visual_bind(&emission);
+	road_abi_vehicle.visual = &emission_cache;
 
 
 
@@ -310,6 +311,8 @@ static void RoadBoundary()
 
 
 	OpenTTDRoadEntry front = probe.entry;
+	/* Emission reads the record's speed: at least 2 passes the visual gate. */
+	probe.speed = 2;
 	// Fresh scalar loads and the post-write crashed-bit reset precede controller entry.
 	probe.order_time = INT32_MAX;
 	probe.running = UINT8_MAX;
@@ -368,6 +371,8 @@ static void RoadBoundary()
 		probe.viewports = 0;
 		probe.status = 0; road_abi_hidden.vehstatus = 1;
 		probe.progress = 0;
+		/* The emission chance reads the record tick; zero after the increment emits. */
+		road_abi_vehicle.tick_counter = 255;
 		CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 		CHECK(probe.viewports == 2 && probe.progress == 1 && probe.dest == 202);
 	}

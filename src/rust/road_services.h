@@ -30,14 +30,11 @@ static uint8_t OPENTTD_RUST_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32_t 
 	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RustRoadVehicleType(RoadOf(v))), straight_only);
 }
 static bool OPENTTD_RUST_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
-/** `old_tile = v->tile; v->tile = tile;` then both road types of the vehicle's road/tram kind. */
-static OpenTTDRoadRoadTypes OPENTTD_RUST_CALL RoadSvcMoveTile(OpenTTDVehicle *v, uint32_t tile) noexcept
+/** Both road types of the vehicle's road/tram kind, on the old and the new tile. */
+static OpenTTDRoadRoadTypes OPENTTD_RUST_CALL RoadSvcTileRoadTypes(OpenTTDVehicle *v, uint32_t old_tile, uint32_t tile) noexcept
 {
-	RoadVehicle *u = RoadOf(v);
-	TileIndex old_tile = u->GetTile();
-	RustWriteVehicleTile(u, TileIndex(tile));
-	RoadTramType rtt = RustRoadTramType(RustRoadVehicleType(u));
-	return {.before = RustRoadTileType(old_tile.base(), rtt), .after = RustRoadTileType(u->GetTile().base(), rtt)};
+	RoadTramType rtt = RustRoadTramType(RustRoadVehicleType(RoadOf(v)));
+	return {.before = RustRoadTileType(old_tile, rtt), .after = RustRoadTileType(tile, rtt)};
 }
 static OpenTTDRoadTrackChoice OPENTTD_RUST_CALL RoadSvcChooseTrack(OpenTTDVehicle *v, uint32_t tile, uint8_t entry, uint16_t trackdirs) noexcept
 {
@@ -55,7 +52,7 @@ static OpenTTDRoadTramBuildRead OPENTTD_RUST_CALL RoadSvcTramBuildRead(OpenTTDVe
 	const RoadVehicle *u = RoadOf(v);
 	if (slot->built) slot->road.~RustRoadCommandContext();
 	slot->built = true;
-	return {.owner = RustVehicleOwner(u), .road_type = RustRoadVehicleType(u), .road = &std::construct_at(&slot->road)->view};
+	return {.road_type = RustRoadVehicleType(u), .road = &std::construct_at(&slot->road)->view};
 }
 static void OPENTTD_RUST_CALL RoadSvcDisconnect() noexcept { FatalError("Disconnecting road vehicle."); }
 static bool OPENTTD_RUST_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t tile) noexcept
@@ -75,14 +72,6 @@ static void OPENTTD_RUST_CALL RoadSvcArrivalNews(OpenTTDVehicle *v, uint16_t sta
 	Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, u->index));
 }
 /** The road stop arrival triggers after `BeginLoading`. */
-/** The depot exit tail of `RoadVehLeaveDepot` after the state and frame stores. */
-static void OPENTTD_RUST_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
-{
-	RoadVehicle *u = RoadOf(v);
-	u->SetVehStatus(u->GetVehStatus().Reset(VehState::Hidden));
-	RustWriteVehicleX(u, x);
-	RustWriteVehicleY(u, y);
-}
 static void OPENTTD_RUST_CALL RoadSvcDepotExitDirty(OpenTTDVehicle *v) noexcept
 {
 	RustVehicleInvalidateDepot(RoadOf(v));
@@ -106,9 +95,9 @@ static uint8_t OPENTTD_RUST_CALL RoadSvcShortenFactor(const OpenTTDEngine *e) no
 {
 	return EngineOf(e)->VehInfo<RoadVehicleInfo>().shorten_factor;
 }
-static uint16_t OPENTTD_RUST_CALL RoadSvcDefaultMaxSpeed(OpenTTDVehicle *v) noexcept
+static uint16_t OPENTTD_RUST_CALL RoadSvcDefaultMaxSpeed(uint16_t engine) noexcept
 {
-	return RoadVehInfo(EngineID(RustVehicleEngineID(VehicleOf(v))))->max_speed;
+	return RoadVehInfo(EngineID(engine))->max_speed;
 }
 
 
@@ -120,7 +109,6 @@ static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amoun
 	CommandCost cost(EXPENSES_ROADVEH_RUN, Money(amount));
 
 	u->profit_this_year -= cost.GetCost();
-	u->Record().running_ticks = 0;
 
 	SubtractMoneyFromCompanyFract(u->GetOwner(), cost);
 
@@ -143,7 +131,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.bay_direction = Shared_bay_stop_direction,
 	.is_drive_through = Shared_is_drive_through_stop,
 	.is_station_road_stop = RoadSvcIsStationRoadStop,
-	.move_tile = RoadSvcMoveTile,
+	.tile_road_types = RoadSvcTileRoadTypes,
 	.choose_track = RoadSvcChooseTrack,
 	.find_depot = RoadSvcFindDepot,
 	.tram_build_read = RoadSvcTramBuildRead,
@@ -151,7 +139,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.should_stop = RoadSvcShouldStop,
 	.arrival_news = RoadSvcArrivalNews,
 	.depot_exit_dirty = RoadSvcDepotExitDirty,
-	.depot_exit = RoadSvcDepotExit,
 	.crash_news = RoadSvcCrashNews,
 	.shorten_factor = RoadSvcShortenFactor,
 	.default_max_speed = RoadSvcDefaultMaxSpeed,

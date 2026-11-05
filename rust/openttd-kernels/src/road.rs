@@ -385,7 +385,8 @@ pub struct Leaves {
     pub bay_direction: extern "C" fn(u32) -> u8,
     pub is_drive_through: extern "C" fn(u32) -> bool,
     pub is_station_road_stop: extern "C" fn(u32) -> bool,
-    pub move_tile: extern "C" fn(VehicleRef, u32) -> RoadTypes,
+    /// The road types of the old and new tile for the vehicle's road/tram kind.
+    pub tile_road_types: extern "C" fn(VehicleRef, u32, u32) -> RoadTypes,
     pub choose_track: extern "C" fn(VehicleRef, u32, u8, u16) -> TrackChoice,
     pub find_depot: extern "C" fn(VehicleRef, i32) -> DepotResult,
     pub tram_build_read:
@@ -395,10 +396,9 @@ pub struct Leaves {
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
     /// The road stop arrival randomisation and animation triggers.
     pub depot_exit_dirty: extern "C" fn(VehicleRef),
-    pub depot_exit: extern "C" fn(VehicleRef, i32, i32),
     pub crash_news: extern "C" fn(VehicleRef, u32),
     pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
-    pub default_max_speed: extern "C" fn(VehicleRef) -> u16,
+    pub default_max_speed: extern "C" fn(u16) -> u16,
     pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
     pub pay_running: extern "C" fn(VehicleRef, i64),
 }
@@ -473,7 +473,6 @@ fn state_of(s: *mut State) -> u8 {
 /// Fields consumed together by `CanBuildTramTrackOnTile`.
 #[repr(C)]
 pub struct TramBuildRead {
-    pub owner: u8,
     pub road_type: u8,
     /// Freshly constructed in the entry's slot for this one build.
     pub road: *const crate::road_cmd::CommandContext,
@@ -583,12 +582,13 @@ impl Game<'_> {
         }
     }
     fn can_build_tram(&self, v: VehicleRef, tile: u32, bits: u8) -> bool {
+        let owner = v.owner();
         let read = service!(self.l.tram_build_read)(v, self.road);
         // SAFETY: the read built live native stack scratch and results in the slot.
         unsafe {
             let context = &*read.road;
             let town = &*(*context.services).town;
-            let old = (town.exchange_company)(u32::from(read.owner));
+            let old = (town.exchange_company)(u32::from(owner));
             let success = context.build(8, tile, bits, read.road_type, u16::MAX);
             (town.exchange_company)(old);
             crate::witness::hit(if success {
@@ -1175,7 +1175,7 @@ impl Game<'_> {
         (v.v).write_max_speed(if speed != 0 {
             speed.wrapping_mul(4)
         } else {
-            u32::from(service!(self.l.default_max_speed)(v.v))
+            u32::from(service!(self.l.default_max_speed)(v.v.engine_id()))
         } as u16);
     }
     /// `RoadFindPathToDest`.
@@ -1348,7 +1348,9 @@ impl Game<'_> {
         }
         v.set(STATE, u16::from(tdir));
         v.set(FRAME, 6);
-        service!(self.l.depot_exit)(v.v, x, y);
+        v.v.set_hidden(false);
+        v.v.write_x(x);
+        v.v.write_y(y);
         // SAFETY: The newly visible shell survives depot exit.
         unsafe {
             crate::vehicle::occupancy::update_position(self.vs, v.v, self.map);
@@ -1597,7 +1599,9 @@ impl Game<'_> {
                     }
                 }
                 if e.flags & VETS_ENTERED_WORMHOLE == 0 {
-                    let types = service!(self.l.move_tile)(v.v, tile);
+                    let old_tile = v.v.tile();
+                    v.v.write_tile(tile);
+                    let types = service!(self.l.tile_road_types)(v.v, old_tile, tile);
                     s.tile = tile;
                     v.set(STATE, u16::from(dir));
                     v.set(FRAME, start_frame as u16);
@@ -2139,6 +2143,8 @@ impl Game<'_> {
             return;
         }
         let cost = self.running_cost(v).saturating_mul(i64::from(running)) / YEAR_TICKS;
+        // `running_ticks = 0` precedes the company payment; nothing between observes it.
+        v.v.write_running(0);
         service!(self.l.pay_running)(v.v, cost);
     }
     /// `CmdTurnRoadVeh` after the ownership checks.
@@ -2459,7 +2465,7 @@ pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDRoadTramBuildRead" ["probe"] => TramBuildRead { owner, road_type, road, };
+    "OpenTTDRoadTramBuildRead" ["probe"] => TramBuildRead { road_type, road, };
     "OpenTTDRoadPathElement" ["probe"] => PathElement {
         trackdir,
         tile,
@@ -2496,7 +2502,7 @@ crate::abi::layouts! {
         bay_direction,
         is_drive_through,
         is_station_road_stop,
-        move_tile,
+        tile_road_types,
         choose_track,
         find_depot,
         tram_build_read,
@@ -2504,7 +2510,6 @@ crate::abi::layouts! {
         should_stop,
         arrival_news,
 
-        depot_exit,
         crash_news,
         shorten_factor,
         default_max_speed,

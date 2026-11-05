@@ -23,7 +23,7 @@ struct OpenTTDRoadState;
 struct OpenTTDGroundState;
 struct OpenTTDRoadCommandContext;
 struct OpenTTDRoadCommandSlot;
-struct OpenTTDRoadTramBuildRead { uint8_t owner, road_type; const OpenTTDRoadCommandContext *road; };
+struct OpenTTDRoadTramBuildRead { uint8_t road_type; const OpenTTDRoadCommandContext *road; };
 struct OpenTTDRoadPathElement { uint8_t trackdir; uint32_t tile; };
 struct OpenTTDRoadEntry {
 	OpenTTDGroundState *ground;
@@ -57,7 +57,7 @@ struct OpenTTDRoadLeaves {
 	uint8_t (OPENTTD_RUST_CALL *bay_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_direction);
 	bool (OPENTTD_RUST_CALL *is_drive_through)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through);
 	bool (OPENTTD_RUST_CALL *is_station_road_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_station_road_stop);
-	OpenTTDRoadRoadTypes (OPENTTD_RUST_CALL *move_tile)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_tile);
+	OpenTTDRoadRoadTypes (OPENTTD_RUST_CALL *tile_road_types)(OpenTTDVehicle *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_road_types);
 	OpenTTDRoadTrackChoice (OPENTTD_RUST_CALL *choose_track)(OpenTTDVehicle *, uint32_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(choose_track);
 	OpenTTDRoadDepotResult (OPENTTD_RUST_CALL *find_depot)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_depot);
 	OpenTTDRoadTramBuildRead (OPENTTD_RUST_CALL *tram_build_read)(OpenTTDVehicle *, OpenTTDRoadCommandSlot *) noexcept OPENTTD_SERVICE_DEFAULT(tram_build_read);
@@ -66,10 +66,9 @@ struct OpenTTDRoadLeaves {
 	void (OPENTTD_RUST_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
 
 	void (OPENTTD_RUST_CALL *depot_exit_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit_dirty);
-	void (OPENTTD_RUST_CALL *depot_exit)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit);
 	void (OPENTTD_RUST_CALL *crash_news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
 	uint8_t (OPENTTD_RUST_CALL *shorten_factor)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(shorten_factor);
-	uint16_t (OPENTTD_RUST_CALL *default_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(default_max_speed);
+	uint16_t (OPENTTD_RUST_CALL *default_max_speed)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(default_max_speed);
 	uint16_t (OPENTTD_RUST_CALL *cargo_age_default)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
 	void (OPENTTD_RUST_CALL *pay_running)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
 };

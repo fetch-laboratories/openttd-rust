@@ -112,9 +112,6 @@ struct OpenTTDWaterGroundServices;
 struct OpenTTDVehicle;
 struct OpenTTDVehicleServices;
 struct OpenTTDAirportGround { const OpenTTDStation *station; uint32_t tile; uint16_t width; uint16_t height; };
-struct OpenTTDFloodVictim { uint8_t status; VehicleType type; };
-struct OpenTTDAircraftFloodPose { uint32_t tile; int32_t z; uint8_t subtype; };
-struct OpenTTDGroundFloodPose { int32_t z; OpenTTDVehicle *first; };
 struct OpenTTDCompanyServices;
 struct OpenTTDWaterGroundServices {
 	const OpenTTDRailServices *rail;
@@ -136,9 +133,6 @@ struct OpenTTDWaterGroundServices {
 	OpenTTDAirportGround (*airport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*airport_member)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_member);
 	int32_t (*airport_z)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_z);
-	OpenTTDFloodVictim (*victim)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(victim);
-	OpenTTDAircraftFloodPose (*aircraft_pose)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_pose);
-	OpenTTDGroundFloodPose (*ground_pose)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ground_pose);
 	uint32_t (*crash)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(crash);
 	void (*ai_event)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ai_event);
 	void (*game_event)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(game_event);
@@ -163,9 +157,6 @@ struct OpenTTDGroundABICalls {
 	OpenTTDRoadSnowGround (*road_snow)() noexcept OPENTTD_SERVICE_DEFAULT(road_snow);
 	OpenTTDTunnelGround (*tunnel)() noexcept OPENTTD_SERVICE_DEFAULT(tunnel);
 	OpenTTDAirportGround (*airport)() noexcept OPENTTD_SERVICE_DEFAULT(airport);
-	OpenTTDFloodVictim (*victim)() noexcept OPENTTD_SERVICE_DEFAULT(victim);
-	OpenTTDAircraftFloodPose (*aircraft)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft);
-	OpenTTDGroundFloodPose (*ground)() noexcept OPENTTD_SERVICE_DEFAULT(ground);
 	bool (*enums)(ClearGround, RailGroundType, Slope, TrackBits, Track, Foundation, Roadside, RoadBits, RoadType, TreeGround, WaterClass, FloodingBehaviour, DiagDirection, LandscapeType, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(enums);
 };
 extern "C" bool openttd_rust_ground_abi_calls(const OpenTTDGroundABICalls *);

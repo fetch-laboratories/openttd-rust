@@ -39,29 +39,15 @@ use crate::vehicle_base::{
     VS_TRAIN_SLOWING,
 };
 use std::sync::atomic::{AtomicPtr, Ordering};
-#[repr(C)]
-pub struct Gate {
-    speed: u16,
-    status: u8,
-    smoke: u8,
-    primary: bool,
-}
-#[repr(C)]
-pub struct Show {
+/// The front's speed and kind with the smoke setting, observed at entry.
+struct Show {
     speed: u16,
     kind: VehicleType,
     smoke: u8,
 }
 #[repr(C)]
-pub struct BridgePosition {
-    x: i32,
-    y: i32,
-}
-#[repr(C)]
 pub struct Engine {
     engine: *const OpenTTDEngine,
-    cache: *mut u8,
-    id: u16,
     kind: VehicleType,
     visual: u8,
     callback: bool,
@@ -71,52 +57,49 @@ pub struct Defaults {
     rail_kind: RailVehicleTypes,
     engclass: u8,
 }
-#[repr(C)]
-pub struct Part {
+/// One part's position, kind, status, tick and visual cache, observed at its visit.
+struct Part {
     tile: u32,
     kind: VehicleType,
     status: u8,
     tick: u8,
     cache: u8,
 }
-#[repr(C)]
-pub struct Offset {
-    direction: u8,
-    length: u8,
+fn part(v: VehicleRef) -> Part {
+    Part {
+        tile: v.tile(),
+        kind: VehicleType(v.vehicle_type()),
+        status: v.status(),
+        tick: v.tick(),
+        cache: v.visual_effect(),
+    }
 }
-#[repr(C)]
-pub struct Train {
-    handle: crate::train::Handle,
-    tile: u32,
-    speed: u16,
-    front: bool,
-}
-#[repr(C)]
-pub struct PowerWeight {
-    power: u32,
-    weight: u32,
+/// `v->direction` and the ground part length (`VEHICLE_LENGTH` otherwise).
+fn pose(v: VehicleRef) -> (u8, u8) {
+    let length = if crate::vehicle_base::is_ground_vehicle(v.vehicle_type()) {
+        crate::raw_field::read_field!(v.ground_cache(), cached_veh_length)
+    } else {
+        VEHICLE_LENGTH
+    };
+    (v.direction(), length)
 }
 /// The gate callback initializes every output field and retains no output pointer.
 #[repr(C)]
 pub struct Services {
     vehicle: &'static VehicleServices,
     shared: &'static Shared,
-    gate: extern "C" fn(VehicleRef, *mut Gate),
-    show: extern "C" fn(VehicleRef) -> Show,
+    /// `_settings_client.gui.smoke_amount`.
+    smoke: extern "C" fn() -> u8,
+    primary: extern "C" fn(VehicleRef) -> bool,
     engine: extern "C" fn(VehicleRef) -> Engine,
     defaults: extern "C" fn(*const OpenTTDEngine) -> Defaults,
     grf_version: extern "C" fn(*const OpenTTDEngine) -> u8,
     power_error: extern "C" fn(u16),
-    part: extern "C" fn(VehicleRef) -> Part,
-    bridge_position: extern "C" fn(VehicleRef) -> BridgePosition,
-    offset: extern "C" fn(VehicleRef) -> Offset,
-    train: extern "C" fn(VehicleRef) -> Train,
     station: extern "C" fn(u32) -> bool,
     depot: extern "C" fn(u32) -> bool,
     tunnel: extern "C" fn(u32) -> bool,
     tile_rail: extern "C" fn(u32) -> crate::services::RailType,
     powered: extern "C" fn(u64, crate::services::RailType) -> bool,
-    power_weight: extern "C" fn(VehicleRef) -> PowerWeight,
 }
 static RUNTIME: AtomicPtr<Services> = AtomicPtr::new(std::ptr::null_mut());
 #[unsafe(no_mangle)]
@@ -130,7 +113,9 @@ fn services() -> &'static Services {
 pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: bool) {
     let s = services();
     let e = (s.engine)(v);
-    let powered_before = has_bit(unsafe { *e.cache }, VE_DISABLE_WAGON_POWER);
+    let cache = crate::raw_field::read_field!(v.0.as_ptr(), visual);
+    let id = v.engine_id();
+    let powered_before = has_bit(unsafe { *cache }, VE_DISABLE_WAGON_POWER);
     let mut visual = if matches!(
         e.kind,
         VehicleType::TRAIN | VehicleType::ROAD | VehicleType::SHIP
@@ -198,27 +183,24 @@ pub extern "C" fn openttd_rust_visual_update(v: VehicleRef, allow_power_change: 
         }
     }
     unsafe {
-        *e.cache = visual as u8;
+        *cache = visual as u8;
     }
     if !allow_power_change && powered_before != has_bit(visual, VE_DISABLE_WAGON_POWER) {
         unsafe {
-            let mut cached = u32::from(*e.cache);
+            let mut cached = u32::from(*cache);
             toggle_bit(&mut cached, VE_DISABLE_WAGON_POWER);
-            *e.cache = cached as u8;
+            *cache = cached as u8;
         }
-        (s.power_error)(e.id);
+        (s.power_error)(id);
     }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_eligible(v: VehicleRef) -> bool {
     let s = services();
-    let mut g = std::mem::MaybeUninit::uninit();
-    (s.gate)(v, g.as_mut_ptr());
-    let g = unsafe { g.assume_init() };
     if s.vehicle.assertions {
-        assert!(g.primary);
+        assert!((s.primary)(v));
     }
-    g.smoke != 0 && g.status & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && g.speed >= 2
+    (s.smoke)() != 0 && v.status() & (VS_TRAIN_SLOWING | VS_STOPPED) == 0 && v.speed() >= 2
 }
 const SMOKE_POS: [i8; 8] = [1, 1, 1, 0, -1, -1, -1, 0];
 fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate::train::Handle>) {
@@ -245,22 +227,22 @@ fn advanced(s: &Services, v: VehicleRef, kind: VehicleType, train: Option<crate:
     let count = gb(u32::from(callback), 0, 2) as usize;
     let center = has_bit(callback, 13);
     let rotate = !has_bit(callback, 14);
-    let p = (s.offset)(v);
+    let (direction, length) = pose(v);
     let l_center = if center && kind == VehicleType::ROAD {
-        -(u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(p.length)) as i32) / 2
+        -(u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(length)) as i32) / 2
     } else if !center && kind == VehicleType::TRAIN {
-        (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(p.length)) / 2) as i32
+        (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(length)) / 2) as i32
     } else {
         0
     } as i8;
     let dir = if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
-        reverse_dir(p.direction, |ok| {
+        reverse_dir(direction, |ok| {
             if s.vehicle.assertions {
                 assert!(ok);
             }
         })
     } else {
-        p.direction
+        direction
     };
     let a = SMOKE_POS[usize::from(dir)];
     let b = SMOKE_POS[usize::from(change_dir(dir, DIRDIFF_90RIGHT, |ok| {
@@ -319,9 +301,11 @@ fn emit_part(
         }
         VESM_DIESEL => {
             let power_weight = if p.kind == VehicleType::TRAIN {
-                let w = (s.power_weight)(front);
-                (32_u32.wrapping_shr(w.power >> 10)) as i32
-                    - (32_u32.wrapping_shr(w.weight >> 9)) as i32
+                let cache = front.ground_cache();
+                let power = crate::raw_field::read_field!(cache, cached_power);
+                let weight = crate::raw_field::read_field!(cache, cached_weight);
+                (32_u32.wrapping_shr(power >> 10)) as i32
+                    - (32_u32.wrapping_shr(weight >> 9)) as i32
             } else {
                 0
             };
@@ -354,15 +338,15 @@ fn emit_part(
     if is_advanced {
         advanced(s, v, p.kind, train);
     } else {
-        let o = (s.offset)(v);
+        let (direction, length) = pose(v);
         if p.kind == VehicleType::TRAIN {
             offset = offset.wrapping_add(
-                (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(o.length)) / 2) as i32,
+                (u32::from(VEHICLE_LENGTH).wrapping_sub(u32::from(length)) / 2) as i32,
             );
         }
-        let mut x = i32::from(SMOKE_POS[usize::from(o.direction)]).wrapping_mul(offset);
+        let mut x = i32::from(SMOKE_POS[usize::from(direction)]).wrapping_mul(offset);
         let mut y =
-            i32::from(SMOKE_POS[usize::from(o.direction.wrapping_add(2) % 8)]).wrapping_mul(offset);
+            i32::from(SMOKE_POS[usize::from(direction.wrapping_add(2) % 8)]).wrapping_mul(offset);
         if train.is_some_and(|t| has_bit(t.get_flags() as u16, crate::train::FLIPPED)) {
             x = x.wrapping_neg();
             y = y.wrapping_neg();
@@ -380,25 +364,30 @@ fn emit_part(
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
     let s = services();
-    let gate = (s.show)(front);
+    let gate = Show {
+        speed: front.speed(),
+        kind: VehicleType(front.vehicle_type()),
+        smoke: (s.smoke)(),
+    };
     let front_train = if gate.kind == VehicleType::TRAIN {
-        let t = (s.train)(front);
-        if t.handle.get_flags() & crate::train::FLAG_REVERSING != 0
-            || ((s.station)(t.tile)
-                && t.front
-                && crate::movement::should_stop(s.shared, front, (s.shared.station_index)(t.tile))
-                && u32::from(t.speed) >= max_speed)
+        let handle = crate::train::Handle::from_record(front.0.as_ptr());
+        let tile = front.tile();
+        if handle.get_flags() & crate::train::FLAG_REVERSING != 0
+            || ((s.station)(tile)
+                && front.is_front_engine()
+                && crate::movement::should_stop(s.shared, front, (s.shared.station_index)(tile))
+                && u32::from(front.speed()) >= max_speed)
         {
             return;
         }
-        Some(t.handle)
+        Some(handle)
     } else {
         None
     };
     let mut sound = false;
     let mut current = Some(front);
     while let Some(v) = current {
-        let p = (s.part)(v);
+        let p = part(v);
         let cache = p.cache;
         let is_advanced = has_bit(cache, VE_ADVANCED_EFFECT);
         let model = if is_advanced {
@@ -416,9 +405,8 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
                 break 'part;
             }
             let bridge = if (s.shared.is_bridge)(p.tile) {
-                let pos = (s.bridge_position)(v);
                 let map = s.shared.map();
-                map.tile_virt_xy(pos.x as u32, pos.y as u32) == p.tile
+                map.tile_virt_xy(v.x() as u32, v.y() as u32) == p.tile
                     && (s.shared.bridge_above)(p.tile)
             } else {
                 (s.shared.bridge_above)(p.tile)
@@ -428,9 +416,9 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             }
             let train = if p.kind == VehicleType::TRAIN {
                 Some(if v == front {
-                    front_train.unwrap_or_else(|| (s.vehicle.train_handle)(v.0.as_ptr()))
+                    front_train.unwrap_or_else(|| crate::train::Handle::from_record(v.0.as_ptr()))
                 } else {
-                    (s.vehicle.train_handle)(v.0.as_ptr())
+                    crate::train::Handle::from_record(v.0.as_ptr())
                 })
             } else {
                 None
@@ -450,14 +438,7 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVisualGate" ["probe"] => Gate { speed, status, smoke, primary, };
-    "OpenTTDVisualShow" ["probe"] => Show { speed, kind, smoke, };
-    "OpenTTDVisualBridgePosition" ["probe"] => BridgePosition { x, y, };
-    "OpenTTDVisualEngine" ["probe"] => Engine { engine, cache, id, kind, visual, callback, };
+    "OpenTTDVisualEngine" ["probe"] => Engine { engine, kind, visual, callback, };
     "OpenTTDVisualDefaults" ["probe"] => Defaults { rail_kind, engclass, };
-    "OpenTTDVisualPart" ["probe"] => Part { tile, kind, status, tick, cache, };
-    "OpenTTDVisualOffset" ["probe"] => Offset { direction, length, };
-    "OpenTTDVisualTrain" ["probe"] => Train { handle, tile, speed, front, };
-    "OpenTTDVisualPowerWeight" ["probe"] => PowerWeight { power, weight, };
-    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, gate, show, engine, defaults, grf_version, power_error, part, bridge_position, offset, train, station, depot, tunnel, tile_rail, powered, power_weight, };
+    "OpenTTDVisualServices" ["probe"] => Services { vehicle, shared, smoke, primary, engine, defaults, grf_version, power_error, station, depot, tunnel, tile_rail, powered, };
 }

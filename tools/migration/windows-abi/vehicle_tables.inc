@@ -80,14 +80,13 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, bay_direction);
 		VEHICLE_UNUSED(leaves, is_drive_through);
 		VEHICLE_UNUSED(leaves, is_station_road_stop);
-		VEHICLE_UNUSED(leaves, move_tile);
+		VEHICLE_UNUSED(leaves, tile_road_types);
 		VEHICLE_UNUSED(leaves, choose_track);
 		VEHICLE_UNUSED(leaves, find_depot);
 		VEHICLE_UNUSED(leaves, tram_build_read);
 		VEHICLE_UNUSED(leaves, disconnect);
 		VEHICLE_UNUSED(leaves, should_stop);
 		VEHICLE_UNUSED(leaves, arrival_news);
-		VEHICLE_UNUSED(leaves, depot_exit);
 		VEHICLE_UNUSED(leaves, crash_news);
 		VEHICLE_UNUSED(ground, cache_begin);
 		VEHICLE_UNUSED(vehicle, engine);

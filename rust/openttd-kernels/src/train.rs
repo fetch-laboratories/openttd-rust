@@ -2501,6 +2501,8 @@ impl Game<'_> {
             if running != 0 {
                 let cost = self.running_cost(id).saturating_mul(i64::from(running))
                     / ((self.leaves.cost_divisor)(id) as i64);
+                // `running_ticks = 0` precedes the company payment; nothing between observes it.
+                (id).vehicle().write_running(0);
                 (self.leaves.pay_running)(id, (cost as u64) as i64);
                 (self.leaves.running_windows)(id);
             }
