@@ -23,7 +23,7 @@ REDUCERS = {
 
 def reducers(out: Path) -> dict[str, Path]:
     """Extract independent pinned reducers and the production candidate facades."""
-    pieces = {"reference": [], "candidate": []}
+    pieces: dict[str, list[str]] = {"reference": [], "candidate": []}
     for filename, signatures in REDUCERS.items():
         source = (probe.REFERENCE / filename).read_text()
         candidate = (probe.ROOT / filename).read_text()
@@ -44,14 +44,16 @@ def reducers(out: Path) -> dict[str, Path]:
     return paths
 
 
-def main():
+def main() -> None:
     out = probe.output("history-comparison")
     production = reducers(out)
     fixture = probe.ROOT / "tools/migration/history-comparison.cpp"
-    outputs = {}
+    outputs: dict[str, bytes] = {}
     for optimization in ("O0", "O2"):
 
-        def command(label, source, optimization=optimization):
+        def command(
+            label: str, source: Path, optimization: str = optimization
+        ) -> list[probe.Argument]:
             return [
                 probe.compiler(),
                 "-std=c++20",

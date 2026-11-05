@@ -11,6 +11,7 @@ rendering or complete GUI equivalence.
 import re
 import shlex
 import subprocess
+from typing import TypedDict
 
 import probe
 
@@ -29,7 +30,12 @@ SIGNATURES = (
 )
 
 
-def main():
+class NullRecord(TypedDict):
+    exit: int
+    stdout: str
+
+
+def main() -> None:
     out = probe.output("widget-parser-comparison")
     original_source = (REFERENCE / "src/widget.cpp").read_text()
     current_source = (ROOT / "src/widget.cpp").read_text()
@@ -102,7 +108,8 @@ def main():
         link = link[: link.index("&&")]
     if link[0] != compiler:
         raise RuntimeError("Unexpected native test link compiler")
-    inputs, cursor = [], 1
+    inputs: list[str] = []
+    cursor = 1
     while cursor < len(link):
         token = link[cursor]
         cursor += 1
@@ -124,9 +131,9 @@ def main():
         if token.endswith(".a") and "cargo-native-test-support/" in token:
             token = str(probe.migration.rust_archive(BUILD))
         inputs.append(token)
-    failures = []
+    failures: list[dict[str, object]] = []
 
-    def command(argv, label):
+    def command(argv: list[str], label: str) -> None:
         probe.compile(argv, out / f"{label}.log")
 
     modes = {
@@ -135,7 +142,7 @@ def main():
         "release": ["-O2", "-DNDEBUG"],
     }
     for mode, policy in modes.items():
-        objects = []
+        objects: list[str] = []
         for label, source in (
             ("widget", ROOT / "src/widget.cpp"),
             ("oracle", oracle),
@@ -150,7 +157,7 @@ def main():
         binary = out / mode
         command([compiler, *objects, *inputs, "-o", str(binary)], f"{mode}-link")
         probe.execute([binary], out / mode)
-        null_records = []
+        null_records: list[NullRecord] = []
         for version in ("original", "candidate"):
             result = subprocess.run(
                 [str(binary), "--null", version],
