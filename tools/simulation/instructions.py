@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 if TYPE_CHECKING:
-    from .core import Result, Run, Scenario
+    from .core import Result, Role, Run, Scenario
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 CANDIDATE_ENTRIES = (
@@ -338,7 +338,7 @@ def prepare(
     return command, dict(identity=measurement, cached=cached, cache=cache)
 
 
-def finish(runs: Mapping[str, "Run"], result: "Result") -> dict[str, Any]:
+def finish(runs: Mapping["Role", "Run"], result: "Result") -> dict[str, Any]:
     if result["differences"] or result["known_failures"] or result["problems"]:
         raise ValueError(
             "semantically unequal/unsuccessful profiles are not speed evidence"
