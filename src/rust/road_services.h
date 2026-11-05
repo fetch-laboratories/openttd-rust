@@ -30,12 +30,6 @@ static uint8_t OPENTTD_RUST_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32_t 
 	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RustRoadVehicleType(RoadOf(v))), straight_only);
 }
 static bool OPENTTD_RUST_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
-/** Both road types of the vehicle's road/tram kind, on the old and the new tile. */
-static OpenTTDRoadRoadTypes OPENTTD_RUST_CALL RoadSvcTileRoadTypes(OpenTTDVehicle *v, uint32_t old_tile, uint32_t tile) noexcept
-{
-	RoadTramType rtt = RustRoadTramType(RustRoadVehicleType(RoadOf(v)));
-	return {.before = RustRoadTileType(old_tile, rtt), .after = RustRoadTileType(tile, rtt)};
-}
 static OpenTTDRoadTrackChoice OPENTTD_RUST_CALL RoadSvcChooseTrack(OpenTTDVehicle *v, uint32_t tile, uint8_t entry, uint16_t trackdirs) noexcept
 {
 	bool found = true;
@@ -108,8 +102,6 @@ static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amoun
 	RoadVehicle *u = RoadOf(v);
 	CommandCost cost(EXPENSES_ROADVEH_RUN, Money(amount));
 
-	u->profit_this_year -= cost.GetCost();
-
 	SubtractMoneyFromCompanyFract(u->GetOwner(), cost);
 
 	RustVehicleDetailsDirty(RustVehicle(u));
@@ -131,7 +123,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.bay_direction = Shared_bay_stop_direction,
 	.is_drive_through = Shared_is_drive_through_stop,
 	.is_station_road_stop = RoadSvcIsStationRoadStop,
-	.tile_road_types = RoadSvcTileRoadTypes,
 	.choose_track = RoadSvcChooseTrack,
 	.find_depot = RoadSvcFindDepot,
 	.tram_build_read = RoadSvcTramBuildRead,

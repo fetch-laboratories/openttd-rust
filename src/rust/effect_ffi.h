@@ -55,7 +55,6 @@ uint16_t OPENTTD_RUST_CALL openttd_rust_effect_get_animation(const OpenTTDEffect
 void OPENTTD_RUST_CALL openttd_rust_effect_set_substate(OpenTTDEffectState *, uint8_t value);
 uint8_t OPENTTD_RUST_CALL openttd_rust_effect_get_substate(const OpenTTDEffectState *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_effect_run(OpenTTDEffectState *, OpenTTDVehicle *record, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *);
-void OPENTTD_RUST_CALL openttd_rust_effect_initialize(OpenTTDEffectState *, OpenTTDVehicle *, uint8_t, const OpenTTDEffectLeaves *, const OpenTTDSharedServices *);
 #ifdef __cplusplus
 }
 #endif

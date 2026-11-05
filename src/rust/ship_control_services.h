@@ -125,7 +125,6 @@ static void Ship_pay_running(uint32_t id, int64_t amount) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
 	CommandCost cost(EXPENSES_SHIP_RUN, Money(amount));
-	v->profit_this_year -= cost.GetCost();
 	SubtractMoneyFromCompanyFract(v->GetOwner(), cost);
 }
 
@@ -171,8 +170,6 @@ static void Ship_path_clear(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleI
 static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleUpdateViewport(v, update_delta, force); }
 
 static void Ship_base_viewport(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Vehicle::UpdateViewport(true); }
-
-static void Ship_cache(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateCache(); }
 
 static void Ship_play_sound(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehiclePlayLeaveSound(RustVehicle(v)); }
 
@@ -308,7 +305,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.path_clear = Ship_path_clear,
 		.viewport = Ship_viewport,
 		.base_viewport = Ship_base_viewport,
-		.cache = Ship_cache, .play_sound = Ship_play_sound,
+		.play_sound = Ship_play_sound,
 		.yapf_reverse = Ship_yapf_reverse, .yapf_choose = Ship_yapf_choose,
 		.update_delta = Ship_update_delta, .build_owner = Ship_build_owner,
 		.build_z = Ship_build_z, .build_properties = Ship_build_properties,

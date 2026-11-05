@@ -317,13 +317,6 @@ struct OvertakeRead {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct RoadTypes {
-    pub before: u8,
-    pub after: u8,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct TrackChoice {
     pub trackdir: u8,
     pub found: bool,
@@ -385,8 +378,6 @@ pub struct Leaves {
     pub bay_direction: extern "C" fn(u32) -> u8,
     pub is_drive_through: extern "C" fn(u32) -> bool,
     pub is_station_road_stop: extern "C" fn(u32) -> bool,
-    /// The road types of the old and new tile for the vehicle's road/tram kind.
-    pub tile_road_types: extern "C" fn(VehicleRef, u32, u32) -> RoadTypes,
     pub choose_track: extern "C" fn(VehicleRef, u32, u8, u16) -> TrackChoice,
     pub find_depot: extern "C" fn(VehicleRef, i32) -> DepotResult,
     pub tram_build_read:
@@ -1612,11 +1603,14 @@ impl Game<'_> {
                 if e.flags & VETS_ENTERED_WORMHOLE == 0 {
                     let old_tile = v.v.tile();
                     v.v.write_tile(tile);
-                    let types = service!(self.l.tile_road_types)(v.v, old_tile, tile);
+                    let tram = (self.movement.get().road_kind)(v.v).0;
+                    let world = crate::map_func::World::new(self.ss);
+                    let before = world.road_type(old_tile, tram);
+                    let after = world.road_type(tile, tram);
                     s.tile = tile;
                     v.set(STATE, u16::from(dir));
                     v.set(FRAME, start_frame as u16);
-                    if types.before != types.after {
+                    if before != after {
                         if s.front {
                             self.update_cache(v, false);
                         }
@@ -2169,7 +2163,8 @@ impl Game<'_> {
             return;
         }
         let cost = self.running_cost(v).saturating_mul(i64::from(running)) / YEAR_TICKS;
-        // `running_ticks = 0` precedes the company payment; nothing between observes it.
+        let profit = service!(self.vs.profit)(v.v).saturating_sub(cost);
+        service!(self.vs.write_profit)(v.v, profit);
         v.v.write_running(0);
         service!(self.l.pay_running)(v.v, cost);
     }
@@ -2503,10 +2498,6 @@ crate::abi::layouts! {
         queue,
         map_log_x,
     };
-    "OpenTTDRoadRoadTypes" ["probe"] => RoadTypes {
-        before,
-        after,
-    };
     "OpenTTDRoadTrackChoice" ["probe"] => TrackChoice {
         trackdir,
         found,
@@ -2528,7 +2519,6 @@ crate::abi::layouts! {
         bay_direction,
         is_drive_through,
         is_station_road_stop,
-        tile_road_types,
         choose_track,
         find_depot,
         tram_build_read,

@@ -278,7 +278,6 @@ static void RoadBoundary()
 			auto &p = *road_abi_probe; p.visual_stage = 1;
 			return p.visual_eligible ? 2 : 0;
 		},
-		.primary = [](OpenTTDVehicle *) noexcept { return true; },
 		.depot = [](uint32_t) noexcept { return false; }, .tunnel = [](uint32_t) noexcept { return false; },
 	};
 	openttd_rust_visual_bind(&emission);

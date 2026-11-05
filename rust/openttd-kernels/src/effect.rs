@@ -528,8 +528,7 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
 /// # Safety
 /// The live owner, shell and immutable tables obey `openttd_rust_effect_run`'s contract.
 #[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_initialize(
+unsafe fn initialize(
     owner: *mut State,
     record: VehicleRef,
     kind: u8,
@@ -617,7 +616,7 @@ pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -
     (s.delta)(v.shell);
     v.record.write_status(crate::vehicle_base::VS_UNCLICKABLE);
     unsafe {
-        openttd_rust_effect_initialize(v.owner, v.record, kind, s.effect, s.shared);
+        initialize(v.owner, v.record, kind, s.effect, s.shared);
     }
     (s.effect.viewport)(v.shell);
     v.shell
