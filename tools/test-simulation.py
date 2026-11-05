@@ -1318,21 +1318,31 @@ class SpeedPassTests(unittest.TestCase):
     def test_preparation_accepts_only_stale_anchor_failures(self):
         from simulation import speed
 
-        def result(passed, problems=(), differences=(), measured=True):
+        def result(
+            passed, problems=(), differences=(), measured=True, known_failures=()
+        ):
             return {
                 "passed": passed,
                 "problems": list(problems),
                 "differences": list(differences),
-                "known_failures": [],
+                "known_failures": list(known_failures),
                 "instruction_speed": {"candidate": {"Ir": 1}} if measured else None,
             }
 
-        stale = f"harness error: ValueError: {speed.STALE_ANCHOR}"
+        stale = (
+            "harness error: ValueError: instruction anchor identity mismatch; "
+            "quiet speed pass required"
+        )
         accepted = [[result(True)], [result(True), result(False, [stale])]]
         rejected = [
             [],
             [result(False, ["harness error: OSError: copy failed"])],
+            [result(False, [stale, "harness error: OSError: copy failed"])],
+            [result(False, [stale + "; copy failed"])],
+            [result(False, ["copy failed: " + stale])],
+            [result(False, [stale.replace("ValueError", "OSError")])],
             [result(False, [stale], differences=[{"field": "line"}])],
+            [result(False, [stale], known_failures=[{"issue": 1}])],
             [result(False, [stale], measured=False)],
             [result(False)],
         ]

@@ -47,7 +47,10 @@ def profile_passed(report: dict[str, Any]) -> bool:
             and not result["differences"]
             and not result["known_failures"]
             and bool(result["problems"])
-            and all(STALE_ANCHOR in problem for problem in result["problems"])
+            and all(
+                problem == f"harness error: ValueError: {STALE_ANCHOR}"
+                for problem in result["problems"]
+            )
         )
         for result in report["results"]
     )
