@@ -270,7 +270,9 @@ class HousekeepingTests(unittest.TestCase):
         )
         self.assertIsNone(housekeeping.remove(self.main, item))
 
-    def hidden_process_plan(self, name: str, offset: float, missing: str = "") -> bool:
+    def hidden_process_plan(
+        self, name: str, offset: float, missing: str = "", comm: str = "job"
+    ) -> bool:
         """Plan with a same-user process whose cwd is unreadable, started OFFSET
         seconds after the worktree was created; return whether it is removable."""
         tree = self.t3_tree(name)
@@ -282,6 +284,7 @@ class HousekeepingTests(unittest.TestCase):
         start = round((creation + offset - boot) * ticks)
         fields = " ".join(["0"] * 18)
         write(self.proc / "88/stat", f"88 (a (job)) S {fields} {start} 0 0\n")
+        write(self.proc / "88/comm", f"{comm}\n")
         if missing:
             target = (
                 self.proc / "88/stat"
@@ -304,6 +307,20 @@ class HousekeepingTests(unittest.TestCase):
     def test_uninspectable_cwd_keeps_worktree(self) -> None:
         # A job started inside the live worktree, then made non-dumpable.
         self.assertFalse(self.hidden_process_plan("t3-hidden-cwd", 60))
+
+    def test_uninspectable_session_manager_cwd_is_ignored(self) -> None:
+        # The user's `systemd --user` may start after a worktree was created.
+        self.assertTrue(self.hidden_process_plan("t3-manager", 60, comm="systemd"))
+
+    def test_loose_file_in_run_folder_follows_idle_rule(self) -> None:
+        log = write(self.top / "local/verification/run.log")
+        now = log.stat().st_mtime
+        for at, removable in (
+            (now, False),
+            (now + 2 * housekeeping.RUNNING_SECONDS, True),
+        ):
+            items = housekeeping.plan_local(self.top / "local", at)
+            self.assertEqual(next(i for i in items if i.path == log).remove, removable)
 
     def test_uninspectable_cwd_older_than_worktree_is_ignored(self) -> None:
         # `(sd-pam)` and other session processes predate every task worktree.

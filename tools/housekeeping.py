@@ -43,6 +43,8 @@ KEPT = {
 }
 # A run without report.json touched this recently may still be running.
 RUNNING_SECONDS = 12 * 3600
+# Session managers hide their cwd from their own user and never run agent work.
+SESSION_MANAGERS = {"systemd", "(sd-pam)"}
 REFERENCE = re.compile(r"\.local/(" + "|".join(OUTPUT) + r")/([^/\"\s]+)")
 
 
@@ -296,6 +298,10 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
                     continue
                 # A non-dumpable process (`(sd-pam)`) hides its cwd from its own user.
                 start, creation = started(process), created(path)
+                if isinstance(error, PermissionError) and command(process) in (
+                    SESSION_MANAGERS
+                ):
+                    continue
                 if (
                     isinstance(error, PermissionError)
                     and start is not None
@@ -309,6 +315,13 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
     if ".t3/worktrees/" in path.as_posix() and recently_active(path):
         return f"T3 task active within {RUNNING_SECONDS // 3600} hours"
     return None
+
+
+def command(process: Path) -> str | None:
+    try:
+        return (process / "comm").read_text().strip()
+    except OSError:
+        return None
 
 
 def started(process: Path) -> float | None:
@@ -455,7 +468,8 @@ def protect_outputs(items: list[Item]) -> list[Item]:
 
 
 def touched(path: Path) -> float:
-    return max([path.stat().st_mtime] + [c.lstat().st_mtime for c in path.iterdir()])
+    children = path.iterdir() if path.is_dir() else []
+    return max([path.stat().st_mtime] + [c.lstat().st_mtime for c in children])
 
 
 def finished(main: Path, report: Path) -> tuple[bool, str]:
