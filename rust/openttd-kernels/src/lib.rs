@@ -122,6 +122,7 @@ mod script_list;
 mod script_rail;
 mod script_road;
 mod script_tile;
+mod script_tunnelbridge;
 pub mod services;
 mod ship_control;
 mod signal;

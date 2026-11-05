@@ -224,7 +224,6 @@ add_files(
     script_base.cpp
     script_basestation.cpp
     script_bridge.cpp
-    script_bridgelist.cpp
     script_cargo.cpp
     script_cargolist.cpp
     script_cargomonitor.cpp

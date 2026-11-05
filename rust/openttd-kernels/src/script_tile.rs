@@ -49,7 +49,7 @@ fn is_type(w: &World<'_>, tile: u32, kind: u8) -> bool {
 }
 
 /// `ScriptCompanyMode::IsValid`.
-fn company_mode_valid(s: &Services) -> bool {
+pub(crate) fn company_mode_valid(s: &Services) -> bool {
     (s.command.shared.company_valid)(script_host::active_company())
 }
 

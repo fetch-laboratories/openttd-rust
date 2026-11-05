@@ -53,7 +53,7 @@ fn check<'a>(w: &'a World<'a>) -> impl Fn(bool) + Copy + 'a {
 
 /// `ScriptRail::IsRailTypeAvailable`; `(::RailType)` truncates to the `uint8_t` enum.
 #[allow(clippy::cast_possible_truncation)]
-fn rail_type_available(s: &Services, rail_type: u32) -> bool {
+pub(crate) fn rail_type_available(s: &Services, rail_type: u32) -> bool {
     if !enforce(
         deity_or_company_mode_valid(s),
         ERR_PRECONDITION_INVALID_COMPANY,
@@ -74,7 +74,7 @@ fn rail_type_available(s: &Services, rail_type: u32) -> bool {
 }
 
 /// `ScriptRail::GetCurrentRailType`.
-fn current_rail_type() -> u32 {
+pub(crate) fn current_rail_type() -> u32 {
     u32::from(script_host::active_rail_type())
 }
 

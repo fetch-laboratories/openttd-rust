@@ -11,6 +11,7 @@
 #define SCRIPT_BRIDGELIST_HPP
 
 #include "script_list.hpp"
+#include "../../rust/script_tunnelbridge_ffi.h"
 
 /**
  * Create a list of bridges types.
@@ -19,7 +20,7 @@
  */
 class ScriptBridgeList : public ScriptList {
 public:
-	ScriptBridgeList();
+	ScriptBridgeList() { openttd_rust_script_bridge_list(&GetRustScriptHostServices(), &GetRustTunnelBridgeServices(), this->GetRustListOwner(), 0, 0); }
 };
 
 /**
@@ -32,7 +33,7 @@ public:
 	/**
 	 * @param length The length of the bridge you want to build.
 	 */
-	ScriptBridgeList_Length(SQInteger length);
+	ScriptBridgeList_Length(SQInteger length) { openttd_rust_script_bridge_list(&GetRustScriptHostServices(), &GetRustTunnelBridgeServices(), this->GetRustListOwner(), 1, length); }
 };
 
 #endif /* SCRIPT_BRIDGELIST_HPP */

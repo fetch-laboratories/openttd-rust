@@ -36,7 +36,7 @@ fn check<'a>(w: &'a World<'a>) -> impl Fn(bool) + Copy + 'a {
 
 /// `ScriptRoad::IsRoadTypeAvailable`; `(::RoadType)` truncates to the `uint8_t` enum.
 #[allow(clippy::cast_possible_truncation)]
-fn road_type_available(s: &Services, road_type: u32) -> bool {
+pub(crate) fn road_type_available(s: &Services, road_type: u32) -> bool {
     if !enforce(
         deity_or_company_mode_valid(s),
         ERR_PRECONDITION_INVALID_COMPANY,
@@ -55,7 +55,7 @@ fn road_type_available(s: &Services, road_type: u32) -> bool {
 }
 
 /// `ScriptRoad::GetCurrentRoadType`.
-fn current_road_type() -> u32 {
+pub(crate) fn current_road_type() -> u32 {
     u32::from(script_host::active_road_type())
 }
 

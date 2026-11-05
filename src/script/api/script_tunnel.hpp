@@ -11,6 +11,7 @@
 #define SCRIPT_TUNNEL_HPP
 
 #include "script_vehicle.hpp"
+#include "../../rust/script_tunnelbridge_ffi.h"
 
 /**
  * Class that handles all tunnel related functions.
@@ -47,7 +48,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is the beginning or end of a tunnel.
 	 */
-	static bool IsTunnelTile(TileIndex tile);
+	static bool IsTunnelTile(TileIndex tile) { return openttd_rust_script_tunnel_is_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Get the tile that exits on the other end of a (would be) tunnel starting
@@ -61,7 +62,7 @@ public:
 	 *  that building a tunnel will succeed. Use BuildTunnel in ScriptTestMode to
 	 *  check whether a tunnel can actually be build.
 	 */
-	static TileIndex GetOtherTunnelEnd(TileIndex tile);
+	static TileIndex GetOtherTunnelEnd(TileIndex tile) { return TileIndex(openttd_rust_script_tunnel_other_end(&GetRustScriptHostServices(), tile.base())); }
 
 	/**
 	 * Internal function to help BuildTunnel in case of road.
