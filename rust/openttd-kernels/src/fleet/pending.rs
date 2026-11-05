@@ -37,8 +37,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_pending_clear() {
 /// Record or overwrite the original `VehicleID` key's leave-depot flag.
 /// # Safety
 /// Serial game thread; map accesses end before returning/reentry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_pending_add(id: u32, leave: bool) {
+pub(crate) unsafe fn add(id: u32, leave: bool) {
     unsafe { (&mut *PENDING.get()).insert(id, leave) };
 }
 /// Drain in ascending IDs; newly inserted later keys remain visible this tick.

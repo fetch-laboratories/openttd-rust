@@ -207,6 +207,5 @@ extern "C++" inline bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionS
 void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, const OpenTTDFleetCosts *, uint32_t, uint32_t);
 uint32_t openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint16_t, uint16_t, bool);
 void openttd_rust_fleet_pending_clear();
-void openttd_rust_fleet_pending_add(uint32_t, bool);
 }
 #endif /* RUST_FLEET_FFI_H */

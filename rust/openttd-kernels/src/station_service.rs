@@ -1519,14 +1519,6 @@ fn refit_vehicle(
     });
     (l.set_current_company)(old_company);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_prepare(
-    front: VehicleRef,
-    world: *const World,
-    loading: *const Loading,
-) {
-    prepare_unload(front, unsafe { &*world }, unsafe { &*loading });
-}
 /// `PrepareUnload`.
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     let st = (w.station)(front.last_station());

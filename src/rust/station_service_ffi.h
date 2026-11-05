@@ -223,7 +223,6 @@ OpenTTDStationQueueEntry *openttd_rust_station_queue_first(const OpenTTDStationS
 OpenTTDStationQueueEntry *openttd_rust_station_queue_next(const OpenTTDStationService *, const OpenTTDStationQueueEntry *);
 void *openttd_rust_station_queue_value(const OpenTTDStationQueueEntry *);
 OpenTTDStationQueueEntry *openttd_rust_station_queue_erase_node(OpenTTDStationService *, OpenTTDStationQueueEntry *);
-void openttd_rust_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *);
 /* An empty queue touches only its Rust owner; service tables may be null then. */
 struct OpenTTDVehicleVisits;
 struct OpenTTDCommandCost;
