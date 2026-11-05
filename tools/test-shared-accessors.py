@@ -109,6 +109,27 @@ with tempfile.TemporaryDirectory() as directory:
     result = check()
     assert result.returncode == 0, result.stdout
     assert "reclassified pre-existing accessor: " + rows[0] in result.stdout
+    # Retired rows cannot exempt additional occurrences of an existing header.
+    wide_base = base
+    spare = "\nint Spare(Vehicle *v) { return v->owner; }"
+    lambda_wide = "\n[](Vehicle *v) { return v->owner + v->index; }"
+    lambda_read = "\n[](Vehicle *v) { return v->owner; }"
+    port.write_text(original + copy + lambda_wide + spare)
+    baseline.write_text(grandfathered)
+    spare_rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    baseline.write_text(grandfathered + "\n".join(spare_rows) + "\n")
+    git("commit", "-qam", "Add: Second retired accessor fixture")
+    base = git("rev-parse", "HEAD")
+    assert check().returncode == 0, check().stdout
+    for second in [lambda_read, "\n[](Vehicle *v) { v->owner = 1; }"]:
+        port.write_text(original + lambda_read + second)
+        baseline.write_text("")
+        duplicate_rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+        assert len(duplicate_rows) == 2
+        baseline.write_text("\n".join(duplicate_rows) + "\n")
+        result = check()
+        assert "addition forbidden" in result.stdout and result.returncode == 1
+    base = wide_base
     # Total growth stays forbidden even for a pre-existing body.
     port.write_text(original + copy + narrow)
     baseline.write_text(grandfathered + rows[0] + "\n")
