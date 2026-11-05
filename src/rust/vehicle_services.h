@@ -109,7 +109,6 @@ inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNu
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 inline OpenTTDVehicleTileLinks *RustVehicleTileLinks(Vehicle *v) noexcept { return &v->tile_links; }
 inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }
-inline uint8_t RustVehicleDay(const Vehicle *v) noexcept { return v->Record().day_counter; }
 inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->GetTile().base(); }
 inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->current_order.GetType(); }
 inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }

@@ -131,7 +131,6 @@ struct OpenTTDVehiclePostTick {
 	const uint8_t *front_status;
 	const uint8_t *status;
 };
-struct OpenTTDVehicleDayCallback { uint8_t day; bool has_engine; };
 struct OpenTTDVehicleSchedulerTables;
 struct OpenTTDVehicleSchedulerServices {
 	OpenTTDVehiclePoolCursor (OPENTTD_RUST_CALL *pool)() noexcept OPENTTD_SERVICE_DEFAULT(pool);
@@ -140,8 +139,6 @@ struct OpenTTDVehicleSchedulerServices {
 	bool (OPENTTD_RUST_CALL *tick)(OpenTTDVehicle *, OpenTTDVehiclePostTick *) noexcept OPENTTD_SERVICE_DEFAULT(tick);
 	void (OPENTTD_RUST_CALL *calendar_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(calendar_day);
 	void (OPENTTD_RUST_CALL *economy_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(economy_day);
-	OpenTTDVehicleDayCallback (OPENTTD_RUST_CALL *day_callback_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_callback_read);
-	void (OPENTTD_RUST_CALL *first_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_dirty);
 	OpenTTDCargoList *(OPENTTD_RUST_CALL *cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
 	const OpenTTDSharedServices *shared; ///< Shared table, immutable for the process.

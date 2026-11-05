@@ -273,12 +273,6 @@ static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell, OpenTT
 }
 static void OPENTTD_RUST_CALL VehicleSchedulerCalendarDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewCalendarDay(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerEconomyDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewEconomyDay(); }
-static OpenTTDVehicleDayCallback OPENTTD_RUST_CALL VehicleSchedulerDayCallbackRead(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.day = RustVehicleDay(v), .has_engine = RustVehicleHasEngine(v)};
-}
-static void OPENTTD_RUST_CALL VehicleSchedulerFirstDirty(OpenTTDVehicle *shell) noexcept { RustVehicleFirst(VehicleOf(shell))->MarkDirty(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_RUST_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
 {
 	PerformanceMeasurer framerate(PFE_GL_ECONOMY);
@@ -304,8 +298,6 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
 		.tick = VehicleSchedulerTick,
 		.calendar_day = VehicleSchedulerCalendarDay,
 		.economy_day = VehicleSchedulerEconomyDay,
-		.day_callback_read = VehicleSchedulerDayCallbackRead,
-		.first_dirty = VehicleSchedulerFirstDirty,
 		.cargo_owner = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,
 		.vehicle = &_rust_vehicle_services,
 		.shared = &GetRustSharedServices(),

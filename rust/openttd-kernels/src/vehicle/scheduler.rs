@@ -46,11 +46,6 @@ pub struct PostTick {
     pub status: *const u8,
 }
 #[repr(C)]
-pub struct DayCallback {
-    pub day: u8,
-    pub has_engine: bool,
-}
-#[repr(C)]
 pub struct SchedulerServices {
     pub pool: extern "C" fn() -> PoolCursor,
     pub assertions: bool,
@@ -59,8 +54,6 @@ pub struct SchedulerServices {
     pub tick: unsafe extern "C" fn(VehicleRef, *mut PostTick) -> bool,
     pub calendar_day: extern "C" fn(VehicleRef),
     pub economy_day: extern "C" fn(VehicleRef),
-    pub day_callback_read: extern "C" fn(VehicleRef) -> DayCallback,
-    pub first_dirty: extern "C" fn(VehicleRef),
     pub cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
     /// Base vehicle and shared tables, immutable for the process.
     pub vehicle: *const VehicleServices,
@@ -154,8 +147,7 @@ unsafe fn day<const COUNTED: bool>(
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }
         if !calendar {
-            let callback_state = svc!(COUNTED, s.day_callback_read, vehicle);
-            if callback_state.day & 0x1f == 0 && callback_state.has_engine {
+            if vehicle.day() & 0x1f == 0 && vehicle.has_engine_type() {
                 if COUNTED {
                     crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
                 }
@@ -178,7 +170,9 @@ unsafe fn day<const COUNTED: bool>(
                         };
                     }
                     if callback != 0 {
-                        svc!(COUNTED, s.first_dirty, vehicle);
+                        // SAFETY: The immutable maintenance table lives for this entry.
+                        let maintenance = unsafe { &*vs.maintenance };
+                        svc!(COUNTED, maintenance.mark_dirty, vehicle.first());
                     }
                     if callback & !3 != 0 {
                         let engine = svc!(COUNTED, vs.engine, vehicle);
@@ -483,18 +477,12 @@ crate::abi::layouts! {
         front_status,
         status,
     };
-    "OpenTTDVehicleDayCallback" ["scheduler"] => DayCallback {
-        day,
-        has_engine,
-    };
     "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
         pool,
         assertions,
         tick,
         calendar_day,
         economy_day,
-        day_callback_read,
-        first_dirty,
         cargo_owner,
         vehicle,
         shared,
