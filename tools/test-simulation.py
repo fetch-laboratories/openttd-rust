@@ -14,8 +14,11 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import unittest.mock
+from collections.abc import Sequence
 from functools import partial
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 
 from code_lines import without_comments
@@ -43,7 +46,7 @@ class SimulationDeterminismTests(unittest.TestCase):
         g = simulate.gamma
         header = b"\x0a" + g(1) + b"s" + b"\x00"  # One SLE_FILE_STRING field "s".
 
-        def save(element_length, body):
+        def save(element_length: bytes, body: bytes) -> bytes:
             chunk = b"TEST\x03" + g(len(header) + 1) + header
             return b"OTTN\0\0\0\0" + chunk + element_length + body + b"\x00" * 5
 
@@ -64,13 +67,13 @@ class SimulationDeterminismTests(unittest.TestCase):
             ),
         ):
             candidate = simulate.parse_save(save(element_length, element))["TEST"]
-            stats = {"elements": 0, "masked": {}}
+            stats = cast(simulate.Stats, {"elements": 0, "masked": {}})
             with self.subTest(name):
                 self.assertEqual(
                     list(simulate.compare_chunk("TEST", minimal, candidate, stats)),
                     [expected],
                 )
-        stats = {"elements": 0, "masked": {}}
+        stats = cast(simulate.Stats, {"elements": 0, "masked": {}})
         self.assertEqual(
             list(simulate.compare_chunk("TEST", minimal, minimal, stats)), []
         )
@@ -270,7 +273,7 @@ class SimulationDeterminismTests(unittest.TestCase):
                 ):
                     launch.return_value.returncode = 0
                     run = simulate.run_game(
-                        dict(scenario, ticks=1),
+                        cast(simulate.Scenario, dict(scenario, ticks=1)),
                         root / "openttd",
                         root,
                         root / "run",
@@ -313,14 +316,17 @@ class SimulationDeterminismTests(unittest.TestCase):
                     source_dir = simulate.ROOT / "tools" / source
                     run_dir = root / installed
                     plan = simulate.prepare_game(
-                        dict(
-                            kind="generate",
-                            seed=86,
-                            map_log2=7,
-                            land_generator=1,
-                            ticks=1,
-                            scenario_ai=str(source_dir),
-                            **keys,
+                        cast(
+                            simulate.Scenario,
+                            dict(
+                                kind="generate",
+                                seed=86,
+                                map_log2=7,
+                                land_generator=1,
+                                ticks=1,
+                                scenario_ai=str(source_dir),
+                                **keys,
+                            ),
                         ),
                         root / "openttd",
                         root,
@@ -376,9 +382,18 @@ class SimulationDeterminismTests(unittest.TestCase):
         self.assertEqual(output.getvalue().splitlines(), ["valid", "other-test"])
 
     def test_end_mismatch_compares_exits_and_full_logs_without_retry(self) -> None:
+        calls: list[Path]
+        compared: list[Path]
         calls, compared = [], []
 
-        def run(scenario, binary, build, folder, *args, **kwargs):
+        def run(
+            scenario: simulate.Scenario,
+            binary: Path,
+            build: Path,
+            folder: Path,
+            *args: object,
+            **kwargs: object,
+        ) -> dict[str, Any]:
             calls.append(folder)
             return {
                 "exit": 0,
@@ -408,9 +423,12 @@ class SimulationDeterminismTests(unittest.TestCase):
             ),
         ):
             result = simulate.run_scenario(
-                {"name": "strict", "short_checkpoint": True, "ticks": 1},
-                {"reference": None, "candidate": None},
-                {"reference": None, "candidate": None},
+                cast(
+                    simulate.Scenario,
+                    {"name": "strict", "short_checkpoint": True, "ticks": 1},
+                ),
+                cast(dict[str, Path], {"reference": None, "candidate": None}),
+                cast(dict[str, Path], {"reference": None, "candidate": None}),
                 Path("unused"),
                 20,
                 10,
@@ -481,11 +499,11 @@ class SimulationRuntimeTests(unittest.TestCase):
     def exercise(
         self,
         *,
-        custom=False,
-        self_compare=False,
-        passed=True,
-        crash=False,
-    ):
+        custom: bool = False,
+        self_compare: bool = False,
+        passed: bool = True,
+        crash: bool = False,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "tools").mkdir()
@@ -506,7 +524,7 @@ class SimulationRuntimeTests(unittest.TestCase):
                 "def git(*args):\n"
                 "    return (ROOT / ('head' if args[0] == 'rev-parse' else 'status')).read_text()\n"
             )
-            ai_initial = {}
+            ai_initial: dict[str, str] = {}
             for folder in ("town-name-observer", "tree-scenario-ai"):
                 ai = root / "tools" / folder
                 ai.mkdir()
@@ -514,6 +532,8 @@ class SimulationRuntimeTests(unittest.TestCase):
                 ai_initial[folder] = hashlib.sha256(
                     (ai / "main.nut").read_bytes()
                 ).hexdigest()
+            originals: dict[str, Path]
+            assets: dict[str, Path]
             originals, assets = {}, {}
             for role in ("reference", "candidate"):
                 if role == "candidate" and self_compare:
@@ -534,9 +554,14 @@ class SimulationRuntimeTests(unittest.TestCase):
                 binary.write_text(f"print('{role}-before')\n")
                 originals[role], assets[role] = binary, asset
 
-            invocations = []
+            invocations: list[str] = []
 
-            def run(scenario, binaries, builds, *args):
+            def run(
+                scenario: simulate.Scenario,
+                binaries: dict[str, Path],
+                builds: dict[str, Path],
+                *args: object,
+            ) -> dict[str, Any]:
                 for role in ("reference", "candidate"):
                     original_role = "reference" if self_compare else role
                     output = subprocess.check_output(
@@ -608,7 +633,7 @@ class SimulationRuntimeTests(unittest.TestCase):
                 if crash:
                     with self.assertRaisesRegex(RuntimeError, "scenario failed"):
                         simulate.main()
-                    run = next((root / ".local/simulation").iterdir())
+                    run = cast(Any, next((root / ".local/simulation").iterdir()))
                     self.assertFalse((run / "reference-runtime").exists())
                     self.assertFalse((run / "candidate-runtime").exists())
                     self.assertFalse((run / "report.json").exists())
@@ -659,8 +684,8 @@ class SimulationRuntimeTests(unittest.TestCase):
                             "SANITIZE = False\n"
                         )
 
-                        def prepare(*args, crash=crash):
-                            out = args[-2]
+                        def prepare(*args: object, crash: bool = crash) -> None:
+                            out = cast(Path, args[-2])
                             (out / "reference-runtime").mkdir()
                             (out / "fixture.log").write_text("retained output")
                             if crash:
@@ -690,7 +715,7 @@ class SimulationRuntimeTests(unittest.TestCase):
     def test_pruning_keeps_newest_ten_completed_runs_and_active_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            completed = []
+            completed: list[Path] = []
             for day in range(1, 14):
                 run = root / f"202601{day:02}T000000Z-123"
                 (run / "failing-scenario").mkdir(parents=True)
@@ -746,33 +771,42 @@ class SimulationSpeedTests(unittest.TestCase):
 
         for name, ceiling in (("play-test", 1.6), ("generate-test", 1.3)):
             with self.subTest(name=name), patch.dict(SPEED_BUDGETS, {name: 1.25}):
-                report = speed_budget(name, 1.4375)
+                report = cast(ir.SpeedBudget, speed_budget(name, 1.4375))
                 self.assertEqual(report["quiet_pass_mean"], 1.25)
                 self.assertEqual(report["record"], 1.25)
                 self.assertAlmostEqual(report["change_percent"], 15.0)
                 self.assertEqual(report["ceiling"], ceiling)
                 self.assertTrue(
-                    speed_budget(name, ceiling, anchor_ratio=1.25)["within_ceiling"]
+                    cast(
+                        ir.SpeedBudget, speed_budget(name, ceiling, anchor_ratio=1.25)
+                    )["within_ceiling"]
                 )
                 self.assertFalse(
-                    speed_budget(name, nextafter(ceiling, inf), anchor_ratio=1.25)[
-                        "within_ceiling"
-                    ]
+                    cast(
+                        ir.SpeedBudget,
+                        speed_budget(name, nextafter(ceiling, inf), anchor_ratio=1.25),
+                    )["within_ceiling"]
                 )
                 self.assertTrue(
-                    speed_budget(name, 0.95 * ceiling, anchor_ratio=1.25)[
-                        "near_ceiling"
-                    ]
+                    cast(
+                        ir.SpeedBudget,
+                        speed_budget(name, 0.95 * ceiling, anchor_ratio=1.25),
+                    )["near_ceiling"]
                 )
                 self.assertFalse(
-                    speed_budget(name, nextafter(0.95 * ceiling, 0), anchor_ratio=1.25)[
-                        "near_ceiling"
-                    ]
+                    cast(
+                        ir.SpeedBudget,
+                        speed_budget(
+                            name, nextafter(0.95 * ceiling, 0), anchor_ratio=1.25
+                        ),
+                    )["near_ceiling"]
                 )
-                self.assertLess(speed_budget(name, 0.9)["change_percent"], 0)
+                self.assertLess(
+                    cast(ir.SpeedBudget, speed_budget(name, 0.9))["change_percent"], 0
+                )
                 self.assertIsNone(speed_budget(name, None))
                 self.assertTrue(
-                    speed_budget(name, 2.0)["within_ceiling"]
+                    cast(ir.SpeedBudget, speed_budget(name, 2.0))["within_ceiling"]
                 )  # A single wall ratio cannot breach the record.
         self.assertIsNone(speed_budget("unrecorded", 1.0))
 
@@ -787,7 +821,9 @@ class SimulationSpeedTests(unittest.TestCase):
         self.assertIn(len(ratios), (1, 2, 3))
         self.assertAlmostEqual(sum(ratios) / len(ratios), SPEED_BUDGETS[name])
         anchor = SPEED_ANCHORS[name]["anchor"]
-        record = {"anchor": anchor, "integrated": {"Ir": anchor["Ir"]}}
+        record = cast(
+            ir.SpeedAnchor, {"anchor": anchor, "integrated": {"Ir": anchor["Ir"]}}
+        )
         # A mean distinct from the latest pass shows which one each figure uses.
         mean = anchor["ratio"] - 0.05
         with patch.dict(SPEED_BUDGETS, {name: mean}):
@@ -802,11 +838,13 @@ class SimulationSpeedTests(unittest.TestCase):
         self.assertTrue(report["within_ceiling"])
         self.assertEqual(report["band"], 1.52)
 
-    def exercise(self, *, instructions=False, **failure):
+    def exercise(
+        self, *, instructions: bool = False, **failure: bool | int
+    ) -> tuple[simulate.Result, int, Any]:
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)
-            scenario = {"name": "speed", "ticks": 74}
-            runs = [
+            scenario = cast(simulate.Scenario, {"name": "speed", "ticks": 74})
+            runs: list[dict[str, Any]] = [
                 {
                     "exit": failure.get("exit_code", 0),
                     "dir": out,
@@ -863,7 +901,10 @@ class SimulationSpeedTests(unittest.TestCase):
             ):
                 result = simulate.run_scenario(
                     scenario,
-                    {role: role for role in ("reference", "candidate")},
+                    cast(
+                        dict[str, Path],
+                        {role: role for role in ("reference", "candidate")},
+                    ),
                     {role: out for role in ("reference", "candidate")},
                     out,
                     1,
@@ -888,7 +929,9 @@ class SimulationSpeedTests(unittest.TestCase):
         self.assertTrue(all(call.kwargs == {"isolate": True} for call in locks))
         self.assertEqual(len(result["plain_speed"]["samples"]), 3)
         self.assertEqual(result["plain_speed"]["median_candidate_reference_ratio"], 2.0)
-        for failure in ({"difference": True}, {"exit_code": 1}):
+        for failure in cast(
+            tuple[dict[str, Any], ...], ({"difference": True}, {"exit_code": 1})
+        ):
             with self.subTest(**failure):
                 result, calls, _ = self.exercise(**failure)
                 self.assertFalse(result["passed"])
@@ -896,11 +939,14 @@ class SimulationSpeedTests(unittest.TestCase):
                 self.assertIsNone(
                     result["plain_speed"]["median_candidate_reference_ratio"]
                 )
-        for failure in (
-            {"difference": True},
-            {"exit_code": 1},
-            {"log": True},
-            {"moment": True},
+        for failure in cast(
+            tuple[dict[str, Any], ...],
+            (
+                {"difference": True},
+                {"exit_code": 1},
+                {"log": True},
+                {"moment": True},
+            ),
         ):
             with self.subTest(instructions=True, **failure):
                 result, calls, _ = self.exercise(instructions=True, **failure)
@@ -910,25 +956,27 @@ class SimulationSpeedTests(unittest.TestCase):
 
 class InstructionSpeedTests(unittest.TestCase):
     def test_fixed_anchor_cumulative_projection_and_replacement(self) -> None:
-        anchor = dict(
+        anchor: dict[str, Any] = dict(
             head="quiet", ratio=1.2314, Ir=100, identity={"compatible": "same"}
         )
-        record = dict(anchor=anchor, integrated=dict(head="base", Ir=100))
-        measurement = dict(Ir=100, identity={"compatible": "same"})
+        record: dict[str, Any] = dict(
+            anchor=anchor, integrated=dict(head="base", Ir=100)
+        )
+        measurement: dict[str, Any] = dict(Ir=100, identity={"compatible": "same"})
         for step in range(1, 4):
             measurement["Ir"] = 100 * 1.04**step
-            report = ir.budget("play-test", measurement, record)
+            report = ir.budget("play-test", measurement, cast(ir.SpeedAnchor, record))
             record["integrated"] = dict(head=str(step), Ir=measurement["Ir"])
         self.assertAlmostEqual(report["projected_ratio"], 1.5389150592)
         self.assertTrue(report["within_ceiling"])
         self.assertEqual(anchor["Ir"], 100)
-        self.assertEqual(ir.projection(anchor, 90), 1.2314)
+        self.assertEqual(ir.projection(cast(ir.Anchor, anchor), 90), 1.2314)
         record["anchor"] = dict(anchor, ratio=1.1, Ir=measurement["Ir"])
-        report = ir.budget("play-test", measurement, record)
+        report = ir.budget("play-test", measurement, cast(ir.SpeedAnchor, record))
         self.assertEqual(report["projected_ratio"], 1.1)
         incompatible = dict(measurement, identity={"compatible": "other"})
         with self.assertRaises(ValueError):
-            ir.budget("play-test", incompatible, record)
+            ir.budget("play-test", incompatible, cast(ir.SpeedAnchor, record))
 
     def test_real_nested_scope_extraction_identity_and_semantic_rejection(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -969,7 +1017,9 @@ class InstructionSpeedTests(unittest.TestCase):
                 env=migration.environment(),
                 check=True,
             )
-            scenario = dict(kind="save", ticks=1, save=str(source))
+            scenario = cast(
+                simulate.Scenario, dict(kind="save", ticks=1, save=str(source))
+            )
             env = dict(
                 migration.environment(), VALGRIND_OPTS="--toggle-collect=StateGameLoop*"
             )
@@ -981,7 +1031,7 @@ class InstructionSpeedTests(unittest.TestCase):
             shutil.copy2(root / "instruction-build.json", candidate)
 
             # Adapter copies exercise export stripping without another compiler fixture.
-            def adapter(build, folder, env):
+            def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
                 folder.mkdir()
                 return Path(shutil.copy2(binary, folder / "adapter"))
 
@@ -992,16 +1042,22 @@ class InstructionSpeedTests(unittest.TestCase):
                     if hasattr(module, "adapter"):
                         stack.enter_context(patch.object(module, "adapter", adapter))
                 runtime.export(root / "bundle", migration)
-            counts = []
+            counts: list[int] = []
             scenario["name"] = next(iter(SPEED_BUDGETS))
 
-            def collect(case, binaries, builds, out, *args):
+            def collect(
+                case: simulate.Scenario,
+                binaries: dict[str, Path],
+                builds: dict[str, Path],
+                out: Path,
+                *args: object,
+            ) -> None:
                 self.assertTrue(args[-1])
                 frozen = binaries["candidate"]
                 context = frozen, builds["candidate"], run, env
                 for reference in (True, False):
                     for kind in ("save", "generate"):
-                        case = dict(scenario, kind=kind)
+                        case = cast(simulate.Scenario, dict(scenario, kind=kind))
                         command, info = ir.prepare(
                             case, [str(frozen)], *context, reference
                         )
@@ -1043,7 +1099,9 @@ class InstructionSpeedTests(unittest.TestCase):
             (root / ".cargo").mkdir()
             for field, value in (("ticks", 2), ("console", ["unpause"])):
                 changed = ir.identity(
-                    dict(scenario, **{field: value}), *context, Path(command[0])
+                    cast(simulate.Scenario, dict(scenario, **{field: value})),
+                    *context,
+                    Path(command[0]),
                 )
                 self.assertNotEqual(baseline, changed)
             # Worktree paths in CMake bookkeeping must not change the identity.
@@ -1114,7 +1172,8 @@ class InstructionSpeedTests(unittest.TestCase):
                 failure = dict(differences=[], known_failures=[], problems=[])
                 failure[key] = ["failure"]
                 with self.assertRaises(ValueError):
-                    ir.finish({}, failure)  # Reject before extraction/cache writes.
+                    # Reject before extraction/cache writes.
+                    ir.finish({}, cast(simulate.Result, failure))
 
     def test_reference_cache_write_stays_within_the_cache_disk(self) -> None:
         rename = Path.replace
@@ -1138,7 +1197,13 @@ class InstructionSpeedTests(unittest.TestCase):
             }
             clean = dict(differences=[], known_failures=[], problems=[])
             with patch.object(Path, "replace", autospec=True, side_effect=same_disk):
-                self.assertEqual(ir.finish(runs, clean)["Ir_ratio"], 1.25)
+                self.assertEqual(
+                    ir.finish(
+                        cast(dict[simulate.Role, simulate.Run], runs),
+                        cast(simulate.Result, clean),
+                    )["Ir_ratio"],
+                    1.25,
+                )
             self.assertEqual(json.loads((cache / "k").read_text()), 40)
             self.assertEqual([path.name for path in cache.iterdir()], ["k"])
 
@@ -1260,32 +1325,40 @@ class SpeedPassTests(unittest.TestCase):
     def test_collection_prepares_before_hold_and_compares_after_release(self) -> None:
         from simulation import speed
 
+        events: list[str | tuple[str, str]]
         held, events = False, []
 
         class Hold:
-            def __init__(self, log):
+            def __init__(self, log: Path) -> None:
                 pass
 
-            def start(self):
+            def start(self) -> None:
                 nonlocal held
                 held = True
                 events.append("start")
 
-            def release(self):
+            def release(self) -> None:
                 nonlocal held
                 held = False
                 events.append("release")
 
-        def prepare(scenario, binary, build, folder, *args, **kwargs):
+        def prepare(
+            scenario: simulate.Scenario,
+            binary: str,
+            build: str,
+            folder: Path,
+            *args: object,
+            **kwargs: object,
+        ) -> dict[str, Any]:
             self.assertFalse(held)
             return {"dir": folder, "role": binary, "scenario": scenario["name"]}
 
-        def execute(plan):
+        def execute(plan: dict[str, Any]) -> dict[str, Any]:
             self.assertTrue(held)
             events.append((plan["scenario"], plan["role"]))
             return plan
 
-        def read(run):
+        def read(run: dict[str, Any]) -> dict[str, Any]:
             self.assertFalse(held)
             return dict(
                 run,
@@ -1297,15 +1370,18 @@ class SpeedPassTests(unittest.TestCase):
                 command=[],
             )
 
-        compared = []
+        compared: list[Path] = []
 
-        def compare(reference, candidate, *args):
+        def compare(reference: Path, candidate: Path, *args: object) -> list[Any]:
             self.assertFalse(held)
             self.assertEqual(reference.parts[:-4], candidate.parts[:-4])
             compared.append(reference)
             return []
 
-        scenarios = [{"name": f"play-{i}", "ticks": 1} for i in range(6)]
+        scenarios = cast(
+            list[simulate.Scenario],
+            [{"name": f"play-{i}", "ticks": 1} for i in range(6)],
+        )
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(speed, "Hold", Hold),
@@ -1317,7 +1393,7 @@ class SpeedPassTests(unittest.TestCase):
             patch.object(simulate, "compare_saves", side_effect=compare),
         ):
             out = Path(directory)
-            roles = {role: role for role in speed.ROLES}
+            roles = cast(dict[str, Path], {role: role for role in speed.ROLES})
             speed.collect_games(out, scenarios, roles, roles, {})
             self.assertEqual(
                 events,
@@ -1352,8 +1428,12 @@ class SpeedPassTests(unittest.TestCase):
         from simulation import speed
 
         def result(
-            passed, problems=(), differences=(), measured=True, known_failures=()
-        ):
+            passed: bool,
+            problems: Sequence[str] = (),
+            differences: Sequence[dict[str, Any]] = (),
+            measured: bool = True,
+            known_failures: Sequence[dict[str, Any]] = (),
+        ) -> dict[str, Any]:
             return {
                 "passed": passed,
                 "problems": list(problems),
@@ -1450,17 +1530,25 @@ class SpeedPassTests(unittest.TestCase):
     def test_preparation_identities_match_each_profiled_role(self) -> None:
         from simulation import speed
 
-        calls = []
+        calls: list[tuple[str, bool]] = []
 
-        def prepare(scenario, command, binary, build, folder, env, reference):
+        def prepare(
+            scenario: simulate.Scenario,
+            command: list[str],
+            binary: str,
+            build: str,
+            folder: Path,
+            env: dict[str, str],
+            reference: bool,
+        ) -> tuple[list[str], dict[str, Any]]:
             calls.append((binary, reference))
-            identity = {"compatible": binary, "executable": binary}
+            identity: dict[str, Any] = {"compatible": binary, "executable": binary}
             if not reference:
                 identity["entries"] = ["candidate"]
             return command, {"identity": identity}
 
         scenario = {"name": "play-a", "kind": "play"}
-        roles = {role: role for role in speed.ROLES}
+        roles = cast(dict[str, Path], {role: role for role in speed.ROLES})
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(speed, "speed_scenarios", return_value=[scenario]),
@@ -1474,7 +1562,9 @@ class SpeedPassTests(unittest.TestCase):
         self.assertNotIn("entries", identities["play-a"]["reference"])
         self.assertEqual(identities["play-a"]["candidate"]["entries"], ["candidate"])
 
-    def test_hold_scans_before_start_returns_and_resumes_on_observer_error(self) -> None:
+    def test_hold_scans_before_start_returns_and_resumes_on_observer_error(
+        self,
+    ) -> None:
         from simulation import speed
 
         with (
@@ -1483,7 +1573,7 @@ class SpeedPassTests(unittest.TestCase):
         ):
             hold = speed.Hold(Path(directory) / "observations.jsonl")
 
-            def scan(*args):
+            def scan(*args: object) -> dict[str, Any]:
                 if not hold.stopped:
                     hold.stopped.add(123)
                     return {}
@@ -1518,7 +1608,7 @@ class SpeedPassTests(unittest.TestCase):
                 json.dumps({"load": [0.5, 0, 0], "unheld": [], "overlap": {}}) + "\n"
             )
 
-            def write(group, ratios, passed=True):
+            def write(group: int, ratios: list[float], passed: bool = True) -> None:
                 results = [
                     {
                         "scenario": name,
@@ -1649,7 +1739,7 @@ class DrawingWorkloadTests(unittest.TestCase):
         report = ir.budget(
             drawing.NAME,
             dict(Ir=110, identity=anchor["identity"]),
-            dict(anchor=anchor, integrated=dict(Ir=100)),
+            cast(ir.SpeedAnchor, dict(anchor=anchor, integrated=dict(Ir=100))),
         )
         self.assertEqual(set(report), {"projected_ratio"})
         self.assertAlmostEqual(report["projected_ratio"], 1.32)
@@ -1657,7 +1747,7 @@ class DrawingWorkloadTests(unittest.TestCase):
     def test_profiled_launch_counts_drawing_in_both_builds(self) -> None:
         from simulation import drawing
 
-        (scenario,) = drawing.scenarios(False)
+        (scenario,) = cast(list[simulate.Scenario], drawing.scenarios(False))
         self.assertIn(scenario, simulate.scenario_list(False))
         self.assertIn(scenario["name"], ir.PROFILED)
         for reference in (True, False):
@@ -1695,7 +1785,7 @@ class DrawingWorkloadTests(unittest.TestCase):
                 drawing.prepare(scenario, {}, builds, root, 1, {}, {})
             header = bytes(18) + (3).to_bytes(4, "little") + (2).to_bytes(4, "little")
             for candidate, equal in ((b"same", True), (b"diff", False)):
-                result = dict(differences=[])
+                result: dict[str, Any] = dict(differences=[])
                 for role, body in (("reference", b"same"), ("candidate", candidate)):
                     image = root / role / "screenshot/drawing.bmp"
                     image.write_bytes(header + body)
@@ -1736,8 +1826,10 @@ class PlatformSubsetTests(unittest.TestCase):
                     ),
                 ),
             ):
-                case = {"kind": "generate", "ticks": 56388}
-                run = {"snapshots": [Path("checkpoint.sav")]}
+                case = cast(
+                    platform_subset.Scenario, {"kind": "generate", "ticks": 56388}
+                )
+                run = cast(simulate.Run, {"snapshots": [Path("checkpoint.sav")]})
                 if jobs:
                     with self.assertRaisesRegex(ValueError, "unexpectedly has"):
                         platform_subset.check_no_join(case, run)
@@ -1756,7 +1848,9 @@ class PlatformSubsetTests(unittest.TestCase):
                     continue
                 source = Path(a["save"])
                 self.assertEqual(source.read_bytes(), Path(b["save"]).read_bytes())
-                platform_subset.check_no_join(a, {"snapshots": [source]})
+                platform_subset.check_no_join(
+                    a, cast(simulate.Run, {"snapshots": [source]})
+                )
                 jobs = simulate.rows(source, "LGRJ")
                 target = root / "due.sav"
                 simulate.patch(
@@ -1765,7 +1859,9 @@ class PlatformSubsetTests(unittest.TestCase):
                     {"LGRJ": {next(iter(jobs)): {"join_date": a["platform_end_date"]}}},
                 )
                 with self.assertRaisesRegex(ValueError, "join due"):
-                    platform_subset.check_no_join(a, {"snapshots": [target]})
+                    platform_subset.check_no_join(
+                        a, cast(simulate.Run, {"snapshots": [target]})
+                    )
 
     def test_stored_capture_requires_every_record_and_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1917,7 +2013,11 @@ class CommunityInputTests(unittest.TestCase):
                 patch.object(community_ai, "packages", return_value=[package]),
             ):
                 newgrf_sets.install(
-                    dict(newgrf_sets.scenarios(False)[0], scenario_ai=str(scripts)), run
+                    cast(
+                        newgrf_sets.Scenario,
+                        dict(newgrf_sets.scenarios(False)[0], scenario_ai=str(scripts)),
+                    ),
+                    run,
                 )
                 community_ai.install({"community_ai": "temperate"}, run)
             installed = list(run.rglob("*.tar"))
@@ -1944,7 +2044,9 @@ class CommunityInputTests(unittest.TestCase):
         elements = dict(chunk["elements"])
         body = elements[0]
         reader = simulate.Reader(body)
-        simulate.read_object(reader, chunk["header"], "", {})
+        simulate.read_object(
+            reader, cast(list[simulate.Field], chunk["header"]), "", {}
+        )
         start = reader.pos
         reader.take(reader.gamma())
         for replaced in (False, True):
@@ -1952,8 +2054,10 @@ class CommunityInputTests(unittest.TestCase):
             elements[0] = (
                 body[:start] + b"\x07%_dummy" + body[reader.pos :] if replaced else body
             )
-            chunks["AIPL"] = dict(chunk, elements=list(elements.items()))
-            run = community_ai.Run(
+            chunks["AIPL"] = cast(
+                simulate.Chunk, dict(chunk, elements=list(elements.items()))
+            )
+            run = cast(Any, community_ai.Run)(
                 dir=Path("unused"), exit=0, snapshots=[source], log=[]
             )
             with (
@@ -1984,10 +2088,26 @@ class CommunityNewGRFSaveTests(unittest.TestCase):
                     patch.object(community_ai, "INPUTS", root),
                 ):
                     if change == "none":
-                        community_newgrf.prepare(scenario, {}, {}, root, 1, {}, {})
+                        community_newgrf.prepare(
+                            scenario,
+                            {},
+                            {},
+                            root,
+                            1,
+                            {},
+                            cast(community_newgrf.Result, {}),
+                        )
                     else:
                         with self.assertRaisesRegex(RuntimeError, "packages differ"):
-                            community_newgrf.prepare(scenario, {}, {}, root, 1, {}, {})
+                            community_newgrf.prepare(
+                                scenario,
+                                {},
+                                {},
+                                root,
+                                1,
+                                {},
+                                cast(community_newgrf.Result, {}),
+                            )
 
     def test_fixture_records_its_saved_newgrf_identities(self) -> None:
         provenance = json.loads(
