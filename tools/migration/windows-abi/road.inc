@@ -20,7 +20,7 @@ struct RoadAbiProbe {
 	OpenTTDRoadState *state = openttd_rust_road_new();
 	GroundStateOwner ground, tail_ground;
 	uint16_t &speed = road_abi_vehicle.cur_speed;
-	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> stop{openttd_rust_road_stop_new(), openttd_rust_road_stop_destroy};
+	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> stop{openttd_rust_road_stop_new(nullptr, UINT32_MAX), openttd_rust_road_stop_destroy};
 	OpenTTDRoadStopEntries entries{};
 	const OpenTTDRoadLeaves *leaves = nullptr;
 	OpenTTDRoadEntry entry{.ground = ground.state, .acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};

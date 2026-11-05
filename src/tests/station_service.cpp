@@ -86,7 +86,7 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 			if (id == 0) delete Station::Get(StationID(id));
 			if (id != 2) return;
 			std::vector<uint16_t> nested;
-			GetRustSharedServices().for_each_station(&nested, [](void *context, const OpenTTDStation *, OpenTTDStationService *, uint16_t next) {
+			GetRustSharedServices().for_each_station(&nested, [](void *context, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t next) {
 				static_cast<std::vector<uint16_t> *>(context)->push_back(next);
 			});
 			CHECK(nested == std::vector<uint16_t>{2, 4, 5});
@@ -99,9 +99,9 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 			Create(growth); // Relocates the pool's slot array during the callback.
 		};
 		if (shared) {
-			GetRustSharedServices().for_each_station(&Visit, [](void *context, const OpenTTDStation *shell, OpenTTDStationService *owner, uint16_t id) {
+			GetRustSharedServices().for_each_station(&Visit, [](void *context, const OpenTTDStation *shell, OpenTTDStationRecord *owner, uint16_t id) {
 				CHECK(shell == reinterpret_cast<const OpenTTDStation *>(Station::Get(StationID(id))));
-				CHECK(owner == Station::Get(StationID(id))->rust_service.get());
+				CHECK(owner == &Station::Get(StationID(id))->Record());
 				(*static_cast<decltype(Visit) *>(context))(id);
 			});
 		} else {
@@ -191,26 +191,27 @@ TEST_CASE("Station service - scalar ABI layouts")
 {
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-station_service.inc"
+#include "abi-layout-station.inc"
 
 }
 TEST_CASE("Station service - goods state conversion reads canonical status")
 {
-	OpenTTDStationCargo cargo{};
+	OpenTTDGoodsEntry cargo{};
 	GoodsEntry goods(&cargo);
 	for (uint16_t status = 0; status <= UINT8_MAX; ++status) {
-		goods.status = GoodsEntry::States(static_cast<uint8_t>(status));
+		goods.SetStatus(GoodsEntry::States(static_cast<uint8_t>(status)));
 		uint8_t expected = 0;
-		if (goods.status.Test(GoodsEntry::State::EverAccepted))    SetBit(expected, 0);
-		if (goods.status.Test(GoodsEntry::State::LastMonth))       SetBit(expected, 1);
-		if (goods.status.Test(GoodsEntry::State::CurrentMonth))    SetBit(expected, 2);
-		if (goods.status.Test(GoodsEntry::State::AcceptedBigtick)) SetBit(expected, 3);
+		if (goods.GetStatus().Test(GoodsEntry::State::EverAccepted))    SetBit(expected, 0);
+		if (goods.GetStatus().Test(GoodsEntry::State::LastMonth))       SetBit(expected, 1);
+		if (goods.GetStatus().Test(GoodsEntry::State::CurrentMonth))    SetBit(expected, 2);
+		if (goods.GetStatus().Test(GoodsEntry::State::AcceptedBigtick)) SetBit(expected, 3);
 		CHECK(cargo.status == status);
 		CHECK(goods.ConvertState() == expected);
 	}
 }
 
 struct StationLoadingProbe {
-	OpenTTDStationService *owner;
+	OpenTTDStationRecord *owner;
 	int vehicle, payment;
 	bool frame_live = false, staged = false;
 };
@@ -218,13 +219,13 @@ static StationLoadingProbe *_station_loading_probe;
 
 TEST_CASE("Station service - direct prepare preserves native frames and same-owner reentry")
 {
-	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
 	/* An empty station does not cross back into any native service. */
 	openttd_rust_station_load(owner.get(), nullptr, nullptr, nullptr, nullptr, nullptr);
 	CHECK(openttd_rust_station_queue_size(owner.get()) == 0);
 	StationLoadingProbe probe{owner.get(), 0, 0};
 	_station_loading_probe = &probe;
-	auto *cargo = openttd_rust_station_service_cargo(owner.get(), 0);
+	auto *cargo = &owner->goods[0];
 	cargo->status = 2;
 	cargo->rating = 1;
 	/* Only the services this vehicle reaches are set; the semantic harness
@@ -255,7 +256,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 		CHECK(static_cast<void *>(payment) == &_station_loading_probe->payment);
 		CHECK(openttd_rust_station_queue_size(_station_loading_probe->owner) == 1);
 		openttd_test_station_modify_rating(_station_loading_probe->owner, 5);
-		CHECK(openttd_rust_station_service_cargo(_station_loading_probe->owner, 0)->rating == 6);
+		CHECK(_station_loading_probe->owner->goods[0].rating == 6);
 		_station_loading_probe->staged = true;
 	};
 	loading.create_payment = [](OpenTTDVehicle *) noexcept -> OpenTTDNativeCargoPayment * { return reinterpret_cast<OpenTTDNativeCargoPayment *>(&_station_loading_probe->payment); };
@@ -270,11 +271,21 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	_station_loading_probe = nullptr;
 }
 
-TEST_CASE("Station service - stable aliases, ordered queue and replacement")
+TEST_CASE("Station service - record defaults, stable fields, ordered queue and replacement")
 {
-	auto *owner = openttd_rust_station_service_new();
-	auto *fields = openttd_rust_station_service_fields(owner);
-	auto *cargo = openttd_rust_station_service_cargo(owner, 63);
+	auto *owner = openttd_rust_station_record_new(nullptr, 0x1234);
+	auto *fields = owner;
+	auto *cargo = &owner->goods[63];
+	CHECK(owner->shell == nullptr);
+	CHECK(owner->xy == 0x1234);
+	CHECK(owner->string_id == INVALID_STRING_ID);
+	CHECK(owner->owner == INVALID_OWNER.base());
+	CHECK(owner->indtype == IT_INVALID);
+	CHECK(owner->airport.rotation == INVALID_DIR);
+	CHECK(owner->airport.area.tile == INVALID_TILE.base());
+	CHECK(owner->train_station.tile == INVALID_TILE.base());
+	CHECK(owner->docking_station.tile == INVALID_TILE.base());
+	CHECK(owner->bus_stops == nullptr);
 	CHECK(fields->delete_ctr == 0);
 	CHECK(fields->time_since_load == 255);
 	CHECK(fields->time_since_unload == 255);
@@ -283,14 +294,16 @@ TEST_CASE("Station service - stable aliases, ordered queue and replacement")
 	CHECK(cargo->rating == 175);
 	CHECK(cargo->time_since_pickup == 255);
 	CHECK(cargo->last_age == 255);
+	CHECK(cargo->node == INVALID_NODE);
+	CHECK(cargo->link_graph == LinkGraphID::Invalid().base());
+	CHECK(cargo->data == nullptr);
 	cargo->rating = 1;
 	fields->delete_ctr = 7;
 	int first, second;
 	for (size_t i = 0; i < 128; ++i) openttd_rust_station_queue_push(owner, &first);
 	openttd_rust_station_queue_push(owner, &second);
 	openttd_rust_station_queue_push(owner, &first);
-	CHECK(fields == openttd_rust_station_service_fields(owner));
-	CHECK(cargo == openttd_rust_station_service_cargo(owner, 63));
+	CHECK(cargo == &owner->goods[63]);
 	CHECK(cargo->rating == 1);
 	CHECK(fields->delete_ctr == 7);
 	auto *entry = openttd_rust_station_queue_erase_node(owner, openttd_rust_station_queue_first(owner));
@@ -301,15 +314,15 @@ TEST_CASE("Station service - stable aliases, ordered queue and replacement")
 	CHECK(openttd_rust_station_queue_value(openttd_rust_station_queue_first(owner)) == &second);
 	openttd_rust_station_queue_clear(owner);
 	CHECK(openttd_rust_station_queue_size(owner) == 0);
-	openttd_rust_station_service_destroy(owner);
-	owner = openttd_rust_station_service_new();
-	CHECK(openttd_rust_station_service_cargo(owner, 63)->rating == 175);
-	CHECK(openttd_rust_station_service_fields(owner)->delete_ctr == 0);
-	openttd_rust_station_service_destroy(owner);
+	openttd_rust_station_record_delete(owner);
+	owner = openttd_rust_station_record_new(nullptr, 0);
+	CHECK(owner->goods[63].rating == 175);
+	CHECK(owner->delete_ctr == 0);
+	openttd_rust_station_record_delete(owner);
 }
 TEST_CASE("Station service - loading facade keeps list node identity")
 {
-	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
 	RustStationLoadingQueue queue(owner.get());
 	int first, second, third;
 	auto *a = reinterpret_cast<Vehicle *>(&first);
@@ -340,8 +353,8 @@ TEST_CASE("Station service - loading facade keeps list node identity")
 
 TEST_CASE("Station service - loading save staging retains partial and nested effects")
 {
-	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
-	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> nested_owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> nested_owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
 	RustStationLoadingQueue queue(owner.get()), nested(nested_owner.get());
 	int first, second;
 	auto *a = reinterpret_cast<Vehicle *>(&first);
@@ -394,8 +407,8 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	st->owner = OWNER_NONE;
 	openttd_test_station_insert(&GetRustSharedServices(), st);
 	StationID id = st->index;
-	st->goods[63].rating = 1;
-	st->goods[63].amount_fract = 255;
+	st->GetGoods(63).rating = 1;
+	st->GetGoods(63).amount_fract = 255;
 	st->delete_ctr = 7;
 	const auto old_counter = TimerGameTick::counter;
 	const auto old_mode = _game_mode;
@@ -407,17 +420,17 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	st = new Station(TileIndex(1));
 	CHECK(st->index == id);
 	CHECK(st->delete_ctr == 0);
-	CHECK(st->goods[63].rating == 175);
-	CHECK(st->goods[63].amount_fract == 0);
+	CHECK(st->GetGoods(63).rating == 175);
+	CHECK(st->GetGoods(63).amount_fract == 0);
 	CHECK(st->loading_vehicles.empty());
 	CHECK(st->time_since_load == 255);
 	auto *indexed = new (StationID(17)) Station(TileIndex(2));
 	CHECK(indexed->index == StationID(17));
-	CHECK(indexed->goods[0].time_since_pickup == 255);
+	CHECK(indexed->GetGoods(0).time_since_pickup == 255);
 	CHECK(indexed->last_vehicle_type == VEH_INVALID);
 	auto *waypoint = new (StationID(19)) Waypoint(TileIndex(3));
 	CHECK(waypoint->delete_ctr == 0);
-	indexed->goods[0].last_speed = 255;
+	indexed->GetGoods(0).last_speed = 255;
 	_station_pool.CleanPool(); // Derived cleanup early returns still drop owners.
 	openttd_rust_station_rebuild_index(&GetRustSharedServices());
 	TimerGameTick::counter = old_counter;
