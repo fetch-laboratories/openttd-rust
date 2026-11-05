@@ -21,17 +21,19 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
   - 136 shared-accessor rows. The +10 is #658's coverage re-baseline: the checker now reads `.inc` files, and ten pre-existing `session_services.inc` accessors became visible. It is not new glue.
   - 48 orphan exports (unchanged).
 - **Compiled C++ is falling again**: -1,062 after +553 across integrations 69 to 72. #636's checkpoint 2 measured a further -1,014 on base 75 and is under review.
-- **Speed: this host's first quiet pass** anchored every scenario at `27de6f8c18` (#676, integration 77). Its runtime pins are in [speed](speed.md#instruction-projections). Each scenario has one pass here, so decisions use that ratio until three exist. Every ratio is below its band; play saves are at most 1.445x against the 1.52x band start, and generation 1.160x against 1.235x. The merged-tip profile at `a2e417114b` is running and records projections when it ends.
+- **Speed: this host's first quiet pass** anchored every scenario at `27de6f8c18` (#676, integration 77). Its runtime pins are in [speed](speed.md#instruction-projections). Each scenario has one pass here, so decisions use that ratio until three exist. Every ratio is below its band; play saves are at most 1.445x against the 1.52x band start, and generation 1.160x against 1.235x. The merged-tip profile at `a2e417114b` (report `.local/simulation/20261105T185141Z-1237553`) found all 7 scenarios equal; its projections are in the table.
 
-| Scenario | Anchor ratio (pass 1 here) | Candidate Ir at `27de6f8c18` |
-| --- | ---: | ---: |
-| TGP | 1.160107x | 2,773,615,856 |
-| Opus | 1.345115x | 28,611,669,801 |
-| Grok | 1.346652x | 27,178,405,243 |
-| P1996 | 1.352194x | 4,744,876,185 |
-| P2000 | 1.444531x | 7,834,343,043 |
-| P2016 | 1.382593x | 14,200,776,421 |
-| Drawing | 1.004635x | 2,154,533,064 |
+| Scenario | Anchor ratio (pass 1 here) | Candidate Ir at `27de6f8c18` | Projection at `a2e417114b` | Change |
+| --- | ---: | ---: | ---: | ---: |
+| TGP | 1.160107x | 2,773,615,856 | 1.190880x | +2.65% |
+| Opus | 1.345115x | 28,611,669,801 | 1.350229x | +0.38% |
+| Grok | 1.346652x | 27,178,405,243 | 1.350792x | +0.31% |
+| P1996 | 1.352194x | 4,744,876,185 | 1.358055x | +0.43% |
+| P2000 | 1.444531x | 7,834,343,043 | 1.444531x | 0.00% |
+| P2016 | 1.382593x | 14,200,776,421 | 1.383195x | +0.04% |
+| Drawing | 1.004635x | 2,154,533,064 | 1.004662x | 0.00% |
+
+- TGP's candidate Ir rose 1.33%, to 2,810,402,399, which is a projection rise of 2.65%. That is under the 3% attribution trigger, and the projection stays below the 1.235x generation band. The anchor head `27de6f8c18` branched from integration 71, so the rise comes from #647 (72), #655 (75) or #679 (80). If the next profile pushes TGP over 3%, attribute it among those three first.
 
 - The old host's profile 64 at `5e414c5a64` and its three-pass record remain history only. Its run under `.local/simulation/20261102T135838Z-2198633` is kept even though housekeeping lists it.
 - Coverage: unchanged. #156 retains the command/network, authentication, script-host, NewGRF and other unreached domains; #503 still has 119 unfinished original traces. No coverage run or deep check was performed.
@@ -424,7 +426,7 @@ Excluded, with return conditions reconsidered on 2026-11-05; neither trigger is 
 
 Root runs in Claude Code (`claude-opus-5-5`, xhigh). Code is `a2e417114b` (integration 80, #685), and `CI_ON_DEMAND` is `true`. Integration 80's platform cadence (run 42087493081) is running; a failure stops integrations. The next stocktake follows integration 82.
 
-The main checkout is on `rust-migration`, profiling the merged tip with `simulate --instructions`; keep it clean until the profile ends. Root's docs commits use `.local/worktrees/root-docs-72`. After #570 integrates, profile the merged tip before deciding record placement for #634 and #635.
+The main checkout is on `rust-migration` and clean; the merged-tip profile at `a2e417114b` is recorded. Root's docs commits use `.local/worktrees/root-docs-72`. After #570 integrates, profile the merged tip before deciding record placement for #634 and #635.
 
 | Issue / PR | Head | Next action on resume | Checkout |
 | --- | --- | --- | --- |
@@ -432,7 +434,6 @@ The main checkout is on `rust-migration`, profiling the merged tip with `simulat
 | #507 / #684 larger NewGRF save | `47912af5d0` | `/root/review-684-newgrf-save` reviews and fixes. Then Full; integrating it closes #507. | its T3 worktree |
 | #574 / #628 network protocol | `3aa260df53` | `/root/update-628-after80` merges integrations 74 to 80 and adopts #657. Then one scoped review of both updates and the adoption, then Full. | new T3 worktree |
 | #501 typing batches 5 and 6 | not yet opened | `/root/typing-501-batch5` and `/root/typing-501-batch6` convert the files listed in work order item 2. Each then gets one reviewer and Full. | new T3 worktrees |
-| Merged-tip profile | `a2e417114b` | Record the six projections in "Where the fork stands" when the background profile ends. | main checkout |
 
 Preserve the following:
 - `t3-3b491ddb`, with five dirty files;
