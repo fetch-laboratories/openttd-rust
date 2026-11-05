@@ -4,7 +4,9 @@ import hashlib
 import re
 import struct
 import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import NotRequired, cast
 
 from . import core, economy
 from .console_adapter import prepared_console
@@ -26,24 +28,30 @@ VISIT_WITNESSES = {
 }
 
 
-def game_environment(scenario):
+class Scenario(economy.Scenario):
+    station_service: NotRequired[str]
+    station_commands: NotRequired[str]
+    station_definition_dir: NotRequired[str]
+
+
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     witnessed = (
         scenario.get("station_service") or scenario.get("station_commands")
     ) and scenario.get("witnesses")
     return core.WITNESS_ENVIRONMENT if witnessed else {}
 
 
-def scenarios(soak):
-    return (
+def scenarios(soak: bool) -> list[Scenario]:
+    cases: list[Scenario] = (
         [
-            dict(
-                name="stations-cargo-rating",
-                kind="save",
-                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
-                engines="cargo-rating-reload",
-                short_checkpoint=True,
-                ticks=1,
-            )
+            {
+                "name": "stations-cargo-rating",
+                "kind": "save",
+                "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                "engines": "cargo-rating-reload",
+                "short_checkpoint": True,
+                "ticks": 1,
+            }
         ]
         + [
             {
@@ -136,9 +144,18 @@ def scenarios(soak):
             )
         ]
     )
+    return cases
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "station_commands" in scenario:
         return prepare_commands(scenario, binaries, builds, out, timeout, env, result)
     if "station_service" not in scenario:
@@ -146,12 +163,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     original = read_save(Path(scenario["save"]))
     source = Path(scenario["save"]).read_bytes()
     data = bytearray(source)
-    patches = []
+    patches: list[tuple[str, int, str, int]] = []
 
-    def patch(cid, index, field, value):
+    def patch(cid: str, index: int, field: str, value: int) -> None:
         chunk = original[cid]
         body = dict(chunk["elements"])[index]
-        begin, end, kind = field_spans(body, chunk["header"])[field]
+        # Every patched chunk is a table with a header.
+        header = cast(list[core.Field], chunk["header"])
+        begin, end, kind = field_spans(body, header)[field]
         if source.count(body, *chunk["span"]) != 1:
             raise RuntimeError("ambiguous station input row")
         encoded = struct.pack(core.FILE_TYPES[kind & 15][0], value)
@@ -161,6 +180,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         data[start : start + len(encoded)] = encoded
         patches.append((cid, index, field, value))
 
+    findings = core.findings(result)
     mode = scenario["station_service"]
     stations = core.rows(original, "STNN")
     if not any(row.get(PREFIX + "loading_vehicles") for row in stations.values()):
@@ -177,7 +197,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             patch("STNN", station, field, stations[station][field] & ~1)
             # This is a short first-unload checkpoint, before natural acceptance
             # polling can restore acceptance. Preserve the already staged packet.
-            tick = decode_element(original["DATE"], original["DATE"]["elements"][0][1])[
+            date = original["DATE"]
+            tick = cast(core.Row, decode_element(date, date["elements"][0][1]))[
                 "tick_counter"
             ]
             if (tick + station) % 250 > 217:
@@ -205,8 +226,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                         "loading-context input lacks distinct station witness"
                     )
                 patch("VEHS", front, VEHICLE + "last_station_visited", alternate)
-        result["station_front"] = front
-        result["station_target"] = (station, cargo)
+        findings["station_front"] = front
+        findings["station_target"] = (station, cargo)
     if mode.startswith(("rating-", "stale-")):
         # Stop transport, retaining the real waiting packet at the first rated
         # passenger station. No expected result is changed with this input.
@@ -246,7 +267,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     edges += 1
         if not edges:
             raise RuntimeError("station input lacks real stale-link edges")
-        result["station_edges"] = (edges, old)
+        findings["station_edges"] = (edges, old)
     if mode.startswith("rating-"):
         station = next(
             index
@@ -264,11 +285,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             packet = stations[station][goods + "cargo[0]/second"][0] - 1
             patch("CAPA", packet, "count", 32768)
             patch("STNN", station, goods + "max_waiting_cargo", 32768)
-        result["station_target"] = (station, 0)
+        findings["station_target"] = (station, 0)
     prepared = Path(scenario["save"]).with_name("station-input.sav")
     prepared.write_bytes(data)
     read_save(prepared)
-    result["station_input"] = {
+    findings["station_input"] = {
         "reference_sha256": hashlib.sha256(source).hexdigest(),
         "input_sha256": hashlib.sha256(data).hexdigest(),
         "patches": patches,
@@ -277,23 +298,30 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             for index, row in stations.items()
         },
     }
-    scenario = dict(scenario, save=str(prepared))
+    scenario = {**scenario, "save": str(prepared)}
     if mode not in ("manual", "cargodist"):
         del scenario["economy"]
     commands = [c for c in scenario["console"] if "order.gradual_loading" not in c]
     commands.insert(0, "setting order.gradual_loading 1")
     if mode.startswith("rating-"):
         commands.insert(0, f"setting order.selectgoods {int(mode == 'rating-expire')}")
-    return dict(scenario, console=commands)
+    return {**scenario, "console": commands}
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if "station_commands" in scenario:
         return check_commands(scenario, run, mode, role, result)
     if "station_service" not in scenario:
         return
+    findings = core.findings(result)
     kind = scenario["station_service"]
-    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+    findings[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
         scenario,
         run,
         role,
@@ -311,7 +339,7 @@ def check(scenario, run, mode, role, result):
         "stale-release": ["stale_release"],
     }.get(kind, [])
     if counts := core.branch_witnesses(scenario, run, role, "station", required):
-        result[f"{mode}_{role}_station_branches"] = counts
+        findings[f"{mode}_{role}_station_branches"] = counts
     graph_required = {"stale-restrict": ["restrict"], "stale-release": ["release"]}.get(
         kind, []
     )
@@ -319,14 +347,14 @@ def check(scenario, run, mode, role, result):
     # Route prediction and link statistics on real station visits.
     visits = VISIT_WITNESSES.get(kind, [])
     if counts := core.branch_witnesses(scenario, run, role, "vehicle_visits", visits):
-        result[f"{mode}_{role}_visit_branches"] = counts
+        findings[f"{mode}_{role}_visit_branches"] = counts
     if not run["snapshots"]:
         return
     saved = [read_save(path) for path in run["snapshots"]]
     before = read_save(Path(scenario["save"]))
     kind = scenario["station_service"]
     if kind.startswith("stale-"):
-        count, old = result["station_edges"]
+        count, old = findings["station_edges"]
         updates = [
             value
             for row in core.rows(saved[-1], "LGRP").values()
@@ -337,7 +365,7 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(f"{mode}/{role}: no stale edge was removed")
         if kind == "stale-refresh" and not any(value > old for value in updates):
             result["problems"].append(f"{mode}/{role}: no stale edge was refreshed")
-        result[f"{mode}_{role}_station_edges"] = (count, len(updates))
+        findings[f"{mode}_{role}_station_edges"] = (count, len(updates))
         return
     if kind in ("manual", "cargodist"):
         queues = [
@@ -356,9 +384,9 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(
                 f"{mode}/{role}: no active queue/fraction witness"
             )
-        result[f"{mode}_{role}_station_queues"] = sum(bool(q) for q in queues)
+        findings[f"{mode}_{role}_station_queues"] = sum(bool(q) for q in queues)
         return
-    station, cargo = result["station_target"]
+    station, cargo = findings["station_target"]
     goods = PREFIX + f"goods[{cargo}]/"
     rows = [core.rows(chunks, "STNN")[station] for chunks in saved]
     if kind == "rating-expire":
@@ -371,9 +399,9 @@ def check(scenario, run, mode, role, result):
         ]
         if counts[1] >= counts[0]:
             result["problems"].append(f"{mode}/{role}: waiting cargo did not truncate")
-        result[f"{mode}_{role}_packet_counts"] = counts
+        findings[f"{mode}_{role}_packet_counts"] = counts
     else:
-        front = result["station_front"]
+        front = findings["station_front"]
         vehicle = core.rows(saved[-1], "VEHS")[front]
         if kind == "full-gradual":
             if vehicle[VEHICLE + "vehicle_flags"] & 1:
@@ -394,7 +422,7 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(
                     f"{mode}/{role}: vehicle station did not retain staged cargo/queue"
                 )
-            result[f"{mode}_{role}_loading_context"] = {
+            findings[f"{mode}_{role}_loading_context"] = {
                 "last_station": vehicle[VEHICLE + "last_station_visited"],
                 "queue_station": station,
                 "action_counts": actions,
@@ -1394,24 +1422,24 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     )
 
 
-def definition_grfs(folder, reordered=False):
+def definition_grfs(folder: Path, reordered: bool = False) -> None:
     """File-loaded station, rail-waypoint, road-stop and road-waypoint definitions."""
     from .newgrf_loading import grf, info
 
     folder.mkdir(parents=True, exist_ok=True)
 
-    def word(value):
+    def word(value: int) -> bytes:
         return struct.pack("<H", value)
 
-    def dword(value):
+    def dword(value: int) -> bytes:
         return struct.pack("<I", value)
 
-    def prop(feature, local, properties):
+    def prop(feature: int, local: int, properties: list[tuple[int, bytes]]) -> bytes:
         return bytes((0, feature, len(properties), 1, local)) + b"".join(
             bytes((key,)) + value for key, value in properties
         )
 
-    def group(feature, index, value):
+    def group(feature: int, index: int, value: int) -> bytes:
         result = word(0x8000 | value)
         return (
             bytes((2, feature, index, 0x81, 0x1A, 0, 0xFF, 1))
@@ -1420,7 +1448,12 @@ def definition_grfs(folder, reordered=False):
             + result
         )
 
-    def mapping(feature, local, default, specific=()):
+    def mapping(
+        feature: int,
+        local: int,
+        default: int,
+        specific: Sequence[tuple[int, int]] = (),
+    ) -> bytes:
         return (
             bytes((3, feature, 1, local, len(specific)))
             + b"".join(bytes((cargo,)) + word(index) for cargo, index in specific)
@@ -1627,40 +1660,56 @@ def airport_definition_grfs(folder: Path) -> None:
     (folder / "exhausted.grf").write_bytes(grf(exhausted, 1))
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if folder := scenario.get("station_definition_dir"):
+        from . import newgrf_loading
         from .newgrf_loading import install as install_grfs
 
-        install_grfs({"loading_fixture_dir": folder}, run_dir)
+        # newgrf_loading.install reads only the fixture folder.
+        install_grfs(
+            cast(newgrf_loading.Scenario, {"loading_fixture_dir": folder}), run_dir
+        )
 
 
-def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
+def prepare_commands(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     folder = out / scenario["name"] / "input"
     source = Path(scenario["save"])
     read_save(source)
     if scenario["station_commands"].startswith("airport-definitions"):
         airport_definition_grfs(folder / "grfs")
-        scenario = dict(scenario, station_definition_dir=str(folder / "grfs"))
+        scenario = {**scenario, "station_definition_dir": str(folder / "grfs")}
     if scenario["station_commands"].startswith("definitions"):
         definition_grfs(folder / "grfs")
-        scenario = dict(scenario, station_definition_dir=str(folder / "grfs"))
+        scenario = {**scenario, "station_definition_dir": str(folder / "grfs")}
     executables = prepared_console("stations", adapter, binaries, builds, folder, env)
     if binaries["candidate"] == binaries["reference"]:
         executables["candidate"] = executables["reference"]
-    scenario = dict(scenario, save=str(source), executables=executables)
+    scenario = {**scenario, "save": str(source), "executables": executables}
     extra = f' "{folder / "grfs"}"' if "station_definition_dir" in scenario else ""
     # Reload modes capture the command fixture's save, then inspect it after load.
     capture, inspect = RELOADS.get(scenario["station_commands"], (None, None))
     if capture:
         saves = {role: folder / role / "stations.sav" for role in executables}
-        runs = core.capture_pair(
-            lambda role: dict(
-                scenario,
-                console=[
+
+        def capture_scenario(role: str) -> Scenario:
+            return {
+                **scenario,
+                "console": [
                     f'stations_scenario {capture}{extra} "{saves[role]}"',
                     "unpause",
                 ],
-            ),
+            }
+
+        runs = core.capture_pair(
+            capture_scenario,
             executables,
             builds,
             folder,
@@ -1691,18 +1740,18 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
             definition_grfs(folder / "grfs", reordered=True)
         elif scenario["station_commands"] == "definitions-missing":
             (folder / "grfs/stations.grf").unlink()
-        return dict(
-            scenario,
-            role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-            console=[f"stations_scenario {inspect}", "unpause"],
-        )
-    return dict(
-        scenario,
-        console=[
+        return {
+            **scenario,
+            "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+            "console": [f"stations_scenario {inspect}", "unpause"],
+        }
+    return {
+        **scenario,
+        "console": [
             "stations_scenario " + scenario["station_commands"] + extra,
             "unpause",
         ],
-    )
+    }
 
 
 def check_airport_definition_state(snapshots: list[Path], log: list[str]) -> None:
@@ -1815,7 +1864,13 @@ def check_spatial602(log: list[str], reload: bool) -> None:
             raise RuntimeError("incomplete station spatial observation: " + rows[0])
 
 
-def check_commands(scenario, run, mode, role, result):
+def check_commands(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario["station_commands"].startswith("spatial602"):
         check_spatial602(run["log"], scenario["station_commands"].endswith("reload"))
         return
