@@ -68,11 +68,13 @@
 #include "rust/services_map.h"
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
+#include "rust/newgrf_text_ffi.h"
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices();
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
 const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
+static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices();
 static OpenTTDIndustryTransactionContext GetIndustryTransactionContext();
 static Industry *IndustryIfValid(uint16_t id) noexcept { return Industry::GetIfValid(IndustryID(id)); }
 
@@ -695,7 +697,7 @@ bool IsProcessingIndustry(const IndustrySpec *spec)
  */
 Money GetConstructionCost(const IndustrySpec *spec)
 {
-	return openttd_rust_industry_construction_cost(spec, _settings_game.construction.raw_industry_construction);
+	return openttd_rust_industry_construction_cost(spec, GetIndustryTransactionServices().raw_setting());
 }
 
 /**
@@ -704,7 +706,7 @@ Money GetConstructionCost(const IndustrySpec *spec)
  */
 bool UsesOriginalEconomy(const IndustrySpec *spec)
 {
-	return openttd_rust_industry_original_economy(spec, _settings_game.economy.type);
+	return openttd_rust_industry_original_economy(spec, GetIndustryRustServices().economy_type());
 }
 
 const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept
@@ -845,7 +847,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		uint16_t result = GetIndustryCallback(monthly ? CBID_INDUSTRY_MONTHLYPROD_CHANGE : CBID_INDUSTRY_PRODUCTION_CHANGE, 0, random, i, i->type, i->location.tile, reg);
 		return {result, reg[0]};
 	},
-	.custom_text = [](uint32_t grfid, uint16_t text) noexcept -> uint32_t { return MapGRFStringID(grfid, GRFStringID(text)); },
+	.text = &GetRustGrfTextServices(),
 	.news = [](void *i, uint32_t text, bool close, OpenTTDIndustryServicing servicing) noexcept { RustIndustryNews(RustIndustry(i), text, close, servicing); },
 	.production_news = [](void *i, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) noexcept { RustIndustryProductionNews(RustIndustry(i), cargo, percent, servicing); },
 	.callback_error = [](void *handle, bool invalid_cargo) noexcept {

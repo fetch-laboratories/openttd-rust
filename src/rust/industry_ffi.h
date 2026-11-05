@@ -9,6 +9,7 @@
 #ifndef RUST_INDUSTRY_FFI_H
 #define RUST_INDUSTRY_FFI_H
 struct GRFFile;
+struct OpenTTDGrfTextServices;
 #include "service_defaults.hpp"
 struct OpenTTDSubsidyServices;
 struct OpenTTDIndustryResolverServices;
@@ -130,7 +131,7 @@ typedef struct OpenTTDIndustryServices {
 	void (*harvest)(uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(harvest);
 	/* Monthly, daily, builder and command entries. */
 	OpenTTDIndustryChange (*change_callback)(void *industry, bool monthly, uint32_t random) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(change_callback);
-	uint32_t (*custom_text)(uint32_t grfid, uint16_t text) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(custom_text);
+	const OpenTTDGrfTextServices *text;
 	void (*news)(void *industry, uint32_t text, bool close, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(news);
 	void (*production_news)(void *industry, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(production_news);
 	void (*callback_error)(void *industry, bool invalid_cargo) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_error);

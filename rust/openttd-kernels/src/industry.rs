@@ -421,8 +421,8 @@ pub struct Services {
     pub tile_completed: unsafe extern "C" fn(*mut c_void, u32) -> bool,
     pub harvest: unsafe extern "C" fn(u32),
     pub change_callback: unsafe extern "C" fn(*mut c_void, bool, u32) -> Change,
-    /// `MapGRFStringID` for the industry type's GRF.
-    pub custom_text: unsafe extern "C" fn(u32, u16) -> u32,
+    /// Shared text owner services for `MapGRFStringID`.
+    pub text: *const crate::newgrf_text::Services,
     pub news: unsafe extern "C" fn(*mut c_void, u32, bool, Servicing),
     pub production_news: unsafe extern "C" fn(*mut c_void, u8, i32, Servicing),
     pub callback_error: unsafe extern "C" fn(*mut c_void, bool),
@@ -886,7 +886,13 @@ fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
             suppress = res & 128 != 0;
             if res & 256 != 0 {
                 let grfid = unsafe { (*spec_of(owner)).grf_prop.grfid };
-                str = unsafe { (s.custom_text)(grfid, result.reg as u16) };
+                str = unsafe {
+                    crate::newgrf_text::openttd_rust_grf_text_map(
+                        &*s.text,
+                        grfid,
+                        u32::from(result.reg as u16),
+                    )
+                };
             }
             res &= 15;
             match res {
@@ -2216,7 +2222,7 @@ crate::abi::layouts! {
         tile_completed,
         harvest,
         change_callback,
-        custom_text,
+        text,
         news,
         production_news,
         callback_error,
