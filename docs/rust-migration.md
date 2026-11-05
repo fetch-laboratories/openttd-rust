@@ -81,6 +81,21 @@ Cache build outputs when the key covers what determines them; never cache test r
 - The driver skips CMake configure when the cache has all requested `-D` values; Ninja still responds to CMake input changes. For changed configure-time environment such as a dependency prefix, use a fresh build directory or configure manually.
 - CI caches use compatible OS, architecture, baseline, compiler, ccache and configuration keys (#79). Windows and macOS also cache vcpkg binaries and use ccache 4.14.1 without PCH; MSVC uses `/Z7` (CMP0141). Emscripten builds without PCH and wraps emcc's clang with the container's ccache through `EM_COMPILER_WRAPPER`.
 
+## Output disk
+
+This host has a 220 GB SSD and a 1 TB HDD mounted at `/mnt/storage` (`/etc/fstab` label `storage`, `nofail`). Write-once output lives on the HDD behind symlinks. Caches, toolchains, the pinned original and its builds, and each worktree's `build-rust` stay on the SSD for build speed.
+
+| Path | Symlink target |
+| --- | --- |
+| Main checkout `.local/` `simulation`, `verification`, `coverage`, `deep`, `speed-pass`, `worktrees` | `/mnt/storage/openttd-rust/main-local/<name>` |
+| Each other worktree's `.local` | `/mnt/storage/openttd-rust/worktree-local/<worktree>-<id>/local` |
+
+- `.git/hooks/post-checkout` calls `.git/hooks/offload-local hook`, which links the `.local` of each new worktree, T3's included. Worktrees inside the main `.local` keep a real `.local`: `.local/worktrees` is already on the HDD, and the pinned original stays unchanged. The hook always exits 0, so it never fails `git worktree add`; without the HDD the new worktree keeps `.local` on the SSD. Both scripts are untracked and exist only on this host.
+- Removing a worktree removes only its link. Each time the hook links a new worktree, it deletes HDD output whose worktree has been gone for 24 hours. `offload-local sweep` lists that output; `--apply` deletes it now.
+- `offload-local migrate` moves a worktree's real `.local` onto the HDD, for example after `git worktree add --no-checkout` skipped the hook, and recreates a missing main-checkout link. It is idempotent. The scripts log to `/mnt/storage/openttd-rust/offload.log`.
+- If the HDD is unmounted, the main checkout's links dangle and runs fail instead of filling the SSD. Mount it and rerun.
+- In tool code, `.resolve()` can take a `.local` path off the checkout's tree, so compute `relative_to(ROOT)` from the unresolved path. `Path.rglob` follows a symlinked starting folder but not symlinked subfolders, which is why worktrees link `.local` whole.
+
 ## Simulation comparison
 
 `python3 tools/migration.py simulate` builds both games and runs `tools/simulate.py`. CI runs the default set after component comparisons. Add scenario dictionaries and prepare/check hooks to the component's module in `tools/simulation/`; `scenario_modules()` assembles them.
