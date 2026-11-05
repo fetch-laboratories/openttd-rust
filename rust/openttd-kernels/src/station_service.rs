@@ -1310,10 +1310,6 @@ pub struct Loading {
     pub(crate) station_dirty: extern "C" fn(*mut Station),
 }
 
-/// `Aircraft::IsNormalAircraft`.
-fn is_normal_aircraft(v: VehicleRef) -> bool {
-    v.subtype() <= crate::aircraft::AIR_AIRCRAFT
-}
 fn parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
     let mut current = Some(v);
     while let Some(part) = current {
@@ -1332,7 +1328,7 @@ fn parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
             None
         };
     }
-    if v.vehicle_type() == 3 && is_normal_aircraft(v) {
+    if v.vehicle_type() == 3 && crate::aircraft::is_normal_aircraft(v.subtype()) {
         return action(unsafe { v.next().unwrap_unchecked() });
     }
     true
@@ -1369,7 +1365,7 @@ fn reserve_consist(
         } else {
             let kind = v.vehicle_type();
             (kind != 0 || !crate::ground_vehicle::is_rear_dualheaded(v.subtype()))
-                && (kind != 3 || is_normal_aircraft(v))
+                && (kind != 3 || crate::aircraft::is_normal_aircraft(v.subtype()))
                 && (must_reserve || control.refit_cargo == (l.cargo_type)(v))
         };
         if reserve_part {
@@ -1400,7 +1396,7 @@ fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
     let observed = (l.load_engine)(v);
     let engine = observed.engine;
     let mut amount = u32::from(observed.amount);
-    let mail = v.vehicle_type() == 3 && !is_normal_aircraft(v);
+    let mail = v.vehicle_type() == 3 && !crate::aircraft::is_normal_aircraft(v.subtype());
     if mail {
         amount = amount.wrapping_add(3) / 4;
     }
