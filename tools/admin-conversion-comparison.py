@@ -13,7 +13,7 @@ REFERENCE = probe.REFERENCE
 extract = probe.body
 
 
-def main():
+def main() -> None:
     out = probe.output("admin-conversion-comparison")
     admin = (REFERENCE / "src/script/api/script_admin.cpp").read_text()
     event = (REFERENCE / "src/script/api/script_event_types.cpp").read_text()
@@ -93,7 +93,7 @@ def main():
         *probe.target_flags(),
     ]
 
-    def compile_run(command, label):
+    def compile_run(command: list[str], label: str) -> None:
         probe.compile(command, out / f"{label}.log")
 
     # One serial compiler, retaining the actual bundled VM. Its sources are unchanged.
@@ -116,7 +116,7 @@ def main():
             [*flags, "-O2", "-c", str(source), "-o", str(obj)], f"vm-{number}-compile"
         )
         objects.append(obj)
-    counts = {}
+    counts: dict[str, int] = {}
     for mode in ("O0", "O2"):
         executable = out / f"comparison-{mode}"
         sources = [

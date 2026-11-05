@@ -2,15 +2,16 @@
 """Compare concrete byte-string gaps with the pristine native original APIs."""
 
 import subprocess
+from collections.abc import Iterator
 
 import probe
 
 
-def token(value):
+def token(value: bytes) -> str:
     return value.hex() or "-"
 
 
-def corpus():
+def corpus() -> Iterator[str]:
     yield "null -"
     values = [
         b"",
@@ -103,7 +104,7 @@ def corpus():
             yield f"trim {token(value)} {token(set_)}"
 
 
-def main():
+def main() -> None:
     out = probe.output("byte-strings-comparison")
     records = list(dict.fromkeys(corpus()))
     data = ("\n".join(records) + "\n").encode()
@@ -114,7 +115,7 @@ def main():
     if "C" not in locales:
         raise RuntimeError("Native C locale is unavailable")
     fixture = probe.ROOT / "tools/migration/byte-strings-comparison.cpp"
-    outputs = {}
+    outputs: dict[tuple[str, str, str], bytes] = {}
     for signedness, flags in (
         ("native", []),
         ("unsigned-char", ["-funsigned-char"]),

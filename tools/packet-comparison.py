@@ -7,6 +7,8 @@ nonempty-short Recv_bytes is undefined upstream (#41) and excluded. No real
 transport delivery, sockets or allocator-wide equivalence.
 """
 
+from pathlib import Path
+
 import probe
 
 SOURCES = (
@@ -19,13 +21,13 @@ SOURCES = (
 )
 
 
-def main():
+def main() -> None:
     out = probe.output("packet-comparison")
     fixture = probe.ROOT / "tools/migration/packet-comparison.cpp"
-    counts = {}
+    counts: dict[str, int] = {}
     for mode in ("O0", "O2"):
 
-        def command(label, source, mode=mode):
+        def command(label: str, source: Path, mode: str = mode) -> list[probe.Argument]:
             return [
                 probe.compiler(),
                 "-std=c++20",
