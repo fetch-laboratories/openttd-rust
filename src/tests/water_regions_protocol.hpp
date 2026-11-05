@@ -17,10 +17,8 @@
 
 namespace WaterProbe {
 inline std::array<bool, 32 * 32> water;
-inline uint32_t tracks_calls, follow_calls;
 inline uint8_t WaterType(uint32_t tile) noexcept
 {
-	++tracks_calls;
 	/* The real follower also queries the tile just beyond this fixture's map. */
 	if (tile >= water.size()) return MP_VOID;
 	return water[tile] ? MP_WATER : MP_CLEAR;
@@ -47,9 +45,10 @@ template <typename Check> void Run(Check check)
 	fill(true);
 	openttd_rust_water_invalidate(owner.get(), &leaves, 0);
 	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1);
-	const auto queries = tracks_calls;
-	check(queries > 0);
-	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1 && tracks_calls == queries);
+	/* A warm region keeps its label without reading the map again until invalidated. */
+	fill(false);
+	check(openttd_rust_water_label(owner.get(), &leaves, 0) == 1);
+	fill(true);
 	OpenTTDWaterSnapshot snapshot{};
 	openttd_rust_water_snapshot(owner.get(), &leaves, 0, &snapshot);
 	check(snapshot.patches == 1 && snapshot.edges[1] == UINT16_MAX && snapshot.edges[2] == UINT16_MAX);
