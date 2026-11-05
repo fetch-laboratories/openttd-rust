@@ -58,23 +58,21 @@ struct OpenTTDCargoStorageServices {
 	uint32_t (*random_draw)() noexcept OPENTTD_SERVICE_DEFAULT(random_draw);
 	void *(*packet_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
 };
+struct OpenTTDVehicle;
+/** A shell's cargo list and cargo type; capacity and links are read from its record. */
 struct OpenTTDCargoCapacityVehicle {
 	OpenTTDCargoList *list;
-	uint16_t capacity;
-	uint8_t cargo, train, articulated;
+	uint8_t cargo;
 };
 struct OpenTTDCargoCapacityServices {
 	void (*read)(void *, OpenTTDCargoCapacityVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(read);
-	void *(*next_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_part);
-	void *(*last_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last_engine_part);
-	void *(*other_multiheaded_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(other_multiheaded_part);
 	const OpenTTDCargoStorageServices *cargo;
 };
 const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept;
 /* capacity mode 0 spreads/shrinks, mode 1 transfers. Return 1 requires the native
  * ConsistChanged callback after Rust returns (no borrowed part/list survives). */
 extern "C" {
-uint8_t openttd_rust_cargo_capacity(const OpenTTDCargoCapacityServices *, void *, void *, uint8_t, uint8_t);
+uint8_t openttd_rust_cargo_capacity(const OpenTTDCargoCapacityServices *, OpenTTDVehicle *, OpenTTDVehicle *, uint8_t, uint8_t);
 void openttd_rust_cargo_invalidate(const OpenTTDCargoStorageServices *, uint16_t, uint8_t);
 OpenTTDCargoPacket *openttd_rust_cargo_packet_new(const OpenTTDCargoPacketFields *);
 void openttd_rust_cargo_packet_destroy(OpenTTDCargoPacket *);

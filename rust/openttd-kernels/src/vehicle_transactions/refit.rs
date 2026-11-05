@@ -265,7 +265,7 @@ unsafe fn refit_chain(
                 },
             );
         }
-        v = unsafe { (c.transactions.first)(v) };
+        v = crate::fleet::transactions::first(c.transactions, v);
     }
     (s.invalidate_chain)(
         unsafe { super::vehicle_ref(v, s.common.vehicles) }
@@ -274,7 +274,7 @@ unsafe fn refit_chain(
     );
     let mut actual_subtype = subtype;
     while !v.is_null() {
-        if !unsafe { (c.transactions.articulated)(v) } {
+        if !crate::fleet::transactions::articulated(c.transactions, v) {
             actual_subtype = subtype;
         }
         if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
@@ -492,7 +492,7 @@ pub(crate) unsafe fn refit(
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
     }
-    let front = unsafe { (c.transactions.first)(v) };
+    let front = crate::fleet::transactions::first(c.transactions, v);
     unsafe {
         b.commands
             .ownership(cost, crate::fleet::record(b.groups, front).owner(), 0);

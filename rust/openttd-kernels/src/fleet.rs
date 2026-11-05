@@ -21,7 +21,7 @@
 use crate::livery::{Livery, PRIMARY, SECONDARY};
 use crate::raw_field::{read_field, write_field};
 use crate::vehicle::{OpenTTDVehicle, VehicleRef};
-use crate::vehicle_base::{is_front_engine, is_ground_vehicle};
+use crate::vehicle_base::is_ground_vehicle;
 use std::collections::{BTreeMap, BTreeSet};
 const NONE: u32 = u32::MAX;
 /// `VehicleID::Invalid()` (`vehicle_type.h`), the list-selection sentinel.
@@ -333,10 +333,6 @@ pub(crate) fn next_part(v: VehicleRef) -> *mut () {
     v.next()
         .map_or(std::ptr::null_mut(), |next| next.shell().cast())
 }
-/// `v->IsFrontEngine()`.
-pub(crate) fn front(v: VehicleRef) -> bool {
-    is_front_engine(is_ground_vehicle(v.vehicle_type()), v.subtype())
-}
 
 // Raw field access permits native aliases; every access ends before a callback.
 unsafe fn group(w: &GroupServices, id: u16) -> *mut GroupFields {
@@ -615,7 +611,7 @@ unsafe fn propagate_livery(w: &GroupServices, id: u16, reset: bool) {
             let v = record.shell().cast();
             from = unsafe { (w.vehicle_id)(v) } + 1;
             if unsafe { (w.vehicle_group)(v) } == id
-                && (!is_ground_vehicle(record.vehicle_type()) || front(record))
+                && (!is_ground_vehicle(record.vehicle_type()) || record.is_front_engine())
             {
                 let mut part = Some(record);
                 while let Some(r) = part {
@@ -1516,7 +1512,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_update_train_group(
     let w = unsafe { &*services };
     unsafe {
         {
-            let id = if front(record(w, v)) {
+            let id = if record(w, v).is_front_engine() {
                 (w.vehicle_group)(v)
             } else {
                 DEFAULT_GROUP

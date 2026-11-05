@@ -133,14 +133,8 @@ impl Ctx {
             .map_or(ptr::null_mut(), |v| v.0.as_ptr())
     }
     /// `GroundVehicle::GetLastEnginePart`.
-    fn last_engine_part(self, mut v: R) -> R {
-        loop {
-            let next = self.next(v);
-            if next.is_null() || !self.is_articulated(next) {
-                return v;
-            }
-            v = next;
-        }
+    fn last_engine_part(self, v: R) -> R {
+        Self::vref(v).last_engine_part().0.as_ptr()
     }
     /// A non-null live record.
     fn vref(v: R) -> VehicleRef {
@@ -867,15 +861,15 @@ pub(crate) unsafe fn move_vehicle(
         unsafe {
             crate::cargo_storage::openttd_rust_cargo_capacity(
                 s.cargo_capacity,
-                Ctx::sh(src_head).cast(),
-                ptr::null_mut(),
+                ptr::NonNull::new(src_head).map(VehicleRef),
+                None,
                 0,
                 0,
             );
             crate::cargo_storage::openttd_rust_cargo_capacity(
                 s.cargo_capacity,
-                Ctx::sh(dst_head).cast(),
-                ptr::null_mut(),
+                ptr::NonNull::new(dst_head).map(VehicleRef),
+                None,
                 0,
                 0,
             );

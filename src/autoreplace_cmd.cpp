@@ -48,19 +48,12 @@ extern void ChangeVehicleViewWindow(VehicleID from_index, VehicleID to_index);
 static void CargoCapacityRead(void *shell, OpenTTDCargoCapacityVehicle *out) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
-	*out = {RustVehicleCargoOwner(v), v->Record().cargo_cap, v->cargo_type, static_cast<uint8_t>(v->GetType() == VEH_TRAIN), static_cast<uint8_t>(v->IsArticulatedPart())};
-}
-static void *CargoCapacityOtherMultiheadedPart(void *shell) noexcept
-{
-	return Train::From(static_cast<Vehicle *>(shell))->GetOtherMultiheadedPart();
+	*out = {RustVehicleCargoOwner(v), v->cargo_type};
 }
 const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
 {
 	static const OpenTTDCargoCapacityServices services{
 		.read = CargoCapacityRead,
-		.next_part = RustOpaqueVehicleRead<void *, RustVehicleNext>,
-		.last_engine_part = RustOpaqueVehicleRead<void *, RustVehicleLastEnginePart>,
-		.other_multiheaded_part = CargoCapacityOtherMultiheadedPart,
 		.cargo = CargoStorageServices(),
 	};
 	return services;
@@ -85,7 +78,7 @@ const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
 static void TransferCargo(Vehicle *old_veh, Vehicle *new_head, bool part_of_chain)
 {
 	const auto &services = GetRustCargoCapacityServices();
-	if (openttd_rust_cargo_capacity(&services, old_veh, new_head, 1, part_of_chain) != 0) Train::From(new_head)->ConsistChanged(CCF_LOADUNLOAD);
+	if (openttd_rust_cargo_capacity(&services, RustVehicle(old_veh), RustVehicle(new_head), 1, part_of_chain) != 0) Train::From(new_head)->ConsistChanged(CCF_LOADUNLOAD);
 }
 
 /**

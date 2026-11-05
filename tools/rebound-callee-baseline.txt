@@ -356,8 +356,6 @@ rebound | RustVehicleDisplaySpeed | src/rust/ground_vehicle_services.cpp | displ
 rebound | RustVehicleDisplaySpeed | src/vehicle.cpp | display_speed
 rebound | RustVehicleExpense | src/economy.cpp | expense
 rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
-rebound | RustVehicleFirstOpaque | src/order_cmd.cpp | first_vehicle
-rebound | RustVehicleFirstOpaque | src/rust/fleet_transaction_services.hpp | first
 rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object
 rebound | RustVehicleGetEngine | src/rust/vehicle_refit_services.hpp | vehicle_engine
 rebound | RustVehicleGetEngine | src/rust/vehicle_services.cpp | engine

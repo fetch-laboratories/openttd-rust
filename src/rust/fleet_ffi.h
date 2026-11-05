@@ -99,11 +99,10 @@ struct OpenTTDFleetTransactionServices {
 	int64_t (*money)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(money);
 	const OpenTTDCommandServices *commands;
 	bool (*rear)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(rear);
-	bool (*articulated)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(articulated);
 	bool (*crashed)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(crashed);
 	bool (*stopped)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped);
 	bool (*chain_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(chain_depot);
-	void * (*first)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(first);
+	const OpenTTDVehicleServices *vehicles;
 	void * (*next_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(next_unit);
 	void * (*prev_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(prev_unit);
 	uint16_t (*length)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(length);
@@ -160,7 +159,6 @@ struct OpenTTDFleetPendingServices {
 };
 const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDFleetTransactionServices &FleetTransactionServices();
-/** Cargo capacity traversal service (cargo_storage.rs), shared as the fleet next-part service. */
 extern "C" {
 void *openttd_rust_fleet_group_create();
 void openttd_rust_fleet_group_destroy(void *);

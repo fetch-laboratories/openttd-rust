@@ -127,7 +127,7 @@ unsafe fn clone(
         return invalid;
     }
     if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
-        && (!crate::fleet::front(crate::fleet::record(b.groups, v))
+        && (!crate::fleet::record(b.groups, v).is_front_engine()
             || (r.train_handle)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr())
                 .get_crash_anim_pos()
                 >= 4400)
@@ -222,7 +222,7 @@ unsafe fn clone(
                     }
                 }
                 if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::TRAIN.0
-                    && !crate::fleet::front(crate::fleet::record(b.groups, v))
+                    && !crate::fleet::record(b.groups, v).is_front_engine()
                 {
                     let moved = unsafe {
                         super::rail::nested_move(

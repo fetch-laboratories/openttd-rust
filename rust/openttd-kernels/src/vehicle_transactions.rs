@@ -198,7 +198,7 @@ unsafe fn vehicle_set(
             v = (handle)
                 .next()
                 .map_or(std::ptr::null_mut(), |v| v.shell().cast());
-            if v.is_null() || !unsafe { (s.transactions.articulated)(v) } {
+            if v.is_null() || !crate::fleet::transactions::articulated(s.transactions, v) {
                 break;
             }
         }
@@ -245,10 +245,14 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
             return;
         }
         if c.kind == VehicleType::TRAIN.0 {
-            if unsafe { (c.s.transactions.articulated)(v) || (c.s.transactions.rear)(v) } {
+            if unsafe {
+                crate::fleet::transactions::articulated(c.s.transactions, v)
+                    || (c.s.transactions.rear)(v)
+            } {
                 return;
             }
-            if c.wagons && (c.s.free_wagon)(unsafe { (c.s.transactions.first)(v) }) {
+            if c.wagons && (c.s.free_wagon)(crate::fleet::transactions::first(c.s.transactions, v))
+            {
                 if c.individual || (c.s.free_wagon)(v) {
                     (c.emit)(v, true);
                 }
@@ -487,7 +491,7 @@ pub(crate) unsafe fn sell(
     if v.is_null() {
         return (b.cost.error)(cost, ERROR);
     }
-    let front = unsafe { (s.transactions.first)(v) };
+    let front = crate::fleet::transactions::first(s.transactions, v);
     unsafe {
         b.commands
             .ownership(cost, crate::fleet::record(b.groups, front).owner(), 0);

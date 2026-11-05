@@ -280,12 +280,37 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn next_vehicle(self) -> Option<Self> {
         let mut next = self.next();
         while let Some(v) = next {
-            if !is_articulated_part(is_ground_vehicle(v.vehicle_type()), v.subtype()) {
+            if !v.is_articulated_part() {
                 break;
             }
             next = v.next();
         }
         next
+    }
+    /// `Vehicle::IsArticulatedPart`.
+    pub(crate) fn is_articulated_part(self) -> bool {
+        is_articulated_part(is_ground_vehicle(self.vehicle_type()), self.subtype())
+    }
+    /// `Vehicle::IsFrontEngine`.
+    pub(crate) fn is_front_engine(self) -> bool {
+        is_front_engine(is_ground_vehicle(self.vehicle_type()), self.subtype())
+    }
+    /// `Vehicle::GetLastEnginePart`.
+    pub(crate) fn last_engine_part(self) -> Self {
+        let mut v = self;
+        while let Some(next) = v.next() {
+            if !next.is_articulated_part() {
+                break;
+            }
+            v = next;
+        }
+        v
+    }
+    /// `Train::other_multiheaded_part`; the record is a live train.
+    pub(crate) fn other_multiheaded_part(self) -> Option<Self> {
+        let train = crate::raw_field::read_field!(self.0.as_ptr(), train);
+        std::ptr::NonNull::new(crate::raw_field::read_field!(train, other_multiheaded_part))
+            .map(Self)
     }
     pub(crate) fn ground(self) -> *mut crate::ground_vehicle::GroundState {
         crate::raw_field::read_field!(self.0.as_ptr(), ground)

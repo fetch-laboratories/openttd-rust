@@ -985,7 +985,8 @@ fn entered_depot_this_tick(v: VehicleRef, s: &Services) {
 pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.check(|| {
         // SAFETY: a live serialized shell; First() does not retain a borrow.
-        (unsafe { (s.refit.common.transactions.first)(v.shell().cast()) }) == v.shell().cast()
+        (crate::fleet::transactions::first(s.refit.common.transactions, v.shell().cast()))
+            == v.shell().cast()
     });
     witness::hit(witness::VISITS_DEPOT);
     let vs = s.vehicles();
