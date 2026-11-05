@@ -68,13 +68,6 @@ fn enforce(condition: bool, error: u32) -> bool {
     condition
 }
 
-fn enforce_company(s: &Services) -> bool {
-    enforce(
-        company_mode_valid(s),
-        script_host::ERR_PRECONDITION_INVALID_COMPANY,
-    )
-}
-
 fn enforce_deity_or_company(s: &Services) -> bool {
     enforce(
         deity_or_company_mode_valid(s),
@@ -514,29 +507,8 @@ pub extern "C" fn openttd_rust_script_tile_build_cost(build_type: u32) -> i64 {
     }
 }
 
-/// `ScriptTile::RaiseTile` and `LowerTile` preconditions.
-fn terraform(s: &Services, tile: u32) -> bool {
-    enforce_company(s) && enforce(tile < s.command.shared.map_size(), ERR_PRECONDITION_FAILED)
-}
-
-/// `ScriptTile::LevelTiles` preconditions.
-fn level(s: &Services, start: u32, end: u32) -> bool {
-    enforce_company(s)
-        && enforce(start < s.command.shared.map_size(), ERR_PRECONDITION_FAILED)
-        && enforce(end < s.command.shared.map_size(), ERR_PRECONDITION_FAILED)
-}
-
-/// `ScriptTile::DemolishTile` preconditions.
-fn demolish(s: &Services, tile: u32) -> bool {
-    enforce_deity_or_company(s) && enforce(valid(&world(s), tile), ERR_PRECONDITION_FAILED)
-}
-
-/// `ScriptTile::PlantTree` preconditions.
-fn plant_tree(s: &Services, tile: u32) -> bool {
-    enforce_company(s) && enforce(valid(&world(s), tile), ERR_PRECONDITION_FAILED)
-}
-
-/// `ScriptTile::PlantTreeRectangle` preconditions; the end tile on success, else `INVALID_TILE`.
+/// `ScriptTile::PlantTreeRectangle` preconditions after the native company-mode
+/// check; the end tile on success, else `INVALID_TILE`.
 #[unsafe(no_mangle)]
 #[allow(clippy::cast_possible_truncation)]
 pub extern "C" fn openttd_rust_script_tile_plant_tree_rectangle(
@@ -546,7 +518,7 @@ pub extern "C" fn openttd_rust_script_tile_plant_tree_rectangle(
     height: i64,
 ) -> u32 {
     let refused = crate::tile_type::INVALID_TILE;
-    if !plant_tree(s, tile)
+    if !enforce(valid(&world(s), tile), ERR_PRECONDITION_FAILED)
         || !enforce((1..=20).contains(&width), ERR_PRECONDITION_FAILED)
         || !enforce((1..=20).contains(&height), ERR_PRECONDITION_FAILED)
     {
@@ -684,28 +656,4 @@ pub extern "C" fn openttd_rust_script_tile_has_transport_type(
     transport_type: u32,
 ) -> u8 {
     u8::from(has_transport_type(s, tile, transport_type))
-}
-
-/// `terraform` as a C byte.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_terraform(s: &Services, tile: u32) -> u8 {
-    u8::from(terraform(s, tile))
-}
-
-/// `level` as a C byte.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_level(s: &Services, start: u32, end: u32) -> u8 {
-    u8::from(level(s, start, end))
-}
-
-/// `demolish` as a C byte.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_demolish(s: &Services, tile: u32) -> u8 {
-    u8::from(demolish(s, tile))
-}
-
-/// `plant_tree` as a C byte.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_script_tile_plant_tree(s: &Services, tile: u32) -> u8 {
-    u8::from(plant_tree(s, tile))
 }

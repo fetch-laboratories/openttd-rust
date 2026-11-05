@@ -9,6 +9,7 @@
 
 #include "../../stdafx.h"
 #include "script_tile.hpp"
+#include "script_map.hpp"
 #include "script_town.hpp"
 #include "../../station_func.h"
 #include "../../town.h"
@@ -37,41 +38,48 @@
 
 /* static */ bool ScriptTile::RaiseTile(TileIndex tile, Slope slope)
 {
-	if (!openttd_rust_script_tile_terraform(&GetRustScriptHostServices(), tile.base())) return false;
+	EnforceCompanyModeValid(false);
+	EnforcePrecondition(false, tile < ScriptMap::GetMapSize());
 
 	return ScriptObject::Command<CMD_TERRAFORM_LAND>::Do(tile, (::Slope)slope, true);
 }
 
 /* static */ bool ScriptTile::LowerTile(TileIndex tile, Slope slope)
 {
-	if (!openttd_rust_script_tile_terraform(&GetRustScriptHostServices(), tile.base())) return false;
+	EnforceCompanyModeValid(false);
+	EnforcePrecondition(false, tile < ScriptMap::GetMapSize());
 
 	return ScriptObject::Command<CMD_TERRAFORM_LAND>::Do(tile, (::Slope)slope, false);
 }
 
 /* static */ bool ScriptTile::LevelTiles(TileIndex start_tile, TileIndex end_tile)
 {
-	if (!openttd_rust_script_tile_level(&GetRustScriptHostServices(), start_tile.base(), end_tile.base())) return false;
+	EnforceCompanyModeValid(false);
+	EnforcePrecondition(false, start_tile < ScriptMap::GetMapSize());
+	EnforcePrecondition(false, end_tile < ScriptMap::GetMapSize());
 
 	return ScriptObject::Command<CMD_LEVEL_LAND>::Do(end_tile, start_tile, false, LM_LEVEL);
 }
 
 /* static */ bool ScriptTile::DemolishTile(TileIndex tile)
 {
-	if (!openttd_rust_script_tile_demolish(&GetRustScriptHostServices(), tile.base())) return false;
+	EnforceDeityOrCompanyModeValid(false);
+	EnforcePrecondition(false, ::IsValidTile(tile));
 
 	return ScriptObject::Command<CMD_LANDSCAPE_CLEAR>::Do(tile);
 }
 
 /* static */ bool ScriptTile::PlantTree(TileIndex tile)
 {
-	if (!openttd_rust_script_tile_plant_tree(&GetRustScriptHostServices(), tile.base())) return false;
+	EnforceCompanyModeValid(false);
+	EnforcePrecondition(false, ::IsValidTile(tile));
 
 	return ScriptObject::Command<CMD_PLANT_TREE>::Do(tile, tile, TREE_INVALID, false);
 }
 
 /* static */ bool ScriptTile::PlantTreeRectangle(TileIndex tile, SQInteger width, SQInteger height)
 {
+	EnforceCompanyModeValid(false);
 	TileIndex end_tile{openttd_rust_script_tile_plant_tree_rectangle(&GetRustScriptHostServices(), tile.base(), width, height)};
 	if (end_tile == INVALID_TILE) return false;
 

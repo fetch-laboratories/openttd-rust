@@ -48,10 +48,6 @@ int64_t OPENTTD_RUST_CALL openttd_rust_script_tile_corner_height(const OpenTTDSc
 int32_t OPENTTD_RUST_CALL openttd_rust_script_tile_owner(const OpenTTDScriptHostServices *, uint32_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_tile_has_transport_type(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_script_tile_build_cost(uint32_t);
-uint8_t OPENTTD_RUST_CALL openttd_rust_script_tile_terraform(const OpenTTDScriptHostServices *, uint32_t);
-uint8_t OPENTTD_RUST_CALL openttd_rust_script_tile_level(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
-uint8_t OPENTTD_RUST_CALL openttd_rust_script_tile_demolish(const OpenTTDScriptHostServices *, uint32_t);
-uint8_t OPENTTD_RUST_CALL openttd_rust_script_tile_plant_tree(const OpenTTDScriptHostServices *, uint32_t);
 uint32_t OPENTTD_RUST_CALL openttd_rust_script_tile_plant_tree_rectangle(const OpenTTDScriptHostServices *, uint32_t, int64_t, int64_t);
 }
 #endif /* OPENTTD_RUST_SCRIPT_TILE_FFI_H */
