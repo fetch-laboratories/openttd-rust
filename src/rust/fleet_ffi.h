@@ -129,7 +129,6 @@ struct OpenTTDFleetTransactionServices {
 	void (*viewports)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(viewports);
 	void (*view_window)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(view_window);
 	void (*news)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(news);
-	void (*transfer_cargo)(void *old, void *replacement, bool chain) noexcept OPENTTD_SERVICE_DEFAULT(transfer_cargo);
 	void (*event)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(event);
 	void (*save_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(save_rng);
 	void (*restore_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(restore_rng);
@@ -207,6 +206,5 @@ extern "C++" inline bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionS
 void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, const OpenTTDFleetCosts *, uint32_t, uint32_t);
 uint32_t openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint16_t, uint16_t, bool);
 void openttd_rust_fleet_pending_clear();
-void openttd_rust_fleet_pending_add(uint32_t, bool);
 }
 #endif /* RUST_FLEET_FFI_H */

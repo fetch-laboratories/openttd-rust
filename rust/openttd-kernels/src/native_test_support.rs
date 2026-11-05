@@ -414,6 +414,17 @@ pub unsafe extern "C" fn openttd_test_station_modify_rating(
         crate::station_service::modify_rating(st, amount);
     }
 }
+/// Exercise production unload preparation with native fixture callback frames.
+/// # Safety
+/// The live record and immutable tables meet `prepare_unload`'s entry contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_prepare(
+    front: VehicleRef,
+    world: *const crate::station_service::World,
+    loading: *const crate::station_service::Loading,
+) {
+    crate::station_service::prepare_unload(front, unsafe { &*world }, unsafe { &*loading });
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_primary_stop(
     s: *const Services,
@@ -491,6 +502,13 @@ pub unsafe extern "C" fn openttd_test_fleet_pending_drain(
     cost: *mut (),
 ) {
     unsafe { crate::fleet::pending::drain(pending, transaction, group, cost) }
+}
+/// Seed and reenter the production pending map from native fixture callbacks.
+/// # Safety
+/// Serialized test access, with no pending-map borrow spanning this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_fleet_pending_add(id: u32, leave: bool) {
+    unsafe { crate::fleet::pending::add(id, leave) };
 }
 
 // Mixed widths force padding; the recursive pointer checks the generated native type.

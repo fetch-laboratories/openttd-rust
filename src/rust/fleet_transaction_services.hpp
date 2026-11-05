@@ -59,7 +59,6 @@ static void FleetTransaction_copy_configuration(void *old, void *replacement) no
 static void FleetTransaction_viewports(void *old, void *replacement) noexcept { ChangeVehicleViewports(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
 static void FleetTransaction_view_window(void *old, void *replacement) noexcept { ChangeVehicleViewWindow(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
 static void FleetTransaction_news(void *old, void *replacement) noexcept { ChangeVehicleNews(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
-static void FleetTransaction_transfer_cargo(void *old, void *replacement, bool chain) noexcept { TransferCargo(static_cast<Vehicle *>(old), static_cast<Vehicle *>(replacement), chain); }
 static void FleetTransaction_event(void *old, void *replacement) noexcept { auto *v = static_cast<Vehicle *>(old); AI::NewEvent(v->GetOwner(), new ScriptEventVehicleAutoReplaced(v->index, static_cast<Vehicle *>(replacement)->index)); }
 static void FleetTransaction_save_rng(void *seeds) noexcept { *static_cast<SavedRandomSeeds *>(seeds) = std::bit_cast<SavedRandomSeeds>(GetRustRandomServices().save()); }
 static void FleetTransaction_restore_rng(void *seeds) noexcept { GetRustRandomServices().restore(std::bit_cast<OpenTTDRandomSeeds>(*static_cast<SavedRandomSeeds *>(seeds))); }
@@ -109,7 +108,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.viewports = FleetTransaction_viewports,
 	.view_window = FleetTransaction_view_window,
 	.news = FleetTransaction_news,
-	.transfer_cargo = FleetTransaction_transfer_cargo,
 	.event = FleetTransaction_event,
 	.save_rng = FleetTransaction_save_rng,
 	.restore_rng = FleetTransaction_restore_rng,

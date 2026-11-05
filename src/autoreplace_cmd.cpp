@@ -60,22 +60,6 @@ const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
 }
 
 
-/**
- * Transfer cargo from a single (articulated )old vehicle to the new vehicle chain
- * @param old_veh Old vehicle that will be sold
- * @param new_head Head of the completely constructed new vehicle chain
- * @param part_of_chain The vehicle is part of a train
- * @pre You can only do this if both consists are not loading or unloading.
- *      They must not carry reserved cargo, nor cargo to be unloaded or
- *      transferred.
- */
-static void TransferCargo(Vehicle *old_veh, Vehicle *new_head, bool part_of_chain)
-{
-	const auto &services = GetRustCargoCapacityServices();
-	if (openttd_rust_cargo_capacity(&services, RustVehicle(old_veh), RustVehicle(new_head), 1, part_of_chain) != 0) Train::From(new_head)->ConsistChanged(CCF_LOADUNLOAD);
-}
-
-
 #include "rust/fleet_transaction_services.hpp"
 const OpenTTDFleetTransactionServices &FleetTransactionServices() { return _fleet_transaction_services; }
 

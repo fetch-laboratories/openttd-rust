@@ -75,7 +75,6 @@ pub struct Services {
     pub(crate) viewports: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) view_window: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) news: unsafe extern "C" fn(*mut (), *mut ()),
-    pub(crate) transfer_cargo: unsafe extern "C" fn(*mut (), *mut (), bool),
     pub(crate) event: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) save_rng: unsafe extern "C" fn(*mut ()),
     pub(crate) restore_rng: unsafe extern "C" fn(*mut ()),
@@ -102,6 +101,32 @@ fn previous_unit(w: &Services, v: *mut ()) -> *mut () {
     record(w, v)
         .previous_unit()
         .map_or(ptr::null_mut(), |v| v.shell().cast())
+}
+/// `TransferCargo`, followed by the original train load/unload cache update.
+unsafe fn transfer_cargo(w: &Services, old: *mut (), new: *mut (), chain: bool) {
+    let old = record(w, old);
+    let new = record(w, new);
+    let build = (w.build_services)();
+    let changed = unsafe {
+        crate::cargo_storage::cargo_capacity(
+            build.rail.cargo_capacity,
+            Some(old),
+            Some(new),
+            1,
+            u8::from(chain),
+        )
+    };
+    if changed != 0 {
+        let refit = (w.refit_services)();
+        unsafe {
+            crate::train::openttd_rust_train_consist_changed(
+                crate::train::Handle::from_record(new.0.as_ptr()),
+                crate::train::CCF_LOADUNLOAD,
+                refit.train,
+                refit.common.base.shared,
+            );
+        }
+    }
 }
 /// `v->First()` of a live shell, as a shell.
 pub(crate) fn first(w: &Services, v: *mut ()) -> *mut () {
@@ -671,7 +696,7 @@ unsafe fn replace_free(
                     u32::from(DoCommandFlag::EXECUTE),
                     false,
                 );
-                (w.transfer_cargo)(old, new, false);
+                transfer_cargo(w, old, new, false);
             }
             *unit = new;
             unsafe { (w.event)(old, new) };
@@ -898,7 +923,7 @@ unsafe fn replace_chain(
                         continue;
                     }
                     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-                        unsafe { (w.transfer_cargo)(old, new_head, true) };
+                        unsafe { transfer_cargo(w, old, new_head, true) };
                     }
                     unsafe {
                         direct_sell(
@@ -920,7 +945,7 @@ unsafe fn replace_chain(
                     // SAFETY: canonical capacity services and live consist; the owner
                     // completes each native shell read before mutating cargo storage.
                     unsafe {
-                        crate::cargo_storage::openttd_rust_cargo_capacity(
+                        crate::cargo_storage::cargo_capacity(
                             (w.build_services)().rail.cargo_capacity,
                             Some(crate::fleet::record(gw, new_head)),
                             None,
@@ -988,7 +1013,7 @@ unsafe fn replace_chain(
             }
             if unsafe { (w.success)(cost) } {
                 if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-                    unsafe { (w.transfer_cargo)(old_head, new_head, true) };
+                    unsafe { transfer_cargo(w, old_head, new_head, true) };
                     *chain = new_head;
                     unsafe { (w.event)(old_head, new_head) };
                 }
@@ -1276,7 +1301,6 @@ crate::abi::layouts! {
         viewports,
         view_window,
         news,
-        transfer_cargo,
         event,
         save_rng,
         restore_rng,

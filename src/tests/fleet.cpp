@@ -25,6 +25,7 @@
 
 extern "C" uint8_t openttd_test_command_stack_probe(const OpenTTDCommandCostServices *);
 extern "C" void openttd_test_fleet_pending_drain(const OpenTTDFleetPendingServices *, const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, void *);
+extern "C" void openttd_test_fleet_pending_add(uint32_t, bool);
 TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 {
 	ABI_LAYOUT_CHECK;
@@ -132,8 +133,8 @@ TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
 	pending.command = [](void *, uint32_t id) noexcept {
 		_fleet_drain_trace.emplace_back(id, _fleet_drain_company);
 		/* Later keys are visited this tick; earlier and current keys are not revisited. */
-		if (id == 5) { openttd_rust_fleet_pending_add(9, true); openttd_rust_fleet_pending_add(2, true); openttd_rust_fleet_pending_add(5, false); }
-		if (id == 9) openttd_rust_fleet_pending_add(0xFFFFF, false);
+		if (id == 5) { openttd_test_fleet_pending_add(9, true); openttd_test_fleet_pending_add(2, true); openttd_test_fleet_pending_add(5, false); }
+		if (id == 9) openttd_test_fleet_pending_add(0xFFFFF, false);
 	};
 	/* Reference: the original std::map loop with the same callback insertions. */
 	std::map<uint32_t, bool> reference{{5, true}, {3, false}, {7, true}};
@@ -144,9 +145,9 @@ TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
 		if (it.first == 9) reference[0xFFFFF] = false;
 	}
 	openttd_rust_fleet_pending_clear();
-	openttd_rust_fleet_pending_add(5, true);
-	openttd_rust_fleet_pending_add(3, false);
-	openttd_rust_fleet_pending_add(7, true);
+	openttd_test_fleet_pending_add(5, true);
+	openttd_test_fleet_pending_add(3, false);
+	openttd_test_fleet_pending_add(7, true);
 	_fleet_drain_company = 11;
 	_fleet_drain_trace.clear();
 	CommandCost cost;

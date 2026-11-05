@@ -222,6 +222,8 @@ impl Handle {
 pub(crate) const FLIPPED: u8 = 4;
 /// `CCF_ARRANGE`: `ConsistChangeFlag::Length` and `ConsistChangeFlag::Capacity`.
 pub(crate) const CCF_ARRANGE: u8 = 3;
+/// `CCF_LOADUNLOAD`: no length or capacity property changes.
+pub(crate) const CCF_LOADUNLOAD: u8 = 0;
 /// `CCF_TRACK`: no length or capacity changes.
 pub(crate) const CCF_TRACK: u8 = 0;
 use crate::tile_type::INVALID_TILE;

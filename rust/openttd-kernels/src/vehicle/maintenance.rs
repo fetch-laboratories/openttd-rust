@@ -5,8 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Base-vehicle maintenance policy over shared records and unmoved native fields.
-//! No world borrow survives callbacks, effects or news.
+//! Base-vehicle maintenance policy. Native shells remain canonical; observations
+//! are operation-sized value copies; native services perform scalar stores. No world borrow survives callbacks, effects or news.
 #![allow(
     unsafe_code,
     clippy::struct_excessive_bools,
@@ -28,6 +28,8 @@ pub struct Renewal {
     pub max_age: CalendarDate,
     pub months: i16,
     pub enabled: bool,
+    pub kind: VehicleType,
+    pub subtype: u8,
 }
 #[repr(C)]
 pub struct Reset {
@@ -69,6 +71,9 @@ pub struct CheckBreakdown {
 }
 #[repr(C)]
 pub struct BreakdownGuard {
+    pub speed: u16,
+    pub counter: u8,
+    pub status: u8,
     pub breakdowns: u8,
     pub menu: bool,
 }
@@ -76,7 +81,34 @@ pub struct BreakdownGuard {
 pub struct BreakdownTrigger {
     pub reliability: u16,
     pub chance: u8,
+    pub kind: VehicleType,
     pub breakdowns: u8,
+}
+#[repr(C)]
+pub struct BreakdownProbe {
+    pub counter: u8,
+    pub status: u8,
+}
+#[repr(C)]
+pub struct BreakdownStart {
+    pub since: u8,
+    pub kind: VehicleType,
+}
+#[repr(C)]
+pub struct BreakdownActive {
+    pub kind: VehicleType,
+    pub tick: u8,
+    pub delay: u8,
+}
+#[repr(C)]
+pub struct BreakdownCountdown {
+    pub order_type: OrderType,
+    pub counter: u8,
+}
+#[repr(C)]
+pub struct BreakdownSoundState {
+    pub kind: VehicleType,
+    pub landscape: services::LandscapeType,
 }
 #[repr(C)]
 pub struct Age {
@@ -87,7 +119,9 @@ pub struct Age {
 #[repr(C)]
 pub struct Warning {
     pub enabled: bool,
-    pub local_company: u8,
+    pub has_previous: bool,
+    pub local: bool,
+    pub status: u8,
 }
 #[repr(C)]
 pub struct WarningCompany {
@@ -106,6 +140,7 @@ pub struct Services {
     /// Company pointers must name the live owner for the synchronous call.
     pub renewal: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Renewal,
     pub reset: extern "C" fn(VehicleRef) -> Reset,
+    pub has_engine: extern "C" fn(VehicleRef) -> bool,
     pub interval: extern "C" fn(VehicleRef) -> Interval,
     pub engine_reliability: extern "C" fn(VehicleRef) -> u16,
     pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Replacement,
@@ -116,9 +151,17 @@ pub struct Services {
     pub breakdown_guard: extern "C" fn(VehicleRef) -> BreakdownGuard,
     pub breakdown_trigger: extern "C" fn(VehicleRef) -> BreakdownTrigger,
     pub chance_write: extern "C" fn(VehicleRef, u8),
+    pub trigger: extern "C" fn(VehicleRef, u8, u8),
+    pub breakdown_probe: extern "C" fn(VehicleRef) -> BreakdownProbe,
+    pub breakdown_start: extern "C" fn(VehicleRef) -> BreakdownStart,
+    pub breakdown_start_write: extern "C" fn(VehicleRef, u8, u8),
+    pub breakdown_active: extern "C" fn(VehicleRef) -> BreakdownActive,
+    pub breakdown_countdown: extern "C" fn(VehicleRef) -> BreakdownCountdown,
+    pub breakdown_sound_state: extern "C" fn(VehicleRef) -> BreakdownSoundState,
     pub breakdown_delay_write: extern "C" fn(VehicleRef, u8),
     pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
     pub smoke_delay: extern "C" fn(VehicleRef) -> u8,
+    pub aircraft_broken: extern "C" fn(VehicleRef),
     pub mark_dirty: extern "C" fn(VehicleRef),
     pub view_dirty: extern "C" fn(VehicleRef),
     pub details_dirty: extern "C" fn(VehicleRef),
@@ -176,7 +219,7 @@ unsafe fn renew<const C: bool>(
     if r.age.0.wrapping_sub(r.max_age.0) < i32::from(r.months) * 30 {
         return false;
     }
-    v.vehicle_type() != VehicleType::TRAIN.0 || v.subtype() & 8 != 0
+    r.kind != VehicleType::TRAIN || r.subtype & 8 != 0
 }
 unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
@@ -198,7 +241,7 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
         let Some(next) = v.next() else {
             break;
         };
-        if !next.has_engine_type() {
+        if !svc!(C, s.has_engine, next) {
             break;
         }
         v = next;
@@ -369,10 +412,10 @@ unsafe fn check_breakdown<const C: bool>(v: VehicleRef, base: &VehicleServices) 
         }
     }
     let guard = svc!(C, s.breakdown_guard, v);
-    if v.breakdown_counter() != 0
-        || v.status() & VS_STOPPED != 0
+    if guard.counter != 0
+        || guard.status & VS_STOPPED != 0
         || guard.breakdowns < 1
-        || v.speed() < 5
+        || guard.speed < 5
         || guard.menu
     {
         return;
@@ -387,21 +430,20 @@ unsafe fn check_breakdown<const C: bool>(v: VehicleRef, base: &VehicleServices) 
     let chance = chance.min(255) as u8;
     svc!(C, s.chance_write, v, chance);
     let reliability = u32::from(trigger.reliability)
-        + if v.vehicle_type() == VehicleType::SHIP.0 {
+        + if trigger.kind == VehicleType::SHIP {
             0x6666
         } else {
             0
         }
         + if trigger.breakdowns == 1 { 0x6666 } else { 0 };
     if BREAKDOWN_CHANCE[(reliability.min(65535) >> 10) as usize] <= chance {
-        v.write_breakdown_counter(((random >> 16) & 63) as u8 + 0x3f);
         svc!(
             C,
-            s.breakdown_delay_write,
+            s.trigger,
             v,
+            ((random >> 16) & 63) as u8 + 0x3f,
             ((random >> 24) & 127) as u8 + 0x80
         );
-        svc!(C, s.chance_write, v, 0);
         branch!(C, VEHICLE_MAINT_TRIGGER);
     }
 }
@@ -419,22 +461,25 @@ unsafe fn breakdown_state<const C: bool>(
     let s = unsafe { &*base.maintenance };
     match counter {
         2 => {
-            v.write_breakdown_counter(1);
-            let resolver = unsafe { &*(base.newgrf)() };
-            let since = unsafe { (resolver.breakdowns)(v.0.as_ptr()) };
-            svc!(C, base.write_breakdowns, v, since.saturating_add(1));
+            let start = svc!(C, s.breakdown_start, v);
+            svc!(
+                C,
+                s.breakdown_start_write,
+                v,
+                1,
+                start.since.saturating_add(1)
+            );
             branch!(C, VEHICLE_MAINT_STARTED);
-            if v.vehicle_type() == VehicleType::AIRCRAFT.0 {
-                v.write_status(v.status() | crate::vehicle_base::VS_AIRCRAFT_BROKEN);
+            if start.kind == VehicleType::AIRCRAFT {
+                svc!(C, s.aircraft_broken, v);
                 branch!(C, VEHICLE_MAINT_AIRCRAFT);
             } else {
                 (v).write_speed(0);
                 if !svc!(C, base.play_vehicle_sound, v, VSE_BREAKDOWN) {
-                    let kind = VehicleType(v.vehicle_type());
-                    let train_ship = kind == VehicleType::TRAIN || kind == VehicleType::SHIP;
-                    let shared = unsafe { &*s.shared };
-                    let toyland = unsafe { shared.settings().climate.read() }
-                        == services::LandscapeType::TOYLAND.0;
+                    let sound = svc!(C, s.breakdown_sound_state, v);
+                    let train_ship =
+                        sound.kind == VehicleType::TRAIN || sound.kind == VehicleType::SHIP;
+                    let toyland = sound.landscape == services::LandscapeType::TOYLAND;
                     let sound = if toyland {
                         if train_ship { 58 } else { 53 }
                     } else if train_ship {
@@ -465,21 +510,29 @@ unsafe fn breakdown_state<const C: bool>(
         }
         1 => {}
         _ => {
-            if v.current_order().kind() == OT_LOADING {
+            let countdown = svc!(C, s.breakdown_countdown, v);
+            if countdown.order_type.0 == OT_LOADING {
                 branch!(C, VEHICLE_MAINT_LOADING);
             } else {
-                v.write_breakdown_counter(v.breakdown_counter().wrapping_sub(1));
+                (v).write_breakdown_counter(countdown.counter.wrapping_sub(1));
                 branch!(C, VEHICLE_MAINT_COUNTDOWN);
             }
             return false;
         }
     }
-    let kind = VehicleType(v.vehicle_type());
-    if kind == VehicleType::AIRCRAFT {
+    let active = svc!(C, s.breakdown_active, v);
+    if active.kind == VehicleType::AIRCRAFT {
         return false;
     }
-    if v.tick() & if kind == VehicleType::TRAIN { 3 } else { 1 } == 0 {
-        let delay = svc!(C, s.smoke_delay, v).wrapping_sub(1);
+    if active.tick
+        & if active.kind == VehicleType::TRAIN {
+            3
+        } else {
+            1
+        }
+        == 0
+    {
+        let delay = active.delay.wrapping_sub(1);
         svc!(C, s.breakdown_delay_write, v, delay);
         branch!(C, VEHICLE_MAINT_DELAY);
         if delay == 0 {
@@ -492,14 +545,15 @@ unsafe fn breakdown_state<const C: bool>(
     true
 }
 unsafe fn breakdown_result<const C: bool>(v: VehicleRef, base: &VehicleServices) -> Breakdown {
-    let counter = v.breakdown_counter();
-    if counter == 0 {
+    let s = unsafe { &*base.maintenance };
+    let probe = svc!(C, s.breakdown_probe, v);
+    if probe.counter == 0 {
         return Breakdown {
             broken: false,
-            status: v.status(),
+            status: probe.status,
         };
     }
-    let broken = unsafe { breakdown_state::<C>(v, base, counter) };
+    let broken = unsafe { breakdown_state::<C>(v, base, probe.counter) };
     Breakdown {
         broken,
         status: (v).status(),
@@ -555,9 +609,9 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     branch!(C, VEHICLE_MAINT_AGE);
     let warning = svc!(C, s.warning, v);
     if !warning.enabled
-        || v.previous().is_some()
-        || v.owner() != warning.local_company
-        || v.status() & (VS_CRASHED | VS_STOPPED) != 0
+        || warning.has_previous
+        || !warning.local
+        || warning.status & (VS_CRASHED | VS_STOPPED) != 0
     {
         return;
     }
@@ -727,6 +781,8 @@ crate::abi::layouts! {
         max_age,
         months,
         enabled,
+        kind,
+        subtype,
     };
     "OpenTTDVehicleMaintenanceReset" ["maintenance"] => Reset {
         economy_date,
@@ -762,13 +818,38 @@ crate::abi::layouts! {
         breakdowns,
     };
     "OpenTTDVehicleMaintenanceBreakdownGuard" ["maintenance"] => BreakdownGuard {
+        speed,
+        counter,
+        status,
         breakdowns,
         menu,
     };
     "OpenTTDVehicleMaintenanceBreakdownTrigger" ["maintenance"] => BreakdownTrigger {
         reliability,
         chance,
+        kind,
         breakdowns,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownProbe" ["maintenance"] => BreakdownProbe {
+        counter,
+        status,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownStart" ["maintenance"] => BreakdownStart {
+        since,
+        kind,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownActive" ["maintenance"] => BreakdownActive {
+        kind,
+        tick,
+        delay,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownCountdown" ["maintenance"] => BreakdownCountdown {
+        order_type,
+        counter,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownSoundState" ["maintenance"] => BreakdownSoundState {
+        kind,
+        landscape,
     };
     "OpenTTDVehicleMaintenanceAge" ["maintenance"] => Age {
         age,
@@ -777,7 +858,9 @@ crate::abi::layouts! {
     };
     "OpenTTDVehicleMaintenanceWarning" ["maintenance"] => Warning {
         enabled,
-        local_company,
+        has_previous,
+        local,
+        status,
     };
     "OpenTTDVehicleMaintenanceWarningCompany" ["maintenance"] => WarningCompany {
         company,
@@ -790,6 +873,7 @@ crate::abi::layouts! {
         company,
         renewal,
         reset,
+        has_engine,
         interval,
         engine_reliability,
         replacement,
@@ -800,9 +884,17 @@ crate::abi::layouts! {
         breakdown_guard,
         breakdown_trigger,
         chance_write,
+        trigger,
+        breakdown_probe,
+        breakdown_start,
+        breakdown_start_write,
+        breakdown_active,
+        breakdown_countdown,
+        breakdown_sound_state,
         breakdown_delay_write,
         smoke_disabled,
         smoke_delay,
+        aircraft_broken,
         mark_dirty,
         view_dirty,
         details_dirty,

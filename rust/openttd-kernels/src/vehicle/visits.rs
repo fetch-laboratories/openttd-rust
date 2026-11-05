@@ -971,10 +971,7 @@ fn entered_depot_this_tick(v: VehicleRef, s: &Services) {
     // Stop in the depot if the vehicle was in 'stopping' state.
     // SAFETY: the serial game thread's pending map; no access survives the call.
     unsafe {
-        crate::fleet::pending::openttd_rust_fleet_pending_add(
-            s.id(v),
-            (v).status() & VS_STOPPED == 0,
-        );
+        crate::fleet::pending::add(s.id(v), (v).status() & VS_STOPPED == 0);
     }
     // Always stop, so no path out of the depot is reserved before autoreplace.
     (v).write_status((v).status() | VS_STOPPED);
@@ -1079,7 +1076,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         witness::hit(witness::VISITS_DEPOT_HALT);
         // Vehicles are always stopped on entering depots. Do not restart this one.
         // SAFETY: as in `entered_depot_this_tick`.
-        unsafe { crate::fleet::pending::openttd_rust_fleet_pending_add(s.id(v), false) };
+        unsafe { crate::fleet::pending::add(s.id(v), false) };
         // The link across this stop can't be predicted.
         (s.set_last_loading)(v, INVALID_STATION);
 
@@ -1133,7 +1130,7 @@ fn depot_refit(v: VehicleRef, cargo: u8, s: &Services) {
         if !(base.cost.success)(costs.out) {
             witness::hit(witness::VISITS_DEPOT_REFIT_FAILED);
             // SAFETY: as in `entered_depot_this_tick`.
-            unsafe { crate::fleet::pending::openttd_rust_fleet_pending_add(id, false) };
+            unsafe { crate::fleet::pending::add(id, false) };
             (s.refit_failed_news)(v);
         } else {
             witness::hit(witness::VISITS_DEPOT_REFIT);

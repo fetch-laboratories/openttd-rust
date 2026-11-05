@@ -861,14 +861,14 @@ pub(crate) unsafe fn move_vehicle(
     }
     if flags & DoCommandFlag::NO_CARGO_CAPACITY_CHECK == 0 {
         unsafe {
-            crate::cargo_storage::openttd_rust_cargo_capacity(
+            crate::cargo_storage::cargo_capacity(
                 s.cargo_capacity,
                 ptr::NonNull::new(src_head).map(VehicleRef),
                 None,
                 0,
                 0,
             );
-            crate::cargo_storage::openttd_rust_cargo_capacity(
+            crate::cargo_storage::cargo_capacity(
                 s.cargo_capacity,
                 ptr::NonNull::new(dst_head).map(VehicleRef),
                 None,

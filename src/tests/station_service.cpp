@@ -38,6 +38,7 @@
 #include "../rust/services_ffi.h"
 #include "station_spatial_fixture.hpp"
 #include "../core/kdtree.hpp"
+extern "C" void openttd_test_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *);
 
 
 
@@ -262,7 +263,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	OpenTTDVehicle record{};
 	record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&probe.vehicle);
 	record.cargo_cap = 1;
-	openttd_rust_station_prepare(&record, &services, &loading);
+	openttd_test_station_prepare(&record, &services, &loading);
 	CHECK(probe.staged);
 	CHECK_FALSE(probe.frame_live);
 	CHECK(cargo->rating == 6);

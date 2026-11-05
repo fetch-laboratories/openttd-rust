@@ -145,7 +145,7 @@ pub struct Services {
     max_age: unsafe extern "C" fn(V) -> i32,
     unit: unsafe extern "C" fn(V) -> u16,
     pub(crate) sprite: unsafe extern "C" fn(V) -> u8,
-    pub(crate) breakdowns: unsafe extern "C" fn(V) -> u8,
+    breakdowns: unsafe extern "C" fn(V) -> u8,
     breakdown_delay: unsafe extern "C" fn(V) -> u8,
     breakdown_chance: unsafe extern "C" fn(V) -> u8,
     reliability: unsafe extern "C" fn(V) -> u16,
