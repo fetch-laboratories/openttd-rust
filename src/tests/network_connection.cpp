@@ -6,6 +6,7 @@
 #include "../network/core/tcp.h"
 #include "../network/core/tcp_game.h"
 #include "../network/network_crypto_internal.h"
+#include "../string_func.h"
 #include "../rust/network_client_ffi.h"
 #include "../rust/network_dispatch_ffi.h"
 #include "../rust/network_tcp_ffi.h"
@@ -205,11 +206,14 @@ static bool dispatch_ended, dispatch_cleanup_order, dispatch_previous_live;
 TEST_CASE("Network game receive - encrypted dispatch preserves consumption and native unwind")
 {
 	NetworkSocketHandler handshake;
-	X25519SecretKey client_secret{}, server_secret{};
+	/* #658: the key-exchange-only handlers come from the production factories with a one-method mask. */
+	X25519SecretKey client_secret{};
 	client_secret[0] = 1;
-	server_secret[0] = 2;
-	X25519KeyExchangeOnlyClientHandler client_auth(client_secret);
-	X25519KeyExchangeOnlyServerHandler server_auth(server_secret);
+	std::string client_secret_text = FormatArrayAsHex(client_secret), client_public_text;
+	auto client_handler = NetworkAuthenticationClientHandler::Create({}, client_secret_text, client_public_text);
+	auto server_handler = NetworkAuthenticationServerHandler::Create(nullptr, nullptr, NetworkAuthenticationMethodMask{NetworkAuthenticationMethod::X25519_KeyExchangeOnly});
+	auto &client_auth = *client_handler;
+	auto &server_auth = *server_handler;
 	Packet request(&handshake, PacketType{});
 	server_auth.SendRequest(request);
 	request.PrepareToSend(); REQUIRE(request.PrepareToRead()); request.Recv_uint8();
