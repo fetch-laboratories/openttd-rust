@@ -16,6 +16,26 @@ use crate::station_cmd::{AirportSpec, RailSpec, RoadSpec};
 use crate::{animated_tile::AirportSpec as AirportTileSpec, objects::Spec as ObjectSpec};
 use std::ffi::c_void;
 
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Borrowed badge IDs; native storage remains live for one synchronous leaf.
+    #[derive(Clone, Copy)]
+    "OpenTTDBadgeSpan" ["probe"] => pub struct BadgeSpan {
+        pub data: *const u32 => "const BadgeID *",
+        pub len: usize,
+    }
+}
+impl BadgeSpan {
+    pub(crate) fn resolve(
+        self,
+        shared: &crate::services::Services,
+        resolver: *const c_void,
+        parameter: u32,
+    ) -> u32 {
+        (shared.resolver_badges)(resolver, self.data, self.len, parameter)
+    }
+}
+
 /// Leaves of specs carrying `StandardGRFFileProps`.
 #[repr(C)]
 pub struct StandardServices<S> {
@@ -63,10 +83,8 @@ pub struct SpecServices<S, T> {
     animation: *const AnimationServices<S, T>,
     /// The spec's native badge list.
     pub badge_list: extern "C" fn(*mut S) -> *mut BadgeList,
-    /// `GetBadgeVariableResult` for the resolver's GRF file.
-    pub badges: extern "C" fn(*const c_void, *const S, u32) -> u32,
-    /// `ConvertBooleanCallback` with the spec's GRF file.
-    pub boolean_callback: extern "C" fn(*const S, u16, u16) -> bool,
+    /// Borrow the native badge storage without retaining the spec.
+    pub badges: extern "C" fn(*const S) -> BadgeSpan,
     /// The spec's GRF file's `cargo_map` entry.
     pub cargo_map: extern "C" fn(*const S, u8) -> u8,
     /// `grf_prop.grffile`.
@@ -144,12 +162,12 @@ spec_tables! {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNewGRFSpecs" ["probe"] => Specs { airport, airport_tile, house, object, road_stop, station };
-    "OpenTTDAirportSpecServices" ["probe"] => SpecServices<AirportSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
-    "OpenTTDAirportTileSpecServices" ["probe"] => SpecServices<AirportTileSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
-    "OpenTTDHouseSpecServices" ["probe"] => SpecServices<HouseSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
-    "OpenTTDObjectSpecServices" ["probe"] => SpecServices<ObjectSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
-    "OpenTTDRoadStopSpecServices" ["probe"] => SpecServices<RoadSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
-    "OpenTTDStationSpecServices" ["probe"] => SpecServices<RailSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDAirportSpecServices" ["probe"] => SpecServices<AirportSpec, u8> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDAirportTileSpecServices" ["probe"] => SpecServices<AirportTileSpec, u8> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDHouseSpecServices" ["probe"] => SpecServices<HouseSpec, u8> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDObjectSpecServices" ["probe"] => SpecServices<ObjectSpec, u16> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDRoadStopSpecServices" ["probe"] => SpecServices<RoadSpec, u16> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDStationSpecServices" ["probe"] => SpecServices<RailSpec, u16> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
     "OpenTTDAirportTileSpecAnimation" ["probe"] => AnimationServices<AirportTileSpec, u8> { frames, speed, status, triggers };
     "OpenTTDRoadStopSpecAnimation" ["probe"] => AnimationServices<RoadSpec, u16> { frames, speed, status, triggers };
     "OpenTTDStationSpecAnimation" ["probe"] => AnimationServices<RailSpec, u16> { frames, speed, status, triggers };

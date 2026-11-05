@@ -801,8 +801,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.play_sound = RustPlayTileSoundBySound,
 	.special_effect = [](void *handle, uint32_t random, uint32_t parameter) noexcept -> uint16_t {
 		Industry *i = RustIndustry(handle);
-		uint16_t result = GetIndustryCallback(CBID_INDUSTRY_SPECIAL_EFFECT, random, parameter, i, i->type, i->location.tile);
-		return result == CALLBACK_FAILED ? CALLBACK_FAILED : OpenTTDConvertBooleanCallback(GetIndustrySpec(i->type)->grf_prop.grffile, CBID_INDUSTRY_SPECIAL_EFFECT, result);
+		return GetIndustryCallback(CBID_INDUSTRY_SPECIAL_EFFECT, random, parameter, i, i->type, i->location.tile);
 	},
 	.tick_trigger = [](void *handle) noexcept {
 		Industry *i = RustIndustry(handle);

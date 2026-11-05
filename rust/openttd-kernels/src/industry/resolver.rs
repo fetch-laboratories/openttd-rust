@@ -82,10 +82,10 @@ impl ResolverServices {
     fn belongs(&self, tile: u32, id: u16) -> bool {
         unsafe { (self.lifecycle().belongs)(tile, id) }
     }
-    pub(crate) fn spec(&self, kind: u8) -> *const SpecHandle {
+    pub(crate) fn spec(kind: u8) -> *const SpecHandle {
         industrytype::industry(u16::from(kind))
     }
-    pub(crate) fn behaviour(&self, spec: *const SpecHandle) -> u32 {
+    pub(crate) fn behaviour(spec: *const SpecHandle) -> u32 {
         unsafe { (*spec).behaviour }
     }
 }
@@ -259,8 +259,12 @@ fn variable(
         witness::hit(witness::INDUSTRY_RESOLVER_LOCATION);
         match variable {
             0x7a => {
-                let badges = unsafe { &(*industrytype::industry(u16::from(c.kind))).badges };
-                return industrytype::badge_variable(s.shared(), ro, badges, parameter);
+                let badges = unsafe {
+                    (*industrytype::industry(u16::from(c.kind)))
+                        .badges
+                        .badge_view()
+                };
+                return badges.resolve(s.shared(), ro, parameter);
             }
             0x80 => return c.tile,
             0x81 => return (c.tile >> 8) & 255,
@@ -292,7 +296,9 @@ fn variable(
                 return unsafe {
                     (s.water_distance)(
                         c.tile,
-                        s.behaviour(s.spec((*i).metadata.kind)) & BUILT_ON_WATER == 0,
+                        ResolverServices::behaviour(ResolverServices::spec((*i).metadata.kind))
+                            & BUILT_ON_WATER
+                            == 0,
                     )
                 };
             }
@@ -306,7 +312,7 @@ fn variable(
             _ => {}
         }
     }
-    let spec = s.spec(c.kind);
+    let spec = ResolverServices::spec(c.kind);
     if i.is_null() {
         return unavailable(variable, available, false, true, callback, s);
     }
@@ -317,7 +323,7 @@ fn variable(
             {
                 return 0;
             }
-            let multiplier = if s.behaviour(spec) & PROD_MULTI_HANDLING != 0 {
+            let multiplier = if ResolverServices::behaviour(spec) & PROD_MULTI_HANDLING != 0 {
                 let level = unsafe { (*i).fields.prod_level };
                 if level == 0 {
                     return 0;
@@ -332,7 +338,10 @@ fn variable(
             )
         }
         0x43 if c.tile != INVALID_TILE => unsafe {
-            (s.water_distance)(c.tile, s.behaviour(spec) & BUILT_ON_WATER == 0)
+            (s.water_distance)(
+                c.tile,
+                ResolverServices::behaviour(spec) & BUILT_ON_WATER == 0,
+            )
         },
         0x44 => u32::from(unsafe { (*i).metadata.selected_layout }),
         0x45 => {
@@ -438,8 +447,12 @@ fn variable(
             }
         }
         0x7a => {
-            let badges = unsafe { &(*industrytype::industry(u16::from(c.kind))).badges };
-            industrytype::badge_variable(s.shared(), ro, badges, parameter)
+            let badges = unsafe {
+                (*industrytype::industry(u16::from(c.kind)))
+                    .badges
+                    .badge_view()
+            };
+            badges.resolve(s.shared(), ro, parameter)
         }
         0x7c => {
             // Resolve the native shell association once, then read the canonical
@@ -585,8 +598,8 @@ fn tile_variable(
         ),
         0x7a => {
             let gfx = unsafe { (s.tile().gfx)(c.tile) };
-            let badges = unsafe { &(*industrytype::tile(gfx)).badges };
-            industrytype::badge_variable(s.shared(), ro, badges, parameter)
+            let badges = unsafe { (*industrytype::tile(gfx)).badges.badge_view() };
+            badges.resolve(s.shared(), ro, parameter)
         }
         _ => unavailable(variable, available, true, false, 0, s),
     }
@@ -773,7 +786,7 @@ pub unsafe extern "C" fn openttd_rust_industry_probability(
 ) -> u32 {
     witness::hit(witness::INDUSTRY_RESOLVER_PROBABILITY);
     let s = unsafe { &*s };
-    let spec = s.spec(kind);
+    let spec = ResolverServices::spec(kind);
     if unsafe { (*spec).callback_mask } & INDUSTRY_PROBABILITY != 0 {
         let result = unsafe {
             (s.callback)(
@@ -822,7 +835,7 @@ pub(crate) unsafe fn refuses(
 ) -> bool {
     witness::hit(witness::INDUSTRY_RESOLVER_REFUSAL);
     let kind = unsafe { (*owner).metadata.kind };
-    let spec = s.spec(kind);
+    let spec = ResolverServices::spec(kind);
     if unsafe { (*spec).callback_mask } & INDUSTRY_REFUSE_CARGO != 0 {
         let file = unsafe { (*spec).grf_prop.grffile };
         let parameter = (s.shared().grf_cargo_map)(file, cargo);

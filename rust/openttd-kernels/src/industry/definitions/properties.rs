@@ -385,7 +385,8 @@ unsafe fn tiles(
                 }
             }
             0x14 => {
-                unsafe { r.badge_ids(newgrf::GSF_INDUSTRYTILES, &raw mut (*spec).badges) }?;
+                let ids = r.badge_ids(newgrf::GSF_INDUSTRYTILES)?;
+                unsafe { (*spec).badges = NativeVec::from_vec(ids) };
             }
             _ => result = UNKNOWN,
         }
@@ -667,7 +668,8 @@ unsafe fn industries(
                 }
             }
             0x29 => {
-                unsafe { r.badge_ids(newgrf::GSF_INDUSTRIES, &raw mut (*spec).badges) }?;
+                let ids = r.badge_ids(newgrf::GSF_INDUSTRIES)?;
+                unsafe { (*spec).badges = NativeVec::from_vec(ids) };
             }
             _ => result = UNKNOWN,
         }

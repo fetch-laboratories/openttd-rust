@@ -59,10 +59,8 @@ struct OpenTTDMovementServices {
 	bool (*owned_land)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_land);
 	OpenTTDMovementObjectFoundation (*object_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_foundation);
 	OpenTTDMovementFoundation (*house_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_foundation);
-	bool (*house_boolean)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_boolean);
 	OpenTTDMovementFoundation (*industry_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_foundation);
 	uint16_t (*industry_callback)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_callback);
-	bool (*industry_boolean)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_boolean);
 };
 extern const OpenTTDMovementServices _rust_movement_services;
 const OpenTTDMovementServices &GetRustMovementServices() noexcept;

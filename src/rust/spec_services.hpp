@@ -65,8 +65,7 @@ template <typename Spec, typename Triggers>
 inline constexpr OpenTTDSpecServices<Spec, Triggers> _rust_spec_services{
 	.animation = RustSpecAnimationTable<Spec, Triggers>(),
 	.badge_list = RustSpecBadgeList<Spec>,
-	.badges = RustSpecBadges<Spec>,
-	.boolean_callback = RustSpecBooleanCallback<Spec>,
+	.badges = RustSpecBadgeView<Spec>,
 	.cargo_map = RustSpecCargoMap<Spec>,
 	.file = RustSpecGRFFile<Spec>,
 	.grfid = RustSpecGRFID<Spec>,

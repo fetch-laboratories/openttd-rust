@@ -757,6 +757,9 @@ pub(super) unsafe fn partial_read_tests() {
     extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
         panic!("unused property service")
     }
+    extern "C" fn unused5<A, B, C, D, E, R>(_: A, _: B, _: C, _: D, _: E) -> R {
+        unreachable!()
+    }
     extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
         panic!("unused property service")
     }
@@ -873,8 +876,8 @@ pub(super) unsafe fn partial_read_tests() {
         read_word: word,
         read_dword: unused2,
         skip: unused2,
-        read_badges: unused3,
-        read_badge_ids: unused3,
+        assign_badges: unused3,
+        read_badge_ids: unused5,
         skip_badges: unused1,
     };
     let file = std::ptr::dangling::<std::ffi::c_void>();

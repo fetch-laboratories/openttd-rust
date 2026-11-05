@@ -159,8 +159,7 @@ pub(crate) fn forest(tile: u32, s: &Services) -> bool {
         crate::movement::table(shared).native_assert,
     );
     let owner = (catchment.industry_owner)(shell);
-    let resolver = unsafe { &*s.resolver };
-    let spec = resolver.spec(unsafe { (*owner).metadata.kind });
+    let spec = super::resolver::ResolverServices::spec(unsafe { (*owner).metadata.kind });
     if unsafe { (*spec).life_type } & LIFE_ORGANIC == 0 {
         return false;
     }

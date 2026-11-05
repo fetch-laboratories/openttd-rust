@@ -221,7 +221,6 @@ pub struct HouseServices {
 
     pub delete_inspect: extern "C" fn(u32),
     pub cargo_file: extern "C" fn(u16) -> *const std::ffi::c_void,
-    pub convert_boolean: extern "C" fn(u16, u16, u16) -> bool,
     pub convert_8bit: extern "C" fn(u16, u16, u16) -> bool,
 
     pub scale_cargo: extern "C" fn(u32) -> u32,
@@ -349,7 +348,8 @@ impl<'a> House<'a> {
             // SAFETY: The entry resolved the live town; no owner borrow spans resolution.
             let res =
                 unsafe { super::resolver::callback(CB_DENY, 0, 0, house, town.shell, tile, false) };
-            res == CALLBACK_FAILED || !(self.h.convert_boolean)(house, CB_DENY, res)
+            res == CALLBACK_FAILED
+                || !(self.s.grf_boolean_callback)((self.h.cargo_file)(house), CB_DENY, res)
         } else {
             !(self.h.protected)(tile)
         }
@@ -938,7 +938,12 @@ impl<'a> House<'a> {
                             false,
                         )
                     };
-                    if res != CALLBACK_FAILED && (self.h.convert_boolean)(house, CB_AUTOSLOPE, res)
+                    if res != CALLBACK_FAILED
+                        && (self.s.grf_boolean_callback)(
+                            (self.h.cargo_file)(house),
+                            CB_AUTOSLOPE,
+                            res,
+                        )
                     {
                         allow = false;
                     }
@@ -1582,7 +1587,6 @@ crate::abi::layouts! {
 
         delete_inspect,
         cargo_file,
-        convert_boolean,
         convert_8bit,
 
         scale_cargo,

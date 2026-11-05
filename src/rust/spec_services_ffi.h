@@ -5,6 +5,7 @@
 #include "service_defaults.hpp"
 #include "spec_identity.h"
 #include "../newgrf_badge_type.h"
+#include "abi-record-probe.h"
 #include <cstdint>
 #include <vector>
 struct AirportSpec; struct AirportTileSpec; struct GRFFile;
@@ -35,8 +36,7 @@ template <typename Spec, typename Triggers> struct OpenTTDSpecAnimationServices 
 template <typename Spec, typename Triggers> struct OpenTTDSpecServices {
 	const OpenTTDSpecAnimationServices<Spec, Triggers> *animation;
 	std::vector<BadgeID> *(*badge_list)(Spec *) noexcept OPENTTD_SERVICE_DEFAULT(badge_list);
-	uint32_t (*badges)(const ResolverObject *, const Spec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	bool (*boolean_callback)(const Spec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(boolean_callback);
+	OpenTTDBadgeSpan (*badges)(const Spec *) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	uint8_t (*cargo_map)(const Spec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_map);
 	const GRFFile *(*file)(const Spec *) noexcept OPENTTD_SERVICE_DEFAULT(file);
 	uint32_t (*grfid)(const Spec *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);

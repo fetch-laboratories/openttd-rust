@@ -11,6 +11,7 @@
 #include "../command_type.h"
 #include "newgrf_class_ffi.h"
 #include "spec_identity.h"
+#include "spec_services_ffi.h"
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
@@ -131,8 +132,8 @@ inline uint32_t RustNearbyStationTile(uint8_t parameter, uint32_t tile, Axis axi
 inline uint32_t RustNearbyTileInformation(uint32_t tile, bool version8) noexcept { return GetNearbyTileInformation(TileIndex(tile), version8); }
 inline uint32_t RustTerrainType(uint32_t tile) noexcept { return GetTerrainType(TileIndex(tile)); }
 template <typename Spec>
-inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec, uint32_t parameter) noexcept { return GetBadgeVariableResult(*RustResolverGRFFile(resolver), spec->badges, parameter); }
-inline uint32_t RustHouseBadges(const ResolverObject *resolver, uint16_t house, uint32_t parameter) noexcept { return RustSpecBadges(resolver, RustHouseSpec(house), parameter); }
+inline OpenTTDBadgeSpan RustSpecBadgeView(const Spec *spec) noexcept { return {spec->badges.data(), spec->badges.size()}; }
+inline OpenTTDBadgeSpan RustHouseBadgeView(uint16_t house) noexcept { return RustSpecBadgeView(RustHouseSpec(house)); }
 
 /* Preserve native default-livery and nullable-file translation behavior. */
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
@@ -172,7 +173,6 @@ template <typename Spec> inline const SpriteGroup *RustSpecCargoSpriteGroup(cons
  * failures terminate. */
 inline bool OpenTTDConvertBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return ConvertBooleanCallback(grf, callback, result); }
 inline bool OpenTTDConvert8bitBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return Convert8bitBooleanCallback(grf, callback, result); }
-inline bool RustHouseConvertBoolean(uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(RustHouseGrf(house), callback, result); }
 inline bool RustHouseConvert8bitBoolean(uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); }
 inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
 /* Typed adapters retain the existing per-component table signatures. */
@@ -190,11 +190,6 @@ inline void RustSpecCallbackError(const Handle *handle, uint16_t callback, uint1
 }
 template <uint16_t Callback, typename Spec>
 inline void RustFixedSpecCallbackError(const Spec *spec, uint16_t result) noexcept { RustSpecCallbackError<Spec, Spec>(spec, Callback, result); }
-template <typename Spec>
-inline bool RustSpecBooleanCallback(const Spec *spec, uint16_t callback, uint16_t result) noexcept
-{
-	return OpenTTDConvertBooleanCallback(RustSpecGRFFile(spec), callback, result);
-}
 template <typename Spec, typename Handle, typename Result, typename Cost, StringID Error>
 inline void RustLocationCallbackError(Cost *out, const Result *result, const Handle *handle) noexcept
 {

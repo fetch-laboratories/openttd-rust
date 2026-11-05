@@ -667,7 +667,11 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
             0xffff
         };
         let act = if cb != 0xffff {
-            cb != 0
+            (s.shared().grf_boolean_callback)(
+                unsafe { (*spec_of(owner)).grf_prop.grffile },
+                crate::newgrf_callbacks::CBID_INDUSTRY_SPECIAL_EFFECT,
+                cb,
+            )
         } else if parameter == 0 {
             chance(s, 1, 8)
         } else {
@@ -1605,14 +1609,14 @@ pub(crate) unsafe fn trigger_delivery(
     use crate::newgrf_callbacks::{
         INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
     };
-    let spec = resolver.spec(unsafe { (*owner).metadata.kind });
+    let spec = resolver::ResolverServices::spec(unsafe { (*owner).metadata.kind });
     let mask = unsafe { (*spec).callback_mask };
     unsafe { (*owner).fields.was_cargo_delivered = 1 };
     if mask & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) != 0 {
         if mask & INDUSTRY_PRODUCTION_CARGO_ARRIVAL != 0 {
             let mut storage = std::mem::MaybeUninit::<ProductionStorage>::uninit();
             let context = unsafe { (delivery.construct)(storage.as_mut_ptr(), shell) };
-            let behaviour = resolver.behaviour(spec);
+            let behaviour = resolver::ResolverServices::behaviour(spec);
             production_callback(
                 shell.cast(),
                 owner,

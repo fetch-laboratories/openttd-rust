@@ -74,6 +74,14 @@ impl<T> NativeVec<T> {
         *self = Self::from_vec(vec);
     }
 }
+impl NativeVec<u32> {
+    pub(crate) fn badge_view(&self) -> crate::newgrf_specs::BadgeSpan {
+        crate::newgrf_specs::BadgeSpan {
+            data: self.items,
+            len: self.count,
+        }
+    }
+}
 impl<T> Default for NativeVec<T> {
     fn default() -> Self {
         Self::new()
@@ -147,17 +155,6 @@ impl SubstituteProps {
         }
     }
 }
-/// `GetBadgeVariableResult` for the resolver's file over a record's badges.
-pub(crate) fn badge_variable(
-    shared: &crate::services::Services,
-    resolver: *const c_void,
-    badges: &NativeVec<u32>,
-    parameter: u32,
-) -> u32 {
-    let badges = badges.as_slice();
-    (shared.resolver_badges)(resolver, badges.as_ptr(), badges.len(), parameter)
-}
-
 /// `AnimationInfo<IndustryAnimationTriggers>`.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -393,24 +390,6 @@ pub unsafe extern "C" fn openttd_rust_industry_file_badge_abi(
     }
     u8::from(any)
 }
-/// Replace a Rust-owned badge list with a native list's contents.
-///
-/// # Safety
-/// `badges` is a live record field; `data` holds `count` IDs.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_badges_assign(
-    badges: *mut NativeVec<u32>,
-    data: *const u32,
-    count: usize,
-) {
-    let ids = if count == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(data, count) }.to_vec()
-    };
-    unsafe { *badges = NativeVec::from_vec(ids) };
-}
-
 /// The animation facts of an industry tile spec, for the shared animation owner.
 ///
 /// # Safety
