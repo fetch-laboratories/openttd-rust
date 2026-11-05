@@ -92,6 +92,8 @@ include = [
     "tools/simulation/roads.py",
     "tools/simulation/disasters.py",
     "tools/simulation/effects.py",
+    "tools/simulation/instructions.py",
+    "tools/simulation/speed.py",
 ]
 
 [analysis]

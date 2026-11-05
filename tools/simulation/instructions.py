@@ -7,8 +7,12 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
+
+if TYPE_CHECKING:
+    from .core import Result, Run, Scenario
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 CANDIDATE_ENTRIES = (
@@ -38,13 +42,35 @@ SPEED_PASS = (
 # Loop Ir at the anchor, in SPEED_PASS order, for projecting instruction-count growth.
 SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
 # fmt: on
-SPEED_ANCHORS = {
-    name: dict(
-        anchor=dict(
-            head=SPEED_HEAD, ratio=ratios[-1], Ir=ir, identity={"compatible": c}
-        ),
-        integrated=dict(head=SPEED_INTEGRATED[0], Ir=integrated),
-    )
+
+
+class Anchor(TypedDict):
+    head: str
+    ratio: float
+    Ir: int
+    identity: dict[str, str]
+
+
+class Integrated(TypedDict):
+    head: str
+    Ir: int
+
+
+class SpeedAnchor(TypedDict):
+    anchor: Anchor
+    integrated: Integrated
+
+
+SPEED_ANCHORS: dict[str, SpeedAnchor] = {
+    name: {
+        "anchor": {
+            "head": SPEED_HEAD,
+            "ratio": ratios[-1],
+            "Ir": ir,
+            "identity": {"compatible": c},
+        },
+        "integrated": {"head": SPEED_INTEGRATED[0], "Ir": integrated},
+    }
     for (name, ratios, ir, c), integrated in zip(
         SPEED_PASS, SPEED_INTEGRATED[1], strict=True
     )
@@ -98,7 +124,7 @@ def speed_budget(
     }
 
 
-def verify_debug(archive):
+def verify_debug(archive: Path) -> None:
     """Inspect our compiled objects, excluding bundled standard-library DWARF."""
     members = subprocess.check_output(["ar", "t", str(archive)], text=True).splitlines()
     members = [m for m in members if ".openttd_kernels." in m and m.endswith(".o")]
@@ -133,7 +159,7 @@ TEST_GIT_ENTRIES = (
 )
 
 
-def anchored_cache(text):
+def anchored_cache(text: str) -> str:
     for entry in TEST_GIT_ENTRIES:
         text = re.sub(entry, "", text)
     if "\nOPTION_RUST:" not in text:
@@ -145,7 +171,7 @@ def anchored_cache(text):
     return text
 
 
-def record_build(build, source, role, env):
+def record_build(build: Path, source: Path, role: str, env: Mapping[str, str]) -> None:
     """Publish only successful builds, bound to the executable being measured."""
     import migration
 
@@ -175,7 +201,7 @@ def record_build(build, source, role, env):
     )
 
 
-def flags(scenario, reference=True):
+def flags(scenario: "Scenario", reference: bool = True) -> list[str]:
     entries = ENTRIES if reference else CANDIDATE_ENTRIES
     entries = entries if scenario["kind"] == "generate" else entries[:1]
     entries = (DRAW_ENTRY,) if scenario.get("draw") else entries
@@ -187,7 +213,7 @@ def flags(scenario, reference=True):
     ]
 
 
-def count(path):
+def count(path: Path) -> int:
     text = path.read_text()
     events = re.findall(r"^events: (.+)$", text, re.M)
     totals = re.findall(r"^totals: ([0-9 ]+)$", text, re.M)
@@ -203,17 +229,25 @@ def count(path):
     return value
 
 
-def digest(value):
+def digest(value: object) -> str:
     if not isinstance(value, bytes):
         value = json.dumps(value, sort_keys=True).encode()
     return hashlib.sha256(value).hexdigest()
 
 
-def identity(scenario, binary, build, folder, env, valgrind, reference=True):
+def identity(
+    scenario: "Scenario",
+    binary: Path,
+    build: Path,
+    folder: Path,
+    env: Mapping[str, str],
+    valgrind: Path,
+    reference: bool = True,
+) -> dict[str, Any]:
     """Compatibility excludes candidate code; full measurement identity retains it."""
     from .core import RUNTIME_DIRECTORIES
 
-    inputs = {}
+    inputs: dict[str, Any] = {}
     for base in (build, folder):
         for p in sorted(base.rglob("*")):
             # CMake bookkeeping embeds each worktree's build path; games never read it.
@@ -223,7 +257,7 @@ def identity(scenario, binary, build, folder, env, valgrind, reference=True):
                 and p.suffix != ".cmake"
             ):
                 inputs[str(p.relative_to(base))] = digest(p.read_bytes())
-    resolved = dict(scenario)
+    resolved: dict[str, Any] = dict(scenario)
     if "save" in resolved:
         resolved["save"] = digest(Path(resolved["save"]).read_bytes())
     libraries = subprocess.check_output(["ldd", str(binary)], env=env, text=True)
@@ -256,13 +290,21 @@ def identity(scenario, binary, build, folder, env, valgrind, reference=True):
     # unchanged reference cache remain valid; full candidate identity records it.
     settings = settings, platform.machine(), tool, flags(scenario), policy
     compatible = digest([resolved, inputs, settings])
-    result = {"compatible": compatible, "executable": executable}
+    result: dict[str, Any] = {"compatible": compatible, "executable": executable}
     if not reference:
         result["entries"] = flags(scenario, reference=False)
     return result
 
 
-def prepare(scenario, command, binary, build, folder, env, reference):
+def prepare(
+    scenario: "Scenario",
+    command: list[str],
+    binary: Path,
+    build: Path,
+    folder: Path,
+    env: dict[str, str],
+    reference: bool,
+) -> tuple[list[str], dict[str, Any]]:
     import migration
 
     root = migration.COMMON_LOCAL / "valgrind/usr"
@@ -296,14 +338,14 @@ def prepare(scenario, command, binary, build, folder, env, reference):
     return command, dict(identity=measurement, cached=cached, cache=cache)
 
 
-def finish(runs, result):
+def finish(runs: Mapping[str, "Run"], result: "Result") -> dict[str, Any]:
     if result["differences"] or result["known_failures"] or result["problems"]:
         raise ValueError(
             "semantically unequal/unsuccessful profiles are not speed evidence"
         )
-    measurements = {}
+    measurements: dict[str, dict[str, Any]] = {}
     for role, run in runs.items():
-        info = run["instructions"]
+        info = cast(dict[str, Any], run["instructions"])
         value = info["cached"]
         if value is None:
             value = count(run["dir"] / "callgrind.out")
@@ -312,7 +354,7 @@ def finish(runs, result):
     candidate["compatible"] = digest(
         [candidate["compatible"], measurements["reference"]["identity"]]
     )
-    info = runs["reference"]["instructions"]
+    info = cast(dict[str, Any], runs["reference"]["instructions"])
     info["cache"].parent.mkdir(parents=True, exist_ok=True)
     # Run folders and the cache may sit on different disks; rename within one.
     with tempfile.NamedTemporaryFile(
@@ -324,11 +366,13 @@ def finish(runs, result):
     return dict(measurements, Ir_ratio=ratio)
 
 
-def projection(anchor, value):
+def projection(anchor: Anchor, value: int) -> float:
     return anchor["ratio"] * (1 + 2 * max(0, value / anchor["Ir"] - 1))
 
 
-def budget(name, measurement, record):
+def budget(
+    name: str, measurement: Mapping[str, Any], record: SpeedAnchor
+) -> dict[str, Any]:
     anchor, integrated = record["anchor"], record["integrated"]
     if measurement["identity"]["compatible"] != anchor["identity"]["compatible"]:
         raise ValueError(
