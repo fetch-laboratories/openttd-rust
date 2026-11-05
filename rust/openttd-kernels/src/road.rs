@@ -666,7 +666,7 @@ impl Game<'_> {
     }
 
     fn visual_effect_and_speed(&self, v: Part) -> SpeedRead {
-        if crate::vehicle_effect::openttd_rust_visual_eligible(v.v) {
+        if crate::vehicle_effect::openttd_rust_visual_eligible_abi(v.v) != 0 {
             let r = service!(self.l.max_speed_read)(v.v);
             let speed = max_speed(v, r, self.acceleration_model, self.l);
             crate::vehicle_effect::openttd_rust_visual_show(v.v, speed as u32);
@@ -2051,24 +2051,24 @@ macro_rules! entry {
 /// # Safety
 /// Live handle/owner pair, entry record and tables for this synchronous call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_tick(
+pub unsafe extern "C" fn openttd_rust_road_tick_abi(
     v: VehicleRef,
     state: *mut State,
     read: *const TickRead,
     leaves: *const Leaves,
     road: *mut crate::road_cmd::CommandSlot,
-) -> bool {
+) -> u8 {
     crate::witness::hit(crate::witness::ROAD_TICKS);
     // SAFETY: Records are borrowed for this call only.
     let t = unsafe { &*read };
     let mut g = entry!(leaves, None);
     g.road = road;
-    g.tick(Part::new(v, state), t)
+    u8::from(g.tick(Part::new(v, state), t))
 }
 /// # Safety
 /// As `openttd_rust_road_tick`; `prev` is null or a live pair.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_individual(
+pub unsafe extern "C" fn openttd_rust_road_individual_abi(
     v: VehicleRef,
     state: *mut State,
     prev: Option<VehicleRef>,
@@ -2076,29 +2076,29 @@ pub unsafe extern "C" fn openttd_rust_road_individual(
     entry: *const Entry,
     leaves: *const Leaves,
     road: *mut crate::road_cmd::CommandSlot,
-) -> bool {
+) -> u8 {
     // SAFETY: Entry record borrowed for this call only.
     let e = unsafe { &*entry };
     let mut g = entry!(leaves, Some(e));
     g.road = road;
     let mut s = service!(g.l.step)(v);
     let v = Part::new(v, state);
-    g.individual(v, v.ground(e.ground), Part::link(prev, prev_state), &mut s)
+    u8::from(g.individual(v, v.ground(e.ground), Part::link(prev, prev_state), &mut s))
 }
 /// # Safety
 /// As `openttd_rust_road_tick`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_leave_depot(
+pub unsafe extern "C" fn openttd_rust_road_leave_depot_abi(
     v: VehicleRef,
     state: *mut State,
     first: bool,
     entry: *const Entry,
     leaves: *const Leaves,
-) -> bool {
+) -> u8 {
     // SAFETY: Entry record borrowed for this call only.
     let e = unsafe { &*entry };
     let v = Part::new(v, state);
-    entry!(leaves, Some(e)).leave_depot(v, v.ground(e.ground), first)
+    u8::from(entry!(leaves, Some(e)).leave_depot(v, v.ground(e.ground), first))
 }
 /// # Safety
 /// As `openttd_rust_road_tick`.
@@ -2194,13 +2194,13 @@ pub unsafe extern "C" fn openttd_rust_road_set_dest(
 /// # Safety
 /// As `openttd_rust_road_tick`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_turn(
+pub unsafe extern "C" fn openttd_rust_road_turn_abi(
     v: VehicleRef,
     state: *mut State,
     execute: bool,
     leaves: *const Leaves,
-) -> bool {
-    entry!(leaves, None).turn(Part::new(v, state), execute)
+) -> u8 {
+    u8::from(entry!(leaves, None).turn(Part::new(v, state), execute))
 }
 /// # Safety
 /// As `openttd_rust_road_tick`.
@@ -2214,14 +2214,14 @@ pub unsafe extern "C" fn openttd_rust_road_trackdir(
 }
 /// # Safety
 /// As `openttd_rust_road_tick`; `first` is the live first part of `v`'s consist.
-pub unsafe extern "C" fn openttd_rust_road_slope_pixel(
+pub unsafe extern "C" fn openttd_rust_road_slope_pixel_abi(
     v: VehicleRef,
     first: VehicleRef,
     first_state: *mut State,
     direction: u8,
     leaves: *const Leaves,
-) -> bool {
-    entry!(leaves, None).slope_pixel(v, Part::new(first, first_state), direction)
+) -> u8 {
+    u8::from(entry!(leaves, None).slope_pixel(v, Part::new(first, first_state), direction))
 }
 /// Shared modern/legacy afterload road-stop frame query, retaining original indexes.
 #[unsafe(no_mangle)]

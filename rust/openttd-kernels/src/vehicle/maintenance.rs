@@ -708,18 +708,18 @@ entry!(
 /// # Safety
 /// As the maintenance entries; company is the live native owner at source scope.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_needs_renew(
+pub unsafe extern "C" fn openttd_rust_vehicle_needs_renew_abi(
     v: VehicleRef,
     base: *const VehicleServices,
     company: *const OpenTTDCompany,
     settings: bool,
-) -> bool {
-    if crate::witness::enabled() {
+) -> u8 {
+    u8::from(if crate::witness::enabled() {
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
         unsafe { renew::<true>(v, &*base, company, settings) }
     } else {
         unsafe { renew::<false>(v, &*base, company, settings) }
-    }
+    })
 }
 /// `Vehicle::NeedsServicing`.
 /// # Safety
@@ -735,11 +735,11 @@ pub(crate) unsafe fn needs_servicing(v: VehicleRef, base: &VehicleServices) -> b
 /// # Safety
 /// As the maintenance entries.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_needs_service(
+pub unsafe extern "C" fn openttd_rust_vehicle_needs_service_abi(
     v: VehicleRef,
     base: *const VehicleServices,
-) -> bool {
-    unsafe { needs_servicing(v, &*base) }
+) -> u8 {
+    u8::from(unsafe { needs_servicing(v, &*base) })
 }
 /// `Vehicle::NeedsAutomaticServicing`.
 /// # Safety
@@ -755,11 +755,11 @@ pub(crate) unsafe fn needs_automatic_servicing(v: VehicleRef, base: &VehicleServ
 /// # Safety
 /// As the maintenance entries.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_needs_automatic_service(
+pub unsafe extern "C" fn openttd_rust_vehicle_needs_automatic_service_abi(
     v: VehicleRef,
     base: *const VehicleServices,
-) -> bool {
-    unsafe { needs_automatic_servicing(v, &*base) }
+) -> u8 {
+    u8::from(unsafe { needs_automatic_servicing(v, &*base) })
 }
 /// `Vehicle::HandleBreakdown`, for callers that consume only its result.
 /// # Safety
@@ -780,11 +780,11 @@ pub(crate) unsafe fn vehicle_handle_breakdown(v: VehicleRef, base: &VehicleServi
 /// # Safety
 /// As the maintenance entries; this native API consumes only the stop result.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown(
+pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown_abi(
     v: VehicleRef,
     base: *const VehicleServices,
-) -> bool {
-    unsafe { vehicle_handle_breakdown(v, &*base) }
+) -> u8 {
+    u8::from(unsafe { vehicle_handle_breakdown(v, &*base) })
 }
 
 crate::abi::layouts! {

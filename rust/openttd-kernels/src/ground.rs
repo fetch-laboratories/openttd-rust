@@ -846,8 +846,8 @@ pub struct ABICalls {
 /// # Safety
 /// A complete immutable fixture table. Returned opaque handles are marker values
 /// for this ABI-only call; they are compared, never dereferenced or used by game services.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ground_abi_calls(calls: *const ABICalls) -> bool {
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn abi_calls(calls: *const ABICalls) -> u8 {
     // SAFETY: Caller provides actual typed native functions for this fixture.
     let c = unsafe { &*calls };
     let fences = (c.fences)();
@@ -862,56 +862,58 @@ pub unsafe extern "C" fn openttd_rust_ground_abi_calls(calls: *const ABICalls) -
     let victim = (c.victim)();
     let aircraft = (c.aircraft)();
     let ground = (c.ground)();
-    fences.ne == 0xfedc_ba98
-        && fences.se == 0x89ab_cdef
-        && fences.sw == 0x7654_3210
-        && fences.nw == 0x1234_5678
-        && surface.density == 0xcd
-        && surface.ground.0 == 240
-        && surface.snow
-        && field.industry == 0xfedc
-        && field.field_type == 0x9876_5432
-        && snow.z == -42
-        && snow.slope.0 == 238
-        && snow.tracks.0 == 237
-        && snow.plain
-        && fence.tracks.0 == 236
-        && fence.owner == 235
-        && !fence.plain
-        && foundation.z == 123_456
-        && foundation.slope.0 == 234
-        && road.z == -123_456
-        && road.snow
-        && tunnel.z == 789
-        && !tunnel.snow
-        && airport.station.is_null()
-        && airport.tile == 0x1234_5678
-        && airport.width == 0xabcd
-        && airport.height == 0xdcba
-        && victim.status == 233
-        && victim.kind.0 == 226
-        && aircraft.tile == 0x8765_4321
-        && aircraft.z == -789
-        && aircraft.subtype == 232
-        && ground.z == 777
-        && ground.first.addr() != 0
-        && (c.enums)(
-            ClearGroundType(240),
-            RailGroundType(239),
-            snow.slope,
-            snow.tracks,
-            crate::services::Track(227),
-            Foundation(228),
-            Roadside(229),
-            RoadBits(230),
-            RoadType(231),
-            crate::services::TreeGround(232),
-            WaterClass(233),
-            crate::services::FloodingBehaviour(234),
-            DiagDirection(235),
-            LandscapeType(236),
-            victim.kind,
-        )
+    u8::from(
+        fences.ne == 0xfedc_ba98
+            && fences.se == 0x89ab_cdef
+            && fences.sw == 0x7654_3210
+            && fences.nw == 0x1234_5678
+            && surface.density == 0xcd
+            && surface.ground.0 == 240
+            && surface.snow
+            && field.industry == 0xfedc
+            && field.field_type == 0x9876_5432
+            && snow.z == -42
+            && snow.slope.0 == 238
+            && snow.tracks.0 == 237
+            && snow.plain
+            && fence.tracks.0 == 236
+            && fence.owner == 235
+            && !fence.plain
+            && foundation.z == 123_456
+            && foundation.slope.0 == 234
+            && road.z == -123_456
+            && road.snow
+            && tunnel.z == 789
+            && !tunnel.snow
+            && airport.station.is_null()
+            && airport.tile == 0x1234_5678
+            && airport.width == 0xabcd
+            && airport.height == 0xdcba
+            && victim.status == 233
+            && victim.kind.0 == 226
+            && aircraft.tile == 0x8765_4321
+            && aircraft.z == -789
+            && aircraft.subtype == 232
+            && ground.z == 777
+            && ground.first.addr() != 0
+            && (c.enums)(
+                ClearGroundType(240),
+                RailGroundType(239),
+                snow.slope,
+                snow.tracks,
+                crate::services::Track(227),
+                Foundation(228),
+                Roadside(229),
+                RoadBits(230),
+                RoadType(231),
+                crate::services::TreeGround(232),
+                WaterClass(233),
+                crate::services::FloodingBehaviour(234),
+                DiagDirection(235),
+                LandscapeType(236),
+                victim.kind,
+            ),
+    )
 }
 
 crate::abi::layouts! {

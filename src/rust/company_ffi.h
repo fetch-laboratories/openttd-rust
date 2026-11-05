@@ -219,7 +219,8 @@ void OPENTTD_RUST_CALL openttd_rust_company_subtract_fraction(const OpenTTDCompa
 int64_t OPENTTD_RUST_CALL openttd_rust_company_value(const OpenTTDCompanyServices *, const CompanyFinances *, uint8_t, bool);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_hostile_takeover_value(const OpenTTDCompanyServices *, const CompanyFinances *, uint8_t);
 int32_t OPENTTD_RUST_CALL openttd_rust_company_update_rating(const OpenTTDCompanyServices *, CompanyFinances *, uint8_t, bool);
-bool OPENTTD_RUST_CALL openttd_rust_economy_add_inflation(bool, int32_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_economy_add_inflation_abi(bool, int32_t);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_economy_add_inflation(bool a0, int32_t a1) { return openttd_rust_economy_add_inflation_abi(a0, a1) != 0; }
 void OPENTTD_RUST_CALL openttd_rust_economy_recompute_prices(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
 void OPENTTD_RUST_CALL openttd_rust_economy_reset_price_multipliers();
 void OPENTTD_RUST_CALL openttd_rust_economy_set_price_multiplier(uint32_t, int32_t);
@@ -228,10 +229,14 @@ void OPENTTD_RUST_CALL openttd_rust_economy_initialize();
 int64_t OPENTTD_RUST_CALL openttd_rust_economy_price(uint32_t, uint32_t, int32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_available_money(const CompanyFinances *, bool);
 int64_t OPENTTD_RUST_CALL openttd_rust_company_max_loan(const CompanyFinances *);
-bool OPENTTD_RUST_CALL openttd_rust_company_startup(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);
-bool OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *, const OpenTTDCompanyCompetitors *);
-bool OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed(const OpenTTDCompanyServices *, uint8_t, uint8_t);
-bool OPENTTD_RUST_CALL openttd_rust_company_control(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCompanyControl *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_startup_abi(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_startup(const OpenTTDCompanyServices *a0, OpenTTDCompanyStartup *a1) { return openttd_rust_company_startup_abi(a0, a1) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout_abi(const OpenTTDCompanyServices *, const OpenTTDCompanyCompetitors *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *a0, const OpenTTDCompanyCompetitors *a1) { return openttd_rust_company_competitor_timeout_abi(a0, a1) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed_abi(const OpenTTDCompanyServices *, uint8_t, uint8_t);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_takeover_allowed(const OpenTTDCompanyServices *a0, uint8_t a1, uint8_t a2) { return openttd_rust_company_takeover_allowed_abi(a0, a1, a2) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_company_control_abi(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCompanyControl *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_company_control(const OpenTTDCompanyServices *a0, const OpenTTDTileOwnerContext *a1, OpenTTDCompanyControl *a2) { return openttd_rust_company_control_abi(a0, a1, a2) != 0; }
 void OPENTTD_RUST_CALL openttd_rust_company_change_ownership(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, uint8_t, uint8_t);
 OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_buy(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, uint8_t, bool, bool);
 OpenTTDCompanyCost OPENTTD_RUST_CALL openttd_rust_company_give_money(const OpenTTDCompanyFinanceServices *, bool, int64_t, uint8_t, bool);

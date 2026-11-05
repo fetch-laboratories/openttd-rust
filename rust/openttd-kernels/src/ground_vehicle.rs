@@ -775,7 +775,15 @@ macro_rules! entry {
 entry!(openttd_rust_ground_power_changed, power_changed => ());
 entry!(openttd_rust_ground_cargo_changed, cargo_changed => ());
 entry!(openttd_rust_ground_acceleration, acceleration => i32);
-entry!(openttd_rust_ground_chain_in_depot, chain_in_depot => bool);
+/// # Safety
+/// Services and shell must remain live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_ground_chain_in_depot_abi(
+    s: *const Services,
+    v: VehicleRef,
+) -> u8 {
+    u8::from(chain_in_depot(unsafe { &*s }, v))
+}
 entry!(openttd_rust_ground_crash, crash, flooded: bool => u32);
 entry!(openttd_rust_ground_weight, weight, full: bool => u16);
 entry!(openttd_rust_ground_acceleration_type, acceleration_type => u8);
@@ -827,7 +835,9 @@ fn reversing(s: &Services, v: VehicleRef) -> bool {
     let o = (s.resolve)(first);
     let direction = (s.vehicle.direction)(v);
     // SAFETY: the shared slope predicate gets live owners and immutable services.
-    unsafe { crate::road::openttd_rust_road_slope_pixel(v, first, o.road, direction, s.road) }
+    unsafe {
+        crate::road::openttd_rust_road_slope_pixel_abi(v, first, o.road, direction, s.road) != 0
+    }
 }
 
 crate::abi::layouts! {

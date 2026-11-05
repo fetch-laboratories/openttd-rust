@@ -152,6 +152,9 @@ pub unsafe extern "C" fn openttd_rust_sign_move(
 /// # Safety
 /// `si` is a live native sign.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_company_can_edit_sign(s: &Services, si: *const Sign) -> bool {
-    can_edit(s, si)
+pub unsafe extern "C" fn openttd_rust_company_can_edit_sign_abi(
+    s: &Services,
+    si: *const Sign,
+) -> u8 {
+    u8::from(can_edit(s, si))
 }

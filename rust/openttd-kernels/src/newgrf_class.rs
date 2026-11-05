@@ -107,7 +107,7 @@ unsafe fn available<T>(state: *mut Registry<T>, class: u16, index: u32, s: &Serv
         return true;
     }
     let spec = unsafe { get_spec(state, class, index) };
-    unsafe { crate::objects::openttd_rust_object_ever_available(s.object, spec.cast()) }
+    unsafe { crate::objects::openttd_rust_object_ever_available_abi(s.object, spec.cast()) != 0 }
 }
 unsafe fn insert<T>(state: *mut Registry<T>, class: u16, spec: *mut T, s: &Services<T>) {
     let index = unsafe {

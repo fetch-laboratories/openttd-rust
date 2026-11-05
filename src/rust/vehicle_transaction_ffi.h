@@ -43,7 +43,7 @@ struct OpenTTDVehicleSelectionServices {
 	void *(*first_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine_part);
 	bool (*multiheaded)(void *) noexcept OPENTTD_SERVICE_DEFAULT(multiheaded);
 	void *(*other_multihead)(void *) noexcept OPENTTD_SERVICE_DEFAULT(other_multihead);
-	void (*with_orders)(void *, bool (*)(void *, const Vehicle *), bool (*)(void *, const Order *), void (*)(void *, const Vehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(with_orders);
+	void (*with_orders)(void *, uint8_t (*)(void *, const Vehicle *), uint8_t (*)(void *, const Order *), void (*)(void *, const Vehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(with_orders);
 	void (*list_clear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(list_clear);
 	void (*list_push)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(list_push);
 };
@@ -93,8 +93,10 @@ void openttd_rust_vehicle_startstop(const OpenTTDVehicleCommonServices *, OpenTT
 void openttd_rust_vehicle_sell(const OpenTTDVehicleCommonServices *, OpenTTDCommandCost *, uint16_t, uint32_t, bool, bool, uint32_t);
 void openttd_rust_vehicle_selection_set(const OpenTTDVehicleSelectionServices *, void *, uint8_t, void *, void (*)(void *, uint32_t));
 void openttd_rust_vehicle_depot_list(const OpenTTDVehicleSelectionServices *, uint8_t, uint32_t, void *, void *, bool);
-bool openttd_rust_vehicle_generate_list(const OpenTTDVehicleSelectionServices *, void *, uint8_t, uint8_t, uint8_t, uint32_t);
-bool openttd_rust_vehicle_unique_name(const OpenTTDVehicleTransactionServices *, OpenTTDByteSpan);
+uint8_t openttd_rust_vehicle_generate_list_abi(const OpenTTDVehicleSelectionServices *, void *, uint8_t, uint8_t, uint8_t, uint32_t);
+extern "C++" inline bool openttd_rust_vehicle_generate_list(const OpenTTDVehicleSelectionServices *a0, void *a1, uint8_t a2, uint8_t a3, uint8_t a4, uint32_t a5) { return openttd_rust_vehicle_generate_list_abi(a0, a1, a2, a3, a4, a5) != 0; }
+uint8_t openttd_rust_vehicle_unique_name_abi(const OpenTTDVehicleTransactionServices *, OpenTTDByteSpan);
+extern "C++" inline bool openttd_rust_vehicle_unique_name(const OpenTTDVehicleTransactionServices *a0, OpenTTDByteSpan a1) { return openttd_rust_vehicle_unique_name_abi(a0, a1) != 0; }
 void openttd_rust_vehicle_rename(const OpenTTDVehicleTransactionServices *, OpenTTDCommandCost *, uint16_t, uint32_t, OpenTTDByteSpan);
 void openttd_rust_vehicle_service_interval(const OpenTTDVehicleTransactionServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint16_t, bool, bool);
 }

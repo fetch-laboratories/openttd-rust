@@ -66,7 +66,9 @@ struct OpenTTDIndustryPropertyContext {
 	uint32_t grfid;
 	uint8_t version, climate;
 };
-extern "C" bool openttd_rust_industry_properties(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, const OpenTTDGrfLoadingServices *, int32_t *);
-extern "C" bool openttd_rust_industry_tile_properties(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, const OpenTTDGrfLoadingServices *, int32_t *);
+extern "C" uint8_t openttd_rust_industry_properties_abi(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, const OpenTTDGrfLoadingServices *, int32_t *);
+extern "C++" inline bool openttd_rust_industry_properties(uint32_t a0, uint32_t a1, int32_t a2, ByteReader *a3, const OpenTTDIndustryPropertyContext *a4, const OpenTTDByteReaderServices *a5, const OpenTTDIndustryDefinitionServices *a6, const OpenTTDIndustryPropertyServices *a7, const OpenTTDGrfLoadingServices *a8, int32_t *a9) { return openttd_rust_industry_properties_abi(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) != 0; }
+extern "C" uint8_t openttd_rust_industry_tile_properties_abi(uint32_t, uint32_t, int32_t, ByteReader *, const OpenTTDIndustryPropertyContext *, const OpenTTDByteReaderServices *, const OpenTTDIndustryDefinitionServices *, const OpenTTDIndustryPropertyServices *, const OpenTTDGrfLoadingServices *, int32_t *);
+extern "C++" inline bool openttd_rust_industry_tile_properties(uint32_t a0, uint32_t a1, int32_t a2, ByteReader *a3, const OpenTTDIndustryPropertyContext *a4, const OpenTTDByteReaderServices *a5, const OpenTTDIndustryDefinitionServices *a6, const OpenTTDIndustryPropertyServices *a7, const OpenTTDGrfLoadingServices *a8, int32_t *a9) { return openttd_rust_industry_tile_properties_abi(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) != 0; }
 const OpenTTDIndustryPropertyServices &GetIndustryPropertyServices() noexcept;
 #endif

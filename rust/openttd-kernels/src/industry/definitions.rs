@@ -124,8 +124,8 @@ pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
     unsafe { allocate_tile_for(override_manager::tile(), local, grfid, substitute) }
 }
 
-unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> bool {
-    crate::newgrf_commons::industry_tile_check_valid_new_id(id)
+unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> u8 {
+    u8::from(crate::newgrf_commons::industry_tile_check_valid_new_id(id))
 }
 pub unsafe fn publish(
     manager: *mut override_manager::Manager,

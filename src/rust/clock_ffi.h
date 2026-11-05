@@ -47,26 +47,40 @@ OpenTTDEconomyMonth RustEconomyClockMonth() noexcept;
 OpenTTDCompanyYear RustCompanyClockYear() noexcept;
 const OpenTTDClockServices &GetRustClockServices() noexcept;
 extern "C" {
-bool openttd_rust_clock_industry_daily(const void *, void *) noexcept;
-bool openttd_rust_clock_industry_monthly(const void *, void *) noexcept;
-bool openttd_rust_clock_engine_daily(const void *, void *) noexcept;
-bool openttd_rust_clock_engine_monthly(const void *, void *) noexcept;
-bool openttd_rust_clock_station_monthly(const void *, void *) noexcept;
-bool openttd_rust_clock_subsidy_monthly(const void *, void *) noexcept;
-bool openttd_rust_clock_town_monthly(const void *, void *) noexcept;
-bool openttd_rust_clock_town_yearly(const void *, void *) noexcept;
-bool openttd_rust_clock_disaster_daily(const void *, void *) noexcept;
-bool openttd_rust_clock_economy_month(const void *, void *) noexcept;
-bool openttd_rust_clock_economy_calendar_month(const void *, void *) noexcept;
-bool openttd_rust_clock_company_yearly(const void *, void *) noexcept;
+uint8_t openttd_rust_clock_industry_daily_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_industry_daily(const void *a0, void *a1) noexcept { return openttd_rust_clock_industry_daily_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_industry_monthly_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_industry_monthly(const void *a0, void *a1) noexcept { return openttd_rust_clock_industry_monthly_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_engine_daily_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_engine_daily(const void *a0, void *a1) noexcept { return openttd_rust_clock_engine_daily_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_engine_monthly_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_engine_monthly(const void *a0, void *a1) noexcept { return openttd_rust_clock_engine_monthly_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_station_monthly_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_station_monthly(const void *a0, void *a1) noexcept { return openttd_rust_clock_station_monthly_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_subsidy_monthly_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_subsidy_monthly(const void *a0, void *a1) noexcept { return openttd_rust_clock_subsidy_monthly_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_town_monthly_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_town_monthly(const void *a0, void *a1) noexcept { return openttd_rust_clock_town_monthly_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_town_yearly_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_town_yearly(const void *a0, void *a1) noexcept { return openttd_rust_clock_town_yearly_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_disaster_daily_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_disaster_daily(const void *a0, void *a1) noexcept { return openttd_rust_clock_disaster_daily_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_economy_month_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_economy_month(const void *a0, void *a1) noexcept { return openttd_rust_clock_economy_month_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_economy_calendar_month_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_economy_calendar_month(const void *a0, void *a1) noexcept { return openttd_rust_clock_economy_calendar_month_abi(a0, a1) != 0; }
+uint8_t openttd_rust_clock_company_yearly_abi(const void *, void *) noexcept;
+extern "C++" inline bool openttd_rust_clock_company_yearly(const void *a0, void *a1) noexcept { return openttd_rust_clock_company_yearly_abi(a0, a1) != 0; }
 OpenTTDCalendarYMD openttd_rust_calendar_date_to_ymd(int32_t) noexcept;
 int32_t openttd_rust_calendar_ymd_to_date(int32_t, uint8_t, uint8_t) noexcept;
 OpenTTDCalendarYMD openttd_rust_economy_date_to_ymd(int32_t, bool) noexcept;
 int32_t openttd_rust_economy_ymd_to_date(int32_t, uint8_t, uint8_t, bool) noexcept;
 void openttd_rust_calendar_set_date(int32_t, uint16_t) noexcept;
 void openttd_rust_economy_set_date(int32_t, uint16_t, bool) noexcept;
-bool openttd_rust_calendar_valid(OpenTTDClockPeriod) noexcept;
-bool openttd_rust_economy_valid(OpenTTDEconomyClockPeriod) noexcept;
+uint8_t openttd_rust_calendar_valid_abi(OpenTTDClockPeriod) noexcept;
+extern "C++" inline bool openttd_rust_calendar_valid(OpenTTDClockPeriod a0) noexcept { return openttd_rust_calendar_valid_abi(a0) != 0; }
+uint8_t openttd_rust_economy_valid_abi(OpenTTDEconomyClockPeriod) noexcept;
+extern "C++" inline bool openttd_rust_economy_valid(OpenTTDEconomyClockPeriod a0) noexcept { return openttd_rust_economy_valid_abi(a0) != 0; }
 void openttd_rust_calendar_register(const OpenTTDNativeClockTimer *, const OpenTTDClockPeriod *, const RustClockBinding *) noexcept;
 void openttd_rust_economy_register(const OpenTTDNativeClockTimer *, const OpenTTDEconomyClockPeriod *, const RustClockBinding *) noexcept;
 void openttd_rust_calendar_unregister(const OpenTTDNativeClockTimer *, OpenTTDClockPeriod) noexcept;

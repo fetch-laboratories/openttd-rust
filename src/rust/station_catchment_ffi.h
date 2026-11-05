@@ -73,10 +73,14 @@ OpenTTDStationRect *openttd_rust_station_rect(OpenTTDStationService *);
 struct OpenTTDBitmapTileArea *openttd_rust_station_catchment_tiles(OpenTTDStationService *);
 OpenTTDStationList *openttd_rust_town_stations_near(OpenTTDTownState *);
 OpenTTDStationList *openttd_rust_industry_stations_near(OpenTTDIndustry *);
-bool openttd_rust_station_rect_empty(const OpenTTDStationRect *);
-bool openttd_rust_station_rect_pt_in_extended_rect(const OpenTTDStationRect *, int32_t, int32_t, int32_t);
-bool openttd_rust_station_rect_before_add_tile(OpenTTDStationRect *, uint32_t, uint8_t, const OpenTTDStationCatchmentServices *);
-bool openttd_rust_station_rect_before_add_rect(OpenTTDStationRect *, uint32_t, int32_t, int32_t, uint8_t, const OpenTTDStationCatchmentServices *);
+uint8_t openttd_rust_station_rect_empty_abi(const OpenTTDStationRect *);
+extern "C++" inline bool openttd_rust_station_rect_empty(const OpenTTDStationRect *a0) { return openttd_rust_station_rect_empty_abi(a0) != 0; }
+uint8_t openttd_rust_station_rect_pt_in_extended_rect_abi(const OpenTTDStationRect *, int32_t, int32_t, int32_t);
+extern "C++" inline bool openttd_rust_station_rect_pt_in_extended_rect(const OpenTTDStationRect *a0, int32_t a1, int32_t a2, int32_t a3) { return openttd_rust_station_rect_pt_in_extended_rect_abi(a0, a1, a2, a3) != 0; }
+uint8_t openttd_rust_station_rect_before_add_tile_abi(OpenTTDStationRect *, uint32_t, uint8_t, const OpenTTDStationCatchmentServices *);
+extern "C++" inline bool openttd_rust_station_rect_before_add_tile(OpenTTDStationRect *a0, uint32_t a1, uint8_t a2, const OpenTTDStationCatchmentServices *a3) { return openttd_rust_station_rect_before_add_tile_abi(a0, a1, a2, a3) != 0; }
+uint8_t openttd_rust_station_rect_before_add_rect_abi(OpenTTDStationRect *, uint32_t, int32_t, int32_t, uint8_t, const OpenTTDStationCatchmentServices *);
+extern "C++" inline bool openttd_rust_station_rect_before_add_rect(OpenTTDStationRect *a0, uint32_t a1, int32_t a2, int32_t a3, uint8_t a4, const OpenTTDStationCatchmentServices *a5) { return openttd_rust_station_rect_before_add_rect_abi(a0, a1, a2, a3, a4, a5) != 0; }
 void openttd_rust_station_recompute_catchment_for_all(const OpenTTDStationCatchmentServices *);
 void openttd_rust_station_remove_from_nearby_lists(BaseStation *, const OpenTTDStationCatchmentServices *);
 uint32_t openttd_rust_station_catchment_radius(BaseStation *, const OpenTTDStationCatchmentServices *);

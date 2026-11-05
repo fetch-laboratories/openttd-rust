@@ -267,7 +267,7 @@ impl<'a> Founding<'a> {
         if layout.0 == 2 || layout.0 == 3 {
             w::hit(w::TOWN_GRID);
         }
-        let previous = super::openttd_rust_town_generating_exchange(true);
+        let previous = super::openttd_rust_town_generating_exchange_abi(true) != 0;
         // SAFETY: Immediate canonical field writes; no borrow spans callbacks.
         unsafe {
             (*town.state).simulation.xy = tile.0;
@@ -361,7 +361,7 @@ impl<'a> Founding<'a> {
         engine.update_rate(u32::from(town.id.0));
         super::policy::update_max_pass(self.leaves, town.state);
         observed!((self.s.update_noise)());
-        super::openttd_rust_town_generating_exchange(previous);
+        super::openttd_rust_town_generating_exchange_abi(previous);
     }
     unsafe fn random_town(
         &self,
@@ -599,7 +599,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
 /// # Safety
 /// Tables and native stack frames remain live; result is writable. Only named progress services report cancellation; scratch drops before native rethrow.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_generate(
+pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     s: *const FoundingServices,
     road: *const crate::road_cmd::CommandContext,
     frame: *mut Frame,
@@ -608,7 +608,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
     has_number: bool,
     number: u32,
     result: *mut bool,
-) -> bool {
+) -> u8 {
     let mut f = unsafe { Founding::new(&*s) };
     f.road = road;
     let mut current = 0_u32;
@@ -627,7 +627,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
     w::hit(w::TOWN_ENTRIES);
     if !observed!((f.s.set_progress)(frame, total)) {
         w::hit(w::TOWN_CANCELLED);
-        return false;
+        return u8::from(false);
     }
     let mut town = observed!((f.names.next)(0));
     while !town.shell.is_null() {
@@ -652,7 +652,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
         let city = larger_towns != 0 && offset.wrapping_add(current) % u32::from(larger_towns) == 0;
         if !observed!((f.s.increase_progress)(frame)) {
             w::hit(w::TOWN_CANCELLED);
-            return false;
+            return u8::from(false);
         }
         if unsafe { f.generate_name(name_frame, &raw mut scratch, &raw mut parts) }
             && unsafe { f.random_town(20, parts, TownSize(3), city, layout) }.is_some()
@@ -670,7 +670,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
         unsafe {
             result.write(true);
         }
-        return true;
+        return u8::from(true);
     }
     w::hit(w::TOWN_FALLBACK);
     let success = unsafe { f.generate_name(name_frame, std::ptr::null_mut(), &raw mut parts) }
@@ -693,7 +693,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
     unsafe {
         result.write(success);
     }
-    true
+    u8::from(true)
 }
 /// # Safety
 /// Tables, command cost and input bytes remain live under the game mutex. Pool resolution supplies the sole owner; mutation ends before native callbacks.

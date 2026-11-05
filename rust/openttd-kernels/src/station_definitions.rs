@@ -457,7 +457,7 @@ unsafe fn road_change(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_change_info(
+pub unsafe extern "C" fn openttd_rust_station_change_info_abi(
     s: *const Services,
     action2: *const Action2Services,
     loading: *const LoadingServices,
@@ -468,33 +468,35 @@ pub unsafe extern "C" fn openttd_rust_station_change_info(
     native: *mut ByteReader,
     sequence: *mut Sequence,
     output: *mut u8,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*s };
     let mut reader = unsafe { Reader::new(native, &*s.reader) };
-    match unsafe {
-        station_change(
-            s,
-            &*action2,
-            &*loading,
-            file,
-            first,
-            last,
-            prop,
-            sequence,
-            &mut reader,
-        )
-    } {
-        Ok(value) => {
-            unsafe {
-                output.write(value as u8);
+    u8::from(
+        match unsafe {
+            station_change(
+                s,
+                &*action2,
+                &*loading,
+                file,
+                first,
+                last,
+                prop,
+                sequence,
+                &mut reader,
+            )
+        } {
+            Ok(value) => {
+                unsafe {
+                    output.write(value as u8);
+                }
+                true
             }
-            true
-        }
-        Err(_) => false,
-    }
+            Err(_) => false,
+        },
+    )
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_roadstop_change_info(
+pub unsafe extern "C" fn openttd_rust_roadstop_change_info_abi(
     s: *const Services,
     file: *mut c_void,
     first: u32,
@@ -502,18 +504,20 @@ pub unsafe extern "C" fn openttd_rust_roadstop_change_info(
     prop: u32,
     native: *mut ByteReader,
     output: *mut u8,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*s };
     let mut reader = unsafe { Reader::new(native, &*s.reader) };
-    match unsafe { road_change(s, file, first, last, prop, &mut reader) } {
-        Ok(value) => {
-            unsafe {
-                output.write(value as u8);
+    u8::from(
+        match unsafe { road_change(s, file, first, last, prop, &mut reader) } {
+            Ok(value) => {
+                unsafe {
+                    output.write(value as u8);
+                }
+                true
             }
-            true
-        }
-        Err(_) => false,
-    }
+            Err(_) => false,
+        },
+    )
 }
 
 #[unsafe(no_mangle)]

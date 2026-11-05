@@ -212,12 +212,14 @@ uint32_t openttd_rust_fleet_sum_vehicles(const OpenTTDFleetGroupServices *, uint
 uint32_t openttd_rust_fleet_sum_min_age(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint8_t);
 int64_t openttd_rust_fleet_sum_profit(const OpenTTDFleetGroupServices *, uint8_t, uint16_t, uint8_t);
 void openttd_rust_fleet_remove_company_groups(const OpenTTDFleetGroupServices *, uint8_t);
-bool openttd_rust_fleet_contains(const OpenTTDFleetGroupServices *, uint16_t, uint16_t);
+uint8_t openttd_rust_fleet_contains_abi(const OpenTTDFleetGroupServices *, uint16_t, uint16_t);
+extern "C++" inline bool openttd_rust_fleet_contains(const OpenTTDFleetGroupServices *a0, uint16_t a1, uint16_t a2) { return openttd_rust_fleet_contains_abi(a0, a1, a2) != 0; }
 uint16_t openttd_rust_fleet_replacement(const OpenTTDFleetGroupServices *, void *, uint16_t, uint16_t, bool *);
 uint32_t openttd_rust_fleet_add_replacement(const OpenTTDFleetGroupServices *, void **, uint16_t, uint16_t, uint16_t, bool, uint32_t);
 uint32_t openttd_rust_fleet_remove_replacement(const OpenTTDFleetGroupServices *, void **, uint16_t, uint16_t, uint32_t);
 void openttd_rust_fleet_remove_all_replacements(const OpenTTDFleetGroupServices *, void **);
-bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint8_t);
+uint8_t openttd_rust_fleet_valid_abi(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint16_t, uint16_t, uint8_t);
+extern "C++" inline bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionServices *a0, const OpenTTDFleetGroupServices *a1, uint16_t a2, uint16_t a3, uint8_t a4) { return openttd_rust_fleet_valid_abi(a0, a1, a2, a3, a4) != 0; }
 void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, const OpenTTDFleetCosts *, uint32_t, uint32_t);
 uint32_t openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint16_t, uint16_t, bool);
 void openttd_rust_fleet_pending_clear();
