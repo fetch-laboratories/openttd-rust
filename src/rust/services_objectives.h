@@ -65,7 +65,6 @@ inline uint16_t RustObjectives_entry_allocate(uint8_t table, int64_t rating, uin
 inline bool RustObjectives_vehicle_valid(uint32_t id) noexcept { return Vehicle::IsValidID(VehicleID(id)); }
 inline bool RustObjectives_text_empty(const EncodedString * text) noexcept { return text->empty(); }
 inline void RustObjectives_text_assign(EncodedString * to, const EncodedString * text) noexcept { *to = *text; }
-inline void RustObjectives_window_data(uint16_t cls, uint32_t number, int32_t data) noexcept { InvalidateWindowData(WindowClass(cls), number, data); }
 inline void RustObjectives_window_close(uint16_t cls, uint32_t number) noexcept { CloseWindowById(WindowClass(cls), number); }
 inline void RustObjectives_question_show(uint16_t id, uint8_t type, uint32_t buttons, const EncodedString * text) noexcept { ShowGoalQuestion(id, GoalQuestionType(type), buttons, *text); }
 inline void RustObjectives_story_show(uint8_t company, uint16_t page) noexcept { ShowStoryBook(CompanyID(company), StoryPageID(page), true); }
@@ -126,7 +125,7 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.vehicle_valid = RustObjectives_vehicle_valid,
 		.text_empty = RustObjectives_text_empty,
 		.text_assign = RustObjectives_text_assign,
-		.window_data = RustObjectives_window_data,
+		.window_data = RustInvalidateWindowData,
 		.window_classes = RustInvalidateWindowClassesData,
 		.window_close = RustObjectives_window_close,
 		.question_show = RustObjectives_question_show,

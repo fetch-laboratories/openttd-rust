@@ -605,7 +605,6 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 			Debug(grf, 0, "NewGRF {:08X} not found; checksum {}", std::byteswap(c.grfid), FormatArrayAsHex(c.md5sum));
 			return false;
 		},
-		.client_list_changed = []() noexcept { InvalidateWindowData(WC_CLIENT_LIST, 0); },
 		.client_name = RustNetworkClientName,
 		.debug_auth_game = []() noexcept { Debug(net, 9, "Client::status = AUTH_GAME"); },
 		.debug_auth_request = []() noexcept { Debug(net, 9, "Client::Receive_SERVER_AUTH_REQUEST()"); },

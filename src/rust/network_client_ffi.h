@@ -11,7 +11,6 @@ struct OpenTTDNetworkClientServices {
 	const NetworkAuthenticationHandler *(*auth)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth);
 	void (*auth_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(auth_create);
 	bool (*check_grf)(uint32_t, const uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(check_grf);
-	void (*client_list_changed)() noexcept OPENTTD_SERVICE_DEFAULT(client_list_changed);
 	OpenTTDByteSpan (*client_name)() noexcept OPENTTD_SERVICE_DEFAULT(client_name);
 	void (*debug_auth_game)() noexcept OPENTTD_SERVICE_DEFAULT(debug_auth_game);
 	void (*debug_auth_request)() noexcept OPENTTD_SERVICE_DEFAULT(debug_auth_request);

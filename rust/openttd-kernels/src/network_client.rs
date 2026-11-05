@@ -32,7 +32,6 @@ pub struct Services {
         extern "C" fn(*mut c_void) -> *const crate::network_crypto::NetworkAuthenticationHandler,
     pub auth_create: extern "C" fn(*mut c_void),
     pub check_grf: extern "C" fn(u32, *const u8) -> bool,
-    pub client_list_changed: extern "C" fn(),
     pub client_name: extern "C" fn() -> crate::services::ByteSpan,
     pub debug_auth_game: extern "C" fn(),
     pub debug_auth_request: extern "C" fn(),
@@ -113,7 +112,6 @@ crate::abi::layouts! {
         auth,
         auth_create,
         check_grf,
-        client_list_changed,
         client_name,
         debug_auth_game,
         debug_auth_request,
@@ -520,7 +518,7 @@ pub(crate) fn receive_error_quit(
         (s.leave_error)(info, unsafe { packet::recv_uint8(p, f.packet) });
         (s.delete_info)(info);
     }
-    (s.client_list_changed)();
+    ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
     NETWORK_RECV_STATUS_OKAY
 }
 
@@ -542,7 +540,7 @@ pub(crate) fn receive_quit(
         (s.leave)(info);
         (s.delete_info)(info);
     }
-    (s.client_list_changed)();
+    ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
     NETWORK_RECV_STATUS_OKAY
 }
 
@@ -561,7 +559,7 @@ pub(crate) fn receive_join(
     if !info.is_null() {
         (s.join)(info);
     }
-    (s.client_list_changed)();
+    ((f.command.company.objectives)().window_data)(crate::window_type::WC_CLIENT_LIST, 0, 0);
     NETWORK_RECV_STATUS_OKAY
 }
 
