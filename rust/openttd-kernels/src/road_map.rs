@@ -233,6 +233,26 @@ impl crate::map_func::World<'_> {
         self.asserted(|m| get_road_type(m, t, crate::services::RoadTramType(tram)))
             .0
     }
+    /// `GetRoadOwner`, with its `MayHaveRoad` assertion.
+    pub(crate) fn road_owner(&self, t: u32, tram: bool) -> u8 {
+        self.asserted(|m| require_may_have_road(m, t));
+        if !tram {
+            let field = if self.is_normal_road_tile(t) {
+                Self::byte(self.types.m1(t))
+            } else {
+                Self::byte(self.types.m7(t))
+            };
+            return field & 0x1F;
+        }
+        /* Trams don't need OWNER_TOWN, and remapping OWNER_NONE
+         * to OWNER_TOWN makes it use one bit less */
+        let o = (Self::byte(self.types.m3(t)) >> 4) & 0xF;
+        if o == crate::company_type::OWNER_TOWN {
+            crate::company_type::OWNER_NONE
+        } else {
+            o
+        }
+    }
 }
 
 /// `HasTownOwnedRoad`, preserving the short circuit before `GetRoadOwner`.

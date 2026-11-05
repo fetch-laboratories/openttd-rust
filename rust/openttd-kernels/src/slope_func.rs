@@ -159,6 +159,14 @@ pub fn get_highest_slope_corner(s: u8) -> u8 {
         _ => unreachable!("native highest slope corner"),
     }
 }
+/// `IsValidCorner`: `CORNER_W` to `CORNER_N`.
+pub const fn is_valid_corner(c: u8) -> bool {
+    c < 4
+}
+/// `SteepSlope`.
+pub fn steep_slope(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    SLOPE_STEEP | slope_with_three_corners_raised(opposite_corner(c), check)
+}
 /// `OppositeCorner`.
 pub const fn opposite_corner(c: u8) -> u8 {
     c ^ 2
