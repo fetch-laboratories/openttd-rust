@@ -143,7 +143,7 @@ ScriptTileList_StationType::ScriptTileList_StationType(StationID station_id, Scr
 {
 	if (!ScriptStation::IsValidStation(station_id)) return;
 
-	const StationRect *rect = &::Station::Get(station_id)->GetRect();
+	const OpenTTDStationRect *rect = &std::as_const(*::Station::Get(station_id)).GetRect();
 
 	EnumBitSet<StationType, uint8_t> station_types = {};
 	/* Convert ScriptStation::StationType to ::StationType, but do it in a
@@ -154,7 +154,7 @@ ScriptTileList_StationType::ScriptTileList_StationType(StationID station_id, Scr
 	if ((station_type & ScriptStation::STATION_AIRPORT) != 0)    station_types.Set({::StationType::Airport, ::StationType::Oilrig});
 	if ((station_type & ScriptStation::STATION_DOCK) != 0)       station_types.Set({::StationType::Dock, ::StationType::Oilrig});
 
-	TileArea ta(::TileXY(rect->left, rect->top), rect->Width(), rect->Height());
+	TileArea ta(::TileXY(rect->left, rect->top), rect->right - rect->left + 1, rect->bottom - rect->top + 1);
 	for (TileIndex cur_tile : ta) {
 		if (!::IsTileType(cur_tile, MP_STATION)) continue;
 		if (::GetStationIndex(cur_tile) != station_id) continue;

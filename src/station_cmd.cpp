@@ -162,7 +162,7 @@ void Station::UpdateVirtCoord()
 	Point pt = RemapCoords2(TileX(this->GetXY()) * TILE_SIZE, TileY(this->GetXY()) * TILE_SIZE);
 
 	pt.y -= 32 * ZOOM_BASE;
-	if (this->GetFacilities().Test(StationFacility::Airport) && this->GetAirport().type == AT_OILRIG) pt.y -= 16 * ZOOM_BASE;
+	if (this->GetFacilities().Test(StationFacility::Airport) && this->GetAirport().Record().type == AT_OILRIG) pt.y -= 16 * ZOOM_BASE;
 
 	if (this->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(this->index));
 
@@ -201,7 +201,7 @@ void ClearAllStationCachedNames()
  */
 CargoTypes GetAcceptanceMask(const Station *st)
 {
-	return openttd_rust_station_acceptance_mask(&st->Record());
+	return openttd_rust_station_acceptance_mask(const_cast<OpenTTDStationRecord *>(&st->Record()));
 }
 
 /**

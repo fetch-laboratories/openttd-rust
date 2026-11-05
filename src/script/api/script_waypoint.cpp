@@ -19,7 +19,7 @@
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const Waypoint *wp = ::Waypoint::GetIfValid(waypoint_id);
-	return wp != nullptr && (wp->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || wp->owner == OWNER_NONE);
+	return wp != nullptr && (wp->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || wp->GetOwner() == OWNER_NONE);
 }
 
 /* static */ StationID ScriptWaypoint::GetWaypointID(TileIndex tile)

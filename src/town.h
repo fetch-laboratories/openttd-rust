@@ -363,13 +363,20 @@ uint8_t GetTownActionCost(TownAction action);
  * @tparam T The type/class to make a default name for
  * @param obj The object/instance we want to find the name for
  */
+/** The town of a depot, or of a waypoint's shared record. */
+template <class T> inline Town *&DefaultNameTown(T *obj) { if constexpr (requires { obj->Record().town; }) return obj->Record().town; else return obj->town; }
+/** The town consecutive number of a depot, or of a waypoint's shared record. */
+template <class T> inline uint16_t &DefaultNameNumber(T *obj) { if constexpr (requires { obj->Record().town_cn; }) return obj->Record().town_cn; else return obj->town_cn; }
+/** The location of a depot or waypoint. */
+template <class T> inline TileIndex DefaultNameTile(T *obj) { if constexpr (requires { obj->GetXY(); }) return obj->GetXY(); else return obj->xy; }
+
 template <class T>
 void MakeDefaultName(T *obj)
 {
 	/* We only want to set names if it hasn't been set before, or when we're calling from afterload. */
-	assert(obj->name.empty() || obj->Record().town_cn == UINT16_MAX);
+	assert(obj->name.empty() || DefaultNameNumber(obj) == UINT16_MAX);
 
-	obj->Record().town = ClosestTownFromTile(obj->GetXY(), UINT_MAX);
+	DefaultNameTown(obj) = ClosestTownFromTile(DefaultNameTile(obj), UINT_MAX);
 
 	/* Find first unused number belonging to this town. This can never fail,
 	 * as long as there can be at most 65535 waypoints/depots in total.
@@ -393,9 +400,9 @@ void MakeDefaultName(T *obj)
 		/* check only valid waypoints... */
 		if (lobj != nullptr && obj != lobj) {
 			/* only objects within the same city and with the same type */
-			if (lobj->Record().town == obj->Record().town && lobj->IsOfType(obj)) {
+			if (DefaultNameTown(lobj) == DefaultNameTown(obj) && lobj->IsOfType(obj)) {
 				/* if lobj->town_cn < next, uint will overflow to '+inf' */
-				uint i = (uint)lobj->Record().town_cn - next;
+				uint i = (uint)DefaultNameNumber(lobj) - next;
 
 				if (i < 32) {
 					SetBit(used, i); // update bitmap
@@ -419,7 +426,7 @@ void MakeDefaultName(T *obj)
 		if (cid == T::GetPoolSize()) cid = 0; // wrap to zero...
 	} while (cid != idx);
 
-	obj->Record().town_cn = (uint16_t)next; // set index...
+	DefaultNameNumber(obj) = (uint16_t)next; // set index...
 }
 
 /*

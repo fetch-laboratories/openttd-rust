@@ -81,7 +81,7 @@ static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32
 {
 	const Station *st = OpenTTDNextStation(from);
 	return st == nullptr ? OpenTTDDisasterStationTarget{.next = UINT32_MAX, .tile = INVALID_TILE.base(), .airport_type = 0} :
-		OpenTTDDisasterStationTarget{.next = uint32_t{RustBaseStationID(st)} + 1, .tile = RustStationAirportTile(st), .airport_type = st->GetAirport().type};
+		OpenTTDDisasterStationTarget{.next = uint32_t{RustBaseStationID(st)} + 1, .tile = RustStationAirportTile(st), .airport_type = st->GetAirport().Record().type};
 }
 static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
 {

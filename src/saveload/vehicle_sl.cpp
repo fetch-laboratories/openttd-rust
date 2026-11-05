@@ -166,7 +166,7 @@ void UpdateOldAircraft()
 {
 	/* set airport_flags to 0 for all airports just to be sure */
 	for (Station *st : Station::Iterate()) {
-		st->GetAirport().blocks = {}; // reset airport
+		st->GetAirport().SetBlocks({}); // reset airport
 	}
 
 	for (Aircraft *a : Aircraft::Iterate()) {

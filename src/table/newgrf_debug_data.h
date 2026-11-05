@@ -533,26 +533,26 @@ static const NIVariable _niv_airports[] = {
 };
 
 class NIHAirport : public NIHelper {
-	bool IsInspectable(uint index) const override        { return AirportSpec::Get(Station::Get(index)->GetAirport().type)->grf_prop.HasGrfFile(); }
+	bool IsInspectable(uint index) const override        { return AirportSpec::Get(Station::Get(index)->GetAirport().Record().type)->grf_prop.HasGrfFile(); }
 	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Station::Get(index)->Record().town->index); }
 	const void *GetInstance(uint index)const override    { return Station::Get(index); }
-	const void *GetSpec(uint index) const override       { return AirportSpec::Get(Station::Get(index)->GetAirport().type); }
-	std::string GetName(uint index) const override       { return GetString(STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT, STR_STATION_NAME, index, Station::Get(index)->GetAirport().tile); }
-	uint32_t GetGRFID(uint index) const override         { return (this->IsInspectable(index)) ? AirportSpec::Get(Station::Get(index)->GetAirport().type)->grf_prop.grfid : 0; }
-	std::span<const BadgeID> GetBadges(uint index) const override { return AirportSpec::Get(Station::Get(index)->GetAirport().type)->badges; }
+	const void *GetSpec(uint index) const override       { return AirportSpec::Get(Station::Get(index)->GetAirport().Record().type); }
+	std::string GetName(uint index) const override       { return GetString(STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT, STR_STATION_NAME, index, Station::Get(index)->GetAirport().GetTile()); }
+	uint32_t GetGRFID(uint index) const override         { return (this->IsInspectable(index)) ? AirportSpec::Get(Station::Get(index)->GetAirport().Record().type)->grf_prop.grfid : 0; }
+	std::span<const BadgeID> GetBadges(uint index) const override { return AirportSpec::Get(Station::Get(index)->GetAirport().Record().type)->badges; }
 
 	uint Resolve(uint index, uint var, uint param, bool &avail) const override
 	{
 		Station *st = Station::Get(index);
-		AirportResolverObject ro(st->GetAirport().tile, st, AirportSpec::Get(st->GetAirport().type), st->GetAirport().layout);
+		AirportResolverObject ro(st->GetAirport().GetTile(), st, AirportSpec::Get(st->GetAirport().Record().type), st->GetAirport().Record().layout);
 		return ro.GetScope(VSG_SCOPE_SELF)->GetVariable(var, param, avail);
 	}
 
 	const std::span<int32_t> GetPSA(uint index, uint32_t) const override
 	{
 		const Station *st = (const Station *)this->GetInstance(index);
-		if (st->GetAirport().psa == nullptr) return {};
-		return st->GetAirport().psa->storage;
+		if (st->GetAirport().Record().psa == nullptr) return {};
+		return st->GetAirport().Record().psa->storage;
 	}
 };
 

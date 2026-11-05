@@ -1430,7 +1430,7 @@ struct StationViewWindow : public Window {
 		this->SetWidgetDisabledState(WID_SV_SHIPS,    !st->GetFacilities().Test(StationFacility::Dock));
 		this->SetWidgetDisabledState(WID_SV_PLANES,   !st->GetFacilities().Test(StationFacility::Airport));
 		this->SetWidgetDisabledState(WID_SV_CLOSE_AIRPORT, !st->GetFacilities().Test(StationFacility::Airport) || st->GetOwner() != _local_company || st->GetOwner() == OWNER_NONE); // Also consider SE, where _local_company == OWNER_NONE
-		this->SetWidgetLoweredState(WID_SV_CLOSE_AIRPORT, st->GetFacilities().Test(StationFacility::Airport) && st->GetAirport().blocks.Test(AirportBlock::AirportClosed));
+		this->SetWidgetLoweredState(WID_SV_CLOSE_AIRPORT, st->GetFacilities().Test(StationFacility::Airport) && st->GetAirport().GetBlocks().Test(AirportBlock::AirportClosed));
 
 		extern const Station *_viewport_highlight_station;
 		this->SetWidgetDisabledState(WID_SV_CATCHMENT, st->GetFacilities().None());

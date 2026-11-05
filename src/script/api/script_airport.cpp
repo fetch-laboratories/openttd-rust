@@ -124,7 +124,7 @@
 
 	if (!ScriptStation::HasStationType(station_id, ScriptStation::STATION_AIRPORT)) return AT_INVALID;
 
-	return (AirportType)::Station::Get(station_id)->GetAirport().type;
+	return (AirportType)::Station::Get(station_id)->GetAirport().Record().type;
 }
 
 

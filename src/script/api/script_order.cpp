@@ -269,10 +269,10 @@ static ScriptOrder::OrderPosition RealOrderPositionToScriptOrderPosition(Vehicle
 					if (IsTileType(t, MP_STATION) && (IsDock(t) || IsOilRig(t)) && GetStationIndex(t) == st->index) return t;
 				}
 			} else if (st->GetBusStops() != nullptr) {
-				return st->GetBusStops()->xy;
+				return st->GetBusStops()->GetXY();
 			} else if (st->GetTruckStops() != nullptr) {
-				return st->GetTruckStops()->xy;
-			} else if (st->GetAirport().tile != INVALID_TILE) {
+				return st->GetTruckStops()->GetXY();
+			} else if (st->GetAirport().GetTile() != INVALID_TILE) {
 				for (TileIndex tile : st->GetAirport()) {
 					if (st->TileBelongsToAirport(tile) && !::IsHangar(tile)) return tile;
 				}
@@ -699,11 +699,11 @@ static void _DoCommandReturnSetOrderFlags(class ScriptInstance &instance)
 	if (vehicle_type == ScriptVehicle::VT_AIR) {
 		if (ScriptTile::IsStationTile(origin_tile)) {
 			const Station *orig_station = ::Station::GetByTile(origin_tile);
-			if (orig_station != nullptr && orig_station->GetAirport().tile != INVALID_TILE) origin_tile = orig_station->airport.tile;
+			if (orig_station != nullptr && orig_station->GetAirport().GetTile() != INVALID_TILE) origin_tile = orig_station->GetAirport().tile;
 		}
 		if (ScriptTile::IsStationTile(dest_tile)) {
 			const Station *dest_station = ::Station::GetByTile(dest_tile);
-			if (dest_station != nullptr && dest_station->GetAirport().tile != INVALID_TILE) dest_tile = dest_station->airport.tile;
+			if (dest_station != nullptr && dest_station->GetAirport().GetTile() != INVALID_TILE) dest_tile = dest_station->GetAirport().tile;
 		}
 
 		return ScriptMap::DistanceSquare(origin_tile, dest_tile);

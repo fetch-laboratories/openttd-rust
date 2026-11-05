@@ -310,7 +310,7 @@ static OpenTTDAircraftGeometry OPENTTD_RUST_CALL Aircraft_geometry(const OpenTTD
 	const Station *st = StationOf(s);
 	const uint32_t tile = RustStationAirportTile(st);
 	if (tile == INVALID_TILE.base()) return {.tile = RustStationLocation(st), .rotation = 0, .width = 1, .height = 1, .airport = false};
-	return {.tile = tile, .rotation = st->GetAirport().rotation, .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
+	return {.tile = tile, .rotation = st->GetAirport().GetRotation(), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
 }
 static uint64_t OPENTTD_RUST_CALL Aircraft_layout_blocks(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].blocks.base(); }
 static uint8_t OPENTTD_RUST_CALL Aircraft_layout_next_position(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next_position; }

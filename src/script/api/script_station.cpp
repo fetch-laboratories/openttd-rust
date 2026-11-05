@@ -23,7 +23,7 @@
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const Station *st = ::Station::GetIfValid(station_id);
-	return st != nullptr && (st->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || st->owner == OWNER_NONE);
+	return st != nullptr && (st->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || st->GetOwner() == OWNER_NONE);
 }
 
 /* static */ StationID ScriptStation::GetStationID(TileIndex tile)
@@ -151,7 +151,7 @@ template <bool Tfrom, bool Tvia>
 {
 	if (!ScriptStation::HasCargoRating(station_id, cargo_type)) return -1;
 
-	return ::ToPercent8(::Station::Get(station_id)->GetGoods(cargo_type).rating);
+	return ::ToPercent8(::Station::Get(station_id)->GetGoods(cargo_type).Record().rating);
 }
 
 /* static */ SQInteger ScriptStation::GetCoverageRadius(ScriptStation::StationType station_type)
@@ -233,7 +233,7 @@ template <bool Tfrom, bool Tvia>
 	EnforcePrecondition(false, IsValidStation(station_id));
 	EnforcePrecondition(false, HasStationType(station_id, STATION_AIRPORT));
 
-	return ::Station::Get(station_id)->GetAirport().blocks.Test(AirportBlock::AirportClosed);
+	return ::Station::Get(station_id)->GetAirport().GetBlocks().Test(AirportBlock::AirportClosed);
 }
 
 /* static */ bool ScriptStation::OpenCloseAirport(StationID station_id)

@@ -280,9 +280,9 @@ static void InitializeWindowsAndCaches()
 		}
 	}
 	for (Station *s : Station::Iterate()) {
-		if (s->GetAirport().psa != nullptr) {
-			s->GetAirport().psa->feature = GSF_AIRPORTS;
-			s->GetAirport().psa->tile = s->GetAirport().tile;
+		if (s->GetAirport().Record().psa != nullptr) {
+			s->GetAirport().Record().psa->feature = GSF_AIRPORTS;
+			s->GetAirport().Record().psa->tile = s->GetAirport().GetTile();
 		}
 	}
 	for (Town *t : Town::Iterate()) {
@@ -691,8 +691,8 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_106)) {
 		/* no station is determined by 'tile == INVALID_TILE' now (instead of '0') */
 		for (Station *st : Station::Iterate()) {
-			if (st->GetAirport().tile       == 0) st->GetAirport().tile = INVALID_TILE;
-			if (st->GetTrainStation().tile == 0) st->train_station.tile   = INVALID_TILE;
+			if (st->GetAirport().GetTile()       == 0) st->GetAirport().Record().area.tile = TileIndex(INVALID_TILE).base();
+			if (st->GetTrainStation().tile == 0) st->Record().train_station.tile = TileIndex(INVALID_TILE).base();
 		}
 
 		/* the same applies to Company::location_of_HQ */
@@ -966,9 +966,11 @@ bool AfterLoadGame()
 							 * internal data structure. */
 							RoadStop *rs = new RoadStop(t);
 
-							RoadStop **head =
-								IsTruckStop(t) ? &st->GetTruckStops() : &st->GetBusStops();
-							*head = rs;
+							if (IsTruckStop(t)) {
+								st->SetTruckStops(rs);
+							} else {
+								st->SetBusStops(rs);
+							}
 						}
 						break;
 
@@ -978,7 +980,7 @@ bool AfterLoadGame()
 						 * DeleteOilRig asserts on the correct type, and
 						 * setting it unconditionally does not hurt.
 						 */
-						Station::GetByTile(t)->GetAirport().type = AT_OILRIG;
+						Station::GetByTile(t)->GetAirport().Record().type = AT_OILRIG;
 
 						/* Very old savegames sometimes have phantom oil rigs, i.e.
 						 * an oil rig which got shut down, but not completely removed from
@@ -2463,17 +2465,17 @@ bool AfterLoadGame()
 	/* Oilrig was moved from id 15 to 9. */
 	if (IsSavegameVersionBefore(SLV_139)) {
 		for (Station *st : Station::Iterate()) {
-			if (st->GetAirport().tile != INVALID_TILE && st->GetAirport().type == 15) {
-				st->GetAirport().type = AT_OILRIG;
+			if (st->GetAirport().GetTile() != INVALID_TILE && st->GetAirport().Record().type == 15) {
+				st->GetAirport().Record().type = AT_OILRIG;
 			}
 		}
 	}
 
 	if (IsSavegameVersionBefore(SLV_140)) {
 		for (Station *st : Station::Iterate()) {
-			if (st->GetAirport().tile != INVALID_TILE) {
-				st->GetAirport().w = st->GetAirport().GetSpec()->size_x;
-				st->GetAirport().h = st->GetAirport().GetSpec()->size_y;
+			if (st->GetAirport().GetTile() != INVALID_TILE) {
+				st->GetAirport().Record().area.w = st->GetAirport().GetSpec()->size_x;
+				st->GetAirport().Record().area.h = st->GetAirport().GetSpec()->size_y;
 			}
 		}
 	}
@@ -2498,7 +2500,7 @@ bool AfterLoadGame()
 
 	if (IsSavegameVersionBefore(SLV_145)) {
 		for (Station *st : Station::Iterate()) {
-			if (st->GetFacilities().Test(StationFacility::Airport)) st->GetAirport().rotation = DIR_N;
+			if (st->GetFacilities().Test(StationFacility::Airport)) st->GetAirport().SetRotation(DIR_N);
 		}
 	}
 
@@ -2850,22 +2852,22 @@ bool AfterLoadGame()
 		if (!IsSavegameVersionBefore(SLV_145)) {
 			for (Station *st : Station::Iterate()) {
 				if (!st->GetFacilities().Test(StationFacility::Airport)) continue;
-				assert(st->GetAirport().psa != nullptr);
+				assert(st->GetAirport().Record().psa != nullptr);
 
 				/* Check if the old storage was empty. */
 				bool is_empty = true;
-				for (uint i = 0; i < sizeof(st->GetAirport().psa->storage); i++) {
-					if (st->GetAirport().psa->GetValue(i) != 0) {
+				for (uint i = 0; i < sizeof(st->GetAirport().Record().psa->storage); i++) {
+					if (st->GetAirport().Record().psa->GetValue(i) != 0) {
 						is_empty = false;
 						break;
 					}
 				}
 
 				if (!is_empty) {
-					st->GetAirport().psa->grfid = _airport_mngr.GetGRFID(st->GetAirport().type);
+					st->GetAirport().Record().psa->grfid = _airport_mngr.GetGRFID(st->GetAirport().Record().type);
 				} else {
-					delete st->GetAirport().psa;
-					st->GetAirport().psa = nullptr;
+					delete st->GetAirport().Record().psa;
+					st->GetAirport().Record().psa = nullptr;
 
 				}
 			}

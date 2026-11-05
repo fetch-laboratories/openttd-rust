@@ -1028,8 +1028,8 @@ static TileHighlightType GetTileHighlightType(TileIndex t)
 
 	if (_viewport_highlight_station_rect != nullptr) {
 		if (IsTileType(t, MP_STATION) && GetStationIndex(t) == _viewport_highlight_station_rect->index) return THT_WHITE;
-		const StationRect *r = &_viewport_highlight_station_rect->GetRect();
-		if (r->PtInExtendedRect(TileX(t), TileY(t))) return THT_BLUE;
+		const OpenTTDStationRect *r = &std::as_const(*_viewport_highlight_station_rect).GetRect();
+		if (openttd_rust_station_rect_pt_in_extended_rect(r, TileX(t), TileY(t), 0)) return THT_BLUE;
 	}
 
 	if (_viewport_highlight_waypoint != nullptr) {
@@ -1038,8 +1038,8 @@ static TileHighlightType GetTileHighlightType(TileIndex t)
 
 	if (_viewport_highlight_waypoint_rect != nullptr) {
 		if (IsTileType(t, MP_STATION) && GetStationIndex(t) == _viewport_highlight_waypoint_rect->index) return THT_WHITE;
-		const StationRect *r = &_viewport_highlight_waypoint_rect->GetRect();
-		if (r->PtInExtendedRect(TileX(t), TileY(t))) return THT_BLUE;
+		const OpenTTDStationRect *r = &std::as_const(*_viewport_highlight_waypoint_rect).GetRect();
+		if (openttd_rust_station_rect_pt_in_extended_rect(r, TileX(t), TileY(t), 0)) return THT_BLUE;
 	}
 
 	if (_viewport_highlight_town != nullptr) {

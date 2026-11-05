@@ -238,7 +238,6 @@ struct Airport {
 	inline operator TileArea() const { return this->GetArea(); }
 	inline OrthogonalTileIterator begin() const { return this->GetArea().begin(); }
 	inline OrthogonalTileIterator end() const { return this->GetArea().end(); }
-	inline bool Contains(TileIndex tile) const { return this->GetArea().Contains(tile); }
 	inline void Clear() { TileArea area = this->GetArea(); area.Clear(); this->SetArea(area); } ///< Clear the airport's tile area.
 
 	/**

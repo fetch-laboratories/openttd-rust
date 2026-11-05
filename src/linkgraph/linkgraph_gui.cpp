@@ -78,7 +78,7 @@ void LinkGraphOverlay::RebuildCache()
 	this->GetWidgetDpi(&dpi);
 
 	for (const Station *sta : Station::Iterate()) {
-		if (sta->GetRect().IsEmpty()) continue;
+		if (openttd_rust_station_rect_empty(&sta->GetRect())) continue;
 
 		Point pta = this->GetStationMiddle(sta);
 
@@ -88,10 +88,10 @@ void LinkGraphOverlay::RebuildCache()
 		uint supply = 0;
 		for (CargoType cargo : SetCargoBitIterator(this->cargo_mask)) {
 			if (!CargoSpec::Get(cargo)->IsValid()) continue;
-			if (!LinkGraph::IsValidID(sta->GetGoods(cargo).link_graph)) continue;
-			const LinkGraph &lg = *LinkGraph::Get(sta->GetGoods(cargo).link_graph);
+			if (!LinkGraph::IsValidID(sta->GetGoods(cargo).GetLinkGraph())) continue;
+			const LinkGraph &lg = *LinkGraph::Get(sta->GetGoods(cargo).GetLinkGraph());
 
-			const auto &from_node = lg[sta->GetGoods(cargo).node];
+			const auto &from_node = lg[sta->GetGoods(cargo).Record().node];
 			supply += lg.Monthly(from_node.Supply());
 			for (const Edge &edge : from_node.Edges()) {
 				StationID to = lg[edge.dest_node].Station();
@@ -104,7 +104,7 @@ void LinkGraphOverlay::RebuildCache()
 
 				/* Show links between stations of selected companies or "neutral" ones like oilrigs. */
 				if (stb->GetOwner() != OWNER_NONE && sta->GetOwner() != OWNER_NONE && !this->company_mask.Test(stb->GetOwner())) continue;
-				if (stb->GetRect().IsEmpty()) continue;
+				if (openttd_rust_station_rect_empty(&stb->GetRect())) continue;
 
 				if (!this->IsLinkVisible(pta, this->GetStationMiddle(stb), &dpi)) continue;
 
@@ -216,12 +216,12 @@ void LinkGraphOverlay::AddLinks(const Station *from, const Station *to)
 		if (!CargoSpec::Get(cargo)->IsValid()) continue;
 		const GoodsEntry ge = from->GetGoods(cargo);
 		if (!LinkGraph::IsValidID(ge.GetLinkGraph()) ||
-				ge.GetLinkGraph() != to->GetGoods(cargo).link_graph) {
+				ge.GetLinkGraph() != to->GetGoods(cargo).GetLinkGraph()) {
 			continue;
 		}
 		const LinkGraph &lg = *LinkGraph::Get(ge.GetLinkGraph());
-		if (lg[ge.Record().node].HasEdgeTo(to->GetGoods(cargo).node)) {
-			ConstEdge &edge = lg[ge.Record().node][to->GetGoods(cargo).node];
+		if (lg[ge.Record().node].HasEdgeTo(to->GetGoods(cargo).Record().node)) {
+			ConstEdge &edge = lg[ge.Record().node][to->GetGoods(cargo).Record().node];
 			this->AddStats(cargo, lg.Monthly(edge.capacity), lg.Monthly(edge.usage),
 					ge.HasData() ? ge.GetData().flows.GetFlowVia(to->index) : 0,
 					edge.TravelTime() / Ticks::DAY_TICKS,

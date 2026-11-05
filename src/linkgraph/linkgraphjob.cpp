@@ -97,7 +97,7 @@ static uint32_t ReadCargoFlowJob(void *context, uint8_t op, uint16_t node, uint1
 		case 8: return _settings_game.linkgraph.GetDistributionType(ctx.cargo) == DT_MANUAL;
 		case 9: return Station::Get(job[node].Station())->GetGoods(ctx.cargo).GetData().IsEmpty();
 		case 10: return RustStationLinkGraphIndex(Station::Get(job[node].Station()), ctx.cargo);
-		case 11: return Station::Get(job[node].Station())->GetGoods(ctx.cargo).node;
+		case 11: return Station::Get(job[node].Station())->GetGoods(ctx.cargo).Record().node;
 		case 12: return RustLinkGraphJobGraphIndex(&job);
 		default: NOT_REACHED();
 	}
