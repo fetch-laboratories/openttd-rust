@@ -76,8 +76,6 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.base_scope = RustResolverBaseScope,
 		.evaluate = EvaluateHouseCallback,
 		.reseed = EvaluateHouseReseed,
-		.unhandled_house = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled house variable 0x{:X}", variable); },
-		.unhandled_town = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled town variable 0x{:X}", variable); },
 	};
 	return services;
 }

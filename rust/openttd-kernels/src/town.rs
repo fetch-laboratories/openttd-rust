@@ -709,7 +709,6 @@ pub struct Leaves {
     pub generating_world: extern "C" fn() -> bool,
     pub allow_crossings: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
-    pub allow_roads: extern "C" fn() -> bool,
     pub road_flags: extern "C" fn(u8) -> u8,
     pub house_availability: extern "C" fn(u16) -> HouseAvailability,
     pub house_placement: extern "C" fn(u16) -> HousePlacement,
@@ -2039,7 +2038,11 @@ impl Engine<'_> {
         if self.flags() & 1 == 0 {
             return;
         }
-        let modes = 1 | if (self.leaves.allow_roads)() { 2 } else { 0 };
+        let modes = 1 | if unsafe { self.services.settings().allow_town_roads.read() } {
+            2
+        } else {
+            0
+        };
         let mut counter = i32::from(self.counter()) - 1;
         if counter < 0 {
             counter = i32::from(if self.grow(town, modes) {
@@ -2537,7 +2540,6 @@ crate::abi::layouts! {
         allow_crossings,
         climate,
 
-        allow_roads,
         road_flags,
         house_availability,
         house_placement,

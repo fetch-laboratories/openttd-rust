@@ -48,7 +48,6 @@ struct OpenTTDCargoStorageServices {
 	void *(*create)(const OpenTTDCargoPacketFields *) noexcept OPENTTD_SERVICE_DEFAULT(create);
 	OpenTTDCargoPacket *(*packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
 	void (*destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
-	uint32_t (*random)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	uint32_t (*coordinate)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(coordinate);
 	int64_t (*pay)(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pay);
 	void (*origin)(void *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(origin);

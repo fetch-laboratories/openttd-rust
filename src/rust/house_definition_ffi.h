@@ -21,7 +21,6 @@ struct OpenTTDHouseDefinitionServices {
 	size_t (*file_count)() noexcept OPENTTD_SERVICE_DEFAULT(file_count);
 	GRFFile *(*file_at)(size_t index) noexcept OPENTTD_SERVICE_DEFAULT(file_at);
 	size_t (*local_count)(const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(local_count);
-	bool (*has_filename)(const GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(has_filename);
 	void (*resize_local)(GRFFile *file, size_t size) noexcept OPENTTD_SERVICE_DEFAULT(resize_local);
 	const HouseSpec *(*local)(const GRFFile *file, size_t index) noexcept OPENTTD_SERVICE_DEFAULT(local);
 	void (*clear_local)(GRFFile *file) noexcept OPENTTD_SERVICE_DEFAULT(clear_local);
@@ -45,15 +44,6 @@ struct OpenTTDHouseDefinitionServices {
 	void (*resize_specs)(size_t count) noexcept OPENTTD_SERVICE_DEFAULT(resize_specs);
 	void (*move_spec)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(move_spec);
 	void (*set_override)(const HouseSpec *spec, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_override);
-	LandscapeType (*landscape)() noexcept OPENTTD_SERVICE_DEFAULT(landscape);
-	void (*too_many)(uint32_t last) noexcept OPENTTD_SERVICE_DEFAULT(too_many);
-	void (*invalid_substitute)(uint8_t substitute, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(invalid_substitute);
-	void (*invalid_override)(uint8_t target, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(invalid_override);
-	void (*allocation_failed)() noexcept OPENTTD_SERVICE_DEFAULT(allocation_failed);
-	void (*invalid_missing)(const GRFFile *file, const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(invalid_missing);
-	void (*invalid_population)(const GRFFile *file, const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(invalid_population);
-	void (*invalid_size)(const GRFFile *file, const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(invalid_size);
-	void (*invalid_availability)(const GRFFile *file, const HouseSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(invalid_availability);
 	void (*set_enabled)(const HouseSpec *spec, bool value) noexcept OPENTTD_SERVICE_DEFAULT(set_enabled);
 	void (*set_flags)(const HouseSpec *spec, uint8_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_flags);
 	void (*set_min_year)(const HouseSpec *spec, int32_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_min_year);

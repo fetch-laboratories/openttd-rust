@@ -45,9 +45,6 @@ static const OpenTTDRailProperties &GetRustRailProperties() noexcept
 		.fallback = [](RailTypeInfo *info, uint8_t value) noexcept { info->fallback_railtype = value; },
 		.acceleration = [](RailTypeInfo *info, uint8_t value) noexcept { info->acceleration_type = static_cast<VehicleAccelerationModel>(value); },
 		.badges = [](RailTypeInfo *info) noexcept { return &info->badges; },
-		.invalid_reserve = [](uint32_t last, size_t size) noexcept { GrfMsg(1, "RailTypeReserveInfo: Rail type {} is invalid, max {}, ignoring", last, size); },
-		.invalid_change = [](uint32_t last, size_t size) noexcept { GrfMsg(1, "RailTypeChangeInfo: Rail type {} is invalid, max {}, ignoring", last, size); },
-		.no_label = [](uint32_t id) noexcept { GrfMsg(1, "RailTypeReserveInfo: Ignoring property 1D for rail type {} because no label was set", id); },
 	};
 	return services;
 }

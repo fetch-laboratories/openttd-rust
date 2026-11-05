@@ -15,7 +15,6 @@
 #include "../rust/vehicle_visits_ffi.h"
 #include "../rust/station_association_ffi.h"
 #include "../rust/station_definitions_ffi.h"
-#include "../rust/newgrf_act3_ffi.h"
 #include "../rust/newgrf_loading_ffi.h"
 #include "../table/strings.h"
 #include "../rust/station_resolver_ffi.h"

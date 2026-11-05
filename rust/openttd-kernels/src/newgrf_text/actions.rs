@@ -1,9 +1,11 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! GRF text loading actions. Checked reads return to the native loader error frame;
 //! earlier string publications remain visible if a later read fails.
+use crate::debug::{Bytes, grf_msg};
 use crate::newgrf_bytereader::{Cursor as ByteReader, ReadBounds};
 use crate::newgrf_config::{GCS_ACTIVATED, GCS_INITIALISED};
 use crate::newgrf_loading::{self as loading, Services};
+use crate::string_validation::make_valid;
 use std::ffi::c_void;
 
 pub(crate) unsafe fn translate_grf_strings(
@@ -20,13 +22,10 @@ pub(crate) unsafe fn translate_grf_strings(
         };
         let text = &*s.text;
         if !matches!(status, Some(GCS_INITIALISED | GCS_ACTIVATED)) {
-            text.log(
+            grf_msg!(
                 7,
-                format!(
-                    "TranslateGRFStrings: GRFID 0x{:08X} unknown, skipping action 13",
-                    grfid.swap_bytes()
-                )
-                .as_bytes(),
+                "TranslateGRFStrings: GRFID 0x{:08X} unknown, skipping action 13",
+                grfid.swap_bytes()
             );
             return Ok(());
         }
@@ -44,7 +43,10 @@ pub(crate) unsafe fn translate_grf_strings(
         let first_id = u32::from(buf.word()?);
         let end = first_id + u32::from(num_strings);
         if !((first_id >= 0xd000 && end <= 0xd400) || (first_id >= 0xd800 && end <= 0xe000)) {
-            text.log(7, format!("TranslateGRFStrings: Attempting to set out-of-range string IDs in action 13 (first: 0x{first_id:04X}, number: 0x{num_strings:02X})").as_bytes());
+            grf_msg!(
+                7,
+                "TranslateGRFStrings: Attempting to set out-of-range string IDs in action 13 (first: 0x{first_id:04X}, number: 0x{num_strings:02X})"
+            );
             return Ok(());
         }
         for i in 0..num_strings {
@@ -53,7 +55,7 @@ pub(crate) unsafe fn translate_grf_strings(
             }
             let string = buf.string();
             if string.1 == 0 {
-                text.log(7, b"TranslateGRFString: Ignoring empty string.");
+                grf_msg!(7, "TranslateGRFString: Ignoring empty string.");
                 continue;
             }
             super::openttd_rust_grf_text_add(
@@ -83,7 +85,6 @@ pub struct BindingServices {
     pub(crate) engine_string:
         unsafe extern "C" fn(*const crate::engine_type::OpenTTDEngine) -> *mut u32,
     pub(crate) mark_feature: unsafe extern "C" fn(*mut c_void, u8),
-    pub(crate) new_name: unsafe extern "C" fn(u16, *const u8, usize),
     pub(crate) object_spec: unsafe extern "C" fn(*mut c_void, u16) -> *mut crate::objects::Spec,
     pub(crate) rail_bind: unsafe extern "C" fn(u8, u8, *const c_void, *const c_void),
     pub(crate) road_bind: unsafe extern "C" fn(u8, u8, *const c_void, *const c_void),
@@ -92,7 +93,7 @@ pub struct BindingServices {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfBindingServices" ["grf_loading"] => BindingServices { badge_bind, badge_name, canal_bind, cargo_bind, custom_engine_sprites, engine_grf, engine_string, mark_feature, new_name, object_spec, rail_bind, road_bind, wagon_override };
+    "OpenTTDGrfBindingServices" ["grf_loading"] => BindingServices { badge_bind, badge_name, canal_bind, cargo_bind, custom_engine_sprites, engine_grf, engine_string, mark_feature, object_spec, rail_bind, road_bind, wagon_override };
 }
 
 pub(crate) unsafe fn feature_new_name(
@@ -106,9 +107,9 @@ pub(crate) unsafe fn feature_new_name(
         let feature = buf.byte()?;
         let text = &*s.text;
         if feature >= GSF_END && feature != crate::newgrf::GSF_ORIGINAL_STRINGS {
-            text.log(
+            grf_msg!(
                 1,
-                format!("FeatureNewName: Unsupported feature 0x{feature:02X}, skipping").as_bytes(),
+                "FeatureNewName: Unsupported feature 0x{feature:02X}, skipping"
             );
             return Ok(());
         }
@@ -124,7 +125,10 @@ pub(crate) unsafe fn feature_new_name(
         };
         language &= 0x7f;
         let end = id.wrapping_add(u16::from(count));
-        text.log(6, format!("FeatureNewName: About to rename engines {id}..{end} (feature 0x{feature:02X}) in language 0x{language:02X}").as_bytes());
+        grf_msg!(
+            6,
+            "FeatureNewName: About to rename engines {id}..{end} (feature 0x{feature:02X}) in language 0x{language:02X}"
+        );
         let overlay = if generic {
             0
         } else {
@@ -134,7 +138,12 @@ pub(crate) unsafe fn feature_new_name(
         let grfid = (s.shared().grf_file_id)(file);
         while id < end && buf.remaining() != 0 {
             let name = buf.string();
-            (bindings.new_name)(id, name.0, name.1);
+            grf_msg!(
+                8,
+                "FeatureNewName: 0x{:04X} <- {}",
+                id,
+                Bytes(&make_valid(std::slice::from_raw_parts(name.0, name.1), 1))
+            );
             if feature <= GSF_AIRCRAFT {
                 if generic {
                     super::openttd_rust_grf_text_add(
@@ -190,12 +199,9 @@ pub(crate) unsafe fn feature_new_name(
                 } else {
                     let string = (bindings.badge_name)(file, id);
                     if string.is_null() {
-                        text.log(
+                        grf_msg!(
                             1,
-                            format!(
-                                "FeatureNewName: Attempt to name undefined badge 0x{id:X}, ignoring"
-                            )
-                            .as_bytes(),
+                            "FeatureNewName: Attempt to name undefined badge 0x{id:X}, ignoring"
                         );
                     } else {
                         let translated = super::openttd_rust_grf_text_add(
@@ -232,7 +238,10 @@ pub(crate) unsafe fn feature_new_name(
                     0xc4 | 0xc5 => {
                         let spec = ((*s.stations).station_get)(file, local);
                         if spec.is_null() {
-                            text.log(1, format!("FeatureNewName: Attempt to name undefined station 0x{local:X}, ignoring").as_bytes());
+                            grf_msg!(
+                                1,
+                                "FeatureNewName: Attempt to name undefined station 0x{local:X}, ignoring"
+                            );
                             std::ptr::null_mut()
                         } else if id >> 8 == 0xc4 {
                             class_spec = spec;
@@ -249,7 +258,10 @@ pub(crate) unsafe fn feature_new_name(
                             (owner.tile_get)(file, local as usize)
                         };
                         if spec.is_null() {
-                            text.log(1, format!("FeatureNewName: Attempt to name undefined airport tile 0x{local:X}, ignoring").as_bytes());
+                            grf_msg!(
+                                1,
+                                "FeatureNewName: Attempt to name undefined airport tile 0x{local:X}, ignoring"
+                            );
                             std::ptr::null_mut()
                         } else {
                             (specs.airport_tile().name)(spec)
@@ -265,17 +277,17 @@ pub(crate) unsafe fn feature_new_name(
                                 .cast::<crate::house::HouseSpec>()
                         };
                         if spec.is_null() {
-                            text.log(1, format!("FeatureNewName: Attempt to name undefined house 0x{local:X}, ignoring.").as_bytes());
+                            grf_msg!(
+                                1,
+                                "FeatureNewName: Attempt to name undefined house 0x{local:X}, ignoring."
+                            );
                             std::ptr::null_mut()
                         } else {
                             (specs.house().name)(spec)
                         }
                     }
                     _ => {
-                        text.log(
-                            7,
-                            format!("FeatureNewName: Unsupported ID (0x{id:04X})").as_bytes(),
-                        );
+                        grf_msg!(7, "FeatureNewName: Unsupported ID (0x{id:04X})");
                         std::ptr::null_mut()
                     }
                 };

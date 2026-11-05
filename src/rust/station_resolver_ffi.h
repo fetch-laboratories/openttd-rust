@@ -46,7 +46,6 @@ struct OpenTTDStationResolverServices {
 	OpenTTDStationSpecIdentity (*identity)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	TownScopeResolver *(*town_scope)(StationResolverObject *, const Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(town_scope);
 	ScopeResolver *(*default_scope)(StationResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(default_scope);
-	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	void (*slope_error)(OpenTTDCommandCost *, const OpenTTDStationSlopeResult *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);
 };
 const OpenTTDStationResolverServices &GetStationResolverServices() noexcept;

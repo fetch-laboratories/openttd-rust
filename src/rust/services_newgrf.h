@@ -49,12 +49,12 @@ inline uint64_t RustHouseWatchedByID(uint16_t house) noexcept { return RustHouse
 inline uint16_t RustTownHouseClass(const HouseSpec *spec) noexcept { return spec->class_id; }
 inline uint16_t RustTownHouseClass(uint16_t house) noexcept { return RustTownHouseClass(RustHouseSpec(house)); }
 
-inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1, "Unhandled scope variable 0x{:X}", variable); }
 
 /* These synchronous field reads borrow live native objects. Callers retain
  * the original non-null resolver/file preconditions; nothing is cached. */
 inline const GRFFile *RustResolverGRFFile(const ResolverObject *resolver) noexcept { return resolver->grffile; }
 inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
+inline OpenTTDByteSpan RustGRFFileName(const GRFFile *file) noexcept { return {reinterpret_cast<const uint8_t *>(file->filename.data()), file->filename.size()}; }
 inline size_t RustGRFFileCount() noexcept { return GetAllGRFFiles().size(); }
 inline GRFFile *RustGRFFileAt(size_t index) noexcept { return const_cast<GRFFile *>(&GetAllGRFFiles()[index]); }
 inline GRFFile *RustGRFFileAtOrNull(size_t index) noexcept { return index < RustGRFFileCount() ? RustGRFFileAt(index) : nullptr; }

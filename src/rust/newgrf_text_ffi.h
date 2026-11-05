@@ -6,18 +6,15 @@
 #include "../newgrf_text_type.h"
 #include "service_table_check.hpp"
 struct OpenTTDGrfTextServices {
-	void (*added)(uint32_t, uint32_t, uint32_t, uint8_t, const uint8_t *, size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(added);
 	uint32_t empty;
 	const LanguageMap *(*language_map)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(language_map);
 	uint32_t (*legacy_string)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(legacy_string);
 	int32_t (*mapping)(const LanguageMap *, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(mapping);
 	uint8_t max_plural_forms;
-	void (*message)(int32_t, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(message);
 	uint8_t (*num_cases)() noexcept OPENTTD_SERVICE_DEFAULT(num_cases);
 	uint8_t (*num_genders)() noexcept OPENTTD_SERVICE_DEFAULT(num_genders);
 	int32_t (*plural_form)(const LanguageMap *) noexcept OPENTTD_SERVICE_DEFAULT(plural_form);
 	int32_t (*reverse_mapping)(const LanguageMap *, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(reverse_mapping);
-	void (*short_buffer)(size_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(short_buffer);
 	uint32_t undefined;
 };
 const OpenTTDGrfTextServices &GetRustGrfTextServices() noexcept;

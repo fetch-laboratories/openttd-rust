@@ -358,7 +358,7 @@ fn difficulty_noise_change(s: &Services) {
         // SAFETY: The shared registry returns the process-lifetime station command table.
         unsafe { crate::station_cmd::openttd_rust_station_update_airport_noise(commands) };
         // SAFETY: As above.
-        if (unsafe { &*commands }.noise_enabled)() {
+        if unsafe { s.shared.settings().station_noise.read() } {
             (s.objectives.window_classes)(WC_TOWN_VIEW, 0);
         }
     }

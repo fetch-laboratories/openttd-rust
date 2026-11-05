@@ -93,7 +93,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		 * selects and caches the owner before either synchronous shell call. */
 		.town_scope = RustResolverTownScope<StationResolverObject>,
 		.default_scope = RustResolverBaseScopeFor<StationResolverObject>,
-		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled station variable 0x{:X}", variable); },
 		.slope_error = RustLocationCallbackError<StationSpec, StationSpec, OpenTTDStationSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 	};
 	return services;

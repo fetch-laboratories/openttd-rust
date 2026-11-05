@@ -76,7 +76,6 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
 		.availability = [](BridgeType type) noexcept -> OpenTTDBridgeAvailability { const auto *b = GetBridgeSpec(type); return {.year = b->avail_year.base(), .min = b->min_length, .max = b->max_length}; },
 		.speed = RustBridgeSpecSpeed,
 		.price = [](BridgeType type) noexcept -> uint16_t { return GetBridgeSpec(type)->price; },
-		.max_bridge_length = RustMaxBridgeLength,
 		.max_bridge_height = RustMaxBridgeHeight,
 		.max_tunnel_length = RustMaxTunnelLength,
 		.crossing_tunnels = []() noexcept -> bool { return _cheats.crossing_tunnels.value; },

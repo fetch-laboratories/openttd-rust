@@ -27,6 +27,21 @@ void RandomBytesWithFallback(std::span<uint8_t> output)
 }
 void DebugPrint(std::string_view category, int level, std::string &&message) { ++logs; last_log = fmt::format("{}:{}:{}", category, level, message); }
 [[noreturn]] void NOT_REACHED(const std::source_location) { std::abort(); }
+#if __has_include("rust/debug_ffi.h")
+#include "rust/debug_ffi.h"
+/* The candidate's Rust Debug reads this harness's net level and prints through its DebugPrint. */
+static const int _debug_other_level = 0;
+/* The harness loads no NewGRF, so no GRF message can reach this. */
+[[noreturn]] static void UnreachableGrfMsg(int, const char *, size_t) noexcept { std::abort(); }
+static const OpenTTDDebugServices _debug_services{
+	.console = &_debug_other_level, .desync = &_debug_other_level, .driver = &_debug_other_level, .fontcache = &_debug_other_level,
+	.gamelog = &_debug_other_level, .grf = &_debug_other_level, .grf_msg = &UnreachableGrfMsg,
+	.map = &_debug_other_level, .misc = &_debug_other_level, .net = &_debug_net_level, .oldloader = &_debug_other_level,
+	.print = [](const char *category, size_t category_size, int level, const char *message, size_t size) noexcept { DebugPrint({category, category_size}, level, std::string(message, size)); },
+	.script = &_debug_other_level, .sl = &_debug_other_level, .sprite = &_debug_other_level, .yapf = &_debug_other_level,
+};
+[[maybe_unused]] static const bool _debug_bound = (openttd_rust_debug_bind(&_debug_services), true);
+#endif
 [[noreturn]] void AssertFailedError(std::string_view, const std::source_location) { std::abort(); }
 
 static unsigned Number(std::string_view input, int base = 10)

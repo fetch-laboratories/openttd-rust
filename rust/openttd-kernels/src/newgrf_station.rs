@@ -13,6 +13,7 @@
     clippy::too_many_arguments
 )]
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
+use crate::debug::debug;
 use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS, INVALID_DIAGDIR};
 use crate::game_state::GameState;
 use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
@@ -146,7 +147,6 @@ pub struct Services {
     identity: extern "C" fn(*mut BaseStation, u8) -> SpecIdentity,
     town_scope: extern "C" fn(*mut c_void, *const crate::services::TownHandle, bool) -> *mut c_void,
     default_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
-    unhandled: extern "C" fn(u8),
     slope_error: extern "C" fn(*mut CommandCost, *const SlopeResult, *const RailSpec),
 }
 static REGISTRY: GameState<*const Services> = GameState::new(ptr::null());
@@ -489,8 +489,8 @@ pub unsafe extern "C" fn openttd_rust_station_scope(
     }
     (services().default_scope)(resolver, scope, relative)
 }
-fn unhandled(native: &Services, variable: u8, available: *mut bool) -> u32 {
-    (native.unhandled)(variable);
+fn unhandled(variable: u8, available: *mut bool) -> u32 {
+    debug!(grf, 1, "Unhandled station variable 0x{:X}", variable);
     unsafe {
         available.write(false);
     }
@@ -552,7 +552,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
                 4 => u32::from(crate::station_type::INVALID_STATION),
                 _ => 0,
             },
-            _ => unhandled(native, variable, available),
+            _ => unhandled(variable, available),
         };
     }
     match variable {
@@ -636,7 +636,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
             _ => unreachable!(),
         };
     }
-    unhandled(native, variable, available)
+    unhandled(variable, available)
 }
 fn land_info(native: &Services, file: *const c_void, tile: u32, axis: u8) -> u32 {
     let slope = (native.shared().tile_slope)(tile);
@@ -1021,7 +1021,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, company, nearby_station, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, company, nearby_station, build_date, airport_ttd_type, identity, town_scope, default_scope, slope_error
  };
 }
 

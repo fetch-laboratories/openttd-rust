@@ -333,13 +333,8 @@ Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid(
 
 /** Start a new competitor company if possible. */
 TimeoutTimer<TimerGameTick> _new_competitor_timeout({ TimerGameTick::Priority::COMPETITOR_TIMEOUT, 0 }, []() {
-	const OpenTTDCompanyCompetitors competitors{
-		.num_companies = Company::GetNumItems(), .interval = _settings_game.difficulty.competitors_interval,
-		.menu = _game_mode == GM_MENU, .can_start = AI::CanStartNew(), .networking = _networking,
-		.max_companies = _settings_client.network.max_companies, .max_competitors = _settings_game.difficulty.max_no_competitors,
-	};
 	/* The Post can start an AI synchronously; Rust has returned before it. */
-	if (openttd_rust_company_competitor_timeout(&GetRustCompanyServices(), &competitors)) Command<CMD_COMPANY_CTRL>::Post(CCA_NEW_AI, CompanyID::Invalid(), CRR_NONE, INVALID_CLIENT_ID);
+	if (openttd_rust_company_competitor_timeout(&GetRustCompanyServices())) Command<CMD_COMPANY_CTRL>::Post(CCA_NEW_AI, CompanyID::Invalid(), CRR_NONE, INVALID_CLIENT_ID);
 });
 
 /** Start of a new game. */

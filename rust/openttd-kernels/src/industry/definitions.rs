@@ -4,6 +4,7 @@
 //! mutex. Cargo array pointers expire at return; cargo translation cannot mutate specs.
 //! References to manager storage end before native leaves or reentrant owners.
 use super::{SpecHandle, TileSpec};
+use crate::debug::grf_msg;
 pub(crate) mod properties;
 pub(crate) mod storage;
 use crate::industry_type::{INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS};
@@ -45,8 +46,6 @@ pub struct Services {
     pub availability: unsafe extern "C" fn(*const SpecHandle) -> Availability,
     pub publish: unsafe extern "C" fn(u16, *mut SpecHandle),
     pub publish_tile: unsafe extern "C" fn(u16, *mut TileSpec),
-    pub industry_full: unsafe extern "C" fn(),
-    pub tile_full: unsafe extern "C" fn(),
     pub reset_industry: unsafe extern "C" fn(u16),
     pub clear_industry: unsafe extern "C" fn(u16),
     pub climate_available: unsafe extern "C" fn(*const SpecHandle, u8) -> bool,
@@ -150,9 +149,10 @@ pub unsafe fn publish(
         (s.shared().specs().industry().substitute().set_override)(spec, invalid);
     }
     if u16::from(id) == invalid {
-        unsafe {
-            (s.industry_full)();
-        }
+        grf_msg!(
+            1,
+            "Industry.SetEntitySpec: Too many industries allocated. Ignoring."
+        );
         return;
     }
     unsafe {
@@ -170,9 +170,10 @@ pub unsafe fn publish_tile(
     let id =
         unsafe { allocate_tile_for(manager, identity.local, identity.grfid, identity.substitute) };
     if id == invalid {
-        unsafe {
-            (s.tile_full)();
-        }
+        grf_msg!(
+            1,
+            "IndustryTile.SetEntitySpec: Too many industry tiles allocated. Ignoring."
+        );
         return;
     }
     unsafe {
@@ -308,6 +309,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryAcceptedSlots" ["industry"] => CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS> { cargo, labels };
     "OpenTTDIndustryDefinitionCargo" ["industry"] => IndustryCargo { produced, accepted };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        generation, shared, industry, tile, availability, publish, publish_tile, industry_full, tile_full, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, cargo, tile_cargo, set_produced, set_accepted, set_tile_accepted
+        generation, shared, industry, tile, availability, publish, publish_tile, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, cargo, tile_cargo, set_produced, set_accepted, set_tile_accepted
     };
 }

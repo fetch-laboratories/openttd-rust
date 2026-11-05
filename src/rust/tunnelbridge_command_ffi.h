@@ -49,7 +49,6 @@ struct OpenTTDTunnelBridgeServices {
 	OpenTTDBridgeAvailability (*availability)(BridgeType type) noexcept OPENTTD_SERVICE_DEFAULT(availability);
 	uint16_t (*speed)(BridgeType type) noexcept OPENTTD_SERVICE_DEFAULT(speed);
 	uint16_t (*price)(BridgeType type) noexcept OPENTTD_SERVICE_DEFAULT(price);
-	uint16_t (*max_bridge_length)() noexcept OPENTTD_SERVICE_DEFAULT(max_bridge_length);
 	uint8_t (*max_bridge_height)() noexcept OPENTTD_SERVICE_DEFAULT(max_bridge_height);
 	uint16_t (*max_tunnel_length)() noexcept OPENTTD_SERVICE_DEFAULT(max_tunnel_length);
 	bool (*crossing_tunnels)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_tunnels);

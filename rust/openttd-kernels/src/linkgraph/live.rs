@@ -10,6 +10,7 @@
 //! between native calls, never across `SlObject`, its pointer cleanup or exceptions.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
+use crate::debug::debug;
 use crate::{
     linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH, INVALID_NODE},
     station_type::INVALID_STATION,
@@ -505,7 +506,6 @@ pub struct Services {
     pub node: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
     pub available: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8) -> *mut super::NativeGraph,
-    pub allocation_failure: extern "C" fn(),
 }
 struct GraphAccess {
     owner: *mut Graph,
@@ -689,7 +689,7 @@ pub(crate) unsafe fn station_supply(
             }
             graph
         } else {
-            (services.allocation_failure)();
+            debug!(misc, 0, "Can't allocate link graph");
             std::ptr::null_mut()
         }
     } else {
@@ -715,8 +715,7 @@ crate::abi::layouts! {
     "OpenTTDLiveGraphAccess" ["station_service"] => Access { owner, index, };
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, get, get_if_valid, station_id, owner, access, station, attach, set_node, delete_graph, graph_id, node, available, allocate, allocation_failure,
-    };
+        assertions, get, get_if_valid, station_id, owner, access, station, attach, set_node, delete_graph, graph_id, node, available, allocate, };
 }
 
 #[unsafe(no_mangle)]
