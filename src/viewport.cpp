@@ -1028,7 +1028,7 @@ static TileHighlightType GetTileHighlightType(TileIndex t)
 
 	if (_viewport_highlight_station_rect != nullptr) {
 		if (IsTileType(t, MP_STATION) && GetStationIndex(t) == _viewport_highlight_station_rect->index) return THT_WHITE;
-		const StationRect *r = &_viewport_highlight_station_rect->rect;
+		const StationRect *r = &_viewport_highlight_station_rect->GetRect();
 		if (r->PtInExtendedRect(TileX(t), TileY(t))) return THT_BLUE;
 	}
 
@@ -1038,7 +1038,7 @@ static TileHighlightType GetTileHighlightType(TileIndex t)
 
 	if (_viewport_highlight_waypoint_rect != nullptr) {
 		if (IsTileType(t, MP_STATION) && GetStationIndex(t) == _viewport_highlight_waypoint_rect->index) return THT_WHITE;
-		const StationRect *r = &_viewport_highlight_waypoint_rect->rect;
+		const StationRect *r = &_viewport_highlight_waypoint_rect->GetRect();
 		if (r->PtInExtendedRect(TileX(t), TileY(t))) return THT_BLUE;
 	}
 
@@ -1047,14 +1047,14 @@ static TileHighlightType GetTileHighlightType(TileIndex t)
 			if (GetTownIndex(t) == _viewport_highlight_town->index) {
 				TileHighlightType type = THT_RED;
 				for (const Station *st : _viewport_highlight_town->stations_near) {
-					if (st->owner != _current_company) continue;
+					if (st->GetOwner() != _current_company) continue;
 					if (st->TileIsInCatchment(t)) return THT_BLUE;
 				}
 				return type;
 			}
 		} else if (IsTileType(t, MP_STATION)) {
 			for (const Station *st : _viewport_highlight_town->stations_near) {
-				if (st->owner != _current_company) continue;
+				if (st->GetOwner() != _current_company) continue;
 				if (GetStationIndex(t) == st->index) return THT_WHITE;
 			}
 		}
@@ -1429,11 +1429,11 @@ static void ViewportAddStationStrings(DrawPixelInfo *dpi, const std::vector<cons
 	if (small) flags.Set(ViewportStringFlag::Small);
 
 	for (const BaseStation *st : stations) {
-		std::string *str = ViewportAddString(dpi, &st->sign, flags, (st->owner == OWNER_NONE || !st->IsInUse()) ? COLOUR_GREY : _company_colours[st->owner]);
+		std::string *str = ViewportAddString(dpi, &st->sign, flags, (st->GetOwner() == OWNER_NONE || !st->IsInUse()) ? COLOUR_GREY : _company_colours[st->GetOwner()]);
 		if (str == nullptr) continue;
 
 		if (Station::IsExpected(st)) { /* Station */
-			*str = GetString(small ? STR_STATION_NAME : STR_VIEWPORT_STATION, st->index, st->facilities);
+			*str = GetString(small ? STR_STATION_NAME : STR_VIEWPORT_STATION, st->index, st->GetFacilities());
 		} else { /* Waypoint */
 			*str = GetString(STR_WAYPOINT_NAME, st->index);
 		}
@@ -1463,13 +1463,13 @@ static void ViewportAddKdtreeSigns(DrawPixelInfo *dpi)
 				const BaseStation *st = BaseStation::Get(std::get<StationID>(item.id));
 
 				/* If no facilities are present the station is a ghost station. */
-				StationFacilities facilities = st->facilities;
+				StationFacilities facilities = st->GetFacilities();
 				if (facilities.None()) facilities = STATION_FACILITY_GHOST;
 
 				if (!facilities.Any(_facility_display_opt)) break;
 
 				/* Don't draw if station is owned by another company and competitor station names are hidden. Stations owned by none are never ignored. */
-				if (!show_competitors && _local_company != st->owner && st->owner != OWNER_NONE) break;
+				if (!show_competitors && _local_company != st->GetOwner() && st->GetOwner() != OWNER_NONE) break;
 
 				stations.push_back(st);
 				break;
@@ -1480,7 +1480,7 @@ static void ViewportAddKdtreeSigns(DrawPixelInfo *dpi)
 				const BaseStation *st = BaseStation::Get(std::get<StationID>(item.id));
 
 				/* Don't draw if station is owned by another company and competitor station names are hidden. Stations owned by none are never ignored. */
-				if (!show_competitors && _local_company != st->owner && st->owner != OWNER_NONE) break;
+				if (!show_competitors && _local_company != st->GetOwner() && st->GetOwner() != OWNER_NONE) break;
 
 				stations.push_back(st);
 				break;
@@ -2312,9 +2312,9 @@ static bool CheckClickOnViewportSign(const Viewport &vp, int x, int y)
 			case ViewportSignKdtreeItem::VKI_STATION: {
 				if (!show_stations) break;
 				st = BaseStation::Get(std::get<StationID>(item.id));
-				if (!show_competitors && _local_company != st->owner && st->owner != OWNER_NONE) break;
+				if (!show_competitors && _local_company != st->GetOwner() && st->GetOwner() != OWNER_NONE) break;
 
-				StationFacilities facilities = st->facilities;
+				StationFacilities facilities = st->GetFacilities();
 				if (facilities.None()) facilities = STATION_FACILITY_GHOST;
 				if (!facilities.Any(_facility_display_opt)) break;
 
@@ -2325,7 +2325,7 @@ static bool CheckClickOnViewportSign(const Viewport &vp, int x, int y)
 			case ViewportSignKdtreeItem::VKI_WAYPOINT:
 				if (!show_waypoints) break;
 				st = BaseStation::Get(std::get<StationID>(item.id));
-				if (!show_competitors && _local_company != st->owner && st->owner != OWNER_NONE) break;
+				if (!show_competitors && _local_company != st->GetOwner() && st->GetOwner() != OWNER_NONE) break;
 				if (CheckClickOnViewportSign(vp, x, y, &st->sign)) last_st = st;
 				break;
 
@@ -3577,8 +3577,8 @@ void ResetObjectToPlace()
 
 Point GetViewportStationMiddle(const Viewport &vp, const Station *st)
 {
-	int x = TileX(st->xy) * TILE_SIZE;
-	int y = TileY(st->xy) * TILE_SIZE;
+	int x = TileX(st->GetXY()) * TILE_SIZE;
+	int y = TileY(st->GetXY()) * TILE_SIZE;
 	int z = GetSlopePixelZ(Clamp(x, 0, Map::SizeX() * TILE_SIZE - 1), Clamp(y, 0, Map::SizeY() * TILE_SIZE - 1));
 
 	Point p = RemapCoords(x, y, z);

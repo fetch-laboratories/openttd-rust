@@ -23,7 +23,7 @@
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const Station *st = ::Station::GetIfValid(station_id);
-	return st != nullptr && (st->owner == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || st->owner == OWNER_NONE);
+	return st != nullptr && (st->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || st->owner == OWNER_NONE);
 }
 
 /* static */ StationID ScriptStation::GetStationID(TileIndex tile)
@@ -52,7 +52,7 @@ template <bool Tfrom, bool Tvia>
 		return -1;
 	}
 
-	const ::GoodsEntry &goods = ::Station::Get(station_id)->goods[cargo_type];
+	const ::GoodsEntry goods = ::Station::Get(station_id)->GetGoods(cargo_type);
 	if (!goods.HasData()) return 0;
 
 	const StationCargoList &cargo_list = goods.GetData().cargo;
@@ -104,7 +104,7 @@ template <bool Tfrom, bool Tvia>
 		return -1;
 	}
 
-	const ::GoodsEntry &goods = ::Station::Get(station_id)->goods[cargo_type];
+	const ::GoodsEntry goods = ::Station::Get(station_id)->GetGoods(cargo_type);
 	if (!goods.HasData()) return 0;
 
 	const FlowStatMap &flows = goods.GetData().flows;
@@ -144,14 +144,14 @@ template <bool Tfrom, bool Tvia>
 	if (!IsValidStation(station_id)) return false;
 	if (!ScriptCargo::IsValidCargo(cargo_type)) return false;
 
-	return ::Station::Get(station_id)->goods[cargo_type].HasRating();
+	return ::Station::Get(station_id)->GetGoods(cargo_type).HasRating();
 }
 
 /* static */ SQInteger ScriptStation::GetCargoRating(StationID station_id, CargoType cargo_type)
 {
 	if (!ScriptStation::HasCargoRating(station_id, cargo_type)) return -1;
 
-	return ::ToPercent8(::Station::Get(station_id)->goods[cargo_type].rating);
+	return ::ToPercent8(::Station::Get(station_id)->GetGoods(cargo_type).rating);
 }
 
 /* static */ SQInteger ScriptStation::GetCoverageRadius(ScriptStation::StationType station_type)
@@ -203,7 +203,7 @@ template <bool Tfrom, bool Tvia>
 	if (!IsValidStation(station_id)) return false;
 	if (!HasExactlyOneBit(station_type)) return false;
 
-	return ::Station::Get(station_id)->facilities.Any(static_cast<StationFacilities>(station_type));
+	return ::Station::Get(station_id)->GetFacilities().Any(static_cast<StationFacilities>(station_type));
 }
 
 /* static */ bool ScriptStation::HasRoadType(StationID station_id, ScriptRoad::RoadType road_type)
@@ -211,11 +211,11 @@ template <bool Tfrom, bool Tvia>
 	if (!IsValidStation(station_id)) return false;
 	if (!ScriptRoad::IsRoadTypeAvailable(road_type)) return false;
 
-	for (const RoadStop *rs = ::Station::Get(station_id)->GetPrimaryRoadStop(RoadStopType::Bus); rs != nullptr; rs = rs->next) {
-		if (::GetPresentRoadTypes(rs->xy).Test(::RoadType(road_type))) return true;
+	for (const RoadStop *rs = ::Station::Get(station_id)->GetPrimaryRoadStop(RoadStopType::Bus); rs != nullptr; rs = rs->GetNext()) {
+		if (::GetPresentRoadTypes(rs->GetXY()).Test(::RoadType(road_type))) return true;
 	}
-	for (const RoadStop *rs = ::Station::Get(station_id)->GetPrimaryRoadStop(RoadStopType::Truck); rs != nullptr; rs = rs->next) {
-		if (::GetPresentRoadTypes(rs->xy).Test(::RoadType(road_type))) return true;
+	for (const RoadStop *rs = ::Station::Get(station_id)->GetPrimaryRoadStop(RoadStopType::Truck); rs != nullptr; rs = rs->GetNext()) {
+		if (::GetPresentRoadTypes(rs->GetXY()).Test(::RoadType(road_type))) return true;
 	}
 
 	return false;
@@ -225,7 +225,7 @@ template <bool Tfrom, bool Tvia>
 {
 	if (!IsValidStation(station_id)) return TownID::Invalid();
 
-	return ::Station::Get(station_id)->town->index;
+	return ::Station::Get(station_id)->Record().town->index;
 }
 
 /* static */ bool ScriptStation::IsAirportClosed(StationID station_id)
@@ -233,7 +233,7 @@ template <bool Tfrom, bool Tvia>
 	EnforcePrecondition(false, IsValidStation(station_id));
 	EnforcePrecondition(false, HasStationType(station_id, STATION_AIRPORT));
 
-	return ::Station::Get(station_id)->airport.blocks.Test(AirportBlock::AirportClosed);
+	return ::Station::Get(station_id)->GetAirport().blocks.Test(AirportBlock::AirportClosed);
 }
 
 /* static */ bool ScriptStation::OpenCloseAirport(StationID station_id)

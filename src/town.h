@@ -367,9 +367,9 @@ template <class T>
 void MakeDefaultName(T *obj)
 {
 	/* We only want to set names if it hasn't been set before, or when we're calling from afterload. */
-	assert(obj->name.empty() || obj->town_cn == UINT16_MAX);
+	assert(obj->name.empty() || obj->Record().town_cn == UINT16_MAX);
 
-	obj->town = ClosestTownFromTile(obj->xy, UINT_MAX);
+	obj->Record().town = ClosestTownFromTile(obj->GetXY(), UINT_MAX);
 
 	/* Find first unused number belonging to this town. This can never fail,
 	 * as long as there can be at most 65535 waypoints/depots in total.
@@ -393,9 +393,9 @@ void MakeDefaultName(T *obj)
 		/* check only valid waypoints... */
 		if (lobj != nullptr && obj != lobj) {
 			/* only objects within the same city and with the same type */
-			if (lobj->town == obj->town && lobj->IsOfType(obj)) {
+			if (lobj->Record().town == obj->Record().town && lobj->IsOfType(obj)) {
 				/* if lobj->town_cn < next, uint will overflow to '+inf' */
-				uint i = (uint)lobj->town_cn - next;
+				uint i = (uint)lobj->Record().town_cn - next;
 
 				if (i < 32) {
 					SetBit(used, i); // update bitmap
@@ -419,7 +419,7 @@ void MakeDefaultName(T *obj)
 		if (cid == T::GetPoolSize()) cid = 0; // wrap to zero...
 	} while (cid != idx);
 
-	obj->town_cn = (uint16_t)next; // set index...
+	obj->Record().town_cn = (uint16_t)next; // set index...
 }
 
 /*

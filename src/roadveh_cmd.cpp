@@ -358,7 +358,7 @@ TileIndex RoadVehicle::GetOrderStationLocation(StationID station)
 		return TileIndex{};
 	}
 
-	return st->xy;
+	return st->GetXY();
 }
 
 

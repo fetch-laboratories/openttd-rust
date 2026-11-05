@@ -51,7 +51,7 @@
  */
 void Waypoint::UpdateVirtCoord()
 {
-	Point pt = RemapCoords2(TileX(this->xy) * TILE_SIZE, TileY(this->xy) * TILE_SIZE);
+	Point pt = RemapCoords2(TileX(this->GetXY()) * TILE_SIZE, TileY(this->GetXY()) * TILE_SIZE);
 	if (this->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeWaypoint(this->index));
 
 	this->sign.UpdatePosition(pt.x, pt.y - 32 * ZOOM_BASE, GetString(STR_WAYPOINT_NAME, this->index));
@@ -68,7 +68,7 @@ void Waypoint::UpdateVirtCoord()
  */
 void Waypoint::MoveSign(TileIndex new_xy)
 {
-	if (this->xy == new_xy) return;
+	if (this->GetXY() == new_xy) return;
 
 	this->BaseStation::MoveSign(new_xy);
 }

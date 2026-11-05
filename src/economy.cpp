@@ -462,33 +462,33 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.stage = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint8_t unload, void *next_stations, OpenTTDNativeCargoPayment *payment) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry ge = st->GetGoods(v->cargo_type);
 		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
-		v->cargo.Stage(ge.status.Test(GoodsEntry::State::Acceptance), st->index, next, static_cast<OrderUnloadType>(unload), &ge, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
+		v->cargo.Stage(ge.GetStatus().Test(GoodsEntry::State::Acceptance), st->index, next, static_cast<OrderUnloadType>(unload), &ge, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
 	},
 	.return_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry ge = st->GetGoods(v->cargo_type);
 		v->cargo.Return(amount, &ge.GetOrCreateData().cargo, StationID::Invalid(), v->GetCargoTile());
 	},
 	.unload_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, OpenTTDNativeCargoPayment *payment) noexcept -> uint32_t {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry ge = st->GetGoods(v->cargo_type);
 		return v->cargo.Unload(amount, &ge.GetOrCreateData().cargo, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
 	},
 	.load_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, void *next_stations) noexcept -> uint32_t {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry ge = st->GetGoods(v->cargo_type);
 		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
 		return ge.GetOrCreateData().cargo.Load(amount, &v->cargo, next, v->GetCargoTile());
 	},
 	.reserve_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, void *next_stations) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry ge = st->GetGoods(v->cargo_type);
 		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
 		ge.GetOrCreateData().cargo.Reserve(amount, &v->cargo, next, v->GetCargoTile());
 	},
@@ -499,11 +499,11 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		VehicleOf(vehicle)->cargo.Reassign<VehicleCargoList::MTA_DELIVER, VehicleCargoList::MTA_KEEP>(amount);
 	},
 	.has_cargo_for = [](OpenTTDStation *station, uint8_t cargo, void *next_stations) noexcept -> bool {
-		GoodsEntry &ge = static_cast<Station *>(station)->goods[cargo];
+		GoodsEntry ge = static_cast<Station *>(station)->GetGoods(cargo);
 		return ge.HasData() && ge.GetData().cargo.HasCargoFor(*static_cast<std::vector<StationID> *>(next_stations));
 	},
 	.station_cargo_total = [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t {
-		return static_cast<Station *>(station)->goods[cargo].GetData().cargo.TotalCount();
+		return static_cast<Station *>(station)->GetGoods(cargo).GetData().cargo.TotalCount();
 	},
 
 
@@ -528,7 +528,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Station *st = static_cast<Station *>(station);
 		st->MarkTilesDirty(true);
 		SetWindowDirty(WC_STATION_VIEW, st->index);
-		SetWindowDirty(WC_STATION_LIST, st->owner);
+		SetWindowDirty(WC_STATION_LIST, st->GetOwner());
 	},
 };
 
@@ -543,7 +543,7 @@ const OpenTTDStationLoading &GetRustStationLoading() noexcept { return _rust_sta
 void LoadUnloadStation(Station *st)
 {
 	CommandCost cost, temporary;
-	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleVisits(), RustCommandCost(&cost), RustCommandCost(&temporary));
+	openttd_rust_station_load(&st->Record(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleVisits(), RustCommandCost(&cost), RustCommandCost(&temporary));
 }
 
 OpenTTDEconomyMonth RustEconomyClockMonth() noexcept

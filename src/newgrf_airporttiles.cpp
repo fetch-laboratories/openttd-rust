@@ -154,7 +154,7 @@ bool DrawNewAirportTile(TileInfo *ti, Station *st, const AirportTileSpec *airts)
 
 	auto processor = group->ProcessRegisters(object, nullptr);
 	auto dts = processor.GetLayout();
-	AirportDrawTileLayout(ti, dts, Company::Get(st->owner)->colour);
+	AirportDrawTileLayout(ti, dts, Company::Get(st->GetOwner())->colour);
 	return true;
 }
 

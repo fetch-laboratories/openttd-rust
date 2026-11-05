@@ -70,15 +70,15 @@ static uint32_t Ship_industry_station(uint32_t tile) noexcept
 
 static bool Ship_oilrig(uint32_t tile) noexcept { return IsTileType(TileIndex(tile), MP_STATION) && IsOilRig(TileIndex(tile)); }
 
-static uint32_t Ship_station_xy(uint32_t station) noexcept { return Station::Get(StationID(station))->xy.base(); }
+static uint32_t Ship_station_xy(uint32_t station) noexcept { return Station::Get(StationID(station))->GetXY().base(); }
 
-static bool Ship_station_dock(uint32_t station) noexcept { return Station::Get(StationID(station))->facilities.Test(StationFacility::Dock); }
+static bool Ship_station_dock(uint32_t station) noexcept { return Station::Get(StationID(station))->GetFacilities().Test(StationFacility::Dock); }
 
-static uint32_t Ship_station_visits(uint32_t station) noexcept { return Station::Get(StationID(station))->had_vehicle_of_type; }
+static uint32_t Ship_station_visits(uint32_t station) noexcept { return Station::Get(StationID(station))->GetHadVehicleOfType(); }
 
 static void Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept
 {
-	Station::Get(StationID(station))->had_vehicle_of_type |= static_cast<StationHadVehicleOfType>(vehicle_type);
+	Station::Get(StationID(station))->SetHadVehicleOfType(Station::Get(StationID(station))->GetHadVehicleOfType() | (static_cast<StationHadVehicleOfType>(vehicle_type)));
 }
 
 static void Ship_arrival(uint32_t id, uint32_t station) noexcept

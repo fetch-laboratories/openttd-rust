@@ -78,7 +78,7 @@ void LinkGraphOverlay::RebuildCache()
 	this->GetWidgetDpi(&dpi);
 
 	for (const Station *sta : Station::Iterate()) {
-		if (sta->rect.IsEmpty()) continue;
+		if (sta->GetRect().IsEmpty()) continue;
 
 		Point pta = this->GetStationMiddle(sta);
 
@@ -88,10 +88,10 @@ void LinkGraphOverlay::RebuildCache()
 		uint supply = 0;
 		for (CargoType cargo : SetCargoBitIterator(this->cargo_mask)) {
 			if (!CargoSpec::Get(cargo)->IsValid()) continue;
-			if (!LinkGraph::IsValidID(sta->goods[cargo].link_graph)) continue;
-			const LinkGraph &lg = *LinkGraph::Get(sta->goods[cargo].link_graph);
+			if (!LinkGraph::IsValidID(sta->GetGoods(cargo).link_graph)) continue;
+			const LinkGraph &lg = *LinkGraph::Get(sta->GetGoods(cargo).link_graph);
 
-			const auto &from_node = lg[sta->goods[cargo].node];
+			const auto &from_node = lg[sta->GetGoods(cargo).node];
 			supply += lg.Monthly(from_node.Supply());
 			for (const Edge &edge : from_node.Edges()) {
 				StationID to = lg[edge.dest_node].Station();
@@ -103,8 +103,8 @@ void LinkGraphOverlay::RebuildCache()
 				assert(sta != stb);
 
 				/* Show links between stations of selected companies or "neutral" ones like oilrigs. */
-				if (stb->owner != OWNER_NONE && sta->owner != OWNER_NONE && !this->company_mask.Test(stb->owner)) continue;
-				if (stb->rect.IsEmpty()) continue;
+				if (stb->GetOwner() != OWNER_NONE && sta->GetOwner() != OWNER_NONE && !this->company_mask.Test(stb->GetOwner())) continue;
+				if (stb->GetRect().IsEmpty()) continue;
 
 				if (!this->IsLinkVisible(pta, this->GetStationMiddle(stb), &dpi)) continue;
 
@@ -214,18 +214,18 @@ void LinkGraphOverlay::AddLinks(const Station *from, const Station *to)
 {
 	for (CargoType cargo : SetCargoBitIterator(this->cargo_mask)) {
 		if (!CargoSpec::Get(cargo)->IsValid()) continue;
-		const GoodsEntry &ge = from->goods[cargo];
-		if (!LinkGraph::IsValidID(ge.link_graph) ||
-				ge.link_graph != to->goods[cargo].link_graph) {
+		const GoodsEntry ge = from->GetGoods(cargo);
+		if (!LinkGraph::IsValidID(ge.GetLinkGraph()) ||
+				ge.GetLinkGraph() != to->GetGoods(cargo).link_graph) {
 			continue;
 		}
-		const LinkGraph &lg = *LinkGraph::Get(ge.link_graph);
-		if (lg[ge.node].HasEdgeTo(to->goods[cargo].node)) {
-			ConstEdge &edge = lg[ge.node][to->goods[cargo].node];
+		const LinkGraph &lg = *LinkGraph::Get(ge.GetLinkGraph());
+		if (lg[ge.Record().node].HasEdgeTo(to->GetGoods(cargo).node)) {
+			ConstEdge &edge = lg[ge.Record().node][to->GetGoods(cargo).node];
 			this->AddStats(cargo, lg.Monthly(edge.capacity), lg.Monthly(edge.usage),
 					ge.HasData() ? ge.GetData().flows.GetFlowVia(to->index) : 0,
 					edge.TravelTime() / Ticks::DAY_TICKS,
-					from->owner == OWNER_NONE || to->owner == OWNER_NONE,
+					from->GetOwner() == OWNER_NONE || to->GetOwner() == OWNER_NONE,
 					this->cached_links[from->index][to->index]);
 		}
 	}
@@ -331,8 +331,8 @@ void LinkGraphOverlay::DrawStationDots(const DrawPixelInfo *dpi) const
 		uint r = width * 2 + width * 2 * std::min(200U, i.second) / 200;
 
 		LinkGraphOverlay::DrawVertex(pt.x, pt.y, r,
-				GetColourGradient(st->owner != OWNER_NONE ?
-						Company::Get(st->owner)->colour : COLOUR_GREY, SHADE_LIGHT),
+				GetColourGradient(st->GetOwner() != OWNER_NONE ?
+						Company::Get(st->GetOwner())->colour : COLOUR_GREY, SHADE_LIGHT),
 				GetColourGradient(COLOUR_GREY, SHADE_DARKEST));
 	}
 }

@@ -144,12 +144,12 @@ bool IsHangar(Tile t)
 TileArea Station::GetTileArea(StationType type) const
 {
 	switch (type) {
-		case StationType::Rail: return this->train_station;
-		case StationType::Airport: return this->airport;
-		case StationType::Truck: return this->truck_station;
-		case StationType::Bus: return this->bus_station;
+		case StationType::Rail: return this->GetTrainStation();
+		case StationType::Airport: return this->GetAirport();
+		case StationType::Truck: return this->GetTruckStation();
+		case StationType::Bus: return this->GetBusStation();
 		case StationType::Dock:
-		case StationType::Oilrig: return this->docking_station;
+		case StationType::Oilrig: return this->GetDockingStation();
 		default: NOT_REACHED();
 	}
 }
@@ -159,14 +159,14 @@ TileArea Station::GetTileArea(StationType type) const
  */
 void Station::UpdateVirtCoord()
 {
-	Point pt = RemapCoords2(TileX(this->xy) * TILE_SIZE, TileY(this->xy) * TILE_SIZE);
+	Point pt = RemapCoords2(TileX(this->GetXY()) * TILE_SIZE, TileY(this->GetXY()) * TILE_SIZE);
 
 	pt.y -= 32 * ZOOM_BASE;
-	if (this->facilities.Test(StationFacility::Airport) && this->airport.type == AT_OILRIG) pt.y -= 16 * ZOOM_BASE;
+	if (this->GetFacilities().Test(StationFacility::Airport) && this->GetAirport().type == AT_OILRIG) pt.y -= 16 * ZOOM_BASE;
 
 	if (this->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(this->index));
 
-	this->sign.UpdatePosition(pt.x, pt.y, GetString(STR_VIEWPORT_STATION, this->index, this->facilities), GetString(STR_STATION_NAME, this->index, this->facilities));
+	this->sign.UpdatePosition(pt.x, pt.y, GetString(STR_VIEWPORT_STATION, this->index, this->GetFacilities()), GetString(STR_STATION_NAME, this->index, this->GetFacilities()));
 
 	_viewport_sign_kdtree.Insert(ViewportSignKdtreeItem::MakeStation(this->index));
 
@@ -201,7 +201,7 @@ void ClearAllStationCachedNames()
  */
 CargoTypes GetAcceptanceMask(const Station *st)
 {
-	return openttd_rust_station_acceptance_mask(st->rust_service.get());
+	return openttd_rust_station_acceptance_mask(&st->Record());
 }
 
 /**
@@ -274,7 +274,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		};
 	},
 	.rating_counts = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDRatingCounts {
-		GoodsEntry &ge = Station::From(static_cast<BaseStation *>(handle))->goods[cargo];
+		GoodsEntry ge = Station::From(static_cast<BaseStation *>(handle))->GetGoods(cargo);
 		return {
 			ge.AvailableCount(), ge.HasData() ? static_cast<uint32_t>(ge.GetData().cargo.MapSize()) : 0
 		};
@@ -305,7 +305,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		return _cheats.station_rating.value;
 	},
 	.available = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint32_t {
-		return Station::From(static_cast<BaseStation *>(handle))->goods[cargo].AvailableCount();
+		return Station::From(static_cast<BaseStation *>(handle))->GetGoods(cargo).AvailableCount();
 	},
 	.cargo_valid = OpenTTDCargoSpecValid,
 	.rating_callback_enabled = [](uint8_t cargo) noexcept -> bool {
@@ -335,7 +335,7 @@ static const OpenTTDStationServices _rust_station_services = {
 
 	.append_packet = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount, OpenTTDCargoSource source) noexcept -> void {
 		Station *st = Station::From(static_cast<BaseStation *>(handle));
-		GoodsEntry &ge = st->goods[cargo];
+		GoodsEntry ge = st->GetGoods(cargo);
 		StationID next = ge.GetVia(st->index);
 		ge.GetOrCreateData().cargo.Append(new CargoPacket(st->index, amount, Source(source.id, source.type)), next);
 	},
@@ -349,7 +349,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.cargo_registry = &GetRustCargoRegistryServices(),
 	.with_truncation = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount, void *context, OpenTTDStationScope body) noexcept {
 		RustStationTruncation result;
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
+		GoodsEntry ge = static_cast<Station *>(handle)->GetGoods(cargo);
 		if (ge.HasData()) ge.GetData().cargo.Truncate(amount, &result.amounts);
 		result.iterator = result.amounts.begin();
 		body(context, &result);
@@ -370,11 +370,11 @@ static const OpenTTDStationLinks _rust_station_links = {
 		return {to, OpenTTDDistanceManhattan(RustStationLocation(from), RustStationLocation(to))};
 	},
 	.delete_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
+		GoodsEntry ge = static_cast<Station *>(handle)->GetGoods(cargo);
 		if (ge.HasData()) ge.GetData().flows.DeleteFlows(StationID(destination));
 	},
 	.restrict_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
+		GoodsEntry ge = static_cast<Station *>(handle)->GetGoods(cargo);
 		if (ge.HasData()) ge.GetData().flows.RestrictFlows(StationID(destination));
 	},
 	.order_list = [](uint16_t id) noexcept -> OpenTTDOrderList * {
@@ -1308,7 +1308,7 @@ void FillTileDescRailStation(TileIndex tile, TileDesc &td)
 
 void FillTileDescAirport(TileIndex tile, TileDesc &td)
 {
-	const AirportSpec *as = Station::GetByTile(tile)->airport.GetSpec();
+	const AirportSpec *as = Station::GetByTile(tile)->GetAirport().GetSpec();
 	td.airport_class = AirportClass::Get(as->class_index)->name;
 	td.airport_name = as->name;
 
@@ -1327,7 +1327,7 @@ void FillTileDescAirport(TileIndex tile, TileDesc &td)
 static void GetTileDesc_Station(TileIndex tile, TileDesc &td)
 {
 	td.owner[0] = GetTileOwner(tile);
-	td.build_date = BaseStation::GetByTile(tile)->build_date;
+	td.build_date = BaseStation::GetByTile(tile)->GetBuildDate();
 
 	if (IsAnyRoadStop(tile)) FillTileDescRoadStop(tile, td);
 	if (HasStationRail(tile)) FillTileDescRailStation(tile, td);
@@ -1343,7 +1343,7 @@ static void GetTileDesc_Station(TileIndex tile, TileDesc &td)
 		case StationType::Truck:    str = STR_LAI_STATION_DESCRIPTION_TRUCK_LOADING_AREA; break;
 		case StationType::Bus:      str = STR_LAI_STATION_DESCRIPTION_BUS_STATION; break;
 		case StationType::Oilrig: {
-			const Industry *i = Station::GetByTile(tile)->industry;
+			const Industry *i = Station::GetByTile(tile)->Record().industry;
 			const IndustrySpec *is = GetIndustrySpec(i->type);
 			td.owner[0] = i->owner;
 			str = is->name;
@@ -1363,11 +1363,11 @@ static bool ClickTile_Station(TileIndex tile)
 {
 	const BaseStation *bst = BaseStation::GetByTile(tile);
 
-	if (bst->facilities.Test(StationFacility::Waypoint)) {
+	if (bst->GetFacilities().Test(StationFacility::Waypoint)) {
 		ShowWaypointWindow(Waypoint::From(bst));
 	} else if (IsHangar(tile)) {
 		const Station *st = Station::From(bst);
-		ShowDepotWindow(st->airport.GetHangarTile(st->airport.GetHangarNum(tile)), VEH_AIRCRAFT);
+		ShowDepotWindow(st->GetAirport().GetHangarTile(st->GetAirport().GetHangarNum(tile)), VEH_AIRCRAFT);
 	} else {
 		ShowStationViewWindow(bst->index);
 	}

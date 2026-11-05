@@ -254,26 +254,26 @@ static ScriptOrder::OrderPosition RealOrderPositionToScriptOrderPosition(Vehicle
 			if (v->GetType() != VEH_AIRCRAFT) return ::Depot::Get(order->GetDestination().ToDepotID())->xy;
 			/* Aircraft's hangars are referenced by StationID, not DepotID */
 			const Station *st = ::Station::Get(order->GetDestination().ToStationID());
-			if (!st->airport.HasHangar()) return INVALID_TILE;
-			return st->airport.GetHangarTile(0);
+			if (!st->GetAirport().HasHangar()) return INVALID_TILE;
+			return st->GetAirport().GetHangarTile(0);
 		}
 
 		case OT_GOTO_STATION: {
 			const Station *st = ::Station::Get(order->GetDestination().ToStationID());
-			if (st->train_station.tile != INVALID_TILE) {
-				for (TileIndex t : st->train_station) {
+			if (st->GetTrainStation().tile != INVALID_TILE) {
+				for (TileIndex t : st->GetTrainStation()) {
 					if (st->TileBelongsToRailStation(t)) return t;
 				}
-			} else if (st->ship_station.tile != INVALID_TILE) {
-				for (TileIndex t : st->ship_station) {
+			} else if (st->GetShipStation().tile != INVALID_TILE) {
+				for (TileIndex t : st->GetShipStation()) {
 					if (IsTileType(t, MP_STATION) && (IsDock(t) || IsOilRig(t)) && GetStationIndex(t) == st->index) return t;
 				}
-			} else if (st->bus_stops != nullptr) {
-				return st->bus_stops->xy;
-			} else if (st->truck_stops != nullptr) {
-				return st->truck_stops->xy;
-			} else if (st->airport.tile != INVALID_TILE) {
-				for (TileIndex tile : st->airport) {
+			} else if (st->GetBusStops() != nullptr) {
+				return st->GetBusStops()->xy;
+			} else if (st->GetTruckStops() != nullptr) {
+				return st->GetTruckStops()->xy;
+			} else if (st->GetAirport().tile != INVALID_TILE) {
+				for (TileIndex tile : st->GetAirport()) {
 					if (st->TileBelongsToAirport(tile) && !::IsHangar(tile)) return tile;
 				}
 			}
@@ -282,17 +282,17 @@ static ScriptOrder::OrderPosition RealOrderPositionToScriptOrderPosition(Vehicle
 
 		case OT_GOTO_WAYPOINT: {
 			const Waypoint *wp = ::Waypoint::Get(order->GetDestination().ToStationID());
-			if (wp->train_station.tile != INVALID_TILE) {
-				for (TileIndex t : wp->train_station) {
+			if (wp->GetTrainStation().tile != INVALID_TILE) {
+				for (TileIndex t : wp->GetTrainStation()) {
 					if (wp->TileBelongsToRailStation(t)) return t;
 				}
-			} else if (wp->road_waypoint_area.tile != INVALID_TILE) {
-				for (TileIndex t : wp->road_waypoint_area) {
+			} else if (wp->GetRoadWaypointArea().tile != INVALID_TILE) {
+				for (TileIndex t : wp->GetRoadWaypointArea()) {
 					if (::IsRoadWaypointTile(t) && ::GetStationIndex(t) == wp->index) return t;
 				}
 			}
 			/* If the waypoint has no rail or road waypoint tiles, it must have a buoy */
-			return wp->xy;
+			return wp->GetXY();
 		}
 		default:               return INVALID_TILE;
 	}
@@ -699,11 +699,11 @@ static void _DoCommandReturnSetOrderFlags(class ScriptInstance &instance)
 	if (vehicle_type == ScriptVehicle::VT_AIR) {
 		if (ScriptTile::IsStationTile(origin_tile)) {
 			const Station *orig_station = ::Station::GetByTile(origin_tile);
-			if (orig_station != nullptr && orig_station->airport.tile != INVALID_TILE) origin_tile = orig_station->airport.tile;
+			if (orig_station != nullptr && orig_station->GetAirport().tile != INVALID_TILE) origin_tile = orig_station->airport.tile;
 		}
 		if (ScriptTile::IsStationTile(dest_tile)) {
 			const Station *dest_station = ::Station::GetByTile(dest_tile);
-			if (dest_station != nullptr && dest_station->airport.tile != INVALID_TILE) dest_tile = dest_station->airport.tile;
+			if (dest_station != nullptr && dest_station->GetAirport().tile != INVALID_TILE) dest_tile = dest_station->airport.tile;
 		}
 
 		return ScriptMap::DistanceSquare(origin_tile, dest_tile);

@@ -79,7 +79,7 @@ extern "C" uint64_t openttd_orders_ownerless_station(uint16_t station, uint8_t i
 {
 	{
 			BaseStation *bs = if_valid != 0 ? BaseStation::GetIfValid(StationID(station)) : BaseStation::Get(StationID(station));
-			return bs != nullptr && bs->owner == OWNER_NONE;
+			return bs != nullptr && bs->GetOwner() == OWNER_NONE;
 		}
 }
 
@@ -165,12 +165,12 @@ extern "C" uint64_t openttd_orders_airport_tile(uint16_t destination) noexcept
 
 extern "C" uint64_t openttd_orders_base_station_tile(uint16_t destination) noexcept
 {
-	return BaseStation::Get(StationID(destination))->xy.base();
+	return BaseStation::Get(StationID(destination))->GetXY().base();
 }
 
 extern "C" uint64_t openttd_orders_station_tile(uint16_t destination) noexcept
 {
-	return Station::Get(StationID(destination))->xy.base();
+	return Station::Get(StationID(destination))->GetXY().base();
 }
 
 extern "C" uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept
@@ -198,7 +198,7 @@ extern "C" uint64_t openttd_orders_target_airport(void *ctx) noexcept
 
 extern "C" uint64_t openttd_orders_waypoint_tile(uint16_t destination) noexcept
 {
-	return Waypoint::Get(StationID(destination))->xy.base();
+	return Waypoint::Get(StationID(destination))->GetXY().base();
 }
 
 extern "C" uint64_t openttd_orders_at_station(void *ctx) noexcept
@@ -214,7 +214,7 @@ extern "C" uint64_t openttd_orders_valid_station(uint16_t destination) noexcept
 
 extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
 {
-	return Station::Get(StationID(destination))->owner.base();
+	return Station::Get(StationID(destination))->GetOwner().base();
 }
 
 
@@ -257,12 +257,12 @@ extern "C" uint64_t openttd_orders_valid_waypoint(uint16_t destination) noexcept
 
 extern "C" uint64_t openttd_orders_waypoint_facilities(uint16_t destination) noexcept
 {
-	return Waypoint::Get(StationID(destination))->facilities.base();
+	return Waypoint::Get(StationID(destination))->GetFacilities().base();
 }
 
 extern "C" uint64_t openttd_orders_waypoint_owner(uint16_t destination) noexcept
 {
-	return Waypoint::Get(StationID(destination))->owner.base();
+	return Waypoint::Get(StationID(destination))->GetOwner().base();
 }
 
 extern "C" uint64_t openttd_orders_list_capacity() noexcept

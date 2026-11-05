@@ -143,7 +143,7 @@ ScriptTileList_StationType::ScriptTileList_StationType(StationID station_id, Scr
 {
 	if (!ScriptStation::IsValidStation(station_id)) return;
 
-	const StationRect *rect = &::Station::Get(station_id)->rect;
+	const StationRect *rect = &::Station::Get(station_id)->GetRect();
 
 	EnumBitSet<StationType, uint8_t> station_types = {};
 	/* Convert ScriptStation::StationType to ::StationType, but do it in a

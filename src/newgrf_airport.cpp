@@ -56,7 +56,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.hangar_tile = RustSelectedHangarTile,
 		.depot_count = [](const AirportSpec *spec) noexcept { return spec->depots.size(); },
 		.depot_offset = [](const AirportSpec *spec, size_t index) noexcept { return spec->depots[index].ti; },
-		.rotated_offset = [](const BaseStation *st, TileIndexDiffC offset, const AirportSpec *spec) noexcept { return Station::From(st)->airport.GetRotatedTileFromOffset(offset, spec).base(); },
+		.rotated_offset = [](const BaseStation *st, TileIndexDiffC offset, const AirportSpec *spec) noexcept { return Station::From(st)->GetAirport().GetRotatedTileFromOffset(offset, spec).base(); },
 		.fta_heading = RustAirportLayoutHeading,
 		.fta_position = [](const AirportFTAClass *fta, uint32_t index) noexcept { return fta->layout[index].position; },
 		.dummy_spec = &AirportSpec::dummy,

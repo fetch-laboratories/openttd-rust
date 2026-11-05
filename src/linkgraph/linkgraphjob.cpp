@@ -95,9 +95,9 @@ static uint32_t ReadCargoFlowJob(void *context, uint8_t op, uint16_t node, uint1
 		case 5: return job[node].edges[edge_index].Flow();
 		case 6: return job[node].edges[edge_index].base.dest_node;
 		case 8: return _settings_game.linkgraph.GetDistributionType(ctx.cargo) == DT_MANUAL;
-		case 9: return Station::Get(job[node].Station())->goods[ctx.cargo].GetData().IsEmpty();
+		case 9: return Station::Get(job[node].Station())->GetGoods(ctx.cargo).GetData().IsEmpty();
 		case 10: return RustStationLinkGraphIndex(Station::Get(job[node].Station()), ctx.cargo);
-		case 11: return Station::Get(job[node].Station())->goods[ctx.cargo].node;
+		case 11: return Station::Get(job[node].Station())->GetGoods(ctx.cargo).node;
 		case 12: return RustLinkGraphJobGraphIndex(&job);
 		default: NOT_REACHED();
 	}
@@ -112,7 +112,7 @@ static OpenTTDCargoFlowMap *CargoLiveFlows(void *context, uint16_t node) noexcep
 {
 	const auto &ctx = *static_cast<CargoFlowContext *>(context);
 	auto &job = *ctx.job;
-	return Station::Get(job[node].Station())->goods[ctx.cargo].GetOrCreateData().flows.RustState();
+	return Station::Get(job[node].Station())->GetGoods(ctx.cargo).GetOrCreateData().flows.RustState();
 }
 
 static void CargoFlowReroute(void *context, uint16_t node, uint16_t via) noexcept
@@ -128,7 +128,7 @@ static void CargoFlowFinish(void *context, uint16_t node, uint8_t clear) noexcep
 	const auto &ctx = *static_cast<CargoFlowContext *>(context);
 	auto &job = *ctx.job;
 	Station *st = Station::Get(job[node].Station());
-	if (clear != 0) st->goods[ctx.cargo].ClearData();
+	if (clear != 0) st->GetGoods(ctx.cargo).ClearData();
 	InvalidateWindowData(WC_STATION_VIEW, st->index, ctx.cargo);
 }
 

@@ -26,12 +26,12 @@ static OpenTTDStorage256 *StorageCreateIndustry(Industry *industry) noexcept
 	industry->psa = new PersistentStorage(spec->grf_prop.grfid, GSF_INDUSTRIES, industry->location.tile);
 	return industry->psa->rust_storage;
 }
-static OpenTTDStorage256 *StorageAirport(Station *station) noexcept { return station->airport.psa == nullptr ? nullptr : station->airport.psa->rust_storage; }
+static OpenTTDStorage256 *StorageAirport(Station *station) noexcept { return station->GetAirport().psa == nullptr ? nullptr : station->GetAirport().psa->rust_storage; }
 static OpenTTDStorage256 *StorageCreateAirport(Station *station, uint32_t grfid) noexcept
 {
 	assert(PersistentStorage::CanAllocateItem());
-	station->airport.psa = new PersistentStorage(grfid, GSF_AIRPORTS, station->airport.tile);
-	return station->airport.psa->rust_storage;
+	station->GetAirport().psa = new PersistentStorage(grfid, GSF_AIRPORTS, station->GetAirport().tile);
+	return station->GetAirport().psa->rust_storage;
 }
 static OpenTTDStorageReference StorageTown(const Town *town, size_t index) noexcept
 {

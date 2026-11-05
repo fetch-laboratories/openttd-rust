@@ -459,7 +459,7 @@ static void TrainViewport(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 }
 static uint64_t TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {
-	return Station::Get(StationID(a))->had_vehicle_of_type;
+	return Station::Get(StationID(a))->GetHadVehicleOfType();
 }
 
 static uint64_t TrainWaitOneway(OpenTTDTrainHandle) noexcept
@@ -485,5 +485,5 @@ static void TrainWriteCrossingBar(OpenTTDTrainHandle, uint32_t a, uint8_t b) noe
 }
 static void TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {
-	Station::Get(StationID(a))->had_vehicle_of_type |= HVOT_TRAIN;
+	Station::Get(StationID(a))->SetHadVehicleOfType(Station::Get(StationID(a))->GetHadVehicleOfType() | (HVOT_TRAIN));
 }

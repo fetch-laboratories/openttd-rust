@@ -365,16 +365,16 @@ static OpenTTDCompanySignalTile Co_signal_tile(uint32_t t) noexcept
 }
 static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
 static void Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept { Company::Get(new_owner)->infrastructure.airport += Company::Get(old_owner)->infrastructure.airport; }
-static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->owner; }); }
-static uint32_t Co_station_facility_count(uint32_t id) noexcept { return Station::Get(id)->facilities.Count(); }
+static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->GetOwner(); }); }
+static uint32_t Co_station_facility_count(uint32_t id) noexcept { return Station::Get(id)->GetFacilities().Count(); }
 static OpenTTDCompanyStationTimes Co_station_times(uint32_t id) noexcept
 {
 	const Station *st = Station::Get(id);
-	return {st->time_since_load, st->time_since_unload};
+	return {st->Record().time_since_load, st->Record().time_since_unload};
 }
-static void Co_set_station_owner(uint32_t id, uint8_t owner) noexcept { Station::Get(id)->owner = CompanyID(owner); }
-static uint32_t Co_waypoint_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Waypoint>(owner, from, [](const Waypoint *wp) { return wp->owner; }); }
-static void Co_set_waypoint_owner(uint32_t id, uint8_t owner) noexcept { Waypoint::Get(id)->owner = CompanyID(owner); }
+static void Co_set_station_owner(uint32_t id, uint8_t owner) noexcept { Station::Get(id)->SetOwner(CompanyID(owner)); }
+static uint32_t Co_waypoint_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Waypoint>(owner, from, [](const Waypoint *wp) { return wp->GetOwner(); }); }
+static void Co_set_waypoint_owner(uint32_t id, uint8_t owner) noexcept { Waypoint::Get(id)->SetOwner(CompanyID(owner)); }
 static uint32_t Co_sign_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Sign>(owner, from, [](const Sign *si) { return si->owner; }); }
 static void Co_set_sign_owner(uint32_t id, uint8_t owner) noexcept { Sign::Get(id)->owner = CompanyID(owner); }
 static uint32_t Co_goal_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Goal>(owner, from, [](const Goal *g) { return g->company; }); }

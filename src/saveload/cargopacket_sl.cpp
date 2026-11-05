@@ -28,19 +28,19 @@
 			for (CargoPacket *cp : *packets) {
 				auto f = cp->Export();
 				StationID first(f.first_station);
-				f.source_xy = (Station::IsValidID(first) ? Station::Get(first)->xy : v->GetTile()).base();
+				f.source_xy = (Station::IsValidID(first) ? Station::Get(first)->GetXY() : v->GetTile()).base();
 				cp->Import(f);
 			}
 		}
 		for (Station *st : Station::Iterate()) {
-			for (GoodsEntry &ge : st->goods) {
+			for (GoodsEntry ge : st->Goods()) {
 				if (!ge.HasData()) continue;
 				auto packets = ge.GetData().cargo.Packets();
 				for (auto it = StationCargoList::ConstIterator(packets->begin()); it != packets->end(); ++it) {
 					CargoPacket *cp = *it;
 					auto f = cp->Export();
 					StationID first(f.first_station);
-					f.source_xy = (Station::IsValidID(first) ? Station::Get(first)->xy : st->xy).base();
+					f.source_xy = (Station::IsValidID(first) ? Station::Get(first)->GetXY() : st->GetXY()).base();
 					cp->Import(f);
 				}
 			}
@@ -54,20 +54,20 @@
 	if (!IsSavegameVersionBefore(SLV_68)) {
 		for (Vehicle *v : Vehicle::Iterate()) v->cargo.InvalidateCache();
 		for (Station *st : Station::Iterate()) {
-			for (GoodsEntry &ge : st->goods) if (ge.HasData()) ge.GetData().cargo.InvalidateCache();
+			for (GoodsEntry ge : st->Goods()) if (ge.HasData()) ge.GetData().cargo.InvalidateCache();
 		}
 	}
 	if (IsSavegameVersionBefore(SLV_181)) for (Vehicle *v : Vehicle::Iterate()) v->cargo.KeepAll();
 	if (IsSavegameVersionBefore(SLV_CARGO_TRAVELLED)) {
 		for (Station *st : Station::Iterate()) {
-			for (GoodsEntry &ge : st->goods) {
+			for (GoodsEntry ge : st->Goods()) {
 				if (!ge.HasData()) continue;
 				auto packets = ge.GetData().cargo.Packets();
 				for (auto &pair : *packets) for (CargoPacket *cp : pair.second) {
 					auto f = cp->Export();
-					if (f.source_xy != INVALID_TILE.base() && f.source_xy != st->xy.base()) {
-						f.travelled_x = TileX(TileIndex(f.source_xy)) - TileX(st->xy);
-						f.travelled_y = TileY(TileIndex(f.source_xy)) - TileY(st->xy);
+					if (f.source_xy != INVALID_TILE.base() && f.source_xy != st->GetXY().base()) {
+						f.travelled_x = TileX(TileIndex(f.source_xy)) - TileX(st->GetXY());
+						f.travelled_y = TileY(TileIndex(f.source_xy)) - TileY(st->GetXY());
 						cp->Import(f);
 					}
 				}

@@ -142,11 +142,11 @@ static void TrainReservationStartStop(void *, OpenTTDTrainHandle id) noexcept
 }
 static uint64_t TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept
 {
-	return Station::Get(StationID(static_cast<uint16_t>(a)))->facilities.Test(StationFacility::Train);
+	return Station::Get(StationID(static_cast<uint16_t>(a)))->GetFacilities().Test(StationFacility::Train);
 }
 static uint64_t TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept
 {
-	return Station::Get(StationID(static_cast<uint16_t>(a)))->xy.base();
+	return Station::Get(StationID(static_cast<uint16_t>(a)))->GetXY().base();
 }
 static void TrainReservationStuck(void *, OpenTTDTrainHandle id) noexcept
 {

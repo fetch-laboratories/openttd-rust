@@ -29,13 +29,13 @@ static constinit const OpenTTDRoadStopServices _rust_road_stop_services{
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.primary = [](uint32_t tile, RoadStopType type) noexcept { return RustStationByTile(tile)->GetPrimaryRoadStop(type); },
-	.head = [](BaseStation *st, bool truck) noexcept { return truck ? Station::From(st)->truck_stops : Station::From(st)->bus_stops; },
+	.head = [](BaseStation *st, bool truck) noexcept { return truck ? Station::From(st)->GetTruckStops() : Station::From(st)->GetBusStops(); },
 	.is_bus = RustVehicleRead<bool, RustRoadIsBus>,
-	.next = [](const RoadStop *stop) noexcept { return stop->next; },
-	.tile = [](const RoadStop *stop) noexcept { return stop->xy.base(); },
+	.next = [](const RoadStop *stop) noexcept { return stop->GetNext(); },
+	.tile = [](const RoadStop *stop) noexcept { return stop->GetXY().base(); },
 	.state = [](const RoadStop *stop) noexcept { return stop->GetRustState(); },
 	.pool_next = [](uint32_t from) noexcept -> OpenTTDRoadStopPoolItem {
-		for (const RoadStop *rs : RoadStop::Iterate(from)) return {rs->GetRustState(), rs->xy.base(), rs->index.base()};
+		for (const RoadStop *rs : RoadStop::Iterate(from)) return {rs->GetRustState(), rs->GetXY().base(), rs->index.base()};
 		return {};
 	},
 };

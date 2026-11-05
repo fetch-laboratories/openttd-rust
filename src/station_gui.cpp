@@ -58,8 +58,8 @@ struct GenericWaypointTypeFilter
 {
 	using StationType = Waypoint;
 
-	static bool IsValidID(StationID id) { return Waypoint::IsValidID(id) && HasBit(Waypoint::Get(id)->waypoint_flags, WPF_ROAD) == ROAD; }
-	static bool IsValidBaseStation(const BaseStation *st) { return Waypoint::IsExpected(st) && HasBit(Waypoint::From(st)->waypoint_flags, WPF_ROAD) == ROAD; }
+	static bool IsValidID(StationID id) { return Waypoint::IsValidID(id) && HasBit(Waypoint::Get(id)->Record().waypoint_flags, WPF_ROAD) == ROAD; }
+	static bool IsValidBaseStation(const BaseStation *st) { return Waypoint::IsExpected(st) && HasBit(Waypoint::From(st)->Record().waypoint_flags, WPF_ROAD) == ROAD; }
 	static bool IsAcceptableWaypointTile(TileIndex tile) { return IsTileType(tile, TILE_TYPE); }
 	static constexpr bool IsWaypoint() { return true; }
 };
@@ -311,15 +311,15 @@ protected:
 		this->stations_per_cargo_type_no_rating = 0;
 
 		for (const Station *st : Station::Iterate()) {
-			if (this->filter.facilities.Any(st->facilities)) { // only stations with selected facilities
-				if (st->owner == owner || (st->owner == OWNER_NONE && HasStationInUse(st->index, true, owner))) {
+			if (this->filter.facilities.Any(st->GetFacilities())) { // only stations with selected facilities
+				if (st->GetOwner() == owner || (st->GetOwner() == OWNER_NONE && HasStationInUse(st->index, true, owner))) {
 					bool has_rating = false;
 					/* Add to the station/cargo counts. */
 					for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
-						if (st->goods[cargo].HasRating()) this->stations_per_cargo_type[cargo]++;
+						if (st->GetGoods(cargo).HasRating()) this->stations_per_cargo_type[cargo]++;
 					}
 					for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
-						if (st->goods[cargo].HasRating()) {
+						if (st->GetGoods(cargo).HasRating()) {
 							has_rating = true;
 							if (HasBit(this->filter.cargoes, cargo)) {
 								this->stations.push_back(st);
@@ -352,7 +352,7 @@ protected:
 	/** Sort stations by their type */
 	static bool StationTypeSorter(const Station * const &a, const Station * const &b, const CargoTypes &)
 	{
-		return a->facilities < b->facilities;
+		return a->GetFacilities() < b->GetFacilities();
 	}
 
 	/** Sort stations by their waiting cargo */
@@ -361,7 +361,7 @@ protected:
 		int diff = 0;
 
 		for (CargoType cargo : SetCargoBitIterator(cargo_filter)) {
-			diff += a->goods[cargo].TotalCount() - b->goods[cargo].TotalCount();
+			diff += a->GetGoods(cargo).TotalCount() - b->GetGoods(cargo).TotalCount();
 		}
 
 		return diff < 0;
@@ -373,7 +373,7 @@ protected:
 		int diff = 0;
 
 		for (CargoType cargo : SetCargoBitIterator(cargo_filter)) {
-			diff += a->goods[cargo].AvailableCount() - b->goods[cargo].AvailableCount();
+			diff += a->GetGoods(cargo).AvailableCount() - b->GetGoods(cargo).AvailableCount();
 		}
 
 		return diff < 0;
@@ -386,8 +386,8 @@ protected:
 		uint8_t maxr2 = 0;
 
 		for (CargoType cargo : SetCargoBitIterator(cargo_filter)) {
-			if (a->goods[cargo].HasRating()) maxr1 = std::max(maxr1, a->goods[cargo].rating);
-			if (b->goods[cargo].HasRating()) maxr2 = std::max(maxr2, b->goods[cargo].rating);
+			if (a->GetGoods(cargo).HasRating()) maxr1 = std::max(maxr1, a->GetGoods(cargo).Record().rating);
+			if (b->GetGoods(cargo).HasRating()) maxr2 = std::max(maxr2, b->GetGoods(cargo).Record().rating);
 		}
 
 		return maxr1 < maxr2;
@@ -400,8 +400,8 @@ protected:
 		uint8_t minr2 = 255;
 
 		for (CargoType cargo : SetCargoBitIterator(cargo_filter)) {
-			if (a->goods[cargo].HasRating()) minr1 = std::min(minr1, a->goods[cargo].rating);
-			if (b->goods[cargo].HasRating()) minr2 = std::min(minr2, b->goods[cargo].rating);
+			if (a->GetGoods(cargo).HasRating()) minr1 = std::min(minr1, a->GetGoods(cargo).Record().rating);
+			if (b->GetGoods(cargo).HasRating()) minr2 = std::min(minr2, b->GetGoods(cargo).Record().rating);
 		}
 
 		return minr1 > minr2;
@@ -512,19 +512,19 @@ public:
 				auto [first, last] = this->vscroll->GetVisibleRangeIterators(this->stations);
 				for (auto it = first; it != last; ++it) {
 					const Station *st = *it;
-					assert(st->xy != INVALID_TILE);
+					assert(st->GetXY() != INVALID_TILE);
 
 					/* Do not do the complex check HasStationInUse here, it may be even false
 					 * when the order had been removed and the station list hasn't been removed yet */
-					assert(st->owner == owner || st->owner == OWNER_NONE);
+					assert(st->GetOwner() == owner || st->GetOwner() == OWNER_NONE);
 
-					int x = DrawString(tr.left, tr.right, tr.top + (line_height - GetCharacterHeight(FS_NORMAL)) / 2, GetString(STR_STATION_LIST_STATION, st->index, st->facilities));
+					int x = DrawString(tr.left, tr.right, tr.top + (line_height - GetCharacterHeight(FS_NORMAL)) / 2, GetString(STR_STATION_LIST_STATION, st->index, st->GetFacilities()));
 					x += rtl ? -text_spacing : text_spacing;
 
 					/* show cargo waiting and station ratings */
 					for (const CargoSpec *cs : _sorted_standard_cargo_specs) {
 						CargoType cargo_type = cs->Index();
-						if (st->goods[cargo_type].HasRating()) {
+						if (st->GetGoods(cargo_type).HasRating()) {
 							/* For RTL we work in exactly the opposite direction. So
 							 * decrement the space needed first, then draw to the left
 							 * instead of drawing to the left and then incrementing
@@ -533,7 +533,7 @@ public:
 								x -= rating_width + rating_spacing;
 								if (x < tr.left) break;
 							}
-							StationsWndShowStationRating(x, x + rating_width, tr.top, cargo_type, st->goods[cargo_type].TotalCount(), st->goods[cargo_type].rating);
+							StationsWndShowStationRating(x, x + rating_width, tr.top, cargo_type, st->GetGoods(cargo_type).TotalCount(), st->GetGoods(cargo_type).Record().rating);
 							if (!rtl) {
 								x += rating_width + rating_spacing;
 								if (x > tr.right) break;
@@ -613,12 +613,12 @@ public:
 
 				const Station *st = *it;
 				/* do not check HasStationInUse - it is slow and may be invalid */
-				assert(st->owner == this->window_number || st->owner == OWNER_NONE);
+				assert(st->GetOwner() == this->window_number || st->GetOwner() == OWNER_NONE);
 
 				if (_ctrl_pressed) {
-					ShowExtraViewportWindow(st->xy);
+					ShowExtraViewportWindow(st->GetXY());
 				} else {
-					ScrollMainWindowToTile(st->xy);
+					ScrollMainWindowToTile(st->GetXY());
 				}
 				break;
 			}
@@ -1323,7 +1323,7 @@ struct StationViewWindow : public Window {
 	StationViewWindow(WindowDesc &desc, WindowNumber window_number) : Window(desc)
 	{
 		this->CreateNestedTree();
-		this->GetWidget<NWidgetStacked>(WID_SV_CLOSE_AIRPORT_SEL)->SetDisplayedPlane(Station::Get(window_number)->facilities.Test(StationFacility::Airport) ? 0 : SZSP_NONE);
+		this->GetWidget<NWidgetStacked>(WID_SV_CLOSE_AIRPORT_SEL)->SetDisplayedPlane(Station::Get(window_number)->GetFacilities().Test(StationFacility::Airport) ? 0 : SZSP_NONE);
 		this->vscroll = this->GetScrollbar(WID_SV_SCROLLBAR);
 		/* Nested widget tree creation is done in two steps to ensure that this->GetWidget<NWidgetCore>(WID_SV_ACCEPTS_RATINGS) exists in UpdateWidgetSize(). */
 		this->FinishInitNested(window_number);
@@ -1334,7 +1334,7 @@ struct StationViewWindow : public Window {
 		this->SelectSortBy(_settings_client.gui.station_gui_sort_by);
 		this->sort_orders[0] = SO_ASCENDING;
 		this->SelectSortOrder((SortOrder)_settings_client.gui.station_gui_sort_order);
-		this->owner = Station::Get(window_number)->owner;
+		this->owner = Station::Get(window_number)->GetOwner();
 	}
 
 	void OnInit() override
@@ -1424,16 +1424,16 @@ struct StationViewWindow : public Window {
 		this->vscroll->SetCount(cargo.GetNumChildren()); // update scrollbar
 
 		/* disable some buttons */
-		this->SetWidgetDisabledState(WID_SV_RENAME,   st->owner != _local_company);
-		this->SetWidgetDisabledState(WID_SV_TRAINS,   !st->facilities.Test(StationFacility::Train));
-		this->SetWidgetDisabledState(WID_SV_ROADVEHS, !st->facilities.Test(StationFacility::TruckStop) && !st->facilities.Test(StationFacility::BusStop));
-		this->SetWidgetDisabledState(WID_SV_SHIPS,    !st->facilities.Test(StationFacility::Dock));
-		this->SetWidgetDisabledState(WID_SV_PLANES,   !st->facilities.Test(StationFacility::Airport));
-		this->SetWidgetDisabledState(WID_SV_CLOSE_AIRPORT, !st->facilities.Test(StationFacility::Airport) || st->owner != _local_company || st->owner == OWNER_NONE); // Also consider SE, where _local_company == OWNER_NONE
-		this->SetWidgetLoweredState(WID_SV_CLOSE_AIRPORT, st->facilities.Test(StationFacility::Airport) && st->airport.blocks.Test(AirportBlock::AirportClosed));
+		this->SetWidgetDisabledState(WID_SV_RENAME,   st->GetOwner() != _local_company);
+		this->SetWidgetDisabledState(WID_SV_TRAINS,   !st->GetFacilities().Test(StationFacility::Train));
+		this->SetWidgetDisabledState(WID_SV_ROADVEHS, !st->GetFacilities().Test(StationFacility::TruckStop) && !st->GetFacilities().Test(StationFacility::BusStop));
+		this->SetWidgetDisabledState(WID_SV_SHIPS,    !st->GetFacilities().Test(StationFacility::Dock));
+		this->SetWidgetDisabledState(WID_SV_PLANES,   !st->GetFacilities().Test(StationFacility::Airport));
+		this->SetWidgetDisabledState(WID_SV_CLOSE_AIRPORT, !st->GetFacilities().Test(StationFacility::Airport) || st->GetOwner() != _local_company || st->GetOwner() == OWNER_NONE); // Also consider SE, where _local_company == OWNER_NONE
+		this->SetWidgetLoweredState(WID_SV_CLOSE_AIRPORT, st->GetFacilities().Test(StationFacility::Airport) && st->GetAirport().blocks.Test(AirportBlock::AirportClosed));
 
 		extern const Station *_viewport_highlight_station;
-		this->SetWidgetDisabledState(WID_SV_CATCHMENT, st->facilities.None());
+		this->SetWidgetDisabledState(WID_SV_CATCHMENT, st->GetFacilities().None());
 		this->SetWidgetLoweredState(WID_SV_CATCHMENT, _viewport_highlight_station == st);
 
 		this->DrawWidgets();
@@ -1479,7 +1479,7 @@ struct StationViewWindow : public Window {
 	{
 		if (widget == WID_SV_CAPTION) {
 			const Station *st = Station::Get(this->window_number);
-			return GetString(STR_STATION_VIEW_CAPTION, st->index, st->facilities);
+			return GetString(STR_STATION_VIEW_CAPTION, st->index, st->GetFacilities());
 		}
 
 		return this->Window::GetWidgetString(widget, stringid);
@@ -1496,9 +1496,9 @@ struct StationViewWindow : public Window {
 		CargoDataEntry &entry = cached_destinations.InsertOrRetrieve(cargo);
 		entry.Clear();
 
-		if (!st->goods[cargo].HasData()) return;
+		if (!st->GetGoods(cargo).HasData()) return;
 
-		for (const auto &it : st->goods[cargo].GetData().flows) {
+		for (const auto &it : st->GetGoods(cargo).GetData().flows) {
 			StationID from = it.first;
 			CargoDataEntry &source_entry = entry.InsertOrRetrieve(from);
 			uint32_t prev_count = 0;
@@ -1527,7 +1527,7 @@ struct StationViewWindow : public Window {
 	void EstimateDestinations(CargoType cargo, StationID source, StationID next, uint count, CargoDataEntry &dest)
 	{
 		if (Station::IsValidID(next) && Station::IsValidID(source)) {
-			GoodsEntry &ge = Station::Get(next)->goods[cargo];
+			GoodsEntry ge = Station::Get(next)->GetGoods(cargo);
 			if (!ge.HasData()) return;
 
 			CargoDataEntry tmp;
@@ -1659,7 +1659,7 @@ struct StationViewWindow : public Window {
 				this->RecalcDestinations(cargo);
 			}
 
-			const GoodsEntry &ge = st->goods[cargo];
+			const GoodsEntry ge = st->GetGoods(cargo);
 			if (!ge.HasData()) continue;
 
 			if (this->current_mode == MODE_WAITING) {
@@ -1829,7 +1829,7 @@ struct StationViewWindow : public Window {
 					if (grouping == GR_NEXT && str == STR_STATION_VIEW_VIA) str = this->SearchNonStop(cd, station, column);
 
 					if (pos == -this->scroll_to_row && Station::IsValidID(station)) {
-						ScrollMainWindowToTile(Station::Get(station)->xy);
+						ScrollMainWindowToTile(Station::Get(station)->GetXY());
 					}
 				}
 
@@ -1847,7 +1847,7 @@ struct StationViewWindow : public Window {
 						sym = "+";
 					} else {
 						/* Only draw '+' if there is something to be shown. */
-						const GoodsEntry &ge = Station::Get(this->window_number)->goods[cargo];
+						const GoodsEntry ge = Station::Get(this->window_number)->GetGoods(cargo);
 						if (ge.HasData()) {
 							const StationCargoList &cargo_list = ge.GetData().cargo;
 							if (grouping == GR_CARGO && (cargo_list.ReservedCount() > 0 || cd.HasTransfers())) {
@@ -1892,8 +1892,8 @@ struct StationViewWindow : public Window {
 		bool rtl = _current_text_dir == TD_RTL;
 		Rect tr = r.Shrink(WidgetDimensions::scaled.framerect);
 
-		if (st->town->exclusive_counter > 0) {
-			tr.top = DrawStringMultiLine(tr, GetString(st->town->exclusivity == st->owner ? STR_STATION_VIEW_EXCLUSIVE_RIGHTS_SELF : STR_STATION_VIEW_EXCLUSIVE_RIGHTS_COMPANY, st->town->exclusivity));
+		if (st->Record().town->exclusive_counter > 0) {
+			tr.top = DrawStringMultiLine(tr, GetString(st->Record().town->exclusivity == st->GetOwner() ? STR_STATION_VIEW_EXCLUSIVE_RIGHTS_SELF : STR_STATION_VIEW_EXCLUSIVE_RIGHTS_COMPANY, st->Record().town->exclusivity));
 			tr.top += WidgetDimensions::scaled.vsep_wide;
 		}
 
@@ -1901,16 +1901,17 @@ struct StationViewWindow : public Window {
 		tr.top += GetCharacterHeight(FS_NORMAL);
 
 		for (const CargoSpec *cs : _sorted_standard_cargo_specs) {
-			const GoodsEntry *ge = &st->goods[cs->Index()];
+			const GoodsEntry goods = st->GetGoods(cs->Index());
+			const GoodsEntry *ge = &goods;
 			if (!ge->HasRating()) continue;
 
-			const LinkGraph *lg = LinkGraph::GetIfValid(ge->link_graph);
+			const LinkGraph *lg = LinkGraph::GetIfValid(ge->GetLinkGraph());
 			DrawString(tr.Indent(WidgetDimensions::scaled.hsep_indent, rtl),
 				GetString(STR_STATION_VIEW_CARGO_SUPPLY_RATING,
 					cs->name,
-					lg != nullptr ? lg->Monthly((*lg)[ge->node].Supply()) : 0,
-					STR_CARGO_RATING_APPALLING + (ge->rating >> 5),
-					ToPercent8(ge->rating)));
+					lg != nullptr ? lg->Monthly((*lg)[ge->Record().node].Supply()) : 0,
+					STR_CARGO_RATING_APPALLING + (ge->Record().rating >> 5),
+					ToPercent8(ge->Record().rating)));
 			tr.top += GetCharacterHeight(FS_NORMAL);
 		}
 		return CeilDiv(tr.top - r.top - WidgetDimensions::scaled.framerect.top, GetCharacterHeight(FS_NORMAL));
@@ -1971,9 +1972,9 @@ struct StationViewWindow : public Window {
 
 			case WID_SV_LOCATION:
 				if (_ctrl_pressed) {
-					ShowExtraViewportWindow(Station::Get(this->window_number)->xy);
+					ShowExtraViewportWindow(Station::Get(this->window_number)->GetXY());
 				} else {
-					ScrollMainWindowToTile(Station::Get(this->window_number)->xy);
+					ScrollMainWindowToTile(Station::Get(this->window_number)->GetXY());
 				}
 				break;
 
@@ -2005,7 +2006,7 @@ struct StationViewWindow : public Window {
 			case WID_SV_ROADVEHS: // Show list of scheduled road-vehicles to this station
 			case WID_SV_SHIPS:    // Show list of scheduled ships to this station
 			case WID_SV_PLANES: { // Show list of scheduled aircraft to this station
-				Owner owner = Station::Get(this->window_number)->owner;
+				Owner owner = Station::Get(this->window_number)->GetOwner();
 				ShowVehicleListWindow(owner, (VehicleType)(widget - WID_SV_TRAINS), static_cast<StationID>(this->window_number));
 				break;
 			}
@@ -2215,9 +2216,9 @@ static void AddNearbyStation(TileIndex tile, TileArea *ctx)
 	if (!T::IsValidID(sid)) return;
 
 	BaseStation *st = BaseStation::Get(sid);
-	if (st->owner != _local_company || std::ranges::find(_stations_nearby_list, sid) != _stations_nearby_list.end()) return;
+	if (st->GetOwner() != _local_company || std::ranges::find(_stations_nearby_list, sid) != _stations_nearby_list.end()) return;
 
-	if (st->rect.BeforeAddRect(ctx->tile, ctx->w, ctx->h, StationRect::ADD_TEST).Succeeded()) {
+	if (st->GetRect().BeforeAddRect(ctx->tile, ctx->w, ctx->h, StationRect::ADD_TEST).Succeeded()) {
 		_stations_nearby_list.push_back(sid);
 	}
 }
@@ -2242,15 +2243,15 @@ static void FindStationsNearby(TileArea ta, bool distant_join)
 
 	/* Look for deleted stations */
 	for (const BaseStation *st : BaseStation::Iterate()) {
-		if (T::IsValidBaseStation(st) && !st->IsInUse() && st->owner == _local_company) {
+		if (T::IsValidBaseStation(st) && !st->IsInUse() && st->GetOwner() == _local_company) {
 			/* Include only within station spread (yes, it is strictly less than) */
-			if (std::max(DistanceMax(ta.tile, st->xy), DistanceMax(TileAddXY(ta.tile, ta.w - 1, ta.h - 1), st->xy)) < _settings_game.station.station_spread) {
-				_deleted_stations_nearby.emplace_back(st->xy, st->index);
+			if (std::max(DistanceMax(ta.tile, st->GetXY()), DistanceMax(TileAddXY(ta.tile, ta.w - 1, ta.h - 1), st->GetXY())) < _settings_game.station.station_spread) {
+				_deleted_stations_nearby.emplace_back(st->GetXY(), st->index);
 
 				/* Add the station when it's within where we're going to build */
-				if (IsInsideBS(TileX(st->xy), TileX(ctx.tile), ctx.w) &&
-						IsInsideBS(TileY(st->xy), TileY(ctx.tile), ctx.h)) {
-					AddNearbyStation<T>(st->xy, &ctx);
+				if (IsInsideBS(TileX(st->GetXY()), TileX(ctx.tile), ctx.w) &&
+						IsInsideBS(TileY(st->GetXY()), TileY(ctx.tile), ctx.h)) {
+					AddNearbyStation<T>(st->GetXY(), &ctx);
 				}
 			}
 		}
@@ -2330,7 +2331,7 @@ struct SelectStationWindow : Window {
 			const BaseStation *st = BaseStation::Get(station);
 			d = maxdim(d, GetStringBoundingBox(T::IsWaypoint()
 				? GetString(STR_STATION_LIST_WAYPOINT, st->index)
-				: GetString(STR_STATION_LIST_STATION, st->index, st->facilities)));
+				: GetString(STR_STATION_LIST_STATION, st->index, st->GetFacilities())));
 		}
 
 		fill.height = resize.height = d.height;
@@ -2353,7 +2354,7 @@ struct SelectStationWindow : Window {
 				const BaseStation *st = BaseStation::Get(*it);
 				DrawString(tr, T::IsWaypoint()
 					? GetString(STR_STATION_LIST_WAYPOINT, st->index)
-					: GetString(STR_STATION_LIST_STATION, st->index, st->facilities));
+					: GetString(STR_STATION_LIST_STATION, st->index, st->GetFacilities()));
 			}
 		}
 

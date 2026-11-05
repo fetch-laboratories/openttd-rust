@@ -382,7 +382,7 @@
 
 	int num = 0;
 	for (const Station *st : Station::Iterate()) {
-		if (st->town == t && st->facilities.Test(StationFacility::Airport) && st->airport.type != AT_OILRIG) num++;
+		if (st->Record().town == t && st->GetFacilities().Test(StationFacility::Airport) && st->GetAirport().type != AT_OILRIG) num++;
 	}
 	return std::max(0, 2 - num);
 }

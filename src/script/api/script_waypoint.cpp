@@ -19,7 +19,7 @@
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const Waypoint *wp = ::Waypoint::GetIfValid(waypoint_id);
-	return wp != nullptr && (wp->owner == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || wp->owner == OWNER_NONE);
+	return wp != nullptr && (wp->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || wp->owner == OWNER_NONE);
 }
 
 /* static */ StationID ScriptWaypoint::GetWaypointID(TileIndex tile)
@@ -33,5 +33,5 @@
 	if (!IsValidWaypoint(waypoint_id)) return false;
 	if (!HasExactlyOneBit(waypoint_type)) return false;
 
-	return ::Waypoint::Get(waypoint_id)->facilities.Any(static_cast<StationFacilities>(waypoint_type));
+	return ::Waypoint::Get(waypoint_id)->GetFacilities().Any(static_cast<StationFacilities>(waypoint_type));
 }

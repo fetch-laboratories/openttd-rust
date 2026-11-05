@@ -38,13 +38,13 @@ static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} 
 static uint64_t * OPENTTD_RUST_CALL Aircraft_airport_blocks(const OpenTTDStation *s) noexcept
 {
 	const Station *st = StationOf(s);
-	return st->airport.rust_blocks.get();
+	return &st->GetAirport().Record().blocks;
 }
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_had_vehicle(const OpenTTDStation *s) noexcept
 {
 	const Station *st = StationOf(s);
-	return st->had_vehicle_of_type;
+	return st->GetHadVehicleOfType();
 }
 
 
@@ -112,7 +112,7 @@ static uint8_t OPENTTD_RUST_CALL Aircraft_terminal_count(const void * ap, uint32
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_hangar_exit(const OpenTTDStation *station, uint32_t tile, const AirportSpec *spec) noexcept
 {
-	return StationOf(station)->airport.GetHangarExitDirection(TileIndex{tile}, spec);
+	return StationOf(station)->GetAirport().GetHangarExitDirection(TileIndex{tile}, spec);
 }
 
 static uint16_t OPENTTD_RUST_CALL Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept
@@ -180,7 +180,7 @@ static void OPENTTD_RUST_CALL Aircraft_crash_news(OpenTTDAircraftVehicle vehicle
 
 static void OPENTTD_RUST_CALL Aircraft_landing_rating(uint16_t station_id, uint8_t cargo) noexcept
 {
-	GoodsEntry &ge = Station::Get(station_id)->goods[cargo]; ge.rating = 1; if (ge.HasData()) ge.GetData().cargo.Truncate();
+	GoodsEntry ge = Station::Get(station_id)->GetGoods(cargo); ge.Record().rating = 1; if (ge.HasData()) ge.GetData().cargo.Truncate();
 }
 
 static void OPENTTD_RUST_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicle) noexcept
@@ -190,7 +190,7 @@ static void OPENTTD_RUST_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicl
 
 static void OPENTTD_RUST_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Station *st = Station::Get(station); st->had_vehicle_of_type |= HVOT_AIRCRAFT;
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Station *st = Station::Get(station); st->SetHadVehicleOfType(st->GetHadVehicleOfType() | (HVOT_AIRCRAFT));
 	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, st->index), v->GetOwner() == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, st->index);
 	AI::NewEvent(v->GetOwner(), new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
 }
@@ -310,7 +310,7 @@ static OpenTTDAircraftGeometry OPENTTD_RUST_CALL Aircraft_geometry(const OpenTTD
 	const Station *st = StationOf(s);
 	const uint32_t tile = RustStationAirportTile(st);
 	if (tile == INVALID_TILE.base()) return {.tile = RustStationLocation(st), .rotation = 0, .width = 1, .height = 1, .airport = false};
-	return {.tile = tile, .rotation = st->airport.rotation, .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
+	return {.tile = tile, .rotation = st->GetAirport().rotation, .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
 }
 static uint64_t OPENTTD_RUST_CALL Aircraft_layout_blocks(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].blocks.base(); }
 static uint8_t OPENTTD_RUST_CALL Aircraft_layout_next_position(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next_position; }
@@ -417,7 +417,7 @@ void UpdateAirplanesOnNewStation(const Station *st) { openttd_rust_aircraft_repl
 ClosestDepot Aircraft::FindClosestDepot()
 {
 	StationID station{openttd_rust_aircraft_closest_depot(&_aircraft_leaves, RustAircraftVehicle(this))};
-	return station == StationID::Invalid() ? ClosestDepot() : ClosestDepot(Station::Get(station)->xy, station);
+	return station == StationID::Invalid() ? ClosestDepot() : ClosestDepot(Station::Get(station)->GetXY(), station);
 }
 Station *GetTargetAirportIfValid(const Aircraft *v)
 {

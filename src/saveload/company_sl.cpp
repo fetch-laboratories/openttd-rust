@@ -130,8 +130,8 @@ void AfterLoadCompanyStats()
 
 	/* Collect airport count. */
 	for (const Station *st : Station::Iterate()) {
-		if (st->facilities.Test(StationFacility::Airport) && Company::IsValidID(st->owner)) {
-			Company::Get(st->owner)->infrastructure.airport++;
+		if (st->GetFacilities().Test(StationFacility::Airport) && Company::IsValidID(st->GetOwner())) {
+			Company::Get(st->GetOwner())->infrastructure.airport++;
 		}
 	}
 

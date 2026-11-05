@@ -43,7 +43,7 @@ private:
 	 */
 	TileIndex GetCenterTile() const
 	{
-		if (!this->wp->IsInUse()) return this->wp->xy;
+		if (!this->wp->IsInUse()) return this->wp->GetXY();
 
 		StationType type;
 		switch (this->vt) {
@@ -74,8 +74,8 @@ public:
 	WaypointWindow(WindowDesc &desc, WindowNumber window_number) : Window(desc)
 	{
 		this->wp = Waypoint::Get(window_number);
-		if (wp->string_id == STR_SV_STNAME_WAYPOINT) {
-			this->vt = HasBit(this->wp->waypoint_flags, WPF_ROAD) ? VEH_ROAD : VEH_TRAIN;
+		if (wp->Record().string_id == STR_SV_STNAME_WAYPOINT) {
+			this->vt = HasBit(this->wp->Record().waypoint_flags, WPF_ROAD) ? VEH_ROAD : VEH_TRAIN;
 		} else {
 			this->vt = VEH_SHIP;
 		}
@@ -93,7 +93,7 @@ public:
 		}
 		this->FinishInitNested(window_number);
 
-		this->owner = this->wp->owner;
+		this->owner = this->wp->GetOwner();
 		this->flags.Set(WindowFlag::DisableVpScroll);
 
 		NWidgetViewport *nvp = this->GetWidget<NWidgetViewport>(WID_W_VIEWPORT);
@@ -144,7 +144,7 @@ public:
 				break;
 
 			case WID_W_SHOW_VEHICLES: // show list of vehicles having this waypoint in their orders
-				ShowVehicleListWindow(this->wp->owner, this->vt, this->wp->index);
+				ShowVehicleListWindow(this->wp->GetOwner(), this->vt, this->wp->index);
 				break;
 
 			case WID_W_CATCHMENT:
@@ -167,7 +167,7 @@ public:
 	{
 		if (!gui_scope) return;
 		/* You can only change your own waypoints */
-		this->SetWidgetDisabledState(WID_W_RENAME, !this->wp->IsInUse() || (this->wp->owner != _local_company && this->wp->owner != OWNER_NONE));
+		this->SetWidgetDisabledState(WID_W_RENAME, !this->wp->IsInUse() || (this->wp->GetOwner() != _local_company && this->wp->GetOwner() != OWNER_NONE));
 		/* Disable the widget for waypoints with no use */
 		this->SetWidgetDisabledState(WID_W_SHOW_VEHICLES, !this->wp->IsInUse());
 

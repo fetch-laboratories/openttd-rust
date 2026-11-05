@@ -19,7 +19,7 @@ inline OpenTTDLiveGraph *LiveGraphOwner(OpenTTDLinkGraph *graph) noexcept { retu
 inline uint16_t RustLinkGraphJobGraphIndex(const LinkGraphJob *j) noexcept { return j->LinkGraphIndex().base(); }
 inline bool RustLinkGraphValid(uint16_t id) noexcept { return LinkGraph::IsValidID(LinkGraphID(id)); }
 inline LinkGraph *RustLinkGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id)); }
-inline uint16_t RustStationLinkGraphIndex(OpenTTDBaseStation *st, uint8_t cargo) noexcept { return Station::From(st)->goods[cargo].link_graph.base(); }
+inline uint16_t RustStationLinkGraphIndex(OpenTTDBaseStation *st, uint8_t cargo) noexcept { return Station::From(st)->GetGoods(cargo).GetLinkGraph().base(); }
 inline bool RustLinkGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }
 inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 {

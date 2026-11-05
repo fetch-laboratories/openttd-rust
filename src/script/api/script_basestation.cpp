@@ -25,13 +25,13 @@
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const BaseStation *st = ::BaseStation::GetIfValid(station_id);
-	return st != nullptr && (st->owner == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || st->owner == OWNER_NONE);
+	return st != nullptr && (st->GetOwner() == ScriptObject::GetCompany() || ScriptCompanyMode::IsDeity() || st->owner == OWNER_NONE);
 }
 
 /* static */ ScriptCompany::CompanyID ScriptBaseStation::GetOwner(StationID station_id)
 {
 	if (!IsValidBaseStation(station_id)) return ScriptCompany::COMPANY_INVALID;
-	return ScriptCompany::ToScriptCompanyID(::BaseStation::Get(station_id)->owner);
+	return ScriptCompany::ToScriptCompanyID(::BaseStation::Get(station_id)->GetOwner());
 }
 
 /* static */ std::optional<std::string> ScriptBaseStation::GetName(StationID station_id)
@@ -63,12 +63,12 @@
 {
 	if (!IsValidBaseStation(station_id)) return INVALID_TILE;
 
-	return ::BaseStation::Get(station_id)->xy;
+	return ::BaseStation::Get(station_id)->GetXY();
 }
 
 /* static */ ScriptDate::Date ScriptBaseStation::GetConstructionDate(StationID station_id)
 {
 	if (!IsValidBaseStation(station_id)) return ScriptDate::DATE_INVALID;
 
-	return (ScriptDate::Date)::BaseStation::Get(station_id)->build_date.base();
+	return (ScriptDate::Date)::BaseStation::Get(station_id)->GetBuildDate().base();
 }

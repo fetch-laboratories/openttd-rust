@@ -116,13 +116,13 @@ void MoveWaypointsToBaseStations()
 		}
 
 		Waypoint *new_wp = new Waypoint(t);
-		new_wp->town       = wp.town;
-		new_wp->town_cn    = wp.town_cn;
+		new_wp->Record().town       = wp.town;
+		new_wp->Record().town_cn    = wp.town_cn;
 		new_wp->name       = wp.name;
-		new_wp->delete_ctr = 0; // Just reset delete counter for once.
-		new_wp->build_date = wp.build_date;
-		new_wp->owner      = wp.owner;
-		new_wp->string_id  = STR_SV_STNAME_WAYPOINT;
+		new_wp->Record().delete_ctr = 0; // Just reset delete counter for once.
+		new_wp->SetBuildDate(wp.build_date);
+		new_wp->SetOwner(wp.owner);
+		new_wp->Record().string_id  = STR_SV_STNAME_WAYPOINT;
 
 		/* The tile might've been reserved! */
 		Tile tile(t);
@@ -130,8 +130,8 @@ void MoveWaypointsToBaseStations()
 
 		/* The tile really has our waypoint, so reassign the map array */
 		MakeRailWaypoint(tile, GetTileOwner(tile), new_wp->index, (Axis)GB(tile.m5(), 0, 1), 0, GetRailType(tile));
-		new_wp->facilities.Set(StationFacility::Train);
-		new_wp->owner = GetTileOwner(tile);
+		new_wp->SetFacilities(new_wp->GetFacilities().Set(StationFacility::Train));
+		new_wp->SetOwner(GetTileOwner(tile));
 
 		SetRailStationReservation(tile, reserved);
 
@@ -140,7 +140,7 @@ void MoveWaypointsToBaseStations()
 			if (specindex.has_value()) AssignSpecToStation(wp.spec, new_wp, *specindex);
 			SetCustomStationSpecIndex(tile, specindex.value_or(0));
 		}
-		new_wp->rect.BeforeAddTile(tile, StationRect::ADD_FORCE);
+		new_wp->GetRect().BeforeAddTile(tile, StationRect::ADD_FORCE);
 
 		wp.new_index = new_wp->index;
 	}

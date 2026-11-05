@@ -1508,14 +1508,14 @@ NetworkCompanyStatsArray NetworkGetCompanyStats()
 
 	/* Go through all stations and count the types of stations */
 	for (const Station *s : Station::Iterate()) {
-		if (Company::IsValidID(s->owner)) {
-			NetworkCompanyStats *npi = &stats[s->owner];
+		if (Company::IsValidID(s->GetOwner())) {
+			NetworkCompanyStats *npi = &stats[s->GetOwner()];
 
-			if (s->facilities.Test(StationFacility::Train))     npi->num_station[NETWORK_VEH_TRAIN]++;
-			if (s->facilities.Test(StationFacility::TruckStop)) npi->num_station[NETWORK_VEH_LORRY]++;
-			if (s->facilities.Test(StationFacility::BusStop))   npi->num_station[NETWORK_VEH_BUS]++;
-			if (s->facilities.Test(StationFacility::Airport))   npi->num_station[NETWORK_VEH_PLANE]++;
-			if (s->facilities.Test(StationFacility::Dock))      npi->num_station[NETWORK_VEH_SHIP]++;
+			if (s->GetFacilities().Test(StationFacility::Train))     npi->num_station[NETWORK_VEH_TRAIN]++;
+			if (s->GetFacilities().Test(StationFacility::TruckStop)) npi->num_station[NETWORK_VEH_LORRY]++;
+			if (s->GetFacilities().Test(StationFacility::BusStop))   npi->num_station[NETWORK_VEH_BUS]++;
+			if (s->GetFacilities().Test(StationFacility::Airport))   npi->num_station[NETWORK_VEH_PLANE]++;
+			if (s->GetFacilities().Test(StationFacility::Dock))      npi->num_station[NETWORK_VEH_SHIP]++;
 		}
 	}
 

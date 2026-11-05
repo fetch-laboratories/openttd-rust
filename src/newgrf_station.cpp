@@ -142,7 +142,7 @@ uint8_t GoodsEntry::ConvertState() const
 	static_assert(to_underlying(GoodsEntry::State::LastMonth) == 3);
 	static_assert(to_underlying(GoodsEntry::State::CurrentMonth) == 4);
 	static_assert(to_underlying(GoodsEntry::State::AcceptedBigtick) == 5);
-	return openttd_rust_goods_convert_state(this->status.base());
+	return openttd_rust_goods_convert_state(this->GetStatus().base());
 }
 
 

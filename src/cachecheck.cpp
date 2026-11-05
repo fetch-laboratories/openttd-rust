@@ -72,10 +72,10 @@ void CheckCaches()
 
 	/* Strict checking of the road stop cache entries */
 	for (const RoadStop *rs : RoadStop::Iterate()) {
-		if (IsBayRoadStopTile(rs->xy)) continue;
+		if (IsBayRoadStopTile(rs->GetXY())) continue;
 
-		openttd_rust_road_stop_check_integrity(&GetRustSharedServices(), rs->xy.base(), rs->GetRustState(), DIAGDIR_NE);
-		openttd_rust_road_stop_check_integrity(&GetRustSharedServices(), rs->xy.base(), rs->GetRustState(), DIAGDIR_NW);
+		openttd_rust_road_stop_check_integrity(&GetRustSharedServices(), rs->GetXY().base(), rs->GetRustState(), DIAGDIR_NE);
+		openttd_rust_road_stop_check_integrity(&GetRustSharedServices(), rs->GetXY().base(), rs->GetRustState(), DIAGDIR_NW);
 	}
 
 	std::vector<NewGRFCache> grf_cache;
@@ -179,7 +179,7 @@ void CheckCaches()
 	for (Station *st : Station::Iterate()) old_station_industries_near.push_back(copy_industries(st->industries_near));
 
 	for (Station *st : Station::Iterate()) {
-		for (GoodsEntry &ge : st->goods) {
+		for (GoodsEntry ge : st->Goods()) {
 			if (!ge.HasData()) continue;
 
 			StationCargoList &cargo_list = ge.GetData().cargo;
@@ -193,13 +193,13 @@ void CheckCaches()
 		/* Check docking tiles */
 		TileArea ta;
 		std::map<TileIndex, bool> docking_tiles;
-		for (TileIndex tile : st->docking_station) {
+		for (TileIndex tile : st->GetDockingStation()) {
 			ta.Add(tile);
 			docking_tiles[tile] = IsDockingTile(tile);
 		}
 		UpdateStationDockingTiles(st);
-		if (ta.tile != st->docking_station.tile || ta.w != st->docking_station.w || ta.h != st->docking_station.h) {
-			Debug(desync, 2, "warning: station docking mismatch: station {}, company {}", st->index, st->owner);
+		if (ta.tile != st->GetDockingStation().tile || ta.w != st->GetDockingStation().w || ta.h != st->GetDockingStation().h) {
+			Debug(desync, 2, "warning: station docking mismatch: station {}, company {}", st->index, st->GetOwner());
 		}
 		for (TileIndex tile : ta) {
 			if (docking_tiles[tile] != IsDockingTile(tile)) {

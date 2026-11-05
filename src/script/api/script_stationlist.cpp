@@ -25,7 +25,7 @@ ScriptStationList::ScriptStationList(ScriptStation::StationType station_type)
 	::CompanyID owner = ScriptObject::GetCompany();
 	ScriptList::FillList<Station>(this,
 		[is_deity, owner, station_type](const Station *st) {
-			return (is_deity || st->owner == owner) && st->facilities.Any(static_cast<StationFacilities>(station_type));
+			return (is_deity || st->GetOwner() == owner) && st->GetFacilities().Any(static_cast<StationFacilities>(station_type));
 		}
 	);
 }
@@ -122,19 +122,19 @@ public:
 		/* Preserve validation order, error state and null goods early returns. */
 		if (!ScriptStation::IsValidStation(station_id)) return;
 		if (!ScriptCargo::IsValidCargo(cargo)) return;
-		this->ge = &(Station::Get(station_id)->goods[cargo]);
+		this->ge = Station::Get(station_id)->GetGoods(cargo);
 	}
 	~CargoCollector() { openttd_rust_cargo_finish(&this->state, this->list); }
 	CargoCollector(const CargoCollector &) = delete;
 	CargoCollector &operator=(const CargoCollector &) = delete;
-	const GoodsEntry *GE() const { return this->ge; }
+	const GoodsEntry *GE() const { return &this->ge; }
 	void Packet(StationID from, StationID via, uint amount) { openttd_rust_cargo_packet(&this->state, this->list, from.base(), via.base(), amount); }
 	void Origin(StationID origin) { openttd_rust_cargo_origin(&this->state, origin.base()); }
 	void Share(StationID via, uint32_t cumulative) { openttd_rust_cargo_share(&this->state, this->list, via.base(), cumulative); }
 private:
 	OpenTTDCargoCollector state;
 	OpenTTDScriptList *list;
-	const GoodsEntry *ge = nullptr;
+	GoodsEntry ge{nullptr};
 };
 
 void ScriptStationList_Cargo::AddCargo(CargoMode mode, CargoSelector selector, StationID station_id, CargoType cargo, StationID other_station)

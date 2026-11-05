@@ -30,7 +30,7 @@ static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexc
 static uint32_t VehicleConstructHangar(const OpenTTDStation *station, uint32_t tile, const AirportSpec *spec) noexcept
 {
 	const Station *st = StationOf(station);
-	uint hangar = st->airport.GetHangarNum(TileIndex(tile), spec);
+	uint hangar = st->GetAirport().GetHangarNum(TileIndex(tile), spec);
 	return RustStationHangarTile(st, hangar, spec).base();
 }
 static void *VehicleConstructNewAircraft() noexcept { return new Aircraft(); }

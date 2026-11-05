@@ -131,7 +131,7 @@ static const NIVariable _niv_stations[] = {
 
 class NIHStation : public NIHelper {
 	bool IsInspectable(uint index) const override        { return GetStationSpec(TileIndex{index}) != nullptr; }
-	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Station::GetByTile(TileIndex{index})->town->index); }
+	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Station::GetByTile(TileIndex{index})->Record().town->index); }
 	const void *GetInstance(uint ) const override        { return nullptr; }
 	const void *GetSpec(uint index) const override       { return GetStationSpec(TileIndex{index}); }
 	std::string GetName(uint index) const override       { return GetString(STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT, STR_STATION_NAME, GetStationIndex(index), index); }
@@ -533,26 +533,26 @@ static const NIVariable _niv_airports[] = {
 };
 
 class NIHAirport : public NIHelper {
-	bool IsInspectable(uint index) const override        { return AirportSpec::Get(Station::Get(index)->airport.type)->grf_prop.HasGrfFile(); }
-	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Station::Get(index)->town->index); }
+	bool IsInspectable(uint index) const override        { return AirportSpec::Get(Station::Get(index)->GetAirport().type)->grf_prop.HasGrfFile(); }
+	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Station::Get(index)->Record().town->index); }
 	const void *GetInstance(uint index)const override    { return Station::Get(index); }
-	const void *GetSpec(uint index) const override       { return AirportSpec::Get(Station::Get(index)->airport.type); }
-	std::string GetName(uint index) const override       { return GetString(STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT, STR_STATION_NAME, index, Station::Get(index)->airport.tile); }
-	uint32_t GetGRFID(uint index) const override         { return (this->IsInspectable(index)) ? AirportSpec::Get(Station::Get(index)->airport.type)->grf_prop.grfid : 0; }
-	std::span<const BadgeID> GetBadges(uint index) const override { return AirportSpec::Get(Station::Get(index)->airport.type)->badges; }
+	const void *GetSpec(uint index) const override       { return AirportSpec::Get(Station::Get(index)->GetAirport().type); }
+	std::string GetName(uint index) const override       { return GetString(STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT, STR_STATION_NAME, index, Station::Get(index)->GetAirport().tile); }
+	uint32_t GetGRFID(uint index) const override         { return (this->IsInspectable(index)) ? AirportSpec::Get(Station::Get(index)->GetAirport().type)->grf_prop.grfid : 0; }
+	std::span<const BadgeID> GetBadges(uint index) const override { return AirportSpec::Get(Station::Get(index)->GetAirport().type)->badges; }
 
 	uint Resolve(uint index, uint var, uint param, bool &avail) const override
 	{
 		Station *st = Station::Get(index);
-		AirportResolverObject ro(st->airport.tile, st, AirportSpec::Get(st->airport.type), st->airport.layout);
+		AirportResolverObject ro(st->GetAirport().tile, st, AirportSpec::Get(st->GetAirport().type), st->GetAirport().layout);
 		return ro.GetScope(VSG_SCOPE_SELF)->GetVariable(var, param, avail);
 	}
 
 	const std::span<int32_t> GetPSA(uint index, uint32_t) const override
 	{
 		const Station *st = (const Station *)this->GetInstance(index);
-		if (st->airport.psa == nullptr) return {};
-		return st->airport.psa->storage;
+		if (st->GetAirport().psa == nullptr) return {};
+		return st->GetAirport().psa->storage;
 	}
 };
 
@@ -697,7 +697,7 @@ static const NIVariable _nif_roadstops[] = {
 
 class NIHRoadStop : public NIHelper {
 	bool IsInspectable(uint index) const override        { return GetRoadStopSpec(TileIndex{index}) != nullptr; }
-	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, BaseStation::GetByTile(TileIndex{index})->town->index); }
+	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, BaseStation::GetByTile(TileIndex{index})->Record().town->index); }
 	const void *GetInstance(uint)const override          { return nullptr; }
 	const void *GetSpec(uint index) const override       { return GetRoadStopSpec(TileIndex{index}); }
 	std::string GetName(uint index) const override       { return GetString(STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT, STR_STATION_NAME, GetStationIndex(index), index); }

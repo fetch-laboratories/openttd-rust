@@ -1677,10 +1677,10 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 						auto tmp_params = MakeParameters(st->name);
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else {
-						StringID string_id = st->string_id;
-						if (st->indtype != IT_INVALID) {
+						StringID string_id = st->Record().string_id;
+						if (st->Record().indtype != IT_INVALID) {
 							/* Special case where the industry provides the name for the station */
-							const IndustrySpec *indsp = GetIndustrySpec(st->indtype);
+							const IndustrySpec *indsp = GetIndustrySpec(st->Record().indtype);
 
 							/* Industry GRFs can change which might remove the station name and
 							 * thus cause very strange things. Here we check for that before we
@@ -1690,7 +1690,7 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 							}
 						}
 
-						auto tmp_params = MakeParameters(STR_TOWN_NAME, st->town->index, st->index);
+						auto tmp_params = MakeParameters(STR_TOWN_NAME, st->Record().town->index, st->index);
 						GetStringWithArgs(builder, string_id, tmp_params);
 					}
 					break;
@@ -1723,9 +1723,9 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 						auto tmp_params = MakeParameters(wp->name);
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else {
-						auto tmp_params = MakeParameters(wp->town->index, wp->town_cn + 1);
-						StringID string_id = ((wp->string_id == STR_SV_STNAME_BUOY) ? STR_FORMAT_BUOY_NAME : STR_FORMAT_WAYPOINT_NAME);
-						if (wp->town_cn != 0) string_id++;
+						auto tmp_params = MakeParameters(wp->Record().town->index, wp->Record().town_cn + 1);
+						StringID string_id = ((wp->Record().string_id == STR_SV_STNAME_BUOY) ? STR_FORMAT_BUOY_NAME : STR_FORMAT_WAYPOINT_NAME);
+						if (wp->Record().town_cn != 0) string_id++;
 						GetStringWithArgs(builder, string_id, tmp_params);
 					}
 					break;

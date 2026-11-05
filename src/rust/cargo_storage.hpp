@@ -30,8 +30,9 @@ static void CargoOrigin(void *context, uint16_t origin, uint32_t amount, uint8_t
 }
 static OpenTTDCargoFlowMap *CargoFlowMap(const void *context) noexcept
 {
-	const GoodsEntry *ge = static_cast<const GoodsEntry *>(context);
-	return ge->HasData() ? ge->GetData().flows.RustState() : nullptr;
+	/* The context is the goods slot of a live station record. */
+	const GoodsEntry ge{const_cast<OpenTTDGoodsEntry *>(static_cast<const OpenTTDGoodsEntry *>(context))};
+	return ge.HasData() ? ge.GetData().flows.RustState() : nullptr;
 }
 static void *CargoNextPacket(void *shell) noexcept
 {
@@ -144,13 +145,13 @@ bool StationCargoList::HasCargoFor(std::span<const StationID> next) const
 }
 bool VehicleCargoList::Stage(bool accepted, StationID station, std::span<const StationID> next, OrderUnloadType unload, const GoodsEntry *ge, CargoType cargo, CargoPayment *payment, TileIndex tile)
 {
-	return openttd_rust_cargo_list_stage(this->state, &_cargo_storage_services, accepted, station.base(), CargoNext(next), next.size(), to_underlying(unload), ge, cargo, payment, tile.base()) != 0;
+	return openttd_rust_cargo_list_stage(this->state, &_cargo_storage_services, accepted, station.base(), CargoNext(next), next.size(), to_underlying(unload), ge == nullptr ? nullptr : &ge->Record(), cargo, payment, tile.base()) != 0;
 }
 template <VehicleCargoList::MoveToAction Tfrom, VehicleCargoList::MoveToAction Tto>
 uint VehicleCargoList::Reassign(uint amount) { return openttd_rust_cargo_list_reassign(this->state, &_cargo_storage_services, Tfrom, Tto, amount); }
 static uint CargoMove(OpenTTDCargoList *src, OpenTTDCargoList *dest, uint8_t mode, uint amount, StationID avoid = StationID::Invalid(), StationID avoid2 = StationID::Invalid(), std::span<const StationID> next = {}, const GoodsEntry *ge = nullptr, CargoType cargo = 0, void *payment = nullptr, TileIndex tile = INVALID_TILE)
 {
-	return openttd_rust_cargo_list_move(src, dest, &_cargo_storage_services, mode, amount, avoid.base(), avoid2.base(), CargoNext(next), next.size(), ge, cargo, payment, tile.base());
+	return openttd_rust_cargo_list_move(src, dest, &_cargo_storage_services, mode, amount, avoid.base(), avoid2.base(), CargoNext(next), next.size(), ge == nullptr ? nullptr : &ge->Record(), cargo, payment, tile.base());
 }
 uint VehicleCargoList::Return(uint amount, StationCargoList *dest, StationID next, TileIndex tile) { return CargoMove(this->state, dest->RustOwner(), 0, amount, next, StationID::Invalid(), {}, nullptr, 0, nullptr, tile); }
 uint VehicleCargoList::Unload(uint amount, StationCargoList *dest, CargoType cargo, CargoPayment *payment, TileIndex tile) { return CargoMove(this->state, dest->RustOwner(), 10, amount, StationID::Invalid(), StationID::Invalid(), {}, nullptr, cargo, payment, tile); }

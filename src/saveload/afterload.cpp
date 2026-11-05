@@ -280,9 +280,9 @@ static void InitializeWindowsAndCaches()
 		}
 	}
 	for (Station *s : Station::Iterate()) {
-		if (s->airport.psa != nullptr) {
-			s->airport.psa->feature = GSF_AIRPORTS;
-			s->airport.psa->tile = s->airport.tile;
+		if (s->GetAirport().psa != nullptr) {
+			s->GetAirport().psa->feature = GSF_AIRPORTS;
+			s->GetAirport().psa->tile = s->GetAirport().tile;
 		}
 	}
 	for (Town *t : Town::Iterate()) {
@@ -612,18 +612,18 @@ bool AfterLoadGame()
 	 * savegames simplifies the code. */
 	if (IsSavegameVersionBefore(SLV_2)) {
 		for (Station *st : Station::Iterate()) {
-			st->train_station.w = st->train_station.h = 0;
+			st->Record().train_station.w = st->Record().train_station.h = 0;
 		}
 		for (auto t : Map::Iterate()) {
 			if (!IsTileType(t, MP_STATION)) continue;
 			if (t.m5() > 7) continue; // is it a rail station tile?
 			Station *st = Station::Get(t.m2());
-			assert(st->train_station.tile != 0);
-			int dx = TileX(t) - TileX(st->train_station.tile);
-			int dy = TileY(t) - TileY(st->train_station.tile);
+			assert(st->GetTrainStation().tile != 0);
+			int dx = TileX(t) - TileX(st->GetTrainStation().tile);
+			int dy = TileY(t) - TileY(st->GetTrainStation().tile);
 			assert(dx >= 0 && dy >= 0);
-			st->train_station.w = static_cast<uint16_t>(std::max<uint>(st->train_station.w, dx + 1));
-			st->train_station.h = static_cast<uint16_t>(std::max<uint>(st->train_station.h, dy + 1));
+			st->Record().train_station.w = static_cast<uint16_t>(std::max<uint>(st->GetTrainStation().w, dx + 1));
+			st->Record().train_station.h = static_cast<uint16_t>(std::max<uint>(st->GetTrainStation().h, dy + 1));
 		}
 	}
 
@@ -674,9 +674,9 @@ bool AfterLoadGame()
 		}
 
 		for (Station *st : Station::Iterate()) {
-			st->name = CopyFromOldName(st->string_id);
+			st->name = CopyFromOldName(st->Record().string_id);
 			/* generating new name would be too much work for little effect, use the station name fallback */
-			if (!st->name.empty()) st->string_id = STR_SV_STNAME_FALLBACK;
+			if (!st->name.empty()) st->Record().string_id = STR_SV_STNAME_FALLBACK;
 		}
 
 		for (Town *t : Town::Iterate()) {
@@ -691,8 +691,8 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_106)) {
 		/* no station is determined by 'tile == INVALID_TILE' now (instead of '0') */
 		for (Station *st : Station::Iterate()) {
-			if (st->airport.tile       == 0) st->airport.tile = INVALID_TILE;
-			if (st->train_station.tile == 0) st->train_station.tile   = INVALID_TILE;
+			if (st->GetAirport().tile       == 0) st->GetAirport().tile = INVALID_TILE;
+			if (st->GetTrainStation().tile == 0) st->train_station.tile   = INVALID_TILE;
 		}
 
 		/* the same applies to Company::location_of_HQ */
@@ -940,10 +940,10 @@ bool AfterLoadGame()
 				BaseStation *bst = BaseStation::GetByTile(t);
 
 				/* Sanity check */
-				if (!IsBuoy(t) && bst->owner != GetTileOwner(t)) SlErrorCorrupt("Wrong owner for station tile");
+				if (!IsBuoy(t) && bst->GetOwner() != GetTileOwner(t)) SlErrorCorrupt("Wrong owner for station tile");
 
 				/* Set up station spread */
-				bst->rect.BeforeAddTile(t, StationRect::ADD_FORCE);
+				bst->GetRect().BeforeAddTile(t, StationRect::ADD_FORCE);
 
 				/* Waypoints don't have road stops/oil rigs in the old format */
 				if (!Station::IsExpected(bst)) break;
@@ -967,7 +967,7 @@ bool AfterLoadGame()
 							RoadStop *rs = new RoadStop(t);
 
 							RoadStop **head =
-								IsTruckStop(t) ? &st->truck_stops : &st->bus_stops;
+								IsTruckStop(t) ? &st->GetTruckStops() : &st->GetBusStops();
 							*head = rs;
 						}
 						break;
@@ -978,7 +978,7 @@ bool AfterLoadGame()
 						 * DeleteOilRig asserts on the correct type, and
 						 * setting it unconditionally does not hurt.
 						 */
-						Station::GetByTile(t)->airport.type = AT_OILRIG;
+						Station::GetByTile(t)->GetAirport().type = AT_OILRIG;
 
 						/* Very old savegames sometimes have phantom oil rigs, i.e.
 						 * an oil rig which got shut down, but not completely removed from
@@ -1437,7 +1437,7 @@ bool AfterLoadGame()
 
 	if (IsSavegameVersionBefore(SLV_26)) {
 		for (Station *st : Station::Iterate()) {
-			st->last_vehicle_type = VEH_INVALID;
+			st->Record().last_vehicle_type = VEH_INVALID;
 		}
 	}
 
@@ -1462,8 +1462,8 @@ bool AfterLoadGame()
 		TimerGameEconomy::date += EconomyTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 		TimerGameEconomy::year += EconomyTime::ORIGINAL_BASE_YEAR;
 
-		for (Station *st : Station::Iterate())   st->build_date      += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
-		for (Waypoint *wp : Waypoint::Iterate()) wp->build_date      += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
+		for (Station *st : Station::Iterate())   st->SetBuildDate(st->GetBuildDate() + (CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR));
+		for (Waypoint *wp : Waypoint::Iterate()) wp->SetBuildDate(wp->GetBuildDate() + (CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR));
 		for (Engine *e : Engine::Iterate())      e->intro_date       += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 		for (Company *c : Company::Iterate())    c->inaugurated_year += EconomyTime::ORIGINAL_BASE_YEAR;
 		for (Industry *i : Industry::Iterate())  i->last_prod_year   += EconomyTime::ORIGINAL_BASE_YEAR;
@@ -1616,7 +1616,7 @@ bool AfterLoadGame()
 	 * be OWNER_NONE. So replace OWNER_NONE with OWNER_WATER. */
 	if (IsSavegameVersionBefore(SLV_46)) {
 		for (Waypoint *wp : Waypoint::Iterate()) {
-			if (wp->facilities.Test(StationFacility::Dock) && IsTileOwner(wp->xy, OWNER_NONE) && TileHeight(wp->xy) == 0) SetTileOwner(wp->xy, OWNER_WATER);
+			if (wp->GetFacilities().Test(StationFacility::Dock) && IsTileOwner(wp->GetXY(), OWNER_NONE) && TileHeight(wp->GetXY()) == 0) SetTileOwner(wp->GetXY(), OWNER_WATER);
 		}
 	}
 
@@ -1770,9 +1770,9 @@ bool AfterLoadGame()
 
 	if (IsSavegameVersionBefore(SLV_74)) {
 		for (Station *st : Station::Iterate()) {
-			for (GoodsEntry &ge : st->goods) {
-				ge.last_speed = 0;
-				if (ge.AvailableCount() != 0) ge.status.Set(GoodsEntry::State::Rating);
+			for (GoodsEntry ge : st->Goods()) {
+				ge.Record().last_speed = 0;
+				if (ge.AvailableCount() != 0) ge.SetStatus(ge.GetStatus().Set(GoodsEntry::State::Rating));
 			}
 		}
 	}
@@ -1950,7 +1950,7 @@ bool AfterLoadGame()
 				if (IsBuoyTile(t)) {
 					/* reset buoy owner to OWNER_NONE in the station struct
 					 * (even if it is owned by active company) */
-					Waypoint::GetByTile(t)->owner = OWNER_NONE;
+					Waypoint::GetByTile(t)->SetOwner(OWNER_NONE);
 				}
 			} else if (IsTileType(t, MP_ROAD)) {
 				/* works for all RoadTileType */
@@ -2079,7 +2079,7 @@ bool AfterLoadGame()
 		/* Station can get named based on an industry type, but the current ones
 		 * are not, so mark them as if they are not named by an industry. */
 		for (Station *st : Station::Iterate()) {
-			st->indtype = IT_INVALID;
+			st->Record().indtype = IT_INVALID;
 		}
 	}
 
@@ -2211,7 +2211,7 @@ bool AfterLoadGame()
 		 * The conversion affects oil rigs and buoys too, but it doesn't matter as
 		 * they have st->owner == OWNER_NONE already. */
 		for (Station *st : Station::Iterate()) {
-			if (!Company::IsValidID(st->owner)) st->owner = OWNER_NONE;
+			if (!Company::IsValidID(st->GetOwner())) st->SetOwner(OWNER_NONE);
 		}
 	}
 
@@ -2277,14 +2277,14 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_124) && !IsSavegameVersionBefore(SLV_1)) {
 		/* The train station tile area was added, but for really old (TTDPatch) it's already valid. */
 		for (Waypoint *wp : Waypoint::Iterate()) {
-			if (wp->facilities.Test(StationFacility::Train)) {
-				wp->train_station.tile = wp->xy;
-				wp->train_station.w = 1;
-				wp->train_station.h = 1;
+			if (wp->GetFacilities().Test(StationFacility::Train)) {
+				wp->Record().train_station.tile = TileIndex(wp->GetXY()).base();
+				wp->Record().train_station.w = 1;
+				wp->Record().train_station.h = 1;
 			} else {
-				wp->train_station.tile = INVALID_TILE;
-				wp->train_station.w = 0;
-				wp->train_station.h = 0;
+				wp->Record().train_station.tile = TileIndex(INVALID_TILE).base();
+				wp->Record().train_station.w = 0;
+				wp->Record().train_station.h = 0;
 			}
 		}
 	}
@@ -2329,12 +2329,12 @@ bool AfterLoadGame()
 						/* Town -> Town */
 						const Station *ss = Station::GetIfValid(s->src.id);
 						const Station *sd = Station::GetIfValid(s->dst.id);
-						if (ss != nullptr && sd != nullptr && ss->owner == sd->owner &&
-								Company::IsValidID(ss->owner)) {
+						if (ss != nullptr && sd != nullptr && ss->GetOwner() == sd->GetOwner() &&
+								Company::IsValidID(ss->GetOwner())) {
 							s->src.type = s->dst.type = SourceType::Town;
-							s->src.SetIndex(ss->town->index);
-							s->dst.SetIndex(sd->town->index);
-							s->awarded = ss->owner;
+							s->src.SetIndex(ss->Record().town->index);
+							s->dst.SetIndex(sd->Record().town->index);
+							s->awarded = ss->GetOwner();
 							continue;
 						}
 						break;
@@ -2463,17 +2463,17 @@ bool AfterLoadGame()
 	/* Oilrig was moved from id 15 to 9. */
 	if (IsSavegameVersionBefore(SLV_139)) {
 		for (Station *st : Station::Iterate()) {
-			if (st->airport.tile != INVALID_TILE && st->airport.type == 15) {
-				st->airport.type = AT_OILRIG;
+			if (st->GetAirport().tile != INVALID_TILE && st->GetAirport().type == 15) {
+				st->GetAirport().type = AT_OILRIG;
 			}
 		}
 	}
 
 	if (IsSavegameVersionBefore(SLV_140)) {
 		for (Station *st : Station::Iterate()) {
-			if (st->airport.tile != INVALID_TILE) {
-				st->airport.w = st->airport.GetSpec()->size_x;
-				st->airport.h = st->airport.GetSpec()->size_y;
+			if (st->GetAirport().tile != INVALID_TILE) {
+				st->GetAirport().w = st->GetAirport().GetSpec()->size_x;
+				st->GetAirport().h = st->GetAirport().GetSpec()->size_y;
 			}
 		}
 	}
@@ -2498,7 +2498,7 @@ bool AfterLoadGame()
 
 	if (IsSavegameVersionBefore(SLV_145)) {
 		for (Station *st : Station::Iterate()) {
-			if (st->facilities.Test(StationFacility::Airport)) st->airport.rotation = DIR_N;
+			if (st->GetFacilities().Test(StationFacility::Airport)) st->GetAirport().rotation = DIR_N;
 		}
 	}
 
@@ -2577,7 +2577,7 @@ bool AfterLoadGame()
 		 * highest possible number to get them numbered in the
 		 * order they have in the pool. */
 		for (Waypoint *wp : Waypoint::Iterate()) {
-			if (!wp->name.empty()) wp->town_cn = UINT16_MAX;
+			if (!wp->name.empty()) wp->Record().town_cn = UINT16_MAX;
 		}
 
 		for (Waypoint *wp : Waypoint::Iterate()) {
@@ -2849,23 +2849,23 @@ bool AfterLoadGame()
 
 		if (!IsSavegameVersionBefore(SLV_145)) {
 			for (Station *st : Station::Iterate()) {
-				if (!st->facilities.Test(StationFacility::Airport)) continue;
-				assert(st->airport.psa != nullptr);
+				if (!st->GetFacilities().Test(StationFacility::Airport)) continue;
+				assert(st->GetAirport().psa != nullptr);
 
 				/* Check if the old storage was empty. */
 				bool is_empty = true;
-				for (uint i = 0; i < sizeof(st->airport.psa->storage); i++) {
-					if (st->airport.psa->GetValue(i) != 0) {
+				for (uint i = 0; i < sizeof(st->GetAirport().psa->storage); i++) {
+					if (st->GetAirport().psa->GetValue(i) != 0) {
 						is_empty = false;
 						break;
 					}
 				}
 
 				if (!is_empty) {
-					st->airport.psa->grfid = _airport_mngr.GetGRFID(st->airport.type);
+					st->GetAirport().psa->grfid = _airport_mngr.GetGRFID(st->GetAirport().type);
 				} else {
-					delete st->airport.psa;
-					st->airport.psa = nullptr;
+					delete st->GetAirport().psa;
+					st->GetAirport().psa = nullptr;
 
 				}
 			}
@@ -3168,15 +3168,15 @@ bool AfterLoadGame()
 
 		/* Link oil rigs to their industry and back. */
 		for (Station *st : Station::Iterate()) {
-			if (IsTileType(st->xy, MP_STATION) && IsOilRig(st->xy)) {
+			if (IsTileType(st->GetXY(), MP_STATION) && IsOilRig(st->GetXY())) {
 				/* Industry tile is always adjacent during construction by TileDiffXY(0, 1) */
-				st->industry = Industry::GetByTile(st->xy + TileDiffXY(0, 1));
-				st->industry->neutral_station = st;
+				st->Record().industry = Industry::GetByTile(st->GetXY() + TileDiffXY(0, 1));
+				st->Record().industry->neutral_station = st;
 			}
 		}
 	} else {
 		/* Link neutral station back to industry, as this is not saved. */
-		for (Industry *ind : Industry::Iterate()) if (ind->neutral_station != nullptr) ind->neutral_station->industry = ind;
+		for (Industry *ind : Industry::Iterate()) if (ind->neutral_station != nullptr) ind->neutral_station->Record().industry = ind;
 	}
 
 	if (IsSavegameVersionBefore(SLV_TREES_WATER_CLASS)) {
@@ -3196,7 +3196,7 @@ bool AfterLoadGame()
 			}
 			/* Add docks and oilrigs to Station::ship_station. */
 			if (IsTileType(t, MP_STATION)) {
-				if (IsDock(t) || IsOilRig(t)) Station::GetByTile(t)->ship_station.Add(t);
+				if (IsDock(t) || IsOilRig(t)) { TileArea area = Station::GetByTile(t)->GetShipStation(); area.Add(t); Station::GetByTile(t)->SetShipStation(area); }
 			}
 		}
 	}
@@ -3204,7 +3204,7 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_REPAIR_OBJECT_DOCKING_TILES)) {
 		/* Placing objects on docking tiles was not updating adjacent station's docking tiles. */
 		for (Station *st : Station::Iterate()) {
-			if (st->ship_station.tile != INVALID_TILE) UpdateStationDockingTiles(st);
+			if (st->GetShipStation().tile != INVALID_TILE) UpdateStationDockingTiles(st);
 		}
 	}
 

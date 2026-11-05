@@ -262,7 +262,7 @@ void AfterLoadLinkGraphs()
 		for (LinkGraph *lg : LinkGraph::Iterate()) {
 			for (NodeID node_id = 0; node_id < lg->Size(); ++node_id) {
 				const Station *st = Station::GetIfValid((*lg)[node_id].Station());
-				if (st != nullptr) (*lg)[node_id].UpdateLocation(st->xy);
+				if (st != nullptr) (*lg)[node_id].UpdateLocation(st->GetXY());
 			}
 		}
 
@@ -270,7 +270,7 @@ void AfterLoadLinkGraphs()
 			LinkGraph *lg = &(const_cast<LinkGraph &>(lgj->Graph()));
 			for (NodeID node_id = 0; node_id < lg->Size(); ++node_id) {
 				const Station *st = Station::GetIfValid((*lg)[node_id].Station());
-				if (st != nullptr) (*lg)[node_id].UpdateLocation(st->xy);
+				if (st != nullptr) (*lg)[node_id].UpdateLocation(st->GetXY());
 			}
 		}
 	}

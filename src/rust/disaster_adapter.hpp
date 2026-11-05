@@ -81,7 +81,7 @@ static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32
 {
 	const Station *st = OpenTTDNextStation(from);
 	return st == nullptr ? OpenTTDDisasterStationTarget{.next = UINT32_MAX, .tile = INVALID_TILE.base(), .airport_type = 0} :
-		OpenTTDDisasterStationTarget{.next = uint32_t{RustBaseStationID(st)} + 1, .tile = RustStationAirportTile(st), .airport_type = st->airport.type};
+		OpenTTDDisasterStationTarget{.next = uint32_t{RustBaseStationID(st)} + 1, .tile = RustStationAirportTile(st), .airport_type = st->GetAirport().type};
 }
 static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
 {
@@ -97,8 +97,9 @@ static OpenTTDDisasterIndustryLocation OPENTTD_RUST_CALL DisasterIndustryLocatio
 static void OPENTTD_RUST_CALL DisasterAirportBlocks(uint16_t id, bool blocked) noexcept
 {
 	Station *st = Station::Get(id);
-	if (blocked) st->airport.blocks.Set({AirportBlock::Zeppeliner, AirportBlock::RunwayIn});
-	else st->airport.blocks.Reset({AirportBlock::Zeppeliner, AirportBlock::RunwayIn});
+	Airport airport = st->GetAirport();
+	if (blocked) airport.SetBlocks(airport.GetBlocks().Set({AirportBlock::Zeppeliner, AirportBlock::RunwayIn}));
+	else airport.SetBlocks(airport.GetBlocks().Reset({AirportBlock::Zeppeliner, AirportBlock::RunwayIn}));
 }
 static void OPENTTD_RUST_CALL DisasterZeppelinCrashed(uint32_t tile) noexcept
 {

@@ -266,7 +266,7 @@ extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexc
 }
 
 static uint32_t SharedRandom(void *) noexcept { return Random(); }
-const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept
+const OpenTTDStationRecord *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept
 {
 	return RustStationServiceOwner(StationOf(station));
 }
@@ -410,7 +410,7 @@ static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
-static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
+static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t)) noexcept
 {
 	for (Station *st : Station::Iterate()) {
 		visit(context, RustStation(st), RustStationServiceOwner(st), RustBaseStationID(st));
@@ -776,18 +776,18 @@ static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept 
 static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
 {
 	Station *st = Station::Get(StationID(station));
-	return {RustStationLocation(st), st->goods[cargo].status.Test(GoodsEntry::State::Acceptance)};
+	return {RustStationLocation(st), st->GetGoods(cargo).GetStatus().Test(GoodsEntry::State::Acceptance)};
 }
 static void LiveGraphAttach(uint16_t station, uint8_t cargo, uint16_t graph, uint16_t node) noexcept
 {
-	GoodsEntry &ge = Station::Get(StationID(station))->goods[cargo];
-	ge.link_graph = LinkGraphID(graph);
-	ge.node = node;
+	GoodsEntry ge = Station::Get(StationID(station))->GetGoods(cargo);
+	ge.SetLinkGraph(LinkGraphID(graph));
+	ge.Record().node = node;
 }
-static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->goods[cargo].node = node; }
+static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->GetGoods(cargo).Record().node = node; }
 static void LiveGraphDelete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
 
-static uint16_t LiveGraphStationNode(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->goods[cargo].node; }
+static uint16_t LiveGraphStationNode(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->GetGoods(cargo).Record().node; }
 static OpenTTDLinkGraph *LiveGraphGetIfValid(uint16_t id) noexcept { return LinkGraph::GetIfValid(LinkGraphID(id)); }
 const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 {

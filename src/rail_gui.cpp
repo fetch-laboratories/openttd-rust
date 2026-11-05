@@ -964,7 +964,7 @@ static void HandleStationPlacement(TileIndex start, TileIndex end)
  */
 static bool StationUsesDefaultType(const BaseStation *bst)
 {
-	for (TileIndex t : bst->train_station) {
+	for (TileIndex t : bst->GetTrainStation()) {
 		if (bst->TileBelongsToRailStation(t) && HasStationRail(t) && GetCustomStationSpecIndex(t) == 0) return true;
 	}
 	return false;
@@ -1037,7 +1037,7 @@ public:
 	{
 		bool default_added = false;
 		for (const Station *st : Station::Iterate()) {
-			if (st->owner != _local_company) continue;
+			if (st->GetOwner() != _local_company) continue;
 			if (!default_added && StationUsesDefaultType(st)) {
 				items.insert({0, 0, STAT_CLASS_DFLT, 0});
 				default_added = true;
@@ -1854,7 +1854,7 @@ public:
 	{
 		bool default_added = false;
 		for (const Waypoint *wp : Waypoint::Iterate()) {
-			if (wp->owner != _local_company || HasBit(wp->waypoint_flags, WPF_ROAD)) continue;
+			if (wp->GetOwner() != _local_company || HasBit(wp->Record().waypoint_flags, WPF_ROAD)) continue;
 			if (!default_added && StationUsesDefaultType(wp)) {
 				items.insert({0, 0, STAT_CLASS_WAYP, 0});
 				default_added = true;
