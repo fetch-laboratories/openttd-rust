@@ -56,21 +56,18 @@ BaseStation::~BaseStation()
 {
 	if (CleaningPool()) return;
 
-	CloseWindowById(WC_TRAINS_LIST,   VehicleListIdentifier(VL_STATION_LIST, VEH_TRAIN,    this->owner, this->index).ToWindowNumber());
-	CloseWindowById(WC_ROADVEH_LIST,  VehicleListIdentifier(VL_STATION_LIST, VEH_ROAD,     this->owner, this->index).ToWindowNumber());
-	CloseWindowById(WC_SHIPS_LIST,    VehicleListIdentifier(VL_STATION_LIST, VEH_SHIP,     this->owner, this->index).ToWindowNumber());
-	CloseWindowById(WC_AIRCRAFT_LIST, VehicleListIdentifier(VL_STATION_LIST, VEH_AIRCRAFT, this->owner, this->index).ToWindowNumber());
+	CloseWindowById(WC_TRAINS_LIST,   VehicleListIdentifier(VL_STATION_LIST, VEH_TRAIN,    this->GetOwner(), this->index).ToWindowNumber());
+	CloseWindowById(WC_ROADVEH_LIST,  VehicleListIdentifier(VL_STATION_LIST, VEH_ROAD,     this->GetOwner(), this->index).ToWindowNumber());
+	CloseWindowById(WC_SHIPS_LIST,    VehicleListIdentifier(VL_STATION_LIST, VEH_SHIP,     this->GetOwner(), this->index).ToWindowNumber());
+	CloseWindowById(WC_AIRCRAFT_LIST, VehicleListIdentifier(VL_STATION_LIST, VEH_AIRCRAFT, this->GetOwner(), this->index).ToWindowNumber());
 
 	this->sign.MarkDirty();
 }
 
 Station::Station(TileIndex tile) :
-	SpecializedStation<Station, false>(tile),
-	bus_station(INVALID_TILE, 0, 0),
-	truck_station(INVALID_TILE, 0, 0),
-	ship_station(INVALID_TILE, 0, 0),
-	indtype(IT_INVALID)
+	SpecializedStation<Station, false>(tile)
 {
+	/* The record starts with every area at INVALID_TILE and indtype IT_INVALID. */
 	/* this->random_bits is set in Station::AddFacility() */
 }
 
@@ -84,6 +81,8 @@ Station::Station(TileIndex tile) :
 Station::~Station()
 {
 	openttd_rust_station_destruct(&GetRustStationLifecycleServices(), this);
+	/* Release the optional cargo data where the goods members were destroyed, last slot first. */
+	for (CargoType cargo = NUM_CARGO; cargo-- > 0;) this->GetGoods(cargo).ClearData();
 }
 
 
@@ -137,7 +136,7 @@ void BaseStation::RemoveRoadStopTileData(TileIndex tile)
  */
 void Station::MarkTilesDirty(bool cargo_change) const
 {
-	if (this->train_station.tile == INVALID_TILE) return;
+	if (this->GetTrainStation().tile == INVALID_TILE) return;
 
 	/* cargo_change is set if we're refreshing the tiles due to cargo moving
 	 * around. */
@@ -148,7 +147,7 @@ void Station::MarkTilesDirty(bool cargo_change) const
 		if (this->speclist.empty()) return;
 	}
 
-	for (TileIndex tile : this->train_station) {
+	for (TileIndex tile : this->GetTrainStation()) {
 		if (this->TileBelongsToRailStation(tile)) {
 			MarkTileDirtyByTile(tile);
 		}
@@ -173,23 +172,23 @@ void Station::RemoveFromAllNearbyLists()
 
 bool StationRect::PtInExtendedRect(int x, int y, int distance) const
 {
-	return openttd_rust_station_rect_pt_in_extended_rect(reinterpret_cast<const OpenTTDStationRect *>(this), x, y, distance);
+	return openttd_rust_station_rect_pt_in_extended_rect(this->rect, x, y, distance);
 }
 
 bool StationRect::IsEmpty() const
 {
-	return openttd_rust_station_rect_empty(reinterpret_cast<const OpenTTDStationRect *>(this));
+	return openttd_rust_station_rect_empty(this->rect);
 }
 
 CommandCost StationRect::BeforeAddTile(TileIndex tile, StationRectMode mode)
 {
-	if (openttd_rust_station_rect_before_add_tile(reinterpret_cast<OpenTTDStationRect *>(this), tile.base(), mode, &GetRustStationCatchmentServices())) return CommandCost();
+	if (openttd_rust_station_rect_before_add_tile(this->rect, tile.base(), mode, &GetRustStationCatchmentServices())) return CommandCost();
 	return CommandCost(STR_ERROR_STATION_TOO_SPREAD_OUT);
 }
 
 CommandCost StationRect::BeforeAddRect(TileIndex tile, int w, int h, StationRectMode mode)
 {
-	if (openttd_rust_station_rect_before_add_rect(reinterpret_cast<OpenTTDStationRect *>(this), tile.base(), w, h, mode, &GetRustStationCatchmentServices())) return CommandCost();
+	if (openttd_rust_station_rect_before_add_rect(this->rect, tile.base(), w, h, mode, &GetRustStationCatchmentServices())) return CommandCost();
 	return CommandCost(STR_ERROR_STATION_TOO_SPREAD_OUT);
 }
 
@@ -213,7 +212,7 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.associated_industry = RustStationAssociatedIndustry,
 		.radius_facilities = [](BaseStation *handle) noexcept -> OpenTTDStationRadiusFacilities {
 			const Station *st = Station::From(handle);
-			return {st->bus_stops != nullptr, st->truck_stops != nullptr, RustStationTrainTile(st), RustStationShipTile(st), RustStationAirportTile(st)};
+			return {st->GetBusStops() != nullptr, st->GetTruckStops() != nullptr, RustStationTrainTile(st), RustStationShipTile(st), RustStationAirportTile(st)};
 		},
 		.modified_catchment = RustModifiedCatchment,
 		.spread = RustStationSpread,

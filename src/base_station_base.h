@@ -17,6 +17,7 @@
 #include "timer/timer_game_calendar.h"
 #include "rust/station_service_ffi.h"
 #include "rust/station_catchment_ffi.h"
+#include "rust/station_record_ffi.h"
 
 typedef Pool<BaseStation, StationID, 32> StationPool;
 extern StationPool _station_pool;
@@ -34,13 +35,16 @@ struct RoadStopTileData {
 	uint8_t animation_frame = 0;
 };
 
-/** StationRect - used to track station spread out rectangle - cheaper than scanning whole map */
-struct StationRect : public Rect {
+/** StationRect - used to track station spread out rectangle - cheaper than scanning whole map.
+ * A view over the rectangle in the shared station record. */
+struct StationRect {
 	enum StationRectMode : uint8_t {
 		ADD_TEST = 0,
 		ADD_TRY,
 		ADD_FORCE
 	};
+
+	OpenTTDStationRect *rect; ///< The record's rectangle.
 
 	bool PtInExtendedRect(int x, int y, int distance = 0) const;
 	bool IsEmpty() const;
@@ -48,43 +52,68 @@ struct StationRect : public Rect {
 	CommandCost BeforeAddRect(TileIndex tile, int w, int h, StationRectMode mode);
 };
 
+/** Owner of a shell's shared record, declared first so the record outlives the base destructor body. */
+struct StationRecordOwner {
+	OpenTTDStationRecord *const record; ///< Shared record of the moved fields.
+
+	StationRecordOwner(BaseStation *shell, TileIndex xy) : record(openttd_rust_station_record_new(shell, xy.base())) {}
+	StationRecordOwner(const StationRecordOwner &) = delete;
+	StationRecordOwner &operator=(const StationRecordOwner &) = delete;
+	~StationRecordOwner() { openttd_rust_station_record_delete(this->record); }
+};
+
+/** Native TileArea of a record area. */
+inline TileArea TileAreaOf(const OpenTTDTileArea &area) { return TileArea{TileIndex{area.tile}, area.w, area.h}; }
+/** Store a native TileArea into a record area. */
+inline void StoreTileArea(OpenTTDTileArea &area, const TileArea &value) { area = {value.tile.base(), value.w, value.h}; }
+
 /** Base class for all station-ish types */
 struct BaseStation : StationPool::PoolItem<&_station_pool> {
-	TileIndex xy = INVALID_TILE; ///< Base tile of the station
+	StationRecordOwner record_owner; ///< Shared record beside the shell; see station_record_ffi.h.
 	TrackedViewportSign sign{}; ///< NOSAVE: Dimensions of sign
-	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> rust_service{openttd_rust_station_service_new(), openttd_rust_station_service_destroy};
-	uint8_t &delete_ctr = openttd_rust_station_service_fields(this->rust_service.get())->delete_ctr;
 
 	std::string name{}; ///< Custom name
-	StringID string_id = INVALID_STRING_ID; ///< Default name (town area) of station
 	mutable std::string cached_name; ///< NOSAVE: Cache of the resolved name of the station, if not using a custom name
-
-	Town *town = nullptr; ///< The town this station is associated with
-	Owner owner = INVALID_OWNER; ///< The owner of this station
-	StationFacilities facilities{}; ///< The facilities that this station has
 
 	std::vector<SpecMapping<StationSpec>> speclist{}; ///< List of rail station specs of this station.
 	std::vector<SpecMapping<RoadStopSpec>> roadstop_speclist{}; ///< List of road stop specs of this station
 
-	TimerGameCalendar::Date build_date{}; ///< Date of construction
-
-	uint16_t random_bits = 0; ///< Random bits assigned to this station
-	StationRandomTriggers waiting_random_triggers; ///< Waiting triggers (NewGRF), shared by all station parts/tiles, road stops, ... essentially useless and broken by design.
-	StationAnimationTriggers cached_anim_triggers; ///< NOSAVE: Combined animation trigger bitmask, used to determine if trigger processing should happen.
-	StationAnimationTriggers cached_roadstop_anim_triggers; ///< NOSAVE: Combined animation trigger bitmask for road stops, used to determine if trigger processing should happen.
-	CargoTypes cached_cargo_triggers{}; ///< NOSAVE: Combined cargo trigger bitmask
-	CargoTypes cached_roadstop_cargo_triggers{}; ///< NOSAVE: Combined cargo trigger bitmask for road stops
-
-	TileArea train_station{INVALID_TILE, 0, 0}; ///< Tile area the train 'station' part covers
-	StationRect &rect = *reinterpret_cast<StationRect *>(openttd_rust_station_rect(this->rust_service.get()));
-
 	std::vector<RoadStopTileData> custom_roadstop_tile_data{}; ///< List of custom road stop tile data
+
+	/* The shared record holds xy, string_id, town, owner, facilities, build_date,
+	 * random_bits, the waiting and cached triggers, train_station, rect, delete_ctr
+	 * and the Station and Waypoint fields. Raw scalars are accessed through
+	 * Record(); typed fields convert here. */
+	inline OpenTTDStationRecord &Record() { return *this->record_owner.record; }
+	inline const OpenTTDStationRecord &Record() const { return *this->record_owner.record; }
+
+	inline TileIndex GetXY() const { return TileIndex{this->Record().xy}; } ///< Base tile of the station.
+	inline void SetXY(TileIndex tile) { this->Record().xy = tile.base(); }
+	inline Owner GetOwner() const { return Owner{this->Record().owner}; } ///< The owner of this station.
+	inline void SetOwner(Owner owner) { this->Record().owner = owner.base(); }
+	inline StationFacilities GetFacilities() const { return StationFacilities{this->Record().facilities}; } ///< The facilities that this station has.
+	inline void SetFacilities(StationFacilities facilities) { this->Record().facilities = facilities.base(); }
+	inline TimerGameCalendar::Date GetBuildDate() const { return TimerGameCalendar::Date{this->Record().build_date}; } ///< Date of construction.
+	inline void SetBuildDate(TimerGameCalendar::Date date) { this->Record().build_date = date.base(); }
+	/** Waiting triggers (NewGRF), shared by all station parts/tiles, road stops, ... essentially useless and broken by design. */
+	inline StationRandomTriggers GetWaitingRandomTriggers() const { return StationRandomTriggers{this->Record().waiting_random_triggers}; }
+	inline void SetWaitingRandomTriggers(StationRandomTriggers triggers) { this->Record().waiting_random_triggers = triggers.base(); }
+	/** NOSAVE: Combined animation trigger bitmask, used to determine if trigger processing should happen. */
+	inline StationAnimationTriggers GetCachedAnimTriggers() const { return StationAnimationTriggers{this->Record().cached_anim_triggers}; }
+	inline void SetCachedAnimTriggers(StationAnimationTriggers triggers) { this->Record().cached_anim_triggers = triggers.base(); }
+	/** NOSAVE: Combined animation trigger bitmask for road stops, used to determine if trigger processing should happen. */
+	inline StationAnimationTriggers GetCachedRoadStopAnimTriggers() const { return StationAnimationTriggers{this->Record().cached_roadstop_anim_triggers}; }
+	inline void SetCachedRoadStopAnimTriggers(StationAnimationTriggers triggers) { this->Record().cached_roadstop_anim_triggers = triggers.base(); }
+	inline TileArea GetTrainStation() const { return TileAreaOf(this->Record().train_station); } ///< Tile area the train 'station' part covers.
+	inline void SetTrainStation(const TileArea &area) { StoreTileArea(this->Record().train_station, area); }
+	inline StationRect GetRect() { return StationRect{&this->Record().rect}; } ///< The station spread rectangle.
+	inline const OpenTTDStationRect &GetRect() const { return this->Record().rect; }
 
 	/**
 	 * Initialize the base station.
 	 * @param tile The location of the station sign
 	 */
-	BaseStation(TileIndex tile) : xy(tile) {}
+	BaseStation(TileIndex tile) : record_owner(this, tile) {}
 
 	virtual ~BaseStation();
 
@@ -119,7 +148,7 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 
 	virtual void MoveSign(TileIndex new_xy)
 	{
-		this->xy = new_xy;
+		this->SetXY(new_xy);
 		this->UpdateVirtCoord();
 	}
 
@@ -149,7 +178,7 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	 */
 	inline bool IsInUse() const
 	{
-		return this->facilities.Any({StationFacility::Train, StationFacility::TruckStop, StationFacility::BusStop, StationFacility::Airport, StationFacility::Dock});
+		return this->GetFacilities().Any({StationFacility::Train, StationFacility::TruckStop, StationFacility::BusStop, StationFacility::Airport, StationFacility::Dock});
 	}
 
 	inline uint8_t GetRoadStopRandomBits(TileIndex tile) const
@@ -197,7 +226,7 @@ struct SpecializedStation : public BaseStation {
 	inline SpecializedStation(TileIndex tile) :
 			BaseStation(tile)
 	{
-		this->facilities = EXPECTED_FACIL;
+		this->SetFacilities(EXPECTED_FACIL);
 	}
 
 	/**
@@ -207,7 +236,7 @@ struct SpecializedStation : public BaseStation {
 	 */
 	static inline bool IsExpected(const BaseStation *st)
 	{
-		return st->facilities.Test(StationFacility::Waypoint) == Tis_waypoint;
+		return st->GetFacilities().Test(StationFacility::Waypoint) == Tis_waypoint;
 	}
 
 	/**

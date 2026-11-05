@@ -128,7 +128,5 @@ uint8_t OPENTTD_RUST_CALL openttd_test_aircraft_event(const OpenTTDAircraftLeave
 void OPENTTD_RUST_CALL openttd_rust_aircraft_release_blocks(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 OpenTTDAircraftState *OPENTTD_RUST_CALL openttd_rust_aircraft_state_new();
 void OPENTTD_RUST_CALL openttd_rust_aircraft_state_destroy(OpenTTDAircraftState *);
-uint64_t *OPENTTD_RUST_CALL openttd_rust_airport_blocks_new();
-void OPENTTD_RUST_CALL openttd_rust_airport_blocks_destroy(uint64_t *);
 }
 #endif /* OPENTTD_RUST_AIRCRAFT_FFI_H */

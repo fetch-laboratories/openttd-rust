@@ -21,7 +21,7 @@
 
 enum class LandscapeType : uint8_t;
 enum class StationType : uint8_t;
-struct OpenTTDStationService;
+struct OpenTTDStationRecord;
 struct OpenTTDNewGRFSpecs;
 struct ResolverObject;
 enum class RoadStopType : uint8_t;
@@ -206,7 +206,7 @@ struct OpenTTDSharedServices {
 	void (*set_fence)(uint32_t, DiagDirection, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_fence);
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
-	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
+	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
 	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 	uint32_t (*nearby_tile)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile);

@@ -32,18 +32,27 @@ struct RoadStop : RoadStopPool::PoolItem<&_roadstop_pool> {
 	/** Drive-through entry point; Rust owns its storage, native readers only load. */
 	using Entry = OpenTTDRoadStopEntry;
 
-	/* Rust owns status and the shared entries; the destructor frees the head's entries. */
-	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> rust_state{openttd_rust_road_stop_new(), openttd_rust_road_stop_destroy};
-	/* Native typed status aliases the Rust-owned byte for the save descriptor;
-	 * start its trivial lifetime in the fixed allocation. Rust stores raw bytes. */
-	RoadStopStatusFlags &status = *new (std::addressof(this->rust_state->status)) RoadStopStatusFlags{RoadStopStatusFlag::Bay0Free, RoadStopStatusFlag::Bay1Free}; ///< Current status of the Stop.
-	TileIndex xy = INVALID_TILE; ///< Position on the map
-	RoadStop *next = nullptr; ///< Next stop of the given type at this station
+	/* The shared record beside the shell holds xy, next, status and the shared
+	 * entries; releasing it frees the head's entries. */
+	OpenTTDRoadStopState *const record;
 
 	/** Initializes a RoadStop */
-	inline RoadStop(TileIndex tile = INVALID_TILE) : xy(tile) { }
+	inline RoadStop(TileIndex tile = INVALID_TILE) : record(openttd_rust_road_stop_new(this, tile.base())) { }
+	RoadStop(const RoadStop &) = delete;
+	RoadStop &operator=(const RoadStop &) = delete;
+	inline ~RoadStop() { openttd_rust_road_stop_destroy(this->record); }
 
-	OpenTTDRoadStopState *GetRustState() const { return this->rust_state.get(); }
+	inline OpenTTDRoadStopState &Record() { return *this->record; }
+	inline const OpenTTDRoadStopState &Record() const { return *this->record; }
+	OpenTTDRoadStopState *GetRustState() const { return this->record; }
+
+	/** @return The shell of a live record, or nullptr. */
+	static inline RoadStop *FromRecord(const OpenTTDRoadStopState *record) { return record == nullptr ? nullptr : record->shell; }
+	inline TileIndex GetXY() const { return TileIndex{this->record->xy}; } ///< Position on the map.
+	inline RoadStop *GetNext() const { return RoadStop::FromRecord(this->record->next); } ///< Next stop of the given type at this station.
+	inline void SetNext(RoadStop *next) { this->record->next = next == nullptr ? nullptr : next->record; }
+	inline RoadStopStatusFlags GetStatus() const { return RoadStopStatusFlags{this->record->status}; } ///< Current status of the Stop.
+	inline void SetStatus(RoadStopStatusFlags status) { this->record->status = status.base(); }
 
 	/**
 	 * Get the drive through road stop entry struct for the given direction.
@@ -52,7 +61,7 @@ struct RoadStop : RoadStopPool::PoolItem<&_roadstop_pool> {
 	 */
 	inline const Entry &GetEntry(DiagDirection dir) const
 	{
-		return dir >= DIAGDIR_SW ? this->rust_state->entries->west : this->rust_state->entries->east;
+		return dir >= DIAGDIR_SW ? this->record->entries->west : this->record->entries->east;
 	}
 
 };

@@ -26,8 +26,19 @@ static const uint8_t MAX_STATION_RATING = 255;
 
 #include "rust/cargo_flow.hpp"
 
+/** Optional cargo packet and flow data of one goods slot; the station shell owns it. */
+struct GoodsEntryData {
+	StationCargoList cargo{}; ///< The cargo packets of cargo waiting in this station
+	FlowStatMap flows{}; ///< Planned flows through this station.
+
+	bool IsEmpty() const
+	{
+		return this->cargo.TotalCount() == 0 && this->flows.empty();
+	}
+};
+
 /**
- * Stores station stats for a single cargo.
+ * Stores station stats for a single cargo: a view over one goods slot of the shared station record.
  */
 struct GoodsEntry {
 	/** Status of this cargo for the station. */
@@ -73,40 +84,25 @@ struct GoodsEntry {
 		AcceptedBigtick = 5,
 	};
 	using States = EnumBitSet<State, uint8_t>;
+	using GoodsEntryData = ::GoodsEntryData;
 
-	struct GoodsEntryData {
-		StationCargoList cargo{}; ///< The cargo packets of cargo waiting in this station
-		FlowStatMap flows{}; ///< Planned flows through this station.
+	/** @param record The goods slot in a live station record. */
+	explicit GoodsEntry(OpenTTDGoodsEntry *record) : record(record) {}
 
-		bool IsEmpty() const
-		{
-			return this->cargo.TotalCount() == 0 && this->flows.empty();
-		}
-	};
-
-	uint &max_waiting_cargo;
-	States &status;
-	uint8_t &time_since_pickup, &rating, &last_speed, &last_age, &amount_fract;
-	/* Native typed status aliases the Rust-owned byte; start its object lifetime. */
-	GoodsEntry(OpenTTDStationCargo *cargo) : max_waiting_cargo(cargo->max_waiting_cargo),
-		status(*::new (static_cast<void *>(&cargo->status)) States), time_since_pickup(cargo->time_since_pickup),
-		rating(cargo->rating), last_speed(cargo->last_speed), last_age(cargo->last_age), amount_fract(cargo->amount_fract)
-	{
-		static_assert(sizeof(States) == sizeof(uint8_t));
-		static_assert(alignof(States) == alignof(uint8_t));
-		static_assert(std::is_trivially_copyable_v<States>);
-	}
-
-	NodeID node = INVALID_NODE; ///< ID of node in link graph referring to this goods entry.
-	LinkGraphID link_graph = LinkGraphID::Invalid(); ///< Link graph this station belongs to.
-
+	/* The record holds max_waiting_cargo, node, link_graph, status, time_since_pickup,
+	 * rating, last_speed, last_age, amount_fract and the data pointer. */
+	inline OpenTTDGoodsEntry &Record() const { return *this->record; }
+	inline States GetStatus() const { return States{this->record->status}; } ///< Status of this cargo, see #State.
+	inline void SetStatus(States status) { this->record->status = status.base(); }
+	inline LinkGraphID GetLinkGraph() const { return LinkGraphID{this->record->link_graph}; } ///< Link graph this station belongs to.
+	inline void SetLinkGraph(LinkGraphID link_graph) { this->record->link_graph = link_graph.base(); }
 
 	/**
 	 * Reports whether a vehicle has ever tried to load the cargo at this station.
 	 * This does not imply that there was cargo available for loading. Refer to GoodsEntry::State::Rating for that.
 	 * @return true if vehicle tried to load.
 	 */
-	bool HasVehicleEverTriedLoading() const { return this->last_speed != 0; }
+	bool HasVehicleEverTriedLoading() const { return this->record->last_speed != 0; }
 
 	/**
 	 * Does this cargo have a rating at this station?
@@ -114,7 +110,7 @@ struct GoodsEntry {
 	 */
 	inline bool HasRating() const
 	{
-		return this->status.Test(GoodsEntry::State::Rating);
+		return this->GetStatus().Test(GoodsEntry::State::Rating);
 	}
 
 	/**
@@ -150,33 +146,27 @@ struct GoodsEntry {
 	 * Test if this goods entry has optional cargo packet/flow data.
 	 * @returns true iff optional data is present.
 	 */
-	[[debug_inline]] inline bool HasData() const { return this->data != nullptr; }
+	[[debug_inline]] inline bool HasData() const { return this->record->data != nullptr; }
 
 	/**
 	 * Clear optional cargo packet/flow data.
 	 */
-	void ClearData() { this->data.reset(); }
+	void ClearData()
+	{
+		GoodsEntryData *data = this->record->data;
+		this->record->data = nullptr;
+		delete data;
+	}
 
 	/**
 	 * Get optional cargo packet/flow data.
 	 * @pre HasData()
 	 * @returns cargo packet/flow data.
 	 */
-	[[debug_inline]] inline const GoodsEntryData &GetData() const
+	[[debug_inline]] inline GoodsEntryData &GetData() const
 	{
 		assert(this->HasData());
-		return *this->data;
-	}
-
-	/**
-	 * Get non-const optional cargo packet/flow data.
-	 * @pre HasData()
-	 * @returns non-const cargo packet/flow data.
-	 */
-	[[debug_inline]] inline GoodsEntryData &GetData()
-	{
-		assert(this->HasData());
-		return *this->data;
+		return *this->record->data;
 	}
 
 	/**
@@ -185,8 +175,8 @@ struct GoodsEntry {
 	 */
 	inline GoodsEntryData &GetOrCreateData()
 	{
-		if (!this->HasData()) this->data = std::make_unique<GoodsEntryData>();
-		return *this->data;
+		if (!this->HasData()) this->record->data = new GoodsEntryData();
+		return *this->record->data;
 	}
 
 	uint8_t ConvertState() const;
@@ -212,25 +202,44 @@ struct GoodsEntry {
 	}
 
 private:
-	std::unique_ptr<GoodsEntryData> data = nullptr; ///< Optional cargo packet and flow data.
+	OpenTTDGoodsEntry *record; ///< The goods slot; its data pointer owns the optional cargo packet and flow data.
 };
 
-/** All airport-related information. Only valid if tile != INVALID_TILE. */
+/** Iterable views over a station record's goods slots. */
+struct GoodsRange {
+	OpenTTDGoodsEntry *first;
+	struct iterator {
+		OpenTTDGoodsEntry *slot;
+		GoodsEntry operator*() const { return GoodsEntry{this->slot}; }
+		iterator &operator++() { ++this->slot; return *this; }
+		bool operator==(const iterator &other) const = default;
+	};
+	iterator begin() const { return {this->first}; }
+	iterator end() const { return {this->first + NUM_CARGO}; }
+};
+
+/** All airport-related information. Only valid if tile != INVALID_TILE.
+ * A view over the airport of a live station record. */
 #include "rust/aircraft_ffi.h"
 static_assert(sizeof(AirportBlocks) == sizeof(uint64_t) && alignof(AirportBlocks) == alignof(uint64_t));
-static_assert(std::is_trivially_destructible_v<AirportBlocks>);
-struct Airport : public TileArea {
-	Airport() : TileArea(INVALID_TILE, 0, 0) {}
+struct Airport {
+	/** @param record The airport of a live station record. */
+	explicit Airport(OpenTTDAirport *record) : record(record) {}
 
-	std::unique_ptr<uint64_t, decltype(&openttd_rust_airport_blocks_destroy)> rust_blocks{openttd_rust_airport_blocks_new(), openttd_rust_airport_blocks_destroy};
-	/* Begin the trivial bitset's lifetime in its canonical allocation. Rust reads
-	 * and writes only its raw uint64 representation; allocation release ends it. */
-	AirportBlocks &blocks = *new (this->rust_blocks.get()) AirportBlocks{};
-	uint8_t type = 0; ///< Type of this airport, @see AirportTypes
-	uint8_t layout = 0; ///< Airport layout number.
-	Direction rotation = INVALID_DIR; ///< How this airport is rotated.
-
-	PersistentStorage *psa = nullptr; ///< Persistent storage for NewGRF airports.
+	/* The record holds the area, blocks, type, layout, rotation and psa link. */
+	inline OpenTTDAirport &Record() const { return *this->record; }
+	inline TileArea GetArea() const { return TileAreaOf(this->record->area); } ///< Tile area the airport covers.
+	inline void SetArea(const TileArea &area) { StoreTileArea(this->record->area, area); }
+	inline TileIndex GetTile() const { return TileIndex{this->record->area.tile}; } ///< The northern tile of the airport, or INVALID_TILE.
+	inline AirportBlocks GetBlocks() const { return AirportBlocks{this->record->blocks}; } ///< Stores which blocks on the airport are taken.
+	inline void SetBlocks(AirportBlocks blocks) { this->record->blocks = blocks.base(); }
+	inline Direction GetRotation() const { return static_cast<Direction>(this->record->rotation); } ///< How this airport is rotated.
+	inline void SetRotation(Direction rotation) { this->record->rotation = rotation; }
+	inline operator TileArea() const { return this->GetArea(); }
+	inline OrthogonalTileIterator begin() const { return this->GetArea().begin(); }
+	inline OrthogonalTileIterator end() const { return this->GetArea().end(); }
+	inline bool Contains(TileIndex tile) const { return this->GetArea().Contains(tile); }
+	inline void Clear() { TileArea area = this->GetArea(); area.Clear(); this->SetArea(area); } ///< Clear the airport's tile area.
 
 	/**
 	 * Get the AirportSpec that from the airport type of this airport. If there
@@ -239,7 +248,7 @@ struct Airport : public TileArea {
 	 */
 	const AirportSpec *GetSpec() const
 	{
-		return openttd_rust_airport_get_spec(this->tile.base(), this->type, &GetAirportResolverServices());
+		return openttd_rust_airport_get_spec(this->record->area.tile, this->record->type, &GetAirportResolverServices());
 	}
 
 	/**
@@ -284,14 +293,15 @@ struct Airport : public TileArea {
 
 	inline TileIndex GetRotatedTileFromOffset(TileIndexDiffC tidc, const AirportSpec *as) const
 	{
-		switch (this->rotation) {
-			case DIR_N: return this->tile + ToTileIndexDiff(tidc);
+		const TileIndex tile = this->GetTile();
+		switch (this->GetRotation()) {
+			case DIR_N: return tile + ToTileIndexDiff(tidc);
 
-			case DIR_E: return this->tile + TileDiffXY(tidc.y, as->size_x - 1 - tidc.x);
+			case DIR_E: return tile + TileDiffXY(tidc.y, as->size_x - 1 - tidc.x);
 
-			case DIR_S: return this->tile + TileDiffXY(as->size_x - 1 - tidc.x, as->size_y - 1 - tidc.y);
+			case DIR_S: return tile + TileDiffXY(as->size_x - 1 - tidc.x, as->size_y - 1 - tidc.y);
 
-			case DIR_W: return this->tile + TileDiffXY(as->size_y - 1 - tidc.y, tidc.x);
+			case DIR_W: return tile + TileDiffXY(as->size_y - 1 - tidc.y, tidc.x);
 
 			default: NOT_REACHED();
 		}
@@ -332,7 +342,7 @@ struct Airport : public TileArea {
 	inline Direction GetHangarExitDirection(TileIndex tile, const AirportSpec *as) const
 	{
 		const HangarTileTable *htt = GetHangarDataByTile(tile, as);
-		return ChangeDir(htt->dir, DirDifference(this->rotation, as->layouts[0].rotation));
+		return ChangeDir(htt->dir, DirDifference(this->GetRotation(), as->layouts[0].rotation));
 	}
 
 	/**
@@ -387,6 +397,8 @@ private:
 		}
 		NOT_REACHED();
 	}
+
+	OpenTTDAirport *record; ///< The airport of the station record.
 };
 
 
@@ -395,38 +407,38 @@ struct Station final : SpecializedStation<Station, false> {
 public:
 	RoadStop *GetPrimaryRoadStop(RoadStopType type) const
 	{
-		return type == RoadStopType::Bus ? bus_stops : truck_stops;
+		return type == RoadStopType::Bus ? this->GetBusStops() : this->GetTruckStops();
 	}
 
+	/* The shared record holds the road-stop list heads, the bus, truck, ship and docking
+	 * areas, the airport, indtype, had_vehicle_of_type, industry, the loading activity
+	 * fields, always_accepted and the goods slots. */
+	inline RoadStop *GetBusStops() const; ///< All the road stops.
+	inline void SetBusStops(RoadStop *stop);
+	inline RoadStop *GetTruckStops() const; ///< All the truck stops.
+	inline void SetTruckStops(RoadStop *stop);
+	inline TileArea GetBusStation() const { return TileAreaOf(this->Record().bus_station); } ///< Tile area the bus 'station' part covers.
+	inline void SetBusStation(const TileArea &area) { StoreTileArea(this->Record().bus_station, area); }
+	inline TileArea GetTruckStation() const { return TileAreaOf(this->Record().truck_station); } ///< Tile area the truck 'station' part covers.
+	inline void SetTruckStation(const TileArea &area) { StoreTileArea(this->Record().truck_station, area); }
+	inline TileArea GetShipStation() const { return TileAreaOf(this->Record().ship_station); } ///< Tile area the ship 'station' part covers.
+	inline void SetShipStation(const TileArea &area) { StoreTileArea(this->Record().ship_station, area); }
+	inline TileArea GetDockingStation() const { return TileAreaOf(this->Record().docking_station); } ///< Tile area the docking tiles cover.
+	inline void SetDockingStation(const TileArea &area) { StoreTileArea(this->Record().docking_station, area); }
+	/** @return The airport of this station. */
+	inline Airport GetAirport() const { return Airport{&const_cast<OpenTTDStationRecord &>(this->Record()).airport}; }
+	inline StationHadVehicleOfType GetHadVehicleOfType() const { return static_cast<StationHadVehicleOfType>(this->Record().had_vehicle_of_type); }
+	inline void SetHadVehicleOfType(StationHadVehicleOfType types) { this->Record().had_vehicle_of_type = types; }
+	/** @return The goods entry of cargo \a cargo. */
+	inline GoodsEntry GetGoods(CargoType cargo) const { return GoodsEntry{&const_cast<OpenTTDStationRecord &>(this->Record()).goods[cargo]}; }
+	/** @return The goods entries of every cargo. */
+	inline GoodsRange Goods() const { return GoodsRange{const_cast<OpenTTDStationRecord &>(this->Record()).goods}; }
 
-	RoadStop *bus_stops = nullptr; ///< All the road stops
-	TileArea bus_station{}; ///< Tile area the bus 'station' part covers
-	RoadStop *truck_stops = nullptr; ///< All the truck stops
-	TileArea truck_station{}; ///< Tile area the truck 'station' part covers
+	BitmapTileArea catchment_tiles{openttd_rust_station_catchment_tiles(&this->Record())};
 
-	Airport airport{}; ///< Tile area the airport covers
-	TileArea ship_station{}; ///< Tile area the ship 'station' part covers
-	TileArea docking_station{}; ///< Tile area the docking tiles cover
+	RustStationLoadingQueue loading_vehicles{&this->Record()};
 
-	IndustryType indtype = IT_INVALID; ///< Industry type to get the name from
-
-	BitmapTileArea catchment_tiles{openttd_rust_station_catchment_tiles(this->rust_service.get())};
-
-	StationHadVehicleOfType had_vehicle_of_type{};
-
-	RustStationLoadingQueue loading_vehicles{this->rust_service.get()};
-	uint8_t &time_since_load = openttd_rust_station_service_fields(this->rust_service.get())->time_since_load;
-	uint8_t &time_since_unload = openttd_rust_station_service_fields(this->rust_service.get())->time_since_unload;
-	uint8_t &last_vehicle_type = openttd_rust_station_service_fields(this->rust_service.get())->last_vehicle_type;
-	CargoTypes &always_accepted = openttd_rust_station_service_fields(this->rust_service.get())->always_accepted;
-	template <size_t... I> static std::array<GoodsEntry, NUM_CARGO> MakeGoods(OpenTTDStationService *state, std::index_sequence<I...>)
-	{
-		return {{GoodsEntry(openttd_rust_station_service_cargo(state, I))...}};
-	}
-	std::array<GoodsEntry, NUM_CARGO> goods = MakeGoods(this->rust_service.get(), std::make_index_sequence<NUM_CARGO>{});
-
-	RustIndustryList industries_near{this->rust_service.get()};
-	Industry *industry = nullptr; ///< NOSAVE: Associated industry for neutral stations. (Rebuilt on load from Industry->st)
+	RustIndustryList industries_near{&this->Record()};
 
 	Station(TileIndex tile = INVALID_TILE);
 	~Station();
@@ -479,7 +491,7 @@ public:
 	 * Construct the iterator.
 	 * @param st Station the airport is part of.
 	 */
-	AirportTileIterator(const Station *st) : OrthogonalTileIterator(st->airport), st(st)
+	AirportTileIterator(const Station *st) : OrthogonalTileIterator(st->GetAirport().GetArea()), st(st)
 	{
 		if (!st->TileBelongsToAirport(this->tile)) ++(*this);
 	}
@@ -500,5 +512,11 @@ public:
 };
 
 
+#include "roadstop_base.h"
+
+inline RoadStop *Station::GetBusStops() const { return RoadStop::FromRecord(this->Record().bus_stops); }
+inline void Station::SetBusStops(RoadStop *stop) { this->Record().bus_stops = stop == nullptr ? nullptr : stop->record; }
+inline RoadStop *Station::GetTruckStops() const { return RoadStop::FromRecord(this->Record().truck_stops); }
+inline void Station::SetTruckStops(RoadStop *stop) { this->Record().truck_stops = stop == nullptr ? nullptr : stop->record; }
 
 #endif /* STATION_BASE_H */

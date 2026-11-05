@@ -20,15 +20,15 @@ struct Vehicle;
  * pointers are separate entries.
  */
 class RustStationLoadingQueue {
-	OpenTTDStationService *state;
+	OpenTTDStationRecord *state;
 
 public:
 	class iterator {
 		friend class RustStationLoadingQueue;
-		OpenTTDStationService *state = nullptr;
+		OpenTTDStationRecord *state = nullptr;
 		OpenTTDStationQueueEntry *node = nullptr;
 
-		iterator(OpenTTDStationService *state, OpenTTDStationQueueEntry *node) : state(state), node(node) {}
+		iterator(OpenTTDStationRecord *state, OpenTTDStationQueueEntry *node) : state(state), node(node) {}
 
 	public:
 		using value_type = Vehicle *;
@@ -53,7 +53,7 @@ public:
 		bool operator==(const iterator &) const = default;
 	};
 
-	explicit RustStationLoadingQueue(OpenTTDStationService *state) : state(state) {}
+	explicit RustStationLoadingQueue(OpenTTDStationRecord *state) : state(state) {}
 	RustStationLoadingQueue(const RustStationLoadingQueue &) = delete;
 	RustStationLoadingQueue &operator=(const RustStationLoadingQueue &) = delete;
 

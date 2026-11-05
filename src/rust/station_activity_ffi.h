@@ -9,6 +9,6 @@
 #ifndef RUST_STATION_ACTIVITY_FFI_H
 #define RUST_STATION_ACTIVITY_FFI_H
 #include <cstdint>
-struct OpenTTDStationService;
+struct OpenTTDStationRecord;
 struct OpenTTDStationActivity { uint8_t time_since_load, time_since_unload; };
 #endif /* RUST_STATION_ACTIVITY_FFI_H */

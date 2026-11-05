@@ -25,8 +25,7 @@ struct OpenTTDRoadStopEntry {
 };
 /** Both entry points of a drive-through line, owned by its BaseEntry stop. */
 struct OpenTTDRoadStopEntries { OpenTTDRoadStopEntry east, west; };
-/** One Rust allocation per native shell: the saved status byte and the shared entries. */
-struct OpenTTDRoadStopState { uint8_t status; OpenTTDRoadStopEntries *entries; };
+#include "station_record_ffi.h"
 struct OpenTTDRoadStopPoolItem { OpenTTDRoadStopState *state; uint32_t xy, index; };
 /* Typed noexcept services; none reenters a road stop, runs scripts or throws. */
 struct OpenTTDRoadStopServices {
@@ -45,7 +44,7 @@ extern "C" {
 /* Each ordinary or indexed-load shell owns one state with both bays free;
  * destroy frees the shared entries when the state holds BaseEntry. Entries
  * take live serialized owners; panics abort and no exception crosses. */
-OpenTTDRoadStopState *openttd_rust_road_stop_new();
+OpenTTDRoadStopState *openttd_rust_road_stop_new(RoadStop *shell, uint32_t xy);
 void openttd_rust_road_stop_destroy(OpenTTDRoadStopState *);
 void openttd_rust_road_stop_leave(const OpenTTDSharedServices *, OpenTTDVehicle *, OpenTTDRoadState *);
 void openttd_rust_road_stop_check_integrity(const OpenTTDSharedServices *, uint32_t, OpenTTDRoadStopState *, uint8_t);

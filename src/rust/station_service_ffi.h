@@ -19,19 +19,12 @@ struct OpenTTDCargoRegistryServices;
 #include "linkgraph_ffi.h"
 #include "orders_ffi.h"
 #include "cargo_payment_ffi.h"
-struct OpenTTDStationService;
-extern "C" uint64_t openttd_rust_station_acceptance_mask(OpenTTDStationService *);
-struct OpenTTDStationCargo {
-	uint32_t max_waiting_cargo;
-	uint8_t status, time_since_pickup, rating, last_speed, last_age, amount_fract;
-};
-struct OpenTTDStationFields {
-	uint64_t always_accepted;
-	uint8_t delete_ctr, time_since_load, time_since_unload, last_vehicle_type;
-};
-/* Each BaseStation owns one stable allocation, created for ordinary and indexed allocation and
- * destroyed after its derived shell and cargo storage; facade references, saving and legacy loading
- * alias its scalars. Cargo status is a native EnumBitSet<uint8_t> that Rust reads only as bytes.
+#include "station_record_ffi.h"
+extern "C" uint64_t openttd_rust_station_acceptance_mask(OpenTTDStationRecord *);
+/* Each BaseStation owns one stable allocation, its shared OpenTTDStationRecord followed by the
+ * Rust-only queue and catchment, created for ordinary and indexed allocation and destroyed after
+ * the base destructor; C++ reads, saving and legacy loading address record fields in place.
+ * Cargo status is a native EnumBitSet<uint8_t> byte; C++ converts it in GoodsEntry accessors.
  * Queue nodes keep std::list identity and erase semantics; the save facade loads into a call-local
  * std::list. Cargo Stage/Unload can reenter payment, delivery and industry owners.
  * Queue reads require live entries and erase requires an entry from that owner; with_* callbacks
@@ -87,7 +80,7 @@ struct OpenTTDTruncatedSource {
 struct OpenTTDLoadingStation {
 	OpenTTDStation *native;
 	OpenTTDBaseStation *base;
-	OpenTTDStationService *state;
+	OpenTTDStationRecord *state;
 };
 struct OpenTTDStationServices {
 	const OpenTTDLiveGraphServices *graphs;
@@ -96,7 +89,7 @@ struct OpenTTDStationServices {
 	OpenTTDStationExclusivity (*station_exclusivity)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_exclusivity);
 	OpenTTDRatingCounts (*rating_counts)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_counts);
 	OpenTTDBaseStation * (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
-	OpenTTDStationService * (*owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
+	OpenTTDStationRecord * (*owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	size_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
 	OpenTTDEnvironmentServices environment;
 	uint8_t (*facilities)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(facilities);
@@ -148,7 +141,7 @@ struct OpenTTDStationLinks {
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
-	const GoodsEntry *(*goods_entry)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(goods_entry);
+	const OpenTTDGoodsEntry *(*goods_entry)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(goods_entry);
 	const OpenTTDStationResolverServices *station_resolver;
 	const OpenTTDVehicleResolverServices *vehicle_resolver;
 };
@@ -211,22 +204,18 @@ const OpenTTDStationLoading &GetRustStationLoading() noexcept;
 const OpenTTDStationLinks &GetRustStationLinks() noexcept;
 extern "C" {
 uint8_t openttd_rust_goods_convert_state(uint8_t status);
-OpenTTDStationService *openttd_rust_station_service_new();
-void openttd_rust_station_service_destroy(OpenTTDStationService *);
-OpenTTDStationFields *openttd_rust_station_service_fields(OpenTTDStationService *);
-OpenTTDStationCargo *openttd_rust_station_service_cargo(OpenTTDStationService *, uint8_t);
-size_t openttd_rust_station_queue_size(const OpenTTDStationService *);
-void openttd_rust_station_queue_push(OpenTTDStationService *, void *);
-void openttd_rust_station_queue_remove(OpenTTDStationService *, void *);
-void openttd_rust_station_queue_clear(OpenTTDStationService *);
-OpenTTDStationQueueEntry *openttd_rust_station_queue_first(const OpenTTDStationService *);
-OpenTTDStationQueueEntry *openttd_rust_station_queue_next(const OpenTTDStationService *, const OpenTTDStationQueueEntry *);
+size_t openttd_rust_station_queue_size(const OpenTTDStationRecord *);
+void openttd_rust_station_queue_push(OpenTTDStationRecord *, void *);
+void openttd_rust_station_queue_remove(OpenTTDStationRecord *, void *);
+void openttd_rust_station_queue_clear(OpenTTDStationRecord *);
+OpenTTDStationQueueEntry *openttd_rust_station_queue_first(const OpenTTDStationRecord *);
+OpenTTDStationQueueEntry *openttd_rust_station_queue_next(const OpenTTDStationRecord *, const OpenTTDStationQueueEntry *);
 void *openttd_rust_station_queue_value(const OpenTTDStationQueueEntry *);
-OpenTTDStationQueueEntry *openttd_rust_station_queue_erase_node(OpenTTDStationService *, OpenTTDStationQueueEntry *);
+OpenTTDStationQueueEntry *openttd_rust_station_queue_erase_node(OpenTTDStationRecord *, OpenTTDStationQueueEntry *);
 /* An empty queue touches only its Rust owner; service tables may be null then. */
 struct OpenTTDVehicleVisits;
 struct OpenTTDCommandCost;
-void openttd_rust_station_load(OpenTTDStationService *, const OpenTTDStationServices *, const OpenTTDStationLoading *, const OpenTTDVehicleVisits *, OpenTTDCommandCost *, OpenTTDCommandCost *);
+void openttd_rust_station_load(OpenTTDStationRecord *, const OpenTTDStationServices *, const OpenTTDStationLoading *, const OpenTTDVehicleVisits *, OpenTTDCommandCost *, OpenTTDCommandCost *);
 void openttd_rust_station_acceptance(OpenTTDBaseStation *, const OpenTTDStationServices *, uint8_t);
 void openttd_rust_station_watched(OpenTTDBaseStation *, const OpenTTDStationServices *);
 void openttd_rust_station_stale(OpenTTDBaseStation *, const OpenTTDStationServices *, const OpenTTDStationLinks *, const OpenTTDVehicleVisits *);

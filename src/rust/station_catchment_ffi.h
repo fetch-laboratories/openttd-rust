@@ -20,13 +20,11 @@ struct OpenTTDObjectServices;
 struct OpenTTDTownLeaves;
 struct OpenTTDStationServices;
 struct OpenTTDVehicleVisits;
-struct OpenTTDStationService;
+#include "station_record_ffi.h"
 struct OpenTTDIndustry;
 struct OpenTTDTownState;
 struct OpenTTDStationList;
 
-/** Layout of the canonical rectangle aliased by the native StationRect facade. */
-struct OpenTTDStationRect { int32_t left, top, right, bottom; };
 /** One StationList member, ordered by station ID. */
 struct OpenTTDStationListEntry { BaseStation *station; uint16_t id; };
 /** One IndustryList member, ordered by distance and industry ID. */
@@ -50,8 +48,8 @@ struct OpenTTDStationCatchmentServices {
 	size_t (*station_count)() noexcept OPENTTD_SERVICE_DEFAULT(station_count);
 	BaseStation *(*station_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_if_valid);
 	BaseStation *(*next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
-	OpenTTDStationService *(*owner)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
-	OpenTTDStationService *(*station_owner)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
+	OpenTTDStationRecord *(*owner)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
+	OpenTTDStationRecord *(*station_owner)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	uint16_t (*id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	Industry *(*associated_industry)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(associated_industry);
@@ -68,9 +66,8 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 
 extern "C" {
 OpenTTDStationListView openttd_rust_station_list_view(const OpenTTDStationList *);
-OpenTTDIndustryListView openttd_rust_station_industries_near(OpenTTDStationService *);
-OpenTTDStationRect *openttd_rust_station_rect(OpenTTDStationService *);
-struct OpenTTDBitmapTileArea *openttd_rust_station_catchment_tiles(OpenTTDStationService *);
+OpenTTDIndustryListView openttd_rust_station_industries_near(OpenTTDStationRecord *);
+struct OpenTTDBitmapTileArea *openttd_rust_station_catchment_tiles(OpenTTDStationRecord *);
 OpenTTDStationList *openttd_rust_town_stations_near(OpenTTDTownState *);
 OpenTTDStationList *openttd_rust_industry_stations_near(OpenTTDIndustry *);
 uint8_t openttd_rust_station_rect_empty_abi(const OpenTTDStationRect *);
@@ -131,9 +128,9 @@ public:
 
 /** Borrowed facade over a station's Rust-owned delivery list. */
 class RustIndustryList {
-	OpenTTDStationService *owner;
+	OpenTTDStationRecord *owner;
 public:
-	explicit RustIndustryList(OpenTTDStationService *owner) : owner(owner) {}
+	explicit RustIndustryList(OpenTTDStationRecord *owner) : owner(owner) {}
 	RustIndustryList(const RustIndustryList &) = delete;
 	RustIndustryList &operator=(const RustIndustryList &) = delete;
 	const OpenTTDIndustryListEntry *begin() const { return openttd_rust_station_industries_near(this->owner).data; }

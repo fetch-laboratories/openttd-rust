@@ -21,9 +21,10 @@ enum WaypointFlags : uint8_t {
 
 /** Representation of a waypoint. */
 struct Waypoint final : SpecializedStation<Waypoint, true> {
-	uint16_t town_cn = 0; ///< The N-1th waypoint for this town (consecutive number)
-	uint16_t waypoint_flags{}; ///< Waypoint flags, see WaypointFlags
-	TileArea road_waypoint_area{}; ///< Tile area the road waypoint part covers
+	/* The shared record holds town_cn (the N-1th waypoint for this town), waypoint_flags
+	 * (see WaypointFlags) and road_waypoint_area. */
+	inline TileArea GetRoadWaypointArea() const { return TileAreaOf(this->Record().road_waypoint_area); } ///< Tile area the road waypoint part covers.
+	inline void SetRoadWaypointArea(const TileArea &area) { StoreTileArea(this->Record().road_waypoint_area, area); }
 
 	/**
 	 * Create a waypoint at the given tile.
@@ -52,7 +53,7 @@ struct Waypoint final : SpecializedStation<Waypoint, true> {
 	 */
 	inline bool IsSingleTile() const
 	{
-		return this->facilities.Test(StationFacility::Train) && this->train_station.w == 1 && this->train_station.h == 1;
+		return this->GetFacilities().Test(StationFacility::Train) && this->GetTrainStation().w == 1 && this->GetTrainStation().h == 1;
 	}
 
 	/**
@@ -63,7 +64,7 @@ struct Waypoint final : SpecializedStation<Waypoint, true> {
 	 */
 	inline bool IsOfType(const Waypoint *wp) const
 	{
-		return this->string_id == wp->string_id;
+		return this->Record().string_id == wp->Record().string_id;
 	}
 };
 
