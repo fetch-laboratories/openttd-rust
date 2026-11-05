@@ -934,9 +934,9 @@ class InstructionSpeedTests(unittest.TestCase):
             rust = root / "probe.rs"
             rust.write_text(
                 'unsafe extern "C" {fn fixture_state_loop(); fn fixture_generate_world();}\n'
-                '#[unsafe(no_mangle)] pub extern "C" fn openttd_rust_session_state_loop(){unsafe{fixture_state_loop();}}\n'
+                '#[unsafe(no_mangle)] pub extern "C" fn openttd_rust_session_state_loop_abi(){unsafe{fixture_state_loop();}}\n'
                 "pub mod genworld {#[inline(never)] pub fn generate(){unsafe{super::fixture_generate_world();}}}\n"
-                "fn main(){genworld::generate(); openttd_rust_session_state_loop();}\n"
+                "fn main(){genworld::generate(); openttd_rust_session_state_loop_abi();}\n"
             )
             subprocess.run(
                 [
