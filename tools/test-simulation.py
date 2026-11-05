@@ -1251,6 +1251,32 @@ class SpeedPassTests(unittest.TestCase):
                     )
                 )
 
+    def test_preparation_accepts_only_stale_anchor_failures(self):
+        from simulation import speed
+
+        def result(passed, problems=(), differences=(), measured=True):
+            return {
+                "passed": passed,
+                "problems": list(problems),
+                "differences": list(differences),
+                "known_failures": [],
+                "instruction_speed": {"candidate": {"Ir": 1}} if measured else None,
+            }
+
+        stale = f"harness error: ValueError: {speed.STALE_ANCHOR}"
+        accepted = [[result(True)], [result(True), result(False, [stale])]]
+        rejected = [
+            [],
+            [result(False, ["harness error: OSError: copy failed"])],
+            [result(False, [stale], differences=[{"field": "line"}])],
+            [result(False, [stale], measured=False)],
+            [result(False)],
+        ]
+        for results in accepted:
+            self.assertTrue(speed.profile_passed({"results": results}))
+        for results in rejected:
+            self.assertFalse(speed.profile_passed({"results": results}))
+
     def test_collection_rejects_changed_profile_and_runtime_before_hold(self):
         from simulation import speed
 

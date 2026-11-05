@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 from deep import LOCK_NAME
 from validation_execution import file_lock
@@ -30,6 +31,26 @@ HEAVY = set(
     "as cargo cc1 cc1plus ccache clang clang++ cmake collect2 g++ gcc gmake ld "
     "ld.bfd ld.gold ld.lld lld lto1 make mold ninja rustc rustfmt valgrind".split()
 )
+
+
+# A profile under another host's or toolchain's anchors fails only this check,
+# after its games compared equal and its counts were recorded; the pass replaces it.
+STALE_ANCHOR = "instruction anchor identity mismatch; quiet speed pass required"
+
+
+def profile_passed(report: dict[str, Any]) -> bool:
+    """Whether every result passed or failed only on a stale anchor identity."""
+    return bool(report["results"]) and all(
+        result["passed"]
+        or (
+            bool(result.get("instruction_speed"))
+            and not result["differences"]
+            and not result["known_failures"]
+            and bool(result["problems"])
+            and all(STALE_ANCHOR in problem for problem in result["problems"])
+        )
+        for result in report["results"]
+    )
 
 
 def speed_scenarios():
@@ -66,7 +87,7 @@ def prepare(out, profile, migration):
     records = {}
     if profile:
         report = json.loads(profile.read_text())
-        if not report["passed"] or report["candidate_commit"] != head:
+        if not profile_passed(report) or report["candidate_commit"] != head:
             sys.exit(f"{profile} is not a passing profile of {head}")
         records = {r["scenario"]: r["instruction_speed"] for r in report["results"]}
     manifest = dict(
