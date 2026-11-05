@@ -98,7 +98,7 @@ This host has a 220 GB SSD and a 1 TB HDD mounted at `/mnt/storage` (`/etc/fstab
 
 ## Simulation comparison
 
-`python3 tools/migration.py simulate` builds both games and runs `tools/simulate.py`. CI runs the default set after component comparisons. Add scenario dictionaries and prepare/check hooks to the component's module in `tools/simulation/`; `scenario_modules()` assembles them.
+`python3 tools/migration.py simulate` builds both games and runs `tools/simulate.py`. CI runs the default set after component comparisons. Add scenario dictionaries and prepare/check hooks to the component's module in `tools/simulation/`; `scenario_modules()` assembles them. A module's hooks run only for the scenarios it defines; a hook that must also act on another module's scenarios is named in `SHARED_HOOKS` in `core.py`.
 
 - Each scenario runs headless in both plain and `-d desync=3` modes under `.local/simulation/`. Desync mode saves an uncompressed snapshot every 32 economy days and changes cache and YAPF behavior. Both modes compare exit saves and full output; warnings, different checkpoint lists or end moments, and semantic differences fail.
 - Default scenarios include regression saves with AIs, generated TGP and original maps, and `play-*` LLM road saves with manual distribution and cargodist. `--soak` adds scenarios, `--self` compares the reference to itself, and names filter the set. The driver runs `--jobs // 2` scenarios at once. See `migration/saves/README.md`.

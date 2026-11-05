@@ -1,15 +1,17 @@
 """Default sign and depot-name commands, semantic SIGN/DEPT records and reload."""
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
 
 
-class Run(TypedDict):
-    exit: int
-    log: list[str]
+class Scenario(core.Scenario):
+    signs: bool
+
+
+Run = core.Run
 
 
 REQUIRED = (
@@ -38,9 +40,9 @@ REQUIRED = (
 )
 
 
-def scenarios(soak: bool) -> list[dict[str, Any]]:
+def scenarios(soak: bool) -> list[Scenario]:
     return [
-        dict(
+        Scenario(
             name="signs",
             kind="save",
             signs=True,
@@ -82,25 +84,28 @@ def observations(run: Run) -> list[str]:
 
 
 def prepare(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     binaries: dict[str, Path],
     builds: dict[str, Path],
     out: Path,
     timeout: int,
     env: dict[str, str],
-    result: dict[str, Any],
-) -> dict[str, Any]:
+    result: core.Result,
+) -> Scenario:
     if "signs" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
     source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
-    scenario = dict(scenario, save=str(source))
+    scenario = {**scenario, "save": str(source)}
     executables = prepared_console("signs", adapter, binaries, builds, folder, env)
     saves = {role: folder / role / "signs.sav" for role in executables}
+
+    def capture(role: str) -> Scenario:
+        console = [f'signs_scenario commands "{saves[role]}"', "unpause"]
+        return {**scenario, "console": console}
+
     captures = core.capture_pair(
-        lambda role: dict(
-            scenario, console=[f'signs_scenario commands "{saves[role]}"', "unpause"]
-        ),
+        capture,
         executables,
         builds,
         folder,
@@ -117,24 +122,24 @@ def prepare(
     )
     if traces["reference"] != traces["candidate"] or differences:
         raise RuntimeError("sign/depot-name results, records or save state differ")
-    result["signs_state"] = [
+    core.findings(result)["signs_state"] = [
         line
         for line in traces["reference"]
         if line.split()[1] in ("sign", "depot", "rng", "state-complete")
     ]
-    return dict(
-        scenario,
-        executables=executables,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["signs_scenario inspect", "unpause"],
-    )
+    return {
+        **scenario,
+        "executables": executables,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": ["signs_scenario inspect", "unpause"],
+    }
 
 
 def check(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     run: Run,
-    mode: str,
-    role: str,
+    mode: core.Mode,
+    role: core.Role,
     result: dict[str, Any],
 ) -> None:
     if "signs" not in scenario:

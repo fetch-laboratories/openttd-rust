@@ -2,9 +2,10 @@
 
 import shutil
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
@@ -13,21 +14,12 @@ AI_FOLDER = "command-scenario-ai"
 FAMILIES = ("rail", "road", "station", "order", "vehicle", "terraform")
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
+class Scenario(core.Scenario):
     command_seed: NotRequired[int]
     command_count: NotRequired[int]
     command_money: NotRequired[bool]
     command_lifecycle: NotRequired[str]
-    short_checkpoint: NotRequired[bool]
-    ticks: int
-    console: NotRequired[list[str]]
-    save: NotRequired[str]
-    seed: NotRequired[int]
-    map_log2: NotRequired[int]
-    land_generator: NotRequired[int]
-    scenario_ai: NotRequired[str]
+    command_setup: NotRequired[bool]
 
 
 @dataclass(frozen=True)
@@ -100,11 +92,11 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     )
 
 
-def uses_ai(scenario: dict[str, Any]) -> bool:
+def uses_ai(scenario: Mapping[str, Any]) -> bool:
     return "command_seed" in scenario
 
 
-def install(scenario: dict[str, Any], run_dir: Path) -> None:
+def install(scenario: Scenario, run_dir: Path) -> None:
     if not uses_ai(scenario):
         return
     folder = run_dir / "ai/commands"
@@ -118,32 +110,35 @@ def install(scenario: dict[str, Any], run_dir: Path) -> None:
 
 
 def prepare(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     binaries: dict[str, Path],
     builds: dict[str, Path],
     out: Path,
     timeout: int,
     env: dict[str, str],
-    result: dict[str, Any],
-) -> dict[str, Any]:
+    result: core.Result,
+) -> Scenario:
     if "command_lifecycle" in scenario:
         folder = out / scenario["name"] / "input"
         source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
-        scenario = dict(scenario, save=str(source))
+        scenario = {**scenario, "save": str(source)}
         executables = prepared_console(
             "commands", adapter, binaries, builds, folder, env
         )
         if scenario["command_lifecycle"] == "control":
-            return dict(
-                scenario,
-                executables=executables,
-                console=["command_scenario probe", "unpause"],
-            )
+            return {
+                **scenario,
+                "executables": executables,
+                "console": ["command_scenario probe", "unpause"],
+            }
         saves = {role: folder / role / "commands.sav" for role in executables}
+
+        def probe(role: str) -> Scenario:
+            console = [f'command_scenario probe "{saves[role]}"', "unpause"]
+            return {**scenario, "console": console}
+
         runs = core.capture_pair(
-            lambda role: dict(
-                scenario, console=[f'command_scenario probe "{saves[role]}"', "unpause"]
-            ),
+            probe,
             executables,
             builds,
             folder,
@@ -166,23 +161,24 @@ def prepare(
         )
         if differences:
             raise RuntimeError(f"command lifecycle checkpoint differs: {differences}")
-        return dict(
-            scenario,
-            executables=executables,
-            role_inputs={r: {"save": str(p)} for r, p in saves.items()},
-            console=["unpause"],
-        )
+        return {
+            **scenario,
+            "executables": executables,
+            "role_inputs": {r: {"save": str(p)} for r, p in saves.items()},
+            "console": ["unpause"],
+        }
     if not uses_ai(scenario):
         return scenario
     folder = out / scenario["name"] / "input"
     if scenario["kind"] == "generate":
+        setup: Scenario = {
+            **scenario,
+            "command_setup": True,
+            "ticks": 1,
+            "console": ["start_ai MigrationCommands", "unpause"],
+        }
         run = core.run_game(
-            dict(
-                scenario,
-                command_setup=True,
-                ticks=1,
-                console=["start_ai MigrationCommands", "unpause"],
-            ),
+            setup,
             binaries["reference"],
             builds["reference"],
             folder / "generate",
@@ -218,8 +214,8 @@ def prepare(
     )
     config = core.ai_config(b"MigrationCommands") * 2 + b"\0"
     prepared.write_bytes(core.set_ai_slots(prepared.read_bytes(), {0: config}))
-    result["command_input"] = record
-    return dict(scenario, kind="save", save=str(prepared))
+    core.findings(result)["command_input"] = record
+    return {**scenario, "kind": "save", "save": str(prepared)}
 
 
 def outcomes(lines: list[str], count: int, seed: int) -> list[Outcome]:

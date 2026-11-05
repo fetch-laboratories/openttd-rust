@@ -192,22 +192,26 @@ def session(
         run = folder / side
         run.mkdir(parents=True)
         core.write_config(
-            {
-                "kind": "save",
-                "settings": {
-                    "gui": {"threaded_saves": "false"},
-                    "network": {
-                        "server_game_type": "local",
-                        "server_port": str(port),
-                        "client_name": "Mixed510",
-                        "participate_survey": "no",
-                        "client_secret_key": AUTH_SECRET,
-                        "server_password": AUTH_PASSWORD
-                        if side == "server" and authentication == "password"
-                        else "",
+            # write_config reads only the kind and settings of a save game.
+            cast(
+                core.Scenario,
+                {
+                    "kind": "save",
+                    "settings": {
+                        "gui": {"threaded_saves": "false"},
+                        "network": {
+                            "server_game_type": "local",
+                            "server_port": str(port),
+                            "client_name": "Mixed510",
+                            "participate_survey": "no",
+                            "client_secret_key": AUTH_SECRET,
+                            "server_password": AUTH_PASSWORD
+                            if side == "server" and authentication == "password"
+                            else "",
+                        },
                     },
                 },
-            },
+            ),
             binaries[role].parent,
             run,
         )
@@ -401,10 +405,7 @@ def check(result: Session, source: Path) -> None:
     result.rng = (dates[0]["random_state[0]"], dates[0]["random_state[1]"])
 
 
-class Stats(TypedDict):
-    chunks: int
-    elements: int
-    masked: dict[str, int]
+Stats = core.Stats
 
 
 @dataclass
@@ -413,7 +414,7 @@ class Result:
     seconds: float = 0
     passed: bool = False
     problems: list[str] = field(default_factory=list)
-    differences: list[dict[str, object]] = field(default_factory=list)
+    differences: list[core.Difference] = field(default_factory=list)
     sessions: list[Session] = field(default_factory=list)
     comparisons: dict[str, Stats] = field(default_factory=dict)
 
