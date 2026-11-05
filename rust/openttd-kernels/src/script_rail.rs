@@ -763,3 +763,29 @@ crate::abi::layouts! {
     "OpenTTDScriptRailDrag" ["script"] => DragPlan { run, track, to };
     "OpenTTDScriptRailSignal" ["script"] => SignalPlan { run, track, signal, cycles };
 }
+
+/// `ScriptRailTypeList`: the rail types a deity or the company may use, in type
+/// order; an invalid company mode records its error and leaves the list empty.
+/// # Safety
+/// `owner` is the live list of the constructing object.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_script_rail_type_list(
+    s: &Services,
+    owner: *mut crate::script_list::List,
+) {
+    if !enforce(
+        deity_or_company_mode_valid(s),
+        ERR_PRECONDITION_INVALID_COMPANY,
+    ) {
+        return;
+    }
+    let owner_company = script_host::active_company();
+    let is_deity = owner_company == crate::company_type::OWNER_DEITY;
+    let types = crate::type_availability::services(s.command.shared);
+    for rt in 0..crate::rail_type::RAILTYPE_END {
+        if is_deity || crate::rail::has_rail_type(types, owner_company, rt) {
+            // SAFETY: caller contract.
+            unsafe { (*owner).add(i64::from(rt), 0) };
+        }
+    }
+}

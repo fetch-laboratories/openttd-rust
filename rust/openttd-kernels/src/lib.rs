@@ -119,6 +119,7 @@ mod road_yapf;
 mod roadveh;
 mod script_host;
 mod script_list;
+mod script_marine;
 mod script_rail;
 mod script_road;
 mod script_tile;

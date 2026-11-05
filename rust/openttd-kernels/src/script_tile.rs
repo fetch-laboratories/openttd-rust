@@ -656,3 +656,71 @@ pub extern "C" fn openttd_rust_script_tile_has_transport_type(
 ) -> u8 {
     u8::from(has_transport_type(s, tile, transport_type))
 }
+
+/// The `ScriptTileList` rectangle and single-tile edits: valid corners only, and
+/// the `OrthogonalTileArea` tiles in row-major order.
+/// # Safety
+/// `owner` is the live list of the calling object.
+unsafe fn edit_tiles(
+    s: &Services,
+    owner: *mut crate::script_list::List,
+    t1: u32,
+    t2: u32,
+    add: bool,
+) {
+    let w = world(s);
+    if !valid(&w, t1) || !valid(&w, t2) {
+        return;
+    }
+    let check = |ok| w.check(ok);
+    let area =
+        crate::tilearea::TileArea::from_corners(w.dimensions, w.types.count(), t1, t2, check);
+    for tile in area.tiles(w.dimensions) {
+        // SAFETY: caller contract.
+        unsafe {
+            if add {
+                (*owner).add(i64::from(tile), 0);
+            } else {
+                (*owner).remove(i64::from(tile));
+            }
+        }
+    }
+}
+
+/// `ScriptTileList::AddRectangle` (`add`) and `RemoveRectangle`.
+/// # Safety
+/// `owner` is the live list of the calling object.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_script_tile_list_rectangle(
+    s: &Services,
+    owner: *mut crate::script_list::List,
+    t1: u32,
+    t2: u32,
+    add: u8,
+) {
+    // SAFETY: caller contract.
+    unsafe { edit_tiles(s, owner, t1, t2, add != 0) };
+}
+
+/// `ScriptTileList::AddTile` (`add`) and `RemoveTile`.
+/// # Safety
+/// `owner` is the live list of the calling object.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_script_tile_list_tile(
+    s: &Services,
+    owner: *mut crate::script_list::List,
+    tile: u32,
+    add: u8,
+) {
+    if !valid(&world(s), tile) {
+        return;
+    }
+    // SAFETY: caller contract.
+    unsafe {
+        if add != 0 {
+            (*owner).add(i64::from(tile), 0);
+        } else {
+            (*owner).remove(i64::from(tile));
+        }
+    }
+}
