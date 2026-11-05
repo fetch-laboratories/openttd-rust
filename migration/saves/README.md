@@ -245,5 +245,40 @@ version, license and archive hashes, dependencies and reproduction commands.
 `community-ai-large-reload` installs these exact packages and compares full
 semantic snapshots and ordinary end states, retaining opaque saved AI data.
 Only optional GLOG history is normalized; no simulation field is patched.
-The same-NewGRF long-game variant remains a limit of #507 until its NewGRF sets
-are fetched by pinned hash (#507, reselected by the user on 2026-11-02).
+Its same-NewGRF counterpart follows.
+
+## Community-built arctic save with NewGRF sets (#507)
+
+`community-newgrf-arctic-2000.sav` repeats that game, with the same seed,
+settings and four AIs, for fifty years instead of twenty, ending in 2000, and
+with OpenGFX+ Trains 0.3.0, Road Vehicles 0.4.1 and Industries 0.3.5 in the
+new-game configuration. The parameters are the ones `newgrf-sets-arctic` uses.
+The unchanged pinned original took 1,833 seconds of wall time to play it. The
+final state holds 1,294 vehicle parts of all four transport types and 60
+industries. Its NGRF chunk records each set's filename, GRF ID
+and MD5. The sibling JSON repeats those identities, with the original revision,
+configuration, command, wall time, end moment and save hash. It also records
+the hash of the complete package manifest, AI and NewGRF rows alike. The fixture
+is distributed under GPLv2-compatible terms. It holds saved AI data and NewGRF
+identities, but no script source or GRF data; the sets remain pinned downloads
+([community inputs](../community-ai/README.md)).
+SHA-256: `658e1406d31a2b6315eeb14da175b50abd1eb8b258d0e65bf99524cb87808d3d`.
+
+```sh
+python3 -m tools.simulation.community_ai fetch
+python3 tools/migration.py build --jobs 3
+python3 -m tools.simulation.community_newgrf generate
+```
+
+`community-newgrf-large-reload` runs by default for two snapshot periods;
+`community-newgrf-large-reload-long` runs two years in soak. Both install the
+same AI and NewGRF packages, remove only optional GLOG, and compare every
+semantic checkpoint, the end states and the complete command and debug logs. The
+checks require the four named AIs to keep their slots, positive recorded revenue
+and deliveries for each AI, vehicle movement across the fleet, and every snapshot
+to keep the saved GRF identities. Income and delivery history includes the input
+save; these checks do not require new revenue or movement from every AI during
+the reload. Candidate Action2 and industry resolver witnesses must be reached,
+including the accepted-cargo
+refusal check on AI deliveries to the sets' industries. Regeneration need not
+reproduce the bytes; the canonical comparison masks the random save ID and GLOG.

@@ -83,6 +83,11 @@ def install(scenario: Scenario, run_dir: Path) -> None:
     if not uses_ai(scenario):
         return
     shutil.copytree(scenario["scenario_ai"], run_dir / "ai/newgrf-sets")
+    install_sets(run_dir)
+
+
+def install_sets(run_dir: Path) -> None:
+    """Place the pinned set archives in both builds' personal NewGRF folders."""
     paths = community_ai.fetch()
     # OpenTTD scans complete content archives, retaining their packaged notices.
     for personal in (
