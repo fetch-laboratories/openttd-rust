@@ -1132,7 +1132,7 @@ impl<'a> World<'a> {
                 v.vehicle().write_z(0);
                 (v.vehicle()).write_status((v.vehicle()).status() | VS_SHADOW);
             }
-        };
+        }
         (v.vehicle()).write_direction(dir);
         (v.vehicle()).write_tile(self.map().tile_virt_xy(x as u32, y as u32));
         crate::raw_field::write_field!(v.handle, subtype, subtype);
