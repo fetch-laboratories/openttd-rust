@@ -56,7 +56,7 @@ struct FollowerFixture {
 		shared.may_have_road = [](uint32_t) noexcept { return true; };
 		movement.native_assert = [](bool okay) noexcept { if (!okay) std::abort(); };
 		movement.shared = &shared; movement.vehicle = &vehicle; movement.train = &train;
-		movement.rail_map = &rail; movement.rail = &ground;
+		movement.rail_map = &rail;
 
 		vehicle.train_handle = [](OpenTTDVehicle *v) noexcept -> OpenTTDTrainHandle { return {v, active->state.get()}; };
 		movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
@@ -65,9 +65,6 @@ struct FollowerFixture {
 		order_state.current.max_speed = 40;
 		orders.vehicle = [](void *) noexcept { return &active->order_state; };
 		movement.orders = &orders;
-		movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
-		movement.water_type = [](uint32_t t) noexcept { return static_cast<WaterTileType>(active->tiles.base[t].m5 >> 4); };
-		movement.tile_flat = [](uint32_t) noexcept { return true; };
 		ground.tracks = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m5 & 63); };
 		rail.rail_tile_type = [](uint32_t t) noexcept { return static_cast<RailTileType>(active->tiles.base[t].m5 >> 6); };
 		rail.is_rail_depot = [](uint32_t t) noexcept { return active->tiles.base[t].m5 >> 6 == 3; };

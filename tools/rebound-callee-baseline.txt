@@ -5,10 +5,7 @@ forwarded | src/industry_cmd.cpp | magic_bulldozer = GetRustTownAuthorityService
 forwarded | src/industry_cmd.cpp | serve_neutral = GetRustSharedServices().station_serve_neutral
 forwarded | src/industry_cmd.cpp | set_frame = GetRustSharedServices().tile_animation_set_frame
 forwarded | src/landscape.cpp | exchange_generating = GetRustTownFoundingServices().exchange_generating
-forwarded | src/landscape.cpp | lock_direction = GetRustWaterCommandServices().lock_direction
 forwarded | src/landscape.cpp | owned_land = GetRustRailGroundServices().owned_land
-forwarded | src/landscape.cpp | tile_flat = GetRustTownFoundingServices().flat
-forwarded | src/landscape.cpp | water_type = GetRustWaterCommandServices().water_type
 forwarded | src/newgrf_airport.cpp | engine_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
 forwarded | src/object_cmd.cpp | bulldozer = GetRustTownAuthorityServices().bulldozer
 forwarded | src/object_cmd.cpp | industry_tiles = GetRustIndustryLoopServices().tiles
@@ -59,8 +56,6 @@ rebound | IndustryCommandDeity | src/industry_cmd.cpp | deity | 2
 rebound | LiveGraphOwner | src/linkgraph/linkgraphschedule.cpp | graph_owner
 rebound | LiveGraphOwner | src/rust/services.cpp | owner
 rebound | LiveGraphOwner | src/timer/timer_game_common.cpp | graph_owner
-rebound | MapSvcRoadIsLevelCrossing | src/landscape.cpp | road_crossing
-rebound | MapSvcRoadIsLevelCrossing | src/pbs.cpp | is_crossing
 rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame
 rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
@@ -192,8 +187,6 @@ rebound | RustIsLocalCompany | src/rust/fleet_transaction_services.hpp | local
 rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
 rebound | RustIsRailStation | src/rust/services.cpp | is_rail_station
 rebound | RustIsRailStation | src/rust/vehicle_effect_services.hpp | station
-rebound | RustIsTunnel | src/landscape.cpp | is_tunnel
-rebound | RustIsTunnel | src/tunnelbridge_cmd.cpp | is_tunnel
 rebound | RustLinkGraphGet | src/linkgraph/linkgraphschedule.cpp | graph_get
 rebound | RustLinkGraphGet | src/rust/services.cpp | get
 rebound | RustLinkGraphNext | src/linkgraph/linkgraphschedule.cpp | next_graph

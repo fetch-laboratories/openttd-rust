@@ -22,7 +22,6 @@
     clippy::cast_sign_loss
 )]
 use crate::direction_func::diag_dir_to_axis;
-use crate::ground::{RailServices, RoadServices};
 use crate::map_func::World;
 use crate::rail_map::{
     RAIL_GROUND_HALF_TILE_WATER, RAIL_TILE_DEPOT, RAIL_TILE_NORMAL, RAIL_TILE_SIGNALS,
@@ -128,8 +127,8 @@ impl std::ops::Deref for Context<'_> {
 impl Context<'_> {
     #[inline]
     fn has_tile_road_type(&self, tile: u32, kind: crate::services::RoadTramType) -> bool {
-        crate::road_map::has_tile_road_type(&self.world.types, tile, kind)
-            .unwrap_or_else(|| (self.s.has_tile_road_type)(tile, kind))
+        self.world
+            .asserted(|m| crate::road_map::has_tile_road_type(m, tile, kind))
     }
 }
 
@@ -160,8 +159,6 @@ pub struct MovementVehicle {
 pub struct MovementServices {
     pub shared: *const Services,
     pub orders: *const crate::orders::Leaves,
-    pub rail: *const RailServices,
-    pub road: *const RoadServices,
     pub rail_map: *const crate::services::RailMapServices,
     pub train: *const crate::train::Leaves,
     pub vehicle: *const crate::vehicle::VehicleServices,
@@ -174,20 +171,7 @@ pub struct MovementServices {
     pub train_engine_class: extern "C" fn(crate::vehicle::VehicleRef) -> u8,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
-    pub plain_rail: extern "C" fn(u32) -> bool,
-    pub is_tunnel: extern "C" fn(u32) -> bool,
-    pub rail_station: extern "C" fn(u32) -> bool,
-    pub road_crossing: extern "C" fn(u32) -> bool,
-    pub tile_flat: extern "C" fn(u32) -> bool,
     pub add_by_diag_dir: extern "C" fn(u32, u8) -> u32,
-    pub rail_depot_tile: extern "C" fn(u32) -> bool,
-    pub has_tile_road_type: extern "C" fn(u32, crate::services::RoadTramType) -> bool,
-    pub oneway_signal: extern "C" fn(u32, u8) -> bool,
-    pub crossing_barred: extern "C" fn(u32) -> bool,
-    pub buoy: extern "C" fn(u32) -> bool,
-    pub water_type: extern "C" fn(u32) -> crate::water_cmd::WaterTileType,
-    pub lock_direction: extern "C" fn(u32) -> crate::services::DiagDirection,
-    pub ship_depot_axis: extern "C" fn(u32) -> crate::services::Axis,
     pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
@@ -214,9 +198,6 @@ impl MovementServices {
 
     nested_tables! {
         pub(crate) fn shared -> Services;
-        fn rail -> RailServices;
-        fn road -> RoadServices;
-        fn rail_map -> crate::services::RailMapServices;
         pub(crate) fn train -> crate::train::Leaves;
         pub(crate) fn vehicle -> crate::vehicle::VehicleServices;
         pub(crate) fn tunnel_bridge -> crate::tunnelbridge_cmd::TunnelBridgeServices;
@@ -229,8 +210,8 @@ impl Context<'_> {
         let kind = self.world.kind(tile);
         match kind {
             MP_RAILWAY => {
-                if (self.plain_rail)(tile) {
-                    rail_foundation(slope, (self.rail().tracks)(tile).0, |ok| {
+                if self.world.is_plain_rail(tile) {
+                    rail_foundation(slope, self.world.tracks(tile), |ok| {
                         (self.native_assert)(ok);
                     })
                 } else {
@@ -239,7 +220,7 @@ impl Context<'_> {
             }
             MP_ROAD => {
                 if self.world.is_normal_road(tile) {
-                    road_foundation(slope, (self.road().all_bits)(tile).0, |ok| {
+                    road_foundation(slope, self.world.all_road_bits(tile), |ok| {
                         (self.native_assert)(ok);
                     })
                 } else {
@@ -248,12 +229,12 @@ impl Context<'_> {
             }
             MP_STATION => flattening_foundation(slope),
             MP_TUNNELBRIDGE => {
-                if (self.is_tunnel)(tile) {
+                if self.world.tunnel(tile) {
                     FOUNDATION_NONE
                 } else {
                     crate::bridge::get_bridge_foundation(
                         slope,
-                        diag_dir_to_axis((self.shared().tunnel_bridge_direction)(tile), |ok| {
+                        diag_dir_to_axis(self.world.tunnel_bridge_dir(tile), |ok| {
                             (self.native_assert)(ok);
                         }),
                     )
@@ -314,7 +295,7 @@ impl Context<'_> {
     fn pixel_z<const GROUND_VEHICLE: bool>(&self, tile: u32, x: u32, y: u32, kind: u8) -> i32 {
         w::hit(w::MOVE_PIXEL_Z);
         if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
-            || (kind == MP_RAILWAY && !(self.plain_rail)(tile))
+            || (kind == MP_RAILWAY && !self.world.is_plain_rail(tile))
             || (kind == MP_ROAD && !self.world.is_normal_road(tile))
             || (kind == MP_OBJECT && !(self.owned_land)(tile))
         {
@@ -335,11 +316,11 @@ impl Context<'_> {
                 return p.z;
             }
             let f = if kind == MP_RAILWAY {
-                rail_foundation(p.slope.0, (self.rail().tracks)(tile).0, |ok| {
+                rail_foundation(p.slope.0, self.world.tracks(tile), |ok| {
                     (self.native_assert)(ok);
                 })
             } else {
-                road_foundation(p.slope.0, (self.road().all_bits)(tile).0, |ok| {
+                road_foundation(p.slope.0, self.world.all_road_bits(tile), |ok| {
                     (self.native_assert)(ok);
                 })
             };
@@ -350,12 +331,12 @@ impl Context<'_> {
             );
             p.z = p.z.wrapping_add(z.cast_signed());
         } else if kind == MP_TUNNELBRIDGE {
-            if (self.is_tunnel)(tile) {
+            if self.world.tunnel(tile) {
                 if GROUND_VEHICLE {
                     return p.z;
                 }
             } else {
-                let dir = (self.shared().tunnel_bridge_direction)(tile);
+                let dir = self.world.tunnel_bridge_dir(tile);
                 let z = crate::landscape::apply_pixel_foundation_to_slope(
                     self.shared(),
                     Foundation(crate::bridge::get_bridge_foundation(
@@ -446,11 +427,10 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation_slope(
     tile: u32,
 ) -> FoundationSlope {
     let s = unsafe { &*s };
-    let p = (s.shared().tile_slope_z)(tile);
-    let a =
-        (s.shared().apply_foundation)(Foundation(s.foundation(tile, p.slope.0)), Slope(p.slope.0));
+    let (slope, z) = s.with_context(|c| c.world.tile_slope_z(tile));
+    let a = (s.shared().apply_foundation)(Foundation(s.foundation(tile, slope)), Slope(slope));
     FoundationSlope {
-        z: p.z.wrapping_add(a.z),
+        z: z.wrapping_add(a.z),
         slope: a.slope,
     }
 }
@@ -649,12 +629,12 @@ impl Context<'_> {
             MP_RAILWAY => {
                 w::hit(w::MOVE_TRACK_RAIL);
                 if mode == TRANSPORT_WATER
-                    && (self.plain_rail)(tile)
-                    && (self.rail().ground)(tile).0 == RAIL_GROUND_HALF_TILE_WATER
-                    && is_slope_with_one_corner_raised((self.shared().tile_slope)(tile))
+                    && self.world.is_plain_rail(tile)
+                    && self.world.rail_ground(tile) == RAIL_GROUND_HALF_TILE_WATER
+                    && is_slope_with_one_corner_raised(self.world.tile_slope(tile))
                 {
                     w::hit(w::MOVE_HALF_WATER);
-                    bits = match (self.rail().tracks)(tile).0 {
+                    bits = match self.world.tracks(tile) {
                         TRACK_BIT_UPPER => TRACK_BIT_LOWER,
                         TRACK_BIT_LOWER => TRACK_BIT_UPPER,
                         TRACK_BIT_LEFT => TRACK_BIT_RIGHT,
@@ -666,19 +646,19 @@ impl Context<'_> {
                 if mode != TRANSPORT_RAIL {
                     return 0;
                 }
-                match (self.rail_map().rail_tile_type)(tile).0 {
-                    RAIL_TILE_NORMAL => bits = (self.rail().tracks)(tile).0,
+                match self.world.rail_tile_type(tile) {
+                    RAIL_TILE_NORMAL => bits = self.world.tracks(tile),
                     RAIL_TILE_SIGNALS => {
-                        bits = (self.rail().tracks)(tile).0;
+                        bits = self.world.tracks(tile);
                         w::hit(w::MOVE_SIGNAL_DIRECTIONS);
-                        let a = (self.rail_map().present_signals)(tile) as u8;
-                        let mut b = (self.rail_map().signal_states)(tile) & u32::from(a);
-                        if !(self.oneway_signal)(tile, TRACK_UPPER)
+                        let a = self.world.present_signals(tile);
+                        let mut b = u32::from(self.world.signal_states(tile) & a);
+                        if !self.world.oneway_signal(tile, TRACK_UPPER)
                             || a & crate::signal_func::signal_on_track(TRACK_UPPER) == 0
                         {
                             b |= u32::from(!a & crate::signal_func::signal_on_track(TRACK_UPPER));
                         }
-                        if !(self.oneway_signal)(tile, TRACK_LOWER)
+                        if !self.world.oneway_signal(tile, TRACK_LOWER)
                             || a & crate::signal_func::signal_on_track(TRACK_LOWER) == 0
                         {
                             b |= u32::from(!a & crate::signal_func::signal_on_track(TRACK_LOWER));
@@ -703,7 +683,7 @@ impl Context<'_> {
                         }
                     }
                     RAIL_TILE_DEPOT => {
-                        let dir = (self.rail_map().rail_depot_direction)(tile).0;
+                        let dir = self.world.rail_depot_dir(tile);
                         if side == INVALID_DIAGDIR || side == dir {
                             bits = diag_dir_to_diag_track_bits(dir, |ok| (self.native_assert)(ok));
                         }
@@ -715,8 +695,8 @@ impl Context<'_> {
                 w::hit(w::MOVE_TRACK_ROAD);
                 match mode {
                     TRANSPORT_RAIL => {
-                        if (self.road_crossing)(tile) {
-                            bits = (self.rail_map().crossing_rail_bits)(tile).0;
+                        if self.world.level_crossing(tile) {
+                            bits = self.world.crossing_rail_bits(tile);
                         }
                     }
                     TRANSPORT_ROAD => {
@@ -771,14 +751,14 @@ impl Context<'_> {
                                 return combine_track_status(dirs, 0);
                             }
                             ROAD_TILE_CROSSING => {
-                                let axis = (self.rail_map().crossing_road_axis)(tile).0;
+                                let axis = self.world.crossing_road_axis(tile);
                                 if side != INVALID_DIAGDIR
                                     && axis != diag_dir_to_axis(side, |ok| (self.native_assert)(ok))
                                 {
                                     return 0;
                                 }
                                 bits = axis_to_track_bits(axis, |ok| (self.native_assert)(ok));
-                                if (self.crossing_barred)(tile) {
+                                if self.world.crossing_barred(tile) {
                                     w::hit(w::MOVE_CROSSING_BARRED);
                                     red = track_bits_to_trackdir_bits(bits);
                                     // Already-owned train query executes directly in Rust.
@@ -807,9 +787,10 @@ impl Context<'_> {
                                                 TRACKDIR_BIT_X_NE | TRACKDIR_BIT_Y_NW,
                                             ),
                                         ] {
+                                            // `TileAdd` keeps its native `_DEBUG` coordinate assertions.
                                             let t = (self.add_by_diag_dir)(tile, dir);
-                                            if (self.shared().is_level_crossing)(t)
-                                                && (self.crossing_barred)(t)
+                                            if self.world.level_crossing_tile(t)
+                                                && self.world.crossing_barred(t)
                                             {
                                                 w::hit(w::MOVE_CROSSING_ESCAPE);
                                                 red &= mask;
@@ -819,7 +800,7 @@ impl Context<'_> {
                                 }
                             }
                             _ => {
-                                let dir = (self.shared().road_depot_direction)(tile);
+                                let dir = self.world.road_depot_dir(tile);
                                 if side == INVALID_DIAGDIR || side == dir {
                                     bits = diag_dir_to_diag_track_bits(dir, |ok| {
                                         (self.native_assert)(ok);
@@ -835,36 +816,34 @@ impl Context<'_> {
                 w::hit(w::MOVE_TRACK_STATION);
                 match mode {
                     TRANSPORT_RAIL => {
-                        if (self.rail_map().has_station_rail)(tile)
-                            && !(self.rail_map().station_blocked)(tile)
-                        {
+                        if self.world.has_station_rail(tile) && !self.world.station_blocked(tile) {
                             bits = crate::track_func::track_to_track_bits(
-                                (self.rail_map().station_track)(tile).0,
+                                self.world.station_track(tile),
                                 |ok| (self.native_assert)(ok),
                             );
                         }
                     }
                     TRANSPORT_WATER => {
-                        if (self.buoy)(tile) {
+                        if self.world.buoy(tile) {
                             bits = self.water_edges(tile, TRACK_BIT_ALL);
                         }
                     }
                     TRANSPORT_ROAD => {
-                        if (self.shared().is_any_road_stop)(tile) {
+                        if self.world.any_road_stop_tile(tile) {
                             if !self
                                 .has_tile_road_type(tile, crate::services::RoadTramType(sub != 0))
                             {
                                 return 0;
                             }
-                            if (self.shared().is_bay_stop)(tile) {
-                                let dir = (self.shared().bay_stop_direction)(tile);
+                            if self.world.bay_stop(tile) {
+                                let dir = self.world.bay_dir(tile);
                                 if side == INVALID_DIAGDIR || side == dir {
                                     bits = diag_dir_to_diag_track_bits(dir, |ok| {
                                         (self.native_assert)(ok);
                                     });
                                 }
                             } else {
-                                let axis = (self.shared().drive_through_axis)(tile);
+                                let axis = self.world.drive_through_axis(tile);
                                 if side == INVALID_DIAGDIR
                                     || axis == diag_dir_to_axis(side, |ok| (self.native_assert)(ok))
                                 {
@@ -881,11 +860,9 @@ impl Context<'_> {
                 if mode != TRANSPORT_WATER {
                     return 0;
                 }
-                bits = match crate::water_map::get_water_tile_type(&self.world.types, tile)
-                    .unwrap_or_else(|| (self.water_type)(tile).0)
-                {
+                bits = match self.world.water_tile_type(tile) {
                     0 => {
-                        if (self.tile_flat)(tile) {
+                        if self.world.tile_flat(tile) {
                             TRACK_BIT_ALL
                         } else {
                             TRACK_BIT_NONE
@@ -910,17 +887,17 @@ impl Context<'_> {
                             TRACK_BIT_NONE,
                             TRACK_BIT_NONE,
                             TRACK_BIT_NONE,
-                        ][usize::from((self.shared().tile_slope)(tile) & 15)]
+                        ][usize::from(self.world.tile_slope(tile) & 15)]
                     }
                     2 => {
                         w::hit(w::MOVE_LOCK);
-                        diag_dir_to_diag_track_bits((self.lock_direction)(tile).0, |ok| {
+                        diag_dir_to_diag_track_bits(self.world.lock_direction(tile), |ok| {
                             (self.native_assert)(ok);
                         })
                     }
                     3 => {
                         w::hit(w::MOVE_SHIP_DEPOT);
-                        axis_to_track_bits((self.ship_depot_axis)(tile).0, |ok| {
+                        axis_to_track_bits(self.world.ship_depot_axis(tile), |ok| {
                             (self.native_assert)(ok);
                         })
                     }
@@ -930,14 +907,14 @@ impl Context<'_> {
             }
             MP_TUNNELBRIDGE => {
                 w::hit(w::MOVE_TRACK_WORMHOLE);
-                let transport = (self.shared().tunnel_transport)(tile);
+                let transport = self.world.tunnel_bridge_transport(tile);
                 if transport != mode
                     || (transport == TRANSPORT_ROAD
                         && !self.has_tile_road_type(tile, crate::services::RoadTramType(sub != 0)))
                 {
                     return 0;
                 }
-                let dir = (self.shared().tunnel_bridge_direction)(tile);
+                let dir = self.world.tunnel_bridge_dir(tile);
                 if side != INVALID_DIAGDIR
                     && side != reverse_diag_dir(dir, |ok| (self.native_assert)(ok))
                 {
@@ -997,10 +974,11 @@ impl MovementServices {
         x: i32,
         y: i32,
     ) -> u8 {
-        if h.kind.0 != VEH_TRAIN || !(self.rail_depot_tile)(tile) {
+        let world = World::new(self.shared());
+        if h.kind.0 != VEH_TRAIN || !world.rail_depot(tile) {
             return 0;
         }
-        let dir = (self.rail_map().rail_depot_direction)(tile).0;
+        let dir = world.rail_depot_dir(tile);
         let fract = ((x & 15) + ((y & 15) << 4)) as u8;
         if FRACT_BEHIND[usize::from(dir)] == fract {
             return CANNOT_ENTER;
@@ -1046,11 +1024,12 @@ impl MovementServices {
         0
     }
     unsafe fn enter_road(&self, h: &MovementVehicle, v: VehicleRef, tile: u32) -> u8 {
-        if (self.shared().road_tile_kind)(tile).0 != ROAD_TILE_DEPOT || h.kind.0 != VEH_ROAD {
+        let world = World::new(self.shared());
+        if world.road_tile_type(tile).0 != ROAD_TILE_DEPOT || h.kind.0 != VEH_ROAD {
             return 0;
         }
         if unsafe { crate::road::get_frame(h.road) } == RVC_DEPOT_STOP_FRAME {
-            let dir = (self.shared().road_depot_direction)(tile);
+            let dir = world.road_depot_dir(tile);
             if ROAD_ENTER_DEPOT[usize::from(dir)] == unsafe { crate::road::get_state(h.road) } {
                 unsafe {
                     w::hit(w::MOVE_ROAD_DEPOT_ENTER_0 + usize::from(dir));
@@ -1081,7 +1060,7 @@ impl MovementServices {
             if !should_stop(self.shared(), v, station) {
                 return 0;
             }
-            if !(self.rail_station)(tile)
+            if !World::new(self.shared()).is_rail_station(tile)
                 || !crate::vehicle_base::is_front_engine(
                     crate::vehicle_base::is_ground_vehicle(h.kind.0),
                     v.subtype(),
@@ -1179,7 +1158,8 @@ impl MovementServices {
         if z.wrapping_abs() > 2 {
             return CANNOT_ENTER;
         }
-        let dir = (self.shared().tunnel_bridge_direction)(tile);
+        let world = World::new(self.shared());
+        let dir = world.tunnel_bridge_dir(tile);
         let vdir = dir_to_diag_dir(direction, |ok| (self.native_assert)(ok));
         let pos = (if diag_dir_to_axis(vdir, |ok| (self.native_assert)(ok)) == AXIS_X {
             x
@@ -1192,7 +1172,7 @@ impl MovementServices {
         } else {
             pos
         };
-        if (self.is_tunnel)(tile) {
+        if world.tunnel(tile) {
             if h.kind.0 == VEH_TRAIN {
                 let track = h.train.track();
                 if track != TRACK_BIT_WORMHOLE && dir == vdir {
@@ -1399,7 +1379,7 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
     let tile = v.vehicle().tile();
     let x = v.vehicle().x();
     let y = v.vehicle().y();
-    let dir = (s.rail_map().rail_depot_direction)(tile).0;
+    let dir = World::new(s.shared()).rail_depot_dir(tile);
     let length = crate::train::next_offset(v);
     let enter = FRACT_ENTER[usize::from(dir)];
     match dir {
@@ -1521,8 +1501,6 @@ crate::abi::layouts! {
     "OpenTTDMovementServices" ["landscape"] => MovementServices {
         shared,
         orders,
-        rail,
-        road,
         rail_map,
         train,
         vehicle,
@@ -1535,20 +1513,7 @@ crate::abi::layouts! {
         train_engine_class,
         depot_invalidate,
         native_assert,
-        plain_rail,
-        is_tunnel,
-        rail_station,
-        road_crossing,
-        tile_flat,
         add_by_diag_dir,
-        rail_depot_tile,
-        has_tile_road_type,
-        oneway_signal,
-        crossing_barred,
-        buoy,
-        water_type,
-        lock_direction,
-        ship_depot_axis,
         owned_land,
         object_foundation,
         house_foundation,

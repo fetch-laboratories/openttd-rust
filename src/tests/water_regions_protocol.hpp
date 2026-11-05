@@ -35,7 +35,6 @@ template <typename Check> void Run(Check check)
 	/* The cache's 32 by 32 map has a readable void southern guard for follower probes. */
 	FollowerFixture map{32, 64};
 	for (uint32_t tile = static_cast<uint32_t>(water.size()); tile < map.tiles.size; ++tile) map.Tile(tile, MP_VOID);
-	map.movement.tile_flat = [](uint32_t) noexcept { ++tracks_calls; return true; };
 	auto &world = map.shared;
 	world.tile_type = WaterType;
 	const OpenTTDWaterLeaves leaves{.shared = &world, .aqueduct = Aqueduct, .debug = WaterProbeDebug};

@@ -190,6 +190,23 @@ impl crate::map_func::World<'_> {
                 .0
                 == crate::station_type::STATION_RAIL
     }
+    /// `IsRailStation`, with `GetStationType`'s tile-type assertion.
+    pub(crate) fn is_rail_station(&self, t: u32) -> bool {
+        self.asserted(|m| get_station_type(m, TileIndex(t))).0 == crate::station_type::STATION_RAIL
+    }
+    /// `IsBuoy`, with `GetStationType`'s tile-type assertion.
+    pub(crate) fn buoy(&self, t: u32) -> bool {
+        self.asserted(|m| get_station_type(m, TileIndex(t))).0 == crate::station_type::BUOY
+    }
+    /// `IsAnyRoadStopTile`.
+    pub(crate) fn any_road_stop_tile(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION && self.asserted(|m| is_any_road_stop(m, TileIndex(t)))
+    }
+    /// `GetRailStationTrack`.
+    pub(crate) fn station_track(&self, t: u32) -> u8 {
+        let axis = crate::services::Axis(self.station_axis(t));
+        crate::track_func::axis_to_track(axis, |ok| self.check(ok)).0
+    }
     /// `IsDriveThroughStopTile`.
     pub(crate) fn drive_through_stop_tile(&self, t: u32) -> bool {
         self.kind(t) == MP_STATION

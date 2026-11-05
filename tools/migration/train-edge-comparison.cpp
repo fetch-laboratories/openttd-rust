@@ -109,7 +109,6 @@ static void RustReverse(int left, int right)
 		events.push_back(0x300 + v->id);
 		return OpenTTDMovementVehicle{Handle(v), nullptr, nullptr, VehicleType{0}};
 	};
-	movement.rail_depot_tile = [](uint32_t) noexcept { return false; };
 	openttd_rust_train_reverse_swap(Handle(trains), left, right, &leaves, &shared);
 }
 static uint32_t random_state = 130;

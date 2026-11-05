@@ -28,8 +28,6 @@ struct OpenTTDMovementVehicle { OpenTTDTrainHandle train; OpenTTDRoadState *road
 struct OpenTTDMovementServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDOrdersLeaves *orders;
-	const OpenTTDRailServices *rail;
-	const OpenTTDRoadGroundServices *road;
 	const OpenTTDRailMapServices *rail_map;
 	const OpenTTDTrainServices *train;
 	const OpenTTDVehicleServices *vehicle;
@@ -42,20 +40,7 @@ struct OpenTTDMovementServices {
 	uint8_t (*train_engine_class)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_engine_class);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);
-	bool (*plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(plain_rail);
-	bool (*is_tunnel)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_tunnel);
-	bool (*rail_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_station);
-	bool (*road_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_crossing);
-	bool (*tile_flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_flat);
 	uint32_t (*add_by_diag_dir)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_by_diag_dir);
-	bool (*rail_depot_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_depot_tile);
-	bool (*has_tile_road_type)(uint32_t, RoadTramType) noexcept OPENTTD_SERVICE_DEFAULT(has_tile_road_type);
-	bool (*oneway_signal)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(oneway_signal);
-	bool (*crossing_barred)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_barred);
-	bool (*buoy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(buoy);
-	WaterTileType (*water_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_type);
-	DiagDirection (*lock_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_direction);
-	Axis (*ship_depot_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_depot_axis);
 	bool (*owned_land)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_land);
 	OpenTTDMovementObjectFoundation (*object_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_foundation);
 	OpenTTDMovementFoundation (*house_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_foundation);

@@ -203,6 +203,23 @@ pub(crate) fn get_tile_pixel_slope_outside_map(
     ))
 }
 
+impl TileTypeAccess {
+    /// Run a header helper whose `None` is a failed precondition. The failure
+    /// retries with each source assertion dispatched to the native handler.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn asserted<T>(
+        &self,
+        shared: &crate::services::Services,
+        read: impl Fn(&TileTypeAccess) -> Option<T>,
+    ) -> T {
+        read(self).unwrap_or_else(|| {
+            self.with_native_assert(crate::movement::table(shared).native_assert, read)
+                .expect("live map scalar")
+        })
+    }
+}
+
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
@@ -229,11 +246,9 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
-        read(&self.types.without_native_assert()).unwrap_or_else(|| {
-            self.types
-                .with_native_assert(crate::movement::table(self.shared).native_assert, read)
-                .expect("live map scalar")
-        })
+        self.types
+            .without_native_assert()
+            .asserted(self.shared, read)
     }
     /// `GetTilePixelSlope`.
     #[allow(clippy::inline_always)]
@@ -248,6 +263,26 @@ impl crate::map_func::World<'_> {
     pub(crate) fn tile_pixel_slope_outside_map(&self, x: i32, y: i32) -> (u8, i32) {
         let (width, height) = self.size();
         self.asserted(|m| get_tile_pixel_slope_outside_map(m, x, y, width, height))
+    }
+    /// `GetTileSlopeZ`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn tile_slope_z(&self, t: u32) -> (u8, i32) {
+        let (x, y) = self.size();
+        self.asserted(|m| get_tile_slope_z(m, t, x, y))
+    }
+    /// `GetTileSlope`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn tile_slope(&self, t: u32) -> u8 {
+        self.tile_slope_z(t).0
+    }
+    /// `IsTileFlat` without the height output.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn tile_flat(&self, t: u32) -> bool {
+        let (x, y) = self.size();
+        self.asserted(|m| is_tile_flat(m, t, x, y))
     }
     /// `GetTileMaxPixelZ`.
     #[allow(clippy::inline_always)]
