@@ -87,8 +87,6 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 
 /** Shared native field definitions, also used by bundled observations. */
 /* Typed signature adapter for synchronous pathfinder vehicle contexts. */
-template <typename Result, typename Shell, auto Query>
-inline Result RustVehicleContextQuery(const void *context) noexcept { return Query(RustVehicle(static_cast<const Shell *>(context))); }
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */
@@ -102,20 +100,17 @@ inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 /** Chain, subtype and unit leaves shared by consist transactions and controllers. */
 inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
 inline uint8_t RustVehicleDirectionTowards(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept { return GetDirectionTowards(VehicleOf(v), x, y); }
-inline Vehicle *RustVehicleLastEnginePart(Vehicle *v) noexcept { return v->GetLastEnginePart(); }
 inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcept { v->SetServiceInterval(interval); }
 inline void RustVehicleSetServiceIntervalIsPercent(Vehicle *v, bool percent) noexcept { v->SetServiceIntervalIsPercent(percent); }
 inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->Record().subtype = subtype; }
 inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
-inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine; }
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 inline OpenTTDVehicleTileLinks *RustVehicleTileLinks(Vehicle *v) noexcept { return &v->tile_links; }
 inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }
 inline uint8_t RustVehicleDay(const Vehicle *v) noexcept { return v->Record().day_counter; }
 inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->GetTile().base(); }
-inline uint32_t RustVehicleDestTile(const Vehicle *v) noexcept { return v->GetDestTile().base(); }
 inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->current_order.GetType(); }
 inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }
 inline OrderUnloadType RustVehicleOrderUnloadType(const Vehicle *v) noexcept { return v->current_order.GetUnloadType(); }
@@ -144,18 +139,13 @@ bool RustTrainMultiheaded(const Vehicle *v) noexcept;
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->GetOwner().base(); }
-inline const uint8_t *RustVehicleDirectionAddress(const Vehicle *v) noexcept { return &v->Record().direction; }
 inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return v->GetDirection(); }
-inline uint8_t RustVehicleProgress(const Vehicle *v) noexcept { return v->Record().progress; }
-inline void RustWriteVehicleProgress(Vehicle *v, uint8_t progress) noexcept { v->Record().progress = progress; }
 inline const uint8_t *RustVehicleTickAddress(const Vehicle *v) noexcept { return &v->Record().tick_counter; }
 inline uint8_t RustVehicleTick(const Vehicle *v) noexcept { return *RustVehicleTickAddress(v); }
 inline const uint8_t *RustVehicleStatusAddress(const Vehicle *v) noexcept { return &v->Record().vehstatus; }
 inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return *RustVehicleStatusAddress(v); }
 inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->SetVehStatus(status); }
-inline void RustVehicleSetUnclickable(Vehicle *v) noexcept { RustWriteVehicleStatus(v, VehState::Unclickable); }
 inline void RustWriteVehicleTile(Vehicle *v, TileIndex tile) noexcept { v->SetTile(tile); }
-inline void RustWriteVehicleTick(Vehicle *v, uint8_t tick) noexcept { v->Record().tick_counter = tick; }
 inline uint8_t RustVehicleBreakdownDelay(const Vehicle *v) noexcept { return v->breakdown_delay; }
 inline uint8_t RustVehicleBreakdownChance(const Vehicle *v) noexcept { return v->breakdown_chance; }
 inline uint8_t RustVehicleBreakdownsSinceService(const Vehicle *v) noexcept { return v->breakdowns_since_last_service; }
@@ -165,7 +155,6 @@ inline TimerGameCalendar::Date RustVehicleAge(const Vehicle *v) noexcept { retur
 inline int32_t RustVehicleAgeValue(const Vehicle *v) noexcept { return RustVehicleAge(v).base(); }
 inline void RustWriteVehicleAge(Vehicle *v, int32_t age) noexcept { v->age = TimerGameCalendar::Date{age}; }
 inline void RustVehicleWriteBreakdown(Vehicle *v, uint8_t counter, uint8_t delay) noexcept { v->Record().breakdown_ctr = counter; v->breakdown_delay = delay; }
-inline bool RustVehicleIsGround(const Vehicle *v) noexcept { return v->IsGroundVehicle(); }
 inline TimerGameCalendar::Date RustVehicleMaxAge(const Vehicle *v) noexcept { return v->max_age; }
 inline void RustVehicleSetMaxAge(OpenTTDVehicle *v, int32_t days) noexcept { VehicleOf(v)->max_age = TimerGameCalendar::Date{days}; }
 inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept { return v->economy_age; }
@@ -218,8 +207,6 @@ inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticul
 inline const uint8_t *RustVehicleSubtypeAddress(const Vehicle *v) noexcept { return &v->Record().subtype; }
 inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return *RustVehicleSubtypeAddress(v); }
 inline bool RustVehicleFront(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
-inline auto *RustVehicleVisualCache(const Vehicle *v) noexcept { return &v->vcache.cached_vis_effect; }
-inline uint8_t RustVehicleVisualEffect(const Vehicle *v) noexcept { return *RustVehicleVisualCache(v); }
 inline const int32_t *RustVehicleXAddress(const Vehicle *v) noexcept { return &v->Record().x_pos; }
 inline int32_t RustVehicleX(const Vehicle *v) noexcept { return *RustVehicleXAddress(v); }
 inline const int32_t *RustVehicleYAddress(const Vehicle *v) noexcept { return &v->Record().y_pos; }
@@ -232,12 +219,6 @@ inline void RustWriteVehicleZ(Vehicle *v, int32_t z) noexcept { v->Record().z_po
 inline const uint16_t *RustVehicleSpeedAddress(const Vehicle *v) noexcept { return &v->Record().cur_speed; }
 inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return *RustVehicleSpeedAddress(v); }
 inline uint8_t RustVehicleSubspeed(const Vehicle *v) noexcept { return v->Record().subspeed; }
-inline uint8_t RustVehicleAcceleration(const Vehicle *v) noexcept { return v->Record().acceleration; }
-inline uint16_t RustVehicleMaxSpeed(const Vehicle *v) noexcept { return v->Record().cached_max_speed; }
-inline const uint8_t *RustVehicleRunningAddress(const Vehicle *v) noexcept { return &v->Record().running_ticks; }
-inline uint8_t RustVehicleRunning(const Vehicle *v) noexcept { return *RustVehicleRunningAddress(v); }
-inline const int32_t *RustVehicleOrderTimeAddress(const Vehicle *v) noexcept { return &v->current_order_time; }
-inline int32_t RustVehicleOrderTime(const Vehicle *v) noexcept { return *RustVehicleOrderTimeAddress(v); }
 inline int64_t RustVehicleProfit(const Vehicle *v) noexcept { return v->profit_this_year; }
 inline const uint8_t *RustVehicleVehicleTypeAddress(const Vehicle *v) noexcept { return &v->Record().type; }
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return v->GetType(); }
@@ -285,12 +266,9 @@ static void RustIndexedVehicleWrite(uint32_t id, Value value) noexcept { Write(V
 
 /** Base vehicle cargo and articulated fields shared by loading and link refresh. */
 inline bool RustVehicleUsesWagonOverride(const Vehicle *v) noexcept { return UsesWagonOverride(v); }
-inline bool RustVehicleArticulated(const Vehicle *v) noexcept { return v->IsArticulatedPart(); }
 inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->cargo_subtype; }
 inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->cargo_type; }
-inline uint8_t RustVehicleOwnerOf(OpenTTDVehicle *handle) noexcept { return RustVehicleOwner(VehicleOf(handle)); }
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
-inline bool RustVehicleHasArticulated(OpenTTDVehicle *handle) noexcept { return RustGroundHasArticulated(VehicleOf(handle)); }
 
 inline const GRFFile *RustEngineGRF(const Engine *engine) noexcept { return RustEngineGRF(RustEngine(engine)); }
 
