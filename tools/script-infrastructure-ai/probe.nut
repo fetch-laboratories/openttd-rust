@@ -387,7 +387,8 @@ function ProbeLists(who) {
 	local text = "";
 	foreach (bt in [-1, 0, 1, 2, 5, 9, 12, 13, 14, 255, 256, 0x100000001]) {
 		text += " " + bt + ":" + Num(ApiBridge.IsValidBridge(bt)) + "," + ApiBridge.GetMaxSpeed(bt) + "," + ApiBridge.GetMinLength(bt) + "," + ApiBridge.GetMaxLength(bt);
-		foreach (length in [-1, 0, 1, 5, 100, 0x7FFFFFFF, 0x10000000000]) text += "," + ApiBridge.GetPrice(bt, length);
+		/* CalcBridgeLenCostFactor loops once per tile of length, so lengths stay small. */
+		foreach (length in [-1, 0, 1, 2, 3, 5, 100, 1000]) text += "," + ApiBridge.GetPrice(bt, length);
 	}
 	Record(who, "bridge.specs", text);
 	Record(who, "list.bridge", ListText(ApiBridgeList()));
