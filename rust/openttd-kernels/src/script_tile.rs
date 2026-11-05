@@ -434,16 +434,36 @@ fn to_script_company_id(company: u8) -> i32 {
     i32::from(company)
 }
 
-/// `ScriptCompany::ResolveCompanyID` for an ID that is not `COMPANY_SELF`; the
-/// original casts it to `::CompanyID` before `Company::IsValidID`.
+/// `ScriptCompany::COMPANY_SELF`.
+const COMPANY_SELF: i32 = 254;
+/// `ScriptCompany::COMPANY_SPECTATOR`.
+const COMPANY_SPECTATOR: i32 = 255;
+
+/// `ScriptCompany::FromScriptCompanyID`; `static_cast<::CompanyID>` keeps the low byte.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn from_script_company_id(s: &Services, company: i32) -> u8 {
+    crate::movement::native_assert(
+        s.command.shared,
+        company != COMPANY_SELF && company != COMPANY_SPECTATOR,
+    );
+    if company == COMPANY_INVALID {
+        return crate::company_type::INVALID_OWNER;
+    }
+    company as u8
+}
+
+/// `ScriptCompany::ResolveCompanyID`. `COMPANY_SELF` reads `_current_company`, not
+/// the script's company mode.
 fn resolve_company_id(s: &Services, company: i32) -> i32 {
-    let native = if company == COMPANY_INVALID {
-        crate::company_type::INVALID_OWNER
-    } else {
-        company as u8
-    };
-    if (s.command.shared.company_valid)(native) {
+    let shared = s.command.shared;
+    if company == COMPANY_SELF {
+        let current = (shared.current_company)();
+        if !(shared.company_valid)(current) {
+            return COMPANY_INVALID;
+        }
+        return to_script_company_id(current);
+    }
+    if (shared.company_valid)(from_script_company_id(s, company)) {
         company
     } else {
         COMPANY_INVALID
