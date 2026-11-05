@@ -184,6 +184,15 @@ impl crate::map_func::World<'_> {
     pub(crate) fn road_tile_type(&self, t: u32) -> crate::services::RoadTileKind {
         self.asserted(|m| get_road_tile_type(m, t))
     }
+    /// `IsLevelCrossingTile`.
+    pub(crate) fn level_crossing_tile(&self, t: u32) -> bool {
+        self.kind(t) == crate::tile_type::MP_ROAD && self.road_tile_type(t).0 == ROAD_TILE_CROSSING
+    }
+    /// `GetCrossingRoadAxis`, with its `IsLevelCrossing` assertion.
+    pub(crate) fn crossing_road_axis(&self, t: u32) -> u8 {
+        self.check(self.road_tile_type(t).0 == ROAD_TILE_CROSSING);
+        Self::byte(self.types.m5(t)) & 1
+    }
     /// `IsNormalRoad`.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -232,6 +241,26 @@ impl crate::map_func::World<'_> {
     pub(crate) fn road_type(&self, t: u32, tram: bool) -> u8 {
         self.asserted(|m| get_road_type(m, t, crate::services::RoadTramType(tram)))
             .0
+    }
+    /// `GetRoadOwner`, with its `MayHaveRoad` assertion.
+    pub(crate) fn road_owner(&self, t: u32, tram: bool) -> u8 {
+        self.asserted(|m| require_may_have_road(m, t));
+        if !tram {
+            let field = if self.is_normal_road_tile(t) {
+                Self::byte(self.types.m1(t))
+            } else {
+                Self::byte(self.types.m7(t))
+            };
+            return field & 0x1F;
+        }
+        /* Trams don't need OWNER_TOWN, and remapping OWNER_NONE
+         * to OWNER_TOWN makes it use one bit less */
+        let o = (Self::byte(self.types.m3(t)) >> 4) & 0xF;
+        if o == crate::company_type::OWNER_TOWN {
+            crate::company_type::OWNER_NONE
+        } else {
+            o
+        }
     }
 }
 

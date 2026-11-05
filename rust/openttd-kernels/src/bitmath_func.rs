@@ -50,7 +50,13 @@ pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
 }
 
 /// `KillFirstBit` for the byte-sized track bitsets.
+#[allow(clippy::cast_possible_truncation)] // Clearing a bit cannot widen the input byte.
 pub const fn kill_first_bit(value: u8) -> u8 {
+    kill_first_bit_u32(value as u32) as u8
+}
+
+/// `KillFirstBit` for script-visible unsigned track masks.
+pub const fn kill_first_bit_u32(value: u32) -> u32 {
     value & value.wrapping_sub(1)
 }
 

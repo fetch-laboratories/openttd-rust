@@ -159,8 +159,6 @@ pub struct RailCommandServices {
     /// `RoadBuildCost`.
     /// `construction.crossing_with_competitor`.
     pub crossing_with_competitor: extern "C" fn() -> bool,
-    /// `GetSlopeZInCorner`.
-    pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
     /// `AutoslopeCheckForEntranceEdge`.
     pub entrance_edge: extern "C" fn(u32, i32, u8, u8) -> bool,
     /// `CMD_BUILD_SINGLE_RAIL`.
@@ -230,9 +228,6 @@ pub struct RailCommandServices {
     pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
 
-const TRACK_X: u8 = 0;
-const TRACK_Y: u8 = 1;
-const INVALID_TRACK: u8 = 0xFF;
 use crate::track_type::INVALID_TRACKDIR;
 use crate::track_type::TRACK_BIT_DEPOT as BIT_DEPOT;
 use crate::track_type::TRACK_BIT_LEFT as BIT_LEFT;
@@ -241,6 +236,7 @@ use crate::track_type::TRACK_BIT_RIGHT as BIT_RIGHT;
 use crate::track_type::TRACK_BIT_UPPER as BIT_UPPER;
 use crate::track_type::TRACK_BIT_X as BIT_X;
 use crate::track_type::TRACK_BIT_Y as BIT_Y;
+use crate::track_type::{INVALID_TRACK, TRACK_X, TRACK_Y};
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.
 pub(crate) const CROSSING_SLOPES: u32 =
@@ -337,6 +333,12 @@ struct Ctx<'a> {
     map: Map,
 }
 impl<'a> Ctx<'a> {
+    /// `GetSlopeZInCorner` with the native assertion.
+    fn slope_z_in_corner(&self, tileh: u8, corner: u8) -> i32 {
+        crate::landscape::get_slope_z_in_corner(tileh, corner, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        })
+    }
     /// # Safety
     /// The table and its nested tables are valid for the synchronous call.
     unsafe fn new(s: *const RailCommandServices) -> Self {
@@ -393,8 +395,7 @@ impl<'a> Ctx<'a> {
     }
     /// `HasSignalOnTrack`: signal tile type and a present signal on the track.
     fn has_signal(&self, tile: u32, track: u8) -> bool {
-        (self.rail.has_signals)(tile)
-            && self.present_signals(tile) & crate::signal_func::signal_on_track(track) != 0
+        crate::map_func::World::new(self.shared).has_signal_on_track(tile, track)
     }
     fn reserved(&self, tile: u32) -> u8 {
         crate::pbs::Pbs::acquire(self.shared).reserved(tile)
@@ -2079,8 +2080,8 @@ impl<'a> Ctx<'a> {
                 return cost.set(price(PR_BUILD_FOUNDATION));
             }
         };
-        z_old += (self.s.slope_z_in_corner)(tileh_old & !SLOPE_HALFTILE_MASK, corner);
-        z_new += (self.s.slope_z_in_corner)(tileh_new & !SLOPE_HALFTILE_MASK, corner);
+        z_old += self.slope_z_in_corner(tileh_old & !SLOPE_HALFTILE_MASK, corner);
+        z_new += self.slope_z_in_corner(tileh_new & !SLOPE_HALFTILE_MASK, corner);
         if z_old != z_new {
             return cost.error(remove_track);
         }
@@ -2133,8 +2134,8 @@ impl<'a> Ctx<'a> {
                 if corner == allowed {
                     continue;
                 }
-                if z_old + (self.s.slope_z_in_corner)(tileh_old, corner)
-                    != z_new + (self.s.slope_z_in_corner)(tileh_new, corner)
+                if z_old + self.slope_z_in_corner(tileh_old, corner)
+                    != z_new + self.slope_z_in_corner(tileh_new, corner)
                 {
                     return;
                 }
@@ -2454,7 +2455,6 @@ crate::abi::layouts! {
         rail_clear_cost,
         rail_convert_cost,
         crossing_with_competitor,
-        slope_z_in_corner,
         entrance_edge,
         build_rail,
         remove_rail,

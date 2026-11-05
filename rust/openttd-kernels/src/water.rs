@@ -502,7 +502,11 @@ impl<'a> World<'a> {
                     }
                 }
                 4 if !is_slope_with_one_corner_raised(slope) => {
-                    (self.w.set_tree_ground)(tile, TreeGround(3), 3);
+                    (self.w.set_tree_ground)(
+                        tile,
+                        TreeGround(crate::tree_map::TREE_GROUND_SHORE),
+                        3,
+                    );
                     (self.s.mark_dirty)(tile);
                     true
                 }

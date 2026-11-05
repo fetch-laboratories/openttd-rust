@@ -8,3 +8,6 @@ pub const WATER_CLASS_CANAL: WaterClass = WaterClass(1);
 
 /// `WaterClass::Sea`.
 pub const WATER_CLASS_SEA: WaterClass = WaterClass(0);
+
+/// `WaterClass::River`.
+pub const WATER_CLASS_RIVER: WaterClass = WaterClass(2);
