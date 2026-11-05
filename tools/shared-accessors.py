@@ -9,6 +9,7 @@ import re
 import subprocess
 import tokenize
 from collections import Counter
+from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,15 +30,17 @@ WORLD = re.compile(
 TABLE = r"OpenTTD\w*(?:Services|Leaves)\s+\w+\s*(?:=\s*)?\{(?!\s*\})(.*?)\n\s*};"
 
 
-def git(*args):
+def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
 
 
-def definitions(source, with_literals=False):
+def definitions(
+    source: str, with_literals: bool = False
+) -> Iterator[tuple[str, str, int]]:
     # Mask comments/strings without changing brace positions or line boundaries.
-    literals = {}
+    literals: dict[int, str] = {}
 
-    def mask(match):
+    def mask(match: re.Match[str]) -> str:
         if with_literals and match[0][0] in "\"'":
             literals[match.start()] = (
                 "LITERAL_" + hashlib.sha256(match[0].encode()).hexdigest().upper()
@@ -63,7 +66,9 @@ def definitions(source, with_literals=False):
         yield header, body, source[: match.start()].count("\n") + 1
 
 
-def single_read(header, body, helpers, writes=False):
+def single_read(
+    header: str, body: str, helpers: set[str], writes: bool = False
+) -> bool:
     statements = [s.strip() for s in body.split(";") if s.strip()]
     if not statements or any("{" in s or "}" in s for s in statements):
         return False
@@ -103,25 +108,27 @@ def single_read(header, body, helpers, writes=False):
     return bool(calls & helpers) and calls <= helpers | {"base", "to_underlying"}
 
 
-def collect(files, originals, writes=False):
+def collect(
+    files: dict[str, str], originals: dict[str, str], writes: bool = False
+) -> dict[str, int]:
     helpers = {
         h.split("(")[0].strip()
         for p, s in files.items()
         if SHARED.fullmatch(p)
         for h, _, _ in definitions(s)
     }
-    hits = {}
+    hits: dict[str, int] = {}
     for path, source in files.items():
         if SHARED.fullmatch(path):
             continue
 
-        def identity(h, b):
+        def identity(h: str, b: str) -> tuple[str, str]:
             return h, "".join(b.split()) if h.startswith("[") else ""
 
         inherited = Counter(
             identity(h, b) for h, b, _ in definitions(originals.get(path, ""))
         )
-        occurrences = Counter()
+        occurrences: Counter[str] = Counter()
         for header, body, line in definitions(source):
             key = identity(header, body)
             if inherited[key]:
@@ -138,7 +145,7 @@ def collect(files, originals, writes=False):
 NATIVE_SUFFIXES = {".cpp", ".h", ".hpp", ".inc"}
 
 
-def sources(revision=None):
+def sources(revision: str | None = None) -> dict[str, str]:
     command = ("ls-tree", "-r", "--name-only", revision) if revision else ("ls-files",)
     return {
         p: git("show", f"{revision}:{p}") if revision else (ROOT / p).read_text()
@@ -148,7 +155,7 @@ def sources(revision=None):
     }
 
 
-def callee_copies(files):
+def callee_copies(files: dict[str, str]) -> dict[str, int]:
     """Compare simple bound leaves; compound callbacks still require review."""
     native = {p: s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES}
     tables = [(p, t) for p, s in native.items() for t in re.findall(TABLE, s, re.S)]
@@ -164,12 +171,14 @@ def callee_copies(files):
         for h, b, line in definitions(t, with_literals=True)
         if h.startswith("[]")
     ]
+    groups: dict[str, dict[str, int]]
+    occurrences: Counter[str]
     groups, occurrences = {}, Counter()
     for path, header, body, line in candidates:
         if "noexcept" not in header:
             continue
         parameters = header[header.find("(") + 1 : header.rfind(")")].split(",")
-        replacements = {}
+        replacements: dict[str, str] = {}
         for i, parameter in enumerate(parameters):
             name = re.search(r"\b(\w+)\s*$", parameter)
             if name:
@@ -219,7 +228,9 @@ def callee_copies(files):
     }
 
 
-def boundary_hits(files, wrappers, originals):
+def boundary_hits(
+    files: dict[str, str], wrappers: dict[str, str], originals: dict[str, str]
+) -> dict[str, int]:
     hits = collect(wrappers, originals, writes=True)
     combined = "\n".join(
         " ".join(
@@ -252,7 +263,7 @@ def boundary_hits(files, wrappers, originals):
     # Direct bindings may reuse one definition in the canonical shared layer.
     # A port-local definition with the same name must still be checked.
     functions = set(re.findall(r"\b(\w+)\s*\([^{};]*\)\s*noexcept\s*\{", native))
-    bindings = Counter()
+    bindings: Counter[str] = Counter()
     for table in re.findall(
         TABLE,
         "\n".join(s for p, s in files.items() if Path(p).suffix in NATIVE_SUFFIXES),
@@ -345,7 +356,7 @@ def scan(
     )
 
 
-def main():
+def main() -> bool:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", help="ratchet against this Git revision")
     args = parser.parse_args()
