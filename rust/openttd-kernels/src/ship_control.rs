@@ -963,7 +963,8 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     if ticks != 0 {
         let cost = unsafe { game.vs().running_cost(vehicle) };
         let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
-        // `running_ticks = 0` precedes the company payment; nothing between observes it.
+        let profit = (game.vs().profit)(vehicle).saturating_sub(cost);
+        (game.vs().write_profit)(vehicle, profit);
         game.vehicle().write_running(0);
         (game.leaves.pay_running)(id, cost);
         // SAFETY: The base table names its immutable maintenance table.

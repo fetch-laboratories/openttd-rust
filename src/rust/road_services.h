@@ -102,8 +102,6 @@ static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amoun
 	RoadVehicle *u = RoadOf(v);
 	CommandCost cost(EXPENSES_ROADVEH_RUN, Money(amount));
 
-	u->profit_this_year -= cost.GetCost();
-
 	SubtractMoneyFromCompanyFract(u->GetOwner(), cost);
 
 	RustVehicleDetailsDirty(RustVehicle(u));

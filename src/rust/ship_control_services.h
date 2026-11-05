@@ -125,7 +125,6 @@ static void Ship_pay_running(uint32_t id, int64_t amount) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
 	CommandCost cost(EXPENSES_SHIP_RUN, Money(amount));
-	v->profit_this_year -= cost.GetCost();
 	SubtractMoneyFromCompanyFract(v->GetOwner(), cost);
 }
 

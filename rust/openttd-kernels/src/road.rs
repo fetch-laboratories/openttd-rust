@@ -2137,7 +2137,8 @@ impl Game<'_> {
             return;
         }
         let cost = self.running_cost(v).saturating_mul(i64::from(running)) / YEAR_TICKS;
-        // `running_ticks = 0` precedes the company payment; nothing between observes it.
+        let profit = service!(self.vs.profit)(v.v).saturating_sub(cost);
+        service!(self.vs.write_profit)(v.v, profit);
         v.v.write_running(0);
         service!(self.l.pay_running)(v.v, cost);
     }
