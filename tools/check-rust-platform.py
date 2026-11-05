@@ -14,7 +14,9 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import migration
 
@@ -40,7 +42,7 @@ ARCHIVE_ONLY = "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY"
 NO_CRT = "-C\x1ftarget-feature=-crt-static"
 UNVALIDATED = "contradictory or unvalidated flags"
 # Windows configurations (CMake arguments, environment) that must fail with a diagnostic.
-REFUSALS = [
+REFUSALS: list[tuple[list[str], dict[str, str], str]] = [
     (["-DCMAKE_BUILD_TYPE=Debug"], {}, MODE),
     (["-DCMAKE_BUILD_TYPE=Release"], {}, MODE),
     (["-DOPTION_USE_ASSERTS=OFF"], {}, MODE),
@@ -60,7 +62,9 @@ REFUSALS = [
 ]
 
 
-def run(argv, log, env=None):
+def run(
+    argv: Sequence[object], log: Path, env: Mapping[str, str] | None = None
+) -> subprocess.CompletedProcess[bytes]:
     result = subprocess.run(
         list(map(str, argv)), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
     )
@@ -68,7 +72,9 @@ def run(argv, log, env=None):
     return result
 
 
-def assertion_policy(command, consumer, build_type, windows):
+def assertion_policy(
+    command: str, consumer: str, build_type: str, windows: bool
+) -> None:
     """Debug: WITH_ASSERT for game/tests. Release: NDEBUG for all, and on Windows
     (RelWithDebInfo with OPTION_USE_ASSERTS) also WITH_ASSERT for game/tests/abi."""
     definitions = set(re.findall(r'(?:^|[\s"])[-/]D\s*"?([A-Za-z_]\w*)', command))
@@ -86,7 +92,14 @@ def assertion_policy(command, consumer, build_type, windows):
         raise RuntimeError(f"{consumer} is not only the static release CRT: {command}")
 
 
-def check_windows_link(out, build, label, consumer, binary, configuration):
+def check_windows_link(
+    out: Path,
+    build: Path,
+    label: str,
+    consumer: str,
+    binary: str,
+    configuration: dict[str, Any],
+) -> None:
     """MSVC may link successfully after CMake drops repeated native arguments."""
     target = {
         "game": "openttd",
@@ -100,7 +113,7 @@ def check_windows_link(out, build, label, consumer, binary, configuration):
     if result.returncode:
         raise RuntimeError(f"Cannot read {consumer} link command")
 
-    def expand(text, seen):
+    def expand(text: str, seen: set[Path]) -> str:
         for match in re.finditer(r'@(?:"([^"]+)"|([^\s"&]+))', text):
             path = (build / (match[1] or match[2])).resolve()
             if path not in seen:
@@ -132,7 +145,9 @@ def check_windows_link(out, build, label, consumer, binary, configuration):
         raise RuntimeError(f"{consumer} lost the ordered native library argument group")
 
 
-def check_build(out, label, build, target, windows):
+def check_build(
+    out: Path, label: str, build: Path, target: str, windows: bool
+) -> dict[str, Any]:
     configuration = migration.rust_configuration(build)
     if configuration["target"] != target:
         raise RuntimeError(f"{label} targets {configuration['target']}, not {target}")
@@ -177,9 +192,11 @@ def check_build(out, label, build, target, windows):
     return configuration
 
 
-def refuse(out, name, flags, changes, diagnostic):
+def refuse(
+    out: Path, name: object, flags: list[str], changes: dict[str, str], diagnostic: str
+) -> None:
     generator = [] if flags[:1] == ["-G"] else ["-G", "Ninja"]
-    argv = ["cmake", "-S", migration.ROOT, "-B", out / f"reject-{name}"]
+    argv: list[object] = ["cmake", "-S", migration.ROOT, "-B", out / f"reject-{name}"]
     argv += ["-DOPTION_TOOLS_ONLY=ON", "-DOPTION_USE_ASSERTS=ON"]
     argv += ["-DCMAKE_BUILD_TYPE=RelWithDebInfo", RUNTIME + "MultiThreaded"]
     log = out / f"reject-{name}.log"
@@ -188,7 +205,7 @@ def refuse(out, name, flags, changes, diagnostic):
         raise RuntimeError(f"Expected refusal {diagnostic!r}; see {log}")
 
 
-def refusals(out, configuration):
+def refusals(out: Path, configuration: dict[str, Any]) -> None:
     for index, (flags, changes, diagnostic) in enumerate(REFUSALS):
         refuse(out, index, flags, changes, diagnostic)
     clang = shutil.which("clang-cl") or r"C:\Program Files\LLVM\bin\clang-cl.exe"
@@ -215,7 +232,7 @@ def refusals(out, configuration):
                 backup.rename(path)
 
 
-def freshness(out, tools, configuration):
+def freshness(out: Path, tools: Path, configuration: dict[str, Any]) -> None:
     """Unchanged reconfiguration keeps the archive; a configuration change and its
     restoration each change the stamp and rebuild the archive."""
     archive = migration.rust_archive(tools)
@@ -256,7 +273,7 @@ def freshness(out, tools, configuration):
             raise RuntimeError(f"Freshness {name}: stamp, rebuild or metadata is wrong")
 
 
-def fresh_generators(out, tools, exe):
+def fresh_generators(out: Path, tools: Path, exe: str) -> None:
     generated = out / "fresh-generated"
     shutil.rmtree(generated, ignore_errors=True)
     generated.mkdir()
@@ -266,8 +283,14 @@ def fresh_generators(out, tools, exe):
         r"\$\{CMAKE_CURRENT_SOURCE_DIR\}/(\w+\.ini)",
         (table / "settings/CMakeLists.txt").read_text(),
     )
-    strgen = [tools / f"src/strgen/strgen{exe}", "-s", lang, "-d", generated]
-    settingsgen = [tools / f"src/settingsgen/settingsgen{exe}"]
+    strgen: list[object] = [
+        tools / f"src/strgen/strgen{exe}",
+        "-s",
+        lang,
+        "-d",
+        generated,
+    ]
+    settingsgen: list[object] = [tools / f"src/settingsgen/settingsgen{exe}"]
     settingsgen += ["-o", generated / "settings.h"]
     settingsgen += ["-b", table / "settings.h.preamble"]
     settingsgen += ["-a", table / "settings.h.postamble"]
@@ -305,7 +328,7 @@ def redirected_console(out: Path, build: Path) -> None:
             raise RuntimeError(f"Windows redirected diagnostics missing: {log}")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", required=True)
     for name in ("--build", "--tools", "--output"):

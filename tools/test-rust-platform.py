@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import migration
@@ -19,7 +20,7 @@ check_windows_link = platform["check_windows_link"]
 
 
 class WindowsLinkTests(unittest.TestCase):
-    def test_native_group_in_nested_response_files(self):
+    def test_native_group_in_nested_response_files(self) -> None:
         with tempfile.TemporaryDirectory(prefix="Rust link ") as directory:
             build = Path(directory)
             arguments = [
@@ -48,7 +49,7 @@ class WindowsLinkTests(unittest.TestCase):
                         check_windows_link.__globals__, run=lambda *args: result
                     ):
 
-                        def check():
+                        def check() -> None:
                             check_windows_link(
                                 build,
                                 build,
@@ -70,7 +71,7 @@ class WindowsLinkTests(unittest.TestCase):
 
 
 class FreshnessTests(unittest.TestCase):
-    def test_deployment_and_profile_invalidation(self):
+    def test_deployment_and_profile_invalidation(self) -> None:
         for system, minimum in (
             ("Darwin", "11.0"),
             ("Darwin", "12.0"),
@@ -82,7 +83,7 @@ class FreshnessTests(unittest.TestCase):
                 ):
                     self.trial(system, minimum, invalidates)
 
-    def trial(self, system, minimum, invalidates):
+    def trial(self, system: str, minimum: str, invalidates: bool) -> None:
         with tempfile.TemporaryDirectory() as directory:
             build = Path(directory)
             archive = build / "archive"
@@ -95,9 +96,11 @@ class FreshnessTests(unittest.TestCase):
             archive.touch()
             successful.write_text(hashlib.sha256(original).hexdigest())
             previous = original
-            trials = []
+            trials: list[str | None] = []
 
-            def run(argv, log, env=None):
+            def run(
+                argv: list[Any], log: Path, env: dict[str, str] | None = None
+            ) -> SimpleNamespace:
                 nonlocal previous
                 if "-S" in argv:
                     if system == "Darwin":

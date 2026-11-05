@@ -78,4 +78,6 @@ include = [
     "tools/simulation/trees.py",
     "tools/ci_native.py",
     "tools/test-ci-native.py",
+    "tools/check-rust-platform.py",
+    "tools/test-rust-platform.py",
 ]
