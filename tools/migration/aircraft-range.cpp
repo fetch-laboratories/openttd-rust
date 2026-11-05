@@ -15,6 +15,7 @@
 #include "rust/vehicle_record_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
+#include "rust/newgrf_vehicle_ffi.h"
 
 static constexpr uint32_t INVALID_TILE = UINT32_MAX;
 static constexpr uint8_t ENDTAKEOFF = 12, HELIENDLANDING = 18;
@@ -103,11 +104,13 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.node = [](const void *ap, uint8_t) noexcept -> const void * { return ap; };
 	leaves.fta = [](const void *) noexcept { return OpenTTDAircraftNode{nullptr, uint64_t{1} << 30, 0, 0, 0}; };
 	leaves.airport_blocks = [](const OpenTTDStation *) noexcept { return &fixture->blocks; };
-	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	/* Part IDs come from the resolver: the aircraft is 17, its shadow 18. */
+	static OpenTTDVehicleResolverServices resolver{};
+	resolver.id = [](OpenTTDVehicle *v) noexcept -> uint32_t { return v == &fixture->record ? 17 : 18; };
+	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if ((property != 0x0C && property != 0x1C) || fallback != 0) std::abort(); return int32_t{0}; };
 	leaves.engine_speed = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{100}; };
 	leaves.cargo_age_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{0}; };
-	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { return v; };
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.plane_speed = []() noexcept { return uint8_t{1}; };
 
@@ -121,7 +124,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
-	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = &fixture->shadow; return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };
 	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 
 	leaves.helipads = [](const void *) noexcept { return uint8_t{0}; };
