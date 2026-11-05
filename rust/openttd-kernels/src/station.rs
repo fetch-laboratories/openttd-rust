@@ -45,15 +45,8 @@ pub use crate::station_type::Station;
 /// A native `BaseStation`, which may also be a waypoint.
 pub use crate::station_type::BaseStation;
 
-/// `StationRect`: the station spread rectangle, aliased by the native `Rect` facade.
-#[repr(C)]
-#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-pub struct StationRect {
-    pub left: i32,
-    pub top: i32,
-    pub right: i32,
-    pub bottom: i32,
-}
+/// `StationRect`: the station spread rectangle, held in the shared station record.
+pub use crate::station_record::StationRect;
 impl StationRect {
     /// `MakeEmpty`.
     fn make_empty(&mut self) {
@@ -305,7 +298,6 @@ impl IndustryList {
 /// Catchment state of one `BaseStation`, held by its station service owner.
 #[derive(Default)]
 pub struct Catchment {
-    rect: StationRect,
     tiles: BitmapTileArea,
     industries_near: IndustryList,
 }
@@ -345,13 +337,13 @@ pub(crate) unsafe fn tile_is_in_catchment(state: *mut Service, tile: u32, c: &Ct
 /// # Safety
 /// `state` is a live station owner.
 pub(crate) unsafe fn rect_is_empty(state: *mut Service) -> bool {
-    unsafe { (*catchment(state)).rect.is_empty() }
+    unsafe { (*state).record.rect.is_empty() }
 }
 /// The live rectangle of a station owner.
 /// # Safety
 /// `state` is a live station owner; the pointer is used only for immediate borrows.
 pub(crate) unsafe fn rect(state: *mut Service) -> *mut StationRect {
-    unsafe { &raw mut (*catchment(state)).rect }
+    unsafe { &raw mut (*state).record.rect }
 }
 
 /// Facility fields `GetCatchmentRadius` observes, at its source observation point.
@@ -1033,13 +1025,6 @@ pub unsafe extern "C" fn openttd_rust_station_industries_near(
         size: entries.len(),
     }
 }
-/// The canonical rectangle aliased by `BaseStation::rect`.
-/// # Safety
-/// `state` is live; the alias ends with the owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_rect(state: *mut Service) -> *mut StationRect {
-    unsafe { rect(state) }
-}
 /// The canonical bitmap aliased by `Station::catchment_tiles`.
 /// # Safety
 /// `state` is live; the alias ends with the owner.
@@ -1166,7 +1151,6 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance_around(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDStationRect" ["station_service"] => StationRect { left, top, right, bottom };
     "OpenTTDStationListEntry" ["station_service"] => StationListEntry { station, id };
     "OpenTTDIndustryListEntry" ["station_service"] => IndustryListEntry { distance, industry, id };
     "OpenTTDStationRadiusFacilities" ["station_service"] => RadiusFacilities { bus, truck, train, ship, airport };

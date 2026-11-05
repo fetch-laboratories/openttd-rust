@@ -137,6 +137,7 @@ mod station_cargo;
 mod station_cmd;
 mod station_lifecycle;
 mod station_map;
+mod station_record;
 mod station_service;
 mod station_type;
 mod string_func;

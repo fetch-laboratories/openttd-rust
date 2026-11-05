@@ -49,13 +49,9 @@ pub struct Entries {
     pub east: Entry,
     pub west: Entry,
 }
-/// One allocation per native shell: the saved status byte and the shared
-/// entries pointer, which the `BaseEntry` holder owns.
-#[repr(C)]
-pub struct State {
-    pub status: u8,
-    pub entries: *mut Entries,
-}
+/// The shared record beside each native shell: position, list link, the saved
+/// status byte and the shared entries pointer, which the `BaseEntry` holder owns.
+pub use crate::station_record::RoadStopRecord as State;
 /// Opaque native `RoadStop` shell; never dereferenced in Rust.
 #[repr(C)]
 pub struct Stop {
@@ -142,10 +138,16 @@ fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
     stop
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_road_stop_new() -> *mut State {
+pub extern "C" fn openttd_rust_road_stop_new(
+    shell: *mut crate::station_record::RoadStop,
+    xy: crate::tile_type::TileIndex,
+) -> *mut State {
     Box::into_raw(Box::new(State {
-        status: BAY0_FREE | BAY1_FREE,
+        shell,
+        next: std::ptr::null_mut(),
         entries: std::ptr::null_mut(),
+        xy,
+        status: BAY0_FREE | BAY1_FREE,
     }))
 }
 /// `RoadStop::~RoadStop`: the head frees the shared entries.
@@ -748,7 +750,6 @@ crate::abi::layouts! {
     "OpenTTDRoadStopEntry" ["probe"] => crate::road_stop::Entry { length, occupied, };
     "OpenTTDRoadStopPoolItem" ["probe"] => crate::road_stop::PoolStop { state, xy, index, };
     "OpenTTDRoadStopEntries" ["probe"] => crate::road_stop::Entries { east, west, };
-    "OpenTTDRoadStopState" ["probe"] => crate::road_stop::State { status, entries, };
     "OpenTTDRoadStopServices" ["probe"] => crate::road_stop::RoadStopServices {
         vehicle,
         ground,

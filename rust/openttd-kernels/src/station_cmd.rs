@@ -724,9 +724,7 @@ impl Ctx<'_> {
         let owner = (self.world().owner)(st);
         if !(self.world().in_use)(st) {
             // SAFETY: canonical owner, serialized scalar write ends before UI reentry.
-            let fields =
-                unsafe { crate::station_service::openttd_rust_station_service_fields(owner) };
-            unsafe { (&raw mut (*fields).delete_ctr).write(0) };
+            unsafe { (&raw mut (*owner).record.delete_ctr).write(0) };
             (self.world().station_list_invalidation)(st, 0);
         }
         self.sign_coord(st);

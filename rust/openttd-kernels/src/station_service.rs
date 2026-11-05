@@ -38,41 +38,13 @@ pub extern "C" fn openttd_rust_goods_convert_state(status: u8) -> u8 {
         | (((status >> GE_ACCEPTED_BIGTICK) & 1) << 3)
 }
 
+/// One goods slot of the shared station record.
+pub type CargoFields = crate::station_record::GoodsRecord;
+/// The canonical station owner: the shared record, then Rust-only containers.
+/// A record pointer is the owner's address.
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct CargoFields {
-    pub max_waiting_cargo: u32,
-    pub status: u8,
-    pub time_since_pickup: u8,
-    pub rating: u8,
-    pub last_speed: u8,
-    pub last_age: u8,
-    pub amount_fract: u8,
-}
-impl Default for CargoFields {
-    fn default() -> Self {
-        Self {
-            max_waiting_cargo: 0,
-            status: 0,
-            time_since_pickup: 255,
-            rating: crate::station_base::INITIAL_STATION_RATING,
-            last_speed: 0,
-            last_age: 255,
-            amount_fract: 0,
-        }
-    }
-}
-#[repr(C)]
-pub struct Fields {
-    pub always_accepted: u64,
-    pub delete_ctr: u8,
-    pub time_since_load: u8,
-    pub time_since_unload: u8,
-    pub last_vehicle_type: u8,
-}
 pub struct Service {
-    fields: Fields,
-    cargo: [CargoFields; 64],
+    pub record: crate::station_record::StationRecord,
     // Each entry is raw-owned: native iterators retain raw pointers, so even a
     // temporary Box/&mut reborrow on a surviving entry would invalidate them.
     queue: Vec<*mut QueueEntry>,
@@ -86,7 +58,7 @@ pub(crate) unsafe fn catchment(state: *mut Service) -> *mut crate::station::Catc
 }
 /// SAFETY: Live serialized station owner; no callback occurs during these accesses.
 pub(crate) unsafe fn always_accepts(state: *const Service, cargo: u8) -> bool {
-    unsafe { (*state).fields.always_accepted & (1_u64 << cargo) != 0 }
+    unsafe { (*state).record.always_accepted & (1_u64 << cargo) != 0 }
 }
 /// Record the original `GoodsEntry` delivery history bits.
 /// SAFETY: Live serialized station owner and valid cargo slot.
@@ -103,7 +75,7 @@ pub(crate) unsafe fn record_delivery(state: *mut Service, cargo: u8) {
 /// The caller supplies a live serialized station owner.
 pub(crate) unsafe fn clear_ratings(state: *mut Service) {
     // SAFETY: No callback or other access while the immediate slots are written.
-    for cargo in unsafe { &mut (*state).cargo } {
+    for cargo in unsafe { &mut (*state).record.goods } {
         cargo.rating = 0;
     }
 }
@@ -124,45 +96,35 @@ pub(crate) unsafe fn activity(state: *const Service) -> StationActivity {
     // SAFETY: Immediate field-sized reads from the caller's live serialized owner.
     unsafe {
         StationActivity {
-            time_since_load: (&raw const (*state).fields.time_since_load).read(),
-            time_since_unload: (&raw const (*state).fields.time_since_unload).read(),
+            time_since_load: (&raw const (*state).record.time_since_load).read(),
+            time_since_unload: (&raw const (*state).record.time_since_unload).read(),
         }
     }
 }
+/// Allocate `shell`'s record and owner with the original member defaults, before
+/// the shell's members are constructed.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {
+pub extern "C" fn openttd_rust_station_record_new(
+    shell: *mut crate::station_type::BaseStation,
+    xy: crate::tile_type::TileIndex,
+) -> *mut crate::station_record::StationRecord {
     Box::into_raw(Box::new(Service {
-        fields: Fields {
-            always_accepted: 0,
-            delete_ctr: 0,
-            time_since_load: 255,
-            time_since_unload: 255,
-            last_vehicle_type: 255,
-        },
-        cargo: [CargoFields::default(); 64],
+        record: crate::station_record::StationRecord::new(shell, xy),
         queue: Vec::new(),
         catchment: crate::station::Catchment::default(),
     }))
+    .cast()
 }
+/// Release a record and its owner after the shell's base destructor.
+/// # Safety
+/// `record` comes from `openttd_rust_station_record_new` and is released once.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_service_destroy(state: *mut Service) {
+pub unsafe extern "C" fn openttd_rust_station_record_delete(
+    record: *mut crate::station_record::StationRecord,
+) {
+    // SAFETY: The record is the first member of its boxed owner.
     unsafe {
-        drop(Box::from_raw(state));
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_service_fields(state: *mut Service) -> *mut Fields {
-    unsafe { &raw mut (*state).fields }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_service_cargo(
-    state: *mut Service,
-    cargo: u8,
-) -> *mut CargoFields {
-    unsafe {
-        (&raw mut (*state).cargo)
-            .cast::<CargoFields>()
-            .add(usize::from(cargo))
+        drop(Box::from_raw(record.cast::<Service>()));
     }
 }
 pub struct QueueEntry {
@@ -405,7 +367,7 @@ pub(crate) fn scope_context<F: FnMut(*mut c_void)>(body: &mut F) -> (*mut c_void
 // observation is used only up to the next original write/observation point.
 unsafe fn cp(state: *mut Service, cargo: u8) -> *mut CargoFields {
     unsafe {
-        (&raw mut (*state).cargo)
+        (&raw mut (*state).record.goods)
             .cast::<CargoFields>()
             .add(usize::from(cargo))
     }
@@ -522,7 +484,7 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
     // SAFETY: Live owner; the tile procs cannot reset this station's catchment.
     if !unsafe { crate::station::rect_is_empty(state) } {
         let c = crate::station::Ctx::from_shared(unsafe { &*w.shared });
-        let always = unsafe { &raw mut (*state).fields.always_accepted };
+        let always = unsafe { &raw mut (*state).record.always_accepted };
         acceptance = unsafe { crate::station::acceptance_around_station(state, always, &c) };
     }
     let facilities = u32::from((w.facilities)(st));
@@ -589,9 +551,9 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
     let mut waiting_changed = false;
     let activity = unsafe { activity(state) };
     unsafe {
-        let p = &raw mut (*state).fields.time_since_load;
+        let p = &raw mut (*state).record.time_since_load;
         p.write(activity.time_since_load.saturating_add(1));
-        let p = &raw mut (*state).fields.time_since_unload;
+        let p = &raw mut (*state).record.time_since_unload;
         p.write(activity.time_since_unload.saturating_add(1));
     }
     for cargo in 0..64_u8 {
@@ -638,7 +600,7 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
                     | ((*ge).max_waiting_cargo.min(65535) << 8)
                     | (u32::from(if speed == 0 { 255 } else { speed }) << 24)
             };
-            let kind = unsafe { (*state).fields.last_vehicle_type };
+            let kind = unsafe { (*state).record.last_vehicle_type };
             let var10 = if kind == 255 {
                 0
             } else {
@@ -667,7 +629,7 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
                 rating += b >> 2;
             }
             let mut waittime = unsafe { (*ge).time_since_pickup };
-            if unsafe { (*state).fields.last_vehicle_type } == 2 {
+            if unsafe { (*state).record.last_vehicle_type } == 2 {
                 waittime >>= 2;
             }
             if waittime <= 21 {
@@ -1163,12 +1125,12 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
         if !st.is_null() {
             let state = (w.owner)(st);
             if u32::from((w.facilities)(st)) & 128 == 0 && u32::from((w.in_use)(st)) != 0 {
-                let mut b = unsafe { (*state).fields.delete_ctr }.wrapping_add(1);
+                let mut b = unsafe { (*state).record.delete_ctr }.wrapping_add(1);
                 if b >= 185 {
                     b = 0;
                 }
                 unsafe {
-                    (&raw mut (*state).fields.delete_ctr).write(b);
+                    (&raw mut (*state).record.delete_ctr).write(b);
                 }
                 if b == 0 {
                     unsafe {
@@ -1186,9 +1148,9 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
             }
             if phase % 250 == 0 {
                 if u32::from((w.in_use)(st)) == 0 {
-                    let b = unsafe { (*state).fields.delete_ctr }.wrapping_add(1);
+                    let b = unsafe { (*state).record.delete_ctr }.wrapping_add(1);
                     unsafe {
-                        (&raw mut (*state).fields.delete_ctr).write(b);
+                        (&raw mut (*state).record.delete_ctr).write(b);
                     }
                     if b >= 8 {
                         (w.delete_station)(st);
@@ -1695,7 +1657,7 @@ unsafe fn load_vehicle(
                     unloaded = true;
                     ticks = ticks.wrapping_add(amount as i32);
                     unsafe {
-                        (&raw mut (*state).fields.time_since_unload).write(0);
+                        (&raw mut (*state).record.time_since_unload).write(0);
                     }
                 }
                 if control.gradual && remaining {
@@ -1768,8 +1730,8 @@ unsafe fn load_vehicle(
                         emptied = false;
                         loaded_any = true;
                         unsafe {
-                            (&raw mut (*state).fields.time_since_load).write(0);
-                            (&raw mut (*state).fields.last_vehicle_type).write(v.vehicle_type());
+                            (&raw mut (*state).record.time_since_load).write(0);
+                            (&raw mut (*state).record.last_vehicle_type).write(v.vehicle_type());
                         }
                         if (l.station_cargo_total)(st.native, cargo) == 0 {
                             crate::animated_tile::cargo_event(
@@ -2023,22 +1985,6 @@ crate::abi::layouts! {
     "OpenTTDLoadingPart" ["probe"] => LoadingPart {
         cargo,
         unloading,
-    };
-    "OpenTTDStationCargo" ["station_service"] => CargoFields {
-        max_waiting_cargo,
-        status,
-        time_since_pickup,
-        rating,
-        last_speed,
-        last_age,
-        amount_fract,
-    };
-    "OpenTTDStationFields" ["station_service"] => Fields {
-        always_accepted,
-        delete_ctr,
-        time_since_load,
-        time_since_unload,
-        last_vehicle_type,
     };
     "OpenTTDStationServices" ["probe"] => World {
         graphs,

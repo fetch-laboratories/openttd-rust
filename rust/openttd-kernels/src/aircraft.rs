@@ -2105,20 +2105,6 @@ pub unsafe extern "C" fn openttd_rust_aircraft_state_destroy(state: *mut State) 
         drop(Box::from_raw(state));
     }
 }
-/// Allocate the station airport's canonical mask, independently of service ownership.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_airport_blocks_new() -> *mut u64 {
-    Box::into_raw(Box::new(0))
-}
-/// Release exactly once after the enclosing station stops using the scalar.
-/// # Safety
-/// Pointer is the live sole airport allocation with no active scalar access.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_blocks_destroy(blocks: *mut u64) {
-    unsafe {
-        drop(Box::from_raw(blocks));
-    }
-}
 // Witness enablement is fixed by the process-start writer. Select once per
 // synchronous entry; both variants use the same World and service bodies.
 macro_rules! with_world {
