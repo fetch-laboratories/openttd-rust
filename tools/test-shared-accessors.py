@@ -94,6 +94,25 @@ with tempfile.TemporaryDirectory() as directory:
     assert len(rows) == 1
     baseline.write_text(rows[0] + "\n")
     assert "addition forbidden" in check().stdout and check().returncode == 1
+    # A pre-existing body newly classified takes a retired row's place.
+    wide = "\nint Wide(Vehicle *v) { return v->owner + v->index; }"
+    baseline.write_text(grandfathered)
+    port.write_text(original + copy + wide)
+    git("commit", "-qam", "Add: Two-field consumer")
+    base = git("rev-parse", "HEAD")
+    assert check().returncode == 0, check().stdout
+    narrow = "\nint Wide(Vehicle *v) { return v->owner; }"
+    port.write_text(original + narrow)
+    rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    assert len(rows) == 1
+    baseline.write_text(rows[0] + "\n")
+    result = check()
+    assert result.returncode == 0, result.stdout
+    assert "reclassified pre-existing accessor: " + rows[0] in result.stdout
+    # Total growth stays forbidden even for a pre-existing body.
+    port.write_text(original + copy + narrow)
+    baseline.write_text(grandfathered + rows[0] + "\n")
+    assert "addition forbidden" in check().stdout and check().returncode == 1
     baseline.write_text(grandfathered)
     port.write_text(original)
     assert "remove retired" in check().stdout

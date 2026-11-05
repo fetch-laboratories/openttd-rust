@@ -106,3 +106,5 @@ src/order_cmd.cpp | openttd_orders_close_shared_window(void *ctx, uint32_t windo
 src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | dfa9c3318c4343db | 1
 src/order_cmd.cpp | openttd_orders_invalidate_vehicle_list(void *ctx) noexcept | e9676e057ddefeff | 1
 src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | b1d6dbf295840283 | 1
+src/script/api/script_vehiclelist.cpp | [vehicle_type](const Vehicle *v) | 24bdc2b99efbbacb | 1
+src/order_cmd.cpp | openttd_orders_shared_window(void *ctx, void *first) noexcept | 3755ddc11f656e07 | 1

@@ -275,15 +275,28 @@ def identity(key: str) -> str | None:
     return " | ".join(parts[:-2])
 
 
-def rehashed(growth: set[str], baseline: set[str], previous: set[str]) -> set[str]:
-    """Added rows that replace a removed row of the same accessor whose body changed."""
-    count = Counter(identity(k) for k in baseline)
-    before = Counter(identity(k) for k in previous)
-    return {
-        k
-        for k in growth
-        if (name := identity(k)) is not None and count[name] <= before[name]
-    }
+def reclassified(
+    growth: set[str], baseline: set[str], base_rows: int, base_files: dict[str, str]
+) -> set[str]:
+    """Added rows for bodies whose path and header existed at the base revision.
+
+    Accepted only while the baseline's total row count does not grow, so a
+    changed body can take a retired row's place but never add an exemption.
+    """
+    if len(baseline) > base_rows:
+        return set()
+    headers: dict[str, set[str]] = {}
+    accepted = set()
+    for key in growth:
+        name = identity(key)
+        if name is None:
+            continue
+        path, header = name.split(" | ", 1)
+        if path not in headers:
+            headers[path] = {h for h, _, _ in definitions(base_files.get(path, ""))}
+        if header in headers[path]:
+            accepted.add(key)
+    return accepted
 
 
 def main():
@@ -307,10 +320,12 @@ def main():
     )
     baseline = set((ROOT / BASELINE).read_text().splitlines())
     previous = baseline
+    base_rows = len(baseline)
     if args.base_ref:
         tracked_base = git("ls-tree", "-r", "--name-only", args.base_ref).splitlines()
         if BASELINE in tracked_base:
             previous = set(git("show", f"{args.base_ref}:{BASELINE}").splitlines())
+            base_rows = len(previous)
         if not any(
             k.startswith(("binding |", "write |", "orphan |")) for k in previous
         ):
@@ -333,7 +348,14 @@ def main():
             previous.update(f"{name} | {n}" for n in range(2, int(count) + 1))
     inherited_callees = callee_copies(sources(args.base_ref or "origin/rust-migration"))
     new, growth = set(hits) - baseline - inherited_callees.keys(), baseline - previous
-    growth -= rehashed(growth, baseline, previous)
+    accepted = (
+        reclassified(growth, baseline, base_rows, sources(args.base_ref))
+        if growth and args.base_ref
+        else set()
+    )
+    growth -= accepted
+    for key in sorted(accepted):
+        print(f"{BASELINE}: reclassified pre-existing accessor: {key}")
     for key in new:
         print(f"{key.split(' | ')[0]}:{hits[key]}: new shared accessor: {key}")
     stale = baseline - set(hits)
