@@ -267,6 +267,25 @@ def boundary_hits(files, wrappers, originals):
     return hits
 
 
+def identity(key: str) -> str | None:
+    """`path | header` of an accessor row, read or write; bindings and orphans have none."""
+    parts = key.removeprefix("write | ").split(" | ")
+    if parts[0] in {"binding", "orphan"} or len(parts) < 4:
+        return None
+    return " | ".join(parts[:-2])
+
+
+def rehashed(growth: set[str], baseline: set[str], previous: set[str]) -> set[str]:
+    """Added rows that replace a removed row of the same accessor whose body changed."""
+    count = Counter(identity(k) for k in baseline)
+    before = Counter(identity(k) for k in previous)
+    return {
+        k
+        for k in growth
+        if (name := identity(k)) is not None and count[name] <= before[name]
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-ref", help="ratchet against this Git revision")
@@ -314,6 +333,7 @@ def main():
             previous.update(f"{name} | {n}" for n in range(2, int(count) + 1))
     inherited_callees = callee_copies(sources(args.base_ref or "origin/rust-migration"))
     new, growth = set(hits) - baseline - inherited_callees.keys(), baseline - previous
+    growth -= rehashed(growth, baseline, previous)
     for key in new:
         print(f"{key.split(' | ')[0]}:{hits[key]}: new shared accessor: {key}")
     stale = baseline - set(hits)

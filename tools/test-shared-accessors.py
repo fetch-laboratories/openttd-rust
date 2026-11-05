@@ -73,6 +73,28 @@ with tempfile.TemporaryDirectory() as directory:
     for changed in [original + copy * 2, original + copy.replace("money", "owner")]:
         port.write_text(changed)
         assert "new shared accessor:" in check().stdout and check().returncode == 1
+    # A changed body may replace its own row: same path, header and row count.
+    grandfathered = baseline.read_text()
+    port.write_text(original + copy.replace("money", "owner"))
+    rehashed = re.findall(r"new shared accessor: (.*)", check().stdout)
+    assert len(rehashed) == 1
+    baseline.write_text(rehashed[0] + "\n")
+    assert check().returncode == 0, check().stdout
+    # A second row of that accessor grows its count.
+    port.write_text(
+        original + copy.replace("money", "owner") + copy.replace("money", "index")
+    )
+    rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    baseline.write_text("\n".join([rehashed[0], *rows]) + "\n")
+    assert "addition forbidden" in check().stdout and check().returncode == 1
+    # A genuinely new accessor cannot take the place of a removed one.
+    fresh = "\nint Fresh(Vehicle *v) { return v->owner; }"
+    port.write_text(original + fresh)
+    rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    assert len(rows) == 1
+    baseline.write_text(rows[0] + "\n")
+    assert "addition forbidden" in check().stdout and check().returncode == 1
+    baseline.write_text(grandfathered)
     port.write_text(original)
     assert "remove retired" in check().stdout
     baseline.write_text("")

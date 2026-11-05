@@ -101,3 +101,8 @@ write | src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t
 write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shell, uint16_t id) noexcept | 1b6edd36dbec0c7a | 1
 write | src/rust/ship_control_services.h | Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept | 680b8e84edac38d1 | 1
 write | src/rust/train_services.h | TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | aebb225d48856496 | 1
+src/order_cmd.cpp | openttd_orders_last_station_write(void *ctx, uint16_t station) noexcept | 7555d996b4dac6a0 | 1
+src/order_cmd.cpp | openttd_orders_close_shared_window(void *ctx, uint32_t window) noexcept | 4cbabab054f97649 | 1
+src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | dfa9c3318c4343db | 1
+src/order_cmd.cpp | openttd_orders_invalidate_vehicle_list(void *ctx) noexcept | e9676e057ddefeff | 1
+src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | b1d6dbf295840283 | 1
