@@ -503,8 +503,6 @@ void DrawShipDepotSprite(int x, int y, Axis axis, DepotPart part)
 }
 
 
-
-
 static void GetTileDesc_Water(TileIndex tile, TileDesc &td)
 {
 	switch (GetWaterTileType(tile)) {
@@ -528,11 +526,7 @@ static void GetTileDesc_Water(TileIndex tile, TileDesc &td)
 	td.owner[0] = GetTileOwner(tile);
 }
 
-/**
- * Handle the flooding of a vehicle. This sets the vehicle state to crashed,
- * creates a newsitem and dirties the necessary windows.
- * @param v The vehicle to flood.
- */
+
 /* Only leaves remain native. Virtual Crash and event insertion can reenter Rust,
  * but queueing AI/Game events never executes a script VM; allocation exceptions
  * terminate under noexcept. Commands use independent lazy stack result contexts. */
@@ -576,7 +570,6 @@ void TileLoop_Water(uint32_t tile) noexcept
 }
 
 
-
 static bool ClickTile_Water(TileIndex tile)
 {
 	if (GetWaterTileType(tile) == WaterTileType::Depot) {
@@ -585,7 +578,6 @@ static bool ClickTile_Water(TileIndex tile)
 	}
 	return false;
 }
-
 
 
 static CommandCost TerraformTile_Water(TileIndex tile, DoCommandFlags flags, int, Slope)

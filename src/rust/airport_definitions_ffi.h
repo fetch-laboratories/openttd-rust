@@ -61,7 +61,9 @@ struct OpenTTDAirportDefinitionServices {
 void RustAirportTileDefault(uint16_t id) noexcept;
 const OpenTTDAirportDefinitionServices &GetAirportDefinitionServices() noexcept;
 extern "C" {
-bool openttd_rust_airport_change_info(const OpenTTDAirportDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
-bool openttd_rust_airport_tile_change_info(const OpenTTDAirportDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
+uint8_t openttd_rust_airport_change_info_abi(const OpenTTDAirportDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
+extern "C++" inline bool openttd_rust_airport_change_info(const OpenTTDAirportDefinitionServices *a0, GRFFile *a1, uint32_t a2, uint32_t a3, uint32_t a4, ByteReader *a5, uint8_t *a6) { return openttd_rust_airport_change_info_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }
+uint8_t openttd_rust_airport_tile_change_info_abi(const OpenTTDAirportDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
+extern "C++" inline bool openttd_rust_airport_tile_change_info(const OpenTTDAirportDefinitionServices *a0, GRFFile *a1, uint32_t a2, uint32_t a3, uint32_t a4, ByteReader *a5, uint8_t *a6) { return openttd_rust_airport_tile_change_info_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }
 }
 #endif

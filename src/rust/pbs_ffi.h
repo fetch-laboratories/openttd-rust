@@ -46,12 +46,15 @@ const OpenTTDPbsServices &GetPbsServices() noexcept;
 extern "C" {
 uint8_t openttd_rust_pbs_reserved(const OpenTTDPbsServices *, uint32_t);
 void openttd_rust_pbs_platform(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
-bool openttd_rust_pbs_try_reserve(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
+uint8_t openttd_rust_pbs_try_reserve_abi(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
+extern "C++" inline bool openttd_rust_pbs_try_reserve(const OpenTTDPbsServices *a0, uint32_t a1, uint8_t a2, bool a3) { return openttd_rust_pbs_try_reserve_abi(a0, a1, a2, a3) != 0; }
 void openttd_rust_pbs_unreserve(const OpenTTDPbsServices *, uint32_t, uint8_t);
 OpenTTDTrainReservationPbs openttd_rust_pbs_follow(const OpenTTDPbsServices *, uint8_t, uint64_t, uint32_t, uint8_t);
 OpenTTDTrainReservationPbs openttd_rust_pbs_follow_train(const OpenTTDPbsServices *, OpenTTDTrainHandle, OpenTTDPbsTrainOutput *);
 OpenTTDTrainHandle openttd_rust_pbs_train_for(const OpenTTDPbsServices *, uint32_t, uint8_t);
-bool openttd_rust_pbs_safe(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool, bool);
-bool openttd_rust_pbs_free(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool);
+uint8_t openttd_rust_pbs_safe_abi(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool, bool);
+extern "C++" inline bool openttd_rust_pbs_safe(const OpenTTDPbsServices *a0, OpenTTDTrainHandle a1, uint32_t a2, uint8_t a3, bool a4, bool a5) { return openttd_rust_pbs_safe_abi(a0, a1, a2, a3, a4, a5) != 0; }
+uint8_t openttd_rust_pbs_free_abi(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool);
+extern "C++" inline bool openttd_rust_pbs_free(const OpenTTDPbsServices *a0, OpenTTDTrainHandle a1, uint32_t a2, uint8_t a3, bool a4) { return openttd_rust_pbs_free_abi(a0, a1, a2, a3, a4) != 0; }
 }
 #endif

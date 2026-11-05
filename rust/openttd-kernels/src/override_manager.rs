@@ -199,7 +199,7 @@ pub unsafe extern "C" fn openttd_rust_override_allocate(
     substitute: u16,
     native: *mut c_void,
     existing: u16,
-    valid: unsafe extern "C" fn(*mut c_void, u16) -> bool,
+    valid: unsafe extern "C" fn(*mut c_void, u16) -> u8,
 ) -> u16 {
     let id = existing;
     let invalid = unsafe { (*manager).invalid };
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn openttd_rust_override_allocate(
     }
     let (offset, maximum) = unsafe { ((*manager).offset, (*manager).maximum) };
     for id in offset..maximum {
-        if !unsafe { valid(native, id) } {
+        if unsafe { valid(native, id) } == 0 {
             continue;
         }
         let map = unsafe { &mut (&mut (*manager).mappings)[usize::from(id)] };
@@ -230,8 +230,8 @@ pub unsafe fn allocate_house(
     substitute: u16,
 ) -> u16 {
     // HouseOverrideManager inherits OverrideManagerBase::CheckValidNewID.
-    unsafe extern "C" fn valid(_: *mut c_void, _: u16) -> bool {
-        true
+    unsafe extern "C" fn valid(_: *mut c_void, _: u16) -> u8 {
+        u8::from(true)
     }
     let existing = unsafe { get(manager, local, grfid) };
     unsafe {

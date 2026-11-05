@@ -1581,13 +1581,13 @@ pub unsafe extern "C" fn openttd_rust_fleet_remove_company_groups(
 /// Static typed noexcept services; live native arguments and game-thread owners.
 /// Field accesses end before callbacks. Panics or escaping exceptions abort.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_fleet_contains(
+pub unsafe extern "C" fn openttd_rust_fleet_contains_abi(
     services: *const GroupServices,
     search: u16,
     target: u16,
-) -> bool {
+) -> u8 {
     let w = unsafe { &*services };
-    unsafe { contains(w, search, target) }
+    u8::from(unsafe { contains(w, search, target) })
 }
 /// Synchronous original fleet replacement control.
 /// # Safety

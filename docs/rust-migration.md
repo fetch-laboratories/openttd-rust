@@ -33,7 +33,7 @@ sudo apt-get install build-essential cmake ninja-build python3 pkg-config \
   libfontconfig-dev libharfbuzz-dev libicu-dev liblzo2-dev openttd-opengfx
 ```
 
-On this Ubuntu 26.04 x86-64 host without administrator access, `python3 tools/bootstrap-local.py` downloads packages to `.local/downloads`, extracts them to `.local/deps`, and installs Rust in `.local/cargo` and `.local/rustup`. It changes no shell profiles or system packages. It depends on host libraries and package names; it is not a portable installer.
+This host runs Ubuntu 24.04 x86-64, the release CI's `ubuntu-24.04` runners use, with the packages above plus `valgrind`, `ccache`, `unifdef` and `gdb` from apt (moved 2026-11-05). Keep `.local/deps` absent here: the driver puts it ahead of system packages on every compiler, library and pkg-config path. `python3 tools/bootstrap-local.py` is for an Ubuntu 26.04 host without administrator access; it extracts that release's packages to `.local/deps` and installs Rust in `.local/cargo` and `.local/rustup`, changing no shell profile or system package. Output built on the previous Ubuntu 26.04 host needs glibc 2.43; it is kept unused at `/mnt/storage/openttd-rust/old-host-ubuntu2604-20261105/`.
 
 | Command | What it does |
 | --- | --- |
@@ -79,7 +79,22 @@ Cache build outputs when the key covers what determines them; never cache test r
 - Worktrees share the main checkout's reference, build, bootstrapped dependencies and `.local/compiler-cache/`. No symlinks are needed.
 - Install ccache or use `tools/bootstrap-local.py`. `migration/ccache.conf` uses compiler-content checks, direct mode and no sloppiness. `--no-ccache` enables an ordinary PCH build; `--ccache-bypass` keeps no-PCH flags without reuse.
 - The driver skips CMake configure when the cache has all requested `-D` values; Ninja still responds to CMake input changes. For changed configure-time environment such as a dependency prefix, use a fresh build directory or configure manually.
-- CI caches use compatible OS, architecture, baseline, compiler, ccache and configuration keys (#79). Windows and macOS also cache vcpkg binaries and use ccache 4.14.1 without PCH; MSVC uses `/Z7` (CMP0141).
+- CI caches use compatible OS, architecture, baseline, compiler, ccache and configuration keys (#79). Windows and macOS also cache vcpkg binaries and use ccache 4.14.1 without PCH; MSVC uses `/Z7` (CMP0141). Emscripten builds without PCH and wraps emcc's clang with the container's ccache through `EM_COMPILER_WRAPPER`.
+
+## Output disk
+
+This host has a 220 GB SSD and a 1 TB HDD mounted at `/mnt/storage` (`/etc/fstab` label `storage`, `nofail`). Write-once output lives on the HDD behind symlinks. Caches, toolchains, the pinned original and its builds, and each worktree's `build-rust` stay on the SSD for build speed.
+
+| Path | Symlink target |
+| --- | --- |
+| Main checkout `.local/` `simulation`, `verification`, `coverage`, `deep`, `speed-pass`, `worktrees` | `/mnt/storage/openttd-rust/main-local/<name>` |
+| Each other worktree's `.local` | `/mnt/storage/openttd-rust/worktree-local/<worktree>-<id>/local` |
+
+- `.git/hooks/post-checkout` calls `.git/hooks/offload-local hook`, which links the `.local` of each new worktree, T3's included. Worktrees inside the main `.local` keep a real `.local`: `.local/worktrees` is already on the HDD, and the pinned original stays unchanged. The hook always exits 0, so it never fails `git worktree add`; without the HDD the new worktree keeps `.local` on the SSD. Both scripts are untracked and exist only on this host.
+- Removing a worktree removes only its link. Each time the hook links a new worktree, it deletes HDD output whose worktree has been gone for 24 hours. `offload-local sweep` lists that output; `--apply` deletes it now.
+- `offload-local migrate` moves a worktree's real `.local` onto the HDD, for example after `git worktree add --no-checkout` skipped the hook, and recreates a missing main-checkout link. It is idempotent. The scripts log to `/mnt/storage/openttd-rust/offload.log`.
+- If the HDD is unmounted, the main checkout's links dangle and runs fail instead of filling the SSD. Mount it and rerun.
+- In tool code, `.resolve()` can take a `.local` path off the checkout's tree, so compute `relative_to(ROOT)` from the unresolved path. `Path.rglob` follows a symlinked starting folder but not symlinked subfolders, which is why worktrees link `.local` whole.
 
 ## Simulation comparison
 
@@ -88,8 +103,9 @@ Cache build outputs when the key covers what determines them; never cache test r
 - Each scenario runs headless in both plain and `-d desync=3` modes under `.local/simulation/`. Desync mode saves an uncompressed snapshot every 32 economy days and changes cache and YAPF behavior. Both modes compare exit saves and full output; warnings, different checkpoint lists or end moments, and semantic differences fail.
 - Default scenarios include regression saves with AIs, generated TGP and original maps, and `play-*` LLM road saves with manual distribution and cargodist. `--soak` adds scenarios, `--self` compares the reference to itself, and names filter the set. The driver runs `--jobs // 2` scenarios at once. See `migration/saves/README.md`.
 - The #86 rail save requires train and ship movement and cargo delivery; `play-padhattan-ridge-2000-*` (#179) adds trains, ships, helicopters and a plane. Saved subsidies and PBS signals do not cover every multiplier or route branch. The aircraft fixture checks movement, cargo, flying and delivery; see `tools/aircraft-scenario-ai/README.md`.
-- Community AI and arctic scenarios (#507) use pinned source downloads; one generated game and one short reload run by default, while ten-year temperate and arctic games use soak. See [input setup](../migration/community-ai/README.md). The same-NewGRF save remains unselected while #525 and #526 are user-parked.
+- Community AI and arctic scenarios (#507) use pinned source downloads; one generated game and one short reload run by default, while ten-year temperate and arctic games use soak. See [input setup](../migration/community-ai/README.md). NewGRF sets (#507) use the same pinned, uncommitted downloads ([evidence](porting.md#evidence)): `newgrf-sets-arctic` runs by default and `newgrf-sets-arctic-long` is soak-only; the same-NewGRF save follows them.
 - `MASKS` records reasons and hits. It masks random save ID, build revision, NewGRF version and the original's uninitialized `round_trip_time` (#83); a port touching the latter needs its own check. Record known port divergences in `KNOWN_FAILURES` by first divergence and issue, never as new `MASKS`.
+- `migration/harness-inventory.json` records scenario names, each comparison driver's case lines, `MASKS` and `KNOWN_FAILURES`. Quick CI fails when the tree differs from it, a mask is added or widened against base, a new known failure names no open issue, or no tool reads a scenario key; `python3 tools/harness_inventory.py --write` records the tree. `run-comparisons.py` fails on no, zero or fewer cases than recorded; `--record` writes the printed lines. A removal passes only once the PR records it there.
 - Named witnesses (#198) fail when a required branch is not reached. `OPENTTD_WITNESS` writes `branch-witnesses.json`; scenario modules set it and check the required counters. Missing files or zero counts fail.
 - Linux games run as an unprivileged user with child-only `RLIMIT_NPROC=0`; original thread-failure paths compute link graphs and save synchronously. A probe rejects hosts that bypass the limit. There are no timing retries or truncated logs; active GameScripts remain outside the corpus. The cadence subset below uses native workers.
 - Runtime trees are copied before games. Keep the candidate build idle during its initial copy. `--candidate` uses data beside that executable. Reports, including initial `candidate_commit` and `candidate_status` (#97), go to `.local/simulation/<time>-<pid>/report.json`.
@@ -124,12 +140,13 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 | `python3 tools/ci.py wait .local/ci-requests/REQUEST.json` | Wait for a request. |
 | `python3 tools/preflight.py --base origin/rust-migration` | Run the pinned commit checker and rebound-callee gate; `--hooks PATH` uses a clean pinned checkout offline. |
 
-- The CLI refuses unmergeable or pending-mergeability PRs and changed heads. A changed head or advanced base needs a new Full. `CI_ON_DEMAND=true` enables requests after root installs and verifies the status; without it automatic Full remains the bootstrap.
+- The CLI refuses unmergeable or pending-mergeability PRs and changed heads. A changed head or advanced base needs a new Full, except when the head's status was carried (next bullet). A Full request for a head that already passed dispatches nothing. `CI_ON_DEMAND=true` enables requests after root installs and verifies the status; without it automatic Full remains the bootstrap.
 - For a workflow-changing PR, root reviews its workflow, temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap` through `ci:full`. After merge, restore the variable to `true` and record both changes in the PR.
 - Keep warm-cache Full within about 15 minutes (#233). Add parallel jobs or shards, not steps on one job's critical path. Keep caches under the repository limit.
 - All profiles run quick checks including Ruff 0.16.8 and ty 0.0.92. Python conversion remains on #501. `rust-migration` protection disables ordinary force pushes and branch deletion; attributed independent review supplies the process gate with shared credentials.
+- Carried validation (#659): when a PR push keeps the non-Markdown tree that its previous head passed Full on, the invalidation workflow copies that `Full validation` and `Validated tree` to the new head within seconds, instead of setting it pending. Examples are an update from base over docs-only commits and a Markdown-only push to the PR. The new head must contain the current base, so the merged tree is the one that was tested. The tree comparison is the same complete-inventory rule as the post-merge cache refresh. Any other push, a previous head without a same-run passing result, or a failed lookup leaves the status pending.
 - Protected pushes queue without cancelling a running validation; newer pending pushes replace older ones. Markdown-only pushes ordinarily start no workflows. Matching previously Full-tested non-Markdown trees refresh eligible compiler caches without repeating tests; incomplete inventories retain heavy validation. Post-merge checks do not authorize an untested combination.
-- Full uses native comparisons and three simulation shards, with frozen runtimes and run-scoped artifacts. Reports and failing saves are artifacts; build inputs expire after one day. Native cache roles are trimmed to 750 MB, Linux flavours to 600 MB and macOS flavours to 650 MB; retention bounds GitHub cache use to 8 GiB under the 10 GiB limit.
+- Full uses native comparisons and three simulation shards, with frozen runtimes and run-scoped artifacts. Reports and failing saves are artifacts; build inputs expire after one day. Native cache roles are trimmed to 750 MB, Linux flavours to 600 MB, macOS flavours to 650 MB and Emscripten to 500 MB; retention bounds GitHub cache use to 8 GiB under the 10 GiB limit.
 - Runner variables are `CI_LINUX_HEAVY`, `CI_LINUX_COMPARISONS`, `CI_LINUX_SIMULATION`, `CI_LINUX_PLATFORM`, `CI_MACOS_HEAVY` and `CI_WINDOWS_HEAVY`. Unset values use `ubuntu-24.04`, `macos-latest` and `windows-2022` respectively; cached GCC flavours always use free `ubuntu-24.04`. Current Blacksmith settings use `blacksmith-8vcpu-ubuntu-2404` for heavy Linux, `blacksmith-4vcpu-ubuntu-2404` for other Linux jobs and `blacksmith-4vcpu-windows-2025` for Windows. Profile runner sizes with `blacksmith jobs list|steps|stats`, `jobs aggregate` and `jobs diagnose rightsize`; use `--job-name` for the latter two. Use an org token, never a person's `~/.blacksmith/credentials`.
 - Run macOS, Windows x86, Linux Clang and Linux GCC Dedicated on `rust-migration` after every fifth integration (user, 2026-10-22 and 2026-10-26; #357, #514): `gh workflow run ci-build.yml --ref rust-migration`. Fix a red result before further integrations. An uncovered protected push also runs them.
 - After two hosted-capacity cancellations of a macOS run, root runs `gh variable set CI_MACOS_HEAVY --body blacksmith-6vcpu-macos-26`, reruns, then `gh variable delete CI_MACOS_HEAVY` when it finishes.
@@ -141,12 +158,13 @@ Full validation requires native comparisons and simulation, Windows x64, Linux G
 | --- | --- |
 | `python3 tools/shared-accessors.py --base-ref origin/rust-migration` | Enforce #249 in quick CI. `tools/shared-accessor-baseline.txt` can shrink, not gain exemptions. Macros, derived fields and compound callbacks need review. |
 | `python3 tools/rebound-callees.py --base-ref origin/rust-migration` | Reject duplicate bindings and forwarded service fields in quick CI. `tools/rebound-callee-baseline.txt` can shrink, not grow. Macros, lambdas, wrappers, some templates and namespace resolution remain review work. |
+| `python3 tools/ffi-bool-returns.py` | Reject Rust-defined C `bool` returns, including callbacks, macro templates and visible simple aliases (#644). Rust-only `cfg(test)` service mocks are excluded. |
 | `python3 tools/orphan-exports.py --base-ref origin/rust-migration` | Check Rust exports and C++ declarations for production use. `tools/orphan-export-baseline.txt` can shrink, not grow. Macros and arbitrary conditional compilation need review; reviewers also check orphan `WITH_RUST` bodies. |
 | `python3 tools/port-metrics.py` | Report code lines with Pygments 2.19.2, using `uv` if needed. Original retirement may be negative; removing fork glue does not retire original C++. |
 | `python3 tools/port-metrics.py --whole-fork` | Report whole-fork and simulation retirement, per-area original, retired, remaining, glue and compiled C++ lines, Rust exports and boundary function pointers. |
 | `python3 tools/port-metrics.py --functions [AREA ...]` | Add the whole-fork report's remaining original code lines per baseline file and top-level function, plus file scope. Rows sum to each area's remaining count. `facade` marks rows whose remaining lines are only a signature and braces. Function detection is a brace heuristic; macro-headed blocks show as `?`. |
 
-The `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py`, `tools/test-orphan-exports.py` and `tools/test-port-metrics.py` tests exercise their checks. Original header helpers and constants live in shared Rust header modules (#261); the checker cannot detect Rust copies. See [porting](porting.md#callees-and-shared-accessors) for the rule.
+The `tools/test-ffi-bool-returns.py`, `tools/test-shared-accessors.py`, `tools/test-rebound-callees.py`, `tools/test-orphan-exports.py` and `tools/test-port-metrics.py` tests exercise their checks. Original header helpers and constants live in shared Rust header modules (#261); the checker cannot detect Rust copies. See [porting](porting.md#callees-and-shared-accessors) for the rule.
 
 Metrics count code lines, excluding comments, directives, blank lines and Python docstrings; a second line retains historical physical counts. The whole-fork report inventories source and `WITH_RUST` guards rather than preprocessing all build defines. Compiled C++ means remaining original plus compiled fork glue; it is not a claim of behavioral completion. Ownership ports retire more original C++ than net glue and tooling added, or explain why; conversions report net glue.
 
@@ -156,8 +174,8 @@ Metrics count code lines, excluding comments, directives, blank lines and Python
 `WITH_RUST` stays defined by CMake for dual-build harnesses under `tools/`.
 The pinned original remains the oracle; do not sweep its worktree or `tools/`.
 
-Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). On the
-Ubuntu 26.04 host without administrator access, obtain package 2.12-1:
+Install unifdef 2.12 (Ubuntu/Debian: `sudo apt-get install unifdef`). Without administrator access on
+Ubuntu, obtain package 2.12-1:
 
 ```sh
 mkdir -p .local/unifdef

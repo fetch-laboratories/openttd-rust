@@ -122,7 +122,7 @@ fn nibble(byte: u8) -> Option<u8> {
 }
 
 #[allow(unsafe_code)] // Shared span creation, preserving null for empty inputs.
-unsafe fn borrowed<'a>(data: *const u8, length: usize) -> &'a [u8] {
+pub(crate) unsafe fn borrowed<'a>(data: *const u8, length: usize) -> &'a [u8] {
     if length == 0 {
         &[]
     } else {

@@ -176,14 +176,14 @@ pub unsafe extern "C" fn openttd_rust_bitmap_set(
 /// # Safety
 /// Live bitmap with no mutable borrow; `shared` is the live shared table.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_bitmap_has(
+pub unsafe extern "C" fn openttd_rust_bitmap_has_abi(
     bitmap: *const BitmapTileArea,
     tile: u32,
     shared: *const crate::services::Services,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*shared };
     let map = s.map();
-    unsafe { (*bitmap).has_tile(tile, map, |ok| crate::movement::native_assert(s, ok)) }
+    u8::from(unsafe { (*bitmap).has_tile(tile, map, |ok| crate::movement::native_assert(s, ok)) })
 }
 
 crate::abi::layouts! {

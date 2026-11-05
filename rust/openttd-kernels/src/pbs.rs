@@ -260,13 +260,13 @@ pub unsafe extern "C" fn openttd_rust_pbs_platform(
 /// # Safety
 /// Same synchronous service/world contract; track has the source preconditions.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_pbs_try_reserve(
+pub unsafe extern "C" fn openttd_rust_pbs_try_reserve_abi(
     s: *const PbsServices,
     tile: u32,
     track: u8,
     trigger: bool,
-) -> bool {
-    Pbs(unsafe { &*s }).try_reserve(tile, track, trigger)
+) -> u8 {
+    u8::from(Pbs(unsafe { &*s }).try_reserve(tile, track, trigger))
 }
 /// # Safety
 /// Same synchronous service/world contract; track has the source preconditions.
@@ -645,27 +645,27 @@ pub unsafe extern "C" fn openttd_rust_pbs_train_for(
 /// # Safety
 /// Live train and tables; original tile and trackdir preconditions apply.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_pbs_safe(
+pub unsafe extern "C" fn openttd_rust_pbs_safe_abi(
     s: *const PbsServices,
     v: Handle,
     tile: u32,
     td: u8,
     end: bool,
     no90: bool,
-) -> bool {
-    Pbs(unsafe { &*s }).safe(v, tile, td, end, no90)
+) -> u8 {
+    u8::from(Pbs(unsafe { &*s }).safe(v, tile, td, end, no90))
 }
 /// # Safety
 /// Live train and tables; original tile and trackdir preconditions apply.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_pbs_free(
+pub unsafe extern "C" fn openttd_rust_pbs_free_abi(
     s: *const PbsServices,
     v: Handle,
     tile: u32,
     td: u8,
     no90: bool,
-) -> bool {
-    Pbs(unsafe { &*s }).free(v, tile, td, no90)
+) -> u8 {
+    u8::from(Pbs(unsafe { &*s }).free(v, tile, td, no90))
 }
 
 /// Transient endpoint observation for the default unchanged-body gap check.

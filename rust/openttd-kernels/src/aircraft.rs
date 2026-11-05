@@ -1822,7 +1822,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 self.update_delta(id);
                 let point = self.xy(id);
                 let tile = self.tile_virt(i64::from(point.x), i64::from(point.y));
-                crate::animated_tile::openttd_rust_trigger_airport_tile(
+                crate::animated_tile::openttd_rust_trigger_airport_tile_abi(
                     (crate::animated_tile::services().as_station)(
                         crate::animated_tile::station_base(self.target(id)),
                     ),
@@ -2250,9 +2250,9 @@ macro_rules! with_world {
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_tick(leaves: *const Leaves, id: Vehicle) -> bool {
+pub unsafe extern "C" fn openttd_rust_aircraft_tick_abi(leaves: *const Leaves, id: Vehicle) -> u8 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    with_world!(leaves, |w| { w.tick(id) })
+    u8::from(with_world!(leaves, |w| { w.tick(id) }))
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2498,12 +2498,8 @@ pub unsafe extern "C" fn openttd_rust_aircraft_closest_depot(
 /// # Safety
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_event(
-    leaves: *const Leaves,
-    id: Vehicle,
-    pass: bool,
-) -> bool {
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn event(leaves: *const Leaves, id: Vehicle, pass: bool) -> bool {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| { w.event(id, u32::from(pass)) })
 }

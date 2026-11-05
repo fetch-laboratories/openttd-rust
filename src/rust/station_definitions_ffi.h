@@ -89,7 +89,9 @@ const OpenTTDStationDefinitionServices &GetStationDefinitionServices() noexcept;
 extern "C" {
 void openttd_rust_station_class_set_name(const StationSpec *, StringID);
 void openttd_rust_roadstop_class_set_name(const RoadStopSpec *, StringID);
-bool openttd_rust_station_change_info(const OpenTTDStationDefinitionServices *, const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, OpenTTDStationSequence *, uint8_t *);
-bool openttd_rust_roadstop_change_info(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
+uint8_t openttd_rust_station_change_info_abi(const OpenTTDStationDefinitionServices *, const OpenTTDAction2Services *, const OpenTTDGrfLoadingServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, OpenTTDStationSequence *, uint8_t *);
+extern "C++" inline bool openttd_rust_station_change_info(const OpenTTDStationDefinitionServices *a0, const OpenTTDAction2Services *a1, const OpenTTDGrfLoadingServices *a2, GRFFile *a3, uint32_t a4, uint32_t a5, uint32_t a6, ByteReader *a7, OpenTTDStationSequence *a8, uint8_t *a9) { return openttd_rust_station_change_info_abi(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9) != 0; }
+uint8_t openttd_rust_roadstop_change_info_abi(const OpenTTDStationDefinitionServices *, GRFFile *, uint32_t, uint32_t, uint32_t, ByteReader *, uint8_t *);
+extern "C++" inline bool openttd_rust_roadstop_change_info(const OpenTTDStationDefinitionServices *a0, GRFFile *a1, uint32_t a2, uint32_t a3, uint32_t a4, ByteReader *a5, uint8_t *a6) { return openttd_rust_roadstop_change_info_abi(a0, a1, a2, a3, a4, a5, a6) != 0; }
 }
 #endif

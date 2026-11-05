@@ -134,8 +134,8 @@ fn can_carry(info: crate::engine::Carrying) -> bool {
     is_valid_cargo_type(info.default_cargo)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_can_carry(s: &Services, e: E) -> bool {
-    can_carry((s.carrying)(e))
+pub unsafe extern "C" fn openttd_rust_engine_can_carry_abi(s: &Services, e: E) -> u8 {
+    u8::from(can_carry((s.carrying)(e)))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_capacity(
@@ -284,23 +284,23 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_refittable(s: &Services, id: u16) -> bool {
-    unsafe {
+pub unsafe extern "C" fn openttd_rust_engine_refittable_abi(s: &Services, id: u16) -> u8 {
+    u8::from(unsafe {
         let e = (s.engine_if_valid)(id);
-        if e.is_null() || !openttd_rust_engine_can_carry(s, e) {
-            return false;
+        if e.is_null() || openttd_rust_engine_can_carry_abi(s, e) == 0 {
+            return u8::from(false);
         }
         if (s.refit_mask)(e) == 0 {
-            return false;
+            return u8::from(false);
         }
         if (s.callbacks)(e) & VEHICLE_CARGO_SUFFIX != 0 {
-            return true;
+            return u8::from(true);
         }
         let cargo = (s.default_cargo)(e);
         let mut mask = 0;
         set_bit64(&mut mask, cargo);
         is_valid_cargo_type(cargo) && (s.refit_mask)(e) != mask
-    }
+    })
 }
 pub(crate) unsafe fn openttd_rust_articulated_next(
     s: &Services,
@@ -348,8 +348,8 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_articulated_is(s: &Services, engine: u16) -> bool {
-    (s.callbacks)((s.engine)(engine)) & VEHICLE_ARTIC_ENGINE != 0
+pub unsafe extern "C" fn openttd_rust_articulated_is_abi(s: &Services, engine: u16) -> u8 {
+    u8::from((s.callbacks)((s.engine)(engine)) & VEHICLE_ARTIC_ENGINE != 0)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_count(
@@ -358,7 +358,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
     purchase: bool,
 ) -> u32 {
     unsafe {
-        if !openttd_rust_articulated_is(s, engine) || !(s.pool_available)(1) {
+        if openttd_rust_articulated_is_abi(s, engine) == 0 || !(s.pool_available)(1) {
             return 0;
         }
         let v = if purchase {
@@ -384,7 +384,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
 }
 /// A live base shell, retained by its fleet/transaction caller.
 pub(crate) unsafe fn can_carry_vehicle(s: &Services, v: V) -> bool {
-    unsafe { openttd_rust_engine_can_carry(s, (s.vehicle_engine_object)(v)) }
+    unsafe { openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(v)) != 0 }
 }
 /// `Engine::GetDisplayDefaultCapacity` delegates to the capacity owner in purchase context.
 pub(crate) unsafe fn display_default_capacity(s: &Services, e: E, mail: *mut u16) -> u32 {
@@ -394,7 +394,7 @@ pub(crate) unsafe fn display_default_capacity(s: &Services, e: E, mail: *mut u16
 unsafe fn default_capacity(s: &Services, engine: u16) -> (u8, u16) {
     unsafe {
         let e = (s.engine)(engine);
-        let cargo = if openttd_rust_engine_can_carry(s, e) {
+        let cargo = if openttd_rust_engine_can_carry_abi(s, e) != 0 {
             (s.default_cargo)(e)
         } else {
             INVALID_CARGO
@@ -412,7 +412,7 @@ unsafe fn default_capacity(s: &Services, engine: u16) -> (u8, u16) {
 pub(crate) unsafe fn available_cargo(s: &Services, engine: u16, initial: bool) -> u64 {
     unsafe {
         let e = (s.engine)(engine);
-        if !openttd_rust_engine_can_carry(s, e) {
+        if openttd_rust_engine_can_carry_abi(s, e) == 0 {
             return 0;
         }
         let mut cargoes = (s.refit_mask)(e);
@@ -480,19 +480,19 @@ pub unsafe extern "C" fn openttd_rust_articulated_cargoes(s: &Services, engine: 
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_articulated_refittable(s: &Services, engine: u16) -> bool {
-    unsafe {
-        if openttd_rust_engine_refittable(s, engine) {
-            return true;
+pub unsafe extern "C" fn openttd_rust_articulated_refittable_abi(s: &Services, engine: u16) -> u8 {
+    u8::from(unsafe {
+        if openttd_rust_engine_refittable_abi(s, engine) != 0 {
+            return u8::from(true);
         }
         let e = (s.engine)(engine);
         let mut refittable = false;
         parts(s, e, engine, |part| {
-            refittable = openttd_rust_engine_refittable(s, part);
+            refittable = openttd_rust_engine_refittable_abi(s, part) != 0;
             !refittable
         });
         refittable
-    }
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_refit_masks(
@@ -552,7 +552,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
         loop {
             let cargo = (s.vehicle_cargo)(v);
             if is_valid_cargo_type(cargo)
-                && openttd_rust_engine_can_carry(s, (s.vehicle_engine_object)(v))
+                && (openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(v)) != 0)
             {
                 set_bit64(&mut cargoes, cargo);
                 if !is_valid_cargo_type(first) {

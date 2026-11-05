@@ -76,7 +76,8 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept;
 extern "C" {
 int32_t openttd_rust_bridge_length_cost(int32_t);
 Foundation openttd_rust_bridge_foundation(uint8_t, Axis);
-bool openttd_rust_bridge_flat_ramp(const OpenTTDSharedServices *, uint8_t, Axis);
+uint8_t openttd_rust_bridge_flat_ramp_abi(const OpenTTDSharedServices *, uint8_t, Axis);
+extern "C++" inline bool openttd_rust_bridge_flat_ramp(const OpenTTDSharedServices *a0, uint8_t a1, Axis a2) { return openttd_rust_bridge_flat_ramp_abi(a0, a1, a2) != 0; }
 void openttd_rust_bridge_available(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, BridgeType, uint32_t, uint16_t);
 void openttd_rust_build_bridge(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, TransportType, BridgeType, uint8_t);
 void openttd_rust_build_tunnel(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, TransportType, uint8_t);

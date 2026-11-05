@@ -18,7 +18,6 @@
 #include "ai_config.hpp"
 #include "ai.hpp"
 
-#include "../script/script_storage.hpp"
 #include "../script/script_cmd.h"
 #include "../script/script_gui.h"
 #include "ai_info.hpp"

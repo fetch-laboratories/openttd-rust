@@ -126,7 +126,6 @@ static GRFFile *GetFileByFilename(const std::string &filename)
 	return nullptr;
 }
 
-/** Reset all NewGRFData that was used only while processing data */
 
 /**
  * Disable a GRF
@@ -203,8 +202,6 @@ EngineID GetNewEngineID(const GRFFile *file, VehicleType type, uint16_t internal
 }
 
 
-
-
 /**
  * Translate the refit mask. refit_mask is uint32_t as it has not been mapped to CargoTypes.
  */
@@ -213,13 +210,6 @@ CargoTypes TranslateRefitMask(uint32_t refit_mask)
 	return openttd_rust_engine_translate_refit(refit_mask, _cur_gps.grffile);
 }
 
-/**
- * Converts TTD(P) Base Price pointers into the enum used by OTTD
- * See http://wiki.ttdpatch.net/tiki-index.php?page=BaseCosts
- * @param base_pointer TTD(P) Base Price Pointer
- * @param error_location Function name for grf error messages
- * @param[out] index If \a base_pointer is valid, \a index is assigned to the matching price; else it is left unchanged
- */
 
 /**
  * Get the language map associated with a given NewGRF and language.
@@ -247,10 +237,6 @@ void GRFUnsafe(ByteReader &)
 {
 	openttd_rust_grf_unsafe(&GetRustGrfLoadingServices());
 }
-
-/** Reset and clear all NewGRFs */
-
-/** Clear all NewGRF errors */
 
 
 /**
@@ -286,10 +272,6 @@ void ResetPersistentNewGRFData()
 	return {reinterpret_cast<const CargoLabel *>(labels.data), labels.size};
 }
 
-/**
- * Construct the Cargo Mapping
- * @note This is the reverse of a cargo translation table
- */
 
 /**
  * Prepare loading a NewGRF file with its config
@@ -348,15 +330,6 @@ GRFFile::GRFFile() = default;
 GRFFile::GRFFile(GRFFile &&other) = default;
 GRFFile::~GRFFile() = default;
 
-/**
- * Find first cargo label that exists and is active from a list of cargo labels.
- * @param labels List of cargo labels.
- * @returns First cargo label in list that exists, or CT_INVALID if none exist.
- */
-
-/**
- * Precalculate refit masks from cargo classes for all vehicles.
- */
 
 /** Set to use the correct action0 properties for each canal feature */
 static void FinaliseCanals()
@@ -369,16 +342,6 @@ static void FinaliseCanals()
 	}
 }
 
-/** Check for invalid engines */
-
-/** Check for invalid cargoes */
-
-
-/**
- * Add all new industries to the industry array. Industry properties can be set at any
- * time in the GRF file, so we can only add a industry spec to the industry array
- * after the file has finished loading.
- */
 
 /**
  * Add all new objects to the object array. Object properties can be set at any
@@ -401,12 +364,6 @@ static void FinaliseObjectsArray()
 
 	ObjectSpec::BindToClasses();
 }
-
-/**
- * Add all new airports to the airport array. Airport properties can be set at any
- * time in the GRF file, so we can only add a airport spec to the airport array
- * after the file has finished loading.
- */
 
 
 /**

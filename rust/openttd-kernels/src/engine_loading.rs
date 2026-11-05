@@ -10,7 +10,7 @@
 )]
 use crate::{
     cargo_registry::{
-        openttd_rust_cargo_by_label, openttd_rust_cargo_is_default, openttd_rust_cargo_mask,
+        openttd_rust_cargo_by_label, openttd_rust_cargo_is_default_abi, openttd_rust_cargo_mask,
         openttd_rust_cargo_translate, openttd_rust_standard_cargo_mask,
     },
     engine_type::INVALID_ENGINE,
@@ -139,15 +139,17 @@ unsafe fn set_override(source: u32, target: u32) {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_override_get(source: u32, target: *mut u32) -> bool {
-    if let Some(value) = unsafe { &*OVERRIDES.get() }.get(&source) {
-        unsafe {
-            *target = *value;
-        }
-        true
-    } else {
-        false
-    }
+pub unsafe extern "C" fn openttd_rust_engine_override_get_abi(source: u32, target: *mut u32) -> u8 {
+    u8::from(
+        if let Some(value) = unsafe { &*OVERRIDES.get() }.get(&source) {
+            unsafe {
+                *target = *value;
+            }
+            true
+        } else {
+            false
+        },
+    )
 }
 pub(crate) unsafe fn openttd_rust_engine_override_clear() {
     unsafe { &mut *OVERRIDES.get() }.clear();
@@ -235,8 +237,8 @@ pub struct Services {
     pub(crate) resolver: *const crate::newgrf_vehicle::Services,
     next: extern "C" fn(u32) -> EngineRef,
     resolve: extern "C" fn(u16) -> EngineRef,
-    dynamic: extern "C" fn() -> bool,
-    find_file: extern "C" fn(u32) -> *mut c_void,
+    pub(crate) dynamic: extern "C" fn() -> bool,
+    pub(crate) find_file: extern "C" fn(u32) -> *mut c_void,
     engine_file: extern "C" fn(E) -> File,
     has_file: extern "C" fn(E) -> bool,
     set_file: extern "C" fn(E, File),
@@ -610,7 +612,7 @@ fn default_masks(s: &Services, kind: u8, shell: E, id: u16, label: u32) -> (u16,
 pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
     let mut original_known_cargoes = 0;
     for cargo in 0..NUM_CARGO {
-        if openttd_rust_cargo_is_default(cargo) {
+        if openttd_rust_cargo_is_default_abi(cargo) != 0 {
             original_known_cargoes |= 1_u64 << cargo;
         }
     }
@@ -982,7 +984,7 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_engine_reset_config(s: &Services) -> bool {
+pub extern "C" fn openttd_rust_engine_reset_config_abi(s: &Services) -> u8 {
     let mut from = 0;
     loop {
         let vehicle = (s.vehicle_next)(from);
@@ -991,14 +993,14 @@ pub extern "C" fn openttd_rust_engine_reset_config(s: &Services) -> bool {
         }
         from = vehicle.id + 1;
         if crate::vehicle_func::is_company_buildable_vehicle_type(vehicle.kind) {
-            return false;
+            return u8::from(false);
         }
     }
     unsafe {
         openttd_rust_engine_mapping_defaults((s.default_counts)());
     }
     (s.reload)();
-    true
+    u8::from(true)
 }
 
 #[repr(C)]

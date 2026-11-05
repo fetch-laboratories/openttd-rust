@@ -308,16 +308,6 @@ void DrawNewObjectTileInGUI(int x, int y, const ObjectSpec *spec, uint8_t view)
 	DrawNewGRFTileSeqInGUI(x, y, &dts, 0, palette);
 }
 
-/**
- * Perform a callback for an object.
- * @param callback The callback to perform.
- * @param param1   The first parameter to pass to the NewGRF.
- * @param param2   The second parameter to pass to the NewGRF.
- * @param spec     The specification of the object / the entry point.
- * @param o        The object to call the callback for.
- * @param tile     The tile the callback is called for.
- * @return The result of the callback.
- */
 
 /** Helper class for animation control. */
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept

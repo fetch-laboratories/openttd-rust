@@ -278,13 +278,20 @@ pub(crate) fn scale(value: u32, target_age: i32, orig_age: i32) -> u32 {
 // All entries require live uniquely owned graph pointers for mutation, valid
 // source indices and original graph invariants. They retain no native pointer.
 // Allocation/panics abort; entries never call throwing C++ services.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_live_graph_new(cargo: u8, date: i32) -> *mut Graph {
+fn new_graph(cargo: u8, date: i32) -> *mut Graph {
     Box::into_raw(Box::new(Graph {
         cargo,
         last_compression: date,
         nodes: Vec::new(),
     }))
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_live_graph_new(cargo: u8) -> *mut Graph {
+    new_graph(cargo, crate::timer_game_common::economy_date().0)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_live_graph_new_empty() -> *mut Graph {
+    new_graph(crate::cargo_type::INVALID_CARGO, 0)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_copy(graph: *const Graph) -> *mut Graph {
@@ -341,11 +348,8 @@ pub extern "C" fn openttd_rust_live_graph_scale(value: u32, target: i32, orig: i
     scale(value, target, orig)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_monthly(
-    graph: *const Graph,
-    value: u32,
-    date: i32,
-) -> u32 {
+pub unsafe extern "C" fn openttd_rust_live_graph_monthly(graph: *const Graph, value: u32) -> u32 {
+    let date = crate::timer_game_common::economy_date().0;
     value.wrapping_mul(30)
         / date
             .wrapping_sub(unsafe { &*graph }.last_compression)
@@ -397,8 +401,8 @@ pub unsafe extern "C" fn openttd_rust_live_node_update_supply(
     graph: *mut Graph,
     id: u16,
     supply: u32,
-    date: i32,
 ) {
+    let date = crate::timer_game_common::economy_date().0;
     let n = &mut unsafe { &mut *graph }.nodes[usize::from(id)];
     n.update_supply(supply, date);
 }
@@ -433,9 +437,9 @@ pub unsafe extern "C" fn openttd_rust_live_node_update_edge(
     usage: u32,
     time: u32,
     modes: EdgeUpdateModes,
-    date: i32,
     assertions: bool,
 ) {
+    let date = crate::timer_game_common::economy_date().0;
     unsafe { &mut *graph }.nodes[usize::from(id)]
         .update_edge(to, capacity, usage, time, modes, date, assertions);
 }
@@ -461,8 +465,8 @@ pub unsafe extern "C" fn openttd_rust_live_edge_update(
     usage: u32,
     time: u32,
     modes: EdgeUpdateModes,
-    date: i32,
 ) {
+    let date = crate::timer_game_common::economy_date().0;
     unsafe { &mut *edge }.update(capacity, usage, time, modes, date);
 }
 #[unsafe(no_mangle)]
@@ -724,8 +728,8 @@ pub unsafe extern "C" fn openttd_rust_live_node_add_edge(
     usage: u32,
     time: u32,
     modes: EdgeUpdateModes,
-    date: i32,
 ) {
+    let date = crate::timer_game_common::economy_date().0;
     unsafe { &mut *graph }.nodes[usize::from(id)].add_edge(to, capacity, usage, time, modes, date);
 }
 #[unsafe(no_mangle)]

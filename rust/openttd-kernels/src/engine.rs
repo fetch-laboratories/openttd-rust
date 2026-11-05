@@ -686,10 +686,10 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
             }
             let cargo = unsafe { call!(s, vehicle_cargo, v.shell) };
             if !unsafe {
-                crate::engine_capabilities::openttd_rust_engine_can_carry(
+                crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                     s.capabilities,
                     cargo.engine,
-                )
+                ) != 0
             } || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
             {
                 continue;
@@ -893,7 +893,7 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
             }
             refresh = true;
         }
-        if !unsafe { openttd_rust_engine_enabled(s, e.shell) } {
+        if !unsafe { openttd_rust_engine_enabled_abi(s, e.shell) != 0 } {
             continue;
         }
         if read_field!(e.state, flags) & AVAILABLE == 0
@@ -953,7 +953,7 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
     } else if read_field!(e.state, company_avail) & company_mask(company) == 0 {
         return false;
     }
-    if !unsafe { openttd_rust_engine_enabled(s, e.shell) } {
+    if !unsafe { openttd_rust_engine_enabled_abi(s, e.shell) != 0 } {
         return false;
     }
     if company != OWNER_DEITY {
@@ -975,27 +975,27 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
     true
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_buildable(
+pub unsafe extern "C" fn openttd_rust_engine_buildable_abi(
     s: *const Services,
     e: EngineRef,
     kind: VehicleType,
     company: u8,
-) -> bool {
+) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    unsafe { buildable(&*s, e, kind, company) }
+    u8::from(unsafe { buildable(&*s, e, kind, company) })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_variant_hidden(
+pub unsafe extern "C" fn openttd_rust_engine_variant_hidden_abi(
     s: *const Services,
     e: EngineRef,
     company: u8,
-) -> bool {
+) -> u8 {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     if company >= 15 {
-        return false;
+        return u8::from(false);
     }
     if read_field!(e.state, company_hidden) & (1 << company) != 0 {
-        return true;
+        return u8::from(true);
     }
     let s = unsafe { &*s };
     let mut re = e;
@@ -1008,7 +1008,7 @@ pub unsafe extern "C" fn openttd_rust_engine_variant_hidden(
         };
         let hidden = read_field!(ve.state, company_hidden) & (1 << company) != 0;
         if hidden || variant.parent == INVALID {
-            return hidden;
+            return u8::from(hidden);
         }
         re = unsafe { call!(s, resolve, variant.parent) };
     }
@@ -1147,7 +1147,7 @@ pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if !unsafe { openttd_rust_engine_enabled(s, e.shell) } || unsafe { wagon(s, e) } {
+        if !unsafe { openttd_rust_engine_enabled_abi(s, e.shell) != 0 } || unsafe { wagon(s, e) } {
             continue;
         }
         if read_field!(e.state, flags) & AVAILABLE != 0 && read_field!(e.state, company_avail) != 0
@@ -1334,9 +1334,9 @@ pub(crate) struct CapacityConfig {
 
 /// Original invalid-string short circuit precedes the climate observation.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_enabled(
+pub unsafe extern "C" fn openttd_rust_engine_enabled_abi(
     s: &Services,
     e: *const OpenTTDEngine,
-) -> bool {
-    unsafe { (s.capabilities.valid_string)(e) && (s.climate)(e) }
+) -> u8 {
+    u8::from(unsafe { (s.capabilities.valid_string)(e) && (s.climate)(e) })
 }

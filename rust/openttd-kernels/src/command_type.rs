@@ -10,6 +10,8 @@
 
 /// `Commands::CMD_COMPANY_CTRL`.
 pub const CMD_COMPANY_CTRL: u8 = 90;
+/// `Commands::CMD_END`.
+pub const CMD_END: u8 = 145;
 
 /// `CommandFlag` values as `CommandFlags` bits.
 pub struct CommandFlag;

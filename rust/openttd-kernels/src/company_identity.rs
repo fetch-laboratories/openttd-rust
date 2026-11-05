@@ -347,14 +347,14 @@ pub extern "C" fn openttd_rust_company_update_liveries(s: &Services, c: *mut Ope
     update_liveries(s, c);
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_manager_face(
+pub extern "C" fn openttd_rust_company_manager_face_abi(
     s: &Services,
     style: u32,
     bits: u32,
     execute: bool,
-) -> bool {
+) -> u8 {
     if !crate::company_manager_face::valid(s.faces, style, bits) {
-        return false;
+        return u8::from(false);
     }
     if execute {
         let c = (s.company)(CompanyID((s.shared.current_company)()));
@@ -365,27 +365,27 @@ pub extern "C" fn openttd_rust_company_manager_face(
         }
         (s.shared.screen_dirty)();
     }
-    true
+    u8::from(true)
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_colour(
+pub extern "C" fn openttd_rust_company_colour_abi(
     s: &Services,
     scheme: u8,
     primary: bool,
     mut colour: u8,
     execute: bool,
-) -> bool {
+) -> u8 {
     use crate::gfx_type::{COLOUR_END, INVALID_COLOUR};
     if scheme >= LS_END || (colour >= COLOUR_END && colour != INVALID_COLOUR) {
-        return false;
+        return u8::from(false);
     }
     if scheme == LS_DEFAULT && colour == INVALID_COLOUR {
-        return false;
+        return u8::from(false);
     }
     let id = CompanyID((s.shared.current_company)());
     let c = (s.company)(id);
     if scheme == LS_DEFAULT && primary && !companies(s, |cc| cc == c || (s.colour)(cc) != colour) {
-        return false;
+        return u8::from(false);
     }
     if execute {
         let l = (s.livery)(c, scheme);
@@ -451,7 +451,7 @@ pub extern "C" fn openttd_rust_company_colour(
         }
         (s.object_colours)(c);
     }
-    true
+    u8::from(true)
 }
 fn rename(s: &Services, text: ByteSpan, execute: bool, president: bool) -> u8 {
     let reset = text.size == 0;

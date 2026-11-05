@@ -1053,54 +1053,54 @@ pub unsafe extern "C" fn openttd_rust_station_catchment_tiles(
 /// # Safety
 /// `r` is a live rectangle.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_rect_empty(r: *const StationRect) -> bool {
-    unsafe { (*r).is_empty() }
+pub unsafe extern "C" fn openttd_rust_station_rect_empty_abi(r: *const StationRect) -> u8 {
+    u8::from(unsafe { (*r).is_empty() })
 }
 /// Native `StationRect::PtInExtendedRect`.
 /// # Safety
 /// `r` is a live rectangle.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_rect_pt_in_extended_rect(
+pub unsafe extern "C" fn openttd_rust_station_rect_pt_in_extended_rect_abi(
     r: *const StationRect,
     x: i32,
     y: i32,
     distance: i32,
-) -> bool {
-    unsafe { (*r).pt_in_extended_rect(x, y, distance) }
+) -> u8 {
+    u8::from(unsafe { (*r).pt_in_extended_rect(x, y, distance) })
 }
 /// Native `StationRect::BeforeAddTile`; `false` is the too-spread-out error.
 /// # Safety
 /// `r` is a live rectangle; `c` is the live catchment table.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_rect_before_add_tile(
+pub unsafe extern "C" fn openttd_rust_station_rect_before_add_tile_abi(
     r: *mut StationRect,
     tile: u32,
     mode: u8,
     c: *const CatchmentServices,
-) -> bool {
+) -> u8 {
     let c = unsafe { Ctx::new(c) };
     let mut copy = unsafe { *r };
     let ok = copy.before_add_tile(tile, mode, &c);
     unsafe { *r = copy };
-    ok
+    u8::from(ok)
 }
 /// Native `StationRect::BeforeAddRect`; `false` is the too-spread-out error.
 /// # Safety
 /// `r` is a live rectangle; `c` is the live catchment table.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_rect_before_add_rect(
+pub unsafe extern "C" fn openttd_rust_station_rect_before_add_rect_abi(
     r: *mut StationRect,
     tile: u32,
     w: i32,
     h: i32,
     mode: u8,
     c: *const CatchmentServices,
-) -> bool {
+) -> u8 {
     let c = unsafe { Ctx::new(c) };
     let mut copy = unsafe { *r };
     let ok = copy.before_add_rect(tile, w, h, mode, &c);
     unsafe { *r = copy };
-    ok
+    u8::from(ok)
 }
 /// Native `Station::RecomputeCatchmentForAll`.
 /// # Safety

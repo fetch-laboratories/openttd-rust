@@ -51,9 +51,13 @@ uint8_t openttd_rust_object_feature();
 ScopeResolver *openttd_rust_object_scope(OpenTTDObjectScope *, ObjectResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 uint16_t openttd_rust_object_callback(const OpenTTDObjectServices *, uint16_t, uint32_t, uint32_t, const ObjectSpec *, Object *, uint32_t, int32_t *, size_t, uint8_t);
 uint16_t openttd_rust_object_animation_callback(uint16_t, uint32_t, uint32_t, const ObjectSpec *, Object *, uint32_t, int32_t) noexcept;
-bool openttd_rust_object_enabled(const OpenTTDObjectServices *, const ObjectSpec *);
-bool openttd_rust_object_ever_available(const OpenTTDObjectServices *, const ObjectSpec *);
-bool openttd_rust_object_was_available(const OpenTTDObjectServices *, const ObjectSpec *);
-bool openttd_rust_object_available(const OpenTTDObjectServices *, const ObjectSpec *);
+uint8_t openttd_rust_object_enabled_abi(const OpenTTDObjectServices *, const ObjectSpec *);
+extern "C++" inline bool openttd_rust_object_enabled(const OpenTTDObjectServices *a0, const ObjectSpec *a1) { return openttd_rust_object_enabled_abi(a0, a1) != 0; }
+uint8_t openttd_rust_object_ever_available_abi(const OpenTTDObjectServices *, const ObjectSpec *);
+extern "C++" inline bool openttd_rust_object_ever_available(const OpenTTDObjectServices *a0, const ObjectSpec *a1) { return openttd_rust_object_ever_available_abi(a0, a1) != 0; }
+uint8_t openttd_rust_object_was_available_abi(const OpenTTDObjectServices *, const ObjectSpec *);
+extern "C++" inline bool openttd_rust_object_was_available(const OpenTTDObjectServices *a0, const ObjectSpec *a1) { return openttd_rust_object_was_available_abi(a0, a1) != 0; }
+uint8_t openttd_rust_object_available_abi(const OpenTTDObjectServices *, const ObjectSpec *);
+extern "C++" inline bool openttd_rust_object_available(const OpenTTDObjectServices *a0, const ObjectSpec *a1) { return openttd_rust_object_available_abi(a0, a1) != 0; }
 }
 #endif

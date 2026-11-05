@@ -183,20 +183,20 @@ unsafe fn next(owner: &Owner, first: bool, key: *mut u32, amount: *mut u32) -> b
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_monitor_next_pickup(
+pub unsafe extern "C" fn openttd_rust_monitor_next_pickup_abi(
     first: bool,
     key: *mut u32,
     amount: *mut u32,
-) -> bool {
-    unsafe { next(&PICKUPS, first, key, amount) }
+) -> u8 {
+    u8::from(unsafe { next(&PICKUPS, first, key, amount) })
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_monitor_next_delivery(
+pub unsafe extern "C" fn openttd_rust_monitor_next_delivery_abi(
     first: bool,
     key: *mut u32,
     amount: *mut u32,
-) -> bool {
-    unsafe { next(&DELIVERIES, first, key, amount) }
+) -> u8 {
+    u8::from(unsafe { next(&DELIVERIES, first, key, amount) })
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_insert_pickup(key: u32, amount: u32) {

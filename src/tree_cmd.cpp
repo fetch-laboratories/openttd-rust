@@ -231,15 +231,6 @@ OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 	};
 }
 
-OpenTTDTreeTickSettings RustTreeTickSettings() noexcept
-{
-	return {
-		.tick_counter = TimerGameTick::counter,
-		.size = Map::Size(),
-		.climate = to_underlying(_settings_game.game_creation.landscape),
-		.extra = _settings_game.construction.extra_tree_placement,
-	};
-}
 
 
 

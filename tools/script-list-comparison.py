@@ -177,6 +177,8 @@ def main():
         str(out),
         "-I",
         str(ROOT / "build-rust/generated"),
+        "-I",
+        str(ROOT / "build-rust/generated-abi"),
     ]
     objects = {}
     for group, source_root in (("reference", REFERENCE), ("rust", ROOT)):

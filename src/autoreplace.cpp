@@ -19,10 +19,6 @@
 EngineRenewPool _enginerenew_pool("EngineRenew");
 INSTANTIATE_POOL_METHODS(EngineRenew)
 
-/**
- * Retrieves the EngineRenew that specifies the replacement of the given
- * engine type from the given renewlist
- */
 
 /**
  * Remove all engine replacement settings for the company.

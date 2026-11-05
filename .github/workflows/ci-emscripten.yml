@@ -7,6 +7,10 @@ on:
         required: false
         type: string
         default: ""
+      cache-only:
+        required: false
+        type: boolean
+        default: false
 
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
@@ -38,6 +42,21 @@ jobs:
         apt-get install -y gcc-12 g++-12
         update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
         update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+
+    - name: Install compiler cache
+      run: |
+        apt-get install -y ccache
+        ccache --version | head -n 1
+
+    # The container sees a different runner temp path than expressions report, so
+    # the compiler cache lives at a fixed container path.
+    - name: Restore compiler cache
+      id: compiler-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: /ccache
+        key: ccache-emscripten-v1-4.0.23-${{ hashFiles('migration/ccache.conf') }}-${{ inputs.checkout-ref || github.sha }}
+        restore-keys: ccache-emscripten-v1-4.0.23-${{ hashFiles('migration/ccache.conf') }}-
 
     - name: Setup cache
       uses: actions/cache@v4
@@ -85,22 +104,46 @@ jobs:
         baseline=$(sed -n 's/  "commit": "\(.*\)"/\1/p' migration/baseline.json)
         git fetch --no-tags --depth=1 origin "$baseline"
 
+    # emcc runs EM_COMPILER_WRAPPER before its clang, so ccache sees ordinary clang
+    # compiles. Precompiled headers stay off, as in the cached GCC flavours.
     - name: Build
+      env:
+        EM_COMPILER_WRAPPER: ccache
+        CCACHE_DIR: /ccache
+        CCACHE_MAXSIZE: 500M
       run: |
+        export CCACHE_CONFIGPATH="$GITHUB_WORKSPACE/migration/ccache.conf" CCACHE_BASEDIR="$GITHUB_WORKSPACE"
+        ccache -z
         mkdir build
         cd build
 
         echo "::group::CMake"
-        emcmake cmake .. -DHOST_BINARY_DIR=../build-host
+        emcmake cmake .. -DHOST_BINARY_DIR=../build-host -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON
         echo "::endgroup::"
 
         echo "::group::Build"
         echo "Running on $(nproc) cores"
         cmake --build . -j $(nproc) --target openttd openttd_rust_abi
         echo "::endgroup::"
+        ccache -s
 
     # emcmake sets emsdk's node as the CTest emulator.
     - name: Test Rust ABI
+      if: ${{ !inputs.cache-only }}
       run: |
         cd build
         ctest -R rust-abi-layout-and-calls --no-tests=error --output-on-failure
+
+    - name: Trim compiler cache
+      if: github.event_name == 'push' && github.ref == 'refs/heads/rust-migration'
+      env:
+        CCACHE_DIR: /ccache
+        CCACHE_MAXSIZE: 500M
+      run: CCACHE_CONFIGPATH="$GITHUB_WORKSPACE/migration/ccache.conf" ccache --cleanup
+
+    - name: Save compiler cache
+      if: github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && steps.compiler-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /ccache
+        key: ${{ steps.compiler-cache.outputs.cache-primary-key }}

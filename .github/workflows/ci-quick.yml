@@ -48,6 +48,8 @@ jobs:
             print(f'Running {test}', flush=True)
             subprocess.run(['python3', str(test)], check=True)
         PY
+    - name: Reject Rust C bool returns
+      run: python3 tools/ffi-bool-returns.py
     - name: Reject source build fallbacks
       run: python3 tools/rust-only.py
     - name: Reject new shared accessor copies
@@ -62,6 +64,11 @@ jobs:
       env:
         BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
       run: python3 tools/rebound-callees.py --base-ref "$BASE_REF"
+    - name: Reject lost scenarios, comparisons and cases or grown masks
+      env:
+        BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.sha || github.event.before }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: python3 tools/harness_inventory.py --base-ref "$BASE_REF"
     - name: Check strings and script mode enforcement
       run: |
         python3 .github/unused-strings.py

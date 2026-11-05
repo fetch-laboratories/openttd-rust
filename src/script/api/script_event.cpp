@@ -9,27 +9,21 @@
 
 #include "../../stdafx.h"
 #include "script_event_types.hpp"
-#include "../script_storage.hpp"
 
 #include "../../safeguards.h"
 
 /* static */ bool ScriptEventController::IsEventWaiting()
 {
-	return !ScriptObject::GetEventQueue().empty();
+	return openttd_rust_script_event_waiting(&ScriptObject::GetStorage()) != 0;
 }
 
 /* static */ ScriptEvent *ScriptEventController::GetNextEvent()
 {
-	auto &queue = ScriptObject::GetEventQueue();
-	if (queue.empty()) return nullptr;
-
-	auto *result = queue.front().release();
-	queue.pop();
-	return result;
+	return openttd_rust_script_event_pop(&ScriptObject::GetStorage());
 }
 
 /* static */ void ScriptEventController::InsertEvent(ScriptEvent *event)
 {
-	ScriptObject::GetEventQueue().push(event);
+	openttd_rust_script_event_push(&ScriptObject::GetStorage(), ScriptObjectRef(event).release());
 }
 

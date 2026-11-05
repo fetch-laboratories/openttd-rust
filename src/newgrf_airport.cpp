@@ -121,12 +121,6 @@ static_assert(NUM_AIRPORTS == 128 && NEW_AIRPORT_OFFSET == 10 && AT_INVALID == 2
 	return openttd_rust_airport_spec(type, &GetAirportResolverServices());
 }
 
-/**
- * Retrieve airport spec for the given airport. Even if an override is
- *  available the base spec is returned.
- * @param type index of airport
- * @return A pointer to the corresponding AirportSpec
- */
 
 /** Check whether this airport is available to build. */
 bool AirportSpec::IsAvailable() const
@@ -144,15 +138,6 @@ bool AirportSpec::IsWithinMapBounds(uint8_t table, TileIndex tile) const
 {
 	return openttd_rust_airport_in_bounds(this, table, tile.base(), &GetAirportResolverServices());
 }
-
-/**
- * This function initializes the airportspec array.
- */
-
-/**
- * Tie all airportspecs to their class.
- */
-
 
 
 /* virtual */ uint32_t AirportScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const

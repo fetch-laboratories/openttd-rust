@@ -50,6 +50,30 @@ def validate_pull(pull: dict, head: str | None = None) -> str:
     return current
 
 
+def passed_run(repository: str, head: str) -> str | None:
+    """Return the run URL of a successful Full validation already on the head."""
+    # Combined statuses omit creators; only the gate's GitHub Actions source qualifies.
+    pages = json.loads(
+        gh(
+            "api",
+            "--paginate",
+            "--slurp",
+            f"repos/{repository}/commits/{head}/statuses?per_page=100",
+        )
+    )
+    full = next(
+        (item for page in pages for item in page if item["context"] == CONTEXT), None
+    )
+    if full and full["state"] == "success":
+        creator = full.get("creator") or {}
+        if (
+            creator.get("login") == "github-actions[bot]"
+            and creator.get("type") == "Bot"
+        ):
+            return full["target_url"]
+    return None
+
+
 def find_run(record: dict, runs: list[dict]) -> dict | None:
     if record.get("run_id"):
         return next((run for run in runs if run["id"] == record["run_id"]), None)
@@ -81,13 +105,20 @@ def write_request(path: Path, record: dict) -> None:
     path.write_text(json.dumps(record, indent=2) + "\n")
 
 
-def request(args: argparse.Namespace) -> Path:
+def request(args: argparse.Namespace) -> Path | None:
     repository = (
         args.repo
         or json.loads(gh("repo", "view", "--json", "nameWithOwner"))["nameWithOwner"]
     )
     pull = api(repository, f"pulls/{args.pr}")
-    head = validate_pull(pull)
+    head = current_head(pull)
+    # A new request would reset a passing status, including one carried across a
+    # docs-only base update, to pending and repeat the run.
+    if args.profile == "full" and not args.bootstrap:
+        if run := passed_run(repository, head):
+            print(f"PR #{args.pr} at {head} already passed Full validation: {run}")
+            return None
+    validate_pull(pull, head)
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
     request_id = uuid.uuid4().hex
@@ -282,7 +313,7 @@ def main() -> int:
     try:
         if args.command == "request":
             path = request(args)
-            if args.wait:
+            if path and args.wait:
                 wait(path, WAIT_TIMEOUT, 15)
         elif args.command == "wait":
             if args.timeout <= 0 or args.interval <= 0:

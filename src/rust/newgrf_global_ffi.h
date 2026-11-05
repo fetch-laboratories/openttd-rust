@@ -20,5 +20,6 @@ struct OpenTTDGlobalVariableServices {
 	uint32_t (*width)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(width);
 };
 const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept;
-extern "C" bool openttd_rust_global_variable(const OpenTTDGlobalVariableServices *, uint8_t, uint32_t *, const GRFFile *);
+extern "C" uint8_t openttd_rust_global_variable_abi(const OpenTTDGlobalVariableServices *, uint8_t, uint32_t *, const GRFFile *);
+extern "C++" inline bool openttd_rust_global_variable(const OpenTTDGlobalVariableServices *a0, uint8_t a1, uint32_t *a2, const GRFFile *a3) { return openttd_rust_global_variable_abi(a0, a1, a2, a3) != 0; }
 #endif

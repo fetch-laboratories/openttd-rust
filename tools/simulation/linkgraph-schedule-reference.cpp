@@ -39,7 +39,7 @@ class LinkGraph {
 public:
 	uint16_t index, size, tag; int32_t date = 100, node_date = 90;
 	OpenTTDLiveGraph *owner = nullptr;
-	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0, this->date); openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) *openttd_rust_live_node_fields(this->owner, i).last_update = this->node_date; } }
+	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0); *openttd_rust_live_graph_date(this->owner) = this->date; openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) *openttd_rust_live_node_fields(this->owner, i).last_update = this->node_date; } }
 	~LinkGraph() { if (this->owner) openttd_rust_live_graph_delete(this->owner); }
 	uint16_t Size() const { return this->size; }
 	static LinkGraph *Get(uint16_t id) { return graphs[id]; }
@@ -131,8 +131,7 @@ static void Tick(int date, int fract, bool client = false)
 		std::optional<PerformanceMeasurer> m;
 		static void *measurement; measurement = &m;
 		fixture.services.schedule = &services;
-		fixture.services.networking = []() noexcept { return _networking; };
-		fixture.services.schedule_time = []() noexcept { return OpenTTDScheduleTime{TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, 4}; };
+		fixture.finance.networking = []() noexcept { return _networking; };
 		fixture.services.schedule_measurement = [](OpenTTDSessionFrame *) noexcept { return measurement; };
 		if (!fixture.Run()) std::abort();
 	}
@@ -146,11 +145,10 @@ static void Pause(int bits, bool load = false)
 		fixture.services.schedule = &services;
 		if (load) { _pause_mode = {}; openttd_rust_schedule_after_load(&services); fixture_pause_mode.bits = _pause_mode.Test(PauseMode::LinkGraph) ? 1 : 0; }
 		else {
-			fixture.services.networking = []() noexcept { return false; };
-			fixture.services.modal = []() noexcept { return true; };
+			fixture.finance.networking = []() noexcept { return false; };
+			fixture.world.modal = []() noexcept { return true; };
 			fixture.services.paused_measurements = SessionFixture::Nothing;
 			fixture.services.scripts_enabled = []() noexcept { return false; };
-			fixture.services.schedule_time = []() noexcept { return OpenTTDScheduleTime{1, 19, 4}; };
 			PauseModes pause; if (bits & 1) pause.Set(PauseMode::LinkGraph); if (bits & 2) pause.Set(PauseMode::Normal);
 			if (!fixture.Run(GM_EDITOR, pause)) std::abort();
 		}

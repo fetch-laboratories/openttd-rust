@@ -88,7 +88,9 @@ void openttd_rust_animate_object(uint32_t);
 void openttd_rust_animate_roadstop(uint32_t);
 void openttd_rust_trigger_station(BaseStation *, uint32_t, uint8_t, uint8_t);
 void openttd_rust_trigger_roadstop(BaseStation *, uint32_t, uint8_t, uint8_t);
-bool openttd_rust_trigger_airport_tile(Station *, uint32_t, uint8_t);
-bool openttd_rust_trigger_airport(Station *, uint8_t, uint8_t);
+uint8_t openttd_rust_trigger_airport_tile_abi(Station *, uint32_t, uint8_t);
+extern "C++" inline bool openttd_rust_trigger_airport_tile(Station *a0, uint32_t a1, uint8_t a2) { return openttd_rust_trigger_airport_tile_abi(a0, a1, a2) != 0; }
+uint8_t openttd_rust_trigger_airport_abi(Station *, uint8_t, uint8_t);
+extern "C++" inline bool openttd_rust_trigger_airport(Station *a0, uint8_t a1, uint8_t a2) { return openttd_rust_trigger_airport_abi(a0, a1, a2) != 0; }
 }
 #endif /* RUST_ANIMATION_FFI_H */

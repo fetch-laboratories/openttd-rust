@@ -184,22 +184,14 @@ pub struct Control {
     pub execute: bool,
     pub stage: u8,
 }
-/// Caller-owned `OnTick_Companies` frame; `true` requests the `CCA_NEW_AI` Post.
-#[repr(C)]
-pub struct Tick {
-    pub finances: *mut Finances,
-    pub num_companies: usize,
-    pub index: i32,
-    pub timeout: i32,
-    pub interval: u16,
-    pub editor: bool,
-    pub named: bool,
-    pub competitor_due: bool,
-    pub networking: bool,
-    pub max_companies: u8,
-    pub max_competitors: u8,
-    pub num_ais: u8,
-    pub stage: u8,
+/// Continuation locals across the native `CCA_NEW_AI` Post; settings are read live.
+#[derive(Default)]
+pub(crate) struct Tick {
+    num_companies: usize,
+    index: i32,
+    timeout: i32,
+    num_ais: u8,
+    stage: u8,
 }
 /// Inputs of the competitor timeout; the entry returns whether to Post.
 #[repr(C)]
@@ -237,17 +229,6 @@ pub struct EconomySettings {
     pub construction_cost: u8,
     pub inflation: bool,
 }
-#[repr(C)]
-pub struct Landscaping {
-    pub terraform_per_64k: u32,
-    pub clear_per_64k: u32,
-    pub tree_per_64k: u32,
-    pub object_per_64k: u32,
-    pub terraform_burst: u16,
-    pub clear_burst: u16,
-    pub tree_burst: u16,
-    pub object_burst: u16,
-}
 /// Finance services used by hot money paths and financial commands.
 #[repr(C)]
 pub struct FinanceServices {
@@ -265,6 +246,7 @@ pub struct Services {
     pub identity: &'static crate::company_identity::Services,
     pub finance: &'static FinanceServices,
     pub shared: &'static crate::services::Services,
+    pub ai_can_start: extern "C" fn() -> bool,
     pub allow_list_add:
         extern "C" fn(crate::company_type::CompanyID, crate::services::ByteSpan) -> bool,
     pub allow_list_remove:
@@ -277,6 +259,7 @@ pub struct Services {
     pub settings: extern "C" fn() -> &'static crate::settings_table::Services,
     pub company_next: extern "C" fn(u32) -> CompanyRef,
     pub company_count: extern "C" fn() -> usize,
+    pub competitor_fired: extern "C" fn() -> bool,
     pub can_allocate_company: extern "C" fn() -> bool,
     pub local_company: extern "C" fn() -> u8,
     pub network_server: extern "C" fn() -> bool,
@@ -1426,7 +1409,15 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     crate::cargomonitor::openttd_rust_monitor_clear_deliveries(old);
     each(
         |from| (s.story_page_next_owned)(old, from),
-        |id| (s.delete_story_page)(id),
+        |id| {
+            unsafe {
+                crate::objectives::delete_elements(
+                    (s.objectives)(),
+                    crate::story_type::StoryPageID(id as u16),
+                );
+            }
+            (s.delete_story_page)(id);
+        },
     );
     if new != INVALID_OWNER {
         (s.change_window_owner)(old, new);
@@ -1543,45 +1534,49 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
 }
 /// One iteration of the original `for (i = 0; i < max; i++)` posting loop; the
 /// increment precedes the check of the resumed iteration.
-fn post_competitor(t: &mut Tick) -> bool {
-    if t.index >= i32::from(t.max_competitors) {
+fn post_competitor(s: &Services, t: &mut Tick) -> bool {
+    let settings = s.shared.settings();
+    if t.index >= i32::from(unsafe { settings.max_competitors.read() }) {
         return false;
     }
     t.index += 1;
-    if t.networking {
+    if (s.finance.networking)() {
         let old = t.num_companies;
         t.num_companies = old.wrapping_add(1);
-        if old >= usize::from(t.max_companies) {
+        if old >= usize::from(unsafe { settings.max_companies.read() }) {
             return false;
         }
     }
     let old = t.num_ais;
     t.num_ais = old.wrapping_add(1);
-    old < t.max_competitors
+    old < unsafe { settings.max_competitors.read() }
 }
 fn tick(s: &Services, t: &mut Tick) -> bool {
     if t.stage == 0 {
-        if t.editor {
+        if crate::session::mode() == crate::openttd::GameMode::EDITOR {
             return false;
         }
         let id = unsafe { TICK } as u8;
-        if !t.finances.is_null() {
-            if t.named {
-                crate::company_identity::generate_name(
-                    s.identity,
-                    (s.identity.company)(crate::company_type::CompanyID(id)),
-                );
+        let finances = (s.finance.company_finances)(id);
+        if !finances.is_null() {
+            let company = (s.identity.company)(crate::company_type::CompanyID(id));
+            if (s.identity.name_id)(company) != 0 {
+                crate::company_identity::generate_name(s.identity, company);
             }
-            if read_field!(t.finances, asked) != 0 {
-                offer(s, t.finances, id);
+            if read_field!(finances, asked) != 0 {
+                offer(s, finances, id);
             }
         }
-        if t.competitor_due {
-            t.timeout = i32::from(t.interval)
+        if (s.competitor_fired)()
+            && crate::session::mode() != crate::openttd::GameMode::MENU
+            && (s.ai_can_start)()
+        {
+            t.timeout = i32::from(unsafe { s.shared.settings().competitor_interval.read() })
                 .wrapping_mul(60)
                 .wrapping_mul(TICKS_PER_SECOND);
             if t.timeout == 0 {
                 t.num_ais = count_ais(s);
+                t.num_companies = (s.company_count)();
                 t.index = 0;
                 t.stage = 1;
             } else {
@@ -1592,7 +1587,7 @@ fn tick(s: &Services, t: &mut Tick) -> bool {
         }
     }
     if t.stage == 1 {
-        if post_competitor(t) {
+        if post_competitor(s, t) {
             return true;
         }
         t.timeout = 10 * 60 * TICKS_PER_SECOND;
@@ -1763,7 +1758,10 @@ pub unsafe extern "C" fn openttd_rust_company_subtract_fraction(
     subtract_fraction(f, p, id, cost, usize::from(expense));
 }
 /// `UpdateLandscapingLimits`.
-pub(crate) fn update_landscaping_limits(s: &Services, r: &Landscaping) {
+pub(crate) fn update_landscaping_limits(
+    s: &Services,
+    r: *const crate::settings_type::ConstructionLimits,
+) {
     let next = |value: u32, per: u32, burst: u16| -> u32 {
         (u64::from(value) + u64::from(per)).min(u64::from(burst) << 16) as u32
     };
@@ -1773,24 +1771,36 @@ pub(crate) fn update_landscaping_limits(s: &Services, r: &Landscaping) {
             terraform,
             next(
                 read_field!(p, terraform),
-                r.terraform_per_64k,
-                r.terraform_burst
+                read_field!(r, terraform_per_64k_frames),
+                read_field!(r, terraform_frame_burst)
             )
         );
         write_field!(
             p,
             clear,
-            next(read_field!(p, clear), r.clear_per_64k, r.clear_burst)
+            next(
+                read_field!(p, clear),
+                read_field!(r, clear_per_64k_frames),
+                read_field!(r, clear_frame_burst)
+            )
         );
         write_field!(
             p,
             tree,
-            next(read_field!(p, tree), r.tree_per_64k, r.tree_burst)
+            next(
+                read_field!(p, tree),
+                read_field!(r, tree_per_64k_frames),
+                read_field!(r, tree_frame_burst)
+            )
         );
         write_field!(
             p,
             object,
-            next(read_field!(p, object), r.object_per_64k, r.object_burst)
+            next(
+                read_field!(p, object),
+                read_field!(r, build_object_per_64k_frames),
+                read_field!(r, build_object_frame_burst)
+            )
         );
     });
 }
@@ -1838,8 +1848,8 @@ pub(crate) fn openttd_rust_economy_month(s: &Services, m: &Month) {
 }
 /// `AddInflation`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_economy_add_inflation(check_year: bool, year: i32) -> bool {
-    inflation(check_year, year)
+pub extern "C" fn openttd_rust_economy_add_inflation_abi(check_year: bool, year: i32) -> u8 {
+    u8::from(inflation(check_year, year))
 }
 /// `RecomputePrices`.
 #[unsafe(no_mangle)]
@@ -1930,24 +1940,24 @@ pub unsafe extern "C" fn openttd_rust_company_max_loan(p: *const Finances) -> i6
 /// `DoStartupNewCompany`; `true` asks the caller to run `AI::StartNew(company)`
 /// and call again. If that throws, the frame is simply abandoned.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_startup(s: &Services, f: &mut Startup) -> bool {
-    startup(s, f)
+pub extern "C" fn openttd_rust_company_startup_abi(s: &Services, f: &mut Startup) -> u8 {
+    u8::from(startup(s, f))
 }
 /// Competitor timeout callback; `true` asks the caller to Post `CCA_NEW_AI`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_competitor_timeout(s: &Services, r: &Competitors) -> bool {
+pub extern "C" fn openttd_rust_company_competitor_timeout_abi(s: &Services, r: &Competitors) -> u8 {
     if r.menu
         || !r.can_start
         || (r.networking && r.num_companies >= usize::from(r.max_companies))
         || r.interval == 0
     {
-        return false;
+        return u8::from(false);
     }
-    count_ais(s) < r.max_competitors
+    u8::from(count_ais(s) < r.max_competitors)
 }
 /// `OnTick_Companies`; `true` asks the caller to Post `CCA_NEW_AI` and call again.
 /// # Safety
-/// `t.finances` is null or the live owner of company `TICK`.
+/// Services address the live serialized game and native Post resumes only after Rust returns.
 pub(crate) unsafe fn on_tick(s: &Services, t: &mut Tick) -> bool {
     tick(s, t)
 }
@@ -1973,18 +1983,22 @@ pub(crate) unsafe fn openttd_rust_company_yearly(s: &Services, y: &Year) {
 }
 /// `CheckTakeoverVehicleLimit`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_takeover_allowed(s: &Services, big: u8, small: u8) -> bool {
-    takeover_limit(s, big, small)
+pub extern "C" fn openttd_rust_company_takeover_allowed_abi(
+    s: &Services,
+    big: u8,
+    small: u8,
+) -> u8 {
+    u8::from(takeover_limit(s, big, small))
 }
 /// `CmdCompanyCtrl`; `true` asks the caller to run `AI::StartNew(startup.company)`
 /// and call again. The result is in `result` once it returns `false`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_control(
+pub extern "C" fn openttd_rust_company_control_abi(
     s: &Services,
     ownership: &crate::tile_owner::Context,
     c: &mut Control,
-) -> bool {
-    control(s, ownership, c)
+) -> u8 {
+    u8::from(control(s, ownership, c))
 }
 /// `ChangeOwnershipOfCompanyItems`.
 #[unsafe(no_mangle)]
@@ -2189,6 +2203,7 @@ crate::abi::layouts! {
         identity,
         finance,
         shared,
+        ai_can_start,
         allow_list_add,
         allow_list_remove,
         assign_company_context,
@@ -2199,6 +2214,7 @@ crate::abi::layouts! {
         settings,
         company_next,
         company_count,
+        competitor_fired,
         can_allocate_company,
         local_company,
         network_server,
@@ -2368,21 +2384,6 @@ crate::abi::layouts! {
         execute,
         stage,
     };
-    "OpenTTDCompanyTick" ["company_economy"] => Tick {
-        finances,
-        num_companies,
-        index,
-        timeout,
-        interval,
-        editor,
-        named,
-        competitor_due,
-        networking,
-        max_companies,
-        max_competitors,
-        num_ais,
-        stage,
-    };
     "OpenTTDCompanyCompetitors" ["company_economy"] => Competitors {
         num_companies,
         interval,
@@ -2411,15 +2412,5 @@ crate::abi::layouts! {
         vehicle_costs,
         construction_cost,
         inflation,
-    };
-    "OpenTTDCompanyLandscaping" ["company_economy"] => Landscaping {
-        terraform_per_64k,
-        clear_per_64k,
-        tree_per_64k,
-        object_per_64k,
-        terraform_burst,
-        clear_burst,
-        tree_burst,
-        object_burst,
     };
 }

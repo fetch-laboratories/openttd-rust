@@ -70,10 +70,10 @@ def deps_libraries() -> Path:
     return bootstrapped("deps") / "usr/lib/x86_64-linux-gnu"
 
 
-def environment():
+def environment() -> dict[str, str]:
     env = os.environ.copy()
 
-    def prepend(name, value):
+    def prepend(name: str, value: str | Path) -> None:
         env[name] = str(value) + (os.pathsep + env[name] if env.get(name) else "")
 
     if (bootstrapped("cargo") / "bin").exists():
@@ -89,6 +89,8 @@ def environment():
         prepend("CPATH", deps / "usr/include")
         prepend("PKG_CONFIG_PATH", deps / "usr/lib/x86_64-linux-gnu/pkgconfig")
         env["PKG_CONFIG_SYSROOT_DIR"] = str(deps)
+    # Fork headers also reach generated records in probes using reference flags.
+    prepend("CPATH", CANDIDATE_BUILD / "generated-abi")
     if (prefix := SCENARIO_COVERAGE_PREFIX.get()) is not None:
         env["OPENTTD_COVERAGE_PREFIX"] = prefix
     return env

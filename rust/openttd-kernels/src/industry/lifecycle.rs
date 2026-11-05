@@ -266,29 +266,29 @@ unsafe fn trigger_animation(
 /// # Safety
 /// Industry tile and valid original trigger; native frame service may reenter.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_animate_tile(
+pub unsafe extern "C" fn openttd_rust_industry_animate_tile_abi(
     tile: u32,
     trigger: u8,
     extra: u32,
     services: *const Services,
     lifecycle: *const LifecycleServices,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*services };
     let w = unsafe { &*lifecycle };
     let random = s.shared().random();
-    unsafe { trigger_animation(tile, trigger, random, extra, w) }
+    u8::from(unsafe { trigger_animation(tile, trigger, random, extra, w) })
 }
 /// # Safety
 /// Live industry and map; immutable tables and valid original trigger.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_animate(
+pub unsafe extern "C" fn openttd_rust_industry_animate_abi(
     owner: *mut Industry,
     id: u16,
     trigger: u8,
     size_x: u32,
     services: *const Services,
     lifecycle: *const LifecycleServices,
-) -> bool {
+) -> u8 {
     let s = unsafe { &*services };
     let w = unsafe { &*lifecycle };
     let mut result = true;
@@ -303,5 +303,5 @@ pub unsafe extern "C" fn openttd_rust_industry_animate(
             }
         }
     });
-    result
+    u8::from(result)
 }

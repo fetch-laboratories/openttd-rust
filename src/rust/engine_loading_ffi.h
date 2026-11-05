@@ -77,7 +77,8 @@ struct OpenTTDEngineLoadingServices {
 const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept;
 void RustVehicleOrderSort(uint16_t *, size_t) noexcept;
 extern "C" {
-bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *);
+uint8_t openttd_rust_engine_reset_config_abi(const OpenTTDEngineLoadingServices *);
+extern "C++" inline bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *a0) { return openttd_rust_engine_reset_config_abi(a0) != 0; }
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);
 void openttd_rust_engine_set_override(const OpenTTDEngineLoadingServices *, uint32_t, uint32_t);
 uint64_t openttd_rust_engine_translate_refit(uint32_t, const GRFFile *);
@@ -90,6 +91,7 @@ void openttd_rust_engine_mapping_defaults(const uint8_t *);
 uint16_t openttd_rust_engine_mapping_get(uint8_t, uint16_t, uint32_t);
 uint16_t openttd_rust_engine_mapping_use(uint8_t, uint16_t, uint32_t, bool);
 void openttd_rust_engine_mapping_set(uint8_t, uint16_t, uint32_t, uint8_t, uint16_t);
-bool openttd_rust_engine_override_get(uint32_t, uint32_t *);
+uint8_t openttd_rust_engine_override_get_abi(uint32_t, uint32_t *);
+extern "C++" inline bool openttd_rust_engine_override_get(uint32_t a0, uint32_t *a1) { return openttd_rust_engine_override_get_abi(a0, a1) != 0; }
 }
 #endif

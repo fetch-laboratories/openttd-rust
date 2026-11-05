@@ -21,7 +21,9 @@ HEAD = "a" * 40
 BASE = "b" * 40
 MERGE = "d" * 40
 TREE = "f" * 40
+PREVIOUS = "9" * 40
 RUN = "https://github.com/example/fork/actions/runs/123"
+ACTIONS = {"login": "github-actions[bot]", "type": "Bot"}
 PULL = {
     "state": "open",
     "head": {"sha": HEAD},
@@ -106,17 +108,41 @@ def good_needs():
     return needs
 
 
-def execute_script(filename, name, pull, *, env=None, event=None, latest=None):
+def execute_script(
+    filename,
+    name,
+    pull,
+    *,
+    env=None,
+    event=None,
+    latest=None,
+    payload=None,
+    previous=(),
+    trees=None,
+    compare=None,
+):
+    """Run a status writer; `previous` holds the statuses of the PREVIOUS head."""
     script = script_for(filename, name)
+    payload = {"pull_request": event, **(payload or {})}
+    compare = compare or "async () => ({data: {behind_by: 0}})"
     return node(f"""
-const statuses = [], failures = [], outputs = {{}};
+const statuses = [], failures = [], outputs = {{}}, trees = {json.dumps(trees or {})};
 const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root',
-  serverUrl: 'https://github.com', runId: 123, payload: {{pull_request: {json.dumps(event)}}}}};
-const core = {{setFailed: value => failures.push(value), setOutput: (k,v) => outputs[k] = v}};
-const github = {{rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}}, repos: {{
+  serverUrl: 'https://github.com', runId: 123, payload: {json.dumps(payload)}}};
+const core = {{setFailed: value => failures.push(value), setOutput: (k,v) => outputs[k] = v,
+  info: () => {{}}}};
+const github = {{paginate: async (_method, args) => {{
+  if (args.ref !== {json.dumps(PREVIOUS)}) throw new Error('Unexpected status ref');
+  return {json.dumps(list(previous))};
+}}, rest: {{pulls: {{get: async () => ({{data: {json.dumps(pull)}}})}},
+  git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
+  repos: {{
   getCommit: async () => ({{data: {{commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
   getCollaboratorPermissionLevel: async () => ({{data: {{permission: 'write'}}}}),
-  getCombinedStatusForRef: async () => ({{data: {{statuses: {json.dumps([latest] if latest else [])}}}}}),
+  getCombinedStatusForRef: async args => ({{data: {{statuses: args.ref === {json.dumps(PREVIOUS)} ?
+    {json.dumps(list(previous))}.map(({{creator, ...status}}) => status) : {json.dumps([latest] if latest else [])}}}}}),
+  compareCommitsWithBasehead: {compare},
+  listCommitStatusesForRef: () => {{}},
   createCommitStatus: async value => statuses.push(value)
 }}}}}};
 Object.assign(process.env, {json.dumps(env or {})});
@@ -139,10 +165,13 @@ def execute_publisher(needs, pull, superseded=False):
     )
 
 
-def execute_invalidator(event, pull, latest=None):
+def execute_invalidator(event, pull, latest=None, **carry):
     return execute_script(
-        "ci-invalidate.yml", "invalidate", pull, event=event, latest=latest
+        "ci-invalidate.yml", "invalidate", pull, event=event, latest=latest, **carry
     )["statuses"]
+
+
+SYNCHRONIZE = {"action": "synchronize", "before": PREVIOUS}
 
 
 def run_policy(
@@ -191,13 +220,48 @@ def tree(*entries, **fields):
 def validation(full="success", marker="success", run=RUN, marker_run=RUN, tree=TREE):
     """Full validation status and its Validated tree marker on a merged head."""
     return [
-        {"context": "Full validation", "state": full, "target_url": run},
+        {
+            "context": "Full validation",
+            "state": full,
+            "target_url": run,
+            "creator": ACTIONS,
+        },
         {
             "context": "Validated tree",
             "state": marker,
             "target_url": marker_run,
             "description": tree,
+            "creator": ACTIONS,
         },
+    ]
+
+
+CODE, DOC = entry("src/game.cpp"), entry("README.md", BASE)
+INVENTORY = tree(CODE, DOC)
+
+
+def inventory_cases():
+    """Trees compared with INVENTORY; "false" means the same non-Markdown inventory."""
+    moved_doc = entry("docs/new.md", MERGE)
+    return [
+        (tree(moved_doc, CODE), "false"),
+        (tree(CODE), "false"),
+        (tree(dict(CODE, sha=MERGE)), "true"),
+        (tree(dict(CODE, mode="100755")), "true"),
+        (tree(dict(CODE, path="src/other.cpp")), "true"),
+        (tree(dict(CODE, type="commit", mode="160000")), "true"),
+        (tree(moved_doc), "true"),
+        (tree(CODE, truncated=True), "true"),
+        ({"tree": [CODE]}, "true"),
+        ({"truncated": False}, "true"),
+        (tree(), "true"),
+        (tree({}), "true"),
+        (tree(CODE, dict(DOC, sha="bad")), "true"),
+        (tree(CODE, dict(DOC, mode="bad")), "true"),
+        (tree(CODE, DOC, DOC), "true"),
+        (tree(CODE, dict(DOC, type="commit", mode="160000")), "true"),
+        (tree(CODE, dict(DOC, path="../a.md")), "true"),
+        (tree(CODE, sha=None), "true"),
     ]
 
 
@@ -347,6 +411,98 @@ class GateTests(unittest.TestCase):
                     observed, [(sha, "pending", ci.CONTEXT) for sha in expected]
                 )
 
+    def test_unchanged_non_markdown_tree_carries_the_previous_head_result(self):
+        event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
+        carried = [
+            (HEAD, "success", ci.CONTEXT, RUN, None),
+            (HEAD, "success", "Validated tree", RUN, BASE),
+        ]
+        pending = [(HEAD, "pending", ci.CONTEXT, None, None)]
+        good = {"payload": SYNCHRONIZE, "previous": validation(tree=BASE)}
+        behind = "async () => ({data: {behind_by: 1}})"
+        missing = "async () => { throw new Error('Not Found'); }"
+        bad_runs = (None, "", "run", RUN + "/extra", RUN.replace("fork", "other"))
+        cases = [("matching tree", {}, carried)]
+        for index in (0, 1):
+            for creator in (None, {}, {"login": "writer", "type": "User"}):
+                forged = validation(tree=BASE)
+                forged[index] = dict(forged[index], creator=creator)
+                cases.append(
+                    (
+                        f"untrusted status {index}: {creator}",
+                        {"previous": forged},
+                        pending,
+                    )
+                )
+                # A newer untrusted status must not expose an older trusted result.
+                cases.append(
+                    (
+                        f"untrusted over trusted {index}: {creator}",
+                        {"previous": [forged[index], *validation(tree=BASE)]},
+                        pending,
+                    )
+                )
+        for label, change in (
+            ("opened", {"payload": {"action": "opened", "before": PREVIOUS}}),
+            ("reopened", {"payload": {"action": "reopened"}}),
+            ("no previous head", {"payload": {"action": "synchronize"}}),
+            ("bad previous head", {"payload": dict(SYNCHRONIZE, before="9")}),
+            ("head behind base", {"compare": behind}),
+            ("lookup failure", {"compare": missing}),
+            ("no previous result", {"previous": []}),
+            ("pending result", {"previous": validation("pending", tree=BASE)}),
+            ("failed result", {"previous": validation("failure", tree=BASE)}),
+            ("failed marker", {"previous": validation(marker="failure", tree=BASE)}),
+            ("other marker run", {"previous": validation(marker_run="old", tree=BASE)}),
+            ("marker not a tree", {"previous": validation(tree="tree")}),
+            ("marker missing", {"previous": validation(tree=BASE)[:1]}),
+            *(
+                (
+                    f"run {run}",
+                    {"previous": validation(run=run, marker_run=run, tree=BASE)},
+                )
+                for run in bad_runs
+            ),
+        ):
+            cases.append((label, change, pending))
+        for label, change, expected in cases:
+            with self.subTest(label):
+                carry = {"trees": {BASE: INVENTORY, TREE: tree(CODE)}, **good, **change}
+                statuses = execute_invalidator(event, PULL, **carry)
+                observed = [
+                    (
+                        s["sha"],
+                        s["state"],
+                        s["context"],
+                        s.get("target_url"),
+                        s["description"] if s["context"] == "Validated tree" else None,
+                    )
+                    for s in statuses
+                ]
+                self.assertEqual(observed, expected)
+        # A request started after the push keeps its own status.
+        latest = {"context": ci.CONTEXT, "updated_at": "2026-10-07T12:00:01Z"}
+        carry = {"trees": {BASE: INVENTORY, TREE: tree(CODE)}, **good}
+        self.assertEqual(execute_invalidator(event, PULL, latest, **carry), [])
+
+    def test_carry_and_post_merge_refresh_share_the_inventory_rule(self):
+        event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
+        for after, expected in inventory_cases():
+            for incomplete_side in (False, True):
+                left, right = (
+                    (after, INVENTORY) if incomplete_side else (INVENTORY, after)
+                )
+                with self.subTest(after=after, incomplete_side=incomplete_side):
+                    statuses = execute_invalidator(
+                        event,
+                        PULL,
+                        payload=SYNCHRONIZE,
+                        previous=validation(tree=BASE),
+                        trees={BASE: left, TREE: right},
+                    )
+                    state = "success" if expected == "false" else "pending"
+                    self.assertEqual(statuses[0]["state"], state)
+
     def test_write_jobs_never_check_out_or_run_candidate_code(self):
         # Structure is the behavior here: pull_request_target and workflow_run jobs,
         # and every job granted a write permission, execute only the github-script
@@ -390,14 +546,15 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
         gib = 1024**3
         prefixes = "compiler-v1-linux compiler-v1-linux ccache-linux-v2-gcc"
         prefixes += " ccache-macos-v2-arm64 ccache-msvc-v1-x64"
+        prefixes += " ccache-emscripten-v1-4.0.23 ccache-emscripten-v1-4.0.23"
         caches = [
             {"id": i, "key": f"{prefix}-{str(i) * 40}", "created_at": f"2026-10-{i:02}"}
             | {"size_in_bytes": gib}
             for i, prefix in enumerate(prefixes.split(), start=1)
         ]
-        self.assertEqual(self.prune(caches), {"deleted": [1], "failures": []})
-        caches[-1]["size_in_bytes"] = 7 * gib
-        self.assertEqual(self.prune(caches), {"deleted": [1, 2, 3], "failures": []})
+        self.assertEqual(self.prune(caches), {"deleted": [1, 6], "failures": []})
+        caches[-1]["size_in_bytes"] = 5 * gib
+        self.assertEqual(self.prune(caches), {"deleted": [1, 2, 3, 6], "failures": []})
         # Unmanaged caches are never removed.
         unmanaged = {"id": 99, "key": "unmanaged", "created_at": "date"}
         result = self.prune([unmanaged | {"size_in_bytes": 9 * gib}])
@@ -452,7 +609,13 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(evaluate(jobs["macos"]["if"], **contexts), macos)
                 self.assertEqual(
                     evaluate(jobs["emscripten"]["if"], **contexts),
-                    bool(checkout and profile != "native" or heavy == "true"),
+                    # A covered push refreshes the Emscripten compiler cache.
+                    bool(
+                        checkout
+                        and profile != "native"
+                        or heavy == "true"
+                        or covered == "true"
+                    ),
                 )
 
     def test_semantic_subset_requires_the_protected_cadence(self) -> None:
@@ -491,7 +654,16 @@ class PolicyTests(unittest.TestCase):
     def test_platform_cache_refresh_is_only_a_covered_protected_push(self):
         build = workflow("ci-build.yml")["jobs"]
         protected = "refs/heads/rust-migration"
-        for name in ("linux", "windows"):
+        for name in ("emscripten", "linux", "windows"):
+            # A covered push runs the cached builds only to refresh their caches.
+            outputs = {"heavy": "false", "covered": "true"}
+            runs_covered = evaluate(
+                build[name]["if"],
+                inputs={"checkout-ref": "", "profile": ""},
+                needs={"policy": {"result": "success", "outputs": outputs}},
+                github={"event_name": "push"},
+            )
+            self.assertTrue(runs_covered, name)
             for checkout, event, ref, covered, expected in (
                 ("", "push", protected, "true", True),
                 ("merge", "push", protected, "true", False),
@@ -516,6 +688,7 @@ class PolicyTests(unittest.TestCase):
             "Retain native Windows Rust and test evidence",
         }
         for filename, name, skipped in (
+            ("ci-emscripten.yml", "emscripten", {"Test Rust ABI"}),
             ("ci-linux.yml", "linux", {"Test"}),
             ("ci-windows.yml", "windows", windows),
         ):
@@ -769,32 +942,11 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(result["outputs"]["heavy"], expected)
 
     def test_markdown_tree_differences_require_complete_inventories(self):
-        code, doc = entry("src/game.cpp"), entry("README.md", BASE)
-        moved_doc = entry("docs/new.md", MERGE)
-        before = tree(code, doc)
-        cases = [
-            (tree(moved_doc, code), "false"),
-            (tree(code), "false"),
-            (tree(dict(code, sha=MERGE)), "true"),
-            (tree(dict(code, mode="100755")), "true"),
-            (tree(dict(code, path="src/other.cpp")), "true"),
-            (tree(dict(code, type="commit", mode="160000")), "true"),
-            (tree(moved_doc), "true"),
-            (tree(code, truncated=True), "true"),
-            ({"tree": [code]}, "true"),
-            ({"truncated": False}, "true"),
-            (tree(), "true"),
-            (tree({}), "true"),
-            (tree(code, dict(doc, sha="bad")), "true"),
-            (tree(code, dict(doc, mode="bad")), "true"),
-            (tree(code, doc, doc), "true"),
-            (tree(code, dict(doc, type="commit", mode="160000")), "true"),
-            (tree(code, dict(doc, path="../a.md")), "true"),
-            (tree(code, sha=None), "true"),
-        ]
-        for after, expected in cases:
+        for after, expected in inventory_cases():
             for incomplete_side in (False, True):
-                left, right = (after, before) if incomplete_side else (before, after)
+                left, right = (
+                    (after, INVENTORY) if incomplete_side else (INVENTORY, after)
+                )
                 with self.subTest(after=after, incomplete_side=incomplete_side):
                     outputs = run_policy(
                         files=[{"filename": "src/game.cpp"}],
@@ -805,6 +957,13 @@ class PolicyTests(unittest.TestCase):
                     covered = "true" if expected == "false" else None
                     self.assertEqual(outputs["heavy"], expected)
                     self.assertEqual(outputs.get("covered"), covered)
+
+
+def pull_and_statuses(statuses):
+    """Answer `ci.api` with the PR for pull paths and `statuses` for commit paths."""
+    return lambda _repository, path: (
+        PULL if path.startswith("pulls/") else {"statuses": statuses}
+    )
 
 
 class RequestTests(unittest.TestCase):
@@ -819,8 +978,8 @@ class RequestTests(unittest.TestCase):
                     request_file=Path(directory) / "request.json",
                 )
                 with (
-                    patch.object(ci, "api", return_value=PULL),
-                    patch.object(ci, "gh") as gh,
+                    patch.object(ci, "api", side_effect=pull_and_statuses([])),
+                    patch.object(ci, "gh", return_value=json.dumps([[]])) as gh,
                 ):
                     request_path = ci.request(args)
                 invocation = gh.call_args.args
@@ -833,6 +992,56 @@ class RequestTests(unittest.TestCase):
                 self.assertEqual(record["head"], HEAD)
                 self.assertEqual(record["base"], BASE)
                 self.assertEqual(len(record["request"]), 32)
+
+    def test_full_request_stops_on_a_head_that_already_passed(self):
+        passed = {
+            "context": ci.CONTEXT,
+            "state": "success",
+            "target_url": RUN,
+            "creator": ACTIONS,
+        }
+        for profile, statuses, bootstrap, dispatched in (
+            ("full", [passed], False, False),
+            ("full", [dict(passed, state="pending")], False, True),
+            ("full", [dict(passed, state="failure")], False, True),
+            ("full", [dict(passed, context="Validated tree")], False, True),
+            ("full", [dict(passed, creator=None)], False, True),
+            (
+                "full",
+                [dict(passed, creator={"login": "writer", "type": "User"})],
+                False,
+                True,
+            ),
+            ("full", [dict(passed, creator=None), passed], False, True),
+            ("full", [passed], True, True),
+            ("native", [passed], False, True),
+        ):
+            with (
+                self.subTest(profile=profile, statuses=statuses, bootstrap=bootstrap),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                args = argparse.Namespace(
+                    repo="example/fork",
+                    pr=170,
+                    profile=profile,
+                    bootstrap=bootstrap,
+                    request_file=Path(directory) / "request.json",
+                )
+                with (
+                    patch.object(ci, "api", side_effect=pull_and_statuses(statuses)),
+                    patch.object(
+                        ci,
+                        "gh",
+                        side_effect=lambda *args, statuses=statuses: json.dumps(
+                            [] if args[0] == "variable" else [statuses]
+                        ),
+                    ) as gh,
+                    patch("builtins.print"),
+                ):
+                    path = ci.request(args)
+                writes = [call for call in gh.call_args_list if call.args[0] != "api"]
+                self.assertEqual(bool(writes), dispatched)
+                self.assertEqual(path is not None, dispatched)
 
     def test_run_discovery_uses_unique_request_identity(self):
         record = {

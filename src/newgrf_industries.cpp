@@ -44,22 +44,6 @@
 IndustryOverrideManager _industry_mngr(NEW_INDUSTRYOFFSET, NUM_INDUSTRYTYPES, IT_INVALID);
 IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRYTILES, INVALID_INDUSTRYTILE);
 
-/**
- * Map the GRF local type to an industry type.
- * @param grf_type The GRF local type.
- * @param grf_id The GRF of the local type.
- * @return The industry type in the global scope.
- */
-
-/**
- * Make an analysis of a tile and check for its belonging to the same
- * industry, and/or the same grf file
- * @param tile TileIndex of the tile to query
- * @param i Industry to which to compare the tile to
- * @param cur_grfid GRFID of the current callback chain
- * @return value encoded as per NFO specs
- */
-
 
 /* virtual */ uint32_t IndustriesScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {

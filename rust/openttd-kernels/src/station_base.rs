@@ -55,7 +55,7 @@ pub(crate) unsafe fn goods_get_via(
     source: u16,
     excluded: u16,
     excluded2: u16,
-    random: extern "C" fn() -> u32,
+    random: impl FnMut() -> u32,
 ) -> u16 {
     if map.is_null() {
         return crate::station_type::INVALID_STATION;
@@ -66,7 +66,7 @@ pub(crate) unsafe fn goods_get_via(
     }
     let mut restricted = 0;
     unsafe {
-        crate::cargo_flow::openttd_rust_flow_via(
+        crate::cargo_flow::flow_via(
             entry.flow,
             2,
             excluded,

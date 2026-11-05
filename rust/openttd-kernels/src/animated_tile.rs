@@ -174,8 +174,8 @@ pub(crate) fn may_animate(tile: u32, shared: &Shared) -> bool {
     )
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_may_animate(tile: u32) -> bool {
-    may_animate(tile, services().shared())
+pub extern "C" fn openttd_rust_may_animate_abi(tile: u32) -> u8 {
+    u8::from(may_animate(tile, services().shared()))
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
@@ -213,7 +213,8 @@ pub extern "C" fn openttd_rust_animation_afterload(clean: bool, flags: bool) {
         let mut i = 0;
         while i < openttd_rust_animation_count() {
             let tile = openttd_rust_animation_at(i);
-            let remove = !openttd_rust_may_animate(tile) || queue(|q| q[..i].contains(&tile));
+            let remove =
+                openttd_rust_may_animate_abi(tile) == 0 || queue(|q| q[..i].contains(&tile));
             if remove {
                 queue(|q| {
                     q.remove(i);
@@ -225,7 +226,7 @@ pub extern "C" fn openttd_rust_animation_afterload(clean: bool, flags: bool) {
     }
     if flags {
         for t in 0..(1_u32 << a.shared().map().log_x) * ((a.shared().map_max_y)() + 1) {
-            if openttd_rust_may_animate(t) {
+            if openttd_rust_may_animate_abi(t) != 0 {
                 (a.set_state)(t, AnimatedTileState::NONE);
             }
         }
@@ -463,20 +464,27 @@ fn airport_trigger(
     true
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_trigger_airport_tile(
+pub extern "C" fn openttd_rust_trigger_airport_tile_abi(
     st: *mut Station,
     tile: u32,
     trigger: u8,
-) -> bool {
+) -> u8 {
     let a = services();
-    airport_trigger(a, st, tile, trigger, a.shared().random(), 0)
+    u8::from(airport_trigger(
+        a,
+        st,
+        tile,
+        trigger,
+        a.shared().random(),
+        0,
+    ))
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, cargo: u8) -> bool {
+pub extern "C" fn openttd_rust_trigger_airport_abi(st: *mut Station, trigger: u8, cargo: u8) -> u8 {
     let a = services();
     let area = (a.airport_area)(st);
     if area.tile == INVALID_TILE {
-        return false;
+        return u8::from(false);
     }
     let mut ret = true;
     let mut random = a.shared().random();
@@ -499,7 +507,7 @@ pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, ca
             ret = false;
         }
     });
-    ret
+    u8::from(ret)
 }
 
 crate::abi::layouts! {
@@ -586,7 +594,7 @@ pub(crate) fn cargo_event(
     let tile = (a.location)(st);
     crate::newgrf_station::openttd_rust_station_randomisation(st, tile, random_trigger, cargo);
     openttd_rust_trigger_station(st, tile, trigger, cargo);
-    openttd_rust_trigger_airport((a.as_station)(st), airport_trigger, cargo);
+    openttd_rust_trigger_airport_abi((a.as_station)(st), airport_trigger, cargo);
     unsafe {
         crate::newgrf_roadstop::openttd_rust_roadstop_randomise(
             st,
@@ -604,11 +612,11 @@ pub(crate) fn acceptance(st: *mut BaseStation) {
     openttd_rust_trigger_station(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     openttd_rust_trigger_roadstop(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     if (a.is_station)(st) {
-        openttd_rust_trigger_airport((a.as_station)(st), AAT_ACCEPTANCE_TICK, INVALID_CARGO);
+        openttd_rust_trigger_airport_abi((a.as_station)(st), AAT_ACCEPTANCE_TICK, INVALID_CARGO);
     }
 }
 pub(crate) fn airport_built(st: *mut BaseStation, tile: u32) {
-    openttd_rust_trigger_airport_tile((services().as_station)(st), tile, AAT_BUILT);
+    openttd_rust_trigger_airport_tile_abi((services().as_station)(st), tile, AAT_BUILT);
 }
 
 /// Borrow the immutable road-stop leaf table installed before animation/gameplay.

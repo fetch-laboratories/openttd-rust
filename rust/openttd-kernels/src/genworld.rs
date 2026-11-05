@@ -237,25 +237,25 @@ pub extern "C" fn openttd_rust_world_request_abort() {
 /// # Safety
 /// The immutable native service table is live; serialized game-state entry.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_world_aborted(s: &WorldServices) -> bool {
-    read_field!(INFO.get(), abort) || (s.exit_game)()
+pub unsafe extern "C" fn openttd_rust_world_aborted_abi(s: &WorldServices) -> u8 {
+    u8::from(read_field!(INFO.get(), abort) || (s.exit_game)())
 }
 /// # Safety
 /// The native exception frame is live; callbacks catch before returning to Rust.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_world_handle_abort(
+pub unsafe extern "C" fn openttd_rust_world_handle_abort_abi(
     s: &WorldServices,
     frame: *mut Frame,
-) -> bool {
+) -> u8 {
     crate::session::set_pending(if crate::session::mode() == GameMode::EDITOR {
         SwitchMode::EDITOR
     } else {
         SwitchMode::MENU
     });
     if let Some(callback) = read_field!(INFO.get(), abort_callback) {
-        return (s.callback)(frame, Some(callback));
+        return u8::from((s.callback)(frame, Some(callback)));
     }
-    true
+    u8::from(true)
 }
 /// # Safety
 /// Live call-local native frame and immutable services. Native exceptions return
@@ -378,7 +378,7 @@ impl World<'_> {
         (unsafe { &*(*self.s.landscape).shared }.screen_dirty)();
     }
     fn abort(&self) -> Result<(), Failure> {
-        native(unsafe { openttd_rust_world_handle_abort(self.s, self.frame) })?;
+        native(unsafe { openttd_rust_world_handle_abort_abi(self.s, self.frame) != 0 })?;
         Err(Failure::Abort)
     }
     fn storage_mode(&self, mode: u8, ignore: bool) {
@@ -469,7 +469,7 @@ impl World<'_> {
         let call = (s.town_begin)(self.frame);
         let mut result = false;
         let completed = unsafe {
-            crate::town::founding::openttd_rust_town_generate(
+            crate::town::founding::openttd_rust_town_generate_abi(
                 s.town,
                 call.road,
                 call.frame,
@@ -478,7 +478,7 @@ impl World<'_> {
                 false,
                 0,
                 &raw mut result,
-            )
+            ) != 0
         };
         (s.town_end)(self.frame);
         native(completed)?;
@@ -487,27 +487,23 @@ impl World<'_> {
         }
         let context = (s.industry_begin)(self.frame);
         let completed = unsafe {
-            crate::industry::openttd_rust_industry_generate(
+            crate::industry::openttd_rust_industry_generate_abi(
                 (s.industry_builder)(),
                 context,
                 s.industry,
                 s.industry_generation,
-            )
+            ) != 0
         };
         (s.industry_end)(self.frame);
         native(completed)?;
         let call = (s.object_begin)(self.frame);
         let completed = unsafe {
-            crate::objects::openttd_rust_object_generate(
-                s.objects, call.out, call.tmp, call.aux, call.frame,
-            )
+            crate::objects::generate(s.objects, call.out, call.tmp, call.aux, call.frame)
         };
         (s.object_end)(self.frame);
         native(completed)?;
         let a = unsafe { &*s.landscape };
-        let aborted = unsafe {
-            crate::trees::openttd_rust_trees_generate((s.tree_settings)(), a.trees, a.shared)
-        };
+        let aborted = unsafe { crate::trees::generate((s.tree_settings)(), a.trees, a.shared) };
         if aborted {
             (s.tree_end)(self.frame);
             return Err(Failure::Native);

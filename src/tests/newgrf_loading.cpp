@@ -54,7 +54,7 @@ TEST_CASE("Rust Action2 callback interner crosses serialized threads")
 	auto parse = [](uint8_t slot) {
 		const uint8_t bytes[]{GSF_ROADVEHICLES, slot, 0x81, 0x0C, 0, 255, 1, 55, 128, 0, 255, 255, 127};
 		OpenTTDGrfCursor reader{bytes, std::size(bytes), 0};
-		return openttd_rust_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &reader);
+		return openttd_test_action2_parse(&GetRustAction2Services(), &GetRustGrfLoadingServices(), &reader);
 	};
 	bool parsed_first = false;
 	std::thread writer([&] {

@@ -29,18 +29,18 @@ impl StoryPageButtonData {
     }
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_story_button_validate_colour(data: u32) -> bool {
-    StoryPageButtonData(data).validate_colour()
+pub extern "C" fn openttd_rust_story_button_validate_colour_abi(data: u32) -> u8 {
+    u8::from(StoryPageButtonData(data).validate_colour())
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_story_button_validate_flags(data: u32) -> bool {
-    StoryPageButtonData(data).validate_flags()
+pub extern "C" fn openttd_rust_story_button_validate_flags_abi(data: u32) -> u8 {
+    u8::from(StoryPageButtonData(data).validate_flags())
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_story_button_validate_cursor(data: u32) -> bool {
-    StoryPageButtonData(data).validate_cursor()
+pub extern "C" fn openttd_rust_story_button_validate_cursor_abi(data: u32) -> u8 {
+    u8::from(StoryPageButtonData(data).validate_cursor())
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_story_button_validate_vehicle_type(data: u32) -> bool {
-    StoryPageButtonData(data).validate_vehicle_type()
+pub extern "C" fn openttd_rust_story_button_validate_vehicle_type_abi(data: u32) -> u8 {
+    u8::from(StoryPageButtonData(data).validate_vehicle_type())
 }
