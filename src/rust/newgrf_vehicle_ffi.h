@@ -40,18 +40,12 @@ struct OpenTTDVehicleResolverServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDSharedServices *shared;
 	NewGRFCache *(*cache)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cache);
-	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
-	OpenTTDVehicle *(*move)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move);
-	OpenTTDVehicle *(*previous)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint16_t (*cargo_classes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
 	bool (*valid_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_company);
 	const Livery *(*livery)(uint16_t, uint8_t, uint16_t, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(livery);
 	uint32_t (*company_info)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company_info);
-	uint16_t (*first_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine);
-	bool (*articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(articulated);
-	bool (*has_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
 	OpenTTDVehicleOverrides (*overrides)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(overrides);
 	OpenTTDVehicleOverride (*override_at)(const OpenTTDEngine *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(override_at);
 	uint16_t (*override_engine)(const OpenTTDEngine *, size_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(override_engine);
@@ -66,7 +60,6 @@ struct OpenTTDVehicleResolverServices {
 	OpenTTDVehicleRandomResult (*resolve_random)(OpenTTDVehicleResolverState *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_random);
 	OpenTTDVehicleLoadingOrder (*order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order);
 	OpenTTDCargoList *(*cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
-	uint16_t (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
 	uint32_t (*real_count)(const RealSpriteGroup *, bool) noexcept OPENTTD_SERVICE_DEFAULT(real_count);
 	const SpriteGroup *(*real_at)(const RealSpriteGroup *, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(real_at);
 	const OpenTTDEngine * (*engine_by_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_by_id);
@@ -74,7 +67,6 @@ struct OpenTTDVehicleResolverServices {
 	uint8_t (*engine_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_flags);
 	uint16_t (*local_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(local_id);
 	OpenTTDVehicleCargoInfo (*cargo_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_info);
-	uint32_t (*motion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(motion);
 	int32_t (*build_year)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(build_year);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
@@ -87,7 +79,6 @@ struct OpenTTDVehicleResolverServices {
 	uint8_t (*real_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(real_order);
 	uint16_t (*load_ticks)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_ticks);
 	uint16_t (*service_interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
-	uint8_t (*acceleration)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(acceleration);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	uint8_t (*cargo_subtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_subtype);
 	int32_t (*age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);
@@ -95,7 +86,6 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*unit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
 	uint8_t (*sprite)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
 	uint8_t (*breakdowns)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdowns);
-	uint8_t (*breakdown_counter)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_counter);
 	uint8_t (*breakdown_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay);
 	uint8_t (*breakdown_chance)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_chance);
 	uint16_t (*reliability)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reliability);
@@ -104,7 +94,6 @@ struct OpenTTDVehicleResolverServices {
 	int64_t (*profit_this)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_this);
 	int64_t (*profit_last)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_last);
 	uint16_t (*vehicle_flags)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_flags);
-	OpenTTDAircraftState *(*aircraft)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft);
 	const OpenTTDStation * (*target_airport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(target_airport);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
 	uint16_t (*moving_flags)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving_flags);

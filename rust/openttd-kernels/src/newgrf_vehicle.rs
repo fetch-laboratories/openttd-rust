@@ -100,18 +100,12 @@ pub struct Services {
     pub(crate) vehicle: &'static VehicleServices,
     pub(crate) shared: &'static crate::services::Services,
     cache: unsafe extern "C" fn(V) -> *mut Cache,
-    first: unsafe extern "C" fn(V) -> V,
-    move_vehicle: unsafe extern "C" fn(V, i32) -> V,
-    previous: unsafe extern "C" fn(V) -> V,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) cargo_classes: unsafe extern "C" fn(u8) -> u16,
     cargo_bitnum: unsafe extern "C" fn(u8) -> u8,
     valid_company: unsafe extern "C" fn(u8) -> bool,
     livery: unsafe extern "C" fn(u16, u8, u16, V) -> *const c_void,
     company_info: unsafe extern "C" fn(u8, *const c_void) -> u32,
-    first_engine: unsafe extern "C" fn(V) -> u16,
-    articulated: unsafe extern "C" fn(V) -> bool,
-    has_articulated: unsafe extern "C" fn(V) -> bool,
     overrides: unsafe extern "C" fn(u16) -> Overrides,
     override_at: unsafe extern "C" fn(*const OpenTTDEngine, usize) -> Override,
     override_engine: unsafe extern "C" fn(*const OpenTTDEngine, usize, usize) -> u16,
@@ -126,7 +120,6 @@ pub struct Services {
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
     order: unsafe extern "C" fn(V) -> OrderState,
     pub(crate) cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
-    cargo_capacity: unsafe extern "C" fn(V) -> u16,
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
     real_at: unsafe extern "C" fn(Group, bool, u32) -> Group,
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
@@ -134,7 +127,6 @@ pub struct Services {
     engine_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     local_id: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     cargo_info: unsafe extern "C" fn(u8) -> CargoInfo,
-    motion: unsafe extern "C" fn(V) -> u32,
     build_year: unsafe extern "C" fn(V) -> i32,
     last_service: unsafe extern "C" fn(V) -> i32,
     primary: unsafe extern "C" fn(V) -> bool,
@@ -147,7 +139,6 @@ pub struct Services {
     real_order: unsafe extern "C" fn(V) -> u8,
     load_ticks: unsafe extern "C" fn(V) -> u16,
     service_interval: unsafe extern "C" fn(V) -> u16,
-    acceleration: unsafe extern "C" fn(V) -> u8,
     pub(crate) cargo_type: unsafe extern "C" fn(V) -> u8,
     cargo_subtype: unsafe extern "C" fn(V) -> u8,
     age: unsafe extern "C" fn(V) -> i32,
@@ -155,7 +146,6 @@ pub struct Services {
     unit: unsafe extern "C" fn(V) -> u16,
     pub(crate) sprite: unsafe extern "C" fn(V) -> u8,
     breakdowns: unsafe extern "C" fn(V) -> u8,
-    breakdown_counter: unsafe extern "C" fn(V) -> u8,
     breakdown_delay: unsafe extern "C" fn(V) -> u8,
     breakdown_chance: unsafe extern "C" fn(V) -> u8,
     reliability: unsafe extern "C" fn(V) -> u16,
@@ -164,7 +154,6 @@ pub struct Services {
     profit_this: unsafe extern "C" fn(V) -> i64,
     profit_last: unsafe extern "C" fn(V) -> i64,
     vehicle_flags: unsafe extern "C" fn(V) -> u16,
-    aircraft: unsafe extern "C" fn(V) -> *mut crate::aircraft::State,
     target_airport: unsafe extern "C" fn(V) -> *const crate::station::Station,
     airport_ttd_type: unsafe extern "C" fn(
         *const crate::station_cmd::AirportSpec,
@@ -218,7 +207,7 @@ unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
             (s.livery)(id, company, crate::engine_type::INVALID_ENGINE, v)
         } else {
             let first_engine = if ground(v) {
-                (s.first_engine)(v)
+                first_engine(v)
             } else {
                 crate::engine_type::INVALID_ENGINE
             };
@@ -226,11 +215,18 @@ unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
         }
     }
 }
-unsafe fn position(s: &Services, v: V, consecutive: bool) -> u32 {
-    unsafe {
+/// `GroundVehicleCache::first_engine` of a live ground record.
+fn first_engine(v: V) -> u16 {
+    crate::raw_field::read_field!(
+        crate::vehicle::VehicleRef::of(v).ground_cache(),
+        first_engine
+    )
+}
+unsafe fn position(v: V, consecutive: bool) -> u32 {
+    {
         let mut before = 0u8;
         let mut after = 0u8;
-        let mut u = (s.first)(v);
+        let mut u = crate::vehicle::VehicleRef::of(v).first().0.as_ptr();
         while u != v {
             before = before.wrapping_add(1);
             if consecutive && engine(u) != engine(v) {
@@ -273,7 +269,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
         let cache = (s.cache)(v);
         if !crate::bitmath_func::has_bit((*cache).cache_valid, bit) {
             let value = match variable {
-                0x40 | 0x41 => position(s, v, variable == 0x41),
+                0x40 | 0x41 => position(v, variable == 0x41),
                 0x42 => {
                     let mut cargoes = [0u8; NUM_CARGO as usize];
                     let mut classes = 0u8;
@@ -320,12 +316,14 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut before = 0u8;
                     let mut after = 0u8;
                     let mut u = v;
-                    while (s.articulated)(u) {
+                    while crate::vehicle::VehicleRef::of(u).is_articulated_part() {
                         before = before.wrapping_add(1);
-                        u = (s.previous)(u);
+                        u = crate::vehicle::VehicleRef::of(u)
+                            .previous()
+                            .map_or(std::ptr::null_mut(), |v| v.0.as_ptr());
                     }
                     u = v;
-                    while (s.has_articulated)(u) {
+                    while crate::vehicle::VehicleRef::of(u).has_articulated_part() {
                         after = after.wrapping_add(1);
                         u = next(u);
                     }
@@ -445,7 +443,11 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
         let mut state = State {
             self_scope: scope,
             parent: Scope {
-                v: if v.is_null() { v } else { (s.first)(v) },
+                v: if v.is_null() {
+                    v
+                } else {
+                    crate::vehicle::VehicleRef::of(v).first().0.as_ptr()
+                },
                 ..scope
             },
             relative: scope,
@@ -460,7 +462,7 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
                 state.root = if wagon == 2 && handle(v).vehicle_type() == 0 {
                     (s.cached_override)(v)
                 } else {
-                    wagon_override(s, engine(v), (s.cargo_type)(v), (s.first_engine)(v))
+                    wagon_override(s, engine(v), (s.cargo_type)(v), first_engine(v))
                 };
             }
             if state.root.is_null() {
@@ -517,7 +519,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_random(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
-    s: &Services,
+    _s: &Services,
     state: *mut State,
     _ro: *const c_void,
     scope: u8,
@@ -542,7 +544,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
                 2 => (*state).parent.v,
                 _ => {
                     let mut first: V = null_mut();
-                    let mut u = (s.first)(self_v);
+                    let mut u = crate::vehicle::VehicleRef::of(self_v).first().0.as_ptr();
                     while u != self_v {
                         if engine(u) != engine(self_v) {
                             first = null_mut();
@@ -555,7 +557,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
                 }
             };
             // Original initializes cached_relative_count but never updates it.
-            let relative_v = (s.move_vehicle)(v, count);
+            let relative_v = crate::vehicle::VehicleRef::move_by(v, count);
             (*state).relative.set_vehicle(relative_v);
         }
         scope
@@ -578,7 +580,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolve_real(
             }
             return null();
         }
-        let order = (s.order)((s.first)(v));
+        let order = (s.order)(crate::vehicle::VehicleRef::of(v).first().0.as_ptr());
         let not_loading = order.unload == crate::order_type::OUFB_NO_UNLOAD
             && order.load == crate::order_type::OLFB_NO_LOAD;
         let motion = !order.loading || not_loading;
@@ -587,7 +589,8 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolve_real(
             return null();
         }
         let cargo = crate::cargo_storage::openttd_rust_cargo_list_stored((s.cargo_owner)(v));
-        let set = cargo.wrapping_mul(total) / u32::from((s.cargo_capacity)(v).max(1));
+        let set = cargo.wrapping_mul(total)
+            / u32::from(crate::vehicle::VehicleRef::of(v).cargo_cap().max(1));
         (s.real_at)(group, motion, set.min(total - 1))
     }
 }
@@ -689,7 +692,13 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
         match trigger {
             0 => {
                 crate::movement::native_assert(s.shared, first);
-                randomise(s, (s.first)(v), Trigger::AnyNewCargo as u8, random, false);
+                randomise(
+                    s,
+                    crate::vehicle::VehicleRef::of(v).first().0.as_ptr(),
+                    Trigger::AnyNewCargo as u8,
+                    random,
+                    false,
+                );
             }
             1 => {
                 let u = next(v);
@@ -851,7 +860,7 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
             st.cast_mut().cast(),
             crate::newgrf_airport::runtime(),
         );
-        let a = (s.aircraft)(v);
+        let a = crate::vehicle::VehicleRef::of(v).aircraft_state();
         let flags = (s.moving_flags)(airport, (*a).pos);
         let has = |flag: u8| flags & (1u16 << flag) != 0;
         match (*a).state {
@@ -947,7 +956,7 @@ unsafe fn aircraft_movement_action(s: &Services, v: V) -> u32 {
         TERM6, TERM7, TERM8,
     };
     unsafe {
-        let a = (s.aircraft)(v);
+        let a = crate::vehicle::VehicleRef::of(v).aircraft_state();
         match (*a).state {
             HANGAR => {
                 if (handle(v)).speed() > 0 {
@@ -1065,7 +1074,9 @@ unsafe fn variable(
                 if !ground(v) {
                     return 0;
                 }
-                let p = (s.previous)(v);
+                let p = crate::vehicle::VehicleRef::of(v)
+                    .previous()
+                    .map_or(std::ptr::null_mut(), |v| v.0.as_ptr());
                 let n = next(v);
                 let direction = (h).direction();
                 let f = if p.is_null() {
@@ -1082,7 +1093,7 @@ unsafe fn variable(
                 let encode = |d| u32::from(if d > DIRDIFF_REVERSE { d | 8 } else { d });
                 return encode(t) << 16 | encode(b) << 8 | encode(f);
             }
-            0x46 => return (s.motion)(v),
+            0x46 => return crate::vehicle::VehicleRef::of(v).motion_counter(),
             0x47 => return cargo_info(s, (s.cargo_type)(v), grf),
             0x48 => return u32::from((s.engine_flags)((s.vehicle.engine)(h).0.as_ptr())),
             0x49 => return (s.build_year)(v) as u32,
@@ -1150,7 +1161,7 @@ unsafe fn variable(
                     ]
                     .contains(&callback)
                 {
-                    let u = (s.move_vehicle)(
+                    let u = crate::vehicle::VehicleRef::move_by(
                         v,
                         crate::newgrf_storage::openttd_rust_storage_temp_get(0x10f),
                     );
@@ -1177,7 +1188,7 @@ unsafe fn variable(
                 if !ground(v) {
                     return 0;
                 }
-                let u = (s.move_vehicle)(v, i32::from(parameter as i8));
+                let u = crate::vehicle::VehicleRef::move_by(v, i32::from(parameter as i8));
                 if u.is_null() {
                     return 0;
                 }
@@ -1286,7 +1297,9 @@ unsafe fn variable(
                     let f = t.get_flags();
                     let wagon = f & crate::train::VRF_POWERED_WAGON != 0;
                     let u = if wagon {
-                        (s.vehicle.train_handle)((s.first)(v))
+                        (s.vehicle.train_handle)(
+                            crate::vehicle::VehicleRef::of(v).first().0.as_ptr(),
+                        )
                     } else {
                         t
                     };
@@ -1334,7 +1347,9 @@ unsafe fn variable(
                 } else {
                     match kind() {
                         0 => (s.vehicle.train_handle)(v).get_wait_counter() as u32,
-                        3 => u32::from((*(s.aircraft)(v)).turn_counter),
+                        3 => u32::from(
+                            (*crate::vehicle::VehicleRef::of(v).aircraft_state()).turn_counter,
+                        ),
                         _ => 0,
                     }
                 };
@@ -1365,9 +1380,9 @@ unsafe fn variable(
                 return high(if kind() == 3 { speed * 10 / 128 } else { speed });
             }
             0xb6 => return u32::from((h).subspeed()),
-            0xb7 => return u32::from((s.acceleration)(v)),
+            0xb7 => return u32::from(crate::vehicle::VehicleRef::of(v).acceleration()),
             0xb9 => return u32::from((s.cargo_type)(v)),
-            0xba | 0xbb => return high(u32::from((s.cargo_capacity)(v))),
+            0xba | 0xbb => return high(u32::from(crate::vehicle::VehicleRef::of(v).cargo_cap())),
             0xbc | 0xbd => {
                 return high(
                     crate::cargo_storage::openttd_rust_cargo_list_stored((s.cargo_owner)(v))
@@ -1404,7 +1419,7 @@ unsafe fn variable(
             }
             0xc9 => return u32::from((h).day()),
             0xca => return u32::from((s.breakdowns)(v)),
-            0xcb => return u32::from((s.breakdown_counter)(v)),
+            0xcb => return u32::from(crate::vehicle::VehicleRef::of(v).breakdown_counter()),
             0xcc => return u32::from((s.breakdown_delay)(v)),
             0xcd => return u32::from((s.breakdown_chance)(v)),
             0xce | 0xcf => return high(u32::from((s.reliability)(v))),
@@ -1455,7 +1470,9 @@ unsafe fn variable(
                     let owner = ((&*(s.ground)()).resolve)(handle(v));
                     return (*owner.state).cache.cached_power >> (u32::from(variable - 0xf4) * 8);
                 }
-                0xfc | 0xfd => return high((s.id)((s.first)(v))),
+                0xfc | 0xfd => {
+                    return high((s.id)(crate::vehicle::VehicleRef::of(v).first().0.as_ptr()));
+                }
                 0xff => return 0,
                 _ => {}
             },
@@ -1482,7 +1499,11 @@ unsafe fn variable(
             }
             3 => match variable {
                 0xe2 => return aircraft_movement_state(s, v),
-                0xe3 => return u32::from((*(s.aircraft)(v)).targetairport),
+                0xe3 => {
+                    return u32::from(
+                        (*crate::vehicle::VehicleRef::of(v).aircraft_state()).targetairport,
+                    );
+                }
                 0xe6 => return aircraft_movement_action(s, v),
                 _ => {}
             },
@@ -1565,12 +1586,7 @@ pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
     unsafe {
         let s = &*(vs.newgrf)();
         let shell = v.0.as_ptr();
-        let group = wagon_override(
-            s,
-            v.engine_id(),
-            (s.cargo_type)(shell),
-            (s.first_engine)(shell),
-        );
+        let group = wagon_override(s, v.engine_id(), (s.cargo_type)(shell), first_engine(shell));
         (s.write_override)(shell, group);
     }
 }
@@ -1642,12 +1658,12 @@ crate::abi::layouts! {
     "OpenTTDVehicleOverride" ["vehicle_resolver"] => Override { group, cargo, count };
     "OpenTTDVehicleOverrides" ["vehicle_resolver"] => Overrides { engine, count };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
-        vehicle, shared, cache, first, move_vehicle => move, previous, capabilities,
-        cargo_classes, cargo_bitnum, valid_company, livery, company_info, first_engine, articulated, has_articulated,
+        vehicle, shared, cache, capabilities,
+        cargo_classes, cargo_bitnum, valid_company, livery, company_info,
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
-        cargo_capacity, real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, local_id, cargo_info, motion, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, acceleration, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_counter, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, aircraft, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services
+        real_count, real_at,
+        engine_by_id, default_cargo, engine_flags, local_id, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, unhandled, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

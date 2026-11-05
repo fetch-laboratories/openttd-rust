@@ -364,6 +364,36 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn cargo_cap(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), cargo_cap)
     }
+    pub(crate) fn refit_cap(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), refit_cap)
+    }
+    pub(crate) fn write_refit_cap(self, value: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), refit_cap, value);
+    }
+    pub(crate) fn breakdown_counter(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), breakdown_ctr)
+    }
+    pub(crate) fn motion_counter(self) -> u32 {
+        crate::raw_field::read_field!(self.0.as_ptr(), motion_counter)
+    }
+    /// The aircraft owner link; the record is a live aircraft.
+    pub(crate) fn aircraft_state(self) -> *mut crate::aircraft::AircraftState {
+        crate::raw_field::read_field!(self.0.as_ptr(), aircraft)
+    }
+    /// `Vehicle::Move(n)` from a nullable record.
+    pub(crate) fn move_by(mut v: *mut VehicleRecord, n: i32) -> *mut VehicleRecord {
+        let mut i = 0;
+        while i != n && !v.is_null() {
+            v = if n < 0 {
+                i -= 1;
+                crate::raw_field::read_field!(v, previous)
+            } else {
+                i += 1;
+                crate::raw_field::read_field!(v, next)
+            };
+        }
+        v
+    }
     /// `GroundVehicle::HasArticulatedPart` / `Vehicle::HasArticulatedPart`.
     pub(crate) fn has_articulated_part(self) -> bool {
         self.next().is_some_and(Self::is_articulated_part)
@@ -466,6 +496,12 @@ impl crate::vehicle::VehicleRef {
         crate::raw_field::write_field!(self.0.as_ptr(), cur_speed, value);
     }
 
+    pub(crate) fn write_engine(self, value: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), engine_type, EngineID(value));
+    }
+    pub(crate) fn write_owner(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), owner, CompanyID(value));
+    }
     pub(crate) fn write_last_station(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), last_station_visited, StationID(value));
     }

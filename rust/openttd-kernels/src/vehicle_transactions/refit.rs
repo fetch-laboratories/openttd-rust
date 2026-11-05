@@ -86,10 +86,6 @@ pub struct Services {
     pub expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> ExpenseType,
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
     pub commit: extern "C" fn(*mut OpenTTDVehicle) -> Commit,
-    pub set_refit_cap: extern "C" fn(*mut OpenTTDVehicle, u16),
-    pub refit_cap: extern "C" fn(*mut OpenTTDVehicle) -> u16,
-    pub cargo_cap: extern "C" fn(*mut OpenTTDVehicle) -> u16,
-    pub set_capacity: extern "C" fn(*mut OpenTTDVehicle, u16),
     pub write_refit: extern "C" fn(*mut OpenTTDVehicle, u8, u16, u8),
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
     pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
@@ -373,17 +369,23 @@ unsafe fn refit_chain(
                 total.total = total.total.wrapping_sub(amount);
                 mail_total = mail_total.wrapping_sub(u32::from(mail));
                 if unsafe { (c.transactions.cargo_type)(v) } == cargo {
-                    total.total = total.total.wrapping_add(u32::from((s.cargo_cap)(
-                        unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                            .0
-                            .as_ptr(),
-                    )));
-                    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
-                        mail_total = mail_total.wrapping_add(u32::from((s.cargo_cap)(
-                            unsafe { super::vehicle_ref(next(s, v), s.common.vehicles) }
+                    total.total = total.total.wrapping_add(u32::from(
+                        crate::vehicle::VehicleRef::of(
+                            unsafe { super::vehicle_ref(v, s.common.vehicles) }
                                 .0
                                 .as_ptr(),
-                        )));
+                        )
+                        .cargo_cap(),
+                    ));
+                    if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
+                        mail_total = mail_total.wrapping_add(u32::from(
+                            crate::vehicle::VehicleRef::of(
+                                unsafe { super::vehicle_ref(next(s, v), s.common.vehicles) }
+                                    .0
+                                    .as_ptr(),
+                            )
+                            .cargo_cap(),
+                        ));
                     }
                 }
             } else {
@@ -417,12 +419,12 @@ unsafe fn refit_chain(
             } else {
                 0
             };
-            (s.set_refit_cap)(
+            crate::vehicle::VehicleRef::of(
                 unsafe { super::vehicle_ref(v, s.common.vehicles) }
                     .0
                     .as_ptr(),
-                cap,
-            );
+            )
+            .write_refit_cap(cap);
             unsafe {
                 truncate(s, v, cap);
             }
@@ -441,24 +443,25 @@ unsafe fn refit_chain(
                         (c.transactions.check)(!shadow.is_null());
                     }
                 }
-                let cap = (s.refit_cap)(
+                let cap = crate::vehicle::VehicleRef::of(
                     unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
                         .0
                         .as_ptr(),
                 )
+                .refit_cap()
                 .min(result.mail as u16);
-                (s.set_refit_cap)(
+                crate::vehicle::VehicleRef::of(
                     unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
                         .0
                         .as_ptr(),
-                    cap,
-                );
-                (s.set_capacity)(
+                )
+                .write_refit_cap(cap);
+                crate::vehicle::VehicleRef::of(
                     unsafe { super::vehicle_ref(shadow, s.common.vehicles) }
                         .0
                         .as_ptr(),
-                    result.mail as u16,
-                );
+                )
+                .write_cargo_cap(result.mail as u16);
                 unsafe {
                     truncate(s, shadow, cap);
                 }
@@ -675,6 +678,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, capabilities, refit_engine, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, capabilities, refit_engine, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, write_refit, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
     };
 }

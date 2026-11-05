@@ -59,6 +59,11 @@ impl VehicleRef {
         crate::raw_field::read_field!(self.0.as_ptr(), shell).cast()
     }
 
+    /// A live, non-null canonical record pointer.
+    pub(crate) fn of(record: *mut OpenTTDVehicle) -> Self {
+        Self(NonNull::new(record).unwrap())
+    }
+
     /// Convert a nullable canonical record to a legacy native context.
     pub(crate) fn shell_from_record(record: *mut OpenTTDVehicle) -> *mut () {
         NonNull::new(record).map_or(std::ptr::null_mut(), |record| Self(record).shell().cast())

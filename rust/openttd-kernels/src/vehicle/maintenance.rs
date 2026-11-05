@@ -152,7 +152,6 @@ pub struct Services {
     pub breakdown_trigger: extern "C" fn(VehicleRef) -> BreakdownTrigger,
     pub chance_write: extern "C" fn(VehicleRef, u8),
     pub trigger: extern "C" fn(VehicleRef, u8, u8),
-    pub breakdown_counter: extern "C" fn(VehicleRef) -> u8,
     pub breakdown_probe: extern "C" fn(VehicleRef) -> BreakdownProbe,
     pub breakdown_start: extern "C" fn(VehicleRef) -> BreakdownStart,
     pub breakdown_start_write: extern "C" fn(VehicleRef, u8, u8),
@@ -760,15 +759,11 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_automatic_service(
 /// # Safety
 /// As the direct maintenance calls.
 pub(crate) unsafe fn vehicle_handle_breakdown(v: VehicleRef, base: &VehicleServices) -> bool {
-    let s = unsafe { &*base.maintenance };
+    let counter = v.breakdown_counter();
     if crate::witness::enabled() {
-        const C: bool = true;
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        let counter = svc!(C, s.breakdown_counter, v);
         unsafe { breakdown_state::<true>(v, base, counter) }
     } else {
-        const C: bool = false;
-        let counter = svc!(C, s.breakdown_counter, v);
         unsafe { breakdown_state::<false>(v, base, counter) }
     }
 }
@@ -893,7 +888,6 @@ crate::abi::layouts! {
         breakdown_trigger,
         chance_write,
         trigger,
-        breakdown_counter,
         breakdown_probe,
         breakdown_start,
         breakdown_start_write,

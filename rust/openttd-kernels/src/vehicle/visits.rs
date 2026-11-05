@@ -697,13 +697,11 @@ pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: b
 }
 
 /// `Vehicle::ResetRefitCaps`.
-pub(crate) fn reset_refit_caps(front: VehicleRef, s: &Services) {
-    let r = s.refit;
+pub(crate) fn reset_refit_caps(front: VehicleRef) {
     let mut part = Some(front);
     while let Some(v) = part {
-        let shell = v.0.as_ptr();
-        (r.set_refit_cap)(shell, (r.cargo_cap)(shell));
-        part = (v).next();
+        v.write_refit_cap(v.cargo_cap());
+        part = v.next();
     }
 }
 
@@ -875,7 +873,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
             witness::hit(witness::VISITS_LEAVE_LOADED);
             // Refresh next hop stats at least once during the stop, with
             // refit_cap == cargo_cap for each vehicle in the consist.
-            reset_refit_caps(v, s);
+            reset_refit_caps(v);
             refresh_links(v, true, false, s);
 
             // The vehicle could load here or stop with cargo loaded.

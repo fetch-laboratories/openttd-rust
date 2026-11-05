@@ -68,14 +68,9 @@ pub struct Services {
     pool_available: extern "C" fn(usize) -> bool,
     new_temporary: extern "C" fn() -> V,
     destroy_temporary: extern "C" fn(V),
-    set_engine: extern "C" fn(V, u16),
-    set_owner: extern "C" fn(V, u8),
-    vehicle_engine: extern "C" fn(V) -> u16,
     vehicle_engine_object: extern "C" fn(V) -> E,
     vehicle_cargo: extern "C" fn(V) -> u8,
     vehicle_subtype: extern "C" fn(V) -> u8,
-    has_articulated: extern "C" fn(V) -> bool,
-    next_articulated: extern "C" fn(V) -> V,
     pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
     pub(crate) aircraft_cost: extern "C" fn(E) -> u8,
@@ -149,7 +144,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
         if s.assertions {
             crate::movement::native_assert(
                 s.shared,
-                v.is_null() || (s.id)(e) == (s.vehicle_engine)(v),
+                v.is_null() || (s.id)(e) == crate::vehicle::VehicleRef::of(v).engine_id(),
             );
         }
         if !mail.is_null() {
@@ -314,7 +309,7 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
         if s.assertions {
             crate::movement::native_assert(
                 s.shared,
-                v.is_null() || (s.vehicle_engine)(v) == engine,
+                v.is_null() || crate::vehicle::VehicleRef::of(v).engine_id() == engine,
             );
         }
         let e = (s.engine)(engine);
@@ -366,8 +361,8 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
             null_mut()
         } else {
             let v = (s.new_temporary)();
-            (s.set_engine)(v, engine);
-            (s.set_owner)(v, (s.shared.current_company)());
+            crate::vehicle::VehicleRef::of(v).write_engine(engine);
+            crate::vehicle::VehicleRef::of(v).write_owner((s.shared.current_company)());
             v
         };
         let mut i = 1;
@@ -564,8 +559,8 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
                     cargo_out = null_mut();
                 }
             }
-            v = if (s.has_articulated)(v) {
-                (s.next_articulated)(v)
+            v = if crate::vehicle::VehicleRef::of(v).has_articulated_part() {
+                crate::vehicle::VehicleRef::of(v).next().unwrap().0.as_ptr()
             } else {
                 null_mut()
             };
@@ -585,8 +580,8 @@ crate::abi::layouts! {
         resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, carrying, capacity_config, refit_mask,
         ship_capacity, passenger_capacity, mail_capacity, train_class, aircraft_subtype, road_sound, rail_kind,
         grf, loading, cargo_classes, multiplier, pool_available,
-        new_temporary, destroy_temporary, set_engine, set_owner, vehicle_engine,
-        vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
+        new_temporary, destroy_temporary,
+        vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
     };
 }
 

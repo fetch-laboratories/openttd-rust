@@ -223,12 +223,7 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
         if c.transactions.assertions {
             unsafe { (c.transactions.check)(cargo < c.strings.cargo_count) };
         }
-        if (r.cargo_cap)(
-            unsafe { super::vehicle_ref(v, r.common.vehicles) }
-                .0
-                .as_ptr(),
-        ) > 0
-        {
+        if unsafe { super::vehicle_ref(v, r.common.vehicles) }.cargo_cap() > 0 {
             real_cargo |= 1_u64.wrapping_shl(u32::from(cargo));
         }
         v = if (s.has_articulated)(v) {

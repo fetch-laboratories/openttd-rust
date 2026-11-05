@@ -126,7 +126,6 @@ struct OpenTTDVehicleMaintenanceServices {
 	OpenTTDVehicleMaintenanceBreakdownTrigger (OPENTTD_RUST_CALL *breakdown_trigger)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_trigger);
 	void (OPENTTD_RUST_CALL *chance_write)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(chance_write);
 	void (OPENTTD_RUST_CALL *trigger)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(trigger);
-	uint8_t (OPENTTD_RUST_CALL *breakdown_counter)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_counter);
 	OpenTTDVehicleMaintenanceBreakdownProbe (OPENTTD_RUST_CALL *breakdown_probe)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_probe);
 	OpenTTDVehicleMaintenanceBreakdownStart (OPENTTD_RUST_CALL *breakdown_start)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_start);
 	void (OPENTTD_RUST_CALL *breakdown_start_write)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_start_write);

@@ -464,7 +464,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.breakdown_trigger = MaintenanceBreakdownTrigger,
 	.chance_write = MaintenanceChanceWrite,
 	.trigger = MaintenanceTrigger,
-	.breakdown_counter = RustVehicleRead<uint8_t, RustVehicleBreakdownCounter>,
 	.breakdown_probe = MaintenanceBreakdownProbe,
 	.breakdown_start = MaintenanceBreakdownStart,
 	.breakdown_start_write = MaintenanceBreakdownStartWrite,

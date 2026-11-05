@@ -16,7 +16,6 @@ forwarded | src/object_cmd.cpp | scale_size_1d = GetRustIndustryLoopServices().g
 forwarded | src/object_cmd.cpp | set_owner = GetRustSharedServices().set_tile_owner
 forwarded | src/object_cmd.cpp | water_class = GetRustClearServices().water_class
 forwarded | src/rust/company_identity_adapter.cpp | aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
-forwarded | src/rust/company_identity_adapter.cpp | articulated = GetRustVehicleResolverServices().articulated
 forwarded | src/rust/company_identity_adapter.cpp | cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes
 forwarded | src/rust/company_identity_adapter.cpp | engine = GetRustEngineCapabilitiesServices().engine
 forwarded | src/rust/company_identity_adapter.cpp | engine_cargo = GetRustEngineCapabilitiesServices().default_cargo
@@ -25,7 +24,6 @@ forwarded | src/rust/company_identity_adapter.cpp | engine_kind = GetRustEngineC
 forwarded | src/rust/company_identity_adapter.cpp | engine_type = GetRustEngineCapabilitiesServices().kind
 forwarded | src/rust/company_identity_adapter.cpp | random = GetRustTownNameServices().random_next
 forwarded | src/rust/company_identity_adapter.cpp | vehicle_cargo = GetRustEngineCapabilitiesServices().vehicle_cargo
-forwarded | src/rust/company_identity_adapter.cpp | vehicle_first = GetRustVehicleResolverServices().first
 forwarded | src/rust/engine_adapter.hpp | company_valid = GetRustSharedServices().company_valid
 forwarded | src/rust/engine_adapter.hpp | utf8_length = GetRustSharedServices().utf8_length
 forwarded | src/rust/engine_capabilities_services.hpp | destroy_temporary = GetRustVehicleServices().destroy
@@ -174,8 +172,6 @@ rebound | RustEngineRailTypes | src/rust/engine_loading_services.hpp | railtypes
 rebound | RustEngineType | src/newgrf_airport.cpp | engine_kind
 rebound | RustEngineType | src/rust/engine_capabilities_services.hpp | kind
 rebound | RustEngineType | src/rust/vehicle_refit_services.hpp | engine_kind
-rebound | RustGroundFirst | src/rust/ground_vehicle_services.cpp | first
-rebound | RustGroundFirst | src/rust/vehicle_services_newgrf.h | first
 rebound | RustHouseSpec | src/animated_tile.cpp | house_spec
 rebound | RustHouseSpec | src/rust/house_definition_services.hpp | get
 rebound | RustIndustryBehaviour | src/industry_cmd.cpp | behaviour
@@ -344,8 +340,6 @@ rebound | RustVehicleCanAllocate | src/rust/disaster_adapter.hpp | can_allocate
 rebound | RustVehicleCanAllocate | src/rust/engine_capabilities_services.hpp | pool_available
 rebound | RustVehicleCanAllocate | src/rust/vehicle_articulated_services.hpp | pool_available
 rebound | RustVehicleCanAllocate | src/rust/vehicle_build_services.hpp | pool_available
-rebound | RustVehicleCargoCap | src/rust/vehicle_refit_services.hpp | cargo_cap
-rebound | RustVehicleCargoCap | src/rust/vehicle_services_newgrf.h | cargo_capacity
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
 rebound | RustVehicleCargoType | src/rust/engine_capabilities_services.hpp | vehicle_cargo
 rebound | RustVehicleCargoType | src/station_cmd.cpp | cargo_type
@@ -358,8 +352,6 @@ rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
 rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object
 rebound | RustVehicleGetEngine | src/rust/vehicle_refit_services.hpp | vehicle_engine
 rebound | RustVehicleGetEngine | src/rust/vehicle_services.cpp | engine
-rebound | RustVehicleHasArticulated | src/rust/engine_capabilities_services.hpp | has_articulated
-rebound | RustVehicleHasArticulated | src/rust/vehicle_services_newgrf.h | has_articulated
 rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks

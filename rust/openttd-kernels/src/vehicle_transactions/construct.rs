@@ -170,12 +170,12 @@ pub(crate) unsafe fn aircraft(
     (k.aircraft_place)(v, u, tile);
     let info = (k.aircraft_info)(e);
     (a.set_part)(v, info.image, (a.default_cargo)(e), info.passengers, true);
-    (r.set_refit_cap)(
+    crate::vehicle::VehicleRef::of(
         unsafe { super::vehicle_ref(u, r.common.vehicles) }
             .0
             .as_ptr(),
-        0,
-    );
+    )
+    .write_refit_cap(0);
     let mail = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
     if (c.valid_cargo)(mail) {
         (k.set_cargo_type)(
@@ -184,12 +184,12 @@ pub(crate) unsafe fn aircraft(
                 .as_ptr(),
             mail,
         );
-        (r.set_capacity)(
+        crate::vehicle::VehicleRef::of(
             unsafe { super::vehicle_ref(u, r.common.vehicles) }
                 .0
                 .as_ptr(),
-            info.mail,
-        );
+        )
+        .write_cargo_cap(info.mail);
     }
     (b.clear_name)(v);
     (k.engine_common)(v, e);
@@ -249,12 +249,12 @@ pub(crate) unsafe fn aircraft(
             (k.mail_capacity_address)(u),
         )
     };
-    (r.set_capacity)(
+    crate::vehicle::VehicleRef::of(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0
             .as_ptr(),
-        capacity as u16,
-    );
+    )
+    .write_cargo_cap(capacity as u16);
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0
