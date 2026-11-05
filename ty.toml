@@ -56,4 +56,5 @@ include = [
     "tools/migration.py",
     "tools/harness_inventory.py",
     "tools/test-harness-inventory.py",
+    "tools/simulation/runtime.py",
 ]
