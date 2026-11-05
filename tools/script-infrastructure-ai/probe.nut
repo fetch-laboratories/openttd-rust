@@ -102,6 +102,23 @@ function TilePredicates() {
 			local sx = ApiMap.GetMapSizeX();
 			return ApiRail.GetSignalType(t, t + 1) + 3 * ApiRail.GetSignalType(t, t - 1) + 7 * ApiRail.GetSignalType(t, t + sx) + 11 * ApiRail.GetSignalType(t, t - sx);
 		}],
+		["IsRoadTile", function(t) { return ApiRoad.IsRoadTile(t); }],
+		["IsRoadDepotTile", function(t) { return ApiRoad.IsRoadDepotTile(t); }],
+		["IsRoadStationTile", function(t) { return ApiRoad.IsRoadStationTile(t); }],
+		["IsDriveThroughRoadStationTile", function(t) { return ApiRoad.IsDriveThroughRoadStationTile(t); }],
+		["HasRoadType", function(t) { return Num(ApiRoad.HasRoadType(t, 0)) + 2 * Num(ApiRoad.HasRoadType(t, 1)) + 4 * Num(ApiRoad.HasRoadType(t, 70)); }],
+		["AreRoadTilesConnected", function(t) {
+			local sx = ApiMap.GetMapSizeX();
+			return Num(ApiRoad.AreRoadTilesConnected(t, t + 1)) + 2 * Num(ApiRoad.AreRoadTilesConnected(t, t - 1)) + 4 * Num(ApiRoad.AreRoadTilesConnected(t, t + sx)) + 8 * Num(ApiRoad.AreRoadTilesConnected(t, t - sx));
+		}],
+		["CanBuildConnectedRoadPartsHere", function(t) {
+			local sx = ApiMap.GetMapSizeX();
+			return ApiRoad.CanBuildConnectedRoadPartsHere(t, t - 1, t + 1) + 3 * ApiRoad.CanBuildConnectedRoadPartsHere(t, t - sx, t + 1) + 9 * ApiRoad.CanBuildConnectedRoadPartsHere(t, t + sx, t - sx) + 27 * ApiRoad.CanBuildConnectedRoadPartsHere(t, t + 1, t + 1);
+		}],
+		["GetNeighbourRoadCount", function(t) { return ApiRoad.GetNeighbourRoadCount(t); }],
+		["GetRoadDepotFrontTile", function(t) { return ApiRoad.GetRoadDepotFrontTile(t); }],
+		["GetRoadStationFrontTile", function(t) { return ApiRoad.GetRoadStationFrontTile(t); }],
+		["GetDriveThroughBackTile", function(t) { return ApiRoad.GetDriveThroughBackTile(t); }],
 		["AreTilesConnected", function(t) {
 			local sx = ApiMap.GetMapSizeX();
 			local v = 0;
@@ -236,6 +253,7 @@ function ProbeRail(who, r) {
 	Command(who, "rail-waypoint-bare", function() : (r, sx) { return ApiRail.BuildRailWaypoint(r + 6 * sx); });
 	Command(who, "rail-waypoint-diag", function() : (r, sx) { return ApiRail.BuildRailWaypoint(r + 2 * sx + 1); });
 	Command(who, "rail-waypoint", function() : (r) { return ApiRail.BuildRailWaypoint(r + 3); });
+	Command(who, "rail-waypoint-2", function() : (r) { return ApiRail.BuildRailWaypoint(r + 6); });
 	Command(who, "rail-convert-invalid", function() : (r, size) { return ApiRail.ConvertRailType(r, size, 0); });
 	Command(who, "rail-convert-type", function() : (r) { return ApiRail.ConvertRailType(r, r + 6, 64); });
 	Command(who, "rail-convert", function() : (r) { return ApiRail.ConvertRailType(r, r + 6, ApiRail.GetCurrentRailType()); });
@@ -246,24 +264,88 @@ function ProbeRail(who, r) {
 	Command(who, "rail-remove-drag-far", function() : (r) { return ApiRail.RemoveRail(r + 7, r + 5, r); });
 	Command(who, "rail-remove-drag", function() : (r, sx) { return ApiRail.RemoveRail(r + 7 - sx, r + 7, r + 7 + 2 * sx); });
 	Command(who, "road-crossing", function() : (r, sx) { return ApiRoad.BuildRoad(r + 4 - sx, r + 4 + sx); });
+	Command(who, "road-crossing-2", function() : (r, sx) { return ApiRoad.BuildRoad(r + 1 - sx, r + 1 + sx); });
 	Record(who, "rail-crossing", Num(ApiRail.IsLevelCrossingTile(r + 4)) + " " + ApiRail.GetRailTracks(r + 4) + " " + Num(ApiRail.AreTilesConnected(r + 3, r + 4, r + 5)));
-	Command(who, "rail-remove-crossing", function() : (r) { return ApiRail.RemoveRailTrack(r + 4, ApiRail.RAILTRACK_NE_SW); });
+	Command(who, "rail-remove-crossing", function() : (r) { return ApiRail.RemoveRailTrack(r + 1, ApiRail.RAILTRACK_NE_SW); });
 	Command(who, "rail-remove-rect", function() : (r, sx) { return ApiRail.RemoveRailStationTileRectangle(r + 5 * sx, r + 5 * sx + 2, false); });
-	Command(who, "rail-remove-waypoint", function() : (r) { return ApiRail.RemoveRailWaypointTileRectangle(r + 3, r + 3, true); });
+	Command(who, "rail-remove-waypoint", function() : (r) { return ApiRail.RemoveRailWaypointTileRectangle(r + 6, r + 6, true); });
 }
 
-/* The first tile of a flat buildable 9x9 block at or after start, or start. */
+/* The first tile of a buildable 9x8 block at or after start, or start. */
 function FreeBlock(start) {
-	local sx = ApiMap.GetMapSizeX();
 	for (local tile = start; tile < ApiMap.GetMapSize(); tile++) {
-		if (!ApiTile.IsBuildableRectangle(tile, 9, 9)) continue;
-		local flat = true;
-		for (local y = 0; y < 9 && flat; y++) {
-			for (local x = 0; x < 9 && flat; x++) flat = ApiTile.GetSlope(tile + x + y * sx) == ApiTile.SLOPE_FLAT;
-		}
-		if (flat) return tile;
+		if (ApiTile.IsBuildableRectangle(tile, 9, 8)) return tile;
 	}
 	return start;
+}
+
+/* Road type availability and the connected-part lookup over every non-aborting slope. */
+function ProbeRoadTypes(who) {
+	local types = "";
+	foreach (rt in [-1, 0, 1, 2, 62, 63, 64, 255, 256]) {
+		types += " " + rt + ":" + Num(ApiRoad.IsRoadTypeAvailable(rt)) + ApiError.GetLastErrorString();
+	}
+	Record(who, "road.types", types);
+	local current = "" + ApiRoad.GetCurrentRoadType();
+	foreach (rt in [64, -1, 1, 256, 0]) {
+		ApiRoad.SetCurrentRoadType(rt);
+		current += " " + ApiRoad.GetCurrentRoadType();
+	}
+	Record(who, "road.current", current);
+	local sx = ApiMap.GetMapSizeX();
+	local nw = ApiMap.GetTileIndex(0, -1), sw = ApiMap.GetTileIndex(1, 0), se = ApiMap.GetTileIndex(0, 1), ne = ApiMap.GetTileIndex(-1, 0);
+	local parts = [nw, sw, se, ne];
+	local slopes = [];
+	for (local slope = 0; slope < 16; slope++) slopes.push(slope);
+	foreach (slope in [0x17, 0x1B, 0x1D, 0x1E, 0x20, 0x100]) slopes.push(slope);
+	foreach (slope in slopes) {
+		local text = "";
+		foreach (existing in [[], [nw], [sw], [se, nw], [ne, sw], [nw, sw], [5]]) {
+			foreach (a in parts) {
+				foreach (b in parts) text += ApiRoad.CanBuildConnectedRoadParts(slope, existing, a, b) + 1;
+			}
+			text += ",";
+		}
+		text += ApiRoad.CanBuildConnectedRoadParts(slope, [], 7, nw) + 1;
+		Record(who, "road.parts " + slope, text);
+	}
+}
+
+/* Road command preconditions and results in a second free block. */
+function ProbeRoad(who, d) {
+	local sx = ApiMap.GetMapSizeX();
+	local size = ApiMap.GetMapSize();
+	Command(who, "road-same", function() : (d) { return ApiRoad.BuildRoad(d, d); });
+	Command(who, "road-invalid", function() : (d, size) { return ApiRoad.BuildRoad(d, size); });
+	Command(who, "road-skew", function() : (d, sx) { return ApiRoad.BuildRoad(d, d + 2 + sx); });
+	Command(who, "road", function() : (d) { return ApiRoad.BuildRoad(d, d + 7); });
+	Command(who, "road-full", function() : (d, sx) { return ApiRoad.BuildRoadFull(d + 2 * sx + 6, d + 2 * sx); });
+	Command(who, "road-oneway", function() : (d, sx) { return ApiRoad.BuildOneWayRoad(d + 3, d + 3 + 4 * sx); });
+	Command(who, "road-oneway-full", function() : (d, sx) { return ApiRoad.BuildOneWayRoadFull(d + 5 + 4 * sx, d + 5); });
+	Command(who, "road-depot-same", function() : (d) { return ApiRoad.BuildRoadDepot(d + 1 + 3 * ApiMap.GetMapSizeX(), d + 1 + 3 * ApiMap.GetMapSizeX()); });
+	Command(who, "road-depot-skew", function() : (d, sx) { return ApiRoad.BuildRoadDepot(d + 1 + sx, d + 2); });
+	Command(who, "road-depot", function() : (d, sx) { return ApiRoad.BuildRoadDepot(d + 1 + sx, d + 1); });
+	Command(who, "road-depot-west", function() : (d, sx) { return ApiRoad.BuildRoadDepot(d + 7 + 2 * sx, d + 6 + 2 * sx); });
+	Command(who, "road-stop-type", function() : (d, sx) { return ApiRoad.BuildRoadStation(d + 4 + sx, d + 4, 2, ApiStation.STATION_NEW); });
+	Command(who, "road-stop-station", function() : (d, sx) { return ApiRoad.BuildRoadStation(d + 4 + sx, d + 4, 0, 9999); });
+	Command(who, "road-stop-skew", function() : (d, sx) { return ApiRoad.BuildRoadStation(d + 4 + sx, d + 5, 0, ApiStation.STATION_NEW); });
+	Command(who, "road-stop", function() : (d, sx) { return ApiRoad.BuildRoadStation(d + 4 + sx, d + 4, 0, ApiStation.STATION_NEW); });
+	Command(who, "road-stop-truck", function() : (d, sx) { return ApiRoad.BuildRoadStation(d + 6 - sx, d + 6, 1, ApiStation.STATION_JOIN_ADJACENT); });
+	Command(who, "road-drive-through", function() : (d, sx) { return ApiRoad.BuildDriveThroughRoadStation(d + 2, d + 3, 0, ApiStation.STATION_NEW); });
+	Command(who, "road-drive-through-y", function() : (d, sx) { return ApiRoad.BuildDriveThroughRoadStation(d + 3 + 2 * sx, d + 3 + sx, 1, ApiStation.STATION_NEW); });
+	Record(who, "road-front", ApiRoad.GetRoadStationFrontTile(d + 4 + sx) + " " + ApiRoad.GetRoadStationFrontTile(d + 2) + " " + ApiRoad.GetDriveThroughBackTile(d + 2) + " " + ApiRoad.GetRoadDepotFrontTile(d + 1 + sx));
+	Command(who, "road-convert-invalid", function() : (d, size) { return ApiRoad.ConvertRoadType(d, size, 0); });
+	Command(who, "road-convert-type", function() : (d) { return ApiRoad.ConvertRoadType(d, d + 7, 64); });
+	Command(who, "road-convert", function() : (d) { return ApiRoad.ConvertRoadType(d, d + 7, 0); });
+	Command(who, "road-remove-same", function() : (d) { return ApiRoad.RemoveRoad(d, d); });
+	Command(who, "road-remove", function() : (d) { return ApiRoad.RemoveRoad(d + 7, d + 6); });
+	Command(who, "road-remove-full", function() : (d, sx) { return ApiRoad.RemoveRoadFull(d + 2 * sx, d + 2 * sx + 2); });
+	Command(who, "road-remove-depot-bare", function() : (d, sx) { return ApiRoad.RemoveRoadDepot(d + 5 * sx); });
+	Command(who, "road-remove-depot-road", function() : (d) { return ApiRoad.RemoveRoadDepot(d + 1); });
+	Command(who, "road-remove-depot", function() : (d, sx) { return ApiRoad.RemoveRoadDepot(d + 7 + 2 * sx); });
+	Command(who, "road-remove-station-bare", function() : (d, sx) { return ApiRoad.RemoveRoadStation(d + 5 * sx); });
+	Command(who, "road-remove-station-rail", function() : (d, sx) { return ApiRoad.RemoveRoadStation(d + 2 * sx + 1); });
+	Command(who, "road-remove-station", function() : (d, sx) { return ApiRoad.RemoveRoadStation(d + 6 - sx); });
 }
 
 function ProbeAll(who, free) {
@@ -273,13 +355,20 @@ function ProbeAll(who, free) {
 	ProbeTiles(who);
 	local rail = FreeBlock(ApiMap.GetTileIndex(2, 2));
 	Record(who, "rail-area", rail);
+	local road = FreeBlock(rail + 10);
+	Record(who, "road-area", road);
 	ProbeRailTypes(who);
+	ProbeRoadTypes(who);
 	local mode = ApiTestMode();
 	ProbeCommands(who + ".test", free);
 	ProbeRail(who + ".test", rail);
+	ProbeRoad(who + ".test", road);
 	mode = null;
 	ProbeCommands(who + ".exec", free);
+	Command(who + ".exec", "rail-level", function() : (rail) { return ApiTile.LevelTiles(rail, rail + 8 + 7 * ApiMap.GetMapSizeX()); });
 	ProbeRail(who + ".exec", rail);
+	Command(who + ".exec", "road-level", function() : (road) { return ApiTile.LevelTiles(road, road + 8 + 7 * ApiMap.GetMapSizeX()); });
+	ProbeRoad(who + ".exec", road);
 	ProbeTiles(who + ".after");
 	Record(who, "done", ApiController.GetTick());
 }

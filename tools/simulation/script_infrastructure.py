@@ -44,12 +44,17 @@ def scenarios(soak: bool) -> list[Scenario]:
             "map_log2": 6,
             "land_generator": 1,
             "console": CONSOLE,
-            "settings": {**SETTINGS, "game_creation": {"landscape": climate}},
+            "settings": {
+                **SETTINGS,
+                "game_creation": {"landscape": climate},
+                "construction": {"build_on_slopes": slopes},
+            },
         }
-        for suffix, climate in (
-            ("", "temperate"),
-            ("-arctic", "arctic"),
-            ("-tropic", "tropic"),
+        for suffix, climate, slopes in (
+            ("", "temperate", "true"),
+            # LookupWithoutBuildOnSlopes is reached only with the setting off.
+            ("-arctic", "arctic", "false"),
+            ("-tropic", "tropic", "true"),
         )
     ]
 
