@@ -14,19 +14,6 @@
 
 #include "../../safeguards.h"
 
-bool ScriptAsyncMode::AsyncModeProc()
-{
-	/* In async mode we only return 'true', telling the DoCommand it
-	 *  should stop run the command in asynchronous/fire-and-forget mode. */
-	return true;
-}
-
-bool ScriptAsyncMode::NonAsyncModeProc()
-{
-	/* In non-async mode we only return 'false', normal operation. */
-	return false;
-}
-
 ScriptAsyncMode::ScriptAsyncMode(HSQUIRRELVM vm)
 {
 	int nparam = sq_gettop(vm) - 1;
@@ -42,7 +29,7 @@ ScriptAsyncMode::ScriptAsyncMode(HSQUIRRELVM vm)
 	this->last_mode     = this->GetDoCommandAsyncMode();
 	this->last_instance = this->GetDoCommandAsyncModeInstance();
 
-	this->SetDoCommandAsyncMode(sqasync ? &ScriptAsyncMode::AsyncModeProc : &ScriptAsyncMode::NonAsyncModeProc, this);
+	this->SetDoCommandAsyncMode(sqasync ? SCRIPT_MODE_EXEC : SCRIPT_MODE_TEST, this);
 }
 
 void ScriptAsyncMode::FinalRelease()

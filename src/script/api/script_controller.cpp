@@ -68,7 +68,6 @@
 }
 
 ScriptController::ScriptController(::CompanyID company) :
-	ticks(0),
 	loaded_library_count(0)
 {
 	ScriptObject::SetCompany(company);
@@ -76,7 +75,7 @@ ScriptController::ScriptController(::CompanyID company) :
 
 /* static */ uint ScriptController::GetTick()
 {
-	return ScriptObject::GetActiveInstance().GetController().ticks;
+	return ScriptObject::GetStorage().ticks;
 }
 
 /* static */ int ScriptController::GetOpsTillSuspend()

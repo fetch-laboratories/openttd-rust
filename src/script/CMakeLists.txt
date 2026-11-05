@@ -20,7 +20,6 @@ add_files(
     script_instance.hpp
     script_scanner.cpp
     script_scanner.hpp
-    script_storage.hpp
     script_suspend.hpp
     squirrel.cpp
     squirrel.hpp

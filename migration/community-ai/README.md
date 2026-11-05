@@ -97,6 +97,7 @@ compares original/candidate snapshots and ordinary end states. No map, vehicle,
 finance or RNG field is patched. Regeneration need not have identical bytes:
 the canonical comparison retains its existing random-save-ID and GLOG masks.
 
-NewGRF input and source packaging (#525/#526) remain user-parked. This corpus
-uses vanilla vehicles/industries. The eventual larger save using the same
-NewGRFs as a future corpus remains a limit of #507.
+NewGRF sets (#507, reselected by the user on 2026-11-02) use the same pinned,
+uncommitted downloads ([evidence](../../docs/porting.md#evidence)), so they need
+no source packaging. This corpus uses vanilla vehicles and industries. The
+larger save using the same NewGRFs follows the sets and remains a limit of #507.

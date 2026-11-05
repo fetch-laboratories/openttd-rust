@@ -18,6 +18,7 @@
 #include "../command_type.h"
 #include "../company_type.h"
 #include "../fileio_type.h"
+#include "../rust/script_host_ffi.h"
 
 static const uint SQUIRREL_MAX_DEPTH = 25; ///< The maximum recursive depth for items stored in the savegame.
 
@@ -91,7 +92,7 @@ public:
 	/**
 	 * Get the storage of this script.
 	 */
-	class ScriptStorage &GetStorage();
+	OpenTTDScriptHost &GetStorage();
 
 	/**
 	 * Get the log pointer of this script.
@@ -155,12 +156,12 @@ public:
 	/**
 	 * Return the "this script died" value
 	 */
-	inline bool IsDead() const { return this->is_dead; }
+	inline bool IsDead() const { return this->host->is_dead; }
 
 	/**
 	 * Return whether the script is alive.
 	 */
-	inline bool IsAlive() const { return !this->IsDead() && !this->in_shutdown; }
+	inline bool IsAlive() const { return !this->IsDead() && !this->host->in_shutdown; }
 
 	/**
 	 * Call the script Save function and save all data in the savegame.
@@ -240,14 +241,14 @@ public:
 	 *  script executed a DoCommand, executed this.Sleep() or it has been
 	 *  paused.
 	 */
-	bool IsSleeping() { return this->suspend != 0; }
+	bool IsSleeping() { return this->host->suspend != 0; }
 
 	size_t GetAllocatedMemory() const;
 
 	/**
 	 * Indicate whether this instance is currently being destroyed.
 	 */
-	inline bool InShutdown() const { return this->in_shutdown; }
+	inline bool InShutdown() const { return this->host->in_shutdown; }
 
 	/**
 	 * Decrease the ref count of a squirrel object.
@@ -288,17 +289,12 @@ protected:
 	virtual void LoadDummyScript() = 0;
 
 private:
-	std::unique_ptr<class ScriptStorage> storage; ///< Some global information for each running script.
+	struct HostDeleter { void operator()(OpenTTDScriptHost *host) const { openttd_rust_script_host_free(host, &GetRustScriptHostServices()); } };
+	std::unique_ptr<OpenTTDScriptHost, HostDeleter> host; ///< Some global information for each running script.
 	std::unique_ptr<class ScriptController> controller; ///< The script main class.
 	std::unique_ptr<SQObject> instance; ///< Squirrel-pointer to the script main class.
 
-	bool is_started = false; ///< Is the scripts constructor executed?
-	bool is_dead = false; ///< True if the script has been stopped.
-	bool is_save_data_on_stack = false; ///< Is the save data still on the squirrel stack?
-	int suspend = 0; ///< The amount of ticks to suspend this script before it's allowed to continue.
-	bool is_paused = false; ///< Is the script paused? (a paused script will not be executed until unpaused)
-	bool in_shutdown = false; ///< Is this instance currently being destructed?
-	Script_SuspendCallbackProc *callback = nullptr; ///< Callback that should be called in the next tick the script runs.
+	ScriptLogTypes::LogData log_data; ///< Log data storage.
 	size_t last_allocated_memory = 0; ///< Last known allocated memory value (for display for crashed scripts)
 
 	/**

@@ -48,6 +48,7 @@ endif()
 
 install(FILES
                 ${CMAKE_SOURCE_DIR}/COPYING.md
+                ${CMAKE_SOURCE_DIR}/rust/THIRD_PARTY_NOTICES.txt
                 ${CMAKE_SOURCE_DIR}/README.md
                 ${CMAKE_SOURCE_DIR}/CREDITS.md
                 ${CMAKE_SOURCE_DIR}/CONTRIBUTING.md

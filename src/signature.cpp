@@ -15,8 +15,7 @@
 #include "fileio_func.h"
 #include "string_func.h"
 
-#include "3rdparty/monocypher/monocypher.h"
-#include "3rdparty/monocypher/monocypher-ed25519.h"
+#include "rust/crypto_ffi.h"
 #include "3rdparty/nlohmann/json.hpp"
 
 #include "safeguards.h"
@@ -39,17 +38,9 @@ static std::string CalculateHashV1(const std::string &filename)
 	if (!f.has_value()) return {};
 
 	std::array<uint8_t, 32> digest;
-	crypto_blake2b_ctx ctx;
-	crypto_blake2b_init(&ctx, digest.size());
-
-	while (!feof(*f)) {
-		std::array<uint8_t, 1024> buf;
-		size_t len = fread(buf.data(), 1, buf.size(), *f);
-
-		crypto_blake2b_update(&ctx, buf.data(), len);
-	}
-
-	crypto_blake2b_final(&ctx, digest.data());
+	openttd_rust_crypto_hash_file(digest.data(), *f,
+			[](void *file) noexcept -> uint8_t { return feof(static_cast<FILE *>(file)) != 0; },
+			[](void *file, uint8_t *buffer, size_t size) noexcept { return fread(buffer, 1, size, static_cast<FILE *>(file)); });
 	return FormatArrayAsHex(digest);
 }
 
@@ -119,8 +110,8 @@ static bool ValidateSignature(const std::string &signature, const nlohmann::json
 
 		for (auto &pk_value : _public_keys_v1) {
 			/* Check if the message is valid with this public key. */
-			auto res = crypto_ed25519_check(sig.data(), pk_value.data(), reinterpret_cast<uint8_t *>(message.data()), message.size());
-			if (res == 0) {
+			auto res = openttd_rust_crypto_check(sig.data(), pk_value.data(), reinterpret_cast<uint8_t *>(message.data()), message.size());
+			if (res != 0) {
 				return true;
 			}
 		}

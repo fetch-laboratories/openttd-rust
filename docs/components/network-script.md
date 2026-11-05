@@ -2,12 +2,13 @@
 
 <!-- Add a new entry at the end of this file. -->
 
-## Authentication and streaming owners
+## Authentication and maintained cryptographic constructions
 
-- Rust owns: X25519 sessions, encryption contexts, and stable key/session and vendor-context storage.
-- C++ keeps: Bundled Monocypher algorithms; C++ supplies each vendor context's size/alignment and starts its trivial lifetime.
-- Checks: `python3 tools/auth-comparison.py`.
-- PRs: #43.
+- Rust owns: Single and combined authentication handlers, method selection and fallback, X25519 sessions, key derivation, packet encryption streams, UID/file hashing and plugin signature verification. Pinned maintained crates supply X25519, BLAKE2b, ChaCha20, Poly1305 and SHA-512; Rust composes Monocypher 4 incremental rekeying and cofactored Ed25519 verification.
+- C++ keeps: Native virtual facades, password/authorized-key providers and UI callbacks, file reads, UID clock/formatting and secret-key string validation. Packet operations use the integrated Rust packet owner directly.
+- Checks: Rust known-answer tests from the pinned original, `python3 tools/auth-comparison.py`, `python3 tools/packet-comparison.py`.
+- Limits: Mixed multiplayer modes are opt-in diagnostics; default public-endpoint comparisons cover the selected authentication paths. Live admin/RCON delivery and plugin-manifest file integration remain coverage gaps in #156. Original packet short-source preconditions remain in #41. Cryptographic security and complete secret erasure are not established by these checks.
+- PRs: #43, #52, #57, #61, #642.
 
 ## Paired Script Admin conversion
 
@@ -33,21 +34,6 @@
 - Limits: Original failed-getter undefined values (#67), unrepresentable conversions, signed overflow and invalidated iterators remain outside defined behavior. The comparison fixture uses four typed items; only the game regressions cover production pools and the CPU limit.
 - PRs: #70.
 
-## ChaCha20, Poly1305 and AEAD primitives
-
-- Rust owns: Monocypher 4.0.2 ChaCha20, Poly1305 and AEAD primitives.
-- C++ keeps: C interfaces, context types and lifetime, wipe and verify leaves; other Monocypher algorithms.
-- Checks: `python3 tools/auth-comparison.py` and generated layout probes.
-- PRs: #52.
-
-## BLAKE2b family
-
-- Rust owns: BLAKE2b compression, initialization, buffering, digest serialization and context wiping.
-- C++ keeps: Public C functions, context lifetime and wipe leaf.
-- Checks: `python3 tools/auth-comparison.py`.
-- Limits: Keys of 65-128 bytes fit the original padded block and keep source behavior (the documented interface limit is 64); keys over 128 overrun original storage and have no reproduction guarantee.
-- PRs: #57.
-
 ## Packet storage, framing and serialization
 
 - Rust owns: Packet byte allocations, growth, copy and destruction, limit and cursor, typed binary and string send/receive, validation, length prefixes, framing and transfer planning/commit. The shared record is generated from Rust; native code reads its fields in place. Rust network callers use the typed packet API directly.
@@ -56,10 +42,10 @@
 - Limits: The original nonempty-short-source `Recv_bytes` precondition remains deferred in #41. Allocation failure is environmental.
 - PRs: #60, #645.
 
-## Normal X25519 and Montgomery ladder
+## Script host lifecycle, command context and events
 
-- Rust owns: `crypto_x25519`, `crypto_x25519_public_key`, `crypto_eddsa_trim_scalar`, the Montgomery ladder and private field operations.
-- C++ keeps: Public interfaces, shared-field helpers for untouched Edwards, conversions, Elligator and other families, wipe and verify leaves.
-- Checks: `python3 tools/auth-comparison.py`.
-- Limits: Shared-field helper duplication is unfinished migration; compiler spills/copies are not erased.
-- PRs: #61.
+- Rust owns: Per-instance host state in a generated shared record (started, dead, paused, shutdown and save-data flags, suspension and pending callback, controller tick, companies, modes, command delay, costs, last result, error and result bytes, callback variables), the process-wide active instance, the pending command bytes and the event FIFO. `GameLoop`, `Continue`, `SetCompany`, `DoCommandPrep`, `DoCommandProcessResult` and `DoCommandCallback` decisions run in Rust.
+- C++ keeps: The Squirrel VM, allocator, registration and object handles; VM `Initialize`, constructor, `Load`, `Start` and `Resume`, stored callbacks and every `Script_Suspend`, `SQInteger` and `Script_FatalError` throw and catch on their native frames; `Debug` output, error mapping and event release leaves; save/load traversal; AI and Game core host functions.
+- Checks: `script-host-generated` and `script-host-reload` simulation scenarios.
+- Limits: The network command path and branches listed on #156 remain source-compared.
+- PRs: #651.

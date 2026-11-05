@@ -26,7 +26,7 @@ jobs:
           const caches = await github.paginate(github.rest.actions.getActionsCacheList, {
             ...context.repo, per_page: 100
           });
-          const owned = key => /^(compiler-v\d+-|ccache-(linux|macos|msvc)-v\d+-|vcpkg-bin-)/.test(key);
+          const owned = key => /^(compiler-v\d+-|ccache-(linux|macos|msvc|emscripten)-v\d+-|vcpkg-bin-)/.test(key);
           const newest = new Set();
           const obsolete = new Set();
           const sorted = [...caches].sort((a, b) => b.created_at.localeCompare(a.created_at));
