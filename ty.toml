@@ -106,6 +106,10 @@ include = [
     "tools/company-command-comparison.py",
     "tools/industry-production-comparison.py",
     "tools/landscape-comparison.py",
+    "tools/shared-accessors.py",
+    "tools/test-shared-accessors.py",
+    "tools/test-simulation.py",
+    "tools/train-edge-comparison.py",
 ]
 
 [analysis]
