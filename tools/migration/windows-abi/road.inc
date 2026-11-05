@@ -464,6 +464,8 @@ static void RoadServiceBoundary()
 		return r;
 	};
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
+	/* The tail record is linked; its part has no engine type, so only the head is serviced. */
+	maintenance.has_engine = [](OpenTTDVehicle *) noexcept { return false; };
 	maintenance.reset = [](OpenTTDVehicle *) noexcept { ++road_service_probe->services; return OpenTTDVehicleMaintenanceReset{}; };
 	t.vehicle.write_economy_service = t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t) noexcept {};
 	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t) noexcept {};
