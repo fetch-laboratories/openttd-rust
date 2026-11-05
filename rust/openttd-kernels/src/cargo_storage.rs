@@ -1522,10 +1522,9 @@ fn vehicle(services: CapacityServices, v: VehicleRef) -> CapacityPart {
 fn other(v: Option<VehicleRef>) -> Option<VehicleRef> {
     v.and_then(VehicleRef::other_multiheaded_part)
 }
-/// The native facade invokes `ConsistChanged` only after this function returns:
+/// Callers invoke `ConsistChanged` only after this function returns:
 /// it may reorder/destroy world parts and reenter their cargo owners.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_capacity(
+pub(crate) unsafe fn cargo_capacity(
     s: *const CapacityServices,
     old: Option<VehicleRef>,
     new: Option<VehicleRef>,
@@ -2235,7 +2234,7 @@ mod tests {
             }
             CAPACITY_CALLS.with(|calls| calls.borrow_mut().clear());
             assert_eq!(
-                openttd_rust_cargo_capacity(
+                cargo_capacity(
                     &raw const capacity,
                     head(&source[0]),
                     head(&destination[0]),
@@ -2284,7 +2283,7 @@ mod tests {
             append(source[0].list, service, cargo(8, 10, 8), KEEP as u16);
             append(source[1].list, service, cargo(1, 11, 1), KEEP as u16);
             assert_eq!(
-                openttd_rust_cargo_capacity(&raw const capacity, head(&source[0]), None, 0, 0),
+                cargo_capacity(&raw const capacity, head(&source[0]), None, 0, 0),
                 0
             );
             assert_eq!(fields(source[0].list).count, 3);
@@ -2292,7 +2291,7 @@ mod tests {
             let mut replacement = [part(4), part(4)];
             link(&replacement);
             assert_eq!(
-                openttd_rust_cargo_capacity(
+                cargo_capacity(
                     &raw const capacity,
                     head(&source[0]),
                     head(&replacement[0]),
@@ -2307,7 +2306,7 @@ mod tests {
             assert_eq!(fields(replacement[1].list).count, 4);
             (*replacement[0].record).cargo_cap = 2;
             replacement[1].cargo = 1;
-            openttd_rust_cargo_capacity(&raw const capacity, head(&replacement[0]), None, 0, 0);
+            cargo_capacity(&raw const capacity, head(&replacement[0]), None, 0, 0);
             assert_eq!(fields(replacement[0].list).count, 2);
             assert_eq!(fields(replacement[1].list).count, 4);
             for entry in source.iter().chain(&replacement) {
