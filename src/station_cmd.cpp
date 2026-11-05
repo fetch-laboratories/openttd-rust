@@ -293,10 +293,10 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.is_station = RustStationIsExpected<OpenTTDBaseStation *>,
 	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return static_cast<BaseStation *>(handle)->owner == _local_company;
+		return static_cast<BaseStation *>(handle)->GetOwner() == _local_company;
 	},
 	.town_statue = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->statues.Test(static_cast<BaseStation *>(handle)->owner);
+		return Company::IsValidID(static_cast<BaseStation *>(handle)->GetOwner()) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->statues.Test(static_cast<BaseStation *>(handle)->GetOwner());
 	},
 	.select_goods = []() noexcept -> bool {
 		return _settings_game.order.selectgoods;

@@ -699,11 +699,11 @@ static void _DoCommandReturnSetOrderFlags(class ScriptInstance &instance)
 	if (vehicle_type == ScriptVehicle::VT_AIR) {
 		if (ScriptTile::IsStationTile(origin_tile)) {
 			const Station *orig_station = ::Station::GetByTile(origin_tile);
-			if (orig_station != nullptr && orig_station->GetAirport().GetTile() != INVALID_TILE) origin_tile = orig_station->GetAirport().tile;
+			if (orig_station != nullptr && orig_station->GetAirport().GetTile() != INVALID_TILE) origin_tile = orig_station->GetAirport().GetTile();
 		}
 		if (ScriptTile::IsStationTile(dest_tile)) {
 			const Station *dest_station = ::Station::GetByTile(dest_tile);
-			if (dest_station != nullptr && dest_station->GetAirport().GetTile() != INVALID_TILE) dest_tile = dest_station->GetAirport().tile;
+			if (dest_station != nullptr && dest_station->GetAirport().GetTile() != INVALID_TILE) dest_tile = dest_station->GetAirport().GetTile();
 		}
 
 		return ScriptMap::DistanceSquare(origin_tile, dest_tile);
