@@ -155,7 +155,6 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 		.native = RustNativeSpriteGroup,
 		.node = GroupNode,
 		.object = &GetRustObjectServices(),
-		.parameter = RustGRFParameter,
 		.profile_end = ProfileEnd,
 		.profile_enter = ProfileEnter,
 		.random_bits = [](const ScopeResolver *s) noexcept { return s->GetRandomBits(); },

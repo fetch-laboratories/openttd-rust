@@ -58,10 +58,6 @@ AirportTileOverrideManager _airporttile_mngr(NEW_AIRPORTTILE_OFFSET, NUM_AIRPORT
 	return AirportTileSpec::Get(GetAirportGfx(tile));
 }
 
-/**
- * This function initializes the tile array of AirportTileSpec
- */
-
 
 /**
  * Do airporttile gfx ID translation for NewGRFs.
@@ -73,14 +69,6 @@ StationGfx GetTranslatedAirportTileID(StationGfx gfx)
 	return openttd_rust_airport_translate_tile(gfx, &GetAirportResolverServices());
 }
 
-/**
- * Based on newhouses/newindustries equivalent, but adapted for airports.
- * @param parameter from callback. It's in fact a pair of coordinates
- * @param tile TileIndex from which the callback was initiated
- * @param index of the industry been queried for
- * @param grf_version8 True, if we are dealing with a new NewGRF which uses GRF version >= 8.
- * @return a construction of bits obeying the newgrf format
- */
 
 /* virtual */ uint32_t AirportTileScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {

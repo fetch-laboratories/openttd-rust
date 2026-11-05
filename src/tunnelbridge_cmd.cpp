@@ -259,15 +259,6 @@ static uint8_t GetBridgeMiddleAxisBaseOffset(Axis axis)
 	return axis == AXIS_X ? 0 : 4;
 }
 
-/**
- * Determines the foundation for the bridge head, and tests if the resulting slope is valid.
- *
- * @param bridge_piece Direction of the bridge head.
- * @param axis Axis of the bridge
- * @param tileh Slope of the tile under the north bridge head; returns slope on top of foundation
- * @param z TileZ corresponding to tileh, gets modified as well
- * @return Error or cost for bridge foundation
- */
 
 /**
  * Is a bridge of the specified type and length available?
@@ -282,12 +273,6 @@ CommandCost CheckBridgeAvailability(BridgeType bridge_type, uint bridge_len, DoC
 	openttd_rust_bridge_available(&GetRustTunnelBridgeServices(), RustCommandCost(&cost), bridge_type, bridge_len, flags.base());
 	return cost;
 }
-
-/**
- * Calculate the base cost of clearing a tunnel/bridge per tile.
- * @param tile Start tile of the tunnel/bridge.
- * @return How much clearing this tunnel/bridge costs per tile.
- */
 
 
 /**
@@ -323,27 +308,6 @@ CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, Transport
 	return cost;
 }
 
-
-/**
- * Are we allowed to remove the tunnel or bridge at \a tile?
- * @param tile End point of the tunnel or bridge.
- * @return A succeeded command if the tunnel or bridge may be removed, a failed command otherwise.
- */
-
-/**
- * Remove a tunnel from the game, update town rating, etc.
- * @param tile Tile containing one of the endpoints of the tunnel.
- * @param flags Command flags.
- * @return Succeeded or failed command.
- */
-
-
-/**
- * Remove a bridge from the game, update town rating, etc.
- * @param tile Tile containing one of the endpoints of the bridge.
- * @param flags Command flags.
- * @return Succeeded or failed command.
- */
 
 /**
  * Remove a tunnel or a bridge from the game.
@@ -1036,8 +1000,6 @@ void DrawBridgeMiddle(const TileInfo *ti, BridgePillarFlags blocked_pillars)
 }
 
 
-
-
 static void GetTileDesc_TunnelBridge(TileIndex tile, TileDesc &td)
 {
 	TransportType tt = GetTunnelBridgeTransportType(tile);
@@ -1113,7 +1075,6 @@ const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept
 	};
 	return services;
 }
-
 
 
 /**

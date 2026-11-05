@@ -107,10 +107,6 @@ void BuildObject(ObjectType type, TileIndex tile, CompanyID owner, Town *town, u
 	openttd_rust_object_build(&GetRustObjectServices(), type, tile.base(), owner.base(), town, view);
 }
 
-/**
- * Increase the HQ size.
- * @param tile The (northern) tile of the company HQ.
- */
 
 /**
  * Get the size of the HQ.
@@ -230,12 +226,10 @@ static void DrawTile_Object(TileInfo *ti)
 }
 
 
-
 /**
  * Perform the actual removal of the object from the map.
  * @param o The object to really clear.
  */
-
 
 
 static void AddAcceptedCargo_Object(TileIndex tile, CargoArray &acceptance, CargoTypes &always_accepted)
@@ -268,7 +262,6 @@ static void TileLoop_Object(uint32_t tile_index) noexcept
 }
 
 
-
 static bool ClickTile_Object(TileIndex tile)
 {
 	if (!IsObjectType(tile, OBJECT_HQ)) return false;
@@ -277,11 +270,6 @@ static bool ClickTile_Object(TileIndex tile)
 	return true;
 }
 
-
-/**
- * Try to build a lighthouse.
- * @return True iff building a lighthouse succeeded.
- */
 
 /**
  * Try to build a transmitter.

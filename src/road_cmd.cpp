@@ -109,9 +109,6 @@ static bool CompareRoadTypes(const RoadType &first, const RoadType &second)
 	return RoadTypeIsTram(first) < RoadTypeIsTram(second);
 }
 
-/**
- * Resolve sprites of custom road types
- */
 
 /**
  * Allocate a new road type label
@@ -152,53 +149,10 @@ const OpenTTDRoadRegistryServices &GetRustRoadRegistryServices() noexcept
 }
 
 
-
-
-/**
- * Update road infrastructure counts for a company.
- * @param rt Road type to update count of.
- * @param o Owner of road piece.
- * @param count Number of road pieces to adjust.
- */
-
-
 /** Invalid RoadBits on slopes.  */
 
 static Foundation GetRoadFoundation(Slope tileh, RoadBits bits);
 
-/**
- * Is it allowed to remove the given road bits from the given tile?
- * @param tile      the tile to remove the road from
- * @param remove    the roadbits that are going to be removed
- * @param owner     the actual owner of the roadbits of the tile
- * @param rt        the road type to remove the bits from
- * @param flags     command flags
- * @param town_check Shall the town rating checked/affected
- * @return A succeeded command when it is allowed to remove the road bits, a failed command otherwise.
- */
-
-
-/**
- * Delete a piece of road.
- * @param tile tile where to remove road from
- * @param flags operation to perform
- * @param pieces roadbits to remove
- * @param rt roadtype to remove
- * @param town_check should we check if the town allows removal?
- */
-
-
-/**
- * Calculate the costs for roads on slopes
- *  Aside modify the RoadBits to fit on the slopes
- *
- * @note The RoadBits are modified too!
- * @param tileh The current slope
- * @param pieces The RoadBits we want to add
- * @param existing The existent RoadBits of the current type
- * @param other The other existent RoadBits
- * @return The costs for these RoadBits on this slope
- */
 
 /**
  * Build a piece of road.
@@ -211,13 +165,6 @@ static Foundation GetRoadFoundation(Slope tileh, RoadBits bits);
  * @return the cost of this operation or an error
  */
 
-/**
- * Checks whether a road or tram connection can be found when building a new road or tram.
- * @param tile Tile at which the road being built will end.
- * @param rt Roadtype of the road being built.
- * @param dir Direction that the road is following.
- * @return True if the next tile at dir direction is suitable for being connected directly by a second roadbit at the end of the road being built.
- */
 
 /**
  * Build a long piece of road.
@@ -258,8 +205,6 @@ static Foundation GetRoadFoundation(Slope tileh, RoadBits bits);
  * @todo When checking for the tile slope,
  * distinguish between "Flat land required" and "land sloped in wrong direction"
  */
-
-
 
 
 struct DrawRoadTileStruct {
@@ -918,7 +863,6 @@ void DrawRoadDepotSprite(int x, int y, DiagDirection dir, RoadType rt)
  */
 
 
-
 const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 {
 	static_assert(SND_21_ROAD_WORKS == 31 && OWNER_TOWN.base() == 15);
@@ -1030,25 +974,6 @@ static void GetTileDesc_Road(TileIndex tile, TileDesc &td)
  * vehicle should be travelling in in order to enter the depot.
  */
 
-
-
-
-
-/**
- * Checks the tile and returns whether the current player is allowed to convert the roadtype to another roadtype without taking ownership
- * @param owner the tile owner.
- * @param rtt Road/tram type.
- * @return whether the road is convertible
- */
-
-/**
- * Convert the ownership of the RoadType of the tile if applicable
- * @param tile the tile of which convert ownership
- * @param num_pieces the count of the roadbits to assign to the new owner
- * @param owner the current owner of the RoadType
- * @param from_type the old road type
- * @param to_type the new road type
- */
 
 /**
  * Convert one road subtype to another.
