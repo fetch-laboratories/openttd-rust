@@ -84,6 +84,7 @@
 #include "newgrf_storage_ffi.h"
 #include "signal_ffi.h"
 #include "debug_ffi.h"
+#include "engine_services.h"
 #include "../debug.h"
 #include "../newgrf.h"
 #include "../safeguards.h"
