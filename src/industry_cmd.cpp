@@ -780,7 +780,6 @@ static void RustIndustryNews(Industry *i, StringID str, bool close, OpenTTDIndus
 }
 
 static Industry *RustIndustry(void *handle) noexcept { return static_cast<Industry *>(handle); }
-static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return RustIndustryTypeSpec(RustIndustry(handle)->type); }
 
 /** One typed noexcept slot per original operation, in industry_ffi.h order. */
 static const OpenTTDIndustryServices _industry_services = {
@@ -788,9 +787,8 @@ static const OpenTTDIndustryServices _industry_services = {
 	.next_tick = [](uint32_t from) noexcept -> OpenTTDIndustryEntry {
 		Industry *i = OpenTTDNextIndustry(from);
 		if (i == nullptr) return {};
-		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), RustIndustrySpecCallbackMask(GetIndustrySpec(i->type))};
+		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)};
 	},
-	.behaviour = RustIndustryBehaviour,
 	.location = [](void *handle) noexcept -> OpenTTDIndustryLocation {
 		const Industry *i = RustIndustry(handle);
 		return {RustIndustryTile(handle), i->location.w, i->location.h};
@@ -842,19 +840,13 @@ static const OpenTTDIndustryServices _industry_services = {
 		AutoRestoreBackup<CompanyID> current(_current_company, OWNER_NONE);
 		Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, TileIndex(tile));
 	},
-	.observe = [](void *handle, OpenTTDIndustryObservation *out) noexcept {
-		Industry *i = RustIndustry(handle);
-		const IndustrySpec *spec = GetIndustrySpec(i->type);
-		*out = {RustIndustryCanonicalOwner(i), RustIndustrySpecBehaviour(spec), RustIndustrySpecCallbackMask(spec), RustIndustrySpecLife(spec), i->type,
-			spec->production_up_text, spec->production_down_text, spec->closure_text};
-	},
 	.change_callback = [](void *handle, bool monthly, uint32_t random) noexcept -> OpenTTDIndustryChange {
 		Industry *i = RustIndustry(handle);
 		std::array<int32_t, 1> reg{};
 		uint16_t result = GetIndustryCallback(monthly ? CBID_INDUSTRY_MONTHLYPROD_CHANGE : CBID_INDUSTRY_PRODUCTION_CHANGE, 0, random, i, i->type, i->location.tile, reg);
 		return {result, reg[0]};
 	},
-	.custom_text = [](void *i, uint16_t text) noexcept -> uint32_t { return MapGRFStringID(RustIndustrySpec(i)->grf_prop.grfid, GRFStringID(text)); },
+	.custom_text = [](uint32_t grfid, uint16_t text) noexcept -> uint32_t { return MapGRFStringID(grfid, GRFStringID(text)); },
 	.news = [](void *i, uint32_t text, bool close, OpenTTDIndustryServicing servicing) noexcept { RustIndustryNews(RustIndustry(i), text, close, servicing); },
 	.production_news = [](void *i, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) noexcept { RustIndustryProductionNews(RustIndustry(i), cargo, percent, servicing); },
 	.callback_error = [](void *handle, bool invalid_cargo) noexcept {
@@ -872,10 +864,6 @@ static const OpenTTDIndustryServices _industry_services = {
 	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
 	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
 	.type_count = [](uint8_t type) noexcept -> uint16_t { return Industry::GetIndustryTypeCount(type); },
-	.type_info = [](uint8_t type) noexcept -> OpenTTDIndustryTypeInfo {
-		const IndustrySpec *spec = GetIndustrySpec(type);
-		return {RustIndustrySpecBehaviour(spec), spec->enabled, !spec->layouts.empty(), spec->appear_ingame[to_underlying(_settings_game.game_creation.landscape)]};
-	},
 	.resolver = &GetIndustryResolverServices(),
 	.scale_by_map_size = OpenTTDMapScaleSize,
 	.company_none = []() noexcept -> uint8_t {

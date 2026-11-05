@@ -411,6 +411,28 @@ pub unsafe extern "C" fn openttd_rust_badges_assign(
     unsafe { *badges = NativeVec::from_vec(ids) };
 }
 
+/// The animation facts of an industry tile spec, for the shared animation owner.
+///
+/// # Safety
+/// `spec` is a live record.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_industry_tile_animation_info(
+    spec: *const IndustryTileSpec,
+) -> crate::newgrf_animation_base::Info {
+    let spec = unsafe { &*spec };
+    crate::newgrf_animation_base::Info {
+        speed: spec.animation.speed,
+        frames: spec.animation.frames,
+        // AnimationStatus::Looping.
+        looping: spec.animation.status == 1,
+        // IndustryTileCallbackMask::AnimationSpeed and AnimationNextFrame.
+        speed_callback: spec.callback_mask & (1 << 1) != 0,
+        next_callback: spec.callback_mask & 1 != 0,
+        // IndustryTileSpecialFlag::NextFrameRandomBits.
+        random: spec.special_flags & 1 != 0,
+        enabled: true,
+    }
+}
 /// `IndustrySpec::IsRawIndustry`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_spec_raw_abi(spec: *const IndustrySpec) -> u8 {

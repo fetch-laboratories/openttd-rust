@@ -79,13 +79,6 @@ OpenTTDIndustryBuilder *openttd_rust_industry_builder_new(void);
 void openttd_rust_industry_builder_destroy(OpenTTDIndustryBuilder *owner);
 OpenTTDIndustryBuilderFields *openttd_rust_industry_builder_fields(OpenTTDIndustryBuilder *owner);
 
-typedef struct OpenTTDIndustryObservation {
-	OpenTTDIndustry *owner;
-	uint32_t behaviour;
-	uint16_t callbacks;
-	uint8_t life, type;
-	uint32_t up_text, down_text, closure_text;
-} OpenTTDIndustryObservation;
 /** Map facts constant for one entry; landscape is the original enum value. */
 typedef struct OpenTTDIndustryMap {
 	uint32_t size_x, size_y;
@@ -95,7 +88,7 @@ typedef struct OpenTTDIndustryMap {
 typedef struct OpenTTDIndustryEntry {
 	void *industry;
 	OpenTTDIndustry *owner;
-	uint16_t id, callbacks;
+	uint16_t id;
 } OpenTTDIndustryEntry;
 typedef struct OpenTTDIndustryLocation {
 	uint32_t tile;
@@ -109,11 +102,6 @@ typedef struct OpenTTDIndustryChange {
 	uint16_t result;
 	int32_t reg;
 } OpenTTDIndustryChange;
-typedef struct OpenTTDIndustryTypeInfo {
-	uint32_t behaviour;
-	bool enabled, layouts;
-	uint8_t appear;
-} OpenTTDIndustryTypeInfo;
 #ifdef __cplusplus
 #	define OPENTTD_INDUSTRY_NOEXCEPT noexcept
 #else
@@ -126,7 +114,6 @@ typedef struct OpenTTDIndustryServices {
 	const OpenTTDSharedServices *shared;
 	/* Periodic tick. */
 	OpenTTDIndustryEntry (*next_tick)(uint32_t from) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(next_tick);
-	uint32_t (*behaviour)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(behaviour);
 	OpenTTDIndustryLocation (*location)(void *industry) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(location);
 	void (*industry_sound)(void *industry, uint32_t index) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(industry_sound);
 	void (*play_sound)(uint16_t sound, uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(play_sound);
@@ -142,9 +129,8 @@ typedef struct OpenTTDIndustryServices {
 	bool (*tile_completed)(void *industry, uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_completed);
 	void (*harvest)(uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(harvest);
 	/* Monthly, daily, builder and command entries. */
-	void (*observe)(void *industry, OpenTTDIndustryObservation *out) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(observe);
 	OpenTTDIndustryChange (*change_callback)(void *industry, bool monthly, uint32_t random) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(change_callback);
-	uint32_t (*custom_text)(void *industry, uint16_t text) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(custom_text);
+	uint32_t (*custom_text)(uint32_t grfid, uint16_t text) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(custom_text);
 	void (*news)(void *industry, uint32_t text, bool close, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(news);
 	void (*production_news)(void *industry, uint8_t cargo, int32_t percent, OpenTTDIndustryServicing servicing) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(production_news);
 	void (*callback_error)(void *industry, bool invalid_cargo) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_error);
@@ -156,7 +142,6 @@ typedef struct OpenTTDIndustryServices {
 	uint32_t (*num_items)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(num_items);
 	void *(*get)(uint16_t id) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(get);
 	uint16_t (*type_count)(uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(type_count);
-	OpenTTDIndustryTypeInfo (*type_info)(uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(type_info);
 	const struct OpenTTDIndustryResolverServices *resolver;
 	uint32_t (*scale_by_map_size)(uint32_t n) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_map_size);
 	uint8_t (*company_none)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(company_none);

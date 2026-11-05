@@ -152,6 +152,74 @@ class GeneratedAbiTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, error):
                         GENERATOR["generate"](root)
 
+    def test_shared_record_native_types_and_arrays(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            source = rust / "probe.rs"
+            prefix = (
+                'layouts! { "Other" ["probe"] => Other {}; }\n'
+                "shared_records! { fn abi_record;\n"
+                '"Probe" ["probe"] => pub struct Probe {\n'
+            )
+            source.write_text(
+                prefix
+                + 'pub list: [u8; 4] => "std::array<uint8_t, 4>",\n'
+                + "pub plain: [u16; COUNT],\n"
+                + "pub grid: [[u16; 3]; 2],\n"
+                + 'pub kinds: [u8; 3] => "Kind[3]",\n'
+                + 'pub flags: u32 => "Flags",\n'
+                + "pub last: u8,\n    }\n}\n"
+            )
+            fragments = GENERATOR["generate"](root)
+            header = fragments["abi-record-probe.h"]
+            with self.subTest(behavior="native type and bounds follow the field name"):
+                self.assertIn("\tstd::array<uint8_t, 4> list;\n", header)
+                self.assertIn("\tuint16_t plain[COUNT];\n", header)
+                self.assertIn("\tuint16_t grid[2][3];\n", header)
+                self.assertIn("\tKind kinds[3];\n", header)
+                self.assertIn("\tFlags flags;\n", header)
+            with self.subTest(
+                behavior="layout checks every field after a comma in a type"
+            ):
+                _, items = layouts(fragments)["Probe"]
+                for field in ("list", "plain", "grid", "kinds", "flags", "last"):
+                    self.assertIn(f"offsetof(Probe, {field})", items)
+                    self.assertIn(f"sizeof(Probe::{field})", items)
+            with self.subTest(
+                behavior="the declaration compiles with the includer's types"
+            ):
+                path = root / "abi-record-probe.h"
+                path.write_text(header)
+                subprocess.run(
+                    [
+                        os.environ.get("CXX", "c++"),
+                        "-std=c++20",
+                        "-x",
+                        "c++",
+                        "-fsyntax-only",
+                        "-",
+                    ],
+                    input=(
+                        "#include <array>\n#include <cstdint>\n"
+                        "using Kind = uint8_t;\nstruct Flags { uint32_t value; };\n"
+                        "constexpr int COUNT = 5;\n"
+                        f'#include "{path}"\n'
+                        "static_assert(sizeof(Probe::grid) == 12 && sizeof(Probe::plain) == 10);\n"
+                    ),
+                    text=True,
+                    check=True,
+                )
+            for fields, error in (
+                ("pub value: [u8 3]", "unsupported record field type"),
+                ('pub value: u8 => "Kind', "invalid record field"),
+            ):
+                with self.subTest(error=error):
+                    source.write_text(prefix + fields + "\n    }\n}\n")
+                    with self.assertRaisesRegex(ValueError, error):
+                        GENERATOR["generate"](root)
+
     def test_synthetic_tree_aliases_widths_and_callback_retirement(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

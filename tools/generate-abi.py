@@ -114,7 +114,9 @@ def shared_records(
         if array:
             element = native(array[1])
             dimension = array[2].split("::")[-1]
-            return re.sub(r"(\[.*\])?$", lambda m: f"[{dimension}]{m[0]}", element, count=1)
+            return re.sub(
+                r"(\[.*\])?$", lambda m: f"[{dimension}]{m[0]}", element, count=1
+            )
         pointer = re.fullmatch(r"\*(mut|const)\s+(.+)", rust)
         if pointer:
             target = pointer[2].strip().split("::")[-1]
@@ -137,6 +139,8 @@ def shared_records(
     for cpp, group, rust, body in sorted(found):
         fields = []
         for field in split_fields(body):
+            if field.count('"') % 2:
+                raise ValueError(f"invalid record field: {cpp}: {field}")
             match = re.fullmatch(
                 r'\s*pub\s+(?:r#)?(\w+)\s*:\s*(.+?)\s*(?:=>\s*(?:(\w+)|"([^"]+)"))?\s*',
                 field,
@@ -146,7 +150,9 @@ def shared_records(
                 raise ValueError(f"invalid record field: {cpp}: {field}")
             # A quoted native type names the C++ field type; the layout check compares sizes.
             cpp_type = match[4] or native(match[2])
-            cpp_type, dimensions = re.fullmatch(r"(.*?)((?:\[\w+\])*)", cpp_type).groups()
+            bounds = re.search(r"(?:\[\w+\])*$", cpp_type)
+            dimensions = bounds[0] if bounds else ""
+            cpp_type = cpp_type[: len(cpp_type) - len(dimensions)]
             if match[4]:
                 fields.append(Field(match[1], cpp_type, None, dimensions))
                 continue
@@ -188,7 +194,12 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
     ]
     lines += [f"{tag} {name};" for name, tag in sorted(opaque.items())]
     lines += [f"struct {name};" for name in sorted(defined)]
-    for cpp, _, _, fields in entries:  # Quoted native field types are declared by the includer.
+    for (
+        cpp,
+        _,
+        _,
+        fields,
+    ) in entries:  # Quoted native field types are declared by the includer.
         lines.append(f"struct {cpp} {{")
         lines += [
             f"\t{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name}{field.dimensions};"
