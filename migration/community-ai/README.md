@@ -122,8 +122,22 @@ python3 tools/migration.py simulate newgrf-sets-arctic --jobs 2
 python3 tools/migration.py simulate --soak newgrf-sets-arctic-long --jobs 2
 ```
 
+`community-arctic-1970.sav` stays vanilla. Its same-NewGRF counterpart,
+`community-newgrf-arctic-2000.sav`, is the #545 game played with these three
+sets loaded ([saves](../saves/README.md#community-built-arctic-save-with-newgrf-sets-507)).
+`community-newgrf-large-reload` loads it by default and
+`community-newgrf-large-reload-long` plays two more years in soak. Installation
+uses the AI and NewGRF paths above together. The provenance pins the complete
+manifest hash, so a changed AI or NewGRF row fails the reload. Unlike
+`newgrf-sets-arctic`, these load saved GRF identities and resolve them against
+the scanned packages. Community AIs, not a scenario AI, chose the vehicles over
+fifty years, and the sets' industries have matured.
+
+```sh
+python3 tools/migration.py simulate community-newgrf --jobs 3
+python3 tools/migration.py simulate --soak community-newgrf-large-reload-long --jobs 3
+```
+
 Only arctic seed 507 is covered. Community ships, aircraft, houses, stations,
-objects, road stops, airports, ways/types, badges, Action2 indirect/procedure
-programs and reload of a save carrying these community sets remain absent.
-The larger save using the same NewGRFs follows the sets as later #507 work;
-the existing twenty-year community-AI save stays vanilla.
+objects, road stops, airports, ways/types, badges and Action2 indirect/procedure
+programs remain absent.
