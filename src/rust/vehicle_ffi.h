@@ -97,13 +97,7 @@ struct OpenTTDVehicleServices {
 struct OpenTTDGroundPhysicsServices;
 struct OpenTTDGroundServices {
 	const OpenTTDGroundPhysicsServices *physics;
-	void (OPENTTD_RUST_CALL *cache_begin)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cache_begin);
 	void (OPENTTD_RUST_CALL *update_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_viewport);
-	void (OPENTTD_RUST_CALL *turn)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(turn);
-	void (OPENTTD_RUST_CALL *go_to_depot_service)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(go_to_depot_service);
-	void (OPENTTD_RUST_CALL *write_first_engine)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_engine);
-	void (OPENTTD_RUST_CALL *write_length)(OpenTTDVehicle *, uint8_t, OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_length);
-	uint8_t (OPENTTD_RUST_CALL *cached_length)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_length);
 	bool (OPENTTD_RUST_CALL *has_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
 };
 extern const OpenTTDVehicleServices _rust_vehicle_services;

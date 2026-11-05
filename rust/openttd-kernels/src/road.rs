@@ -1067,7 +1067,8 @@ impl Game<'_> {
                 while let Some(part) = u {
                     let random = self.random();
                     let direction = (part).direction();
-                    service!(self.gs.turn)(part, (direction + DELTA[(random & 3) as usize]) & 7);
+                    part.write_direction((direction + DELTA[(random & 3) as usize]) & 7);
+                    (self.gs.physics.viewport)(part, true, true);
                     u = (part).next();
                 }
             }
@@ -1118,7 +1119,15 @@ impl Game<'_> {
     }
     /// `RoadVehUpdateCache`.
     fn update_cache(&self, v: Part, same_length: bool) {
-        service!(self.gs.cache_begin)(v.v);
+        // SAFETY: Serialized live records; invalidation finishes before the length reset.
+        unsafe {
+            crate::newgrf_vehicle::openttd_rust_vehicle_grf_invalidate(
+                &*(self.vs.newgrf)(),
+                v.v.0.as_ptr(),
+                true,
+            );
+        }
+        crate::raw_field::write_field!(v.v.ground_cache(), cached_total_length, 0);
         let mut total: u16 = 0;
         let mut u = v.v;
         loop {
@@ -1127,7 +1136,7 @@ impl Game<'_> {
             } else {
                 (v.v).engine_id()
             };
-            service!(self.gs.write_first_engine)(u, first_engine);
+            crate::raw_field::write_field!(u.ground_cache(), first_engine, first_engine);
             let engine = service!(self.vs.engine_for_length)(u);
             let mut length = VEHICLE_LENGTH;
             let mut factor = if engine.grf_version >= 8 {
@@ -1151,11 +1160,14 @@ impl Game<'_> {
             if factor != 0 {
                 length -= factor.min(u16::from(VEHICLE_LENGTH - 1)) as u8;
             }
-            if same_length && length != service!(self.gs.cached_length)(u) {
+            if same_length
+                && length != crate::raw_field::read_field!(u.ground_cache(), cached_veh_length)
+            {
                 service!(self.vs.length_changed)(u);
             }
             total = total.wrapping_add(u16::from(length));
-            service!(self.gs.write_length)(u, length, v.v, total);
+            crate::raw_field::write_field!(u.ground_cache(), cached_veh_length, length);
+            crate::raw_field::write_field!(v.v.ground_cache(), cached_total_length, total);
             crate::vehicle_effect::openttd_rust_visual_update(u, true);
             let period = service!(self.l.cargo_age_default)(u);
             let age = service!(self.vs.property)(
@@ -1709,7 +1721,8 @@ impl Game<'_> {
             if self.original() {
                 Self::set_speed(v, s, s.cur_speed - (s.cur_speed >> 2));
             }
-            service!(self.gs.turn)(v.v, new_dir);
+            v.v.write_direction(new_dir);
+            (self.gs.physics.viewport)(v.v, true, true);
             s.direction = new_dir;
             return true;
         }
@@ -2117,7 +2130,24 @@ impl Game<'_> {
         {
             return;
         }
-        service!(self.gs.go_to_depot_service)(v.v, depot_id);
+        let ground = v.v.ground();
+        let flags = crate::raw_field::read_field!(ground, flags);
+        crate::raw_field::write_field!(
+            ground,
+            flags,
+            flags | (1 << crate::ground_vehicle::GVF_SUPPRESS_IMPLICIT_ORDERS)
+        );
+        // SAFETY: The current order belongs to this live serialized record.
+        unsafe {
+            crate::orders::openttd_rust_order_depot(
+                v.v.current_order_pointer(),
+                depot_id,
+                crate::order_type::ODTF_SERVICE,
+                crate::order_type::ONSF_NO_INTERMEDIATE,
+                0,
+                crate::cargo_type::CARGO_NO_REFIT,
+            );
+        }
         Self::set_dest(v, depot.tile);
         service!(self.vs.start_stop_dirty)(v.v);
     }

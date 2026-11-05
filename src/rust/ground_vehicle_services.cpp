@@ -70,7 +70,7 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 	return services;
 }
 static_assert(TRACK_BIT_X == 1 && TRACK_BIT_Y == 2 && TRACK_BIT_WORMHOLE == 0x40 && TRACK_BIT_DEPOT == 0x80 && TRACK_BIT_MASK == 0x3f && TRACKDIR_BIT_MASK == 0x3f3f);
-static_assert(GROUND_ACCELERATION == 9800 && GVF_GOINGUP_BIT == 0 && GVF_GOINGDOWN_BIT == 1);
+static_assert(GROUND_ACCELERATION == 9800 && GVF_GOINGUP_BIT == 0 && GVF_GOINGDOWN_BIT == 1 && GVF_SUPPRESS_IMPLICIT_ORDERS == 2);
 static_assert(PROP_TRAIN_POWER == 0x0B && PROP_TRAIN_WEIGHT == 0x16 && PROP_TRAIN_TRACTIVE_EFFORT == 0x1F);
 static_assert(PROP_ROADVEH_POWER == 0x13 && PROP_ROADVEH_WEIGHT == 0x14 && PROP_ROADVEH_TRACTIVE_EFFORT == 0x18);
 static_assert(to_underlying(VehicleAccelerationModel::Normal) == 0 && to_underlying(VehicleAccelerationModel::Maglev) == 2);
