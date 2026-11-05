@@ -4,7 +4,9 @@
 Tools are discovered as tools/*-comparison.py plus tools/compare-integers.py, so
 adding a comparison never requires a workflow edit. Each tool keeps its own
 scratch directory under .local/; their logs go to .local/comparison-logs/.
-Each passing tool's case inventory (its "passed" and "cases" lines) is printed.
+Each passing tool's case inventory (its "passed" and "cases" lines) is printed
+and checked against migration/harness-inventory.json: no driver may report no
+or zero cases or fewer than recorded. --record writes the printed lines there.
 """
 
 import argparse
@@ -15,6 +17,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import harness_inventory
 from validation_execution import run_logged
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,12 +25,6 @@ LOGS = ROOT / ".local/comparison-logs"
 TIMEOUT_SECONDS = 1200
 # Summary lines; compiler diagnostics start with a path, file:line or space.
 INVENTORY = re.compile(r"^(?![^\s:]+:\d+:)[A-Za-z].*(?:\bpassed\b|cases: \d+$)")
-
-
-def discover():
-    tools = sorted(ROOT.glob("tools/*-comparison.py"))
-    tools.append(ROOT / "tools/compare-integers.py")
-    return [tool for tool in tools if tool.is_file()]
 
 
 def run(tool):
@@ -53,6 +50,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument(
+        "--record", action="store_true", help="record printed case lines"
+    )
+    parser.add_argument(
         "names", nargs="*", help="Only run tools whose file name contains one of these"
     )
     args = parser.parse_args()
@@ -60,13 +60,13 @@ def main():
         parser.error("--jobs must be positive")
     tools = [
         tool
-        for tool in discover()
+        for tool in harness_inventory.discover()
         if not args.names or any(name in tool.name for name in args.names)
     ]
     if not tools:
         sys.exit("No comparison tools selected")
     LOGS.mkdir(parents=True, exist_ok=True)
-    failed = []
+    failed, printed = [], {}
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         futures = [pool.submit(run, tool) for tool in tools]
         for future in as_completed(futures):
@@ -78,14 +78,28 @@ def main():
             if code:
                 failed.append(log)
             else:
-                for line in log.read_text(errors="replace").splitlines():
-                    if INVENTORY.match(line):
-                        print(f"      {line}", flush=True)
+                printed[tool.name] = [
+                    line
+                    for line in log.read_text(errors="replace").splitlines()
+                    if INVENTORY.match(line)
+                ]
+                for line in printed[tool.name]:
+                    print(f"      {line}", flush=True)
     for log in failed:
         print(f"\n===== {log.relative_to(ROOT)} (last 80 lines) =====")
         print("\n".join(log.read_text(errors="replace").splitlines()[-80:]))
     if failed:
         sys.exit(f"{len(failed)} of {len(tools)} comparisons failed")
+    inventory = harness_inventory.load((ROOT / harness_inventory.INVENTORY).read_text())
+    errors = harness_inventory.case_errors(
+        {} if args.record else inventory["comparisons"], printed
+    )
+    if errors:
+        print("\n".join(errors))
+        sys.exit(f"Case inventory check failed; see {harness_inventory.INVENTORY}")
+    if args.record:
+        inventory["comparisons"].update(printed)
+        harness_inventory.write(inventory)
     print(f"All {len(tools)} comparisons passed")
 
 

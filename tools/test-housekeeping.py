@@ -6,6 +6,7 @@ import errno
 import io
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -269,7 +270,9 @@ class HousekeepingTests(unittest.TestCase):
         )
         self.assertIsNone(housekeeping.remove(self.main, item))
 
-    def hidden_process_plan(self, name: str, offset: float, missing: str = "") -> bool:
+    def hidden_process_plan(
+        self, name: str, offset: float, missing: str = "", comm: str = "job"
+    ) -> bool:
         """Plan with a same-user process whose cwd is unreadable, started OFFSET
         seconds after the worktree was created; return whether it is removable."""
         tree = self.t3_tree(name)
@@ -281,6 +284,7 @@ class HousekeepingTests(unittest.TestCase):
         start = round((creation + offset - boot) * ticks)
         fields = " ".join(["0"] * 18)
         write(self.proc / "88/stat", f"88 (a (job)) S {fields} {start} 0 0\n")
+        write(self.proc / "88/comm", f"{comm}\n")
         if missing:
             target = (
                 self.proc / "88/stat"
@@ -303,6 +307,20 @@ class HousekeepingTests(unittest.TestCase):
     def test_uninspectable_cwd_keeps_worktree(self) -> None:
         # A job started inside the live worktree, then made non-dumpable.
         self.assertFalse(self.hidden_process_plan("t3-hidden-cwd", 60))
+
+    def test_uninspectable_session_manager_cwd_is_ignored(self) -> None:
+        # The user's `systemd --user` may start after a worktree was created.
+        self.assertTrue(self.hidden_process_plan("t3-manager", 60, comm="systemd"))
+
+    def test_loose_file_in_run_folder_follows_idle_rule(self) -> None:
+        log = write(self.top / "local/verification/run.log")
+        now = log.stat().st_mtime
+        for at, removable in (
+            (now, False),
+            (now + 2 * housekeeping.RUNNING_SECONDS, True),
+        ):
+            items = housekeeping.plan_local(self.top / "local", at)
+            self.assertEqual(next(i for i in items if i.path == log).remove, removable)
 
     def test_uninspectable_cwd_older_than_worktree_is_ignored(self) -> None:
         # `(sd-pam)` and other session processes predate every task worktree.
@@ -595,16 +613,54 @@ class HousekeepingTests(unittest.TestCase):
                 )
                 self.assertTrue(retained.exists())
 
-    def run_main(self, *arguments: str) -> list[Path]:
+    def run_main(
+        self, *arguments: str, issues: housekeeping.IssueState = lambda *_: "OPEN"
+    ) -> list[Path]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             code = housekeeping.main(
-                [*arguments, "--repo", str(self.main)], pr_state, lambda _: ""
+                [*arguments, "--repo", str(self.main)], pr_state, lambda _: "", issues
             )
         self.assertEqual(code, 0)
         lines = output.getvalue().splitlines()
         removals = [line for line in lines if line.startswith("remove ")]
         return [Path(line.split(maxsplit=2)[2].rsplit(" (", 1)[0]) for line in removals]
+
+    def review_checkout(self, name: str, of: str) -> Path:
+        """A T3 checkout on its own branch that pushes to OF's branch."""
+        tree = self.top / ".t3/worktrees/openttd-rust" / name
+        git(self.main, "worktree", "add", "--quiet", "-b", name, str(tree), of)
+        self.age(tree, 2 * housekeeping.RUNNING_SECONDS)
+        return tree
+
+    def test_pushed_review_checkouts_stale_locks_and_missing_folders(self) -> None:
+        self.branch("pr-head")
+        pushed, unpushed, dirty, merged_lock, open_lock = (
+            self.review_checkout(f"review-{name}", "pr-head")
+            for name in ("pushed", "unpushed", "dirty", "merged-lock", "open-lock")
+        )
+        git(unpushed, "commit", "--quiet", "--allow-empty", "-m", "Add: unpushed")
+        write(dirty / "untracked")
+        git(self.main, "worktree", "lock", "--reason", "Review #900", str(merged_lock))
+        git(self.main, "worktree", "lock", "--reason", "Fixing #901", str(open_lock))
+        missing = self.review_checkout("review-missing", "pr-head")
+        housekeeping.writable(missing)
+        shutil.rmtree(missing)
+        removed = {pushed, merged_lock, missing}
+        states = {900: "CLOSED\n", 901: "OPEN\n"}.get
+        with patch.dict(PR_STATES, {"pr-head": "OPEN"}):
+            listed = set(self.run_main(issues=lambda _, n: states(n) or ""))
+            self.assertEqual(listed, removed | self.removable)
+            self.run_main("--apply", issues=lambda _, n: states(n) or "")
+        for tree in removed:
+            self.assertFalse(tree.exists(), tree)
+        for tree in (unpushed, dirty, open_lock):
+            self.assertTrue(tree.exists(), tree)
+        records = git(self.main, "worktree", "list", "--porcelain")
+        self.assertNotIn(f"worktree {missing}\n", records)
+        self.assertIn(f"worktree {open_lock}\nHEAD", records)
+        # Review branches have no same-head origin branch, so they stay.
+        self.assertIn("review-pushed", self.branches())
 
     def branches(self) -> set[str]:
         return set(git(self.main, "branch", "--format=%(refname:short)").split())
