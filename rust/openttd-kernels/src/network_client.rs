@@ -690,12 +690,12 @@ pub(crate) fn check_connection(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_network_client_is_connected(
+pub extern "C" fn openttd_rust_network_client_is_connected_abi(
     s: &Services,
     f: &FrameServices,
-) -> bool {
+) -> u8 {
     let game = (f.client_game)();
-    !game.is_null() && status(s, game) == status::ACTIVE
+    u8::from(!game.is_null() && status(s, game) == status::ACTIVE)
 }
 
 #[unsafe(no_mangle)]

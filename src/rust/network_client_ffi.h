@@ -88,6 +88,7 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept;
 extern "C" {
 void openttd_rust_network_client_connected(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
 uint8_t openttd_rust_network_client_close(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *game, uint8_t result);
-bool openttd_rust_network_client_is_connected(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
+uint8_t openttd_rust_network_client_is_connected_abi(const OpenTTDNetworkClientServices *, const OpenTTDNetworkFrameServices *);
+extern "C++" inline bool openttd_rust_network_client_is_connected(const OpenTTDNetworkClientServices *a0, const OpenTTDNetworkFrameServices *a1) { return openttd_rust_network_client_is_connected_abi(a0, a1) != 0; }
 }
 #endif /* RUST_NETWORK_CLIENT_FFI_H */
