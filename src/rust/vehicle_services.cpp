@@ -82,9 +82,9 @@ void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept { static_cas
 bool RustVehiclePrimary(const Vehicle *v) noexcept { return v->IsPrimaryVehicle(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept { return v->IsInDepot(); }
 bool RustTrainFreeWagon(const Vehicle *v) noexcept { return Train::From(v)->IsFreeWagon(); }
-Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().first_engine_part(RustVehicle(v))); }
-bool RustTrainMultiheaded(const Vehicle *v) noexcept { return GetRustStationLoading().is_multiheaded(RustVehicle(v)); }
-Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().other_multiheaded(RustVehicle(v))); }
+Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return v->GetFirstEnginePart(); }
+bool RustTrainMultiheaded(const Vehicle *v) noexcept { return Train::From(v)->IsMultiheaded(); }
+Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return Train::From(v)->GetOtherMultiheadedPart(); }
 
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }

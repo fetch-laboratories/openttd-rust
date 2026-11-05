@@ -49,7 +49,6 @@ struct OpenTTDStationExclusivity {
  * Rust reads remaining counts directly; refresh after refit or reservation. */
 struct OpenTTDCargoCapacity {
 	const OpenTTDCargoList *owner;
-	uint16_t capacity;
 	uint8_t cargo;
 };
 struct OpenTTDCargoReservation {
@@ -190,7 +189,6 @@ struct OpenTTDStationLoading {
 	OpenTTDCargoReservation (*cargo_reservation)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_reservation);
 	OpenTTDCargoCapacity (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
-	uint16_t (*cargo_cap)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_cap);
 	uint32_t (*stored_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stored_count);
 	uint32_t (*unload_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unload_count);
 	uint32_t (*deliver_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(deliver_count);
@@ -199,13 +197,7 @@ struct OpenTTDStationLoading {
 	uint8_t (*unload_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unload_type);
 	bool (*has_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_orders);
 	uint16_t (*load_unload_ticks)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_unload_ticks);
-	bool (*has_articulated_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated_part);
-	bool (*is_articulated_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_articulated_part);
-	bool (*is_rear_dualheaded)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_rear_dualheaded);
-	bool (*is_normal_aircraft)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_normal_aircraft);
-	bool (*is_multiheaded)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_multiheaded);
 	uint16_t (*cargo_multiplier)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_multiplier);
-	uint16_t (*cached_total_length)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_total_length);
 	bool (*full_load_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(full_load_order);
 	bool (*passenger_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(passenger_cargo);
 	bool (*station_length_penalty)() noexcept OPENTTD_SERVICE_DEFAULT(station_length_penalty);
@@ -223,11 +215,6 @@ struct OpenTTDStationLoading {
 	bool (*indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(indicator);
 	void (*show_indicator)(OpenTTDVehicle *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_indicator);
 	void (*set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
-	OpenTTDVehicle * (*next_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_articulated);
-	OpenTTDVehicle * (*other_multiheaded)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(other_multiheaded);
-	OpenTTDVehicle * (*first_engine_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine_part);
-	OpenTTDVehicle * (*first_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_vehicle);
-	OpenTTDVehicle * (*previous_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous_vehicle);
 	void (*with_next_stations)(OpenTTDVehicle *, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_next_stations);
 	void (*stage)(OpenTTDStation *, OpenTTDVehicle *, uint8_t, void *, OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(stage);
 	void (*return_cargo)(OpenTTDStation *, OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(return_cargo);

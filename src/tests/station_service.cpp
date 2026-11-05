@@ -235,7 +235,6 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	OpenTTDVehicleServices vehicle{};
 	OpenTTDStationLoading loading{};
 	loading.vehicle = &vehicle;
-	loading.cargo_cap = [](OpenTTDVehicle *) noexcept -> uint16_t { return 1; };
 	loading.unload_count = [](OpenTTDVehicle *) noexcept -> uint32_t { return 1; };
 	loading.unload_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	loading.has_orders = [](OpenTTDVehicle *) noexcept { return false; };
@@ -262,6 +261,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	loading.create_payment = [](OpenTTDVehicle *) noexcept -> OpenTTDNativeCargoPayment * { return reinterpret_cast<OpenTTDNativeCargoPayment *>(&_station_loading_probe->payment); };
 	OpenTTDVehicle record{};
 	record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&probe.vehicle);
+	record.cargo_cap = 1;
 	openttd_rust_station_prepare(&record, &services, &loading);
 	CHECK(probe.staged);
 	CHECK_FALSE(probe.frame_live);

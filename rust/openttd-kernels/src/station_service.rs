@@ -295,7 +295,6 @@ pub struct StationExclusivity {
 #[repr(C)]
 pub struct CargoCapacity {
     pub(crate) owner: *const crate::cargo_storage::List,
-    pub(crate) capacity: u16,
     pub(crate) cargo: u8,
 }
 impl CargoCapacity {
@@ -1267,7 +1266,6 @@ pub struct Loading {
     pub(crate) cargo_reservation: extern "C" fn(VehicleRef) -> CargoReservation,
     pub(crate) cargo_capacity: extern "C" fn(VehicleRef) -> CargoCapacity,
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
-    pub(crate) cargo_cap: extern "C" fn(VehicleRef) -> u16,
     pub(crate) stored_count: extern "C" fn(VehicleRef) -> u32,
     pub(crate) unload_count: extern "C" fn(VehicleRef) -> u32,
     pub(crate) deliver_count: extern "C" fn(VehicleRef) -> u32,
@@ -1276,13 +1274,7 @@ pub struct Loading {
     pub(crate) unload_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) has_orders: extern "C" fn(VehicleRef) -> bool,
     pub(crate) load_unload_ticks: extern "C" fn(VehicleRef) -> u16,
-    pub(crate) has_articulated_part: extern "C" fn(VehicleRef) -> bool,
-    pub(crate) is_articulated_part: extern "C" fn(VehicleRef) -> bool,
-    pub(crate) is_rear_dualheaded: extern "C" fn(VehicleRef) -> bool,
-    pub(crate) is_normal_aircraft: extern "C" fn(VehicleRef) -> bool,
-    pub(crate) is_multiheaded: extern "C" fn(VehicleRef) -> bool,
     pub(crate) cargo_multiplier: extern "C" fn(VehicleRef) -> u16,
-    pub(crate) cached_total_length: extern "C" fn(VehicleRef) -> u16,
     pub(crate) full_load_order: extern "C" fn(VehicleRef) -> bool,
     pub(crate) passenger_cargo: extern "C" fn(VehicleRef) -> bool,
     pub(crate) station_length_penalty: extern "C" fn() -> bool,
@@ -1300,11 +1292,6 @@ pub struct Loading {
     pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
     pub(crate) show_indicator: extern "C" fn(VehicleRef, u8, u32),
     pub(crate) set_current_company: extern "C" fn(u8),
-    pub(crate) next_articulated: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
-    pub(crate) other_multiheaded: extern "C" fn(VehicleRef) -> VehicleRef,
-    pub(crate) first_engine_part: extern "C" fn(VehicleRef) -> VehicleRef,
-    pub(crate) first_vehicle: extern "C" fn(VehicleRef) -> VehicleRef,
-    pub(crate) previous_vehicle: extern "C" fn(VehicleRef) -> VehicleRef,
     pub(crate) with_next_stations: extern "C" fn(VehicleRef, *mut c_void, Scope),
     pub(crate) stage: extern "C" fn(*mut Station, VehicleRef, u8, *mut c_void, *mut NativePayment),
     pub(crate) return_cargo: extern "C" fn(*mut Station, VehicleRef, u32),
@@ -1323,25 +1310,29 @@ pub struct Loading {
     pub(crate) station_dirty: extern "C" fn(*mut Station),
 }
 
-fn parts(l: &Loading, v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
+/// `Aircraft::IsNormalAircraft`.
+fn is_normal_aircraft(v: VehicleRef) -> bool {
+    v.subtype() <= crate::aircraft::AIR_AIRCRAFT
+}
+fn parts(v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
     let mut current = Some(v);
     while let Some(part) = current {
         if !action(part) {
             return false;
         }
         if part.vehicle_type() == 0
-            && (l.is_multiheaded)(part)
-            && !action((l.other_multiheaded)(part))
+            && crate::ground_vehicle::is_multiheaded(part.subtype())
+            && !action(part.other_multiheaded_part().unwrap())
         {
             return false;
         }
-        current = if (l.has_articulated_part)(part) {
-            (l.next_articulated)(part)
+        current = if part.has_articulated_part() {
+            part.next()
         } else {
             None
         };
     }
-    if v.vehicle_type() == 3 && (l.is_normal_aircraft)(v) {
+    if v.vehicle_type() == 3 && is_normal_aircraft(v) {
         return action(unsafe { v.next().unwrap_unchecked() });
     }
     true
@@ -1373,18 +1364,18 @@ fn reserve_consist(
     let must_reserve = !control.refit || (l.get_payment)(front).is_null();
     let mut current = Some(front);
     while let Some(v) = current {
-        let reserve_part = if (l.is_articulated_part)(v) {
+        let reserve_part = if v.is_articulated_part() {
             false
         } else {
             let kind = v.vehicle_type();
-            (kind != 0 || !(l.is_rear_dualheaded)(v))
-                && (kind != 3 || (l.is_normal_aircraft)(v))
+            (kind != 0 || !crate::ground_vehicle::is_rear_dualheaded(v.subtype()))
+                && (kind != 3 || is_normal_aircraft(v))
                 && (must_reserve || control.refit_cargo == (l.cargo_type)(v))
         };
         if reserve_part {
-            parts(l, v, |part| {
+            parts(v, |part| {
                 let observed = (l.cargo_capacity)(part);
-                let cap = u32::from(observed.capacity);
+                let cap = u32::from(part.cargo_cap());
                 let remaining = observed.remaining();
                 if cap > remaining && may_load(st, part, w) {
                     (l.reserve_cargo)(st.native, part, cap - remaining, next);
@@ -1393,12 +1384,12 @@ fn reserve_consist(
             });
         }
         if let Some(ref mut capleft) = capleft
-            && (l.cargo_cap)(v) != 0
+            && v.cargo_cap() != 0
         {
             let observed = (l.cargo_capacity)(v);
             let cargo = usize::from(observed.cargo);
             capleft[cargo] = capleft[cargo]
-                .wrapping_add(u32::from(observed.capacity).wrapping_sub(observed.remaining()));
+                .wrapping_add(u32::from(v.cargo_cap()).wrapping_sub(observed.remaining()));
         }
         current = v.next();
     }
@@ -1409,7 +1400,7 @@ fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
     let observed = (l.load_engine)(v);
     let engine = observed.engine;
     let mut amount = u32::from(observed.amount);
-    let mail = v.vehicle_type() == 3 && !(l.is_normal_aircraft)(v);
+    let mail = v.vehicle_type() == 3 && !is_normal_aircraft(v);
     if mail {
         amount = amount.wrapping_add(3) / 4;
     }
@@ -1505,14 +1496,14 @@ fn refit_vehicle(
     l: &Loading,
     refit: &RefitContext,
 ) {
-    let start = (l.first_engine_part)(v);
-    if !parts(l, start, |part| (l.stored_count)(part) == 0) {
+    let start = v.first_engine_part();
+    if !parts(start, |part| (l.stored_count)(part) == 0) {
         return;
     }
     let old_company = (l.current_company)();
     (l.set_current_company)(v.owner());
     let mut mask = (l.refit_mask)(v);
-    parts(l, start, |part| {
+    parts(start, |part| {
         let observed = (l.cargo_reservation)(part);
         let cargo = usize::from(observed.cargo);
         capleft[cargo] = capleft[cargo]
@@ -1538,7 +1529,7 @@ fn refit_vehicle(
         }
     }
     if new_cargo < 64 && u32::from(new_cargo) != u32::from((l.cargo_type)(start)) {
-        parts(l, start, |part| {
+        parts(start, |part| {
             (l.return_cargo)(st.native, part, u32::MAX);
             true
         });
@@ -1546,13 +1537,13 @@ fn refit_vehicle(
         let cost = refit.cost().money();
         let succeeded = refit.cost().ok();
         if succeeded {
-            (l.subtract_profit)((l.first_vehicle)(v), cost.wrapping_shl(8));
+            (l.subtract_profit)(v.first(), cost.wrapping_shl(8));
         }
     }
-    let do_reserve = auto || (l.full_load_order)((l.first_vehicle)(v));
-    parts(l, start, |part| {
+    let do_reserve = auto || (l.full_load_order)(v.first());
+    parts(start, |part| {
         let observed = (l.cargo_capacity)(part);
-        let remaining = u32::from(observed.capacity).wrapping_sub(observed.remaining());
+        let remaining = u32::from(part.cargo_cap()).wrapping_sub(observed.remaining());
         if do_reserve {
             (l.reserve_cargo)(st.native, part, remaining, next);
         }
@@ -1560,7 +1551,7 @@ fn refit_vehicle(
         let observed = (l.cargo_capacity)(part);
         let cargo = usize::from(observed.cargo);
         capleft[cargo] = capleft[cargo]
-            .wrapping_add(u32::from(observed.capacity).wrapping_sub(observed.remaining()));
+            .wrapping_add(u32::from(part.cargo_cap()).wrapping_sub(observed.remaining()));
         true
     });
     (l.set_current_company)(old_company);
@@ -1586,7 +1577,7 @@ pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
         if !(l.has_orders)(front) || (l.unload_type)(front) != 4 {
             let mut current = Some(front);
             while let Some(v) = current {
-                if u32::from((l.cargo_cap)(v)) > 0 && (l.total_count)(v) > 0 {
+                if u32::from(v.cargo_cap()) > 0 && (l.total_count)(v) > 0 {
                     (l.stage)(st.native, v, (l.unload_type)(front), next, payment);
                     if (l.unload_count)(v) > 0 {
                         (l.set_cargo_unloading)(v, true);
@@ -1608,7 +1599,10 @@ fn update_ticks(
     l: &Loading,
 ) {
     if kind == 0 && (l.station_length_penalty)() {
-        let cached_length = u32::from((l.cached_total_length)(front));
+        let cached_length = u32::from(crate::raw_field::read_field!(
+            front.ground_cache(),
+            cached_total_length
+        ));
         let tile = front.tile();
         // SAFETY: The loading entry keeps the immutable shared services live.
         let world = crate::map_func::World::new(unsafe { &*w.shared });
@@ -1689,7 +1683,7 @@ unsafe fn load_vehicle(
         let mut artic_part = 0_u32;
         let mut current = Some(front);
         while let Some(v) = current {
-            if v == front || !(l.has_articulated_part)((l.previous_vehicle)(v)) {
+            if v == front || !v.previous().unwrap().has_articulated_part() {
                 artic_part = 0;
             }
             let part = (l.part)(v);
@@ -1882,7 +1876,7 @@ unsafe fn load_vehicle(
                 if control.load_type == 3 {
                     if (control.vehicle_type == 3
                         && (l.passenger_cargo)(front)
-                        && u32::from((l.cargo_cap)(front)) > (l.stored_count)(front))
+                        && u32::from(front.cargo_cap()) > (l.stored_count)(front))
                         || (cargo_not_full != 0 && (cargo_full & !cargo_not_full) == 0)
                     {
                         finished = false;
@@ -2036,7 +2030,6 @@ crate::abi::layouts! {
     };
     "OpenTTDCargoCapacity" ["probe"] => CargoCapacity {
         owner,
-        capacity,
         cargo,
     };
     "OpenTTDCargoReservation" ["probe"] => CargoReservation {
@@ -2184,7 +2177,6 @@ crate::abi::layouts! {
         cargo_reservation,
         cargo_capacity,
         cargo_type,
-        cargo_cap,
         stored_count,
         unload_count,
         deliver_count,
@@ -2193,13 +2185,7 @@ crate::abi::layouts! {
         unload_type,
         has_orders,
         load_unload_ticks,
-        has_articulated_part,
-        is_articulated_part,
-        is_rear_dualheaded,
-        is_normal_aircraft,
-        is_multiheaded,
         cargo_multiplier,
-        cached_total_length,
         full_load_order,
         passenger_cargo,
         station_length_penalty,
@@ -2217,11 +2203,6 @@ crate::abi::layouts! {
         indicator,
         show_indicator,
         set_current_company,
-        next_articulated,
-        other_multiheaded,
-        first_engine_part,
-        first_vehicle,
-        previous_vehicle,
         with_next_stations,
         stage,
         return_cargo,

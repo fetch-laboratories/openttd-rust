@@ -361,6 +361,21 @@ impl crate::vehicle::VehicleRef {
             self.status() & !VS_HIDDEN
         });
     }
+    pub(crate) fn cargo_cap(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), cargo_cap)
+    }
+    /// `GroundVehicle::HasArticulatedPart` / `Vehicle::HasArticulatedPart`.
+    pub(crate) fn has_articulated_part(self) -> bool {
+        self.next().is_some_and(Self::is_articulated_part)
+    }
+    /// `GroundVehicle::GetFirstEnginePart`.
+    pub(crate) fn first_engine_part(self) -> Self {
+        let mut v = self;
+        while v.is_articulated_part() {
+            v = v.previous().unwrap();
+        }
+        v
+    }
     pub(crate) fn write_cargo_cap(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), cargo_cap, value);
     }

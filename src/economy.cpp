@@ -304,17 +304,12 @@ static const OpenTTDCargoServices _cargo_services = {
 	.resolver = &GetIndustryResolverServices(),
 	.subsidies = RustSubsidyServices,
 	.industry_delivery = &GetIndustryDeliveryServices(),
-	.last_station = RustVehicleLastStationVisited,
-	.vehicle_owner = RustVehicleOwnerOf,
 	.detach_payment = RustVehicleDetachPayment,
 	.finance = &GetRustCompanyFinanceServices(),
 	.vehicles = &GetRustVehicleServices(),
 	.local_company = RustIsLocalCompany,
 	.expense = RustVehicleExpense,
 	.profit = RustVehicleRead<int64_t, RustVehicleProfit>,
-	.x = RustVehicleRead<int32_t, RustVehicleX>,
-	.y = RustVehicleRead<int32_t, RustVehicleY>,
-	.z = RustVehicleRead<int32_t, RustVehicleZ>,
 	.shared = &GetRustSharedServices(),
 	.feeder_animation = RustFeederIncomeAnimation,
 	.subsidy_multiplier = RustSubsidyMultiplier,
@@ -339,7 +334,7 @@ Vehicle *CargoPayment::GetFront() const { return VehicleOf(openttd_rust_cargo_pa
 void CargoPayment::AfterLoad()
 {
 	this->GetFront()->cargo_payment = this;
-	openttd_rust_cargo_payment_afterload(this->rust_state, &_cargo_services);
+	openttd_rust_cargo_payment_afterload(this->rust_state);
 }
 void CargoPayment::PayFinalDelivery(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile)
 {
@@ -445,12 +440,9 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.cargo_capacity = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoCapacity {
 		Vehicle *v = VehicleOf(handle);
-		return {
-			RustVehicleCargoOwner(v), RustVehicleCargoCap(handle), v->cargo_type
-		};
+		return {RustVehicleCargoOwner(v), v->cargo_type};
 	},
 	.cargo_type = RustVehicleCargoType,
-	.cargo_cap = RustVehicleCargoCap,
 	.stored_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
 		Vehicle *v = VehicleOf(handle); return v->cargo.StoredCount();
 	},
@@ -474,26 +466,9 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *v = VehicleOf(handle); return v->orders != nullptr;
 	},
 	.load_unload_ticks = RustVehicleLoadUnloadTicks,
-	.has_articulated_part = RustVehicleHasArticulated,
-	.is_articulated_part = RustVehicleRead<bool, RustVehicleArticulated>,
-	.is_rear_dualheaded = [](OpenTTDVehicle *handle) noexcept -> bool {
-		Vehicle *v = VehicleOf(handle);
-		return Train::From(v)->IsRearDualheaded();
-	},
-	.is_normal_aircraft = [](OpenTTDVehicle *handle) noexcept -> bool {
-		Vehicle *v = VehicleOf(handle);
-		return Aircraft::From(v)->IsNormalAircraft();
-	},
-	.is_multiheaded = [](OpenTTDVehicle *handle) noexcept -> bool {
-		Vehicle *v = VehicleOf(handle); return Train::From(v)->IsMultiheaded();
-	},
 	.cargo_multiplier = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
 		Vehicle *v = VehicleOf(handle);
 		return CargoSpec::Get(v->cargo_type)->multiplier;
-	},
-	.cached_total_length = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
-		Vehicle *v = VehicleOf(handle);
-		return RustGroundCachedTotalLength(v->GetGroundVehicleCache());
 	},
 	.full_load_order = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->current_order.IsFullLoadOrder();
@@ -557,20 +532,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		}
 	},
 	.set_current_company = GetRustCompanyFinanceServices().set_current_company,
-	.next_articulated = RustVehicleNextArticulated,
-	.other_multiheaded = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
-		Vehicle *v = VehicleOf(handle);
-		return RustVehicle(Train::From(v)->GetOtherMultiheadedPart());
-	},
-	.first_engine_part = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
-		Vehicle *v = VehicleOf(handle); return RustVehicle(v->GetFirstEnginePart());
-	},
-	.first_vehicle = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
-		Vehicle *v = VehicleOf(handle); return RustVehicle(v->First());
-	},
-	.previous_vehicle = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
-		Vehicle *v = VehicleOf(handle); return RustVehicle(v->Previous());
-	},
 	.with_next_stations = [](OpenTTDVehicle *handle, void *context, OpenTTDStationScope body) noexcept {
 		std::vector<StationID> next;
 		VehicleOf(handle)->GetNextStoppingStation(next);

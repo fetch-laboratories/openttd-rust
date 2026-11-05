@@ -344,7 +344,6 @@ rebound | RustVehicleCanAllocate | src/rust/disaster_adapter.hpp | can_allocate
 rebound | RustVehicleCanAllocate | src/rust/engine_capabilities_services.hpp | pool_available
 rebound | RustVehicleCanAllocate | src/rust/vehicle_articulated_services.hpp | pool_available
 rebound | RustVehicleCanAllocate | src/rust/vehicle_build_services.hpp | pool_available
-rebound | RustVehicleCargoCap | src/economy.cpp | cargo_cap
 rebound | RustVehicleCargoCap | src/rust/vehicle_refit_services.hpp | cargo_cap
 rebound | RustVehicleCargoCap | src/rust/vehicle_services_newgrf.h | cargo_capacity
 rebound | RustVehicleCargoType | src/economy.cpp | cargo_type
@@ -359,15 +358,12 @@ rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
 rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object
 rebound | RustVehicleGetEngine | src/rust/vehicle_refit_services.hpp | vehicle_engine
 rebound | RustVehicleGetEngine | src/rust/vehicle_services.cpp | engine
-rebound | RustVehicleHasArticulated | src/economy.cpp | has_articulated_part
 rebound | RustVehicleHasArticulated | src/rust/engine_capabilities_services.hpp | has_articulated
 rebound | RustVehicleHasArticulated | src/rust/vehicle_services_newgrf.h | has_articulated
 rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleLoadUnloadTicks | src/economy.cpp | load_unload_ticks
 rebound | RustVehicleLoadUnloadTicks | src/rust/vehicle_services_newgrf.h | load_ticks
-rebound | RustVehicleNextArticulated | src/economy.cpp | next_articulated
-rebound | RustVehicleNextArticulated | src/rust/engine_capabilities_services.hpp | next_articulated
 rebound | RustVehicleTrain | src/rust/vehicle_refit_services.hpp | train_handle
 rebound | RustVehicleTrain | src/rust/vehicle_services.cpp | train_handle
 rebound | RustVehicleUpdateDelta | src/effectvehicle.cpp | delta

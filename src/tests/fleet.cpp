@@ -18,6 +18,7 @@
 #include "../rust/command_services.h"
 #include "../rust/company_identity_ffi.h"
 #include "../rust/vehicle_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
 #include "../table/strings.h"
 #include <map>
 #include "../safeguards.h"
