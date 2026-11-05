@@ -9,6 +9,8 @@ require("probe.nut");
 
 class MigrationInfra extends AIController {
 	function Start() {
+		/* One full tile-loop cycle settles snow and desert ground first. */
+		this.Sleep(300);
 		local free = Free();
 		/* Company-owned single-bit road pieces and a company road owner. */
 		AIRoad.SetCurrentRoadType(AIRoadTypeList(AIRoad.ROADTRAMTYPES_ROAD).Begin());

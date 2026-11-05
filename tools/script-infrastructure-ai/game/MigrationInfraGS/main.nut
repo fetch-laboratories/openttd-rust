@@ -10,7 +10,7 @@ require("probe.nut");
 class MigrationInfraGS extends GSController {
 	function Start() {
 		/* Let the AI company build its road before company-mode probes. */
-		this.Sleep(200);
+		this.Sleep(500);
 		local free = Free();
 		ProbeAll("gs.deity", free);
 		local company = GSCompanyMode(0);

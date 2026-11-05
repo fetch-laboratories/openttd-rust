@@ -32,10 +32,11 @@ class Scenario(core.Scenario):
 
 
 def scenarios(soak: bool) -> list[Scenario]:
+    """Temperate, plus arctic snow and tropic desert/rainforest terrain branches."""
     del soak
     return [
         {
-            "name": "script-infrastructure-tile",
+            "name": f"script-infrastructure-tile{suffix}",
             "kind": "generate",
             "script_infrastructure": True,
             "ticks": 8000,
@@ -43,8 +44,13 @@ def scenarios(soak: bool) -> list[Scenario]:
             "map_log2": 6,
             "land_generator": 1,
             "console": CONSOLE,
-            "settings": SETTINGS,
+            "settings": {**SETTINGS, "game_creation": {"landscape": climate}},
         }
+        for suffix, climate in (
+            ("", "temperate"),
+            ("-arctic", "arctic"),
+            ("-tropic", "tropic"),
+        )
     ]
 
 
