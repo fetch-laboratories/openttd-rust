@@ -6,16 +6,22 @@ import runpy
 import struct
 import subprocess
 from pathlib import Path
+from typing import Any, Literal, NotRequired, cast
 
 from . import core
-from .core import ROOT, SNAPSHOT_TICKS, field_spans, read_save
+from .core import ROOT, SNAPSHOT_TICKS, Field, field_spans, read_save
 from .play_saves import DISTRIBUTIONS
 
 PREPARE_ORDER = 6
 VEHICLE = "roadveh[0]/common[0]/"
 
 
-def scenarios(soak):
+class Scenario(core.Scenario):
+    economy: NotRequired[str]
+    cargo_storage: Literal["manual", "cargodist", "no-unload", "transfer", "unload"]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     return [
         {
             "name": f"cargo-storage-{mode}",
@@ -30,7 +36,15 @@ def scenarios(soak):
     ]
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "cargo_storage" not in scenario:
         return scenario
     mode = scenario["cargo_storage"]
@@ -39,12 +53,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     original = read_save(Path(scenario["save"]))
     source = Path(scenario["save"]).read_bytes()
     data = bytearray(source)
-    patches = []
+    patches: list[tuple[str, int, str, int]] = []
 
-    def patch(cid, index, field, value):
+    def patch(cid: str, index: int, field: str, value: int) -> None:
         chunk = original[cid]
         body = dict(chunk["elements"])[index]
-        begin, end, kind = field_spans(body, chunk["header"])[field]
+        begin, end, kind = field_spans(body, cast(list[Field], chunk["header"]))[field]
         if source.count(body, *chunk["span"]) != 1:
             raise RuntimeError("ambiguous cargo input row")
         encoded = struct.pack(core.FILE_TYPES[kind & 15][0], value)
@@ -69,23 +83,29 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     prepared = Path(scenario["save"]).with_name(f"cargo-{mode}.sav")
     prepared.write_bytes(data)
     read_save(prepared)
-    result["cargo_input"] = {
+    core.findings(result)["cargo_input"] = {
         "reference_sha256": hashlib.sha256(source).hexdigest(),
         "input_sha256": hashlib.sha256(data).hexdigest(),
         "patches": patches,
     }
-    scenario = dict(scenario, save=str(prepared))
+    scenario = {**scenario, "save": str(prepared)}
     del scenario["economy"]
     return scenario
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if "cargo_storage" not in scenario or not run["snapshots"]:
         return
     before = read_save(Path(scenario["save"]))
     saved = [read_save(path) for path in run["snapshots"]]
     packets = core.rows(before, "CAPA")
-    observed = []
+    observed: list[dict[str, Any]] = []
     action_totals = [0, 0, 0, 0]
     for chunks in saved:
         current = core.rows(chunks, "CAPA")
@@ -122,10 +142,13 @@ def check(scenario, run, mode, role, result):
     kind = scenario["cargo_storage"]
     if kind == "transfer" and not any(row["feeder"] for row in observed):
         result["problems"].append(f"{mode}/{role}: no transfer feeder share")
-    result[f"{mode}_{role}_cargo"] = {"actions": action_totals, "state": observed}
+    core.findings(result)[f"{mode}_{role}_cargo"] = {
+        "actions": action_totals,
+        "state": observed,
+    }
 
 
-def scaling_probe():
+def scaling_probe() -> None:
     """Witness the large-list gap: saves currently reach at most six packets."""
     migration = runpy.run_path(str(ROOT / "tools/migration.py"))
     out = ROOT / ".local/cargo-list-scaling"

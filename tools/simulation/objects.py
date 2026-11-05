@@ -1,20 +1,28 @@
 """Object ownership scenarios and named unchanged-original-body gap inputs."""
 
+from collections.abc import Sequence
 from itertools import product
 from pathlib import Path
+from typing import Literal, NotRequired
 
 from . import core, generated
 from .console_adapter import console_adapter, prepared_console
 from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses
 
 
-def scenarios(soak):
+class Scenario(core.Scenario):
+    generation_owner: NotRequired[str]  # generated.Scenario's; it imports this module
+    objects: NotRequired[Literal["commands", "gaps", "reload"]]
+    objects_generation: NotRequired[bool]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     worlds = [s for s in generated.scenarios(soak) if "settings-" in s["name"]][:4]
     return [
-        dict(s, name="objects-generation-" + str(i), objects_generation=True)
+        {**s, "name": "objects-generation-" + str(i), "objects_generation": True}
         for i, s in enumerate(worlds)
     ] + [
-        dict(
+        Scenario(
             name="objects-" + mode,
             kind="save",
             objects=mode,
@@ -26,7 +34,7 @@ def scenarios(soak):
     ]
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> dict[str, str]:
     selected = "objects" in scenario or "objects_generation" in scenario
     return WITNESS_ENVIRONMENT if selected and scenario.get("witnesses") else {}
 
@@ -55,17 +63,25 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "objects" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
     source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
-    scenario = dict(scenario, save=str(source))
+    scenario = {**scenario, "save": str(source)}
     executables = prepared_console("objects", adapter, binaries, builds, folder, env)
     if scenario["objects"] == "gaps":
         for kind in ("valid", "header", "partial", "excess", "fixed", "riff"):
-            logs = {}
-            probe = dict(scenario, console=["objects_scenario anit-" + kind])
+            logs: dict[str, list[str]] = {}
+            probe: Scenario = {**scenario, "console": ["objects_scenario anit-" + kind]}
             runs = core.capture_pair(
                 probe, executables, builds, folder, timeout, env, "anit-" + kind
             )
@@ -80,17 +96,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             if logs["reference"] != logs["candidate"]:
                 raise RuntimeError(f"actual ANIT {kind} differs: {logs}")
     if scenario["objects"] != "reload":
-        return dict(
-            scenario,
-            executables=executables,
-            console=["objects_scenario " + scenario["objects"], "unpause"],
-        )
+        return {
+            **scenario,
+            "executables": executables,
+            "console": ["objects_scenario " + scenario["objects"], "unpause"],
+        }
     saves = {role: folder / role / "objects.sav" for role in executables}
+
+    def commands(role: str) -> Scenario:
+        console = [f'objects_scenario commands "{saves[role]}"', "unpause"]
+        return {**scenario, "console": console}
+
     runs = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=[f'objects_scenario commands "{saves[role]}"', "unpause"],
-        ),
+        commands,
         executables,
         builds,
         folder,
@@ -106,10 +124,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             raise RuntimeError("object reload capture failed")
         state = [x for x in capture["log"] if x.startswith("OBJECT animation-reload ")]
         if len(state) != 1 or (
-            role == "candidate" and state != result["saved_animation"]
+            role == "candidate" and state != core.findings(result)["saved_animation"]
         ):
             raise RuntimeError("nonempty animation reload capture differs/missing")
-        result["saved_animation"] = state
+        core.findings(result)["saved_animation"] = state
     differences = core.compare_saves(
         saves["reference"],
         saves["candidate"],
@@ -119,17 +137,23 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     if differences:
         raise RuntimeError(f"object reload capture differs: {differences}")
-    return dict(
-        scenario,
-        executables=executables,
-        role_inputs={r: {"save": str(s)} for r, s in saves.items()},
-        console=["objects_scenario inspect", "unpause"],
-    )
+    return {
+        **scenario,
+        "executables": executables,
+        "role_inputs": {r: {"save": str(s)} for r, s in saves.items()},
+        "console": ["objects_scenario inspect", "unpause"],
+    }
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if "objects_generation" in scenario:
-        branches = ("generate",)
+        branches: Sequence[str] = ("generate",)
         if scenario["name"].endswith("-1"):
             branches += ("lighthouse", "transmitter")
         branch_witnesses(scenario, run, role, "object", branches)
@@ -242,7 +266,7 @@ def check(scenario, run, mode, role, result):
                 )
     if scenario["objects"] == "reload":
         state = [x for x in lines if x.startswith("OBJECT animation-reload ")]
-        if state != result["saved_animation"]:
+        if state != core.findings(result)["saved_animation"]:
             raise RuntimeError(
                 "animation queue/frame/bits/records/RNG changed on reload"
             )

@@ -4,18 +4,21 @@ import concurrent.futures
 import os
 import shutil
 import subprocess
+from collections.abc import Mapping
+from pathlib import Path
+from types import ModuleType
 
 from . import core
 
 
-def strip_debug(source, destination=None):
+def strip_debug(source: Path, destination: Path | None = None) -> None:
     command = ["objcopy", "--strip-debug", str(source)]
     if destination is not None:
         command.append(str(destination))
     subprocess.run(command, check=True)
 
 
-def export(destination, migration):
+def export(destination: Path, migration: ModuleType) -> None:
     """Capture under build locks; adapters must come from these exact game objects."""
     adapters = core.adapter_modules()
     destination.mkdir(parents=True)
@@ -34,7 +37,9 @@ def export(destination, migration):
             runtime = destination / f"{role}-runtime"
             binary = core._copy_runtime(build, source, runtime)
 
-            def build_adapter(module, build=build, runtime=runtime):
+            def build_adapter(
+                module: ModuleType, build: Path = build, runtime: Path = runtime
+            ) -> None:
                 folder = runtime / module.__name__.rsplit(".", 1)[1]
                 executable = module.adapter(build, folder, migration.environment())
                 for object_file in folder.glob("*.o"):
@@ -50,7 +55,9 @@ def export(destination, migration):
                 strip_debug(binary)
 
 
-def prepared_adapter(kind, role, builds, folder):
+def prepared_adapter(
+    kind: str, role: str, builds: Mapping[str, Path], folder: Path
+) -> Path | None:
     source = builds[role] / kind / f"openttd-{kind}"
     if not source.is_file():
         return None
