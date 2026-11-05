@@ -3,7 +3,7 @@
 //! `CmdBuildAircraft`. Native leaves allocate shells and store fields; Rust owns
 //! the checks, RNG draws, articulated assembly, capacities, caches and chain.
 #![allow(clippy::many_single_char_names)]
-use super::{ERROR, articulated, build};
+use super::{ERROR, articulated, build, vehicle_ref};
 use crate::aircraft::{AIR_AIRCRAFT, AIR_HELICOPTER};
 use crate::airport::HANGAR;
 use crate::command_type::DoCommandFlag;
@@ -46,11 +46,6 @@ pub struct Services {
     pub service_flags: extern "C" fn(*mut (), bool, bool),
     pub wrong_depot: u32,
 }
-/// # Safety
-/// `v` is a live shell for the duration of the native call.
-unsafe fn vehicle_ref(v: *mut ()) -> crate::vehicle::VehicleRef {
-    crate::vehicle::VehicleRef(unsafe { ptr::NonNull::new_unchecked(v.cast()) })
-}
 /// Original `CmdBuildRoadVehicle`.
 /// # Safety
 /// Live native cost and engine; new shells stay live, and no owner access spans a callback.
@@ -80,11 +75,15 @@ pub(crate) unsafe fn road(
     crate::witness::hit(crate::witness::VT_ROAD);
     let company = (b.shared.current_company)();
     let v = (k.new_road)(tile);
-    unsafe { crate::road::set_depot_state((r.road_state)(v.cast())) };
+    unsafe {
+        crate::road::set_depot_state((r.road_state)(
+            super::vehicle_ref(v, r.common.vehicles).0.as_ptr(),
+        ));
+    };
     let info = (a.road_info)(e, true);
     (a.set_part)(v, info.image, (a.default_cargo)(e), info.capacity, true);
     (k.engine_common)(v, e);
-    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v) }, unsafe {
+    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
         crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
     });
     (k.service_dates)(v, b.interval_default(company, VehicleType::ROAD.0) as u16);
@@ -93,14 +92,18 @@ pub(crate) unsafe fn road(
     (k.road_front)(v, e);
     (k.service_flags)(v, (k.exclusive_preview)(e), (b.interval_percent)(company));
     unsafe { articulated::add(a, v) };
-    (r.invalidate_chain)(v.cast());
+    (r.invalidate_chain)(
+        unsafe { super::vehicle_ref(v, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    );
     let mut u = v;
     while !u.is_null() {
         let capacity = unsafe {
             crate::engine_capabilities::openttd_rust_engine_capacity(
                 r.capabilities,
-                (r.vehicle_engine)(u.cast()),
-                u.cast(),
+                (r.vehicle_engine)(super::vehicle_ref(u, r.common.vehicles).0.as_ptr()),
+                super::vehicle_ref(u, r.common.vehicles).0.as_ptr(),
                 ptr::null_mut(),
             )
         };
@@ -109,8 +112,8 @@ pub(crate) unsafe fn road(
     }
     unsafe {
         crate::road::openttd_rust_road_update_cache(
-            vehicle_ref(v),
-            (r.road_state)(v.cast()),
+            vehicle_ref(v, r.common.vehicles),
+            (r.road_state)(super::vehicle_ref(v, r.common.vehicles).0.as_ptr()),
             false,
             r.road,
         );
@@ -118,7 +121,7 @@ pub(crate) unsafe fn road(
     if (r.road_acceleration)() != 0 {
         crate::ground_vehicle::cargo_changed(
             r.road_ground.physics,
-            (r.road_ground.physics.first)(unsafe { vehicle_ref(v) }),
+            unsafe { vehicle_ref(v, r.common.vehicles) }.first(),
         );
     }
     unsafe {
@@ -131,6 +134,7 @@ pub(crate) unsafe fn road(
 /// Original `CmdBuildAircraft`, including its shadow and helicopter rotor.
 /// # Safety
 /// As `road`; the station of a hangar tile is live for the whole call.
+#[allow(clippy::too_many_lines)]
 pub(crate) unsafe fn aircraft(
     s: &build::Services,
     out: *mut CommandCost,
@@ -166,15 +170,30 @@ pub(crate) unsafe fn aircraft(
     (k.aircraft_place)(v, u, tile);
     let info = (k.aircraft_info)(e);
     (a.set_part)(v, info.image, (a.default_cargo)(e), info.passengers, true);
-    (r.set_refit_cap)(u.cast(), 0);
+    crate::vehicle::VehicleRef::of(
+        unsafe { super::vehicle_ref(u, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    )
+    .write_refit_cap(0);
     let mail = crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_MAIL);
     if (c.valid_cargo)(mail) {
-        (k.set_cargo_type)(u.cast(), mail);
-        (r.set_capacity)(u.cast(), info.mail);
+        (k.set_cargo_type)(
+            unsafe { super::vehicle_ref(u, r.common.vehicles) }
+                .0
+                .as_ptr(),
+            mail,
+        );
+        crate::vehicle::VehicleRef::of(
+            unsafe { super::vehicle_ref(u, r.common.vehicles) }
+                .0
+                .as_ptr(),
+        )
+        .write_cargo_cap(info.mail);
     }
     (b.clear_name)(v);
     (k.engine_common)(v, e);
-    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v) }, unsafe {
+    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
         crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
     });
     let subtype = if info.subtype & AIR_CTOL != 0 {
@@ -183,8 +202,17 @@ pub(crate) unsafe fn aircraft(
         AIR_HELICOPTER
     };
     (k.aircraft_properties)(v, u, e, subtype);
-    let hv = (r.aircraft_handle)(v.cast());
-    let hu = (r.aircraft_handle)(u.cast());
+    unsafe { c.vehicles.set_next_shell(v.cast(), u.cast()) };
+    let hv = (r.aircraft_handle)(
+        unsafe { super::vehicle_ref(v, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    );
+    let hu = (r.aircraft_handle)(
+        unsafe { super::vehicle_ref(u, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    );
     unsafe {
         (r.aircraft.update_delta)(hv);
         (r.aircraft.update_delta)(hu);
@@ -207,18 +235,31 @@ pub(crate) unsafe fn aircraft(
     (a.random_bits)(v, b.shared.random() as u16);
     (a.random_bits)(u, b.shared.random() as u16);
     (k.service_flags)(v, (k.exclusive_preview)(e), (b.interval_percent)(company));
-    (r.invalidate_chain)(v.cast());
+    (r.invalidate_chain)(
+        unsafe { super::vehicle_ref(v, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    );
     // Source passes the live mail shell field, so callbacks see each optional write immediately.
     let capacity = unsafe {
         crate::engine_capabilities::openttd_rust_engine_capacity(
             r.capabilities,
             e,
-            v.cast(),
+            super::vehicle_ref(v, r.common.vehicles).0.as_ptr(),
             (k.mail_capacity_address)(u),
         )
     };
-    (r.set_capacity)(v.cast(), capacity as u16);
-    (r.invalidate_chain)(v.cast());
+    crate::vehicle::VehicleRef::of(
+        unsafe { super::vehicle_ref(v, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    )
+    .write_cargo_cap(capacity as u16);
+    (r.invalidate_chain)(
+        unsafe { super::vehicle_ref(v, r.common.vehicles) }
+            .0
+            .as_ptr(),
+    );
     unsafe { crate::aircraft::openttd_rust_aircraft_cache(r.aircraft, hv, true) };
     unsafe {
         a.position(v);
@@ -228,8 +269,13 @@ pub(crate) unsafe fn aircraft(
         crate::witness::hit(crate::witness::VT_ROTOR);
         let w = (k.new_aircraft)();
         (k.rotor)(w, v, u);
+        unsafe { c.vehicles.set_next_shell(u.cast(), w.cast()) };
         (a.random_bits)(w, b.shared.random() as u16);
-        let hw = (r.aircraft_handle)(w.cast());
+        let hw = (r.aircraft_handle)(
+            unsafe { super::vehicle_ref(w, r.common.vehicles) }
+                .0
+                .as_ptr(),
+        );
         // SAFETY: As above, for the new rotor's private owner.
         unsafe {
             (*hw.state).state = HRS_ROTOR_STOPPED;

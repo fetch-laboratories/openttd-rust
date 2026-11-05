@@ -13,6 +13,7 @@
 #include "../rust/station_service_ffi.h"
 #include "../engine_type.h"
 #include "../rust/vehicle_visits_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
 #include "../rust/station_association_ffi.h"
 #include "../rust/station_definitions_ffi.h"
 #include "../rust/newgrf_loading_ffi.h"
@@ -36,6 +37,7 @@
 #include "../rust/services_ffi.h"
 #include "station_spatial_fixture.hpp"
 #include "../core/kdtree.hpp"
+extern "C" void openttd_test_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *);
 
 
 
@@ -231,10 +233,8 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	services.station = [](uint16_t) noexcept -> OpenTTDLoadingStation { return {reinterpret_cast<OpenTTDStation *>(_station_loading_probe), reinterpret_cast<OpenTTDBaseStation *>(_station_loading_probe), _station_loading_probe->owner}; };
 	services.owner = [](OpenTTDBaseStation *) noexcept { return _station_loading_probe->owner; };
 	OpenTTDVehicleServices vehicle{};
-	vehicle.last_station = [](OpenTTDVehicle *) noexcept -> uint16_t { return 0; };
 	OpenTTDStationLoading loading{};
 	loading.vehicle = &vehicle;
-	loading.cargo_cap = [](OpenTTDVehicle *) noexcept -> uint16_t { return 1; };
 	loading.unload_count = [](OpenTTDVehicle *) noexcept -> uint32_t { return 1; };
 	loading.unload_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	loading.has_orders = [](OpenTTDVehicle *) noexcept { return false; };
@@ -242,7 +242,6 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	loading.set_cargo_unloading = [](OpenTTDVehicle *, bool) noexcept {};
 	loading.set_loading_finished = [](OpenTTDVehicle *, bool) noexcept {};
 	loading.set_load_ticks = [](OpenTTDVehicle *, uint16_t) noexcept {};
-	loading.next_vehicle = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
 	loading.with_next_stations = [](OpenTTDVehicle *, void *context, OpenTTDStationScope body) noexcept {
 		int destination = 42;
 		_station_loading_probe->frame_live = true;
@@ -260,7 +259,10 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 		_station_loading_probe->staged = true;
 	};
 	loading.create_payment = [](OpenTTDVehicle *) noexcept -> OpenTTDNativeCargoPayment * { return reinterpret_cast<OpenTTDNativeCargoPayment *>(&_station_loading_probe->payment); };
-	openttd_rust_station_prepare(reinterpret_cast<OpenTTDVehicle *>(&probe.vehicle), &services, &loading);
+	OpenTTDVehicle record{};
+	record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&probe.vehicle);
+	record.cargo_cap = 1;
+	openttd_test_station_prepare(&record, &services, &loading);
 	CHECK(probe.staged);
 	CHECK_FALSE(probe.frame_live);
 	CHECK(cargo->rating == 6);

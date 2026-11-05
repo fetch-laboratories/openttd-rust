@@ -36,6 +36,8 @@ def main():
             "-O2",
             *probe.target_flags(args.build),
             "-I",
+            args.build / "generated-abi",
+            "-I",
             probe.ROOT / "src",
             "-I",
             out,

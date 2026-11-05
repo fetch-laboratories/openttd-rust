@@ -31,19 +31,6 @@ pub struct Links {
     pub prev: *mut Shell,
     pub current: *mut Shell,
 }
-/// Normal position update only; removal acquires links without reading tile.
-#[repr(C)]
-pub struct UpdateObservation {
-    pub links: *mut Links,
-    pub tile: u32,
-}
-/// Coordinates observed together for rectangle filtering. The link carrier is
-/// used only on a false match; its next field is not prefetched.
-#[repr(C)]
-pub struct NearObservation {
-    pub links: *mut Links,
-    pub xy: super::XY,
-}
 static BUCKETS: GameState<[Shell; TOTAL]> = GameState::new([ptr::null_mut(); TOTAL]);
 fn hash_1d(p: u32) -> u32 {
     crate::bitmath_func::gb(p, HASH_RES, HASH_BITS)
@@ -83,12 +70,11 @@ pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
     }
 }
 /// The caller's dimensions cover only a serialized synchronous no-reset/no-yield
-/// interval. No map storage is exposed. Links and tile are observed once here;
-/// the native observation and link accessors neither reenter nor mutate state.
+/// interval. No map storage is exposed. Links resolve once here; native link access neither reenters nor mutates state.
 #[inline]
 pub(crate) unsafe fn update_position(s: &VehicleServices, v: VehicleRef, map: Map) {
-    let o = (s.occupancy_update)(v);
-    unsafe { update_bucket(s, v, o.links, tile_bucket(map, o.tile)) };
+    let links = (s.tile_links)(v);
+    unsafe { update_bucket(s, v, links, tile_bucket(map, v.tile())) };
 }
 #[inline]
 unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, new: *mut Shell) {
@@ -125,8 +111,10 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
     let pool = (s.pool)();
     let vs = unsafe { &*s.vehicle };
     for i in 0..unsafe { *pool.first_unused } {
-        if let Some(v) = unsafe { *pool.slots.add(i) } {
+        let shell = unsafe { *pool.slots.add(i) };
+        if !shell.is_null() {
             unsafe {
+                let v = VehicleRef::from_shell(shell.cast(), vs);
                 (*((vs.tile_links)(v))).current = ptr::null_mut();
             }
         }
@@ -165,7 +153,7 @@ impl OnTile {
         it
     }
     unsafe fn filter(&mut self, s: &VehicleServices) {
-        while !self.current.is_null() && (s.tile)(unsafe { handle(self.current) }) != self.tile {
+        while !self.current.is_null() && unsafe { handle(self.current) }.tile() != self.tile {
             crate::witness::hit(crate::witness::OCCUPANCY_ALIAS);
             self.current = unsafe { next(s, self.current) };
         }
@@ -269,19 +257,19 @@ impl Near {
     #[inline]
     unsafe fn filter(&mut self, s: &VehicleServices) {
         while let Some(v) = self.get() {
-            let o = (s.occupancy_near)(v);
+            let links = (s.tile_links)(v);
             if crate::geometry_type::rect_contains(
                 self.left,
                 self.top,
                 self.right,
                 self.bottom,
-                o.xy.x,
-                o.xy.y,
+                v.x(),
+                v.y(),
             ) {
                 break;
             }
             unsafe {
-                self.increment(o.links);
+                self.increment(links);
             }
         }
     }
@@ -322,8 +310,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, max_pixel_z, costs, vehicle_error, };
     "OpenTTDVehicleTileLinks" ["probe"] => Links { next, prev, current, };
-    "OpenTTDOccupancyUpdateObservation" ["probe"] => UpdateObservation { links, tile, };
-    "OpenTTDOccupancyNearObservation" ["probe"] => NearObservation { links, xy, };
     "OpenTTDVehicleOnTile" ["probe"] => OnTile { tile, current, };
     "OpenTTDVehicleNear" ["probe"] => Near { left, top, right, bottom, hxmin, hxmax, hymin, hymax, hx, hy, current, };
 }
@@ -356,11 +342,11 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     let z = (c.max_pixel_z)(tile);
     let mut it = unsafe { OnTile::new(s, tile) };
     while let Some(v) = it.get() {
-        let kind = (s.vehicle_type)(v);
+        let kind = v.vehicle_type();
         if kind != super::VehicleType::DISASTER.0
             && !(kind == super::VehicleType::AIRCRAFT.0
-                && (s.subtype)(v) == crate::aircraft::AIR_SHADOW)
-            && (s.z)(v) <= z
+                && v.subtype() == crate::aircraft::AIR_SHADOW)
+            && v.z() <= z
         {
             c.result(out, Some(kind));
             return;
@@ -392,7 +378,7 @@ pub(crate) unsafe fn wormhole_blocker(
     for tile in [tile, end] {
         let mut it = unsafe { OnTile::new(s, tile) };
         while let Some(v) = it.get() {
-            let kind = (s.vehicle_type)(v);
+            let kind = v.vehicle_type();
             if [
                 super::VehicleType::TRAIN.0,
                 super::VehicleType::ROAD.0,
@@ -420,7 +406,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_train(
     let s = c.vehicles;
     let mut it = unsafe { OnTile::new(s, tile) };
     while let Some(v) = it.get() {
-        if (s.vehicle_type)(v) == super::VehicleType::TRAIN.0 {
+        if v.vehicle_type() == super::VehicleType::TRAIN.0 {
             let track = (s.train_handle)(v.0.as_ptr()).track();
             if track == bits || crate::track_func::tracks_overlap(track | bits) {
                 c.result(out, Some(super::VehicleType::TRAIN.0));

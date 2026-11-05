@@ -29,7 +29,7 @@ use crate::{
         self, ClearGroundType, FloodingBehaviour, Foundation, RailGroundType, Services, Slope,
         Track, TreeGround,
     },
-    vehicle::{VehicleRef, VehicleServices, VehicleType},
+    vehicle::{VehicleRef, VehicleServices},
 };
 
 #[repr(C)]
@@ -38,22 +38,6 @@ pub struct AirportGround {
     pub tile: u32,
     pub width: u16,
     pub height: u16,
-}
-#[repr(C)]
-pub struct FloodVictim {
-    pub status: u8,
-    pub kind: VehicleType,
-}
-#[repr(C)]
-pub struct AircraftFloodPose {
-    pub tile: u32,
-    pub z: i32,
-    pub subtype: u8,
-}
-#[repr(C)]
-pub struct GroundFloodPose {
-    pub z: i32,
-    pub first: *mut crate::vehicle::OpenTTDVehicle,
 }
 #[repr(C)]
 pub struct WaterServices {
@@ -76,9 +60,6 @@ pub struct WaterServices {
     pub airport: extern "C" fn(u32) -> AirportGround,
     pub airport_member: unsafe extern "C" fn(*const crate::station::Station, u32) -> bool,
     pub airport_z: extern "C" fn(*const std::ffi::c_void) -> i32,
-    pub victim: extern "C" fn(VehicleRef) -> FloodVictim,
-    pub aircraft_pose: extern "C" fn(VehicleRef) -> AircraftFloodPose,
-    pub ground_pose: extern "C" fn(VehicleRef) -> GroundFloodPose,
     pub crash: extern "C" fn(VehicleRef) -> u32,
     pub ai_event: extern "C" fn(VehicleRef, u32),
     pub game_event: extern "C" fn(VehicleRef, u32),
@@ -432,24 +413,21 @@ impl<'a> World<'a> {
         crate::ground::hit(crate::ground::Witness::VehicleCrash);
     }
     fn victim(&self, v: VehicleRef, z: i32) {
-        // Pose reads are separated only by pure map tests in the source. No
-        // mutating callback intervenes, and no pose is reused after Crash.
-        let inputs = (self.w.victim)(v);
-        if inputs.status & 128 != 0 {
+        // Fields are read at the source's points; no callback intervenes before Crash.
+        if v.status() & crate::vehicle_base::VS_CRASHED != 0 {
             crate::ground::hit(crate::ground::Witness::CrashedSkip);
             return;
         }
-        match inputs.kind.0 {
+        match v.vehicle_type() {
             3 => {
-                let pose = (self.w.aircraft_pose)(v);
-                let tile = pose.tile;
+                let tile = v.tile();
                 if !(self.w.airport_tile)(tile) || (self.s.tile_max_z)(tile) != 0 {
                     return;
                 }
-                if pose.subtype == 4 {
+                if v.subtype() == crate::aircraft::AIR_SHADOW {
                     return;
                 }
-                if pose.z
+                if v.z()
                     != (self.w.airport_z)(crate::newgrf_airport::station_fta(
                         crate::station_map::station_by_tile(tile, crate::newgrf_airport::runtime()),
                         crate::newgrf_airport::runtime(),
@@ -460,15 +438,9 @@ impl<'a> World<'a> {
                 self.crash(v);
             }
             0 | 1 => {
-                let pose = (self.w.ground_pose)(v);
-                if pose.z <= z {
-                    // SAFETY: Source dereferences First only after this z test.
-                    // Vehicle construction/afterload establishes a nonnull head
-                    // before hash insertion; the raw record adds no precondition
-                    // to parts rejected by altitude. No callback intervenes.
-                    self.crash(VehicleRef(unsafe {
-                        std::ptr::NonNull::new_unchecked(pose.first)
-                    }));
+                if v.z() <= z {
+                    // Source dereferences First only after this z test.
+                    self.crash(v.first());
                 }
             }
             _ => {}
@@ -826,26 +798,10 @@ crate::abi::layouts! {
         airport,
         airport_member,
         airport_z,
-        victim,
-        aircraft_pose,
-        ground_pose,
         crash,
         ai_event,
         game_event,
         news,
-    };
-    "OpenTTDFloodVictim" ["landscape"] => FloodVictim {
-        status,
-        kind => type,
-    };
-    "OpenTTDAircraftFloodPose" ["landscape"] => AircraftFloodPose {
-        tile,
-        z,
-        subtype,
-    };
-    "OpenTTDGroundFloodPose" ["landscape"] => GroundFloodPose {
-        z,
-        first,
     };
     "OpenTTDWaterRestorationServices" ["common"] => RestorationServices {
         infrastructure,
@@ -889,9 +845,6 @@ pub(crate) fn fixture() -> WaterServices {
         airport: unused1,
         airport_member: unused2,
         airport_z: unused1,
-        victim: unused1,
-        aircraft_pose: unused1,
-        ground_pose: unused1,
         crash: unused1,
         ai_event: unused2,
         game_event: unused2,

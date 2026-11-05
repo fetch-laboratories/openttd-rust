@@ -604,9 +604,9 @@ pub struct Leaves {
 struct Game(&'static Leaves);
 
 /// Convert the live, non-null native Vehicle shell supplied by each entry.
-fn native_vehicle(v: *mut c_void) -> VehicleRef {
+fn native_vehicle(v: *mut c_void, base: &VehicleServices) -> VehicleRef {
     // SAFETY: Callers inherit their entry's live, non-null Vehicle contract.
-    VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast()) })
+    unsafe { VehicleRef::from_shell(v, base) }
 }
 
 /// Typed calls into the `Leaves` table. Callers pass the live native pointees and
@@ -697,7 +697,7 @@ impl Game {
     fn bus(self, vehicle: *mut c_void) -> bool {
         // SAFETY: The immutable maintenance table supplies the shared world services.
         let shared = unsafe { &*self.maintenance().shared };
-        crate::road_stop::is_bus(shared, native_vehicle(vehicle))
+        crate::road_stop::is_bus(shared, native_vehicle(vehicle, self.0.base))
     }
     fn maintenance(self) -> &'static maintenance::Services {
         // SAFETY: The immutable base table supplies its process-wide maintenance table.
@@ -877,6 +877,10 @@ impl Game {
     }
 }
 impl Order {
+    /// `Order::GetDepotActionType`.
+    pub(crate) fn depot_action_flags(self) -> u8 {
+        (self.flags >> 3) & 15
+    }
     pub(crate) fn kind(&self) -> u8 {
         self.kind & 15
     }
@@ -906,6 +910,10 @@ impl Order {
     }
     pub(crate) fn is_refit(self) -> bool {
         self.refit < 64 || self.refit == 0xfd
+    }
+    /// `Order::GetMaxSpeed`.
+    pub(crate) fn max_speed(self) -> u16 {
+        self.speed
     }
     /// `Order::GetConditionSkipToOrder`.
     pub(crate) fn condition_skip_to(self) -> u8 {
@@ -1422,7 +1430,7 @@ impl Game {
         }
     }
     fn owner_check(self, v: *mut c_void, output: *mut c_void) -> bool {
-        let owner = (self.0.base.owner)(native_vehicle(v));
+        let owner = (native_vehicle(v, self.0.base)).owner();
         self.check_owner(u64::from(owner), output)
     }
     fn command_error(self, output: *mut c_void, error: u32) -> u32 {
@@ -1896,7 +1904,7 @@ impl Game {
         while !u.is_null() {
             if self.stopped_or_crashed(u) == 0 {
                 write_field!(self.consist(u), next_departure, departure);
-                (self.maintenance().view_dirty)(native_vehicle(u));
+                (self.maintenance().view_dirty)(native_vehicle(u, self.0.base));
             }
             u = self.next(u);
         }
@@ -2941,13 +2949,17 @@ impl Game {
         }
         let variable = match order.variable() {
             0 => i32::from(crate::vehicle::visits::percent_filled(
-                native_vehicle(v),
+                native_vehicle(v, self.0.base),
                 None,
                 self.0.base.visits(),
             )),
             1 => ((self.reliability(v) * 101) >> 16) as i32,
             7 => {
-                (i32::from((self.maintenance().engine_reliability)(native_vehicle(v))) * 101) >> 16
+                (i32::from((self.maintenance().engine_reliability)(native_vehicle(
+                    v,
+                    self.0.base,
+                ))) * 101)
+                    >> 16
             }
             2 => (self.display_speed(v) as i32).wrapping_mul(10) / 16,
             3 => self.age_years(v) as i32,
@@ -3526,7 +3538,7 @@ impl Control {
         }
         if execute {
             if g.current(v).kind() == OT_LOADING {
-                let vehicle = native_vehicle(v);
+                let vehicle = native_vehicle(v, self.g.0.base);
                 crate::vehicle::visits::leave_station(vehicle, g.0.base.visits());
             }
             write_field!(state, implicit, index);
@@ -4237,7 +4249,7 @@ impl Control {
                 current.kind = OT_DUMMY;
                 current.flags = 0;
                 g.put_current(v, current);
-                (g.maintenance().view_dirty)(native_vehicle(v));
+                (g.maintenance().view_dirty)(native_vehicle(v, g.0.base));
             }
             if !g.orders(v).is_null() {
                 let mut index = 0u8;
@@ -4304,7 +4316,7 @@ impl Control {
         {
             return;
         }
-        if g.local_owner(v) == 0 || !(g.0.base.day)(native_vehicle(v)).is_multiple_of(20) {
+        if g.local_owner(v) == 0 || !(native_vehicle(v, g.0.base)).day().is_multiple_of(20) {
             return;
         }
         let mut message = 0u32;
@@ -4503,7 +4515,7 @@ impl VisitOrders {
         Self(Game(leaves))
     }
     fn shell(v: VehicleRef) -> *mut c_void {
-        v.0.as_ptr().cast()
+        v.shell().cast()
     }
     /// `v->orders`, the native `OrderList` shell or null.
     pub(crate) fn list(self, v: VehicleRef) -> *mut c_void {
@@ -4766,7 +4778,9 @@ fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u6
     // SAFETY: The caller supplies live serialized vehicle and destination shells.
     u64::from(unsafe {
         crate::vehicle_func::can_vehicle_use_station(
-            vehicle.cast(),
+            native_vehicle(vehicle, &*crate::newgrf_airport::runtime().vehicles)
+                .0
+                .as_ptr(),
             crate::newgrf_airport::station_by_id(destination, crate::newgrf_airport::runtime()),
             crate::newgrf_airport::runtime(),
         )

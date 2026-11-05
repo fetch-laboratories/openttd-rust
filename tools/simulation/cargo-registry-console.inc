@@ -1,6 +1,7 @@
 #ifdef WITH_RUST
 #include "session-fixture.hpp"
 #endif
+#include "vehicle-record-fixture.hpp"
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Native loaders remain compiled unchanged so fixtures exercise their real publication phases. */
 #include "newgrf.cpp"
@@ -144,9 +145,9 @@ static void CargoProfitFixture()
 	std::array<int32_t, 3> regs{-1, -2, -3};
 	CARGO_REQUIRE(GetCargoCallback(CBID_CARGO_PROFIT_CALC, 7, 19, cs, regs) == 0x4001 && regs[0] == 19 && regs[1] == 7 && regs[2] == CBID_CARGO_PROFIT_CALC);
 	Vehicle *front = nullptr;
-	for (Vehicle *v : Vehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_payment == nullptr && Station::IsValidID(v->last_station_visited)) { front = v; break; }
+	for (Vehicle *v : Vehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_payment == nullptr && Station::IsValidID(FIXTURE_GET(v, LastStationVisited, last_station_visited))) { front = v; break; }
 	CARGO_REQUIRE(front != nullptr);
-	Station *station = Station::Get(front->last_station_visited);
+	Station *station = Station::Get(FIXTURE_GET(front, LastStationVisited, last_station_visited));
 	SubsidyClean(); SetBit(station->always_accepted, cargo);
 	CARGO_REQUIRE(CargoPayment::CanAllocateItem() && CargoPacket::CanAllocateItem());
 	auto *packet = new CargoPacket(station->index, 31, {station->town->index, SourceType::Town}); packet->UpdateLoadingTile(station->xy);

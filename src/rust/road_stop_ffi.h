@@ -28,8 +28,6 @@ struct OpenTTDRoadStopEntries { OpenTTDRoadStopEntry east, west; };
 /** One Rust allocation per native shell: the saved status byte and the shared entries. */
 struct OpenTTDRoadStopState { uint8_t status; OpenTTDRoadStopEntries *entries; };
 struct OpenTTDRoadStopPoolItem { OpenTTDRoadStopState *state; uint32_t xy, index; };
-struct OpenTTDRoadStopDriveRead { uint16_t total_length; uint8_t direction; };
-struct OpenTTDRoadStopRebuildRead { OpenTTDRoadState *road; uint16_t total_length; VehicleType vehicle_type; uint8_t direction, status; bool primary; };
 /* Typed noexcept services; none reenters a road stop, runs scripts or throws. */
 struct OpenTTDRoadStopServices {
 	const OpenTTDVehicleServices *vehicle;
@@ -41,8 +39,6 @@ struct OpenTTDRoadStopServices {
 	uint32_t (*tile)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDRoadStopState *(*state)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(state);
 	OpenTTDRoadStopPoolItem (*pool_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_next);
-	OpenTTDRoadStopDriveRead (OPENTTD_RUST_CALL *drive_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(drive_read);
-	OpenTTDRoadStopRebuildRead (OPENTTD_RUST_CALL *rebuild_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(rebuild_read);
 };
 const OpenTTDRoadStopServices &GetRustRoadStopServices() noexcept;
 extern "C" {

@@ -43,15 +43,9 @@ pub struct Services {
     pub(crate) error: unsafe extern "C" fn(*mut ()) -> u32,
     pub(crate) money: unsafe extern "C" fn(*mut ()) -> i64,
     pub(crate) commands: *const crate::services::CommandServices,
-    pub(crate) rear: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) articulated: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) crashed: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) stopped: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) chain_depot: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) first: unsafe extern "C" fn(*mut ()) -> *mut (),
-    pub(crate) next_unit: unsafe extern "C" fn(*mut ()) -> *mut (),
-    pub(crate) prev_unit: unsafe extern "C" fn(*mut ()) -> *mut (),
-    pub(crate) length: unsafe extern "C" fn(*mut ()) -> u16,
+    /// Resolves shells to their canonical records.
+    pub(crate) vehicles: &'static crate::vehicle::VehicleServices,
     pub(crate) cargo_type: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) stopped_in_depot: unsafe extern "C" fn(*mut ()) -> bool,
@@ -81,7 +75,6 @@ pub struct Services {
     pub(crate) viewports: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) view_window: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) news: unsafe extern "C" fn(*mut (), *mut ()),
-    pub(crate) transfer_cargo: unsafe extern "C" fn(*mut (), *mut (), bool),
     pub(crate) event: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) save_rng: unsafe extern "C" fn(*mut ()),
     pub(crate) restore_rng: unsafe extern "C" fn(*mut ()),
@@ -91,6 +84,62 @@ pub struct Services {
     pub(crate) too_long: u32,
     pub(crate) too_long_replacement: u32,
     pub(crate) nothing: u32,
+}
+/// Canonical record of a live native transaction shell.
+pub(crate) fn record(w: &Services, v: *mut ()) -> crate::vehicle::VehicleRef {
+    // SAFETY: Every caller passes a live shell of the serialized game state.
+    unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), w.vehicles) }
+}
+/// `Train::GetNextUnit` as a nullable shell.
+pub(crate) fn next_unit(w: &Services, v: *mut ()) -> *mut () {
+    record(w, v)
+        .next_unit()
+        .map_or(ptr::null_mut(), |v| v.shell().cast())
+}
+/// `Train::GetPrevUnit` as a nullable shell.
+fn previous_unit(w: &Services, v: *mut ()) -> *mut () {
+    record(w, v)
+        .previous_unit()
+        .map_or(ptr::null_mut(), |v| v.shell().cast())
+}
+/// `TransferCargo`, followed by the original train load/unload cache update.
+unsafe fn transfer_cargo(w: &Services, old: *mut (), new: *mut (), chain: bool) {
+    let old = record(w, old);
+    let new = record(w, new);
+    let build = (w.build_services)();
+    let changed = unsafe {
+        crate::cargo_storage::cargo_capacity(
+            build.rail.cargo_capacity,
+            Some(old),
+            Some(new),
+            1,
+            u8::from(chain),
+        )
+    };
+    if changed != 0 {
+        let refit = (w.refit_services)();
+        unsafe {
+            crate::train::openttd_rust_train_consist_changed(
+                crate::train::Handle::from_record(new.0.as_ptr()),
+                crate::train::CCF_LOADUNLOAD,
+                refit.train,
+                refit.common.base.shared,
+            );
+        }
+    }
+}
+/// `v->First()` of a live shell, as a shell.
+pub(crate) fn first(w: &Services, v: *mut ()) -> *mut () {
+    // SAFETY: Every caller passes a live shell of the serialized game state.
+    unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), w.vehicles) }
+        .first()
+        .shell()
+        .cast()
+}
+/// `v->IsArticulatedPart()` of a live shell.
+pub(crate) fn articulated(w: &Services, v: *mut ()) -> bool {
+    // SAFETY: Every caller passes a live shell of the serialized game state.
+    unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), w.vehicles) }.is_articulated_part()
 }
 
 /// `DoCommandFlag::NoCargoCapacityCheck`, set by every original autoreplace move.
@@ -124,8 +173,8 @@ unsafe fn move_vehicle(
 unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {
     let s = (w.build_services)();
     let b = s.refit.common.base;
-    let v = unsafe { vehicle_ref_for_build(old) };
-    let tile = (s.refit.common.vehicles.tile)(v);
+    let v = unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) };
+    let tile = (v).tile();
     let result = crate::command::nested(
         b.commands,
         b.shared,
@@ -153,8 +202,11 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
         std::ptr::null_mut()
     }
 }
-unsafe fn vehicle_ref_for_build(v: *mut ()) -> crate::vehicle::VehicleRef {
-    crate::vehicle::VehicleRef(std::ptr::NonNull::new(v.cast()).unwrap())
+unsafe fn vehicle_ref_for_build(
+    v: *mut (),
+    services: &crate::vehicle::VehicleServices,
+) -> crate::vehicle::VehicleRef {
+    unsafe { crate::vehicle::VehicleRef::from_shell(v.cast(), services) }
 }
 
 unsafe fn direct_start(w: &Services, out: *mut (), v: *mut (), evaluate: bool) {
@@ -330,14 +382,14 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
     a == 0 || b == 0 || a & b != 0
 }
 unsafe fn order_vehicle(w: &Services, gw: &GroupServices, v: *mut ()) -> *mut () {
-    if unsafe { (gw.vehicle_type)(v) } == 0 {
-        unsafe { (w.first)(v) }
+    if crate::fleet::record(gw, v).vehicle_type() == 0 {
+        crate::fleet::transactions::first(w, v)
     } else {
         v
     }
 }
 unsafe fn verify_refits(w: &Services, gw: &GroupServices, v: *mut (), engine: u16) -> bool {
-    let old_engine = unsafe { (gw.vehicle_engine)(v) };
+    let old_engine = crate::fleet::record(gw, v).engine_id();
     let old_mask = unsafe {
         crate::engine_capabilities::openttd_rust_articulated_refit_union(
             w.capabilities,
@@ -426,7 +478,7 @@ unsafe fn new_cargo(
     let mask = unsafe {
         crate::engine_capabilities::openttd_rust_articulated_live_cargoes(
             w.capabilities,
-            v.cast(),
+            vehicle_ref_for_build(v, (w.common)().vehicles).0.as_ptr(),
             &raw mut cargo,
         )
     };
@@ -440,18 +492,23 @@ unsafe fn new_cargo(
         return INVALID_CARGO;
     }
     if cargo == INVALID_CARGO {
-        if unsafe { (gw.vehicle_type)(v) } != 0 || !chain {
+        if crate::fleet::record(gw, v).vehicle_type() != 0 || !chain {
             return NO_REFIT;
         }
-        v = unsafe { (w.first)(v) };
+        v = crate::fleet::transactions::first(w, v);
         while !v.is_null() {
-            if unsafe { crate::engine_capabilities::can_carry_vehicle(w.capabilities, v.cast()) } {
+            if unsafe {
+                crate::engine_capabilities::can_carry_vehicle(
+                    w.capabilities,
+                    vehicle_ref_for_build(v, (w.common)().vehicles).0.as_ptr(),
+                )
+            } {
                 let cargo = unsafe { (w.cargo_type)(v) };
                 if available & 1_u64.wrapping_shl(u32::from(cargo)) != 0 {
                     return cargo;
                 }
             }
-            v = unsafe { (gw.next_part)(v) };
+            v = crate::fleet::next_part(crate::fleet::record(gw, v));
         }
         NO_REFIT
     } else {
@@ -471,15 +528,18 @@ unsafe fn new_engine(
     always: bool,
     cost: *mut (),
 ) -> u16 {
-    let kind = unsafe { (gw.vehicle_type)(v) };
-    check!(w, kind != 0 || !unsafe { (w.articulated)(v) });
+    let kind = crate::fleet::record(gw, v).vehicle_type();
+    check!(
+        w,
+        kind != 0 || !crate::fleet::transactions::articulated(w, v)
+    );
     unsafe { (w.cost_zero)(cost) };
-    if kind == 0 && unsafe { (w.rear)(v) } {
+    if kind == 0 && crate::ground_vehicle::is_rear_dualheaded(record(w, v).subtype()) {
         return INVALID_ENGINE;
     }
     let company = unsafe { (gw.current_company)() };
     let head = unsafe { (gw.head)(company).cast::<*mut ()>().read() };
-    let from = unsafe { (gw.vehicle_engine)(v) };
+    let from = crate::fleet::record(gw, v).engine_id();
     let id = unsafe { (gw.vehicle_group)(v) };
     let mut old = false;
     let mut engine = unsafe { replacement(gw, head, from, id, &raw mut old) };
@@ -531,20 +591,25 @@ unsafe fn build(
         }
         check!(w, unsafe { (w.success)(cost) });
     }
-    if unsafe { (gw.vehicle_type)(new) } == 0
-        && ((w.refit_services)().train_handle)(old.cast()).get_flags()
+    if crate::fleet::record(gw, new).vehicle_type() == 0
+        && ((w.refit_services)().train_handle)(
+            unsafe { vehicle_ref_for_build(old, (w.common)().vehicles) }
+                .0
+                .as_ptr(),
+        )
+        .get_flags()
             & (1 << crate::train::FLIPPED)
             != 0
         && !unsafe {
             crate::newgrf_vehicle::reverse_probability(
                 (w.common)().vehicles,
-                vehicle_ref_for_build(old),
+                vehicle_ref_for_build(old, (w.common)().vehicles),
             )
         }
         && !unsafe {
             crate::newgrf_vehicle::reverse_probability(
                 (w.common)().vehicles,
-                vehicle_ref_for_build(new),
+                vehicle_ref_for_build(new, (w.common)().vehicles),
             )
         }
     {
@@ -575,7 +640,10 @@ unsafe fn copy_head(
         }
     }
     if unsafe { (w.success)(cost) } {
-        check!(w, unsafe { (w.stopped)(new) });
+        check!(
+            w,
+            record(w, new).status() & crate::vehicle_base::VS_STOPPED != 0
+        );
         unsafe {
             direct_start(w, costs.temporary, new, true);
             (w.cost_add)(cost, costs.temporary);
@@ -609,7 +677,8 @@ unsafe fn replace_free(
     let old = *unit;
     check!(
         w,
-        !unsafe { (w.articulated)(old) } && !unsafe { (w.rear)(old) }
+        !crate::fleet::transactions::articulated(w, old)
+            && !crate::ground_vehicle::is_rear_dualheaded(record(w, old).subtype())
     );
     let cost = costs.replace;
     unsafe { (w.cost_vehicles)(cost) };
@@ -627,7 +696,7 @@ unsafe fn replace_free(
                     u32::from(DoCommandFlag::EXECUTE),
                     false,
                 );
-                (w.transfer_cargo)(old, new, false);
+                transfer_cargo(w, old, new, false);
             }
             *unit = new;
             unsafe { (w.event)(old, new) };
@@ -668,8 +737,8 @@ unsafe fn replace_chain(
     check!(w, unsafe { (gw.primary)(old_head) });
     let cost = costs.replace;
     unsafe { (w.cost_vehicles)(cost) };
-    if unsafe { (gw.vehicle_type)(old_head) } == 0 {
-        let length = unsafe { (w.length)(old_head) };
+    if crate::fleet::record(gw, old_head).vehicle_type() == 0 {
+        let length = read_field!(record(w, old_head).ground_cache(), cached_total_length);
         let old_total_length = (u32::from(length).div_ceil(TILE_SIZE) * TILE_SIZE) as u16;
         let mut replacements = Vec::<ChainItem>::new();
         let mut unit = old_head;
@@ -692,11 +761,11 @@ unsafe fn replace_chain(
             if !new.is_null() {
                 *nothing = false;
             }
-            unit = unsafe { (w.next_unit)(unit) };
+            unit = next_unit(w, unit);
         }
         let new_head = replacements[0].vehicle();
         if unsafe { (w.success)(cost) } {
-            let second = unsafe { (w.next_unit)(old_head) };
+            let second = next_unit(w, old_head);
             if !second.is_null() {
                 unsafe {
                     move_vehicle(
@@ -710,12 +779,12 @@ unsafe fn replace_chain(
                     (w.cost_add)(cost, costs.temporary);
                 }
             }
-            check!(w, unsafe { (w.next_unit)(new_head) }.is_null());
+            check!(w, next_unit(w, new_head).is_null());
             let mut last_engine: *mut () = ptr::null_mut();
             if unsafe { (w.success)(cost) } {
                 for item in replacements.iter().rev() {
                     let append = item.vehicle();
-                    let engine = unsafe { (gw.vehicle_engine)(append) };
+                    let engine = crate::fleet::record(gw, append).engine_id();
                     if unsafe { (w.wagon)(engine) } {
                         continue;
                     }
@@ -756,7 +825,8 @@ unsafe fn replace_chain(
             }
             if unsafe { (w.success)(cost) }
                 && wagon_removal
-                && unsafe { (w.length)(new_head) } > old_total_length
+                && read_field!(record(w, new_head).ground_cache(), cached_total_length)
+                    > old_total_length
             {
                 unsafe { (w.cost_error)(cost, w.too_long_replacement) };
             }
@@ -764,7 +834,7 @@ unsafe fn replace_chain(
                 for item in replacements.iter().rev() {
                     check!(w, !last_engine.is_null());
                     let append = item.vehicle();
-                    let engine = unsafe { (gw.vehicle_engine)(append) };
+                    let engine = crate::fleet::record(gw, append).engine_id();
                     if unsafe { (w.wagon)(engine) } {
                         unsafe {
                             move_vehicle(
@@ -778,7 +848,10 @@ unsafe fn replace_chain(
                         };
                         if wagon_removal
                             && if unsafe { (w.success)(costs.temporary) } {
-                                (unsafe { (w.length)(new_head) }) > old_total_length
+                                (read_field!(
+                                    record(w, new_head).ground_cache(),
+                                    cached_total_length
+                                )) > old_total_length
                             } else {
                                 (unsafe { (w.error)(costs.temporary) }) == w.too_long
                             }
@@ -802,25 +875,29 @@ unsafe fn replace_chain(
                         }
                     } else {
                         check!(w, append == last_engine);
-                        last_engine = unsafe { (w.prev_unit)(last_engine) };
+                        last_engine = previous_unit(w, last_engine);
                     }
                 }
             }
             if unsafe { (w.success)(cost) } && wagon_removal {
                 check!(
                     w,
-                    u32::from(unsafe { (w.length)(new_head) })
-                        <= u32::from(unsafe { (w.max_length)() }) * TILE_SIZE
+                    u32::from(read_field!(
+                        record(w, new_head).ground_cache(),
+                        cached_total_length
+                    )) <= u32::from(unsafe { (w.max_length)() }) * TILE_SIZE
                 );
                 for item in replacements.iter_mut().skip(1) {
                     let wagon = item.new;
                     if wagon.is_null() {
                         continue;
                     }
-                    if unsafe { (w.first)(wagon) } == new_head {
+                    if crate::fleet::transactions::first(w, wagon) == new_head {
                         break;
                     }
-                    check!(w, unsafe { (w.wagon)((gw.vehicle_engine)(wagon)) });
+                    check!(w, unsafe {
+                        (w.wagon)(crate::fleet::record(gw, wagon).engine_id())
+                    });
                     unsafe {
                         direct_sell(w, costs.temporary, wagon, u32::from(DoCommandFlag::EXECUTE));
                     };
@@ -842,11 +919,11 @@ unsafe fn replace_chain(
                 }
                 for (i, item) in replacements.iter_mut().enumerate() {
                     let old = item.old;
-                    if unsafe { (w.first)(old) } == new_head {
+                    if crate::fleet::transactions::first(w, old) == new_head {
                         continue;
                     }
                     if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-                        unsafe { (w.transfer_cargo)(old, new_head, true) };
+                        unsafe { transfer_cargo(w, old, new_head, true) };
                     }
                     unsafe {
                         direct_sell(
@@ -868,10 +945,10 @@ unsafe fn replace_chain(
                     // SAFETY: canonical capacity services and live consist; the owner
                     // completes each native shell read before mutating cargo storage.
                     unsafe {
-                        crate::cargo_storage::openttd_rust_cargo_capacity(
+                        crate::cargo_storage::cargo_capacity(
                             (w.build_services)().rail.cargo_capacity,
-                            new_head.cast(),
-                            ptr::null_mut(),
+                            Some(crate::fleet::record(gw, new_head)),
+                            None,
                             0,
                             0,
                         );
@@ -879,7 +956,7 @@ unsafe fn replace_chain(
                 }
             }
             if flags & u32::from(DoCommandFlag::EXECUTE) == 0 {
-                let second = unsafe { (w.next_unit)(old_head) };
+                let second = next_unit(w, old_head);
                 if !second.is_null() {
                     unsafe {
                         move_vehicle(
@@ -893,7 +970,7 @@ unsafe fn replace_chain(
                         );
                     };
                 }
-                check!(w, unsafe { (w.next_unit)(old_head) }.is_null());
+                check!(w, next_unit(w, old_head).is_null());
                 for item in replacements.iter().rev() {
                     unsafe {
                         move_vehicle(
@@ -936,7 +1013,7 @@ unsafe fn replace_chain(
             }
             if unsafe { (w.success)(cost) } {
                 if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-                    unsafe { (w.transfer_cargo)(old_head, new_head, true) };
+                    unsafe { transfer_cargo(w, old_head, new_head, true) };
                     *chain = new_head;
                     unsafe { (w.event)(old_head, new_head) };
                 }
@@ -965,26 +1042,28 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let owner = unsafe { (gw.vehicle_owner)(v) };
+    let owner = crate::fleet::record(gw, v).owner();
     // Native cost is live caller-owned CommandCost storage; no owner borrow spans the call.
     unsafe { (*w.commands).ownership(cost.cast(), owner, 0) };
     if !unsafe { (w.success)(cost) } {
         return;
     }
-    if unsafe { (w.crashed)(v) } {
+    if record(w, v).status() & crate::vehicle_base::VS_CRASHED != 0 {
         unsafe { (w.cost_error)(cost, ERROR) };
         return;
     }
-    let kind = unsafe { (gw.vehicle_type)(v) };
+    let kind = crate::fleet::record(gw, v).vehicle_type();
     let mut free = false;
     if kind == 0 {
-        if unsafe { (w.articulated)(v) || (w.rear)(v) } {
+        if crate::fleet::transactions::articulated(w, v)
+            || crate::ground_vehicle::is_rear_dualheaded(record(w, v).subtype())
+        {
             unsafe { (w.cost_error)(cost, ERROR) };
             return;
         }
-        free = !unsafe { (gw.front)(v) };
-        let first = unsafe { (w.first)(v) };
-        if free && unsafe { (gw.front)(first) } {
+        free = !crate::fleet::record(gw, v).is_front_engine();
+        let first = crate::fleet::transactions::first(w, v);
+        if free && crate::fleet::record(gw, first).is_front_engine() {
             unsafe { (w.cost_error)(cost, ERROR) };
             return;
         }
@@ -1012,8 +1091,8 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
             return;
         }
         any |= engine != INVALID_ENGINE;
-        unit = if !free && unsafe { (gw.vehicle_type)(unit) } == 0 {
-            unsafe { (w.next_unit)(unit) }
+        unit = if !free && crate::fleet::record(gw, unit).vehicle_type() == 0 {
+            next_unit(w, unit)
         } else {
             ptr::null_mut()
         };
@@ -1021,7 +1100,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
     unsafe { (w.cost_vehicles)(cost) };
     let mut nothing = true;
     if any {
-        let stopped = free || unsafe { (w.stopped)(v) };
+        let stopped = free || (record(w, v).status() & crate::vehicle_base::VS_STOPPED != 0);
         if !stopped {
             unsafe {
                 direct_start(w, costs.temporary, v, true);
@@ -1191,15 +1270,8 @@ crate::abi::layouts! {
         error,
         money,
         commands,
-        rear,
-        articulated,
-        crashed,
-        stopped,
         chain_depot,
-        first,
-        next_unit,
-        prev_unit,
-        length,
+        vehicles,
         cargo_type,
         capabilities,
         stopped_in_depot,
@@ -1229,7 +1301,6 @@ crate::abi::layouts! {
         viewports,
         view_window,
         news,
-        transfer_cargo,
         event,
         save_rng,
         restore_rng,

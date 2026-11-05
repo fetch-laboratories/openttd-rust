@@ -21,11 +21,6 @@
 #include "safeguards.h"
 
 
-static void OPENTTD_RUST_CALL EffectObserve(void *context, OpenTTDEffectView *view) noexcept
-{
-	auto *v = static_cast<EffectVehicle *>(context);
-	*view = {RustVehicleX(v), RustVehicleY(v), RustVehicleZ(v), RustVehicleFirstSprite(v), RustVehicleProgress(v), RustVehicleSprite(v), RustVehicleSubtype(v), static_cast<uint8_t>(_settings_client.sound.ambient)};
-}
 
 static void OPENTTD_RUST_CALL EffectViewport(void *context) noexcept
 {
@@ -41,13 +36,9 @@ static void OPENTTD_RUST_CALL EffectSound(void *context, uint8_t success) noexce
 static const OpenTTDEffectLeaves &EffectServices()
 {
 	static const OpenTTDEffectLeaves leaves{
-		.observe = EffectObserve,
-		.write_x = RustOpaqueVehicleInvoke<RustWriteVehicleX, int32_t>,
-		.write_y = RustOpaqueVehicleInvoke<RustWriteVehicleY, int32_t>,
-		.write_z = RustOpaqueVehicleInvoke<RustWriteVehicleZ, int32_t>,
+		.vehicles = &GetRustVehicleServices(),
 		.sprite_sequence = RustOpaqueVehicleInvoke<RustWriteVehicleSpriteSequence, uint32_t>,
 		.sprite = RustOpaqueVehicleInvoke<RustWriteVehicleFirstSprite, uint32_t>,
-		.progress = RustOpaqueVehicleInvoke<RustWriteVehicleProgress, uint8_t>,
 		.spritenum = RustOpaqueVehicleInvoke<RustWriteVehicleSprite, uint8_t>,
 		.viewport = EffectViewport,
 		.sound = EffectSound,
@@ -61,25 +52,17 @@ extern "C" const OpenTTDEffectCreationServices *GetRustEffectCreationServices() 
 		.effect = &EffectServices(),
 		.shared = &GetRustSharedServices(),
 		.can_allocate = RustVehicleCanAllocate,
-		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {v, v->rust_state.get()}; },
+		.allocate = []() noexcept -> OpenTTDEffectAllocation { auto *v = new EffectVehicle(); return {v, RustVehicle(v), v->rust_state.get()}; },
 		.owner = [](void *shell) noexcept { return static_cast<EffectVehicle *>(shell)->rust_state.get(); },
-		.place = [](void *shell, int32_t x, int32_t y, int32_t z, uint8_t type) noexcept {
-			auto *v = static_cast<EffectVehicle *>(shell);
-			RustVehicleSetSubtype(v, type); RustWriteVehicleX(v, x); RustWriteVehicleY(v, y); RustWriteVehicleZ(v, z); RustWriteVehicleTile(v, TileIndex{});
-		},
 		.delta = RustVehicleUpdateDelta<void *>,
-		.unclickable = RustOpaqueVehicleInvoke<RustVehicleSetUnclickable>,
-		.position = [](const OpenTTDVehicle *shell) noexcept -> OpenTTDEffectPosition {
-			const auto *v = VehicleOf(shell);
-			return {.x = RustVehicleX(v), .y = RustVehicleY(v), .z = RustVehicleZ(v)};
-		},
+
 	};
 	return &services;
 }
 
 static bool RunEffect(EffectVehicle *v)
 {
-	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices()) != 0) return true;
+	if (openttd_rust_effect_run(v->rust_state.get(), RustVehicle(v), &EffectServices(), &GetRustSharedServices()) != 0) return true;
 	/* Expiry returns before destroying the Rust owner. Vehicle::~Vehicle and
 	 * Pool::FreeItem/PostDestructor run wholly outside any Rust frame/borrow. */
 	delete v;
@@ -146,7 +129,7 @@ void EffectVehicle::UpdateDeltaXY()
 TransparencyOption EffectVehicle::GetTransparencyOption() const
 {
 	static const std::array<TransparencyOption, EV_END> transparency{TO_INDUSTRIES, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INVALID, TO_INDUSTRIES, TO_INVALID, TO_INDUSTRIES};
-	return transparency[this->subtype];
+	return transparency[this->Record().subtype];
 }
 
 #include "rust/service_table_check.hpp"

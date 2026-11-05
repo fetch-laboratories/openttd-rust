@@ -12,8 +12,10 @@
 #include <memory>
 #include <optional>
 #include "rust/aircraft_ffi.h"
+#include "rust/vehicle_record_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
+#include "rust/newgrf_vehicle_ffi.h"
 
 static constexpr uint32_t INVALID_TILE = UINT32_MAX;
 static constexpr uint8_t ENDTAKEOFF = 12, HELIENDLANDING = 18;
@@ -54,12 +56,9 @@ static void AirportGoToNextPosition(Aircraft *) {}
 #include "aircraft-range-reference.inc"
 
 struct Fixture {
+	OpenTTDVehicle record{}, shadow{};
 	Aircraft aircraft;
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
-	int32_t x = 0, y = 0, z = 1;
-	uint16_t speed = 0;
-	uint8_t subtype = 2;
-	Direction direction{};
 	uint64_t blocks = 0;
 	std::array<unsigned, 4> messages{};
 	OpenTTDVehicleTileLinks links[2];
@@ -79,7 +78,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	shared.map = &map.statics;
 	leaves.station = [](uint16_t id) noexcept -> const OpenTTDStation * { return reinterpret_cast<const OpenTTDStation *>(Station::GetIfValid(id)); };
 	leaves.airport_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
-	vehicle.status = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.vehstatus.value); };
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.current_order.type); };
 	vehicle.order_destination = [](OpenTTDVehicle *) noexcept { return fixture->aircraft.current_order.destination; };
 	vehicle.maintenance = &maintenance;
@@ -100,64 +98,40 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.station_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 	leaves.geometry = [](const OpenTTDStation *s) noexcept { auto tile = reinterpret_cast<const Station *>(s)->airport.tile; return OpenTTDAircraftGeometry{tile, 0, 7, 7, true}; };
-	vehicle.position_observations = [](OpenTTDVehicle *) noexcept { return OpenTTDVehiclePositionObservations{.subtype = &fixture->subtype, .z = &fixture->z}; };
-	vehicle.movement_observations = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMovementObservations{.position = {.subtype = &fixture->subtype, .z = &fixture->z},
-			.x = &fixture->x, .y = &fixture->y, .speed = &fixture->speed, .direction = &fixture->direction};
-	};
-	vehicle.max_speed = [](OpenTTDVehicle *) noexcept { return uint16_t{100}; };
-	vehicle.x = vehicle.y = [](OpenTTDVehicle *) noexcept { return int32_t{0}; };
-	vehicle.direction = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
 	AircraftTestAirportServices().dummy_fta = reinterpret_cast<const AirportFTAClass *>(&fixture->blocks);
 	leaves.airport_elements = [](const void *) noexcept { return uint8_t{1}; };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{0, 0, 16, 0}; };
-	vehicle.write_speed = [](OpenTTDVehicle *, uint16_t) noexcept {};
 	leaves.node = [](const void *ap, uint8_t) noexcept -> const void * { return ap; };
 	leaves.fta = [](const void *) noexcept { return OpenTTDAircraftNode{nullptr, uint64_t{1} << 30, 0, 0, 0}; };
 	leaves.airport_blocks = [](const OpenTTDStation *) noexcept { return &fixture->blocks; };
-	vehicle.write_subspeed = [](OpenTTDVehicle *, uint8_t) noexcept {};
-	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	/* Part IDs come from the resolver: the aircraft is 17, its shadow 18. */
+	static OpenTTDVehicleResolverServices resolver{};
+	resolver.id = [](OpenTTDVehicle *v) noexcept -> uint32_t { return v == &fixture->record ? 17 : 18; };
+	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if ((property != 0x0C && property != 0x1C) || fallback != 0) std::abort(); return int32_t{0}; };
 	leaves.engine_speed = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{100}; };
-	vehicle.write_max_speed = [](OpenTTDVehicle *, uint16_t) noexcept {};
-	vehicle.write_cargo_age = [](OpenTTDVehicle *, uint16_t) noexcept {};
 	leaves.cargo_age_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{0}; };
-	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { return v; };
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.plane_speed = []() noexcept { return uint8_t{1}; };
-	vehicle.z = [](OpenTTDVehicle *) noexcept { return int32_t{1}; };
-	vehicle.subtype = [](OpenTTDVehicle * v) noexcept { return uint8_t(v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? 2 : 4); };
-	vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept { return uint8_t{3}; };
-	vehicle.altitude_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleAltitudeInputs{100, 0}; };
+
 	movement.shared = &shared;
 	shared.movement = &movement;
 	shared.tile_type = [](uint32_t) noexcept { return uint8_t{0}; }; // Flat clear ground.
 	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
 	leaves.airport_entry = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
-	vehicle.write_x = vehicle.write_y = vehicle.write_z = [](OpenTTDVehicle *, int32_t) noexcept {};
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
-	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? 0 : 1]; };
-	vehicle.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
-	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = vehicle.tile(shell)}; };
+	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
-	vehicle.next = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicle * { return v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}) : nullptr; };
-	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };
-	vehicle.speed = [](OpenTTDVehicle *) noexcept { return uint16_t{0}; };
 	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
-	vehicle.owner = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
+
 	leaves.helipads = [](const void *) noexcept { return uint8_t{0}; };
 	leaves.airport_flags = [](const void *) noexcept { return uint8_t{1}; };
 	vehicle.waiting_for_unbunching = [](OpenTTDVehicle *) noexcept { return false; };
 	leaves.block_node = [](const void *) noexcept { return OpenTTDAircraftBlockNode{uint64_t{1} << 30, 0, 0}; };
 	leaves.route_node = [](const void *) noexcept { return OpenTTDAircraftRouteNode{nullptr, 0, 0}; };
 	leaves.block_choice = [](const void *) noexcept { return OpenTTDAircraftBlockChoice{nullptr, uint64_t{1} << 30, 0}; };
-	vehicle.xy = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleXY{0, 0}; };
-	vehicle.coordinates = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleCoordinates{0, 0, 1}; };
-	vehicle.speed_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleSpeedInputs{0, 100, 8, 0, 0}; };
-	vehicle.direction_progress = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleDirectionProgress{0, 0}; };
-	vehicle.write_coordinates = [](OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept {};
 	leaves.layout_blocks = [](const void *, uint8_t) noexcept { return uint64_t{1} << 30; };
 	leaves.layout_heading = leaves.layout_next_position = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	leaves.layout_next = [](const void *, uint8_t) noexcept -> const void * { return nullptr; };
@@ -175,11 +149,15 @@ int main()
 		f.state->cached_max_range_sqr = range; f.state->state = state; f.state->flags = flag; f.state->targetairport = 0;
 		messages = {}; AircraftEventHandler(&f.aircraft, 0); auto expected = messages;
 		fixture = &f;
+		f.record.type = 3; f.record.subtype = 2; f.record.z_pos = 1; f.record.cached_max_speed = 100; f.record.vehstatus = f.aircraft.vehstatus.value;
+		f.shadow.type = 3; f.shadow.subtype = 4; f.record.next = &f.shadow;
+		f.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f);
+		f.shadow.shell = reinterpret_cast<OpenTTDVehicleShell *>(&f.shadow);
 		const auto leaves = RangeLeaves();
-		openttd_test_aircraft_event(&leaves, {reinterpret_cast<OpenTTDVehicle *>(&f), f.state.get(), 17}, false);
+		openttd_test_aircraft_event(&leaves, {&f.record, f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
-		openttd_rust_occupancy_update(&vehicle, reinterpret_cast<OpenTTDVehicle *>(&f), true);
-		openttd_rust_occupancy_update(&vehicle, reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}), true);
+		openttd_rust_occupancy_update(&vehicle, &f.record, true);
+		openttd_rust_occupancy_update(&vehicle, &fixture->shadow, true);
 		cases++;
 	}
 	std::printf("finite range transition: %u unchanged-reference cases passed\n", cases);

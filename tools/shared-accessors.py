@@ -267,6 +267,54 @@ def boundary_hits(files, wrappers, originals):
     return hits
 
 
+def identity(key: str) -> str | None:
+    """`path | header` of an accessor row, read or write; bindings and orphans have none."""
+    parts = key.removeprefix("write | ").split(" | ")
+    if parts[0] in {"binding", "orphan"} or len(parts) < 4:
+        return None
+    return " | ".join(parts[:-2])
+
+
+def reclassified(
+    growth: set[str],
+    baseline: set[str],
+    base_rows: int,
+    base_files: dict[str, str],
+    current_files: dict[str, str],
+) -> set[str]:
+    """Added rows for bodies whose path and header existed at the base revision.
+
+    Accepted only while the baseline's total row count does not grow, so a
+    changed body can take a retired row's place but never add an exemption.
+    """
+    if len(baseline) > base_rows:
+        return set()
+    headers: dict[str, Counter[str]] = {}
+    current_headers: dict[str, Counter[str]] = {}
+    rows = Counter(identity(key) for key in baseline)
+    accepted = set()
+    for key in growth:
+        name = identity(key)
+        if name is None:
+            continue
+        path, header = name.split(" | ", 1)
+        if path not in headers:
+            headers[path] = Counter(
+                h for h, _, _ in definitions(base_files.get(path, ""))
+            )
+            current_headers[path] = Counter(
+                h for h, _, _ in definitions(current_files.get(path, ""))
+            )
+        # Repeated lambda headers identify occurrences, not one shared body.
+        # Read and write rows consume the same pre-existing occurrence budget.
+        if (
+            rows[name] <= headers[path][header]
+            and current_headers[path][header] <= headers[path][header]
+        ):
+            accepted.add(key)
+    return accepted
+
+
 def scan(
     pinned: str, revision: str | None = None, all_files: dict[str, str] | None = None
 ) -> dict[str, int]:
@@ -303,13 +351,16 @@ def main():
     args = parser.parse_args()
     pinned = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
     tracked = set(git("ls-tree", "-r", "--name-only", pinned, "src").splitlines())
-    hits = scan(pinned)
+    all_files = sources()
+    hits = scan(pinned, all_files=all_files)
     baseline = set((ROOT / BASELINE).read_text().splitlines())
     previous = baseline
+    base_rows = len(baseline)
     if args.base_ref:
         tracked_base = git("ls-tree", "-r", "--name-only", args.base_ref).splitlines()
         if BASELINE in tracked_base:
             previous = set(git("show", f"{args.base_ref}:{BASELINE}").splitlines())
+            base_rows = len(previous)
         if not any(
             k.startswith(("binding |", "write |", "orphan |")) for k in previous
         ):
@@ -336,6 +387,14 @@ def main():
     if growth and args.base_ref:
         # Rows the base already had under these rules are newly visible, not new glue.
         growth -= scan(pinned, args.base_ref, base_sources).keys()
+    accepted = (
+        reclassified(growth, baseline, base_rows, base_sources, all_files)
+        if growth and args.base_ref
+        else set()
+    )
+    growth -= accepted
+    for key in sorted(accepted):
+        print(f"{BASELINE}: reclassified pre-existing accessor: {key}")
     for key in new:
         print(f"{key.split(' | ')[0]}:{hits[key]}: new shared accessor: {key}")
     stale = baseline - set(hits)

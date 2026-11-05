@@ -427,7 +427,7 @@ static void FixOwnerOfRailTrack(Tile t)
 	/* remove leftover rail piece from crossing (from very old savegames) */
 	Train *v = nullptr;
 	for (Train *w : Train::Iterate()) {
-		if (w->tile == TileIndex(t)) {
+		if (w->GetTile() == TileIndex(t)) {
 			v = w;
 			break;
 		}
@@ -435,7 +435,7 @@ static void FixOwnerOfRailTrack(Tile t)
 
 	if (v != nullptr) {
 		/* when there is a train on crossing (it could happen in TTD), set owner of crossing to train owner */
-		SetTileOwner(t, v->owner);
+		SetTileOwner(t, v->GetOwner());
 		return;
 	}
 
@@ -481,8 +481,8 @@ static void FixOwnerOfRailTrack(Tile t)
 static uint FixVehicleInclination(Vehicle *v, Direction dir)
 {
 	/* Compute place where this vehicle entered the tile */
-	int entry_x = v->x_pos;
-	int entry_y = v->y_pos;
+	int entry_x = v->Record().x_pos;
+	int entry_y = v->Record().y_pos;
 	switch (dir) {
 		case DIR_NE: entry_x |= TILE_UNIT_MASK; break;
 		case DIR_NW: entry_y |= TILE_UNIT_MASK; break;
@@ -494,8 +494,8 @@ static uint FixVehicleInclination(Vehicle *v, Direction dir)
 	uint8_t entry_z = GetSlopePixelZ(entry_x, entry_y, true);
 
 	/* Compute middle of the tile. */
-	int middle_x = (v->x_pos & ~TILE_UNIT_MASK) + TILE_SIZE / 2;
-	int middle_y = (v->y_pos & ~TILE_UNIT_MASK) + TILE_SIZE / 2;
+	int middle_x = (v->Record().x_pos & ~TILE_UNIT_MASK) + TILE_SIZE / 2;
+	int middle_y = (v->Record().y_pos & ~TILE_UNIT_MASK) + TILE_SIZE / 2;
 	uint8_t middle_z = GetSlopePixelZ(middle_x, middle_y, true);
 
 	/* middle_z == entry_z, no height change. */
@@ -522,7 +522,7 @@ static void CheckGroundVehiclesAtCorrectZ()
 			 * in the wormhole of a bridge or a tunnel, or the Z-coordinate must
 			 * be the same as when it would be recalculated right now.
 			 */
-			assert(v->tile != TileVirtXY(v->x_pos, v->y_pos) || v->z_pos == GetSlopePixelZ(v->x_pos, v->y_pos, true));
+			assert(v->GetTile() != TileVirtXY(v->Record().x_pos, v->Record().y_pos) || v->Record().z_pos == GetSlopePixelZ(v->Record().x_pos, v->Record().y_pos, true));
 		}
 	}
 }
@@ -1281,24 +1281,24 @@ bool AfterLoadGame()
 
 		for (Vehicle *v : Vehicle::Iterate()) {
 			if (!v->IsGroundVehicle()) continue;
-			if (IsBridgeTile(v->tile)) {
-				DiagDirection dir = GetTunnelBridgeDirection(v->tile);
+			if (IsBridgeTile(v->GetTile())) {
+				DiagDirection dir = GetTunnelBridgeDirection(v->GetTile());
 
-				if (dir != DirToDiagDir(v->direction)) continue;
+				if (dir != DirToDiagDir(v->GetDirection())) continue;
 				switch (dir) {
 					default: SlErrorCorrupt("Invalid vehicle direction");
-					case DIAGDIR_NE: if ((v->x_pos & 0xF) !=  0)            continue; break;
-					case DIAGDIR_SE: if ((v->y_pos & 0xF) != TILE_SIZE - 1) continue; break;
-					case DIAGDIR_SW: if ((v->x_pos & 0xF) != TILE_SIZE - 1) continue; break;
-					case DIAGDIR_NW: if ((v->y_pos & 0xF) !=  0)            continue; break;
+					case DIAGDIR_NE: if ((v->Record().x_pos & 0xF) !=  0)            continue; break;
+					case DIAGDIR_SE: if ((v->Record().y_pos & 0xF) != TILE_SIZE - 1) continue; break;
+					case DIAGDIR_SW: if ((v->Record().x_pos & 0xF) != TILE_SIZE - 1) continue; break;
+					case DIAGDIR_NW: if ((v->Record().y_pos & 0xF) !=  0)            continue; break;
 				}
-			} else if (v->z_pos > GetTileMaxPixelZ(TileVirtXY(v->x_pos, v->y_pos))) {
-				v->tile = GetNorthernBridgeEnd(v->tile);
+			} else if (v->Record().z_pos > GetTileMaxPixelZ(TileVirtXY(v->Record().x_pos, v->Record().y_pos))) {
+				v->SetTile(GetNorthernBridgeEnd(v->GetTile()));
 				v->UpdatePosition();
 			} else {
 				continue;
 			}
-			if (v->type == VEH_TRAIN) {
+			if (v->GetType() == VEH_TRAIN) {
 				Train::From(v)->SetTrack(TRACK_BIT_WORMHOLE);
 			} else {
 				RoadVehicle::From(v)->SetState(RVSB_WORMHOLE);
@@ -1340,7 +1340,7 @@ bool AfterLoadGame()
 		RailType min_rail = RAILTYPE_ELECTRIC;
 
 		for (Train *v : Train::Iterate()) {
-			RailTypes rts = RailVehInfo(v->engine_type)->railtypes;
+			RailTypes rts = RailVehInfo(v->GetEngineType())->railtypes;
 
 			v->SetRailTypes(rts);
 			if (rts.Test(RAILTYPE_ELECTRIC)) min_rail = RAILTYPE_RAIL;
@@ -1431,7 +1431,7 @@ bool AfterLoadGame()
 		/* Remove obsolete VS_WAIT_FOR_SLOT state from road vehicles. */
 		static constexpr VehStates OLD_VS_WAIT_FOR_SLOT{0x40};
 		for (RoadVehicle *rv : RoadVehicle::Iterate()) {
-			rv->vehstatus.Reset(OLD_VS_WAIT_FOR_SLOT);
+			rv->SetVehStatus(rv->GetVehStatus().Reset(OLD_VS_WAIT_FOR_SLOT));
 		}
 	}
 
@@ -1623,11 +1623,11 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_50)) {
 		/* Aircraft units changed from 8 mph to 1 km-ish/h */
 		for (Aircraft *v : Aircraft::Iterate()) {
-			if (v->subtype <= AIR_AIRCRAFT) {
-				const AircraftVehicleInfo *avi = AircraftVehInfo(v->engine_type);
-				v->cur_speed *= 128;
-				v->cur_speed /= 10;
-				v->acceleration = avi->acceleration;
+			if (v->Record().subtype <= AIR_AIRCRAFT) {
+				const AircraftVehicleInfo *avi = AircraftVehInfo(v->GetEngineType());
+				v->Record().cur_speed *= 128;
+				v->Record().cur_speed /= 10;
+				v->Record().acceleration = avi->acceleration;
 			}
 		}
 	}
@@ -1677,10 +1677,10 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_57)) {
 		/* Added a FIFO queue of vehicles loading at stations */
 		for (Vehicle *v : Vehicle::Iterate()) {
-			if ((v->type != VEH_TRAIN || Train::From(v)->IsFrontEngine()) &&  // for all locs
-					!v->vehstatus.Any({VehState::Stopped, VehState::Crashed}) && // not stopped or crashed
+			if ((v->GetType() != VEH_TRAIN || Train::From(v)->IsFrontEngine()) &&  // for all locs
+					!v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed}) && // not stopped or crashed
 					v->current_order.IsType(OT_LOADING)) {         // loading
-				Station::Get(v->last_station_visited)->loading_vehicles.push_back(v);
+				Station::Get(v->GetLastStationVisited())->loading_vehicles.push_back(v);
 
 				/* The loading finished flag is *only* set when actually completely
 				 * finished. Because the vehicle is loading, it is not finished. */
@@ -1828,7 +1828,7 @@ bool AfterLoadGame()
 			}
 
 			v->current_order.ConvertFromOldSavegame();
-			if (v->type == VEH_ROAD && v->IsPrimaryVehicle() && v->FirstShared() == v) {
+			if (v->GetType() == VEH_ROAD && v->IsPrimaryVehicle() && v->FirstShared() == v) {
 				for (Order &order : v->Orders()) order.SetNonStopType(OrderNonStopFlag::NoIntermediate);
 			}
 		}
@@ -1973,7 +1973,7 @@ bool AfterLoadGame()
 		for (Vehicle *v : Vehicle::Iterate()) {
 			v->profit_this_year <<= 8;
 			v->profit_last_year <<= 8;
-			v->running_ticks = 0;
+			v->Record().running_ticks = 0;
 		}
 	}
 
@@ -1992,7 +1992,7 @@ bool AfterLoadGame()
 		/* Remove all trams from savegames without tram support.
 		 * There would be trams without tram track under causing crashes sooner or later. */
 		for (RoadVehicle *v : RoadVehicle::Iterate()) {
-			if (v->First() == v && EngInfo(v->engine_type)->misc_flags.Test(EngineMiscFlag::RoadIsTram)) {
+			if (v->First() == v && EngInfo(v->GetEngineType())->misc_flags.Test(EngineMiscFlag::RoadIsTram)) {
 				ShowErrorMessage(GetEncodedString(STR_WARNING_LOADGAME_REMOVED_TRAMS), {}, WL_CRITICAL);
 				delete v;
 			}
@@ -2087,7 +2087,7 @@ bool AfterLoadGame()
 		for (Aircraft *a : Aircraft::Iterate()) {
 			/* Set engine_type of shadow and rotor */
 			if (!a->IsNormalAircraft()) {
-				a->engine_type = a->First()->engine_type;
+				a->SetEngineType(a->First()->GetEngineType());
 			}
 		}
 
@@ -2234,9 +2234,9 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_121)) {
 		/* Delete small ufos heading for non-existing vehicles */
 		for (DisasterVehicle *v : DisasterVehicle::Iterate()) {
-			if (v->subtype == 2 /* ST_SMALL_UFO */ && v->State() != 0) {
-				const Vehicle *u = Vehicle::GetIfValid(v->dest_tile.base());
-				if (u == nullptr || u->type != VEH_ROAD || !RoadVehicle::From(u)->IsFrontEngine()) {
+			if (v->Record().subtype == 2 /* ST_SMALL_UFO */ && v->State() != 0) {
+				const Vehicle *u = Vehicle::GetIfValid(v->GetDestTile().base());
+				if (u == nullptr || u->GetType() != VEH_ROAD || !RoadVehicle::From(u)->IsFrontEngine()) {
 					delete v;
 				}
 			}
@@ -2516,9 +2516,9 @@ bool AfterLoadGame()
 				UpdateAircraftCache(v);
 				AircraftNextAirportPos_and_Order(v);
 				/* get aircraft back on running altitude */
-				if (!v->vehstatus.Test(VehState::Crashed)) {
-					GetAircraftFlightLevelBounds(v, &v->z_pos, nullptr);
-					SetAircraftPosition(v, v->x_pos, v->y_pos, GetAircraftFlightLevel(v));
+				if (!v->GetVehStatus().Test(VehState::Crashed)) {
+					GetAircraftFlightLevelBounds(v, &v->Record().z_pos, nullptr);
+					SetAircraftPosition(v, v->Record().x_pos, v->Record().y_pos, GetAircraftFlightLevel(v));
 				}
 			}
 		}
@@ -2597,21 +2597,21 @@ bool AfterLoadGame()
 			if (!v->IsGroundVehicle()) continue;
 
 			/* Is the vehicle in a tunnel? */
-			if (!IsTunnelTile(v->tile)) continue;
+			if (!IsTunnelTile(v->GetTile())) continue;
 
 			/* Is the vehicle actually at a tunnel entrance/exit? */
-			TileIndex vtile = TileVirtXY(v->x_pos, v->y_pos);
+			TileIndex vtile = TileVirtXY(v->Record().x_pos, v->Record().y_pos);
 			if (!IsTunnelTile(vtile)) continue;
 
 			/* Are we actually in this tunnel? Or maybe a lower tunnel? */
-			if (GetSlopePixelZ(v->x_pos, v->y_pos, true) != v->z_pos) continue;
+			if (GetSlopePixelZ(v->Record().x_pos, v->Record().y_pos, true) != v->Record().z_pos) continue;
 
 			/* What way are we going? */
 			const DiagDirection dir = GetTunnelBridgeDirection(vtile);
-			const DiagDirection vdir = DirToDiagDir(v->direction);
+			const DiagDirection vdir = DirToDiagDir(v->GetDirection());
 
 			/* Have we passed the visibility "switch" state already? */
-			uint8_t pos = (DiagDirToAxis(vdir) == AXIS_X ? v->x_pos : v->y_pos) & TILE_UNIT_MASK;
+			uint8_t pos = (DiagDirToAxis(vdir) == AXIS_X ? v->Record().x_pos : v->Record().y_pos) & TILE_UNIT_MASK;
 			uint8_t frame = (vdir == DIAGDIR_NE || vdir == DIAGDIR_NW) ? TILE_SIZE - 1 - pos : pos;
 			const uint8_t visibility_frame = openttd_rust_movement_tunnel_visibility(dir);
 
@@ -2619,11 +2619,11 @@ bool AfterLoadGame()
 			bool hidden;
 			if (dir == vdir) { // Entering tunnel
 				hidden = frame >= visibility_frame;
-				v->tile = vtile;
+				v->SetTile(vtile);
 			} else if (dir == ReverseDiagDir(vdir)) { // Leaving tunnel
 				hidden = frame < TILE_SIZE - visibility_frame;
 				/* v->tile changes at the moment when the vehicle leaves the tunnel. */
-				v->tile = hidden ? GetOtherTunnelBridgeEnd(vtile) : vtile;
+				v->SetTile(hidden ? GetOtherTunnelBridgeEnd(vtile) : vtile);
 			} else {
 				/* We could get here in two cases:
 				 * - for road vehicles, it is reversing at the end of the tunnel
@@ -2634,17 +2634,17 @@ bool AfterLoadGame()
 			}
 
 			if (hidden) {
-				v->vehstatus.Set(VehState::Hidden);
+				v->SetVehStatus(v->GetVehStatus().Set(VehState::Hidden));
 
-				switch (v->type) {
+				switch (v->GetType()) {
 					case VEH_TRAIN: Train::From(v)->SetTrack(TRACK_BIT_WORMHOLE); break;
 					case VEH_ROAD:  RoadVehicle::From(v)->SetState(RVSB_WORMHOLE);      break;
 					default: NOT_REACHED();
 				}
 			} else {
-				v->vehstatus.Reset(VehState::Hidden);
+				v->SetVehStatus(v->GetVehStatus().Reset(VehState::Hidden));
 
-				switch (v->type) {
+				switch (v->GetType()) {
 					case VEH_TRAIN: Train::From(v)->SetTrack(DiagDirToDiagTrackBits(vdir)); break;
 					case VEH_ROAD:  RoadVehicle::From(v)->SetState(DiagDirToDiagTrackdir(vdir)); RoadVehicle::From(v)->SetFrame(frame); break;
 					default: NOT_REACHED();
@@ -2697,16 +2697,16 @@ bool AfterLoadGame()
 		 * GetSlopePixelZ which internally uses GetPartialPixelZ.
 		 */
 		for (Vehicle *v : Vehicle::Iterate()) {
-			if (v->IsGroundVehicle() && TileVirtXY(v->x_pos, v->y_pos) == v->tile) {
+			if (v->IsGroundVehicle() && TileVirtXY(v->Record().x_pos, v->Record().y_pos) == v->GetTile()) {
 				/* Vehicle is on the ground, and not in a wormhole. */
-				v->z_pos = GetSlopePixelZ(v->x_pos, v->y_pos, true);
+				v->Record().z_pos = GetSlopePixelZ(v->Record().x_pos, v->Record().y_pos, true);
 			}
 		}
 	}
 
 	if (IsSavegameVersionBefore(SLV_158)) {
 		for (Vehicle *v : Vehicle::Iterate()) {
-			switch (v->type) {
+			switch (v->GetType()) {
 				case VEH_TRAIN: {
 					Train *t = Train::From(v);
 
@@ -2722,12 +2722,12 @@ bool AfterLoadGame()
 					ClrBit(t->gv_flags, GVF_GOINGDOWN_BIT);
 
 					/* Crashed vehicles can't be going up/down. */
-					if (t->vehstatus.Test(VehState::Crashed)) break;
+					if (t->GetVehStatus().Test(VehState::Crashed)) break;
 
 					/* Only X/Y tracks can be sloped. */
 					if (t->GetTrack() != TRACK_BIT_X && t->GetTrack() != TRACK_BIT_Y) break;
 
-					t->gv_flags |= FixVehicleInclination(t, t->direction);
+					t->gv_flags |= FixVehicleInclination(t, t->GetDirection());
 					break;
 				}
 				case VEH_ROAD: {
@@ -2736,17 +2736,17 @@ bool AfterLoadGame()
 					ClrBit(rv->gv_flags, GVF_GOINGDOWN_BIT);
 
 					/* Crashed vehicles can't be going up/down. */
-					if (rv->vehstatus.Test(VehState::Crashed)) break;
+					if (rv->GetVehStatus().Test(VehState::Crashed)) break;
 
 					if (rv->GetState() == RVSB_IN_DEPOT || rv->GetState() == RVSB_WORMHOLE) break;
 
-					TrackStatus ts = GetTileTrackStatus(rv->tile, TRANSPORT_ROAD, GetRoadTramType(rv->roadtype));
+					TrackStatus ts = GetTileTrackStatus(rv->GetTile(), TRANSPORT_ROAD, GetRoadTramType(rv->roadtype));
 					TrackBits trackbits = TrackStatusToTrackBits(ts);
 
 					/* Only X/Y tracks can be sloped. */
 					if (trackbits != TRACK_BIT_X && trackbits != TRACK_BIT_Y) break;
 
-					Direction dir = rv->direction;
+					Direction dir = rv->GetDirection();
 
 					/* Test if we are reversing. */
 					Axis a = trackbits == TRACK_BIT_X ? AXIS_X : AXIS_Y;
@@ -2767,14 +2767,14 @@ bool AfterLoadGame()
 					continue;
 			}
 
-			if (IsBridgeTile(v->tile) && TileVirtXY(v->x_pos, v->y_pos) == v->tile) {
+			if (IsBridgeTile(v->GetTile()) && TileVirtXY(v->Record().x_pos, v->Record().y_pos) == v->GetTile()) {
 				/* In old versions, z_pos was 1 unit lower on bridge heads.
 				 * However, this invalid state could be converted to new savegames
 				 * by loading and saving the game in a new version. */
-				v->z_pos = GetSlopePixelZ(v->x_pos, v->y_pos, true);
-				DiagDirection dir = GetTunnelBridgeDirection(v->tile);
-				if (v->type == VEH_TRAIN && !v->vehstatus.Test(VehState::Crashed) &&
-						v->direction != DiagDirToDir(dir)) {
+				v->Record().z_pos = GetSlopePixelZ(v->Record().x_pos, v->Record().y_pos, true);
+				DiagDirection dir = GetTunnelBridgeDirection(v->GetTile());
+				if (v->GetType() == VEH_TRAIN && !v->GetVehStatus().Test(VehState::Crashed) &&
+						v->GetDirection() != DiagDirToDir(dir)) {
 					/* If the train has left the bridge, it shouldn't have
 					 * track == TRACK_BIT_WORMHOLE - this could happen
 					 * when the train was reversed while on the last "tick"
@@ -2785,7 +2785,7 @@ bool AfterLoadGame()
 
 			/* If the vehicle is really above v->tile (not in a wormhole),
 			 * it should have set v->z_pos correctly. */
-			assert(v->tile != TileVirtXY(v->x_pos, v->y_pos) || v->z_pos == GetSlopePixelZ(v->x_pos, v->y_pos, true));
+			assert(v->GetTile() != TileVirtXY(v->Record().x_pos, v->Record().y_pos) || v->Record().z_pos == GetSlopePixelZ(v->Record().x_pos, v->Record().y_pos, true));
 		}
 
 		/* Fill Vehicle::cur_real_order_index */
@@ -2955,9 +2955,9 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_182)) {
 		/* Aircraft acceleration variable was bonkers */
 		for (Aircraft *v : Aircraft::Iterate()) {
-			if (v->subtype <= AIR_AIRCRAFT) {
-				const AircraftVehicleInfo *avi = AircraftVehInfo(v->engine_type);
-				v->acceleration = avi->acceleration;
+			if (v->Record().subtype <= AIR_AIRCRAFT) {
+				const AircraftVehicleInfo *avi = AircraftVehInfo(v->GetEngineType());
+				v->Record().acceleration = avi->acceleration;
 			}
 		}
 
@@ -3020,13 +3020,13 @@ bool AfterLoadGame()
 		for (RoadVehicle *v : RoadVehicle::Iterate()) {
 			if (!v->IsFrontEngine()) continue;
 			skip_frames.clear();
-			TileIndex prev_tile = v->tile;
+			TileIndex prev_tile = v->GetTile();
 			uint prev_tile_skip = 0;
 			uint cur_skip = 0;
 			for (RoadVehicle *u = v; u != nullptr; u = u->Next()) {
-				if (u->tile != prev_tile) {
+				if (u->GetTile() != prev_tile) {
 					prev_tile_skip = cur_skip;
-					prev_tile = u->tile;
+					prev_tile = u->GetTile();
 				} else {
 					cur_skip = prev_tile_skip;
 				}
@@ -3126,16 +3126,16 @@ bool AfterLoadGame()
 		/* Move ships from lock slope to upper or lower position. */
 		for (Ship *s : Ship::Iterate()) {
 			/* Suitable tile? */
-			if (!IsTileType(s->tile, MP_WATER) || !IsLock(s->tile) || GetLockPart(s->tile) != LockPart::Middle) continue;
+			if (!IsTileType(s->GetTile(), MP_WATER) || !IsLock(s->GetTile()) || GetLockPart(s->GetTile()) != LockPart::Middle) continue;
 
 			/* We don't need to adjust position when at the tile centre */
-			int x = s->x_pos & 0xF;
-			int y = s->y_pos & 0xF;
+			int x = s->Record().x_pos & 0xF;
+			int y = s->Record().y_pos & 0xF;
 			if (x == 8 && y == 8) continue;
 
 			/* Test if ship is on the second half of the tile */
 			bool second_half;
-			DiagDirection shipdiagdir = DirToDiagDir(s->direction);
+			DiagDirection shipdiagdir = DirToDiagDir(s->GetDirection());
 			switch (shipdiagdir) {
 				default: NOT_REACHED();
 				case DIAGDIR_NE: second_half = x < 8; break;
@@ -3144,15 +3144,15 @@ bool AfterLoadGame()
 				case DIAGDIR_SE: second_half = y > 8; break;
 			}
 
-			DiagDirection slopediagdir = GetInclinedSlopeDirection(GetTileSlope(s->tile));
+			DiagDirection slopediagdir = GetInclinedSlopeDirection(GetTileSlope(s->GetTile()));
 
 			/* Heading up slope == passed half way */
 			if ((shipdiagdir == slopediagdir) == second_half) {
 				/* On top half of lock */
-				s->z_pos = GetTileMaxZ(s->tile) * (int)TILE_HEIGHT;
+				s->Record().z_pos = GetTileMaxZ(s->GetTile()) * (int)TILE_HEIGHT;
 			} else {
 				/* On lower half of lock */
-				s->z_pos = GetTileZ(s->tile) * (int)TILE_HEIGHT;
+				s->Record().z_pos = GetTileZ(s->GetTile()) * (int)TILE_HEIGHT;
 			}
 		}
 	}
@@ -3251,29 +3251,29 @@ bool AfterLoadGame()
 			if (rv->IsArticulatedPart()) continue;
 
 			/* Ignore moving vehicles. */
-			if (rv->cur_speed > 0) continue;
+			if (rv->Record().cur_speed > 0) continue;
 
 			/* Ignore crashed vehicles. */
-			if (rv->vehstatus.Test(VehState::Crashed)) continue;
+			if (rv->GetVehStatus().Test(VehState::Crashed)) continue;
 
 			/* Ignore vehicles not on level crossings. */
-			TileIndex cur_tile = rv->tile;
+			TileIndex cur_tile = rv->GetTile();
 			if (!IsLevelCrossingTile(cur_tile)) continue;
 
 			ClosestDepot closest_depot = rv->FindClosestDepot();
 
 			/* Try to find a depot with a distance limit of 512 tiles (Manhattan distance). */
-			if (closest_depot.found && DistanceManhattan(rv->tile, closest_depot.location) < 512u) {
+			if (closest_depot.found && DistanceManhattan(rv->GetTile(), closest_depot.location) < 512u) {
 				/* Teleport all parts of articulated vehicles. */
 				for (RoadVehicle *u = rv; u != nullptr; u = u->Next()) {
-					u->tile = closest_depot.location;
+					u->SetTile(closest_depot.location);
 					int x = TileX(closest_depot.location) * TILE_SIZE + TILE_SIZE / 2;
 					int y = TileY(closest_depot.location) * TILE_SIZE + TILE_SIZE / 2;
-					u->x_pos = x;
-					u->y_pos = y;
-					u->z_pos = GetSlopePixelZ(x, y, true);
+					u->Record().x_pos = x;
+					u->Record().y_pos = y;
+					u->Record().z_pos = GetSlopePixelZ(x, y, true);
 
-					u->vehstatus.Set(VehState::Hidden);
+					u->SetVehStatus(u->GetVehStatus().Set(VehState::Hidden));
 					u->SetState(RVSB_IN_DEPOT);
 					u->UpdatePosition();
 				}
@@ -3328,7 +3328,7 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_SHIP_ACCELERATION)) {
 		/* NewGRF acceleration information was added to ships. */
 		for (Ship *s : Ship::Iterate()) {
-			if (s->acceleration == 0) s->acceleration = ShipVehInfo(s->engine_type)->acceleration;
+			if (s->Record().acceleration == 0) s->Record().acceleration = ShipVehInfo(s->GetEngineType())->acceleration;
 		}
 	}
 

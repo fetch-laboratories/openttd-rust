@@ -23,17 +23,17 @@ struct OpenTTDRoadYapfTile {
 };
 struct OpenTTDRoadYapfLeaves {
 	const OpenTTDSharedServices *shared; ///< Shared world and movement owner.
-	OpenTTDRoadYapfTile (OPENTTD_RUST_CALL *tile)(const void *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	uint32_t (OPENTTD_RUST_CALL *closest)(const void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest);
+	OpenTTDRoadYapfTile (OPENTTD_RUST_CALL *tile)(const OpenTTDVehicle *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile);
+	uint32_t (OPENTTD_RUST_CALL *closest)(const OpenTTDVehicle *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest);
 };
 struct OpenTTDRoadYapfResult { uint32_t tile; int32_t cost; uint8_t direction, found; int32_t rounds, open, closed, calcs, distance; };
-/* Input is copied, and the opaque vehicle context stays live for the call. Leaves use only shared
+/* Input is copied, and the canonical vehicle record stays live for the call. Leaves use only shared
  * map, pool, settings and follower services and cannot reenter the search or road owner. The search
  * owns its arena, lookup maps, exact-order heap and reconstruction, and writes the road vehicle's
  * path directly. Tile costs, including road-stop occupancy, are read only in calc_cost; traversal
  * reads ground-vehicle center Z and speed, then CFollowTrackRoad limits for old_tile. */
-OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_choose(OpenTTDRoadState *, const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, uint32_t, uint8_t, uint16_t, uint8_t);
-OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_depot(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, int32_t);
+OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_choose(OpenTTDRoadState *, const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const OpenTTDVehicle *, uint32_t, uint8_t, uint16_t, uint8_t);
+OpenTTDRoadYapfResult OPENTTD_RUST_CALL openttd_rust_road_yapf_depot(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const OpenTTDVehicle *, int32_t);
 /* Evidence-only actual-heap probe. Input/Leaves initialized; no leaf is invoked.
  * costs[nodes], commands[count], values[count] readable and output[count] writable
  * disjoint spans. Indices/membership satisfy the original heap preconditions. */

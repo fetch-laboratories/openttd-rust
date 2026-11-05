@@ -19,7 +19,6 @@
 #include "rust/animation_ffi.h"
 #include "rust/station_resolver_ffi.h"
 #include "rust/tile_animation_services.h"
-#include "rust/services_sound.h"
 #include "rust/services_station.h"
 #include "rust/services_industry.h"
 #include "rust/services_cargo.h"

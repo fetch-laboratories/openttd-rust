@@ -55,14 +55,14 @@ void MoveBuoysToWaypoints()
 {
 	/* Buoy orders become waypoint orders */
 	for (OrderList *ol : OrderList::Iterate()) {
-		VehicleType vt = ol->GetFirstSharedVehicle()->type;
+		VehicleType vt = ol->GetFirstSharedVehicle()->GetType();
 		if (vt != VEH_SHIP && vt != VEH_TRAIN) continue;
 
 		for (Order &o : ol->GetOrders()) UpdateWaypointOrder(o);
 	}
 
 	for (Vehicle *v : Vehicle::Iterate()) {
-		VehicleType vt = v->type;
+		VehicleType vt = v->GetType();
 		if (vt != VEH_SHIP && vt != VEH_TRAIN) continue;
 
 		UpdateWaypointOrder(v->current_order);

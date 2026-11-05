@@ -24,42 +24,14 @@ enum AccelStatus : uint8_t {
 	AS_BRAKE, ///< We want to stop.
 };
 
-/**
- * Cached, frequently calculated values.
- * All of these values except cached_slope_resistance are set only for the first part of a vehicle.
- */
-struct GroundVehicleCache {
-	/* Cached acceleration values, recalculated when the cargo on a vehicle changes (in addition to the conditions below) */
-	uint32_t cached_weight = 0; ///< Total weight of the consist (valid only for the first engine).
-	uint32_t cached_slope_resistance = 0; ///< Resistance caused by weight when this vehicle part is at a slope.
-	uint32_t cached_max_te = 0; ///< Maximum tractive effort of consist (valid only for the first engine).
-	uint16_t cached_axle_resistance = 0; ///< Resistance caused by the axles of the vehicle (valid only for the first engine).
+#include "abi-record-ground.h"
 
-	/* Cached acceleration values, recalculated on load and each time a vehicle is added to/removed from the consist. */
-	uint16_t cached_max_track_speed = 0; ///< Maximum consist speed (in internal units) limited by track type (valid only for the first engine).
-	uint32_t cached_power = 0; ///< Total power of the consist (valid only for the first engine).
-	uint32_t cached_air_drag = 0; ///< Air drag coefficient of the vehicle (valid only for the first engine).
-
-	/* Cached NewGRF values, recalculated on load and each time a vehicle is added to/removed from the consist. */
-	uint16_t cached_total_length = 0; ///< Length of the whole vehicle (valid only for the first engine).
-	EngineID first_engine = EngineID::Invalid(); ///< Cached EngineID of the front vehicle. EngineID::Invalid() for the front vehicle itself.
-	uint8_t cached_veh_length = 0; ///< Length of this vehicle in units of 1/VEHICLE_LENGTH of normal length. It is cached because this can be set by a callback.
-
-	/* Cached UI information. */
-	uint16_t last_speed = 0; ///< The last speed we did display, so we only have to redraw when this changes.
-
-	auto operator<=>(const GroundVehicleCache &) const = default;
-};
-
-/** One canonical Rust allocation, shared by stable native reference aliases.
- * Construction (including indexed loading) and destruction follow the shell.
- * SaveLoad and legacy loaders address gv_flags through the alias, unchanged. */
-struct OpenTTDGroundState { GroundVehicleCache cache; uint16_t flags = 0; };
+extern "C" uint8_t openttd_rust_ground_cache_equal(const GroundVehicleCache *, const GroundVehicleCache *);
 extern "C" OpenTTDGroundState *openttd_rust_ground_new();
 extern "C" void openttd_rust_ground_destroy(OpenTTDGroundState *);
 struct GroundStateOwner {
 	OpenTTDGroundState *state;
-	GroundStateOwner() : state(openttd_rust_ground_new()) { new (this->state) OpenTTDGroundState(); }
+	GroundStateOwner() : state(openttd_rust_ground_new()) {}
 	GroundStateOwner(const GroundStateOwner &) = delete;
 	GroundStateOwner &operator=(const GroundStateOwner &) = delete;
 	~GroundStateOwner() { openttd_rust_ground_destroy(this->state); }
@@ -104,7 +76,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	/**
 	 * The constructor at SpecializedVehicle must be called.
 	 */
-	GroundVehicle() : SpecializedVehicle<T, Type>() {}
+	GroundVehicle() : SpecializedVehicle<T, Type>() { this->record->ground = this->rust_ground.state; }
 
 	void PowerChanged();
 	void CargoChanged();
@@ -118,7 +90,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	uint Crash(bool flooded) override
 	{
-		return openttd_rust_ground_crash(&GetRustGroundPhysicsServices(), this, flooded);
+		return openttd_rust_ground_crash(&GetRustGroundPhysicsServices(), this->record, flooded);
 	}
 
 	/**
@@ -150,86 +122,86 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	/**
 	 * Set front engine state.
 	 */
-	inline void SetFrontEngine() { SetBit(this->subtype, GVSF_FRONT); }
+	inline void SetFrontEngine() { SetBit(this->Record().subtype, GVSF_FRONT); }
 
 	/**
 	 * Remove the front engine state.
 	 */
-	inline void ClearFrontEngine() { ClrBit(this->subtype, GVSF_FRONT); }
+	inline void ClearFrontEngine() { ClrBit(this->Record().subtype, GVSF_FRONT); }
 
 	/**
 	 * Set a vehicle to be an articulated part.
 	 */
-	inline void SetArticulatedPart() { SetBit(this->subtype, GVSF_ARTICULATED_PART); }
+	inline void SetArticulatedPart() { SetBit(this->Record().subtype, GVSF_ARTICULATED_PART); }
 
 	/**
 	 * Clear a vehicle from being an articulated part.
 	 */
-	inline void ClearArticulatedPart() { ClrBit(this->subtype, GVSF_ARTICULATED_PART); }
+	inline void ClearArticulatedPart() { ClrBit(this->Record().subtype, GVSF_ARTICULATED_PART); }
 
 	/**
 	 * Set a vehicle to be a wagon.
 	 */
-	inline void SetWagon() { SetBit(this->subtype, GVSF_WAGON); }
+	inline void SetWagon() { SetBit(this->Record().subtype, GVSF_WAGON); }
 
 	/**
 	 * Clear wagon property.
 	 */
-	inline void ClearWagon() { ClrBit(this->subtype, GVSF_WAGON); }
+	inline void ClearWagon() { ClrBit(this->Record().subtype, GVSF_WAGON); }
 
 	/**
 	 * Set engine status.
 	 */
-	inline void SetEngine() { SetBit(this->subtype, GVSF_ENGINE); }
+	inline void SetEngine() { SetBit(this->Record().subtype, GVSF_ENGINE); }
 
 	/**
 	 * Clear engine status.
 	 */
-	inline void ClearEngine() { ClrBit(this->subtype, GVSF_ENGINE); }
+	inline void ClearEngine() { ClrBit(this->Record().subtype, GVSF_ENGINE); }
 
 	/**
 	 * Set a vehicle as a free wagon.
 	 */
-	inline void SetFreeWagon() { SetBit(this->subtype, GVSF_FREE_WAGON); }
+	inline void SetFreeWagon() { SetBit(this->Record().subtype, GVSF_FREE_WAGON); }
 
 	/**
 	 * Clear a vehicle from being a free wagon.
 	 */
-	inline void ClearFreeWagon() { ClrBit(this->subtype, GVSF_FREE_WAGON); }
+	inline void ClearFreeWagon() { ClrBit(this->Record().subtype, GVSF_FREE_WAGON); }
 
 	/**
 	 * Set a vehicle as a multiheaded engine.
 	 */
-	inline void SetMultiheaded() { SetBit(this->subtype, GVSF_MULTIHEADED); }
+	inline void SetMultiheaded() { SetBit(this->Record().subtype, GVSF_MULTIHEADED); }
 
 	/**
 	 * Clear multiheaded engine property.
 	 */
-	inline void ClearMultiheaded() { ClrBit(this->subtype, GVSF_MULTIHEADED); }
+	inline void ClearMultiheaded() { ClrBit(this->Record().subtype, GVSF_MULTIHEADED); }
 
 	/**
 	 * Check if the vehicle is a free wagon (got no engine in front of it).
 	 * @return Returns true if the vehicle is a free wagon.
 	 */
-	inline bool IsFreeWagon() const { return HasBit(this->subtype, GVSF_FREE_WAGON); }
+	inline bool IsFreeWagon() const { return HasBit(this->Record().subtype, GVSF_FREE_WAGON); }
 
 	/**
 	 * Check if a vehicle is an engine (can be first in a consist).
 	 * @return Returns true if vehicle is an engine.
 	 */
-	inline bool IsEngine() const { return HasBit(this->subtype, GVSF_ENGINE); }
+	inline bool IsEngine() const { return HasBit(this->Record().subtype, GVSF_ENGINE); }
 
 	/**
 	 * Check if a vehicle is a wagon.
 	 * @return Returns true if vehicle is a wagon.
 	 */
-	inline bool IsWagon() const { return HasBit(this->subtype, GVSF_WAGON); }
+	inline bool IsWagon() const { return HasBit(this->Record().subtype, GVSF_WAGON); }
 
 	/**
 	 * Check if the vehicle is a multiheaded engine.
 	 * @return Returns true if the vehicle is a multiheaded engine.
 	 */
-	inline bool IsMultiheaded() const { return HasBit(this->subtype, GVSF_MULTIHEADED); }
+	inline bool IsMultiheaded() const { return HasBit(this->Record().subtype, GVSF_MULTIHEADED); }
 
 	/**
 	 * Tell if we are dealing with the rear end of a multiheaded engine.

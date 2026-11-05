@@ -12,6 +12,7 @@
 
 #include "core/enum_type.hpp"
 #include "core/pool_type.hpp"
+#include "rust/vehicle_record_ffi.h"
 
 /** The type all our vehicle IDs have. */
 using VehicleID = PoolID<uint32_t, struct VehicleIDTag, 0xFF000, 0xFFFFF>;
@@ -46,9 +47,21 @@ struct Aircraft;
 struct EffectVehicle;
 struct DisasterVehicle;
 
-/** Base vehicle class. */
+/** Base vehicle class: owner of the shell's shared record, which outlives the derived and Vehicle destructors. */
 struct BaseVehicle {
-	VehicleType type = VEH_INVALID; ///< Type of vehicle
+	OpenTTDVehicle *const record; ///< Shared record of the moved fields, including the type.
+
+	explicit BaseVehicle(VehicleType type) : record(openttd_rust_vehicle_record_new(nullptr, type)) {}
+	BaseVehicle(const BaseVehicle &) = delete;
+	BaseVehicle &operator=(const BaseVehicle &) = delete;
+	~BaseVehicle() { openttd_rust_vehicle_record_delete(this->record); }
+
+	/** @return The shared record. */
+	inline OpenTTDVehicle &Record() { return *this->record; }
+	inline const OpenTTDVehicle &Record() const { return *this->record; }
+	/** @return Type of vehicle. */
+	inline VehicleType GetType() const { return static_cast<VehicleType>(this->record->type); }
+	inline void SetType(VehicleType type) { this->record->type = type; }
 };
 
 /** Flags for goto depot commands. */

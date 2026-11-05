@@ -21,7 +21,7 @@
 template <class T, VehicleType Type>
 void GroundVehicle<T, Type>::PowerChanged()
 {
-	return openttd_rust_ground_power_changed(&GetRustGroundPhysicsServices(), this);
+	return openttd_rust_ground_power_changed(&GetRustGroundPhysicsServices(), this->record);
 }
 
 /**
@@ -31,7 +31,7 @@ void GroundVehicle<T, Type>::PowerChanged()
 template <class T, VehicleType Type>
 void GroundVehicle<T, Type>::CargoChanged()
 {
-	return openttd_rust_ground_cargo_changed(&GetRustGroundPhysicsServices(), this);
+	return openttd_rust_ground_cargo_changed(&GetRustGroundPhysicsServices(), this->record);
 }
 
 /**
@@ -41,7 +41,7 @@ void GroundVehicle<T, Type>::CargoChanged()
 template <class T, VehicleType Type>
 int GroundVehicle<T, Type>::GetAcceleration() const
 {
-	return openttd_rust_ground_acceleration(&GetRustGroundPhysicsServices(), this);
+	return openttd_rust_ground_acceleration(&GetRustGroundPhysicsServices(), this->record);
 }
 
 /**
@@ -51,7 +51,7 @@ int GroundVehicle<T, Type>::GetAcceleration() const
 template <class T, VehicleType Type>
 bool GroundVehicle<T, Type>::IsChainInDepot() const
 {
-	return openttd_rust_ground_chain_in_depot(&GetRustGroundPhysicsServices(), this);
+	return openttd_rust_ground_chain_in_depot(&GetRustGroundPhysicsServices(), this->record);
 }
 
 /* Instantiation for Train */

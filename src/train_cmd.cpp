@@ -51,7 +51,7 @@
 #include "rust/settings_services.h"
 OpenTTDTrainHandle TrainHandle(const Train *v) noexcept
 {
-	return {const_cast<Train *>(v), v == nullptr ? nullptr : v->GetRustState()};
+	return {RustVehicle(v), v == nullptr ? nullptr : v->GetRustState()};
 }
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
@@ -93,13 +93,13 @@ void CheckTrainsLengths()
 	bool first = true;
 
 	for (const Train *v : Train::Iterate()) {
-		if (v->First() == v && !v->vehstatus.Test(VehState::Crashed)) {
+		if (v->First() == v && !v->GetVehStatus().Test(VehState::Crashed)) {
 			for (const Train *u = v, *w = v->Next(); w != nullptr; u = w, w = w->Next()) {
 				if (u->GetTrack() != TRACK_BIT_DEPOT) {
 					if ((w->GetTrack() != TRACK_BIT_DEPOT &&
-							std::max(abs(u->x_pos - w->x_pos), abs(u->y_pos - w->y_pos)) != u->CalcNextVehicleOffset()) ||
+							std::max(abs(u->Record().x_pos - w->Record().x_pos), abs(u->Record().y_pos - w->Record().y_pos)) != u->CalcNextVehicleOffset()) ||
 							(w->GetTrack() == TRACK_BIT_DEPOT && TicksToLeaveDepot(u) <= 0)) {
-						ShowErrorMessage(GetEncodedString(STR_BROKEN_VEHICLE_LENGTH, v->index, v->owner), {}, WL_CRITICAL);
+						ShowErrorMessage(GetEncodedString(STR_BROKEN_VEHICLE_LENGTH, v->index, v->GetOwner()), {}, WL_CRITICAL);
 
 						if (!_networking && first) {
 							first = false;
@@ -158,12 +158,12 @@ int Train::GetCurrentMaxSpeed() const
 /** Update acceleration of the train from the cached power and weight. */
 void Train::UpdateAcceleration()
 {
-	openttd_rust_train_update_acceleration(TrainHandle(this), &GetTrainServices(), &GetRustSharedServices());
+	openttd_rust_train_update_acceleration(TrainHandle(this));
 }
 
 int Train::GetCursorImageOffset() const
 {
-	if (this->gcache.cached_veh_length != 8 && this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->engine_type)->misc_flags.Test(EngineMiscFlag::RailFlips)) {
+	if (this->gcache.cached_veh_length != 8 && this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->GetEngineType())->misc_flags.Test(EngineMiscFlag::RailFlips)) {
 		int reference_width = TRAININFO_DEFAULT_VEHICLE_WIDTH;
 
 		const Engine *e = this->GetEngine();
@@ -193,7 +193,7 @@ int Train::GetDisplayImageWidth(Point *offset) const
 	}
 
 	if (offset != nullptr) {
-		if (this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->engine_type)->misc_flags.Test(EngineMiscFlag::RailFlips)) {
+		if (this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->GetEngineType())->misc_flags.Test(EngineMiscFlag::RailFlips)) {
 			offset->x = ScaleSpriteTrad(((int)this->gcache.cached_veh_length - (int)VEHICLE_LENGTH / 2) * reference_width / (int)VEHICLE_LENGTH);
 		} else {
 			offset->x = ScaleSpriteTrad(reference_width) / 2;
@@ -232,7 +232,7 @@ void Train::GetImage(Direction direction, EngineImageType image_type, VehicleSpr
 	assert(IsValidImageIndex<VEH_TRAIN>(spritenum));
 	SpriteID sprite = GetDefaultTrainSprite(spritenum, direction);
 
-	if (this->cargo.StoredCount() >= this->cargo_cap / 2U) sprite += _wagon_full_adder[spritenum];
+	if (this->cargo.StoredCount() >= this->Record().cargo_cap / 2U) sprite += _wagon_full_adder[spritenum];
 
 	result->Set(sprite);
 }
@@ -354,11 +354,11 @@ void Train::UpdateDeltaXY()
 	this->bounds = {{-1, -1, 0}, {3, 3, 6}, {}};
 
 	/* Set if flipped and engine is NOT flagged with custom flip handling. */
-	int flipped = this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->engine_type)->misc_flags.Test(EngineMiscFlag::RailFlips);
+	int flipped = this->GetTrainFlags().Test(VehicleRailFlag::Flipped) && !EngInfo(this->GetEngineType())->misc_flags.Test(EngineMiscFlag::RailFlips);
 	/* If flipped and vehicle length is odd, we need to adjust the bounding box offset slightly. */
 	int flip_offs = flipped && (this->gcache.cached_veh_length & 1);
 
-	Direction dir = this->direction;
+	Direction dir = this->GetDirection();
 	if (flipped) dir = ReverseDir(dir);
 
 	if (!IsDiagonalDirection(dir)) {
@@ -562,7 +562,7 @@ CommandCost CmdReverseTrainDirection(DoCommandFlags flags, VehicleID veh_id, boo
 {
 	Train *v = Train::GetIfValid(veh_id);
 	if (v == nullptr) return CMD_ERROR;
-	CommandCost ret = CheckOwnership(v->owner);
+	CommandCost ret = CheckOwnership(v->GetOwner());
 	if (ret.Failed()) return ret;
 	switch (openttd_rust_train_reverse_command(TrainHandle(v), static_cast<uint8_t>(flags.Test(DoCommandFlag::Execute)), static_cast<uint8_t>(reverse_single_veh), &GetTrainServices(), &GetRustSharedServices())) {
 		case 0: return CommandCost();
@@ -595,7 +595,7 @@ CommandCost CmdForceTrainProceed(DoCommandFlags flags, VehicleID veh_id)
 	if (t == nullptr) return CMD_ERROR;
 	/* Preserve primary validation before the ownership shared service. */
 	if (!t->IsPrimaryVehicle()) return CMD_ERROR;
-	CommandCost ret = CheckOwnership(t->owner);
+	CommandCost ret = CheckOwnership(t->GetOwner());
 	if (ret.Failed()) return ret;
 	openttd_rust_train_force_command(TrainHandle(t), static_cast<uint8_t>(flags.Test(DoCommandFlag::Execute)), &GetTrainServices(), &GetRustSharedServices());
 	return CommandCost();
@@ -610,7 +610,7 @@ CommandCost CmdForceTrainProceed(DoCommandFlags flags, VehicleID veh_id)
  */
 static FindDepotData FindClosestTrainDepot(Train *v, int max_distance)
 {
-	assert(!v->vehstatus.Test(VehState::Crashed));
+	assert(!v->GetVehStatus().Test(VehState::Crashed));
 
 	return YapfTrainFindNearestDepot(v, max_distance);
 }
@@ -636,7 +636,7 @@ void Train::PlayLeaveStationSound(bool force) const
 
 	if (PlayVehicleSound(this, VSE_START, force)) return;
 
-	SndPlayVehicleFx(sfx[RailVehInfo(this->engine_type)->engclass], this);
+	SndPlayVehicleFx(sfx[RailVehInfo(this->GetEngineType())->engclass], this);
 }
 
 /**
@@ -830,7 +830,7 @@ uint Train::Crash(bool flooded)
  */
 bool TrainController(Train *v, Vehicle *nomove, bool reverse)
 {
-	return openttd_rust_train_controller(TrainHandle(v), OpenTTDTrainHandle{nomove, nullptr}, static_cast<uint8_t>(reverse), &GetTrainServices(), &GetRustSharedServices()) != 0;
+	return openttd_rust_train_controller(TrainHandle(v), OpenTTDTrainHandle{RustVehicle(nomove), nullptr}, static_cast<uint8_t>(reverse), &GetTrainServices(), &GetRustSharedServices()) != 0;
 }
 
 
@@ -946,7 +946,7 @@ Trackdir Train::GetVehicleTrackdir() const
 
 uint16_t Train::GetMaxWeight() const
 {
-	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, true);
+	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this->record, true);
 }
 
 #include "rust/train_services.h"
@@ -959,91 +959,10 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 {
 	static const OpenTTDTrainServices services{
 		.physics = &GetRustGroundPhysicsServices(),
-		.read_first = TrainReadFirst,
-		.read_next = TrainReadNext,
-		.read_previous = TrainReadPrevious,
-		.read_next_unit = TrainReadNextUnit,
-		.read_last = TrainReadLast,
-		.read_tile = TrainVehicleRead<uint32_t, RustVehicleTile>,
-		.read_dest = TrainVehicleRead<uint32_t, RustVehicleDestTile>,
-		.read_order_time = TrainReadOrderTime,
-		.read_length = TrainVehicleRead<uint16_t, RustGroundCachedLength<Train>>,
-		.read_total_length = TrainReadTotalLength,
-		.read_max_track_speed = TrainReadMaxTrackSpeed,
-		.read_speed = TrainVehicleRead<uint16_t, RustVehicleSpeed>,
-		.read_gv_flags = TrainReadGvFlags,
-		.read_refit_cap = TrainReadRefitCap,
-		.read_last_station = TrainReadLastStation,
-		.read_direction = TrainVehicleRead<uint8_t, RustVehicleDirection>,
-		.read_status = TrainVehicleRead<uint8_t, RustVehicleStatus>,
-		.read_tick = TrainVehicleRead<uint8_t, RustVehicleTick>,
-		.read_running = TrainReadRunning,
-		.read_day = TrainVehicleRead<uint8_t, RustVehicleDay>,
-		.read_progress = TrainVehicleRead<uint8_t, RustVehicleProgress>,
-		.read_order = TrainVehicleRead<uint8_t, RustVehicleOrderType>,
-		.read_front = TrainReadFront,
-		.read_articulated = TrainVehicleRead<uint8_t, RustVehicleArticulated>,
-		.read_multiheaded = TrainReadMultiheaded,
-		.read_owner = TrainVehicleRead<uint8_t, RustVehicleOwner>,
-		.read_vis_effect = TrainReadVisEffect,
-		.read_consist_changed = TrainReadConsistChanged,
-		.read_consist_changed_1 = TrainReadConsistChanged1,
-		.read_consist_changed_2 = TrainReadConsistChanged2,
-		.read_curve_limit = TrainReadCurveLimit,
-		.read_stop_location = TrainReadStopLocation,
-		.read_current_max_speed = TrainReadCurrentMaxSpeed,
-		.read_update_acceleration = TrainReadUpdateAcceleration,
-		.read_update_speed = TrainReadUpdateSpeed,
-		.read_trackdir = TrainReadTrackdir,
-		.read_can_leave = TrainReadCanLeave,
-		.read_crossing_approach = TrainReadCrossingApproach,
-		.read_next_offset = TrainReadNextOffset,
-		.read_after_swap = TrainReadAfterSwap,
-		.read_reverse_swap = TrainReadReverseSwap,
-		.read_approaching_end = TrainReadApproachingEnd,
-		.read_line_ends = TrainReadLineEnds,
-		.read_speed_z = TrainReadSpeedZ,
-		.read_move_vehicle = TrainReadMoveVehicle,
-		.read_move_vehicle_20 = TrainReadMoveVehicle20,
-		.read_collision_one = TrainReadCollisionOne,
-		.read_collision_one_22 = TrainReadCollisionOne22,
-		.read_delete_last = TrainReadDeleteLast,
-		.read_stay_depot = TrainReadStayDepot,
-		.read_loco = TrainReadLoco,
-		.read_loco_26 = TrainReadLoco26,
-		.read_tick_state = TrainReadTickState,
-		.read_needs_service = TrainReadNeedsService,
-		.read_next_force = TrainReadNextForce,
-		.read_reverse_command = TrainReadReverseCommand,
-		.write_tile = TrainWriteTile,
-		.write_dest = TrainWriteDest,
-		.write_x = TrainWriteX,
-		.write_y = TrainWriteY,
-		.write_z = TrainWriteZ,
-		.write_direction = TrainWriteDirection,
-		.write_speed = TrainWriteSpeed,
-		.write_tick = TrainWriteTick,
-		.write_running = TrainWriteRunning,
-		.write_day = TrainWriteDay,
-		.write_order_time = TrainWriteOrderTime,
-		.write_progress = TrainWriteProgress,
-		.write_subspeed = TrainWriteSubspeed,
-		.write_gv_flags = TrainWriteGvFlags,
-		.write_acceleration = TrainWriteAcceleration,
-		.write_length = TrainWriteLength,
-		.write_total_length = TrainWriteTotalLength,
-		.write_first_engine = TrainWriteFirstEngine,
-		.write_max_speed = TrainWriteMaxSpeed,
-		.write_cargo_cap = TrainWriteCargoCap,
-		.write_refit_cap = TrainWriteRefitCap,
-		.write_cargo_age = TrainWriteCargoAge,
-		.write_last_station = TrainWriteLastStation,
 		.write_colourmap = TrainWriteColourmap,
-		.write_status = TrainWriteStatus,
 		.acc_model = TrainAccModel,
 		.advance_distance = TrainAdvanceDistance,
 		.all_powered = TrainAllPowered,
-		.ambient_sound = RustAmbientSoundLegacy<OpenTTDTrainHandle>,
 		.arrival_news = TrainArrivalNews,
 		.axis_diag = TrainAxisDiag,
 		.backoff = RustTrainPathBackoffInterval,
@@ -1131,7 +1050,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.running_windows = TrainRunningWindows,
 		.servint = TrainServint,
 		.set_depot_res = OpenTTDLegacyMapQuery<void, RustSetDepotReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.set_next = TrainVehiclePair<RustVehicleSetNext>,
 
 		.set_signal_state = OpenTTDLegacyMapQuery<void, RustRailSetSignalState, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
 		.set_tunnel_res = OpenTTDLegacyMapQuery<void, RustSetTunnelBridgeReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
@@ -1191,19 +1109,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 {
 	static const OpenTTDTrainReservationLeaves services{
-		.read_tile = TrainVehicleRead<uint32_t, RustVehicleTile>,
-		.read_next = TrainReadNext,
-		.read_last_station = TrainReadLastStation,
-		.read_direction = TrainVehicleRead<uint8_t, RustVehicleDirection>,
-		.read_order = TrainVehicleRead<uint8_t, RustVehicleOrderType>,
 		.read_num_orders = TrainVehicleRead<uint8_t, RustVehicleNumOrders>,
-		.read_order_index = TrainVehicleRead<uint8_t, RustVehicleRealOrderIndex>,
-		.read_free = TrainReservationReadFree,
-		.read_free_1 = TrainReservationReadFree1,
-		.read_new = TrainReservationReadNew,
-		.read_choose = TrainReservationReadChoose,
-		.read_choose_4 = TrainReservationReadChoose4,
-		.read_check_next = TrainReservationReadCheckNext,
 		.all_compat = TrainReservationAllCompat,
 		.backoff = RustTrainPathBackoffInterval,
 		.bits_track = TrainReservationBitsTrack,
@@ -1245,11 +1151,8 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.reach_tracks = TrainReservationReachTracks,
 
 		.reserve_paths = RustTrainReservePaths,
-		.restore_order = TrainReservationRestoreOrder,
-		.save_order = TrainReservationSaveOrder,
 		.service = TrainReservationService,
 		.set_depot = OpenTTDLegacyContextMapQuery<void, RustSetDepotReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
-		.set_depot_dest = TrainReservationSetDepotDest,
 
 		.set_signal = OpenTTDLegacyContextMapQuery<void, RustRailSetSignalGreen, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
 		.set_tunnel = OpenTTDLegacyContextMapQuery<void, RustSetTunnelBridgeReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
@@ -1266,9 +1169,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
-		.write_dest = TrainReservationWriteDest,
-		.write_last = TrainReservationWriteLast,
-		.write_suppress = TrainReservationWriteSuppress,
 
 		.pathfind = TrainReservationPathfind,
 		.safe_track = TrainReservationSafeTrack,

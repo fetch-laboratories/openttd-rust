@@ -22,7 +22,7 @@
 
 namespace {
 struct HeapNode { int32_t estimate; bool operator<(const HeapNode &other) const { return this->estimate < other.estimate; } };
-OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t, uint8_t, bool) noexcept { OpenTTDRoadYapfTile tile{}; tile.type = 5; tile.station_type = 2; return tile; }
+OpenTTDRoadYapfTile ProbeTile(const OpenTTDVehicle *, uint32_t, uint8_t, bool) noexcept { OpenTTDRoadYapfTile tile{}; tile.type = 5; tile.station_type = 2; return tile; }
 uint16_t fixture_dirs = 1;
 OpenTTDFixtureMap movement_map{6, 4096};
 /* Every tile carries the road bits and one-way state the callbacks report. */
@@ -39,6 +39,9 @@ const OpenTTDSharedServices *MovementWorld()
 {
 	static OpenTTDSharedServices world{};
 	static OpenTTDMovementServices movement{};
+	static OpenTTDVehicleServices vehicle{};
+
+	movement.vehicle = &vehicle;
 	static OpenTTDStationCatchmentServices stations{};
 	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
 	stations.station_if_valid = [](uint16_t) noexcept -> BaseStation * { return nullptr; };
@@ -59,7 +62,7 @@ const OpenTTDSharedServices *MovementWorld()
 	SetFixtureDirs(fixture_dirs);
 	return &world;
 }
-uint32_t RoadProbeClosest(const void *, uint16_t, uint8_t) noexcept { return 0; }
+uint32_t RoadProbeClosest(const OpenTTDVehicle *, uint16_t, uint8_t) noexcept { return 0; }
 const OpenTTDRoadYapfLeaves probe_leaves{
 	.shared = MovementWorld(),
 	.tile = ProbeTile,
@@ -98,12 +101,13 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 	input.dest_tile = 1;
 	input.order_type = 1;
 	OpenTTDRoadState *state = openttd_rust_road_new();
+	OpenTTDVehicle record{};
 	for (uint8_t entry = 0; entry < 4; ++entry) {
 		for (uint8_t td = 0; td < 14; ++td) {
 			if (td == 6 || td == 7) continue;
 			uint16_t tracks = 1U << td;
 			SetFixtureDirs(tracks);
-			auto result = openttd_rust_road_yapf_choose(state, &input, &leaves, &tracks, 0, entry, TRACKDIR_BIT_Y_NW, true);
+			auto result = openttd_rust_road_yapf_choose(state, &input, &leaves, &record, 0, entry, TRACKDIR_BIT_Y_NW, true);
 			bool reachable = (tracks & DiagdirReachesTrackdirs(static_cast<DiagDirection>(entry))) != 0;
 			REQUIRE(result.direction == (reachable ? td : static_cast<uint8_t>(TRACKDIR_Y_NW)));
 			REQUIRE(result.found == static_cast<uint8_t>(reachable));
@@ -122,13 +126,13 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 #include "follower_probe.hpp"
 namespace RoadLimit {
 inline uint32_t goal, start = 32 + 32 * 64;
-OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t tile, uint8_t, bool) noexcept
+OpenTTDRoadYapfTile ProbeTile(const OpenTTDVehicle *, uint32_t tile, uint8_t, bool) noexcept
 {
 	OpenTTDRoadYapfTile out{}; out.type = 2; out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
 OpenTTDTestFollow Follow(uint32_t tile, uint8_t td)
 {
-	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_ROAD, reinterpret_cast<Vehicle *>(FollowerFixture::active->Vehicle()), 0, 0, true, tile, td);
+	return OpenTTDTestFollowOnce(FollowerFixture::active->shared, TRANSPORT_ROAD, FollowerFixture::active->Vehicle(), 0, 0, true, tile, td);
 }
 struct Follower {};
 class Search;
@@ -206,7 +210,7 @@ TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference",
 namespace RoadOrder {
 inline uint32_t goal;
 inline std::vector<char> limits;
-OpenTTDRoadYapfTile Tile(const void *, uint32_t tile, uint8_t, bool) noexcept {
+OpenTTDRoadYapfTile Tile(const OpenTTDVehicle *, uint32_t tile, uint8_t, bool) noexcept {
 	OpenTTDRoadYapfTile out{}; out.type = FollowerFixture::active->shared.tile_type(tile); out.depot = tile == goal; out.depot_dir = DIAGDIR_SW; return out;
 }
 }

@@ -59,10 +59,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.expense = RustVehicleExpense,
 		.invalidate_chain = RustVehicleInvalidateChain,
 		.commit = VehicleRefitCommit,
-		.set_refit_cap = RustVehicleSetRefitCap,
-		.refit_cap = RustVehicleRefitCap,
-		.cargo_cap = RustVehicleCargoCap,
-		.set_capacity = RustVehicleSetCargoCap,
 		.write_refit = VehicleRefitWrite,
 
 		.train_handle = RustVehicleTrain,

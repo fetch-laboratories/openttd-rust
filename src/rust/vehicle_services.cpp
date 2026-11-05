@@ -62,14 +62,10 @@ OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept { return Ship:
 OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *v) noexcept
 {
 	if (v == nullptr) return {nullptr, nullptr, VehicleID::Invalid().base()};
-	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? RustVehicleAircraftOwner(v) : nullptr, RustVehicleIndexOpaque(v)};
+	return {RustVehicle(v), v->GetType() == VEH_AIRCRAFT ? RustVehicleAircraftOwner(v) : nullptr, RustVehicleIndexOpaque(v)};
 }
 OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *v) noexcept { return RustAircraftVehicle(VehicleOf(v)); }
 
-OpenTTDAircraftVehicle OPENTTD_RUST_CALL RustAircraftNext(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	return RustAircraftVehicle(RustVehicleNext(VehicleOf(vehicle.handle)));
-}
 
 #include "../safeguards.h"
 
@@ -86,21 +82,21 @@ void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept { static_cas
 bool RustVehiclePrimary(const Vehicle *v) noexcept { return v->IsPrimaryVehicle(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept { return v->IsInDepot(); }
 bool RustTrainFreeWagon(const Vehicle *v) noexcept { return Train::From(v)->IsFreeWagon(); }
-Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().first_engine_part(RustVehicle(v))); }
-bool RustTrainMultiheaded(const Vehicle *v) noexcept { return GetRustStationLoading().is_multiheaded(RustVehicle(v)); }
-Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().other_multiheaded(RustVehicle(v))); }
+Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return v->GetFirstEnginePart(); }
+bool RustTrainMultiheaded(const Vehicle *v) noexcept { return Train::From(v)->IsMultiheaded(); }
+Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return Train::From(v)->GetOtherMultiheadedPart(); }
 
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept { return GetGRFStringID(grfid, GRFStringID(string)); }
-void RustVehicleFlipStopped(Vehicle *v) noexcept { v->vehstatus.Flip(VehState::Stopped); }
+void RustVehicleFlipStopped(Vehicle *v) noexcept { v->SetVehStatus(v->GetVehStatus().Flip(VehState::Stopped)); }
 
-uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->refit_cap; }
-uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->cargo_cap; }
-void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->refit_cap = cap; }
-void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->cargo_cap = cap; }
+uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().refit_cap; }
+uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().cargo_cap; }
+void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->Record().refit_cap = cap; }
+void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->Record().cargo_cap = cap; }
 void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept { VehicleOf(v)->cargo_type = cargo; }
 void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept { VehicleOf(v)->cargo_subtype = subtype; }
 void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept { RustVehicleSetCargoType(v, cargo); RustVehicleSetCargoSubtype(v, subtype); }
@@ -119,21 +115,7 @@ static_assert(PROP_AIRCRAFT_SPEED == 0x0C && CBID_VEHICLE_LENGTH == 0x11 && CBID
 static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_TOUCHDOWN == 5 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
-static void OPENTTD_RUST_CALL VehicleSvcWriteCounters(OpenTTDVehicle *v, uint8_t tick, uint8_t running, int32_t order_time) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	RustWriteVehicleTick(u, tick);
-	u->running_ticks = running;
-	u->current_order_time = order_time;
-}
 static void OPENTTD_RUST_CALL VehicleSvcCheckOrdersOnly(OpenTTDVehicle *v) noexcept { CheckOrders(VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteCoordinates(OpenTTDVehicle *v, int32_t x, int32_t y, int32_t z) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	RustWriteVehicleX(u, x);
-	RustWriteVehicleY(u, y);
-	RustWriteVehicleZ(u, z);
-}
 static bool OPENTTD_RUST_CALL VehicleSvcWaitingForUnbunching(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsWaitingForUnbunching(); }
 static void OPENTTD_RUST_CALL VehicleSvcLeaveUnbunchingDepot(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveUnbunchingDepot(); }
 static void OPENTTD_RUST_CALL VehicleSvcResetDepotUnbunching(OpenTTDVehicle *v) noexcept { VehicleOf(v)->ResetDepotUnbunching(); }
@@ -142,13 +124,6 @@ static OpenTTDVehicleNewPosition OPENTTD_RUST_CALL VehicleSvcNewPosition(OpenTTD
 {
 	GetNewVehiclePosResult gp = GetNewVehiclePos(VehicleOf(v));
 	return {.x = gp.x, .y = gp.y, .tile = gp.new_tile.base()};
-}
-static void OPENTTD_RUST_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	RustWriteVehicleX(u, x);
-	RustWriteVehicleY(u, y);
-
 }
 static void OPENTTD_RUST_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
 uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_weight; }
@@ -170,17 +145,6 @@ static void OPENTTD_RUST_CALL VehicleSvcOrderDummy(OpenTTDVehicle *v) noexcept
 }
 static void OPENTTD_RUST_CALL VehicleSvcStartStopDirty(OpenTTDVehicle *v) noexcept { SetWindowWidgetDirty(WC_VEHICLE_VIEW, VehicleOf(v)->index, WID_VV_START_STOP); }
 static void OPENTTD_RUST_CALL VehicleSvcDestroy(OpenTTDVehicle *v) noexcept { delete VehicleOf(v); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcCheckOrders(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	CheckOrders(u);
-	return RustVehicleRunning(u);
-}
-static uint8_t OPENTTD_RUST_CALL VehicleSvcDay(OpenTTDVehicle *v) noexcept { return RustVehicleDay(VehicleOf(v)); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteDay(OpenTTDVehicle *v, uint8_t day) noexcept { VehicleOf(v)->day_counter = day; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteDirection(OpenTTDVehicle *v, uint8_t direction) noexcept { VehicleOf(v)->direction = static_cast<Direction>(direction); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->cur_speed = speed; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteLastStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_station_visited = StationID(station); }
 /* Legacy orders context adapters; the native operations have shared definitions. */
 extern "C" uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept
 {
@@ -192,114 +156,26 @@ extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcep
 	RustVehicleSetDestTile(RustVehicle(static_cast<Vehicle *>(ctx)), tile);
 }
 
-static void OPENTTD_RUST_CALL VehicleSvcWriteDest(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->dest_tile = TileIndex(tile); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteProgress(OpenTTDVehicle *v, uint8_t progress) noexcept { RustWriteVehicleProgress(VehicleOf(v), progress); }
 
-static OpenTTDVehiclePreviousTile OPENTTD_RUST_CALL VehicleSvcPreviousTile(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *previous = RustVehiclePrevious(VehicleOf(v));
-	return {.tile = previous == nullptr ? 0 : RustVehicleTile(previous), .exists = previous != nullptr};
-}
-/** `DeleteLastRoadVeh` before the road stop check: unlink the last part and copy the station. */
-static void OPENTTD_RUST_CALL VehicleSvcDetachLast(OpenTTDVehicle *previous, OpenTTDVehicle *last, OpenTTDVehicle *first) noexcept
-{
-	RustVehicleSetNext(VehicleOf(previous), nullptr);
-	VehicleOf(last)->last_station_visited = VehicleOf(first)->last_station_visited;
-}
-static void OPENTTD_RUST_CALL VehicleSvcWriteMaxSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->vcache.cached_max_speed = speed; }
 
-static uint8_t OPENTTD_RUST_CALL VehicleSvcProgress(OpenTTDVehicle *v) noexcept { return RustVehicleProgress(VehicleOf(v)); }
-static uint32_t OPENTTD_RUST_CALL VehicleSvcDestTile(OpenTTDVehicle *v) noexcept { return RustVehicleDestTile(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderType(OpenTTDVehicle *v) noexcept { return RustVehicleOrderType(VehicleOf(v)); }
 static uint16_t OPENTTD_RUST_CALL VehicleSvcOrderDestination(OpenTTDVehicle *v) noexcept { return RustVehicleOrderDestination(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderNonStop(OpenTTDVehicle *v) noexcept { return RustVehicleOrderNonStop(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcDirection(OpenTTDVehicle *v) noexcept { return RustVehicleDirection(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcStatus(OpenTTDVehicle *v) noexcept { return RustVehicleStatus(VehicleOf(v)); }
-static uint32_t OPENTTD_RUST_CALL VehicleSvcTile(OpenTTDVehicle *v) noexcept { return RustVehicleTile(VehicleOf(v)); }
-static OpenTTDVehicle *OPENTTD_RUST_CALL VehicleSvcNext(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleNext(VehicleOf(v))); }
-static uint16_t OPENTTD_RUST_CALL VehicleSvcEngineID(OpenTTDVehicle *v) noexcept { return RustVehicleEngineID(VehicleOf(v)); }
 static OpenTTDEngineForLength OPENTTD_RUST_CALL VehicleSvcEngineForLength(OpenTTDVehicle *v) noexcept
 {
 	const Engine *e = EngineOf(RustVehicleGetEngine(v));
 	return {.engine = RustEngine(e), .grf_version = RustEngineGRFVersion(e)};
 }
 
-static void OPENTTD_RUST_CALL VehicleSvcWriteTick(OpenTTDVehicle *v, uint8_t tick) noexcept { RustWriteVehicleTick(VehicleOf(v), tick); }
 
-static uint8_t OPENTTD_RUST_CALL VehicleSvcSubtype(OpenTTDVehicle *v) noexcept { return RustVehicleSubtype(VehicleOf(v)); }
-static int32_t OPENTTD_RUST_CALL VehicleSvcX(OpenTTDVehicle *v) noexcept { return RustVehicleX(VehicleOf(v)); }
-static int32_t OPENTTD_RUST_CALL VehicleSvcY(OpenTTDVehicle *v) noexcept { return RustVehicleY(VehicleOf(v)); }
-static int32_t OPENTTD_RUST_CALL VehicleSvcZ(OpenTTDVehicle *v) noexcept { return RustVehicleZ(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcTick(OpenTTDVehicle *v) noexcept { return RustVehicleTick(VehicleOf(v)); }
-static uint16_t OPENTTD_RUST_CALL VehicleSvcSpeed(OpenTTDVehicle *v) noexcept { return RustVehicleSpeed(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcSubspeed(OpenTTDVehicle *v) noexcept { return RustVehicleSubspeed(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcRunning(OpenTTDVehicle *v) noexcept { return RustVehicleRunning(VehicleOf(v)); }
-static int32_t OPENTTD_RUST_CALL VehicleSvcOrderTime(OpenTTDVehicle *v) noexcept { return RustVehicleOrderTime(VehicleOf(v)); }
-static uint8_t OPENTTD_RUST_CALL VehicleSvcVehicleType(OpenTTDVehicle *v) noexcept { return static_cast<uint8_t>(RustVehicleVehicleType(VehicleOf(v))); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteX(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleX(VehicleOf(v), value); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteY(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleY(VehicleOf(v), value); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteZ(OpenTTDVehicle *v, int32_t value) noexcept { RustWriteVehicleZ(VehicleOf(v), value); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteTile(OpenTTDVehicle *v, uint32_t value) noexcept { RustWriteVehicleTile(VehicleOf(v), TileIndex(value)); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteStatus(OpenTTDVehicle *v, uint8_t value) noexcept { RustWriteVehicleStatus(VehicleOf(v), VehStates{value}); }
-static void OPENTTD_RUST_CALL VehicleSvcWriteSubspeed(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->subspeed = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteBreakdownCounter(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->breakdown_ctr = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteRunning(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->running_ticks = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteOrderTime(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->current_order_time = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteProfit(OpenTTDVehicle *v, int64_t value) noexcept { VehicleOf(v)->profit_this_year = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteEconomyService(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->date_of_last_service = TimerGameEconomy::Date{value}; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteCalendarService(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->date_of_last_service_newgrf = TimerGameCalendar::Date{value}; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteBreakdowns(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->breakdowns_since_last_service = value; }
 static void OPENTTD_RUST_CALL VehicleSvcWriteReliability(OpenTTDVehicle *v, uint16_t value) noexcept { VehicleOf(v)->reliability = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteCargoAge(OpenTTDVehicle *v, uint16_t value) noexcept { VehicleOf(v)->vcache.cached_cargo_age_period = value; }
-static OpenTTDVehicleCoordinates OPENTTD_RUST_CALL VehicleSvcCoordinates(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u)};
-}
-static OpenTTDVehicleXY OPENTTD_RUST_CALL VehicleSvcXy(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.x = RustVehicleX(u), .y = RustVehicleY(u)};
-}
-static OpenTTDVehicleSpeedInputs OPENTTD_RUST_CALL VehicleSvcSpeedInputs(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.speed = RustVehicleSpeed(u), .max_speed = RustVehicleMaxSpeed(u), .acceleration = RustVehicleAcceleration(u), .status = RustVehicleStatus(u), .subspeed = RustVehicleSubspeed(u)};
-}
-static OpenTTDVehicleDirectionProgress OPENTTD_RUST_CALL VehicleSvcDirectionProgress(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.direction = RustVehicleDirection(u), .progress = RustVehicleProgress(u)};
-}
-static OpenTTDVehicleTickStatus OPENTTD_RUST_CALL VehicleSvcTickStatus(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.tick = RustVehicleTick(u), .status = RustVehicleStatus(u)};
-}
-static OpenTTDVehicleDayCost OPENTTD_RUST_CALL VehicleSvcDayCost(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.profit = RustVehicleProfit(u), .running = RustVehicleRunning(u)};
-}
+static int64_t OPENTTD_RUST_CALL VehicleSvcProfit(OpenTTDVehicle *v) noexcept { return RustVehicleProfit(VehicleOf(v)); }
 static void OPENTTD_RUST_CALL VehicleSvcMakeDummy(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.MakeDummy(); }
 
-static OpenTTDVehiclePositionObservations OPENTTD_RUST_CALL VehicleSvcPositionObservations(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.subtype = RustVehicleSubtypeAddress(v), .z = RustVehicleZAddress(v)};
-}
-static OpenTTDVehicleMovementObservations OPENTTD_RUST_CALL VehicleSvcMovementObservations(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.position = {.subtype = RustVehicleSubtypeAddress(v), .z = RustVehicleZAddress(v)},
-		.x = RustVehicleXAddress(v), .y = RustVehicleYAddress(v), .speed = RustVehicleSpeedAddress(v), .direction = RustVehicleDirectionAddress(v)};
-}
-static uint16_t OPENTTD_RUST_CALL VehicleSvcMaxSpeed(OpenTTDVehicle *shell) noexcept { return RustVehicleMaxSpeed(VehicleOf(shell)); }
-static OpenTTDVehicleAltitudeInputs OPENTTD_RUST_CALL VehicleSvcAltitudeInputs(OpenTTDVehicle *v) noexcept
-{
-	const Vehicle *u = VehicleOf(v);
-	return {.max_speed = RustVehicleMaxSpeed(u), .direction = RustVehicleDirection(u)};
-}
 
 const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 {
@@ -309,21 +185,14 @@ const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 static_assert(AIR_SHADOW == 4);
 
 static OpenTTDVehicleTileLinks *OPENTTD_RUST_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return RustVehicleTileLinks(VehicleOf(v)); }
-static OpenTTDOccupancyUpdateObservation OPENTTD_RUST_CALL VehicleSvcOccupancyUpdate(OpenTTDVehicle *shell) noexcept
-{
-	Vehicle *v = VehicleOf(shell);
-	return {.links = RustVehicleTileLinks(v), .tile = RustVehicleTile(v)};
-}
-static OpenTTDOccupancyNearObservation OPENTTD_RUST_CALL VehicleSvcOccupancyNear(OpenTTDVehicle *shell) noexcept
-{
-	Vehicle *v = VehicleOf(shell);
-	return {.links = RustVehicleTileLinks(v), .xy = {.x = RustVehicleX(v), .y = RustVehicleY(v)}};
-}
+
+static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return shell == nullptr ? nullptr : static_cast<Vehicle *>(shell)->record; }
+static void VehicleRecordAssertNext(OpenTTDVehicle *v, OpenTTDVehicle *next) noexcept { assert(v != next); }
 
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
+	.assert_next = VehicleRecordAssertNext,
+	.record_from_shell = VehicleRecordFromShell,
 	.tile_links = VehicleSvcTileLinks,
-	.occupancy_update = VehicleSvcOccupancyUpdate,
-	.occupancy_near = VehicleSvcOccupancyNear,
 	.map_log_x = OpenTTDMapLogX,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 	.assertions = true,
@@ -331,14 +200,12 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.assertions = false,
 #endif
 	.train_handle = RustVehicleTrain,
-	.write_counters = VehicleSvcWriteCounters,
 	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
 	.leave_unbunching_depot = VehicleSvcLeaveUnbunchingDepot,
 	.reset_depot_unbunching = VehicleSvcResetDepotUnbunching,
 	.enter_depot = openttd_rust_visit_enter_depot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,
-	.write_xy = VehicleSvcWriteXY,
 	.base_viewport = VehicleSvcBaseViewport,
 	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
 	.property = openttd_rust_vehicle_shell_property,
@@ -351,75 +218,25 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.order_dummy = VehicleSvcOrderDummy,
 	.start_stop_dirty = VehicleSvcStartStopDirty,
 	.destroy = VehicleSvcDestroy,
-	.check_orders = VehicleSvcCheckOrders,
-	.day = VehicleSvcDay,
-	.write_day = VehicleSvcWriteDay,
-	.write_direction = VehicleSvcWriteDirection,
-	.write_speed = VehicleSvcWriteSpeed,
-	.last_station = RustVehicleLastStationVisited,
-	.write_last_station = VehicleSvcWriteLastStation,
 	.set_dest_tile = RustVehicleSetDestTile,
-	.write_dest = VehicleSvcWriteDest,
-	.write_progress = VehicleSvcWriteProgress,
-	.write_max_speed = VehicleSvcWriteMaxSpeed,
-	.previous_tile = VehicleSvcPreviousTile,
-	.detach_last = VehicleSvcDetachLast,
-	.next = VehicleSvcNext,
-	.engine_id = VehicleSvcEngineID,
 	.engine = RustVehicleGetEngine,
 	.engine_for_length = VehicleSvcEngineForLength,
-	.write_tick = VehicleSvcWriteTick,
-	.direction = VehicleSvcDirection,
-	.status = VehicleSvcStatus,
-	.tile = VehicleSvcTile,
-	.progress = VehicleSvcProgress,
-	.dest_tile = VehicleSvcDestTile,
 	.order_type = VehicleSvcOrderType,
 	.order_destination = VehicleSvcOrderDestination,
 	.order_nonstop = VehicleSvcOrderNonStop,
-	.subtype = VehicleSvcSubtype,
-	.x = VehicleSvcX,
-	.y = VehicleSvcY,
-	.z = VehicleSvcZ,
-	.tick = VehicleSvcTick,
-	.owner = RustVehicleOwnerOf,
-	.speed = VehicleSvcSpeed,
-	.subspeed = VehicleSvcSubspeed,
-	.running = VehicleSvcRunning,
-	.order_time = VehicleSvcOrderTime,
-	.vehicle_type = VehicleSvcVehicleType,
-	.write_x = VehicleSvcWriteX,
-	.write_y = VehicleSvcWriteY,
-	.write_z = VehicleSvcWriteZ,
-	.write_tile = VehicleSvcWriteTile,
-	.write_status = VehicleSvcWriteStatus,
-	.write_subspeed = VehicleSvcWriteSubspeed,
-	.write_breakdown_counter = VehicleSvcWriteBreakdownCounter,
-	.write_running = VehicleSvcWriteRunning,
-	.write_order_time = VehicleSvcWriteOrderTime,
 	.write_profit = VehicleSvcWriteProfit,
 	.write_economy_service = VehicleSvcWriteEconomyService,
 	.write_calendar_service = VehicleSvcWriteCalendarService,
 	.write_breakdowns = VehicleSvcWriteBreakdowns,
 	.write_reliability = VehicleSvcWriteReliability,
-	.write_cargo_age = VehicleSvcWriteCargoAge,
-	.coordinates = VehicleSvcCoordinates,
-	.xy = VehicleSvcXy,
-	.speed_inputs = VehicleSvcSpeedInputs,
-	.direction_progress = VehicleSvcDirectionProgress,
-	.tick_status = VehicleSvcTickStatus,
-	.day_cost = VehicleSvcDayCost,
+	.profit = VehicleSvcProfit,
 	.make_dummy = VehicleSvcMakeDummy,
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
-	.write_coordinates = VehicleSvcWriteCoordinates,
-	.altitude_inputs = VehicleSvcAltitudeInputs,
-	.position_observations = VehicleSvcPositionObservations,
-	.movement_observations = VehicleSvcMovementObservations,
-	.max_speed = VehicleSvcMaxSpeed,
 	.maintenance = &_rust_vehicle_maintenance_services,
 	.visits = RustVehicleVisits,
 	.orders = VehicleOrders,
 	.ship_get = RustShipGet,
+	.first_sprite = RustVehicleRead<uint32_t, RustVehicleFirstSprite>,
 };
 
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept
@@ -445,7 +262,7 @@ static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell, OpenTT
 {
 	Vehicle *v = VehicleOf(shell);
 	if (!v->Tick()) return false;
-	const VehicleType type = v->type; // Fresh after Tick survives.
+	const VehicleType type = v->GetType(); // Fresh after Tick survives.
 	if (type > VEH_AIRCRAFT) {
 		*out = {.type = type, .period = nullptr, .counter = nullptr, .motion = nullptr, .speed = nullptr, .front_type = nullptr, .subtype = nullptr, .tick = nullptr, .front_status = nullptr, .status = nullptr};
 		return true;
@@ -456,12 +273,6 @@ static bool OPENTTD_RUST_CALL VehicleSchedulerTick(OpenTTDVehicle *shell, OpenTT
 }
 static void OPENTTD_RUST_CALL VehicleSchedulerCalendarDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewCalendarDay(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerEconomyDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewEconomyDay(); }
-static OpenTTDVehicleDayCallback OPENTTD_RUST_CALL VehicleSchedulerDayCallbackRead(OpenTTDVehicle *shell) noexcept
-{
-	const Vehicle *v = VehicleOf(shell);
-	return {.day = RustVehicleDay(v), .has_engine = RustVehicleHasEngine(v)};
-}
-static void OPENTTD_RUST_CALL VehicleSchedulerFirstDirty(OpenTTDVehicle *shell) noexcept { RustVehicleFirst(VehicleOf(shell))->MarkDirty(); }
 static void OPENTTD_RUST_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_RUST_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
 {
 	PerformanceMeasurer framerate(PFE_GL_ECONOMY);
@@ -487,8 +298,6 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
 		.tick = VehicleSchedulerTick,
 		.calendar_day = VehicleSchedulerCalendarDay,
 		.economy_day = VehicleSchedulerEconomyDay,
-		.day_callback_read = VehicleSchedulerDayCallbackRead,
-		.first_dirty = VehicleSchedulerFirstDirty,
 		.cargo_owner = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,
 		.vehicle = &_rust_vehicle_services,
 		.shared = &GetRustSharedServices(),
@@ -505,7 +314,7 @@ static OpenTTDEconomyDate MaintenanceDate(TimerGameEconomy::Date date) noexcept 
 static OpenTTDVehicleMaintenanceRenewal OPENTTD_RUST_CALL MaintenanceRenewal(OpenTTDVehicle *handle, const Company *company) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	assert(company == Company::Get(v->owner));
+	assert(company == Company::Get(v->GetOwner()));
 	return {.age = MaintenanceDate(RustVehicleAge(v)), .max_age = MaintenanceDate(RustVehicleMaxAge(v)), .months = company->settings.engine_renew_months, .enabled = company->settings.engine_renew, .kind = RustVehicleVehicleType(v), .subtype = RustVehicleSubtype(v)};
 }
 static OpenTTDVehicleMaintenanceReset OPENTTD_RUST_CALL MaintenanceReset(OpenTTDVehicle *handle) noexcept
@@ -517,7 +326,7 @@ static bool OPENTTD_RUST_CALL MaintenanceHasEngine(OpenTTDVehicle *handle) noexc
 static OpenTTDVehicleMaintenanceInterval OPENTTD_RUST_CALL MaintenanceInterval(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	const Company *company = Company::Get(v->owner);
+	const Company *company = Company::Get(v->GetOwner());
 	return {.company = company, .last_service = MaintenanceDate(RustVehicleLastService(v)), .now = MaintenanceDate(TimerGameEconomy::date), .interval = RustVehicleServiceInterval(v), .reliability = RustVehicleReliability(v), .percent = v->ServiceIntervalIsPercent(), .wallclock = TimerGameEconomy::UsingWallclockUnits(), .no_service = _settings_game.order.no_servicing_if_no_breakdowns, .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
 }
 static uint16_t OPENTTD_RUST_CALL MaintenanceEngineReliability(OpenTTDVehicle *handle) noexcept { return RustEngineReliability(VehicleOf(handle)->GetEngine()); }
@@ -525,10 +334,10 @@ static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplace
 {
 	const Vehicle *v = VehicleOf(handle);
 	bool when_old = false;
-	EngineID engine = EngineReplacementForCompany(company, v->engine_type, v->group_id, &when_old);
+	EngineID engine = EngineReplacementForCompany(company, v->GetEngineType(), v->group_id, &when_old);
 	return {.engine = engine.base(), .when_old = when_old};
 }
-static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(VehicleOf(handle)->owner); }
+static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(VehicleOf(handle)->GetOwner()); }
 static OpenTTDVehicleMaintenanceAutomatic OPENTTD_RUST_CALL MaintenanceAutomatic(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -570,7 +379,7 @@ static OpenTTDVehicleMaintenanceBreakdownStart OPENTTD_RUST_CALL MaintenanceBrea
 static void OPENTTD_RUST_CALL MaintenanceBreakdownStartWrite(OpenTTDVehicle *handle, uint8_t counter, uint8_t since) noexcept
 {
 	Vehicle *v = VehicleOf(handle);
-	v->breakdown_ctr = counter;
+	v->Record().breakdown_ctr = counter;
 	v->breakdowns_since_last_service = since;
 }
 static OpenTTDVehicleMaintenanceBreakdownActive OPENTTD_RUST_CALL MaintenanceBreakdownActive(OpenTTDVehicle *handle) noexcept
@@ -585,7 +394,7 @@ static OpenTTDVehicleMaintenanceBreakdownCountdown OPENTTD_RUST_CALL Maintenance
 }
 static void OPENTTD_RUST_CALL MaintenanceBreakdownDelayWrite(OpenTTDVehicle *handle, uint8_t delay) noexcept { VehicleOf(handle)->breakdown_delay = delay; }
 static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
-static void OPENTTD_RUST_CALL MaintenanceAircraftBroken(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->vehstatus.Set(VehState::AircraftBroken); }
+static void OPENTTD_RUST_CALL MaintenanceAircraftBroken(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->SetVehStatus(VehicleOf(handle)->GetVehStatus().Set(VehState::AircraftBroken)); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
 static OpenTTDVehicleMaintenanceAge OPENTTD_RUST_CALL MaintenanceAge(OpenTTDVehicle *handle) noexcept
@@ -602,14 +411,14 @@ static OpenTTDVehicleMaintenanceWarning OPENTTD_RUST_CALL MaintenanceWarning(Ope
 }
 static OpenTTDVehicleMaintenanceWarningCompany OPENTTD_RUST_CALL MaintenanceWarningCompany(OpenTTDVehicle *handle) noexcept
 {
-	const Company *company = Company::Get(VehicleOf(handle)->owner);
+	const Company *company = Company::Get(VehicleOf(handle)->GetOwner());
 	return {.company = company, .renewal = company->settings.engine_renew};
 }
 static bool OPENTTD_RUST_CALL MaintenanceEngineAvailableAny(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->GetEngine()->company_avail.Any(); }
 static bool OPENTTD_RUST_CALL MaintenanceReplacementActive(OpenTTDVehicle *handle, const Company *company) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return EngineHasReplacementForCompany(company, v->engine_type, v->group_id);
+	return EngineHasReplacementForCompany(company, v->GetEngineType(), v->group_id);
 }
 static void OPENTTD_RUST_CALL MaintenanceOldNews(OpenTTDVehicle *handle, StringID message) noexcept
 {
@@ -642,7 +451,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.breakdown_trigger = MaintenanceBreakdownTrigger,
 	.chance_write = MaintenanceChanceWrite,
 	.trigger = MaintenanceTrigger,
-	.breakdown_counter = RustVehicleRead<uint8_t, RustVehicleBreakdownCounter>,
 	.breakdown_probe = MaintenanceBreakdownProbe,
 	.breakdown_start = MaintenanceBreakdownStart,
 	.breakdown_start_write = MaintenanceBreakdownStartWrite,

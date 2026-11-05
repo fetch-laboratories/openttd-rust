@@ -27,15 +27,9 @@ struct OpenTTDRailTile {
 	uint8_t railtype, tracks, station_track, tunnel_dir;
 	uint8_t uphill, signal_along, signal_against, signal_green, signal_type, oneway;
 };
-struct OpenTTDRailTrain {
-	uint64_t compatible, all_compatible;
-	uint32_t tile, rear_tile, virtual_tile, rear_virtual_tile, dest_tile, length, speed;
-	uint16_t order_destination;
-	uint8_t td, rear_td, wormhole, rear_wormhole, order, nearest_depot, complex_waypoint;
-};
 struct OpenTTDRailInput {
 	void *context;
-	const Train *vehicle;
+	const OpenTTDVehicle *vehicle;
 	const OpenTTDSharedServices *shared;
 	OpenTTDRailSettings settings;
 	uint32_t map_x, tile;
@@ -47,7 +41,7 @@ struct OpenTTDRailStep {
 	uint8_t action, td, found, reverse, value, target_td, target_okay;
 };
 struct OpenTTDRailLeaves {
-	OpenTTDRailTrain (*train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(train);
+	bool (*waypoint_single)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_single);
 	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	uint32_t (*closest_station)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_station);
 	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept OPENTTD_SERVICE_DEFAULT(output);

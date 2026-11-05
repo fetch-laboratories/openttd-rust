@@ -413,6 +413,7 @@ def check(scenario, run, mode, role, result):
 COMMAND_SOURCE = r"""
 #include "station_cmd.cpp"
 #include "console_internal.h"
+#include "vehicle-record-fixture.hpp"
 // TYPE_RESERVE_FIXTURE
 #include "clear_map.h"
 #include "order_cmd.h"
@@ -462,8 +463,8 @@ static void StationRoadStops(const char *label)
 /* Place a stopped fixture vehicle at the tile centre and enter the tile natively. */
 static void StationRoadEnter(RoadVehicle *v, TileIndex t, Direction dir, Trackdir td)
 {
-	v->tile = t; v->x_pos = TileX(t) * TILE_SIZE + 8; v->y_pos = TileY(t) * TILE_SIZE + 8; v->direction = dir;
-	v->cur_speed = 0; v->vehstatus.Set(VehState::Stopped);
+	FIXTURE_SET(v, Tile, tile, t); FIXTURE_FIELD(v, x_pos) = TileX(t) * TILE_SIZE + 8; FIXTURE_FIELD(v, y_pos) = TileY(t) * TILE_SIZE + 8; FIXTURE_SET(v, Direction, direction, dir);
+	FIXTURE_FIELD(v, cur_speed) = 0; FIXTURE_SET(v, VehStatus, vehstatus, FIXTURE_GET(v, VehStatus, vehstatus).Set(VehState::Stopped));
 #ifdef WITH_RUST
 	v->SetState(td); v->SetFrame(0);
 	auto state = [v] { return v->GetState(); };
@@ -472,7 +473,7 @@ static void StationRoadEnter(RoadVehicle *v, TileIndex t, Direction dir, Trackdi
 	auto state = [v] { return v->state; };
 #endif
 	v->UpdatePosition();
-	auto entered = VehicleEnterTile(v, t, v->x_pos, v->y_pos);
+	auto entered = VehicleEnterTile(v, t, FIXTURE_FIELD(v, x_pos), FIXTURE_FIELD(v, y_pos));
 	fmt::print(stderr, "STCMD road-enter {} {} {} {}\n", v->index.base(), t.base(), entered.base(), state());
 }
 static TileIndex StationPatch()
@@ -488,7 +489,7 @@ static TileIndex StationPatch()
 		/* Preserve live vehicle corner heights so their saved z remains valid. */
 		for (const Vehicle *v : Vehicle::Iterate()) {
 			if (!v->IsGroundVehicle()) continue;
-			uint xx = TileX(v->tile), yy = TileY(v->tile);
+			uint xx = TileX(FIXTURE_GET(v, Tile, tile)), yy = TileY(FIXTURE_GET(v, Tile, tile));
 			for (uint dy = 0; dy < 2; dy++) for (uint dx = 0; dx < 2; dx++) if (height(xx + dx, yy + dy) != TileHeight(TileXY(xx + dx, yy + dy))) usable = false;
 		}
 		if (!usable) continue;
@@ -713,11 +714,11 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 		check("wp-road-join", build_road(exec, road + 2 * step, 1, 1, StationID::Invalid(), false));
 		StationNeed(GetStationIndex(road + 2 * step) == rid, __LINE__);
 		/* A real vehicle occupies the replacement tile. Restore its spatial hash before saving. */
-		RoadVehicle *v = nullptr; for (RoadVehicle *candidate : RoadVehicle::Iterate()) if (!candidate->vehstatus.Test(VehState::Hidden)) { v = candidate; break; }
-		StationNeed(v != nullptr, __LINE__); TileIndex old_tile = v->tile; int old_x = v->x_pos, old_y = v->y_pos, old_z = v->z_pos;
-		v->tile = road; v->x_pos = TileX(road) * TILE_SIZE + 8; v->y_pos = TileY(road) * TILE_SIZE + 8; v->z_pos = GetTileZ(road); v->UpdatePosition();
+		RoadVehicle *v = nullptr; for (RoadVehicle *candidate : RoadVehicle::Iterate()) if (!FIXTURE_GET(candidate, VehStatus, vehstatus).Test(VehState::Hidden)) { v = candidate; break; }
+		StationNeed(v != nullptr, __LINE__); TileIndex old_tile = FIXTURE_GET(v, Tile, tile); int old_x = FIXTURE_FIELD(v, x_pos), old_y = FIXTURE_FIELD(v, y_pos), old_z = FIXTURE_FIELD(v, z_pos);
+		FIXTURE_SET(v, Tile, tile, road); FIXTURE_FIELD(v, x_pos) = TileX(road) * TILE_SIZE + 8; FIXTURE_FIELD(v, y_pos) = TileY(road) * TILE_SIZE + 8; FIXTURE_FIELD(v, z_pos) = GetTileZ(road); v->UpdatePosition();
 		check("wp-occupied", build_road(test, road, width, height, rid, true), false);
-		v->tile = old_tile; v->x_pos = old_x; v->y_pos = old_y; v->z_pos = old_z; v->UpdatePosition();
+		FIXTURE_SET(v, Tile, tile, old_tile); FIXTURE_FIELD(v, x_pos) = old_x; FIXTURE_FIELD(v, y_pos) = old_y; FIXTURE_FIELD(v, z_pos) = old_z; v->UpdatePosition();
 		check("wp-road-remove", Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, road, road + 2 * step));
 		check("wp-road-remove-distant", Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, road_distant, road_distant));
 		check("wp-road-reuse", build_road(exec, road, width, height, StationID::Invalid(), false));
@@ -969,7 +970,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	if (args[1] == "removed-destination") {
 		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { bus = v; break; }
 		StationNeed(bus != nullptr, __LINE__);
-		company = Company::Get(bus->owner);
+		company = Company::Get(FIXTURE_GET(bus, Owner, owner));
 	}
 	Backup<CompanyID> current(_current_company, company->index);
 	/* Declare the builtin tram type available without an external vehicle GRF. */
@@ -1057,11 +1058,11 @@ static bool StationCommands(std::span<std::string_view> args)
 			bus->cur_implicit_order_index = bus->cur_real_order_index = 0;
 			bus->SetDestTile(stop);
 			/* A cached route while en route, through the vehicle owner's public API. */
-			StationPathPush(bus, TRACKDIR_X_NE, bus->tile);
-			StationNeed(bus->tile != stop && StationPathSize(bus) != 0 && bus->GetNumOrders() == 1, __LINE__);
+			StationPathPush(bus, TRACKDIR_X_NE, FIXTURE_GET(bus, Tile, tile));
+			StationNeed(FIXTURE_GET(bus, Tile, tile) != stop && StationPathSize(bus) != 0 && bus->GetNumOrders() == 1, __LINE__);
 			StationCost("removed-destination", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, stop, 1, 1, RoadStopType::Bus, false));
-			fmt::print(stderr, "STCMD removed-destination {} {} {}\n", bus->dest_tile.base(), StationPathSize(bus), IsAnyRoadStopTile(stop));
-			StationNeed(bus->dest_tile == TileIndex{} && StationPathSize(bus) == 0 && !IsAnyRoadStopTile(stop), __LINE__);
+			fmt::print(stderr, "STCMD removed-destination {} {} {}\n", FIXTURE_GET(bus, DestTile, dest_tile).base(), StationPathSize(bus), IsAnyRoadStopTile(stop));
+			StationNeed(FIXTURE_GET(bus, DestTile, dest_tile) == TileIndex{} && StationPathSize(bus) == 0 && !IsAnyRoadStopTile(stop), __LINE__);
 			fmt::print(stderr, "STCMD complete\n");
 			current.Restore(); return true;
 		}
@@ -1106,7 +1107,7 @@ static bool StationCommands(std::span<std::string_view> args)
 				auto [cost, id, refit, capacity, cargo] = Command<CMD_BUILD_VEHICLE>::Do(exec, tile(4, 4), engine, false, INVALID_CARGO, INVALID_CLIENT_ID);
 				StationNeed(cost.Succeeded() && RoadVehicle::Get(id)->Next() == nullptr, __LINE__);
 				buses.push_back(RoadVehicle::Get(id));
-				buses.back()->vehstatus.Reset(VehState::Hidden);
+				FIXTURE_SET(buses.back(), VehStatus, vehstatus, FIXTURE_GET(buses.back(), VehStatus, vehstatus).Reset(VehState::Hidden));
 			}
 			for (int x = 8; x < 17; x++) MakeRoadNormal(tile(x, 10), ROAD_X, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
 			for (int y = 8; y < 15; y++) MakeRoadNormal(tile(20, y), ROAD_Y, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
