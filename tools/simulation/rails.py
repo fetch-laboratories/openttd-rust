@@ -6,9 +6,11 @@ import re
 import shutil
 import struct
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, NotRequired, cast
 
-from . import core
+from . import core, signals
 from .console_adapter import console_adapter, prepared_console
 from .core import (
     ROOT,
@@ -22,6 +24,22 @@ from .core import (
 from .play_saves import DISTRIBUTIONS
 
 AI_FOLDER = "rail-scenario-ai"
+
+
+class Scenario(signals.Scenario):
+    rail_fixture: NotRequired[bool]
+    movement_structure: NotRequired[str]
+    movement_depot: NotRequired[bool]
+    pbs_probe: NotRequired[bool]
+    rail_reload: NotRequired[bool]
+    rail_control: NotRequired[str]
+    vehicle_heads: NotRequired[tuple[int, ...]]
+    crossing_tiles: NotRequired[tuple[int, ...]]
+    barred_crossings: NotRequired[tuple[int, ...]]
+    owner_structures: NotRequired[bool]
+    owner_structure_reload: NotRequired[bool]
+    structure_checkpoint: NotRequired[tuple[int, int, int]]
+    follower_probe: NotRequired[bool]
 
 
 # Exact unchanged pinned bodies: transient PBSTileInfo/train_on_res and trigger order
@@ -116,11 +134,11 @@ PBS_WRAPS = (
 )
 
 
-def pbs_wraps(build):
+def pbs_wraps(build: Path) -> tuple[str, ...]:
     return () if (build / "openttd-rust").exists() else PBS_WRAPS
 
 
-def pbs_interpose(build):
+def pbs_interpose(build: Path) -> tuple[str, ...]:
     # Rust owners call each other directly, bypassing both native trigger facades.
     # rustc may place a caller in its callee's codegen unit, out of --wrap's reach.
     if (build / "openttd-rust").exists():
@@ -128,11 +146,11 @@ def pbs_interpose(build):
     return ()
 
 
-def uses_ai(scenario):
+def uses_ai(scenario: Scenario) -> bool:
     return "rail_control" in scenario
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
         ai = run_dir / "ai/rails"
         shutil.copytree(scenario["scenario_ai"], ai)
@@ -154,8 +172,8 @@ HEADS_2016 = tuple(
 )
 
 
-def scenarios(soak):
-    cases = [
+def scenarios(soak: bool) -> list[Scenario]:
+    cases: list[Scenario] = [
         {
             "name": f"play-padhattan-ridge-1996-{distribution}",
             "kind": "save",
@@ -167,68 +185,68 @@ def scenarios(soak):
         for distribution, commands in DISTRIBUTIONS.items()
     ]
     cases.extend(
-        dict(
-            name="movement-" + route,
-            kind="save",
-            save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
-            movement_structure=route,
-            ticks=10000,
-            console=["movement_structures " + route, "unpause"],
-        )
+        {
+            "name": "movement-" + route,
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            "movement_structure": route,
+            "ticks": 10000,
+            "console": ["movement_structures " + route, "unpause"],
+        }
         for route in ("train-bridge", "road-tunnel")
     )
     cases.append(
-        dict(
-            cases[0],
-            name="rail-movement-depot-3",
-            movement_depot=True,
-            ticks=1200,
-            short_checkpoint=True,
-        )
+        {
+            **cases[0],
+            "name": "rail-movement-depot-3",
+            "movement_depot": True,
+            "ticks": 1200,
+            "short_checkpoint": True,
+        }
     )
     cases.append(
-        dict(
-            cases[0],
-            name="rail-padhattan-ridge-1996-realistic",
-            console=["setting vehicle.train_acceleration_model 1", "unpause"],
-        )
+        {
+            **cases[0],
+            "name": "rail-padhattan-ridge-1996-realistic",
+            "console": ["setting vehicle.train_acceleration_model 1", "unpause"],
+        }
     )
     for forbid90 in (0, 1):
         cases.append(
-            dict(
-                cases[0],
-                name=f"rail-reservation-90-{forbid90}",
-                console=[
+            {
+                **cases[0],
+                "name": f"rail-reservation-90-{forbid90}",
+                "console": [
                     f"setting pf.forbid_90_deg {forbid90}",
                     "setting pf.reserve_paths 1",
                     "setting pf.yapf.rail_look_ahead_max_signals 1",
                     "unpause",
                 ],
-            )
+            }
         )
-    cases.append(dict(cases[-2], name="rail-reservation-reload", rail_reload=True))
+    cases.append({**cases[-2], "name": "rail-reservation-reload", "rail_reload": True})
     for action in ("reverse", "service", "crossing", "collision", "reservation"):
         cases.append(
-            dict(
-                cases[0],
-                name=f"rail-controller-{action}",
-                rail_control=action,
-                ticks=(60000 if soak else 18000) + SNAPSHOT_TICKS,
-                console=[
+            {
+                **cases[0],
+                "name": f"rail-controller-{action}",
+                "rail_control": action,
+                "ticks": (60000 if soak else 18000) + SNAPSHOT_TICKS,
+                "console": [
                     "setting difficulty.disasters 0",
                     "setting pf.reserve_paths 1",
                     "unpause",
                 ],
-            )
+            }
         )
     # The blocked train waits wait_for_pbs_path days, then reverses (stuck_reverse).
     cases.append(
-        dict(
-            cases[-1],
-            name="rail-controller-reservation-reverse",
-            console=[*cases[-1]["console"][:-1], "setting pf.reverse_at_signals 1"]
+        {
+            **cases[-1],
+            "name": "rail-controller-reservation-reverse",
+            "console": [*cases[-1]["console"][:-1], "setting pf.reverse_at_signals 1"]
             + ["unpause"],
-        )
+        }
     )
     for distribution, commands in DISTRIBUTIONS.items():
         cases.append(
@@ -279,14 +297,14 @@ def scenarios(soak):
         ("lock-exit", 240, 12576, 1579, 0),
     ):
         cases.append(
-            dict(
-                base,
-                name=f"rail-owner-2006-{name}",
-                owner_structure_reload=True,
-                structure_checkpoint=(tile, y, z),
-                ticks=ticks,
-                short_checkpoint=True,
-            )
+            {
+                **base,
+                "name": f"rail-owner-2006-{name}",
+                "owner_structure_reload": True,
+                "structure_checkpoint": (tile, y, z),
+                "ticks": ticks,
+                "short_checkpoint": True,
+            }
         )
     for distribution, commands in DISTRIBUTIONS.items():
         cases.append(
@@ -302,15 +320,15 @@ def scenarios(soak):
             }
         )
     cases.append(
-        dict(
-            name="track-follower",
-            kind="save",
-            follower_probe=True,
-            save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
-            ticks=1,
-            short_checkpoint=True,
-            console=["follower_probe", "unpause"],
-        )
+        {
+            "name": "track-follower",
+            "kind": "save",
+            "follower_probe": True,
+            "save": str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            "ticks": 1,
+            "short_checkpoint": True,
+            "console": ["follower_probe", "unpause"],
+        }
     )
     for case in cases:
         if case["name"].startswith(("rail-reservation-", "rail-controller-")):
@@ -319,11 +337,11 @@ def scenarios(soak):
     return cases
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return ["-d", "yapf=3"] if scenario.get("rail_fixture") else []
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     witnessed = (
         scenario.get("rail_fixture") or scenario.get("movement_structure")
     ) and scenario.get("witnesses")
@@ -362,7 +380,7 @@ TRAIN_BRANCHES = {
 }
 
 
-def train_required(scenario):
+def train_required(scenario: Scenario) -> tuple[str, ...] | list[str]:
     name = scenario["name"]
     if scenario.get("movement_depot"):
         return []
@@ -371,20 +389,27 @@ def train_required(scenario):
     ]
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if scenario.get("follower_probe"):
         directory = out / scenario["name"] / "prepare"
         normalized, record = normalize(Path(scenario["save"]), directory)
-        result["follower_input"] = record
+        core.findings(result)["follower_input"] = record
         executables = prepared_console(
             "rails", adapter, binaries, builds, directory / "follower", env
         )
-        return dict(scenario, save=str(normalized), executables=executables)
+        return {**scenario, "save": str(normalized), "executables": executables}
     if scenario.get("movement_structure"):
-        from . import signals
-
+        movement: Scenario = {**scenario, "signals": "movement"}
         prepared = signals.prepare(
-            dict(scenario, signals="movement"),
+            movement,
             binaries,
             builds,
             out,
@@ -393,17 +418,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             result,
         )
         prepared.pop("signals")
-        return prepared
+        return cast(Scenario, prepared)
     if not scenario.get("rail_fixture"):
         return scenario
     directory = out / scenario["name"] / "prepare"
     normalized, record = normalize(Path(scenario["save"]), directory)
-    result["rail_input"] = record
+    core.findings(result)["rail_input"] = record
     if scenario.get("owner_structures"):
-        result["owner_structure_inventory"] = structure_inventory(normalized)
+        core.findings(result)["owner_structure_inventory"] = structure_inventory(
+            normalized
+        )
         vehicles = vehicle_rows(normalized)
         followers = {row["next"] - 1 for row in vehicles.values() if row["next"]}
-        result["owner_transport_heads"] = {
+        core.findings(result)["owner_transport_heads"] = {
             kind: sorted(
                 index
                 for index, row in vehicles.items()
@@ -412,8 +439,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             for kind in range(4)
         }
     if scenario.get("movement_depot"):
+        staging: Scenario = {**scenario, "save": str(normalized), "ticks": 1000}
         warm = run_game(
-            dict(scenario, save=str(normalized), ticks=1000),
+            staging,
             binaries["reference"],
             builds["reference"],
             directory / "depot-warm",
@@ -428,16 +456,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if rows(normalized)[14]["train[0]/common[0]/current_order.type"] & 15 == 3:
             raise RuntimeError("depot staging still has a station loading owner")
         normalized = depot_input(normalized, directory)
-    scenario = dict(scenario, save=str(normalized))
+    scenario = {**scenario, "save": str(normalized)}
     if "rail_control" in scenario:
         normalized, record = controller_input(normalized, directory, scenario)
-        result["rail_controller_input"] = record
-        scenario = dict(scenario, save=str(normalized))
+        core.findings(result)["rail_controller_input"] = record
+        scenario = {**scenario, "save": str(normalized)}
     if scenario.get("owner_structure_reload"):
         # Reach this actual upper-lock pose from the immutable owner save.
         # No position, height, map, RNG or expected-result input is patched.
+        setup: Scenario = {**scenario, "ticks": 47000}
         warm = run_game(
-            dict(scenario, ticks=47000),
+            setup,
             binaries["reference"],
             builds["reference"],
             directory / "warm",
@@ -458,10 +487,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if warm["exit"] != 0 or fixture is None:
             raise RuntimeError("owner structure reload lacks reference upper-lock pose")
         normalized, record = normalize(fixture, directory / "reload")
-        result["owner_structure_reload_input"] = record
-        scenario = dict(scenario, save=str(normalized))
+        core.findings(result)["owner_structure_reload_input"] = record
+        scenario = {**scenario, "save": str(normalized)}
     if scenario.get("rail_reload"):
-        setup = dict(scenario, ticks=8 * SNAPSHOT_TICKS)
+        setup = {**scenario, "ticks": 8 * SNAPSHOT_TICKS}
         run = run_game(
             setup,
             binaries["reference"],
@@ -483,22 +512,22 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if fixture is None:
             raise RuntimeError("rail reload lacks live track/platform reservations")
         normalized, record = normalize(fixture, directory / "reload")
-        result["rail_reload_input"] = record
-        scenario = dict(scenario, save=str(normalized))
+        core.findings(result)["rail_reload_input"] = record
+        scenario = {**scenario, "save": str(normalized)}
     if scenario.get("pbs_probe"):
         executables = prepared_console(
             "rails", adapter, binaries, builds, directory / "pbs", env
         )
-        scenario = dict(scenario, executables=executables)
+        scenario = {**scenario, "executables": executables}
     return scenario
 
 
-def depot_input(source, directory):
+def depot_input(source: Path, directory: Path) -> Path:
     """Stage the existing consist north of real depot 5; ordinary ticks enter/leave."""
     from .core import patch
 
     common, depot = "train[0]/common[0]/", 8280
-    changes = {"VEHS": {}}
+    changes: dict[str, dict[int, dict[str, Any]]] = {"VEHS": {}}
     for index in (14, 15, 16):
         y = 1016 - (index - 14) * 8
         changes["VEHS"][index] = {
@@ -539,11 +568,13 @@ def depot_input(source, directory):
     return target
 
 
-def controller_input(source, directory, scenario):
+def controller_input(
+    source: Path, directory: Path, scenario: Scenario
+) -> tuple[Path, dict[str, Any]]:
     """Declare company/AI inputs and source-derived placement; no expected edits."""
     from .core import patch, rows
 
-    changes = {"PLYR": {0: {"is_ai": 1}}}
+    changes: dict[str, dict[int, dict[str, Any]]] = {"PLYR": {0: {"is_ai": 1}}}
     if scenario["rail_control"] == "collision":
         vehicles = rows(source)
         common = "train[0]/common[0]/"
@@ -621,7 +652,7 @@ def controller_input(source, directory, scenario):
     return target, record
 
 
-def reservation_rows(path):
+def reservation_rows(path: Path) -> dict[str, list[Any]]:
     """Read current-save reservation fields; comparator still checks every byte."""
     chunks = read_save(path)
     tile_types = chunks["MAPT"]["raw"]
@@ -650,7 +681,9 @@ SEARCH = re.compile(
 )
 
 
-def search_witnesses(scenario, run, mode):
+def search_witnesses(
+    scenario: Scenario, run: core.Run, mode: core.Mode
+) -> dict[str, Any]:
     searches = [match.groups() for line in run["log"] if (match := SEARCH.search(line))]
     if not searches:
         raise RuntimeError("rail fixture lacks native YAPFt search witnesses")
@@ -673,11 +706,11 @@ def search_witnesses(scenario, run, mode):
     }
 
 
-def vehicle_rows(path):
+def vehicle_rows(path: Path) -> dict[int, core.Row]:
     chunk = read_save(path)["VEHS"]
-    rows = {}
+    rows: dict[int, core.Row] = {}
     for index, body in chunk["elements"]:
-        fields = decode_element(chunk, body)
+        fields = cast(core.Row, decode_element(chunk, body))
         if fields["type"] not in (0, 1, 2, 3):
             continue
         kind = {0: "train", 1: "roadveh", 2: "ship", 3: "aircraft"}[fields["type"]]
@@ -708,7 +741,7 @@ def vehicle_rows(path):
     return rows
 
 
-def structure_inventory(path):
+def structure_inventory(path: Path) -> dict[str, list[int]]:
     """Decode native map accessors; presence is independent of vehicle use."""
     chunks = read_save(path)
     types, m5 = chunks["MAPT"]["raw"], chunks["MAP5"]["raw"]
@@ -743,12 +776,14 @@ def structure_inventory(path):
     }
 
 
-def structure_witnesses(paths, observations, mode):
+def structure_witnesses(
+    paths: list[Path], observations: list[dict[int, core.Row]], mode: core.Mode
+) -> dict[str, list[list[int]]]:
     """Record actual poses on structures, separately from saved inventory."""
     inventory = structure_inventory(paths[0])
     if any(not tiles for tiles in inventory.values()):
         raise RuntimeError("owner save lacks declared structure inventory")
-    witnessed = {name: [] for name in inventory}
+    witnessed: dict[str, list[list[int]]] = {name: [] for name in inventory}
     for checkpoint, (path, vehicles) in enumerate(
         zip(paths, observations, strict=True)
     ):
@@ -785,14 +820,17 @@ def structure_witnesses(paths, observations, mode):
     return witnessed
 
 
-def controller_witnesses(scenario, run, mode):
+def controller_witnesses(
+    scenario: Scenario, run: core.Run, mode: core.Mode
+) -> dict[str, Any]:
     from .core import rows
 
     if run["exit"] != 0 or not run["snapshots"]:
         raise RuntimeError("rail controller game failed or omitted checkpoints")
     common = "train[0]/common[0]/"
     observations = [rows(path) for path in [Path(scenario["save"]), *run["snapshots"]]]
-    heads = {
+    # A deleted head is None; the reservation and service checks index it.
+    heads: dict[int, list[Any]] = {
         head: [
             {
                 key: snapshot[head][common + key]
@@ -876,7 +914,13 @@ def controller_witnesses(scenario, run, mode):
     }
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario.get("follower_probe"):
         rows = [line for line in run["log"] if line.startswith("FOLLOWER ")]
         required = set(
@@ -886,10 +930,10 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError(
                 "missing default follower branch/path/reservation/RNG outputs"
             )
-        result[f"{mode}_{role}_follower"] = rows
+        core.findings(result)[f"{mode}_{role}_follower"] = rows
         other = "candidate" if role == "reference" else "reference"
         if (
-            expected := result.get(f"{mode}_{other}_follower")
+            expected := core.findings(result).get(f"{mode}_{other}_follower")
         ) is not None and rows != expected:
             raise RuntimeError(
                 "follower paths, errors, reservations or RNG streams differ"
@@ -929,10 +973,10 @@ def check(scenario, run, mode, role, result):
         ):
             raise RuntimeError("movement vehicle did not reach the far side")
         prefix = "train_bridge" if route == "train-bridge" else "road_tunnel"
-        result[f"{mode}_{role}_movement"] = core.branch_witnesses(
+        core.findings(result)[f"{mode}_{role}_movement"] = core.branch_witnesses(
             scenario, run, role, "movement", [prefix + "_enter", prefix + "_exit"]
         )
-        result[f"{mode}_{role}_route"] = observations
+        core.findings(result)[f"{mode}_{role}_route"] = observations
         return
     if not scenario.get("rail_fixture"):
         return
@@ -948,13 +992,13 @@ def check(scenario, run, mode, role, result):
             "occupancy",
             ["insert", "same_bucket", "remove", "reset", "near"],
         )
-    result[f"{mode}_{role}_ground"] = core.branch_witnesses(
+    core.findings(result)[f"{mode}_{role}_ground"] = core.branch_witnesses(
         scenario, run, role, "ground", ground
     )
     if scenario.get("pbs_probe"):
         if not any("PBS checked" in line for line in run["log"]):
             raise RuntimeError("missing default PBS transient comparison")
-        result[f"{mode}_{role}_pbs"] = core.branch_witnesses(
+        core.findings(result)[f"{mode}_{role}_pbs"] = core.branch_witnesses(
             scenario,
             run,
             role,
@@ -994,14 +1038,14 @@ def check(scenario, run, mode, role, result):
         required += [f"road_depot_enter_{direction}" for direction in range(4)]
     if scenario.get("rail_control") in ("crossing", "service"):
         required += ["signal_directions", "station_stop"]
-    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+    core.findings(result)[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
         scenario, run, role, "movement", required
     )
     counts = core.branch_witnesses(
         scenario, run, role, "train", train_required(scenario)
     )
     if counts is not None:
-        result[f"{mode}_{role}_train_profile"] = counts
+        core.findings(result)[f"{mode}_{role}_train_profile"] = counts
     if scenario.get("movement_depot"):
         return
     if scenario.get("owner_structure_reload"):
@@ -1014,20 +1058,22 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError(
                 f"owner structure checkpoint {actual} != {scenario['structure_checkpoint']}"
             )
-        result[f"{mode}_{role}_owner_structure_window"] = {
+        core.findings(result)[f"{mode}_{role}_owner_structure_window"] = {
             "before": before,
             "after": after,
         }
         return
     if "rail_control" in scenario:
         # Controller cases can intentionally stop or delete the original heads.
-        result[f"{mode}_{role}_rail_control"] = controller_witnesses(
+        core.findings(result)[f"{mode}_{role}_rail_control"] = controller_witnesses(
             scenario, run, mode
         )
         return
-    result[f"{mode}_{role}_rail_search"] = search_witnesses(scenario, run, mode)
+    core.findings(result)[f"{mode}_{role}_rail_search"] = search_witnesses(
+        scenario, run, mode
+    )
     if (profile := core.witness_counts(run, "rail")) is not None:
-        result[f"{mode}_{role}_rail_profile"] = profile
+        core.findings(result)[f"{mode}_{role}_rail_profile"] = profile
     paths = [Path(scenario["save"]), *run["snapshots"]]
     observations = [vehicle_rows(path) for path in paths]
     witnesses = {}
@@ -1077,9 +1123,9 @@ def check(scenario, run, mode, role, result):
             if mode == "snapshots" and 14 not in states:
                 raise RuntimeError(f"aircraft {head} lacks flying-state witness")
             witnesses[head]["airport_states"] = states
-    result[f"{mode}_{role}_rail"] = witnesses
+    core.findings(result)[f"{mode}_{role}_rail"] = witnesses
     if scenario.get("owner_structures"):
-        result[f"{mode}_{role}_owner_structures"] = structure_witnesses(
+        core.findings(result)[f"{mode}_{role}_owner_structures"] = structure_witnesses(
             paths, observations, mode
         )
     if "crossing_tiles" in scenario:
@@ -1100,10 +1146,10 @@ def check(scenario, run, mode, role, result):
             for tile in scenario["barred_crossings"]
         ):
             raise RuntimeError("owner-built crossing lacks saved bar and release")
-        result[f"{mode}_{role}_crossings"] = crossings
+        core.findings(result)[f"{mode}_{role}_crossings"] = crossings
         # Offers/awards and reservations are observations, not witnesses of a
         # particular subsidy multiplier or PBS search/control-flow branch.
-        result[f"{mode}_{role}_subsidies"] = [
+        core.findings(result)[f"{mode}_{role}_subsidies"] = [
             {
                 index: decode_element(chunk["SUBS"], body)
                 for index, body in chunk["SUBS"]["elements"]
