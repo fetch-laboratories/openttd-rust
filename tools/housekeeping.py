@@ -53,6 +53,8 @@ class Item:
     reason: str
     worktree: bool = False
     branch: str | None = None  # local branch deleted after its worktree
+    unlock: bool = False  # stale lock released by --apply before removal
+    prune: bool = False  # missing folder; --apply prunes its record
     identity: tuple[int, int] | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
@@ -70,9 +72,13 @@ class Worktree:
     branch: str | None
     locked: bool
     prunable: bool
+    lock_note: str = ""
 
 
 PrState = Callable[[Path, str], str | None]
+IssueState = Callable[[Path, int], str]
+# Issue and PR numbers a lock note names: #123 or an issues/pull URL.
+NAMED = re.compile(r"(?:#|/(?:issues|pull)/)(\d+)\b")
 
 
 def git(repo: Path, *arguments: str) -> str:
@@ -87,6 +93,35 @@ def gh_pr_state(repo: Path, branch: str) -> str | None:
     return next((s for s in ("OPEN", "MERGED", "CLOSED") if s in states), None)
 
 
+def gh_issue_state(repo: Path, number: int) -> str:
+    """OPEN or CLOSED for an issue or PR; a merged PR is closed."""
+    command = ["gh", "api", f"repos/{{owner}}/{{repo}}/issues/{number}"]
+    return subprocess.check_output([*command, "--jq", ".state"], cwd=repo, text=True)
+
+
+def stale_lock(main: Path, note: str, issue_state: IssueState) -> str | None:
+    """The closed numbers when every issue or PR the note names is closed."""
+    named = sorted(set(NAMED.findall(note)), key=int)
+    states = [issue_state(main, int(number)).strip().upper() for number in named]
+    if not named or "OPEN" in states:
+        return None
+    return ", ".join(f"#{number}" for number in named)
+
+
+def lock_age(tree: Path) -> str:
+    try:
+        admin = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
+        days = (time.time() - (admin / "locked").stat().st_mtime) / 86400
+    except (OSError, subprocess.CalledProcessError):
+        return "age unknown"
+    return f"{days:.0f} days old"
+
+
+def on_origin(main: Path, head: str) -> bool:
+    refs = git(main, "for-each-ref", "--contains", head, "refs/remotes/origin")
+    return bool(refs.strip())
+
+
 def list_worktrees(repo: Path) -> list[Worktree]:
     found = []
     for block in git(repo, "worktree", "list", "--porcelain").strip().split("\n\n"):
@@ -99,6 +134,7 @@ def list_worktrees(repo: Path) -> list[Worktree]:
                 branch,
                 "locked" in fields,
                 "prunable" in fields,
+                fields.get("locked", ""),
             )
         )
     return found
@@ -114,13 +150,23 @@ def origin_head(main: Path, branch: str) -> str:
 
 
 def plan_worktrees(
-    main: Path, entries: list[Worktree], pr_state: PrState, references: str = ""
+    main: Path,
+    entries: list[Worktree],
+    pr_state: PrState,
+    references: str = "",
+    issue_state: IssueState = gh_issue_state,
 ) -> list[Item]:
     # A head on the base's first-parent chain is a fresh branch, not merged work.
     first_parent = set(git(main, "rev-list", "--first-parent", BASE).split())
     items = []
     for tree in entries:
         if tree.path.is_relative_to(main / ".local/reference"):
+            continue
+        if tree.prunable or not tree.path.exists():
+            reason = (
+                f"folder missing; {'locked' if tree.locked else 'prune its record'}"
+            )
+            items.append(Item(tree.path, not tree.locked, reason, True, prune=True))
             continue
         task = ".t3/worktrees/" in tree.path.as_posix()
         if tree.branch is None and not task:
@@ -152,20 +198,34 @@ def plan_worktrees(
             if task and (tree.branch is None or fresh):
                 reason = "finished T3 task; detached or no commits beyond base"
                 # A fresh branch holds no work to delete; a detached head has none.
+            elif not fresh and on_origin(main, tree.head):
+                # Review and update checkouts push to another branch's PR.
+                reason = "no PR; head pushed to origin"
+                if origin_head(main, str(tree.branch)) != tree.head:
+                    branch = None
             else:
                 reason = (
                     "no PR; branch at a base commit" if fresh else "no PR; unmerged"
                 )
                 items.append(Item(tree.path, False, reason, True))
                 continue
-        if tree.locked or tree.prunable:
-            hold = "locked" if tree.locked else "missing; run git worktree prune"
-            items.append(Item(tree.path, False, f"{reason}, but {hold}", True))
-        elif git(tree.path, "status", "--porcelain").strip():
-            items.append(Item(tree.path, False, f"{reason}, but dirty", True))
+        unlock = False
+        if tree.locked:
+            if closed := stale_lock(main, tree.lock_note, issue_state):
+                reason, unlock = f"{reason}; stale lock: {closed} closed", True
+            else:
+                hold = f"locked ({tree.lock_note or 'no note'}; {lock_age(tree.path)})"
+                items.append(Item(tree.path, False, f"{reason}, but {hold}", True))
+                continue
+        if git(tree.path, "status", "--porcelain").strip():
+            dirty = f"{reason}, but dirty"
+            items.append(Item(tree.path, False, dirty, True, None, unlock))
         else:
             refusal = worktree_refusal(main, tree.path, references)
-            items.append(Item(tree.path, not refusal, refusal or reason, True, branch))
+            remove = not refusal
+            items.append(
+                Item(tree.path, remove, refusal or reason, True, branch, unlock)
+            )
     return protect_outputs(items)
 
 
@@ -386,7 +446,9 @@ def protect_outputs(items: list[Item]) -> list[Item]:
     handles, error = open_outputs()
     return [
         replace(item, remove=False, reason=reason)
-        if item.remove and (reason := output_refusal(item.path, handles, error))
+        if item.remove
+        and not item.prune
+        and (reason := output_refusal(item.path, handles, error))
         else item
         for item in items
     ]
@@ -466,9 +528,15 @@ def plan_local(local: Path, now: float) -> list[Item]:
     return protect_outputs(items)
 
 
-def plan(repo: Path, pr_state: PrState, now: float, references: str = "") -> list[Item]:
+def plan(
+    repo: Path,
+    pr_state: PrState,
+    now: float,
+    references: str = "",
+    issue_state: IssueState = gh_issue_state,
+) -> list[Item]:
     main, *linked = list_worktrees(repo)
-    trees = plan_worktrees(main.path, linked, pr_state, references)
+    trees = plan_worktrees(main.path, linked, pr_state, references, issue_state)
     return trees + plan_local(main.path / ".local", now)
 
 
@@ -505,6 +573,10 @@ def writable(path: Path) -> None:
 
 def remove(main: Path, item: Item, references: str = "") -> str | None:
     """Remove ITEM; return the refusal when git keeps it."""
+    if item.prune:
+        git(main, "worktree", "prune")
+        listed = {tree.path for tree in list_worktrees(main)}
+        return "record not pruned" if item.path in listed else None
     if item.worktree and (refusal := worktree_refusal(main, item.path, references)):
         return refusal
     handles, error = open_outputs()
@@ -540,6 +612,7 @@ def main(
     argv: list[str] | None = None,
     pr_state: PrState = gh_pr_state,
     references_reader: Callable[[Path], str] = worktree_references,
+    issue_state: IssueState = gh_issue_state,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="remove the listed items")
@@ -550,7 +623,7 @@ def main(
     main_root = list_worktrees(args.repo)[0].path
     git(main_root, "fetch", "--prune", "--quiet", "origin")
     references = references_reader(main_root)
-    items = plan(args.repo, pr_state, time.time(), references)
+    items = plan(args.repo, pr_state, time.time(), references, issue_state)
     total = 0
     for item in items:
         bytes_ = size(item.path) if item.remove and item.path.exists() else 0
@@ -558,6 +631,8 @@ def main(
         shown = human(bytes_) if item.remove else "-"
         label = "remove" if item.remove else "keep  "
         print(f"{label} {shown:>7} {item.path} ({item.reason})", flush=True)
+        if item.unlock and args.apply:
+            git(main_root, "worktree", "unlock", str(item.path))
         if item.remove and args.apply:
             refusal = remove(main_root, item, references)
             if refusal:

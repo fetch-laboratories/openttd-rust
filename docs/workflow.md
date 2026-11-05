@@ -80,8 +80,10 @@ For final validation and merge, root follows these steps:
 ### Housekeeping
 
 - At session start and after integrations, root runs `python3 tools/housekeeping.py` and reads the dry run. It lists sizes and reasons. After a final live-output check, root uses `--apply` for eligible `remove` entries.
-- The tool removes linked worktrees whose branch merged into `origin/rust-migration` or whose PR merged or closed. It uses `git worktree remove` without `--force`. It then deletes local branches if merged or held at the same head on origin. It keeps other no-PR branches.
-- The tool never removes the main checkout, `.local/reference`, or dirty or locked trees. It keeps a live worktree's `.local`.
+- The tool removes linked worktrees whose branch merged into `origin/rust-migration` or whose PR merged or closed. It also removes a clean worktree with no PR of its own whose HEAD, beyond base, is on an `origin/` branch, such as a review or update checkout. It uses `git worktree remove` without `--force`. It then deletes local branches if merged or held at the same head on origin. It keeps other no-PR branches.
+- A lock is stale when every issue or PR its note names (`#123` or a URL) is closed or merged. The tool reports it, `--apply` unlocks it, and the ordinary rules then apply. It keeps any other lock and reports its note and age.
+- The tool reports worktree records whose folder is missing; `--apply` prunes them.
+- The tool never removes the main checkout, `.local/reference`, or dirty or currently locked trees. It keeps a live worktree's `.local`.
 - The tool may remove a clean detached or no-commit T3 task worktree only if no process has its cwd inside. The roadmap and open issue and PR bodies must not name the path, including shortened T3 names. Current deep reports, speed anchors and pinned runtimes must not retain its output. If cwd inspection fails, the tool keeps the tree.
 - In the main checkout's `.local`, the tool removes finished `simulation`, `verification`, `coverage` and `deep` runs when the report's `candidate_commit` is an ancestor of `origin/rust-migration`. For deep reports it uses `commit`. It keeps other finished runs as possible PR evidence and reports without a commit as unclassified.
 - The tool removes unfinished runs idle for 12 hours and loose logs. It first clears read-only bits. It keeps unknown entries for a manual decision.

@@ -6,6 +6,7 @@ import errno
 import io
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -595,16 +596,54 @@ class HousekeepingTests(unittest.TestCase):
                 )
                 self.assertTrue(retained.exists())
 
-    def run_main(self, *arguments: str) -> list[Path]:
+    def run_main(
+        self, *arguments: str, issues: housekeeping.IssueState = lambda *_: "OPEN"
+    ) -> list[Path]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             code = housekeeping.main(
-                [*arguments, "--repo", str(self.main)], pr_state, lambda _: ""
+                [*arguments, "--repo", str(self.main)], pr_state, lambda _: "", issues
             )
         self.assertEqual(code, 0)
         lines = output.getvalue().splitlines()
         removals = [line for line in lines if line.startswith("remove ")]
         return [Path(line.split(maxsplit=2)[2].rsplit(" (", 1)[0]) for line in removals]
+
+    def review_checkout(self, name: str, of: str) -> Path:
+        """A T3 checkout on its own branch that pushes to OF's branch."""
+        tree = self.top / ".t3/worktrees/openttd-rust" / name
+        git(self.main, "worktree", "add", "--quiet", "-b", name, str(tree), of)
+        self.age(tree, 2 * housekeeping.RUNNING_SECONDS)
+        return tree
+
+    def test_pushed_review_checkouts_stale_locks_and_missing_folders(self) -> None:
+        self.branch("pr-head")
+        pushed, unpushed, dirty, merged_lock, open_lock = (
+            self.review_checkout(f"review-{name}", "pr-head")
+            for name in ("pushed", "unpushed", "dirty", "merged-lock", "open-lock")
+        )
+        git(unpushed, "commit", "--quiet", "--allow-empty", "-m", "Add: unpushed")
+        write(dirty / "untracked")
+        git(self.main, "worktree", "lock", "--reason", "Review #900", str(merged_lock))
+        git(self.main, "worktree", "lock", "--reason", "Fixing #901", str(open_lock))
+        missing = self.review_checkout("review-missing", "pr-head")
+        housekeeping.writable(missing)
+        shutil.rmtree(missing)
+        removed = {pushed, merged_lock, missing}
+        states = {900: "CLOSED\n", 901: "OPEN\n"}.get
+        with patch.dict(PR_STATES, {"pr-head": "OPEN"}):
+            listed = set(self.run_main(issues=lambda _, n: states(n) or ""))
+            self.assertEqual(listed, removed | self.removable)
+            self.run_main("--apply", issues=lambda _, n: states(n) or "")
+        for tree in removed:
+            self.assertFalse(tree.exists(), tree)
+        for tree in (unpushed, dirty, open_lock):
+            self.assertTrue(tree.exists(), tree)
+        records = git(self.main, "worktree", "list", "--porcelain")
+        self.assertNotIn(f"worktree {missing}\n", records)
+        self.assertIn(f"worktree {open_lock}\nHEAD", records)
+        # Review branches have no same-head origin branch, so they stay.
+        self.assertIn("review-pushed", self.branches())
 
     def branches(self) -> set[str]:
         return set(git(self.main, "branch", "--format=%(refname:short)").split())
