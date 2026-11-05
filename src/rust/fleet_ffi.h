@@ -21,24 +21,20 @@ struct OpenTTDSharedServices;
  * pool identity. Name, children and engine maps and pending IDs are Rust containers. Commands keep
  * caller-owned stack CommandCost objects with their original move and AddCost behavior. */
 struct OpenTTDVehicle;
+struct OpenTTDVehicleServices;
 struct OpenTTDFleetGroupServices {
 	void * (*group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(group);
 	uint32_t (*next_group)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_group);
 	uint32_t (*next_company)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
 	OpenTTDVehicle * (*next_vehicle)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	void * (*vehicle)(uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(vehicle);
+	const OpenTTDVehicleServices *vehicles;
 	uint32_t (*vehicle_id)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
-	uint8_t (*vehicle_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_type);
-	uint8_t (*vehicle_owner)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_owner);
 	uint16_t (*vehicle_group)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_group);
-	uint16_t (*vehicle_engine)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_engine);
 	int64_t (*profit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(profit);
 	bool (*old_enough)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(old_enough);
 	bool (*primary)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	bool (*countable)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(countable);
-	bool (*ground)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(ground);
-	bool (*front)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(front);
-	void * (*next_part)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(next_part);
 	void * (*first_shared)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(first_shared);
 	void * (*next_shared)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(next_shared);
 	void (*set_membership)(void *shell, uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(set_membership);
@@ -101,15 +97,8 @@ struct OpenTTDFleetTransactionServices {
 	uint32_t (*error)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(error);
 	int64_t (*money)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(money);
 	const OpenTTDCommandServices *commands;
-	bool (*rear)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(rear);
-	bool (*articulated)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(articulated);
-	bool (*crashed)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(crashed);
-	bool (*stopped)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped);
 	bool (*chain_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(chain_depot);
-	void * (*first)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(first);
-	void * (*next_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(next_unit);
-	void * (*prev_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(prev_unit);
-	uint16_t (*length)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(length);
+	const OpenTTDVehicleServices *vehicles;
 	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
@@ -139,7 +128,6 @@ struct OpenTTDFleetTransactionServices {
 	void (*viewports)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(viewports);
 	void (*view_window)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(view_window);
 	void (*news)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(news);
-	void (*transfer_cargo)(void *old, void *replacement, bool chain) noexcept OPENTTD_SERVICE_DEFAULT(transfer_cargo);
 	void (*event)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(event);
 	void (*save_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(save_rng);
 	void (*restore_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(restore_rng);
@@ -153,10 +141,6 @@ struct OpenTTDFleetTransactionServices {
 struct OpenTTDCompanyIdentityServices;
 struct OpenTTDFleetPendingServices {
 	void (*set_current)(uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(set_current);
-	void (*restart)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(restart);
-	int32_t (*x)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(x);
-	int32_t (*y)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(y);
-	int32_t (*z)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(z);
 	const OpenTTDCompanyIdentityServices *company;
 	void (*subtract)(int64_t amount) noexcept OPENTTD_SERVICE_DEFAULT(subtract);
 	void (*command)(void *out, uint32_t id) noexcept OPENTTD_SERVICE_DEFAULT(command);
@@ -167,7 +151,6 @@ struct OpenTTDFleetPendingServices {
 };
 const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDFleetTransactionServices &FleetTransactionServices();
-/** Cargo capacity traversal service (cargo_storage.rs), shared as the fleet next-part service. */
 extern "C" {
 void *openttd_rust_fleet_group_create();
 void openttd_rust_fleet_group_destroy(void *);
@@ -222,6 +205,5 @@ extern "C++" inline bool openttd_rust_fleet_valid(const OpenTTDFleetTransactionS
 void openttd_rust_fleet_autoreplace(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, const OpenTTDFleetCosts *, uint32_t, uint32_t);
 uint32_t openttd_rust_fleet_set_rule(const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, uint32_t, uint16_t, uint16_t, uint16_t, bool);
 void openttd_rust_fleet_pending_clear();
-void openttd_rust_fleet_pending_add(uint32_t, bool);
 }
 #endif /* RUST_FLEET_FFI_H */

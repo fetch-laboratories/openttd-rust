@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file company-control-console.inc Native context, errors, notification order and saved keys. */
 #include "company_cmd.h"
+#include "vehicle-record-fixture.hpp"
 #include "network/network_type.h"
 #include "town.h"
 #include "window_func.h"
@@ -44,7 +45,7 @@ extern "C" CommandCost __wrap__Z19CmdChangeServiceInt10EnumBitSetI13DoCommandFla
 	if (_company_control_transfer && flags.Test(DoCommandFlag::Bankrupt)) {
 		const Vehicle *v = Vehicle::Get(id);
 		if (flags != DoCommandFlags{DoCommandFlag::Execute, DoCommandFlag::Bankrupt} || custom) FixtureAbort(__LINE__);
-		fmt::print(stderr, "COMPANY-CONTROL nested {} {} {} {} {} {} {}\n", id.base(), v->type, v->owner.base(), flags.base(), interval, custom, percent);
+		fmt::print(stderr, "COMPANY-CONTROL nested {} {} {} {} {} {} {}\n", id.base(), FIXTURE_GET(v, Type, type), FIXTURE_GET(v, Owner, owner).base(), flags.base(), interval, custom, percent);
 	}
 	return __real__Z19CmdChangeServiceInt10EnumBitSetI13DoCommandFlagtLS0_16EE6PoolIDIj12VehicleIDTagLj1044480ELj1048575EEtbb(flags, id, interval, custom, percent);
 }

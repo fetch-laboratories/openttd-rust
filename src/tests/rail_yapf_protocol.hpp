@@ -10,6 +10,7 @@
 #define RAIL_YAPF_PROTOCOL_HPP
 #include "../rust/rail_yapf_ffi.h"
 #include "../rust/pbs_ffi.h"
+#include "abi-record-ground.h"
 #include "../track_type.h"
 #include "../rail_type.h"
 #include "follower_fixture.hpp"
@@ -27,12 +28,6 @@ inline std::vector<char> follow_reads;
 inline size_t search_read_count;
 inline std::array<uint32_t, 8> stats;
 inline uint32_t flushes, limits, red, restored;
-inline OpenTTDRailTrain Train(void *) noexcept
-{
-	OpenTTDRailTrain train{};
-	train.compatible = train.all_compatible = 1; train.tile = train.virtual_tile = train.rear_tile = train.rear_virtual_tile = start; train.dest_tile = start - goal; train.speed = 100;
-	return train;
-}
 inline OpenTTDRailTile Tile(uint32_t tile, uint8_t td) noexcept
 {
 	OpenTTDRailTile info{};
@@ -71,17 +66,23 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	follow_reads.clear();
 	search_read_count = 0;
 	static FollowerFixture map{128, 128};
+	static OpenTTDGroundState ground{};
 	FollowerFixture::active = &map;
 	auto &shared = map.shared;
 	for (uint32_t y = 1; y < 127; ++y) for (uint32_t x = 1; x < 127; ++x) map.Tile(x + y * 128, MP_RAILWAY, TRACK_BIT_ALL);
 	if (follow_fail) map.tiles.base[start - 1].m5 = 0;
-	// Owner lookup marks construction; reservation and speed reads use their
-	// shared services, including origin and reservation-target probes.
-	map.vehicle.owner = [](OpenTTDVehicle *) noexcept -> uint8_t { follow_reads.push_back('f'); return 0; };
+	// Reservation and speed callbacks mark their original observation points.
+	map.record.owner = 0;
+	map.record.tile = start;
+	map.record.ground = &ground;
+	map.record.x_pos = 32 * 16; map.record.y_pos = 32 * 16;
+	map.record.dest_tile = start - goal; map.record.cached_max_speed = 100;
+	map.order_state.current.max_speed = 100;
+	map.state->track = TRACK_BIT_X;
+	map.record.vehstatus = 1;
+	map.record.direction = 0;
 	map.rail.rail_reservation = [](uint32_t) noexcept { follow_reads.push_back('r'); return TRACK_BIT_NONE; };
 	map.physics.rail_speed = [](RailType) noexcept -> uint16_t { follow_reads.push_back('s'); return 0; };
-	map.train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return start; };
-	map.train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {0, 0, 1}; };
 	map.train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
 	map.train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
 	map.pbs.try_track = [](uint32_t tile, uint8_t track) noexcept { return Write(tile, track, 1) != 0; };
@@ -90,12 +91,12 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	map.pbs.has_pbs = [](uint32_t, uint8_t) noexcept { return false; };
 	map.rail.set_signal_state = [](uint32_t tile, uint8_t td, uint8_t value) noexcept { Write(tile, td, value ? 6 : 5); };
 	shared.train_trackdir = [](const ::Train *) noexcept { return TRACKDIR_X_NE; };
-	OpenTTDRailInput input{}; input.shared = &shared; input.vehicle = reinterpret_cast<const ::Train *>(map.Vehicle()); input.tile = start;
+	OpenTTDRailInput input{}; input.shared = &shared; input.vehicle = map.Vehicle(); input.tile = start;
 	input.settings.max_nodes = limit; input.settings.curve45 = curve;
 	input.settings.slope = 50; input.settings.lookahead = !cache;
 	input.map_x = 128; input.reserve = reserve;
 	input.kind = kind;
-	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .closest_station = Closest, .output = Output, .debug = Debug};
+	const OpenTTDRailLeaves leaves{.waypoint_single = [](uint16_t) noexcept { return true; }, .tile = Tile, .closest_station = Closest, .output = Output, .debug = Debug};
 	std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)> owner{openttd_rust_rail_new(&input, &leaves), openttd_rust_rail_destroy};
 	return openttd_rust_rail_step(owner.get());
 }

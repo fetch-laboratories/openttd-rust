@@ -950,11 +950,11 @@ protected:
 	void DrawVehicles(const DrawPixelInfo *dpi, Blitter *blitter) const
 	{
 		for (const Vehicle *v : Vehicle::Iterate()) {
-			if (v->type == VEH_EFFECT) continue;
-			if (v->vehstatus.Any({VehState::Hidden, VehState::Unclickable})) continue;
+			if (v->GetType() == VEH_EFFECT) continue;
+			if (v->GetVehStatus().Any({VehState::Hidden, VehState::Unclickable})) continue;
 
 			/* Remap into flat coordinates. */
-			Point pt = this->RemapTile(v->x_pos / (int)TILE_SIZE, v->y_pos / (int)TILE_SIZE);
+			Point pt = this->RemapTile(v->Record().x_pos / (int)TILE_SIZE, v->Record().y_pos / (int)TILE_SIZE);
 
 			int y = pt.y - dpi->top;
 			if (!IsInsideMM(y, 0, dpi->height)) continue; // y is out of bounds.
@@ -973,7 +973,7 @@ protected:
 			}
 
 			/* Calculate pointer to pixel and the colour */
-			PixelColour colour = (this->map_type == SMT_VEHICLES) ? _vehicle_type_colours[v->type] : PC_WHITE;
+			PixelColour colour = (this->map_type == SMT_VEHICLES) ? _vehicle_type_colours[v->GetType()] : PC_WHITE;
 
 			/* And draw either one or two pixels depending on clipping */
 			blitter->SetPixel(dpi->dst_ptr, x, y, colour);

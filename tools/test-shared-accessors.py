@@ -73,6 +73,68 @@ with tempfile.TemporaryDirectory() as directory:
     for changed in [original + copy * 2, original + copy.replace("money", "owner")]:
         port.write_text(changed)
         assert "new shared accessor:" in check().stdout and check().returncode == 1
+    # A changed body may replace its own row: same path, header and row count.
+    grandfathered = baseline.read_text()
+    port.write_text(original + copy.replace("money", "owner"))
+    rehashed = re.findall(r"new shared accessor: (.*)", check().stdout)
+    assert len(rehashed) == 1
+    baseline.write_text(rehashed[0] + "\n")
+    assert check().returncode == 0, check().stdout
+    # A second row of that accessor grows its count.
+    port.write_text(
+        original + copy.replace("money", "owner") + copy.replace("money", "index")
+    )
+    rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    baseline.write_text("\n".join([rehashed[0], *rows]) + "\n")
+    assert "addition forbidden" in check().stdout and check().returncode == 1
+    # A genuinely new accessor cannot take the place of a removed one.
+    fresh = "\nint Fresh(Vehicle *v) { return v->owner; }"
+    port.write_text(original + fresh)
+    rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    assert len(rows) == 1
+    baseline.write_text(rows[0] + "\n")
+    assert "addition forbidden" in check().stdout and check().returncode == 1
+    # A pre-existing body newly classified takes a retired row's place.
+    wide = "\nint Wide(Vehicle *v) { return v->owner + v->index; }"
+    baseline.write_text(grandfathered)
+    port.write_text(original + copy + wide)
+    git("commit", "-qam", "Add: Two-field consumer")
+    base = git("rev-parse", "HEAD")
+    assert check().returncode == 0, check().stdout
+    narrow = "\nint Wide(Vehicle *v) { return v->owner; }"
+    port.write_text(original + narrow)
+    rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    assert len(rows) == 1
+    baseline.write_text(rows[0] + "\n")
+    result = check()
+    assert result.returncode == 0, result.stdout
+    assert "reclassified pre-existing accessor: " + rows[0] in result.stdout
+    # Retired rows cannot exempt additional occurrences of an existing header.
+    wide_base = base
+    spare = "\nint Spare(Vehicle *v) { return v->owner; }"
+    lambda_wide = "\n[](Vehicle *v) { return v->owner + v->index; }"
+    lambda_read = "\n[](Vehicle *v) { return v->owner; }"
+    port.write_text(original + copy + lambda_wide + spare)
+    baseline.write_text(grandfathered)
+    spare_rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+    baseline.write_text(grandfathered + "\n".join(spare_rows) + "\n")
+    git("commit", "-qam", "Add: Second retired accessor fixture")
+    base = git("rev-parse", "HEAD")
+    assert check().returncode == 0, check().stdout
+    for second in [lambda_read, "\n[](Vehicle *v) { v->owner = 1; }"]:
+        port.write_text(original + lambda_read + second)
+        baseline.write_text("")
+        duplicate_rows = re.findall(r"new shared accessor: (.*)", check().stdout)
+        assert len(duplicate_rows) == 2
+        baseline.write_text("\n".join(duplicate_rows) + "\n")
+        result = check()
+        assert "addition forbidden" in result.stdout and result.returncode == 1
+    base = wide_base
+    # Total growth stays forbidden even for a pre-existing body.
+    port.write_text(original + copy + narrow)
+    baseline.write_text(grandfathered + rows[0] + "\n")
+    assert "addition forbidden" in check().stdout and check().returncode == 1
+    baseline.write_text(grandfathered)
     port.write_text(original)
     assert "remove retired" in check().stdout
     baseline.write_text("")

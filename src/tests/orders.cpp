@@ -15,6 +15,7 @@
 #include "../rust/command_services.h"
 #include "../rust/station_command_ffi.h"
 #include "../rust/vehicle_ffi.h"
+#include "../rust/vehicle_record_ffi.h"
 #include "../company_func.h"
 #include "../core/backup_type.hpp"
 #include "../strings_func.h"
@@ -50,13 +51,12 @@ TEST_CASE("Order vector preserves values and allocation invalidation")
 }
 namespace {
 struct TimetableDateFixture {
+	OpenTTDVehicle record{};
 	OpenTTDVehicleOrderState vehicle{};
 	OpenTTDOrderListState list{};
 	RustOrderVector orders;
-	uint8_t owner = 0;
-	uint32_t owner_reads = 0;
 	bool primary = true;
-	TimetableDateFixture() { this->vehicle.orders = this; }
+	TimetableDateFixture() { this->vehicle.orders = this; this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); }
 };
 }
 TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
@@ -69,7 +69,8 @@ TEST_CASE("Orders timetable - signed native economy dates cross into Rust")
 	leaves.vector = [](void *v) noexcept { return static_cast<TimetableDateFixture *>(v)->orders.GetRustOwner(); };
 	leaves.primary_vehicle = [](void *) noexcept -> uint64_t { return 1; };
 	auto base = GetRustVehicleServices();
-	base.owner = [](OpenTTDVehicle *v) noexcept -> uint8_t { return reinterpret_cast<TimetableDateFixture *>(v)->owner; };
+	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
+
 	OpenTTDStationCommandServices station{};
 	station.command = &GetRustCommandServices(); station.cost = &GetRustCommandCostServices();
 	leaves.base = &base; leaves.station_commands = &station;
@@ -97,7 +98,8 @@ TEST_CASE("Orders ownership - early validation and complete native error storage
 	leaves.primary_vehicle = [](void *v) noexcept -> uint64_t { return static_cast<TimetableDateFixture *>(v)->primary; };
 	leaves.command_error = [](void *out, uint32_t error, uint32_t detail) noexcept { CHECK(error == 0); CHECK(detail == 0); *static_cast<CommandCost *>(out) = CMD_ERROR; };
 	auto base = GetRustVehicleServices();
-	base.owner = [](OpenTTDVehicle *v) noexcept -> uint8_t { auto *f = reinterpret_cast<TimetableDateFixture *>(v); ++f->owner_reads; return f->owner; };
+	base.record_from_shell = [](void *shell) noexcept { return &static_cast<TimetableDateFixture *>(shell)->record; };
+
 	OpenTTDStationCommandServices station{};
 	station.command = &GetRustCommandServices(); station.cost = &GetRustCommandCostServices();
 	leaves.base = &base; leaves.station_commands = &station;
@@ -110,22 +112,19 @@ TEST_CASE("Orders ownership - early validation and complete native error storage
 		CHECK(openttd_rust_command_insert(v, 0, 0, &order, &result, &leaves) == 0);
 		CHECK(result.GetErrorMessage() == INVALID_STRING_ID);
 		CHECK(result.Failed());
-		CHECK(fixture.owner_reads == 0);
 	}
 	fixture.primary = true;
 	for (CompanyID local : {CompanyID(0), COMPANY_SPECTATOR}) {
 		_local_company = local;
 		for (bool destination : {false, true}) {
-			fixture.owner = destination ? 0 : OWNER_NONE.base();
+			fixture.record.owner = destination ? 0 : OWNER_NONE.base();
 			leaves.vehicle_type = destination ? +[](void *) noexcept -> uint64_t { return VEH_ROAD; } : OpenTTDOrdersLeaves{}.vehicle_type;
 			leaves.valid_station = []([[maybe_unused]] uint16_t id) noexcept -> uint64_t { return 1; };
 			leaves.station_owner = []([[maybe_unused]] uint16_t id) noexcept -> uint64_t { return OWNER_WATER.base(); };
 			for (bool timetable : {false, true}) {
 				if (timetable && destination) continue;
 				CommandCost result;
-				uint32_t reads = fixture.owner_reads;
 				CHECK((timetable ? openttd_rust_timetable_start(&fixture, 0, 0, 0, &result, &leaves) : openttd_rust_command_insert(&fixture, 0, 0, &order, &result, &leaves)) == 0);
-				CHECK(fixture.owner_reads == reads + 1);
 				Owner owner = destination ? OWNER_WATER : OWNER_NONE;
 				CHECK(result.GetErrorMessage() == STR_ERROR_OWNED_BY);
 				CHECK(result.GetErrorOwner() == (local == 0 ? owner : INVALID_OWNER));

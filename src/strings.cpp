@@ -1746,7 +1746,7 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 						auto tmp_params = MakeParameters(v->unitnumber);
 
 						StringID string_id;
-						switch (v->type) {
+						switch (v->GetType()) {
 							default:           string_id = STR_INVALID_VEHICLE; break;
 							case VEH_TRAIN:    string_id = STR_SV_TRAIN_NAME; break;
 							case VEH_ROAD:     string_id = STR_SV_ROAD_VEHICLE_NAME; break;

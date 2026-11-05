@@ -19,7 +19,6 @@
 #include "rust/services_newgrf.h"
 #include "rust/services_cargo.h"
 #include "rust/services_landscape.h"
-#include "rust/services_sound.h"
 #include "rust/services_water.h"
 
 #include "safeguards.h"

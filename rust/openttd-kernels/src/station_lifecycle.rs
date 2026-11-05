@@ -18,7 +18,6 @@ use crate::tile_type::TileIndex;
 use crate::tile_type::{INVALID_TILE, MP_INDUSTRY, MP_STATION, MP_TREES, MP_WATER};
 use crate::vehicle::VehicleRef;
 use crate::vehicle_type::VehicleID;
-use std::ptr::NonNull;
 
 use crate::industrytype::{self, IndustrySpec};
 /// Process-lifetime string constants from `table/strings.h`.
@@ -448,12 +447,12 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         if front.is_null() {
             break;
         }
-        let vehicle = VehicleRef(
-            NonNull::new(
-                unsafe { crate::station_service::openttd_rust_station_queue_value(front) }.cast(),
+        let vehicle = unsafe {
+            VehicleRef::from_shell(
+                crate::station_service::openttd_rust_station_queue_value(front),
+                visits.vehicles(),
             )
-            .unwrap(),
-        );
+        };
         crate::vehicle::visits::leave_station(vehicle, visits);
     }
     let id = (s.catchment.id)(st);
@@ -510,8 +509,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let mut from = VehicleID(0);
     while let Some(v) = (s.shared.vehicle_next)(from.0) {
         from = VehicleID(unsafe { (resolver.id)(v.0.as_ptr()) }.wrapping_add(1));
-        if (vehicles.last_station)(v) == id.0 {
-            (vehicles.write_last_station)(v, INVALID_STATION);
+        if v.last_station() == id.0 {
+            v.write_last_station(INVALID_STATION);
         }
         if (s.last_loading)(v) == id {
             (visits.set_last_loading)(v, INVALID_STATION);

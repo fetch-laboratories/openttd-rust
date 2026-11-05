@@ -66,7 +66,6 @@
 #include "rust/industry_resolver_ffi.h"
 #include "rust/command_cost_native_services.h"
 #include "rust/services_map.h"
-#include "rust/services_sound.h"
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();

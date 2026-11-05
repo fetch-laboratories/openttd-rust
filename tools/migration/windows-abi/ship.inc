@@ -6,10 +6,9 @@
 /* Saves cannot observe NOSAVE rotation coordinates. Compare their full bit domain
  * with native C++ narrowing, and exercise real nested owner mutation in a callback. */
 struct ShipProbe {
-	uint32_t x = 32768, y = static_cast<uint32_t>(-32769), dest = 0;
-	uint32_t order_time = UINT32_MAX;
-	uint8_t tick = 255, running = 255, direction = 1;
-	uint16_t speed = 33;
+	OpenTTDVehicle record{};
+	ShipProbe() { record.type = VEH_SHIP; record.x_pos = 32768; record.y_pos = -32769; record.tick_counter = 255; record.running_ticks = 255; record.direction = 1; record.cur_speed = 33; }
+	OpenTTDConsistState consist{};
 	uint32_t stage = 0, paths = 0, positions = 0;
 	OpenTTDVehicleTileLinks links;
 	OpenTTDShipState *owner = nullptr;
@@ -40,8 +39,7 @@ static void ShipBoundary()
 	static OpenTTDVehicleMaintenanceServices ship_maintenance;
 	static OpenTTDVehicleServices ship_vehicle;
 	ship_vehicle.maintenance = &ship_maintenance;
-	static int ship_shell; ///< Its address is the opaque vehicle handle.
-	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&ship_shell);
+	auto *shell = &ship_probe.record;
 	/* Initialize every function pointer, including paths unused in this concrete gap. */
 	static const OpenTTDEngineCapabilitiesServices capabilities{};
 	OpenTTDShipLeaves leaves{
@@ -84,62 +82,36 @@ static void ShipBoundary()
 		.path_clear = ShipProbeUnused<void, uint32_t>,
 		.viewport = ShipProbeUnused<void, uint32_t, bool, bool>,
 		.base_viewport = ShipProbeUnused<void, uint32_t>,
-		.cache = ShipProbeUnused<void, uint32_t>, .play_sound = ShipProbeUnused<void, uint32_t>,
+		.play_sound = ShipProbeUnused<void, uint32_t>,
 		.yapf_reverse = ShipProbeUnused<OpenTTDShipReverseResult, uint32_t, bool>, .yapf_choose = ShipProbeUnused<OpenTTDShipTrackResult, uint32_t, uint32_t>,
 		.update_delta = ShipProbeUnused<void, uint32_t>, .build_owner = ShipProbeUnused<void, uint32_t>,
 		.build_z = ShipProbeUnused<void, uint32_t>, .build_properties = ShipProbeUnused<void, uint32_t, uint32_t>,
 		.build_dates = ShipProbeUnused<void, uint32_t>, .build_acceleration = ShipProbeUnused<void, uint32_t, uint32_t>,
 		.build_prototype = ShipProbeUnused<void, uint32_t>, .build_interval_percent = ShipProbeUnused<void, uint32_t>,
-		.build_capacity = ShipProbeUnused<void, uint32_t, uint32_t>, .set_tile = ShipProbeUnused<void, uint32_t, uint32_t>,
-		.set_x = ShipProbeUnused<void, uint32_t, int32_t>, .set_y = ShipProbeUnused<void, uint32_t, int32_t>,
-		.set_z = ShipProbeUnused<void, uint32_t, int32_t>, .set_direction = ShipProbeUnused<void, uint32_t, uint8_t>,
-		.set_speed = ShipProbeUnused<void, uint32_t, uint16_t>, .set_tick = ShipProbeUnused<void, uint32_t, uint8_t>,
-		.set_running = ShipProbeUnused<void, uint32_t, uint8_t>, .set_day = ShipProbeUnused<void, uint32_t, uint8_t>,
-		.set_order_time = ShipProbeUnused<void, uint32_t, int32_t>, .set_progress = ShipProbeUnused<void, uint32_t, uint8_t>,
-		.set_last_station = ShipProbeUnused<void, uint32_t, uint16_t>, .set_hidden = ShipProbeUnused<void, uint32_t, bool>,
-		.set_max_speed = ShipProbeUnused<void, uint32_t, uint16_t>, .set_cargo_age = ShipProbeUnused<void, uint32_t, uint16_t>,
-		.set_dest = ShipProbeUnused<void, uint32_t, uint32_t>, .tile = ShipProbeUnused<uint32_t, uint32_t>,
-		.dest = ShipProbeUnused<uint32_t, uint32_t>, .x = ShipProbeUnused<uint32_t, uint32_t>,
-		.y = ShipProbeUnused<uint32_t, uint32_t>, .z = ShipProbeUnused<uint32_t, uint32_t>,
-		.direction = ShipProbeUnused<uint32_t, uint32_t>, .speed = ShipProbeUnused<uint32_t, uint32_t>,
-		.tick = ShipProbeUnused<uint32_t, uint32_t>, .running = ShipProbeUnused<uint32_t, uint32_t>,
-		.day = ShipProbeUnused<uint32_t, uint32_t>, .order_time = ShipProbeUnused<uint32_t, uint32_t>,
-		.progress = ShipProbeUnused<uint32_t, uint32_t>, .status = ShipProbeUnused<uint32_t, uint32_t>,
-		.owner = ShipProbeUnused<uint32_t, uint32_t>, .last_station = ShipProbeUnused<uint32_t, uint32_t>,
+
+
+
 		.order_destination = ShipProbeUnused<uint32_t, uint32_t>, .order_type = ShipProbeUnused<uint32_t, uint32_t>,
-		.order_max_speed = ShipProbeUnused<uint32_t, uint32_t>, .acceleration = ShipProbeUnused<uint32_t, uint32_t>,
-		.max_speed = ShipProbeUnused<uint32_t, uint32_t>, .state_owner = ShipProbeUnused<OpenTTDShipState *, uint32_t>,
+		.order_max_speed = ShipProbeUnused<uint32_t, uint32_t>,
+		.state_owner = ShipProbeUnused<OpenTTDShipState *, uint32_t>,
 		.patch = ShipProbeUnused<OpenTTDWaterPatch, uint32_t>, .neighbours = ShipProbeUnused<size_t, OpenTTDWaterPatch, OpenTTDWaterPatch *>,
 		.next_depot = ShipProbeUnused<bool, uint32_t, OpenTTDShipDepot *>,
 		.vehicle = &ship_vehicle
 	};
 	ship_probe = {};
+	ship_probe.consist.current_order_time = -1;
+	ship_probe.record.consist = &ship_probe.consist;
+	ship_probe.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&ship_probe);
 	ship_probe.owner = state.get();
 	ship_probe.leaves = &leaves;
 	ship_probe.services = OpenTTDFixtureSharedServices(nullptr, ShipProbeUnused<uint32_t, void *>, ShipProbeUnused<uint32_t, int32_t, int32_t, uint32_t *>);
 	leaves.state_owner = [](uint32_t) noexcept { return ship_probe.owner; };
-	leaves.x = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.x); };
-	leaves.y = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.y); };
-	leaves.dest = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.dest); };
-	leaves.order_time = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.order_time); };
-	leaves.tick = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.tick); };
-	leaves.running = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.running); };
-	leaves.direction = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.direction); };
-	leaves.speed = [](uint32_t) noexcept { return static_cast<uint32_t>(ship_probe.speed); };
-	leaves.set_tick = [](uint32_t, uint8_t value) noexcept { ship_probe.tick = value; };
-	leaves.set_running = [](uint32_t, uint8_t value) noexcept { ship_probe.running = value; };
-	leaves.set_order_time = [](uint32_t, int32_t value) noexcept { ship_probe.order_time = static_cast<uint32_t>(value); };
-	leaves.set_direction = [](uint32_t, uint8_t value) noexcept { ship_probe.direction = value; };
-	leaves.set_speed = [](uint32_t, uint16_t value) noexcept { ship_probe.speed = value; };
-	leaves.set_dest = [](uint32_t, uint32_t value) noexcept { ship_probe.dest = value; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
 	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
-	ship_vehicle.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
-	ship_vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = ship_vehicle.tile_links(shell), .tile = ship_vehicle.tile(shell)}; };
 	ship_vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
 		CHECK(ship_probe.stage++ == 0);
-		CHECK(ship_probe.tick == 0 && ship_probe.running == 0 && ship_probe.order_time == 0);
+		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
 		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0};
 	};
 	ControllerOrders orders(&ship_vehicle);
@@ -149,7 +121,7 @@ static void ShipBoundary()
 	orders_shell = shell;
 	ship_vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &ship_orders->services; };
 	ship_vehicle.ship_get = [](uint32_t id) noexcept { CHECK(id == 4); return orders_shell; };
-	orders.services.vehicle = [](void *v) noexcept { CHECK(v == orders_shell); return ship_orders->vehicle.get(); };
+	orders.services.vehicle = [](void *v) noexcept { CHECK(v == &ship_probe); return ship_orders->vehicle.get(); };
 	orders.services.consist = [](void *) noexcept { return &ship_orders->consist; };
 	orders.services.vehicle_type = [](void *) noexcept { return uint64_t{2}; };
 	orders.services.invalidate_order = [](void *, int32_t reason) noexcept { CHECK(reason == -2 && ship_probe.stage++ == 1); };
@@ -159,19 +131,19 @@ static void ShipBoundary()
 	};
 	leaves.viewport = [](uint32_t id, bool update_delta, bool force) noexcept {
 		CHECK(ship_probe.stage++ == 3 && update_delta && force);
-		CHECK(ship_probe.direction == 5 && ship_probe.speed == 0 && ship_probe.paths == 1 && ship_probe.positions == 1);
-		CHECK(openttd_rust_ship_get_rotation_x(ship_probe.owner) == static_cast<int16_t>(ship_probe.x));
-		CHECK(openttd_rust_ship_get_rotation_y(ship_probe.owner) == static_cast<int16_t>(ship_probe.y));
+		CHECK(ship_probe.record.direction == 5 && ship_probe.record.cur_speed == 0 && ship_probe.paths == 1 && ship_probe.positions == 1);
+		CHECK(openttd_rust_ship_get_rotation_x(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.x_pos));
+		CHECK(openttd_rust_ship_get_rotation_y(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.y_pos));
 		/* The outer call holds no Rust reference to this owner during nested mutation. */
 		openttd_rust_ship_destination(id, 17, ship_probe.leaves, &ship_probe.services);
-		CHECK(ship_probe.dest == 17 && ship_probe.paths == 2);
+		CHECK(ship_probe.record.dest_tile == 17 && ship_probe.paths == 2);
 		openttd_rust_ship_set_rotation(ship_probe.owner, 3);
 	};
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 4 && openttd_rust_ship_get_rotation(state.get()) == 3);
 	openttd_rust_occupancy_update(&ship_vehicle, shell, true);
 	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
-	leaves.owner = [](uint32_t) noexcept { return uint32_t{3}; };
+	ship_probe.record.owner = 3;
 	leaves.next_depot = [](uint32_t first, OpenTTDShipDepot *out) noexcept {
 		if (first != 0) return false;
 		*out = {0x1234, 0x80000017, 3, 1};

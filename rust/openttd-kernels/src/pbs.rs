@@ -395,7 +395,7 @@ impl<'a> Pbs<'a> {
         extern "C" fn visit(context: *mut std::ffi::c_void, t: Handle) -> u8 {
             // SAFETY: visitor and call-local selection state live through synchronous enumeration.
             let c = unsafe { &mut *context.cast::<Check<'_>>() };
-            if (c.pbs.train().read_status)(t) & 128 != 0 {
+            if t.vehicle().status() & 128 != 0 {
                 return 0;
             }
             let track = t.track();
@@ -406,11 +406,12 @@ impl<'a> Pbs<'a> {
                     })
                     != 0
             {
-                let t = (c.pbs.train().read_first)(t);
-                if c.best.shell.is_null()
-                    || (c.pbs.0.index)(t.shell) < (c.pbs.0.index)(c.best.shell)
+                let t = t.first();
+                if c.best.record.is_null()
+                    || (c.pbs.0.index)(t.vehicle().shell())
+                        < (c.pbs.0.index)(c.best.vehicle().shell())
                 {
-                    if !c.best.shell.is_null() {
+                    if !c.best.record.is_null() {
                         crate::witness::hit(crate::witness::PBS_LOWER_ID);
                     }
                     *c.best = t;
@@ -426,7 +427,7 @@ impl<'a> Pbs<'a> {
         // SAFETY: the serialized query keeps shells and service tables live.
         let vs = unsafe { &*self.train().vehicle };
         vs.any_on_tile(tile, |v| {
-            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+            v.vehicle_type() == crate::vehicle::VehicleType::TRAIN.0
                 && visit(
                     std::ptr::from_mut(&mut check).cast(),
                     (vs.train_handle)(v.0.as_ptr()),
@@ -445,7 +446,7 @@ impl<'a> Pbs<'a> {
         check_other: bool,
         other: &mut O,
     ) -> TileInfo {
-        let tile = (self.train().read_tile)(v);
+        let tile = v.vehicle().tile();
         let td =
             unsafe { crate::train::openttd_rust_train_trackdir(v, self.0.train, self.0.shared) };
         if self.is_depot(tile) && (self.0.depot_bits)(tile).0 == 0 {
@@ -457,7 +458,7 @@ impl<'a> Pbs<'a> {
             };
         }
         let mut res = self.follow_reservation(
-            (self.train().read_owner)(v),
+            v.vehicle().owner(),
             (self.0.all_compatible)(v.get_railtypes()),
             tile,
             td,
@@ -467,25 +468,25 @@ impl<'a> Pbs<'a> {
         if check_other {
             let mut best = Handle::NONE;
             self.check_trains(&res, res.tile, &mut best);
-            if !best.shell.is_null() {
-                other.write((self.train().read_first)(best));
+            if !best.record.is_null() {
+                other.write(best.first());
             }
-            if other.read().shell.is_null() && (self.rail().is_rail_station)(res.tile) {
+            if other.read().record.is_null() && (self.rail().is_rail_station)(res.tile) {
                 let diff = self
                     .map()
                     .offs_by_diag_dir(trackdir_to_exitdir(reverse_trackdir(res.td)));
                 let mut st_tile = res.tile.wrapping_add(diff);
-                while other.read().shell.is_null()
+                while other.read().record.is_null()
                     && World::new(self.shared()).compatible_station(st_tile, res.tile)
                 {
                     self.check_trains(&res, st_tile, &mut best);
-                    if !best.shell.is_null() {
-                        other.write((self.train().read_first)(best));
+                    if !best.record.is_null() {
+                        other.write(best.first());
                     }
                     st_tile = st_tile.wrapping_add(diff);
                 }
             }
-            if other.read().shell.is_null()
+            if other.read().record.is_null()
                 && (self.shared().tile_type)(res.tile) == MP_TUNNELBRIDGE
             {
                 self.check_trains(
@@ -493,8 +494,8 @@ impl<'a> Pbs<'a> {
                     (self.rail().other_tunnel_bridge_end)(res.tile),
                     &mut best,
                 );
-                if !best.shell.is_null() {
-                    other.write((self.train().read_first)(best));
+                if !best.record.is_null() {
+                    other.write(best.first());
                     crate::witness::hit(crate::witness::PBS_OTHER_END_TRAIN);
                 }
             }
@@ -526,7 +527,7 @@ impl<'a> Pbs<'a> {
                 self.follow_reservation((self.shared().tile_owner)(tile), types, tile, td, true);
             let mut best = Handle::NONE;
             self.check_trains(&res, res.tile, &mut best);
-            if !best.shell.is_null() {
+            if !best.record.is_null() {
                 return best;
             }
             if (self.rail().is_rail_station)(res.tile) {
@@ -536,7 +537,7 @@ impl<'a> Pbs<'a> {
                 let mut st_tile = res.tile.wrapping_add(diff);
                 while World::new(self.shared()).compatible_station(st_tile, res.tile) {
                     self.check_trains(&res, st_tile, &mut best);
-                    if !best.shell.is_null() {
+                    if !best.record.is_null() {
                         crate::witness::hit(crate::witness::PBS_PLATFORM_TRAIN);
                         return best;
                     }
@@ -549,7 +550,7 @@ impl<'a> Pbs<'a> {
                     (self.rail().other_tunnel_bridge_end)(res.tile),
                     &mut best,
                 );
-                if !best.shell.is_null() {
+                if !best.record.is_null() {
                     crate::witness::hit(crate::witness::PBS_OTHER_END_TRAIN);
                     return best;
                 }

@@ -8,8 +8,6 @@ no production user | openttd_rust_cargo_finalise
 no production user | openttd_rust_convert_ground_water
 no production user | openttd_rust_disaster_startup
 no production user | openttd_rust_economy_startup
-no production user | openttd_rust_effect_initialize
-no production user | openttd_rust_fleet_pending_add
 no production user | openttd_rust_generic_reset
 no production user | openttd_rust_house_animate
 no production user | openttd_rust_house_class_allocate
@@ -32,7 +30,6 @@ no production user | openttd_rust_shared_tile_type
 no production user | openttd_rust_ship_heap_probe
 no production user | openttd_rust_signal_inspect
 no production user | openttd_rust_signal_workset_probe
-no production user | openttd_rust_station_prepare
 no production user | openttd_rust_subsidy_delete_with
 no production user | openttd_rust_tgp_estimate
 no production user | openttd_rust_town_class_counts_resize
@@ -42,7 +39,5 @@ no production user | openttd_rust_town_global_class_counts_resize
 no production user | openttd_rust_town_global_id_counts_resize
 no production user | openttd_rust_town_id_counts_resize
 no production user | openttd_rust_town_rating
-no production user | openttd_rust_train_state_set_cached_curve_speed_mod
-no production user | openttd_rust_train_state_set_cached_tilt
 no production user | openttd_rust_trees_clear_tile
 no production user | openttd_rust_vehicle_cursor_next

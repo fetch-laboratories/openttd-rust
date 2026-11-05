@@ -32,13 +32,13 @@ static void VehicleMaintenanceBoundary()
 	RoadTestTables tables(&shared);
 	auto &base = tables.vehicle;
 	base.maintenance = &maintenance;
-	base.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
 	base.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
 	base.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
 	base.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); };
 	base.write_reliability = [](OpenTTDVehicle *, uint16_t reliability) noexcept { CHECK(reliability == 0x9876); };
-	uint8_t opaque;
-	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&opaque);
+	OpenTTDVehicle record{};
+	record.type = VEH_ROAD;
+	auto *shell = &record;
 	openttd_rust_vehicle_service_depot(shell, &base);
 	openttd_rust_vehicle_decrease_value(shell, &base);
 	CHECK(openttd_rust_vehicle_needs_renew(shell, &base, nullptr, false));
@@ -82,8 +82,7 @@ static void VehicleMaintenanceBoundary()
 	capabilities.price_shift = [](const OpenTTDEngine *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
 	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities; transactions.commands = &commands;
 	maintenance.transaction = &transactions;
-	base.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
-	base.vehicle_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return VEH_ROAD; };
+
 	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval {
 		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .reliability = 0, .percent = false, .wallclock = false, .no_service = true, .breakdowns = 0};
 	};
@@ -125,7 +124,7 @@ static void VehicleMaintenanceBoundary()
  * native size_t/pointer cursor calls on every platform. */
 static void VehicleSchedulerBoundary()
 {
-	using Status = decltype(std::declval<Vehicle>().vehstatus);
+	using Status = decltype(std::declval<Vehicle>().GetVehStatus());
 	static_assert(std::is_same_v<Status::BaseType, uint8_t>);
 	static_assert(std::is_same_v<decltype(RustVehicleStatusAddress(nullptr)), const uint8_t *>);
 	Status status;
@@ -149,15 +148,19 @@ static void VehicleSchedulerBoundary()
 	slots[2] = reinterpret_cast<Vehicle *>(&opaque[1]);
 	slots[3] = slots[4] = nullptr;
 	live = size = 2;
+	static OpenTTDVehicle records[2]{};
+	OpenTTDVehicleServices base{};
+	base.record_from_shell = [](void *shell) noexcept { return shell == slots[0] ? &records[0] : &records[1]; };
 	OpenTTDVehicleSchedulerServices services{};
+	services.vehicle = &base;
 	services.pool = []() noexcept { return OpenTTDVehiclePoolCursor{.slots = slots, .slots_len = size, .first_unused = &live}; };
 	auto cursor = services.pool();
 	size_t from = 0;
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == reinterpret_cast<OpenTTDVehicle *>(slots[0]));
+	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == &records[0]);
 	CHECK(from == 1);
 	live = 3;
 	size = 5;
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == reinterpret_cast<OpenTTDVehicle *>(slots[2]));
+	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == &records[1]);
 	CHECK(cursor.slots_len == 5);
 	CHECK(cursor.first_unused == &live);
 	CHECK(from == 3);

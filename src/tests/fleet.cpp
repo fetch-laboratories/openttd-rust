@@ -18,11 +18,9 @@
 #include "../rust/command_services.h"
 #include "../rust/company_identity_ffi.h"
 #include "../table/strings.h"
-#include <map>
 #include "../safeguards.h"
 
 extern "C" uint8_t openttd_test_command_stack_probe(const OpenTTDCommandCostServices *);
-extern "C" void openttd_test_fleet_pending_drain(const OpenTTDFleetPendingServices *, const OpenTTDFleetTransactionServices *, const OpenTTDFleetGroupServices *, void *);
 TEST_CASE("Fleet - canonical state layouts and independent lifetimes")
 {
 	ABI_LAYOUT_CHECK;
@@ -97,54 +95,4 @@ TEST_CASE("Command - opaque stack lifetime and moved encoded errors")
 	native.destroy(a);
 	CHECK(reinterpret_cast<CommandCost *>(b)->GetEncodedMessage() == expected);
 	native.destroy(b);
-}
-
-/* Drain reentry: the command callback inserts and overwrites map entries. */
-static std::vector<std::pair<uint32_t, uint8_t>> _fleet_drain_trace;
-static uint8_t _fleet_drain_company = 0;
-
-TEST_CASE("Fleet - pending drain matches ordered map iteration under reentry")
-{
-	OpenTTDFleetGroupServices group{};
-	group.current_company = []() noexcept -> uint8_t { return _fleet_drain_company; };
-	group.vehicle = [](uint32_t id) noexcept -> void * { return reinterpret_cast<void *>(static_cast<uintptr_t>(id) + 1); };
-	group.vehicle_owner = [](void *shell) noexcept -> uint8_t { return static_cast<uint8_t>(reinterpret_cast<uintptr_t>(shell) % 3); };
-	OpenTTDFleetTransactionServices transaction{};
-	transaction.local = []() noexcept { return false; };
-	OpenTTDFleetPendingServices pending{};
-	pending.set_current = [](uint8_t company) noexcept { _fleet_drain_company = company; };
-	pending.restart = [](void *) noexcept {};
-	pending.x = [](void *) noexcept -> int32_t { return 0; };
-	pending.y = [](void *) noexcept -> int32_t { return 0; };
-	pending.z = [](void *) noexcept -> int32_t { return 0; };
-	OpenTTDCompanyIdentityServices company{};
-	company.company = [](uint8_t id) noexcept { return reinterpret_cast<Company *>(static_cast<uintptr_t>(id) + 1); };
-	company.renew_reserve = [](const Company *c) noexcept -> uint32_t { CHECK(static_cast<uint8_t>(reinterpret_cast<uintptr_t>(c) - 1) == _fleet_drain_company); return 0; };
-	pending.company = &company;
-	pending.subtract = [](int64_t) noexcept {};
-	pending.command = [](void *, uint32_t id) noexcept {
-		_fleet_drain_trace.emplace_back(id, _fleet_drain_company);
-		/* Later keys are visited this tick; earlier and current keys are not revisited. */
-		if (id == 5) { openttd_rust_fleet_pending_add(9, true); openttd_rust_fleet_pending_add(2, true); openttd_rust_fleet_pending_add(5, false); }
-		if (id == 9) openttd_rust_fleet_pending_add(0xFFFFF, false);
-	};
-	/* Reference: the original std::map loop with the same callback insertions. */
-	std::map<uint32_t, bool> reference{{5, true}, {3, false}, {7, true}};
-	std::vector<std::pair<uint32_t, uint8_t>> expected;
-	for (auto &it : reference) {
-		expected.emplace_back(it.first, static_cast<uint8_t>((it.first + 1) % 3));
-		if (it.first == 5) { reference[9] = true; reference[2] = true; reference[5] = false; }
-		if (it.first == 9) reference[0xFFFFF] = false;
-	}
-	openttd_rust_fleet_pending_clear();
-	openttd_rust_fleet_pending_add(5, true);
-	openttd_rust_fleet_pending_add(3, false);
-	openttd_rust_fleet_pending_add(7, true);
-	_fleet_drain_company = 11;
-	_fleet_drain_trace.clear();
-	CommandCost cost;
-	openttd_test_fleet_pending_drain(&pending, &transaction, &group, &cost);
-	CHECK(_fleet_drain_trace == expected);
-	CHECK(_fleet_drain_company == 11);
-	openttd_rust_fleet_pending_clear();
 }

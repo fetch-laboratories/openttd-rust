@@ -185,7 +185,7 @@ bool Engine::CanCarryCargo() const
  */
 uint Engine::DetermineCapacity(const Vehicle *v, uint16_t *mail_capacity) const
 {
-	return openttd_rust_engine_capacity(&GetRustEngineCapabilitiesServices(), RustEngine(this), v, mail_capacity);
+	return openttd_rust_engine_capacity(&GetRustEngineCapabilitiesServices(), RustEngine(this), RustVehicle(v), mail_capacity);
 }
 
 /**

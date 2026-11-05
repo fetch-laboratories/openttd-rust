@@ -18,6 +18,7 @@
     clippy::too_many_arguments,
     clippy::too_many_lines
 )]
+use crate::vehicle::VehicleRef;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
 
@@ -212,16 +213,10 @@ crate::abi::layouts! {
     };
     "OpenTTDCargoCapacityVehicle" ["probe"] => Vehicle {
         list,
-        capacity,
         cargo,
-        train,
-        articulated,
     };
     "OpenTTDCargoCapacityServices" ["probe"] => CapacityServices {
         read,
-        next_part,
-        last_engine_part,
-        other_multiheaded_part,
         cargo,
     };
 }
@@ -1495,32 +1490,44 @@ pub unsafe extern "C" fn openttd_rust_cargo_invalidate(s: *const Services, value
 #[derive(Clone, Copy, Default)]
 pub struct Vehicle {
     pub(crate) list: *mut List,
-    pub(crate) capacity: u16,
     pub(crate) cargo: u8,
-    pub(crate) train: u8,
-    pub(crate) articulated: u8,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CapacityServices {
+    /// The shell's cargo list and cargo type.
     pub(crate) read: extern "C" fn(*mut c_void, *mut Vehicle),
-    pub(crate) next_part: extern "C" fn(*mut c_void) -> *mut c_void,
-    pub(crate) last_engine_part: extern "C" fn(*mut c_void) -> *mut c_void,
-    pub(crate) other_multiheaded_part: extern "C" fn(*mut c_void) -> *mut c_void,
     pub(crate) cargo: *const Services,
 }
-fn vehicle(services: CapacityServices, shell: *mut c_void) -> Vehicle {
-    let mut fields = Vehicle::default();
-    (services.read)(shell, &raw mut fields);
-    fields
+/// One part's cargo fields, and its capacity, train kind and articulation.
+struct CapacityPart {
+    list: *mut List,
+    cargo: u8,
+    capacity: u16,
+    train: bool,
+    articulated: bool,
 }
-/// The native facade invokes `ConsistChanged` only after this function returns:
+fn vehicle(services: CapacityServices, v: VehicleRef) -> CapacityPart {
+    let mut fields = Vehicle::default();
+    (services.read)(v.shell(), &raw mut fields);
+    CapacityPart {
+        list: fields.list,
+        cargo: fields.cargo,
+        capacity: crate::raw_field::read_field!(v.0.as_ptr(), cargo_cap),
+        train: v.vehicle_type() == crate::vehicle_type::VEH_TRAIN,
+        articulated: v.is_articulated_part(),
+    }
+}
+/// `Train::From(v)->other_multiheaded_part`, as a nullable record.
+fn other(v: Option<VehicleRef>) -> Option<VehicleRef> {
+    v.and_then(VehicleRef::other_multiheaded_part)
+}
+/// Callers invoke `ConsistChanged` only after this function returns:
 /// it may reorder/destroy world parts and reenter their cargo owners.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_capacity(
+pub(crate) unsafe fn cargo_capacity(
     s: *const CapacityServices,
-    old: *mut c_void,
-    new: *mut c_void,
+    old: Option<VehicleRef>,
+    new: Option<VehicleRef>,
     mode: u8,
     part_chain: u8,
 ) -> u8 {
@@ -1528,43 +1535,43 @@ pub unsafe extern "C" fn openttd_rust_cargo_capacity(
     let cargo = unsafe { *services.cargo };
     let transfer = mode != 0;
     let mut src = old;
-    while !src.is_null() {
-        let source = vehicle(services, src);
+    while let Some(src_part) = src {
+        let source = vehicle(services, src_part);
         let count = unsafe { fields(source.list) }.count;
         if transfer
             && part_chain == 0
-            && source.train != 0
+            && source.train
             && src != old
-            && src != (services.other_multiheaded_part)(old)
-            && source.articulated == 0
+            && src != other(old)
+            && !source.articulated
         {
-            src = (services.next_part)((services.last_engine_part)(src));
+            src = src_part.last_engine_part().next();
             continue;
         }
         if (!transfer && count <= u32::from(source.capacity))
             || (transfer && (source.cargo >= 64 || count == 0))
         {
-            src = (services.next_part)(src);
+            src = src_part.next();
             continue;
         }
         let mut spread = count.wrapping_sub(u32::from(source.capacity));
         let mut dest = if transfer { new } else { old };
-        while !dest.is_null()
+        while let Some(dest_part) = dest
             && (if transfer {
                 unsafe { fields(source.list) }.count > 0
             } else {
                 spread != 0
             })
         {
-            let destination = vehicle(services, dest);
+            let destination = vehicle(services, dest_part);
             if transfer
                 && part_chain == 0
-                && destination.train != 0
+                && destination.train
                 && dest != new
-                && dest != (services.other_multiheaded_part)(new)
-                && destination.articulated == 0
+                && dest != other(new)
+                && !destination.articulated
             {
-                dest = (services.next_part)((services.last_engine_part)(dest));
+                dest = dest_part.last_engine_part().next();
                 continue;
             }
             let held = unsafe { fields(destination.list) }.count;
@@ -1600,7 +1607,7 @@ pub unsafe extern "C" fn openttd_rust_cargo_capacity(
                     }
                 }
             }
-            dest = (services.next_part)(dest);
+            dest = dest_part.next();
         }
         if !transfer {
             let count = unsafe { fields(source.list) }.count;
@@ -1624,9 +1631,13 @@ pub unsafe extern "C" fn openttd_rust_cargo_capacity(
                 }
             }
         }
-        src = (services.next_part)(src);
+        src = src_part.next();
     }
-    u8::from(transfer && part_chain != 0 && vehicle(services, new).train != 0)
+    u8::from(
+        transfer
+            && part_chain != 0
+            && new.is_some_and(|v| v.vehicle_type() == crate::vehicle_type::VEH_TRAIN),
+    )
 }
 
 /// `VehicleCargoList::Reroute`, with already-resolved canonical owners.
@@ -2106,16 +2117,13 @@ mod tests {
         }
     }
 
+    /// One train part: its shell-side cargo fields and its canonical record.
     struct Part {
         id: u8,
-        next: *mut Part,
-        last: *mut Part,
-        other: *mut Part,
         list: *mut List,
-        cap: u16,
         cargo: u8,
-        train: u8,
-        articulated: u8,
+        record: *mut crate::vehicle_base::VehicleRecord,
+        train: Box<crate::train_state::TrainState>,
     }
     extern "C" fn capacity_read(shell: *mut c_void, output: *mut Vehicle) {
         let part = unsafe { &*shell.cast::<Part>() };
@@ -2123,39 +2131,46 @@ mod tests {
         unsafe {
             output.write(Vehicle {
                 list: part.list,
-                capacity: part.cap,
                 cargo: part.cargo,
-                train: part.train,
-                articulated: part.articulated,
             });
         }
     }
-    extern "C" fn capacity_next_part(shell: *mut c_void) -> *mut c_void {
-        let part = unsafe { &*shell.cast::<Part>() };
-        CAPACITY_CALLS.with(|calls| calls.borrow_mut().push(("next", part.id)));
-        part.next.cast()
-    }
-    extern "C" fn capacity_last_engine_part(shell: *mut c_void) -> *mut c_void {
-        let part = unsafe { &*shell.cast::<Part>() };
-        CAPACITY_CALLS.with(|calls| calls.borrow_mut().push(("last", part.id)));
-        part.last.cast()
-    }
-    extern "C" fn capacity_other_multiheaded_part(shell: *mut c_void) -> *mut c_void {
-        let part = unsafe { &*shell.cast::<Part>() };
-        CAPACITY_CALLS.with(|calls| calls.borrow_mut().push(("other", part.id)));
-        part.other.cast()
-    }
-    fn part(cap: u16) -> Part {
-        Part {
+    // The record keeps the boxed part address as its shell.
+    #[allow(clippy::unnecessary_box_returns)]
+    fn part(cap: u16) -> Box<Part> {
+        let mut part = Box::new(Part {
             id: 0,
-            next: std::ptr::null_mut(),
-            last: std::ptr::null_mut(),
-            other: std::ptr::null_mut(),
             list: list(true),
-            cap,
             cargo: 0,
-            train: 1,
-            articulated: 0,
+            record: std::ptr::null_mut(),
+            train: Box::default(),
+        });
+        let shell = std::ptr::from_mut(&mut *part).cast();
+        part.record = crate::vehicle_base::openttd_rust_vehicle_record_new(
+            shell,
+            crate::vehicle_type::VehicleType::TRAIN,
+        );
+        unsafe {
+            (*part.record).cargo_cap = cap;
+            (*part.record).train = &raw mut *part.train;
+        }
+        part
+    }
+    fn link(parts: &[Box<Part>]) {
+        for pair in parts.windows(2) {
+            unsafe { crate::vehicle_base::set_next(pair[0].record, pair[1].record) };
+        }
+    }
+    fn articulate(part: &Part) {
+        unsafe { (*part.record).subtype |= 1 << crate::vehicle_base::GVSF_ARTICULATED_PART };
+    }
+    fn head(part: &Part) -> Option<VehicleRef> {
+        std::ptr::NonNull::new(part.record).map(VehicleRef)
+    }
+    fn release(part: &Part) {
+        unsafe {
+            clean(part.list);
+            crate::vehicle_base::openttd_rust_vehicle_record_delete(part.record);
         }
     }
     #[test]
@@ -2187,28 +2202,22 @@ mod tests {
         let service = services();
         let capacity = CapacityServices {
             read: capacity_read,
-            next_part: capacity_next_part,
-            last_engine_part: capacity_last_engine_part,
-            other_multiheaded_part: capacity_other_multiheaded_part,
             cargo: &raw const service,
         };
-        let mut source = std::array::from_fn::<_, 5, _>(|_| part(1));
-        let mut destination = std::array::from_fn::<_, 5, _>(|_| part(1));
-        for parts in [&mut source, &mut destination] {
-            let base = parts.as_mut_ptr();
-            for (index, entry) in parts.iter_mut().enumerate() {
-                entry.id = index as u8 + 1;
-                if index < 4 {
-                    entry.next = unsafe { base.add(index + 1) };
-                }
-            }
-            parts[0].other = unsafe { base.add(4) };
-            parts[1].articulated = 1;
-            parts[2].last = unsafe { base.add(3) };
-            parts[3].articulated = 1;
+        let mut source: Vec<_> = (0..5).map(|_| part(1)).collect();
+        let mut destination: Vec<_> = (0..5).map(|_| part(1)).collect();
+        for parts in [&source, &destination] {
+            link(parts);
+            let (front, rear) = (parts[0].record, parts[4].record);
+            unsafe { (*(*front).train).other_multiheaded_part = rear };
+            articulate(&parts[1]);
+            articulate(&parts[3]);
         }
-        for entry in &mut destination {
-            entry.id += 10;
+        for (index, entry) in source.iter_mut().enumerate() {
+            entry.id = index as u8 + 1;
+        }
+        for (index, entry) in destination.iter_mut().enumerate() {
+            entry.id = index as u8 + 11;
         }
         unsafe {
             for (index, entry) in source.iter().enumerate() {
@@ -2221,64 +2230,39 @@ mod tests {
             }
             CAPACITY_CALLS.with(|calls| calls.borrow_mut().clear());
             assert_eq!(
-                openttd_rust_cargo_capacity(
+                cargo_capacity(
                     &raw const capacity,
-                    source.as_mut_ptr().cast(),
-                    destination.as_mut_ptr().cast(),
+                    head(&source[0]),
+                    head(&destination[0]),
                     1,
                     0,
                 ),
                 0
             );
             assert_eq!(
-                source.each_ref().map(|entry| fields(entry.list).count),
+                source
+                    .iter()
+                    .map(|entry| fields(entry.list).count)
+                    .collect::<Vec<_>>(),
                 [0, 0, 1, 1, 0]
             );
             assert_eq!(
-                destination.each_ref().map(|entry| fields(entry.list).count),
+                destination
+                    .iter()
+                    .map(|entry| fields(entry.list).count)
+                    .collect::<Vec<_>>(),
                 [1, 1, 0, 0, 1]
             );
+            // Foreign engines skip to after their last articulated part: 3 skips 4, 13 skips 14.
             CAPACITY_CALLS.with(|calls| {
                 assert_eq!(
-                    *calls.borrow(),
-                    vec![
-                        ("read", 1),
-                        ("read", 11),
-                        ("next", 11),
-                        ("next", 1),
-                        ("read", 2),
-                        ("other", 1),
-                        ("read", 11),
-                        ("next", 11),
-                        ("read", 12),
-                        ("other", 11),
-                        ("next", 12),
-                        ("next", 2),
-                        ("read", 3),
-                        ("other", 1),
-                        ("last", 3),
-                        ("next", 4),
-                        ("read", 5),
-                        ("other", 1),
-                        ("read", 11),
-                        ("next", 11),
-                        ("read", 12),
-                        ("other", 11),
-                        ("next", 12),
-                        ("read", 13),
-                        ("other", 11),
-                        ("last", 13),
-                        ("next", 14),
-                        ("read", 15),
-                        ("other", 11),
-                        ("next", 15),
-                        ("next", 5),
-                    ]
+                    calls.borrow().iter().map(|&(_, id)| id).collect::<Vec<_>>(),
+                    [1, 11, 2, 11, 12, 3, 5, 11, 12, 13, 15]
                 );
             });
-            for entry in source.iter().chain(&destination) {
-                clean(entry.list);
-            }
+        }
+        for entry in source.iter().chain(&destination) {
+            release(entry);
         }
     }
 
@@ -2287,61 +2271,43 @@ mod tests {
         let service = services();
         let capacity = CapacityServices {
             read: capacity_read,
-            next_part: capacity_next_part,
-            last_engine_part: capacity_last_engine_part,
-            other_multiheaded_part: capacity_other_multiheaded_part,
             cargo: &raw const service,
         };
-        let mut source = part(3);
-        let mut tail = part(6);
-        source.next = &raw mut tail;
+        let source = [part(3), part(6)];
+        link(&source);
         unsafe {
-            append(source.list, service, cargo(8, 10, 8), KEEP as u16);
-            append(tail.list, service, cargo(1, 11, 1), KEEP as u16);
+            append(source[0].list, service, cargo(8, 10, 8), KEEP as u16);
+            append(source[1].list, service, cargo(1, 11, 1), KEEP as u16);
             assert_eq!(
-                openttd_rust_cargo_capacity(
-                    &raw const capacity,
-                    (&raw mut source).cast(),
-                    std::ptr::null_mut(),
-                    0,
-                    0
-                ),
+                cargo_capacity(&raw const capacity, head(&source[0]), None, 0, 0),
                 0
             );
-            assert_eq!(fields(source.list).count, 3);
-            assert_eq!(fields(tail.list).count, 6);
-            let mut replacement = part(4);
-            let mut replacement_tail = part(4);
-            replacement.next = &raw mut replacement_tail;
+            assert_eq!(fields(source[0].list).count, 3);
+            assert_eq!(fields(source[1].list).count, 6);
+            let mut replacement = [part(4), part(4)];
+            link(&replacement);
             assert_eq!(
-                openttd_rust_cargo_capacity(
+                cargo_capacity(
                     &raw const capacity,
-                    (&raw mut source).cast(),
-                    (&raw mut replacement).cast(),
+                    head(&source[0]),
+                    head(&replacement[0]),
                     1,
                     1
                 ),
                 1
             );
-            assert_eq!(fields(source.list).count, 0);
-            assert_eq!(fields(tail.list).count, 1);
-            assert_eq!(fields(replacement.list).count, 4);
-            assert_eq!(fields(replacement_tail.list).count, 4);
-            replacement.cap = 2;
-            replacement_tail.cargo = 1;
-            openttd_rust_cargo_capacity(
-                &raw const capacity,
-                (&raw mut replacement).cast(),
-                std::ptr::null_mut(),
-                0,
-                0,
-            );
-            assert_eq!(fields(replacement.list).count, 2);
-            assert_eq!(fields(replacement_tail.list).count, 4);
-            clean(source.list);
-            clean(tail.list);
-            clean(replacement.list);
-            clean(replacement_tail.list);
+            assert_eq!(fields(source[0].list).count, 0);
+            assert_eq!(fields(source[1].list).count, 1);
+            assert_eq!(fields(replacement[0].list).count, 4);
+            assert_eq!(fields(replacement[1].list).count, 4);
+            (*replacement[0].record).cargo_cap = 2;
+            replacement[1].cargo = 1;
+            cargo_capacity(&raw const capacity, head(&replacement[0]), None, 0, 0);
+            assert_eq!(fields(replacement[0].list).count, 2);
+            assert_eq!(fields(replacement[1].list).count, 4);
+            for entry in source.iter().chain(&replacement) {
+                release(entry);
+            }
         }
     }
 }

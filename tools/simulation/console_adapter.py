@@ -32,7 +32,12 @@ def console_adapter(
     compile_args = shlex.split(entry["command"])
     compile_args[compile_args.index("-o") + 1] = str(folder / f"{kind}.o")
     compile_args[compile_args.index("-c") + 1] = str(source)
-    compile_args += ["-I" + str(Path(entry["file"]).parent), "-I" + str(folder)]
+    # Copied fixture text still finds its shared headers, such as vehicle-record-fixture.hpp.
+    compile_args += [
+        "-I" + str(Path(entry["file"]).parent),
+        "-I" + str(folder),
+        "-I" + str(Path(__file__).resolve().parent),
+    ]
     subprocess.run(compile_args, cwd=entry["directory"], env=env, check=True)
     target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
     command = subprocess.check_output(

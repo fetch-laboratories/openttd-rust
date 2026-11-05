@@ -33,18 +33,18 @@ void DrawAircraftDetails(const Aircraft *v, const Rect &r)
 	int y = r.top;
 	for (const Aircraft *u = v; u != nullptr; u = u->Next()) {
 		if (u->IsNormalAircraft()) {
-			DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(u->engine_type, EngineNameContext::VehicleDetails), u->build_year, u->value));
+			DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(u->GetEngineType(), EngineNameContext::VehicleDetails), u->build_year, u->value));
 			y += GetCharacterHeight(FS_NORMAL);
 
-			if (u->Next()->cargo_cap != 0) {
-				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY_CAPACITY, u->cargo_type, u->cargo_cap, u->Next()->cargo_type, u->Next()->cargo_cap, GetCargoSubtypeText(u)));
+			if (u->Next()->Record().cargo_cap != 0) {
+				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY_CAPACITY, u->cargo_type, u->Record().cargo_cap, u->Next()->cargo_type, u->Next()->Record().cargo_cap, GetCargoSubtypeText(u)));
 			} else {
-				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, u->cargo_type, u->cargo_cap, GetCargoSubtypeText(u)));
+				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, u->cargo_type, u->Record().cargo_cap, GetCargoSubtypeText(u)));
 			}
 			y += GetCharacterHeight(FS_NORMAL) + WidgetDimensions::scaled.vsep_normal;
 		}
 
-		if (u->cargo_cap != 0) {
+		if (u->Record().cargo_cap != 0) {
 			uint cargo_count = u->cargo.StoredCount();
 
 			if (cargo_count != 0) {
@@ -82,22 +82,22 @@ void DrawAircraftImage(const Vehicle *v, const Rect &r, VehicleID selection, Eng
 	int x = rtl ? r.right - width - x_offs : r.left - x_offs;
 	/* This magic -1 offset is related to the sprite_y_offsets in build_vehicle_gui.cpp */
 	int y = ScaleSpriteTrad(-1) + CentreBounds(r.top, r.bottom, 0);
-	bool helicopter = v->subtype == AIR_HELICOPTER;
+	bool helicopter = v->Record().subtype == AIR_HELICOPTER;
 
 	int heli_offs = 0;
 
-	PaletteID pal = v->vehstatus.Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(v);
-	seq.Draw(x, y, pal, v->vehstatus.Test(VehState::Crashed));
+	PaletteID pal = v->GetVehStatus().Test(VehState::Crashed) ? PALETTE_CRASH : GetVehiclePalette(v);
+	seq.Draw(x, y, pal, v->GetVehStatus().Test(VehState::Crashed));
 
 	/* Aircraft can store cargo in their shadow, show this if present. */
 	const Vehicle *u = v->Next();
 	assert(u != nullptr);
 	int dx = 0;
-	if (u->cargo_cap > 0 && u->cargo_type != v->cargo_type) {
+	if (u->Record().cargo_cap > 0 && u->cargo_type != v->cargo_type) {
 		dx = GetLargestCargoIconSize().width / 2;
 		DrawCargoIconOverlay(x + dx, y, u->cargo_type);
 	}
-	if (v->cargo_cap > 0) DrawCargoIconOverlay(x - dx, y, v->cargo_type);
+	if (v->Record().cargo_cap > 0) DrawCargoIconOverlay(x - dx, y, v->cargo_type);
 
 	if (helicopter) {
 		const Aircraft *a = Aircraft::From(v);

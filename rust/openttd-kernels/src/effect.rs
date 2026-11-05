@@ -21,12 +21,12 @@ pub struct State {
 }
 use crate::random_func::chance16_i;
 use crate::services::Services;
+use crate::vehicle::VehicleRef;
 use std::ffi::c_void;
 
-/// Call-scoped copied observation of canonical C++ fields.
-#[repr(C)]
+/// Controller-local values at the original observation points.
 #[derive(Default)]
-pub struct View {
+struct View {
     pub x: i32,
     pub y: i32,
     pub z: i32,
@@ -37,17 +37,13 @@ pub struct View {
     pub ambient: u8,
 }
 /// All leaves are noexcept and cannot reenter or retain pointers. Shared vehicle
-/// fields remain canonical in C++; every mutation is written immediately.
+/// fields use the shared record; every mutation is written immediately.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub observe: extern "C" fn(*mut c_void, *mut View),
-    pub write_x: extern "C" fn(*mut c_void, i32),
-    pub write_y: extern "C" fn(*mut c_void, i32),
-    pub write_z: extern "C" fn(*mut c_void, i32),
+    pub vehicles: *const crate::vehicle::VehicleServices,
     pub sprite_sequence: extern "C" fn(*mut c_void, u32),
     pub sprite: extern "C" fn(*mut c_void, u32),
-    pub progress: extern "C" fn(*mut c_void, u8),
     pub spritenum: extern "C" fn(*mut c_void, u8),
     pub viewport: extern "C" fn(*mut c_void),
     pub sound: extern "C" fn(*mut c_void, u8),
@@ -217,6 +213,7 @@ const BUBBLES: [&[(i32, i32, i32, u32)]; 6] = [
 struct Controller<'a> {
     owner: *mut State,
     context: *mut c_void,
+    record: VehicleRef,
     leaves: &'a Leaves,
     services: &'a Services,
     v: View,
@@ -229,15 +226,15 @@ impl Controller<'_> {
     }
     fn set_x(&mut self, value: i32) {
         self.v.x = value;
-        (self.leaves.write_x)(self.context, value);
+        self.record.write_x(value);
     }
     fn set_y(&mut self, value: i32) {
         self.v.y = value;
-        (self.leaves.write_y)(self.context, value);
+        self.record.write_y(value);
     }
     fn set_z(&mut self, value: i32) {
         self.v.z = value;
-        (self.leaves.write_z)(self.context, value);
+        self.record.write_z(value);
     }
     fn set_sprite_sequence(&mut self, value: u32) {
         self.v.sprite = value;
@@ -249,7 +246,7 @@ impl Controller<'_> {
     }
     fn set_progress(&mut self, value: u8) {
         self.v.progress = value;
-        (self.leaves.progress)(self.context, value);
+        self.record.write_progress(value);
     }
     fn set_spritenum(&mut self, value: u8) {
         self.v.spritenum = value;
@@ -500,16 +497,27 @@ pub unsafe extern "C" fn openttd_rust_effect_get_substate(owner: *const State) -
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_effect_run(
     owner: *mut State,
-    context: *mut c_void,
+    record: VehicleRef,
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
     let leaves = unsafe { &*leaves };
-    let mut v = View::default();
-    (leaves.observe)(context, &raw mut v);
+    let vehicles = unsafe { &*leaves.vehicles };
+    let v = View {
+        x: record.x(),
+        y: record.y(),
+        z: record.z(),
+        sprite: (vehicles.first_sprite)(record),
+        progress: record.progress(),
+        spritenum: unsafe { ((*((vehicles.newgrf)())).sprite)(record.0.as_ptr()) },
+        subtype: record.subtype(),
+        ambient: u8::from(unsafe { (*services).settings().ambient.read() }),
+    };
+    let context = record.shell();
     let mut controller = Controller {
         owner,
         context,
+        record,
         leaves,
         services: unsafe { &*services },
         v,
@@ -520,17 +528,17 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
 /// # Safety
 /// The live owner, shell and immutable tables obey `openttd_rust_effect_run`'s contract.
 #[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_effect_initialize(
+unsafe fn initialize(
     owner: *mut State,
-    context: *mut c_void,
+    record: VehicleRef,
     kind: u8,
     leaves: &Leaves,
     services: &Services,
 ) {
     let mut controller = Controller {
         owner,
-        context,
+        context: record.shell(),
+        record,
         leaves,
         services,
         v: View {
@@ -543,27 +551,16 @@ pub unsafe extern "C" fn openttd_rust_effect_initialize(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDEffectView" ["probe"] => View {
-        x,
-        y,
-        z,
-        sprite,
-        progress,
-        spritenum,
-        subtype,
-        ambient,
-    };
     "OpenTTDEffectLeaves" ["probe"] => Leaves {
-        observe,
-        write_x, write_y, write_z, sprite_sequence, sprite, progress, spritenum,
+        vehicles,
+        sprite_sequence, sprite, spritenum,
         viewport,
         sound,
 
     };
-"OpenTTDEffectAllocation" ["probe"] => Allocation { shell, owner, };
-    "OpenTTDEffectPosition" ["probe"] => Position { x, y, z, };
+"OpenTTDEffectAllocation" ["probe"] => Allocation { shell, record, owner, };
     "OpenTTDEffectCreationServices" ["probe"] => CreationServices {
-        effect, shared, can_allocate, allocate, owner, place, delta, unclickable, position,
+        effect, shared, can_allocate, allocate, owner, delta,
     };
 
 }
@@ -574,13 +571,8 @@ crate::abi::layouts! {
 #[repr(C)]
 struct Allocation {
     shell: *mut c_void,
+    record: VehicleRef,
     owner: *mut State,
-}
-#[repr(C)]
-struct Position {
-    x: i32,
-    y: i32,
-    z: i32,
 }
 #[repr(C)]
 pub struct CreationServices {
@@ -589,10 +581,7 @@ pub struct CreationServices {
     can_allocate: extern "C" fn(usize) -> bool,
     allocate: extern "C" fn() -> Allocation,
     owner: extern "C" fn(*mut c_void) -> *mut State,
-    place: extern "C" fn(*mut c_void, i32, i32, i32, u8),
     delta: extern "C" fn(*mut c_void),
-    unclickable: extern "C" fn(*mut c_void),
-    position: extern "C" fn(*const crate::vehicle::OpenTTDVehicle) -> Position,
 }
 static CREATION: std::sync::atomic::AtomicPtr<CreationServices> =
     std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
@@ -619,11 +608,15 @@ pub extern "C" fn openttd_rust_effect_create(x: i32, y: i32, z: i32, kind: u8) -
         return std::ptr::null_mut();
     }
     let v = (s.allocate)();
-    (s.place)(v.shell, x, y, z, kind);
+    crate::raw_field::write_field!(v.record.0.as_ptr(), subtype, kind);
+    v.record.write_x(x);
+    v.record.write_y(y);
+    v.record.write_z(z);
+    v.record.write_tile(0);
     (s.delta)(v.shell);
-    (s.unclickable)(v.shell);
+    v.record.write_status(crate::vehicle_base::VS_UNCLICKABLE);
     unsafe {
-        openttd_rust_effect_initialize(v.owner, v.shell, kind, s.effect, s.shared);
+        initialize(v.owner, v.record, kind, s.effect, s.shared);
     }
     (s.effect.viewport)(v.shell);
     v.shell
@@ -663,11 +656,11 @@ pub extern "C" fn openttd_rust_effect_create_rel(
     z: i32,
     kind: u8,
 ) -> *mut c_void {
-    let p = (creation().position)(v);
+    let record = VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast_mut()) });
     openttd_rust_effect_create(
-        p.x.wrapping_add(x),
-        p.y.wrapping_add(y),
-        p.z.wrapping_add(z),
+        record.x().wrapping_add(x),
+        record.y().wrapping_add(y),
+        record.z().wrapping_add(z),
         kind,
     )
 }

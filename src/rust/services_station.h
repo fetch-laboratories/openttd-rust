@@ -119,6 +119,7 @@ inline OrthogonalTileArea *RustStationStopArea(BaseStation *st, bool truck) noex
 inline OrthogonalTileArea *RustStationAirportArea(BaseStation *st) noexcept { return &Station::From(st)->airport; }
 inline OrthogonalTileArea *RustStationShipArea(BaseStation *st) noexcept { return &Station::From(st)->ship_station; }
 inline OrthogonalTileArea *RustStationDockingArea(BaseStation *st) noexcept { return &Station::From(st)->docking_station; }
+inline bool RustWaypointSingleTile(uint16_t id) noexcept { return Waypoint::Get(StationID{id})->IsSingleTile(); }
 inline OrthogonalTileArea *RustWaypointRoadArea(BaseStation *st) noexcept { return &Waypoint::From(st)->road_waypoint_area; }
 inline const OpenTTDStation *OpenTTDStationByTile(uint32_t tile) noexcept { return RustStation(RustStationByTile(tile)); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }

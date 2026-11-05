@@ -25,23 +25,6 @@ RoadStopPool _roadstop_pool("RoadStop");
 INSTANTIATE_POOL_METHODS(RoadStop)
 
 
-static OpenTTDRoadStopDriveRead OPENTTD_RUST_CALL RoadStopDriveRead(OpenTTDVehicle *handle) noexcept
-{
-	const RoadVehicle *rv = RoadVehicle::From(VehicleOf(handle));
-	return {.total_length = RustGroundCachedTotalLength(&rv->gcache), .direction = RustVehicleDirection(rv)};
-}
-
-/** The Rebuild filter reads; only road vehicles have the road fields. */
-static OpenTTDRoadStopRebuildRead OPENTTD_RUST_CALL RoadStopRebuildRead(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	VehicleType type = RustVehicleVehicleType(v);
-	if (type != VEH_ROAD) return {.road = nullptr, .total_length = 0, .vehicle_type = type, .direction = 0, .status = 0, .primary = false};
-	const RoadVehicle *rv = RoadVehicle::From(v);
-	return {.road = RoadStateOf(rv), .total_length = RustGroundCachedTotalLength(&rv->gcache), .vehicle_type = type,
-		.direction = RustVehicleDirection(v), .status = RustVehicleStatus(v), .primary = RustVehiclePrimary(v)};
-}
-
 static constinit const OpenTTDRoadStopServices _rust_road_stop_services{
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
@@ -55,8 +38,6 @@ static constinit const OpenTTDRoadStopServices _rust_road_stop_services{
 		for (const RoadStop *rs : RoadStop::Iterate(from)) return {rs->GetRustState(), rs->xy.base(), rs->index.base()};
 		return {};
 	},
-	.drive_read = RoadStopDriveRead,
-	.rebuild_read = RoadStopRebuildRead,
 };
 
 const OpenTTDRoadStopServices &GetRustRoadStopServices() noexcept
