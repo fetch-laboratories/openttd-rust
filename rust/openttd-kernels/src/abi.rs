@@ -33,12 +33,14 @@ pub(crate) use layouts;
 /// Records both languages access in place. `tools/generate-abi.py` emits each C++
 /// declaration from this field list; the layout lists size, alignment, then each
 /// field's offset and size. Field types are primitives, transparent newtypes of
-/// primitives, or raw pointers. Opaque pointer fields use `=> class` to match a
-/// native class; `=> struct` and untagged opaque pointers declare native structs.
+/// primitives, fixed arrays of those, or raw pointers. Opaque pointer fields use
+/// `=> class` to match a native class; `=> struct` and untagged opaque pointers
+/// declare native structs. `=> "Type"` names a native field type the includer
+/// declares, such as a typed bitset, with any array bounds as a `[N]` suffix.
 #[allow(unused_macros)] // Test-only users are feature-gated.
 macro_rules! shared_records {
     (fn $function:ident; $( $(#[$meta:meta])* $cpp:literal [$group:literal] => pub struct $name:ident {
-        $($(#[$field_meta:meta])* pub $field:ident : $type:ty $(=> $pointee_tag:ident)?),* $(,)?
+        $($(#[$field_meta:meta])* pub $field:ident : $type:ty $(=> $pointee_tag:tt)?),* $(,)?
     } )*) => {
         $(
             $(#[$meta])*

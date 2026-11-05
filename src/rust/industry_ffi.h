@@ -24,6 +24,7 @@ extern "C" {
 #endif
 typedef struct Industry OpenTTDIndustryShell;
 typedef struct IndustryTileSpec OpenTTDIndustryTileSpec;
+struct IndustrySpec;
 typedef struct OpenTTDIndustryStationHandle OpenTTDIndustryStationHandle;
 typedef struct OpenTTDIndustry OpenTTDIndustry;
 typedef struct OpenTTDIndustryBuilder OpenTTDIndustryBuilder;
@@ -173,13 +174,15 @@ typedef struct OpenTTDIndustryServices {
 } OpenTTDIndustryServices;
 uint8_t openttd_rust_industry_forest_abi(uint32_t, const OpenTTDIndustryServices *);
 extern "C++" inline bool openttd_rust_industry_forest(uint32_t a0, const OpenTTDIndustryServices *a1) { return openttd_rust_industry_forest_abi(a0, a1) != 0; }
-uint8_t openttd_rust_industry_spec_raw_abi(uint8_t life);
-extern "C++" inline bool openttd_rust_industry_spec_raw(uint8_t a0) { return openttd_rust_industry_spec_raw_abi(a0) != 0; }
-uint8_t openttd_rust_industry_spec_processing_abi(uint8_t life, uint32_t behaviour);
-extern "C++" inline bool openttd_rust_industry_spec_processing(uint8_t a0, uint32_t a1) { return openttd_rust_industry_spec_processing_abi(a0, a1) != 0; }
-uint8_t openttd_rust_industry_original_economy_abi(uint16_t callbacks, uint8_t economy);
-extern "C++" inline bool openttd_rust_industry_original_economy(uint16_t a0, uint8_t a1) { return openttd_rust_industry_original_economy_abi(a0, a1) != 0; }
-int64_t openttd_rust_industry_construction_cost(uint8_t multiplier, uint8_t life, uint8_t raw_setting);
+uint8_t openttd_rust_industry_spec_raw_abi(const IndustrySpec *);
+extern "C++" inline bool openttd_rust_industry_spec_raw(const IndustrySpec *a0) { return openttd_rust_industry_spec_raw_abi(a0) != 0; }
+uint8_t openttd_rust_industry_spec_processing_abi(const IndustrySpec *);
+extern "C++" inline bool openttd_rust_industry_spec_processing(const IndustrySpec *a0) { return openttd_rust_industry_spec_processing_abi(a0) != 0; }
+uint8_t openttd_rust_industry_original_economy_abi(const IndustrySpec *, uint8_t economy);
+extern "C++" inline bool openttd_rust_industry_original_economy(const IndustrySpec *a0, uint8_t a1) { return openttd_rust_industry_original_economy_abi(a0, a1) != 0; }
+int64_t openttd_rust_industry_construction_cost(const IndustrySpec *, uint8_t raw_setting);
+IndustrySpec *openttd_rust_industry_specs();
+IndustryTileSpec *openttd_rust_industry_tile_specs();
 struct OpenTTDIndustryPair { uint16_t first, second; };
 OpenTTDIndustryPair openttd_rust_industry_sum_history(const OpenTTDIndustryPair *, size_t);
 

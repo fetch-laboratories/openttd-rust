@@ -10,7 +10,6 @@
 #include "../newgrf_object.h"
 #include "../newgrf_roadstop.h"
 #include "../newgrf_station.h"
-#include "../industrytype.h"
 #include <type_traits>
 template <typename Spec, typename Triggers>
 inline constexpr OpenTTDSpecAnimationServices<Spec, Triggers> _rust_spec_animation{
@@ -83,8 +82,6 @@ static constexpr OpenTTDNewGRFSpecs _rust_newgrf_specs{
 	.airport = &_rust_spec_services<AirportSpec, uint8_t>,
 	.airport_tile = &_rust_spec_services<AirportTileSpec, uint8_t>,
 	.house = &_rust_spec_services<HouseSpec, uint8_t>,
-	.industry = &_rust_spec_services<IndustrySpec, uint8_t>,
-	.industry_tile = &_rust_spec_services<IndustryTileSpec, uint8_t>,
 	.object = &_rust_spec_services<ObjectSpec, uint16_t>,
 	.road_stop = &_rust_spec_services<RoadStopSpec, uint16_t>,
 	.station = &_rust_spec_services<StationSpec, uint16_t>,

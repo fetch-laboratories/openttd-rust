@@ -1,68 +1,24 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Industry definition allocation and publication. Native specs hold tables and graphs;
-//! mapping/override state is canonical Rust storage. All calls run under the game-state
-//! mutex. Cargo array pointers expire at return; cargo translation cannot mutate specs.
-//! References to manager storage end before native leaves or reentrant owners.
-use super::{SpecHandle, TileSpec};
+//! Industry definition allocation, publication and reset over the Rust spec storage. All
+//! calls run under the game-state mutex. No reference into spec or manager storage survives
+//! a native leaf or a reentrant owner; specs move between storages by value.
 use crate::debug::grf_msg;
+use crate::industrytype::{self, EMPTY_INDUSTRY, EMPTY_TILE, IndustrySpec, IndustryTileSpec};
 pub(crate) mod properties;
-pub(crate) mod storage;
 use crate::industry_type::{INDUSTRY_ORIGINAL_NUM_INPUTS, INDUSTRY_ORIGINAL_NUM_OUTPUTS};
+use crate::newgrf::CargoLabel;
 use crate::newgrf_commons::SubstituteSpecIdentity as Identity;
 use crate::override_manager::{self, Mapping};
 use std::ffi::c_void;
-#[repr(C)]
-pub struct Availability {
-    pub enabled: bool,
-    pub has_file: bool,
-}
-#[repr(C)]
-pub struct CargoSlots<const N: usize> {
-    cargo: *mut u8,
-    labels: [crate::newgrf::CargoLabel; N],
-}
-impl<const N: usize> CargoSlots<N> {
-    unsafe fn translate(self) {
-        for i in 0..N {
-            if !crate::cargo_type::is_valid_cargo_type(unsafe { self.cargo.add(i).read() }) {
-                unsafe {
-                    self.cargo.add(i).write(translate(self.labels[i]));
-                }
-            }
-        }
-    }
-}
-#[repr(C)]
-pub struct IndustryCargo {
-    produced: CargoSlots<INDUSTRY_ORIGINAL_NUM_OUTPUTS>,
-    accepted: CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS>,
-}
+/// Native inputs: the original tables and the string ids Rust cannot name.
 #[repr(C)]
 pub struct Services {
-    pub generation: *const super::GenerationServices,
     pub shared: *const crate::services::Services,
-    pub industry: unsafe extern "C" fn(u16) -> *mut SpecHandle,
-    pub tile: unsafe extern "C" fn(u16) -> *mut TileSpec,
-    pub availability: unsafe extern "C" fn(*const SpecHandle) -> Availability,
-    pub publish: unsafe extern "C" fn(u16, *mut SpecHandle),
-    pub publish_tile: unsafe extern "C" fn(u16, *mut TileSpec),
-    pub reset_industry: unsafe extern "C" fn(u16),
-    pub clear_industry: unsafe extern "C" fn(u16),
-    pub climate_available: unsafe extern "C" fn(*const SpecHandle, u8) -> bool,
-    pub reset_tile: unsafe extern "C" fn(u16),
-    pub clear_tile: unsafe extern "C" fn(u16),
-    pub industry_count: unsafe extern "C" fn(*const c_void) -> usize,
-    pub tile_count: unsafe extern "C" fn(*const c_void) -> usize,
-    pub file_industry: unsafe extern "C" fn(*mut c_void, usize) -> *mut SpecHandle,
-    pub file_tile: unsafe extern "C" fn(*mut c_void, usize) -> *mut TileSpec,
-    pub clear_file: unsafe extern "C" fn(*mut c_void),
-    pub conflicting: unsafe extern "C" fn(*mut SpecHandle) -> *mut u8,
-    pub invalid_name: unsafe extern "C" fn(*mut SpecHandle),
-    pub cargo: unsafe extern "C" fn(*mut SpecHandle) -> IndustryCargo,
-    pub tile_cargo: unsafe extern "C" fn(*mut TileSpec) -> CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS>,
-    pub set_produced: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
-    pub set_accepted: unsafe extern "C" fn(*mut SpecHandle, usize, u8),
-    pub set_tile_accepted: unsafe extern "C" fn(*mut TileSpec, usize, u8),
+    pub origin: *const IndustrySpec,
+    pub origin_tiles: *const IndustryTileSpec,
+    pub invalid_name: u32,
+    /// `AddStringForMapping` into a `StringID` field of a record.
+    pub map_string: unsafe extern "C" fn(u16, *mut u32),
 }
 impl Services {
     fn shared(&self) -> &crate::services::Services {
@@ -75,7 +31,6 @@ pub unsafe fn allocate(
     local: u16,
     grfid: u32,
     substitute: u16,
-    s: &Services,
 ) -> u16 {
     let (offset, maximum, invalid) =
         unsafe { ((*manager).offset, (*manager).maximum, (*manager).invalid) };
@@ -83,9 +38,10 @@ pub unsafe fn allocate(
         if id < offset && unsafe { (&(*manager).entities)[usize::from(id)] } != invalid {
             continue;
         }
-        let spec = unsafe { ((*s.generation).spec)(id as u8) };
-        let status = unsafe { (s.availability)(spec) };
-        if !status.enabled && !status.has_file {
+        // The original narrows the slot to IndustryType for GetIndustrySpec.
+        let spec = industrytype::industry(u16::from(id as u8));
+        let (enabled, has_file) = unsafe { ((*spec).enabled, (*spec).grf_prop.has_grf_file()) };
+        if !enabled && !has_file {
             let map = unsafe { &mut (&mut (*manager).mappings)[usize::from(id)] };
             if map.entity_id == 0 && map.grfid == 0 {
                 *map = Mapping {
@@ -126,27 +82,16 @@ pub unsafe fn allocate_tile(local: u16, grfid: u32, substitute: u16) -> u16 {
 unsafe extern "C" fn tile_valid(_: *mut c_void, id: u16) -> u8 {
     u8::from(crate::newgrf_commons::industry_tile_check_valid_new_id(id))
 }
-pub unsafe fn publish(
-    manager: *mut override_manager::Manager,
-    spec: *mut SpecHandle,
-    s: &Services,
-) {
-    let identity = (s.shared().specs().industry().substitute().identity)(spec);
+/// `IndustryOverrideManager::SetEntitySpec`, moving the per-file spec into its slot.
+pub unsafe fn publish(manager: *mut override_manager::Manager, spec: *mut IndustrySpec) {
+    let props = unsafe { (*spec).grf_prop };
     let invalid = unsafe { (*manager).invalid };
     // The original narrows GetID and AddEntityID to IndustryType before testing it.
     let mut id =
-        unsafe { override_manager::industry_id_for(manager, identity.local, identity.grfid) } as u8;
+        unsafe { override_manager::industry_id_for(manager, props.local_id, props.grfid) } as u8;
     if u16::from(id) == invalid {
-        id = unsafe {
-            allocate(
-                manager,
-                identity.local,
-                identity.grfid,
-                identity.substitute,
-                s,
-            )
-        } as u8;
-        (s.shared().specs().industry().substitute().set_override)(spec, invalid);
+        id = unsafe { allocate(manager, props.local_id, props.grfid, props.subst_id) } as u8;
+        unsafe { (*spec).grf_prop.override_id = invalid };
     }
     if u16::from(id) == invalid {
         grf_msg!(
@@ -155,20 +100,17 @@ pub unsafe fn publish(
         );
         return;
     }
+    let target = industrytype::industry(u16::from(id));
     unsafe {
-        (s.publish)(u16::from(id), spec);
-        (s.shared().specs().industry().substitute().set_enabled)((s.industry)(u16::from(id)), true);
+        *target = std::mem::replace(&mut *spec, EMPTY_INDUSTRY);
+        (*target).enabled = true;
     }
 }
-pub unsafe fn publish_tile(
-    manager: *mut override_manager::Manager,
-    spec: *mut TileSpec,
-    s: &Services,
-) {
-    let identity = (s.shared().specs().industry_tile().substitute().identity)(spec);
+/// `IndustryTileOverrideManager::SetEntitySpec`.
+pub unsafe fn publish_tile(manager: *mut override_manager::Manager, spec: *mut IndustryTileSpec) {
+    let props = unsafe { (*spec).grf_prop };
     let (offset, invalid) = unsafe { ((*manager).offset, (*manager).invalid) };
-    let id =
-        unsafe { allocate_tile_for(manager, identity.local, identity.grfid, identity.substitute) };
+    let id = unsafe { allocate_tile_for(manager, props.local_id, props.grfid, props.subst_id) };
     if id == invalid {
         grf_msg!(
             1,
@@ -177,32 +119,41 @@ pub unsafe fn publish_tile(
         return;
     }
     unsafe {
-        (s.publish_tile)(id, spec);
+        *industrytype::tile(id) = std::mem::replace(&mut *spec, EMPTY_TILE);
     }
     for i in 0..offset {
         let matched = unsafe {
-            (&(*manager).entities)[usize::from(i)] == identity.local
-                && (&(*manager).grfids)[usize::from(i)] == identity.grfid
+            (&(*manager).entities)[usize::from(i)] == props.local_id
+                && (&(*manager).grfids)[usize::from(i)] == props.grfid
         };
         if !matched {
             continue;
         }
-        let overridden = unsafe { (s.tile)(i) };
-        (s.shared().specs().industry_tile().substitute().set_override)(overridden, id);
-        (s.shared().specs().industry_tile().substitute().set_enabled)(overridden, false);
+        let overridden = industrytype::tile(i);
         unsafe {
+            (*overridden).grf_prop.override_id = id;
+            (*overridden).enabled = false;
             (&mut (*manager).entities)[usize::from(i)] = invalid;
             (&mut (*manager).grfids)[usize::from(i)] = 0;
         }
     }
 }
-fn translate(label: crate::newgrf::CargoLabel) -> u8 {
+fn translate(label: CargoLabel) -> u8 {
     use crate::cargo_registry::openttd_rust_cargo_by_label;
     openttd_rust_cargo_by_label(crate::newgrf::get_active_cargo_label(label, |label| {
         openttd_rust_cargo_by_label(label)
     }))
 }
+/// Replace each invalid cargo slot with its default label's translation.
+fn translate_cargo(cargo: &mut [u8], labels: &[CargoLabel]) {
+    for (cargo, label) in cargo.iter_mut().zip(labels) {
+        if !crate::cargo_type::is_valid_cargo_type(*cargo) {
+            *cargo = translate(*label);
+        }
+    }
+}
 
+/// `FinaliseIndustriesArray`.
 pub unsafe fn finalise(s: &Services) {
     let mut file_index = 0;
     loop {
@@ -210,93 +161,69 @@ pub unsafe fn finalise(s: &Services) {
         if file.is_null() {
             break;
         }
-        let industry_count = unsafe { (s.industry_count)(file) };
-        for i in 0..industry_count {
-            let spec = unsafe { (s.file_industry)(file, i) };
-            if spec.is_null() || !unsafe { (s.availability)(spec) }.enabled {
+        let count = unsafe { industrytype::file_specs(file) }.industries.len();
+        for i in 0..count {
+            let Some(spec) = (unsafe { industrytype::file_specs(file) }.industries[i].as_deref_mut())
+                .map(std::ptr::from_mut)
+            else {
                 continue;
-            }
-            unsafe {
-                publish(override_manager::industry(), spec, s);
-            }
-        }
-        let tile_count = unsafe { (s.tile_count)(file) };
-        for i in 0..tile_count {
-            let spec = unsafe { (s.file_tile)(file, i) };
-            if !spec.is_null() {
-                unsafe {
-                    publish_tile(override_manager::tile(), spec, s);
-                }
+            };
+            if unsafe { (*spec).enabled } {
+                unsafe { publish(override_manager::industry(), spec) };
             }
         }
-        unsafe {
-            (s.clear_file)(file);
+        let count = unsafe { industrytype::file_specs(file) }.tiles.len();
+        for i in 0..count {
+            if let Some(spec) = (unsafe { industrytype::file_specs(file) }.tiles[i].as_deref_mut())
+                .map(std::ptr::from_mut)
+            {
+                unsafe { publish_tile(override_manager::tile(), spec) };
+            }
         }
+        industrytype::clear_file(file);
         file_index += 1;
     }
     for id in 0..u16::from(crate::industry_type::NUM_INDUSTRYTYPES) {
-        let spec = unsafe { (s.industry)(id) };
-        let status = unsafe { (s.availability)(spec) };
-        if status.enabled && status.has_file {
-            let grfid = (s.shared().specs().industry().grfid)(spec);
-            let conflicting = unsafe { (s.conflicting)(spec) };
+        let spec = industrytype::industry(id);
+        let (enabled, has_file, grfid) = unsafe {
+            (
+                (*spec).enabled,
+                (*spec).grf_prop.has_grf_file(),
+                (*spec).grf_prop.grfid,
+            )
+        };
+        if enabled && has_file {
             for i in 0..3 {
-                let kind = unsafe { conflicting.add(i).read() };
+                let kind = unsafe { (*spec).conflicting[i] };
                 let mapped = crate::industry::resolver::map_type(kind, grfid);
-                unsafe {
-                    conflicting.add(i).write(mapped);
-                }
+                unsafe { (*spec).conflicting[i] = mapped };
             }
         }
-        if !status.enabled {
-            unsafe {
-                (s.invalid_name)(spec);
-            }
+        if !enabled {
+            unsafe { (*spec).name = s.invalid_name };
         }
-        let cargo = unsafe { (s.cargo)(spec) };
-        unsafe {
-            cargo.produced.translate();
-            cargo.accepted.translate();
-        }
+        let mut produced = unsafe { (*spec).produced_cargo };
+        let labels = unsafe { (*spec).produced_cargo_label };
+        translate_cargo(&mut produced[..INDUSTRY_ORIGINAL_NUM_OUTPUTS], &labels);
+        unsafe { (*spec).produced_cargo = produced };
+        let mut accepted = unsafe { (*spec).accepts_cargo };
+        let labels = unsafe { (*spec).accepts_cargo_label };
+        translate_cargo(&mut accepted[..INDUSTRY_ORIGINAL_NUM_INPUTS], &labels);
+        unsafe { (*spec).accepts_cargo = accepted };
     }
-    for id in 0..crate::industry_type::NUM_INDUSTRYTILES {
-        let spec = unsafe { (s.tile)(id) };
-        unsafe {
-            (s.tile_cargo)(spec).translate();
-        }
+    for gfx in 0..crate::industry_type::NUM_INDUSTRYTILES {
+        let spec = industrytype::tile(gfx);
+        let mut accepted = unsafe { (*spec).accepts_cargo };
+        let labels = unsafe { (*spec).accepts_cargo_label };
+        translate_cargo(&mut accepted[..INDUSTRY_ORIGINAL_NUM_INPUTS], &labels);
+        unsafe { (*spec).accepts_cargo = accepted };
     }
 }
 
+/// `ResetIndustries` with the override managers.
 pub(crate) unsafe fn reset(climate: u8, s: &Services) {
-    for id in 0..crate::industry_type::NEW_INDUSTRYOFFSET {
-        unsafe {
-            (s.reset_industry)(id);
-        }
-    }
-    for id in
-        crate::industry_type::NEW_INDUSTRYOFFSET..u16::from(crate::industry_type::NUM_INDUSTRYTYPES)
-    {
-        unsafe {
-            (s.clear_industry)(id);
-        }
-    }
-    for id in 0..crate::industry_type::NEW_INDUSTRYOFFSET {
-        let spec = unsafe { (s.industry)(id) };
-        let available = unsafe { (s.climate_available)(spec, climate) };
-        (s.shared().specs().industry().substitute().set_enabled)(spec, available);
-    }
-    for id in 0..crate::industry_type::NEW_INDUSTRYTILEOFFSET {
-        unsafe {
-            (s.reset_tile)(id);
-        }
-    }
-    for id in crate::industry_type::NEW_INDUSTRYTILEOFFSET..crate::industry_type::NUM_INDUSTRYTILES
-    {
-        unsafe {
-            (s.clear_tile)(id);
-        }
-    }
     unsafe {
+        industrytype::reset(climate, s.origin, s.origin_tiles);
         override_manager::openttd_rust_override_reset(override_manager::tile());
         override_manager::openttd_rust_override_reset(override_manager::industry());
     }
@@ -304,11 +231,7 @@ pub(crate) unsafe fn reset(climate: u8, s: &Services) {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDSubstituteSpecIdentity" ["industry"] => Identity { grfid, local, substitute };
-    "OpenTTDIndustryDefinitionAvailability" ["industry"] => Availability { enabled, has_file };
-    "OpenTTDIndustryProducedSlots" ["industry"] => CargoSlots<INDUSTRY_ORIGINAL_NUM_OUTPUTS> { cargo, labels };
-    "OpenTTDIndustryAcceptedSlots" ["industry"] => CargoSlots<INDUSTRY_ORIGINAL_NUM_INPUTS> { cargo, labels };
-    "OpenTTDIndustryDefinitionCargo" ["industry"] => IndustryCargo { produced, accepted };
     "OpenTTDIndustryDefinitionServices" ["industry"] => Services {
-        generation, shared, industry, tile, availability, publish, publish_tile, reset_industry, clear_industry, climate_available, reset_tile, clear_tile, industry_count, tile_count, file_industry, file_tile, clear_file, conflicting, invalid_name, cargo, tile_cargo, set_produced, set_accepted, set_tile_accepted
+        shared, origin, origin_tiles, invalid_name, map_string
     };
 }

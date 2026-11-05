@@ -874,6 +874,7 @@ pub(super) unsafe fn partial_read_tests() {
         read_dword: unused2,
         skip: unused2,
         read_badges: unused3,
+        read_badge_ids: unused3,
         skip_badges: unused1,
     };
     let file = std::ptr::dangling::<std::ffi::c_void>();

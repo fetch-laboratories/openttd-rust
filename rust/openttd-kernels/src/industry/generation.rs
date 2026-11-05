@@ -10,10 +10,7 @@
 //! exception frame.
 use super::{Builder, Services, TYPES, place};
 
-#[repr(C)]
-pub struct SpecHandle {
-    _private: [u8; 0],
-}
+pub use crate::industrytype::IndustrySpec as SpecHandle;
 #[repr(C)]
 pub struct GenerationContext {
     _private: [u8; 0],

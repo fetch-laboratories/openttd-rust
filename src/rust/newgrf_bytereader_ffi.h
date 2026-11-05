@@ -6,6 +6,7 @@
 #include "../newgrf_badge_type.h"
 #include "../newgrf.h"
 #include "../newgrf/newgrf_bytereader.h"
+#include "rust_vector.h"
 struct OpenTTDGrfCursor {
 	const uint8_t *data;
 	size_t len;
@@ -20,6 +21,8 @@ struct OpenTTDByteReaderServices {
 	bool (*read_dword)(ByteReader *, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(read_dword);
 	bool (*skip)(ByteReader *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip);
 	bool (*read_badges)(ByteReader *, GrfSpecFeature, std::vector<BadgeID> *) noexcept OPENTTD_SERVICE_DEFAULT(read_badges);
+	bool (*read_badge_ids)(ByteReader *, GrfSpecFeature, RustVector<BadgeID> *) noexcept OPENTTD_SERVICE_DEFAULT(read_badge_ids);
 	bool (*skip_badges)(ByteReader *) noexcept OPENTTD_SERVICE_DEFAULT(skip_badges);
 };
+extern "C" void openttd_rust_badges_assign(RustVector<BadgeID> *, const BadgeID *, size_t);
 #endif

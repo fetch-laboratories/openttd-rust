@@ -144,7 +144,6 @@ fn cargo_callbacks(
     output: bool,
     g: &GenerationServices,
     c: &ConstructionServices,
-    shared: &crate::services::Services,
 ) {
     let callback = if output {
         OUTPUT_CARGO_TYPES
@@ -177,7 +176,7 @@ fn cargo_callbacks(
         }
         let cargo = crate::cargo_registry::openttd_rust_cargo_translate(
             res as u8,
-            (shared.specs().industry().file)(spec),
+            unsafe { (*spec).grf_prop.grffile },
             false,
         );
         if !valid(cargo) && !unlimited {
@@ -406,10 +405,10 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         }
     }
     if callbacks & (1 << 12) != 0 {
-        cargo_callbacks(industry, owner, spec, &lists, false, g, c, s.shared());
+        cargo_callbacks(industry, owner, spec, &lists, false, g, c);
     }
     if callbacks & (1 << 13) != 0 {
-        cargo_callbacks(industry, owner, spec, &lists, true, g, c, s.shared());
+        cargo_callbacks(industry, owner, spec, &lists, true, g, c);
     }
     let count = unsafe { (c.layout_size)(r.layout) };
     for n in 0..count {

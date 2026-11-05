@@ -25,10 +25,7 @@ pub struct TileIndustry {
     pub shell: *mut ShellHandle,
     pub owner: *mut Industry,
 }
-#[repr(C)]
-pub struct TileSpec {
-    _private: [u8; 0],
-}
+pub use crate::industrytype::IndustryTileSpec as TileSpec;
 #[repr(C)]
 pub struct TileAcceptance {
     pub cargo: [u8; 16],
@@ -518,7 +515,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
             for n in 0..3 {
                 info.cargo[n] = crate::cargo_registry::openttd_rust_cargo_translate(
                     ((result >> (n * 5)) & 31) as u8,
-                    (unsafe { &*t.shared }.specs().industry_tile().file)(spec),
+                    unsafe { (*spec).grf_prop.grffile },
                     false,
                 );
             }
@@ -638,7 +635,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
             let allowed = if unsafe { (p.autoslope_callback)(spec) } {
                 let result = unsafe { (t.callback)(tile, gfx, 0x3c, 0, 0) };
                 result == CALLBACK_FAILED
-                    || !(shared.specs().industry_tile().boolean_callback)(spec, 0x3c, result)
+                    || !(shared.grf_boolean_callback)(unsafe { (*spec).grf_prop.grffile }, 0x3c, result)
             } else {
                 true
             };

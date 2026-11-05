@@ -176,39 +176,22 @@ pub(super) fn advertise(shell: *mut c_void, s: &Services) {
         (s.opening_events)(shell);
     }
 }
-pub(super) const fn spec_raw(life: u8) -> bool {
+pub(crate) const fn spec_raw(life: u8) -> bool {
     life & (LIFE_EXTRACTIVE | LIFE_ORGANIC) != 0
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_spec_raw_abi(life: u8) -> u8 {
-    u8::from(spec_raw(life))
+pub(crate) const fn spec_processing(life: u8, behaviour: u32) -> bool {
+    life & LIFE_PROCESSING != 0 && behaviour & CUT_TREES == 0
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_spec_processing_abi(life: u8, behaviour: u32) -> u8 {
-    u8::from(life & LIFE_PROCESSING != 0 && behaviour & CUT_TREES == 0)
-}
-pub(super) const fn original_economy(callbacks: u16, economy: u8) -> bool {
+pub(crate) const fn original_economy(callbacks: u16, economy: u8) -> bool {
     economy == 0 || callbacks & super::construction::ORIGINAL_CALLBACKS != 0
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_original_economy_abi(callbacks: u16, economy: u8) -> u8 {
-    u8::from(original_economy(callbacks, economy))
-}
-pub(super) fn construction_cost(multiplier: u8, life: u8, raw_setting: u8) -> i64 {
+pub(crate) fn construction_cost(multiplier: u8, life: u8, raw_setting: u8) -> i64 {
     let price = if raw_setting == 1 && spec_raw(life) {
         crate::economy_type::PR_BUILD_INDUSTRY_RAW
     } else {
         crate::economy_type::PR_BUILD_INDUSTRY
     };
     crate::company::price(price).saturating_mul(i64::from(multiplier)) >> 8
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_construction_cost(
-    multiplier: u8,
-    life: u8,
-    raw_setting: u8,
-) -> i64 {
-    construction_cost(multiplier, life, raw_setting)
 }
 pub(crate) fn removal_cost(multiplier: u32) -> i64 {
     // OverflowSafeInt::operator*= takes int, including the unsigned multiplier conversion.

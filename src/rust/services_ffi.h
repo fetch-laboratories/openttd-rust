@@ -215,6 +215,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
+	bool (*grf_boolean_callback)(const GRFFile *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_boolean_callback);
 	GRFFile *(*grf_file_at_or_null)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_at_or_null);
 	uint32_t (*grf_file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_id);
 	OpenTTDByteSpan (*grf_file_name)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_name);
@@ -222,6 +223,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*grf_parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_parameter);
 	const OpenTTDNewGRFSpecs *newgrf_specs = nullptr;
 	const GRFFile *(*resolver_grf_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file);
+	uint32_t (*resolver_badges)(const ResolverObject *, const BadgeID *, size_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(resolver_badges);
 	uint32_t (*resolver_grf_file_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file_id);
 	uint8_t (*resolver_grf_version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_version);
 	void (*show_error)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_error);

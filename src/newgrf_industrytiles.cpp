@@ -71,7 +71,7 @@ IndustryTileResolverObject::IndustryTileResolverObject(IndustryGfx gfx, TileInde
 	ind_scope(*this, tile, indus, indus->type),
 	gfx(gfx)
 {
-	this->root_spritegroup = openttd_rust_industry_tile_root(&this->indtile_scope.context, gfx, &GetIndustryResolverServices());
+	this->root_spritegroup = openttd_rust_industry_tile_root(&this->indtile_scope.context, gfx);
 }
 
 GrfSpecFeature IndustryTileResolverObject::GetFeature() const

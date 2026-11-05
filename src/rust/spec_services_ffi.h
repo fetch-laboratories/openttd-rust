@@ -7,7 +7,7 @@
 #include "../newgrf_badge_type.h"
 #include <cstdint>
 #include <vector>
-struct AirportSpec; struct AirportTileSpec; struct GRFFile; struct IndustrySpec; struct IndustryTileSpec;
+struct AirportSpec; struct AirportTileSpec; struct GRFFile;
 struct HouseSpec; struct ObjectSpec; struct ResolverObject; struct RoadStopSpec; struct SpriteGroup; struct StationSpec;
 /* Specs carrying `StandardGRFFileProps`. */
 template <typename Spec> struct OpenTTDStandardSpecServices {
@@ -51,32 +51,23 @@ template <typename Spec, typename Triggers> struct OpenTTDSpecServices {
 using OpenTTDAirportSpecServices = OpenTTDSpecServices<AirportSpec, uint8_t>;
 using OpenTTDAirportTileSpecServices = OpenTTDSpecServices<AirportTileSpec, uint8_t>;
 using OpenTTDHouseSpecServices = OpenTTDSpecServices<HouseSpec, uint8_t>;
-using OpenTTDIndustrySpecServices = OpenTTDSpecServices<IndustrySpec, uint8_t>;
-using OpenTTDIndustryTileSpecServices = OpenTTDSpecServices<IndustryTileSpec, uint8_t>;
 using OpenTTDObjectSpecServices = OpenTTDSpecServices<ObjectSpec, uint16_t>;
 using OpenTTDRoadStopSpecServices = OpenTTDSpecServices<RoadStopSpec, uint16_t>;
 using OpenTTDStationSpecServices = OpenTTDSpecServices<StationSpec, uint16_t>;
 using OpenTTDAirportTileSpecAnimation = OpenTTDSpecAnimationServices<AirportTileSpec, uint8_t>;
-using OpenTTDIndustryTileSpecAnimation = OpenTTDSpecAnimationServices<IndustryTileSpec, uint8_t>;
 using OpenTTDRoadStopSpecAnimation = OpenTTDSpecAnimationServices<RoadStopSpec, uint16_t>;
 using OpenTTDStationSpecAnimation = OpenTTDSpecAnimationServices<StationSpec, uint16_t>;
 using OpenTTDAirportSpecStandard = OpenTTDStandardSpecServices<AirportSpec>;
 using OpenTTDAirportTileSpecStandard = OpenTTDStandardSpecServices<AirportTileSpec>;
 using OpenTTDHouseSpecStandard = OpenTTDStandardSpecServices<HouseSpec>;
-using OpenTTDIndustrySpecStandard = OpenTTDStandardSpecServices<IndustrySpec>;
-using OpenTTDIndustryTileSpecStandard = OpenTTDStandardSpecServices<IndustryTileSpec>;
 using OpenTTDObjectSpecStandard = OpenTTDStandardSpecServices<ObjectSpec>;
 using OpenTTDAirportSpecSubstitute = OpenTTDSubstituteSpecServices<AirportSpec>;
 using OpenTTDAirportTileSpecSubstitute = OpenTTDSubstituteSpecServices<AirportTileSpec>;
 using OpenTTDHouseSpecSubstitute = OpenTTDSubstituteSpecServices<HouseSpec>;
-using OpenTTDIndustrySpecSubstitute = OpenTTDSubstituteSpecServices<IndustrySpec>;
-using OpenTTDIndustryTileSpecSubstitute = OpenTTDSubstituteSpecServices<IndustryTileSpec>;
 struct OpenTTDNewGRFSpecs {
 	const OpenTTDAirportSpecServices *airport;
 	const OpenTTDAirportTileSpecServices *airport_tile;
 	const OpenTTDHouseSpecServices *house;
-	const OpenTTDIndustrySpecServices *industry;
-	const OpenTTDIndustryTileSpecServices *industry_tile;
 	const OpenTTDObjectSpecServices *object;
 	const OpenTTDRoadStopSpecServices *road_stop;
 	const OpenTTDStationSpecServices *station;

@@ -528,6 +528,8 @@ pub struct Services {
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
     /// `GRFFile::cargo_map` entry of a non-null file.
     pub grf_cargo_map: extern "C" fn(*const c_void, u8) -> u8,
+    /// `ConvertBooleanCallback` for a non-null file.
+    pub grf_boolean_callback: extern "C" fn(*const c_void, u16, u16) -> bool,
     /// Loaded GRF file at an index, or null past the end.
     pub grf_file_at_or_null: extern "C" fn(usize) -> *mut c_void,
     /// `GRFFile::grfid` of a non-null file.
@@ -542,6 +544,8 @@ pub struct Services {
     pub newgrf_specs: *const crate::newgrf_specs::Specs,
     /// `ResolverObject::grffile`.
     pub resolver_grf_file: extern "C" fn(*const c_void) -> *const c_void,
+    /// `GetBadgeVariableResult` for the resolver's file and a badge list.
+    pub resolver_badges: extern "C" fn(*const c_void, *const u32, usize, u32) -> u32,
     /// `GRFFile::grfid` of the resolver's non-null file.
     pub resolver_grf_file_id: extern "C" fn(*const c_void) -> u32,
     /// `GRFFile::grf_version` of the resolver's non-null file.
@@ -919,6 +923,7 @@ crate::abi::layouts! {
         terrain_type,
         grf_file_version,
         grf_cargo_map,
+        grf_boolean_callback,
         grf_file_at_or_null,
         grf_file_id,
         grf_file_name,
@@ -926,6 +931,7 @@ crate::abi::layouts! {
         grf_parameter,
         newgrf_specs,
         resolver_grf_file,
+        resolver_badges,
         resolver_grf_file_id,
         resolver_grf_version,
         show_error,
@@ -1052,6 +1058,12 @@ pub fn fixture(
     extern "C" fn unexpected_cargo_map(_: *const c_void, _: u8) -> u8 {
         std::process::abort()
     }
+    extern "C" fn unexpected_boolean(_: *const c_void, _: u16, _: u16) -> bool {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_badges(_: *const c_void, _: *const u32, _: usize, _: u32) -> u32 {
+        std::process::abort()
+    }
     extern "C" fn unexpected_file_at(_: usize) -> *mut c_void {
         std::process::abort()
     }
@@ -1070,6 +1082,7 @@ pub fn fixture(
     Services {
         grf_file_version: unexpected_version,
         grf_cargo_map: unexpected_cargo_map,
+        grf_boolean_callback: unexpected_boolean,
         grf_file_at_or_null: unexpected_file_at,
         grf_file_id: unexpected_file_id,
         grf_file_name: unexpected_file_name,
@@ -1077,6 +1090,7 @@ pub fn fixture(
         grf_parameter: unexpected_parameter,
         newgrf_specs: std::ptr::null(),
         resolver_grf_file: unexpected_file,
+        resolver_badges: unexpected_badges,
         resolver_grf_file_id: unexpected_file_id,
         resolver_grf_version: unexpected_version,
         nearby_tile: unexpected_nearby,

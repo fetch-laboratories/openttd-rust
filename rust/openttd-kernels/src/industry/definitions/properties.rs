@@ -1,9 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Action0 industry and tile property interpretation, including incremental failure effects.
-use super::{
-    Services,
-    storage::{LayoutBuffer, LayoutTile, Services as Storage},
-};
+use super::Services;
+use crate::industrytype::{self, IndustrySpec, IndustryTileSpec, LayoutTile, NativeVec};
 use crate::bitmath_func::{gb, sb};
 use crate::cargo_type::INVALID_CARGO;
 use crate::debug::grf_msg;
@@ -26,6 +24,34 @@ pub struct Context {
     pub grfid: u32,
     pub version: u8,
     pub climate: u8,
+}
+/// `CT_INVALID` as a default cargo label.
+const INVALID_LABEL: crate::newgrf::CargoLabel = crate::newgrf::CargoLabel {
+    value: u32::MAX,
+    mixed: false,
+};
+/// `INDUSTRYTILE_NOANIM`.
+const INDUSTRYTILE_NOANIM: u8 = 0xff;
+/// `CheckProc::CHECK_NOTHING`.
+const CHECK_NOTHING: u8 = 0;
+/// `STR_NULL`.
+const STR_NULL: u32 = 0;
+/// `GRFFilePropsBase::SetGRFFile` with the context's non-null file.
+fn set_file(props: &mut industrytype::SubstituteProps, c: &Context) {
+    props.grffile = c.file;
+    props.grfid = c.grfid;
+}
+/// `GRFFile::industryspec[id]`, or null.
+fn file_industry(file: *const c_void, id: u32) -> *mut IndustrySpec {
+    unsafe { industrytype::file_specs(file) }.industries[id as usize]
+        .as_deref_mut()
+        .map_or(ptr::null_mut(), ptr::from_mut)
+}
+/// `GRFFile::indtspec[id]`, or null.
+fn file_tile(file: *const c_void, id: u32) -> *mut IndustryTileSpec {
+    unsafe { industrytype::file_specs(file) }.tiles[id as usize]
+        .as_deref_mut()
+        .map_or(ptr::null_mut(), ptr::from_mut)
 }
 fn ignore_tile(prop: i32, r: &mut Reader<'_>) -> Result<i32, ReadError> {
     match prop {
@@ -112,10 +138,10 @@ fn valid_layout(layout: &[LayoutTile]) -> bool {
 }
 unsafe fn layouts(
     id: u32,
-    spec: *mut super::SpecHandle,
+    spec: *mut IndustrySpec,
     c: &Context,
     r: &mut Reader<'_>,
-    p: &Storage,
+    s: &Services,
     loading: &newgrf_loading::Services,
 ) -> Result<i32, ReadError> {
     let count = r.byte()?;
@@ -158,7 +184,8 @@ unsafe fn layouts(
                     }
                     return Ok(DISABLED);
                 }
-                if usize::from(index) >= unsafe { (p.original_layout_count)(kind) } {
+                let originals = unsafe { (*s.origin.add(usize::from(kind))).layouts.as_slice() };
+                if usize::from(index) >= originals.len() {
                     unsafe {
                         grf_msg!(
                             1,
@@ -169,10 +196,7 @@ unsafe fn layouts(
                     }
                     return Ok(DISABLED);
                 }
-                let original = unsafe { (p.original_layout)(kind, index) };
-                layout.extend_from_slice(unsafe {
-                    std::slice::from_raw_parts(original.data, original.size)
-                });
+                layout.extend_from_slice(originals[usize::from(index)].as_slice());
                 break;
             }
             tile.ti.y = i16::from(r.byte()?);
@@ -209,7 +233,7 @@ unsafe fn layouts(
             k = k.wrapping_add(1);
         }
         if valid_layout(&layout) {
-            new_layouts.push(LayoutBuffer::new(layout.clone()));
+            new_layouts.push(NativeVec::from_vec(layout.clone()));
         } else {
             grf_msg!(
                 1,
@@ -218,9 +242,7 @@ unsafe fn layouts(
             );
         }
     }
-    unsafe {
-        (p.install_layouts)(spec, new_layouts.as_ptr(), new_layouts.len());
-    }
+    unsafe { (*spec).layouts = NativeVec::from_vec(new_layouts) };
     Ok(SUCCESS)
 }
 unsafe fn tiles(
@@ -228,8 +250,6 @@ unsafe fn tiles(
     prop: i32,
     c: &Context,
     r: &mut Reader<'_>,
-    s: &Services,
-    p: &Storage,
     loading: &newgrf_loading::Services,
 ) -> Result<i32, ReadError> {
     let last = ids.end;
@@ -242,14 +262,13 @@ unsafe fn tiles(
         );
         return Ok(INVALID_ID);
     }
-    if unsafe { (s.tile_count)(c.file) } < last as usize {
-        unsafe {
-            (p.resize_tiles)(c.file, last as usize);
-        }
+    let specs = unsafe { industrytype::file_specs(c.file) };
+    if specs.tiles.len() < last as usize {
+        specs.tiles.resize_with(last as usize, || None);
     }
     let mut result = SUCCESS;
     for id in ids {
-        let mut spec = unsafe { (s.file_tile)(c.file, id as usize) };
+        let mut spec = file_tile(c.file, id);
         if prop != 0x08 && spec.is_null() {
             result = result.max(ignore_tile(prop, r)?);
             continue;
@@ -267,11 +286,18 @@ unsafe fn tiles(
                     continue;
                 }
                 if spec.is_null() {
-                    spec = unsafe { (p.create_tile)(c.file, id as u16, substitute) };
+                    // A copy of the current, not the original, substitute tile.
+                    let mut tile = unsafe { (*industrytype::tile(u16::from(substitute))).clone() };
+                    tile.enabled = true;
+                    tile.anim_production = INDUSTRYTILE_NOANIM;
+                    tile.anim_next = INDUSTRYTILE_NOANIM;
+                    tile.grf_prop.local_id = id as u16;
+                    tile.grf_prop.subst_id = u16::from(substitute);
+                    set_file(&mut tile.grf_prop, c);
+                    unsafe { industrytype::file_specs(c.file) }.tiles[id as usize] =
+                        Some(Box::new(tile));
+                    spec = file_tile(c.file, id);
                     unsafe {
-                        (s.shared().specs().industry_tile().substitute().set_enabled)(spec, true);
-                        (p.clear_animation)(spec);
-                        (p.tile_identity)(spec, c.file, id as u16, substitute);
                         super::allocate_tile(id as u16, c.grfid, u16::from(substitute));
                     }
                 }
@@ -305,29 +331,29 @@ unsafe fn tiles(
                     false,
                 );
                 unsafe {
-                    (s.set_tile_accepted)(spec, slot, cargo);
-                    (p.set_acceptance)(spec, slot, gb(u32::from(value), 8, 8).clamp(0, 16) as i8);
-                    (p.invalidate_tile_accepted)(spec, slot);
+                    (*spec).accepts_cargo[slot] = cargo;
+                    (*spec).acceptance[slot] = gb(u32::from(value), 8, 8).clamp(0, 16) as i8;
+                    (*spec).accepts_cargo_label[slot] = INVALID_LABEL;
                 }
             }
             0x0d => unsafe {
-                (p.set_tile_slopes)(spec, r.byte()?);
+                (*spec).slopes_refused = r.byte()?;
             },
             0x0e => unsafe {
-                (p.set_tile_callbacks)(spec, r.byte()?);
+                (*spec).callback_mask = r.byte()?;
             },
-            0x0f => {
-                (s.shared().specs().industry_tile().animation().frames)(spec, r.byte()?);
-                (s.shared().specs().industry_tile().animation().status)(spec, r.byte()?);
-            }
-            0x10 => {
-                (s.shared().specs().industry_tile().animation().speed)(spec, r.byte()?);
-            }
-            0x11 => {
-                (s.shared().specs().industry_tile().animation().triggers)(spec, r.byte()?);
-            }
+            0x0f => unsafe {
+                (*spec).animation.frames = r.byte()?;
+                (*spec).animation.status = r.byte()?;
+            },
+            0x10 => unsafe {
+                (*spec).animation.speed = r.byte()?;
+            },
+            0x11 => unsafe {
+                (*spec).animation.triggers = r.byte()?;
+            },
             0x12 => unsafe {
-                (p.set_tile_flags)(spec, r.byte()?);
+                (*spec).special_flags = r.byte()?;
             },
             0x13 => {
                 let count = usize::from(r.byte()?);
@@ -344,29 +370,22 @@ unsafe fn tiles(
                             c.file,
                             false,
                         );
-                        unsafe {
-                            (s.set_tile_accepted)(spec, i, cargo);
-                        }
+                        unsafe { (*spec).accepts_cargo[i] = cargo };
                         let acceptance = r.byte()? as i8;
-                        unsafe {
-                            (p.set_acceptance)(spec, i, acceptance);
-                        }
+                        unsafe { (*spec).acceptance[i] = acceptance };
                     } else {
                         unsafe {
-                            (s.set_tile_accepted)(spec, i, INVALID_CARGO);
-                            (p.set_acceptance)(spec, i, 0);
+                            (*spec).accepts_cargo[i] = INVALID_CARGO;
+                            (*spec).acceptance[i] = 0;
                         }
                     }
                     if i < INDUSTRY_ORIGINAL_NUM_INPUTS {
-                        unsafe {
-                            (p.invalidate_tile_accepted)(spec, i);
-                        }
+                        unsafe { (*spec).accepts_cargo_label[i] = INVALID_LABEL };
                     }
                 }
             }
             0x14 => {
-                let destination = (s.shared().specs().industry_tile().badge_list)(spec);
-                unsafe { r.badges(newgrf::GSF_INDUSTRYTILES, destination) }?;
+                unsafe { r.badge_ids(newgrf::GSF_INDUSTRYTILES, &raw mut (*spec).badges) }?;
             }
             _ => result = UNKNOWN,
         }
@@ -378,8 +397,6 @@ unsafe fn industries(
     prop: i32,
     c: &Context,
     r: &mut Reader<'_>,
-    s: &Services,
-    p: &Storage,
     loading: &newgrf_loading::Services,
 ) -> Result<i32, ReadError> {
     let last = ids.end;
@@ -392,14 +409,14 @@ unsafe fn industries(
         );
         return Ok(INVALID_ID);
     }
-    if unsafe { (s.industry_count)(c.file) } < last as usize {
-        unsafe {
-            (p.resize_industries)(c.file, last as usize);
-        }
+    let s = unsafe { &*loading.industry };
+    let specs = unsafe { industrytype::file_specs(c.file) };
+    if specs.industries.len() < last as usize {
+        specs.industries.resize_with(last as usize, || None);
     }
     let mut result = SUCCESS;
     for id in ids {
-        let mut spec = unsafe { (s.file_industry)(c.file, id as usize) };
+        let mut spec = file_industry(c.file, id);
         if prop != 0x08 && spec.is_null() {
             result = result.max(ignore_industry(prop, r)?);
             continue;
@@ -408,12 +425,8 @@ unsafe fn industries(
             0x08 => {
                 let substitute = r.byte()?;
                 if substitute == 0xff {
-                    unsafe {
-                        (s.shared().specs().industry().substitute().set_enabled)(
-                            (s.industry)(id as u16),
-                            false,
-                        );
-                    }
+                    // The original disables the global slot with the local ID.
+                    unsafe { (*industrytype::industry(id as u16)).enabled = false };
                     continue;
                 }
                 if u16::from(substitute) >= NEW_INDUSTRYOFFSET {
@@ -426,12 +439,16 @@ unsafe fn industries(
                     continue;
                 }
                 if spec.is_null() {
-                    spec = unsafe { (p.create_industry)(c.file, id as u16, substitute) };
-                    unsafe {
-                        (s.shared().specs().industry().substitute().set_enabled)(spec, true);
-                        (p.industry_identity)(spec, c.file, id as u16, substitute);
-                        (p.clear_placement_check)(spec);
-                    }
+                    let mut industry =
+                        unsafe { (*s.origin.add(usize::from(substitute))).clone() };
+                    industry.enabled = true;
+                    industry.grf_prop.local_id = id as u16;
+                    industry.grf_prop.subst_id = u16::from(substitute);
+                    set_file(&mut industry.grf_prop, c);
+                    industry.check_proc = CHECK_NOTHING;
+                    unsafe { industrytype::file_specs(c.file) }.industries[id as usize] =
+                        Some(Box::new(industry));
+                    spec = file_industry(c.file, id);
                 }
             }
             0x09 => {
@@ -446,10 +463,7 @@ unsafe fn industries(
                     continue;
                 }
                 unsafe {
-                    (s.shared().specs().industry().substitute().set_override)(
-                        spec,
-                        u16::from(override_id),
-                    );
+                    (*spec).grf_prop.override_id = u16::from(override_id);
                     override_manager::openttd_rust_override_add(
                         override_manager::industry(),
                         id as u16,
@@ -459,25 +473,25 @@ unsafe fn industries(
                 }
             }
             0x0a => {
-                let status = unsafe { layouts(id, spec, c, r, p, loading) }?;
+                let status = unsafe { layouts(id, spec, c, r, s, loading) }?;
                 if status == DISABLED {
                     return Ok(status);
                 }
             }
             0x0b => unsafe {
-                (p.set_life)(spec, r.byte()?);
+                (*spec).life_type = r.byte()?;
             },
             0x0c => unsafe {
-                (p.map_closure_text)(spec, r.word()?);
+                (s.map_string)(r.word()?, &raw mut (*spec).closure_text);
             },
             0x0d => unsafe {
-                (p.map_production_up_text)(spec, r.word()?);
+                (s.map_string)(r.word()?, &raw mut (*spec).production_up_text);
             },
             0x0e => unsafe {
-                (p.map_production_down_text)(spec, r.word()?);
+                (s.map_string)(r.word()?, &raw mut (*spec).production_down_text);
             },
             0x0f => unsafe {
-                (p.set_cost)(spec, r.byte()?);
+                (*spec).cost_multiplier = r.byte()?;
             },
             0x10 | 0x11 => {
                 let produced = prop == 0x10;
@@ -494,13 +508,13 @@ unsafe fn industries(
                     );
                     if produced {
                         unsafe {
-                            (s.set_produced)(spec, i, cargo);
-                            (p.invalidate_produced)(spec, i);
+                            (*spec).produced_cargo[i] = cargo;
+                            (*spec).produced_cargo_label[i] = INVALID_LABEL;
                         }
                     } else {
                         unsafe {
-                            (s.set_accepted)(spec, i, cargo);
-                            (p.invalidate_accepted)(spec, i);
+                            (*spec).accepts_cargo[i] = cargo;
+                            (*spec).accepts_cargo_label[i] = INVALID_LABEL;
                         }
                     }
                 }
@@ -509,10 +523,10 @@ unsafe fn industries(
                 }
             }
             0x12 | 0x13 => unsafe {
-                (p.set_rate)(spec, (prop - 0x12) as usize, r.byte()?);
+                (*spec).production_rate[(prop - 0x12) as usize] = r.byte()?;
             },
             0x14 => unsafe {
-                (p.set_minimal_cargo)(spec, r.byte()?);
+                (*spec).minimal_cargo = r.byte()?;
             },
             0x15 => {
                 let count = r.byte()?;
@@ -520,80 +534,61 @@ unsafe fn industries(
                 for _ in 0..count {
                     sounds.push(r.byte()?);
                 }
-                unsafe {
-                    (p.set_sounds)(spec, sounds.as_ptr(), sounds.len());
-                }
+                unsafe { (*spec).random_sounds = NativeVec::from_vec(sounds) };
             }
             0x16 => {
                 for i in 0..3 {
-                    unsafe {
-                        (p.set_conflicting)(spec, i, r.byte()?);
-                    }
+                    unsafe { (*spec).conflicting[i] = r.byte()? };
                 }
             }
             0x17 => unsafe {
-                (p.set_creation)(spec, c.climate, r.byte()?);
+                (*spec).appear_creation[usize::from(c.climate)] = r.byte()?;
             },
             0x18 => unsafe {
-                (p.set_ingame)(spec, c.climate, r.byte()?);
+                (*spec).appear_ingame[usize::from(c.climate)] = r.byte()?;
             },
             0x19 => unsafe {
-                (p.set_map_colour)(spec, r.byte()?);
+                (*spec).map_colour = r.byte()?;
             },
             0x1a => unsafe {
-                (p.set_behaviour)(spec, r.dword()?);
+                (*spec).behaviour = r.dword()?;
             },
             0x1b => unsafe {
-                (p.map_new_industry_text)(spec, r.word()?);
+                (s.map_string)(r.word()?, &raw mut (*spec).new_industry_text);
             },
             0x1c..=0x1e => {
                 let multiples = r.dword()?;
+                let input = (prop - 0x1c) as usize;
                 unsafe {
-                    (p.set_multiplier)(
-                        spec,
-                        (prop - 0x1c) as usize,
-                        0,
-                        gb(multiples, 0, 16) as u16,
-                    );
-                    (p.set_multiplier)(
-                        spec,
-                        (prop - 0x1c) as usize,
-                        1,
-                        gb(multiples, 16, 16) as u16,
-                    );
+                    (*spec).input_cargo_multiplier[input][0] = gb(multiples, 0, 16) as u16;
+                    (*spec).input_cargo_multiplier[input][1] = gb(multiples, 16, 16) as u16;
                 }
             }
             0x1f => unsafe {
-                (p.map_name)(spec, r.word()?);
+                (s.map_string)(r.word()?, &raw mut (*spec).name);
             },
             0x20 => unsafe {
-                (p.set_prospecting)(spec, r.dword()?);
+                (*spec).prospecting_chance = r.dword()?;
             },
             0x21 | 0x22 => {
-                let mut mask = u32::from(unsafe { (p.callbacks)(spec) });
+                let mut mask = u32::from(unsafe { (*spec).callback_mask });
                 sb(
                     &mut mask,
                     ((prop - 0x21) * 8) as u8,
                     8,
                     u32::from(r.byte()?),
                 );
-                unsafe {
-                    (p.set_callbacks)(spec, mask as u16);
-                }
+                unsafe { (*spec).callback_mask = mask as u16 };
             }
             0x23 => unsafe {
-                (p.set_removal_cost)(spec, r.dword()?);
+                (*spec).removal_cost_multiplier = r.dword()?;
             },
             0x24 => {
                 let string = r.word()?;
                 if string == 0 {
-                    unsafe {
-                        (p.clear_station_name)(spec);
-                    }
+                    unsafe { (*spec).station_name = STR_NULL };
                 } else {
-                    unsafe {
-                        (p.map_station_name)(spec, string);
-                    }
+                    unsafe { (s.map_string)(string, &raw mut (*spec).station_name) };
                 }
             }
             0x25 | 0x26 => {
@@ -626,23 +621,15 @@ unsafe fn industries(
                         INVALID_CARGO
                     };
                     if produced {
-                        unsafe {
-                            (s.set_produced)(spec, i, cargo);
-                        }
+                        unsafe { (*spec).produced_cargo[i] = cargo };
                     } else {
-                        unsafe {
-                            (s.set_accepted)(spec, i, cargo);
-                        }
+                        unsafe { (*spec).accepts_cargo[i] = cargo };
                     }
                     if i < labels {
                         if produced {
-                            unsafe {
-                                (p.invalidate_produced)(spec, i);
-                            }
+                            unsafe { (*spec).produced_cargo_label[i] = INVALID_LABEL };
                         } else {
-                            unsafe {
-                                (p.invalidate_accepted)(spec, i);
-                            }
+                            unsafe { (*spec).accepts_cargo_label[i] = INVALID_LABEL };
                         }
                     }
                 }
@@ -657,9 +644,7 @@ unsafe fn industries(
                 }
                 for i in 0..INDUSTRY_NUM_OUTPUTS {
                     let rate = if i < count { r.byte()? } else { 0 };
-                    unsafe {
-                        (p.set_rate)(spec, i, rate);
-                    }
+                    unsafe { (*spec).production_rate[i] = rate };
                 }
             }
             0x28 => {
@@ -678,15 +663,12 @@ unsafe fn industries(
                         } else {
                             0
                         };
-                        unsafe {
-                            (p.set_multiplier)(spec, i, j, multiplier);
-                        }
+                        unsafe { (*spec).input_cargo_multiplier[i][j] = multiplier };
                     }
                 }
             }
             0x29 => {
-                let destination = (s.shared().specs().industry().badge_list)(spec);
-                unsafe { r.badges(newgrf::GSF_INDUSTRIES, destination) }?;
+                unsafe { r.badge_ids(newgrf::GSF_INDUSTRIES, &raw mut (*spec).badges) }?;
             }
             _ => result = UNKNOWN,
         }
@@ -712,15 +694,13 @@ pub unsafe extern "C" fn openttd_rust_industry_properties_abi(
     native: *mut ByteReader,
     c: *const Context,
     reads: *const ReaderServices,
-    s: *const Services,
-    p: *const Storage,
     loading: *const newgrf_loading::Services,
     result: *mut i32,
 ) -> u8 {
-    let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
+    let (c, reads, loading) = unsafe { (&*c, &*reads, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
     u8::from(finish(
-        &unsafe { industries(first..last, prop, c, &mut reader, s, p, loading) },
+        &unsafe { industries(first..last, prop, c, &mut reader, loading) },
         result,
     ))
 }
@@ -732,15 +712,13 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_properties_abi(
     native: *mut ByteReader,
     c: *const Context,
     reads: *const ReaderServices,
-    s: *const Services,
-    p: *const Storage,
     loading: *const newgrf_loading::Services,
     result: *mut i32,
 ) -> u8 {
-    let (c, reads, s, p, loading) = unsafe { (&*c, &*reads, &*s, &*p, &*loading) };
+    let (c, reads, loading) = unsafe { (&*c, &*reads, &*loading) };
     let mut reader = unsafe { Reader::new(native, reads) };
     u8::from(finish(
-        &unsafe { tiles(first..last, prop, c, &mut reader, s, p, loading) },
+        &unsafe { tiles(first..last, prop, c, &mut reader, loading) },
         result,
     ))
 }

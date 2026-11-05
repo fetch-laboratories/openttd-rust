@@ -6,6 +6,7 @@ use super::{
     TileServices, TownHandle,
 };
 use crate::debug::debug;
+use crate::industrytype;
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{
     BUILT_ON_WATER, INVALID_INDUSTRY, INVALID_INDUSTRYTILE, IT_INVALID, NEW_INDUSTRYTILEOFFSET,
@@ -114,33 +115,26 @@ fn id_at_offset(tile: u32, id: u16, grfid: u32, s: &ResolverServices) -> u32 {
         return 0xffff;
     }
     let gfx = unsafe { (s.clean_gfx)(tile) };
-    let spec = unsafe { (s.tile().spec)(gfx) };
+    let props = unsafe { (*industrytype::tile(gfx)).grf_prop };
     if gfx < NEW_INDUSTRYTILEOFFSET {
-        let override_id = (s.shared().specs().industry_tile().substitute().override_id)(spec);
-        if override_id == INVALID_INDUSTRYTILE {
+        if props.override_id == INVALID_INDUSTRYTILE {
             return 0xff00 | u32::from(gfx);
         }
-        let other = unsafe { (s.tile().spec)(override_id) };
-        return if (s.shared().specs().industry_tile().grfid)(other) == grfid {
-            u32::from((s.shared().specs().industry_tile().local_id)(other))
+        let other = unsafe { (*industrytype::tile(props.override_id)).grf_prop };
+        return if other.grfid == grfid {
+            u32::from(other.local_id)
         } else {
             0xfffe
         };
     }
-    if (s
-        .shared()
-        .specs()
-        .industry_tile()
-        .standard()
-        .has_sprite_groups)(spec)
-    {
-        if (s.shared().specs().industry_tile().grfid)(spec) == grfid {
-            u32::from((s.shared().specs().industry_tile().local_id)(spec))
+    if props.has_sprite_groups() {
+        if props.grfid == grfid {
+            u32::from(props.local_id)
         } else {
             0xfffe
         }
     } else {
-        0xff00 | u32::from((s.shared().specs().industry_tile().substitute().substitute)(spec))
+        0xff00 | u32::from(props.subst_id)
     }
 }
 fn nearby_information(
@@ -202,7 +196,7 @@ fn count_and_distance(
     } else {
         if grfid == u32::MAX {
             grfid = unsafe {
-                (s.shared().specs().industry().grfid)(s.spec((*current.owner).metadata.kind))
+                (*industrytype::industry(u16::from((*current.owner).metadata.kind))).grf_prop.grfid
             };
         }
         parameter |= 0x80;
@@ -273,7 +267,10 @@ fn variable(
     if callback == CBID_INDUSTRY_LOCATION {
         witness::hit(witness::INDUSTRY_RESOLVER_LOCATION);
         match variable {
-            0x7a => return (s.shared().specs().industry().badges)(ro, s.spec(c.kind), parameter),
+            0x7a => {
+                let badges = unsafe { &(*industrytype::industry(u16::from(c.kind))).badges };
+                return industrytype::badge_variable(s.shared(), ro, badges, parameter);
+            }
             0x80 => return c.tile,
             0x81 => return (c.tile >> 8) & 255,
             0x82 => return town_id(c.town, s),
@@ -387,7 +384,7 @@ fn variable(
             }
         }
         0x64 if c.tile != INVALID_TILE => {
-            let kind = map_type(parameter as u8, (s.shared().specs().industry().grfid)(spec));
+            let kind = map_type(parameter as u8, unsafe { (*spec).grf_prop.grfid });
             if kind >= NUM_INDUSTRYTYPES {
                 u32::MAX
             } else {
@@ -449,7 +446,10 @@ fn variable(
                 u32::from(a.waiting)
             }
         }
-        0x7a => (s.shared().specs().industry().badges)(ro, s.spec(c.kind), parameter),
+        0x7a => {
+            let badges = unsafe { &(*industrytype::industry(u16::from(c.kind))).badges };
+            industrytype::badge_variable(s.shared(), ro, badges, parameter)
+        }
         0x7c => {
             // Resolve the native shell association once, then read the canonical
             // Rust payload directly. Temporary invalid-ID scopes can read PSA;
@@ -514,7 +514,7 @@ fn variable(
             (*super::get_produced(i, usize::from(variable - 0x9c))).history[usize::from(LAST_MONTH)]
                 .pct_transported()
         }),
-        0xa6 => u32::from((s.shared().specs().industry().local_id)(spec)),
+        0xa6 => u32::from(unsafe { (*spec).grf_prop.local_id }),
         0xa7 => u32::from(unsafe { (*i).metadata.founder }),
         0xa8 => u32::from(unsafe { (*i).metadata.random_colour }),
         0xa9 => unsafe { (*i).fields.last_prod_year }
@@ -594,9 +594,8 @@ fn tile_variable(
         ),
         0x7a => {
             let gfx = unsafe { (s.tile().gfx)(c.tile) };
-            unsafe {
-                (s.shared().specs().industry_tile().badges)(ro, (s.tile().spec)(gfx), parameter)
-            }
+            let badges = unsafe { &(*industrytype::tile(gfx)).badges };
+            industrytype::badge_variable(s.shared(), ro, badges, parameter)
         }
         _ => unavailable(variable, available, true, false, 0, s),
     }
@@ -677,15 +676,11 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_triggers(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_resolver_root(
     c: *const ResolverContext,
-    s: *const ResolverServices,
 ) -> *const c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_ROOT);
     let c = unsafe { *c };
-    let s = unsafe { &*s };
-    (s.shared().specs().industry().standard().sprite_group)(
-        s.spec(c.kind),
-        !c.owner.is_null() && c.id != INVALID_INDUSTRY,
-    )
+    let props = unsafe { (*industrytype::industry(u16::from(c.kind))).grf_prop };
+    props.sprite_group(!c.owner.is_null() && c.id != INVALID_INDUSTRY)
 }
 /// # Safety
 /// Original non-null industry and valid gfx preconditions; stable native group.
@@ -693,17 +688,10 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_root(
 pub unsafe extern "C" fn openttd_rust_industry_tile_root(
     c: *const ResolverContext,
     gfx: u16,
-    s: *const ResolverServices,
 ) -> *const c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TILE_ROOT);
-    unsafe {
-        ((*s)
-            .shared()
-            .specs()
-            .industry_tile()
-            .standard()
-            .sprite_group)(((*(*s).tile).spec)(gfx), (*c).id != INVALID_INDUSTRY)
-    }
+    let props = unsafe { (*industrytype::tile(gfx)).grf_prop };
+    props.sprite_group(unsafe { (*c).id } != INVALID_INDUSTRY)
 }
 fn town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TOWN);
@@ -845,7 +833,8 @@ pub(crate) unsafe fn refuses(
     let kind = unsafe { (*owner).metadata.kind };
     let spec = s.spec(kind);
     if unsafe { (s.construction().callback_mask)(spec) } & INDUSTRY_REFUSE_CARGO != 0 {
-        let parameter = (s.shared().specs().industry().cargo_map)(spec, cargo);
+        let file = unsafe { (*spec).grf_prop.grffile };
+        let parameter = (s.shared().grf_cargo_map)(file, cargo);
         let tile = unsafe { (*owner).metadata.tile };
         let result = unsafe {
             (s.callback)(
@@ -858,11 +847,7 @@ pub(crate) unsafe fn refuses(
             )
         };
         if result != CALLBACK_FAILED {
-            return !(s.shared().specs().industry().boolean_callback)(
-                spec,
-                CBID_INDUSTRY_REFUSE_CARGO,
-                result,
-            );
+            return !(s.shared().grf_boolean_callback)(file, CBID_INDUSTRY_REFUSE_CARGO, result);
         }
     }
     false

@@ -141,9 +141,9 @@ pub const INVALID_GRFID: u32 = 0xFFFF_FFFF;
 /// Native cargo-label or mixed-cargo alternative from `GetActiveCargoLabel`.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(crate) struct CargoLabel {
-    pub(crate) value: u32,
-    pub(crate) mixed: bool,
+pub struct CargoLabel {
+    pub value: u32,
+    pub mixed: bool,
 }
 
 /// First existing label, in the order supplied by the definition.

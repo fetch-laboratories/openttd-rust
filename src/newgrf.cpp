@@ -52,6 +52,7 @@
 #include "rust/vehicle_properties_services.hpp"
 #include "rust/cargo_registry_ffi.h"
 #include "rust/house_definition_services.hpp"
+#include "rust/industry_definition_ffi.h"
 
 #include "rust/type_registry_ffi.h"
 
@@ -576,8 +577,8 @@ static void FinaliseBadges()
 
 		AddBadgeToSpecs(file.stations, GSF_STATIONS, *badge);
 		AddBadgeToSpecs(file.housespec, GSF_HOUSES, *badge);
-		AddBadgeToSpecs(file.industryspec, GSF_INDUSTRIES, *badge);
-		AddBadgeToSpecs(file.indtspec, GSF_INDUSTRYTILES, *badge);
+		if (openttd_rust_industry_file_badge(&file, false, badge->index)) badge->features.Set(GSF_INDUSTRIES);
+		if (openttd_rust_industry_file_badge(&file, true, badge->index)) badge->features.Set(GSF_INDUSTRYTILES);
 		AddBadgeToSpecs(file.objectspec, GSF_OBJECTS, *badge);
 		AddBadgeToSpecs(file.airportspec, GSF_AIRPORTS, *badge);
 		AddBadgeToSpecs(file.airtspec, GSF_AIRPORTTILES, *badge);

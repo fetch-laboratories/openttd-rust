@@ -92,6 +92,8 @@ pub struct Services {
     pub read_dword: unsafe extern "C" fn(*mut ByteReader, *mut u32) -> bool,
     pub skip: unsafe extern "C" fn(*mut ByteReader, usize) -> bool,
     pub read_badges: unsafe extern "C" fn(*mut ByteReader, u8, *mut BadgeList) -> bool,
+    pub read_badge_ids:
+        unsafe extern "C" fn(*mut ByteReader, u8, *mut crate::industrytype::NativeVec<u32>) -> bool,
     pub skip_badges: unsafe extern "C" fn(*mut ByteReader) -> bool,
 }
 pub struct Reader<'a> {
@@ -177,6 +179,21 @@ impl<'a> Reader<'a> {
             Err(ReadError)
         }
     }
+    /// `ReadBadgeList` into a Rust-owned record list.
+    ///
+    /// # Safety
+    /// `destination` is a live record field with no other borrow.
+    pub unsafe fn badge_ids(
+        &mut self,
+        feature: u8,
+        destination: *mut crate::industrytype::NativeVec<u32>,
+    ) -> Result<(), ReadError> {
+        if unsafe { (self.services.read_badge_ids)(self.native, feature, destination) } {
+            Ok(())
+        } else {
+            Err(ReadError)
+        }
+    }
     pub fn skip_badges(&mut self) -> Result<(), ReadError> {
         if unsafe { (self.services.skip_badges)(self.native) } {
             Ok(())
@@ -188,7 +205,7 @@ impl<'a> Reader<'a> {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDGrfCursor" ["act2"] => Cursor { data, len, pos };
-    "OpenTTDByteReaderServices" ["services"] => Services { has_data, peek_dword, read_bytes, read_byte, read_word, read_dword, skip, read_badges, skip_badges };
+    "OpenTTDByteReaderServices" ["services"] => Services { has_data, peek_dword, read_bytes, read_byte, read_word, read_dword, skip, read_badges, read_badge_ids, skip_badges };
 }
 
 /// `ReadVarSize` is called only with 1, 2 or 4 from Action2's six type cases.

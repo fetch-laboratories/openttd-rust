@@ -816,8 +816,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         return;
     }
     let spec = unsafe { (e.g.spec)(kind) };
-    if !(e.s.shared().specs().industry().substitute().enabled)(spec)
-        || unsafe { (e.x.layout_count)(spec) } == 0
+    if !unsafe { (*spec).enabled } || unsafe { (*spec).layouts.is_empty() }
     {
         e.fail(0xffff);
         return;

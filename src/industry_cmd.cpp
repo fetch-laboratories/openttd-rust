@@ -89,7 +89,8 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 #include "rust/industry_resolver_ffi.h"
 
 #include "rust/industry_definition_ffi.h"
-#include "rust/industry_property_ffi.h"
+#include "newgrf/newgrf_stringmapping.h"
+#include "table/build_industry.h"
 
 #include "rust/clock_ffi.h"
 
@@ -111,8 +112,6 @@ std::array<RustIndustryRegistry, NUM_INDUSTRYTYPES> Industry::industries = [] {
 	return result;
 }();
 
-IndustrySpec _industry_specs[NUM_INDUSTRYTYPES];
-IndustryTileSpec _industry_tile_specs[NUM_INDUSTRYTILES];
 IndustryBuildData _industry_builder; ///< In-game manager of industries.
 
 
@@ -144,7 +143,7 @@ IndustryType GetIndustryType(Tile tile)
 const IndustrySpec *GetIndustrySpec(IndustryType thistype)
 {
 	assert(thistype < NUM_INDUSTRYTYPES);
-	return &_industry_specs[thistype];
+	return &openttd_rust_industry_specs()[thistype];
 }
 
 /**
@@ -158,7 +157,7 @@ const IndustrySpec *GetIndustrySpec(IndustryType thistype)
 const IndustryTileSpec *GetIndustryTileSpec(IndustryGfx gfx)
 {
 	assert(gfx < NUM_INDUSTRYTILES);
-	return &_industry_tile_specs[gfx];
+	return &openttd_rust_industry_tile_specs()[gfx];
 }
 
 Industry::~Industry()
@@ -569,7 +568,7 @@ Industry::AcceptedHistory SumHistory(std::span<const Industry::AcceptedHistory> 
 
 void Industry::RecomputeProductionMultipliers()
 {
-	assert(GetIndustrySpec(this->type)->UsesOriginalEconomy());
+	assert(UsesOriginalEconomy(GetIndustrySpec(this->type)));
 	openttd_rust_industry_recompute(this, this->production_owner.get(), &GetIndustryRustServices());
 }
 
@@ -677,36 +676,48 @@ void CheckIndustries()
  * Is an industry with the spec a raw industry?
  * @return true if it should be handled as a raw industry
  */
-bool IndustrySpec::IsRawIndustry() const
+bool IsRawIndustry(const IndustrySpec *spec)
 {
-	return openttd_rust_industry_spec_raw(this->life_type.base());
+	return openttd_rust_industry_spec_raw(spec);
 }
 
 /**
  * Is an industry with the spec a processing industry?
  * @return true if it should be handled as a processing industry
  */
-bool IndustrySpec::IsProcessingIndustry() const
+bool IsProcessingIndustry(const IndustrySpec *spec)
 {
-	return openttd_rust_industry_spec_processing(this->life_type.base(), this->behaviour.base());
+	return openttd_rust_industry_spec_processing(spec);
 }
 
 /**
  * Get the cost for constructing this industry
  * @return the cost (inflation corrected etc)
  */
-Money IndustrySpec::GetConstructionCost() const
+Money GetConstructionCost(const IndustrySpec *spec)
 {
-	return openttd_rust_industry_construction_cost(RustIndustrySpecCostMultiplier(this), this->life_type.base(), _settings_game.construction.raw_industry_construction);
+	return openttd_rust_industry_construction_cost(spec, _settings_game.construction.raw_industry_construction);
 }
 
 /**
  * Determines whether this industrytype uses standard/newgrf production changes.
  * @return true if original economy is used.
  */
-bool IndustrySpec::UsesOriginalEconomy() const
+bool UsesOriginalEconomy(const IndustrySpec *spec)
 {
-	return openttd_rust_industry_original_economy(this->callback_mask.base(), _settings_game.economy.type);
+	return openttd_rust_industry_original_economy(spec, _settings_game.economy.type);
+}
+
+const OpenTTDIndustryDefinitionServices &GetIndustryDefinitionServices() noexcept
+{
+	static const OpenTTDIndustryDefinitionServices services{
+		.shared = &GetRustSharedServices(),
+		.origin = _origin_industry_specs,
+		.origin_tiles = _origin_industry_tile_specs,
+		.invalid_name = STR_NEWGRF_INVALID_INDUSTRYTYPE,
+		.map_string = [](uint16_t source, uint32_t *target) noexcept { AddStringForMapping(GRFStringID{source}, target); },
+	};
+	return services;
 }
 
 
@@ -1149,7 +1160,6 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDIndustryResolverServices.hpp"
 #include "abi-visit-OpenTTDIndustryDefinitionServices.hpp"
-#include "abi-visit-OpenTTDIndustryPropertyServices.hpp"
 #include "abi-visit-OpenTTDIndustryServices.hpp"
 #include "abi-visit-OpenTTDIndustryDeliveryServices.hpp"
 #include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
@@ -1165,7 +1175,6 @@ bool CheckAbi_industry_cmd()
 {
 	return AbiServicesComplete(GetIndustryDeliveryServices()) &&
 		AbiServicesComplete(GetIndustryDefinitionServices()) &&
-		AbiServicesComplete(GetIndustryPropertyServices()) &&
 		AbiServicesComplete(GetIndustryGenerationServices().environment) &&
 		AbiServicesComplete(GetIndustryResolverServices()) &&
 		AbiServicesComplete(GetIndustryRustServices()) &&

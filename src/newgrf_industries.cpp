@@ -91,7 +91,7 @@ IndustriesResolverObject::IndustriesResolverObject(TileIndex tile, Industry *ind
 	: ResolverObject(GetGrffile(type), callback, callback_param1, callback_param2),
 	industries_scope(*this, tile, indus, type, random_bits)
 {
-	this->root_spritegroup = openttd_rust_industry_resolver_root(&this->industries_scope.context, &GetIndustryResolverServices());
+	this->root_spritegroup = openttd_rust_industry_resolver_root(&this->industries_scope.context);
 }
 
 /**

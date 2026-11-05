@@ -19,6 +19,9 @@
 #include "newgrf_badge_type.h"
 #include "newgrf_callbacks.h"
 #include "newgrf_commons.h"
+#include "economy_type.h"
+#include "rust/cargo_label_ffi.h"
+#include "rust/rust_vector.h"
 
 /** Available types of industry lifetimes. */
 enum class IndustryLifeType : uint8_t {
@@ -94,89 +97,20 @@ struct IndustryTileLayoutTile {
 	IndustryGfx gfx;
 };
 
-/** A complete tile layout for an industry is a list of tiles */
+/** A complete tile layout for an industry is a list of tiles; the original tables build them. */
 using IndustryTileLayout = std::vector<IndustryTileLayoutTile>;
 
-/**
- * Defines the data structure for constructing industry.
- */
-struct IndustrySpec {
-	std::vector<IndustryTileLayout> layouts;    ///< List of possible tile layouts for the industry
-	uint8_t cost_multiplier;                      ///< Base construction cost multiplier.
-	uint32_t removal_cost_multiplier;             ///< Base removal cost multiplier.
-	uint32_t prospecting_chance;                  ///< Chance prospecting succeeds
-	IndustryType conflicting[3];                ///< Industries this industry cannot be close to
-	uint8_t check_proc;                            ///< Index to a procedure to check for conflicting circumstances
-	std::array<CargoType, INDUSTRY_NUM_OUTPUTS> produced_cargo;
-	uint8_t production_rate[INDUSTRY_NUM_OUTPUTS];
-	/**
-	 * minimum amount of cargo transported to the stations.
-	 * If the waiting cargo is less than this number, no cargo is moved to it.
-	 */
-	uint8_t minimal_cargo;
-	std::array<CargoType, INDUSTRY_NUM_INPUTS> accepts_cargo; ///< 16 accepted cargoes.
-	uint16_t input_cargo_multiplier[INDUSTRY_NUM_INPUTS][INDUSTRY_NUM_OUTPUTS]; ///< Input cargo multipliers (multiply amount of incoming cargo for the produced cargoes)
-	IndustryLifeTypes life_type;                 ///< This is also known as Industry production flag, in newgrf specs
-	LandscapeTypes climate_availability; ///< Bitmask, giving landscape enums as bit position
-	IndustryBehaviours behaviour;                ///< How this industry will behave, and how others entities can use it
-	PixelColour map_colour; ///< colour used for the small map
-	StringID name;                              ///< Displayed name of the industry
-	StringID new_industry_text;                 ///< Message appearing when the industry is built
-	StringID closure_text;                      ///< Message appearing when the industry closes
-	StringID production_up_text;                ///< Message appearing when the industry's production is increasing
-	StringID production_down_text;              ///< Message appearing when the industry's production is decreasing
-	StringID station_name;                      ///< Default name for nearby station
-	uint8_t appear_ingame[NUM_LANDSCAPE];          ///< Probability of appearance in game
-	uint8_t appear_creation[NUM_LANDSCAPE];        ///< Probability of appearance during map creation
-	/* Newgrf data */
-	IndustryCallbackMasks callback_mask;                       ///< Bitmask of industry callbacks that have to be called
-	bool enabled;                               ///< entity still available (by default true).newgrf can disable it, though
-	SubstituteGRFFileProps grf_prop; ///< properties related to the grf file
-	std::vector<uint8_t> random_sounds; ///< Random sounds;
-	std::vector<BadgeID> badges;
+/* IndustrySpec and IndustryTileSpec are defined in Rust (industrytype.rs). */
+#include "abi-record-industry.h"
 
-	std::array<std::variant<CargoLabel, MixedCargoType>, INDUSTRY_ORIGINAL_NUM_OUTPUTS> produced_cargo_label; ///< Cargo labels of produced cargo for default industries.
-	std::array<std::variant<CargoLabel, MixedCargoType>, INDUSTRY_ORIGINAL_NUM_INPUTS> accepts_cargo_label; ///< Cargo labels of accepted cargo for default industries.
-
-	bool IsRawIndustry() const;
-	bool IsProcessingIndustry() const;
-	Money GetConstructionCost() const;
-	bool UsesOriginalEconomy() const;
-};
-
-/**
- * Defines the data structure of each individual tile of an industry.
- * @note A tile can at most accept 3 types of cargo, even if an industry as a whole can accept more types.
- */
-struct IndustryTileSpec {
-	std::array<CargoType, INDUSTRY_NUM_INPUTS> accepts_cargo; ///< Cargo accepted by this tile
-	std::array<int8_t, INDUSTRY_NUM_INPUTS> acceptance; ///< Level of acceptance per cargo type (signed, may be negative!)
-	Slope slopes_refused;                 ///< slope pattern on which this tile cannot be built
-	uint8_t anim_production;                 ///< Animation frame to start when goods are produced
-	uint8_t anim_next;                       ///< Next frame in an animation
-	/**
-	 * When true, the tile has to be drawn using the animation
-	 * state instead of the construction stage
-	 */
-	bool anim_state;
-	/* Newgrf data */
-	IndustryTileCallbackMasks callback_mask;                  ///< Bitmask of industry tile callbacks that have to be called
-	AnimationInfo<IndustryAnimationTriggers> animation; ///< Information about the animation (is it looping, how many loops etc)
-	IndustryTileSpecialFlags special_flags; ///< Bitmask of extra flags used by the tile
-	bool enabled;                         ///< entity still available (by default true).newgrf can disable it, though
-	SubstituteGRFFileProps grf_prop; ///< properties related to the grf file
-	std::vector<BadgeID> badges;
-
-	std::array<std::variant<CargoLabel, MixedCargoType>, INDUSTRY_ORIGINAL_NUM_INPUTS> accepts_cargo_label; ///< Cargo labels of accepted cargo for default industry tiles.
-};
+bool IsRawIndustry(const IndustrySpec *spec);
+bool IsProcessingIndustry(const IndustrySpec *spec);
+Money GetConstructionCost(const IndustrySpec *spec);
+bool UsesOriginalEconomy(const IndustrySpec *spec);
 
 /* industry_cmd.cpp*/
 const IndustrySpec *GetIndustrySpec(IndustryType thistype);    ///< Array of industries data
 const IndustryTileSpec *GetIndustryTileSpec(IndustryGfx gfx);  ///< Array of industry tiles data
-
-/* writable arrays of specs */
-extern IndustrySpec _industry_specs[NUM_INDUSTRYTYPES];
-extern IndustryTileSpec _industry_tile_specs[NUM_INDUSTRYTILES];
 
 /* industry_gui.cpp */
 void SortIndustryTypes();
@@ -197,7 +131,7 @@ inline IndustryGfx GetTranslatedIndustryTileID(IndustryGfx gfx)
 	 * tests while building the industry (as in WATER REQUIRED */
 	if (gfx != 0xFF) {
 		assert(gfx < NUM_INDUSTRYTILES);
-		const IndustryTileSpec *it = &_industry_tile_specs[gfx];
+		const IndustryTileSpec *it = GetIndustryTileSpec(gfx);
 		return it->grf_prop.override_id == INVALID_INDUSTRYTILE ? gfx : it->grf_prop.override_id;
 	} else {
 		return gfx;

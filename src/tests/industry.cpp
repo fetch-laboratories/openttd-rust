@@ -513,7 +513,7 @@ TEST_CASE("Industry - specification price widths and saturation")
 		Backup<Money> raw(_price[PR_BUILD_INDUSTRY_RAW], price), clear(_price[PR_CLEAR_INDUSTRY], price);
 		for (uint8_t multiplier : {uint8_t(0), uint8_t(1), uint8_t(255)}) {
 			spec.cost_multiplier = multiplier;
-			CHECK(spec.GetConstructionCost() == ((price * multiplier) >> 8));
+			CHECK(GetConstructionCost(&spec) == ((price * multiplier) >> 8));
 		}
 		for (uint32_t multiplier : {0U, 1U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) {
 			CHECK(openttd_test_industry_removal_cost(multiplier) == ((price * multiplier) >> 8).base());
