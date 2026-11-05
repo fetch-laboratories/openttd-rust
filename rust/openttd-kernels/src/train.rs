@@ -1003,6 +1003,7 @@ impl Game<'_> {
             } else {
                 crate::witness::TRAIN_CROSS_UNBAR
             });
+            // SAFETY: The shared catalog and native setting live for this serialized entry.
             if barred && sound && unsafe { self.services.settings().ambient.read() } {
                 (self.leaves.crossing_sound)(Handle::NONE, tile);
             }
@@ -1779,6 +1780,7 @@ impl Game<'_> {
                     let crossing = self.approaching_crossing(id);
                     if crossing != INVALID_TILE
                         && (self.services.crossing_reserved)(crossing)
+                        // SAFETY: The shared catalog and native setting live for this entry.
                         && unsafe { self.services.settings().ambient.read() }
                     {
                         (self.leaves.crossing_sound)(Handle::NONE, crossing);
