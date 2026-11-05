@@ -1,8 +1,9 @@
 """Engine lifecycle commands, preview, reliability and canonical modern reload."""
 
 import struct
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import NotRequired, cast
 
 from . import core, economy
 from .console_adapter import console_adapter, prepared_console
@@ -15,35 +16,35 @@ from .core import (
 )
 
 
-class RuntimeRun(TypedDict):
-    exit: int | str
-    log: list[str]
-    stdout: bytes
+class Scenario(economy.Scenario):
+    engine_loading_dir: NotRequired[str]
 
 
 def runtime_fatal_probes(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     executables: dict[str, Path],
     builds: dict[str, Path],
     folder: Path,
     timeout: int,
     env: dict[str, str],
-    result: dict[str, Any],
+    result: core.Result,
 ) -> None:
     exits: dict[str, dict[str, int]] = {}
     for operation in ("cost", "running", "range"):
         command = "runtime-invalid-" + operation
-        runs = cast(
-            dict[str, RuntimeRun],
-            core.capture_pair(
-                dict(scenario, console=["engines_scenario " + command], ticks=1),
-                executables,
-                builds,
-                folder,
-                timeout,
-                env,
-                name="runtime-fatal-" + operation,
-            ),
+        probe: Scenario = {
+            **scenario,
+            "console": ["engines_scenario " + command],
+            "ticks": 1,
+        }
+        runs = core.capture_pair(
+            probe,
+            executables,
+            builds,
+            folder,
+            timeout,
+            env,
+            name="runtime-fatal-" + operation,
         )
         for run in runs.values():
             if (
@@ -56,7 +57,7 @@ def runtime_fatal_probes(
                     "engine invalid-kind fatal path missing: " + operation
                 )
         exits[operation] = {role: cast(int, run["exit"]) for role, run in runs.items()}
-    result["engine_runtime_fatal"] = exits
+    core.findings(result)["engine_runtime_fatal"] = exits
 
 
 def runtime_markers(lines: list[str]) -> list[str]:
@@ -228,7 +229,7 @@ EXPECTED = {
 }
 
 
-def scenarios(soak):
+def scenarios(soak: bool) -> list[Scenario]:
     return [
         {
             "name": "engines-" + mode,
@@ -257,7 +258,7 @@ def scenarios(soak):
     ]
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     env = (
         dict(WITNESS_ENVIRONMENT)
         if scenario.get("engines") and scenario.get("witnesses")
@@ -275,14 +276,14 @@ def game_environment(scenario):
     return env
 
 
-def type_load_wraps(build):
+def type_load_wraps(build: Path) -> tuple[str, ...]:
     # Rust owns town-name and vehicle-order finalization; its pre-sort is the first native call.
     if (build / "openttd-rust").exists():
         return ("_Z20RustVehicleOrderSortPtm",)
     return ("_Z29CommitVehicleListOrderChangesv",)
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     economy.subsidy_reference(folder)
     return console_adapter(
         build,
@@ -295,13 +296,21 @@ def adapter(build, folder, env):
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "engines" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
     normalized, record = core.normalize(Path(scenario["save"]), folder / "source")
-    result["engines_input"] = record
-    scenario = dict(scenario, save=str(normalized))
+    core.findings(result)["engines_input"] = record
+    scenario = {**scenario, "save": str(normalized)}
     if scenario["engines"].startswith(("loading", "properties")):
         loading_grfs(
             folder / "loading-grfs",
@@ -328,11 +337,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         "cargo-profit-reload",
         "cargo-rating-reload",
     ):
-        return dict(
-            scenario,
-            executables=executables,
-            console=["engines_scenario " + scenario["engines"], "unpause"],
-        )
+        return {
+            **scenario,
+            "executables": executables,
+            "console": ["engines_scenario " + scenario["engines"], "unpause"],
+        }
     types = scenario["engines"] == "types-reload"
     subsidy = scenario["engines"] == "subsidies-reload"
     cargo = scenario["engines"].startswith("cargo-")
@@ -346,19 +355,23 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if types:
         variant, prefix = "types", "ENGINE "
     saves = {role: folder / role / "engines.sav" for role in executables}
+
+    def capture(role: str) -> Scenario:
+        return {
+            **scenario,
+            "console": [f'engines_scenario {variant} "{saves[role]}"', "unpause"],
+            "ticks": 1,
+        }
+
     runs = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=[f'engines_scenario {variant} "{saves[role]}"', "unpause"],
-            ticks=1,
-        ),
+        capture,
         executables,
         builds,
         folder,
         timeout,
         env,
     )
-    captures = {}
+    captures: dict[str, list[str]] = {}
     required = (
         EXPECTED[scenario["engines"]]
         if cargo
@@ -387,12 +400,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if differences or captures["reference"] != captures["candidate"]:
         result["differences"].extend(differences)
         raise RuntimeError("engine reload capture differs")
-    result["engines_capture"] = captures
-    return dict(
-        scenario,
-        executables=executables,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=[
+    core.findings(result)["engines_capture"] = captures
+    return {
+        **scenario,
+        "executables": executables,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": [
             "engines_scenario "
             + (
                 variant
@@ -405,14 +418,20 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ),
             "unpause",
         ],
-    )
+    }
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if role == "candidate" and scenario.get("witnesses"):
         counts = witness_counts(run, "engine")
         if counts is not None:
-            result[mode + "_engine_crossings"] = {
+            core.findings(result)[mode + "_engine_crossings"] = {
                 key: counts[key] for key in ("entries", "services", "bytes")
             }
     if "engines" not in scenario or run["exit"] or not run["snapshots"]:
@@ -427,14 +446,14 @@ def check(scenario, run, mode, role, result):
         if variant.startswith("properties"):
             runtime_markers(run["log"])
         trace = [line for line in run["log"] if line.startswith("ENGINE properties-")]
-        result.setdefault(mode + "_properties_trace", {})[role] = trace
-        pair = result[mode + "_properties_trace"]
+        core.findings(result).setdefault(mode + "_properties_trace", {})[role] = trace
+        pair = core.findings(result)[mode + "_properties_trace"]
         if len(pair) == 2 and pair["reference"] != pair["candidate"]:
             raise RuntimeError("unsaved engine property state differs")
     if variant == "types-definitions":
         trace = [line for line in run["log"] if line.startswith("ENGINE definitions-")]
-        result.setdefault(mode + "_definitions_trace", {})[role] = trace
-        pair = result[mode + "_definitions_trace"]
+        core.findings(result).setdefault(mode + "_definitions_trace", {})[role] = trace
+        pair = core.findings(result)[mode + "_definitions_trace"]
         if len(pair) == 2 and pair["reference"] != pair["candidate"]:
             raise RuntimeError("unsaved type registry/translation state differs")
     if (
@@ -478,10 +497,10 @@ def check(scenario, run, mode, role, result):
         if prefix + expected not in run["log"]:
             raise RuntimeError("engine branch result missing: " + expected)
     if counts := branch_witnesses(scenario, run, role, component, REQUIRED[variant]):
-        result[mode + "_" + component + "_branches"] = counts
+        core.findings(result)[mode + "_" + component + "_branches"] = counts
 
 
-def type_markers(lines, capture):
+def type_markers(lines: list[str], capture: bool) -> bool:
     required = ["ENGINE types-loadphase true", "ENGINE types-complete true"]
     if not all(marker in lines for marker in required):
         return False
@@ -507,32 +526,34 @@ def type_markers(lines, capture):
     return True
 
 
-def loading_grfs(folder, *, properties=False):
+def loading_grfs(folder: Path, *, properties: bool = False) -> None:
     """Small v1 containers exercise the real FILE/Action0/2/3/4 loading path."""
     import struct
 
     folder.mkdir(parents=True, exist_ok=True)
 
-    def word(value):
+    def word(value: int) -> bytes:
         return struct.pack("<H", value)
 
-    def dword(value):
+    def dword(value: int) -> bytes:
         return struct.pack("<I", value)
 
-    def extended(value):
+    def extended(value: int) -> bytes:
         return bytes([value]) if value < 255 else b"\xff" + word(value)
 
-    def properties_record(feature, first, items, count=1):
+    def properties_record(
+        feature: int, first: int, items: list[tuple[int, bytes]], count: int = 1
+    ) -> bytes:
         return (
             bytes([0, feature, len(items), count])
             + extended(first)
             + b"".join(bytes([prop]) + data for prop, data in items)
         )
 
-    def table(prop, labels):
+    def table(prop: int, labels: list[bytes]) -> bytes:
         return properties_record(8, 0, [(prop, b"".join(labels))], len(labels))
 
-    def engine(feature, local, custom=True):
+    def engine(feature: int, local: int, custom: bool = True) -> list[bytes]:
         common = [(0, word(10000)), (3, b"\xff"), (4, b"\xff"), (6, b"\x0f")]
         specific = (
             [
@@ -808,7 +829,15 @@ def loading_grfs(folder, *, properties=False):
         (folder / f"owner470-{which}.grf").write_bytes(data)
 
 
-def prepare_loading(scenario, executables, builds, folder, timeout, env, result):
+def prepare_loading(
+    scenario: Scenario,
+    executables: dict[str, Path],
+    builds: dict[str, Path],
+    folder: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     variant = scenario["engines"]
     property_mode = variant.startswith("properties")
     command = "properties" if property_mode else "loading"
@@ -817,25 +846,29 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
             scenario, executables, builds, folder, timeout, env, result
         )
     if not variant.endswith("-reload"):
-        return dict(
-            scenario,
-            executables=executables,
-            console=["engines_scenario " + scenario["engines"], "unpause"],
-        )
+        return {
+            **scenario,
+            "executables": executables,
+            "console": ["engines_scenario " + scenario["engines"], "unpause"],
+        }
     saves = {role: folder / role / "loading.sav" for role in executables}
+
+    def capture(role: str) -> Scenario:
+        return {
+            **scenario,
+            "console": [f'engines_scenario {command} "{saves[role]}"', "unpause"],
+            "ticks": 74 if property_mode else 1,
+        }
+
     runs = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=[f'engines_scenario {command} "{saves[role]}"', "unpause"],
-            ticks=74 if property_mode else 1,
-        ),
+        capture,
         executables,
         builds,
         folder,
         timeout,
         env,
     )
-    captures = {}
+    captures: dict[str, list[str]] = {}
     for role, run in runs.items():
         if (
             run["exit"]
@@ -865,16 +898,18 @@ def prepare_loading(scenario, executables, builds, folder, timeout, env, result)
     if differences or captures["reference"] != captures["candidate"]:
         result["differences"].extend(differences)
         raise RuntimeError("file-loaded engine capture differs")
-    result["engine_loading_capture"] = captures
-    return dict(
-        scenario,
-        executables=executables,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=[f"engines_scenario {command}-inspect", "unpause"],
-    )
+    core.findings(result)["engine_loading_capture"] = captures
+    return {
+        **scenario,
+        "executables": executables,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": [f"engines_scenario {command}-inspect", "unpause"],
+    }
 
 
-def loading_markers(lines, *, setup, saving=False, properties=False):
+def loading_markers(
+    lines: list[str], *, setup: bool, saving: bool = False, properties: bool = False
+) -> None:
     from collections import Counter
 
     counts = Counter(
@@ -983,23 +1018,23 @@ def loading_markers(lines, *, setup, saving=False, properties=False):
         raise RuntimeError("engine loading completion missing")
 
 
-def write_type_grfs(folder):
+def write_type_grfs(folder: Path) -> None:
     """Real version-1 containers exercise the production reserve/activate reader."""
     folder.mkdir(parents=True, exist_ok=True)
 
-    def prop(feature, first, number, key, value):
+    def prop(feature: int, first: int, number: int, key: int, value: bytes) -> bytes:
         return bytes((0, feature, 1, number, first, key)) + value
 
-    def labels(feature, names):
+    def labels(feature: int, names: list[bytes]) -> bytes:
         return prop(feature, 0, len(names), 8, b"".join(names))
 
-    def table(key, names):
+    def table(key: int, names: list[bytes]) -> bytes:
         return prop(8, 0, len(names), key, b"".join(names))
 
-    def listing(feature, first, key, names):
+    def listing(feature: int, first: int, key: int, names: list[bytes]) -> bytes:
         return prop(feature, first, 1, key, bytes((len(names),)) + b"".join(names))
 
-    def write(name, grfid, actions):
+    def write(name: str, grfid: bytes, actions: list[bytes]) -> None:
         actions = [
             bytes((8, 8)) + grfid + name.encode() + b"\0Type registry fixture\0",
             *actions,
@@ -1119,13 +1154,24 @@ DEFINITION_CAPTURE = (
 )
 
 
-def definition_reload(scenario, executables, builds, folder, timeout, env, result):
+def definition_reload(
+    scenario: Scenario,
+    executables: dict[str, Path],
+    builds: dict[str, Path],
+    folder: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
+    def build(role: str) -> Scenario:
+        return {
+            **scenario,
+            "console": ["engines_scenario types-definitions-build", "unpause"],
+            "ticks": 74,
+        }
+
     runs = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=["engines_scenario types-definitions-build", "unpause"],
-            ticks=74,
-        ),
+        build,
         executables,
         builds,
         folder / "definitions",
@@ -1159,9 +1205,9 @@ def definition_reload(scenario, executables, builds, folder, timeout, env, resul
     if differences:
         result["differences"].extend(differences)
         raise RuntimeError("real-file type construction differs")
-    return dict(
-        scenario,
-        executables=executables,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["engines_scenario types-definitions-reload", "unpause"],
-    )
+    return {
+        **scenario,
+        "executables": executables,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": ["engines_scenario types-definitions-reload", "unpause"],
+    }

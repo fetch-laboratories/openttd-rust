@@ -4,8 +4,12 @@ import hashlib
 import json
 import shutil
 import struct
+from collections.abc import Mapping
 from pathlib import Path
+from types import ModuleType
+from typing import Any, NotRequired, cast
 
+from . import core
 from .console_adapter import prepared_console
 from .core import (
     FILE_TYPES,
@@ -29,22 +33,29 @@ from .play_saves import DISTRIBUTIONS
 AI_FOLDER = "water-scenario-ai"
 
 
-def uses_ai(scenario):
+class Scenario(core.Scenario):
+    water: NotRequired[str]
+    water_operation: NotRequired[str]
+    water_commands: NotRequired[bool | str]
+    water_record: NotRequired[dict[str, Any]]
+
+
+def uses_ai(scenario: Scenario) -> bool:
     return scenario.get("water") == "structures"
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return ["-d", "yapf=3"] if scenario.get("water") else []
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     witnessed = (
         scenario.get("water") or scenario.get("water_commands")
     ) and scenario.get("witnesses")
     return WITNESS_ENVIRONMENT if witnessed else {}
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
         ai = run_dir / "ai/water-scenarios"
         shutil.copytree(scenario["scenario_ai"], ai)
@@ -53,26 +64,26 @@ def install(scenario, run_dir):
         )
 
 
-def scenarios(soak):
-    scenarios = [
-        dict(
-            name="water-commands",
-            kind="save",
-            water_commands=True,
-            save=str(ROOT / "migration/saves/water-structures.sav"),
-            short_checkpoint=True,
-            ticks=1,
-            console=["water_scenario", "unpause"],
-        ),
-        dict(
-            name="ownership-dispatch",
-            kind="save",
-            water_commands="ownership",
-            save=str(ROOT / "migration/saves/water-structures.sav"),
-            short_checkpoint=True,
-            ticks=1,
-            console=["owner_scenario", "unpause"],
-        ),
+def scenarios(soak: bool) -> list[Scenario]:
+    scenarios: list[Scenario] = [
+        {
+            "name": "water-commands",
+            "kind": "save",
+            "water_commands": True,
+            "save": str(ROOT / "migration/saves/water-structures.sav"),
+            "short_checkpoint": True,
+            "ticks": 1,
+            "console": ["water_scenario", "unpause"],
+        },
+        {
+            "name": "ownership-dispatch",
+            "kind": "save",
+            "water_commands": "ownership",
+            "save": str(ROOT / "migration/saves/water-structures.sav"),
+            "short_checkpoint": True,
+            "ticks": 1,
+            "console": ["owner_scenario", "unpause"],
+        },
     ]
     for distribution, commands in DISTRIBUTIONS.items():
         scenarios.append(
@@ -100,18 +111,18 @@ def scenarios(soak):
     return scenarios
 
 
-def check_water(scenario, run, desync):
+def check_water(scenario: Scenario, run: core.Run, desync: bool) -> dict[str, Any]:
     source = Path(scenario["save"])
-    record = scenario.get("water_record") or json.loads(
+    record: dict[str, Any] = scenario.get("water_record") or json.loads(
         source.with_suffix(".json").read_text()
     )
     if hashlib.sha256(source.read_bytes()).hexdigest() != record["normalized_sha256"]:
         raise RuntimeError("water fixture differs from its preparation record")
     ship = record["ship"]
 
-    def observe(path):
+    def observe(path: Path) -> dict[str, Any]:
         chunk = read_save(path)["VEHS"]
-        row = decode_element(chunk, dict(chunk["elements"])[ship])
+        row = cast(core.Row, decode_element(chunk, dict(chunk["elements"])[ship]))
         if row["type"] != 2:
             raise RuntimeError("water witness is not a ship")
         common = "ship[0]/common[0]/"
@@ -189,7 +200,7 @@ def check_water(scenario, run, desync):
         )
         if [row[0] for row in markers] != expected:
             raise RuntimeError("water command/lost/recovery witnesses are incomplete")
-    lifecycle = None
+    lifecycle: dict[str, Any] | None = None
     if operation == "lifecycle":
         ids = [
             int(row[1])
@@ -199,7 +210,7 @@ def check_water(scenario, run, desync):
         if len(ids) != 4 or len(set(ids)) != 1 or ids[0] == ship:
             raise RuntimeError("ship build/sell/reuse markers lack actual ID reuse")
         chunk = read_save(run["snapshots"][-1])["VEHS"]
-        reused = decode_element(chunk, dict(chunk["elements"])[ids[0]])
+        reused = cast(core.Row, decode_element(chunk, dict(chunk["elements"])[ids[0]]))
         if reused["type"] != 2 or reused["ship[0]/common[0]/motion_counter"] == 0:
             raise RuntimeError("rebuilt ship owner did not drive a moving ship")
         lifecycle = {
@@ -217,7 +228,7 @@ def check_water(scenario, run, desync):
     }
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     from .console_adapter import console_adapter
 
     return console_adapter(
@@ -225,12 +236,20 @@ def adapter(build, folder, env):
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if scenario.get("water_commands"):
         executables = prepared_console(
             "ships", adapter, binaries, builds, out / scenario["name"], env
         )
-        return dict(scenario, executables=executables)
+        return {**scenario, "executables": executables}
 
     if scenario.get("water_operation") == "class":
         # MakeRiver differs from the existing flat clear canal only in m1:
@@ -257,11 +276,15 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             "normalized_sha256": hashlib.sha256(data).hexdigest(),
             "changed": {"chunk": "MAPO", "tile": tile, "old": 33, "new": 81},
         }
-        result["water_class_input"] = record
-        return dict(scenario, save=str(prepared), water_record=record)
+        core.findings(result)["water_class_input"] = record
+        return {**scenario, "save": str(prepared), "water_record": record}
     if scenario.get("water_operation") != "reload":
         return scenario
-    setup = dict(scenario, water_operation="route", ticks=3 * SNAPSHOT_TICKS)
+    setup: Scenario = {
+        **scenario,
+        "water_operation": "route",
+        "ticks": 3 * SNAPSHOT_TICKS,
+    }
     run = run_game(
         setup,
         binaries["reference"],
@@ -279,9 +302,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             for path in run["snapshots"]
             if any(
                 key.startswith("ship[0]/path[")
-                for key in decode_element(
-                    read_save(path)["VEHS"],
-                    dict(read_save(path)["VEHS"]["elements"])[ship],
+                for key in cast(
+                    core.Row,
+                    decode_element(
+                        read_save(path)["VEHS"],
+                        dict(read_save(path)["VEHS"]["elements"])[ship],
+                    ),
                 )
             )
         ),
@@ -298,8 +324,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
         "removed_chunk": "GLOG",
     }
-    result["water_reload_input"] = record
-    return dict(scenario, save=str(normalized), water_record=record)
+    core.findings(result)["water_reload_input"] = record
+    return {**scenario, "save": str(normalized), "water_record": record}
 
 
 # Successful builds per kind over both areas, and each bankrupt tile's (type, owner).
@@ -332,11 +358,13 @@ OWNER_INDUSTRIES = {
 }
 
 
-def check_ownership(scenario, run, role, markers):
+def check_ownership(
+    scenario: Scenario, run: core.Run, role: str, markers: list[str]
+) -> None:
     for kind, count in OWNER_BUILDS.items():
         if sum(row.startswith(f"cost owner-{kind} true ") for row in markers) != count:
             raise RuntimeError("ownership fixture did not build " + kind)
-    tiles = {}
+    tiles: dict[str, dict[str, tuple[int, int]]] = {}
     for row in markers:
         if row.startswith("owner "):
             _, phase, name, kind, m1 = row.split()[:5]
@@ -363,7 +391,13 @@ def check_ownership(scenario, run, role, markers):
         branch_witnesses(scenario, run, role, prefix, required)
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario.get("water_commands") == "ownership":
         markers = [
             line.split("WATER-CMD ", 1)[1]
@@ -480,12 +514,12 @@ def check(scenario, run, mode, role, result):
             "restore depot remove_depot force lock remove_lock canal skip clear owner desert".split(),
         )
         if branches is not None:
-            result[f"{mode}_{role}_water_command_profile"] = branches
+            core.findings(result)[f"{mode}_{role}_water_command_profile"] = branches
         return
 
     if "water" in scenario:
         if scenario.get("water_operation") == "route":
-            result[f"{mode}_{role}_movement"] = branch_witnesses(
+            core.findings(result)[f"{mode}_{role}_movement"] = branch_witnesses(
                 scenario,
                 run,
                 role,
@@ -510,10 +544,12 @@ def check(scenario, run, mode, role, result):
                 raise RuntimeError(
                     "ship controller did not initialize both build/reuse owners"
                 )
-            result[f"{mode}_{role}_ship_control_profile"] = branches
-        result[f"{mode}_{role}_water"] = check_water(scenario, run, mode == "snapshots")
+            core.findings(result)[f"{mode}_{role}_ship_control_profile"] = branches
+        core.findings(result)[f"{mode}_{role}_water"] = check_water(
+            scenario, run, mode == "snapshots"
+        )
         if (profile := witness_counts(run, "water")) is not None:
-            result[f"{mode}_{role}_water_profile"] = profile
+            core.findings(result)[f"{mode}_{role}_water_profile"] = profile
         required = [
             "region_nodes",
             "track_nodes",
@@ -528,10 +564,12 @@ def check(scenario, run, mode, role, result):
         )
         branches = branch_witnesses(scenario, run, role, "ship_yapf", required)
         if branches is not None:
-            result[f"{mode}_{role}_ship_yapf_profile"] = branches
+            core.findings(result)[f"{mode}_{role}_ship_yapf_profile"] = branches
 
 
-def prepare_water_save(layout, migration, out, timeout):
+def prepare_water_save(
+    layout: str, migration: ModuleType, out: Path, timeout: int
+) -> None:
     """Build inputs with reference commands; only funding/AI identity are patched."""
     runtime = out / "reference-runtime"
     with migration.reference_lock(shared=True):
@@ -540,12 +578,16 @@ def prepare_water_save(layout, migration, out, timeout):
         )
     scripts = out / "water-ai"
     shutil.copytree(ROOT / "tools/water-scenario-ai", scripts)
-    scenario = {
-        "kind": "save",
-        "save": str(migration.REFERENCE / "regression/stationlist/test.sav"),
-        "ticks": 1,
-        "console": ["unpause"],
-    }
+    # An unnamed preparation input; run_game reads no name.
+    scenario = cast(
+        Scenario,
+        {
+            "kind": "save",
+            "save": str(migration.REFERENCE / "regression/stationlist/test.sav"),
+            "ticks": 1,
+            "console": ["unpause"],
+        },
+    )
     initial = run_game(
         scenario,
         binary,
@@ -560,7 +602,7 @@ def prepare_water_save(layout, migration, out, timeout):
     emitted = initial["snapshots"][-1]
     data, chunks = bytearray(emitted.read_bytes()), read_save(emitted)
 
-    def element_offset(chunk, wanted):
+    def element_offset(chunk: core.Chunk, wanted: int) -> tuple[int, core.Buffer]:
         reader = Reader(data, chunk["span"][0] + 5)
         reader.take(reader.gamma() - 1)
         for index, body in chunk["elements"]:
@@ -575,11 +617,12 @@ def prepare_water_save(layout, migration, out, timeout):
                 return offset, body
         raise RuntimeError("water fixture company disappeared")
 
-    funding = None
+    funding: dict[str, Any] | None = None
     if layout == "structures":
         company = chunks["PLYR"]
         offset, body = element_offset(company, 1)
-        begin, end, kind = field_spans(body, company["header"])["money"]
+        header = cast(list[core.Field], company["header"])  # PLYR is a table
+        begin, end, kind = field_spans(body, header)["money"]
         old = struct.unpack(FILE_TYPES[kind & 15][0], body[begin:end])[0]
         replacement = struct.pack(FILE_TYPES[kind & 15][0], 10_000_000)
         if kind != 7 or len(replacement) != end - begin:
@@ -595,7 +638,8 @@ def prepare_water_save(layout, migration, out, timeout):
             for (index, before), (other, after) in zip(
                 chunk["elements"], funded_chunks[cid]["elements"], strict=True
             ):
-                a, b = decode_element(chunk, before), decode_element(chunk, after)
+                a = cast(core.Row, decode_element(chunk, before))
+                b = cast(core.Row, decode_element(chunk, after))
                 if index == 1:
                     a["money"] = funding["new"]
                 if index != other or a != b:
@@ -652,7 +696,7 @@ def prepare_water_save(layout, migration, out, timeout):
         begin = reader.pos
         value = read_value(reader, kind)
         if key in ("name", "running_name"):
-            if value.casefold() != "stationlist":
+            if cast(str, value).casefold() != "stationlist":
                 raise RuntimeError(
                     "water preparation did not use its isolated setup AI"
                 )

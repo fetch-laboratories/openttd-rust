@@ -1,7 +1,11 @@
 """Orders command, backup and initialized unbunching evidence on the player save."""
 
 import hashlib
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any, NotRequired, cast
 
+from . import core
 from .console_adapter import prepared_console
 from .core import (
     ROOT,
@@ -29,7 +33,12 @@ VISITS += ["leave_empty", "leave_loaded", "loading_depart", "merge_blocked"]
 VISITS += ["refit", "reset_refit"]
 
 
-def scenarios(soak):
+class Scenario(core.Scenario):
+    orders: NotRequired[str]
+    orders_client: NotRequired[bool]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     return [
         {
             "name": "orders-" + mode,
@@ -77,13 +86,21 @@ def scenarios(soak):
     ]
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     if scenario.get("orders", "").startswith("visits") and scenario.get("witnesses"):
         return WITNESS_ENVIRONMENT
     return {"OPENTTD_ORDERS_CLIENT": "1"} if scenario.get("orders_client") else {}
 
 
-def adapter(build, folder, env, *, source=ADAPTER, name="orders", afterload=True):
+def adapter(
+    build: Path,
+    folder: Path,
+    env: dict[str, str],
+    *,
+    source: Path = ADAPTER,
+    name: str = "orders",
+    afterload: bool = True,
+) -> Path:
     from .console_adapter import console_adapter
 
     return console_adapter(
@@ -91,7 +108,15 @@ def adapter(build, folder, env, *, source=ADAPTER, name="orders", afterload=True
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "orders" not in scenario:
         return scenario
 
@@ -99,34 +124,36 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     executables = prepared_console("orders", adapter, binaries, builds, folder, env)
     mode = scenario["orders"]
     if mode.startswith("visits"):
-        from pathlib import Path
-
         from .core import normalize
 
-        save, result["visits_input"] = normalize(Path(scenario["save"]), folder)
-        return dict(scenario, executables=executables, save=str(save))
+        save, core.findings(result)["visits_input"] = normalize(
+            Path(scenario["save"]), folder
+        )
+        return {**scenario, "executables": executables, "save": str(save)}
     if mode in ("commands", "implicit-wrap", "oversized"):
-        return dict(
-            scenario,
-            executables=executables,
-            console=[
+        return {
+            **scenario,
+            "executables": executables,
+            "console": [
                 "orders_scenario " + ("setup" if mode == "commands" else mode),
                 "unpause",
             ],
-        )
+        }
     shared = mode == "client-shared-restore"
-    saves, captures, active_inputs = {}, {}, {}
+    saves: dict[str, Path] = {}
+    captures: dict[str, dict[str, Any]] = {}
+    active_inputs: dict[str, dict[str, Any]] = {}
 
-    def setup(role):
+    def setup(role: str) -> Scenario:
         backup = folder / role / "backups.sav"
-        return dict(
-            scenario,
-            console=[
+        return {
+            **scenario,
+            "console": [
                 f'orders_scenario setup "{backup}" {"shared" if shared else "unique"}',
                 "unpause",
             ],
-            ticks=1,
-        )
+            "ticks": 1,
+        }
 
     runs = capture_pair(setup, executables, builds, folder, timeout, env)
     for role, run in runs.items():
@@ -143,7 +170,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         saves[role] = backup
     if captures["reference"]["witnesses"] != captures["candidate"]["witnesses"]:
         raise RuntimeError("native command/departure witnesses differ")
-    result["orders_capture"] = captures
+    core.findings(result)["orders_capture"] = captures
     records = compare_saves(
         saves["reference"], saves["candidate"], scenario["name"], 20, result["stats"]
     )
@@ -151,13 +178,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         result["differences"].extend(records)
         raise RuntimeError("serialized backup preparation states differ")
     if mode == "active-reload":
+
+        def active(role: str) -> Scenario:
+            return {
+                **scenario,
+                "save": str(saves[role]),
+                "console": ["orders_scenario active", "unpause"],
+                "ticks": 1,
+            }
+
         runs = capture_pair(
-            lambda role: dict(
-                scenario,
-                save=str(saves[role]),
-                console=["orders_scenario active", "unpause"],
-                ticks=1,
-            ),
+            active,
             executables,
             builds,
             folder,
@@ -184,7 +215,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     line for line in run["log"] if line.startswith("ORDERS ")
                 ],
             }
-        result["orders_active"] = active_inputs
+        core.findings(result)["orders_active"] = active_inputs
         records = compare_saves(
             saves["reference"],
             saves["candidate"],
@@ -197,21 +228,27 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             raise RuntimeError("active preparation states differ")
     # Compare each preparation before loading its same-build save; crossing build
     # revisions would add a GLOG revision event unrelated to orders behavior.
-    return dict(
-        scenario,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        executables=executables,
-        orders_client=mode in ("client-restore", "client-shared-restore"),
-        console=[
+    return {
+        **scenario,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "executables": executables,
+        "orders_client": mode in ("client-restore", "client-shared-restore"),
+        "console": [
             "orders_scenario restore " + ("shared" if shared else "unique")
             if mode in ("client-restore", "client-shared-restore")
             else "orders_scenario inspect",
             "unpause",
         ],
-    )
+    }
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if "orders" not in scenario or run["exit"] or not run["snapshots"]:
         return
     operation = scenario["orders"]
@@ -219,7 +256,7 @@ def check(scenario, run, mode, role, result):
         if "VISITS setup 3 3 120 0" not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing visits setup")
         if counts := branch_witnesses(scenario, run, role, "vehicle_visits", VISITS):
-            result[f"{mode}_{role}_visit_branches"] = counts
+            core.findings(result)[f"{mode}_{role}_visit_branches"] = counts
         return
     if operation == "visits-reserved":
         reservations = [
@@ -237,7 +274,7 @@ def check(scenario, run, mode, role, result):
         if counts := branch_witnesses(
             scenario, run, role, "vehicle_visits", ["reservation"]
         ):
-            result[f"{mode}_{role}_visit_branches"] = counts
+            core.findings(result)[f"{mode}_{role}_visit_branches"] = counts
         return
     required = {
         "commands": ["ORDERS backups captured 2", "ORDERS waiting true true"],
@@ -260,17 +297,18 @@ def check(scenario, run, mode, role, result):
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
     chunk = read_save(run["snapshots"][-1])["VEHS"]
+    # An undecodable element (None) still raises TypeError here.
     vehicles = {
-        index: decode_element(chunk, body)
+        index: cast(core.Row, decode_element(chunk, body))
         for index, body in chunk["elements"]
-        if decode_element(chunk, body)["type"] == 1
+        if cast(core.Row, decode_element(chunk, body))["type"] == 1
     }
     # Compare the actual initialized trip values separately from #83's general mask.
     trips = {index: row[COMMON + "round_trip_time"] for index, row in vehicles.items()}
     key = mode + "_orders_trips"
     if role == "reference":
-        result[key] = trips
-    elif result[key] != trips:
+        core.findings(result)[key] = trips
+    elif core.findings(result)[key] != trips:
         result["problems"].append(f"{mode}: unmasked initialized-peer trip mismatch")
     if operation in ("client-restore", "client-shared-restore") and trips[126] != 0:
         result["problems"].append(
