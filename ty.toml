@@ -52,4 +52,6 @@ include = [
     "tools/test-kernel-state.py",
     "tools/simulation/core.py",
     "tools/migration.py",
+    "tools/harness_inventory.py",
+    "tools/test-harness-inventory.py",
 ]

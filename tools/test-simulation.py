@@ -1019,6 +1019,32 @@ class InstructionSpeedTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     ir.finish({}, failure)  # Reject before extraction/cache writes.
 
+    def test_reference_cache_write_stays_within_the_cache_disk(self):
+        rename = Path.replace
+
+        def same_disk(source: Path, target: Path) -> Path:
+            if Path(source).parent != Path(target).parent:
+                raise OSError(18, "Invalid cross-device link")
+            return rename(source, target)
+
+        with tempfile.TemporaryDirectory() as directory:
+            run, cache = Path(directory) / "simulation", Path(directory) / "cache"
+            run.mkdir()
+            runs = {
+                role: {
+                    "dir": run,
+                    "instructions": dict(
+                        identity={"compatible": role}, cached=value, cache=cache / "k"
+                    ),
+                }
+                for role, value in (("reference", 40), ("candidate", 50))
+            }
+            clean = dict(differences=[], known_failures=[], problems=[])
+            with patch.object(Path, "replace", autospec=True, side_effect=same_disk):
+                self.assertEqual(ir.finish(runs, clean)["Ir_ratio"], 1.25)
+            self.assertEqual(json.loads((cache / "k").read_text()), 40)
+            self.assertEqual([path.name for path in cache.iterdir()], ["k"])
+
     def test_main_checkout_and_worktree_record_one_settings_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             main, worktree = Path(directory) / "clone", Path(directory) / "wt"
