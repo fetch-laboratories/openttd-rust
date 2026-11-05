@@ -70,6 +70,15 @@ inline void RustSpecPlayTileSound(const Spec *spec, uint8_t sound, uint32_t tile
 template <typename Spec>
 inline void RustSpecSetGRFFile(Spec *spec, const GRFFile *file) noexcept { spec->grf_prop.SetGRFFile(file); }
 template <typename Spec>
+inline void RustSpecSetStandardSpriteGroup(Spec *spec, uint8_t which, const SpriteGroup *group) noexcept { spec->grf_prop.SetSpriteGroup(static_cast<StandardSpriteGroup>(which), group); }
+template <typename Spec>
+inline uint32_t *RustSpecName(Spec *spec) noexcept
+{
+	if constexpr (requires { spec->name; }) return &spec->name;
+	else if constexpr (requires { spec->building_name; }) return &spec->building_name;
+	else return nullptr;
+}
+template <typename Spec>
 inline void RustSpecSetCargoGroup(Spec *spec, CargoType cargo, const SpriteGroup *group) noexcept { spec->grf_prop.SetSpriteGroup(cargo, group); }
 template <typename Spec> inline bool RustSpecEnabled(const Spec *spec) noexcept { return spec->enabled; }
 template <typename Spec> inline void RustSpecSetEnabled(Spec *spec, bool value) noexcept { spec->enabled = value; }

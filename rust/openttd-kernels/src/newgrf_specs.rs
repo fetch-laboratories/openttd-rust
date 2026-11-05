@@ -9,6 +9,7 @@
 //! table per spec type, reached through `Services::newgrf_specs`. Specs stay
 //! native and live for each synchronous call; every table is process-lifetime.
 #![allow(unsafe_code)]
+use crate::house::HouseSpec;
 use crate::newgrf_bytereader::BadgeList;
 use crate::newgrf_commons::SubstituteSpecIdentity;
 use crate::station_cmd::{AirportSpec, RailSpec, RoadSpec};
@@ -21,6 +22,8 @@ use std::ffi::c_void;
 pub struct StandardServices<S> {
     /// `grf_prop.HasSpriteGroups()`.
     pub has_sprite_groups: extern "C" fn(*const S) -> bool,
+    /// `grf_prop.SetSpriteGroup` for default/purchase bindings.
+    pub set_sprite_group: extern "C" fn(*mut S, u8, *const c_void),
     /// `grf_prop.GetSpriteGroup(entity_exists)`.
     pub sprite_group: extern "C" fn(*const S, bool) -> *const c_void,
 }
@@ -75,6 +78,8 @@ pub struct SpecServices<S, T> {
     pub has_file: extern "C" fn(*const S) -> bool,
     /// `grf_prop.local_id`.
     pub local_id: extern "C" fn(*const S) -> u16,
+    /// Writable display name, or null for specs with no display name.
+    pub name: extern "C" fn(*mut S) -> *mut u32,
     /// `grf_prop.SetGRFFile`.
     pub set_file: extern "C" fn(*mut S, *const c_void),
     /// Store `grf_prop.local_id`.
@@ -109,6 +114,7 @@ impl<S, T> SpecServices<S, T> {
 pub struct Specs {
     airport: *const SpecServices<AirportSpec, u8>,
     airport_tile: *const SpecServices<AirportTileSpec, u8>,
+    house: *const SpecServices<HouseSpec, u8>,
     industry: *const SpecServices<IndustrySpec, u8>,
     industry_tile: *const SpecServices<IndustryTileSpec, u8>,
     object: *const SpecServices<ObjectSpec, u16>,
@@ -132,6 +138,7 @@ macro_rules! spec_tables {
 spec_tables! {
     airport: AirportSpec, u8;
     airport_tile: AirportTileSpec, u8;
+    house: HouseSpec, u8;
     industry: IndustrySpec, u8;
     industry_tile: IndustryTileSpec, u8;
     object: ObjectSpec, u16;
@@ -141,25 +148,28 @@ spec_tables! {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDNewGRFSpecs" ["probe"] => Specs { airport, airport_tile, industry, industry_tile, object, road_stop, station };
-    "OpenTTDAirportSpecServices" ["probe"] => SpecServices<AirportSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, set_file, set_local_id, standard, substitute };
-    "OpenTTDAirportTileSpecServices" ["probe"] => SpecServices<AirportTileSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, set_file, set_local_id, standard, substitute };
-    "OpenTTDIndustrySpecServices" ["probe"] => SpecServices<IndustrySpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, set_file, set_local_id, standard, substitute };
-    "OpenTTDIndustryTileSpecServices" ["probe"] => SpecServices<IndustryTileSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, set_file, set_local_id, standard, substitute };
-    "OpenTTDObjectSpecServices" ["probe"] => SpecServices<ObjectSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, set_file, set_local_id, standard, substitute };
-    "OpenTTDRoadStopSpecServices" ["probe"] => SpecServices<RoadSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, set_file, set_local_id, standard, substitute };
-    "OpenTTDStationSpecServices" ["probe"] => SpecServices<RailSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, set_file, set_local_id, standard, substitute };
+    "OpenTTDNewGRFSpecs" ["probe"] => Specs { airport, airport_tile, house, industry, industry_tile, object, road_stop, station };
+    "OpenTTDAirportSpecServices" ["probe"] => SpecServices<AirportSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDAirportTileSpecServices" ["probe"] => SpecServices<AirportTileSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDHouseSpecServices" ["probe"] => SpecServices<HouseSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDIndustrySpecServices" ["probe"] => SpecServices<IndustrySpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDIndustryTileSpecServices" ["probe"] => SpecServices<IndustryTileSpec, u8> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDObjectSpecServices" ["probe"] => SpecServices<ObjectSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDRoadStopSpecServices" ["probe"] => SpecServices<RoadSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
+    "OpenTTDStationSpecServices" ["probe"] => SpecServices<RailSpec, u16> { animation, badge_list, badges, boolean_callback, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
     "OpenTTDAirportTileSpecAnimation" ["probe"] => AnimationServices<AirportTileSpec, u8> { frames, speed, status, triggers };
     "OpenTTDIndustryTileSpecAnimation" ["probe"] => AnimationServices<IndustryTileSpec, u8> { frames, speed, status, triggers };
     "OpenTTDRoadStopSpecAnimation" ["probe"] => AnimationServices<RoadSpec, u16> { frames, speed, status, triggers };
     "OpenTTDStationSpecAnimation" ["probe"] => AnimationServices<RailSpec, u16> { frames, speed, status, triggers };
-    "OpenTTDAirportSpecStandard" ["probe"] => StandardServices<AirportSpec> { has_sprite_groups, sprite_group };
-    "OpenTTDAirportTileSpecStandard" ["probe"] => StandardServices<AirportTileSpec> { has_sprite_groups, sprite_group };
-    "OpenTTDIndustrySpecStandard" ["probe"] => StandardServices<IndustrySpec> { has_sprite_groups, sprite_group };
-    "OpenTTDIndustryTileSpecStandard" ["probe"] => StandardServices<IndustryTileSpec> { has_sprite_groups, sprite_group };
-    "OpenTTDObjectSpecStandard" ["probe"] => StandardServices<ObjectSpec> { has_sprite_groups, sprite_group };
+    "OpenTTDAirportSpecStandard" ["probe"] => StandardServices<AirportSpec> { has_sprite_groups, set_sprite_group, sprite_group };
+    "OpenTTDAirportTileSpecStandard" ["probe"] => StandardServices<AirportTileSpec> { has_sprite_groups, set_sprite_group, sprite_group };
+    "OpenTTDHouseSpecStandard" ["probe"] => StandardServices<HouseSpec> { has_sprite_groups, set_sprite_group, sprite_group };
+    "OpenTTDIndustrySpecStandard" ["probe"] => StandardServices<IndustrySpec> { has_sprite_groups, set_sprite_group, sprite_group };
+    "OpenTTDIndustryTileSpecStandard" ["probe"] => StandardServices<IndustryTileSpec> { has_sprite_groups, set_sprite_group, sprite_group };
+    "OpenTTDObjectSpecStandard" ["probe"] => StandardServices<ObjectSpec> { has_sprite_groups, set_sprite_group, sprite_group };
     "OpenTTDAirportSpecSubstitute" ["probe"] => SubstituteServices<AirportSpec> { enabled, identity, override_id, set_enabled, set_override, substitute };
     "OpenTTDAirportTileSpecSubstitute" ["probe"] => SubstituteServices<AirportTileSpec> { enabled, identity, override_id, set_enabled, set_override, substitute };
+    "OpenTTDHouseSpecSubstitute" ["probe"] => SubstituteServices<HouseSpec> { enabled, identity, override_id, set_enabled, set_override, substitute };
     "OpenTTDIndustrySpecSubstitute" ["probe"] => SubstituteServices<IndustrySpec> { enabled, identity, override_id, set_enabled, set_override, substitute };
     "OpenTTDIndustryTileSpecSubstitute" ["probe"] => SubstituteServices<IndustryTileSpec> { enabled, identity, override_id, set_enabled, set_override, substitute };
 }

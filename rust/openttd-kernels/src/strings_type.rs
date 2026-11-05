@@ -14,3 +14,14 @@ pub const SPECSTR_TOWNNAME_START: u32 = 0x20C0;
 
 /// `BUILTIN_TOWNNAME_GENERATOR_COUNT`.
 pub const BUILTIN_TOWNNAME_GENERATOR_COUNT: u32 = 21;
+
+/// Bits per string tab (`TAB_SIZE_BITS`).
+pub const TAB_SIZE_BITS: u32 = 11;
+/// First tab of GRF strings (`TEXT_TAB_NEWGRF_START`).
+pub const TEXT_TAB_NEWGRF_START: u32 = 64;
+/// Maximum GRF text entries (`TAB_SIZE_NEWGRF`).
+pub const TAB_SIZE_NEWGRF: usize = (1 << TAB_SIZE_BITS) * 256;
+/// `MakeStringID(TEXT_TAB_NEWGRF_START, index)`.
+pub fn grf_string_id(index: usize) -> u32 {
+    (TEXT_TAB_NEWGRF_START << TAB_SIZE_BITS) + u32::try_from(index).unwrap()
+}

@@ -720,6 +720,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDByteReaderServices.hpp"
 #include "abi-visit-OpenTTDAirportSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecServices.hpp"
+#include "abi-visit-OpenTTDHouseSpecServices.hpp"
 #include "abi-visit-OpenTTDIndustrySpecServices.hpp"
 #include "abi-visit-OpenTTDIndustryTileSpecServices.hpp"
 #include "abi-visit-OpenTTDObjectSpecServices.hpp"
@@ -731,11 +732,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDStationSpecAnimation.hpp"
 #include "abi-visit-OpenTTDAirportSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecStandard.hpp"
+#include "abi-visit-OpenTTDHouseSpecStandard.hpp"
 #include "abi-visit-OpenTTDIndustrySpecStandard.hpp"
 #include "abi-visit-OpenTTDIndustryTileSpecStandard.hpp"
 #include "abi-visit-OpenTTDObjectSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecSubstitute.hpp"
+#include "abi-visit-OpenTTDHouseSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDIndustrySpecSubstitute.hpp"
 #include "abi-visit-OpenTTDIndustryTileSpecSubstitute.hpp"
 /* Each capability table Rust reaches is present and complete. */
@@ -745,6 +748,7 @@ static bool NewGRFSpecsComplete()
 	auto complete = [](const auto *table) { return table != nullptr && AbiServicesComplete(*table); };
 	return complete(s.airport) && complete(s.airport->standard) && complete(s.airport->substitute) &&
 		complete(s.airport_tile) && complete(s.airport_tile->animation) && complete(s.airport_tile->standard) && complete(s.airport_tile->substitute) &&
+		complete(s.house) && complete(s.house->standard) && complete(s.house->substitute) &&
 		complete(s.industry) && complete(s.industry->standard) && complete(s.industry->substitute) &&
 		complete(s.industry_tile) && complete(s.industry_tile->animation) && complete(s.industry_tile->standard) && complete(s.industry_tile->substitute) &&
 		complete(s.object) && complete(s.object->standard) &&

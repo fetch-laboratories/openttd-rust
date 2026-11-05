@@ -188,13 +188,14 @@ pub(crate) unsafe fn get_type(mut gen_: u16) -> u16 {
     SPECSTR_TOWNNAME_START as u16
 }
 unsafe fn translate(s: &Services, grfid: u32, lang: u8, text: (*const u8, usize)) -> Vec<u8> {
-    // The native loader frame keeps this view alive until the next translation.
-    let translated = unsafe { (s.translate_text)(grfid, lang, false, text.0, text.1) };
-    if translated.size == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(translated.data, translated.size) }.to_vec()
-    }
+    crate::newgrf_text::translate(
+        unsafe { &*s.text },
+        grfid,
+        lang,
+        false,
+        unsafe { crate::utf8::borrow(text.0, text.1) },
+        crate::control_codes::SCC_NEWGRF_PRINT_WORD_STRING_ID,
+    )
 }
 
 /// Action 0x0F - Define Town names (`FeatureTownName`).
@@ -240,7 +241,8 @@ pub(crate) unsafe fn feature_town_name(
                     Bytes(&lang_name)
                 );
 
-                style = (s.add_string)(
+                style = crate::newgrf_text::openttd_rust_grf_text_add(
+                    &*s.text,
                     grfid,
                     u32::from(id),
                     lang,

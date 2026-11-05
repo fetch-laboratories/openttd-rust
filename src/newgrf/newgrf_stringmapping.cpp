@@ -13,6 +13,7 @@
 #include "../newgrf_text.h"
 #include "../newgrf_text_type.h"
 #include "../strings_type.h"
+#include "../rust/newgrf_text_ffi.h"
 #include "newgrf_internal.h"
 #include "newgrf_stringmapping.h"
 
@@ -62,7 +63,7 @@ void AddStringForMapping(GRFStringID source, StringID *target)
  * @param str Grf-local GRFStringID to convert.
  * @return the converted string ID
  */
-static StringID TTDPStringIDToOTTDStringIDMapping(GRFStringID str)
+StringID TTDPStringIDToOTTDStringIDMapping(GRFStringID str)
 {
 	/* StringID table for TextIDs 0x4E->0x6D */
 	static const StringID units_volume[] = {
@@ -128,29 +129,7 @@ static StringID TTDPStringIDToOTTDStringIDMapping(GRFStringID str)
  */
 StringID MapGRFStringID(uint32_t grfid, GRFStringID str)
 {
-	if (IsInsideMM(str.base(), 0xD800, 0x10000)) {
-		/* General text provided by NewGRF.
-		 * In the specs this is called the 0xDCxx range (misc persistent texts),
-		 * but we meanwhile extended the range to 0xD800-0xFFFF.
-		 * Note: We are not involved in the "persistent" business, since we do not store
-		 * any NewGRF strings in savegames. */
-		return GetGRFStringID(grfid, str);
-	} else if (IsInsideMM(str.base(), 0xD000, 0xD800)) {
-		/* Callback text provided by NewGRF.
-		 * In the specs this is called the 0xD0xx range (misc graphics texts).
-		 * These texts can be returned by various callbacks.
-		 *
-		 * Due to how TTDP implements the GRF-local- to global-textid translation
-		 * texts included via 0x80 or 0x81 control codes have to add 0x400 to the textid.
-		 * We do not care about that difference and just mask out the 0x400 bit.
-		 */
-		str = GRFStringID(str.base() & ~0x400);
-		return GetGRFStringID(grfid, str);
-	} else {
-		/* The NewGRF wants to include/reference an original TTD string.
-		 * Try our best to find an equivalent one. */
-		return TTDPStringIDToOTTDStringIDMapping(str);
-	}
+	return openttd_rust_grf_text_map(&GetRustGrfTextServices(), grfid, str.base());
 }
 
 /**

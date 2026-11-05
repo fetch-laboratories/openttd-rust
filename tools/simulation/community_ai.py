@@ -12,7 +12,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, cast
 
 from . import core
 
@@ -45,24 +45,11 @@ class Package:
         return f"https://bananas-cdn.openttd.org/{self.kind}/{self.uid}/{self.md5}/{self.filename}"
 
 
-class Scenario(TypedDict):
-    name: str
-    kind: str
+class Scenario(core.Scenario):
     community_ai: str
-    ticks: int
-    console: list[str]
-    save: NotRequired[str]
-    seed: NotRequired[int]
-    map_log2: NotRequired[int]
-    land_generator: NotRequired[int]
-    settings: NotRequired[dict[str, dict[str, int | str]]]
 
 
-class Run(TypedDict):
-    dir: Path
-    exit: int | str
-    snapshots: list[Path]
-    log: list[str]
+Run = core.Run
 
 
 @dataclass
@@ -228,7 +215,7 @@ def activity(run: Run, source: Path | None = None) -> Activity:
                 raise RuntimeError(f"community AI {cid} missing from {path.name}")
             reader = core.Reader(dict(chunk["elements"])[cid])
             # SaveReal_AIPL writes slot configuration before the running AI.
-            core.read_object(reader, chunk["header"], "", {})
+            core.read_object(reader, cast(list[core.Field], chunk["header"]), "", {})
             if reader.take(reader.gamma()).decode() != SCRIPTS[cid]:
                 raise RuntimeError(f"community AI {cid} was replaced")
             observed.loans.setdefault(cid, []).append(company["current_loan"])

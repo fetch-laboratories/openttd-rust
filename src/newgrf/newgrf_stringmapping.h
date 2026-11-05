@@ -16,5 +16,6 @@
 void AddStringForMapping(GRFStringID source, std::function<void(StringID)> &&func);
 void AddStringForMapping(GRFStringID source, StringID *target);
 void FinaliseStringMapping();
+StringID TTDPStringIDToOTTDStringIDMapping(GRFStringID str);
 
 #endif /* NEWGRF_STRINGMAPPING_H */

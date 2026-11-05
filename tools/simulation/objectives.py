@@ -1,20 +1,22 @@
 """Default objectives commands, unsaved results/events, semantic chunks and reload."""
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
 from . import core
 from .console_adapter import console_adapter, prepared_console
 
 
-class Run(TypedDict):
-    exit: int
-    log: list[str]
+class Scenario(core.Scenario):
+    objectives: bool
 
 
-def scenarios(soak: bool) -> list[dict[str, Any]]:
+Run = core.Run
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     return [
-        dict(
+        Scenario(
             name="objectives",
             kind="save",
             objectives=True,
@@ -69,26 +71,28 @@ def observations(run: Run) -> list[str]:
 
 
 def prepare(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     binaries: dict[str, Path],
     builds: dict[str, Path],
     out: Path,
     timeout: int,
     env: dict[str, str],
-    result: dict[str, Any],
-) -> dict[str, Any]:
+    result: core.Result,
+) -> Scenario:
     if "objectives" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
     source, _ = core.normalize(Path(scenario["save"]), folder / "normalized")
-    scenario = dict(scenario, save=str(source))
+    scenario = {**scenario, "save": str(source)}
     executables = prepared_console("objectives", adapter, binaries, builds, folder, env)
     saves = {role: folder / role / "objectives.sav" for role in executables}
+
+    def capture(role: str) -> Scenario:
+        console = [f'objectives_scenario commands "{saves[role]}"', "unpause"]
+        return {**scenario, "console": console}
+
     captures = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=[f'objectives_scenario commands "{saves[role]}"', "unpause"],
-        ),
+        capture,
         executables,
         builds,
         folder,
@@ -105,25 +109,25 @@ def prepare(
     )
     if traces["reference"] != traces["candidate"] or differences:
         raise RuntimeError("objectives production results, events or save state differ")
-    result["objectives_state"] = [
+    core.findings(result)["objectives_state"] = [
         line
         for line in traces["reference"]
         if line.split()[1]
         in ("goal", "page", "element", "entry", "rng", "state-complete")
     ]
-    return dict(
-        scenario,
-        executables=executables,
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["objectives_scenario inspect", "unpause"],
-    )
+    return {
+        **scenario,
+        "executables": executables,
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": ["objectives_scenario inspect", "unpause"],
+    }
 
 
 def check(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     run: Run,
-    mode: str,
-    role: str,
+    mode: core.Mode,
+    role: core.Role,
     result: dict[str, Any],
 ) -> None:
     if "objectives" in scenario:

@@ -5,7 +5,10 @@ import re
 import shutil
 import struct
 from collections import Counter
+from pathlib import Path
+from typing import Any, Literal, NotRequired, cast
 
+from . import core
 from .core import (
     SNAPSHOT_TICKS,
     TICKS_PER_DAY,
@@ -18,10 +21,19 @@ from .core import (
 )
 
 
-def tree_coverage(path):
+class Scenario(core.Scenario):
+    trees: NotRequired[Literal["generate", "growth", "commands"]]
+    tree_counter: NotRequired[int]
+    map_log2_y: NotRequired[int]
+    tree_flood: NotRequired[int]
+    tree_anchor: NotRequired[int]
+    tree_water: NotRequired[int]
+
+
+def tree_coverage(path: Path) -> dict[str, Any]:
     """Observed tile states, not an inference from requested settings."""
     chunks = read_save(path)
-    states = Counter()
+    states = Counter[str]()
     for tile, kind in enumerate(chunks["MAPT"]["raw"]):
         if kind >> 4 == 4:
             ground = struct.unpack_from(">H", chunks["MAP2"]["raw"], 2 * tile)[0]
@@ -31,7 +43,7 @@ def tree_coverage(path):
             ] += 1
     date = chunks["DATE"]
     pats = chunks["PATS"]
-    settings = decode_element(pats, pats["elements"][0][1])
+    settings = cast(core.Row, decode_element(pats, pats["elements"][0][1]))
     return {
         "settings": {
             key: settings[key]
@@ -42,12 +54,24 @@ def tree_coverage(path):
             )
         },
         "zone/ground/density/count-minus-one/growth": dict(sorted(states.items())),
-        "counter": decode_element(date, date["elements"][0][1])["trees_tick_counter"],
+        "counter": cast(core.Row, decode_element(date, date["elements"][0][1]))[
+            "trees_tick_counter"
+        ],
     }
 
 
-def prepare_trees(scenario, binaries, builds, out, timeout, env):
-    setup = {k: v for k, v in scenario.items() if k not in ("trees", "console")}
+def prepare_trees(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+) -> tuple[Scenario, dict[str, Any]]:
+    setup = cast(
+        Scenario,
+        {k: v for k, v in scenario.items() if k not in ("trees", "console")},
+    )
     run = run_game(
         setup,
         binaries["reference"],
@@ -61,9 +85,9 @@ def prepare_trees(scenario, binaries, builds, out, timeout, env):
     fixture = run["snapshots"][-1]
     chunks = read_save(fixture)
     source = fixture.read_bytes()
-    data, patches = bytearray(source), []
+    data, patches = bytearray(source), list[list[str | int]]()
 
-    def patch(cid, relative, value, label):
+    def patch(cid: str, relative: int, value: bytes, label: str) -> None:
         position = chunks[cid]["span"][0] + relative
         patches.append(
             [
@@ -76,14 +100,14 @@ def prepare_trees(scenario, binaries, builds, out, timeout, env):
         )
         data[position : position + len(value)] = value
 
-    def tile_field(cid, tile, value):
+    def tile_field(cid: str, tile: int, value: int) -> None:
         # RIFF chunks have an eight-byte header; MAP2/MAP8 are big-endian u16.
         width = 2 if cid in ("MAP2", "MAP8") else 1
         patch(cid, 8 + width * tile, value.to_bytes(width, "big"), f"tile[{tile}]")
 
     types = chunks["MAPT"]["raw"]
     width = struct.unpack(">II", chunks["MAPS"]["elements"][0][1])[0]
-    climate = scenario["settings"]["game_creation"]["landscape"]
+    climate = cast(str, scenario["settings"]["game_creation"]["landscape"])
     if scenario["trees"] == "growth":
         trees = [i for i, kind in enumerate(types) if kind >> 4 == 4]
         if len(trees) < 32:
@@ -167,10 +191,13 @@ def prepare_trees(scenario, binaries, builds, out, timeout, env):
             ("MAP5", 3),
         ):
             tile_field(cid, flood, value)
-        scenario = dict(scenario, tree_flood=flood)
+        scenario = {**scenario, "tree_flood": flood}
     else:
         city = chunks["CITY"]
-        towns = [decode_element(city, body)["xy"] for _, body in city["elements"]]
+        towns = [
+            cast(core.Row, decode_element(city, body))["xy"]
+            for _, body in city["elements"]
+        ]
         anchor = next(
             i
             for i in range(width + 1, len(types) - 3 * width)
@@ -221,14 +248,14 @@ def prepare_trees(scenario, binaries, builds, out, timeout, env):
             for i, kind in enumerate(types)
             if kind >> 4 == 6 and chunks["MAP5"]["raw"][i] == 0
         )
-        scenario = dict(scenario, tree_anchor=anchor, tree_water=water)
+        scenario = {**scenario, "tree_anchor": anchor, "tree_water": water}
     date = chunks["DATE"]
     if date["kind"] != 3 or len(date["elements"]) != 1:
         raise RuntimeError("unexpected DATE counter table")
     reader = Reader(source, date["span"][0] + 5)
     reader.take(reader.gamma() - 1)
     reader.gamma()
-    for field in date["header"]:
+    for field in cast(list[core.Field], date["header"]):
         if field["key"] == "trees_tick_counter":
             if field["type"] != 2:
                 raise RuntimeError("unexpected trees counter schema")
@@ -245,7 +272,7 @@ def prepare_trees(scenario, binaries, builds, out, timeout, env):
     normalized = fixture.parent / "tree-input.sav"
     strip_glog(data, normalized)
     normalized_data = normalized.read_bytes()
-    return dict(scenario, kind="save", save=str(normalized)), {
+    return {**scenario, "kind": "save", "save": str(normalized)}, {
         "reference": str(fixture),
         "normalized": str(normalized),
         "reference_sha256": hashlib.sha256(source).hexdigest(),
@@ -259,8 +286,8 @@ def prepare_trees(scenario, binaries, builds, out, timeout, env):
     }
 
 
-def scenarios(soak):
-    scenarios = []
+def scenarios(soak: bool) -> list[Scenario]:
+    scenarios: list[Scenario] = []
     climates = ("temperate", "arctic", "tropic", "toyland")
     for climate, label in enumerate(climates):
         for extra in range(4):
@@ -316,20 +343,35 @@ def scenarios(soak):
     return scenarios
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if scenario.get("trees") in ("growth", "commands"):
-        scenario, result["tree_input"] = prepare_trees(
+        scenario, core.findings(result)["tree_input"] = prepare_trees(
             scenario, binaries, builds, out, timeout, env
         )
     return scenario
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
+    findings = core.findings(result)
     if "trees" in scenario:
-        result[f"{mode}_{role}_trees"] = [
+        findings[f"{mode}_{role}_trees"] = [
             tree_coverage(path) for path in run["snapshots"]
         ]
-        settings = result[f"{mode}_{role}_trees"][-1]["settings"]
+        settings = findings[f"{mode}_{role}_trees"][-1]["settings"]
         expected = {
             "game_creation.landscape": (
                 "temperate",
@@ -355,7 +397,7 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError("water did not clear the prepared forest tile")
         if scenario["trees"] == "commands":
             rows = [line for line in run["log"] if "TREE-COMMAND " in line]
-            result[f"{mode}_{role}_tree_commands"] = rows
+            findings[f"{mode}_{role}_tree_commands"] = rows
             markers = [
                 line.rsplit("TREE-COMMAND-END ", 1)[1]
                 for line in run["log"]
@@ -363,7 +405,10 @@ def check(scenario, run, mode, role, result):
             ]
             labels = "rectangle add0 add1 add2 add3 full water invalid clear-full clear-added clear-field replant".split()
             order = [
-                re.search(r"TREE-COMMAND (\S+) (test|execute) ", line).groups()
+                cast(
+                    re.Match[str],
+                    re.search(r"TREE-COMMAND (\S+) (test|execute) ", line),
+                ).groups()
                 for line in rows
             ]
             expected_order = [
@@ -379,7 +424,7 @@ def check(scenario, run, mode, role, result):
                 )
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if scenario.get("trees") == "commands":
         ai = run_dir / "ai/tree-scenarios"
         shutil.copytree(scenario["scenario_ai"], ai)
@@ -388,7 +433,7 @@ def install(scenario, run_dir):
         )
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return ["-d", "script=2"] if scenario.get("trees") == "commands" else []
 
 
@@ -398,7 +443,7 @@ PREPARE_ORDER = 2
 AI_FOLDER = "tree-scenario-ai"
 
 
-def uses_ai(scenario):
+def uses_ai(scenario: Scenario) -> bool:
     return scenario.get("trees") == "commands"
 
 
