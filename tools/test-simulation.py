@@ -750,16 +750,22 @@ class SimulationSpeedTests(unittest.TestCase):
         ratios = next(
             ratios for scenario, ratios, _, _ in SPEED_PASS if scenario == name
         )
-        self.assertEqual(len(ratios), 3)
-        self.assertAlmostEqual(sum(ratios) / 3, SPEED_BUDGETS[name])
+        # The record restarts on a new host; decisions use the passes it has.
+        self.assertIn(len(ratios), (1, 2, 3))
+        self.assertAlmostEqual(sum(ratios) / len(ratios), SPEED_BUDGETS[name])
         anchor = SPEED_ANCHORS[name]["anchor"]
         record = {"anchor": anchor, "integrated": {"Ir": anchor["Ir"]}}
-        report = budget(
-            name, {"Ir": anchor["Ir"] * 1.001, "identity": anchor["identity"]}, record
-        )
-        self.assertGreater(report["projected_ratio"], 1.52)
-        self.assertAlmostEqual(report["record"], sum(ratios) / 3 * 1.002)
-        self.assertFalse(report["near_ceiling"])
+        # A mean distinct from the latest pass shows which one each figure uses.
+        mean = anchor["ratio"] - 0.05
+        with patch.dict(SPEED_BUDGETS, {name: mean}):
+            report = budget(
+                name,
+                {"Ir": anchor["Ir"] * 1.001, "identity": anchor["identity"]},
+                record,
+            )
+        self.assertAlmostEqual(report["projected_ratio"], anchor["ratio"] * 1.002)
+        self.assertAlmostEqual(report["record"], mean * 1.002)
+        self.assertEqual(report["near_ceiling"], report["record"] >= 1.52)
         self.assertTrue(report["within_ceiling"])
         self.assertEqual(report["band"], 1.52)
 
@@ -1309,6 +1315,42 @@ class SpeedPassTests(unittest.TestCase):
                     )
                 )
 
+    def test_preparation_accepts_only_stale_anchor_failures(self):
+        from simulation import speed
+
+        def result(
+            passed, problems=(), differences=(), measured=True, known_failures=()
+        ):
+            return {
+                "passed": passed,
+                "problems": list(problems),
+                "differences": list(differences),
+                "known_failures": list(known_failures),
+                "instruction_speed": {"candidate": {"Ir": 1}} if measured else None,
+            }
+
+        stale = (
+            "harness error: ValueError: instruction anchor identity mismatch; "
+            "quiet speed pass required"
+        )
+        accepted = [[result(True)], [result(True), result(False, [stale])]]
+        rejected = [
+            [],
+            [result(False, ["harness error: OSError: copy failed"])],
+            [result(False, [stale, "harness error: OSError: copy failed"])],
+            [result(False, [stale + "; copy failed"])],
+            [result(False, ["copy failed: " + stale])],
+            [result(False, [stale.replace("ValueError", "OSError")])],
+            [result(False, [stale], differences=[{"field": "line"}])],
+            [result(False, [stale], known_failures=[{"issue": 1}])],
+            [result(False, [stale], measured=False)],
+            [result(False)],
+        ]
+        for results in accepted:
+            self.assertTrue(speed.profile_passed({"results": results}))
+        for results in rejected:
+            self.assertFalse(speed.profile_passed({"results": results}))
+
     def test_collection_rejects_changed_profile_and_runtime_before_hold(self):
         from simulation import speed
 
@@ -1347,6 +1389,57 @@ class SpeedPassTests(unittest.TestCase):
                 ):
                     speed.collect(out, migration)
                 games.assert_not_called()
+
+    def test_collection_refuses_an_already_collected_bundle(self):
+        from simulation import speed
+
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            profile = out / "profile.json"
+            profile.write_text("profile")
+            manifest = dict(
+                head="head",
+                profile=str(profile),
+                profile_sha256=ir.digest(profile.read_bytes()),
+                ld_library_path="",
+                runtime_identities={},
+            )
+            (out / "manifest.json").write_text(json.dumps(manifest))
+            (out / "observations.jsonl").write_text('{"unheld": {"1": "cc1plus"}}\n')
+            with (
+                patch.object(migration, "git", side_effect=["head", ""]),
+                patch.object(speed, "collect_games") as games,
+                self.assertRaisesRegex(SystemExit, "already collected"),
+            ):
+                speed.collect(out, migration)
+            games.assert_not_called()
+
+    def test_preparation_identities_match_each_profiled_role(self):
+        from simulation import speed
+
+        calls = []
+
+        def prepare(scenario, command, binary, build, folder, env, reference):
+            calls.append((binary, reference))
+            identity = {"compatible": binary, "executable": binary}
+            if not reference:
+                identity["entries"] = ["candidate"]
+            return command, {"identity": identity}
+
+        scenario = {"name": "play-a", "kind": "play"}
+        roles = {role: role for role in speed.ROLES}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(speed, "speed_scenarios", return_value=[scenario]),
+            patch.object(simulate, "scenario_modules", return_value=[]),
+            patch.object(simulate, "prepare_scenario", return_value=scenario),
+            patch.object(simulate, "prepare_run_dir"),
+            patch.object(speed.instructions, "prepare", side_effect=prepare),
+        ):
+            _, identities = speed.prepare_inputs(Path(directory), roles, roles, {})
+        self.assertEqual(sorted(calls), [("candidate", False), ("reference", True)])
+        self.assertNotIn("entries", identities["play-a"]["reference"])
+        self.assertEqual(identities["play-a"]["candidate"]["entries"], ["candidate"])
 
     def test_hold_scans_before_start_returns_and_resumes_on_observer_error(self):
         from simulation import speed
