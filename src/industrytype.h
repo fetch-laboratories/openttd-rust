@@ -101,7 +101,7 @@ struct IndustryTileLayoutTile {
 using IndustryTileLayout = std::vector<IndustryTileLayoutTile>;
 
 /* IndustrySpec and IndustryTileSpec are defined in Rust (industrytype.rs). */
-#include "abi-record-industry.h"
+#include "abi-record-industry_spec.h"
 
 bool IsRawIndustry(const IndustrySpec *spec);
 bool IsProcessingIndustry(const IndustrySpec *spec);

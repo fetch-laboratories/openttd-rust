@@ -172,7 +172,7 @@ crate::abi::shared_records! {
     fn abi_record;
     /// `IndustrySpec`; `layouts` indices are those saved in `Industry::selected_layout`.
     #[derive(Clone)]
-    "IndustrySpec" ["industry"] => pub struct IndustrySpec {
+    "IndustrySpec" ["industry_spec"] => pub struct IndustrySpec {
         pub layouts: NativeVec<Layout> => "RustVector<RustVector<IndustryTileLayoutTile>>",
         pub cost_multiplier: u8,
         pub removal_cost_multiplier: u32,
@@ -206,7 +206,7 @@ crate::abi::shared_records! {
     }
     /// `IndustryTileSpec`.
     #[derive(Clone)]
-    "IndustryTileSpec" ["industry"] => pub struct IndustryTileSpec {
+    "IndustryTileSpec" ["industry_spec"] => pub struct IndustryTileSpec {
         pub accepts_cargo: [u8; INDUSTRY_NUM_INPUTS] => "std::array<CargoType, INDUSTRY_NUM_INPUTS>",
         pub acceptance: [i8; INDUSTRY_NUM_INPUTS] => "std::array<int8_t, INDUSTRY_NUM_INPUTS>",
         pub slopes_refused: u8 => "Slope",
@@ -447,8 +447,8 @@ pub unsafe extern "C" fn openttd_rust_industry_construction_cost(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "IndustryTileLayoutTile" ["industry"] => LayoutTile { ti, gfx };
-    "RustVector<uint8_t>" ["industry"] => NativeVec<u8> { items, count, capacity };
-    "SubstituteGRFFileProps" ["industry"] => SubstituteProps { local_id, grfid, grffile, spritegroups, subst_id, override_id };
-    "AnimationInfo<IndustryAnimationTriggers>" ["industry"] => AnimationInfo { frames, status, speed, triggers };
+    "IndustryTileLayoutTile" ["industry_spec"] => LayoutTile { ti, gfx };
+    "RustVector<uint8_t>" ["industry_spec"] => NativeVec<u8> { items, count, capacity };
+    "SubstituteGRFFileProps" ["industry_spec"] => SubstituteProps { local_id, grfid, grffile, spritegroups, subst_id, override_id };
+    "AnimationInfo<IndustryAnimationTriggers>" ["industry_spec"] => AnimationInfo { frames, status, speed, triggers };
 }

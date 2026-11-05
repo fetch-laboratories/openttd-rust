@@ -45,10 +45,12 @@ static_assert(sizeof(TimerGameCalendar::Date) == sizeof(int32_t));
 TEST_CASE("Industry - canonical native layouts")
 {
 	ABI_LAYOUT_CHECK;
-/* SubstituteGRFFileProps derives from a base with fields, so offsetof is conditionally supported. */
+/* SubstituteGRFFileProps derives from a base with fields, so offsetof is conditionally supported;
+ * no base has tail padding, so Itanium and MSVC agree on its layout. */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #include "abi-layout-industry.inc"
+#include "abi-layout-industry_spec.inc"
 #pragma GCC diagnostic pop
 
 	REQUIRE(std::size(OpenTTDIndustryBuilderFields{}.builddata) == NUM_INDUSTRYTYPES);
