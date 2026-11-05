@@ -3,12 +3,16 @@
 import hashlib
 import struct
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
+from typing import NotRequired, cast
 
 from . import core
 from .core import (
     ROOT,
     SNAPSHOT_TICKS,
+    Chunks,
+    Field,
     field_spans,
     read_save,
     rows,
@@ -17,10 +21,15 @@ from .core import (
 from .play_saves import DISTRIBUTIONS
 
 
-def scenarios(soak):
+class Scenario(core.Scenario):
+    economy: NotRequired[str]
+    engines: NotRequired[str]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     return (
         [
-            dict(
+            Scenario(
                 name="economy-cargo-profit",
                 kind="save",
                 save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
@@ -48,7 +57,7 @@ def scenarios(soak):
             for mode in ("manual", "cargodist", "stockpile")
         ]
         + [
-            dict(
+            Scenario(
                 name="subsidies-" + mode,
                 kind="save",
                 save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
@@ -61,7 +70,7 @@ def scenarios(soak):
     )
 
 
-def pending(chunks):
+def pending(chunks: Chunks) -> int | None:
     """Actual unloading coal vehicle with a live payment, not a synthetic packet."""
     vehicles = rows(chunks, "VEHS")
     for payment in rows(chunks, "CAPY").values():
@@ -76,7 +85,9 @@ def pending(chunks):
     return None
 
 
-def active_monitors(path, cargoes=(0, 1), amount=0):
+def active_monitors(
+    path: Path, cargoes: Iterable[int] = (0, 1), amount: int = 0
+) -> None:
     """Register cargo 0/1 town/industry monitors through the real modern loader."""
     from .core import gamma
 
@@ -100,10 +111,18 @@ def active_monitors(path, cargoes=(0, 1), amount=0):
         path.write_bytes(data)
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "economy" not in scenario:
         return scenario
-    setup = dict(scenario, ticks=8 * SNAPSHOT_TICKS)
+    setup: Scenario = {**scenario, "ticks": 8 * SNAPSHOT_TICKS}
     if scenario["economy"] == "stockpile":
         setup["console"] = DISTRIBUTIONS["manual"]
     run = run_game(
@@ -116,7 +135,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     candidates = [p for p in run["snapshots"] if read_save(p)["CAPY"]["elements"]]
 
-    def witness(path):
+    def witness(path: Path) -> bool:
         chunks = read_save(path)
         if scenario["economy"] == "stockpile":
             return pending(chunks) is not None
@@ -132,7 +151,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         # Mature flows above came from frequent recalculation. Drain overdue
         # reference jobs before the payment test, whose cadence is deliberately
         # long; null-video loops count async reload pauses as iterations.
-        drain = dict(scenario, save=str(fixture), ticks=4 * SNAPSHOT_TICKS)
+        drain: Scenario = {
+            **scenario,
+            "save": str(fixture),
+            "ticks": 4 * SNAPSHOT_TICKS,
+        }
         drain["console"] = [
             c for c in scenario["console"] if "linkgraph.recalc_time " not in c
         ]
@@ -146,7 +169,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             env,
         )
 
-        def future_jobs(path):
+        def future_jobs(path: Path) -> list[tuple[int, core.Buffer]] | bool:
             chunks = read_save(path)
             date = core.save_moment(path)[0]
             return chunks["CAPY"]["elements"] and all(
@@ -156,9 +179,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         fixture = next((p for p in drained["snapshots"] if future_jobs(p)), None)
         if drained["exit"] or fixture is None:
             raise RuntimeError("reference preparation did not drain overdue link jobs")
-        scenario = dict(
-            scenario,
-            console=[
+        scenario = {
+            **scenario,
+            "console": [
                 c
                 for c in scenario["console"]
                 if not any(
@@ -166,7 +189,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     for key in ("linkgraph.recalc_time ", "linkgraph.recalc_interval ")
                 )
             ],
-        )
+        }
         scenario["console"] = [
             "setting linkgraph.recalc_time 9000",
             "setting linkgraph.recalc_interval 90",
@@ -175,12 +198,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     original = read_save(fixture)
     source = fixture.read_bytes()
     data = bytearray(source)
-    patches = []
+    patches: list[tuple[str, int, str, int]] = []
 
-    def patch(cid, index, field, value):
+    def patch(cid: str, index: int, field: str, value: int) -> None:
         chunk = original[cid]
         body = dict(chunk["elements"])[index]
-        begin, end, kind = field_spans(body, chunk["header"])[field]
+        begin, end, kind = field_spans(body, cast(list[Field], chunk["header"]))[field]
         if source.count(body, *chunk["span"]) != 1:
             raise RuntimeError("ambiguous economy input row")
         start = source.index(body, *chunk["span"]) + begin
@@ -217,11 +240,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     and "/history" not in field
                 ):
                     patch("INDY", i, field, 65530)
-        result["stockpile_front"] = front
+        core.findings(result)["stockpile_front"] = front
     normalized = fixture.parent / "economy-input.sav"
     core.strip_glog(data, normalized)
     active_monitors(normalized)
-    result["economy_input"] = {
+    core.findings(result)["economy_input"] = {
         "reference_sha256": hashlib.sha256(source).hexdigest(),
         "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
         "payments": rows(original, "CAPY"),
@@ -231,9 +254,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         from .console_adapter import prepared_console
         from .engines import adapter
 
-        scenario = dict(
-            scenario,
-            executables=prepared_console(
+        scenario = {
+            **scenario,
+            "executables": prepared_console(
                 "engines",
                 adapter,
                 binaries,
@@ -241,11 +264,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 normalized.parent / "monitors",
                 env,
             ),
-        )
-    return dict(scenario, save=str(normalized))
+        }
+    return {**scenario, "save": str(normalized)}
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario.get("engines") == "monitors":
         if not run["snapshots"] or any(
             read_save(run["snapshots"][-1])[cid]["elements"] for cid in ("CMDL", "CMPU")
@@ -255,7 +284,7 @@ def check(scenario, run, mode, role, result):
         return
     saved = [read_save(p) for p in run["snapshots"]]
     initial = read_save(Path(scenario["save"]))
-    counts = {}
+    counts: dict[str, dict[str, int]] = {}
     for cid in ("CMDL", "CMPU"):
         before, after = rows(initial, cid), rows(saved[-1], cid)
         changed = sum(row["amount"] != before[i]["amount"] for i, row in after.items())
@@ -266,18 +295,18 @@ def check(scenario, run, mode, role, result):
             "changed": changed,
             "amount": sum(row["amount"] for row in after.values()),
         }
-    result[f"{mode}_{role}_monitors"] = counts
+    core.findings(result)[f"{mode}_{role}_monitors"] = counts
     if scenario["economy"] == "stockpile":
         import migration
 
         capture = run["dir"] / "immediate.sav"
         executable = scenario["executables"][role]
-        reload = dict(
-            scenario,
-            save=str(run["snapshots"][-1]),
-            ticks=1,
-            console=[f'engines_scenario monitors-capture "{capture}"'],
-        )
+        reload: Scenario = {
+            **scenario,
+            "save": str(run["snapshots"][-1]),
+            "ticks": 1,
+            "console": [f'engines_scenario monitors-capture "{capture}"'],
+        }
         loaded = run_game(
             reload,
             executable,
@@ -296,7 +325,7 @@ def check(scenario, run, mode, role, result):
             }
             if before != after or not any(after.values()):
                 raise RuntimeError("immediate monitor reload changed " + cid)
-        result[f"{mode}_{role}_monitor_reload"] = True
+        core.findings(result)[f"{mode}_{role}_monitor_reload"] = True
         delivered = [
             i for i in rows(saved[-1], "INDY").values() if i["was_cargo_delivered"]
         ]
@@ -317,11 +346,11 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(
                 f"{mode}/{role}: expected partial acceptance 5, saw {delta}"
             )
-        result[f"{mode}_{role}_partial_acceptance"] = delta
+        core.findings(result)[f"{mode}_{role}_partial_acceptance"] = delta
         return
     payments = [p for c in saved for p in rows(c, "CAPY").values()]
 
-    def delivered(chunks):
+    def delivered(chunks: Chunks) -> int:
         return sum(
             sum(value)
             for company in rows(chunks, "PLYR").values()
@@ -338,7 +367,7 @@ def check(scenario, run, mode, role, result):
         # In this vanilla fixture new packets have zero feeder share; split/merge
         # preserves total credit and delivery removes it. A net increase requires
         # new PayTransfer credit, rather than merely inheriting loaded shares.
-        def feeder(chunks):
+        def feeder(chunks: Chunks) -> int:
             return sum(p["feeder_share"] for p in rows(chunks, "CAPA").values())
 
         credit_states = [read_save(Path(scenario["save"])), *saved]
@@ -352,22 +381,26 @@ def check(scenario, run, mode, role, result):
             )
         before = feeder(credit_states[0])
         after = max(feeder(chunks) for chunks in saved)
-        result[f"{mode}_{role}_feeder_credit"] = {"before": before, "after": after}
+        core.findings(result)[f"{mode}_{role}_feeder_credit"] = {
+            "before": before,
+            "after": after,
+        }
         if after <= before:
             result["problems"].append(
                 f"{mode}/{role}: no new transfer credit ({before} -> {after})"
             )
-    result[f"{mode}_{role}_payment_samples"] = len(payments)
-    result[f"{mode}_{role}_delivered_delta"] = delivered_delta
+    core.findings(result)[f"{mode}_{role}_payment_samples"] = len(payments)
+    core.findings(result)[f"{mode}_{role}_delivered_delta"] = delivered_delta
 
 
-def income_gap():
+def income_gap() -> None:
     """Native-width/negative callback and Money bounds absent from road fixtures."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
         "migration", ROOT / "tools/migration.py"
     )
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     build = ROOT / "build-rust"
@@ -377,7 +410,7 @@ def income_gap():
         ["git", "show", migration.BASELINE["commit"] + ":src/economy.cpp"], cwd=ROOT
     ).decode()
 
-    def body(start, end):
+    def body(start: str, end: str) -> str:
         offset = source.index(start)
         return source[offset : source.index(end, offset)]
 
@@ -414,7 +447,7 @@ if __name__ == "__main__":
     income_gap()
 
 
-def subsidy_reference(folder):
+def subsidy_reference(folder: Path) -> None:
     """Unchanged monthly lambda isolates wrap, disabled expiry and retry RNG gaps."""
     import migration
 
@@ -427,7 +460,14 @@ def subsidy_reference(folder):
     )
 
 
-def monitor_load_probes(scenario, executables, builds, folder, timeout, env):
+def monitor_load_probes(
+    scenario: Scenario,
+    executables: dict[str, Path],
+    builds: dict[str, Path],
+    folder: Path,
+    timeout: int,
+    env: dict[str, str],
+) -> None:
     """Dispatch real modern chunk bytes, including native decode/error unwinding."""
     from .core import gamma
 
@@ -452,10 +492,12 @@ def monitor_load_probes(scenario, executables, builds, folder, timeout, env):
             path = folder / f"{cid}-{case}.bin"
             path.write_bytes(raw)
             for role, executable in executables.items():
-                probe = dict(
-                    scenario,
-                    console=[f'engines_scenario monitors-load "{path}" {cid} {case}'],
-                )
+                probe: Scenario = {
+                    **scenario,
+                    "console": [
+                        f'engines_scenario monitors-load "{path}" {cid} {case}'
+                    ],
+                }
                 run = run_game(
                     probe,
                     executable,

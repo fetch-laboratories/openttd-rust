@@ -4,7 +4,9 @@ import hashlib
 import subprocess
 import threading
 from pathlib import Path
+from typing import NotRequired, cast
 
+from . import core
 from .core import (
     ROOT,
     SNAPSHOT_TICKS,
@@ -43,17 +45,22 @@ DISTRIBUTIONS = {
 
 
 _SCHEDULER_LOCK = threading.Lock()
-_SCHEDULER_REPORTS = {}
+_SCHEDULER_REPORTS: dict[Path, str] = {}
 
 
-def scheduler_reference(out):
+class Scenario(core.Scenario):
+    reload_chunk: NotRequired[str]
+    reload_cargos: NotRequired[list[int]]
+
+
+def scheduler_reference(out: Path) -> str:
     """Default fixture for worker states unavailable with deterministic thread fallback."""
     import probe
 
     import migration
 
     out.mkdir(parents=True, exist_ok=True)
-    bodies = []
+    bodies: list[str] = []
     for file, signatures, destination in (
         (
             "linkgraphschedule.cpp",
@@ -113,8 +120,8 @@ def scheduler_reference(out):
     return run.stdout.strip()
 
 
-def scenarios(soak):
-    scenarios = []
+def scenarios(soak: bool) -> list[Scenario]:
+    scenarios: list[Scenario] = []
     years = 6 if soak else 2
     for save in PLAY_SAVES if soak else PLAY_SAVES[:2]:
         for distribution, commands in DISTRIBUTIONS.items():
@@ -180,7 +187,15 @@ def scenarios(soak):
     return scenarios
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "reload_chunk" in scenario:
         if binaries["candidate"] != binaries["reference"]:
             with _SCHEDULER_LOCK:
@@ -188,10 +203,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     _SCHEDULER_REPORTS[out] = scheduler_reference(
                         out / "scheduler-reference"
                     )
-                result["scheduler_reference"] = _SCHEDULER_REPORTS[out]
+                core.findings(result)["scheduler_reference"] = _SCHEDULER_REPORTS[out]
         # The fixture comes from the unchanged reference only. Outstanding
         # jobs recompute from their saved graph/settings on load in both.
-        setup = dict(scenario, ticks=3 * SNAPSHOT_TICKS)
+        setup: Scenario = {**scenario, "ticks": 3 * SNAPSHOT_TICKS}
         prepared = run_game(
             setup,
             binaries["reference"],
@@ -204,11 +219,15 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if prepared["exit"] != 0:
             raise RuntimeError(f"reload preparation exited with {prepared['exit']}")
         chunk = scenario["reload_chunk"]
-        fixture = None
+        fixture: Path | None = None
         for path in prepared["snapshots"]:
             chunks = read_save(path)
-            saved = chunks.get(chunk, {})
-            queues = decode_element(chunks["LGRS"], chunks["LGRS"]["elements"][0][1])
+            # A save without the chunk yields no elements, so nothing decodes it.
+            saved = cast(core.Chunk, chunks.get(chunk, {}))
+            queues = cast(
+                core.Row,
+                decode_element(chunks["LGRS"], chunks["LGRS"]["elements"][0][1]),
+            )
             graph_ids = {index + 1 for index, _ in chunks["LGRP"]["elements"]}
             job_ids = {index + 1 for index, _ in saved.get("elements", [])}
             if not (
@@ -234,9 +253,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 f"reload preparation saved no outstanding {chunk} records for required cargo IDs"
             )
         original = read_save(fixture)
-        result["reload_queues"] = queues
-        result["reload_records"] = len(original[chunk]["elements"])
-        result["reload_cargos"] = sorted(
+        findings = core.findings(result)
+        findings["reload_queues"] = queues
+        findings["reload_records"] = len(original[chunk]["elements"])
+        findings["reload_cargos"] = sorted(
             {
                 fields["linkgraph[0]/cargo"]
                 for _, body in original[chunk]["elements"]
@@ -248,28 +268,28 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         normalized = fixture.parent / "reload-input.sav"
         strip_glog(data, normalized)
         normalized_data = normalized.read_bytes()
-        result["reload_input"] = {
+        findings["reload_input"] = {
             "reference": str(fixture),
             "normalized": str(normalized),
             "reference_sha256": hashlib.sha256(data).hexdigest(),
             "normalized_sha256": hashlib.sha256(normalized_data).hexdigest(),
             "removed_chunk": "GLOG",
         }
-        scenario = dict(scenario, save=str(normalized))
+        scenario = {**scenario, "save": str(normalized)}
     return scenario
 
 
 PREPARE_ORDER = 3
 
 
-def counted_road_save(scenario):
+def counted_road_save(scenario: Scenario) -> bool:
     return any(
         scenario.get("name", "").startswith(f"play-{save}-")
         for save in (*PLAY_SAVES, "padhattan-ridge-2000")
     )
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> dict[str, str]:
     return (
         WITNESS_ENVIRONMENT
         if counted_road_save(scenario) and scenario.get("witnesses")
@@ -277,11 +297,17 @@ def game_environment(scenario):
     )
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if not counted_road_save(scenario):
         return
     if "reload_chunk" in scenario:
-        result[f"{mode}_{role}_schedule"] = branch_witnesses(
+        core.findings(result)[f"{mode}_{role}_schedule"] = branch_witnesses(
             scenario,
             run,
             role,
@@ -295,7 +321,7 @@ def check(scenario, run, mode, role, result):
         return
     crossings = counts["services"] + counts["visitors"]
     density = crossings / counts["ticks"]
-    result[f"{mode}_{role}_road_crossings"] = dict(
+    core.findings(result)[f"{mode}_{role}_road_crossings"] = dict(
         counts,
         services_and_visitors_per_tick=density,
         controller_entries_per_tick=counts["entries"] / counts["ticks"],
