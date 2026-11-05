@@ -5,6 +5,8 @@ import json
 import re
 import struct
 import subprocess
+from collections.abc import Iterator, Mapping
+from pathlib import Path
 
 import probe
 
@@ -14,9 +16,11 @@ ROOT = probe.ROOT
 REFERENCE = probe.REFERENCE
 TOOLS = ROOT / ".local/build-tools-rust"
 OUT = ROOT / ".local/integer-comparison"
+# Fixture binaries by (label, fatal).
+Binaries = dict[tuple[str, bool], Path]
 
 
-def cases():
+def cases() -> Iterator[tuple[int, int, int, int, bytes]]:
     inputs = [
         b"",
         b"-",
@@ -74,7 +78,7 @@ def cases():
                         yield width, signed, base, clamp, src
 
 
-def builder_cases():
+def builder_cases() -> Iterator[tuple[int, int, int, int]]:
     for width in (8, 16, 32, 64):
         mask = (1 << width) - 1
         for signed in (0, 1):
@@ -98,14 +102,14 @@ def builder_cases():
                     yield width, signed, base, value & mask
 
 
-def compare_builders(env, binaries):
+def compare_builders(env: Mapping[str, str], binaries: Binaries) -> int:
     corpus = list(builder_cases())
     records = [
         f"{width} {signed} {base} {bits:x}\n".encode()
         for width, signed, base, bits in corpus
     ]
     (OUT / "builder-corpus.txt").write_bytes(b"".join(records))
-    streams = {}
+    streams: dict[str, list[bytes]] = {}
     for name in ("reference", "candidate"):
         command = [str(binaries[name, False]), "--builder"]
         result = subprocess.run(
@@ -145,12 +149,12 @@ def compare_builders(env, binaries):
     return len(corpus)
 
 
-def compare_consumers(env, binaries):
+def compare_consumers(env: Mapping[str, str], binaries: Binaries) -> tuple[int, int]:
     # Bounded audited gaps, not a second general consumer fuzz corpus.
     maximum = (
         1 << (8 * struct.calcsize("P"))
     ) - 1  # Native size_t; cross compilation is unsupported.
-    corpus = []
+    corpus: list[tuple[int, int, int, bytes]] = []
     for operation in (0, 1, 2):
         for offset, requested, src in (
             (0, 0, b""),
@@ -193,7 +197,7 @@ def compare_consumers(env, binaries):
         for operation, offset, requested, src in corpus
     ]
     (OUT / "consumer-corpus.txt").write_bytes(b"".join(records))
-    streams = []
+    streams: list[bytes] = []
     for name in ("reference", "candidate"):
         result = subprocess.run(
             [str(binaries[name, False]), "--consumer"],
@@ -242,8 +246,8 @@ def compare_consumers(env, binaries):
     return len(corpus), fatal_cases
 
 
-def compare_generators(env):
-    outputs = {}
+def compare_generators(env: Mapping[str, str]) -> int:
+    outputs: dict[str, dict[str, bytes]] = {}
     settings_dir = REFERENCE / "src/table/settings"
     settings_inputs = [
         str(settings_dir / name)
@@ -301,7 +305,7 @@ def compare_generators(env):
         (directory / "english.txt").write_bytes(
             original.replace(b"##id 0x0000", pragma, 1)
         )
-        results = []
+        results: list[tuple[int, bytes, bytes]] = []
         for _name, tool_dir in tools.items():
             command = [
                 str(tool_dir / "strgen/strgen"),
@@ -319,10 +323,10 @@ def compare_generators(env):
     return malformed
 
 
-def main():
+def main() -> None:
     probe.output("integer-comparison")
     env = probe.ENV
-    binaries = {}
+    binaries: Binaries = {}
     for name, source in probe.LABELS:
         for fatal in (False, True):
             binary = OUT / (name + ("-fatal" if fatal else ""))
@@ -355,7 +359,7 @@ def main():
         for width, signed, base, clamp, src in corpus
     ]
     (OUT / "corpus.txt").write_bytes(b"".join(records))
-    results = {}
+    results: dict[str, list[bytes]] = {}
     for name in ("reference", "candidate"):
         result = subprocess.run(
             [str(binaries[name, False])],

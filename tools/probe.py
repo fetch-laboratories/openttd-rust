@@ -7,6 +7,7 @@ It then requires identical output.
 
 import difflib
 import subprocess
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import migration
@@ -16,9 +17,12 @@ BUILD = ROOT / "build-rust"
 REFERENCE = migration.REFERENCE.resolve()
 LABELS = (("reference", REFERENCE), ("candidate", ROOT))
 ENV = migration.environment()
+# A command argument; compile and execute stringify each one.
+Argument = str | Path
+Labels = Sequence[tuple[str, Path]]
 
 
-def output(name, directory=None):
+def output(name: str, directory: Argument | None = None) -> Path:
     """Check the pinned reference and return the comparison's scratch directory."""
     # Shallow CI checkouts lack the immutable oracle commit the reference needs.
     present = subprocess.run(
@@ -38,7 +42,7 @@ def output(name, directory=None):
     return out
 
 
-def body(text, signature):
+def body(text: str, signature: str) -> str:
     """Signature through its matching brace; pinned bodies balance braces, even in comments."""
     start = text.index(signature)
     end = text.index("{", start) + 1
@@ -49,11 +53,11 @@ def body(text, signature):
     return text[start:end]
 
 
-def compiler(build=BUILD):
+def compiler(build: Path = BUILD) -> str:
     return migration.cmake_cache(build)["CMAKE_CXX_COMPILER"]
 
 
-def target_flags(build=BUILD):
+def target_flags(build: Path = BUILD) -> list[str]:
     """Pointer-width and Darwin SDK flags CMake gives Rust-consuming C++."""
     configuration = migration.rust_configuration(build)
     flags = ["-DPOINTER_IS_64BIT"] if configuration["pointer_bytes"] == 8 else []
@@ -70,14 +74,16 @@ def target_flags(build=BUILD):
     return flags
 
 
-def rust(build=BUILD, *, define=True):
+def rust(build: Path = BUILD, *, define: bool = True) -> list[str]:
     """WITH_RUST (unless define is false), the validated archive and its libraries."""
     configuration = migration.rust_configuration(build)
     archive = str(migration.rust_archive(build))
     return ["-DWITH_RUST"] * define + [archive, *configuration["native_libraries"]]
 
 
-def compile(command, log, env=None):
+def compile(
+    command: Sequence[Argument], log: Argument, env: Mapping[str, str] | None = None
+) -> None:
     """Run a compile or link command, retaining its combined output in log."""
     with Path(log).open("wb") as handle:
         subprocess.run(
@@ -89,7 +95,14 @@ def compile(command, log, env=None):
         )
 
 
-def execute(argv, log, *, input=None, env=None, stderr="empty"):
+def execute(
+    argv: Sequence[Argument],
+    log: Argument,
+    *,
+    input: bytes | None = None,
+    env: Mapping[str, str] | None = None,
+    stderr: str = "empty",
+) -> bytes:
     """Run a fixture and return stdout; stderr is "empty", "merged" or "allowed"."""
     result = subprocess.run(
         list(map(str, argv)),
@@ -106,7 +119,7 @@ def execute(argv, log, *, input=None, env=None, stderr="empty"):
     return result.stdout
 
 
-def same(expected, actual, name, out):
+def same(expected: bytes, actual: bytes, name: str, out: Path) -> None:
     """Raise with a retained unified diff when two outputs differ."""
     if expected == actual:
         return
@@ -120,7 +133,15 @@ def same(expected, actual, name, out):
     raise RuntimeError(f"{name} differs from the reference; see {out / name}.diff")
 
 
-def compare(out, mode, command, *, labels=LABELS, input=None, stderr="empty"):
+def compare(
+    out: Path,
+    mode: str,
+    command: Callable[[str, Path], Sequence[Argument]],
+    *,
+    labels: Labels = LABELS,
+    input: bytes | None = None,
+    stderr: str = "empty",
+) -> bytes:
     """Build command(label, source) + [-o binary] for each label and compare runs."""
     outputs = {}
     for label, source in labels:
@@ -132,7 +153,7 @@ def compare(out, mode, command, *, labels=LABELS, input=None, stderr="empty"):
     return outputs[labels[0][0]]
 
 
-def passed(name, **counts):
+def passed(name: str, **counts: int) -> None:
     """Recheck the reference and print the inventory run-comparisons reports."""
     if not counts or 0 in counts.values():
         raise RuntimeError(f"{name} compared no cases: {counts}")
