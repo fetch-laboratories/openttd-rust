@@ -84,4 +84,9 @@ include = [
     "tools/test-compiler-cache.py",
     "tools/test-port-metrics.py",
     "tools/test-validation-execution.py",
+    "tools/test-ci.py",
 ]
+
+[analysis]
+# PyYAML is a system package that ty's isolated environment cannot see.
+allowed-unresolved-imports = ["yaml"]
