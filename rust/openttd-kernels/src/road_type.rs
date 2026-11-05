@@ -16,6 +16,12 @@ pub const ROAD_Y: u8 = 5;
 
 /// `ROAD_W`.
 pub const ROAD_W: u8 = ROAD_NW | ROAD_SW;
+/// `ROAD_N`.
+pub const ROAD_N: u8 = ROAD_NE | ROAD_NW;
+/// `ROAD_E`.
+pub const ROAD_E: u8 = ROAD_NE | ROAD_SE;
+/// `ROAD_S`.
+pub const ROAD_S: u8 = ROAD_SE | ROAD_SW;
 /// `ROAD_NW`.
 pub const ROAD_NW: u8 = 1;
 
@@ -46,3 +52,12 @@ pub const ROAD_NONE: u8 = 0;
 
 /// `ROAD_END`.
 pub const ROAD_END: u8 = (ROAD_X | ROAD_Y) + 1;
+
+/// `DisallowedRoadDirections::DRD_NONE`.
+pub const DRD_NONE: u8 = 0;
+/// `DisallowedRoadDirections::DRD_SOUTHBOUND`.
+pub const DRD_SOUTHBOUND: u8 = 1;
+/// `DisallowedRoadDirections::DRD_NORTHBOUND`.
+pub const DRD_NORTHBOUND: u8 = 2;
+/// `DisallowedRoadDirections::DRD_BOTH`.
+pub const DRD_BOTH: u8 = 3;

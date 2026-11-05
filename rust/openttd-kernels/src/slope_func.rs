@@ -30,6 +30,8 @@ pub const SLOPE_SE: u8 = SLOPE_S | SLOPE_E;
 pub const SLOPE_NE: u8 = SLOPE_N | SLOPE_E;
 /// `SLOPE_EW`.
 pub const SLOPE_EW: u8 = SLOPE_E | SLOPE_W;
+/// `SLOPE_WSE`.
+pub const SLOPE_WSE: u8 = SLOPE_W | SLOPE_S | SLOPE_E;
 /// `SLOPE_NS`.
 pub const SLOPE_NS: u8 = SLOPE_N | SLOPE_S;
 /// `SLOPE_ELEVATED`.

@@ -12,29 +12,21 @@
 #![allow(unsafe_code)] // Exported symbol attributes and the borrowed tile span.
 
 use crate::map_func::World;
-use crate::road_type::{ROAD_NE, ROAD_NONE, ROAD_NW, ROAD_SE, ROAD_SW, ROAD_X, ROAD_Y};
+use crate::road_type::{
+    DRD_BOTH, DRD_NONE, DRD_NORTHBOUND, DRD_SOUTHBOUND, ROAD_E, ROAD_N, ROAD_NE, ROAD_NONE,
+    ROAD_NW, ROAD_S, ROAD_SE, ROAD_SW, ROAD_X, ROAD_Y,
+};
 use crate::script_host::{self, ERR_PRECONDITION_INVALID_COMPANY, Services};
 use crate::script_tile::{
     ERR_PRECONDITION_FAILED, deity_or_company_mode_valid, enforce, valid, world,
 };
 use crate::slope_func::{
-    SLOPE_E, SLOPE_EW, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_S, SLOPE_SE, SLOPE_SW, SLOPE_W,
+    SLOPE_EW, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, SLOPE_W, SLOPE_WSE,
 };
 
 /// `ScriptRoad::ROADVEHTYPE_BUS` and `ROADVEHTYPE_TRUCK`.
 const ROADVEHTYPE_BUS: u32 = 0;
 const ROADVEHTYPE_TRUCK: u32 = 1;
-/// `DisallowedRoadDirections`.
-const DRD_NONE: u8 = 0;
-const DRD_SOUTHBOUND: u8 = 1;
-const DRD_NORTHBOUND: u8 = 2;
-const DRD_BOTH: u8 = 3;
-/// `SLOPE_WSE`.
-const SLOPE_WSE: u8 = SLOPE_W | SLOPE_S | SLOPE_E;
-/// `ROAD_N`, `ROAD_E`, `ROAD_S`.
-const ROAD_N: u8 = ROAD_NE | ROAD_NW;
-const ROAD_E: u8 = ROAD_NE | ROAD_SE;
-const ROAD_S: u8 = ROAD_SE | ROAD_SW;
 /// The refused result of the byte-valued command entries.
 const REFUSED: u8 = 0xFF;
 
