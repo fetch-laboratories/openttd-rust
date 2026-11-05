@@ -31,14 +31,6 @@
 	return ::StrMakeValid(::GetString(GetRailTypeInfo((::RailType)rail_type)->strings.menu_text), {});
 }
 
-/* static */ bool ScriptRail::TrainHasPowerOnRail(ScriptRail::RailType engine_rail_type, ScriptRail::RailType track_rail_type)
-{\
-	if (!ScriptRail::IsRailTypeAvailable(engine_rail_type)) return false;
-	if (!ScriptRail::IsRailTypeAvailable(track_rail_type)) return false;
-
-	return ::HasPowerOnRail((::RailType)engine_rail_type, (::RailType)track_rail_type);
-}
-
 /* static */ bool ScriptRail::ConvertRailType(TileIndex start_tile, TileIndex end_tile, ScriptRail::RailType convert_to)
 {
 	EnforceCompanyModeValid(false);
@@ -182,27 +174,6 @@
 	if (track == INVALID_TRACK) return false;
 
 	return ScriptObject::Command<CMD_REMOVE_SINGLE_SIGNAL>::Do(tile, track);
-}
-
-/* static */ Money ScriptRail::GetBuildCost(RailType railtype, BuildType build_type)
-{
-	if (!ScriptRail::IsRailTypeAvailable(railtype)) return -1;
-
-	switch (build_type) {
-		case BT_TRACK:    return ::RailBuildCost((::RailType)railtype);
-		case BT_SIGNAL:   return ::GetPrice(PR_BUILD_SIGNALS, 1, nullptr);
-		case BT_DEPOT:    return ::GetPrice(PR_BUILD_DEPOT_TRAIN, 1, nullptr);
-		case BT_STATION:  return ::GetPrice(PR_BUILD_STATION_RAIL, 1, nullptr) + ::GetPrice(PR_BUILD_STATION_RAIL_LENGTH, 1, nullptr);
-		case BT_WAYPOINT: return ::GetPrice(PR_BUILD_WAYPOINT_RAIL, 1, nullptr);
-		default: return -1;
-	}
-}
-
-/* static */ SQInteger ScriptRail::GetMaxSpeed(RailType railtype)
-{
-	if (!ScriptRail::IsRailTypeAvailable(railtype)) return -1;
-
-	return ::GetRailTypeInfo((::RailType)railtype)->max_speed;
 }
 
 /* static */ SQInteger ScriptRail::GetMaintenanceCostFactor(RailType railtype)

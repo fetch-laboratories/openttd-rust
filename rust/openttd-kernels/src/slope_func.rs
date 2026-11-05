@@ -175,7 +175,7 @@ pub const fn opposite_corner(c: u8) -> u8 {
 }
 /// `SlopeWithOneCornerRaised`.
 pub fn slope_with_one_corner_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if c >= 4 {
+    if !is_valid_corner(c) {
         check(false);
     }
     (1_u32.wrapping_shl(u32::from(c)) & 0xff) as u8
@@ -186,14 +186,14 @@ pub fn slope_with_three_corners_raised(c: u8, check: impl Fn(bool) + Copy) -> u8
 }
 /// `HalftileFoundation`, with a valid native corner.
 pub fn halftile_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if c >= 4 {
+    if !is_valid_corner(c) {
         check(false);
     }
     FOUNDATION_HALFTILE_W.wrapping_add(c)
 }
 /// `SpecialRailFoundation`, with a valid native corner.
 pub fn special_rail_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if c >= 4 {
+    if !is_valid_corner(c) {
         check(false);
     }
     FOUNDATION_RAIL_W.wrapping_add(c)

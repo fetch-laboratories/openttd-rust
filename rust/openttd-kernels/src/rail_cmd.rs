@@ -395,8 +395,7 @@ impl<'a> Ctx<'a> {
     }
     /// `HasSignalOnTrack`: signal tile type and a present signal on the track.
     fn has_signal(&self, tile: u32, track: u8) -> bool {
-        (self.rail.has_signals)(tile)
-            && self.present_signals(tile) & crate::signal_func::signal_on_track(track) != 0
+        crate::map_func::World::new(self.shared).has_signal_on_track(tile, track)
     }
     fn reserved(&self, tile: u32) -> u8 {
         crate::pbs::Pbs::acquire(self.shared).reserved(tile)

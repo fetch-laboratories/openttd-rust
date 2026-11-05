@@ -80,7 +80,10 @@ function TilePredicates() {
 		["GetSlope", function(t) { return ApiTile.GetSlope(t); }],
 		["GetMinHeight", function(t) { return ApiTile.GetMinHeight(t); }],
 		["GetMaxHeight", function(t) { return ApiTile.GetMaxHeight(t); }],
-		["GetCornerHeight", function(t) { return ApiTile.GetCornerHeight(t, t % 4) * 7 + ApiTile.GetCornerHeight(t, 3 - t % 4); }],
+		["GetCornerHeight.0", function(t) { return ApiTile.GetCornerHeight(t, 0); }],
+		["GetCornerHeight.1", function(t) { return ApiTile.GetCornerHeight(t, 1); }],
+		["GetCornerHeight.2", function(t) { return ApiTile.GetCornerHeight(t, 2); }],
+		["GetCornerHeight.3", function(t) { return ApiTile.GetCornerHeight(t, 3); }],
 		["GetOwner", function(t) { return ApiTile.GetOwner(t); }],
 		["HasRail", function(t) { return ApiTile.HasTransportType(t, ApiTile.TRANSPORT_RAIL); }],
 		["HasRoad", function(t) { return ApiTile.HasTransportType(t, ApiTile.TRANSPORT_ROAD); }],
@@ -98,10 +101,10 @@ function TilePredicates() {
 		["GetRailType", function(t) { return ApiRail.GetRailType(t); }],
 		["GetRailDepotFrontTile", function(t) { return ApiRail.GetRailDepotFrontTile(t); }],
 		["GetRailStationDirection", function(t) { return ApiRail.GetRailStationDirection(t); }],
-		["GetSignalType", function(t) {
-			local sx = ApiMap.GetMapSizeX();
-			return ApiRail.GetSignalType(t, t + 1) + 3 * ApiRail.GetSignalType(t, t - 1) + 7 * ApiRail.GetSignalType(t, t + sx) + 11 * ApiRail.GetSignalType(t, t - sx);
-		}],
+		["GetSignalType.sw", function(t) { return ApiRail.GetSignalType(t, t + 1); }],
+		["GetSignalType.ne", function(t) { return ApiRail.GetSignalType(t, t - 1); }],
+		["GetSignalType.se", function(t) { return ApiRail.GetSignalType(t, t + ApiMap.GetMapSizeX()); }],
+		["GetSignalType.nw", function(t) { return ApiRail.GetSignalType(t, t - ApiMap.GetMapSizeX()); }],
 		["IsRoadTile", function(t) { return ApiRoad.IsRoadTile(t); }],
 		["IsRoadDepotTile", function(t) { return ApiRoad.IsRoadDepotTile(t); }],
 		["IsRoadStationTile", function(t) { return ApiRoad.IsRoadStationTile(t); }],
@@ -201,7 +204,9 @@ function ProbeRailTypes(who) {
 	local types = "";
 	foreach (rt in [-1, 0, 1, 2, 3, 4, 63, 64, 255, 256, 0x100000001]) {
 		types += " " + rt + ":" + Num(ApiRail.IsRailTypeAvailable(rt)) + ApiError.GetLastErrorString();
-		foreach (track in [0, 1, 2, 3, 64]) types += Num(ApiRail.TrainCanRunOnRail(rt, track));
+		foreach (track in [0, 1, 2, 3, 64, 256]) types += Num(ApiRail.TrainCanRunOnRail(rt, track)) + ":" + Num(ApiRail.TrainHasPowerOnRail(rt, track)) + ",";
+		types += " speed=" + ApiRail.GetMaxSpeed(rt);
+		for (local build = -1; build <= 5; build++) types += " cost=" + ApiRail.GetBuildCost(rt, build);
 	}
 	Record(who, "rail.types", types);
 	local current = "" + ApiRail.GetCurrentRailType();

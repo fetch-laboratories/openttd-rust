@@ -77,7 +77,7 @@ pub(crate) fn is_rail_waypoint(tile: u32, s: &Services) -> bool {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_rail_waypoint_tile(tile: u32, s: &Services) -> bool {
-    (s.tile_type)(tile) == MP_STATION && is_rail_waypoint(tile, s)
+    crate::map_func::World::new(s).rail_waypoint_tile(tile)
 }
 /// `IsRoadWaypointTile`.
 #[allow(clippy::inline_always)]
