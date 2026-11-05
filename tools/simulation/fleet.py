@@ -1,8 +1,11 @@
 """Fleet hierarchy, renewal and actual replacement transactions."""
 
 import hashlib
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, NotRequired
 
+from . import core
 from .console_adapter import prepared_console
 from .core import (
     ROOT,
@@ -33,8 +36,16 @@ BRANCHES = {
 }
 
 
-def scenarios(soak):
-    cases = [
+class Scenario(core.Scenario):
+    fleet: NotRequired[str]
+    engines: NotRequired[str]  # engines.Scenario's key on fleet-engine-loading
+    # effects.Scenario's keys on the effects-emission* fleets prepare handles.
+    effect_emission: NotRequired[bool | str]
+    effect_emission_reload: NotRequired[bool]
+
+
+def scenarios(soak: bool) -> list[Scenario]:
+    cases: list[Scenario] = [
         {
             "name": "fleet-" + mode,
             "kind": "save",
@@ -105,9 +116,11 @@ def scenarios(soak):
         )
     ]
 
-    cases.append(dict(cases[0], name="fleet-reload", fleet="reload"))
+    cases.append({**cases[0], "name": "fleet-reload", "fleet": "reload"})
     resolver = next(case for case in cases if case["fleet"] == "resolver")
-    cases.append(dict(resolver, name="fleet-resolver-reload", fleet="resolver-reload"))
+    cases.append(
+        {**resolver, "name": "fleet-resolver-reload", "fleet": "resolver-reload"}
+    )
     cases.append(
         {
             "name": "fleet-engine-loading",
@@ -120,19 +133,21 @@ def scenarios(soak):
     )
     capabilities = next(case for case in cases if case["fleet"] == "capabilities")
     cases.append(
-        dict(
-            capabilities, name="fleet-capabilities-reload", fleet="capabilities-reload"
-        )
+        {
+            **capabilities,
+            "name": "fleet-capabilities-reload",
+            "fleet": "capabilities-reload",
+        }
     )
     return cases
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     witnessed = scenario.get("fleet") in BRANCHES and scenario.get("witnesses")
     return WITNESS_ENVIRONMENT if witnessed else {}
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if scenario.get("fleet", "").startswith("drain"):
         (run_dir / "fleet-drain.scr").write_text("fleet_scenario drain-inspect\n")
 
@@ -158,7 +173,15 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "fleet" not in scenario:
         return scenario
 
@@ -178,14 +201,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         from .core import normalize
 
         source, record = normalize(Path(scenario["save"]), folder / "normalized")
-        result["fleet_input"] = record
-        scenario = dict(scenario, save=str(source))
+        core.findings(result)["fleet_input"] = record
+        scenario = {**scenario, "save": str(source)}
     executables = prepared_console("fleet", adapter, binaries, builds, folder, env)
     if scenario.get("effect_emission_reload"):
         from . import effects
 
         runs = capture_pair(scenario, executables, builds, folder, timeout, env)
-        saves = {}
+        saves: dict[str, Path] = {}
         for role, run in runs.items():
             if run["exit"] or not run["snapshots"]:
                 raise RuntimeError("effect-emission reload capture failed")
@@ -205,19 +228,22 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if differences or logs[0] != logs[1]:
             result["differences"].extend(differences)
             raise RuntimeError("effect-emission reload capture differs")
-        result["effect_emission_capture"] = logs[0]
-        return dict(
-            scenario,
-            executables=executables,
-            role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        )
+        core.findings(result)["effect_emission_capture"] = logs[0]
+        return {
+            **scenario,
+            "executables": executables,
+            "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        }
     if scenario["fleet"] in ("reload", "resolver-reload", "capabilities-reload"):
         resolver = scenario["fleet"] == "resolver-reload"
         capabilities = scenario["fleet"] == "capabilities-reload"
-        saves, capture, saved_resolver, saved_capabilities = {}, {}, {}, {}
-        setup = dict(
-            scenario,
-            console=[
+        saves: dict[str, Path] = {}
+        capture: dict[str, dict[str, Any]] = {}
+        saved_resolver: dict[str, list[Any]] = {}
+        saved_capabilities: dict[str, dict[str, list[list[str]]]] = {}
+        setup: Scenario = {
+            **scenario,
+            "console": [
                 "fleet_scenario "
                 + (
                     "resolver"
@@ -228,8 +254,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 ),
                 "unpause",
             ],
-            ticks=1,
-        )
+            "ticks": 1,
+        }
         runs = capture_pair(setup, executables, builds, folder, timeout, env)
         for role, run in runs.items():
             if (
@@ -296,16 +322,16 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         ):
             result["differences"].extend(differences)
             raise RuntimeError("fleet reload capture differs")
-        result["fleet_capture"] = capture
+        core.findings(result)["fleet_capture"] = capture
         if resolver:
-            result["resolver_saved"] = saved_resolver
+            core.findings(result)["resolver_saved"] = saved_resolver
         if capabilities:
-            result["capability_saved"] = saved_capabilities
-        return dict(
-            scenario,
-            executables=executables,
-            role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-            console=[
+            core.findings(result)["capability_saved"] = saved_capabilities
+        return {
+            **scenario,
+            "executables": executables,
+            "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+            "console": [
                 "fleet_scenario "
                 + (
                     "resolver-inspect"
@@ -316,11 +342,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 ),
                 "unpause",
             ],
-        )
-    return dict(scenario, executables=executables)
+        }
+    return {**scenario, "executables": executables}
 
 
-def capability_state(run, stage):
+def capability_state(run: core.Run, stage: str) -> dict[str, list[list[str]]]:
     return {
         key: [
             line.split()[3:]
@@ -331,7 +357,9 @@ def capability_state(run, stage):
     }
 
 
-def check_capabilities(run, mode, role, result):
+def check_capabilities(
+    run: core.Run, mode: str, role: str, result: core.Result
+) -> None:
     counts = [
         line.split()[2:]
         for line in run["log"]
@@ -423,7 +451,9 @@ def check_capabilities(run, mode, role, result):
         result["problems"].append(f"{mode}/{role}: capability spec/graph restoration")
 
 
-def check_override_order(run, mode, role, result):
+def check_override_order(
+    run: core.Run, mode: str, role: str, result: core.Result
+) -> None:
     # Frozen callback results from the unchanged native first-match policy.
     overrides = [
         line.split()[2:]
@@ -450,7 +480,9 @@ def check_override_order(run, mode, role, result):
         result["problems"].append(f"{mode}/{role}: wagon override restoration/RNG")
 
 
-def check_property_boundaries(run, mode, role, result):
+def check_property_boundaries(
+    run: core.Run, mode: str, role: str, result: core.Result
+) -> None:
     # Explicit native callback-36 results; failure preserves the full int default.
     expected = []
     for value, signed in (
@@ -493,7 +525,9 @@ def check_property_boundaries(run, mode, role, result):
         result["problems"].append(f"{mode}/{role}: property restoration/RNG")
 
 
-def check_real_boundaries(run, mode, role, result):
+def check_real_boundaries(
+    run: core.Run, mode: str, role: str, result: core.Result
+) -> None:
     # Real-group policy is observed through normal callback/property entries.
     # Explicit boundary results distinguish empty-vector fallback and clamps.
     purchases = [
@@ -560,7 +594,13 @@ def check_real_boundaries(run, mode, role, result):
         result["problems"].append(f"{mode}/{role}: real-group order flag inputs")
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario.get("effect_emission"):
         return
     if "fleet" not in scenario or run["exit"] or not run["snapshots"]:
@@ -667,7 +707,7 @@ def check(scenario, run, mode, role, result):
         check_capabilities(run, mode, role, result)
     if scenario["fleet"] == "capabilities-reload":
         loaded = capability_state(run, "loaded")
-        if loaded != result["capability_saved"][role]:
+        if loaded != core.findings(result)["capability_saved"][role]:
             result["problems"].append(
                 f"{mode}/{role}: restored articulated chain/state"
             )
@@ -756,7 +796,7 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(f"{mode}/{role}: resolver {label} invariant")
     if scenario["fleet"] == "resolver-reload":
         expected = "FLEET resolver-saved " + " ".join(
-            map(str, result["resolver_saved"][role])
+            map(str, core.findings(result)["resolver_saved"][role])
         )
         if expected not in run["log"]:
             result["problems"].append(
@@ -815,7 +855,7 @@ def check(scenario, run, mode, role, result):
         probes = [line for line in run["log"] if line.startswith("FLEET ground-probe ")]
         if len(probes) != 1 or probes[0].split()[3] != "30":
             result["problems"].append(f"{mode}/{role}: missing ground arithmetic probe")
-        result[f"{mode}_{role}_ground"] = branch_witnesses(
+        core.findings(result)[f"{mode}_{role}_ground"] = branch_witnesses(
             scenario,
             run,
             role,
@@ -836,6 +876,6 @@ def check(scenario, run, mode, role, result):
             ["same_bucket", "remove", "alias_filter", "reset", "near"],
         )
     if scenario["fleet"] in BRANCHES:
-        result[mode + "_" + role + "_branches"] = branch_witnesses(
+        core.findings(result)[mode + "_" + role + "_branches"] = branch_witnesses(
             scenario, run, role, "vehicle_transactions", BRANCHES[scenario["fleet"]]
         )

@@ -90,6 +90,11 @@ include = [
     "tools/simulation/landscape.py",
     "tools/simulation/companies.py",
     "tools/simulation/industries.py",
+    "tools/simulation/engines.py",
+    "tools/simulation/fleet.py",
+    "tools/simulation/orders.py",
+    "tools/simulation/vehicles.py",
+    "tools/simulation/ships.py",
 ]
 
 [analysis]

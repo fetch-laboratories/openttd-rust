@@ -1,6 +1,8 @@
 """Base scheduler and maintenance evidence over actual transport saves."""
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, NotRequired
 
 from . import core
 from .core import patch, rows
@@ -29,7 +31,14 @@ MAINTENANCE = {
 }
 
 
-def scenarios(soak):
+class Scenario(core.Scenario):
+    vehicle_maintenance: NotRequired[str]
+    # Other families' keys that the shared check reads.
+    crash_expiry: NotRequired[str]  # roads
+    effects: NotRequired[str]  # effects
+
+
+def scenarios(soak: bool) -> list[Scenario]:
     # Short typed input boundaries supplement the unchanged multi-year saves.
     return [
         {
@@ -49,7 +58,15 @@ def scenarios(soak):
     ]
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "vehicle_maintenance" not in scenario:
         return scenario
     kind = scenario["vehicle_maintenance"]
@@ -58,7 +75,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     original = rows(source)[3]
     if original["type"] != 1 or original[COMMON + "vehstatus"] & 130:
         raise RuntimeError("maintenance fixture is not an active road head")
-    changes = {}
+    changes: dict[str, Any] = {}
     if kind == "age-value":
         changes = {
             "age": 3659,
@@ -92,18 +109,18 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         destination,
         {"VEHS": {3: {COMMON + key: value for key, value in changes.items()}}},
     )
-    result["vehicle_maintenance_input"] = {
+    core.findings(result)["vehicle_maintenance_input"] = {
         "normalization": normalization,
         "patch": record,
     }
-    return dict(scenario, save=str(destination))
+    return {**scenario, "save": str(destination)}
 
 
-def selected(scenario):
+def selected(scenario: Scenario) -> bool:
     return scenario.get("name", "").startswith(PREFIXES)
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     return (
         core.WITNESS_ENVIRONMENT
         if selected(scenario) and scenario.get("witnesses")
@@ -111,7 +128,13 @@ def game_environment(scenario):
     )
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if not selected(scenario):
         return
     if scenario.get("vehicle_maintenance") == "age-value":
@@ -177,7 +200,7 @@ def check(scenario, run, mode, role, result):
         scenario, run, role, "vehicle_maintenance", maintenance_required
     )
     if maintenance is not None:
-        result[f"{mode}_{role}_vehicle_maintenance"] = {
+        core.findings(result)[f"{mode}_{role}_vehicle_maintenance"] = {
             "counts": maintenance,
             # Native entries plus both selected owners' outgoing calls. Existing
             # controller/fleet internals retain their separate instrumentation.
@@ -189,7 +212,7 @@ def check(scenario, run, mode, role, result):
             )
             / visits,
         }
-    result[f"{mode}_{role}_vehicle_scheduler"] = {
+    core.findings(result)[f"{mode}_{role}_vehicle_scheduler"] = {
         "outer_visits": visits,
         "counts": counts,
         "crossings_per_outer_visit": counts["crossings"] / visits,
