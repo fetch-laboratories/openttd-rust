@@ -5,7 +5,9 @@ import json
 import shutil
 import struct
 import threading
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any, NotRequired, TypedDict, cast
 
 from . import core
 from .core import (
@@ -17,6 +19,22 @@ from .core import (
     save_moment,
 )
 
+
+class Params(TypedDict, total=False):
+    industry: int
+    action: str
+    target: int
+
+
+class Scenario(core.Scenario, Params):
+    disasters: NotRequired[str]
+    family: NotRequired[str]
+    setup: NotRequired[bool]
+    expected_subtypes: NotRequired[tuple[int, ...]]
+    main: NotRequired[int]
+    before: NotRequired[core.Row]
+
+
 AI_FOLDER = "disaster-scenario-ai"
 LOCK = threading.Lock()
 SCHEMA = list(
@@ -26,7 +44,7 @@ SCHEMA = list(
         strict=True,
     )
 )
-FAMILIES = {
+FAMILIES: dict[str, tuple[int, int, tuple[int, ...]]] = {
     "zeppelin": (1935, 0, (0, 1)),
     "small-ufo": (1945, 1, (2, 3)),
     "airplane": (1965, 1, (4, 5)),
@@ -38,11 +56,11 @@ FAMILIES = {
 }
 
 
-def uses_ai(scenario):
+def uses_ai(scenario: Scenario) -> bool:
     return "disasters" in scenario
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
         ai = run_dir / "ai/disasters"
         shutil.copytree(scenario["scenario_ai"], ai)
@@ -51,13 +69,13 @@ def install(scenario, run_dir):
         )
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return (
         ["-d", "script=2"] if uses_ai(scenario) and scenario["kind"] != "save" else []
     )
 
 
-def disasters(path):
+def disasters(path: Path) -> dict[int, core.Row]:
     return {
         index: {
             key.removeprefix("disaster[0]/"): value
@@ -69,12 +87,12 @@ def disasters(path):
     }
 
 
-def negative_probes(source, folder, main):
+def negative_probes(source: Path, folder: Path, main: int) -> list[str]:
     """The unchanged semantic decoder must expose each Rust-private saved field."""
     baseline = folder / "negative-baseline.sav"
     patch(source, baseline, {})
     observed = disasters(source)[main]
-    checked = []
+    checked: list[str] = []
     for field in ("state", "image_override", "big_ufo_destroyer_target", "flags"):
         changed = folder / f"negative-{field}.sav"
         key = f"disaster[0]/{field}"
@@ -98,22 +116,30 @@ def negative_probes(source, folder, main):
     return checked
 
 
-def calendar(year):
+def calendar(year: int) -> int:
     return year * 365 + (year - 1) // 4 - (year - 1) // 100 + (year - 1) // 400 + 1
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "disasters" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
     folder.mkdir(parents=True, exist_ok=True)
 
-    def run(label, setup, ticks):
+    def run(label: str, setup: Mapping[str, Any], ticks: int) -> Path:
         cache = out / "disaster-fixtures" / label
         fixture = cache / "save/autosave/exit.sav"
         if not fixture.exists():
             trial = run_game(
-                dict(setup, ticks=ticks),
+                cast(Scenario, {**setup, "ticks": ticks}),
                 binaries["reference"],
                 builds["reference"],
                 cache,
@@ -165,18 +191,18 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             )
             script = out / "disaster-fixtures/script.sav"
             patch(initial, script, {}, "observer")
-            setup = dict(
-                scenario,
-                kind="save",
-                save=str(script),
-                setup=True,
-                console=[
+            setup: Scenario = {
+                **scenario,
+                "kind": "save",
+                "save": str(script),
+                "setup": True,
+                "console": [
                     "setting difficulty.disasters 0",
                     "setting linkgraph.recalc_time 9000",
                     "setting linkgraph.recalc_interval 4",
                     "unpause",
                 ],
-            )
+            }
             base = run("rail", setup, 3000)
             if not (
                 rows(base)[17]["train[0]/common[0]/tile"] == 10007
@@ -188,13 +214,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             if "large" in kind:
                 base = run(
                     "large-airport",
-                    dict(
-                        scenario,
-                        kind="save",
-                        save=str(base),
-                        action="large-airport",
-                        console=["unpause"],
-                    ),
+                    {
+                        **scenario,
+                        "kind": "save",
+                        "save": str(base),
+                        "action": "large-airport",
+                        "console": ["unpause"],
+                    },
                     64,
                 )
                 if rows(base, "STNN")[0]["normal[0]/airport.type"] != 1:
@@ -207,14 +233,16 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             if kind.startswith("train")
             else "small-ufo",
         )
-        year, seed, expected = FAMILIES[family]
+        year, seed, expected = cast(
+            tuple[int, int | None, tuple[int, ...]], FAMILIES[family]
+        )
         if family == "small-ufo" and station:
             year, seed = 1969, 4
         elif kind.startswith("train"):
             year, seed = 2099, None
         elif kind in ("disabled", "empty-year", "countdown-wrap"):
             year = 2130 if kind == "empty-year" else 1956
-        date = {
+        date: dict[str, int] = {
             "date": calendar(year),
             "date_fract": 73,
             "economy_date_fract": 73,
@@ -225,7 +253,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             date.pop("economy_date_fract")
         if seed is not None:
             date["random_state[0]"] = date["random_state[1]"] = seed
-        changes = {"DATE": {0: date}}
+        changes: dict[str, dict[int, dict[str, int]]] = {"DATE": {0: date}}
         if kind.startswith("train"):
             changes["PLYR"] = {1: {"is_ai": 0}}
         target = folder / "input.sav"
@@ -234,7 +262,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
         schema = next(
             field["fields"]
-            for field in read_save(target)["VEHS"]["header"]
+            for field in cast(list[core.Field], read_save(target)["VEHS"]["header"])
             if field["key"] == "disaster"
         )
         if schema != [{"key": key, "type": dtype} for key, dtype in SCHEMA]:
@@ -243,13 +271,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             f"setting difficulty.disasters {int(kind not in ('disabled', 'countdown-wrap'))}",
             "unpause",
         ]
-        scenario = dict(
-            scenario,
-            kind="save",
-            save=str(target),
-            console=console,
-            expected_subtypes=expected,
-        )
+        scenario = {
+            **scenario,
+            "kind": "save",
+            "save": str(target),
+            "console": console,
+            "expected_subtypes": expected,
+        }
         extra = kind in (
             "industry-reset",
             "industry-release",
@@ -268,8 +296,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 index for index, row in live.items() if row["subtype"] == subtype
             )
             record["negative_fields"] = negative_probes(natural, folder, main)
-            edits = {"DATE": {0: {"next_disaster_start": 65535}}}
-            params = {}
+            edits: dict[str, dict[int, dict[str, int]]] = {
+                "DATE": {0: {"next_disaster_start": 65535}}
+            }
+            params: Params = {}
             if kind.startswith("industry"):
                 industry = next(
                     index
@@ -277,7 +307,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     if row["type"] == (4 if family == "airplane" else 6)
                     and (row["location.tile"] // 256) * 16 + 37 == live[main]["y_pos"]
                 )
-                fields = {
+                fields: dict[str, int] = {
                     "disaster[0]/state": 1,
                     "disaster[0]/dest_tile": industry,
                     "disaster[0]/age": 111 if kind == "industry-reset" else 0,
@@ -286,13 +316,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 params["industry"] = industry
                 if kind == "industry-release":
                     edits["CHTS"] = {0: {"magic_bulldozer.value": 1}}
-                    params.update(
-                        action="industry",
-                        target=rows(natural, "INDY")[industry]["location.tile"],
-                    )
+                    params["action"] = "industry"
+                    params["target"] = rows(natural, "INDY")[industry]["location.tile"]
             elif kind == "road-release":
                 fields = {"disaster[0]/state": 1, "disaster[0]/dest_tile": 12}
-                params.update(action="road-sale", target=12)
+                params["action"] = "road-sale"
+                params["target"] = 12
             elif kind == "target-reload":
                 target_road = rows(natural)[21]
                 fields = {
@@ -320,14 +349,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 ),
                 "unpause",
             ]
-            scenario = dict(
-                scenario,
-                save=str(modified),
-                console=console,
-                main=main,
-                before=live[main],
+            scenario = {
+                **scenario,
+                "save": str(modified),
+                "console": console,
+                "main": main,
+                "before": live[main],
                 **params,
-            )
+            }
             if kind == "target-reload":
                 reload = run("road-live-target", scenario, 16)
                 saved = disasters(reload).get(main)
@@ -335,13 +364,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     raise RuntimeError("reload input lacks live UFO/road target")
                 modified = folder / "reload-input.sav"
                 record["reload"] = patch(reload, modified, {})
-                scenario = dict(scenario, save=str(modified), before=saved)
+                scenario = {**scenario, "save": str(modified), "before": saved}
         record["moment"] = save_moment(Path(scenario["save"]))
-        result["disaster_input"] = record
+        core.findings(result)["disaster_input"] = record
     return scenario
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if "disasters" not in scenario or run["exit"] or not run["snapshots"]:
         return
     path = run["snapshots"][-1]
@@ -485,7 +520,7 @@ def check(scenario, run, mode, role, result):
             not current or current["state"] != 1 or current["dest_tile"] != 21
         ):
             raise RuntimeError("reloaded UFO did not retain its live road target")
-    result[f"{mode}_{role}_disasters"] = {
+    core.findings(result)[f"{mode}_{role}_disasters"] = {
         "elapsed_ticks": elapsed,
         "vehicles": live,
         "delay": date["next_disaster_start"],
@@ -493,8 +528,10 @@ def check(scenario, run, mode, role, result):
     }
 
 
-def scenarios(soak):
-    cases = [(f"init-{family}", "init", 1, family) for family in FAMILIES]
+def scenarios(soak: bool) -> list[Scenario]:
+    cases: list[tuple[str, str, int, str]] = [
+        (f"init-{family}", "init", 1, family) for family in FAMILIES
+    ]
     cases += [
         (kind, kind, 1, "coal") for kind in ("disabled", "empty-year", "countdown-wrap")
     ]
