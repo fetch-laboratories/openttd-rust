@@ -243,10 +243,10 @@ The steering checked every claim acted on below against the source.
      - Scenarios, runs and results flow as untyped dicts through an unannotated `core.py`, so `ty` proves less than its pass suggests.
      - At the current pace #501 finishes around March 2027. Its first planned step, `core.py` and `migration.py`, never happened.
    - **Structure.** The code is split by component, with one private reach-in. But it has a 37-module import cycle through `core` and the driver, five second copies of `migration.py`, hooks dispatched to every module through `getattr`, and functions of 268 and 437 lines.
-   - **Verdict: no broad refactor.** The size tracks ports, and the six drafts touch 72 `tools/` files. Corrections, in order:
-     1. #672 guards the oracle and does #501's free cleanup.
-     2. #673 types the shared records and consolidates helpers, after #670 integrates.
-     3. #501's mechanical batches follow until its ignore list is empty.
+   - **Verdict: no broad refactor.** The size tracks ports, and the six drafts touch 72 `tools/` files. Corrections:
+     1. Type checking goes first (user, 2026-11-05): #673's typing PR, with #501's free cleanup, then #501's mechanical batches until the ignore list is empty ([work order](#work-order) item 4).
+     2. #672 guards the oracle.
+     3. #673's second PR consolidates helpers.
      4. New scenario code uses the shared helpers ([evidence](porting.md#evidence)).
 3. **The oracle can weaken silently.** Four gaps:
    - a removed scenario passes Full, because `validate_plan` checks the candidate's own list;
@@ -285,7 +285,8 @@ No user direction is reversed. On 11-05 the user asked to change the project as 
 
 New since this review, for the next steer to judge:
 - Whether the first builds on this host and the first Full from it agree, and what the new anchors measure.
-- Whether #671 and #672 take the first free maintenance slot, and whether a guard fires on a draft.
+- Whether typing takes the first freed slots: #673's typing PR, then #501's batches, and how fast the ignore list empties.
+- Whether #671 and #672 follow, and whether a guard fires on a draft.
 - Whether #673 keeps the scenario inventory and digests identical, and how many `ty` diagnostics remain over `tools/`.
 - Whether housekeeping after #671 keeps T3 worktrees to open PRs plus unpushed work.
 
@@ -366,13 +367,16 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
    - Extending `tools.simulation.community_ai` and its cached manifest avoids a workflow change. Keep the sets out of every uploaded artifact.
    - The default slice is `newgrf-sets-arctic` (about 7 s of game time); `newgrf-sets-arctic-long` runs in soak. The same-NewGRF larger save follows as a later #507 PR.
    - Integrate it before #655 if it is ready first; #655 does not wait for it.
-4. **Maintenance batch: #657 + #658**, built by root from `rust-migration` after #647 and #649 integrate, with one reviewer and one Full. #658 now also deletes the settings-catalog copies and carriers #649 left ([steering comment](https://github.com/fetch-laboratories/openttd-rust/pull/649#issuecomment-6651456306)). #657's read-only design is complete; implementation has not started. #657 removes about 300 to 450 compiled lines on base and prevents roughly 172 lines in #628 by replacing about 166 per-message services. Open drafts adopt it at their next base update. #658's cleanup saving is small; show the **+445 code-line .inc accounting re-baseline separately** from deletion savings (487 physical lines is not the code-line count).
+4. **Type checking first (user, 2026-11-05).** Typing takes each slot an integration frees, ahead of #657 + #658, the harness batch and new owners:
+   - **#673's typing PR**, now. It types shared `Scenario`, `Run` and `Result` records in `tools/simulation/core.py`, types hook dispatch, adds `core.py` and `migration.py` to `ty.toml`, and carries #501's free cleanup. It does not wait for #670; whichever of the two integrates second resolves the `core.py` registry conflict. Helper consolidation follows as #673's second PR.
+   - **#501's mechanical batches** start as soon as #673's typing PR integrates, two at a time on disjoint files, each adding its files to `ty.toml`. They annotate `scenario`, `result` and `run` with #673's records. A file an open draft touches converts as soon as that draft integrates.
+   - Done when the ANN ignore list is empty and `ty.toml` covers all of `tools/`. Each typing PR has one reviewer and one Full.
+5. **Maintenance batch: #657 + #658**, built by root from `rust-migration` after #647 and #649 integrate, with one reviewer and one Full. #658 now also deletes the settings-catalog copies and carriers #649 left ([steering comment](https://github.com/fetch-laboratories/openttd-rust/pull/649#issuecomment-6651456306)). #657's read-only design is complete; implementation has not started. #657 removes about 300 to 450 compiled lines on base and prevents roughly 172 lines in #628 by replacing about 166 per-message services. Open drafts adopt it at their next base update. #658's cleanup saving is small; show the **+445 code-line .inc accounting re-baseline separately** from deletion savings (487 physical lines is not the code-line count).
    - #565 item 2 with #168's unfinished world-generation leaves follows #570, because both edit `movement.rs`: remove map fallbacks, remaining rail/crossing/depot/stop/water/tunnel leaves, `tile_slope_z` and per-tile world-generation services. Estimated compiled C++ removed: 300 to 600. Delete duplicated `bridge_above` and `rail_tile_type` too. This completes the phase-2 boundary; it creates no phase-1 owner.
    - #500 typing adoption and #168/#199 residual boundary cleanup attach to the owner touching those records; completed-job publication stays with link graph/jobs.
-   - **Harness batch: #672 + #671**, delegated from `rust-migration` beside #657 + #658 (disjoint files), with one reviewer and one Full. It guards the scenario and comparison inventories and masks, carries #501's free cleanup and fixes housekeeping.
-   - **#673 typed harness records and helper consolidation**, after #670 integrates. Inventory, scenario digests and comparison results must stay identical. It is the only harness refactor; no broader rewrite.
-   - #501 then converts the remaining ANN-ignored files in mechanical batches that skip files drafts touch, until its ignore list is empty. These fill free maintenance slots and displace no ownership work.
-5. **Ranked phase-2 queue after #570 integrates.** Before briefing #634 or #635, root decides whether later records sit beside or inside shells using the merged #570 profile and #566 drawing workload, after the owed quiet speed pass. Use the dependent-load table/profile checklist in the twenty-eighth #636 steering comment; record a material placement decision in the [world-state design](design/world-state.md).
+   - **Harness batch: #672 + #671**, delegated from `rust-migration` beside #657 + #658 (disjoint files), with one reviewer and one Full. It guards the scenario and comparison inventories and masks and fixes housekeeping.
+   - **#673's consolidation PR** follows its typing PR. Inventory, scenario digests and comparison results must stay identical. It is the only harness refactor; no broader rewrite.
+6. **Ranked phase-2 queue after #570 integrates.** Before briefing #634 or #635, root decides whether later records sit beside or inside shells using the merged #570 profile and #566 drawing workload, after the owed quiet speed pass. Use the dependent-load table/profile checklist in the twenty-eighth #636 steering comment; record a material placement decision in the [world-state design](design/world-state.md).
 
    | Rank | Owner | Estimated compiled C++ removed | Selection event / coupled scope |
    | ---: | --- | ---: | --- |
@@ -387,7 +391,7 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
    | 9 | Map storage and remaining map bodies | 2,000 to 3,200 | All simulation pools complete and #565 item 2 integrated; allocation/reset and remaining rail/road/water/tunnel/landscape/tile bodies. Pools-before-map ranks this last despite size. |
 
    Pools without an issue get one and a design section when selected. Every brief includes the accepted allocation/lifetime and exact shell dispositions above. No new phase-1 owners. Coupled save adapters, generated native declarations/layout checks and displaced field routes belong to each record owner.
-6. **Phase 3 fills slots phase 2 leaves free**, after finishing the open owners and preserving #507's first-free-slot placement:
+7. **Phase 3 fills slots phase 2 leaves free**, after finishing the open owners and preserving #507's first-free-slot placement:
    - **READY #666 infrastructure script APIs**, 650 to 950 compiled C++ removed from 1,649 .cpp source lines. Rail/road/tile/map/bridge/tunnel/marine/infrastructure and associated lists use integrated map/command owners; keep VM/typed-command shims. Compare API returns/errors, command results and enumeration order.
    - **READY #667 content/download protocol**, 500 to 700 from 923 source lines. Own metadata, dependency and download state; native HTTP/file/decompression operations remain. Compare packets, dependency order, cancellation, completion and defined malformed-input behavior locally.
    - **READY #668 coordinator/STUN/TURN**, 400 to 600 from 912 source lines. Own token/negotiation state using integrated packet handling and native socket/connect leaves. Compare packets, fallback order, controlled-time timeouts and connection disposition.
@@ -396,7 +400,7 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
    - **#653 industry/industry-tile definitions**, 270 to 400, after #647/#649; vector fields are decided at the first checkpoint. HouseSpec follows #628 under #669; station/road-stop/airport definitions are grouped there. #622 is completed.
 
    These owners use only integrated interfaces; a needed unintegrated service blocks its owner. No #628 draft services or parallel replacements. Keep VM/binding surfaces, and size owners to repay review/Full ([selection](planning.md#selection)).
-7. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect merely to fill a slot. Deep execution remains user-only.
+8. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect merely to fill a slot. Deep execution remains user-only.
 
 Recurring:
 - After every second integration (next after 70), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip once this host has anchors ([speed](speed.md#instruction-projections)).
