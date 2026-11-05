@@ -138,11 +138,6 @@ static TownDrawTileProc * const _town_draw_tile_procs[1] = {
 	TownDrawHouseLift
 };
 
-/**
- * Return a random direction
- *
- * @return a random direction
- */
 
 /**
  * Draw a house and its tile. This is a tile callback routine.
@@ -190,19 +185,6 @@ static void DrawTile_Town(TileInfo *ti)
 }
 
 
-/**
- * Get the foundation for a house. This is a tile callback routine.
- * @param tile The tile to find a foundation for.
- * @param tileh The slope of the tile.
- */
-
-/**
- * Animate a tile for a town.
- * Only certain houses can be animated.
- * The newhouses animation supersedes regular ones.
- * @param tile TileIndex of the house to animate.
- */
-
 /** Resize the sign (label) of the town after it changes population. */
 void Town::UpdateVirtCoord()
 {
@@ -243,11 +225,6 @@ void ClearAllTownCachedNames()
 	}
 }
 
-/**
- * Change the town's population as recorded in the town cache, town label, and town directory.
- * @param t The town which has changed.
- * @param mod The population change (can be positive or negative).
- */
 
 /**
  * Get the total population, the sum of all towns in the world.
@@ -566,14 +543,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 }
 
 
-/** Iterate through all towns and call their tick handler. */
-
-/**
- * Return the RoadBits of a tile, ignoring depot and bay road stops.
- * @param tile The tile to check.
- * @return The roadbits of the given tile.
- */
-
 /**
  * Get the road type that towns should build at this current moment.
  * They may have built a different type in the past.
@@ -589,16 +558,6 @@ bool CheckTownRoadTypes()
 	return openttd_rust_town_check_road_types(&GetRustTownServices());
 }
 
-/**
- * Check for parallel road inside a given distance.
- *   Assuming a road from (tile - TileOffsByDiagDir(dir)) to tile,
- *   is there a parallel road left or right of it within distance dist_multi?
- *
- * @param tile The current tile.
- * @param dir The target direction.
- * @param dist_multi The distance multiplier.
- * @return true if there is a parallel road.
- */
 
 /**
  * Update the cached town zone radii of a town, based on the number of houses.
@@ -720,15 +679,6 @@ HouseZones GetClimateMaskForLandscape()
 	return HouseZones{openttd_rust_town_climate_mask(OpenTTDLandscapeValue())};
 }
 
-/**
- * Create a random town somewhere in the world.
- * @param attempts How many times should we try?
- * @param townnameparts The name of the town.
- * @param size The size preset of the town.
- * @param city Should we build a city?
- * @param layout The road layout to build.
- * @return The town object, or nullptr if we failed to create a town anywhere.
- */
 
 /**
  * Returns the bit corresponding to the town zone of the specified tile.
@@ -741,25 +691,6 @@ HouseZone GetTownRadiusGroup(const Town *t, TileIndex tile)
 	return static_cast<HouseZone>(openttd_rust_town_radius_group(t->growth_owner.get(), &GetRustSharedServices(), tile.base()));
 }
 
-/**
- * Clears tile and builds a house or house part.
- * @param tile The tile to build upon.
- * @param t The town which will own the house.
- * @param counter The construction stage counter for the house.
- * @param stage The current construction stage of the house.
- * @param type The type of house.
- * @param random_bits Random bits for newgrf houses to use.
- * @param is_protected Whether the house is protected from the town upgrading it.
- * @pre The house can be built here.
- */
-
-/**
- * Determines if a given HouseID is part of a multitile house.
- * The given ID is set to the ID of the north tile and the TileDiff to the north tile is returned.
- *
- * @param house Is changed to the HouseID of the north tile of the same house
- * @return TileDiff from the tile of the given HouseID to the north tile
- */
 
 /**
  * Place an individual house.
@@ -975,13 +906,6 @@ CommandCost CmdDoTownAction(DoCommandFlags flags, TownID town_id, TownAction act
 	return result;
 }
 
-
-/**
- * Updates town grow counter after growth rate change.
- * Preserves relative house builting progress whenever it can.
- * @param t The town to calculate grow counter for
- * @param prev_growth_rate Town growth rate before it changed (one that was used with grow counter to be updated)
- */
 
 /**
  * Checks whether the local authority allows construction of a new station (rail, road, airport, dock) on the given tile

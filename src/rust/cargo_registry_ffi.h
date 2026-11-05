@@ -68,7 +68,8 @@ uint8_t *openttd_rust_cargo_reverse();
 void openttd_rust_cargo_setup(const OpenTTDCargoRegistryServices *, uint8_t);
 void openttd_rust_cargo_labels_rebuild();
 void openttd_rust_cargo_bitnum_changed(const CargoSpec *, uint8_t, const GRFFile *);
-bool openttd_rust_cargo_is_default(uint8_t);
+uint8_t openttd_rust_cargo_is_default_abi(uint8_t);
+extern "C++" inline bool openttd_rust_cargo_is_default(uint8_t a0) { return openttd_rust_cargo_is_default_abi(a0) != 0; }
 OpenTTDCargoLabels openttd_rust_cargo_climate_labels();
 OpenTTDCargoLabels openttd_rust_cargo_bitnum_labels();
 void openttd_rust_cargo_sort(const OpenTTDCargoRegistryServices *);

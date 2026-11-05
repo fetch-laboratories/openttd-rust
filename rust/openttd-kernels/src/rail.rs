@@ -26,9 +26,9 @@ pub fn has_rail_type(s: &Services, company: u8, rt: u8) -> bool {
     crate::type_registry::rail_hidden() & bit == 0 && (s.company_railtypes)(company) & bit != 0
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_has_any_rail_types(s: &Services, company: u8) -> bool {
+pub extern "C" fn openttd_rust_has_any_rail_types_abi(s: &Services, company: u8) -> u8 {
     let available = (s.company_railtypes)(company);
-    available & !crate::type_registry::rail_hidden() != 0
+    u8::from(available & !crate::type_registry::rail_hidden() != 0)
 }
 pub fn val_param_rail_type(shared: &Shared, rt: u8) -> bool {
     rt < RAILTYPE_END && has_rail_type(services(shared), (shared.current_company)(), rt)

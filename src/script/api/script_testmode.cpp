@@ -14,18 +14,11 @@
 
 #include "../../safeguards.h"
 
-bool ScriptTestMode::ModeProc()
-{
-	/* In test mode we only return 'false', telling the DoCommand it
-	 *  should stop after testing the command and return with that result. */
-	return false;
-}
-
 ScriptTestMode::ScriptTestMode()
 {
 	this->last_mode     = this->GetDoCommandMode();
 	this->last_instance = this->GetDoCommandModeInstance();
-	this->SetDoCommandMode(&ScriptTestMode::ModeProc, this);
+	this->SetDoCommandMode(SCRIPT_MODE_TEST, this);
 }
 
 void ScriptTestMode::FinalRelease()

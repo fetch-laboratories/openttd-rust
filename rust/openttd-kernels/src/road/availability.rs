@@ -49,13 +49,13 @@ pub fn has_road_type(shared: &Shared, s: &Services, company: u8, rt: u8) -> bool
     }
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_has_any_road_types(
+pub extern "C" fn openttd_rust_has_any_road_types_abi(
     s: &Services,
     company: u8,
     rtt: RoadTramType,
-) -> bool {
+) -> u8 {
     let available = (s.company_roadtypes)(company) & !crate::type_registry::road_hidden();
-    available & get_mask_for_road_tram_type(rtt) != 0
+    u8::from(available & get_mask_for_road_tram_type(rtt) != 0)
 }
 pub fn val_param_road_type(shared: &Shared, rt: u8) -> bool {
     rt < ROADTYPE_END && has_road_type(shared, services(shared), (shared.current_company)(), rt)

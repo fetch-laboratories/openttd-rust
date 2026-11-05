@@ -25,6 +25,7 @@ extern "C" {
 uint16_t openttd_rust_sign_place(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint32_t, OpenTTDByteSpan);
 void openttd_rust_sign_rename(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 void openttd_rust_sign_move(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint32_t);
-bool openttd_rust_company_can_edit_sign(const OpenTTDSignServices *, const Sign *);
+uint8_t openttd_rust_company_can_edit_sign_abi(const OpenTTDSignServices *, const Sign *);
+extern "C++" inline bool openttd_rust_company_can_edit_sign(const OpenTTDSignServices *a0, const Sign *a1) { return openttd_rust_company_can_edit_sign_abi(a0, a1) != 0; }
 }
 #endif /* RUST_SIGNS_FFI_H */

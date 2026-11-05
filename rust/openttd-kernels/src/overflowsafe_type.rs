@@ -11,3 +11,8 @@
 pub fn add_u32(value: &mut i32, amount: u32) {
     *value = value.saturating_add(amount as i32);
 }
+
+/// `OverflowSafeInt64::operator+=`, which saturates toward the addend's sign.
+pub fn add_i64(value: &mut i64, amount: i64) {
+    *value = value.saturating_add(amount);
+}

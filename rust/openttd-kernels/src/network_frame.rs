@@ -398,7 +398,7 @@ pub(crate) fn map_begin(frame: u32) {
 
 fn state_loop(session: &crate::session::Services, frame: *mut Frame) -> Result<(), ()> {
     // SAFETY: The session frame is live through this game loop entry.
-    if unsafe { crate::session::openttd_rust_session_state_loop(session, frame) } {
+    if unsafe { crate::session::openttd_rust_session_state_loop_abi(session, frame) != 0 } {
         Ok(())
     } else {
         Err(())
@@ -609,7 +609,7 @@ pub(crate) fn game_loop(
     frame: *mut Frame,
     work: Actions,
 ) -> Result<(), ()> {
-    if !(session.networking)() {
+    if !(unsafe { &*session.company }.finance.networking)() {
         return Ok(());
     }
     let result = socket::receive_all(session, s, frame, work);

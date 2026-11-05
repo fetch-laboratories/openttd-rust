@@ -1,10 +1,7 @@
 """Real file-loaded NewGRF interpreter, failure and reset/reload comparisons."""
 
 import calendar
-import json
-import shlex
 import struct
-import subprocess
 from pathlib import Path
 
 from . import core
@@ -292,20 +289,7 @@ def fixtures(folder, version):
         (folder / f"{name}.grf").write_bytes(grf(actions, version))
 
 
-def adapter(build, folder, env):
-    commands = json.loads((build / "compile_commands.json").read_text())
-    entry = next(
-        item for item in commands if item["file"].endswith("/newgrf/newgrf_act2.cpp")
-    )
-    args = shlex.split(entry["command"])
-    if "-DWITH_RUST" not in args:
-        # Compile the candidate's portable bodies without changing the reference.
-        folder.mkdir(parents=True, exist_ok=True)
-        portable = folder / "action2-portable.o"
-        args[args.index("-c") + 1] = str(core.ROOT / "src/newgrf/newgrf_act2.cpp")
-        args[args.index("-o") + 1] = str(portable)
-        subprocess.run(args, cwd=entry["directory"], env=env, check=True)
-        portable.unlink()
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     return console_adapter(
         build,
         folder,

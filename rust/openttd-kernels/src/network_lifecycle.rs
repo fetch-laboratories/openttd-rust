@@ -240,7 +240,7 @@ pub(crate) fn reboot(s: &Services, f: &FrameServices, session: &SessionServices,
     if (f.command.company.network_server)() {
         reboot_send(s, f, session, 0, work);
     } else {
-        close(s, f, !(session.dedicated)(), work);
+        close(s, f, !(unsafe { &*(session.world)() }.dedicated)(), work);
     }
 }
 
@@ -260,7 +260,7 @@ pub(crate) fn reboot_send(
         }
     }
     (s.admins_newgame)();
-    close(s, f, !(session.dedicated)(), work);
+    close(s, f, !(unsafe { &*(session.world)() }.dedicated)(), work);
 }
 
 pub(crate) fn join_game(s: &Services, f: &FrameServices, work: Actions) {
@@ -315,7 +315,7 @@ fn init_game_info(s: &Services, f: &FrameServices, session: &SessionServices) {
     unsafe {
         f.connection
             .clients_on
-            .write(u8::from(!(session.dedicated)()));
+            .write(u8::from(!((*(session.world)()).dedicated)()));
     };
     let info = (s.allocate_server_info)();
     (s.auth_client_key)();
@@ -335,10 +335,10 @@ pub(crate) fn server_start(
     if !(s.pre_server)(frame) {
         return Err(());
     }
-    if (session.dedicated)() && !(s.pre_dedicated)(frame) {
+    if (unsafe { &*(session.world)() }.dedicated)() && !(s.pre_dedicated)(frame) {
         return Err(());
     }
-    if (session.dedicated)() {
+    if (unsafe { &*(session.world)() }.dedicated)() {
         (s.check_names)();
     }
     disconnect(s, f, false, work);
@@ -383,7 +383,7 @@ pub(crate) fn server_start_after_close(
     if !(s.on_server)(frame) {
         return Err(());
     }
-    if (session.dedicated)() && !(s.on_dedicated)(frame) {
+    if (unsafe { &*(session.world)() }.dedicated)() && !(s.on_dedicated)(frame) {
         return Err(());
     }
     Ok(true)
@@ -395,7 +395,7 @@ pub(crate) fn on_game_start(s: &Services, f: &FrameServices, session: &SessionSe
     }
     (s.update_game_info)();
     (s.reset_restart_time)();
-    if (session.dedicated)() {
+    if (unsafe { &*(session.world)() }.dedicated)() {
         (s.admins_welcome)();
     } else {
         let company_services = f.command.company;

@@ -28,8 +28,8 @@ pub struct Support {
 static SNOW_LINE: GameState<*mut SnowLine> = GameState::new(ptr::null_mut());
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_snow_line_is_set() -> bool {
-    unsafe { !SNOW_LINE.get().read().is_null() }
+pub extern "C" fn openttd_rust_snow_line_is_set_abi() -> u8 {
+    u8::from(unsafe { !SNOW_LINE.get().read().is_null() })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_snow_line_set(s: &Support, next: *mut SnowLine) {

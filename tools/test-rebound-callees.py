@@ -96,11 +96,11 @@ class ReboundTests(unittest.TestCase):
         ):
             root = Path(directory)
             baseline = "rebound | RustTileOwner | src/a.cpp | owner\n"
-            baseline += "rebound | RustTileOwner | src/b.cpp | owner\n"
+            baseline += "rebound | RustTileOwner | src/b.inc | owner\n"
             for path, text in {
                 "src/services.h": SERVICES,
                 "src/a.cpp": "const A a{.owner = RustTileOwner};\n",
-                "src/b.cpp": "const B b{.owner = RustTileOwner};\n",
+                "src/b.inc": "const B b{.owner = RustTileOwner};\n",
                 REBOUND.BASELINE: baseline,
             }.items():
                 target = root / path
@@ -128,13 +128,13 @@ class ReboundTests(unittest.TestCase):
                     return REBOUND.main()
 
             self.assertEqual(check(), 0)
-            (root / "src/c.cpp").write_text("const C c{.owner = RustTileOwner};\n")
+            (root / "src/c.inc").write_text("const C c{.owner = RustTileOwner};\n")
             self.assertEqual(check(), 1)
             with (root / REBOUND.BASELINE).open("a") as output:
-                output.write("rebound | RustTileOwner | src/c.cpp | owner\n")
+                output.write("rebound | RustTileOwner | src/c.inc | owner\n")
             self.assertEqual(check(), 1)  # Adding exemptions never fixes it.
-            (root / "src/c.cpp").unlink()
-            (root / "src/b.cpp").write_text("const B b{.owner = RustOther};\n")
+            (root / "src/c.inc").unlink()
+            (root / "src/b.inc").write_text("const B b{.owner = RustOther};\n")
             (root / REBOUND.BASELINE).write_text(baseline)
             self.assertEqual(check(), 1)  # Retired exemptions must disappear.
             (root / REBOUND.BASELINE).write_text("")

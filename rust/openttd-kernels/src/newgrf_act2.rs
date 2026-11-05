@@ -245,7 +245,7 @@ unsafe fn create_group(
         if has_bit(id, 15) {
             return callback(s, l, id);
         }
-        if !loading::openttd_rust_grf_has_set(feature, u32::from(id)) {
+        if loading::openttd_rust_grf_has_set_abi(feature, u32::from(id)) == 0 {
             (s.missing_set)(setid, kind, id);
             return ptr::null();
         }
@@ -459,7 +459,7 @@ unsafe fn real<R: Read>(
 ) -> Result<Option<Handle>, ReadError> {
     unsafe {
         let num_loading = b.byte()?;
-        if !loading::openttd_rust_grf_has_sets(feature) {
+        if loading::openttd_rust_grf_has_sets_abi(feature) == 0 {
             (s.no_sets)();
             return Ok(None);
         }
@@ -653,7 +653,7 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
         if custom {
             let index = gb(*image.sprite, 0, 14);
             if use_sets
-                && (!loading::openttd_rust_grf_has_set(feature, index)
+                && (loading::openttd_rust_grf_has_set_abi(feature, index) == 0
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
             {
                 (s.sprite_set)(index);
@@ -683,7 +683,7 @@ pub(crate) unsafe fn layout_sprite<R: Read>(
         if flags & TLF_CUSTOM_PALETTE != 0 {
             let index = gb(*image.pal, 0, 14);
             if use_sets
-                && (!loading::openttd_rust_grf_has_set(feature, index)
+                && (loading::openttd_rust_grf_has_set_abi(feature, index) == 0
                     || loading::openttd_rust_grf_set_size(feature, index) == 0)
             {
                 (s.palette_set)(index);
@@ -961,11 +961,6 @@ unsafe fn parse<R: Read>(s: &Services, l: &LoadingServices, b: &mut R) -> Result
         Ok(())
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_action2_parse(
-    s: &Services,
-    l: &LoadingServices,
-    reader: &mut Cursor,
-) -> bool {
+pub(crate) unsafe fn parse_action(s: &Services, l: &LoadingServices, reader: &mut Cursor) -> bool {
     unsafe { parse(s, l, reader).is_ok() }
 }

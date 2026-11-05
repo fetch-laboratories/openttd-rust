@@ -201,27 +201,27 @@ pub(super) unsafe fn generate(
 /// # Safety
 /// Tables, rendering frame and parameters remain live. Optional scratch is exclusively owned; rendering frames keep candidate and other bytes distinct.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_verify_name(
+pub unsafe extern "C" fn openttd_rust_town_verify_name_abi(
     s: *const NameServices,
     frame: *mut NameFrame,
     seed: u32,
     params: *const NameParams,
     names: *mut Names,
-) -> bool {
-    unsafe { verify(&*s, frame, seed, params, names) }
+) -> u8 {
+    u8::from(unsafe { verify(&*s, frame, seed, params, names) })
 }
 /// # Safety
 /// Tables, frames, Randomizer and output remain live and writable as applicable. Optional scratch is exclusive; rejected seeds leave output untouched.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_generate_name(
+pub unsafe extern "C" fn openttd_rust_town_generate_name_abi(
     s: *const NameServices,
     frame: *mut NameFrame,
     random: *mut Randomizer,
     result: *mut u32,
     params: *const NameParams,
     names: *mut Names,
-) -> bool {
-    unsafe { generate(&*s, frame, random, result, params, names) }
+) -> u8 {
+    u8::from(unsafe { generate(&*s, frame, random, result, params, names) })
 }
 
 crate::abi::layouts! {

@@ -179,6 +179,10 @@ def pack(bundle, count):
         ROOT / "build-rust/generated",
         ROOT / "build-rust/generated-abi",
         migration.rust_archive(ROOT / "build-rust"),
+        migration.rust_archive(
+            ROOT / "build-rust",
+            target_dir=ROOT / "build-rust/cargo-native-test-support",
+        ),
     ]
     with tarfile.open(
         bundle.parent / "native-support.tar", "w", dereference=True

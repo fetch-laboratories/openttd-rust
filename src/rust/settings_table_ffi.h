@@ -52,7 +52,8 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept;
 extern "C" {
 void openttd_rust_settings_update_consists(const OpenTTDSettingServices *);
 void openttd_rust_settings_update_all_service_interval(const OpenTTDSettingServices *, int32_t);
-bool openttd_rust_settings_can_update_service_interval(const OpenTTDSettingServices *, int32_t);
+uint8_t openttd_rust_settings_can_update_service_interval_abi(const OpenTTDSettingServices *, int32_t);
+extern "C++" inline bool openttd_rust_settings_can_update_service_interval(const OpenTTDSettingServices *a0, int32_t a1) { return openttd_rust_settings_can_update_service_interval_abi(a0, a1) != 0; }
 void openttd_rust_settings_update_service_interval(const OpenTTDSettingServices *, uint8_t, int32_t);
 int32_t openttd_rust_settings_default_service_interval(const OpenTTDSettingServices *, int32_t, uint8_t);
 OpenTTDSettingRange openttd_rust_settings_service_interval_range(const OpenTTDSettingServices *);
@@ -61,16 +62,21 @@ void openttd_rust_settings_train_slope_steepness_changed(const OpenTTDSettingSer
 void openttd_rust_settings_road_acceleration_model_changed(const OpenTTDSettingServices *);
 void openttd_rust_settings_road_slope_steepness_changed(const OpenTTDSettingServices *);
 void openttd_rust_settings_difficulty_noise_change(const OpenTTDSettingServices *);
-bool openttd_rust_settings_check_road_side(const OpenTTDSettingServices *);
-bool openttd_rust_settings_check_freeform_edges(const OpenTTDSettingServices *, int32_t);
+uint8_t openttd_rust_settings_check_road_side_abi(const OpenTTDSettingServices *);
+extern "C++" inline bool openttd_rust_settings_check_road_side(const OpenTTDSettingServices *a0) { return openttd_rust_settings_check_road_side_abi(a0) != 0; }
+uint8_t openttd_rust_settings_check_freeform_edges_abi(const OpenTTDSettingServices *, int32_t);
+extern "C++" inline bool openttd_rust_settings_check_freeform_edges(const OpenTTDSettingServices *a0, int32_t a1) { return openttd_rust_settings_check_freeform_edges_abi(a0, a1) != 0; }
 void openttd_rust_settings_update_freeform_edges(const OpenTTDSettingServices *, int32_t);
-bool openttd_rust_settings_check_dynamic_engines(const OpenTTDSettingServices *);
-bool openttd_rust_settings_check_max_height_level(const OpenTTDSettingServices *, int32_t);
+uint8_t openttd_rust_settings_check_dynamic_engines_abi(const OpenTTDSettingServices *);
+extern "C++" inline bool openttd_rust_settings_check_dynamic_engines(const OpenTTDSettingServices *a0) { return openttd_rust_settings_check_dynamic_engines_abi(a0) != 0; }
+uint8_t openttd_rust_settings_check_max_height_level_abi(const OpenTTDSettingServices *, int32_t);
+extern "C++" inline bool openttd_rust_settings_check_max_height_level(const OpenTTDSettingServices *a0, int32_t a1) { return openttd_rust_settings_check_max_height_level_abi(a0, a1) != 0; }
 void openttd_rust_settings_station_catchment_changed(const OpenTTDSettingServices *);
 void openttd_rust_settings_change_timekeeping_units(const OpenTTDSettingServices *);
 void openttd_rust_settings_change_minutes_per_year(const OpenTTDSettingServices *, int32_t);
 OpenTTDSettingRange openttd_rust_settings_minutes_per_year_range(const OpenTTDSettingServices *);
-bool openttd_rust_settings_can_change_timetable_mode(const OpenTTDSettingServices *);
+uint8_t openttd_rust_settings_can_change_timetable_mode_abi(const OpenTTDSettingServices *);
+extern "C++" inline bool openttd_rust_settings_can_change_timetable_mode(const OpenTTDSettingServices *a0) { return openttd_rust_settings_can_change_timetable_mode_abi(a0) != 0; }
 void openttd_rust_cmd_change_setting(const OpenTTDSettingServices *, OpenTTDCommandCost *, uint16_t, OpenTTDByteSpan, int32_t);
 void openttd_rust_cmd_change_company_setting(const OpenTTDSettingServices *, OpenTTDCommandCost *, uint16_t, OpenTTDByteSpan, int32_t);
 }

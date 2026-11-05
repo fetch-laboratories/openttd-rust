@@ -225,10 +225,13 @@ pub(crate) fn cargo_label(cargo: u8) -> u32 {
     (s.label_spec)((s.spec)(cargo)).label
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_cargo_is_default(cargo: u8) -> bool {
+pub extern "C" fn openttd_rust_cargo_is_default_abi(cargo: u8) -> u8 {
     let s = services();
     let spec = (s.label_spec)((s.spec)(cargo));
-    is_cargo_spec_valid(spec.bitnum) && unsafe { (*REGISTRY.get()).defaults.contains(&spec.label) }
+    u8::from(
+        is_cargo_spec_valid(spec.bitnum)
+            && unsafe { (*REGISTRY.get()).defaults.contains(&spec.label) },
+    )
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_cargo_climate_labels() -> Labels {

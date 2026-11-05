@@ -134,6 +134,8 @@ def compare(out, mode, command, *, labels=LABELS, input=None, stderr="empty"):
 
 def passed(name, **counts):
     """Recheck the reference and print the inventory run-comparisons reports."""
+    if not counts or 0 in counts.values():
+        raise RuntimeError(f"{name} compared no cases: {counts}")
     migration.ensure_reference()
     summary = ", ".join(
         f"{value} {key.replace('_', ' ')}" for key, value in counts.items()

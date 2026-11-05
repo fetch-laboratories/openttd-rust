@@ -108,7 +108,7 @@ class PortMetricsTests(unittest.TestCase):
             counts(METRICS.metrics(deleted, restored, all_lines=True), *keys),
             (-1, 0, 0, 0),
         )
-        renamed = self.root / "src/renamed_glue.cpp"
+        renamed = self.root / "src/renamed_glue.inc"
         glue.rename(renamed)
         moved = self.commit()
         result = METRICS.metrics(restored, moved, all_lines=True)

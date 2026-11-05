@@ -61,7 +61,9 @@ OpenTTDSubsidyState *openttd_rust_subsidy_new(uint16_t);
 void openttd_rust_subsidy_destroy(uint16_t, OpenTTDSubsidyState *);
 void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
 void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
-bool openttd_rust_subsidy_command(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);
-bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, uint8_t, Source, uint16_t);
+uint8_t openttd_rust_subsidy_command_abi(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);
+extern "C++" inline bool openttd_rust_subsidy_command(const OpenTTDSubsidyServices *a0, uint16_t a1, CargoType a2, Source a3, Source a4) { return openttd_rust_subsidy_command_abi(a0, a1, a2, a3, a4) != 0; }
+uint8_t openttd_rust_subsidy_check_abi(const OpenTTDSubsidyServices *, CargoType, uint8_t, Source, uint16_t);
+extern "C++" inline bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *a0, CargoType a1, uint8_t a2, Source a3, uint16_t a4) { return openttd_rust_subsidy_check_abi(a0, a1, a2, a3, a4) != 0; }
 }
 #endif /* RUST_SUBSIDY_FFI_H */

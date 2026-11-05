@@ -15,7 +15,6 @@
 #include "../script/squirrel_std.hpp"
 
 #include "script_fatalerror.hpp"
-#include "script_storage.hpp"
 #include "script_info.hpp"
 #include "script_instance.hpp"
 
@@ -31,11 +30,27 @@
 #include "../signs_type.h"
 #include "../story_type.h"
 #include "../misc/endian_buffer.hpp"
+#include "../rust/command_cost_services.h"
+#include "../rust/command_services_ffi.h"
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDScriptHostServices.hpp"
 
 #include "../safeguards.h"
 
-ScriptStorage::ScriptStorage() = default;
-ScriptStorage::~ScriptStorage() = default;
+const OpenTTDScriptHostServices &GetRustScriptHostServices() noexcept
+{
+	static const OpenTTDScriptHostServices services{
+		.command = &GetRustCommandServices(),
+		.release_event = [](ScriptEvent *event) noexcept { if (event != nullptr) event->Release(); },
+		.string_to_error = [](uint32_t message) noexcept { return ScriptError::StringToError(StringID{message}); },
+	};
+	return services;
+}
+
+/* script_host.rs mirrors these error values. */
+static_assert(ScriptError::ERR_NONE == 0 && ScriptError::ERR_PRECONDITION_INVALID_COMPANY == 4);
+
+bool CheckAbi_script_instance() { return AbiServicesComplete(GetRustScriptHostServices()); }
 
 /**
  * Callback called by squirrel when a script uses "print" and for error messages.
@@ -50,7 +65,7 @@ static void PrintFunc(bool error_msg, std::string_view message)
 
 ScriptInstance::ScriptInstance(std::string_view api_name)
 {
-	this->storage = std::make_unique<ScriptStorage>();
+	this->host.reset(openttd_rust_script_host_new(this));
 	this->engine = std::make_unique<Squirrel>(api_name);
 	this->engine->SetPrintFunction(&PrintFunc);
 }
@@ -90,7 +105,7 @@ void ScriptInstance::Initialize(const std::string &main_script, const std::strin
 			return;
 		}
 	} catch (Script_FatalError &e) {
-		this->is_dead = true;
+		this->host->is_dead = true;
 		this->engine->ThrowError(e.GetErrorMessage());
 		this->engine->ResumeError();
 		this->Died();
@@ -155,7 +170,7 @@ bool ScriptInstance::LoadCompatibilityScripts(Subdirectory dir, std::span<const 
 ScriptInstance::~ScriptInstance()
 {
 	ScriptObject::ActiveInstance active(*this);
-	this->in_shutdown = true;
+	this->host->in_shutdown = true;
 
 	if (instance != nullptr) this->engine->ReleaseObject(this->instance.get());
 
@@ -165,15 +180,14 @@ ScriptInstance::~ScriptInstance()
 
 void ScriptInstance::Continue()
 {
-	assert(this->suspend < 0);
-	this->suspend = -this->suspend - 1;
+	openttd_rust_script_continue(this->host.get(), &GetRustScriptHostServices());
 }
 
 void ScriptInstance::Died()
 {
 	Debug(script, 0, "The script died unexpectedly.");
-	this->is_dead = true;
-	this->in_shutdown = true;
+	this->host->is_dead = true;
+	this->host->in_shutdown = true;
 
 	this->last_allocated_memory = this->GetAllocatedMemory(); // Update cache
 
@@ -192,35 +206,25 @@ void ScriptInstance::GameLoop()
 		this->Died();
 		return;
 	}
-	if (this->is_paused) return;
-	this->controller->ticks++;
-
-	if (this->suspend   < -1) this->suspend++; // Multiplayer suspend, increase up to -1.
-	if (this->suspend   < 0)  return;          // Multiplayer suspend, wait for Continue().
-	if (--this->suspend > 0)  return;          // Singleplayer suspend, decrease to 0.
-
-	_current_company = ScriptObject::GetCompany();
+	OpenTTDScriptStep step = openttd_rust_script_loop(this->host.get(), &GetRustScriptHostServices());
 
 	/* If there is a callback to call, call that first */
-	if (this->callback != nullptr) {
-		if (this->is_save_data_on_stack) {
+	if (step == OpenTTDScriptStep::Callback || step == OpenTTDScriptStep::PopCallback) {
+		if (step == OpenTTDScriptStep::PopCallback) {
 			sq_poptop(this->engine->GetVM());
-			this->is_save_data_on_stack = false;
+			this->host->is_save_data_on_stack = false;
 		}
 		try {
-			this->callback(*this);
+			reinterpret_cast<Script_SuspendCallbackProc *>(this->host->callback)(*this);
 		} catch (Script_Suspend &e) {
-			this->suspend  = e.GetSuspendTime();
-			this->callback = e.GetSuspendCallback();
-
+			openttd_rust_script_suspend(this->host.get(), e.GetSuspendTime(), reinterpret_cast<ScriptCallback *>(e.GetSuspendCallback()));
 			return;
 		}
+		step = openttd_rust_script_callback_done(this->host.get());
 	}
+	if (step == OpenTTDScriptStep::Idle) return;
 
-	this->suspend  = 0;
-	this->callback = nullptr;
-
-	if (!this->is_started) {
+	if (step == OpenTTDScriptStep::Start) {
 		try {
 			{
 				ScriptObject::DisableDoCommandScope disabler{};
@@ -241,31 +245,29 @@ void ScriptInstance::GameLoop()
 			/* Start the script by calling Start() */
 			if (!this->engine->CallMethod(*this->instance, "Start",  _settings_game.script.script_max_opcode_till_suspend) || !this->engine->IsSuspended()) this->Died();
 		} catch (Script_Suspend &e) {
-			this->suspend  = e.GetSuspendTime();
-			this->callback = e.GetSuspendCallback();
+			openttd_rust_script_suspend(this->host.get(), e.GetSuspendTime(), reinterpret_cast<ScriptCallback *>(e.GetSuspendCallback()));
 		} catch (Script_FatalError &e) {
-			this->is_dead = true;
+			this->host->is_dead = true;
 			this->engine->ThrowError(e.GetErrorMessage());
 			this->engine->ResumeError();
 			this->Died();
 		}
 
-		this->is_started = true;
+		this->host->is_started = true;
 		return;
 	}
-	if (this->is_save_data_on_stack) {
+	if (step == OpenTTDScriptStep::PopResume) {
 		sq_poptop(this->engine->GetVM());
-		this->is_save_data_on_stack = false;
+		this->host->is_save_data_on_stack = false;
 	}
 
 	/* Continue the VM */
 	try {
 		if (!this->engine->Resume(_settings_game.script.script_max_opcode_till_suspend)) this->Died();
 	} catch (Script_Suspend &e) {
-		this->suspend  = e.GetSuspendTime();
-		this->callback = e.GetSuspendCallback();
+		openttd_rust_script_suspend(this->host.get(), e.GetSuspendTime(), reinterpret_cast<ScriptCallback *>(e.GetSuspendCallback()));
 	} catch (Script_FatalError &e) {
-		this->is_dead = true;
+		this->host->is_dead = true;
 		this->engine->ThrowError(e.GetErrorMessage());
 		this->engine->ResumeError();
 		this->Died();
@@ -274,7 +276,7 @@ void ScriptInstance::GameLoop()
 
 void ScriptInstance::CollectGarbage()
 {
-	if (this->is_started && !this->IsDead()) {
+	if (this->host->is_started && !this->IsDead()) {
 		ScriptObject::ActiveInstance active(*this);
 		this->engine->CollectGarbage();
 	}
@@ -326,10 +328,10 @@ void ScriptInstance::CollectGarbage()
 }
 
 
-ScriptStorage &ScriptInstance::GetStorage()
+OpenTTDScriptHost &ScriptInstance::GetStorage()
 {
-	assert(this->storage != nullptr);
-	return *this->storage;
+	assert(this->host != nullptr);
+	return *this->host;
 }
 
 ScriptLogTypes::LogData &ScriptInstance::GetLogData()
@@ -521,12 +523,12 @@ void ScriptInstance::Save()
 	}
 
 	HSQUIRRELVM vm = this->engine->GetVM();
-	if (this->is_save_data_on_stack) {
+	if (this->host->is_save_data_on_stack) {
 		_script_sl_byte = 1;
 		SlObject(nullptr, _script_byte);
 		/* Save the data that was just loaded. */
 		SaveObject(vm, -1, SQUIRREL_MAX_DEPTH, false);
-	} else if (!this->is_started) {
+	} else if (!this->host->is_started) {
 		SaveEmpty();
 		return;
 	} else if (this->engine->MethodExists(*this->instance, "Save")) {
@@ -544,13 +546,13 @@ void ScriptInstance::Save()
 		} catch (Script_FatalError &e) {
 			/* If we don't mark the script as dead here cleaning up the squirrel
 			 * stack could throw Script_FatalError again. */
-			this->is_dead = true;
+			this->host->is_dead = true;
 			this->engine->ThrowError(e.GetErrorMessage());
 			this->engine->ResumeError();
 			SaveEmpty();
 			/* We can't kill the script here, so mark it as crashed (not dead) and
 			 * kill it in the next script tick. */
-			this->is_dead = false;
+			this->host->is_dead = false;
 			this->engine->CrashOccurred();
 			return;
 		}
@@ -566,7 +568,7 @@ void ScriptInstance::Save()
 			_script_sl_byte = 1;
 			SlObject(nullptr, _script_byte);
 			SaveObject(vm, -1, SQUIRREL_MAX_DEPTH, false);
-			this->is_save_data_on_stack = true;
+			this->host->is_save_data_on_stack = true;
 		} else {
 			SaveEmpty();
 			this->engine->CrashOccurred();
@@ -584,17 +586,17 @@ void ScriptInstance::Pause()
 	HSQUIRRELVM vm = this->engine->GetVM();
 	Squirrel::DecreaseOps(vm, _settings_game.script.script_max_opcode_till_suspend);
 
-	this->is_paused = true;
+	this->host->is_paused = true;
 }
 
 void ScriptInstance::Unpause()
 {
-	this->is_paused = false;
+	this->host->is_paused = false;
 }
 
 bool ScriptInstance::IsPaused()
 {
-	return this->is_paused;
+	return this->host->is_paused;
 }
 
 /* static */ bool ScriptInstance::LoadObjects(ScriptData *data)
@@ -760,7 +762,7 @@ void ScriptInstance::LoadOnStack(ScriptData *data)
 	try {
 		sq_pushinteger(vm, std::get<SQInteger>(version));
 		LoadObjects(vm, data);
-		this->is_save_data_on_stack = true;
+		this->host->is_save_data_on_stack = true;
 	} catch (Script_FatalError &e) {
 		ScriptLog::Warning(fmt::format("Loading failed: {}", e.GetErrorMessage()));
 		/* Discard partially loaded savegame data and version. */
@@ -772,9 +774,9 @@ bool ScriptInstance::CallLoad()
 {
 	HSQUIRRELVM vm = this->engine->GetVM();
 	/* Is there save data that we should load? */
-	if (!this->is_save_data_on_stack) return true;
+	if (!this->host->is_save_data_on_stack) return true;
 	/* Whatever happens, after CallLoad the savegame data is removed from the stack. */
-	this->is_save_data_on_stack = false;
+	this->host->is_save_data_on_stack = false;
 
 	if (!this->engine->MethodExists(*this->instance, "Load")) {
 		ScriptLog::Warning("Loading failed: there was data for the script to load, but the script does not have a Load() function.");
@@ -814,22 +816,12 @@ bool ScriptInstance::DoCommandCallback(const CommandCost &result, const CommandD
 {
 	ScriptObject::ActiveInstance active(*this);
 
-	if (!ScriptObject::CheckLastCommand(data, cmd)) {
+	Debug(script, 6, "CheckLastCommand company={:02d} cmd={} data={}", this->host->root_company, cmd, FormatArrayAsHex(data));
+	if (openttd_rust_script_command_done(this->host.get(), &GetRustScriptHostServices(), RustCommandCost(&result), data.data(), data.size(), result_data.data(), result_data.size(), cmd) == 0) {
 		Debug(script, 1, "DoCommandCallback terminating a script, last command does not match expected command");
 		return false;
 	}
-
-	ScriptObject::SetLastCommandRes(result.Succeeded());
-	ScriptObject::SetLastCommandResData(std::move(result_data));
-
-	if (result.Failed()) {
-		ScriptObject::SetLastError(ScriptError::StringToError(result.GetErrorMessage()));
-	} else {
-		ScriptObject::IncreaseDoCommandCosts(result.GetCost());
-		ScriptObject::SetLastCost(result.GetCost());
-	}
-
-	ScriptObject::SetLastCommand({}, CMD_END);
+	Debug(script, 6, "SetLastCommand company={:02d} cmd={} data={}", this->host->root_company, CMD_END, FormatArrayAsHex({}));
 
 	return true;
 }
@@ -849,5 +841,5 @@ size_t ScriptInstance::GetAllocatedMemory() const
 
 void ScriptInstance::ReleaseSQObject(HSQOBJECT *obj)
 {
-	if (!this->in_shutdown) this->engine->ReleaseObject(obj);
+	if (!this->host->in_shutdown) this->engine->ReleaseObject(obj);
 }

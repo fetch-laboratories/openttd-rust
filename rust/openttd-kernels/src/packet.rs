@@ -706,29 +706,32 @@ pub unsafe extern "C" fn openttd_rust_packet_destroy(state: *mut State) {
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_can_write(state: *const State, amount: usize) -> bool {
-    unsafe { (&*state).can_write(amount) }
+pub unsafe extern "C" fn openttd_rust_packet_can_write_abi(
+    state: *const State,
+    amount: usize,
+) -> u8 {
+    u8::from(unsafe { (&*state).can_write(amount) })
 }
 
 /// Native facade for `can_read`.
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_can_read(
+pub unsafe extern "C" fn openttd_rust_packet_can_read_abi(
     state: *mut State,
     services: *const Services,
     amount: usize,
     close: bool,
-) -> bool {
-    unsafe { can_read(state, &*services, amount, close) }
+) -> u8 {
+    u8::from(unsafe { can_read(state, &*services, amount, close) })
 }
 
 /// Native facade for `parse_size`.
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_parse_size(state: *mut State) -> bool {
-    unsafe { (&mut *state).parse_size() }
+pub unsafe extern "C" fn openttd_rust_packet_parse_size_abi(state: *mut State) -> u8 {
+    u8::from(unsafe { (&mut *state).parse_size() })
 }
 
 /// Native facade for `begin_send`.
@@ -807,18 +810,18 @@ pub unsafe extern "C" fn openttd_rust_packet_transfer_commit(state: *mut State, 
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_frame(
+pub unsafe extern "C" fn openttd_rust_packet_frame_abi(
     position: u16,
     size: usize,
     mac: usize,
     output: *mut Frame,
-) -> bool {
-    unsafe {
+) -> u8 {
+    u8::from(unsafe {
         let frame = frame(position, size, mac);
         let accepted = size > frame.message;
         output.write(frame);
         accepted
-    }
+    })
 }
 
 /// Native facade for `prepare_to_send`.
@@ -839,11 +842,11 @@ pub unsafe extern "C" fn openttd_rust_packet_prepare_to_send(
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_prepare_to_read(
+pub unsafe extern "C" fn openttd_rust_packet_prepare_to_read_abi(
     state: *mut State,
     services: *const Services,
-) -> bool {
-    unsafe { prepare_to_read(state, &*services) }
+) -> u8 {
+    u8::from(unsafe { prepare_to_read(state, &*services) })
 }
 
 /// Native facade for `recv_buffer_size`.
@@ -1040,11 +1043,11 @@ pub unsafe extern "C" fn openttd_rust_packet_send_uint64(
 /// # Safety
 /// Record and service pointers follow this module's ownership and byte-span contract.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_packet_recv_bool(
+pub unsafe extern "C" fn openttd_rust_packet_recv_bool_abi(
     state: *mut State,
     services: *const Services,
-) -> bool {
-    unsafe { recv_bool(state, &*services) }
+) -> u8 {
+    u8::from(unsafe { recv_bool(state, &*services) })
 }
 
 /// Native facade for `recv_uint8`.

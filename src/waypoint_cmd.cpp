@@ -73,14 +73,6 @@ void Waypoint::MoveSign(TileIndex new_xy)
 	this->BaseStation::MoveSign(new_xy);
 }
 
-/**
- * Find a deleted waypoint close to a tile.
- * @param tile to search from
- * @param str  the string to get the 'type' of
- * @param cid previous owner of the waypoint
- * @param is_road whether to find a road waypoint
- * @return the deleted nearby waypoint
- */
 
 /**
  * Get the axis for a new rail waypoint. This means that if it is a valid
@@ -105,14 +97,6 @@ Axis GetAxisForNewRoadWaypoint(TileIndex tile)
 {
 	return static_cast<Axis>(openttd_rust_waypoint_road_axis(&GetRustStationCommandServices(), tile.base()));
 }
-
-
-/**
- * Check whether the given tile is suitable for a waypoint.
- * @param tile the tile to check for suitability
- * @param axis the axis of the waypoint
- * @param waypoint Waypoint the waypoint to check for is already joined to. If we find another waypoint it can join to it will throw an error.
- */
 
 
 /**
@@ -170,19 +154,6 @@ CommandCost CmdBuildBuoy(DoCommandFlags flags, TileIndex tile)
 	return cost;
 }
 
-/**
- * Remove a buoy
- * @param tile TileIndex been queried
- * @param flags operation to perform
- * @pre IsBuoyTile(tile)
- * @return cost or failure of operation
- */
-
-/**
- * Check whether the name is unique amongst the waypoints.
- * @param name The name to check.
- * @return True iff the name is unique.
- */
 
 /**
  * Rename a waypoint.

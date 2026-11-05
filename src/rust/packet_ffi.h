@@ -34,9 +34,12 @@ void OPENTTD_RUST_CALL openttd_rust_packet_init_send(OpenTTDPacketState *, void 
 void OPENTTD_RUST_CALL openttd_rust_packet_clone(OpenTTDPacketState *, const OpenTTDPacketState *);
 void OPENTTD_RUST_CALL openttd_rust_packet_assign(OpenTTDPacketState *, const OpenTTDPacketState *);
 void OPENTTD_RUST_CALL openttd_rust_packet_destroy(OpenTTDPacketState *);
-bool OPENTTD_RUST_CALL openttd_rust_packet_can_write(const OpenTTDPacketState *, size_t);
-bool OPENTTD_RUST_CALL openttd_rust_packet_can_read(OpenTTDPacketState *, const OpenTTDPacketServices *, size_t, bool);
-bool OPENTTD_RUST_CALL openttd_rust_packet_parse_size(OpenTTDPacketState *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_packet_can_write_abi(const OpenTTDPacketState *, size_t);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_can_write(const OpenTTDPacketState *a0, size_t a1) { return openttd_rust_packet_can_write_abi(a0, a1) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_packet_can_read_abi(OpenTTDPacketState *, const OpenTTDPacketServices *, size_t, bool);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_can_read(OpenTTDPacketState *a0, const OpenTTDPacketServices *a1, size_t a2, bool a3) { return openttd_rust_packet_can_read_abi(a0, a1, a2, a3) != 0; }
+uint8_t OPENTTD_RUST_CALL openttd_rust_packet_parse_size_abi(OpenTTDPacketState *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_parse_size(OpenTTDPacketState *a0) { return openttd_rust_packet_parse_size_abi(a0) != 0; }
 void OPENTTD_RUST_CALL openttd_rust_packet_begin_send(OpenTTDPacketState *, void (*)(bool) noexcept);
 void OPENTTD_RUST_CALL openttd_rust_packet_finish_send(OpenTTDPacketState *);
 void OPENTTD_RUST_CALL openttd_rust_packet_begin_read(OpenTTDPacketState *);
@@ -44,9 +47,11 @@ void OPENTTD_RUST_CALL openttd_rust_packet_finish_read(OpenTTDPacketState *, siz
 uint8_t OPENTTD_RUST_CALL openttd_rust_packet_packet_type(const OpenTTDPacketState *, size_t);
 size_t OPENTTD_RUST_CALL openttd_rust_packet_transfer_amount(const OpenTTDPacketState *, size_t);
 void OPENTTD_RUST_CALL openttd_rust_packet_transfer_commit(OpenTTDPacketState *, intptr_t);
-bool OPENTTD_RUST_CALL openttd_rust_packet_frame(uint16_t, size_t, size_t, OpenTTDPacketFrame *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_packet_frame_abi(uint16_t, size_t, size_t, OpenTTDPacketFrame *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_frame(uint16_t a0, size_t a1, size_t a2, OpenTTDPacketFrame *a3) { return openttd_rust_packet_frame_abi(a0, a1, a2, a3) != 0; }
 void OPENTTD_RUST_CALL openttd_rust_packet_prepare_to_send(OpenTTDPacketState *, const OpenTTDPacketServices *, void (*)(bool) noexcept);
-bool OPENTTD_RUST_CALL openttd_rust_packet_prepare_to_read(OpenTTDPacketState *, const OpenTTDPacketServices *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_packet_prepare_to_read_abi(OpenTTDPacketState *, const OpenTTDPacketServices *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_prepare_to_read(OpenTTDPacketState *a0, const OpenTTDPacketServices *a1) { return openttd_rust_packet_prepare_to_read_abi(a0, a1) != 0; }
 size_t OPENTTD_RUST_CALL openttd_rust_packet_recv_buffer_size(OpenTTDPacketState *, const OpenTTDPacketServices *);
 void OPENTTD_RUST_CALL openttd_rust_packet_recv_buffer_data(OpenTTDPacketState *, uint8_t *, size_t);
 size_t OPENTTD_RUST_CALL openttd_rust_packet_recv_bytes(OpenTTDPacketState *, uint8_t *, size_t);
@@ -55,7 +60,8 @@ void OPENTTD_RUST_CALL openttd_rust_packet_send_buffer(OpenTTDPacketState *, voi
 size_t OPENTTD_RUST_CALL openttd_rust_packet_send_bytes(OpenTTDPacketState *, const uint8_t *, size_t);
 void OPENTTD_RUST_CALL openttd_rust_packet_recv_string(OpenTTDPacketState *, const OpenTTDPacketServices *, void (*)(bool) noexcept, size_t, uint8_t, void *, void (*)(void *, const uint8_t *, size_t) noexcept);
 void OPENTTD_RUST_CALL openttd_rust_packet_send_bool(OpenTTDPacketState *, void (*)(bool) noexcept, bool);
-bool OPENTTD_RUST_CALL openttd_rust_packet_recv_bool(OpenTTDPacketState *, const OpenTTDPacketServices *);
+uint8_t OPENTTD_RUST_CALL openttd_rust_packet_recv_bool_abi(OpenTTDPacketState *, const OpenTTDPacketServices *);
+extern "C++" inline bool OPENTTD_RUST_CALL openttd_rust_packet_recv_bool(OpenTTDPacketState *a0, const OpenTTDPacketServices *a1) { return openttd_rust_packet_recv_bool_abi(a0, a1) != 0; }
 void OPENTTD_RUST_CALL openttd_rust_packet_send_uint8(OpenTTDPacketState *, void (*)(bool) noexcept, uint8_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_packet_recv_uint8(OpenTTDPacketState *, const OpenTTDPacketServices *);
 void OPENTTD_RUST_CALL openttd_rust_packet_send_uint16(OpenTTDPacketState *, void (*)(bool) noexcept, uint16_t);

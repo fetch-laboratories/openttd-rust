@@ -715,17 +715,19 @@ pub(crate) unsafe fn water_tile_loop(
 /// # Safety
 /// Same table/context contract; original native plain-rail assertion is retained.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_flood_halftile(
+pub unsafe extern "C" fn openttd_rust_flood_halftile_abi(
     tile: u32,
     call: *mut Call,
     w: *const WaterServices,
     s: *const Services,
-) -> bool {
+) -> u8 {
     // SAFETY: Serialized native entry; no borrowed state crosses commands. Half
     // flooding uses the canonical descriptor and original map dimensions.
     let map = crate::map_func::World::new(unsafe { &*s });
-    unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
-        .half_flood(tile, call)
+    u8::from(
+        unsafe { World::new(w, s, &map.types, map.dimensions.size_x(), map.size().1) }
+            .half_flood(tile, call),
+    )
 }
 /// # Safety
 /// Live immutable service tables; valid original tile argument.

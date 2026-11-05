@@ -232,7 +232,7 @@ pub(crate) fn check_min_active_clients(session: &crate::session::Services, f: &F
     let s = f.connection;
     let pause = crate::session::pause();
     if pause & PauseMode::ERROR.bit() != 0
-        || !(session.dedicated)()
+        || !(unsafe { &*(session.world)() }.dedicated)()
         || ((s.min_active_clients)() == 0 && pause & PauseMode::ACTIVE_CLIENTS.bit() == 0)
     {
         return;

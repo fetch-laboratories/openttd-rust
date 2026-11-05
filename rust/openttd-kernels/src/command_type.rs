@@ -20,6 +20,8 @@ pub const CMD_PAUSE: u8 = 71;
 pub const CMD_SET_COMPANY_COLOUR: u8 = 54;
 /// `CommandType::CompanySetting`.
 pub const COMMAND_TYPE_COMPANY_SETTING: u8 = 6;
+/// `Commands::CMD_END`.
+pub const CMD_END: u8 = 145;
 
 /// `CommandFlag` values as `CommandFlags` bits.
 pub struct CommandFlag;

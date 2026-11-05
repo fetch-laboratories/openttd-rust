@@ -48,12 +48,13 @@ pub(crate) fn pause(shared: &crate::services::Services, mode: PauseMode, paused:
         CommandFlag::SERVER | CommandFlag::NO_EST,
         true,
         |out, flags| {
-            if crate::session::openttd_rust_session_pause(
+            if crate::session::openttd_rust_session_pause_abi(
                 (p.session)(),
                 mode,
                 paused,
                 flags & DoCommandFlag::EXECUTE != 0,
-            ) {
+            ) != 0
+            {
                 out.zero();
             } else {
                 out.error(crate::strings_type::INVALID_STRING_ID);
@@ -73,13 +74,14 @@ pub(crate) fn colour(shared: &crate::services::Services, primary: bool, colour: 
         true,
         |out, flags| {
             let s = unsafe { &*((p.command)().company)() };
-            if crate::company_identity::openttd_rust_company_colour(
+            if crate::company_identity::openttd_rust_company_colour_abi(
                 s.identity,
                 crate::livery::LS_DEFAULT,
                 primary,
                 colour,
                 flags & DoCommandFlag::EXECUTE != 0,
-            ) {
+            ) != 0
+            {
                 out.zero();
             } else {
                 out.error(crate::strings_type::INVALID_STRING_ID);

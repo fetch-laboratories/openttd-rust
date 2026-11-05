@@ -64,7 +64,7 @@ public:
 		 */
 		TimerGameEconomy::Date LastUpdate() const { return TimerGameEconomy::Date{openttd_rust_live_edge_last_update(reinterpret_cast<const OpenTTDLiveEdge *>(this))}; }
 
-		void Update(uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(this->capacity > 0); assert(capacity >= usage); openttd_rust_live_edge_update(reinterpret_cast<OpenTTDLiveEdge *>(this), capacity, usage, time, modes.base(), TimerGameEconomy::date.base()); }
+		void Update(uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(this->capacity > 0); assert(capacity >= usage); openttd_rust_live_edge_update(reinterpret_cast<OpenTTDLiveEdge *>(this), capacity, usage, time, modes.base()); }
 		void Restrict() { openttd_rust_live_edge_restrict(reinterpret_cast<OpenTTDLiveEdge *>(this)); }
 		void Release() { openttd_rust_live_edge_release(reinterpret_cast<OpenTTDLiveEdge *>(this)); }
 
@@ -97,10 +97,10 @@ public:
 		uint Supply() const { return openttd_rust_live_node_supply(this->owner, this->id); }
 		StationID Station() const { return StationID(openttd_rust_live_node_station(this->owner, this->id)); }
 		const uint16_t *StationAddress() const { return openttd_rust_live_node_station_address(this->owner, this->id); }
-		void UpdateSupply(uint supply) { openttd_rust_live_node_update_supply(this->owner, this->id, supply, TimerGameEconomy::date.base()); }
+		void UpdateSupply(uint supply) { openttd_rust_live_node_update_supply(this->owner, this->id, supply); }
 		void UpdateLocation(TileIndex xy) { openttd_rust_live_node_location(this->owner, this->id, xy.base()); }
-		void UpdateEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(capacity > 0); assert(usage <= capacity); openttd_rust_live_node_update_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), TimerGameEconomy::date.base(), GetRustLiveGraphServices().assertions); }
-		void AddEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(!this->HasEdgeTo(to)); openttd_rust_live_node_add_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), TimerGameEconomy::date.base()); }
+		void UpdateEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(capacity > 0); assert(usage <= capacity); openttd_rust_live_node_update_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), GetRustLiveGraphServices().assertions); }
+		void AddEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(!this->HasEdgeTo(to)); openttd_rust_live_node_add_edge(this->owner, this->id, to, capacity, usage, time, modes.base()); }
 		bool HasEdgeTo(NodeID to) const { return openttd_rust_live_node_edge(this->owner, this->id, to) != nullptr; }
 		const BaseEdge &operator[](NodeID to) const { auto *edge = openttd_rust_live_node_edge(this->owner, this->id, to); assert(edge != nullptr); return *reinterpret_cast<const BaseEdge *>(edge); }
 		std::span<const BaseEdge> Edges() const { size_t size; auto *edges = openttd_rust_live_node_edges(this->owner, this->id, &size); return {reinterpret_cast<const BaseEdge *>(edges), size}; }
@@ -131,8 +131,8 @@ public:
 		return openttd_rust_live_graph_scale(val, target_age.base(), orig_age.base());
 	}
 
-	LinkGraph() : owner(openttd_rust_live_graph_new(INVALID_CARGO, 0)) {}
-	LinkGraph(CargoType cargo) : owner(openttd_rust_live_graph_new(cargo, TimerGameEconomy::date.base())) {}
+	LinkGraph() : owner(openttd_rust_live_graph_new_empty()) {}
+	LinkGraph(CargoType cargo) : owner(openttd_rust_live_graph_new(cargo)) {}
 	LinkGraph(const LinkGraph &other) : LinkGraphPool::PoolItem<&_link_graph_pool>(other), owner(openttd_rust_live_graph_copy(other.owner)) {}
 	~LinkGraph() { openttd_rust_live_graph_delete(this->owner); }
 	LinkGraph &operator=(const LinkGraph &) = delete;
@@ -184,7 +184,7 @@ public:
 	 */
 	inline uint Monthly(uint base) const
 	{
-		return openttd_rust_live_graph_monthly(this->owner, base, TimerGameEconomy::date.base());
+		return openttd_rust_live_graph_monthly(this->owner, base);
 	}
 
 	NodeID AddNode(const ::Station *st) { return openttd_rust_live_graph_add_station(this, GetRustLiveGraphServices().station_id(st), &GetRustLiveGraphServices()); }

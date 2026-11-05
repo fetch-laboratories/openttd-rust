@@ -2442,7 +2442,7 @@ impl Game<'_> {
             return true;
         }
         if !mode {
-            if crate::vehicle_effect::openttd_rust_visual_eligible(id.vehicle()) {
+            if crate::vehicle_effect::openttd_rust_visual_eligible_abi(id.vehicle()) != 0 {
                 crate::vehicle_effect::openttd_rust_visual_show(
                     id.vehicle(),
                     self.current_max_speed(id) as u32,

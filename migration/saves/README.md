@@ -245,5 +245,5 @@ version, license and archive hashes, dependencies and reproduction commands.
 `community-ai-large-reload` installs these exact packages and compares full
 semantic snapshots and ordinary end states, retaining opaque saved AI data.
 Only optional GLOG history is normalized; no simulation field is patched.
-The same-NewGRF long-game variant remains a limit of #507 while #525/#526 are
-user-parked.
+The same-NewGRF long-game variant remains a limit of #507 until its NewGRF sets
+are fetched by pinned hash (#507, reselected by the user on 2026-11-02).

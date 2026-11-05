@@ -255,9 +255,9 @@ pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -
     (state.growth.road, zone, dx + dy)
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
-pub extern "C" fn openttd_rust_town_generating_exchange(generating: bool) -> bool {
+pub extern "C" fn openttd_rust_town_generating_exchange_abi(generating: bool) -> u8 {
     // SAFETY: Serialized native entry; the flag is process-wide.
-    unsafe { std::ptr::replace(GENERATING_TOWN.get(), generating) }
+    u8::from(unsafe { std::ptr::replace(GENERATING_TOWN.get(), generating) })
 }
 /// Convert original town tick counters, including tick zero, to game ticks.
 fn town_ticks_to_game_ticks(ticks: u16) -> u16 {
@@ -2148,8 +2148,8 @@ pub unsafe extern "C" fn openttd_rust_town_road_type(
 ) -> u32 {
     engine(leaves, services).road_type()
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_tunnel(
+#[cfg(feature = "native-test-support")]
+pub(crate) unsafe fn tunnel(
     leaves: *const Leaves,
     services: *const Services,
     road: *const crate::road_cmd::CommandContext,
@@ -2585,13 +2585,13 @@ mod tests {
         };
         owner.simulation.ratings[0] = 77;
         let address = (&raw mut owner) as usize;
-        assert!(!openttd_rust_town_generating_exchange(true));
+        assert_eq!(openttd_rust_town_generating_exchange_abi(true), 0);
         clear_house_candidates();
         add_house_candidate(110, 1);
         openttd_rust_town_rating_test(true);
         let (id_pointer, class_pointer, rating) = std::thread::spawn(move || {
             let owner = address as *mut State;
-            assert!(openttd_rust_town_generating_exchange(false));
+            assert!((openttd_rust_town_generating_exchange_abi(false) != 0));
             assert_eq!(take_house_candidate(0), (110, 1));
             add_house_candidate(4095, 1);
             // SAFETY: Owner lives on the suspended parent stack; spawn/join prevents
@@ -2619,7 +2619,7 @@ mod tests {
         assert_eq!(classes.data as usize, class_pointer);
         assert_eq!(rating, -99);
         assert_eq!(take_house_candidate(0), (4095, 1));
-        assert!(!openttd_rust_town_generating_exchange(false));
+        assert_eq!(openttd_rust_town_generating_exchange_abi(false), 0);
         // SAFETY: Child has joined; original pointers remain valid without resize.
         unsafe {
             assert_eq!(*ids.data.cast::<u32>().add(110), 1);

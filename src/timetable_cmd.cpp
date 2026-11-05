@@ -41,14 +41,6 @@ TimerGameEconomy::Date GetDateFromStartTick(TimerGameTick::TickCounter start_tic
 	return TimerGameEconomy::Date(openttd_rust_orders_start_date(start_tick, TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, TimerGameTick::counter));
 }
 
-/**
- * Change/update a particular timetable entry.
- * @param v            The vehicle to change the timetable of.
- * @param order_number The index of the timetable in the order list.
- * @param val          The new data of the timetable entry.
- * @param mtf          Which part of the timetable entry to change.
- * @param timetabled   If the new value is explicitly timetabled.
- */
 
 /**
  * Change timetable data of an order.
@@ -91,14 +83,6 @@ CommandCost CmdSetVehicleOnTime(DoCommandFlags flags, VehicleID veh, bool apply_
 	CommandCost result; openttd_rust_timetable_on_time(Vehicle::GetIfValid(veh), flags.Test(DoCommandFlag::Execute), apply_to_group, &result, &GetRustOrdersLeaves()); return result;
 }
 
-/**
- * Order vehicles based on their timetable. The vehicles will be sorted in order
- * they would reach the first station.
- *
- * @param a First Vehicle pointer.
- * @param b Second Vehicle pointer.
- * @return Comparison value.
- */
 
 /**
  * Set the start date of the timetable.

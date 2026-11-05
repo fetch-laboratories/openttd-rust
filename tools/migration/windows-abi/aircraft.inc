@@ -74,7 +74,7 @@ static void AircraftDirectBoundary()
 	vehicle.write_cargo_age = [](OpenTTDVehicle *, uint16_t age) noexcept { aircraft_probe.cargo_age = age; };
 	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { return v; };
 	p.vehicle = {reinterpret_cast<OpenTTDVehicle *>(&p), openttd_rust_aircraft_state_new(), 17};
-	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
+	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.orders == 1 && p.vehicle.state->pos == 19 && p.vehicle.state->cached_max_range == 41 && p.vehicle.state->cached_max_range_sqr == 1681);
 	CHECK(p.maximum_speed == 2560 && p.cargo_age == 71);
 	/* A ProcessOrders callback replaces the order with OT_DUMMY. HandleLoading
@@ -90,7 +90,7 @@ static void AircraftDirectBoundary()
 			aircraft_probe.order_owner->vehicle->current.type = 3;
 		}
 	};
-	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, true));
+	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, true));
 	CHECK(p.order_owner->consist.real_index == 1 && p.order_owner->consist.implicit_index == 1);
 	vehicle.status = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.live); return uint8_t{128}; };
 	leaves.station = [](uint16_t) noexcept -> const OpenTTDStation * { CHECK(aircraft_probe.live); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
@@ -112,7 +112,7 @@ static void AircraftDirectBoundary()
 	};
 	p.vehicle.state->targetairport = 7;
 	p.vehicle.state->crashed_counter = 9999;
-	CHECK(!openttd_rust_aircraft_event(&leaves, p.vehicle, false));
+	CHECK(!openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(!p.live && p.deleted == 1);
 	/* A disaster has its own flags and no Aircraft state, even with subtype zero. */
 	static OpenTTDFixtureMap disaster_map{6};
@@ -227,7 +227,7 @@ static void AircraftPhaseBoundary()
 	v.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
 	v.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = aircraft_probe.vehicle_services.tile_links(shell), .tile = aircraft_probe.vehicle_services.tile(shell)}; };
 	v.map_log_x = []() noexcept { return uint32_t{6}; };
-	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
+	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.x == 1 && p.y == 0 && p.progress == 1);
 	p.subtype = 2; p.z = 1;
 	v.position_observations = [](OpenTTDVehicle *shell) noexcept {

@@ -57,7 +57,6 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 		else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);
 	},
 };
-OpenTTDScheduleTime RustScheduleTime() noexcept { return {TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, _settings_game.linkgraph.recalc_interval}; }
 void LinkGraphSchedule::Queue(LinkGraph *g) { openttd_rust_schedule_queue(&services, g); }
 void LinkGraphSchedule::Dequeue(LinkGraph *g) { openttd_rust_schedule_dequeue(g); }
 void LinkGraphSchedule::SpawnAll() { openttd_rust_schedule_spawn_all(&services); }

@@ -41,3 +41,11 @@
 - Checks: `python3 tools/auth-comparison.py`, scripted regressions and `python3 tools/packet-comparison.py`.
 - Limits: The original nonempty-short-source `Recv_bytes` precondition remains deferred in #41. Allocation failure is environmental.
 - PRs: #60, #645.
+
+## Script host lifecycle, command context and events
+
+- Rust owns: Per-instance host state in a generated shared record (started, dead, paused, shutdown and save-data flags, suspension and pending callback, controller tick, companies, modes, command delay, costs, last result, error and result bytes, callback variables), the process-wide active instance, the pending command bytes and the event FIFO. `GameLoop`, `Continue`, `SetCompany`, `DoCommandPrep`, `DoCommandProcessResult` and `DoCommandCallback` decisions run in Rust.
+- C++ keeps: The Squirrel VM, allocator, registration and object handles; VM `Initialize`, constructor, `Load`, `Start` and `Resume`, stored callbacks and every `Script_Suspend`, `SQInteger` and `Script_FatalError` throw and catch on their native frames; `Debug` output, error mapping and event release leaves; save/load traversal; AI and Game core host functions.
+- Checks: `script-host-generated` and `script-host-reload` simulation scenarios.
+- Limits: The network command path and branches listed on #156 remain source-compared.
+- PRs: #651.

@@ -10,7 +10,8 @@ struct OpenTTDSnowLineSupport {
 };
 struct OpenTTDSharedServices;
 extern "C" {
-bool openttd_rust_snow_line_is_set();
+uint8_t openttd_rust_snow_line_is_set_abi();
+extern "C++" inline bool openttd_rust_snow_line_is_set() { return openttd_rust_snow_line_is_set_abi() != 0; }
 void openttd_rust_snow_line_set(const OpenTTDSnowLineSupport *, SnowLine *);
 void openttd_rust_snow_line_clear(const OpenTTDSharedServices *);
 uint8_t openttd_rust_snow_line_get(const OpenTTDSharedServices *);

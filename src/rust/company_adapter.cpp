@@ -124,6 +124,8 @@ static void Fin_money_animation(uint32_t t, int64_t amount) noexcept
 }
 
 /* Company identity and lifecycle services. */
+static bool Co_ai_can_start() noexcept { return AI::CanStartNew(); }
+static bool Co_competitor_fired() noexcept { return _new_competitor_timeout.HasFired(); }
 static size_t Co_company_count() noexcept { return Company::GetNumItems(); }
 static bool Co_can_allocate_company() noexcept { return Company::CanAllocateItem(); }
 static OpenTTDCompanyVehicleCounts Co_company_vehicle_counts(uint8_t id) noexcept
@@ -413,6 +415,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.identity = &GetRustCompanyIdentityServices(),
 		.finance = &GetRustCompanyFinanceServices(),
 		.shared = &GetRustSharedServices(),
+		.ai_can_start = Co_ai_can_start,
 		.allow_list_add = Co_allow_list_add,
 		.allow_list_remove = Co_allow_list_remove,
 		.assign_company_context = RustRestoreGenerationCompanies,
@@ -422,7 +425,9 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.owned_by = STR_ERROR_OWNED_BY,
 		.settings = GetRustSettingServices,
 		.company_next = RustCompanyRefNext,
-		.company_count = Co_company_count, .can_allocate_company = Co_can_allocate_company,
+		.company_count = Co_company_count,
+		.competitor_fired = Co_competitor_fired,
+		.can_allocate_company = Co_can_allocate_company,
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_in_trouble = Co_company_in_trouble,

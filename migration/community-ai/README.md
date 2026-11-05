@@ -1,11 +1,16 @@
-# Community AI inputs (#507)
+# Community AI and NewGRF inputs (#507)
 
 Agent: /root/implement507_ai_large_corpus | Model: gpt-6.1-sol | Reasoning effort: high.
 
-`packages.json` pins the complete source packages served by OpenTTD's official
+`packages.json` pins the complete packages served by OpenTTD's official
 BaNaNaS content service. It records the exact upload metadata, publisher,
 version, content MD5, archive SHA-256, license and transitive dependencies.
-The archive URL is
+NewGRF entries record live `CLIENT_INFO_EXTID` identities from the pinned
+protocol. Industries advertises `$VERSION`; its packaged readme identifies
+0.3.5. Its exact CDN filename retains `VERSION`.
+An optional `archive_filename` records the exact CDN name when it differs from
+the package identity, including punctuation and placeholder versions. Otherwise
+the archive URL is
 `https://bananas-cdn.openttd.org/{kind}/{uid}/{md5}/{uid}-{name}-{version}.tar.gz`.
 Download and validate them with:
 
@@ -17,7 +22,7 @@ Archives remain uncommitted in ignored storage. Every use verifies SHA-256,
 and an invalid cached archive fails. CI uses the ordinary Actions cache keyed
 by the manifest; a cache miss downloads the exact package. Missing inputs fail
 the simulation. Runtime installation decompresses complete archives to `.tar`
-without stripping their files or notices. These are interpreted Squirrel sources,
+without stripping their files or notices. The AI packages are interpreted Squirrel sources,
 not compiled programs: their runnable packages contain the corresponding `.nut`
 sources, GPLv2 license texts and all packaged notices. No source offer is made.
 
@@ -89,7 +94,7 @@ python3 -m tools.simulation.community_ai generate
 The generator freezes the original runtime under the existing reference lock,
 uses the ordinary harness configuration/launcher and saves the final original
 state with LZMA compression. The sibling JSON provenance records the original
-revision, configuration, generation command, manifest hash, end moment and save
+revision, configuration, generation command, AI-only manifest hash (canonical JSON, two-space indentation and final newline), end moment and save
 hash. The save is a GPLv2-compatible generated fixture; it contains saved AI data,
 not embedded script source. Reload installs the same pinned source packages,
 removes only optional GLOG using the existing byte-checked normalization, and
@@ -97,6 +102,28 @@ compares original/candidate snapshots and ordinary end states. No map, vehicle,
 finance or RNG field is patched. Regeneration need not have identical bytes:
 the canonical comparison retains its existing random-save-ID and GLOG masks.
 
-NewGRF input and source packaging (#525/#526) remain user-parked. This corpus
-uses vanilla vehicles/industries. The eventual larger save using the same
-NewGRFs as a future corpus remains a limit of #507.
+`newgrf-sets-arctic` installs OpenGFX+ Trains 0.3.0, Road Vehicles 0.4.1 and
+Industries 0.3.5 from the same ignored cache into both personal NewGRF folders.
+OpenTTD scans their complete `.tar` packages; no files are extracted. The cache
+and installed `.tar` files are outside the CI evidence collector's allowed
+outputs, so no third-party GRFs, readmes, licenses or source enter artifacts.
+Saves retain only NewGRF identities and checksums. The short default scenario
+runs two years on a 128x128 arctic map; `newgrf-sets-arctic-long` runs eight years
+on 256x256 in soak. A scenario AI builds a train with two passenger wagons and
+two buses. Explicit Action14 parameter defaults reproduce GUI configuration;
+the config loader otherwise leaves parameters at zero. Ready/save checks and
+common Action2/industry resolver witnesses require the sets to be active.
+This adds community-authored vehicle and industry callback programs beyond the
+existing synthetic file-loading fixtures. Both modes compare the ordinary
+semantic checkpoints, RNG state and loader/debug logs.
+
+```sh
+python3 tools/migration.py simulate newgrf-sets-arctic --jobs 2
+python3 tools/migration.py simulate --soak newgrf-sets-arctic-long --jobs 2
+```
+
+Only arctic seed 507 is covered. Community ships, aircraft, houses, stations,
+objects, road stops, airports, ways/types, badges, Action2 indirect/procedure
+programs and reload of a save carrying these community sets remain absent.
+The larger save using the same NewGRFs follows the sets as later #507 work;
+the existing twenty-year community-AI save stays vanilla.

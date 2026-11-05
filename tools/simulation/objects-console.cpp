@@ -357,7 +357,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 #ifdef WITH_RUST
 				OpenTTDObjectGenerationFrame frame;
 				CommandCost out, tmp, aux;
-				if (!openttd_rust_object_generate(&GetRustObjectServices(), RustCommandCost(&out), RustCommandCost(&tmp), RustCommandCost(&aux), &frame)) std::rethrow_exception(frame.cancellation);
+				if (!openttd_test_object_generate(&GetRustObjectServices(), RustCommandCost(&out), RustCommandCost(&tmp), RustCommandCost(&aux), &frame)) std::rethrow_exception(frame.cancellation);
 #else
 				GenerateObjects();
 #endif

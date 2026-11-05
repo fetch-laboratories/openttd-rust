@@ -346,6 +346,8 @@ pub struct Services {
     pub is_water_tile: extern "C" fn(u32) -> bool,
     /// Canonical `Tile` and `Map` statics, loaded at each observation.
     pub map: *const crate::map_func::MapStatics,
+    /// Shared addresses of canonical settings; field values are loaded at their source branches.
+    pub settings: *const crate::settings_type::SettingAddresses,
     /// Shared live map max x observation.
     pub map_max_x: extern "C" fn() -> u32,
     /// Shared live map max y observation.
@@ -531,6 +533,8 @@ pub struct Services {
     pub grf_file_at_or_null: extern "C" fn(usize) -> *mut c_void,
     /// `GRFFile::grfid` of a non-null file.
     pub grf_file_id: extern "C" fn(*const c_void) -> u32,
+    /// Canonical native `GRFFile::GetParam` shared by loaders and resolvers.
+    pub grf_parameter: extern "C" fn(*const c_void, u32) -> u32,
     /// `_rust_newgrf_specs`; read through `specs`.
     pub newgrf_specs: *const crate::newgrf_specs::Specs,
     /// `ResolverObject::grffile`.
@@ -560,6 +564,15 @@ pub struct FoundationSlope {
     pub slope: Slope,
 }
 impl Services {
+    /// Canonical `Map::LogY`, including before the first allocation.
+    pub(crate) fn map_log_y(&self) -> u32 {
+        unsafe { (*self.map).log_y.read() }
+    }
+    /// Immutable address catalog; its targets are read with field-sized raw loads.
+    pub(crate) fn settings(&self) -> &crate::settings_type::SettingAddresses {
+        unsafe { &*self.settings }
+    }
+
     /// Typed `NewGRF` specification leaves.
     #[must_use]
     pub fn specs(&self) -> &crate::newgrf_specs::Specs {
@@ -630,6 +643,7 @@ crate::abi::layouts! {
         extended,
         size,
         log_x,
+        log_y,
         assertions,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => BaseTileLayout {
@@ -813,6 +827,7 @@ crate::abi::layouts! {
         is_sea,
         is_water_tile,
         map,
+        settings,
         map_max_x,
         map_max_y,
         mark_bridge_dirty,
@@ -903,6 +918,7 @@ crate::abi::layouts! {
         grf_cargo_map,
         grf_file_at_or_null,
         grf_file_id,
+        grf_parameter,
         newgrf_specs,
         resolver_grf_file,
         resolver_grf_file_id,
@@ -934,6 +950,9 @@ pub fn fixture(
     industry: extern "C" fn(i32, i32, *mut u32) -> u32,
 ) -> Services {
     unsafe extern "C" fn unused_snow_line_destroy(_: *mut crate::snow_line::SnowLine) {
+        unreachable!()
+    }
+    extern "C" fn unexpected_parameter(_: *const c_void, _: u32) -> u32 {
         unreachable!()
     }
     extern "C" fn zero_byte() -> u8 {
@@ -1049,6 +1068,7 @@ pub fn fixture(
         grf_cargo_map: unexpected_cargo_map,
         grf_file_at_or_null: unexpected_file_at,
         grf_file_id: unexpected_file_id,
+        grf_parameter: unexpected_parameter,
         newgrf_specs: std::ptr::null(),
         resolver_grf_file: unexpected_file,
         resolver_grf_file_id: unexpected_file_id,
@@ -1099,6 +1119,7 @@ pub fn fixture(
         is_sea: flag,
         is_water_tile: flag,
         map: crate::map_func::fixture::statics(),
+        settings: std::ptr::null(),
         map_max_x: word0,
         map_max_y: word0,
         mark_bridge_dirty: tile,

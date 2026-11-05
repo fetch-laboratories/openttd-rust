@@ -133,27 +133,6 @@ set(RUST_EFFECTIVE_FLAGS "${RUST_EFFECTIVE_FLAGS}" CACHE INTERNAL "Direct rustc 
 set(RUST_PLATFORM "${CMAKE_SYSTEM_NAME}" CACHE INTERNAL "Validated C++ platform" FORCE)
 set(RUST_POINTER_WIDTH "${CMAKE_SIZEOF_VOID_P}" CACHE INTERNAL "Validated C++ pointer bytes" FORCE)
 file(WRITE "${CMAKE_BINARY_DIR}/rust-toolchain.txt" "${RUST_VERSION}\ntarget=${RUST_TARGET}\ncrt=${RUST_CRT}\nflags=${RUST_EFFECTIVE_FLAGS}\narchitecture=${CMAKE_OSX_ARCHITECTURES}\npointer_bytes=${RUST_POINTER_WIDTH}\nsdk=${RUST_SDKROOT}\ndeployment_target=${CMAKE_OSX_DEPLOYMENT_TARGET}\n")
-# Query the pinned standard library, rather than borrowing Linux link flags on Darwin.
-file(WRITE "${CMAKE_BINARY_DIR}/rust-native-libs.rs" "pub fn native_link_probe() {}\n")
-execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${RUST_BUILD_ENV}
-    "${RUSTC_EXECUTABLE}" --crate-type staticlib --edition=2024 --target "${RUST_TARGET}"
-    -C panic=abort -C overflow-checks=on -C opt-level=3 ${RUST_EFFECTIVE_FLAGS} --print=native-static-libs
-    "${CMAKE_BINARY_DIR}/rust-native-libs.rs" -o "${CMAKE_BINARY_DIR}/rust-native-libs-${RUST_ARCHIVE_NAME}"
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" OUTPUT_VARIABLE RUST_LIB_STDOUT
-    ERROR_VARIABLE RUST_LIB_STDERR RESULT_VARIABLE RUST_RESULT)
-file(WRITE "${CMAKE_BINARY_DIR}/rust-native-libs.log" "${RUST_LIB_STDOUT}${RUST_LIB_STDERR}")
-string(REGEX MATCH "native-static-libs:([^\r\n]*)" RUST_NATIVE_LINE "${RUST_LIB_STDOUT}${RUST_LIB_STDERR}")
-string(STRIP "${CMAKE_MATCH_1}" CMAKE_MATCH_1)
-# The wasm32-unknown-emscripten standard library needs nothing beyond emcc's default libraries.
-if(NOT RUST_RESULT EQUAL 0 OR NOT RUST_NATIVE_LINE OR (NOT CMAKE_MATCH_1 AND NOT EMSCRIPTEN))
-    message(FATAL_ERROR "Cannot obtain native static libraries for ${RUST_TARGET}; see rust-native-libs.log")
-endif()
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    separate_arguments(RUST_NATIVE_LIBS WINDOWS_COMMAND "${CMAKE_MATCH_1}")
-else()
-    separate_arguments(RUST_NATIVE_LIBS UNIX_COMMAND "${CMAKE_MATCH_1}")
-endif()
-set(RUST_NATIVE_LIBS "${RUST_NATIVE_LIBS}" CACHE INTERNAL "Pinned Rust native link flags" FORCE)
 # Makefiles do not track command-line/environment changes as output dependencies.
 # Generate a content-stable configuration file and invalidate the release crate
 # only when its effective configuration changes, including SDK-only changes.
@@ -186,8 +165,40 @@ foreach(RUST_ENV IN LISTS RUST_CONFIGURATION_ENV)
         list(APPEND RUST_BUILD_ENV "--unset=${RUST_ENV}")
     endif()
 endforeach()
-file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/rust-build-configuration.txt" CONTENT "${RUST_CONFIGURATION}")
+set(RUST_PREVIOUS_CONFIGURATION "")
+if(EXISTS "${CMAKE_BINARY_DIR}/rust-build-configuration.txt")
+    file(READ "${CMAKE_BINARY_DIR}/rust-build-configuration.txt" RUST_PREVIOUS_CONFIGURATION)
+endif()
+if(NOT RUST_CONFIGURATION STREQUAL RUST_PREVIOUS_CONFIGURATION)
+    file(WRITE "${CMAKE_BINARY_DIR}/rust-build-configuration.txt" "${RUST_CONFIGURATION}")
+endif()
 file(GLOB_RECURSE RUST_INPUTS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/*.rs" "${CMAKE_SOURCE_DIR}/rust/*/Cargo.toml")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_INPUTS}
+    "${CMAKE_SOURCE_DIR}/Cargo.toml" "${CMAKE_SOURCE_DIR}/Cargo.lock"
+    "${CMAKE_SOURCE_DIR}/rust-toolchain.toml" "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake")
+# Build the real crate once so dependency-added native libraries participate in linkage.
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
+    "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"
+    "-DLOG=${CMAKE_BINARY_DIR}/rust-build.log"
+    "-DCONFIGURATION=${CMAKE_BINARY_DIR}/rust-build-configuration.txt" -P "${CMAKE_SOURCE_DIR}/cmake/BuildRust.cmake"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" RESULT_VARIABLE RUST_RESULT)
+if(NOT RUST_RESULT EQUAL 0)
+    message(FATAL_ERROR "Cannot obtain native static libraries for ${RUST_TARGET}; see rust-build.log")
+endif()
+file(READ "${CMAKE_BINARY_DIR}/rust-build.log" RUST_LIB_OUTPUT)
+file(WRITE "${CMAKE_BINARY_DIR}/rust-native-libs.log" "${RUST_LIB_OUTPUT}")
+string(REGEX MATCH "native-static-libs:([^\r\n]*)" RUST_NATIVE_LINE "${RUST_LIB_OUTPUT}")
+string(STRIP "${CMAKE_MATCH_1}" CMAKE_MATCH_1)
+# The wasm32-unknown-emscripten standard library needs nothing beyond emcc's default libraries.
+if(NOT RUST_NATIVE_LINE OR (NOT CMAKE_MATCH_1 AND NOT EMSCRIPTEN))
+    message(FATAL_ERROR "Cannot obtain native static libraries for ${RUST_TARGET}; see rust-native-libs.log")
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    separate_arguments(RUST_NATIVE_LIBS WINDOWS_COMMAND "${CMAKE_MATCH_1}")
+else()
+    separate_arguments(RUST_NATIVE_LIBS UNIX_COMMAND "${CMAKE_MATCH_1}")
+endif()
+set(RUST_NATIVE_LIBS "${RUST_NATIVE_LIBS}" CACHE INTERNAL "Pinned Rust native link flags" FORCE)
 add_custom_command(OUTPUT "${RUST_ARCHIVE}"
     COMMAND ${CMAKE_COMMAND} -E env ${RUST_BUILD_ENV} "${CMAKE_COMMAND}"
         "-DCARGO=${CARGO_EXECUTABLE}" "-DSOURCE=${CMAKE_SOURCE_DIR}" "-DTARGET=${RUST_TARGET}"

@@ -102,13 +102,19 @@ impl TileArea {
     pub fn expand(&mut self, radius: i32, map: Map, size_y: u32) {
         let x = map.tile_x(self.tile) as i32;
         let y = map.tile_y(self.tile) as i32;
-        let sx = (x - radius).max(0);
-        let sy = (y - radius).max(0);
-        let ex = (x + i32::from(self.w) + radius).min(map.size_x() as i32);
-        let ey = (y + i32::from(self.h) + radius).min(size_y as i32);
+        let sx = x.wrapping_sub(radius).max(0);
+        let sy = y.wrapping_sub(radius).max(0);
+        let ex = x
+            .wrapping_add(i32::from(self.w))
+            .wrapping_add(radius)
+            .min(map.size_x() as i32);
+        let ey = y
+            .wrapping_add(i32::from(self.h))
+            .wrapping_add(radius)
+            .min(size_y as i32);
         self.tile = map.tile_xy(sx as u32, sy as u32);
-        self.w = (ex - sx) as u16;
-        self.h = (ey - sy) as u16;
+        self.w = ex.wrapping_sub(sx) as u16;
+        self.h = ey.wrapping_sub(sy) as u16;
     }
     /// Original `ClampToMap`; the unsigned remaining extent converts to `int` before the minimum.
     #[allow(
@@ -591,6 +597,30 @@ mod tests {
         };
         area.expand(-67_108_864, map, 64);
         assert_eq!((area.tile, area.w, area.h), (67_108_864, 1, 1));
+    }
+
+    #[test]
+    fn extreme_expansion_wraps_before_clipping_and_narrowing() {
+        // OrthogonalTileArea::Expand on a 16x8 map at (3, 2), with extents (4, 3).
+        // INT_MIN: starts wrap negative and clip to 0; ends are -2147483641/-2147483643.
+        // INT_MAX: starts clip to 0; ends wrap to -2147483642/-2147483644.
+        for (radius, expected) in [(i32::MIN, (0, 7, 5)), (i32::MAX, (0, 6, 4))] {
+            let mut area = TileArea {
+                tile: MAP.tile_xy(3, 2),
+                w: 4,
+                h: 3,
+            };
+            area.expand(radius, MAP, 8);
+            assert_eq!((area.tile, area.w, area.h), expected);
+        }
+        // At the origin INT_MIN - INT_MIN wraps before the uint16_t narrowing.
+        let mut area = TileArea {
+            tile: 0,
+            w: 1,
+            h: 1,
+        };
+        area.expand(i32::MIN, MAP, 8);
+        assert_eq!((area.tile, area.w, area.h), (0, 1, 1));
     }
 
     #[test]
