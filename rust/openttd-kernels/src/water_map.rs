@@ -78,6 +78,16 @@ pub(crate) fn is_water(m: &TileTypeAccess, tile: u32) -> Option<bool> {
     Some(get_water_tile_type(m, tile)? == 0)
 }
 
+/// `IsSea`.
+pub(crate) fn is_sea(m: &TileTypeAccess, tile: u32) -> Option<bool> {
+    Some(is_water(m, tile)? && get_water_class(m, tile)? == crate::water_type::WATER_CLASS_SEA.0)
+}
+
+/// `IsRiver`.
+pub(crate) fn is_river(m: &TileTypeAccess, tile: u32) -> Option<bool> {
+    Some(is_water(m, tile)? && get_water_class(m, tile)? == crate::water_type::WATER_CLASS_RIVER.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{get_water_class, has_tile_water_class};

@@ -30,6 +30,8 @@ pub const SLOPE_SE: u8 = SLOPE_S | SLOPE_E;
 pub const SLOPE_NE: u8 = SLOPE_N | SLOPE_E;
 /// `SLOPE_EW`.
 pub const SLOPE_EW: u8 = SLOPE_E | SLOPE_W;
+/// `SLOPE_WSE`.
+pub const SLOPE_WSE: u8 = SLOPE_W | SLOPE_S | SLOPE_E;
 /// `SLOPE_NS`.
 pub const SLOPE_NS: u8 = SLOPE_N | SLOPE_S;
 /// `SLOPE_ELEVATED`.
@@ -159,13 +161,21 @@ pub fn get_highest_slope_corner(s: u8) -> u8 {
         _ => unreachable!("native highest slope corner"),
     }
 }
+/// `IsValidCorner`: `CORNER_W` to `CORNER_N`.
+pub const fn is_valid_corner(c: u8) -> bool {
+    c < 4
+}
+/// `SteepSlope`.
+pub fn steep_slope(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    SLOPE_STEEP | slope_with_three_corners_raised(opposite_corner(c), check)
+}
 /// `OppositeCorner`.
 pub const fn opposite_corner(c: u8) -> u8 {
     c ^ 2
 }
 /// `SlopeWithOneCornerRaised`.
 pub fn slope_with_one_corner_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if c >= 4 {
+    if !is_valid_corner(c) {
         check(false);
     }
     (1_u32.wrapping_shl(u32::from(c)) & 0xff) as u8
@@ -176,14 +186,14 @@ pub fn slope_with_three_corners_raised(c: u8, check: impl Fn(bool) + Copy) -> u8
 }
 /// `HalftileFoundation`, with a valid native corner.
 pub fn halftile_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if c >= 4 {
+    if !is_valid_corner(c) {
         check(false);
     }
     FOUNDATION_HALFTILE_W.wrapping_add(c)
 }
 /// `SpecialRailFoundation`, with a valid native corner.
 pub fn special_rail_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if c >= 4 {
+    if !is_valid_corner(c) {
         check(false);
     }
     FOUNDATION_RAIL_W.wrapping_add(c)

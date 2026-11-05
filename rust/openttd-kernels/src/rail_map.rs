@@ -57,6 +57,37 @@ impl crate::map_func::World<'_> {
         self.check(self.plain_rail(t));
         gb(u32::from(Self::byte(self.types.m5(t))), 0, 6) as u8
     }
+    /// `HasSignals`.
+    pub(crate) fn has_signals(&self, t: u32) -> bool {
+        self.rail_tile_type(t) == RAIL_TILE_SIGNALS
+    }
+    /// `GetPresentSignals`.
+    fn present_signals(&self, t: u32) -> u8 {
+        (Self::byte(self.types.m3(t)) >> 4) & 0xF
+    }
+    /// `HasSignalOnTrack`.
+    pub(crate) fn has_signal_on_track(&self, t: u32, track: u8) -> bool {
+        self.check(crate::track_func::is_valid_track(track));
+        self.has_signals(t)
+            && self.present_signals(t) & crate::signal_func::signal_on_track(track) != 0
+    }
+    /// `HasSignalOnTrackdir`.
+    pub(crate) fn has_signal_on_trackdir(&self, t: u32, trackdir: u8) -> bool {
+        self.check(crate::track_func::is_valid_trackdir(trackdir));
+        self.has_signals(t)
+            && self.present_signals(t) & crate::signal_func::signal_along_trackdir(trackdir) != 0
+    }
+    /// `GetSignalType`.
+    pub(crate) fn signal_type(&self, t: u32, track: u8) -> u8 {
+        self.check(self.has_signals(t));
+        let pos =
+            if track == crate::track_type::TRACK_LOWER || track == crate::track_type::TRACK_RIGHT {
+                4
+            } else {
+                0
+            };
+        gb(u32::from(Self::word(self.types.m2(t))), pos, 3) as u8
+    }
     #[inline]
     pub(crate) fn rail_depot_dir(&self, t: u32) -> u8 {
         gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8

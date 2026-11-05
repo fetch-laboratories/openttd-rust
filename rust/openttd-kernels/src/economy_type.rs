@@ -11,6 +11,14 @@
 pub const PR_BUILD_SIGNALS: usize = 3;
 /// `PR_BUILD_DEPOT_TRAIN`.
 pub const PR_BUILD_DEPOT_TRAIN: usize = 5;
+/// `PR_BUILD_DEPOT_ROAD`.
+pub const PR_BUILD_DEPOT_ROAD: usize = 6;
+/// `PR_BUILD_STATION_BUS`.
+pub const PR_BUILD_STATION_BUS: usize = 12;
+/// `PR_BUILD_STATION_RAIL`.
+pub const PR_BUILD_STATION_RAIL: usize = 9;
+/// `PR_BUILD_STATION_RAIL_LENGTH`.
+pub const PR_BUILD_STATION_RAIL_LENGTH: usize = 10;
 /// `PR_CLEAR_ROUGH`.
 pub const PR_CLEAR_ROUGH: usize = 23;
 /// `PR_CLEAR_SIGNALS`.
@@ -22,6 +30,8 @@ pub const PR_CLEAR_WATER: usize = 34;
 /// `PR_BUILD_FOUNDATION`.
 pub const PR_BUILD_FOUNDATION: usize = 57;
 
+/// `PR_BUILD_TREES`.
+pub const PR_BUILD_TREES: usize = 20;
 /// `PR_TERRAFORM`.
 pub const PR_TERRAFORM: usize = 21;
 /// `PR_CLEAR_CANAL`.
