@@ -175,6 +175,26 @@ impl Map {
         let (x, y) = tile_index_diff_c_by_diag_dir(dir);
         self.diff(x, y)
     }
+    /// `DiagdirBetweenTiles`.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn diagdir_between_tiles(self, from: u32, to: u32) -> u8 {
+        use crate::direction_type::{
+            DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR,
+        };
+        let dx = (self.tile_x(to) as i32).wrapping_sub(self.tile_x(from) as i32);
+        let dy = (self.tile_y(to) as i32).wrapping_sub(self.tile_y(from) as i32);
+        if dx == 0 {
+            if dy == 0 {
+                return INVALID_DIAGDIR;
+            }
+            return if dy < 0 { DIAGDIR_NW } else { DIAGDIR_SE };
+        }
+        if dy != 0 {
+            return INVALID_DIAGDIR;
+        }
+        if dx < 0 { DIAGDIR_NE } else { DIAGDIR_SW }
+    }
     /// `tile + TileOffsByDiagDir(dir)`.
     #[must_use]
     #[inline]

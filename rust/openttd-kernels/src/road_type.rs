@@ -14,6 +14,8 @@ pub const ROAD_X: u8 = 10;
 /// `ROAD_Y`.
 pub const ROAD_Y: u8 = 5;
 
+/// `ROAD_W`.
+pub const ROAD_W: u8 = ROAD_NW | ROAD_SW;
 /// `ROAD_NW`.
 pub const ROAD_NW: u8 = 1;
 

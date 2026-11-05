@@ -120,6 +120,7 @@ mod roadveh;
 mod script_host;
 mod script_list;
 mod script_rail;
+mod script_road;
 mod script_tile;
 pub mod services;
 mod ship_control;

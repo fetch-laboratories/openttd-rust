@@ -190,6 +190,26 @@ impl crate::map_func::World<'_> {
                 .0
                 == crate::station_type::STATION_RAIL
     }
+    /// `IsDriveThroughStopTile`.
+    pub(crate) fn drive_through_stop_tile(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && is_any_road_stop(&self.types, TileIndex(t)).expect("station tile")
+            && self.station_gfx(t) >= GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
+    }
+    /// `GetDriveThroughStopAxis`.
+    pub(crate) fn drive_through_axis(&self, t: u32) -> u8 {
+        self.check(self.drive_through_stop_tile(t));
+        self.station_gfx(t)
+            .wrapping_sub(GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET)
+    }
+    /// `GetRoadStopType`: `RoadStopType::Truck` or `Bus`.
+    pub(crate) fn road_stop_type(&self, t: u32) -> u8 {
+        let kind = get_station_type(&self.types, TileIndex(t))
+            .expect("station tile")
+            .0;
+        self.check(kind == STATION_TRUCK || kind == STATION_BUS);
+        u8::from(kind == STATION_TRUCK)
+    }
     /// `IsRailWaypointTile`.
     pub(crate) fn rail_waypoint_tile(&self, t: u32) -> bool {
         self.kind(t) == MP_STATION

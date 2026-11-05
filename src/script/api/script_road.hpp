@@ -14,6 +14,7 @@
 #include "../squirrel_helper_type.hpp"
 #include "../../station_type.h"
 #include "../../road.h"
+#include "../../rust/script_road_ffi.h"
 
 /**
  * Class that handles all road related functions.
@@ -111,7 +112,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has road.
 	 */
-	static bool IsRoadTile(TileIndex tile);
+	static bool IsRoadTile(TileIndex tile) { return openttd_rust_script_road_is_road_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a road depot.
@@ -120,7 +121,7 @@ public:
 	 * @pre IsRoadTypeAvailable(GetCurrentRoadType()).
 	 * @return True if and only if the tile has a road depot.
 	 */
-	static bool IsRoadDepotTile(TileIndex tile);
+	static bool IsRoadDepotTile(TileIndex tile) { return openttd_rust_script_road_is_depot_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a road station.
@@ -129,7 +130,7 @@ public:
 	 * @pre IsRoadTypeAvailable(GetCurrentRoadType()).
 	 * @return True if and only if the tile has a road station.
 	 */
-	static bool IsRoadStationTile(TileIndex tile);
+	static bool IsRoadStationTile(TileIndex tile) { return openttd_rust_script_road_is_station_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a drive through
@@ -139,7 +140,7 @@ public:
 	 * @pre IsRoadTypeAvailable(GetCurrentRoadType()).
 	 * @return True if and only if the tile has a drive through road station.
 	 */
-	static bool IsDriveThroughRoadStationTile(TileIndex tile);
+	static bool IsDriveThroughRoadStationTile(TileIndex tile) { return openttd_rust_script_road_is_drive_through_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if a given RoadType is available.
@@ -147,19 +148,19 @@ public:
 	 * @game @pre ScriptCompanyMode::IsValid().
 	 * @return True if this RoadType can be used.
 	 */
-	static bool IsRoadTypeAvailable(RoadType road_type);
+	static bool IsRoadTypeAvailable(RoadType road_type) { return openttd_rust_script_road_is_type_available(&GetRustScriptHostServices(), static_cast<uint32_t>(road_type)); }
 
 	/**
 	 * Get the current RoadType set for all ScriptRoad functions.
 	 * @return The RoadType currently set.
 	 */
-	static RoadType GetCurrentRoadType();
+	static RoadType GetCurrentRoadType() { return static_cast<RoadType>(openttd_rust_script_road_current_type()); }
 
 	/**
 	 * Set the RoadType for all further ScriptRoad functions.
 	 * @param road_type The RoadType to set.
 	 */
-	static void SetCurrentRoadType(RoadType road_type);
+	static void SetCurrentRoadType(RoadType road_type) { openttd_rust_script_road_set_current_type(&GetRustScriptHostServices(), static_cast<uint32_t>(road_type)); }
 
 	/**
 	 * Check if a road vehicle built for a road type can run on another road type.
@@ -204,7 +205,7 @@ public:
 	 * @pre IsRoadTypeAvailable(road_type).
 	 * @return True if the tile contains a RoadType object.
 	 */
-	static bool HasRoadType(TileIndex tile, RoadType road_type);
+	static bool HasRoadType(TileIndex tile, RoadType road_type) { return openttd_rust_script_road_has_type(&GetRustScriptHostServices(), tile.base(), static_cast<uint32_t>(road_type)); }
 
 	/**
 	 * Checks whether the given tiles are directly connected, i.e. whether
@@ -218,7 +219,7 @@ public:
 	 * @pre 'tile_from' and 'tile_to' are directly neighbouring tiles.
 	 * @return True if and only if a road vehicle can go from tile_from to tile_to.
 	 */
-	static bool AreRoadTilesConnected(TileIndex tile_from, TileIndex tile_to);
+	static bool AreRoadTilesConnected(TileIndex tile_from, TileIndex tile_to) { return openttd_rust_script_road_tiles_connected(&GetRustScriptHostServices(), tile_from.base(), tile_to.base()); }
 
 	/**
 	 * Lookup function for building road parts independent of whether the
@@ -249,7 +250,7 @@ public:
 	 *         they are build or 2 when building the first part automatically
 	 *         builds the second part. -1 means the preconditions are not met.
 	 */
-	static SQInteger CanBuildConnectedRoadParts(ScriptTile::Slope slope, Array<TileIndex> &&existing, TileIndex start, TileIndex end);
+	static SQInteger CanBuildConnectedRoadParts(ScriptTile::Slope slope, Array<TileIndex> &&existing, TileIndex start, TileIndex end) { return openttd_rust_script_road_can_build_parts(&GetRustScriptHostServices(), static_cast<uint32_t>(slope), existing.data(), existing.size(), start.base(), end.base()); }
 
 	/**
 	 * Lookup function for building road parts independent of whether the
@@ -270,7 +271,7 @@ public:
 	 *         they are build or 2 when building the first part automatically
 	 *         builds the second part. -1 means the preconditions are not met.
 	 */
-	static SQInteger CanBuildConnectedRoadPartsHere(TileIndex tile, TileIndex start, TileIndex end);
+	static SQInteger CanBuildConnectedRoadPartsHere(TileIndex tile, TileIndex start, TileIndex end) { return openttd_rust_script_road_can_build_parts_here(&GetRustScriptHostServices(), tile.base(), start.base(), end.base()); }
 
 	/**
 	 * Count how many neighbours are road.
@@ -279,7 +280,7 @@ public:
 	 * @pre IsRoadTypeAvailable(GetCurrentRoadType()).
 	 * @return 0 means no neighbour road; max value is 4.
 	 */
-	static SQInteger GetNeighbourRoadCount(TileIndex tile);
+	static SQInteger GetNeighbourRoadCount(TileIndex tile) { return openttd_rust_script_road_neighbour_count(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Gets the tile in front of a road depot.
@@ -287,7 +288,7 @@ public:
 	 * @pre IsRoadDepotTile(depot).
 	 * @return The tile in front of the depot.
 	 */
-	static TileIndex GetRoadDepotFrontTile(TileIndex depot);
+	static TileIndex GetRoadDepotFrontTile(TileIndex depot) { return TileIndex(openttd_rust_script_road_depot_front_tile(&GetRustScriptHostServices(), depot.base())); }
 
 	/**
 	 * Gets the tile in front of a road station.
@@ -295,7 +296,7 @@ public:
 	 * @pre IsRoadStationTile(station).
 	 * @return The tile in front of the road station.
 	 */
-	static TileIndex GetRoadStationFrontTile(TileIndex station);
+	static TileIndex GetRoadStationFrontTile(TileIndex station) { return TileIndex(openttd_rust_script_road_station_front_tile(&GetRustScriptHostServices(), station.base())); }
 
 	/**
 	 * Gets the tile at the back of a drive through road station.
@@ -305,7 +306,7 @@ public:
 	 * @pre IsDriveThroughRoadStationTile(station).
 	 * @return The tile at the back of the drive through road station.
 	 */
-	static TileIndex GetDriveThroughBackTile(TileIndex station);
+	static TileIndex GetDriveThroughBackTile(TileIndex station) { return TileIndex(openttd_rust_script_road_drive_through_back_tile(&GetRustScriptHostServices(), station.base())); }
 
 	/**
 	 * Builds a road from the center of tile start to the center of tile end.
