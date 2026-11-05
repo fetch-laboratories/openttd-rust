@@ -911,6 +911,10 @@ impl Order {
     pub(crate) fn is_refit(self) -> bool {
         self.refit < 64 || self.refit == 0xfd
     }
+    /// `Order::GetMaxSpeed`.
+    pub(crate) fn max_speed(self) -> u16 {
+        self.speed
+    }
     /// `Order::GetConditionSkipToOrder`.
     pub(crate) fn condition_skip_to(self) -> u8 {
         self.flags

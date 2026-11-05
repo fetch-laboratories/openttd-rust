@@ -31,7 +31,7 @@ use crate::track_func::{
 use crate::binaryheap::BinaryHeap;
 use crate::node_hash::NodeMap;
 use crate::witness;
-use std::cell::{OnceCell, UnsafeCell};
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::rc::Rc;
@@ -110,32 +110,90 @@ impl std::ops::Deref for Follow {
         &self.step
     }
 }
-#[repr(C)]
+/// Search-entry facts, observed in the native `RailTrain` initializer order.
 #[derive(Clone, Copy)]
-pub struct Train {
-    pub compatible: u64,
-    pub all_compatible: u64,
-    pub tile: u32,
-    pub rear_tile: u32,
-    pub virtual_tile: u32,
-    pub rear_virtual_tile: u32,
-    pub dest_tile: u32,
-    pub length: u32,
-    pub speed: u32,
-    pub order_destination: u16,
-    pub td: u8,
-    pub rear_td: u8,
-    pub wormhole: u8,
-    pub rear_wormhole: u8,
-    pub order: u8,
-    pub nearest_depot: u8,
-    pub complex_waypoint: u8,
+struct TrainFacts {
+    compatible: u64,
+    all_compatible: u64,
+    tile: u32,
+    rear_tile: u32,
+    virtual_tile: u32,
+    rear_virtual_tile: u32,
+    dest_tile: u32,
+    length: u32,
+    speed: u32,
+    order_destination: u16,
+    td: u8,
+    rear_td: u8,
+    wormhole: u8,
+    rear_wormhole: u8,
+    order: u8,
+    nearest_depot: u8,
+    complex_waypoint: u8,
+}
+impl TrainFacts {
+    fn read(
+        v: crate::vehicle::VehicleRef,
+        input: &Input,
+        leaves: &Leaves,
+        pbs: crate::pbs::Pbs<'_>,
+    ) -> Self {
+        use crate::raw_field::read_field;
+        let rear = v.last();
+        let head = crate::train::Handle::from_record(v.0.as_ptr());
+        let tail = crate::train::Handle::from_record(rear.0.as_ptr());
+        let compatible = head.get_compatible_railtypes();
+        let all_compatible = (pbs.0.all_compatible)(head.get_railtypes());
+        let tile = v.tile();
+        let rear_tile = rear.tile();
+        let map = crate::map_func::Map::from_log_x(input.map_x.trailing_zeros());
+        let virtual_tile = map.tile_virt_xy(v.x() as u32, v.y() as u32);
+        let rear_virtual_tile = map.tile_virt_xy(rear.x() as u32, rear.y() as u32);
+        let dest_tile = v.dest_tile();
+        let length = u32::from(read_field!(v.ground_cache(), cached_total_length));
+        let speed = u32::from(v.max_speed().min(v.current_order().max_speed()));
+        let order_destination = v.current_order().destination;
+        // SAFETY: Records and immutable train tables stay live for this search entry.
+        let td =
+            unsafe { crate::train::openttd_rust_train_trackdir(head, pbs.0.train, input.shared) };
+        let rear_td =
+            unsafe { crate::train::openttd_rust_train_trackdir(tail, pbs.0.train, input.shared) };
+        let wormhole = u8::from(head.track() == crate::track_type::TRACK_BIT_WORMHOLE);
+        let rear_wormhole = u8::from(tail.track() == crate::track_type::TRACK_BIT_WORMHOLE);
+        let order = v.current_order().kind();
+        let nearest_depot = u8::from(
+            v.current_order().depot_action_flags() & crate::order_type::ODATF_NEAREST_DEPOT != 0,
+        );
+        let complex_waypoint = u8::from(
+            v.current_order().kind() == OT_GOTO_WAYPOINT
+                && !(leaves.waypoint_single)(v.current_order().destination),
+        );
+        Self {
+            compatible,
+            all_compatible,
+            tile,
+            rear_tile,
+            virtual_tile,
+            rear_virtual_tile,
+            dest_tile,
+            length,
+            speed,
+            order_destination,
+            td,
+            rear_td,
+            wormhole,
+            rear_wormhole,
+            order,
+            nearest_depot,
+            complex_waypoint,
+        }
+    }
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Input {
     pub context: *mut c_void,
-    pub vehicle: *const crate::services::Train,
+    pub vehicle: *const crate::vehicle::OpenTTDVehicle,
     pub shared: *const crate::services::Services,
     pub settings: Settings,
     pub map_x: u32,
@@ -166,7 +224,7 @@ pub struct Step {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub train: unsafe extern "C" fn(*mut c_void) -> Train,
+    pub waypoint_single: extern "C" fn(u16) -> bool,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
@@ -306,9 +364,9 @@ impl Node {
 }
 struct Search {
     input: Input,
-    vehicle: OnceCell<Option<crate::vehicle::VehicleRef>>,
+    vehicle: crate::vehicle::VehicleRef,
     leaves: Leaves,
-    train: Train,
+    train: TrainFacts,
     compatible: u64,
     bank: usize,
     disabled: bool,
@@ -369,10 +427,13 @@ impl Search {
                 ) as i32
             })
             .collect();
-        let train = unsafe { (leaves.train)(input.context) };
+        let vehicle = crate::vehicle::VehicleRef::of(input.vehicle.cast_mut());
+        let shared = unsafe { &*input.shared };
+        let pbs = crate::pbs::Pbs::acquire(shared);
+        let train = TrainFacts::read(vehicle, &input, &leaves, pbs);
         Self {
             input,
-            vehicle: OnceCell::new(),
+            vehicle,
             leaves,
             train,
             compatible: train.compatible,
@@ -512,21 +573,10 @@ impl Search {
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
         let shared = unsafe { &*self.input.shared };
-        let v = *self.vehicle.get_or_init(|| {
-            std::ptr::NonNull::new(self.input.vehicle.cast_mut()).map(|shell| {
-                // SAFETY: Native searches retain the same live train shell until return.
-                unsafe {
-                    crate::vehicle::VehicleRef::from_shell(
-                        shell.as_ptr().cast(),
-                        crate::movement::table(shared).vehicle(),
-                    )
-                }
-            })
-        });
         let mut state = crate::follow_track::State::vehicle(
             shared,
             crate::transport_type::TRANSPORT_RAIL,
-            v,
+            Some(self.vehicle),
             compatible,
             no90 == 0,
         );
@@ -548,7 +598,7 @@ impl Search {
             max_speed: crate::follow_track::speed_limit(
                 shared,
                 crate::transport_type::TRANSPORT_RAIL,
-                v,
+                Some(self.vehicle),
                 tile,
             ),
         };
@@ -566,11 +616,22 @@ impl Search {
     }
     fn safe(&self, tile: u32, td: u8, forbid: u8) -> bool {
         let pbs = self.pbs();
-        pbs.safe(pbs.handle(self.input.vehicle), tile, td, true, forbid != 0)
+        pbs.safe(
+            crate::train::Handle::from_record(self.vehicle.0.as_ptr()),
+            tile,
+            td,
+            true,
+            forbid != 0,
+        )
     }
     fn free(&self, tile: u32, td: u8, forbid: u8) -> bool {
         let pbs = self.pbs();
-        pbs.free(pbs.handle(self.input.vehicle), tile, td, forbid != 0)
+        pbs.free(
+            crate::train::Handle::from_record(self.vehicle.0.as_ptr()),
+            tile,
+            td,
+            forbid != 0,
+        )
     }
     fn platform_length(&self, tile: u32, dir: u8) -> u32 {
         crate::follow_track::platform_length(&self.world(), tile, dir)
@@ -1197,7 +1258,7 @@ impl Search {
             0 | 2 => {
                 let pbs = self.pbs();
                 let origin = pbs.follow_train(
-                    pbs.handle(self.input.vehicle),
+                    crate::train::Handle::from_record(self.vehicle.0.as_ptr()),
                     false,
                     crate::train::Handle::NONE,
                 );
@@ -1803,7 +1864,7 @@ crate::abi::layouts! {
         oneway,
     };
     "OpenTTDRailLeaves" ["probe"] => Leaves {
-        train,
+        waypoint_single,
         tile,
         closest_station,
         output,
@@ -1836,24 +1897,5 @@ crate::abi::layouts! {
         value,
         target_td,
         target_okay,
-    };
-    "OpenTTDRailTrain" ["probe"] => Train {
-        compatible,
-        all_compatible,
-        tile,
-        rear_tile,
-        virtual_tile,
-        rear_virtual_tile,
-        dest_tile,
-        length,
-        speed,
-        order_destination,
-        td,
-        rear_td,
-        wormhole,
-        rear_wormhole,
-        order,
-        nearest_depot,
-        complex_waypoint,
     };
 }

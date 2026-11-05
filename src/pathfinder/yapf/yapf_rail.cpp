@@ -33,18 +33,6 @@ struct RailYapfContext {
 	PBSTileInfo *target = nullptr;
 	TileIndex *destination = nullptr;
 };
-static OpenTTDRailTrain RailTrain(void *context) noexcept
-{
-	const Train *v = static_cast<RailYapfContext *>(context)->train;
-	const Train *rear = v->Last();
-	return {v->GetCompatibleRailTypes().base(), RustAllCompatibleRailTypes(v->GetRailTypes().base()),
-		v->GetTile().base(), rear->GetTile().base(), TileVirtXY(v->Record().x_pos, v->Record().y_pos).base(), TileVirtXY(rear->Record().x_pos, rear->Record().y_pos).base(),
-		v->GetDestTile().base(), RustGroundCachedTotalLength(&v->gcache), static_cast<uint32_t>(std::min<int>(RustVehicleDisplayMaxSpeed(v), RustVehicleOrderMaxSpeed(v))),
-		v->current_order.GetDestination().base(), GetRustSharedServices().train_trackdir(v), GetRustSharedServices().train_trackdir(rear),
-		static_cast<uint8_t>(v->GetTrack() == TRACK_BIT_WORMHOLE), static_cast<uint8_t>(rear->GetTrack() == TRACK_BIT_WORMHOLE),
-		static_cast<uint8_t>(v->current_order.GetType()), static_cast<uint8_t>(v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)),
-		static_cast<uint8_t>(v->current_order.IsType(OT_GOTO_WAYPOINT) && !Waypoint::Get(v->current_order.GetDestination().ToStationID())->IsSingleTile())};
-}
 static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 {
 	const TileIndex t{tile};
@@ -147,7 +135,7 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 	}
 }
 static const OpenTTDRailLeaves _rail_leaves{
-	.train = RailTrain, .tile = RailTile,
+	.waypoint_single = RustWaypointSingleTile, .tile = RailTile,
 	.closest_station = RailClosestStation,
 	.output = RailOutput, .debug = RailDebug,
 };
@@ -158,7 +146,7 @@ static OpenTTDRailStep RailRun(RailYapfContext &context, uint8_t kind, TileIndex
 		s.rail_station_penalty, s.rail_slope_penalty, s.rail_curve45_penalty, s.rail_curve90_penalty, s.rail_depot_reverse_penalty, s.rail_crossing_penalty, s.rail_look_ahead_max_signals,
 		s.rail_look_ahead_signal_p0, s.rail_look_ahead_signal_p1, s.rail_look_ahead_signal_p2, s.rail_pbs_cross_penalty, s.rail_pbs_station_penalty, s.rail_pbs_signal_back_penalty, s.rail_doubleslip_penalty,
 		s.rail_longer_platform_penalty, s.rail_longer_platform_per_tile_penalty, s.rail_shorter_platform_penalty, s.rail_shorter_platform_per_tile_penalty, static_cast<uint8_t>(s.rail_firstred_twoway_eol)};
-	const OpenTTDRailInput input{&context, context.train, &GetRustSharedServices(), settings, Map::SizeX(), tile.base(), max_cost, _debug_desync_level, kind, static_cast<uint8_t>(td), static_cast<uint8_t>(override_railtype), static_cast<uint8_t>(_settings_game.pf.forbid_90_deg), static_cast<uint8_t>(reserve)};
+	const OpenTTDRailInput input{&context, RustVehicle(context.train), &GetRustSharedServices(), settings, Map::SizeX(), tile.base(), max_cost, _debug_desync_level, kind, static_cast<uint8_t>(td), static_cast<uint8_t>(override_railtype), static_cast<uint8_t>(_settings_game.pf.forbid_90_deg), static_cast<uint8_t>(reserve)};
 	using Owner = std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)>;
 	Owner owner{openttd_rust_rail_new(&input, &_rail_leaves), openttd_rust_rail_destroy};
 	for (;;) {
