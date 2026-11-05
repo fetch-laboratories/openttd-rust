@@ -283,8 +283,10 @@ def compare_generators(env: Mapping[str, str]) -> int:
                 *settings_inputs,
             ],
         ]
+        # strgen writes tmp.xxx in its working directory and renames it into -d;
+        # run it in out so the rename stays on one filesystem (.local may be linked).
         for index, command in enumerate(invocations):
-            probe.compile(command, OUT / f"{name}-generator-{index}.log", env)
+            probe.compile(command, OUT / f"{name}-generator-{index}.log", env, cwd=out)
         outputs[name] = {
             filename: (out / filename).read_bytes()
             for filename in ("strings.h", "settings.h", "english.lng", "french.lng")
@@ -315,7 +317,11 @@ def compare_generators(env: Mapping[str, str]) -> int:
                 str(directory),
             ]
             result = subprocess.run(
-                command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                command,
+                cwd=directory,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
             results.append((result.returncode, result.stdout, result.stderr))
         assert results[0] == results[1] and results[0][0] == 2, results

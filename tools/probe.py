@@ -82,12 +82,17 @@ def rust(build: Path = BUILD, *, define: bool = True) -> list[str]:
 
 
 def compile(
-    command: Sequence[Argument], log: Argument, env: Mapping[str, str] | None = None
+    command: Sequence[Argument],
+    log: Argument,
+    env: Mapping[str, str] | None = None,
+    *,
+    cwd: Path | None = None,
 ) -> None:
     """Run a compile or link command, retaining its combined output in log."""
     with Path(log).open("wb") as handle:
         subprocess.run(
             list(map(str, command)),
+            cwd=cwd,
             env=env or ENV,
             stdout=handle,
             stderr=subprocess.STDOUT,
