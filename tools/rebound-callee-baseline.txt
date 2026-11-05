@@ -170,8 +170,6 @@ rebound | RustEngineType | src/rust/engine_capabilities_services.hpp | kind
 rebound | RustEngineType | src/rust/vehicle_refit_services.hpp | engine_kind
 rebound | RustHouseSpec | src/animated_tile.cpp | house_spec
 rebound | RustHouseSpec | src/rust/house_definition_services.hpp | get
-rebound | RustIndustryBehaviour | src/industry_cmd.cpp | behaviour
-rebound | RustIndustryBehaviour | src/rust/disaster_adapter.hpp | industry_behaviour
 rebound | RustIndustryBuilderState | src/genworld.cpp | industry_builder
 rebound | RustIndustryBuilderState | src/rust/newgrf_spritegroup_services.cpp | industry_builder
 rebound | RustIndustryByID | src/industry_cmd.cpp | industry
