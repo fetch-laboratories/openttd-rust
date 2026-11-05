@@ -31,9 +31,11 @@ void DebugPrint(std::string_view category, int level, std::string &&message) { +
 #include "rust/debug_ffi.h"
 /* The candidate's Rust Debug reads this harness's net level and prints through its DebugPrint. */
 static const int _debug_other_level = 0;
+/* The harness loads no NewGRF, so no GRF message can reach this. */
+[[noreturn]] static void UnreachableGrfMsg(int, const char *, size_t) noexcept { std::abort(); }
 static const OpenTTDDebugServices _debug_services{
 	.console = &_debug_other_level, .desync = &_debug_other_level, .driver = &_debug_other_level, .fontcache = &_debug_other_level,
-	.gamelog = &_debug_other_level, .grf = &_debug_other_level, .grf_msg = [](int, const char *, size_t) noexcept { std::abort(); },
+	.gamelog = &_debug_other_level, .grf = &_debug_other_level, .grf_msg = &UnreachableGrfMsg,
 	.map = &_debug_other_level, .misc = &_debug_other_level, .net = &_debug_net_level, .oldloader = &_debug_other_level,
 	.print = [](const char *category, size_t category_size, int level, const char *message, size_t size) noexcept { DebugPrint({category, category_size}, level, std::string(message, size)); },
 	.script = &_debug_other_level, .sl = &_debug_other_level, .sprite = &_debug_other_level, .yapf = &_debug_other_level,
