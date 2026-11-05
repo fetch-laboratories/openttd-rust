@@ -53,9 +53,8 @@ pub struct Services {
     pub company_allows_client: extern "C" fn(u8, *mut c_void) -> bool,
     pub enable_encryption:
         extern "C" fn(*mut c_void, *const u8, *mut crate::auth::Stream, *mut crate::auth::Stream),
-    pub error_announcement: extern "C" fn(*mut c_void, u32, crate::services::ByteSpan, bool),
+    pub error_announcement: extern "C" fn(*mut c_void, u32, crate::services::ByteSpan, bool, bool),
     pub error_message: extern "C" fn(u8) -> u32,
-    pub error_unjoined: extern "C" fn(*mut c_void, u32),
     pub grf: &'static crate::newgrf_loading::Services,
     pub info: extern "C" fn(*mut c_void) -> *mut c_void,
     pub join_date: extern "C" fn(*mut c_void) -> i32,
@@ -98,7 +97,6 @@ crate::abi::layouts! {
         enable_encryption,
         error_announcement,
         error_message,
-        error_unjoined,
         grf,
         info,
         join_date,
@@ -737,13 +735,15 @@ pub(crate) fn send_error(
     }
     packet_send(f, game, &mut p);
     let strid = (s.error_message)(error);
-    if status(s, socket) >= AUTHORIZED {
-        (s.error_announcement)(
-            socket::server(socket),
-            strid,
-            reason,
-            error == NETWORK_ERROR_KICKED && reason.size != 0,
-        );
+    let authorized = status(s, socket) >= AUTHORIZED;
+    (s.error_announcement)(
+        socket::server(socket),
+        strid,
+        reason,
+        error == NETWORK_ERROR_KICKED && reason.size != 0,
+        authorized,
+    );
+    if authorized {
         let mut cursor = 0;
         while let Some(client) = next_client(f.command, &mut cursor) {
             if socket::status(client.socket) >= AUTHORIZED && client.socket != socket {
@@ -759,8 +759,6 @@ pub(crate) fn send_error(
             }
         }
         (s.admin_error)(socket::server(socket), error);
-    } else {
-        (s.error_unjoined)(socket::server(socket), strid);
     }
     close_connection(s, f, socket, NETWORK_RECV_STATUS_SERVER_ERROR, work)
 }

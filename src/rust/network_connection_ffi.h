@@ -21,9 +21,8 @@ struct OpenTTDNetworkConnectionServices {
 	uint8_t *clients_on;
 	bool (*company_allows_client)(uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(company_allows_client);
 	void (*enable_encryption)(void *, const uint8_t *, OpenTTDAuthStream *, OpenTTDAuthStream *) noexcept OPENTTD_SERVICE_DEFAULT(enable_encryption);
-	void (*error_announcement)(void *, uint32_t, OpenTTDByteSpan, bool) noexcept OPENTTD_SERVICE_DEFAULT(error_announcement);
+	void (*error_announcement)(void *, uint32_t, OpenTTDByteSpan, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(error_announcement);
 	uint32_t (*error_message)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
-	void (*error_unjoined)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error_unjoined);
 	const OpenTTDGrfLoadingServices *grf;
 	void * (*info)(void *) noexcept OPENTTD_SERVICE_DEFAULT(info);
 	int32_t (*join_date)(void *) noexcept OPENTTD_SERVICE_DEFAULT(join_date);

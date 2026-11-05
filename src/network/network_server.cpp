@@ -1169,13 +1169,16 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			cs->send_encryption_handler = MakeNetworkEncryptionHandler(send);
 			cs->authentication_handler = nullptr;
 		},
-		.error_announcement = [](void *socket, uint32_t strid, OpenTTDByteSpan reason, bool kicked) noexcept {
+		.error_announcement = [](void *socket, uint32_t strid, OpenTTDByteSpan reason, bool kicked, bool authorized) noexcept {
+			if (!authorized) {
+				Debug(net, 1, "Client {} made an error and has been disconnected: {}", static_cast<NetworkClientSocket *>(socket)->client_id, GetString(strid));
+				return;
+			}
 			std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName();
 			Debug(net, 1, "'{}' made an error and has been disconnected: {}", client_name, GetString(strid));
 			NetworkTextMessage(kicked ? NETWORK_ACTION_KICKED : NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, kicked ? std::string_view(reinterpret_cast<const char *>(reason.data), reason.size) : "", strid);
 		},
 		.error_message = [](uint8_t error) noexcept -> uint32_t { return GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error)); },
-		.error_unjoined = [](void *socket, uint32_t strid) noexcept { Debug(net, 1, "Client {} made an error and has been disconnected: {}", static_cast<NetworkClientSocket *>(socket)->client_id, GetString(strid)); },
 		.grf = &GetRustGrfLoadingServices(),
 		.info = [](void *socket) noexcept -> void * { return static_cast<NetworkClientSocket *>(socket)->GetInfo(); },
 		.join_date = [](void *socket) noexcept -> int32_t { return static_cast<NetworkClientSocket *>(socket)->GetInfo()->join_date.base(); },
