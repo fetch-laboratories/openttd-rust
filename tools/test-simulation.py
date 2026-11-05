@@ -2,6 +2,7 @@
 """Exercise simulation determinism, runtime isolation and semantic speed reports."""
 
 import contextlib
+import gzip
 import hashlib
 import io
 import json
@@ -9,6 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from functools import partial
@@ -19,6 +21,7 @@ from simulation import (
     community_ai,
     engines,
     newgrf_loading,
+    newgrf_sets,
     platform_subset,
     runtime,
     stations,
@@ -1591,18 +1594,137 @@ class CommunityInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             manifest = root / "packages.json"
-            original = (community_ai.INPUTS / manifest.name).read_bytes()
-            for changed in (False, True):
-                manifest.write_bytes(original + (b"\n" if changed else b""))
+            original = json.loads((community_ai.INPUTS / manifest.name).read_text())
+            for change in ("none", "newgrf", "ai"):
+                rows = json.loads(json.dumps(original))
+                row = next(
+                    r
+                    for r in rows
+                    if r["kind"] == ("ai" if change == "ai" else "newgrf")
+                )
+                if change != "none":
+                    row["sha256"] = "0" * 64
+                manifest.write_text(json.dumps(rows))
                 with (
-                    self.subTest(changed=changed),
+                    self.subTest(change=change),
                     patch.object(community_ai, "INPUTS", root),
                 ):
-                    if changed:
+                    if change == "ai":
                         with self.assertRaisesRegex(RuntimeError, "packages differ"):
                             community_ai.prepare(scenario, {}, {}, root, 1, {}, {})
                     else:
                         community_ai.prepare(scenario, {}, {}, root, 1, {}, {})
+
+    def test_download_and_cached_archive_hashes_are_required(self) -> None:
+        payload = b"pinned package bytes"
+        package = community_ai.Package(
+            name="Test+ Content",
+            version="0.3.5",
+            kind="newgrf",
+            uid="12345678",
+            md5="1" * 32,
+            sha256=hashlib.sha256(payload).hexdigest(),
+            license="GPL-2.0-or-later",
+            metadata="test",
+            publisher="test",
+            dependencies=[],
+            archive_filename="12345678-Test_Content-VERSION.tar.gz",
+        )
+        self.assertEqual(
+            package.url,
+            "https://bananas-cdn.openttd.org/newgrf/12345678/"
+            "11111111111111111111111111111111/12345678-Test_Content-VERSION.tar.gz",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / ".local/community-ai" / package.filename
+            for invalid in (True, False):
+
+                def download(
+                    command: list[str], *, check: bool, invalid: bool = invalid
+                ) -> None:
+                    Path(command[-1]).write_bytes(b"corrupt" if invalid else payload)
+
+                with (
+                    self.subTest(invalid=invalid),
+                    patch.object(simulate, "ROOT", root),
+                    patch.object(community_ai, "packages", return_value=[package]),
+                    patch.object(
+                        community_ai.subprocess, "run", side_effect=download
+                    ) as curl,
+                ):
+                    if invalid:
+                        with self.assertRaisesRegex(
+                            RuntimeError, "download hash mismatch"
+                        ):
+                            community_ai.fetch()
+                        self.assertFalse(cache.exists())
+                    else:
+                        self.assertEqual(
+                            community_ai.fetch(), {package.filename: cache}
+                        )
+                        self.assertEqual(cache.read_bytes(), payload)
+                        community_ai.fetch()
+                        self.assertEqual(curl.call_count, 1)
+                        cache.write_bytes(b"corrupt")
+                        with self.assertRaisesRegex(
+                            RuntimeError, "cached input hash mismatch"
+                        ):
+                            community_ai.fetch()
+
+    def test_newgrf_archives_preserve_notices_without_evidence_content(self) -> None:
+        import ci_native
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            archive = root / "fixture.tar.gz"
+            with tarfile.open(archive, "w:gz") as tar:
+                for name in ("fixture.grf", "readme.txt", "license.txt"):
+                    data = b"third-party input"
+                    member = tarfile.TarInfo("package/" + name)
+                    member.size = len(data)
+                    tar.addfile(member, io.BytesIO(data))
+            package = community_ai.Package(
+                name="fixture",
+                version="1",
+                kind="newgrf",
+                uid="12345678",
+                md5="1" * 32,
+                sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
+                license="test",
+                metadata="test",
+                publisher="test",
+                dependencies=[],
+            )
+            run = root / ".local/simulation/run/newgrf-sets/plain/reference"
+            run.mkdir(parents=True)
+            with (
+                patch.object(
+                    community_ai, "fetch", return_value={package.filename: archive}
+                ),
+                patch.object(community_ai, "packages", return_value=[package]),
+            ):
+                newgrf_sets.install(
+                    dict(newgrf_sets.scenarios(False)[0], scenario_ai=str(scripts)), run
+                )
+                community_ai.install({"community_ai": "temperate"}, run)
+            installed = list(run.rglob("*.tar"))
+            self.assertEqual(len(installed), 4)
+            for path in installed:
+                self.assertEqual(
+                    path.read_bytes(), gzip.decompress(archive.read_bytes())
+                )
+            (run / "stderr.log").write_text("scenario failed")
+            (run / "exit.sav").write_bytes(b"save metadata")
+            evidence = root / "evidence"
+            with patch.object(ci_native, "ROOT", root):
+                ci_native.collect_evidence(evidence)
+            self.assertEqual(
+                sorted(p.name for p in evidence.rglob("*") if p.is_file()),
+                ["exit.sav", "stderr.log"],
+            )
 
     def test_running_ai_identity_is_distinct_from_slot_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

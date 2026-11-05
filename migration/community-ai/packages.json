@@ -131,5 +131,44 @@
     "dependencies": [],
     "metadata": "https://github.com/OpenTTD/BaNaNaS/blob/75a904f4fe1e7bc8cde4c272462fcbaae181e836/ai-library/51554248/versions/20090117T163656Z.yaml",
     "license": "GPL-2.0-only"
+  },
+  {
+    "name": "OpenGFX+ Trains",
+    "version": "0.3.0",
+    "publisher": "http://dev.openttdcoop.org/projects/ogfx-trains",
+    "kind": "newgrf",
+    "uid": "4f472b31",
+    "md5": "4e0b2d42462f295f36afba90d239a323",
+    "sha256": "9398b07f34bdfc8ab5cd3570c22de4a4da000a97b5f51b91450778df78dfdd36",
+    "dependencies": [],
+    "metadata": "BaNaNaS CLIENT_INFO_EXTID, content ID 2335545",
+    "license": "GPL-2.0-or-later",
+    "archive_filename": "4f472b31-OpenGFX_Trains-0.3.0.tar.gz"
+  },
+  {
+    "name": "OpenGFX+ Road Vehicles",
+    "version": "0.4.1",
+    "publisher": "http://dev.openttdcoop.org/projects/ogfx-rv",
+    "kind": "newgrf",
+    "uid": "4f472b32",
+    "md5": "b46f2d7781158dd122f2e4b2afc9f38f",
+    "sha256": "90b1b62eaf79d5db3862ed63723937e3b3994730a5c6c2a08aa8c36da2a029ea",
+    "dependencies": [],
+    "metadata": "BaNaNaS CLIENT_INFO_EXTID, content ID 9434057",
+    "license": "GPL-2.0-or-later",
+    "archive_filename": "4f472b32-OpenGFX_Road_Vehicles-0.4.1.tar.gz"
+  },
+  {
+    "name": "OpenGFX+ Industries",
+    "version": "0.3.5",
+    "publisher": "http://dev.openttdcoop.org/ogfx-industries",
+    "kind": "newgrf",
+    "uid": "4f472b33",
+    "md5": "437e4f6bda52eb5ca9615196291514ca",
+    "sha256": "f5ae6397847dc8836c0548d84db76d2ff3825741bc0ee04986f2acd2fe550f9c",
+    "dependencies": [],
+    "metadata": "BaNaNaS CLIENT_INFO_EXTID, content ID 13243413; advertised version $VERSION; packaged readme version 0.3.5",
+    "license": "GPL-2.0-or-later",
+    "archive_filename": "4f472b33-OpenGFX_Industries-VERSION.tar.gz"
   }
 ]
