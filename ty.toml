@@ -80,4 +80,7 @@ include = [
     "tools/test-ci-native.py",
     "tools/check-rust-platform.py",
     "tools/test-rust-platform.py",
+    "tools/bootstrap-local.py",
+    "tools/test-compiler-cache.py",
+    "tools/test-port-metrics.py",
 ]
