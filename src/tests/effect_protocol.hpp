@@ -19,7 +19,8 @@
 struct EffectTestView {
 	int32_t x, y, z;
 	uint32_t sprite;
-	uint8_t progress, spritenum, subtype, ambient;
+	uint8_t progress, spritenum, subtype;
+	bool ambient;
 };
 struct EffectTestWorld {
 	EffectTestView view{};
@@ -83,7 +84,9 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	effect_test_world = &w;
 	const OpenTTDEffectLeaves leaves = EffectTestLeaves();
 	auto services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
-	services.ambient_sound = []() noexcept { return effect_test_world->view.ambient != 0; };
+	OpenTTDSettingAddresses settings{};
+	settings.ambient = &w.view.ambient;
+	services.settings = &settings;
 	auto animation_shared = services;
 	animation_shared.mark_dirty = [](uint32_t) noexcept {};
 	auto animation = OpenTTDAnimationServices{};

@@ -1003,7 +1003,7 @@ impl Game<'_> {
             } else {
                 crate::witness::TRAIN_CROSS_UNBAR
             });
-            if barred && sound && (self.services.ambient_sound)() {
+            if barred && sound && unsafe { self.services.settings().ambient.read() } {
                 (self.leaves.crossing_sound)(Handle::NONE, tile);
             }
             (self.leaves.write_crossing_bar)(Handle::NONE, tile, u8::from(barred));
@@ -1779,7 +1779,7 @@ impl Game<'_> {
                     let crossing = self.approaching_crossing(id);
                     if crossing != INVALID_TILE
                         && (self.services.crossing_reserved)(crossing)
-                        && (self.services.ambient_sound)()
+                        && unsafe { self.services.settings().ambient.read() }
                     {
                         (self.leaves.crossing_sound)(Handle::NONE, crossing);
                     }

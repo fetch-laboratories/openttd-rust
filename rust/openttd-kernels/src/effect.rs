@@ -511,7 +511,7 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
         progress: record.progress(),
         spritenum: unsafe { ((*((vehicles.newgrf)())).sprite)(record.0.as_ptr()) },
         subtype: record.subtype(),
-        ambient: u8::from((unsafe { &*services }.ambient_sound)()),
+        ambient: u8::from(unsafe { (*services).settings().ambient.read() }),
     };
     let context = record.shell();
     let mut controller = Controller {
