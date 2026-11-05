@@ -26,10 +26,7 @@ static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 	if (v->GetType() == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, TrainHandle(t), nullptr, v->GetType()}; }
 	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->GetType()};
 }
-static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->GetType() == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSubtype(v)}; }
 static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {RustCargoSpec(v->cargo_type), RustVehicleCargoOwner(v)}; }
-static OpenTTDGroundAccelerationInput GroundAccelerationInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->GetType() == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSpeed(v), RustVehicleStatus(v), v->GetType() == VEH_ROAD ? RustRoadVehicleType(RoadVehicle::From(v)) : RoadType{0}}; }
-static OpenTTDGroundSpeedInput GroundSpeedInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), RustVehicleSubspeed(v)}; }
 static uint64_t GroundCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnits(count); }
 static uint64_t GroundTrainCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnitsInTrain(count); }
 static uint16_t GroundRoadSpeed(OpenTTDVehicle *shell) noexcept { const RoadVehicle *v = RoadVehicle::From(VehicleOf(shell)); return RustRoadTypeMaxSpeed(RustRoadTileType(v->GetTile().base(), RustRoadTramType(RustRoadVehicleType(v)))); }
@@ -48,11 +45,7 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.assertions = false,
 #endif
 		.resolve = GroundResolve,
-		.first = RustGroundFirst,
-		.power_input = GroundPowerInput,
 		.weight_input = GroundWeightInput,
-		.acceleration_input = GroundAccelerationInput,
-		.speed_input = GroundSpeedInput,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_weight = GroundCargoWeight,
 		.train_cargo_weight = GroundTrainCargoWeight,

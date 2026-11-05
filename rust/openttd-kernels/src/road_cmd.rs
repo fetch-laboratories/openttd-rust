@@ -368,7 +368,7 @@ impl<'a> Ctx<'a> {
         p.vehicle.for_each_on_tile(tile, |v| {
             if v.vehicle_type() == crate::vehicle::VehicleType::ROAD.0 {
                 unsafe {
-                    (self.s.include_vehicle)(frame, (p.first)(v));
+                    (self.s.include_vehicle)(frame, v.first());
                 }
             }
         });

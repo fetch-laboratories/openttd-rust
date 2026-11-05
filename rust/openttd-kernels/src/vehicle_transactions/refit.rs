@@ -575,9 +575,7 @@ pub(crate) unsafe fn refit(
                 if (s.road_acceleration)() != 0 {
                     crate::ground_vehicle::cargo_changed(
                         s.road_ground.physics,
-                        (s.road_ground.physics.first)(unsafe {
-                            vehicle_ref(front, s.common.vehicles)
-                        }),
+                        unsafe { vehicle_ref(front, s.common.vehicles) }.first(),
                     );
                 }
             }

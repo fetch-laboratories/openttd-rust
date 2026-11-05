@@ -157,27 +157,6 @@ pub struct MovementVehicle {
     pub kind: crate::vehicle::VehicleType,
 }
 #[repr(C)]
-pub struct MovementPose {
-    pub z: i32,
-    pub direction: u8,
-}
-#[repr(C)]
-pub struct DepotPosition {
-    pub tile: u32,
-    pub x: i32,
-    pub y: i32,
-}
-#[repr(C)]
-pub struct Incline {
-    pub z: i32,
-    pub flags: u16,
-}
-#[repr(C)]
-pub struct FirstSpeed {
-    pub first: crate::vehicle::VehicleRef,
-    pub speed: u16,
-}
-#[repr(C)]
 pub struct MovementServices {
     pub shared: *const Services,
     pub orders: *const crate::orders::Leaves,
@@ -192,12 +171,6 @@ pub struct MovementServices {
     pub road_kind: extern "C" fn(VehicleRef) -> crate::services::RoadTramType,
     pub road_vehicle: *const crate::road::Leaves,
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
-    pub pose: extern "C" fn(crate::vehicle::VehicleRef) -> MovementPose,
-    pub depot_position: extern "C" fn(crate::train::Handle) -> DepotPosition,
-    pub incline: extern "C" fn(crate::vehicle::VehicleRef) -> Incline,
-    pub first: extern "C" fn(VehicleRef) -> VehicleRef,
-    pub first_speed: extern "C" fn(crate::vehicle::VehicleRef) -> FirstSpeed,
-    pub write_ground_flags: extern "C" fn(crate::vehicle::VehicleRef, u16),
     pub train_engine_class: extern "C" fn(crate::vehicle::VehicleRef) -> u8,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
@@ -1064,7 +1037,7 @@ impl MovementServices {
             Self::hidden(v, true);
             (v).write_direction(reverse_dir(direction, |ok| (self.native_assert)(ok)));
             if (v).next().is_none() {
-                self.vehicle().enter_depot((self.first)(v));
+                self.vehicle().enter_depot(v.first());
             }
             (v).write_tile(tile);
             (self.depot_invalidate)(v);
@@ -1086,7 +1059,7 @@ impl MovementServices {
                 Self::hidden(v, true);
                 (v).write_direction(reverse_dir((v).direction(), |ok| (self.native_assert)(ok)));
                 if (v).next().is_none() {
-                    self.vehicle().enter_depot((self.first)(v));
+                    self.vehicle().enter_depot(v.first());
                 }
                 (v).write_tile(tile);
                 (self.depot_invalidate)(v);
@@ -1170,17 +1143,24 @@ impl MovementServices {
         }
         0
     }
-    fn prepare_bridge(&self, v: VehicleRef) {
-        let p = (self.incline)(v);
-        if p.flags & (1 << crate::ground_vehicle::GVF_GOINGUP_BIT) != 0 {
+    fn prepare_bridge(v: VehicleRef) {
+        let z = v.z();
+        let ground = v.ground();
+        let flags = crate::raw_field::read_field!(ground, flags);
+        if flags & (1 << crate::ground_vehicle::GVF_GOINGUP_BIT) != 0 {
             w::hit(w::MOVE_BRIDGE_UP);
-            (v).write_z(p.z.wrapping_add(1));
-            (self.write_ground_flags)(v, p.flags & !(1 << crate::ground_vehicle::GVF_GOINGUP_BIT));
+            (v).write_z(z.wrapping_add(1));
+            crate::raw_field::write_field!(
+                ground,
+                flags,
+                flags & !(1 << crate::ground_vehicle::GVF_GOINGUP_BIT)
+            );
         } else {
             w::hit(w::MOVE_BRIDGE_DOWN);
-            (self.write_ground_flags)(
-                v,
-                p.flags & !(1 << crate::ground_vehicle::GVF_GOINGDOWN_BIT),
+            crate::raw_field::write_field!(
+                ground,
+                flags,
+                flags & !(1 << crate::ground_vehicle::GVF_GOINGDOWN_BIT)
             );
         }
     }
@@ -1193,13 +1173,14 @@ impl MovementServices {
         y: i32,
     ) -> u8 {
         let slope = unsafe { openttd_rust_movement_pixel_z(self, x, y, true) };
-        let p = (self.pose)(v);
-        let z = slope.wrapping_sub(p.z);
+        let vehicle_z = v.z();
+        let direction = v.direction();
+        let z = slope.wrapping_sub(vehicle_z);
         if z.wrapping_abs() > 2 {
             return CANNOT_ENTER;
         }
         let dir = (self.shared().tunnel_bridge_direction)(tile);
-        let vdir = dir_to_diag_dir(p.direction, |ok| (self.native_assert)(ok));
+        let vdir = dir_to_diag_dir(direction, |ok| (self.native_assert)(ok));
         let pos = (if diag_dir_to_axis(vdir, |ok| (self.native_assert)(ok)) == AXIS_X {
             x
         } else {
@@ -1296,8 +1277,9 @@ impl MovementServices {
                     }
                     speed = speed.wrapping_mul(2);
                 }
-                let first = (self.first_speed)(v);
-                (first.first).write_speed(first.speed.min(speed));
+                let first = v.first();
+                let first_speed = first.speed();
+                first.write_speed(first_speed.min(speed));
             }
             if vdir == dir {
                 if frame != TILE_SIZE as u8 - 1 {
@@ -1312,13 +1294,13 @@ impl MovementServices {
                 match h.kind.0 {
                     VEH_TRAIN => {
                         h.train.set_track(u64::from(TRACK_BIT_WORMHOLE));
-                        self.prepare_bridge(v);
+                        Self::prepare_bridge(v);
                     }
                     VEH_ROAD => {
                         unsafe {
                             crate::road::set_state(h.road, RVSB_WORMHOLE);
                         }
-                        self.prepare_bridge(v);
+                        Self::prepare_bridge(v);
                     }
                     VEH_SHIP => unsafe {
                         crate::ship_control::openttd_rust_ship_set_state(
@@ -1414,15 +1396,17 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
 ) -> i32 {
     let s = unsafe { &*s };
     w::hit(w::MOVE_DEPOT_TICKS);
-    let p = (s.depot_position)(v);
-    let dir = (s.rail_map().rail_depot_direction)(p.tile).0;
+    let tile = v.vehicle().tile();
+    let x = v.vehicle().x();
+    let y = v.vehicle().y();
+    let dir = (s.rail_map().rail_depot_direction)(tile).0;
     let length = crate::train::next_offset(v);
     let enter = FRACT_ENTER[usize::from(dir)];
     match dir {
-        0 => (p.x & 15) - (i32::from(enter & 15) - (length + 1)),
-        1 => -((p.y & 15) - (i32::from(enter >> 4) + (length + 1))),
-        2 => -((p.x & 15) - (i32::from(enter & 15) + (length + 1))),
-        3 => (p.y & 15) - (i32::from(enter >> 4) - (length + 1)),
+        0 => (x & 15) - (i32::from(enter & 15) - (length + 1)),
+        1 => -((y & 15) - (i32::from(enter >> 4) + (length + 1))),
+        2 => -((x & 15) - (i32::from(enter & 15) + (length + 1))),
+        3 => (y & 15) - (i32::from(enter >> 4) - (length + 1)),
         _ => unreachable!("native depot direction"),
     }
 }
@@ -1519,23 +1503,6 @@ mod tests {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDMovementFirstSpeed" ["landscape"] => FirstSpeed {
-        first,
-        speed,
-    };
-    "OpenTTDMovementIncline" ["landscape"] => Incline {
-        z,
-        flags,
-    };
-    "OpenTTDMovementDepotPosition" ["landscape"] => DepotPosition {
-        tile,
-        x,
-        y,
-    };
-    "OpenTTDMovementPose" ["landscape"] => MovementPose {
-        z,
-        direction,
-    };
     "OpenTTDMovementVehicle" ["landscape"] => MovementVehicle {
         train,
         road,
@@ -1565,12 +1532,6 @@ crate::abi::layouts! {
         road_kind,
         road_vehicle,
         resolve,
-        pose,
-        depot_position,
-        incline,
-        first,
-        first_speed,
-        write_ground_flags,
         train_engine_class,
         depot_invalidate,
         native_assert,

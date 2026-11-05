@@ -159,7 +159,7 @@ pub struct Services {
         *const crate::station_cmd::AirportSpec,
     ) -> crate::newgrf_airport::TtdpAirportType,
     moving_flags: unsafe extern "C" fn(*const c_void, u8) -> u16,
-    roadtype: unsafe extern "C" fn(V) -> crate::services::RoadType,
+    pub(crate) roadtype: unsafe extern "C" fn(V) -> crate::services::RoadType,
     tile_roadtype:
         unsafe extern "C" fn(u32, crate::services::RoadTramType) -> crate::services::RoadType,
     tile_railtype: unsafe extern "C" fn(u32) -> crate::services::RailType,
