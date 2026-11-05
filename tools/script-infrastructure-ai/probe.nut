@@ -284,6 +284,15 @@ function ProbeRoadTypes(who) {
 	local types = "";
 	foreach (rt in [-1, 0, 1, 2, 62, 63, 64, 255, 256]) {
 		types += " " + rt + ":" + Num(ApiRoad.IsRoadTypeAvailable(rt)) + ApiError.GetLastErrorString();
+		local info = "" + ApiRoad.GetMaxSpeed(rt) + ":" + ApiError.GetLastErrorString();
+		foreach (build in [-1, 0, 1, 2, 3, 4, 256]) {
+			info += " " + build + ":" + ApiRoad.GetBuildCost(rt, build) + ":" + ApiError.GetLastErrorString();
+		}
+		foreach (other in [-1, 0, 1, 2, 62, 63, 64, 255, 256]) {
+			info += " " + other + ":" + Num(ApiRoad.RoadVehHasPowerOnRoad(rt, other)) + ":" + ApiError.GetLastErrorString();
+			info += ":" + Num(ApiRoad.RoadVehCanRunOnRoad(rt, other)) + ":" + ApiError.GetLastErrorString();
+		}
+		Record(who, "road.info " + rt, info);
 	}
 	Record(who, "road.types", types);
 	local current = "" + ApiRoad.GetCurrentRoadType();

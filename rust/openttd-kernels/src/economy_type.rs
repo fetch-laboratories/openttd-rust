@@ -11,6 +11,10 @@
 pub const PR_BUILD_SIGNALS: usize = 3;
 /// `PR_BUILD_DEPOT_TRAIN`.
 pub const PR_BUILD_DEPOT_TRAIN: usize = 5;
+/// `PR_BUILD_DEPOT_ROAD`.
+pub const PR_BUILD_DEPOT_ROAD: usize = 6;
+/// `PR_BUILD_STATION_BUS`.
+pub const PR_BUILD_STATION_BUS: usize = 12;
 /// `PR_CLEAR_ROUGH`.
 pub const PR_CLEAR_ROUGH: usize = 23;
 /// `PR_CLEAR_SIGNALS`.

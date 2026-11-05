@@ -14,6 +14,9 @@
 #include "../tile_type.h"
 struct OpenTTDScriptHostServices;
 extern "C" {
+int64_t OPENTTD_RUST_CALL openttd_rust_script_road_build_cost(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
+int64_t OPENTTD_RUST_CALL openttd_rust_script_road_max_speed(const OpenTTDScriptHostServices *, uint32_t);
+uint8_t OPENTTD_RUST_CALL openttd_rust_script_road_powered(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 uint32_t OPENTTD_RUST_CALL openttd_rust_script_road_current_type();
 void OPENTTD_RUST_CALL openttd_rust_script_road_set_current_type(const OpenTTDScriptHostServices *, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_script_road_can_build_parts(const OpenTTDScriptHostServices *, uint32_t, const TileIndex *, size_t, uint32_t, uint32_t);

@@ -59,6 +59,48 @@ fn current_road_type() -> u32 {
     u32::from(script_host::active_road_type())
 }
 
+/// `ScriptRoad::RoadVehHasPowerOnRoad` and its `RoadVehCanRunOnRoad` forwarder.
+#[allow(clippy::cast_possible_truncation)]
+fn road_veh_has_power(s: &Services, engine_type: u32, road_type: u32) -> bool {
+    road_type_available(s, engine_type)
+        && road_type_available(s, road_type)
+        && (s.command.shared.road_powered)(engine_type as u8, road_type as u8)
+}
+
+/// `ScriptRoad::GetMaxSpeed`.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn openttd_rust_script_road_max_speed(s: &Services, road_type: u32) -> i64 {
+    if !road_type_available(s, road_type) {
+        return -1;
+    }
+    i64::from((crate::movement::table(s.command.shared).road_type_speed)(
+        crate::services::RoadType(road_type as u8),
+    ))
+}
+
+/// `ScriptRoad::GetBuildCost`.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn openttd_rust_script_road_build_cost(
+    s: &Services,
+    road_type: u32,
+    build_type: u32,
+) -> i64 {
+    use crate::economy_type::{PR_BUILD_DEPOT_ROAD, PR_BUILD_STATION_BUS, PR_BUILD_STATION_TRUCK};
+    if !road_type_available(s, road_type) {
+        return -1;
+    }
+    let price = match build_type {
+        0 => return crate::road_cost::build_cost(s.command.shared, road_type as u8),
+        1 => PR_BUILD_DEPOT_ROAD,
+        2 => PR_BUILD_STATION_BUS,
+        3 => PR_BUILD_STATION_TRUCK,
+        _ => return -1,
+    };
+    crate::economy_func::get_price(price as u32, 1, 0, 0)
+}
+
 /// `GetPresentRoadTypes(tile).Test(road_type)`.
 fn has_present(w: &World<'_>, tile: u32, road_type: u8) -> bool {
     crate::road_map::get_present_road_types(w, tile) & (1_u64 << road_type) != 0
@@ -692,6 +734,8 @@ macro_rules! byte_entries {
 }
 
 byte_entries! {
+    /// `ScriptRoad::RoadVehHasPowerOnRoad` and `RoadVehCanRunOnRoad`.
+    openttd_rust_script_road_powered => road_veh_has_power(engine_type: u32, road_type: u32);
     /// `ScriptRoad::IsRoadTile`.
     openttd_rust_script_road_is_road_tile => road_tile(tile: u32);
     /// `ScriptRoad::IsRoadDepotTile`.

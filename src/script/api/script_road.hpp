@@ -170,7 +170,7 @@ public:
 	 * @pre ScriptRoad::IsRoadTypeAvailable(road_road_type).
 	 * @return Whether a road vehicle built for 'engine_road_type' can run on 'road_road_type'.
 	 */
-	static bool RoadVehCanRunOnRoad(ScriptRoad::RoadType engine_road_type, ScriptRoad::RoadType road_road_type);
+	static bool RoadVehCanRunOnRoad(ScriptRoad::RoadType engine_road_type, ScriptRoad::RoadType road_road_type) { return openttd_rust_script_road_powered(&GetRustScriptHostServices(), static_cast<uint32_t>(engine_road_type), static_cast<uint32_t>(road_road_type)); }
 
 	/**
 	 * Check if a road vehicle built for a road type has power on another road type.
@@ -180,7 +180,7 @@ public:
 	 * @pre ScriptRoad::IsRoadTypeAvailable(road_road_type).
 	 * @return Whether a road vehicle built for 'engine_road_type' has power on 'road_road_type'.
 	 */
-	static bool RoadVehHasPowerOnRoad(ScriptRoad::RoadType engine_road_type, ScriptRoad::RoadType road_road_type);
+	static bool RoadVehHasPowerOnRoad(ScriptRoad::RoadType engine_road_type, ScriptRoad::RoadType road_road_type) { return openttd_rust_script_road_powered(&GetRustScriptHostServices(), static_cast<uint32_t>(engine_road_type), static_cast<uint32_t>(road_road_type)); }
 
 
 	/**
@@ -550,7 +550,7 @@ public:
 	 * @pre IsRoadTypeAvailable(roadtype)
 	 * @return The baseprice of building the given object.
 	 */
-	static Money GetBuildCost(RoadType roadtype, BuildType build_type);
+	static Money GetBuildCost(RoadType roadtype, BuildType build_type) { return Money(openttd_rust_script_road_build_cost(&GetRustScriptHostServices(), static_cast<uint32_t>(roadtype), static_cast<uint32_t>(build_type))); }
 
 	/**
 	 * Test if a road type is for road or trams.
@@ -569,7 +569,7 @@ public:
 	 *       This is mph / 0.8, which is roughly 0.5 km/h.
 	 *       To get km/h multiply this number by 2.01168.
 	 */
-	static SQInteger GetMaxSpeed(RoadType road_type);
+	static SQInteger GetMaxSpeed(RoadType road_type) { return openttd_rust_script_road_max_speed(&GetRustScriptHostServices(), static_cast<uint32_t>(road_type)); }
 
 	/**
 	 * Get the maintenance cost factor of a road type.

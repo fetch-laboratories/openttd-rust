@@ -33,19 +33,6 @@
 	return ::StrMakeValid(::GetString(GetRoadTypeInfo((::RoadType)road_type)->strings.name), {});
 }
 
-/* static */ bool ScriptRoad::RoadVehCanRunOnRoad(RoadType engine_road_type, RoadType road_road_type)
-{
-	return RoadVehHasPowerOnRoad(engine_road_type, road_road_type);
-}
-
-/* static */ bool ScriptRoad::RoadVehHasPowerOnRoad(RoadType engine_road_type, RoadType road_road_type)
-{
-	if (!IsRoadTypeAvailable(engine_road_type)) return false;
-	if (!IsRoadTypeAvailable(road_road_type)) return false;
-
-	return ::HasPowerOnRoad((::RoadType)engine_road_type, (::RoadType)road_road_type);
-}
-
 /* static */ bool ScriptRoad::ConvertRoadType(TileIndex start_tile, TileIndex end_tile, RoadType road_type)
 {
 	EnforceCompanyModeValid(false);
@@ -150,29 +137,9 @@
 	return ScriptObject::Command<CMD_REMOVE_ROAD_STOP>::Do(tile, 1, 1, static_cast<RoadStopType>(stop_type), false);
 }
 
-/* static */ Money ScriptRoad::GetBuildCost(RoadType roadtype, BuildType build_type)
-{
-	if (!ScriptRoad::IsRoadTypeAvailable(roadtype)) return -1;
-
-	switch (build_type) {
-		case BT_ROAD:       return ::RoadBuildCost((::RoadType)roadtype);
-		case BT_DEPOT:      return ::GetPrice(PR_BUILD_DEPOT_ROAD, 1, nullptr);
-		case BT_BUS_STOP:   return ::GetPrice(PR_BUILD_STATION_BUS, 1, nullptr);
-		case BT_TRUCK_STOP: return ::GetPrice(PR_BUILD_STATION_TRUCK, 1, nullptr);
-		default: return -1;
-	}
-}
-
 /* static */ ScriptRoad::RoadTramTypes ScriptRoad::GetRoadTramType(RoadType roadtype)
 {
 	return (RoadTramTypes)(1 << ::GetRoadTramType((::RoadType)roadtype));
-}
-
-/* static */ SQInteger ScriptRoad::GetMaxSpeed(RoadType road_type)
-{
-	if (!ScriptRoad::IsRoadTypeAvailable(road_type)) return -1;
-
-	return GetRoadTypeInfo((::RoadType)road_type)->max_speed;
 }
 
 /* static */ SQInteger ScriptRoad::GetMaintenanceCostFactor(RoadType roadtype)
