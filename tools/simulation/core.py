@@ -711,11 +711,16 @@ def benchmark_run(
     env: Mapping[str, str],
     stdout: IO[Any] | int,
     stderr: IO[Any] | int,
+    started: Callable[[subprocess.Popen[bytes]], None] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
-    """Wait without polling; the watchdog kills and the caller reaps on timeout."""
+    """Wait without polling; the watchdog kills and the caller reaps on timeout.
+
+    `started` receives the child, so an observer can stop it early."""
     with subprocess.Popen(
         command, cwd=cwd, env=env, stdout=stdout, stderr=stderr
     ) as child:
+        if started is not None:
+            started(child)
         expired = threading.Event()
 
         def kill() -> None:
