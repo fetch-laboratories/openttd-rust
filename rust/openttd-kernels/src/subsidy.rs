@@ -62,9 +62,6 @@ pub struct Services {
     pub industry_owner: extern "C" fn(*mut c_void) -> *mut crate::industry::Industry,
     pub industry_id: extern "C" fn(*mut c_void) -> u16,
     pub next_industry: extern "C" fn(u32) -> u32,
-    pub has_source_flag: extern "C" fn(Source, PartOfSubsidy) -> bool,
-    pub set_source_flag: extern "C" fn(Source, PartOfSubsidy),
-    pub clear_source_flags: extern "C" fn(Source),
     pub valid_source: extern "C" fn(Source) -> bool,
     pub can_allocate: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8, Source, Source, u16) -> u16,
@@ -85,7 +82,6 @@ pub struct Services {
     pub expired_events: extern "C" fn(u16),
     pub dirty: extern "C" fn(),
     pub station: extern "C" fn(u16) -> *const Station,
-    pub assert_destination: extern "C" fn(Source),
 }
 struct RegistryState {
     slots: [*mut State; 256],
@@ -154,8 +150,33 @@ impl Services {
             }
         }
     }
+    /// Live source at the original cache observation point. Resolving the owner
+    /// ends before its field is borrowed; callers retain no view across effects.
+    fn source_flags(&self, source: Source) -> *mut u8 {
+        match source.kind {
+            Source::TOWN => {
+                let owner = (self.shared().town_owner_by_id)(u32::from(source.id));
+                unsafe { &raw mut (*owner).record.part_of_subsidy }
+            }
+            Source::INDUSTRY => {
+                let shell = unsafe { (self.industry().get)(source.id) };
+                let owner = (self.industry_owner)(shell);
+                unsafe { &raw mut (*owner).record.part_of_subsidy }
+            }
+            _ => unreachable!("subsidy source type"),
+        }
+    }
+    fn has_flag(&self, source: Source, flag: PartOfSubsidy) -> bool {
+        unsafe { *self.source_flags(source) & (1 << flag as u8) != 0 }
+    }
     fn flag(&self, source: Source, flag: PartOfSubsidy) {
-        (self.set_source_flag)(source, flag);
+        unsafe { *self.source_flags(source) |= 1 << flag as u8 };
+    }
+    fn assert_destination(&self, source: Source) {
+        crate::movement::native_assert(
+            self.shared(),
+            self.has_flag(source, PartOfSubsidy::Destination),
+        );
     }
     fn distance_tiles(&self, a: u32, b: u32) -> bool {
         let map = self.shared().map();
@@ -167,12 +188,12 @@ impl Services {
     fn rebuild(&self) {
         let mut id = (self.shared().town_next_id)(0);
         while id != u32::MAX {
-            (self.clear_source_flags)(Source::town(id as u16));
+            unsafe { *self.source_flags(Source::town(id as u16)) = 0 };
             id = (self.shared().town_next_id)(id + 1);
         }
         let mut id = (self.next_industry)(0);
         while id != u32::MAX {
-            (self.clear_source_flags)(Source::industry(id as u16));
+            unsafe { *self.source_flags(Source::industry(id as u16)) = 0 };
             id = (self.next_industry)(id + 1);
         }
         each(|_, state| {
@@ -465,9 +486,7 @@ impl Services {
         }
     }
     pub(crate) fn check(&self, cargo: u8, company: u8, src: Source, station: u16) -> bool {
-        if !src.is_valid()
-            || src.kind > Source::TOWN
-            || !(self.has_source_flag)(src, PartOfSubsidy::Source)
+        if !src.is_valid() || src.kind > Source::TOWN || !self.has_flag(src, PartOfSubsidy::Source)
         {
             return false;
         }
@@ -497,7 +516,7 @@ impl Services {
                             return;
                         }
                         let town = (shared.town_index)(tile);
-                        if (self.has_source_flag)(Source::town(town), PartOfSubsidy::Destination) {
+                        if self.has_flag(Source::town(town), PartOfSubsidy::Destination) {
                             towns[usize::from(town) / 64] |= 1 << (town % 64);
                         }
                     });
@@ -522,7 +541,7 @@ impl Services {
                 unsafe {
                     crate::station::for_each_industry_near(station_state, |near| {
                         if near.id == crate::industry_type::IndustryID(dst.id) {
-                            (self.assert_destination)(dst);
+                            self.assert_destination(dst);
                             subsidised = true;
                             if !(*state).is_awarded() {
                                 self.award(id, company);
@@ -532,7 +551,7 @@ impl Services {
                     });
                 }
             } else if towns[usize::from(dst.id) / 64] & (1 << (dst.id % 64)) != 0 {
-                (self.assert_destination)(dst);
+                self.assert_destination(dst);
                 subsidised = true;
                 if unsafe { !(*state).is_awarded() } {
                     self.award(id, company);
@@ -598,9 +617,6 @@ crate::abi::layouts! {
         industry_owner,
         industry_id,
         next_industry,
-        has_source_flag,
-        set_source_flag,
-        clear_source_flags,
         valid_source,
         can_allocate,
         allocate,
@@ -621,6 +637,5 @@ crate::abi::layouts! {
         expired_events,
         dirty,
         station,
-        assert_destination,
     };
 }

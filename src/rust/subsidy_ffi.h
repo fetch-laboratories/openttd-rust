@@ -31,9 +31,6 @@ struct OpenTTDSubsidyServices {
 	OpenTTDIndustry *(*industry_owner)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_owner);
 	uint16_t (*industry_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_id);
 	uint32_t (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
-	bool (*has_source_flag)(Source, PartOfSubsidy) noexcept OPENTTD_SERVICE_DEFAULT(has_source_flag);
-	void (*set_source_flag)(Source, PartOfSubsidy) noexcept OPENTTD_SERVICE_DEFAULT(set_source_flag);
-	void (*clear_source_flags)(Source) noexcept OPENTTD_SERVICE_DEFAULT(clear_source_flags);
 	bool (*valid_source)(Source) noexcept OPENTTD_SERVICE_DEFAULT(valid_source);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	uint16_t (*allocate)(CargoType, Source, Source, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
@@ -54,7 +51,6 @@ struct OpenTTDSubsidyServices {
 	void (*expired_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(expired_events);
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	const Station *(*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
-	void (*assert_destination)(Source) noexcept OPENTTD_SERVICE_DEFAULT(assert_destination);
 };
 extern "C" {
 /* A record with the original member defaults. */

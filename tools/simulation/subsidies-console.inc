@@ -68,6 +68,12 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	bool refusals = CmdCreateSubsidy({}, INVALID_CARGO, town, other).Failed() && CmdCreateSubsidy({}, cargo, {Source::Invalid, SourceType::Town}, other).Failed();
 	current.Change(FIXTURE_GET(front, Owner, owner)); refusals &= CmdCreateSubsidy({}, cargo, town, other).Failed(); current.Change(OWNER_DEITY);
 	fmt::print(stderr, "SUBSIDY commands {} {}\n", commands, refusals);
+	auto flags_are = [](PartsOfSubsidy flags, bool source, bool destination) { return flags.Test(PartOfSubsidy::Source) == source && flags.Test(PartOfSubsidy::Destination) == destination; };
+	auto cache_populated = [&] {
+		return flags_are(FIXTURE_TOWN_CACHE(a).part_of_subsidy, true, true) && flags_are(FIXTURE_TOWN_CACHE(b).part_of_subsidy, false, false)
+			&& flags_are(FIXTURE_POOL_RECORD(i).part_of_subsidy, true, false) && flags_are(FIXTURE_POOL_RECORD(j).part_of_subsidy, false, true);
+	};
+	bool cache = cache_populated(); RebuildSubsidisedSourceAndDestinationCache(); cache &= cache_populated();
 	bool classes = CheckSubsidised(cargo, FIXTURE_GET(front, Owner, owner), town, st) && CheckSubsidised(cargo, FIXTURE_GET(front, Owner, owner), industry, st);
 	bool rival = !CheckSubsidised(cargo, CompanyID((FIXTURE_GET(front, Owner, owner).base() + 1) % 15), town, st);
 	fmt::print(stderr, "SUBSIDY classes {} {}\n", classes, rival);
@@ -121,6 +127,9 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	DeleteSubsidyWith(industry);
 #endif
 	removed &= Subsidy::GetNumItems() == 0;
+	bool cleared = flags_are(FIXTURE_TOWN_CACHE(a).part_of_subsidy, false, false) && flags_are(FIXTURE_TOWN_CACHE(b).part_of_subsidy, false, false)
+		&& flags_are(FIXTURE_POOL_RECORD(i).part_of_subsidy, false, false) && flags_are(FIXTURE_POOL_RECORD(j).part_of_subsidy, false, false);
+	fmt::print(stderr, "SUBSIDY cache {} {}\n", cache, cleared);
 	fmt::print(stderr, "SUBSIDY transfer {} {}\n", transfer, removed);
 	s = FixtureSubsidy(cargo, town, other, 54321); FIXTURE_POOL_RECORD(s).awarded = FIXTURE_GET(front, Owner, owner); RebuildSubsidisedSourceAndDestinationCache();
 	last.Restore(); current.Restore();

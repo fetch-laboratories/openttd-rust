@@ -148,9 +148,6 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 	static const OpenTTDSubsidyServices services = {
 		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industry = &GetIndustryRustServices(),
 		.industry_owner = RustIndustryCanonicalOwner<void *>, .industry_id = RustIndustryID<void *>, .next_industry = RustIndustryNextID,
-		.has_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: return Town::Get(source.ToTownID())->Record().part_of_subsidy.Test(part); case SourceType::Industry: return Industry::Get(source.ToIndustryID())->Record().part_of_subsidy.Test(part); default: NOT_REACHED(); } },
-		.set_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->Record().part_of_subsidy.Set(part); return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->Record().part_of_subsidy.Set(part); return; default: NOT_REACHED(); } },
-		.clear_source_flags = [](Source source) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->Record().part_of_subsidy = {}; return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->Record().part_of_subsidy = {}; return; default: NOT_REACHED(); } },
 		.valid_source = [](Source source) noexcept { return source.type == SourceType::Town ? Town::IsValidID(source.ToTownID()) : source.type == SourceType::Industry && Industry::IsValidID(source.ToIndustryID()); },
 		.can_allocate = []() noexcept { return Subsidy::CanAllocateItem(); },
 		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
@@ -169,7 +166,6 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); },
 		.dirty = []() noexcept { InvalidateWindowData(WC_SUBSIDIES_LIST, 0); },
 		.station = RustStationGet<const Station *>,
-		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->Record().part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->Record().part_of_subsidy.Test(PartOfSubsidy::Destination)); } },
 	};
 	return services;
 }

@@ -217,6 +217,7 @@ EXPECTED = {
     "subsidies": (
         "nearby true",
         "commands true true",
+        "cache true true",
         "classes true true",
         "multipliers true",
         "wrap true",
