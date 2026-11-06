@@ -976,7 +976,7 @@ static void ResolverProbe()
 	random->groups = {result, result};
 	e->grf_prop.spritegroups.clear();
 	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random);
-	for (Train *u = v; u != nullptr; u = u->Next()) u->tcache.cached_override = random;
+	for (Train *u = v; u != nullptr; u = u->Next()) FIXTURE_SET(u, CachedOverride, tcache.cached_override, random);
 	for (VehicleRandomTrigger trigger : {VehicleRandomTrigger::NewCargo, VehicleRandomTrigger::Depot, VehicleRandomTrigger::Empty, VehicleRandomTrigger::Callback32}) {
 		SavedRandomSeeds before, after;
 		SaveRandomSeeds(&before);

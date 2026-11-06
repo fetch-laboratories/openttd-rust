@@ -23,6 +23,8 @@ crate::abi::shared_records! {
         pub railtypes: u64,
         pub track: u8,
         pub force_proceed: u8,
+        /// NOSAVE wagon override sprite group, rebuilt with the consist cache.
+        pub cached_override: *const std::ffi::c_void => "const struct SpriteGroup *",
         pub cached_tilt: bool,
         pub user_def_data: u8,
         pub cached_curve_speed_mod: i16,

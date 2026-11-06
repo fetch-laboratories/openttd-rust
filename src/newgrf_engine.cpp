@@ -240,7 +240,7 @@ void GetCustomRotorIcon(EngineID engine, EngineImageType image_type, VehicleSpri
 bool UsesWagonOverride(const Vehicle *v)
 {
 	assert(v->GetType() == VEH_TRAIN);
-	return Train::From(v)->tcache.cached_override != nullptr;
+	return Train::From(v)->GetCachedOverride() != nullptr;
 }
 
 /**

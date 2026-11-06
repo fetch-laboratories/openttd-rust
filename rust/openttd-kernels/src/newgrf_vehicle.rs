@@ -110,8 +110,6 @@ pub struct Services {
     overrides: unsafe extern "C" fn(u16) -> Overrides,
     override_at: unsafe extern "C" fn(*const OpenTTDEngine, usize) -> Override,
     override_engine: unsafe extern "C" fn(*const OpenTTDEngine, usize, usize) -> u16,
-    cached_override: unsafe extern "C" fn(V) -> Group,
-    write_override: unsafe extern "C" fn(V, Group),
     spritegroup: unsafe extern "C" fn(u16, u8) -> Group,
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
@@ -451,7 +449,7 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
             if wagon != 0 && !v.is_null() && ground(v) {
                 crate::movement::native_assert(s.shared, engine(v) == id);
                 state.root = if wagon == 2 && handle(v).vehicle_type() == 0 {
-                    (s.cached_override)(v)
+                    crate::train::Handle::from_record(v).cached_override()
                 } else {
                     wagon_override(s, engine(v), handle(v).cargo_type(), first_engine(v))
                 };
@@ -1610,7 +1608,7 @@ pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
             handle(shell).cargo_type(),
             first_engine(shell),
         );
-        (s.write_override)(shell, group);
+        crate::train::Handle::from_record(shell).write_cached_override(group);
     }
 }
 /// Direct owner entry; the caller preserves the live shell through evaluation.
@@ -1683,7 +1681,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, capabilities,
         cargo_classes, cargo_bitnum, valid_company, livery, company_info,
-        overrides, override_at, override_engine, cached_override, write_override, spritegroup, resolve_callback, resolve_random, order, cargo_owner,
+        overrides, override_at, override_engine, spritegroup, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
         engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, service_interval, age, max_age, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };

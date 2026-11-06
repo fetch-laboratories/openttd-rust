@@ -84,19 +84,15 @@ struct TrainCache {
 	auto operator<=>(const TrainCache &) const = default;
 };
 
-/** The only C++ train-private cache is its shared NewGRF sprite pointer. */
-struct TrainSpriteCache {
-	const struct SpriteGroup *cached_override = nullptr;
-};
-
 /**
  * 'Train' is either a loco or a wagon.
  */
 struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	/* Canonical allocation destructs after PreDestructor, also on pool cleanup
-	 * and indexed-load destruction. C++ retains only the sprite pointer cache. */
+	 * and indexed-load destruction. */
 	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> rust_state{openttd_rust_train_state_new(), openttd_rust_train_state_destroy};
-	TrainSpriteCache tcache{};
+	const SpriteGroup *GetCachedOverride() const { return this->rust_state->cached_override; }
+	void SetCachedOverride(const SpriteGroup *group) { this->rust_state->cached_override = group; }
 
 	/** Native facade over the canonical NOSAVE multihead record link. */
 	Train *GetOtherMultiheadedPart() const { return static_cast<Train *>(VehicleFromRecord(this->rust_state->other_multiheaded_part)); }
@@ -199,7 +195,7 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	/** Copied diagnostic view of the private cache state. */
 	TrainCache CopyTrainCache() const
 	{
-		return {this->tcache.cached_override, this->GetCachedTilt(), this->GetUserDefData(), this->GetCachedCurveSpeedMod(), this->GetCachedMaxCurveSpeed()};
+		return {this->GetCachedOverride(), this->GetCachedTilt(), this->GetUserDefData(), this->GetCachedCurveSpeedMod(), this->GetCachedMaxCurveSpeed()};
 	}
 
 

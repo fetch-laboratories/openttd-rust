@@ -55,8 +55,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.overrides = [](uint16_t engine) noexcept -> OpenTTDVehicleOverrides { const Engine *e = Engine::Get(EngineID(engine)); return {RustEngine(e), e->overrides.size()}; },
 		.override_at = [](const OpenTTDEngine *engine, size_t i) noexcept -> OpenTTDVehicleOverride { const auto &o = EngineOf(engine)->overrides[i]; return {o.group, o.cargo, o.engines.size()}; },
 		.override_engine = [](const OpenTTDEngine *engine, size_t i, size_t j) noexcept { return EngineOf(engine)->overrides[i].engines[j].base(); },
-		.cached_override = [](OpenTTDVehicle *v) noexcept { return Train::From(VehicleOf(v))->tcache.cached_override; },
-		.write_override = [](OpenTTDVehicle *v, const SpriteGroup *group) noexcept { Train::From(VehicleOf(v))->tcache.cached_override = group; },
 		.spritegroup = [](uint16_t engine, uint8_t cargo) noexcept { return RustSpecCargoSpriteGroup(Engine::Get(EngineID(engine)), cargo); },
 		.resolve_callback = VehicleResolverCallback, .resolve_random = VehicleResolverRandom,
 		.order = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicleLoadingOrder { const Vehicle *u = VehicleOf(v); return {to_underlying(RustVehicleOrderUnloadType(u)), to_underlying(RustVehicleOrderLoadType(u)), RustVehicleOrderType(u) == OT_LOADING}; },

@@ -69,6 +69,12 @@ impl Handle {
             }
         }
     }
+    pub(crate) fn cached_override(self) -> *const std::ffi::c_void {
+        read_field!(self.owner, cached_override)
+    }
+    pub(crate) fn write_cached_override(self, group: *const std::ffi::c_void) {
+        write_field!(self.owner, cached_override, group);
+    }
     pub(crate) fn next(self) -> Self {
         Self::from_record(read_field!(self.record, next))
     }
