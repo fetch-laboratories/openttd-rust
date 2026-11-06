@@ -292,15 +292,14 @@ unsafe fn reliability(s: &Services, e: EngineRef, month: bool) {
     {
         age = age.wrapping_add(1);
     }
-    let cfg = read_field!(e.state, info);
     let phase1 = u32::from(read_field!(e.state, duration_phase_1));
     let phase2 = u32::from(read_field!(e.state, duration_phase_2));
     let phase3 = u32::from(read_field!(e.state, duration_phase_3));
     if read_field!(e.state, company_avail) != 0
         && !unsafe { never_expire(s) }
-        && cfg.base_life != 255
+        && read_field!(e.state, info.base_life) != 255
     {
-        let early = i32::from(cfg.retire_early);
+        let early = i32::from(read_field!(e.state, info.retire_early));
         let max_age = ((phase1 + phase2) as i32 - early * 12).max(0) as u32;
         if early != 0 && age >= max_age {
             write_field!(e.state, company_avail, 0);
@@ -319,7 +318,8 @@ unsafe fn reliability(s: &Services, e: EngineRef, month: bool) {
             + start;
     } else {
         age = age.wrapping_sub(phase1);
-        if age < phase2 || unsafe { never_expire(s) } || cfg.base_life == 255 {
+        if age < phase2 || unsafe { never_expire(s) } || read_field!(e.state, info.base_life) == 255
+        {
             value = u32::from(read_field!(e.state, reliability_max));
         } else {
             age = age.wrapping_sub(phase2);
@@ -362,7 +362,6 @@ pub unsafe extern "C" fn openttd_rust_engine_reliability(
 }
 #[allow(clippy::too_many_lines)]
 unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
-    let cfg = read_field!(e.state, info);
     let climate = unsafe { climate(s, e.shell) };
     let settings = unsafe { call!(s, start_settings) };
     write_field!(e.state, age, 0);
@@ -372,27 +371,23 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     let rng = unsafe { &*s.rng };
     let shared = unsafe { &*s.shared };
     let saved = unsafe { call!(rng, save) };
-    unsafe {
-        call!(
-            rng,
-            set_seed,
-            shared.settings().generation_seed.read()
-                ^ seed
-                ^ cfg.base_intro as u32
-                ^ u32::from(e.kind.0)
-                ^ crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell),
-        );
-    }
+    let intro_seed = unsafe { shared.settings().generation_seed.read() }
+        ^ seed
+        ^ read_field!(e.state, info.base_intro) as u32
+        ^ u32::from(e.kind.0)
+        ^ unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell) };
+    unsafe { call!(rng, set_seed, intro_seed) };
     let r = call!(shared, random, shared.context);
     let cutoff = crate::timer_game_common::calendar_ymd_to_date(
         settings.starting_year.wrapping_add(2),
         0,
         1,
     );
-    let intro = if cfg.base_intro <= cutoff {
-        cfg.base_intro
+    let base_intro = read_field!(e.state, info.base_intro);
+    let intro = if base_intro <= cutoff {
+        base_intro
     } else {
-        cfg.base_intro.wrapping_add((r & 511) as i32)
+        base_intro.wrapping_add((r & 511) as i32)
     };
     write_field!(e.state, intro_date, intro);
     if intro <= settings.date {
@@ -411,22 +406,16 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
         write_field!(e.state, flags, read_field!(e.state, flags) | AVAILABLE);
     }
     let re = unsafe { parent(s, e) };
-    let re_cfg = read_field!(re.state, info);
-    unsafe {
-        call!(
-            rng,
-            set_seed,
-            shared.settings().generation_seed.read()
-                ^ seed
-                ^ (u32::from(call!(s, engine_id, re.shell)) << 16)
-                ^ (re_cfg.base_intro as u32).wrapping_shl(12)
-                ^ (u32::from(re_cfg.decay_speed) << 8)
-                ^ (re_cfg.lifelength as u32).wrapping_shl(4)
-                ^ (i32::from(re_cfg.retire_early) as u32)
-                ^ u32::from(e.kind.0)
-                ^ crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell),
-        );
-    }
+    let reliability_seed = unsafe { shared.settings().generation_seed.read() }
+        ^ seed
+        ^ (u32::from(unsafe { call!(s, engine_id, re.shell) }) << 16)
+        ^ (read_field!(re.state, info.base_intro) as u32).wrapping_shl(12)
+        ^ (u32::from(read_field!(re.state, info.decay_speed)) << 8)
+        ^ (read_field!(re.state, info.lifelength) as u32).wrapping_shl(4)
+        ^ (i32::from(read_field!(re.state, info.retire_early)) as u32)
+        ^ u32::from(e.kind.0)
+        ^ unsafe { crate::engine_capabilities::openttd_rust_engine_grfid(s.capabilities, e.shell) };
+    unsafe { call!(rng, set_seed, reliability_seed) };
     let r = call!(shared, random, shared.context);
     write_field!(
         e.state,
@@ -444,7 +433,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     write_field!(
         e.state,
         duration_phase_2,
-        cfg.base_life
+        read_field!(e.state, info.base_life)
             .wrapping_mul(12)
             .wrapping_add(((r >> 5) & 15) as i32)
             .wrapping_sub(96)
@@ -457,7 +446,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
     write_field!(
         e.state,
         reliability_spd_dec,
-        u16::from(cfg.decay_speed) << 2
+        u16::from(read_field!(e.state, info.decay_speed)) << 2
     );
     if !climate {
         write_field!(e.state, flags, read_field!(e.state, flags) | AVAILABLE);
@@ -491,10 +480,9 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
         if !unsafe { climate(s, e.shell) } || unsafe { wagon(e) } {
             continue;
         }
-        let cfg = read_field!(e.state, info);
-        let date = cfg
-            .base_intro
-            .wrapping_add(cfg.lifelength.wrapping_mul(DAYS_IN_LEAP_YEAR) / 2);
+        let date = read_field!(e.state, info.base_intro).wrapping_add(
+            read_field!(e.state, info.lifelength).wrapping_mul(DAYS_IN_LEAP_YEAR) / 2,
+        );
         year = year.max(crate::timer_game_common::calendar_date_to_ymd(date).year);
     }
     unsafe {
