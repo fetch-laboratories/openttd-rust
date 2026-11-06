@@ -504,8 +504,8 @@ static bool LoadingScenario(std::span<std::string_view> args)
 		auto [refit, refit_capacity, refit_mail, refit_cargos] = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, vehicle, FIXTURE_FIELD(Vehicle::Get(vehicle), cargo_type), 1, false, true, 1);
 		Require(refit.Succeeded() && refit_capacity == 55, "action2-refit-capacity");
 		TriggerVehicleRandomisation(Vehicle::Get(vehicle), VehicleRandomTrigger::Depot);
-		Require(!Vehicle::Get(vehicle)->waiting_random_triggers.Test(VehicleRandomTrigger::Depot), "action2-random-trigger");
-		fmt::print(stderr, "LOADING randomized {} {} {} {}\n", FIXTURE_FIELD(Vehicle::Get(vehicle), random_bits), Vehicle::Get(vehicle)->waiting_random_triggers.base(), _random.state[0], _random.state[1]);
+		Require(!FIXTURE_GET(Vehicle::Get(vehicle), WaitingRandomTriggers, waiting_random_triggers).Test(VehicleRandomTrigger::Depot), "action2-random-trigger");
+		fmt::print(stderr, "LOADING randomized {} {} {} {}\n", FIXTURE_FIELD(Vehicle::Get(vehicle), random_bits), FIXTURE_GET(Vehicle::Get(vehicle), WaitingRandomTriggers, waiting_random_triggers).base(), _random.state[0], _random.state[1]);
 		built = true;
 		break;
 	}
