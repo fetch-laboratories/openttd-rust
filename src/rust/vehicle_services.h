@@ -244,8 +244,6 @@ static void RustIndexedVehicleWrite(uint32_t id, Value value) noexcept { Write(V
 
 /** Base vehicle cargo and articulated fields shared by loading and link refresh. */
 inline bool RustVehicleUsesWagonOverride(const Vehicle *v) noexcept { return UsesWagonOverride(v); }
-inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->Record().cargo_subtype; }
-inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->Record().cargo_type; }
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
 
 inline const GRFFile *RustEngineGRF(const Engine *engine) noexcept { return RustEngineGRF(RustEngine(engine)); }

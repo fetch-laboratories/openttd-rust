@@ -581,6 +581,12 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn write_breakdown_chance(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), breakdown_chance, value);
     }
+    pub(crate) fn write_cargo_type(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), cargo_type, value);
+    }
+    pub(crate) fn write_cargo_subtype(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), cargo_subtype, value);
+    }
     pub(crate) fn cargo_type(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), cargo_type)
     }

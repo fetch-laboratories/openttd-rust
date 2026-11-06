@@ -10,7 +10,7 @@ use crate::command_type::DoCommandFlag;
 use crate::engine_type::AIR_CTOL;
 use crate::services::CommandCost;
 use crate::station::Station;
-use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleType};
+use crate::vehicle::{OpenTTDEngine, VehicleType};
 use std::ptr;
 
 const HRS_ROTOR_STOPPED: u8 = 0;

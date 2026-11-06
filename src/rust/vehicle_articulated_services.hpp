@@ -11,7 +11,7 @@ static void VehicleArticSetPart(void *shell, uint8_t image, uint8_t cargo, uint1
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	RustWriteVehicleSprite(v, image);
 	v->Record().cargo_type = cargo;
-	if (validate) assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
+	if (validate) assert(OpenTTDIsValidCargo(v->Record().cargo_type));
 	v->Record().cargo_cap = capacity;
 	v->Record().refit_cap = 0;
 }
