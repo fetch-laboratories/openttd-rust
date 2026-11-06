@@ -1285,7 +1285,11 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
                 (s.delete_group)(id);
             } else {
                 unsafe {
-                    crate::fleet::transfer_group((s.settings)().transactions.groups, id as u16, new)
+                    crate::fleet::transfer_group(
+                        (s.settings)().transactions.groups,
+                        id as u16,
+                        new,
+                    );
                 };
             }
         },
