@@ -5,7 +5,10 @@
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 use super::{Settings, live::Graph};
 use crate::cargotype::{CC_EXPRESS, CC_MAIL, PASSENGERS};
-use crate::{cargo_flow::FlowMap, industrytype::NativeVec, timer_game_common::INVALID_DATE};
+use crate::{
+    cargo_flow::FlowMap, industrytype::NativeVec, linkgraph_type::LinkGraphID,
+    timer_game_common::INVALID_DATE,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 crate::abi::shared_records! {
@@ -29,7 +32,7 @@ crate::abi::shared_records! {
     "OpenTTDLinkGraphJobRecord" ["station_service"] => pub struct JobRecord {
         pub graph: *mut Graph,
         pub settings: SnapshotSettings,
-        pub graph_index: u16,
+        pub graph_index: LinkGraphID,
         pub join_date: i32,
         pub nodes: NativeVec<JobNode> => "RustVector<OpenTTDLinkGraphJobNode>",
         pub edge_flows: NativeVec<u32> => "RustVector<uint32_t>",
@@ -72,7 +75,7 @@ impl Drop for JobRecord {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_linkgraph_job_new(
     graph: *const Graph,
-    graph_index: u16,
+    graph_index: LinkGraphID,
     settings: *const SnapshotSettings,
 ) -> *mut JobRecord {
     let settings = unsafe { *settings };
@@ -212,7 +215,9 @@ mod tests {
                     EdgeUpdateModes::UNRESTRICTED,
                 );
             }
-            let job = unsafe { openttd_rust_linkgraph_job_new(graph, 42, &raw const settings) };
+            let job = unsafe {
+                openttd_rust_linkgraph_job_new(graph, LinkGraphID(42), &raw const settings)
+            };
             unsafe {
                 (*job).join_date = 59;
                 (*job).aborted.store(abort, Ordering::Release);

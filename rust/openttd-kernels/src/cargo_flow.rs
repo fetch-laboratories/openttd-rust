@@ -627,7 +627,7 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
     }
     let snapshot = unsafe { (*s.job).graph };
     let size = unsafe { &*snapshot }.size();
-    let graph = u32::from(unsafe { (*s.job).graph_index });
+    let graph = u32::from(unsafe { (*s.job).graph_index.0 });
     let job_flows = |node: u16| unsafe { (&(*s.job).nodes)[usize::from(node)].flows };
     let mut edge_begin = 0;
     let valid_node = |node| {
@@ -910,7 +910,7 @@ mod tests {
             let job = unsafe {
                 crate::linkgraph::job::openttd_rust_linkgraph_job_new(
                     snapshot,
-                    42,
+                    crate::linkgraph_type::LinkGraphID(42),
                     &raw const settings,
                 )
             };

@@ -12,7 +12,7 @@
 
 use crate::debug::debug;
 use crate::{
-    linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH, INVALID_NODE},
+    linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH, INVALID_NODE, LinkGraphID},
     station_type::INVALID_STATION,
     tile_type::INVALID_TILE,
     timer_game_common::INVALID_DATE,
@@ -417,7 +417,7 @@ pub struct StationInput {
 #[repr(C)]
 pub struct Access {
     pub owner: *mut Graph,
-    pub index: u16,
+    pub index: LinkGraphID,
 }
 /// Typed native shell/station leaves; no opcode dispatch or registered globals.
 #[repr(C)]
@@ -436,10 +436,6 @@ pub struct Services {
     pub node: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
     pub available: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8) -> *mut super::NativeGraph,
-}
-struct GraphAccess {
-    owner: *mut Graph,
-    index: u16,
 }
 /// Resolve once per Rust caller entry; the shell remains live under the game mutex.
 pub(crate) unsafe fn resolve(graph: *mut super::NativeGraph, services: &Services) -> *mut Graph {
@@ -484,11 +480,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     let date = crate::timer_game_common::economy_date().0;
     let services = unsafe { &*services };
     witness::hit(witness::LINKGRAPH_MERGE);
-    let native = (services.access)(graph);
-    let access = GraphAccess {
-        owner: native.owner,
-        index: native.index,
-    };
+    let access = (services.access)(graph);
     let source = unsafe { resolve(other, services) };
     let (cargo, first, age, other_age, size) = {
         let g = unsafe { &*access.owner };
@@ -509,7 +501,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
         unsafe { &mut *access.owner }.nodes[usize::from(new)].supply =
             scale(supply, age, other_age);
         // No graph borrow crosses station mutation or deletion/reentry.
-        (services.attach)(station, cargo, access.index, new);
+        (services.attach)(station, cargo, access.index.0, new);
         let from = &unsafe { &*source }.nodes[usize::from(id)];
         let to = &mut unsafe { &mut *access.owner }.nodes[usize::from(new)];
         for edge in &from.edges {
@@ -567,15 +559,11 @@ pub(crate) fn station_graph(
     (services.get_if_valid)((services.graph_id)(station, cargo))
 }
 pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
-    let native = (services.access)(graph);
-    let access = GraphAccess {
-        owner: native.owner,
-        index: native.index,
-    };
+    let access = (services.access)(graph);
     let cargo = unsafe { (*access.owner).cargo };
     let input = (services.station)(station, cargo);
     let node = unsafe { &mut *access.owner }.add_node(input.xy, station, input.demand);
-    (services.attach)(station, cargo, access.index, node);
+    (services.attach)(station, cargo, access.index.0, node);
 }
 pub(crate) unsafe fn station_demand(
     station: *mut crate::station::BaseStation,

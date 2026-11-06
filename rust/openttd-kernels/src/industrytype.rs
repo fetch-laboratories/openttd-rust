@@ -50,9 +50,7 @@ impl<T> NativeVec<T> {
     where
         T: Clone,
     {
-        let mut vec = std::mem::take(self).into_vec();
-        vec.resize(count, value);
-        *self = Self::from_vec(vec);
+        self.edit(|vec| vec.resize(count, value));
     }
     pub fn as_slice(&self) -> &[T] {
         if self.count == 0 {
@@ -79,6 +77,8 @@ impl<T> NativeVec<T> {
         self.count = 0;
         vec
     }
+    // The canonical owner is empty while editing; unwind drops the detached vector.
+    // Callers finish edits before callbacks can observe native aliases.
     pub(crate) fn edit<R>(&mut self, edit: impl FnOnce(&mut Vec<T>) -> R) -> R {
         let mut vec = std::mem::take(self).into_vec();
         let result = edit(&mut vec);
@@ -98,9 +98,7 @@ impl<T> NativeVec<T> {
         self.edit(|vec| vec.retain(keep));
     }
     pub fn push(&mut self, value: T) {
-        let mut vec = std::mem::take(self).into_vec();
-        vec.push(value);
-        *self = Self::from_vec(vec);
+        self.edit(|vec| vec.push(value));
     }
 }
 impl<T> std::ops::Deref for NativeVec<T> {

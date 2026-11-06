@@ -12,6 +12,16 @@ pub const INVALID_NODE: u16 = u16::MAX;
 /// `LinkGraphID::Invalid()`.
 pub const INVALID_LINK_GRAPH: u16 = u16::MAX;
 
+/// `LinkGraphID`, retaining the native u16 coordinate and reuse semantics.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LinkGraphID(pub u16);
+impl crate::pool::PoolId for LinkGraphID {
+    fn index(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
 /// `EdgeUpdateModes`, the `EnumBitSet<EdgeUpdateMode, uint8_t>` base value.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
