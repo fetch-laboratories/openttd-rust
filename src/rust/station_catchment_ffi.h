@@ -9,8 +9,7 @@
 #ifndef RUST_STATION_CATCHMENT_FFI_H
 #define RUST_STATION_CATCHMENT_FFI_H
 #include "service_defaults.hpp"
-#include "rust_vector.h"
-#include "abi-record-station_service.h"
+#include "linkgraph_ffi.h"
 #include <cstdint>
 #include <cstddef>
 struct BaseStation;
