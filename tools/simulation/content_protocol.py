@@ -386,7 +386,7 @@ def observe(run: Run, server: ContentServer, mirror: list[str]) -> list[str]:
 
 
 REQUIRED = (
-    "CONTENT event connect True",
+    "CONTENT event connect true",
     "CONTENT event complete 120",
     "CONTENT event complete 121",
     "CONTENT event complete 122",
