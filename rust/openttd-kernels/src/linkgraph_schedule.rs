@@ -21,22 +21,23 @@ struct Queues {
 }
 #[repr(C)]
 pub(crate) struct Services {
-    shared: &'static crate::services::Services,
-    assert_graph: extern "C" fn(*const Graph),
-    can_allocate: extern "C" fn() -> bool,
     allocation_failure: extern "C" fn(),
-    new_job: extern "C" fn(*const Graph) -> *mut Job,
-    spawn: extern "C" fn(*mut Job),
+    assert_graph: extern "C" fn(*const Graph),
+    begin_measurement: extern "C" fn(*mut c_void, bool),
+    can_allocate: extern "C" fn() -> bool,
     destroy_job: extern "C" fn(*mut Job),
-    graph_valid: extern "C" fn(u16) -> bool,
     pub(crate) graph_get: extern "C" fn(u16) -> *mut Graph,
+    graph_valid: extern "C" fn(u16) -> bool,
+    new_job: extern "C" fn(*const Graph) -> *mut Job,
     next_graph: extern "C" fn(*mut u32) -> *mut Graph,
     next_job: extern "C" fn(*mut u32) -> *mut Job,
-    begin_measurement: extern "C" fn(*mut c_void, bool),
+    shared: &'static crate::services::Services,
+    start_thread: extern "C" fn(*mut Job) -> bool,
+    vehicle: *const crate::vehicle::VehicleServices,
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { shared, assert_graph, can_allocate, allocation_failure, new_job, spawn, destroy_job, graph_valid, graph_get, next_graph, next_job, begin_measurement };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, graph_get, graph_valid, new_job, next_graph, next_job, shared, start_thread, vehicle };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -66,6 +67,26 @@ pub(crate) extern "C" fn openttd_rust_schedule_queue(s: &Services, graph: *mut G
 pub(crate) extern "C" fn openttd_rust_schedule_dequeue(graph: *mut Graph) {
     access(|q| q.schedule.retain(|&g| g != graph));
 }
+fn spawn_job(s: &Services, job: *mut Job) {
+    if (s.start_thread)(job) {
+        return;
+    }
+    if unsafe { (*job).aborted.load(Ordering::Acquire) } {
+        return;
+    }
+    // The source fallback observes cargo classes and map dimensions at worker entry.
+    let cargo = unsafe { (*(*job).graph).cargo };
+    let resolver = unsafe { ((*s.vehicle).newgrf)() };
+    let classes = unsafe { ((*resolver).cargo_classes)(cargo) };
+    unsafe {
+        crate::linkgraph::job::openttd_rust_linkgraph_job_run(
+            job,
+            classes,
+            (s.shared.map_max_x)(),
+            (s.shared.map_max_y)(),
+        );
+    }
+}
 fn spawn_next(s: &Services) {
     let Some(mut next) = access(|q| q.schedule.front().copied()) else {
         return;
@@ -85,7 +106,7 @@ fn spawn_next(s: &Services) {
     access(|q| q.schedule.pop_front());
     if (s.can_allocate)() {
         let job = (s.new_job)(next);
-        (s.spawn)(job); // may synchronously compute; no owner borrow survives.
+        spawn_job(s, job); // may synchronously compute; no owner borrow survives.
         access(|q| q.running.push_back(job));
         witness::hit(witness::SCHEDULE_SPAWN);
     } else {
@@ -120,7 +141,7 @@ fn join_next(s: &Services) {
 extern "C" fn openttd_rust_schedule_spawn_all(s: &Services) {
     let mut i = 0;
     while let Some(job) = access(|q| q.running.get(i).copied()) {
-        (s.spawn)(job);
+        spawn_job(s, job);
         witness::hit(witness::SCHEDULE_RELOAD_JOB);
         i += 1;
     }

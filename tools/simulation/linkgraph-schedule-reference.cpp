@@ -89,18 +89,18 @@ extern "C" void openttd_test_schedule_pause_observer(void (*)(bool));
 static void ObservePause(bool paused) { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused); }
 static const OpenTTDSharedServices fixture_shared{};
 static const OpenTTDScheduleServices services{
-	.shared = &fixture_shared,
-	.assert_graph = [](const OpenTTDLiveGraph *g) noexcept { assert(g->shell == LinkGraph::Get(g->shell->index)); },
-	.can_allocate = []() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.allocation_failure = []() noexcept { NOT_REACHED(); },
-	.new_job = [](const OpenTTDLiveGraph *g) noexcept { return (new LinkGraphJob(*g->shell))->record; },
-	.spawn = [](OpenTTDLinkGraphJobRecord *j) noexcept { j->shell->SpawnThread(); },
+	.assert_graph = [](const OpenTTDLiveGraph *g) noexcept { assert(g->shell == LinkGraph::Get(g->shell->index)); },
+	.begin_measurement = [](void *p, bool client) noexcept { if (client) static_cast<std::optional<PerformanceMeasurer> *>(p)->emplace(PFE_GL_LINKGRAPH); else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH); },
+	.can_allocate = []() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.destroy_job = [](OpenTTDLinkGraphJobRecord *j) noexcept { delete j->shell; },
-	.graph_valid = [](uint16_t id) noexcept { return LinkGraph::IsValidID(id); },
 	.graph_get = [](uint16_t id) noexcept { return LinkGraph::Get(id)->owner; },
+	.graph_valid = [](uint16_t id) noexcept { return LinkGraph::IsValidID(id); },
+	.new_job = [](const OpenTTDLiveGraph *g) noexcept { return (new LinkGraphJob(*g->shell))->record; },
 	.next_graph = [](uint32_t *from) noexcept -> OpenTTDLiveGraph * { while (*from < graphs.size()) { auto *g = graphs[(*from)++]; if (g != nullptr) return g->owner; } return nullptr; },
 	.next_job = [](uint32_t *from) noexcept -> OpenTTDLinkGraphJobRecord * { while (*from < jobs.size()) { auto *j = jobs[(*from)++]; if (j != nullptr) return j->record; } return nullptr; },
-	.begin_measurement = [](void *p, bool client) noexcept { if (client) static_cast<std::optional<PerformanceMeasurer> *>(p)->emplace(PFE_GL_LINKGRAPH); else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH); },
+	.shared = &fixture_shared,
+	.start_thread = [](OpenTTDLinkGraphJobRecord *j) noexcept { j->shell->SpawnThread(); return true; },
 };
 static auto &ref = reference::LinkGraphSchedule::instance;
 static void Import(std::initializer_list<LinkGraph *> schedule, std::initializer_list<LinkGraphJob *> running)

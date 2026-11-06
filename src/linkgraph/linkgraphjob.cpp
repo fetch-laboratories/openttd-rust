@@ -25,22 +25,10 @@ INSTANTIATE_POOL_METHODS(LinkGraphJob)
 LinkGraphJob::LinkGraphJob() : record(openttd_rust_linkgraph_job_new(nullptr, LinkGraphID::Invalid().base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; }
 LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgraph_job_new(orig.RustState(), orig.index.base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; }
 
-/**
- * Spawn a thread if possible and run the link graph job in the thread. If
- * that's not possible run the job right now in the current thread.
- */
-void LinkGraphJob::SpawnThread()
+/** Start the native worker; Rust executes the synchronous failure fallback. */
+bool LinkGraphJob::StartThread()
 {
-	if (!StartNewThread(&this->thread, "ottd:linkgraph", &(LinkGraphSchedule::Run), this)) {
-		/* Of course this will hang a bit.
-		 * On the other hand, if you want to play games which make this hang noticeably
-		 * on a platform without threads then you'll probably get other problems first.
-		 * OK:
-		 * If someone comes and tells me that this hangs for them, I'll implement a
-		 * smaller grained "Step" method for all handlers and add some more ticks where
-		 * "Step" is called. No problem in principle. */
-		LinkGraphSchedule::Run(this);
-	}
+	return StartNewThread(&this->thread, "ottd:linkgraph", &(LinkGraphSchedule::Run), this);
 }
 
 /**

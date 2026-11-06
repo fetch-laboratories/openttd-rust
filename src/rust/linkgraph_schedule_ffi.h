@@ -17,19 +17,21 @@ struct OpenTTDScheduleQueues {
  * Exported spans live only until the next owner mutation; copy in native code
  * before SlObject. Native staging publishes partial state on return and unwind, including recursive null cleanup. */
 struct OpenTTDSharedServices;
+struct OpenTTDVehicleServices;
 struct OpenTTDScheduleServices {
-	const OpenTTDSharedServices *shared;
-	void (OPENTTD_RUST_CALL *assert_graph)(const OpenTTDLiveGraph *) noexcept;
-	bool (OPENTTD_RUST_CALL *can_allocate)() noexcept;
 	void (OPENTTD_RUST_CALL *allocation_failure)() noexcept;
-	OpenTTDLinkGraphJobRecord *(OPENTTD_RUST_CALL *new_job)(const OpenTTDLiveGraph *) noexcept;
-	void (OPENTTD_RUST_CALL *spawn)(OpenTTDLinkGraphJobRecord *) noexcept;
+	void (OPENTTD_RUST_CALL *assert_graph)(const OpenTTDLiveGraph *) noexcept;
+	void (OPENTTD_RUST_CALL *begin_measurement)(void *, bool) noexcept;
+	bool (OPENTTD_RUST_CALL *can_allocate)() noexcept;
 	void (OPENTTD_RUST_CALL *destroy_job)(OpenTTDLinkGraphJobRecord *) noexcept;
-	bool (OPENTTD_RUST_CALL *graph_valid)(uint16_t) noexcept;
 	OpenTTDLiveGraph *(OPENTTD_RUST_CALL *graph_get)(uint16_t) noexcept;
+	bool (OPENTTD_RUST_CALL *graph_valid)(uint16_t) noexcept;
+	OpenTTDLinkGraphJobRecord *(OPENTTD_RUST_CALL *new_job)(const OpenTTDLiveGraph *) noexcept;
 	OpenTTDLiveGraph *(OPENTTD_RUST_CALL *next_graph)(uint32_t *) noexcept;
 	OpenTTDLinkGraphJobRecord *(OPENTTD_RUST_CALL *next_job)(uint32_t *) noexcept;
-	void (OPENTTD_RUST_CALL *begin_measurement)(void *, bool) noexcept;
+	const OpenTTDSharedServices *shared;
+	bool (OPENTTD_RUST_CALL *start_thread)(OpenTTDLinkGraphJobRecord *) noexcept;
+	const OpenTTDVehicleServices *vehicle;
 };
 extern "C" {
 void openttd_rust_schedule_queue(const OpenTTDScheduleServices *, OpenTTDLiveGraph *);

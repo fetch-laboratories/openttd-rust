@@ -43,7 +43,7 @@ private:
 	OpenTTDLinkGraphJobRecord *record;
 	std::thread thread{};
 	void JoinThread();
-	void SpawnThread();
+	bool StartThread();
 };
 
 #endif /* LINKGRAPHJOB_H */
