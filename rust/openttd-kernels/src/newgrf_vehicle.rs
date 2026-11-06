@@ -86,17 +86,6 @@ pub struct CargoInfo {
     weight: u8,
 }
 #[repr(C)]
-pub struct Override {
-    group: Group,
-    cargo: u8,
-    count: usize,
-}
-#[repr(C)]
-pub struct Overrides {
-    engine: *const OpenTTDEngine,
-    count: usize,
-}
-#[repr(C)]
 pub struct Services {
     pub(crate) vehicle: &'static VehicleServices,
     pub(crate) shared: &'static crate::services::Services,
@@ -107,10 +96,6 @@ pub struct Services {
     valid_company: unsafe extern "C" fn(u8) -> bool,
     livery: unsafe extern "C" fn(u16, u8, u16, V) -> *const c_void,
     company_info: unsafe extern "C" fn(u8, *const c_void) -> u32,
-    overrides: unsafe extern "C" fn(u16) -> Overrides,
-    override_at: unsafe extern "C" fn(*const OpenTTDEngine, usize) -> Override,
-    override_engine: unsafe extern "C" fn(*const OpenTTDEngine, usize, usize) -> u16,
-    spritegroup: unsafe extern "C" fn(u16, u8) -> Group,
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
     order: unsafe extern "C" fn(V) -> OrderState,
@@ -118,8 +103,6 @@ pub struct Services {
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
     real_at: unsafe extern "C" fn(Group, bool, u32) -> Group,
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
-    default_cargo: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
-    engine_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     cargo_info: unsafe extern "C" fn(u8) -> CargoInfo,
     primary: unsafe extern "C" fn(V) -> bool,
     train_services: unsafe extern "C" fn() -> *const crate::train::Leaves,
@@ -147,10 +130,10 @@ pub struct Services {
         unsafe extern "C" fn(crate::services::RailType, crate::services::RailType) -> bool,
     badge_count: unsafe extern "C" fn(*const c_void) -> usize,
     badge_at: unsafe extern "C" fn(*const c_void, u32) -> u32,
-    engine_has_badge: unsafe extern "C" fn(*const OpenTTDEngine, u32) -> bool,
-    engine_badge: unsafe extern "C" fn(*const OpenTTDEngine) -> crate::newgrf_specs::BadgeSpan,
-    rail_badge: unsafe extern "C" fn(crate::services::RailType) -> crate::newgrf_specs::BadgeSpan,
-    road_badge: unsafe extern "C" fn(crate::services::RoadType) -> crate::newgrf_specs::BadgeSpan,
+    pub(crate) rail_badge:
+        unsafe extern "C" fn(crate::services::RailType) -> crate::newgrf_specs::BadgeSpan,
+    pub(crate) road_badge:
+        unsafe extern "C" fn(crate::services::RoadType) -> crate::newgrf_specs::BadgeSpan,
     ship_owner: unsafe extern "C" fn(V) -> *mut crate::ship_control::State,
     aircraft_leaves: unsafe extern "C" fn() -> *const crate::aircraft::Leaves,
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
@@ -383,20 +366,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_grf_fill(s: &Services, v: V) {
     }
 }
 unsafe fn wagon_override(s: &Services, id: u16, cargo: u8, overriding: u16) -> Group {
+    let engine = unsafe { (s.engine_by_id)(id) };
     unsafe {
-        let entries = (s.overrides)(id);
-        for i in 0..entries.count {
-            let entry = (s.override_at)(entries.engine, i);
-            if entry.cargo != cargo && entry.cargo != crate::newgrf_commons::SG_DEFAULT {
-                continue;
-            }
-            for j in 0..entry.count {
-                if (s.override_engine)(entries.engine, i, j) == overriding {
-                    return entry.group;
-                }
-            }
-        }
-        null()
+        crate::engine::bindings::wagon_override(
+            engine,
+            cargo,
+            crate::engine_type::EngineID(overriding),
+        )
     }
 }
 #[unsafe(no_mangle)]
@@ -448,7 +424,7 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
                 };
                 state.root = crate::newgrf_commons::first_sprite_group_of(
                     [cargo, crate::newgrf_commons::SG_DEFAULT],
-                    |cargo| (s.spritegroup)(id, cargo),
+                    |cargo| crate::engine::bindings::sprite_group((s.engine_by_id)(id), cargo),
                 );
             }
         }
@@ -1071,7 +1047,7 @@ unsafe fn variable(
             }
             0x46 => return crate::vehicle::VehicleRef::of(v).motion_counter(),
             0x47 => return cargo_info(s, handle(v).cargo_type(), grf),
-            0x48 => return u32::from((s.engine_flags)((s.vehicle.engine)(h).0.as_ptr())),
+            0x48 => return u32::from((s.vehicle.engine)(h).flags()),
             0x49 => return handle(v).build_year() as u32,
             0x4a => {
                 let tile = (h).tile();
@@ -1108,16 +1084,23 @@ unsafe fn variable(
             0x60 => {
                 if kind() != 0 {
                     return u32::from(
-                        u32::from((s.shared.engine_local_id)((s.vehicle.engine)(h).0.as_ptr()))
-                            == parameter,
+                        u32::from(
+                            (*(s.vehicle.engine)(h).0.as_ptr())
+                                .bindings
+                                .grf_prop
+                                .local_id,
+                        ) == parameter,
                     );
                 }
                 let mut count = 0u32;
                 let mut u = v;
                 while !u.is_null() {
-                    if u32::from((s.shared.engine_local_id)(
-                        (s.vehicle.engine)(handle(u)).0.as_ptr(),
-                    )) == parameter
+                    if u32::from(
+                        (*(s.vehicle.engine)(handle(u)).0.as_ptr())
+                            .bindings
+                            .grf_prop
+                            .local_id,
+                    ) == parameter
                     {
                         count = count.wrapping_add(1);
                     }
@@ -1242,7 +1225,7 @@ unsafe fn variable(
             },
             0x64 => {
                 if kind() != 0 {
-                    return (s.engine_badge)((s.vehicle.engine)(h).0.as_ptr())
+                    return crate::engine::bindings::badges((s.vehicle.engine)(h).0.as_ptr())
                         .resolve(s.shared, ro, parameter);
                 }
                 if u64::from(parameter) >= (s.badge_count)(grf) as u64 {
@@ -1252,7 +1235,12 @@ unsafe fn variable(
                 let mut count = 0u32;
                 let mut u = v;
                 while !u.is_null() {
-                    if (s.engine_has_badge)((s.vehicle.engine)(handle(u)).0.as_ptr(), badge) {
+                    if (*((s.vehicle.engine)(handle(u)).0.as_ptr()))
+                        .bindings
+                        .badges
+                        .as_slice()
+                        .contains(&badge)
+                    {
                         count = count.wrapping_add(1);
                     }
                     u = next(u);
@@ -1272,7 +1260,7 @@ unsafe fn variable(
                 _ => return u32::MAX,
             },
             0x7a => {
-                return (s.engine_badge)((s.vehicle.engine)(h).0.as_ptr())
+                return crate::engine::bindings::badges((s.vehicle.engine)(h).0.as_ptr())
                     .resolve(s.shared, ro, parameter);
             }
             0xfe | 0xff => {
@@ -1389,9 +1377,12 @@ unsafe fn variable(
             0xc4 => return old_year(handle(v).build_year()),
             0xc5 => return u32::from(handle(v).unit_number()),
             0xc6 | 0xc7 => {
-                return high(u32::from((s.shared.engine_local_id)(
-                    (s.vehicle.engine)(h).0.as_ptr(),
-                )));
+                return high(u32::from(
+                    (*(s.vehicle.engine)(h).0.as_ptr())
+                        .bindings
+                        .grf_prop
+                        .local_id,
+                ));
             }
             0xc8 => {
                 let sprite = handle(v).sprite_number();
@@ -1542,28 +1533,37 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
             ),
             0x46 | 0xf2 => 0,
             0x47 => {
-                let cargo = (s.default_cargo)((s.engine_by_id)((*scope).self_type));
+                let cargo = crate::vehicle::EngineRef::of((s.engine_by_id)((*scope).self_type))
+                    .default_cargo();
                 if crate::cargo_type::is_valid_cargo_type(cargo) {
                     cargo_info(s, cargo, grf)
                 } else {
                     0xff
                 }
             }
-            0x48 => u32::from((s.engine_flags)((s.engine_by_id)((*scope).self_type))),
+            0x48 => u32::from(
+                crate::vehicle::EngineRef::of((s.engine_by_id)((*scope).self_type)).flags(),
+            ),
             0x49 => crate::timer_game_common::calendar_year().0 as u32,
             0x4b => crate::timer_game_common::calendar_date().0 as u32,
-            0x7a => (s.engine_badge)((s.engine_by_id)((*scope).self_type))
+            0x7a => crate::engine::bindings::badges((s.engine_by_id)((*scope).self_type))
                 .resolve(s.shared, ro, parameter),
             0x92 => service_date(crate::timer_game_common::calendar_date().0),
             0x93 => service_date(crate::timer_game_common::calendar_date().0) >> 8,
             0xc4 => old_year(crate::timer_game_common::calendar_year().0),
-            0xc6 => u32::from((s.shared.engine_local_id)((s.engine_by_id)(
-                (*scope).self_type,
-            ))),
+            0xc6 => u32::from(
+                (*(s.engine_by_id)((*scope).self_type))
+                    .bindings
+                    .grf_prop
+                    .local_id,
+            ),
             0xc7 => {
-                u32::from((s.shared.engine_local_id)((s.engine_by_id)(
-                    (*scope).self_type,
-                ))) >> 8
+                u32::from(
+                    (*(s.engine_by_id)((*scope).self_type))
+                        .bindings
+                        .grf_prop
+                        .local_id,
+                ) >> 8
             }
             0xda => crate::fleet::INVALID_VEHICLE,
             _ => {
@@ -1662,14 +1662,12 @@ crate::abi::layouts! {
     "OpenTTDVehicleLoadingOrder" ["vehicle_resolver"] => OrderState { unload, load, loading };
     "OpenTTDVehicleRandomResult" ["vehicle_resolver"] => RandomResult { used, reseed };
     "OpenTTDVehicleCargoInfo" ["vehicle_resolver"] => CargoInfo { classes, weight };
-    "OpenTTDVehicleOverride" ["vehicle_resolver"] => Override { group, cargo, count };
-    "OpenTTDVehicleOverrides" ["vehicle_resolver"] => Overrides { engine, count };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, capabilities,
         cargo_classes, cargo_bitnum, valid_company, livery, company_info,
-        overrides, override_at, override_engine, spritegroup, resolve_callback, resolve_random, order, cargo_owner,
+        resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, cargo_info, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, cargo_info, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

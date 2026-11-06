@@ -9,8 +9,6 @@
 #include "services_road.h"
 #include "services_cargo.h"
 
-static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = RustCargoClasses(cargo), .local = RustGRFCargoMap(RustEngineGRF(e), cargo)}; }
-static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = RustEngineCargoRefitMask(e), .automatic = EngineMiscFlags(RustEngineMiscFlags(e)).Test(EngineMiscFlag::AutoRefit)}; }
 static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); }
 static void VehicleRefitDetailsUI(OpenTTDVehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleOf(v)->index); }
 static void VehicleRefitListsUI(uint8_t type) noexcept { InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
@@ -34,13 +32,7 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 			.auto_refit = CCF_AUTOREFIT.base(), .refit = CCF_REFIT.base(),
 		},
 		.engine = RustEngineByID,
-		.has_grf = RustEngineHasGRF,
-		.refit_cost = RustEngineRefitCost,
-		.refit_cargo = VehicleRefitCargo,
-		.engine_kind = RustEngineType,
-		.rail_kind = Engine_rail_kind,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
-		.refit_engine = VehicleRefitEngine,
 		.expense = RustVehicleExpense,
 		.invalidate_chain = RustVehicleInvalidateChain,
 
@@ -53,3 +45,5 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 	};
 	return services;
 }
+
+static_assert(to_underlying(EngineMiscFlag::AutoRefit) == 4);

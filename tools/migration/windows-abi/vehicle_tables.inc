@@ -75,10 +75,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, arrival_news);
 		VEHICLE_UNUSED(leaves, crash_news);
 		VEHICLE_UNUSED(vehicle, engine);
-		VEHICLE_UNUSED(vehicle, engine_for_length);
-		VEHICLE_UNUSED(leaves, shorten_factor);
-		VEHICLE_UNUSED(leaves, default_max_speed);
-		VEHICLE_UNUSED(leaves, cargo_age_default);
 		VEHICLE_UNUSED(leaves, running_windows);
 		leaves.vehicle = &vehicle;
 		leaves.ground = &ground;

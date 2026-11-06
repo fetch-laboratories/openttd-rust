@@ -50,12 +50,13 @@ struct SchedulerLifetimeVehicle final : Vehicle {
 			new (VehicleID(4)) SchedulerLifetimeVehicle(); // Ahead: visited this tick.
 			new (VehicleID(3)) SchedulerLifetimeVehicle(); // Inside initialized storage.
 			delete Vehicle::Get(VehicleID(5)); // Hole ahead must be skipped.
-			const auto old_slots = reinterpret_cast<uintptr_t>(_vehicle_pool.descriptor->slots.items);
 			_lifetime_growth = static_cast<uint32_t>(_vehicle_pool.descriptor->slots.capacity);
 			REQUIRE(Vehicle::CanAllocateItem(2));
 			new (VehicleID(_lifetime_growth)) SchedulerLifetimeVehicle();
 			new (VehicleID(_lifetime_growth + 1)) SchedulerLifetimeVehicle();
-			CHECK(reinterpret_cast<uintptr_t>(_vehicle_pool.descriptor->slots.items) != old_slots);
+			/* Growth may extend an allocation in place. The visit trace below
+			 * independently requires the newly initialized slots to be discovered. */
+			CHECK(_vehicle_pool.descriptor->slots.capacity > _lifetime_growth);
 		}
 		if (id == _lifetime_growth) {
 			delete this; // Newly discovered shell dies before the next slot is read.
@@ -77,7 +78,7 @@ TEST_CASE("Vehicle maintenance previous ID preserves the company sentinel")
 	CHECK(services.vehicle_previous(part->index.base()) == head->index.base());
 }
 
-TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation order")
+TEST_CASE("Base vehicle scheduler - production deletion, reuse and growth order")
 {
 	struct Restore {
 		GameMode mode = _game_mode;

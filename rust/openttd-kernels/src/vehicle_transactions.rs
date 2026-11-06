@@ -464,7 +464,6 @@ pub struct CommonServices {
     pub strings: TransactionStrings,
     pub train_power: extern "C" fn(*mut ()) -> u32,
     pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
-    pub grf_version: extern "C" fn(*mut ()) -> u8,
     pub grf_string: extern "C" fn(u32, u32) -> u32,
     pub waiting_news: extern "C" fn(u32),
     pub flip_stopped: extern "C" fn(*mut ()),
@@ -589,7 +588,7 @@ pub(crate) unsafe fn startstop(
         };
         let mut error = s.strings.null_string;
         if callback != crate::vehicle::CALLBACK_FAILED {
-            if (s.grf_version)(v) < 8 {
+            if s.engine_grf_version(unsafe { vehicle_ref(v, s.vehicles) }) < 8 {
                 if callback < 0x400 && callback & 0xff != 0xff {
                     error = s.grf_text(v, s.strings.grf_text.0.wrapping_add(u32::from(callback)));
                 }
@@ -669,8 +668,7 @@ crate::abi::layouts! {
     };
     "OpenTTDVehicleCommonServices" ["probe"] => CommonServices {
         base, transactions, vehicles, orders, strings, train_power, aircraft_start,
-        grf_version, grf_string, waiting_news, flip_stopped,
-        startstop_ui, valid_cargo,
+        grf_string, waiting_news, flip_stopped, startstop_ui, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {
         groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,
@@ -686,6 +684,9 @@ crate::abi::layouts! {
 }
 
 impl CommonServices {
+    fn engine_grf_version(&self, v: crate::vehicle::VehicleRef) -> u8 {
+        (self.vehicles.engine)(v).grf_version(self.base.shared)
+    }
     fn grf_text(&self, v: *mut (), string: u32) -> u32 {
         let cap = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
         let e = (self.vehicles.engine)(unsafe { vehicle_ref(v, self.vehicles) })

@@ -121,15 +121,8 @@ static void Ship_check_orders(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicl
 static uint32_t Ship_cost_divisor() noexcept { return CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS; }
 
 
-static uint32_t Ship_speed_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ShipVehInfo(v->GetEngineType())->max_speed; }
 
-static uint32_t Ship_age_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return RustEngineCargoAge(RustVehicleGetEngine(RustVehicle(v))); }
 
-static uint32_t Ship_speed_frac(uint32_t id, bool sea) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	return sea ? ShipVehInfo(v->GetEngineType())->ocean_speed_frac : ShipVehInfo(v->GetEngineType())->canal_speed_frac;
-}
 
 static void Ship_cache_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleInvalidateChain(RustVehicle(v)); }
 
@@ -203,7 +196,7 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->Record().reliability = RustEngineReliability(e);
-	v->Record().reliability_spd_dec = e->reliability_spd_dec;
+	v->Record().reliability_spd_dec = e->Record().reliability_spd_dec;
 }
 
 static void Ship_build_dates(uint32_t id) noexcept
@@ -214,13 +207,6 @@ static void Ship_build_dates(uint32_t id) noexcept
 	v->SetCalendarServiceDate(TimerGameCalendar::date);
 	v->SetBuildYear(TimerGameCalendar::year);
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
-}
-
-static void Ship_build_acceleration(uint32_t id, uint32_t engine) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	const auto &svi = Engine::Get(EngineID(engine))->VehInfo<ShipVehicleInfo>();
-	v->Record().acceleration = svi.acceleration;
 }
 
 static void Ship_build_prototype(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->vehicle_flags.Set(VehicleFlag::BuiltAsPrototype); }
@@ -285,12 +271,10 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.depot_invalidate = Ship_depot_invalidate, .ships_dirty = Ship_ships_dirty,
 		.check_orders = Ship_check_orders,
 		.cost_divisor = Ship_cost_divisor,
-		.speed_default = Ship_speed_default,
-		.age_default = Ship_age_default, .speed_frac = Ship_speed_frac,
 		.cache_invalidate = Ship_cache_invalidate,
 		.capabilities = &GetRustEngineCapabilitiesServices(), .sprite_direction = Ship_sprite_direction,
 		.tile_x = Ship_tile_x, .tile_y = Ship_tile_y,
-		.build_flag = RustIndexedEngineRead<bool, RustEngineExclusivePreview, uint32_t>, .build_random = Ship_build_random,
+		.build_random = Ship_build_random,
 		.new_position = Ship_new_position, .exit_dir = Ship_exit_dir,
 		.track_direction = Ship_track_direction, .tracks_reach = Ship_tracks_reach,
 		.path_size = Ship_path_size,
@@ -302,7 +286,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.yapf_reverse = Ship_yapf_reverse, .yapf_choose = Ship_yapf_choose,
 		.update_delta = Ship_update_delta, .build_owner = Ship_build_owner,
 		.build_z = Ship_build_z, .build_properties = Ship_build_properties,
-		.build_dates = Ship_build_dates, .build_acceleration = Ship_build_acceleration,
+		.build_dates = Ship_build_dates,
 		.build_prototype = Ship_build_prototype, .build_interval_percent = Ship_build_interval_percent,
 
 

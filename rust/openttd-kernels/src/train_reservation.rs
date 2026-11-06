@@ -72,7 +72,6 @@ pub struct Choice {
 pub struct Leaves {
     pub read_num_orders: extern "C" fn(Handle) -> u8,
 
-    pub all_compat: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub backoff: extern "C" fn() -> u8,
     pub bits_track: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub blocking: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
@@ -351,7 +350,7 @@ fn free(g: &Game, id: Handle) {
     if (g.leaves.overlap)(g.context, id, reserved | (1 << (td & 7))) != 0 {
         return;
     }
-    let types = (g.leaves.all_compat)(g.context, id);
+    let types = (g.shared().all_compatible_railtypes)(id.get_railtypes());
     let mut ft = g.follower(id, types);
     while ft.follow(g.shared(), tile, td) {
         tile = ft.new_tile.0;
@@ -1105,7 +1104,6 @@ crate::abi::layouts! {
     };
     "OpenTTDTrainReservationLeaves" ["probe"] => Leaves {
         read_num_orders,
-        all_compat,
         backoff,
         bits_track,
         blocking,
@@ -1218,7 +1216,6 @@ pub(crate) mod tests {
     fn leaves() -> Leaves {
         Leaves {
             read_num_orders: unused(),
-            all_compat: unused(),
             backoff: unused(),
             bits_track: unused(),
             blocking: unused(),
@@ -1311,7 +1308,6 @@ pub(crate) mod tests {
             road_kind: unused(),
             road_vehicle: unused(),
             resolve: unused(),
-            train_engine_class: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
             add_by_diag_dir: unused(),
@@ -1349,7 +1345,6 @@ pub(crate) mod tests {
             destroy: unused(),
             set_dest_tile: unused(),
             engine: unused(),
-            engine_for_length: unused(),
             order_type: unused(),
             order_destination: unused(),
             order_nonstop: unused(),
@@ -1514,6 +1509,7 @@ pub(crate) mod tests {
             let mut world = Box::new(Self {
                 shared: crate::services::Services {
                     pbs_services,
+                    all_compatible_railtypes: every_type,
                     tile_type: railway,
                     is_plain_rail: yes,
                     ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
@@ -1626,7 +1622,6 @@ pub(crate) mod tests {
             write_train_on_res: unused(),
             assertions: false,
             handle: unused(),
-            all_compatible: every_type,
             compatible: unused(),
             rail90: same_types,
             blocking: no_signal,

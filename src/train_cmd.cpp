@@ -226,7 +226,7 @@ void Train::GetImage(Direction direction, EngineImageType image_type, VehicleSpr
 		GetCustomVehicleSprite(this, direction, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = this->GetEngine()->original_image_index;
+		spritenum = this->GetEngine()->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_TRAIN>(spritenum));
@@ -252,7 +252,7 @@ static void GetRailIcon(EngineID engine, bool rear_head, int &y, EngineImageType
 			return;
 		}
 
-		spritenum = Engine::Get(engine)->original_image_index;
+		spritenum = Engine::Get(engine)->Record().original_image_index;
 	}
 
 	if (rear_head) spritenum++;
@@ -969,7 +969,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.bridge_speed = TrainSharedMap<uint64_t, &OpenTTDSharedServices::bridge_speed>,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.capacity_error = TrainCapacityError,
-		.cargo_age_default = TrainCargoAgeDefault,
 		.check_next = TrainCheckNext,
 		.check_orders = TrainCheckOrders,
 		.check_reverse = TrainCheckReverse,
@@ -985,7 +984,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.crossing_rail_axis = TrainCrossingRailAxis,
 		.crossing_sound = RustCrossingSound<OpenTTDTrainHandle>,
 		.curve_advantage = TrainCurveAdvantage,
-		.curve_mod_default = TrainCurveModDefault,
 		.day_ticks = TrainDayTicks,
 		.delete_vehicle = TrainDeleteVehicle,
 		.depot_dir = OpenTTDLegacyMapQuery<uint64_t, RustRailDepotDirection, OpenTTDTrainHandle, uint32_t>,
@@ -999,9 +997,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.dirty_tile = TrainSharedMap<void, &OpenTTDSharedServices::mark_dirty>,
 		.dir_diag = TrainDirDiag,
 		.disconnect = TrainDisconnect,
-		.engine_power = TrainEnginePower,
 		.find_depot = TrainFindDepot,
-		.grf_version = TrainGrfVersion,
 		.has_depot_res = OpenTTDLegacyMapQuery<uint64_t, RustDepotReserved, OpenTTDTrainHandle, uint32_t>,
 
 		.has_signal = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignalTrack, OpenTTDTrainHandle, uint32_t, uint8_t>,
@@ -1015,8 +1011,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.is_station_any = TrainIsStationAny,
 		.leave_sound = TrainLeaveSound,
 		.leave_unbunch = TrainLeaveUnbunch,
-		.length_callback = TrainLengthCallback,
-		.length_default = TrainLengthDefault,
 		.local_company = TrainLocalCompany,
 		.lost_warn = TrainLostWarn,
 		.map_size = TrainMapSize,
@@ -1028,16 +1022,11 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.order_free = TrainOrderFree,
 		.order_max_speed = TrainVehicleRead<uint64_t, RustVehicleOrderMaxSpeed>,
 		.other_end = OpenTTDLegacyMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
-		.pow_wag_power = TrainPowWagPower,
-		.railveh_wagon = TrainRailvehWagon,
-		.rail_tilt = TrainRailTilt,
 		.rail_type = OpenTTDLegacyMapQuery<uint64_t, RustRailType, OpenTTDTrainHandle, uint32_t>,
-		.rail_types = TrainRailTypes,
 		.reserve_paths = RustTrainReservePaths,
 		.reserve_under = TrainReserveUnder,
 		.reset_unbunch = TrainResetUnbunch,
 		.reverse_at_signals = TrainReverseAtSignals,
-		.reverse_single_blocked = TrainReverseSingleBlocked,
 		.reverse_windows = TrainReverseWindows,
 		.running_windows = TrainRunningWindows,
 		.servint = TrainServint,
@@ -1050,7 +1039,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.signal_has_pbs = OpenTTDLegacyMapQuery<uint64_t, RustHasPbsSignal, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.sigseg_full = TrainSigsegFull,
 		.sigseg_pbs = TrainSigsegPbs,
-		.speed_default = TrainSpeedDefault,
 		.start_stop_dirty = TrainStartStopDirty,
 		.station = TrainSharedMap<uint64_t, &OpenTTDSharedServices::station_index>,
 		.station_axis = OpenTTDLegacyMapQuery<uint64_t, RustRailStationAxis, OpenTTDTrainHandle, uint32_t>,
@@ -1079,7 +1067,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.tunnel_dir = TrainSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
 
 		.update_delta = RustVehicleUpdateDelta<OpenTTDTrainHandle>,
-		.user_default = TrainUserDefault,
 		.veh_exit_dir = TrainVehExitDir,
 		.viewport = TrainViewport,
 		.visit_type = TrainVisitType,
@@ -1099,7 +1086,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 {
 	static const OpenTTDTrainReservationLeaves services{
 		.read_num_orders = TrainVehicleRead<uint8_t, RustVehicleNumOrders>,
-		.all_compat = TrainReservationAllCompat,
 		.backoff = RustTrainPathBackoffInterval,
 		.bits_track = TrainReservationBitsTrack,
 		.blocking = OpenTTDLegacyContextMapQuery<uint64_t, RustOnewaySignalBlocking, OpenTTDTrainHandle, uint32_t, uint8_t>,

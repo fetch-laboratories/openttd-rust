@@ -77,7 +77,6 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.renew_state = FleetGroup_renew_state,
 		.next_renew = FleetGroup_next_renew,
 		.renew_id = RustEngineRenewIndex<void *>,
-		.engine_type = RustIndexedEngineRead<uint8_t, RustEngineType>,
 		.current_company = RustCurrentCompanyID,
 		.buildable_type = FleetGroup_buildable_type,
 		.can_allocate = FleetGroup_can_allocate,

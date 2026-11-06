@@ -325,7 +325,7 @@ impl Refresher {
         while let Some(v) = part {
             let shell = v.0.as_ptr();
             let e = (r.engine)(v.engine_id());
-            if (r.refit_engine)(e).mask >> self.cargo & 1 == 0 {
+            if crate::vehicle::EngineRef::of(e).refit_mask() >> self.cargo & 1 == 0 {
                 index += 1;
                 part = (v).next();
                 continue;

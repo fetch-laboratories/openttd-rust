@@ -51,10 +51,6 @@ struct OpenTTDCargoCapacity {
 	const OpenTTDCargoList *owner;
 	uint8_t cargo;
 };
-struct OpenTTDLoadEngine {
-	const OpenTTDEngine *engine;
-	uint8_t amount;
-};
 struct OpenTTDLoadingWait {
 	int32_t lateness;
 	uint16_t wait;
@@ -155,10 +151,6 @@ struct OpenTTDStationLoading {
 	OpenTTDLoadingControl (*control)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(control);
 	OpenTTDLoadingPart (*part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(part);
 	OpenTTDLoadingWait (*wait_observation)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(wait_observation);
-	OpenTTDLoadEngine (*load_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_engine);
-	uint8_t (*grf_version)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
-	bool (*engine_load_callback)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_load_callback);
-	bool (*engine_no_multiplier)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_no_multiplier);
 	OpenTTDCargoCapacity (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
 	uint32_t (*stored_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stored_count);
 	uint32_t (*unload_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unload_count);
@@ -174,11 +166,9 @@ struct OpenTTDStationLoading {
 	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	const OpenTTDVehicleServices *vehicle;
 	uint32_t (*total_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(total_count);
-	uint64_t (*refit_mask)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(refit_mask);
 	void (*set_cargo_unloading)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_unloading);
 	void (*set_loading_finished)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_finished);
 	void (*set_stop)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_stop);
-	void (*unknown_load_result)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_load_result);
 	void (*vehicle_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);
 	bool (*indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(indicator);
 	void (*show_indicator)(OpenTTDVehicle *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_indicator);

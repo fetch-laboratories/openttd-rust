@@ -61,9 +61,6 @@ struct OpenTTDRoadLeaves {
 
 	void (OPENTTD_RUST_CALL *depot_exit_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit_dirty);
 	void (OPENTTD_RUST_CALL *crash_news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
-	uint8_t (OPENTTD_RUST_CALL *shorten_factor)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(shorten_factor);
-	uint16_t (OPENTTD_RUST_CALL *default_max_speed)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(default_max_speed);
-	uint16_t (OPENTTD_RUST_CALL *cargo_age_default)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
 	void (OPENTTD_RUST_CALL *running_windows)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(running_windows);
 };
 const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept;

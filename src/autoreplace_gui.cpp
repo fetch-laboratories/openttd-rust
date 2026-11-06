@@ -39,7 +39,7 @@
 
 static bool EngineNumberSorter(const GUIEngineListItem &a, const GUIEngineListItem &b)
 {
-	return Engine::Get(a.engine_id)->list_position < Engine::Get(b.engine_id)->list_position;
+	return Engine::Get(a.engine_id)->Record().list_position < Engine::Get(b.engine_id)->Record().list_position;
 }
 
 /**
@@ -57,7 +57,7 @@ void InvalidateAutoreplaceWindow(EngineID e, GroupID id_g)
 		/* We don't have any of this engine type.
 		 * Either we just sold the last one, we build a new one or we stopped replacing it.
 		 * In all cases, we need to update the left list */
-		InvalidateWindowData(WC_REPLACE_VEHICLE, Engine::Get(e)->type, 1);
+		InvalidateWindowData(WC_REPLACE_VEHICLE, Engine::Get(e)->Record().type, 1);
 	}
 }
 
@@ -157,12 +157,12 @@ class ReplaceVehicleWindow : public Window {
 				if (!CheckAutoreplaceValidity(this->sel_engine[0], eid, _local_company)) continue;
 			}
 
-			list.emplace_back(eid, e->info.variant_id, (side == 0) ? EngineDisplayFlags{} : e->display_flags, 0);
+			list.emplace_back(eid, e->Record().info.variant_id, (side == 0) ? EngineDisplayFlags{} : e->display_flags, 0);
 
 			if (side == 1) {
-				EngineID parent = e->info.variant_id;
+				EngineID parent = e->Record().info.variant_id;
 				while (parent != EngineID::Invalid() && variants.insert(parent).second) {
-					parent = Engine::Get(parent)->info.variant_id;
+					parent = Engine::Get(parent)->Record().info.variant_id;
 				}
 			}
 			if (eid == this->sel_engine[side]) selected_engine = eid; // The selected engine is still in the list
@@ -173,7 +173,7 @@ class ReplaceVehicleWindow : public Window {
 			for (const auto &variant : variants) {
 				if (std::ranges::find(list, variant, &GUIEngineListItem::engine_id) == list.end()) {
 					const Engine *e = Engine::Get(variant);
-					list.emplace_back(variant, e->info.variant_id, e->display_flags | EngineDisplayFlag::Shaded, 0);
+					list.emplace_back(variant, e->Record().info.variant_id, e->display_flags | EngineDisplayFlag::Shaded, 0);
 				}
 			}
 		}

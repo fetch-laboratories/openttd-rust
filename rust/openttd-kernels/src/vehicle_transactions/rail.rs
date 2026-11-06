@@ -32,8 +32,6 @@ pub struct Services {
     pub cargo_capacity: &'static crate::cargo_storage::CapacityServices,
     pub strings: Strings,
     pub train_if_valid: extern "C" fn(u32) -> *mut (),
-    pub compatible: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
-    pub powered: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     pub new_wagon: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub new_engine: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub engine_dates: extern "C" fn(*mut (), *const OpenTTDEngine),
@@ -260,7 +258,9 @@ unsafe fn build_wagon(
     tile: u32,
     e: *const OpenTTDEngine,
 ) -> R {
-    if !(x.s.compatible)(e, tile) {
+    let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
+    let tiletype = (x.b.refit.train.physics.rail_type)(tile);
+    if (x.t.shared.all_compatible_railtypes)(railtypes) & (1 << tiletype.0) == 0 {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
     }
@@ -342,11 +342,13 @@ pub(crate) unsafe fn build(
 ) -> *mut () {
     let x = Ctx::new(b);
     let s = x.s;
-    let kind = (x.r.rail_kind)(e);
+    let kind = crate::vehicle::EngineRef::of(e).rail_kind();
     if kind == RailVehicleTypes::WAGON {
         return Ctx::sh(unsafe { build_wagon(x, out, flags, tile, e) });
     }
-    if !(s.powered)(e, tile) {
+    let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
+    let tiletype = (b.refit.train.physics.rail_type)(tile);
+    if !(b.refit.train.physics.powered)(railtypes, tiletype) {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
     }
@@ -567,7 +569,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                 let grf_text = |n: u32| {
                     x.c.grf_text(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
                 };
-                if (x.c.grf_version)(Ctx::sh(head)) < 8 {
+                if x.c.engine_grf_version(Ctx::vref(head)) < 8 {
                     if callback == 0xFD {
                         error = strings.incompatible_rail;
                     }
@@ -981,7 +983,7 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
+        cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
         invalidate_grf, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };

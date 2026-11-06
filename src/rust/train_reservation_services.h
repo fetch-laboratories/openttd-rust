@@ -20,11 +20,6 @@ static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle id, uint32_t 
 	return TrainSharedMap<Result, Member>(id, tile);
 }
 
-static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustAllCompatibleRailTypes(RustTrainRailTypes(v));
-}
 static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return TrackBitsToTrack(static_cast<TrackBits>(a));

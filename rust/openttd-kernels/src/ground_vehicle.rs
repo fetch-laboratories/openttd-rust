@@ -169,12 +169,6 @@ pub struct Services {
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
     pub train_cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
-    pub engine_power: extern "C" fn(VehicleRef) -> u16,
-    pub engine_weight: extern "C" fn(VehicleRef) -> u16,
-    pub engine_te: extern "C" fn(VehicleRef) -> u8,
-    pub engine_drag: extern "C" fn(VehicleRef) -> u8,
-    pub wagon_power: extern "C" fn(u16) -> u16,
-    pub wagon_weight: extern "C" fn(u16) -> u8,
     pub powered: extern "C" fn(u64, RailType) -> bool,
     pub rail_type: extern "C" fn(u32) -> RailType,
     pub rail_acceleration: extern "C" fn(RailType) -> u8,
@@ -223,7 +217,7 @@ fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         } else {
             PROP_ROADVEH_POWER
         },
-        i32::from((s.engine_power)(v)),
+        i32::from((s.vehicle.engine)(v).ground_power(VehicleType(v.vehicle_type()))),
     );
     if o.rail() {
         let mut p = p as u16;
@@ -240,7 +234,10 @@ fn powered_part_owned(s: &Services, v: VehicleRef, o: Owner, head: VehicleRef) -
         let head = if head == v { o } else { (s.resolve)(head) };
         if (s.powered)(head.train.get_railtypes(), (s.rail_type)((v).tile())) {
             // SAFETY: scalar load ends before the specification lookup.
-            return (s.wagon_power)(unsafe { (*o.state).cache.first_engine });
+            return crate::vehicle::EngineRef::of((s.capabilities.engine)(unsafe {
+                (*o.state).cache.first_engine
+            }))
+            .wagon_power();
         }
     }
     0
@@ -280,15 +277,18 @@ fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
             } else {
                 PROP_ROADVEH_WEIGHT
             },
-            i32::from((s.engine_weight)(v)),
+            i32::from((s.vehicle.engine)(v).ground_weight(VehicleType(v.vehicle_type()))),
         );
         weight = weight.wrapping_add(if o.rail() { w } else { w / 4 } as u16);
     }
     if o.powered_wagon() {
         // SAFETY: no borrow spans the spec leaf.
-        weight = weight.wrapping_add(u16::from((s.wagon_weight)(unsafe {
-            (*o.state).cache.first_engine
-        })));
+        weight = weight.wrapping_add(u16::from(
+            crate::vehicle::EngineRef::of((s.capabilities.engine)(unsafe {
+                (*o.state).cache.first_engine
+            }))
+            .wagon_weight(),
+        ));
     }
     weight
 }
@@ -301,11 +301,11 @@ fn tractive_effort_owned(s: &Services, v: VehicleRef, o: Owner) -> u8 {
         } else {
             PROP_ROADVEH_TRACTIVE_EFFORT
         },
-        i32::from((s.engine_te)(v)),
+        i32::from((s.vehicle.engine)(v).ground_te(VehicleType(v.vehicle_type()))),
     ) as u8
 }
 pub(crate) fn air_drag(s: &Services, v: VehicleRef) -> u8 {
-    (s.engine_drag)(v)
+    (s.vehicle.engine)(v).ground_drag(VehicleType(v.vehicle_type()))
 }
 fn air_drag_area_for(o: Owner, status: u8) -> u8 {
     if !o.rail() {
@@ -832,6 +832,6 @@ fn reversing(s: &Services, v: VehicleRef) -> bool {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, weight_input, capabilities, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, weight_input, capabilities, cargo_weight, train_cargo_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, steepness, display_max_speed, viewport, details_dirty, base_crash, depot_tile, };
     "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
 }

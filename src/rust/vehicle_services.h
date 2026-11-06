@@ -34,7 +34,6 @@ OpenTTDVehicle *RustShipGet(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedWeight(const Vehicle *v) noexcept;
 uint64_t RustTrainRailTypes(const Vehicle *v) noexcept;
-uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept;
 void RustVehicleFlipStopped(Vehicle *v) noexcept;
 
@@ -137,7 +136,7 @@ inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return *RustVehicl
 inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->SetVehStatus(status); }
 inline void RustWriteVehicleTile(Vehicle *v, TileIndex tile) noexcept { v->SetTile(tile); }
 inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v->Record().breakdown_ctr; }
-inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }
+inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->Record().reliability; }
 template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept
 {
 	if constexpr (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Handle>>, OpenTTDVehicle>) return VehicleOf(v)->index.base();
@@ -153,16 +152,9 @@ inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
 inline void RustVehicleSetEngine(OpenTTDVehicle *v, uint16_t engine) noexcept { VehicleOf(v)->SetEngineType(EngineID(engine)); }
 inline void RustVehicleSetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { VehicleOf(v)->SetOwner(Owner(owner)); }
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->GetEngineType().base(); }
-inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
-inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
-inline const GRFFile *RustEngineGRF(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetGRF(); }
+inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return e == nullptr ? nullptr : &e->Record(); }
+inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return e == nullptr ? nullptr : e->shell; }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
-/** Shared engine observation for a live base shell, resolved once. */
-template <typename Result, auto Read>
-static Result RustVehicleEngineRead(OpenTTDVehicle *v) noexcept { return Read(RustVehicleGetEngine(v)); }
-/** Signature adapter for a typed controller handle's shared engine observation. */
-template <typename Result, typename Handle, auto Read>
-static Result RustVehicleEngineObservation(Handle handle) noexcept { return RustVehicleEngineRead<Result, Read>(handle.handle); }
 void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept;
 ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
 /** Canonical cached consist length, shared by narrow and compound observations. */
@@ -231,14 +223,6 @@ static void RustIndexedVehicleWrite(uint32_t id, Value value) noexcept { Write(V
 inline bool RustVehicleUsesWagonOverride(const Vehicle *v) noexcept { return UsesWagonOverride(v); }
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
 
-inline const GRFFile *RustEngineGRF(const Engine *engine) noexcept { return RustEngineGRF(RustEngine(engine)); }
-
-/** GRF version of a live engine; the original default-engine value is zero. */
-inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
-{
-	const GRFFile *grf = RustEngineGRF(engine);
-	return grf == nullptr ? uint8_t(0) : RustGRFFileVersion(grf);
-}
 
 template <class T>
 inline void OPENTTD_RUST_CALL GroundSvcUpdateViewport(OpenTTDVehicle *part) noexcept

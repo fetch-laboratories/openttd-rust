@@ -77,23 +77,8 @@ static OpenTTDAircraftMoving OPENTTD_RUST_CALL Aircraft_moving(const void * airp
 	return {.x = m->x, .y = m->y, .flags = RustAirportMovingFlags(m), .direction = m->direction};
 }
 
-static uint16_t OPENTTD_RUST_CALL Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return AircraftVehInfo(v->GetEngineType())->max_speed;
-}
 
-static uint8_t OPENTTD_RUST_CALL Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return RustAircraftInfoSubtype(AircraftVehInfo(EngineID(RustVehicleEngineID(v))));
-}
 
-static uint16_t OPENTTD_RUST_CALL Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return AircraftVehInfo(v->GetEngineType())->sfx;
-}
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_airport_entry(const void * ap, uint8_t direction) noexcept
 {
@@ -340,9 +325,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.node = Aircraft_node,
 	.fta = Aircraft_fta,
 	.moving = Aircraft_moving,
-	.engine_speed = Aircraft_engine_speed,
-	.engine_subtype = Aircraft_engine_subtype,
-	.engine_sound = Aircraft_engine_sound,
 	.airport_entry = Aircraft_airport_entry,
 	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
 	.hangar_height = Aircraft_hangar_height,
@@ -373,7 +355,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.invalid_position = Aircraft_invalid_position,
 	.invalid_scheme = Aircraft_invalid_scheme,
 	.unreachable = RustNotReachedWithUnusedOwner<OpenTTDAircraftVehicle>,
-	.cargo_age_default = RustVehicleEngineObservation<uint16_t, OpenTTDAircraftVehicle, RustEngineCargoAge>,
 	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
 	.update_rotor_image = Aircraft_update_rotor_image,
 	.vehicle_crash = RustVehicleBaseCrashHandle<OpenTTDAircraftVehicle>,

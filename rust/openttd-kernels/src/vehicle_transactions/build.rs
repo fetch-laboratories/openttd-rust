@@ -3,7 +3,7 @@
 use super::{ERROR, construct, mass, rail, refit};
 use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, Cost, RandomServices};
-use crate::vehicle::{OpenTTDEngine, RailVehicleTypes, VehicleRef, VehicleType};
+use crate::vehicle::{RailVehicleTypes, VehicleRef, VehicleType};
 use std::ptr;
 #[repr(C)]
 pub struct Result {
@@ -24,7 +24,6 @@ pub struct Services {
     pub mass: &'static mass::Services,
     pub random: &'static RandomServices,
     pub depot_kind: extern "C" fn(u32) -> VehicleType,
-    pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub pool_available: extern "C" fn(usize) -> bool,
     pub construct: &'static construct::Services,
     pub rail: &'static rail::Services,
@@ -75,7 +74,7 @@ pub(crate) unsafe fn build(
     (b.cost.expense_money)(out, c.strings.new_vehicle_expense, unsafe {
         crate::engine_capabilities::openttd_rust_engine_cost(r.capabilities, e)
     });
-    let default_cargo = (s.default_cargo)(e);
+    let default_cargo = crate::vehicle::EngineRef::of(e).default_cargo();
     if !(c.valid_cargo)(default_cargo) {
         value.error(ERROR);
         return Result::default();
@@ -83,7 +82,7 @@ pub(crate) unsafe fn build(
     let refitting = (c.valid_cargo)(cargo) && cargo != default_cargo;
     let count = match kind {
         VehicleType::TRAIN => {
-            u32::from((r.rail_kind)(e) == RailVehicleTypes::MULTIHEAD)
+            u32::from(crate::vehicle::EngineRef::of(e).rail_kind() == RailVehicleTypes::MULTIHEAD)
                 + 1
                 + unsafe {
                     crate::engine_capabilities::openttd_rust_articulated_count(
@@ -104,7 +103,7 @@ pub(crate) unsafe fn build(
         }
         VehicleType::SHIP => 1,
         VehicleType::AIRCRAFT => {
-            if unsafe { (c.transactions.plane)(engine) } != 0 {
+            if crate::vehicle::EngineRef::of(e).plane() {
                 2
             } else {
                 3
@@ -117,7 +116,8 @@ pub(crate) unsafe fn build(
         return Result::default();
     }
     let unit = if flags & (DoCommandFlag::QUERY_COST | DoCommandFlag::AUTO_REPLACE) != 0
-        || (kind == VehicleType::TRAIN && (r.rail_kind)(e) == RailVehicleTypes::WAGON)
+        || (kind == VehicleType::TRAIN
+            && crate::vehicle::EngineRef::of(e).rail_kind() == RailVehicleTypes::WAGON)
     {
         0
     } else {
@@ -312,7 +312,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleBuildResult" ["probe"] => Result { id, capacity, };
     "OpenTTDVehicleBuildServices" ["probe"] => Services {
-        refit, mass, random, depot_kind, default_cargo, pool_available,
+        refit, mass, random, depot_kind, pool_available,
         construct, rail, ship_tile, new_ship,
         is_engine, presentation, too_many, unavailable,
     };

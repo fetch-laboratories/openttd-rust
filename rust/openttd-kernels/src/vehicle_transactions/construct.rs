@@ -16,29 +16,19 @@ use std::ptr;
 const HRS_ROTOR_STOPPED: u8 = 0;
 
 #[repr(C)]
-pub struct AircraftInfo {
-    pub image: u8,
-    pub passengers: u16,
-    pub mail: u16,
-    pub subtype: u8,
-}
-#[repr(C)]
 pub struct Services {
     pub articulated: &'static articulated::Services,
-    pub powered_roadtypes: extern "C" fn(*const OpenTTDEngine) -> u64,
     pub new_road: extern "C" fn(u32) -> *mut (),
-    pub road_front: extern "C" fn(*mut (), *const OpenTTDEngine),
+    pub road_front: extern "C" fn(*mut (), crate::services::RoadType, u64),
     pub station: extern "C" fn(u32) -> *const Station,
     pub hangar_tile:
         extern "C" fn(*const Station, u32, *const crate::station_cmd::AirportSpec) -> u32,
     pub new_aircraft: extern "C" fn() -> *mut (),
     pub aircraft_place: extern "C" fn(*mut (), *mut (), u32),
-    pub aircraft_info: extern "C" fn(*const OpenTTDEngine) -> AircraftInfo,
-    pub aircraft_properties: extern "C" fn(*mut (), *mut (), *const OpenTTDEngine, u8),
+    pub aircraft_properties: extern "C" fn(*mut (), *mut (), u8, u16, u8),
     pub rotor: extern "C" fn(*mut (), *mut (), *mut ()),
     pub road_capacity: extern "C" fn(*mut (), *mut (), u16),
-    pub engine_common: extern "C" fn(*mut (), *const OpenTTDEngine),
-    pub exclusive_preview: extern "C" fn(*const OpenTTDEngine) -> bool,
+    pub engine_common: extern "C" fn(*mut (), u16, u16, u16),
     pub wrong_depot: u32,
 }
 /// Original construction service interval and consecutive date stores.
@@ -56,7 +46,7 @@ pub(super) unsafe fn service_flags(
     company: u8,
 ) {
     let common = k.articulated.refit.common;
-    if (k.exclusive_preview)(engine) {
+    if crate::vehicle::EngineRef::of(engine).exclusive_preview() {
         let v = unsafe { vehicle_ref(shell, common.vehicles) };
         v.write_vehicle_flags(v.vehicle_flags() | crate::base_consist::VF_BUILT_AS_PROTOTYPE);
     }
@@ -81,7 +71,7 @@ pub(crate) unsafe fn road(
     if !crate::road_map::has_tile_any_road_type(
         &crate::map_func::World::new(b.shared),
         tile,
-        (k.powered_roadtypes)(e),
+        crate::vehicle::EngineRef::of(e).powered_roadtypes(b.shared),
     ) {
         (b.cost.error)(out, k.wrong_depot);
         return ptr::null_mut();
@@ -98,10 +88,21 @@ pub(crate) unsafe fn road(
             super::vehicle_ref(v, r.common.vehicles).0.as_ptr(),
         ));
     };
-    let info = (a.road_info)(e, true);
-    (a.set_part)(v, info.image, (a.default_cargo)(e), info.capacity, true);
-    (k.engine_common)(v, e);
-    (unsafe { vehicle_ref(v, r.common.vehicles) }).write_max_age(crate::services::CalendarDate(
+    let engine = crate::vehicle::EngineRef::of(e);
+    (a.set_part)(
+        v,
+        engine.ground_image(VehicleType::ROAD),
+        engine.default_cargo(),
+        u16::from(engine.ground_capacity(VehicleType::ROAD)),
+        true,
+    );
+    (k.engine_common)(
+        v,
+        (r.capabilities.id)(e),
+        engine.reliability(),
+        engine.reliability_decay(),
+    );
+    unsafe { vehicle_ref(v, r.common.vehicles) }.write_max_age(crate::services::CalendarDate(
         unsafe { crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e) },
     ));
     service_dates(
@@ -112,7 +113,11 @@ pub(crate) unsafe fn road(
         .write_build_year(crate::timer_game_common::calendar_year().0);
     (a.sprite_sequence)(v, crate::sprites::SPR_IMG_QUERY);
     unsafe { a.randomize(v) };
-    (k.road_front)(v, e);
+    (k.road_front)(
+        v,
+        crate::services::RoadType(engine.roadtype()),
+        engine.powered_roadtypes(b.shared),
+    );
     unsafe { service_flags(k, v, e, company) };
     unsafe { articulated::add(a, v) };
     (r.invalidate_chain)(
@@ -191,8 +196,14 @@ pub(crate) unsafe fn aircraft(
     let v = (k.new_aircraft)();
     let u = (k.new_aircraft)();
     (k.aircraft_place)(v, u, tile);
-    let info = (k.aircraft_info)(e);
-    (a.set_part)(v, info.image, (a.default_cargo)(e), info.passengers, true);
+    let engine = crate::vehicle::EngineRef::of(e);
+    (a.set_part)(
+        v,
+        engine.aircraft_image(),
+        engine.default_cargo(),
+        engine.passenger_capacity(),
+        true,
+    );
     crate::vehicle::VehicleRef::of(
         unsafe { super::vehicle_ref(u, r.common.vehicles) }
             .0
@@ -207,19 +218,30 @@ pub(crate) unsafe fn aircraft(
                 .0
                 .as_ptr(),
         )
-        .write_cargo_cap(info.mail);
+        .write_cargo_cap(u16::from(engine.mail_capacity()));
     }
     (b.clear_name)(v);
-    (k.engine_common)(v, e);
-    (unsafe { vehicle_ref(v, r.common.vehicles) }).write_max_age(crate::services::CalendarDate(
+    (k.engine_common)(
+        v,
+        (r.capabilities.id)(e),
+        engine.reliability(),
+        engine.reliability_decay(),
+    );
+    unsafe { vehicle_ref(v, r.common.vehicles) }.write_max_age(crate::services::CalendarDate(
         unsafe { crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e) },
     ));
-    let subtype = if info.subtype & AIR_CTOL != 0 {
+    let subtype = if engine.aircraft_subtype() & AIR_CTOL != 0 {
         AIR_AIRCRAFT
     } else {
         AIR_HELICOPTER
     };
-    (k.aircraft_properties)(v, u, e, subtype);
+    (k.aircraft_properties)(
+        v,
+        u,
+        engine.aircraft_acceleration(),
+        (r.capabilities.id)(e),
+        subtype,
+    );
     unsafe { c.vehicles.set_next_shell(v.cast(), u.cast()) };
     let hv = (r.aircraft_handle)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
@@ -311,10 +333,9 @@ pub(crate) unsafe fn aircraft(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDAircraftInfo" ["probe"] => AircraftInfo { image, passengers, mail, subtype, };
     "OpenTTDVehicleConstructServices" ["probe"] => Services {
-        articulated, powered_roadtypes, new_road, road_front, station,
-        hangar_tile, new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
-        rotor, road_capacity, engine_common, exclusive_preview, wrong_depot,
+        articulated, new_road, road_front, station,
+        hangar_tile, new_aircraft, aircraft_place, aircraft_properties,
+        rotor, road_capacity, engine_common, wrong_depot,
     };
 }

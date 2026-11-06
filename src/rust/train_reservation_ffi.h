@@ -31,7 +31,6 @@ struct OpenTTDTrainReservationChoice { uint8_t track, reserved; };
 struct OpenTTDTrainReservationLeaves {
 	uint8_t (*read_num_orders)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_num_orders);
 
-	uint64_t (*all_compat)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(all_compat);
 	uint8_t (*backoff)() noexcept OPENTTD_SERVICE_DEFAULT(backoff);
 	uint64_t (*bits_track)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(bits_track);
 	uint64_t (*blocking)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(blocking);

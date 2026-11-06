@@ -7,6 +7,7 @@
 
 /** @file fleet-console.cpp Identical command inputs for unchanged-reference fleet witnesses. */
 #include "stdafx.h"
+#include "engine-record-fixture.hpp"
 #include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
@@ -82,13 +83,13 @@ struct AttachmentObserver : SpriteGroup {
 static void AttachmentCallbacks(Train *head)
 {
 	Engine *engine = Engine::Get(FIXTURE_GET(head, EngineType, engine_type));
-	Backup<CargoGRFFileProps> props(engine->grf_prop);
+	FixtureEngineBackup<FixtureEngineGRFProps> props(EngineBindings(engine).grf_prop);
 	GRFFile grf;
 	grf.grfid = 0x156CA110;
 	auto config = std::make_unique<GRFConfig>("attachment-fixture.grf");
 	config->ident.grfid = grf.grfid;
 	_grfconfig.push_back(std::move(config));
-	engine->grf_prop.grffile = &grf;
+	EngineBindings(engine).grf_prop.grffile = &grf;
 	StringID text = AddGRFString(grf.grfid, GRFSTR_MISC_GRF_TEXT, 0x7F, true, false, "attachment text", STR_UNDEFINED);
 	StringID regtext = AddGRFString(grf.grfid, GRFStringID(0xD042), 0x7F, true, false, "attachment register", STR_UNDEFINED);
 	/* Pool-allocated Action2 inputs stay alive until the engine's original groups
@@ -104,8 +105,8 @@ static void AttachmentCallbacks(Train *head)
 	program->default_result.group = result;
 	auto *observer = new AttachmentObserver();
 	observer->program = program;
-	engine->grf_prop.spritegroups.clear();
-	engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer);
+	FixtureClearEngineSprites(engine);
+	FixtureSetEngineSprite(engine, CargoGRFFileProps::SG_DEFAULT, observer);
 	struct Case { uint8_t version; uint16_t result; StringID error; };
 	const Case cases[] = {
 		{7, 0, text}, {7, 0xFD, STR_ERROR_INCOMPATIBLE_RAIL_TYPES},
@@ -226,7 +227,7 @@ static Vehicle *BuildFixture(VehicleType type)
 	if (type == VEH_TRAIN) {
 		EngineID wagon = EngineID::Invalid();
 		for (const Engine *e : Engine::Iterate()) {
-			if (e->type != type || RailVehInfo(e->index)->railveh_type != RAILVEH_WAGON || !IsEngineBuildable(e->index, type, _current_company)) continue;
+			if (EngineFields(e).type != type || RailVehInfo(e->index)->railveh_type != RAILVEH_WAGON || !IsEngineBuildable(e->index, type, _current_company)) continue;
 			if (std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Succeeded()) { wagon = e->index; break; }
 		}
 		if (wagon == EngineID::Invalid()) FixtureAbort(__LINE__);
@@ -257,8 +258,8 @@ static void CloneRefitCosts(Vehicle *front)
 	Vehicle *v = front->GetNextVehicle();
 	if (v == nullptr || FIXTURE_FIELD(v, cargo_cap) == 0) FixtureAbort(__LINE__);
 	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
-	Backup<EngineInfo> info(e->info);
-	Backup<CargoGRFFileProps> props(e->grf_prop);
+	Backup<EngineInfo> info(EngineFields(e).info);
+	FixtureEngineBackup<FixtureEngineGRFProps> props(EngineBindings(e).grf_prop);
 	CargoType cargo = GetCargoTypeByLabel(CT_MAIL);
 	if (!IsValidCargoType(cargo) || cargo == e->GetDefaultCargoType()) FixtureAbort(__LINE__);
 	GRFFile grf;
@@ -273,10 +274,10 @@ static void CloneRefitCosts(Vehicle *front)
 	program->ranges = {{{.group = result.get()}, CBID_VEHICLE_REFIT_COST, CBID_VEHICLE_REFIT_COST}};
 	program->default_result.group = failure.get();
 	auto observer = std::make_unique<RefitCostObserver>(); observer->program = program.get();
-	e->grf_prop.grffile = &grf;
-	e->grf_prop.spritegroups.clear();
-	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
-	e->info.refit_mask |= CargoTypes{1} << cargo;
+	EngineBindings(e).grf_prop.grffile = &grf;
+	FixtureClearEngineSprites(e);
+	FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, observer.get());
+	EngineFields(e).info.refit_mask |= CargoTypes{1} << cargo;
 	Checked("clone-refit-setup", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, v->index, cargo, 1, false, true, 0)));
 	for (uint16_t value : {uint16_t(0x40), uint16_t(CALLBACK_FAILED)}) {
 		result->result = value;
@@ -338,12 +339,12 @@ struct CapabilityObserver : SpriteGroup {
 struct CapabilityProgram {
 	Engine *engine;
 	Backup<EngineInfo> info;
-	Backup<CargoGRFFileProps> props;
+	FixtureEngineBackup<FixtureEngineGRFProps> props;
 	GRFFile grf;
 	std::unique_ptr<CallbackResultSpriteGroup> part, stop, capacity, refit, failure;
 	std::unique_ptr<DeterministicSpriteGroup> root, articulated, property;
 	std::unique_ptr<CapabilityObserver> observer;
-	explicit CapabilityProgram(Engine *e) : engine(e), info(e->info), props(e->grf_prop)
+	explicit CapabilityProgram(Engine *e) : engine(e), info(EngineFields(e).info), props(EngineBindings(e).grf_prop)
 	{
 		if (!SpriteGroup::CanAllocateItem(9)) FixtureAbort(__LINE__);
 		grf.grfid = 0x439CA110; grf.grf_version = 8;
@@ -360,9 +361,9 @@ struct CapabilityProgram {
 		articulated->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}};
 		articulated->ranges = {{{.group = part.get()}, 1, 1}}; articulated->default_result.group = stop.get();
 		property->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}};
-		property->ranges = {{{.group = capacity.get()}, e->type == VEH_TRAIN ? PROP_TRAIN_CARGO_CAPACITY : PROP_AIRCRAFT_PASSENGER_CAPACITY, e->type == VEH_TRAIN ? PROP_TRAIN_CARGO_CAPACITY : PROP_AIRCRAFT_PASSENGER_CAPACITY}};
+		property->ranges = {{{.group = capacity.get()}, EngineFields(e).type == VEH_TRAIN ? PROP_TRAIN_CARGO_CAPACITY : PROP_AIRCRAFT_PASSENGER_CAPACITY, EngineFields(e).type == VEH_TRAIN ? PROP_TRAIN_CARGO_CAPACITY : PROP_AIRCRAFT_PASSENGER_CAPACITY}};
 		observer = std::make_unique<CapabilityObserver>(); observer->program = root.get();
-		e->grf_prop.grffile = &grf; e->grf_prop.spritegroups.clear(); e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
+		EngineBindings(e).grf_prop.grffile = &grf; FixtureClearEngineSprites(e); FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, observer.get());
 	}
 	~CapabilityProgram() { props.Restore(); info.Restore(); }
 };
@@ -387,15 +388,15 @@ static void CapabilitiesInspect()
 	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type)), *part = Engine::Get(FIXTURE_GET(v->Next(), EngineType, engine_type));
 	Backup<bool> dynamic(_settings_game.vehicle.dynamic_engines, false);
 	Backup<RailVehicleInfo> rail(e->VehInfo<RailVehicleInfo>()), part_rail(part->VehInfo<RailVehicleInfo>());
-	Backup<EngineInfo> part_info(part->info);
+	Backup<EngineInfo> part_info(EngineFields(part).info);
 	{
 		CapabilityProgram p(e);
 		e->VehInfo<RailVehicleInfo>().capacity = 10; e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_SINGLEHEAD;
 		part->VehInfo<RailVehicleInfo>().capacity = 7;
-		e->info.cargo_type = GetCargoTypeByLabel(CT_PASSENGERS); e->info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL);
-		e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); e->info.callback_mask = {VehicleCallbackMask::ArticEngine, VehicleCallbackMask::RefitCapacity};
-		part->info.cargo_type = GetCargoTypeByLabel(CT_MAIL); part->info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL); part->info.callback_mask = {};
-		p.part->result = part->grf_prop.local_id | 0x4000;
+		EngineFields(e).info.cargo_type = GetCargoTypeByLabel(CT_PASSENGERS); EngineFields(e).info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL);
+		EngineFields(e).info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); EngineFields(e).info.callback_mask = {VehicleCallbackMask::ArticEngine, VehicleCallbackMask::RefitCapacity};
+		EngineFields(part).info.cargo_type = GetCargoTypeByLabel(CT_MAIL); EngineFields(part).info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL); EngineFields(part).info.callback_mask = {};
+		p.part->result = EngineBindings(part).grf_prop.local_id | 0x4000;
 		v->InvalidateNewGRFCacheOfChain();
 		CapabilityLive(v, "loaded");
 	}
@@ -411,7 +412,7 @@ static void CapabilitiesProbe()
 	Engine *e = Engine::Get(FIXTURE_GET(fixture, EngineType, engine_type)), *part = Engine::Get(FIXTURE_GET(fixture->GetNextVehicle(), EngineType, engine_type));
 	Backup<bool> dynamic(_settings_game.vehicle.dynamic_engines, false);
 	Backup<RailVehicleInfo> rail(e->VehInfo<RailVehicleInfo>()), part_rail(part->VehInfo<RailVehicleInfo>());
-	Backup<EngineInfo> part_info(part->info);
+	Backup<EngineInfo> part_info(EngineFields(part).info);
 	const CargoType passengers = GetCargoTypeByLabel(CT_PASSENGERS), mail = GetCargoTypeByLabel(CT_MAIL);
 	if (!IsValidCargoType(passengers) || !IsValidCargoType(mail)) FixtureAbort(__LINE__);
 	SavedRandomSeeds before, after; SaveRandomSeeds(&before);
@@ -420,11 +421,11 @@ static void CapabilitiesProbe()
 		CapabilityProgram p(e);
 		e->VehInfo<RailVehicleInfo>().capacity = 10; e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_SINGLEHEAD;
 		part->VehInfo<RailVehicleInfo>().capacity = 7;
-		e->info.cargo_type = passengers; e->info.refit_mask = CargoTypes{1} << mail; e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
-		e->info.callback_mask = {VehicleCallbackMask::ArticEngine, VehicleCallbackMask::RefitCapacity};
-		part->info.cargo_type = mail; part->info.refit_mask = CargoTypes{1} << mail; part->info.callback_mask = {};
+		EngineFields(e).info.cargo_type = passengers; EngineFields(e).info.refit_mask = CargoTypes{1} << mail; EngineFields(e).info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
+		EngineFields(e).info.callback_mask = {VehicleCallbackMask::ArticEngine, VehicleCallbackMask::RefitCapacity};
+		EngineFields(part).info.cargo_type = mail; EngineFields(part).info.refit_mask = CargoTypes{1} << mail; EngineFields(part).info.callback_mask = {};
 		for (uint8_t version : {7, 8}) for (bool fail : {false, true}) for (bool purchase : {false, true}) {
-			p.grf.grf_version = version; p.part->result = part->grf_prop.local_id | (version < 8 ? 0x180 : 0x4000); p.stop->result = fail ? CALLBACK_FAILED : version < 8 ? 0x1FF : 0x7FFF;
+			p.grf.grf_version = version; p.part->result = EngineBindings(part).grf_prop.local_id | (version < 8 ? 0x180 : 0x4000); p.stop->result = fail ? CALLBACK_FAILED : version < 8 ? 0x1FF : 0x7FFF;
 			p.observer->Reset();
 			size_t items = Vehicle::GetNumItems();
 			uint count = CountArticulatedParts(e->index, purchase);
@@ -441,11 +442,11 @@ static void CapabilitiesProbe()
 			auto cap = GetCapacityOfArticulatedParts(e->index);
 			fmt::print(stderr, "FLEET capability-aggregate {} {} {} {} {} {} {}\n", initial, u, i, cap[passengers], cap[mail], GetCargoTypesOfArticulatedParts(e->index), IsArticulatedVehicleRefittable(e->index));
 		}
-		e->info.refit_mask = CargoTypes{1} << passengers;
+		EngineFields(e).info.refit_mask = CargoTypes{1} << passengers;
 		fmt::print(stderr, "FLEET capability-suffix {} ", IsEngineRefittable(e->index));
-		e->info.callback_mask.Set(VehicleCallbackMask::CargoSuffix);
+		EngineFields(e).info.callback_mask.Set(VehicleCallbackMask::CargoSuffix);
 		fmt::print(stderr, "{}\n", IsEngineRefittable(e->index));
-		e->info.callback_mask.Reset(VehicleCallbackMask::CargoSuffix); e->info.refit_mask = CargoTypes{1} << mail;
+		EngineFields(e).info.callback_mask.Reset(VehicleCallbackMask::CargoSuffix); EngineFields(e).info.refit_mask = CargoTypes{1} << mail;
 		p.capacity->result = 0;
 		fmt::print(stderr, "FLEET capability-zero {} {} ", e->CanCarryCargo(), e->DetermineCapacity(nullptr));
 		e->VehInfo<RailVehicleInfo>().capacity = 0;
@@ -461,23 +462,23 @@ static void CapabilitiesProbe()
 			Backup<CargoType> cargo(FIXTURE_FIELD(fixture, cargo_type)); Backup<uint8_t> subtype(FIXTURE_FIELD(fixture, cargo_subtype));
 			Backup<uint16_t> passenger_multiplier(CargoSpec::Get(passengers)->multiplier), mail_multiplier(CargoSpec::Get(mail)->multiplier);
 			for (bool algorithm : {false, true}) for (bool other : {false, true}) for (uint8_t suffix : {0, 1}) {
-				e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); FIXTURE_FIELD(fixture, cargo_type) = other ? mail : passengers; FIXTURE_FIELD(fixture, cargo_subtype) = suffix;
+				EngineFields(e).info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); FIXTURE_FIELD(fixture, cargo_type) = other ? mail : passengers; FIXTURE_FIELD(fixture, cargo_subtype) = suffix;
 				p.observer->Reset(); uint amount = e->DetermineCapacity(fixture);
 				fmt::print(stderr, "FLEET capability-gate {} {} {} {} {}\n", algorithm, other, suffix, amount, p.observer->refits);
 			}
-			e->info.callback_mask.Reset(VehicleCallbackMask::RefitCapacity); FIXTURE_FIELD(fixture, cargo_type) = mail;
+			EngineFields(e).info.callback_mask.Reset(VehicleCallbackMask::RefitCapacity); FIXTURE_FIELD(fixture, cargo_type) = mail;
 			for (bool algorithm : {false, true}) for (uint16_t base : {1, 256, 65535}) for (uint16_t factor : {1, 256, 65535}) {
-				e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); CargoSpec::Get(passengers)->multiplier = base; CargoSpec::Get(mail)->multiplier = factor;
+				EngineFields(e).info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); CargoSpec::Get(passengers)->multiplier = base; CargoSpec::Get(mail)->multiplier = factor;
 				fmt::print(stderr, "FLEET capability-multiplier {} {} {} {}\n", algorithm, base, factor, e->DetermineCapacity(fixture));
 			}
 			passenger_multiplier.Restore(); mail_multiplier.Restore(); cargo.Restore(); subtype.Restore();
-			e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); e->info.callback_mask.Set(VehicleCallbackMask::RefitCapacity);
+			EngineFields(e).info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); EngineFields(e).info.callback_mask.Set(VehicleCallbackMask::RefitCapacity);
 		}
 		for (Engine *ship : Engine::Iterate()) {
-			if (ship->type != VEH_SHIP) continue;
-			Backup<EngineInfo> ship_info(ship->info); Backup<ShipVehicleInfo> ship_spec(ship->VehInfo<ShipVehicleInfo>());
+			if (EngineFields(ship).type != VEH_SHIP) continue;
+			Backup<EngineInfo> ship_info(EngineFields(ship).info); Backup<ShipVehicleInfo> ship_spec(ship->VehInfo<ShipVehicleInfo>());
 			Backup<uint16_t> multiplier(CargoSpec::Get(mail)->multiplier);
-			ship->info.cargo_type = mail; ship->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier); ship->VehInfo<ShipVehicleInfo>().capacity = UINT16_MAX; CargoSpec::Get(mail)->multiplier = UINT16_MAX;
+			EngineFields(ship).info.cargo_type = mail; EngineFields(ship).info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier); ship->VehInfo<ShipVehicleInfo>().capacity = UINT16_MAX; CargoSpec::Get(mail)->multiplier = UINT16_MAX;
 			uint amount = ship->GetDisplayDefaultCapacity(); auto caps = GetCapacityOfArticulatedParts(ship->index);
 			fmt::print(stderr, "FLEET capability-ship {} {} {}\n", amount, caps[mail], caps[mail] == static_cast<uint16_t>(amount));
 			multiplier.Restore(); ship_spec.Restore(); ship_info.Restore(); break;
@@ -524,20 +525,20 @@ static void CapabilityAircraft(Vehicle *v)
 	Backup<uint16_t> capacity(FIXTURE_FIELD(v, cargo_cap)), secondary_capacity(FIXTURE_FIELD(v->Next(), cargo_cap)), refit_capacity(FIXTURE_FIELD(v, refit_cap));
 	{
 	CapabilityProgram p(e);
-	e->info.cargo_type = GetCargoTypeByLabel(CT_PASSENGERS); e->info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL);
-	e->info.callback_mask = {VehicleCallbackMask::RefitCapacity}; e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
+	EngineFields(e).info.cargo_type = GetCargoTypeByLabel(CT_PASSENGERS); EngineFields(e).info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL);
+	EngineFields(e).info.callback_mask = {VehicleCallbackMask::RefitCapacity}; EngineFields(e).info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
 	e->VehInfo<AircraftVehicleInfo>().passenger_capacity = 100; e->VehInfo<AircraftVehicleInfo>().mail_capacity = 11;
 	p.property->ranges.push_back({{.group = p.refit.get()}, PROP_AIRCRAFT_MAIL_CAPACITY, PROP_AIRCRAFT_MAIL_CAPACITY});
-	FIXTURE_FIELD(v, cargo_type) = e->info.cargo_type; FIXTURE_FIELD(v, cargo_subtype) = 0;
+	FIXTURE_FIELD(v, cargo_type) = EngineFields(e).info.cargo_type; FIXTURE_FIELD(v, cargo_subtype) = 0;
 	uint16_t secondary = 999;
 	uint amount = e->DetermineCapacity(v, &secondary);
 	fmt::print(stderr, "FLEET capability-aircraft {} {}\n", amount, secondary);
 	{
-		Backup<uint16_t> passengers(CargoSpec::Get(e->info.cargo_type)->multiplier), mail(CargoSpec::Get(GetCargoTypeByLabel(CT_MAIL))->multiplier), goods(CargoSpec::Get(GetCargoTypeByLabel(CT_GOODS))->multiplier);
-		e->info.callback_mask.Reset(VehicleCallbackMask::RefitCapacity);
+		Backup<uint16_t> passengers(CargoSpec::Get(EngineFields(e).info.cargo_type)->multiplier), mail(CargoSpec::Get(GetCargoTypeByLabel(CT_MAIL))->multiplier), goods(CargoSpec::Get(GetCargoTypeByLabel(CT_GOODS))->multiplier);
+		EngineFields(e).info.callback_mask.Reset(VehicleCallbackMask::RefitCapacity);
 		FIXTURE_FIELD(v, cargo_type) = GetCargoTypeByLabel(CT_MAIL);
 		for (bool algorithm : {false, true}) for (uint16_t factor : {1, 256, 65535}) {
-			e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); CargoSpec::Get(e->info.cargo_type)->multiplier = UINT16_MAX; CargoSpec::Get(FIXTURE_FIELD(v, cargo_type))->multiplier = factor;
+			EngineFields(e).info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); CargoSpec::Get(EngineFields(e).info.cargo_type)->multiplier = UINT16_MAX; CargoSpec::Get(FIXTURE_FIELD(v, cargo_type))->multiplier = factor;
 			uint16_t extra = 999; uint amount = e->DetermineCapacity(v, &extra);
 			fmt::print(stderr, "FLEET capability-aircraft-mail {} {} {} {}\n", algorithm, factor, amount, extra);
 			FIXTURE_FIELD(v, cargo_type) = GetCargoTypeByLabel(CT_GOODS); CargoSpec::Get(FIXTURE_FIELD(v, cargo_type))->multiplier = UINT16_MAX;
@@ -546,16 +547,16 @@ static void CapabilityAircraft(Vehicle *v)
 			FIXTURE_FIELD(v, cargo_type) = GetCargoTypeByLabel(CT_MAIL);
 		}
 		passengers.Restore(); mail.Restore(); goods.Restore();
-		e->info.callback_mask.Set(VehicleCallbackMask::RefitCapacity); e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); FIXTURE_FIELD(v, cargo_type) = e->info.cargo_type;
+		EngineFields(e).info.callback_mask.Set(VehicleCallbackMask::RefitCapacity); EngineFields(e).info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); FIXTURE_FIELD(v, cargo_type) = EngineFields(e).info.cargo_type;
 	}
-	e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier);
+	EngineFields(e).info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier);
 	p.observer->inspect_mail = true;
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
 		auto [cost, id, cap, mail, caps] = Command<CMD_BUILD_VEHICLE>::Do(flags, FIXTURE_GET(v, Tile, tile), e->index, false, INVALID_CARGO, INVALID_CLIENT_ID); Checked("capability-aircraft-build", cost);
 		fmt::print(stderr, "FLEET capability-aircraft-build {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, p.observer->mail_valid && (!flags.Test(DoCommandFlag::Execute) || p.observer->mail_calls != 0));
 		if (flags.Test(DoCommandFlag::Execute)) { CapabilityChain(Vehicle::Get(id), "aircraft"); Checked("capability-aircraft-sell", Command<CMD_SELL_VEHICLE>::Do(DoCommandFlag::Execute, id, true, false, INVALID_CLIENT_ID)); }
 	}
-	p.observer->inspect_mail = false; e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
+	p.observer->inspect_mail = false; EngineFields(e).info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
 		auto [cost, cap, mail, caps] = Command<CMD_REFIT_VEHICLE>::Do(flags, v->index, GetCargoTypeByLabel(CT_MAIL), 1, false, false, 0); Checked("capability-aircraft-refit", cost);
 		fmt::print(stderr, "FLEET capability-aircraft-refit {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, FIXTURE_FIELD(v->Next(), cargo_cap));
@@ -682,7 +683,7 @@ static void ResolverAircraft(Aircraft *v)
 static void ResolverRealBoundaries(Train *v, Engine *engine)
 {
 	if (v->cargo.TotalCount() != 0 || !SpriteGroup::CanAllocateItem(7)) FixtureAbort(__LINE__);
-	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
+	FixtureEngineBackup<decltype(EngineBindings(engine).grf_prop.spritegroups)> sprites(EngineBindings(engine).grf_prop.spritegroups);
 	Backup<uint16_t> capacity(FIXTURE_FIELD(v, cargo_cap));
 	Backup<Order> order(v->First()->current_order);
 	const uint16_t original_capacity = FIXTURE_FIELD(v, cargo_cap);
@@ -697,8 +698,8 @@ static void ResolverRealBoundaries(Train *v, Engine *engine)
 		loading[i] = new CallbackResultSpriteGroup(211 + i);
 	}
 	auto *real = new RealSpriteGroup();
-	engine->grf_prop.spritegroups.clear();
-	engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, real);
+	FixtureClearEngineSprites(engine);
+	FixtureSetEngineSprite(engine, CargoGRFFileProps::SG_DEFAULT, real);
 	for (uint mask = 0; mask < 4; ++mask) {
 		real->loaded.clear(); real->loading.clear();
 		if (mask & 1) real->loaded.assign(loaded.begin(), loaded.end());
@@ -738,8 +739,8 @@ static void ResolverOverrideOrder(Train *wagon)
 {
 	Engine *engine = Engine::Get(FIXTURE_GET(wagon, EngineType, engine_type));
 	if (EngineID(wagon->gcache.first_engine) == EngineID::Invalid() || !SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
-	Backup<decltype(engine->overrides)> overrides(engine->overrides);
-	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
+	FixtureEngineBackup<decltype(EngineBindings(engine).overrides)> overrides(EngineBindings(engine).overrides);
+	FixtureEngineBackup<decltype(EngineBindings(engine).grf_prop.spritegroups)> sprites(EngineBindings(engine).grf_prop.spritegroups);
 	Backup<CargoType> cargo(FIXTURE_FIELD(wagon, cargo_type));
 	const CargoType original_cargo = FIXTURE_FIELD(wagon, cargo_type);
 	const CargoType other_cargo = (original_cargo + 1) % NUM_CARGO;
@@ -750,29 +751,29 @@ static void ResolverOverrideOrder(Train *wagon)
 	auto *first = new CallbackResultSpriteGroup(311);
 	auto *second = new CallbackResultSpriteGroup(419);
 	auto *ordinary = new CallbackResultSpriteGroup(523);
-	engine->grf_prop.spritegroups.clear();
-	engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, ordinary);
+	FixtureClearEngineSprites(engine);
+	FixtureSetEngineSprite(engine, CargoGRFFileProps::SG_DEFAULT, ordinary);
 	std::array<EngineID, 2> matching{EngineID::Invalid(), EngineID(wagon->gcache.first_engine)};
 	std::array<EngineID, 1> rejected{EngineID::Invalid()};
 	for (uint test = 0; test < 6; ++test) {
-		engine->overrides.clear();
+		FixtureClearEngineOverrides(engine);
 		/* Neither a wrong engine nor a wrong cargo may steal the match. */
-		SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, second, rejected);
-		SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), (original_cargo + 2) % NUM_CARGO, second, matching);
+		FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, second, rejected);
+		FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), (original_cargo + 2) % NUM_CARGO, second, matching);
 		if (test == 0) {
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, first, matching);
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, first, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
 		} else if (test == 1) {
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, first, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, first, matching);
 		} else if (test == 2) {
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, first, matching);
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, first, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, second, matching);
 		} else if (test == 3) {
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, nullptr, matching);
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, second, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, nullptr, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), CargoGRFFileProps::SG_DEFAULT, second, matching);
 		} else if (test == 4) {
-			SetWagonOverrideSprites(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, first, matching);
+			FixtureWagonOverride(FIXTURE_GET(wagon, EngineType, engine_type), original_cargo, first, matching);
 		}
 		for (uint input = 0; input < 2; ++input) {
 			cargo.Change(input == 0 ? original_cargo : other_cargo);
@@ -791,7 +792,7 @@ static void ResolverOverrideOrder(Train *wagon)
 static void ResolverPropertyBoundaries(Train *v, Engine *engine)
 {
 	if (!SpriteGroup::CanAllocateItem()) FixtureAbort(__LINE__);
-	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
+	FixtureEngineBackup<decltype(EngineBindings(engine).grf_prop.spritegroups)> sprites(EngineBindings(engine).grf_prop.spritegroups);
 	Backup<Randomizer> interactive(_interactive_random);
 	_interactive_random.SetSeed(12345);
 	SavedRandomSeeds before, after;
@@ -801,15 +802,15 @@ static void ResolverPropertyBoundaries(Train *v, Engine *engine)
 	det->var_scope = VSG_SCOPE_SELF;
 	det->default_result.calculated_result = true;
 	for (uint32_t value : {0U, 1U, 0x3FFEU, 0x3FFFU, 0x4000U, 0x4001U, 0x7FFEU, 0x7FFFU, 0xFFFFU}) {
-		engine->grf_prop.spritegroups.clear();
-		if (value != CALLBACK_FAILED) engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+		FixtureClearEngineSprites(engine);
+		if (value != CALLBACK_FAILED) FixtureSetEngineSprite(engine, CargoGRFFileProps::SG_DEFAULT, det);
 		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = value}};
 		for (int fallback : {INT32_MIN, -17, 0, 17, INT32_MAX}) for (bool is_signed : {false, true}) {
 			fmt::print(stderr, "FLEET resolver-property-boundary {} {} {} {} {}\n", value, fallback, is_signed, GetVehicleProperty(v, PROP_TRAIN_SPEED, fallback, is_signed), GetEngineProperty(FIXTURE_GET(v, EngineType, engine_type), PROP_TRAIN_SPEED, fallback, nullptr, is_signed));
 		}
 	}
 	sprites.Revert();
-	const bool restored = engine->grf_prop.spritegroups == sprites.GetOriginalValue();
+	const bool restored = EngineBindings(engine).grf_prop.spritegroups == sprites.GetOriginalValue();
 	sprites.Restore();
 	delete det;
 	SaveRandomSeeds(&after);
@@ -826,8 +827,8 @@ static void ResolverProbe()
 	if (v == nullptr) FixtureAbort(__LINE__);
 	ResolverVariables(v);
 	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
-	Backup<decltype(e->grf_prop.spritegroups)> sprites(e->grf_prop.spritegroups);
-	Backup<const GRFFile *> file(e->grf_prop.grffile);
+	FixtureEngineBackup<decltype(EngineBindings(e).grf_prop.spritegroups)> sprites(EngineBindings(e).grf_prop.spritegroups);
+	Backup<const GRFFile *> file(EngineBindings(e).grf_prop.grffile);
 	GRFFile grf;
 	grf.grf_version = 8;
 	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
@@ -841,8 +842,8 @@ static void ResolverProbe()
 	det->var_scope = VSG_SCOPE_SELF;
 	det->default_result.calculated_result = true;
 	det->adjusts.push_back({.operation = DSGA_OP_RST, .variable = 0x42, .and_mask = UINT32_MAX});
-	e->grf_prop.spritegroups.clear();
-	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+	FixtureClearEngineSprites(e);
+	FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, det);
 	v->InvalidateNewGRFCacheOfChain();
 	{
 		VehicleResolverObject ro(FIXTURE_GET(v, EngineType, engine_type), v, VehicleResolverObject::WO_NONE);
@@ -863,7 +864,7 @@ static void ResolverProbe()
 		caller.grf_version = 8;
 		uint32_t version8 = ro.self_scope.GetVariable(0x42, 0, available);
 		fmt::print(stderr, "FLEET resolver-caller-grf {} {} {}\n", version7 == untranslated, version8 != translated, v->grf_cache == before);
-		Backup<decltype(e->badges)> badges(e->badges, std::vector<BadgeID>{BadgeID(0x12345678)});
+		FixtureEngineBackup<decltype(EngineBindings(e).badges)> badges(EngineBindings(e).badges, std::vector<BadgeID>{BadgeID(0x12345678)});
 		caller.badge_list = {BadgeID(0x12345678)};
 		uint32_t badge_count = ro.self_scope.GetVariable(0x64, 0, available);
 		fmt::print(stderr, "FLEET resolver-wide-badge {} {}\n", available, badge_count > 0);
@@ -938,12 +939,12 @@ static void ResolverProbe()
 		auto probability = TestVehicleBuildProbability(v, FIXTURE_GET(v, EngineType, engine_type), BuildProbabilityType::Reversed);
 		SaveRandomSeeds(&probability_after);
 		fmt::print(stderr, "FLEET resolver-probability {} {} {}\n", probability.has_value(), probability.value_or(false), !SameRandom(probability_before, probability_after));
-		e->grf_prop.spritegroups.clear();
+		FixtureClearEngineSprites(e);
 		SaveRandomSeeds(&probability_before);
 		probability = TestVehicleBuildProbability(v, FIXTURE_GET(v, EngineType, engine_type), BuildProbabilityType::Reversed);
 		SaveRandomSeeds(&probability_after);
 		fmt::print(stderr, "FLEET resolver-probability-failed {} {}\n", !probability.has_value(), SameRandom(probability_before, probability_after));
-		e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+		FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, det);
 		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x61, .parameter = 0x84, .and_mask = UINT32_MAX}};
 		auto *fallback = new CallbackResultSpriteGroup(123);
 		det->error_group = fallback;
@@ -956,7 +957,7 @@ static void ResolverProbe()
 		auto *high = new CallbackResultSpriteGroup(11);
 		auto *real = new RealSpriteGroup();
 		real->loaded = {low, high}; real->loading = {high, low};
-		e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, real);
+		FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, real);
 		Backup<Order> order(v->current_order);
 		for (bool loading : {false, true}) {
 			if (loading) v->current_order.MakeLoading(false); else v->current_order.MakeDummy();
@@ -964,7 +965,7 @@ static void ResolverProbe()
 		}
 		fmt::print(stderr, "FLEET resolver-purchase-real {}\n", GetEngineProperty(FIXTURE_GET(v, EngineType, engine_type), PROP_TRAIN_SPEED, 17) == 11);
 		order.Restore();
-		e->grf_prop.spritegroups.clear();
+		FixtureClearEngineSprites(e);
 		delete real; delete high; delete low;
 	}
 	auto *result = new CallbackResultSpriteGroup(7);
@@ -974,8 +975,8 @@ static void ResolverProbe()
 	random->cmp_mode = RSG_CMP_ANY;
 	random->lowest_randbit = 3;
 	random->groups = {result, result};
-	e->grf_prop.spritegroups.clear();
-	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random);
+	FixtureClearEngineSprites(e);
+	FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, random);
 	for (Train *u = v; u != nullptr; u = u->Next()) FIXTURE_SET(u, CachedOverride, tcache.cached_override, random);
 	for (VehicleRandomTrigger trigger : {VehicleRandomTrigger::NewCargo, VehicleRandomTrigger::Depot, VehicleRandomTrigger::Empty, VehicleRandomTrigger::Callback32}) {
 		SavedRandomSeeds before, after;
@@ -1011,14 +1012,14 @@ static void ResolverProbe()
 	ReloadNewGRFData();
 	v = Train::Get(id); e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	fmt::print(stderr, "FLEET resolver-grf-reload {} {} {} {}\n", cache.cache_valid == 31, bits == FIXTURE_FIELD(v, random_bits), waiting == FIXTURE_GET(v, WaitingRandomTriggers, waiting_random_triggers).base(), v->grf_cache.cache_valid);
-	Backup<decltype(e->grf_prop.spritegroups)> reinstalled(e->grf_prop.spritegroups);
-	Backup<const GRFFile *> refile(e->grf_prop.grffile, &grf);
+	FixtureEngineBackup<decltype(EngineBindings(e).grf_prop.spritegroups)> reinstalled(EngineBindings(e).grf_prop.spritegroups);
+	Backup<const GRFFile *> refile(EngineBindings(e).grf_prop.grffile, &grf);
 	if (!SpriteGroup::CanAllocateItem()) FixtureAbort(__LINE__);
 	det = new DeterministicSpriteGroup();
 	det->size = DSG_SIZE_DWORD; det->var_scope = VSG_SCOPE_SELF;
 	det->default_result.calculated_result = true;
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x42, .and_mask = UINT32_MAX}};
-	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+	FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, det);
 	v->InvalidateNewGRFCacheOfChain();
 	{
 		VehicleResolverObject ro(FIXTURE_GET(v, EngineType, engine_type), v, VehicleResolverObject::WO_NONE);
@@ -1055,8 +1056,8 @@ static void VisualEffectProbe()
 	if (v == nullptr) FixtureAbort(__LINE__);
 	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
 	fmt::print(stderr, "FLEET effect-load-cache {}\n", v->vcache.cached_vis_effect);
-	Backup<CargoGRFFileProps> props(e->grf_prop);
-	Backup<VehicleCallbackMasks> mask(e->info.callback_mask);
+	FixtureEngineBackup<FixtureEngineGRFProps> props(EngineBindings(e).grf_prop);
+	Backup<VehicleCallbackMasks> mask(EngineFields(e).info.callback_mask);
 	Backup<uint8_t> smoke(_settings_game.vehicle.smoke_amount, 2);
 	Backup<bool> sound(_settings_client.sound.vehicle, true);
 	Backup<VehicleCache> cache(v->vcache);
@@ -1073,16 +1074,16 @@ static void VisualEffectProbe()
 	config->ident.grfid = grf.grfid;
 	_grfconfig.push_back(std::move(config));
 	Backup<uint8_t> default_visual(e->VehInfo<RoadVehicleInfo>().visual_effect, VE_DEFAULT);
-	e->grf_prop.grffile = &grf;
-	e->info.callback_mask.Set(VehicleCallbackMask::VisualEffect).Set(VehicleCallbackMask::SoundEffect);
+	EngineBindings(e).grf_prop.grffile = &grf;
+	EngineFields(e).info.callback_mask.Set(VehicleCallbackMask::VisualEffect).Set(VehicleCallbackMask::SoundEffect);
 	if (!SpriteGroup::CanAllocateItem(2)) FixtureAbort(__LINE__);
 	auto *observer = new VisualEffectObserver();
 	auto *program = new DeterministicSpriteGroup();
 	observer->program = program;
 	program->size = DSG_SIZE_DWORD;
 	program->default_result.calculated_result = true;
-	e->grf_prop.spritegroups.clear();
-	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer);
+	FixtureClearEngineSprites(e);
+	FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, observer);
 	for (uint16_t result : {uint16_t(0x2003), uint16_t(0), uint16_t(0x4001)}) {
 		program->adjusts.clear();
 		for (auto [reg, value] : {std::pair{0x100U, 0xFE03FCF1U}, {0x101U, 0x04FE02F2U}, {0x102U, 0x0601FFF3U}}) {
@@ -1164,7 +1165,7 @@ static void VisualEffectProbe()
 	}
 	default_visual.Restore();
 	_grfconfig.pop_back();
-	e->grf_prop = props.GetOriginalValue();
+	props.Revert();
 	delete program; delete observer;
 	props.Restore(); mask.Restore(); smoke.Restore(); sound.Restore(); cache.Restore(); status.Restore(); speed.Restore(); tick.Restore(); direction.Restore(); length.Restore(); tile.Restore(); x.Restore(); y.Restore(); z.Restore();
 	fmt::print(stderr, "FLEET effect-checkpoint complete\n");
@@ -1207,8 +1208,8 @@ static void VisualTrainProbe()
 	std::vector<std::pair<Train *, VehicleCache>> caches;
 	for (Train *t = v; t != nullptr; t = t->Next()) { caches.emplace_back(t, t->vcache); t->vcache.cached_vis_effect = 0x40; }
 	Engine *e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
-	Backup<CargoGRFFileProps> props(e->grf_prop);
-	Backup<VehicleCallbackMasks> mask(e->info.callback_mask);
+	FixtureEngineBackup<FixtureEngineGRFProps> props(EngineBindings(e).grf_prop);
+	Backup<VehicleCallbackMasks> mask(EngineFields(e).info.callback_mask);
 	Backup<RailVehicleInfo> info(e->VehInfo<RailVehicleInfo>());
 	Backup<uint8_t> smoke(_settings_game.vehicle.smoke_amount, 2);
 	Backup<bool> sound(_settings_client.sound.vehicle, true);
@@ -1220,8 +1221,8 @@ static void VisualTrainProbe()
 	const auto flags = VisualTrainFlags(v);
 	const auto rail = VisualTrainRail(v);
 	GRFFile grf; grf.grf_version = 8;
-	e->grf_prop.grffile = &grf;
-	e->info.callback_mask = VehicleCallbackMask::SoundEffect;
+	EngineBindings(e).grf_prop.grffile = &grf;
+	EngineFields(e).info.callback_mask = VehicleCallbackMask::SoundEffect;
 	if (!SpriteGroup::CanAllocateItem(2)) FixtureAbort(__LINE__);
 	auto *observer = new VisualEffectObserver();
 	auto *program = new DeterministicSpriteGroup();
@@ -1229,7 +1230,7 @@ static void VisualTrainProbe()
 	program->size = DSG_SIZE_DWORD;
 	program->default_result.calculated_result = true;
 	program->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0xFE03FCF1}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 1}};
-	e->grf_prop.spritegroups.clear(); e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer);
+	FixtureClearEngineSprites(e); FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, observer);
 	for (const char *label : {"stock-flipped", "reversing", "unpowered", "advanced-flipped", "advanced-center"}) {
 		const std::string_view name(label);
 		v->vcache.cached_vis_effect = name.starts_with("advanced") ? 0x41 : 0x11;
@@ -1248,7 +1249,7 @@ static void VisualTrainProbe()
 		}
 		fmt::print(stderr, "FLEET effect-train {} count {} sound {} rng {}\n", label, count, observer->sound - old_sound, _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1]);
 	}
-	e->info.callback_mask = {};
+	EngineFields(e).info.callback_mask = {};
 	for (uint8_t kind : {uint8_t(EC_STEAM), uint8_t(EC_DIESEL), uint8_t(EC_ELECTRIC), uint8_t(EC_MONORAIL), uint8_t(255)}) {
 		e->VehInfo<RailVehicleInfo>().engclass = static_cast<EngineClass>(kind); e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_SINGLEHEAD; e->VehInfo<RailVehicleInfo>().visual_effect = VE_DEFAULT;
 		v->UpdateVisualEffect();
@@ -1412,7 +1413,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		EngineID wagon = FIXTURE_GET(v->GetNextVehicle(), EngineType, engine_type);
 		EngineID single = EngineID::Invalid(), multi = EngineID::Invalid();
 		for (const Engine *e : Engine::Iterate()) {
-			if (e->type != VEH_TRAIN || !std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Succeeded()) continue;
+			if (EngineFields(e).type != VEH_TRAIN || !std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Succeeded()) continue;
 			RailVehicleTypes kind = RailVehInfo(e->index)->railveh_type;
 			if (kind == RAILVEH_SINGLEHEAD && single == EngineID::Invalid()) single = e->index;
 			if (kind == RAILVEH_MULTIHEAD && multi == EngineID::Invalid()) multi = e->index;
@@ -1633,7 +1634,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 			return std::get<1>(built);
 		};
 		auto buildable = [&](const Engine *e, RailVehicleTypes kind) {
-			return e->type == VEH_TRAIN && RailVehInfo(e->index)->railveh_type == kind && std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Succeeded();
+			return EngineFields(e).type == VEH_TRAIN && RailVehInfo(e->index)->railveh_type == kind && std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Succeeded();
 		};
 		EngineID engine = EngineID::Invalid();
 		EngineID multihead = EngineID::Invalid();

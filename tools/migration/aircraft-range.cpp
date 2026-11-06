@@ -107,8 +107,16 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	resolver.id = [](OpenTTDVehicle *v) noexcept -> uint32_t { return v == &fixture->record ? 17 : 18; };
 	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if ((property != 0x0C && property != 0x1C) || fallback != 0) std::abort(); return int32_t{0}; };
-	leaves.engine_speed = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{100}; };
-	leaves.cargo_age_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{0}; };
+	static std::unique_ptr<OpenTTDEngine, decltype(&openttd_rust_engine_destroy)> engine{
+		[] {
+			auto *record = openttd_rust_engine_new();
+			const OpenTTDEngineDefaults defaults{};
+			openttd_rust_engine_construct(record, &defaults, VEH_AIRCRAFT, UINT16_MAX);
+			record->vehicle_info.aircraft.max_speed = 100;
+			record->info.cargo_age_period = 0;
+			return record;
+		}(), openttd_rust_engine_destroy};
+	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine.get(); };
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
 	shared.plane_speed = []() noexcept { return uint8_t{1}; };
 

@@ -59,12 +59,6 @@ struct OpenTTDCompanyIdentityServices {
 	void (OPENTTD_RUST_CALL *object_colours)(Company *c) noexcept OPENTTD_SERVICE_DEFAULT(object_colours);
 	void (OPENTTD_RUST_CALL *reset_colourmap)() noexcept OPENTTD_SERVICE_DEFAULT(reset_colourmap);
 	const OpenTTDEngine * (OPENTTD_RUST_CALL *engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
-	VehicleType (OPENTTD_RUST_CALL *engine_type)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_type);
-	uint8_t (OPENTTD_RUST_CALL *engine_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_cargo);
-	RailVehicleTypes (OPENTTD_RUST_CALL *engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
-	EngineClass (OPENTTD_RUST_CALL *engine_class)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_class);
-	uint8_t (OPENTTD_RUST_CALL *engine_misc)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_misc);
-	uint8_t (OPENTTD_RUST_CALL *aircraft_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_subtype);
 	bool (OPENTTD_RUST_CALL *wagon_override)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(wagon_override);
 	bool (OPENTTD_RUST_CALL *cargo_freight)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_freight);
 	uint16_t (OPENTTD_RUST_CALL *cargo_classes)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);

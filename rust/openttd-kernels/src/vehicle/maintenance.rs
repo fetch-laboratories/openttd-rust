@@ -36,12 +36,9 @@ pub struct Services {
     pub group: *const fleet::GroupServices,
     pub company: *const crate::company_identity::Services,
     pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany, u16) -> Replacement,
-    pub replacement_available: extern "C" fn(u8, u16) -> bool,
-    pub smoke_disabled: extern "C" fn(u16) -> bool,
     pub mark_dirty: extern "C" fn(VehicleRef),
     pub view_dirty: extern "C" fn(VehicleRef),
     pub details_dirty: extern "C" fn(VehicleRef),
-    pub engine_available_any: extern "C" fn(u16) -> bool,
     pub replacement_active: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany, u16) -> bool,
     pub old_news: extern "C" fn(VehicleRef, u32),
     pub reached_min_age: extern "C" fn(VehicleRef),
@@ -56,11 +53,6 @@ pub struct Services {
 }
 
 impl Services {
-    pub(crate) fn engine_reliability(&self, v: VehicleRef) -> u16 {
-        let engine = (self.settings().engines.resolve)(v.engine_id());
-        read_field!(engine.state, reliability)
-    }
-
     /// Reuse the command/Company registry's existing settings table route at
     /// game entry, avoiding a second binding or a static-initialization cycle.
     fn settings(&self) -> &'static crate::settings_table::Services {
@@ -119,7 +111,7 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
     loop {
         let economy_date = crate::timer_game_common::economy_date();
         let calendar_date = crate::timer_game_common::calendar_date();
-        let reliability = s.engine_reliability(v);
+        let reliability = (base.engine)(v).reliability();
         let old_chance = v.breakdown_chance();
         let breakdowns = unsafe { (*s.shared).settings().vehicle_breakdowns.read() };
         let chance = if breakdowns == 1 {
@@ -171,7 +163,7 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     branch!(C, VEHICLE_MAINT_SERVICE);
     if percent {
         branch!(C, VEHICLE_MAINT_PERCENT);
-        let engine_reliability = s.engine_reliability(v);
+        let engine_reliability = (base.engine)(v).reliability();
         if i32::from(reliability)
             >= i32::from(engine_reliability).wrapping_mul(100 - i32::from(interval)) / 100
         {
@@ -226,7 +218,12 @@ unsafe fn replacement_needed<const C: bool>(
     // SAFETY: needs_service retains the live native owner through this decision.
     let replacement = unsafe { svc!(C, s.replacement, v, company, v.engine_id()) };
     if replacement.engine == crate::engine_type::INVALID_ENGINE
-        || !svc!(C, s.replacement_available, v.owner(), replacement.engine)
+        || crate::vehicle::EngineRef::of((unsafe { &*s.transaction }.capabilities.engine)(
+            replacement.engine,
+        ))
+        .company_availability()
+            & (1 << v.owner())
+            == 0
     {
         return false;
     }
@@ -393,7 +390,14 @@ unsafe fn breakdown_state<const C: bool>(
                     };
                     svc!(C, base.play_sound, v, sound);
                 }
-                if (v).status() & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v.engine_id()) {
+                if (v).status() & VS_HIDDEN == 0
+                    && crate::vehicle::EngineRef::of((unsafe { &*s.transaction }
+                        .capabilities
+                        .engine)(v.engine_id()))
+                    .misc()
+                        & crate::engine_type::NO_BREAKDOWN_SMOKE
+                        == 0
+                {
                     let smoke = crate::effect::openttd_rust_effect_create_rel(
                         v.0.as_ptr(),
                         4,
@@ -519,7 +523,13 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     let companies = unsafe { &*s.company };
     let company = (companies.company)(crate::company_type::CompanyID(v.owner()));
     let renewal = read_field!((companies.settings)(company), engine_renew);
-    if renewal && svc!(C, s.engine_available_any, v.engine_id()) {
+    if renewal
+        && crate::vehicle::EngineRef::of((unsafe { &*s.transaction }.capabilities.engine)(
+            v.engine_id(),
+        ))
+        .company_availability()
+            != 0
+    {
         return;
     }
     // Engine availability only reads; the Company is still the original live owner.
@@ -690,12 +700,9 @@ crate::abi::layouts! {
         group,
         company,
         replacement,
-        replacement_available,
-        smoke_disabled,
         mark_dirty,
         view_dirty,
         details_dirty,
-        engine_available_any,
         replacement_active,
         old_news,
         reached_min_age,

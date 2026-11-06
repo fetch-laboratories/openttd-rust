@@ -81,19 +81,11 @@ impl VehicleRef {
     }
 }
 
-/// Opaque immutable C++ engine context captured before a callback.
+/// A live canonical Engine record captured under the serialized game lifetime.
 pub use crate::engine_type::OpenTTDEngine;
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct EngineRef(pub NonNull<OpenTTDEngine>);
-
-/// Only the engine context and GRF version consumed before the length callback.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EngineForLength {
-    pub engine: EngineRef,
-    pub grf_version: u8,
-}
 
 pub use crate::newgrf_callbacks::CALLBACK_FAILED;
 pub use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING};
@@ -172,7 +164,6 @@ pub struct VehicleServices {
     pub set_dest_tile: extern "C" fn(VehicleRef, u32),
     /// Only the current engine, for callers that do not consume its GRF version.
     pub engine: extern "C" fn(VehicleRef) -> EngineRef,
-    pub engine_for_length: extern "C" fn(VehicleRef) -> EngineForLength,
     pub order_type: extern "C" fn(VehicleRef) -> u8,
     pub order_destination: extern "C" fn(VehicleRef) -> u16,
     pub order_nonstop: extern "C" fn(VehicleRef) -> u8,
@@ -350,7 +341,6 @@ crate::abi::layouts! {
         destroy,
         set_dest_tile,
         engine,
-        engine_for_length,
         order_type,
         order_destination,
         order_nonstop,
@@ -370,10 +360,6 @@ crate::abi::layouts! {
         update_viewport,
         has_articulated,
         physics,
-    };
-    "OpenTTDEngineForLength" ["probe"] => EngineForLength {
-        engine,
-        grf_version,
     };
     "OrderType" ["maintenance"] => OrderType {
     };

@@ -78,7 +78,7 @@
 	EnforcePrecondition(VEHICLE_INVALID, ScriptEngine::IsBuildable(engine_id));
 	EnforcePrecondition(VEHICLE_INVALID, !::IsValidCargoType(cargo) || ScriptCargo::IsValidCargo(cargo));
 
-	::VehicleType type = ::Engine::Get(engine_id)->type;
+	::VehicleType type = ::Engine::Get(engine_id)->Record().type;
 
 	EnforcePreconditionCustomError(VEHICLE_INVALID, !ScriptGameSettings::IsDisabledVehicleType((ScriptVehicle::VehicleType)type), ScriptVehicle::ERR_VEHICLE_BUILD_DISABLED);
 

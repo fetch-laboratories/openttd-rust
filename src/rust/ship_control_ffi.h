@@ -66,15 +66,11 @@ struct OpenTTDShipLeaves {
 	void (*ships_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(ships_dirty);
 	void (*check_orders)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(check_orders);
 	uint32_t (*cost_divisor)() noexcept OPENTTD_SERVICE_DEFAULT(cost_divisor);
-	uint32_t (*speed_default)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_default);
-	uint32_t (*age_default)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age_default);
-	uint32_t (*speed_frac)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(speed_frac);
 	void (*cache_invalidate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cache_invalidate);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	void (*sprite_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_direction);
 	uint32_t (*tile_x)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_x);
 	uint32_t (*tile_y)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_y);
-	bool (*build_flag)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_flag);
 	void (*build_random)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(build_random);
 	OpenTTDShipPosition (*new_position)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
 	uint32_t (*exit_dir)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(exit_dir);
@@ -94,7 +90,6 @@ struct OpenTTDShipLeaves {
 	void (*build_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_z);
 	void (*build_properties)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_properties);
 	void (*build_dates)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_dates);
-	void (*build_acceleration)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_acceleration);
 	void (*build_prototype)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_prototype);
 	void (*build_interval_percent)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(build_interval_percent);
 	uint32_t (*order_destination)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_destination);

@@ -90,7 +90,6 @@ Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return Train::From
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
-uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept { return GetGRFStringID(grfid, GRFStringID(string)); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->SetVehStatus(v->GetVehStatus().Flip(VehState::Stopped)); }
 
@@ -155,11 +154,6 @@ extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcep
 static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderType(OpenTTDVehicle *v) noexcept { return RustVehicleOrderType(VehicleOf(v)); }
 static uint16_t OPENTTD_RUST_CALL VehicleSvcOrderDestination(OpenTTDVehicle *v) noexcept { return RustVehicleOrderDestination(VehicleOf(v)); }
 static uint8_t OPENTTD_RUST_CALL VehicleSvcOrderNonStop(OpenTTDVehicle *v) noexcept { return RustVehicleOrderNonStop(VehicleOf(v)); }
-static OpenTTDEngineForLength OPENTTD_RUST_CALL VehicleSvcEngineForLength(OpenTTDVehicle *v) noexcept
-{
-	const Engine *e = EngineOf(RustVehicleGetEngine(v));
-	return {.engine = RustEngine(e), .grf_version = RustEngineGRFVersion(e)};
-}
 
 
 static void OPENTTD_RUST_CALL VehicleSvcMakeDummy(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.MakeDummy(); }
@@ -206,7 +200,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.destroy = VehicleSvcDestroy,
 	.set_dest_tile = RustVehicleSetDestTile,
 	.engine = RustVehicleGetEngine,
-	.engine_for_length = VehicleSvcEngineForLength,
 	.order_type = VehicleSvcOrderType,
 	.order_destination = VehicleSvcOrderDestination,
 	.order_nonstop = VehicleSvcOrderNonStop,
@@ -294,11 +287,8 @@ static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplace
 	EngineID engine = EngineReplacementForCompany(company, EngineID{current_engine}, v->group_id, &when_old);
 	return {.engine = engine.base(), .when_old = when_old};
 }
-static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(uint8_t owner, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(CompanyID{owner}); }
-static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(uint16_t engine) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustEngineByID(engine))).Test(EngineMiscFlag::NoBreakdownSmoke); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
-static bool OPENTTD_RUST_CALL MaintenanceEngineAvailableAny(uint16_t engine) noexcept { return Engine::Get(EngineID{engine})->company_avail.Any(); }
 static bool OPENTTD_RUST_CALL MaintenanceReplacementActive(OpenTTDVehicle *handle, const Company *company, uint16_t engine) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -319,12 +309,9 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.group = &FleetGroupServices(),
 	.company = &GetRustCompanyIdentityServices(),
 	.replacement = MaintenanceReplacement,
-	.replacement_available = MaintenanceReplacementAvailable,
-	.smoke_disabled = MaintenanceSmokeDisabled,
 	.mark_dirty = MaintenanceMarkDirty,
 	.view_dirty = MaintenanceViewDirty,
 	.details_dirty = RustVehicleDetailsDirty,
-	.engine_available_any = MaintenanceEngineAvailableAny,
 	.replacement_active = MaintenanceReplacementActive,
 	.old_news = MaintenanceOldNews,
 	.reached_min_age = MaintenanceReachedMinAge,
