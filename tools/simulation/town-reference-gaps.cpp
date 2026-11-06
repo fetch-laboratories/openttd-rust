@@ -89,18 +89,18 @@ static Tile At(TileIndex tile)
 	auto it = world->tiles.find(tile);
 	return it == world->tiles.end() ? Tile{} : it->second;
 }
-/* A callable map service suppresses ADL into the real map's dimension-dependent
- * TileOffsByDiagDir. Direction-only helpers use the canonical native header. */
+/* Callable fixture services suppress ADL into native helpers brought in by the
+ * canonical town record's field types. */
 static constexpr auto TileOffsByDiagDir = [](DiagDirection dir) -> TileIndexDiff { return std::array<int32_t, 4>{-1, 1024, 1, -1024}[dir]; };
-static RoadBits DiagDirToRoadBits(DiagDirection dir) { return 1 << (3 - dir); }
+static constexpr auto DiagDirToRoadBits = [](DiagDirection dir) -> RoadBits { return 1 << (3 - dir); };
 static TileIndex TileAddByDiagDir(TileIndex tile, DiagDirection dir) { return tile + TileOffsByDiagDir(dir); }
-static Slope InclinedSlope(DiagDirection dir) { return static_cast<Slope>(std::array<uint32_t, 4>{12, 6, 3, 9}[dir]); }
+static constexpr auto InclinedSlope = [](DiagDirection dir) -> Slope { return static_cast<Slope>(std::array<uint32_t, 4>{12, 6, 3, 9}[dir]); };
 static Slope GetTileSlope(TileIndex tile) { return static_cast<Slope>(At(tile).slope); }
 static uint32_t GetTileZ(TileIndex tile) { return At(tile).z; }
 static bool IsValidTile(TileIndex tile) { return At(tile).valid; }
 static bool IsTileType(TileIndex tile, uint32_t type) { return At(tile).type == type; }
-static bool IsSteepSlope(Slope slope) { return (slope & 16) != 0; }
-static bool IsSlopeWithOneCornerRaised(Slope slope) { return slope == 1 || slope == 2 || slope == 4 || slope == 8; }
+static constexpr auto IsSteepSlope = [](Slope slope) { return (slope & 16) != 0; };
+static constexpr auto IsSlopeWithOneCornerRaised = [](Slope slope) { return slope == 1 || slope == 2 || slope == 4 || slope == 8; };
 static RoadBits GetTownRoadBits(TileIndex tile) { return At(tile).roads; }
 static uint32_t GetTunnelBridgeTransportType(TileIndex tile) { return At(tile).transport; }
 static DiagDirection GetTunnelBridgeDirection(TileIndex tile) { return static_cast<DiagDirection>(At(tile).facing); }

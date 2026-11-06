@@ -284,7 +284,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	w.shared = &services;
 	static OpenTTDSharedServices landscape_world{};
 	landscape_world = services;
-	landscape_world.tile_type = [](uint32_t tile) noexcept -> uint8_t { uint8_t type = town_protocol_world->shared->tile_type(tile); return type == MP_CLEAR ? MP_TUNNELBRIDGE : type; };
+	landscape_world.tile_type = [](uint32_t tile) noexcept -> uint8_t { uint8_t type = town_protocol_world->shared->tile_type(tile); return type == MP_CLEAR ? static_cast<uint8_t>(MP_TUNNELBRIDGE) : type; };
 	town_protocol_landscape.shared = &landscape_world; town_protocol_landscape.costs = &town_protocol_costs;
 	town_protocol_landscape.commands = &town_protocol_commands; town_protocol_landscape.tile_procs = &tiles;
 	const OpenTTDHouseAnimation animation_house{
