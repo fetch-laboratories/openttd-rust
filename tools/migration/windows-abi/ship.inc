@@ -9,8 +9,7 @@ struct ShipProbe {
 	OpenTTDVehicle record{};
 	ShipProbe() { record.type = VEH_SHIP; record.x_pos = 32768; record.y_pos = -32769; record.tick_counter = 255; record.running_ticks = 255; record.direction = 1; record.cur_speed = 33; }
 	OpenTTDConsistState consist{};
-	uint32_t stage = 0, paths = 0, positions = 0;
-	OpenTTDVehicleTileLinks links;
+	uint32_t stage = 0, paths = 0;
 	OpenTTDShipState *owner = nullptr;
 	const OpenTTDShipLeaves *leaves = nullptr;
 	OpenTTDSharedServices services{};
@@ -107,7 +106,6 @@ static void ShipBoundary()
 	ship_probe.services = OpenTTDFixtureSharedServices(nullptr, ShipProbeUnused<uint32_t, void *>, ShipProbeUnused<uint32_t, int32_t, int32_t, uint32_t *>);
 	leaves.state_owner = [](uint32_t) noexcept { return ship_probe.owner; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
-	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
 	ship_vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
 		CHECK(ship_probe.stage++ == 0);
@@ -131,7 +129,7 @@ static void ShipBoundary()
 	};
 	leaves.viewport = [](uint32_t id, bool update_delta, bool force) noexcept {
 		CHECK(ship_probe.stage++ == 3 && update_delta && force);
-		CHECK(ship_probe.record.direction == 5 && ship_probe.record.cur_speed == 0 && ship_probe.paths == 1 && ship_probe.positions == 1);
+		CHECK(ship_probe.record.direction == 5 && ship_probe.record.cur_speed == 0 && ship_probe.paths == 1 && ship_probe.record.tile_links.current != nullptr);
 		CHECK(openttd_rust_ship_get_rotation_x(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.x_pos));
 		CHECK(openttd_rust_ship_get_rotation_y(ship_probe.owner) == static_cast<int16_t>(ship_probe.record.y_pos));
 		/* The outer call holds no Rust reference to this owner during nested mutation. */

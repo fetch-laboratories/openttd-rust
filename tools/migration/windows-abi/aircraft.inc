@@ -19,7 +19,6 @@ static struct AircraftBoundaryProbe {
 	OpenTTDVehicleCommonServices common{};
 	OpenTTDVehicleRefitServices refit{};
 	OpenTTDVehicleVisits visits{};
-	OpenTTDVehicleTileLinks links[2];
 	uint64_t blocks = UINT64_MAX;
 	unsigned orders = 0, deleted = 0, moves = 0;
 	OpenTTDConsistState consist{};
@@ -209,7 +208,6 @@ static void AircraftPhaseBoundary()
 	s.movement = &movement;
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
-	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
 	v.map_log_x = []() noexcept { return uint32_t{6}; };
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.record.x_pos == 1 && p.record.y_pos == 0 && p.record.progress == 1);

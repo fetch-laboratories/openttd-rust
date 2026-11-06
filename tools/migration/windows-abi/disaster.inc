@@ -13,7 +13,6 @@ struct DisasterProbe {
 	uint8_t tile_type = 0, clear_owner = 0;
 	std::vector<uint32_t> script{};
 	size_t scripted = 0;
-	OpenTTDVehicleTileLinks links{};
 	const OpenTTDDisasterServices *services = nullptr;
 	OpenTTDDisasterState *state = nullptr;
 };
@@ -56,10 +55,9 @@ static void Disasters()
 	CHECK(!openttd_rust_disaster_tick(&services, vehicle));
 	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 2);
 
-	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v->shell)->links; };
 	vehicles.map_log_x = []() noexcept { return 6U; };
 
-	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(p->links.current != nullptr); p->viewports++; };
+	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept { auto *p = reinterpret_cast<DisasterProbe *>(v->shell); CHECK(v->tile_links.current != nullptr); p->viewports++; };
 	vehicles.first_sprite = [](OpenTTDVehicle *) noexcept { return 3904U; };
 	services.write_first_sprite = [](OpenTTDVehicle *, uint32_t image) noexcept { CHECK(image == 3902); };
 	probe.record.tick_counter = 1; probe.record.subtype = 8;
