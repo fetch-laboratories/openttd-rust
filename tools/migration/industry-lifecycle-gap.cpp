@@ -14,6 +14,8 @@
 #include "rust/cargo_registry_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/spec_services_ffi.h"
+#include "industrytype.h"
+#include "rust/industry_ffi.h"
 namespace IndustryReference {
 #include "industry-graphics-reference.inc"
 using TileIndex = uint32_t;
@@ -130,29 +132,13 @@ static uint16_t GetIndustryTileCallback(uint16_t callback, uint32_t, uint32_t, I
 #include "industry-acceptance-reference.inc"
 static void CheckAcceptance()
 {
-	OpenTTDIndustryTileSpecServices tile_spec{};
-	tile_spec.file = [](const ::IndustryTileSpec *spec) noexcept -> const GRFFile * { return reinterpret_cast<const GRFFile *>(reinterpret_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile); };
-	OpenTTDNewGRFSpecs spec_tables{};
-	spec_tables.industry_tile = &tile_spec;
 	auto shared = OpenTTDFixtureSharedServices(nullptr, nullptr);
-	shared.newgrf_specs = &spec_tables;
 	static OpenTTDSettingAddresses settings{};
 	settings.ambient = &_settings_client.sound.ambient;
 	shared.settings = &settings;
 	OpenTTDIndustryTileServices service{};
 	service.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(tile); };
 	service.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { return {reinterpret_cast<::Industry *>(Industry::GetByTile(tile)), acceptance_owner}; };
-	service.spec = [](uint16_t gfx) noexcept -> const OpenTTDIndustryTileSpec * { return reinterpret_cast<const OpenTTDIndustryTileSpec *>(GetIndustryTileSpec(gfx)); };
-	service.acceptance = [](const OpenTTDIndustryTileSpec *native_spec) noexcept -> OpenTTDIndustryTileAcceptance {
-		const auto *spec = reinterpret_cast<const IndustryTileSpec *>(native_spec);
-		OpenTTDIndustryTileAcceptance result;
-		std::ranges::copy(spec->accepts_cargo, result.cargo);
-		std::ranges::copy(spec->acceptance, result.amount);
-		result.accepts_all = spec->special_flags.Test(IndustryTileSpecialFlag::AcceptsAllCargo);
-		result.accepts_callback = spec->callback_mask.Test(IndustryTileCallbackMask::AcceptCargo);
-		result.amount_callback = spec->callback_mask.Test(IndustryTileCallbackMask::CargoAcceptance);
-		return result;
-	};
 	service.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t p1, uint32_t p2) noexcept -> uint16_t { return GetIndustryTileCallback(callback, p1, p2, gfx, Industry::GetByTile(tile), tile); };
 	service.shared = &shared;
 	Industry industry{}; active = &industry;
@@ -173,6 +159,13 @@ static void CheckAcceptance()
 						spec.accepts_cargo[n] = pattern == 0 ? INVALID_CARGO : pattern == 1 ? n : pattern == 2 ? 2 : n % 3 == 0 ? INVALID_CARGO : n;
 						spec.acceptance[n] = amount;
 					}
+					/* Rust reads the canonical record, so mirror the reference spec into it. */
+					::IndustryTileSpec &record = openttd_rust_industry_tile_specs()[2];
+					record.accepts_cargo = spec.accepts_cargo;
+					record.acceptance = spec.acceptance;
+					record.special_flags = ::IndustryTileSpecialFlags{spec.special_flags.value};
+					record.callback_mask = ::IndustryTileCallbackMasks{spec.callback_mask.value};
+					record.grf_prop.grffile = nullptr;
 				};
 				CargoArray initial; initial.fill(UINT32_MAX - 4);
 				setup(false); auto expected = initial; CargoTypes expected_always = 4;
@@ -193,7 +186,6 @@ static void CheckAcceptance()
 static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenTTDAnimationServices &animation)
 {
 	OpenTTDIndustryConstructionServices construction{};
-	construction.animation_enabled = [](uint16_t) noexcept -> bool { return builtin_spec.animation.status != AnimationStatus::NoAnimation; };
 	construction.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(tile, stage); };
 	OpenTTDIndustryTileServices tileservice{};
 	tileservice.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(tile); };
@@ -210,7 +202,7 @@ static void CheckBuiltinAnimation(const OpenTTDIndustryServices &services, OpenT
 		for (uint16_t gfx : {1, 10, 30, 31, 32, 48, 88, 143, 148, 151, 155, 162, 165, 174, 175}) for (uint8_t frame : {0, 1, 3, 4, 5, 6, 7, 14, 23, 28, 39, 49, 50, 56, 69, 70, 96, 127, 128, 130, 191, 192, 194, 195, 254, 255}) {
 			if (gfx == GFX_TOFFEE_QUARRY && frame >= std::size(_industry_anim_offs_toffee)) continue; // Reference has no defined read outside its rendering table.
 			for (uint8_t loop : {0, 7, 255}) for (bool ambient : {false, true}) for (bool custom : {false, true}) {
-				auto setup = [&] { openttd_rust_animation_initialize(); openttd_rust_animation_append(2); animation_state = AnimatedTileState::Animated; rng = seed; trace.clear(); builtin = {gfx, frame, loop, 0}; _settings_client.sound.ambient = ambient; TimerGameTick::counter = tick; builtin_spec.animation.status = custom ? AnimationStatus::Animated : AnimationStatus::NoAnimation; };
+				auto setup = [&] { openttd_rust_animation_initialize(); openttd_rust_animation_append(2); animation_state = AnimatedTileState::Animated; rng = seed; trace.clear(); builtin = {gfx, frame, loop, 0}; _settings_client.sound.ambient = ambient; TimerGameTick::counter = tick; builtin_spec.animation.status = custom ? AnimationStatus::Animated : AnimationStatus::NoAnimation; openttd_rust_industry_tile_specs()[gfx].animation.status = custom ? ::AnimationStatus::Looping : ::AnimationStatus::NoAnimation; };
 				setup(); AnimateTile_Industry(2);
 				const auto expected_trace = trace; const auto expected_state = builtin; const auto expected_rng = rng; const auto expected_animation = animation_state;
 				setup(); openttd_rust_industry_tile_animate(2, &services, &construction, &tileservice);

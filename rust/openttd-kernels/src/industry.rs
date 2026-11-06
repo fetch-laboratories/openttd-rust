@@ -360,8 +360,8 @@ pub unsafe extern "C" fn openttd_rust_industry_builder_fields(
     unsafe { ptr::addr_of_mut!((*owner).fields) }
 }
 
-#[repr(C)]
-#[derive(Default, Clone, Copy)]
+/// Spec facts of one industry's type, read together as the original did.
+#[derive(Clone, Copy)]
 pub struct Observation {
     pub owner: *mut Industry,
     pub behaviour: u32,
@@ -386,7 +386,6 @@ pub struct Entry {
     pub industry: *mut c_void,
     pub owner: *mut Industry,
     pub id: u16,
-    pub callbacks: u16,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -402,22 +401,12 @@ pub struct Change {
     pub result: u16,
     pub reg: i32,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TypeInfo {
-    pub behaviour: u32,
-    pub enabled: bool,
-    pub layouts: bool,
-    pub appear: u8,
-}
 /// Typed `noexcept` C++ services in `industry_ffi.h` order. Each is a world leaf;
 /// construction and commands return values at the original call site.
 #[repr(C)]
 pub struct Services {
     pub shared: *const crate::services::Services,
     pub next_tick: unsafe extern "C" fn(u32) -> Entry,
-    pub sound_count: unsafe extern "C" fn(*mut c_void) -> u16,
-    pub behaviour: unsafe extern "C" fn(*mut c_void) -> u32,
     pub location: unsafe extern "C" fn(*mut c_void) -> TileArea,
     pub industry_sound: unsafe extern "C" fn(*mut c_void, u32),
     pub play_sound: unsafe extern "C" fn(u16, u32),
@@ -431,10 +420,9 @@ pub struct Services {
     pub fence_wanted: unsafe extern "C" fn(u32, u8) -> bool,
     pub tile_completed: unsafe extern "C" fn(*mut c_void, u32) -> bool,
     pub harvest: unsafe extern "C" fn(u32),
-    pub observe: unsafe extern "C" fn(*mut c_void, *mut Observation),
-    pub production_rate: unsafe extern "C" fn(*mut c_void, u32) -> u8,
     pub change_callback: unsafe extern "C" fn(*mut c_void, bool, u32) -> Change,
-    pub custom_text: unsafe extern "C" fn(*mut c_void, u16) -> u32,
+    /// Shared text owner services for `MapGRFStringID`.
+    pub text: *const crate::newgrf_text::Services,
     pub news: unsafe extern "C" fn(*mut c_void, u32, bool, Servicing),
     pub production_news: unsafe extern "C" fn(*mut c_void, u8, i32, Servicing),
     pub callback_error: unsafe extern "C" fn(*mut c_void, bool),
@@ -446,7 +434,6 @@ pub struct Services {
     pub num_items: unsafe extern "C" fn() -> u32,
     pub get: unsafe extern "C" fn(u16) -> *mut c_void,
     pub type_count: unsafe extern "C" fn(u8) -> u16,
-    pub type_info: unsafe extern "C" fn(u8) -> TypeInfo,
     pub resolver: *const resolver::ResolverServices,
     pub scale_by_map_size: unsafe extern "C" fn(u32) -> u32,
     pub company_none: unsafe extern "C" fn() -> u8,
@@ -474,12 +461,24 @@ impl Map {
 const SND_36_LUMBER_MILL_3: u16 = 0x36;
 const SND_37_LUMBER_MILL_2: u16 = 0x37;
 use crate::landscape_type::{ARCTIC, TROPIC};
-fn observe(s: &Services, i: *mut c_void) -> Observation {
-    let mut o = Observation::default();
+/// `GetIndustrySpec(i->type)` through the owner's type.
+fn spec_of(owner: *mut Industry) -> *const crate::industrytype::IndustrySpec {
+    crate::industrytype::industry(u16::from(unsafe { (*owner).metadata.kind }))
+}
+fn observe(owner: *mut Industry) -> Observation {
+    let spec = spec_of(owner);
     unsafe {
-        (s.observe)(i, &raw mut o);
+        Observation {
+            owner,
+            behaviour: (*spec).behaviour,
+            callbacks: (*spec).callback_mask,
+            life: (*spec).life_type,
+            kind: (*owner).metadata.kind,
+            up_text: (*spec).production_up_text,
+            down_text: (*spec).production_down_text,
+            closure_text: (*spec).closure_text,
+        }
     }
-    o
 }
 fn rand(s: &Services) -> u32 {
     s.shared().random()
@@ -616,7 +615,12 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
     if unsafe { (*f).counter.is_multiple_of(64) } {
         let r = rand(s);
         if chance16_i(1, 14, r) {
-            let sounds = unsafe { (s.sound_count)(i) };
+            let kind = unsafe { (*owner).metadata.kind };
+            let sounds = unsafe {
+                (*crate::industrytype::industry(u16::from(kind)))
+                    .random_sounds
+                    .len()
+            } as u16;
             if sounds != 0
                 && unsafe { s.shared().settings().ambient.read() }
                 && (0..produced_count(owner)).any(|n| unsafe {
@@ -630,7 +634,8 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
     unsafe {
         (*f).counter = (*f).counter.wrapping_sub(1);
     }
-    let callback = e.callbacks & 4 != 0;
+    let callbacks = unsafe { (*spec_of(owner)).callback_mask };
+    let callback = callbacks & 4 != 0;
     if callback
         && unsafe {
             u32::from((*f).counter)
@@ -650,19 +655,23 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
     if !callback {
         helper(owner, s, true);
     }
-    let behaviour = unsafe { (s.behaviour)(i) };
+    let behaviour = unsafe { (*spec_of(owner)).behaviour };
     for (flag, parameter) in [(1, 0), (2, 1)] {
         if behaviour & flag == 0 {
             continue;
         }
-        let cb = if e.callbacks & (1 << 9) != 0 {
+        let cb = if callbacks & (1 << 9) != 0 {
             let random = rand(s);
             unsafe { (s.special_effect)(i, random, parameter) }
         } else {
             0xffff
         };
         let act = if cb != 0xffff {
-            cb != 0
+            (s.shared().grf_boolean_callback)(
+                unsafe { (*spec_of(owner)).grf_prop.grffile },
+                crate::newgrf_callbacks::CBID_INDUSTRY_SPECIAL_EFFECT,
+                cb,
+            )
         } else if parameter == 0 {
             chance(s, 1, 8)
         } else {
@@ -779,10 +788,11 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
     }
     u8::from(moved)
 }
-fn recompute(i: *mut c_void, owner: *mut Industry, s: &Services) {
+fn recompute(owner: *mut Industry) {
     let f = fields(owner);
     for n in 0..produced_count(owner) {
-        let rate = u32::from(unsafe { (s.production_rate)(i, n as u32) });
+        let spec = crate::industrytype::industry(u16::from(unsafe { (*owner).metadata.kind }));
+        let rate = u32::from(unsafe { (*spec).production_rate[n] });
         let value = rate * unsafe { u32::from((*f).prod_level) };
         unsafe {
             (*produced(owner, n)).rate = value.div_ceil(16).min(255) as u8;
@@ -792,12 +802,8 @@ fn recompute(i: *mut c_void, owner: *mut Industry, s: &Services) {
 /// # Safety
 /// Live industry and its owner; the original `UsesOriginalEconomy` precondition applies.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_recompute(
-    i: *mut c_void,
-    owner: *mut Industry,
-    s: *const Services,
-) {
-    recompute(i, owner, unsafe { &*s });
+pub unsafe extern "C" fn openttd_rust_industry_recompute(owner: *mut Industry) {
+    recompute(owner);
 }
 fn update_history(mask: &mut u64, month: u32) {
     for (first, last, division, total) in [(1, 25, 1, 1), (25, 42, 3, 3), (42, 61, 4, 12)] {
@@ -863,8 +869,8 @@ fn protected(o: Observation, s: &Services) -> bool {
     }
     o.behaviour & (1 << 17) == 0 && unsafe { (s.type_count)(o.kind) } <= 1
 }
-fn change(i: *mut c_void, s: &Services, monthly: bool) {
-    let o = observe(s, i);
+fn change(i: *mut c_void, owner: *mut Industry, s: &Services, monthly: bool) {
+    let o = observe(owner);
     let f = fields(o.owner);
     let mut str = 0;
     let mut close = false;
@@ -883,7 +889,14 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
         if res != 0xffff {
             suppress = res & 128 != 0;
             if res & 256 != 0 {
-                str = unsafe { (s.custom_text)(i, result.reg as u16) };
+                let grfid = unsafe { (*spec_of(owner)).grf_prop.grfid };
+                str = unsafe {
+                    crate::newgrf_text::openttd_rust_grf_text_map(
+                        &*s.text,
+                        grfid,
+                        u32::from(result.reg as u16),
+                    )
+                };
             }
             res &= 15;
             match res {
@@ -1036,7 +1049,7 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
         }
     }
     if recalc {
-        recompute(i, o.owner, s);
+        recompute(o.owner);
     }
     if close && !protected(o, s) && unsafe { (*f).ctlflags & 4 == 0 } {
         unsafe {
@@ -1075,18 +1088,26 @@ fn game_probability(kind: u8, s: &Services) -> u64 {
     if unsafe { (s.fund_only)() } {
         return 0;
     }
-    let info = unsafe { (s.type_info)(kind) };
-    let behavior = info.behaviour;
+    let spec = crate::industrytype::industry(u16::from(kind));
+    let climate = unsafe { s.shared().settings().climate.read() };
+    let (behavior, enabled, layouts, appear) = unsafe {
+        (
+            (*spec).behaviour,
+            (*spec).enabled,
+            !(*spec).layouts.is_empty(),
+            (*spec).appear_ingame[usize::from(climate)],
+        )
+    };
     let year = crate::timer_game_common::calendar_year().0;
-    if !info.enabled
-        || !info.layouts
+    if !enabled
+        || !layouts
         || (behavior & (1 << 8) != 0 && year > 1950)
         || (behavior & (1 << 9) != 0 && year < 1960)
     {
         return 0;
     }
     let probability = unsafe {
-        resolver::openttd_rust_industry_probability(kind, 1, u32::from(info.appear), s.resolver)
+        resolver::openttd_rust_industry_probability(kind, 1, u32::from(appear), s.resolver)
     } as u8;
     if probability == 0 {
         return 0;
@@ -1316,10 +1337,10 @@ pub(crate) unsafe fn openttd_rust_industry_daily(builder: *mut Builder, services
         if chance(s, percentage, 100) {
             build_try(builder, s);
         } else {
-            let i = random_industry(s);
-            if !i.is_null() {
-                change(i, s, false);
-                unsafe { (s.set_dirty)(i) };
+            let e = random_entry(s);
+            if !e.industry.is_null() {
+                change(e.industry, e.owner, s, false);
+                unsafe { (s.set_dirty)(e.industry) };
             }
         }
     }
@@ -1349,7 +1370,7 @@ pub(crate) unsafe fn openttd_rust_industry_monthly(
         if unsafe { (*fields(e.owner)).prod_level == 0 } {
             unsafe { (s.destroy)(e.industry) };
         } else {
-            change(e.industry, s, true);
+            change(e.industry, e.owner, s, true);
             unsafe { (s.set_dirty)(e.industry) };
         }
     }
@@ -1575,7 +1596,6 @@ pub struct DeliveryServices {
         unsafe extern "C" fn(*mut ProductionStorage, *mut ShellHandle) -> *mut ProductionContext,
     pub destroy: unsafe extern "C" fn(*mut ProductionContext),
     pub resolve: unsafe extern "C" fn(*mut ProductionContext, u32, u32, *mut ProductionResult),
-    pub input_multiplier: unsafe extern "C" fn(*const SpecHandle, usize, usize) -> u16,
 }
 /// SAFETY: Live serialized industry, immutable services and spec; callbacks retain no owner borrows.
 pub(crate) unsafe fn trigger_delivery(
@@ -1589,14 +1609,14 @@ pub(crate) unsafe fn trigger_delivery(
     use crate::newgrf_callbacks::{
         INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
     };
-    let spec = resolver.spec(unsafe { (*owner).metadata.kind });
-    let mask = unsafe { (resolver.construction().callback_mask)(spec) };
+    let spec = resolver::ResolverServices::spec(unsafe { (*owner).metadata.kind });
+    let mask = unsafe { (*spec).callback_mask };
     unsafe { (*owner).fields.was_cargo_delivered = 1 };
     if mask & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) != 0 {
         if mask & INDUSTRY_PRODUCTION_CARGO_ARRIVAL != 0 {
             let mut storage = std::mem::MaybeUninit::<ProductionStorage>::uninit();
             let context = unsafe { (delivery.construct)(storage.as_mut_ptr(), shell) };
-            let behaviour = resolver.behaviour(spec);
+            let behaviour = resolver::ResolverServices::behaviour(spec);
             production_callback(
                 shell.cast(),
                 owner,
@@ -1624,7 +1644,7 @@ pub(crate) unsafe fn trigger_delivery(
                     continue;
                 }
                 let old = unsafe { (*p).waiting };
-                let multiplier = unsafe { (delivery.input_multiplier)(spec, input, output) };
+                let multiplier = unsafe { (*spec).input_cargo_multiplier[input][output] };
                 let product = i32::from(waiting).wrapping_mul(i32::from(multiplier));
                 unsafe {
                     (*p).waiting =
@@ -1939,11 +1959,7 @@ crate::abi::layouts! {
         too_many,
     };
     "OpenTTDIndustryTransactionServices" ["industry"] => crate::industry::TransactionServices {
-        layout_count,
-        layout,
         raw_setting,
-        check_proc,
-        conflicting,
         multiple_per_town,
         town,
         population,
@@ -1959,14 +1975,11 @@ crate::abi::layouts! {
         resolve_shape,
         location_error,
         shape_error,
-        tile_grf_version,
-        shape_callback,
         terragenesis,
         ignore_restrictions,
         platform,
         can_allocate,
         allocate,
-        prospecting_chance,
         local_company,
         prospect_no_place,
         prospect_unlucky,
@@ -1990,13 +2003,10 @@ crate::abi::layouts! {
         current_company,
         magic_bulldozer,
         object_in_way,
-        slopes_refused,
         close_ai,
         close_game,
         destroy,
-        removal_multiplier,
         tile_max_z,
-        autoslope_callback,
         command_checks,
     };
     "OpenTTDIndustryCostServices" ["industry"] => crate::industry::IndustryCostServices {
@@ -2041,12 +2051,8 @@ crate::abi::layouts! {
         toffee_offset,
         on_water,
         transport,
-        anim_production,
-        anim_next,
         build_oilrig,
         pixel_max_z,
-        spec,
-        acceptance,
         callback,
         };
     "OpenTTDIndustryPair" ["industry"] => Pair { first, second, };
@@ -2074,23 +2080,16 @@ crate::abi::layouts! {
         founder,
     };
     "OpenTTDIndustryConstructionServices" ["industry"] => crate::industry::ConstructionServices {
-        cargo_lists,
-        callback_mask,
         set_town,
         generating,
         callback,
         callback_error,
-        grf_version,
-        layout_size,
-        layout_tile,
         water_class,
         clear_tile,
         make_industry,
         set_construction_counter,
         set_construction_stage,
         translated_gfx,
-        animation_enabled,
-
         build_window_dirty,
         serve_neutral,
     };
@@ -2100,12 +2099,6 @@ crate::abi::layouts! {
         layouts,
     };
     "OpenTTDIndustryGenerationServices" ["industry"] => crate::industry::GenerationServices {
-        spec,
-        spec_behaviour,
-        spec_life,
-        cost_multiplier,
-        info,
-        coastal,
         environment,
         density,
         custom_number,
@@ -2215,21 +2208,9 @@ crate::abi::layouts! {
         last_accepted,
         history,
     };
-    "OpenTTDIndustryObservation" ["industry"] => Observation {
-        owner,
-        behaviour,
-        callbacks,
-        life,
-        kind => type,
-        up_text,
-        down_text,
-        closure_text,
-    };
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
         next_tick,
-        sound_count,
-        behaviour,
         location,
         industry_sound,
         play_sound,
@@ -2244,10 +2225,8 @@ crate::abi::layouts! {
         fence_wanted,
         tile_completed,
         harvest,
-        observe,
-        production_rate,
         change_callback,
-        custom_text,
+        text,
         news,
         production_news,
         callback_error,
@@ -2259,7 +2238,6 @@ crate::abi::layouts! {
         num_items,
         get,
         type_count,
-        type_info,
         resolver,
         scale_by_map_size,
         company_none,
@@ -2274,7 +2252,7 @@ crate::abi::layouts! {
         deity,
     };
     "OpenTTDIndustryProductionStorage" ["industry"] => ProductionStorage { storage, };
-    "OpenTTDIndustryDeliveryServices" ["industry"] => DeliveryServices { construct, destroy, resolve, input_multiplier, };
+    "OpenTTDIndustryDeliveryServices" ["industry"] => DeliveryServices { construct, destroy, resolve, };
     "OpenTTDIndustryProductionResult" ["industry"] => ProductionResult {
         subtract,
         add,
@@ -2295,7 +2273,6 @@ crate::abi::layouts! {
         industry,
         owner,
         id,
-        callbacks,
     };
     "OpenTTDIndustryLocation" ["industry"] => TileArea {
         tile,
@@ -2311,12 +2288,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryChange" ["industry"] => Change {
         result,
         reg,
-    };
-    "OpenTTDIndustryTypeInfo" ["industry"] => TypeInfo {
-        behaviour,
-        enabled,
-        layouts,
-        appear,
     };
 }
 

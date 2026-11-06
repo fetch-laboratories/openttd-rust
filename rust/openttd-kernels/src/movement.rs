@@ -191,10 +191,8 @@ pub struct MovementServices {
     pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
-    pub house_boolean: extern "C" fn(*const c_void, u16) -> bool,
     pub industry_foundation: extern "C" fn(u32) -> CallbackFoundation,
     pub industry_callback: extern "C" fn(u32, u16) -> u16,
-    pub industry_boolean: extern "C" fn(*const c_void, u16) -> bool,
 }
 /// One accessor per nested table pointer, named after its field.
 macro_rules! nested_tables {
@@ -273,11 +271,23 @@ impl Context<'_> {
                         (self.industry_callback)(tile, p.kind)
                     };
                     if result != crate::newgrf_callbacks::CALLBACK_FAILED
-                        && !if house {
-                            (self.house_boolean)(p.spec, result)
-                        } else {
-                            (self.industry_boolean)(p.spec, result)
-                        }
+                        && !(self.shared().grf_boolean_callback)(
+                            if house {
+                                (self.shared().specs().house().file)(p.spec.cast())
+                            } else {
+                                unsafe {
+                                    (*p.spec.cast::<crate::industrytype::IndustryTileSpec>())
+                                        .grf_prop
+                                        .grffile
+                                }
+                            },
+                            if house {
+                                crate::newgrf_callbacks::CBID_HOUSE_DRAW_FOUNDATIONS.0
+                            } else {
+                                crate::newgrf_callbacks::CBID_INDTILE_DRAW_FOUNDATIONS.0
+                            },
+                            result,
+                        )
                     {
                         return FOUNDATION_NONE;
                     }
@@ -1552,9 +1562,7 @@ crate::abi::layouts! {
         owned_land,
         object_foundation,
         house_foundation,
-        house_boolean,
         industry_foundation,
         industry_callback,
-        industry_boolean,
     };
 }

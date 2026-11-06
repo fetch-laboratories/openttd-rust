@@ -27,8 +27,6 @@ struct OpenTTDIndustryResolverRef { OpenTTDIndustry *owner; Town *town; };
 struct OpenTTDIndustryFounderInfo { uint8_t colours; bool is_ai; };
 struct OpenTTDIndustryResolverServices {
 	const OpenTTDSharedServices *shared;
-	const OpenTTDIndustryGenerationServices *generation;
-	const OpenTTDIndustryConstructionServices *construction;
 	const OpenTTDIndustryLifecycleServices *lifecycle;
 	const OpenTTDIndustryTileServices *tile;
 	OpenTTDIndustryResolverRef (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
@@ -54,8 +52,8 @@ uint32_t openttd_rust_industry_tile_variable(const OpenTTDIndustryResolverContex
 uint32_t openttd_rust_industry_resolver_random(const OpenTTDIndustryResolverContext *);
 uint32_t openttd_rust_industry_tile_random(const OpenTTDIndustryResolverContext *, const OpenTTDIndustryResolverServices *);
 uint32_t openttd_rust_industry_tile_triggers(const OpenTTDIndustryResolverContext *, const OpenTTDIndustryResolverServices *);
-const SpriteGroup *openttd_rust_industry_resolver_root(const OpenTTDIndustryResolverContext *, const OpenTTDIndustryResolverServices *);
-const SpriteGroup *openttd_rust_industry_tile_root(const OpenTTDIndustryResolverContext *, uint16_t, const OpenTTDIndustryResolverServices *);
+const SpriteGroup *openttd_rust_industry_resolver_root(const OpenTTDIndustryResolverContext *);
+const SpriteGroup *openttd_rust_industry_tile_root(const OpenTTDIndustryResolverContext *, uint16_t);
 TownScopeResolver *openttd_rust_industry_resolver_town(const OpenTTDIndustryResolverContext *, ResolverObject *, const OpenTTDIndustryResolverServices *);
 ScopeResolver *openttd_rust_industry_resolver_scope(const OpenTTDIndustryResolverContext *, ResolverObject *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDIndustryResolverServices *);
 ScopeResolver *openttd_rust_industry_tile_scope(ResolverObject *, ScopeResolver *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDIndustryResolverServices *);

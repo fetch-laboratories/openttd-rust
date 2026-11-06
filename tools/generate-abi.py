@@ -43,6 +43,23 @@ class Field(NamedTuple):
     name: str
     cpp_type: str
     pointee_tag: str | None
+    dimensions: str = ""
+
+
+def split_fields(body: str) -> list[str]:
+    """Split a field list at top-level commas, outside brackets and native type strings."""
+    fields, depth, quoted, start = [], 0, False, 0
+    for index, char in enumerate(body):
+        if char == '"':
+            quoted = not quoted
+        elif not quoted and char in "<[(":
+            depth += 1
+        elif not quoted and char in ">])" and body[index - 1 : index + 1] != "=>":
+            depth -= 1
+        elif not quoted and depth == 0 and char == ",":
+            fields.append(body[start:index])
+            start = index + 1
+    return [field for field in fields + [body[start:]] if field.strip()]
 
 
 class SharedRecord(NamedTuple):
@@ -97,6 +114,13 @@ def shared_records(
 
     def native(rust: str) -> str:
         rust = rust.strip()
+        array = re.fullmatch(r"\[(.+);\s*([\w:]+)\s*\]", rust, re.S)
+        if array:
+            element = native(array[1])
+            dimension = array[2].split("::")[-1]
+            return re.sub(
+                r"(\[.*\])?$", lambda m: f"[{dimension}]{m[0]}", element, count=1
+            )
         pointer = re.fullmatch(r"\*(mut|const)\s+(.+)", rust)
         if pointer:
             target = pointer[2].strip().split("::")[-1]
@@ -120,15 +144,24 @@ def shared_records(
     opaque_tags: dict[str, str] = {}
     for cpp, group, rust, body in sorted(found):
         fields = []
-        for field in filter(str.strip, body.split(",")):
+        for field in split_fields(body):
+            if field.count('"') % 2:
+                raise ValueError(f"invalid record field: {cpp}: {field}")
             match = re.fullmatch(
-                r"\s*pub\s+(?:r#)?(\w+)\s*:\s*(.+?)\s*(?:=>\s*(\w+))?\s*",
+                r'\s*pub\s+(?:r#)?(\w+)\s*:\s*(.+?)\s*(?:=>\s*(?:(\w+)|"([^"]+)"))?\s*',
                 field,
                 re.S,
             )
             if not match:
                 raise ValueError(f"invalid record field: {cpp}: {field}")
-            cpp_type = native(match[2])
+            # A quoted native type names the C++ field type; the layout check compares sizes.
+            cpp_type = match[4] or native(match[2])
+            bounds = re.search(r"(?:\[\w+\])*$", cpp_type)
+            dimensions = bounds[0] if bounds else ""
+            cpp_type = cpp_type[: len(cpp_type) - len(dimensions)]
+            if match[4]:
+                fields.append(Field(match[1], cpp_type, None, dimensions))
+                continue
             target = cpp_type.removeprefix("const ").removesuffix(" *")
             tag = match[3]
             if tag is not None and (
@@ -145,7 +178,7 @@ def shared_records(
                     raise ValueError(f"conflicting pointee tags: {target}")
             if cpp_type.endswith(" *") and target in pointer_names.values():
                 tag = "struct"
-            fields.append(Field(match[1], cpp_type, tag))
+            fields.append(Field(match[1], cpp_type, tag, dimensions))
         result.append(SharedRecord(cpp, group, rust, fields))
     if len(names) != len(found):
         raise ValueError("duplicate shared record")
@@ -181,9 +214,10 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
         for field in record.fields:
             if field.cpp_type in records:
                 emit(records[field.cpp_type], active | {record.cpp})
+        # Quoted native field types are declared by the includer.
         lines.append(f"struct {record.cpp} {{")
         lines.extend(
-            f"\t{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name};"
+            f"\t{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name}{field.dimensions};"
             for field in record.fields
         )
         lines.append("};")

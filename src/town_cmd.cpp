@@ -485,7 +485,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 
 		.delete_inspect = OpenTTDDeleteHouseInspect,
 		.cargo_file = RustHouseGrf,
-		.convert_boolean = RustHouseConvertBoolean,
 		.convert_8bit = RustHouseConvert8bitBoolean,
 
 		.scale_cargo = OpenTTDScaleTownCargo,

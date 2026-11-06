@@ -19,7 +19,8 @@ struct OpenTTDByteReaderServices {
 	bool (*read_word)(ByteReader *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(read_word);
 	bool (*read_dword)(ByteReader *, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(read_dword);
 	bool (*skip)(ByteReader *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(skip);
-	bool (*read_badges)(ByteReader *, GrfSpecFeature, std::vector<BadgeID> *) noexcept OPENTTD_SERVICE_DEFAULT(read_badges);
+	void (*assign_badges)(std::vector<BadgeID> *, const BadgeID *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_badges);
+	bool (*read_badge_ids)(ByteReader *, GrfSpecFeature, uint16_t, BadgeID *, size_t *) noexcept OPENTTD_SERVICE_DEFAULT(read_badge_ids);
 	bool (*skip_badges)(ByteReader *) noexcept OPENTTD_SERVICE_DEFAULT(skip_badges);
 };
 #endif

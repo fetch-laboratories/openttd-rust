@@ -46,7 +46,6 @@ pub struct Result {
 pub struct Services {
     shared: *const Shared,
     cargo_bitnum: extern "C" fn(u8) -> u8,
-    industry_substitute: extern "C" fn(u8) -> u16,
     evaluate: extern "C" fn(*const Invocation, *mut i32, usize) -> u16,
     common: *const crate::newgrf_spritegroup::Services,
     enabled: extern "C" fn() -> bool,
@@ -206,7 +205,11 @@ fn substitute(industry: u8) -> u8 {
     if industry == IT_AI_UNKNOWN || industry == IT_AI_TOWN {
         return industry;
     }
-    let substitute = (services().industry_substitute)(industry);
+    let substitute = unsafe {
+        (*crate::industrytype::industry(u16::from(industry)))
+            .grf_prop
+            .subst_id
+    };
     if substitute == u16::from(IT_INVALID) {
         industry
     } else {
@@ -315,5 +318,5 @@ crate::abi::layouts! {
     "OpenTTDGenericScope" ["probe"] => Scope { cargo, selection, source, destination, distance, event, count, station_size, feature, ai };
     "OpenTTDGenericInvocation" ["probe"] => Invocation { scope, callback, param1, file, root };
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
-    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_bitnum, industry_substitute, evaluate, common, enabled, water_class, sound };
+    "OpenTTDGenericServices" ["probe"] => Services { shared, cargo_bitnum, evaluate, common, enabled, water_class, sound };
 }

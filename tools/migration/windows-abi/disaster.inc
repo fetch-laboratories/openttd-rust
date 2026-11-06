@@ -1,6 +1,8 @@
 #pragma once
 #include "rust/disaster_ffi.h"
 #include "rust/clock_ffi.h"
+#include "industrytype.h"
+#include "rust/industry_ffi.h"
 #include "core/backup_type.hpp"
 
 struct DisasterProbe {
@@ -78,9 +80,10 @@ static void Disasters()
 	services.rail_map = &rail_map;
 	services.disasters_enabled = []() noexcept { return true; };
 	services.next_industry = [](uint32_t from) noexcept -> OpenTTDDisasterIndustryTarget {
-		return from <= 7 ? OpenTTDDisasterIndustryTarget{.industry = _disaster_probe, .id = 7} : OpenTTDDisasterIndustryTarget{.industry = nullptr, .id = 0xFFFF};
+		return from <= 7 ? OpenTTDDisasterIndustryTarget{.industry = _disaster_probe, .id = 7, .kind = 0} : OpenTTDDisasterIndustryTarget{.industry = nullptr, .id = 0xFFFF, .kind = IT_INVALID};
 	};
-	services.industry_behaviour = [](void *industry) noexcept { CHECK(industry == _disaster_probe); return 1U << 13; };
+	/* The target's type 0 can cause subsidence; Rust reads the spec record. */
+	openttd_rust_industry_specs()[0].behaviour = IndustryBehaviours{IndustryBehaviour::CanSubsidence};
 	services.industry_location = [](void *) noexcept { return OpenTTDDisasterIndustryLocation{.tile = 0, .town = 3}; };
 	services.coal_news = [](uint32_t tile, uint16_t town) noexcept { CHECK(tile == 65 && town == 3); _disaster_probe->news++; };
 	services.human = [](uint8_t company) noexcept { CHECK(company == 1); return true; };

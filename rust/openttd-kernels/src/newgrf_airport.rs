@@ -357,7 +357,13 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
     let s = unsafe { &*s };
     match variable {
         0x40 => return u32::from(c.layout),
-        0x7a => return (s.shared().specs().airport().badges)(resolver, c.spec, parameter),
+        0x7a => {
+            return (s.shared().specs().airport().badges)(c.spec).resolve(
+                s.shared(),
+                resolver,
+                parameter,
+            );
+        }
         _ => {}
     }
     if c.station.is_null() {
@@ -481,7 +487,11 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
             (s.shared().resolver_grf_file_id)(resolver),
             s,
         ),
-        0x7a => (s.shared().specs().airport_tile().badges)(resolver, c.tile_spec, parameter),
+        0x7a => (s.shared().specs().airport_tile().badges)(c.tile_spec).resolve(
+            s.shared(),
+            resolver,
+            parameter,
+        ),
         _ => {
             debug!(grf, 1, "Unhandled airport tile variable 0x{:X}", variable);
             unsafe {
