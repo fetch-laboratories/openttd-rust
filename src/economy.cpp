@@ -318,6 +318,7 @@ Money CargoPayment::PayTransfer(CargoType cargo, const CargoPacket *cp, uint cou
 	return openttd_rust_cargo_payment_transfer(this->rust_state, &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit());
 }
 
+static_assert(to_underlying(VehicleCallbackMask::LoadAmount) == 2);
 static const OpenTTDStationLoading _rust_station_loading = {
 	.control = [](OpenTTDVehicle *handle) noexcept -> OpenTTDLoadingControl {
 		Vehicle *v = VehicleOf(handle);
@@ -346,19 +347,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		return {
 			v->lateness_counter, v->current_order.GetTimetabledWait()
 		};
-	},
-	.load_engine = [](OpenTTDVehicle *handle) noexcept -> OpenTTDLoadEngine {
-		const Engine *engine = VehicleOf(handle)->GetEngine();
-		return {RustEngine(engine), engine->info.load_amount};
-	},
-	.grf_version = [](const OpenTTDEngine *handle) noexcept -> uint8_t {
-		return RustEngineGRFVersion(EngineOf(handle));
-	},
-	.engine_load_callback = [](const OpenTTDEngine *handle) noexcept -> bool {
-		return EngineOf(handle)->info.callback_mask.Test(VehicleCallbackMask::LoadAmount);
-	},
-	.engine_no_multiplier = [](const OpenTTDEngine *handle) noexcept -> bool {
-		return EngineOf(handle)->info.misc_flags.Test(EngineMiscFlag::NoDefaultCargoMultiplier);
 	},
 	.cargo_capacity = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoCapacity {
 		Vehicle *v = VehicleOf(handle);
@@ -407,10 +395,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.total_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
 		Vehicle *v = VehicleOf(handle); return v->cargo.TotalCount();
 	},
-	.refit_mask = [](OpenTTDVehicle *handle) noexcept -> uint64_t {
-		Vehicle *v = VehicleOf(handle);
-		return static_cast<uint64_t>(EngInfo(v->GetEngineType())->refit_mask);
-	},
 	.set_cargo_unloading = [](OpenTTDVehicle *handle, bool value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		front->vehicle_flags.Set(VehicleFlag::CargoUnloading, value);
@@ -430,10 +414,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.subtract_profit = [](OpenTTDVehicle *handle, int64_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		front->profit_this_year -= value;
-	},
-	.unknown_load_result = [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void {
-		Vehicle *front = VehicleOf(handle);
-		ErrorUnknownCallbackResult(front->GetEngine()->GetGRFID(), CBID_VEHICLE_LOAD_AMOUNT, value);
 	},
 	.vehicle_dirty = [](OpenTTDVehicle *handle) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);

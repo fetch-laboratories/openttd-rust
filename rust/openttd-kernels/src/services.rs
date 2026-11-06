@@ -283,6 +283,8 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Native `GetAllCompatibleRailTypes`, including empty and all-bit masks.
+    pub all_compatible_railtypes: extern "C" fn(u64) -> u64,
     /// Typed Rust post lifecycles and native argument codecs.
     pub command_post: extern "C" fn() -> &'static crate::command_post::Services,
     /// Complete synchronous movement owner; immutable process-lifetime table.
@@ -363,6 +365,8 @@ pub struct Services {
     pub plane_crashes: extern "C" fn() -> u8,
     /// Shared live plane speed observation.
     pub plane_speed: extern "C" fn() -> u8,
+    /// Native `RoadTypeInfo` powered mask, retaining `GetRoadTypeInfo`'s assertion.
+    pub powered_roadtypes: extern "C" fn(RoadType) -> u64,
     /// One shared game Random draw, including debug logging.
     pub random: extern "C" fn(*mut c_void) -> u32,
     /// Original `GetAnyRoadBits`, parameterized by `RoadTramType`.
@@ -506,6 +510,13 @@ pub struct Services {
     pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
     /// `GetTerrainType`.
     pub terrain_type: extern "C" fn(u32) -> u32,
+    /// `AppendCopyableBadgeList` over readable spans; output holds their combined capacity.
+    pub copyable_badges: extern "C" fn(
+        crate::newgrf_specs::BadgeSpan,
+        crate::newgrf_specs::BadgeSpan,
+        u8,
+        *mut u32,
+    ) -> usize,
     /// `GRFFile::grf_version` of a non-null file.
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
     /// `GRFFile::cargo_map` entry of a non-null file.
@@ -518,8 +529,6 @@ pub struct Services {
     pub grf_file_id: extern "C" fn(*const c_void) -> u32,
     /// `GRFFile::filename` of a non-null file, live while the file is.
     pub grf_file_name: extern "C" fn(*const c_void) -> ByteSpan,
-    /// `Engine::grf_prop.local_id`.
-    pub engine_local_id: extern "C" fn(*const crate::engine_type::OpenTTDEngine) -> u16,
     /// Canonical native `GRFFile::GetParam` shared by loaders and resolvers.
     pub grf_parameter: extern "C" fn(*const c_void, u32) -> u32,
     /// `_rust_newgrf_specs`; read through `specs`.
@@ -748,6 +757,7 @@ crate::abi::layouts! {
         generating_world,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        all_compatible_railtypes,
         command_post,
         movement,
         set_tile_owner,
@@ -788,6 +798,7 @@ crate::abi::layouts! {
         other_tunnel_end,
         plane_crashes,
         plane_speed,
+        powered_roadtypes,
         random,
         road_bits,
         road_cost_multiplier,
@@ -857,13 +868,13 @@ crate::abi::layouts! {
         screen_dirty,
         string_data,
         terrain_type,
+        copyable_badges,
         grf_file_version,
         grf_cargo_map,
         grf_boolean_callback,
         grf_file_at_or_null,
         grf_file_id,
         grf_file_name,
-        engine_local_id,
         grf_parameter,
         newgrf_specs,
         resolver_grf_file,
@@ -1019,16 +1030,29 @@ pub fn fixture(
     extern "C" fn unexpected_file_name(_: *const c_void) -> ByteSpan {
         std::process::abort()
     }
-    extern "C" fn unexpected_engine_local_id(_: *const crate::engine_type::OpenTTDEngine) -> u16 {
-        std::process::abort()
-    }
     extern "C" fn unexpected_file(_: *const c_void) -> *const c_void {
         std::process::abort()
+    }
+    extern "C" fn unexpected_compatible(_: u64) -> u64 {
+        unreachable!()
+    }
+    extern "C" fn unexpected_powered(_: RoadType) -> u64 {
+        unreachable!()
     }
     extern "C" fn unexpected_post() -> &'static crate::command_post::Services {
         std::process::abort()
     }
+    extern "C" fn unexpected_copyable(
+        _: crate::newgrf_specs::BadgeSpan,
+        _: crate::newgrf_specs::BadgeSpan,
+        _: u8,
+        _: *mut u32,
+    ) -> usize {
+        std::process::abort()
+    }
     Services {
+        copyable_badges: unexpected_copyable,
+        all_compatible_railtypes: unexpected_compatible,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
         grf_cargo_map: unexpected_cargo_map,
@@ -1036,7 +1060,6 @@ pub fn fixture(
         grf_file_at_or_null: unexpected_file_at,
         grf_file_id: unexpected_file_id,
         grf_file_name: unexpected_file_name,
-        engine_local_id: unexpected_engine_local_id,
         grf_parameter: unexpected_parameter,
         newgrf_specs: std::ptr::null(),
         resolver_grf_file: unexpected_file,
@@ -1093,6 +1116,7 @@ pub fn fixture(
         other_tunnel_end: word,
         plane_crashes: zero_byte,
         plane_speed: zero_byte,
+        powered_roadtypes: unexpected_powered,
         random,
         road_bits: bits,
         road_cost_multiplier: unused_road_cost_multiplier,

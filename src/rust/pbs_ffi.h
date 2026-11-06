@@ -35,7 +35,6 @@ struct OpenTTDPbsServices {
 	void (*write_train_on_res)(OpenTTDPbsTrainOutput *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(write_train_on_res);
 	bool assertions;
 	OpenTTDTrainHandle (*handle)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(handle);
-	uint64_t (*all_compatible)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible);
 	uint64_t (*compatible)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
 	bool (*rail90)(uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(rail90);
 	bool (*blocking)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(blocking);

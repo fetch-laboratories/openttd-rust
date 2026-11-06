@@ -198,4 +198,15 @@ inline void RustLocationCallbackError(Cost *out, const Result *result, const Han
 }
 template <GrfSpecFeature Feature, typename Id>
 inline void RustCloseInspect(Id id) noexcept { RustCloseNewGRFInspect(Feature, id); }
+
+/** Caller owns output for destination.len + source.len IDs; no engine field is accessed. */
+inline size_t RustCopyableBadges(OpenTTDBadgeSpan destination, OpenTTDBadgeSpan source, GrfSpecFeature feature, BadgeID *output) noexcept
+{
+	std::vector<BadgeID> values;
+	if (destination.len != 0) values.assign(destination.data, destination.data + destination.len);
+	AppendCopyableBadgeList(values, {source.data, source.len}, feature);
+	std::ranges::copy(values, output);
+	return values.size();
+}
+
 #endif /* RUST_SERVICES_NEWGRF_H */

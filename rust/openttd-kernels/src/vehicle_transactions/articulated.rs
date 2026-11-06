@@ -5,22 +5,14 @@ use super::refit;
 use crate::vehicle::{OpenTTDEngine, VehicleType};
 use std::mem::MaybeUninit;
 #[repr(C)]
-pub struct Part {
-    pub image: u8,
-    pub capacity: u16,
-}
-#[repr(C)]
 pub struct Services {
     pub refit: &'static refit::Services,
-    pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub pool_available: extern "C" fn(usize) -> bool,
     pub prepare_previous: extern "C" fn(*mut ()) -> *mut (),
     pub new_train: extern "C" fn() -> *mut (),
     pub new_road: extern "C" fn() -> *mut (),
     pub road_length: extern "C" fn(*mut ()),
     pub copy_roadtype: extern "C" fn(*mut (), *mut ()),
-    pub train_info: extern "C" fn(*const OpenTTDEngine, bool) -> Part,
-    pub road_info: extern "C" fn(*const OpenTTDEngine, bool) -> Part,
     pub set_part: extern "C" fn(*mut (), u8, u8, u16, bool),
     pub mark_train: extern "C" fn(*mut ()),
     pub mark_road: extern "C" fn(*mut ()),
@@ -124,22 +116,24 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         let can_carry = unsafe {
             crate::engine_capabilities::openttd_rust_engine_can_carry_abi(r.capabilities, e) != 0
         };
-        let info = if kind == VehicleType::TRAIN {
-            (s.train_info)(e, can_carry)
+        let specification = crate::vehicle::EngineRef::of(e);
+        let image = specification.ground_image(kind);
+        let capacity = if can_carry {
+            u16::from(specification.ground_capacity(kind))
         } else {
-            (s.road_info)(e, can_carry)
+            0
         };
         let cargo = if can_carry {
-            (s.default_cargo)(e)
+            specification.default_cargo()
         } else {
             unsafe { (c.transactions.cargo_type)(first) }
         };
         // The road-only assertion remains in its native field-store leaf.
         (s.set_part)(
             v,
-            info.image,
+            image,
             cargo,
-            info.capacity,
+            capacity,
             kind == VehicleType::ROAD && can_carry,
         );
         if kind == VehicleType::TRAIN {
@@ -267,10 +261,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_articulated_consistency(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDArticulatedPart" ["probe"] => Part { image, capacity, };
     "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
-        refit, default_cargo, pool_available, prepare_previous,
-        new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
+        refit, pool_available, prepare_previous,
+        new_train, new_road, road_length, copy_roadtype, set_part, mark_train,
         mark_road, copy_common, random_bits, flip_image, warning,
         has_articulated, next_articulated,
     };

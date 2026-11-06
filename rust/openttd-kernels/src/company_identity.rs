@@ -21,7 +21,7 @@ use crate::raw_field::{read_field, write_field};
 use crate::services::{ByteSpan, Services as Shared};
 use crate::tile_type::TileIndex;
 use crate::vehicle::RailVehicleTypes;
-use crate::vehicle_type::{OpenTTDVehicle, VehicleID, VehicleType};
+use crate::vehicle_type::{OpenTTDVehicle, VehicleID};
 use std::mem::MaybeUninit;
 type Town = crate::town_type::TownHandle;
 use crate::company_manager_face::Face;
@@ -83,12 +83,6 @@ pub struct Services {
     pub object_colours: extern "C" fn(*mut OpenTTDCompany) -> (),
     pub reset_colourmap: extern "C" fn() -> (),
     pub engine: extern "C" fn(EngineID) -> *const OpenTTDEngine,
-    pub engine_type: extern "C" fn(*const OpenTTDEngine) -> VehicleType,
-    pub engine_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
-    pub engine_kind: extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
-    pub engine_class: extern "C" fn(*const OpenTTDEngine) -> u8,
-    pub engine_misc: extern "C" fn(*const OpenTTDEngine) -> u8,
-    pub aircraft_subtype: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub vehicle_cargo: extern "C" fn(*mut OpenTTDVehicle) -> u8,
     pub wagon_override: extern "C" fn(*mut OpenTTDVehicle) -> bool,
     pub cargo_freight: extern "C" fn(u8) -> bool,
@@ -523,33 +517,32 @@ pub(crate) fn engine_livery(
         AIR_CTOL, AIR_FAST, AIR_HELI, EC_DIESEL, EC_ELECTRIC, EC_MAGLEV, EC_MONORAIL, EC_STEAM,
         RAIL_IS_MU, ROAD_IS_TRAM,
     };
-    use crate::vehicle::RailVehicleTypes;
     let mut cargo = if v.is_null() {
         INVALID_CARGO
     } else {
         (s.vehicle_cargo)(v)
     };
     let mut e = (s.engine)(engine);
-    match (s.engine_type)(e).0 {
+    match crate::vehicle::EngineRef::of(e).kind().0 {
         crate::vehicle_type::VEH_TRAIN => {
             if !v.is_null()
                 && parent != EngineID::INVALID
                 && ((s.wagon_override)(v)
                     || (crate::vehicle::VehicleRef::of(v).is_articulated_part()
-                        && (s.engine_kind)(e) != RailVehicleTypes::WAGON))
+                        && crate::vehicle::EngineRef::of(e).rail_kind() != RailVehicleTypes::WAGON))
             {
                 engine = parent;
                 e = (s.engine)(engine);
             }
             if !is_valid_cargo_type(cargo) {
-                cargo = (s.engine_cargo)(e);
+                cargo = crate::vehicle::EngineRef::of(e).default_cargo();
             }
             if !is_valid_cargo_type(cargo) {
                 cargo =
                     crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
             }
             assert!(is_valid_cargo_type(cargo));
-            if (s.engine_kind)(e) == RailVehicleTypes::WAGON {
+            if crate::vehicle::EngineRef::of(e).rail_kind() == RailVehicleTypes::WAGON {
                 if (s.cargo_freight)(cargo) {
                     return LS_FREIGHT_WAGON;
                 }
@@ -557,8 +550,8 @@ pub(crate) fn engine_livery(
                     return LS_PASSENGER_WAGON_STEAM;
                 }
                 let p = (s.engine)(parent);
-                let mu = (s.engine_misc)(p) & RAIL_IS_MU != 0;
-                match (s.engine_class)(p) {
+                let mu = crate::vehicle::EngineRef::of(p).misc() & RAIL_IS_MU != 0;
+                match crate::vehicle::EngineRef::of(p).train_class() {
                     EC_STEAM => LS_PASSENGER_WAGON_STEAM,
                     EC_DIESEL => {
                         if mu {
@@ -579,8 +572,8 @@ pub(crate) fn engine_livery(
                     _ => unreachable!("NOT_REACHED"),
                 }
             } else {
-                let mu = (s.engine_misc)(e) & RAIL_IS_MU != 0;
-                match (s.engine_class)(e) {
+                let mu = crate::vehicle::EngineRef::of(e).misc() & RAIL_IS_MU != 0;
+                match crate::vehicle::EngineRef::of(e).train_class() {
                     EC_STEAM => LS_STEAM,
                     EC_DIESEL => {
                         if mu {
@@ -609,14 +602,14 @@ pub(crate) fn engine_livery(
                 cargo = (s.vehicle_cargo)(crate::vehicle::VehicleRef::of(v).first().0.as_ptr());
             }
             if !is_valid_cargo_type(cargo) {
-                cargo = (s.engine_cargo)(e);
+                cargo = crate::vehicle::EngineRef::of(e).default_cargo();
             }
             if !is_valid_cargo_type(cargo) {
                 cargo =
                     crate::cargo_registry::openttd_rust_cargo_by_label(crate::cargo_type::CT_GOODS);
             }
             assert!(is_valid_cargo_type(cargo));
-            if (s.engine_misc)(e) & ROAD_IS_TRAM != 0 {
+            if crate::vehicle::EngineRef::of(e).misc() & ROAD_IS_TRAM != 0 {
                 if crate::cargotype::is_cargo_in_class(
                     (s.cargo_classes)(cargo),
                     crate::cargotype::PASSENGERS,
@@ -636,7 +629,7 @@ pub(crate) fn engine_livery(
         }
         crate::vehicle_type::VEH_SHIP => {
             if !is_valid_cargo_type(cargo) {
-                cargo = (s.engine_cargo)(e);
+                cargo = crate::vehicle::EngineRef::of(e).default_cargo();
             }
             if !is_valid_cargo_type(cargo) {
                 cargo =
@@ -652,12 +645,14 @@ pub(crate) fn engine_livery(
                 LS_FREIGHT_SHIP
             }
         }
-        crate::vehicle_type::VEH_AIRCRAFT => match (s.aircraft_subtype)(e) {
-            AIR_HELI => LS_HELICOPTER,
-            AIR_CTOL => LS_SMALL_PLANE,
-            x if x == AIR_CTOL | AIR_FAST => LS_LARGE_PLANE,
-            _ => unreachable!("NOT_REACHED"),
-        },
+        crate::vehicle_type::VEH_AIRCRAFT => {
+            match crate::vehicle::EngineRef::of(e).aircraft_subtype() {
+                AIR_HELI => LS_HELICOPTER,
+                AIR_CTOL => LS_SMALL_PLANE,
+                x if x == AIR_CTOL | AIR_FAST => LS_LARGE_PLANE,
+                _ => unreachable!("NOT_REACHED"),
+            }
+        }
         _ => unreachable!("NOT_REACHED"),
     }
 }
@@ -675,5 +670,5 @@ crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine,       vehicle_cargo, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, };
 }

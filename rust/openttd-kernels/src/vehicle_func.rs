@@ -15,7 +15,7 @@ pub(crate) fn can_engine_use_station(
 ) -> bool {
     let e = (s.engine_if_valid)(engine);
     (s.check)(!e.is_null());
-    let kind = (s.engine_kind)(e).0;
+    let kind = crate::vehicle::EngineRef::of(e).kind().0;
     let world = unsafe { &*s.commands().station };
     match kind {
         0 => (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_TRAIN != 0,
@@ -28,7 +28,10 @@ pub(crate) fn can_engine_use_station(
         3 => {
             (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_AIRPORT != 0 && {
                 let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
-                let flag = if (s.engine_subtype)(e) & crate::engine_type::AIR_CTOL != 0 {
+                let flag = if crate::vehicle::EngineRef::of(e).aircraft_subtype()
+                    & crate::engine_type::AIR_CTOL
+                    != 0
+                {
                     crate::airport::FTA_AIRPLANES
                 } else {
                     crate::airport::FTA_HELICOPTERS

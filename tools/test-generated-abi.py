@@ -38,7 +38,10 @@ class GeneratedAbiTests(unittest.TestCase):
                 "shared_records! {\n    fn abi_record;\n"
                 '    "AContainer" ["test"] => pub struct Container {\n'
                 "        pub value: Value,\n        pub context: *mut c_void,\n"
+                "        pub choice: Choice,\n"
                 "    }\n"
+                '    "ZChoice" ["test"] => pub union Choice {\n'
+                "        pub wide: u64,\n        pub narrow: u8,\n    }\n"
                 '    "ZValue" ["test"] => pub struct Value {\n'
                 "        pub number: u32,\n"
                 '        pub bytes: [u8; 3] => "std::array<uint8_t, 3>",\n    }\n}\n'
@@ -51,6 +54,9 @@ class GeneratedAbiTests(unittest.TestCase):
             source.write_text(
                 '#include "record.h"\n#include <type_traits>\n'
                 "static_assert(std::is_same_v<decltype(AContainer::value), ZValue>);\n"
+                "static_assert(std::is_union_v<ZChoice>);\n"
+                "static_assert(sizeof(ZChoice) == sizeof(uint64_t));\n"
+                "static_assert(offsetof(ZChoice, wide) == offsetof(ZChoice, narrow));\n"
                 "static_assert(std::is_same_v<decltype(AContainer::context), void *>);\n"
                 "static_assert(std::is_same_v<decltype(ZValue::bytes), std::array<uint8_t, 3>>);\n"
             )
@@ -115,7 +121,7 @@ class GeneratedAbiTests(unittest.TestCase):
             set(generated),
             {name for name, *_ in records} | {record.cpp for record in shared},
         )
-        for name, group, _, fields in shared:
+        for name, group, _, fields, _ in shared:
             with self.subTest(record=name):
                 self.assertEqual(
                     generated[name],

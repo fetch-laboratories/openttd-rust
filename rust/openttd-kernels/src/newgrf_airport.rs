@@ -52,9 +52,6 @@ pub struct Services {
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
     pub(crate) engine_id: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u16,
-    pub(crate) engine_kind:
-        extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> crate::vehicle::VehicleType,
-    pub(crate) engine_subtype: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u8,
     pub(crate) fta_flags: extern "C" fn(*const c_void) -> u8,
     pub(crate) has_hangar: extern "C" fn(*const BaseStation, *const AirportSpec) -> bool,
     pub(crate) hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
@@ -564,7 +561,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id,   fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]

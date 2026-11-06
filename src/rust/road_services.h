@@ -85,14 +85,6 @@ static void OPENTTD_RUST_CALL RoadSvcCrashNews(OpenTTDVehicle *v, uint32_t victi
 	AddTileNewsItem(std::move(headline), newstype, u->GetTile());
 
 }
-static uint8_t OPENTTD_RUST_CALL RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept
-{
-	return EngineOf(e)->VehInfo<RoadVehicleInfo>().shorten_factor;
-}
-static uint16_t OPENTTD_RUST_CALL RoadSvcDefaultMaxSpeed(uint16_t engine) noexcept
-{
-	return RoadVehInfo(EngineID(engine))->max_speed;
-}
 
 
 
@@ -130,9 +122,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.arrival_news = RoadSvcArrivalNews,
 	.depot_exit_dirty = RoadSvcDepotExitDirty,
 	.crash_news = RoadSvcCrashNews,
-	.shorten_factor = RoadSvcShortenFactor,
-	.default_max_speed = RoadSvcDefaultMaxSpeed,
-	.cargo_age_default = RustVehicleEngineRead<uint16_t, RustEngineCargoAge>,
 	.pay_running = RoadSvcPayRunning,
 };
 

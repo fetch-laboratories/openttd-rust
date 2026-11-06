@@ -31,46 +31,10 @@
 
 #include "safeguards.h"
 
-void SetWagonOverrideSprites(EngineID engine, CargoType cargo, const SpriteGroup *group, std::span<EngineID> engine_ids)
-{
-	Engine *e = Engine::Get(engine);
-
-	assert(cargo < NUM_CARGO + 2); // Include SpriteGroupCargo::SG_DEFAULT and SpriteGroupCargo::SG_PURCHASE pseudo cargoes.
-
-	WagonOverride *wo = &e->overrides.emplace_back();
-	wo->group = group;
-	wo->cargo = cargo;
-	wo->engines.assign(engine_ids.begin(), engine_ids.end());
-}
-
 const SpriteGroup *GetWagonOverrideSpriteSet(EngineID engine, CargoType cargo, EngineID overriding_engine)
 {
 	return openttd_rust_vehicle_wagon_override(&GetRustVehicleResolverServices(), engine.base(), cargo, overriding_engine.base());
 }
-
-void SetCustomEngineSprites(EngineID engine, CargoType cargo, const SpriteGroup *group)
-{
-	Engine *e = Engine::Get(engine);
-
-	if (e->grf_prop.GetSpriteGroup(cargo) != nullptr) {
-		GrfMsg(6, "SetCustomEngineSprites: engine {} cargo {} already has group -- replacing", engine, cargo);
-	}
-	e->grf_prop.SetSpriteGroup(cargo, group);
-}
-
-
-/**
- * Tie a GRFFile entry to an engine, to allow us to retrieve GRF parameters
- * etc during a game.
- * @param engine Engine ID to tie the GRFFile to.
- * @param file   Pointer of GRFFile to tie.
- */
-void SetEngineGRF(EngineID engine, const GRFFile *file)
-{
-	Engine *e = Engine::Get(engine);
-	e->grf_prop.SetGRFFile(file);
-}
-
 
 /* virtual */ uint32_t VehicleScopeResolver::GetRandomBits() const
 {
@@ -109,7 +73,7 @@ void VehicleScopeResolver::SetVehicle(const Vehicle *v) { openttd_rust_vehicle_s
 
 GrfSpecFeature VehicleResolverObject::GetFeature() const
 {
-	switch (Engine::Get(EngineID(this->self_scope.self_type))->type) {
+	switch (Engine::Get(EngineID(this->self_scope.self_type))->Record().type) {
 		case VEH_TRAIN: return GSF_TRAINS;
 		case VEH_ROAD: return GSF_ROADVEHICLES;
 		case VEH_SHIP: return GSF_SHIPS;
@@ -120,7 +84,7 @@ GrfSpecFeature VehicleResolverObject::GetFeature() const
 
 uint32_t VehicleResolverObject::GetDebugID() const
 {
-	return Engine::Get(EngineID(this->self_scope.self_type))->grf_prop.local_id;
+	return Engine::Get(EngineID(this->self_scope.self_type))->Record().bindings.grf_prop.local_id;
 }
 
 /**
@@ -195,7 +159,7 @@ static void GetRotorOverrideSprite(EngineID engine, const struct Aircraft *v, En
 	const Engine *e = Engine::Get(engine);
 
 	/* Only valid for helicopters */
-	assert(e->type == VEH_AIRCRAFT);
+	assert(e->Record().type == VEH_AIRCRAFT);
 	assert(!(e->VehInfo<AircraftVehicleInfo>().subtype & AIR_CTOL));
 
 	/* We differ from TTDPatch by resolving the sprite using the primary vehicle 'v', and not using the rotor vehicle 'v->Next()->Next()'.
@@ -207,7 +171,7 @@ static void GetRotorOverrideSprite(EngineID engine, const struct Aircraft *v, En
 	result->Clear();
 	uint rotor_pos = v == nullptr || rotor_in_gui ? 0 : v->Next()->Next()->state;
 
-	bool sprite_stack = e->info.misc_flags.Test(EngineMiscFlag::SpriteStack);
+	bool sprite_stack = e->Record().info.misc_flags.Test(EngineMiscFlag::SpriteStack);
 	uint max_stack = sprite_stack ? static_cast<uint>(std::size(result->seq)) : 1;
 	for (uint stack = 0; stack < max_stack; ++stack) {
 		object.callback_param1 = image_type | (stack << 8);
@@ -320,13 +284,13 @@ static bool EnginePreSort(const EngineID &a, const EngineID &b)
 	const Engine &engine_b = *Engine::Get(b);
 
 	/* 1. Sort by engine type */
-	if (engine_a.type != engine_b.type) return static_cast<int>(engine_a.type) < static_cast<int>(engine_b.type);
+	if (engine_a.Record().type != engine_b.Record().type) return static_cast<int>(engine_a.Record().type) < static_cast<int>(engine_b.Record().type);
 
 	/* 2. Sort by scope-GRFID */
-	if (engine_a.grf_prop.grfid != engine_b.grf_prop.grfid) return engine_a.grf_prop.grfid < engine_b.grf_prop.grfid;
+	if (engine_a.Record().bindings.grf_prop.grfid != engine_b.Record().bindings.grf_prop.grfid) return engine_a.Record().bindings.grf_prop.grfid < engine_b.Record().bindings.grf_prop.grfid;
 
 	/* 3. Sort by local ID */
-	return static_cast<int>(engine_a.grf_prop.local_id) < static_cast<int>(engine_b.grf_prop.local_id);
+	return static_cast<int>(engine_a.Record().bindings.grf_prop.local_id) < static_cast<int>(engine_b.Record().bindings.grf_prop.local_id);
 }
 
 void RustVehicleOrderSort(uint16_t *data, size_t size) noexcept

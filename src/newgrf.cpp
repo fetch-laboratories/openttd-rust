@@ -569,11 +569,7 @@ static void FinaliseBadges()
 		Badge *badge = GetBadgeByLabel(fmt::format("newgrf/{:08x}", std::byteswap(file.grfid)));
 		if (badge == nullptr) continue;
 
-		for (Engine *e : Engine::Iterate()) {
-			if (e->grf_prop.grffile != &file) continue;
-			e->badges.push_back(badge->index);
-			badge->features.Set(static_cast<GrfSpecFeature>(GSF_TRAINS + e->type));
-		}
+		badge->features.Set(GrfSpecFeatures{openttd_rust_engine_file_badge(&GetRustEngineLoadingServices(), &file, badge->index)});
 
 		AddBadgeToSpecs(file.stations, GSF_STATIONS, *badge);
 		AddBadgeToSpecs(file.housespec, GSF_HOUSES, *badge);

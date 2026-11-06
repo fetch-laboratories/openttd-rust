@@ -12,19 +12,6 @@ const OpenTTDVisualServices &GetRustVisualServices()
 		.vehicle = &GetRustVehicleServices(),
 		.shared = &GetRustSharedServices(),
 		.smoke = RustVehicleSmokeAmount,
-		.engine = [](OpenTTDVehicle *shell) noexcept -> OpenTTDVisualEngine {
-			const Engine *e = EngineOf(RustVehicleGetEngine(shell));
-			OpenTTDVisualEngine result{.engine = RustEngine(e), .kind = RustEngineType(RustEngine(e)), .visual = 0, .callback = VehicleCallbackMasks(RustEngineCallbackMask(RustEngine(e))).Test(VehicleCallbackMask::VisualEffect)};
-			switch (result.kind) {
-				case VEH_TRAIN: result.visual = e->VehInfo<RailVehicleInfo>().visual_effect; break;
-				case VEH_ROAD: result.visual = e->VehInfo<RoadVehicleInfo>().visual_effect; break;
-				case VEH_SHIP: result.visual = e->VehInfo<ShipVehicleInfo>().visual_effect; break;
-				default: break;
-			}
-			return result;
-		},
-		.defaults = [](const OpenTTDEngine *shell) noexcept -> OpenTTDVisualDefaults { const Engine *e = EngineOf(shell); return {.rail_kind = RustEngineRailKind(e), .engclass = RustRailEngineClass(&e->VehInfo<RailVehicleInfo>())}; },
-		.grf_version = RustEngineGRFVersionOpaque,
 		.power_error = [](uint16_t engine) noexcept { RustVehicleShowNewGRFError(EngineID(engine), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_POWERED_WAGON, GRFBug::VehPoweredWagon, false); },
 		.station = RustIsRailStation,
 		.depot = SharedIsDepotTile,
@@ -34,3 +21,5 @@ const OpenTTDVisualServices &GetRustVisualServices()
 	};
 	return services;
 }
+
+static_assert(to_underlying(VehicleCallbackMask::VisualEffect) == 0);

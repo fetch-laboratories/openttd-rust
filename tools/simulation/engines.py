@@ -292,6 +292,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         env,
         ADAPTER,
         "engines",
+        native_test_support=True,
         wraps=type_load_wraps(build),
         replace_objects=("saveload.cpp.o", "/newgrf.cpp.o", "/newgrf_act0_cargo.cpp.o"),
     )

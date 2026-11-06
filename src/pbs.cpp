@@ -48,7 +48,6 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.assertions = false,
 #endif
 		.handle = TrainHandle,
-		.all_compatible = RustAllCompatibleRailTypes,
 		.compatible = [](uint8_t rt) noexcept { return GetRailTypeInfo(static_cast<RailType>(rt))->compatible_railtypes.base(); },
 		.rail90 = RustRail90Disallowed,
 		.blocking = RustOnewaySignalBlocking,

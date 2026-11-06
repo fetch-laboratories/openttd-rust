@@ -62,9 +62,6 @@ struct OpenTTDAircraftLeaves {
 	const void * (OPENTTD_RUST_CALL *node)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(node);
 	OpenTTDAircraftNode (OPENTTD_RUST_CALL *fta)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta);
 	OpenTTDAircraftMoving (OPENTTD_RUST_CALL *moving)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving);
-	uint16_t (OPENTTD_RUST_CALL *engine_speed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_speed);
-	uint8_t (OPENTTD_RUST_CALL *engine_subtype)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_subtype);
-	uint16_t (OPENTTD_RUST_CALL *engine_sound)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_sound);
 	uint8_t (OPENTTD_RUST_CALL *airport_entry)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_entry);
 	uint8_t (OPENTTD_RUST_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
 	int32_t (OPENTTD_RUST_CALL *hangar_height)(const OpenTTDStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
@@ -97,7 +94,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_RUST_CALL *invalid_position)(OpenTTDAircraftVehicle, const void *) noexcept OPENTTD_SERVICE_DEFAULT(invalid_position);
 	void (OPENTTD_RUST_CALL *invalid_scheme)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(invalid_scheme);
 	void (OPENTTD_RUST_CALL *unreachable)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(unreachable);
-	uint16_t (OPENTTD_RUST_CALL *cargo_age_default)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
 	bool (OPENTTD_RUST_CALL *rotor_image_if_changed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image_if_changed);
 	void (OPENTTD_RUST_CALL *update_rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_rotor_image);
 	uint32_t (OPENTTD_RUST_CALL *vehicle_crash)(OpenTTDAircraftVehicle, bool) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_crash);
