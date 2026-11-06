@@ -4,18 +4,21 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-06, retrospective repairs through integration 90)
+## Where the fork stands (2026-11-06, retrospective repairs through integration 91)
 
 Agent: /root (Codex steering review) | Model: gpt-6-astra | Reasoning effort: xhigh
 
-- Code is `8fc7620ce5` (integration 90). #711 repaired #709 at 89; #705 completed
+- Code is `561ec04c42` (integration 91). #711 repaired #709 at 89; #705 completed
   typing, TSan startup checks and precise network-join diagnostics at 90. Both
-  passed Opus 5.5 review and exact-head Full. Other ownership work stays paused;
+  passed Opus 5.5 review and exact-head Full. #712 at 91 completes accounting,
+  housekeeping, identity and read-only fact tools under the same review and CI.
+  Other ownership work stays paused;
   this user-directed session completes the selected retrospective repairs only.
 - The detailed recount and profile below remain the integration-88 baseline.
   Integrations 89 and 90 changed no C++ source or generated record definitions,
   so its original/glue inventory, exports and callback counts are unchanged.
-  The Rust/tooling recount follows #712's same-version accounting snapshot.
+  The final Rust/tooling recount and fresh merged-tip profile are root's remaining
+  checks. #712's historical same-version snapshot is complete.
 - The steering recount matches navigation: 61,415 of 284,355 original code lines
   retired (21.60%), +5,239 since steering 29. The measured original-plus-glue
   inventory is 258,221, down 4,289 on the consistent recount. Its scope and the
@@ -24,11 +27,10 @@ Agent: /root (Codex steering review) | Model: gpt-6-astra | Reasoning effort: xh
   slots 3,636. Current rebound/shared-accessor/orphan baseline rows are
   **371 / 119 / 43**. Simulation-source retirement is 41,139 of 61,148 (67.28%),
   not whole-game completion. No coverage or deep run was performed.
-- Five branches remain: retrospective tools #712 and the paused #700, #704,
-  #698 and #706. The six-component bound is unchanged. #705 checks every Python
-  file under tools with Ruff ANN and ty. #712 adds the accounting, housekeeping,
-  profile-identity and read-only coordination helpers; its final evidence and
-  Opus review remain pending.
+- Four branches remain, all paused: #700, #704, #698 and #706. The six-component
+  bound is unchanged. #705 checks every Python file under tools with Ruff ANN
+  and ty. #712's focused tests, historical recount, Opus review and exact-head
+  Full passed; root still inspects and applies eligible real cleanup.
 - #636's shared-record/data-boundary work removed 1,952 C++ lines. Direct Rust
   Tick dispatch remains in #656 with routing, lifecycle and pool completion;
   the historical integration title does not establish that checkpoint.
@@ -413,13 +415,13 @@ six-branch limit and the disjoint-service rule; finishing review and integration
 of an open branch comes first. A lower rank can run while a higher one waits.
 Scopes live in issues; per-PR changes live in each PR's steering comment.
 
-0. **Recovery #709 and typing #705 are complete**, through integrations 89 and 90. Complete the selected retrospective tools batch #712 next. Other ownership work remains paused under this session's scope.
+0. **The selected retrospective code is integrated**, through #711 (89), #705 (90) and #712 (91). Root finishes real cleanup, the same-version stocktake and a fresh merged-tip profile before reporting. Other ownership work remains paused under this session's scope.
 1. **Finish the open branches in readiness order.** The [integration-88 checkpoint](#resume-checkpoint-2026-11-06-stocktake-88) holds current heads and concrete next actions for #705, #700, #704, #698 and #706. Integration 85's cadence is repaired; #692 and #628 integrated together as 88, clearing their dependency events. Children check `.local/deep.lock.holders` before a native build, link or game, and pass `--jobs 3`. Rebuild an open PR's worktree only when its work resumes, after pulling it to the PR head. Use focused local checks and diagnostic CI subsets for concrete failures; no universal native profile precedes review and Full ([checks](workflow.md#checks)). #698 does not wait for PR speed evidence.
 2. **Type checking is complete** (user's first priority, #501 via #705 at 90).
    The ANN ignore list is empty and `ty.toml` covers all of `tools/`.
    - **#673's consolidation PR** follows typing and the #707/#708/#275 tools batch. Inventory, scenario digests and comparison results must stay identical. It is the only harness refactor; no broader rewrite.
 3. **Maintenance and measurement.**
-   - **#707, #708, #275's identity correction and #710** join the next tools batch after #705: complete C++ evidence accounting, repair finished-worktree/retained-profile cleanup, resolve non-behavioral configuration identity, and compose existing PR/CI/metric data into small read-only readiness, latency and stocktake commands. No new metric or ownership gate.
+   - **#707, #708, #275's identity correction and #710's helpers** integrated as #712 at 91. The corrected guard accepts all six retained integration-88 captures. Root's final cleanup/profile/stocktake checks remain; host completion delivery is outside this repository. No new metric or ownership gate.
    - **#156**: repair script sweep high-bit observations in the next evidence batch; establish the nonempty network execution-queue seam before choosing its observation. Threaded cancellation remains with the socket/resource owner or user-requested threaded work.
    - **#686 (the user's request):** measured and its capacity decision resolved on 2026-11-06: the repository's lower subagent caps are lifted and Codex has 12 slots. The next steering review checks review/resume turnaround under that limit. #699's cache repair integrated as #701 and its issue is closed.
    - **TGP Ir attribution**: done on #275. The `tile_loop::run` gate repair went into #698. The vehicle record↔shell hops (0.44% to 0.51%) went to #656.
@@ -471,30 +473,29 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
-## Resume checkpoint (2026-11-06, retrospective repairs through integration 90)
+## Resume checkpoint (2026-11-06, retrospective repairs through integration 91)
 
 **Other ownership work remains paused at the user's request.** The current
 session is authorized to finish the retrospective repairs. #709 and #705 are
-integrated; #712 is the active tools batch. The older rows below preserve the
+integrated, as is #712. Root's final operational checks remain. The rows below preserve the
 paused owners' next actions.
 
 Root is now in Codex (`gpt-6.1-sol`, ultra), with Opus 5.5 independent reviews.
-Code is `8fc7620ce5`, exact-head Full passed. `CI_ON_DEMAND` is `true` and
+Code is `561ec04c42`, exact-head Full passed. `CI_ON_DEMAND` is `true` and
 `CI_MACOS_HEAVY` is unset. No rollback was eligible.
 
-Integration 90 owes the existing platform check and merged-tip profile. Dispatch
-the platform workflow at this code head. Profile once #712's selected #275
-identity correction is integrated, instead of repeating a known incompatible
-capture; #712 already accepts the six retained integration-88 captures through
-the ordinary corrected guard. The final accounting snapshot also belongs to
-#712. No new cadence or schedule is established.
+Integration 90's existing platform workflow passed, including the bounded
+cross-platform comparison subset. Root now profiles the integrated tip through
+#712's corrected guard and records the final same-version accounting snapshot.
+Root also inspects the new housekeeping dry run before applying eligible cleanup.
+No new cadence or schedule is established.
 
 **Subagent limit (user, 2026-11-06):** the user raised Codex's per-session subagent limit to 12, in `~/.codex/config.toml` and in the main checkout's `.codex/config.toml`. Codex rejects values below 1, so the limit cannot be removed. The main checkout's change is uncommitted on purpose: leave it, and neither revert nor commit it. Worktrees still check out a limit of 8 until a PR changes the file.
 
 The main checkout includes navigation `2d233f628b` and preserves the config edit. The previous root's docs checkout is `.local/worktrees/root-docs-72`; do not push its stale checkpoint over current guidance.
 
-The earlier pause had no running jobs. Current #712 jobs and evidence live in
-its PR status comment. The paused owners' work remains pushed and unchanged.
+The earlier pause had no running jobs. All #712 implementation/review jobs are
+finished; root owns the final operational checks. The paused owners' work remains pushed and unchanged.
 The #705 repair and scoped review are integrated; its transient checkouts can
 be removed through ordinary clean/pushed/live checks.
 
