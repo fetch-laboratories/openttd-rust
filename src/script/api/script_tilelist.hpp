@@ -13,6 +13,7 @@
 #include "script_station.hpp"
 #include "script_list.hpp"
 #include "../../industry_type.h"
+#include "../../rust/script_tile_ffi.h"
 
 /**
  * Creates an empty list, in which you can add tiles.
@@ -31,14 +32,14 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile_from).
 	 * @pre ScriptMap::IsValidTile(tile_to).
 	 */
-	void AddRectangle(TileIndex tile_from, TileIndex tile_to);
+	void AddRectangle(TileIndex tile_from, TileIndex tile_to) { openttd_rust_script_tile_list_rectangle(&GetRustScriptHostServices(), this->GetRustListOwner(), tile_from.base(), tile_to.base(), 1); }
 
 	/**
 	 * Add a tile to the to-be-evaluated tiles.
 	 * @param tile The tile to add.
 	 * @pre ScriptMap::IsValidTile(tile).
 	 */
-	void AddTile(TileIndex tile);
+	void AddTile(TileIndex tile) { openttd_rust_script_tile_list_tile(&GetRustScriptHostServices(), this->GetRustListOwner(), tile.base(), 1); }
 
 	/**
 	 * Remove the tiles inside the rectangle between tile_from and tile_to from the list.
@@ -47,14 +48,14 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile_from).
 	 * @pre ScriptMap::IsValidTile(tile_to).
 	 */
-	void RemoveRectangle(TileIndex tile_from, TileIndex tile_to);
+	void RemoveRectangle(TileIndex tile_from, TileIndex tile_to) { openttd_rust_script_tile_list_rectangle(&GetRustScriptHostServices(), this->GetRustListOwner(), tile_from.base(), tile_to.base(), 0); }
 
 	/**
 	 * Remove a tile from the list.
 	 * @param tile The tile to remove.
 	 * @pre ScriptMap::IsValidTile(tile).
 	 */
-	void RemoveTile(TileIndex tile);
+	void RemoveTile(TileIndex tile) { openttd_rust_script_tile_list_tile(&GetRustScriptHostServices(), this->GetRustListOwner(), tile.base(), 0); }
 };
 
 /**

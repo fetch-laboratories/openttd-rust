@@ -36,7 +36,7 @@ fn check<'a>(w: &'a World<'a>) -> impl Fn(bool) + Copy + 'a {
 
 /// `ScriptRoad::IsRoadTypeAvailable`; `(::RoadType)` truncates to the `uint8_t` enum.
 #[allow(clippy::cast_possible_truncation)]
-fn road_type_available(s: &Services, road_type: u32) -> bool {
+pub(crate) fn road_type_available(s: &Services, road_type: u32) -> bool {
     if !enforce(
         deity_or_company_mode_valid(s),
         ERR_PRECONDITION_INVALID_COMPANY,
@@ -55,7 +55,7 @@ fn road_type_available(s: &Services, road_type: u32) -> bool {
 }
 
 /// `ScriptRoad::GetCurrentRoadType`.
-fn current_road_type() -> u32 {
+pub(crate) fn current_road_type() -> u32 {
     u32::from(script_host::active_road_type())
 }
 
@@ -758,4 +758,35 @@ byte_entries! {
     openttd_rust_script_road_station_tiles => straight_pair(tile: u32, front: u32);
     /// `ScriptRoad::RemoveRoadDepot` preconditions.
     openttd_rust_script_road_remove_depot => remove_road_depot(tile: u32);
+}
+
+/// `ScriptRoadTypeList`: the road types of the requested road/tram kinds the
+/// company may use, in type order; an invalid company mode records its error.
+/// # Safety
+/// `owner` is the live list of the constructing object.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_script_road_type_list(
+    s: &Services,
+    owner: *mut crate::script_list::List,
+    rtts: u32,
+) {
+    if !enforce(
+        deity_or_company_mode_valid(s),
+        ERR_PRECONDITION_INVALID_COMPANY,
+    ) {
+        return;
+    }
+    let owner_company = script_host::active_company();
+    let shared = s.command.shared;
+    for rt in 0..crate::road_type::ROADTYPE_END {
+        let kind = crate::road::availability::get_road_tram_type(rt).0;
+        if rtts & (1 << u32::from(kind)) == 0 {
+            continue;
+        }
+        let types = crate::type_availability::services(shared);
+        if crate::road::availability::has_road_type(shared, types, owner_company, rt) {
+            // SAFETY: caller contract.
+            unsafe { (*owner).add(i64::from(rt), 0) };
+        }
+    }
 }

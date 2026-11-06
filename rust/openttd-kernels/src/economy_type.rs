@@ -106,3 +106,11 @@ pub const PR_BUILD_VEHICLE_SHIP: u32 = 19;
 pub const PR_RUNNING_AIRCRAFT: u32 = 45;
 /// `PR_RUNNING_SHIP`.
 pub const PR_RUNNING_SHIP: u32 = 47;
+/// `PR_BUILD_DEPOT_SHIP`.
+pub const PR_BUILD_DEPOT_SHIP: usize = 7;
+/// `PR_BUILD_STATION_DOCK`.
+pub const PR_BUILD_STATION_DOCK: usize = 14;
+/// `PR_BUILD_CANAL`.
+pub const PR_BUILD_CANAL: usize = 60;
+/// `PR_BUILD_LOCK`.
+pub const PR_BUILD_LOCK: usize = 64;
