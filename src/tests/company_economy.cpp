@@ -25,6 +25,7 @@
 #include "../rust/command_services.h"
 #include "../rust/command_post_ffi.h"
 #include "../rust/network_frame_ffi.h"
+#include "../rust/network_tcp_ffi.h"
 #include "../core/backup_type.hpp"
 #include "../strings_func.h"
 #include "../table/strings.h"
@@ -174,6 +175,7 @@ static OpenTTDCommandPostServices fixture_post;
 static OpenTTDCommandServices fixture_command;
 static OpenTTDNetworkCommandServices fixture_network_command;
 static OpenTTDNetworkFrameServices fixture_network_frame;
+static OpenTTDNetworkTcpServices fixture_network_tcp;
 static OpenTTDNetworkGameSocket fixture_network_socket;
 static OpenTTDCompanyServices fixture_network_company, fixture_post_company;
 static OpenTTDCompanyIdentityServices fixture_identity;
@@ -241,7 +243,9 @@ static void FixtureReset(bool networking, bool server)
 	fixture_network_frame = GetRustNetworkFrameServices();
 	fixture_network_frame.command = &fixture_network_command;
 	fixture_network_frame.client_game = []() noexcept { return &fixture_network_socket; };
-	fixture_network_frame.packet_enqueue = [](void *, OpenTTDPacketState *) noexcept {};
+	fixture_network_tcp = GetRustNetworkTcpServices();
+	fixture_network_tcp.packet_enqueue = [](NetworkTCPSocketHandler *, OpenTTDPacketState *) noexcept {};
+	fixture_network_frame.tcp = &fixture_network_tcp;
 	fixture_network_command.network = []() noexcept -> const OpenTTDNetworkFrameServices & { return fixture_network_frame; };
 	fixture_post.network = []() noexcept -> const OpenTTDNetworkCommandServices & { return fixture_network_command; };
 	fixture_post.pack_control = [](uint8_t action, uint8_t target, uint8_t reason, uint32_t client) noexcept {

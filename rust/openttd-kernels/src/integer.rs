@@ -11,11 +11,11 @@
 #[repr(C)]
 #[derive(Default)]
 pub struct IntegerResult {
-    pub(super) value_bits: u64,
-    pub(super) length: usize,
-    pub(super) error_offset: usize,
-    pub(super) error_length: usize,
-    pub(super) error_kind: u8,
+    pub(crate) value_bits: u64,
+    pub(crate) length: usize,
+    pub(crate) error_offset: usize,
+    pub(crate) error_length: usize,
+    pub(crate) error_kind: u8,
 }
 
 fn digit(byte: u8, base: u8) -> Option<u64> {
@@ -41,7 +41,7 @@ fn failure(kind: u8, offset: usize, length: usize) -> IntegerResult {
     }
 }
 
-pub(super) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) -> IntegerResult {
+pub(crate) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) -> IntegerResult {
     let mask = u64::MAX >> (64 - width);
     let signed_min = 1_u64 << (width - 1);
     if base == 0 {
@@ -117,7 +117,7 @@ pub(super) fn parse(src: &[u8], base: u8, width: u8, signed: bool, clamp: bool) 
     }
 }
 
-pub(super) fn skip(src: &[u8], mut base: u8) -> usize {
+pub(crate) fn skip(src: &[u8], mut base: u8) -> usize {
     let mut pos = usize::from(src.starts_with(b"-"));
     if base == 0 {
         if hexadecimal(&src[pos..]) {

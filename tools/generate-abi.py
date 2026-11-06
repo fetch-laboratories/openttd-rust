@@ -55,7 +55,11 @@ def split_fields(body: str) -> list[str]:
             quoted = not quoted
         elif not quoted and char in "<[(":
             depth += 1
-        elif not quoted and char in ">])" and body[index - 1 : index + 1] not in ("=>", "->"):
+        elif (
+            not quoted
+            and char in ">])"
+            and body[index - 1 : index + 1] not in ("=>", "->")
+        ):
             depth -= 1
         elif not quoted and depth == 0 and char == ",":
             fields.append(body[start:index])
@@ -115,9 +119,13 @@ def shared_records(
 
     def native(rust: str) -> str:
         rust = rust.strip()
-        callback = re.fullmatch(r'(?:unsafe\s+)?extern\s+"C"\s+fn\((.*?)\)(?:\s*->\s*(.+))?', rust, re.S)
+        callback = re.fullmatch(
+            r'(?:unsafe\s+)?extern\s+"C"\s+fn\((.*?)\)(?:\s*->\s*(.+))?', rust, re.S
+        )
         if callback:
-            arguments = ", ".join(native(argument) for argument in split_fields(callback[1]))
+            arguments = ", ".join(
+                native(argument) for argument in split_fields(callback[1])
+            )
             result = native(callback[2]) if callback[2] else "void"
             return f"{result} (OPENTTD_RUST_CALL *)({arguments}) noexcept"
         array = re.fullmatch(r"\[(.+);\s*([\w:]+)\s*\]", rust, re.S)
@@ -225,7 +233,9 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
         lines.append(f"struct {record.cpp} {{")
         for field in record.fields:
             if "(OPENTTD_RUST_CALL *)" in field.cpp_type:
-                declaration = field.cpp_type.replace("(OPENTTD_RUST_CALL *)", f"(OPENTTD_RUST_CALL *{field.name})")
+                declaration = field.cpp_type.replace(
+                    "(OPENTTD_RUST_CALL *)", f"(OPENTTD_RUST_CALL *{field.name})"
+                )
             else:
                 declaration = f"{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name}{field.dimensions}"
             lines.append(f"\t{declaration};")

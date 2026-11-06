@@ -13,6 +13,22 @@ User focus: $ARGUMENTS (in Codex, any text sent with `$steer`). Answer a focused
 Attribution on every issue, comment and commit body you write:
 `Agent: /root (<host> steering review) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
 
+## While root runs
+
+Root may keep running; it shares the main checkout. Steering 31 first used this protocol.
+
+- Edit only in your own locked worktree under `.local/worktrees/`, using `git -C`. Leave the main checkout, root's worktrees and `.local` output unchanged.
+- **Notice.** At the start, send root a mid-turn notice (`t3_thread_send`, mode `steer`) that steering is underway. In it:
+  - Tell root to continue all in-flight work.
+  - Tell root to leave the orchestration skills, the work order and the steering sections unchanged until release.
+- **Freeze.** Before step 4, ask root to:
+  - push any docs edit already in progress, then hold direct docs pushes to `rust-migration`;
+  - reply in your thread with its last docs commit.
+
+  Edit on that tip.
+- **Release.** After pushing, send root the commit hash and ask it to fetch and apply the new steering actions.
+- **Measurements and restart.** Take no wall-clock timings while root builds. Skip step 6's restart; root picks up the commit at release.
+
 ## 1. Load the last steering
 
 Identify the standing corrections and root's subsequent sessions.

@@ -44,10 +44,8 @@ struct OpenTTDNetworkFrameServices {
 	uint16_t (*max_join_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_join_time);
 	uint16_t (*max_lag_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_lag_time);
 	uint16_t (*max_password_time)() noexcept OPENTTD_SERVICE_DEFAULT(max_password_time);
-	int64_t (*now)() noexcept OPENTTD_SERVICE_DEFAULT(now);
 	bool (*on_server_connect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(on_server_connect);
 	const OpenTTDPacketServices *packet;
-	void (*packet_enqueue)(void *, OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(packet_enqueue);
 	uint8_t (*query_close)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(query_close);
 	const uint32_t *random;
 	void (*replay_commands)() noexcept OPENTTD_SERVICE_DEFAULT(replay_commands);
