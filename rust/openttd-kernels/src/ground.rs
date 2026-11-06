@@ -18,8 +18,7 @@
 )]
 use crate::services::{
     Axis, ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType,
-    RailGroundType, RailMapServices, RoadBits, RoadType, Roadside, Services, Slope, Track,
-    TrackBits, WaterClass,
+    RailGroundType, RoadBits, RoadType, Roadside, Services, Slope, Track, TrackBits, WaterClass,
 };
 use crate::slope_func::{is_slope_with_three_corners_raised, is_steep_slope};
 
@@ -32,9 +31,13 @@ pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Servi
 use crate::track_func::axis_to_track;
 
 /// Original `GetCrossingRailAxis`, over the canonical road-axis accessor.
-fn crossing_rail_axis(tile: u32, rail: &RailMapServices, check: impl Fn(bool) + Copy) -> Axis {
+fn crossing_rail_axis(
+    tile: u32,
+    world: &crate::map_func::World<'_>,
+    check: impl Fn(bool) + Copy,
+) -> Axis {
     Axis(crate::direction_func::other_axis(
-        (rail.crossing_road_axis)(tile).0,
+        world.crossing_road_axis(tile),
         check,
     ))
 }
@@ -42,10 +45,10 @@ fn crossing_rail_axis(tile: u32, rail: &RailMapServices, check: impl Fn(bool) + 
 /// Original `GetCrossingRailTrack`, retaining its named helper composition.
 pub(crate) fn crossing_rail_track(
     tile: u32,
-    rail: &RailMapServices,
+    world: &crate::map_func::World<'_>,
     check: impl Fn(bool) + Copy,
 ) -> Track {
-    axis_to_track(crossing_rail_axis(tile, rail, check), check)
+    axis_to_track(crossing_rail_axis(tile, world, check), check)
 }
 
 /// Original `CheckBuildAbove_Clear`: construction above clear tiles always succeeds.

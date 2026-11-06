@@ -37,7 +37,10 @@ impl Ctx<'_> {
             return (self.s.rail_axis)(tile).0;
         }
         if (self.shared.tile_type)(tile) != MP_RAILWAY
-            || (self.rail_map().rail_tile_type)(tile).0 != RAIL_TILE_NORMAL
+            || crate::services::RailTileType(
+                crate::map_func::World::new(self.shared).rail_tile_type(tile),
+            )
+            .0 != RAIL_TILE_NORMAL
         {
             return INVALID_AXIS;
         }
@@ -444,7 +447,7 @@ impl Ctx<'_> {
                 id,
                 axis,
                 gfx,
-                (self.rail_map().rail_type)(tile),
+                crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile)),
             );
             (self.s.set_custom_rail_index)(tile, specindex.value);
             self.set_rail_flags(tile, spec);

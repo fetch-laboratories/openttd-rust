@@ -125,7 +125,6 @@ struct OpenTTDWaterGroundServices {
 	void (*set_tree_ground)(uint32_t, TreeGround, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tree_ground);
 	void (*make_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_sea);
 	bool (*buoy_or_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(buoy_or_dock);
-	bool (*canal_or_river)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_or_river);
 	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);

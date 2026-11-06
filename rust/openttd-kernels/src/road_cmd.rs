@@ -676,20 +676,36 @@ impl<'a> Ctx<'a> {
                     return;
                 }
                 if flags & DoCommandFlag::EXECUTE != 0 {
-                    (self.r.crossing_removed)(tile, (self.rail.crossing_road_axis)(tile).0);
+                    (self.r.crossing_removed)(
+                        tile,
+                        crate::services::Axis(
+                            crate::map_func::World::new(self.shared).crossing_road_axis(tile),
+                        )
+                        .0,
+                    );
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
-                    let track = crate::ground::crossing_rail_track(tile, self.rail, |ok| {
-                        crate::movement::native_assert(self.shared, ok);
-                    })
+                    let track = crate::ground::crossing_rail_track(
+                        tile,
+                        &crate::map_func::World::new(self.shared),
+                        |ok| {
+                            crate::movement::native_assert(self.shared, ok);
+                        },
+                    )
                     .0;
                     if self.rt(tile, rtt ^ 1) == INVALID {
-                        let tracks = (self.rail.crossing_rail_bits)(tile).0;
+                        let tracks = crate::services::TrackBits(
+                            crate::map_func::World::new(self.shared).crossing_rail_bits(tile),
+                        )
+                        .0;
                         let reserved = (self.shared.crossing_reserved)(tile);
                         (self.rail.make_rail_normal)(
                             tile,
                             (self.shared.tile_owner)(tile),
                             tracks,
-                            (self.rail.rail_type)(tile).0,
+                            crate::services::RailType(
+                                crate::map_func::World::new(self.shared).rail_type(tile),
+                            )
+                            .0,
                         );
                         if reserved {
                             (self.rail.set_track_reservation)(tile, tracks);
@@ -698,7 +714,10 @@ impl<'a> Ctx<'a> {
                         if (self.shared.company_valid)(owner) {
                             (self.r.rail_infrastructure)(
                                 owner,
-                                (self.rail.rail_type)(tile).0,
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
                                 (LEVELCROSSING_TRACKBIT_FACTOR - 1).wrapping_neg(),
                             );
                             (self.commands.infrastructure_dirty)(owner);
@@ -933,14 +952,23 @@ impl<'a> Ctx<'a> {
                         return;
                     }
                 }
-                if (self.rail.rail_tile_type)(tile).0 != 0 {
+                if crate::services::RailTileType(
+                    crate::map_func::World::new(self.shared).rail_tile_type(tile),
+                )
+                .0 != 0
+                {
                     clear = true;
                 } else {
                     if (self.r.road_no_crossing)(rt) {
                         cost.error(self.r.strings.crossing_road);
                         return;
                     }
-                    if (self.r.rail_no_crossings)((self.rail.rail_type)(tile).0) {
+                    if (self.r.rail_no_crossings)(
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
+                    ) {
                         cost.error(self.r.strings.crossing_rail);
                         return;
                     }
@@ -968,7 +996,10 @@ impl<'a> Ctx<'a> {
                             if (self.shared.company_valid)(owner) {
                                 (self.r.rail_infrastructure)(
                                     owner,
-                                    (self.rail.rail_type)(tile).0,
+                                    crate::services::RailType(
+                                        crate::map_func::World::new(self.shared).rail_type(tile),
+                                    )
+                                    .0,
                                     LEVELCROSSING_TRACKBIT_FACTOR - 1,
                                 );
                                 (self.commands.infrastructure_dirty)(owner);
@@ -982,14 +1013,24 @@ impl<'a> Ctx<'a> {
                                 company,
                                 (self.shared.tile_owner)(tile),
                                 axis,
-                                (self.rail.rail_type)(tile).0,
+                                crate::services::RailType(
+                                    crate::map_func::World::new(self.shared).rail_type(tile),
+                                )
+                                .0,
                                 if rtt == 0 { rt } else { INVALID },
                                 if rtt == 1 { rt } else { INVALID },
                                 town_id,
                             );
                             (self.shared.set_crossing_reserved)(tile, reserved);
                             (self.shared.update_level_crossing)(tile, false);
-                            (self.r.mark_crossings)(tile, (self.rail.crossing_road_axis)(tile).0);
+                            (self.r.mark_crossings)(
+                                tile,
+                                crate::services::Axis(
+                                    crate::map_func::World::new(self.shared)
+                                        .crossing_road_axis(tile),
+                                )
+                                .0,
+                            );
                             (self.shared.mark_dirty)(tile);
                         }
                         cost.set(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
@@ -1636,9 +1677,13 @@ impl<'a> Ctx<'a> {
             && (self.shared.tile_owner)(tile) == old
         {
             if new == INVALID_OWNER {
-                let track = crate::ground::crossing_rail_track(tile, self.rail, |ok| {
-                    crate::movement::native_assert(self.shared, ok);
-                })
+                let track = crate::ground::crossing_rail_track(
+                    tile,
+                    &crate::map_func::World::new(self.shared),
+                    |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    },
+                )
                 .0;
                 self.command(
                     ret,
@@ -1660,7 +1705,10 @@ impl<'a> Ctx<'a> {
                     },
                 );
             } else {
-                let rt = (self.rail.rail_type)(tile).0;
+                let rt = crate::services::RailType(
+                    crate::map_func::World::new(self.shared).rail_type(tile),
+                )
+                .0;
                 (self.r.rail_infrastructure)(old, rt, LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg());
                 (self.r.rail_infrastructure)(new, rt, LEVELCROSSING_TRACKBIT_FACTOR);
                 (self.shared.set_tile_owner)(tile, new);

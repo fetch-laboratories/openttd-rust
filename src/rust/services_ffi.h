@@ -242,10 +242,7 @@ enum class RailGroundType : uint8_t;
 enum SignalVariant : uint8_t;
 
 struct OpenTTDRailTraversal { bool depot; TrackBits tracks; };
-struct OpenTTDRailSignalPresence { bool signals; bool track; SignalType kind; bool forward; bool reverse; };
-struct OpenTTDRailSignalUpdate { SignalType kind; TrackBits reservations; };
 struct OpenTTDRailStationAdmission { bool rail; uint8_t owner; Axis axis; bool blocked; };
-struct OpenTTDRailCrossingAdmission { bool crossing; uint8_t owner; Axis axis; };
 struct OpenTTDRailWormholeAdmission { uint8_t owner; TransportType transport; DiagDirection direction; };
 
 /* Canonical rail/signal map leaves. A consuming owner calls each phase only at
@@ -255,29 +252,16 @@ struct OpenTTDRailServices;
 struct OpenTTDRailMapServices {
 	const OpenTTDRailServices *ground;
 	OpenTTDRailTraversal (*traversal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
-	OpenTTDRailSignalPresence (*signal_presence)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_presence);
-	OpenTTDRailSignalUpdate (*signal_update)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_update);
 	OpenTTDRailStationAdmission (*station_admission)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_admission);
-	OpenTTDRailCrossingAdmission (*crossing_admission)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_admission);
 	OpenTTDRailWormholeAdmission (*wormhole_admission)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_admission);
 
-	bool (*is_rail_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_rail_depot);
-	DiagDirection (*rail_depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_depot_direction);
-	bool (*has_signal_trackdir)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal_trackdir);
-	SignalState (*signal_state)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_state);
 	void (*set_signal_state)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
 	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_bridge_end);
 	/* Rail command, depot and level-crossing leaves (rail_cmd.rs). */
-	bool (*has_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
-	SignalType (*signal_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
 	RailType (*invalid_rail_type)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_rail_type);
-	RailType (*rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);
 	void (*set_rail_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_type);
-	RailTileType (*rail_tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_tile_type);
 	void (*set_track_bits)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_track_bits);
-	unsigned int (*present_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(present_signals);
 	void (*set_present_signals)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_present_signals);
-	unsigned int (*signal_states)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_states);
 	void (*set_signal_states)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_states);
 	void (*set_has_signals)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_has_signals);
 	void (*set_signal_type)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_type);
@@ -290,12 +274,6 @@ struct OpenTTDRailMapServices {
 	void (*set_depot_exit)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot_exit);
 	void (*make_rail_normal)(uint32_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_normal);
 	void (*make_rail_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_depot);
-	TrackBits (*crossing_rail_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_rail_bits);
-	Axis (*crossing_road_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_axis);
-	bool (*has_station_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_station_rail);
-	bool (*is_rail_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_rail_station);
-	bool (*station_blocked)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_blocked);
-	Track (*station_track)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_track);
 	bool (*wormhole_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_reserved);
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;

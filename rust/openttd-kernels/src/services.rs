@@ -649,27 +649,11 @@ crate::abi::layouts! {
         depot,
         tracks,
     };
-    "OpenTTDRailSignalPresence" ["probe"] => RailSignalPresence {
-        signals,
-        track,
-        kind,
-        forward,
-        reverse,
-    };
-    "OpenTTDRailSignalUpdate" ["probe"] => RailSignalUpdate {
-        kind,
-        reservations,
-    };
     "OpenTTDRailStationAdmission" ["probe"] => RailStationAdmission {
         rail,
         owner,
         axis,
         blocked,
-    };
-    "OpenTTDRailCrossingAdmission" ["probe"] => RailCrossingAdmission {
-        crossing,
-        owner,
-        axis,
     };
     "OpenTTDRailWormholeAdmission" ["probe"] => RailWormholeAdmission {
         owner,
@@ -679,27 +663,14 @@ crate::abi::layouts! {
     "OpenTTDRailMapServices" ["probe"] => RailMapServices {
         ground,
         traversal,
-        signal_presence,
-        signal_update,
         station_admission,
-        crossing_admission,
         wormhole_admission,
-        is_rail_depot,
-        rail_depot_direction,
-        has_signal_trackdir,
-        signal_state,
         set_signal_state,
         other_tunnel_bridge_end,
-        has_signals,
-        signal_type,
         invalid_rail_type,
-        rail_type,
         set_rail_type,
-        rail_tile_type,
         set_track_bits,
-        present_signals,
         set_present_signals,
-        signal_states,
         set_signal_states,
         set_has_signals,
         set_signal_type,
@@ -712,12 +683,6 @@ crate::abi::layouts! {
         set_depot_exit,
         make_rail_normal,
         make_rail_depot,
-        crossing_rail_bits,
-        crossing_road_axis,
-        has_station_rail,
-        is_rail_station,
-        station_blocked,
-        station_track,
         wormhole_reserved,
     };
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
@@ -1287,30 +1252,6 @@ pub struct RailTraversal {
 /// Fields consumed together at one original rail/signal branch phase.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct RailSignalPresence {
-    /// Native `signals` observation; later-branch fields are read only after their guards.
-    pub signals: bool,
-    /// Native `track` observation; later-branch fields are read only after their guards.
-    pub track: bool,
-    /// Native `kind` observation; later-branch fields are read only after their guards.
-    pub kind: SignalType,
-    /// Native `forward` observation; later-branch fields are read only after their guards.
-    pub forward: bool,
-    /// Native `reverse` observation; later-branch fields are read only after their guards.
-    pub reverse: bool,
-}
-/// Fields consumed together at one original rail/signal branch phase.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RailSignalUpdate {
-    /// Native `kind` observation; later-branch fields are read only after their guards.
-    pub kind: SignalType,
-    /// Native `reservations` observation; later-branch fields are read only after their guards.
-    pub reservations: TrackBits,
-}
-/// Fields consumed together at one original rail/signal branch phase.
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct RailStationAdmission {
     /// Native `rail` observation; later-branch fields are read only after their guards.
     pub rail: bool,
@@ -1320,17 +1261,6 @@ pub struct RailStationAdmission {
     pub axis: Axis,
     /// Native `blocked` observation; later-branch fields are read only after their guards.
     pub blocked: bool,
-}
-/// Fields consumed together at one original rail/signal branch phase.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RailCrossingAdmission {
-    /// Native `crossing` observation; later-branch fields are read only after their guards.
-    pub crossing: bool,
-    /// Native `owner` observation; later-branch fields are read only after their guards.
-    pub owner: u8,
-    /// Native `axis` observation; later-branch fields are read only after their guards.
-    pub axis: Axis,
 }
 /// Fields consumed together at one original rail/signal branch phase.
 #[repr(C)]
@@ -1353,48 +1283,22 @@ pub struct RailMapServices {
     /// Consumed source-phase observation; guarded fields are not hoisted.
     pub traversal: extern "C" fn(u32) -> RailTraversal,
     /// Consumed source-phase observation; guarded fields are not hoisted.
-    pub signal_presence: extern "C" fn(u32, u8, u8) -> RailSignalPresence,
-    /// Consumed source-phase observation; guarded fields are not hoisted.
-    pub signal_update: extern "C" fn(u32, u8) -> RailSignalUpdate,
-    /// Consumed source-phase observation; guarded fields are not hoisted.
     pub station_admission: extern "C" fn(u32, u8, u8) -> RailStationAdmission,
-    /// Consumed source-phase observation; guarded fields are not hoisted.
-    pub crossing_admission: extern "C" fn(u32, u8) -> RailCrossingAdmission,
     /// Consumed source-phase observation; guarded fields are not hoisted.
     pub wormhole_admission: extern "C" fn(u32, u8) -> RailWormholeAdmission,
 
-    /// Native `is_rail_depot` map operation at the original observation point.
-    pub is_rail_depot: extern "C" fn(u32) -> bool,
-    /// Native `rail_depot_direction` map operation at the original observation point.
-    pub rail_depot_direction: extern "C" fn(u32) -> DiagDirection,
-    /// Native `has_signal_trackdir` map operation at the original observation point.
-    pub has_signal_trackdir: extern "C" fn(u32, u8) -> bool,
-    /// Native `signal_state` map operation at the original observation point.
-    pub signal_state: extern "C" fn(u32, u8) -> SignalState,
     /// Native `set_signal_state` map operation at the original observation point.
     pub set_signal_state: extern "C" fn(u32, u8, u8) -> (),
     /// Native `other_tunnel_bridge_end` map operation at the original observation point.
     pub other_tunnel_bridge_end: extern "C" fn(u32) -> u32,
-    /// Native `HasSignals`.
-    pub has_signals: extern "C" fn(u32) -> bool,
-    /// Native `GetSignalType`.
-    pub signal_type: extern "C" fn(u32, u8) -> SignalType,
     /// Native `INVALID_RAILTYPE`.
     pub invalid_rail_type: extern "C" fn() -> RailType,
-    /// Native `GetRailType`.
-    pub rail_type: extern "C" fn(u32) -> RailType,
     /// Native `SetRailType`.
     pub set_rail_type: extern "C" fn(u32, u8),
-    /// Native `GetRailTileType`.
-    pub rail_tile_type: extern "C" fn(u32) -> RailTileType,
     /// Native `SetTrackBits`.
     pub set_track_bits: extern "C" fn(u32, u8),
-    /// Native `GetPresentSignals`.
-    pub present_signals: extern "C" fn(u32) -> std::ffi::c_uint,
     /// Native `SetPresentSignals`.
     pub set_present_signals: extern "C" fn(u32, u8),
-    /// Native `GetSignalStates`.
-    pub signal_states: extern "C" fn(u32) -> std::ffi::c_uint,
     /// Native `SetSignalStates`.
     pub set_signal_states: extern "C" fn(u32, u8),
     /// Native `SetHasSignals`.
@@ -1419,18 +1323,6 @@ pub struct RailMapServices {
     pub make_rail_normal: extern "C" fn(u32, u8, u8, u8),
     /// Native `MakeRailDepot(tile, owner, depot, dir, railtype)`.
     pub make_rail_depot: extern "C" fn(u32, u8, u16, u8, u8),
-    /// Native `GetCrossingRailBits`.
-    pub crossing_rail_bits: extern "C" fn(u32) -> TrackBits,
-    /// Native `GetCrossingRoadAxis`.
-    pub crossing_road_axis: extern "C" fn(u32) -> Axis,
-    /// Native `HasStationRail`.
-    pub has_station_rail: extern "C" fn(u32) -> bool,
-    /// Native `IsRailStationTile`.
-    pub is_rail_station: extern "C" fn(u32) -> bool,
-    /// Native `IsStationTileBlocked`.
-    pub station_blocked: extern "C" fn(u32) -> bool,
-    /// Native `GetRailStationTrack`.
-    pub station_track: extern "C" fn(u32) -> Track,
     /// Native `HasTunnelBridgeReservation`.
     pub wormhole_reserved: extern "C" fn(u32) -> bool,
 }

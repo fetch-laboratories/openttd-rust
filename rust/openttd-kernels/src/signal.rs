@@ -15,7 +15,7 @@ use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
 use crate::company_type::INVALID_OWNER;
 use crate::direction_type::INVALID_DIAGDIR;
-use crate::services::{Map, RailMapServices, Services};
+use crate::services::{Axis, Map, RailMapServices, Services, SignalType, TrackBits};
 use std::ffi::c_uint;
 
 const ENTER_TRACKS: [u8; 4] = [0x25, 0x2a, 0x19, 0x16];
@@ -125,6 +125,103 @@ macro_rules! read {
         crate::witness::counted!(before SIGNAL_SERVICES, SIGNAL_BYTES, ($w.$group.$field)($($arg),*))
     };
 }
+/// Signal facts consumed together; later fields are read only after their guards.
+#[allow(clippy::struct_excessive_bools)] // The original reads four independent signal facts.
+#[derive(Clone, Copy)]
+struct RailSignalPresence {
+    signals: bool,
+    track: bool,
+    kind: SignalType,
+    forward: bool,
+    reverse: bool,
+}
+
+#[derive(Clone, Copy)]
+struct RailSignalUpdate {
+    kind: SignalType,
+    reservations: TrackBits,
+}
+
+#[derive(Clone, Copy)]
+struct RailCrossingAdmission {
+    crossing: bool,
+    owner: u8,
+    axis: Axis,
+}
+impl World<'_> {
+    /// The canonical map view, loaded at each observation.
+    fn view(&self) -> crate::map_func::World<'_> {
+        crate::map_func::World::new(self.shared)
+    }
+}
+/// `UpdateSignalsAroundSegment` signal facts: `HasSignals`, then `GetPresentSignals`
+/// with `SignalOnTrack`, then `GetSignalType` and both `SignalAlongTrackdir` tests.
+fn signal_presence(w: &World<'_>, tile: u32, masked_tracks: u8, td: u8) -> RailSignalPresence {
+    let view = w.view();
+    let mut r = RailSignalPresence {
+        signals: view.has_signals(tile),
+        track: false,
+        kind: SignalType(crate::signal_type::SIGTYPE_BLOCK),
+        forward: false,
+        reverse: false,
+    };
+    if r.signals {
+        // `TrackBitsToTrack`, including its single-track assertion.
+        let check = |ok| view.check(ok);
+        let mask = masked_tracks & crate::track_type::TRACK_BIT_MASK;
+        check(
+            masked_tracks == crate::track_type::INVALID_TRACK_BIT
+                || (masked_tracks != 0 && mask & mask.wrapping_sub(1) == 0),
+        );
+        let track = if masked_tracks == crate::track_type::INVALID_TRACK_BIT {
+            crate::track_type::INVALID_TRACK
+        } else {
+            crate::bitmath_func::find_first_bit(u64::from(mask))
+        };
+        let present = view.present_signals(tile);
+        r.track = present & crate::signal_func::signal_on_track(track) != 0;
+        if r.track {
+            r.kind = SignalType(view.signal_type(tile, track));
+            r.forward = present & crate::signal_func::signal_along_trackdir(td) != 0;
+            r.reverse = present
+                & crate::signal_func::signal_along_trackdir(crate::track_func::reverse_trackdir(
+                    td,
+                ))
+                != 0;
+        }
+    }
+    r
+}
+/// Signal update facts: the signal type, then reservations only for path signals.
+fn signal_update(w: &World<'_>, tile: u32, td: u8) -> RailSignalUpdate {
+    let view = w.view();
+    view.check(view.has_signal_on_trackdir(tile, td));
+    let kind = view.signal_type(tile, crate::track_func::trackdir_to_track(td));
+    let mut r = RailSignalUpdate {
+        kind: SignalType(kind),
+        reservations: TrackBits(0),
+    };
+    if pbs(kind) {
+        r.reservations = read!(w, rail, rail_reservation, tile);
+    }
+    r
+}
+/// Level-crossing admission: `IsLevelCrossing`, then the owner, then the road axis.
+fn crossing_admission(w: &World<'_>, tile: u32, owner: u8) -> RailCrossingAdmission {
+    let view = w.view();
+    let mut r = RailCrossingAdmission {
+        crossing: view.level_crossing(tile),
+        owner: INVALID_OWNER,
+        axis: Axis(crate::direction_type::AXIS_X),
+    };
+    if r.crossing {
+        r.owner = view.owner(tile);
+        if r.owner == owner {
+            r.axis = Axis(view.crossing_road_axis(tile));
+        }
+    }
+    r
+}
 fn track_bits(status: u32) -> u8 {
     ((status | (status >> 8)) & 0x3f) as u8
 }
@@ -232,10 +329,10 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                     if dir == INVALID_DIAGDIR {
                         crate::witness::hit(crate::witness::SIGNAL_DEPOT);
                         train_on_tile(w, tile, &mut flags);
-                        exitdir = read!(w, rail, rail_depot_direction, tile).0;
+                        exitdir = w.view().rail_depot_dir(tile);
                         tile = w.map.add_diag(tile, exitdir);
                         dir = reverse(exitdir);
-                    } else if dir == read!(w, rail, rail_depot_direction, tile).0 {
+                    } else if dir == w.view().rail_depot_dir(tile) {
                         train_on_tile(w, tile, &mut flags);
                         continue;
                     } else {
@@ -268,7 +365,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                             }),
                         )))
                     .trailing_zeros() as u8;
-                    let signal = read!(w, rail, signal_presence, tile, masked, td);
+                    let signal = signal_presence(w, tile, masked, td);
                     if signal.signals {
                         if signal.track {
                             let kind = signal.kind.0;
@@ -297,7 +394,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                                 }
                                 flags |= EXIT;
                                 crate::witness::hit(crate::witness::SIGNAL_EXIT);
-                                if read!(w, rail, signal_state, tile, td).0 == 1 {
+                                if w.view().signal_state_by_trackdir(tile, td) == 1 {
                                     if flags & GREEN != 0 {
                                         flags |= MULTI_GREEN;
                                         crate::witness::hit(crate::witness::SIGNAL_MULTI_GREEN);
@@ -337,7 +434,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 tile = w.map.add_diag(tile, exitdir);
             }
             MP_ROAD => {
-                let crossing = read!(w, rail, crossing_admission, tile, owner);
+                let crossing = crossing_admission(w, tile, owner);
                 if !crossing.crossing || crossing.owner != owner || (dir & 1) == crossing.axis.0 {
                     continue;
                 }
@@ -385,7 +482,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
 fn update_around(w: &World<'_>, flags: u16) {
     while let Some(Item { tile, dir: td }) = access(|s| s.tbu.get()) {
         let track = td & 7;
-        let observation = read!(w, rail, signal_update, tile, td);
+        let observation = signal_update(w, tile, td);
         let kind = observation.kind.0;
         let mut new_state = 1;
         if pbs(kind) && observation.reservations.0 & (1 << track) != 0 {
@@ -394,12 +491,12 @@ fn update_around(w: &World<'_>, flags: u16) {
         }
         if flags & TRAIN != 0 || (pbs(kind) && flags & (SPLIT | MULTI_ENTER) != 0) {
             new_state = 0;
-        } else if kind == 3 && read!(w, rail, has_signal_trackdir, tile, td ^ 8) {
+        } else if kind == 3 && w.view().has_signal_on_trackdir(tile, td ^ 8) {
             crate::witness::hit(crate::witness::SIGNAL_COMBO);
             if flags & MULTI_EXIT != 0
                 && (flags & GREEN == 0
                     || (flags & MULTI_GREEN == 0
-                        && read!(w, rail, signal_state, tile, td ^ 8).0 == 1))
+                        && w.view().signal_state_by_trackdir(tile, td ^ 8) == 1))
             {
                 new_state = 0;
                 crate::witness::hit(crate::witness::SIGNAL_COMBO_RED);
@@ -407,7 +504,7 @@ fn update_around(w: &World<'_>, flags: u16) {
         } else if (kind == 1 || kind == 3) && flags & EXIT != 0 && flags & GREEN == 0 {
             new_state = 0;
         }
-        if new_state != read!(w, rail, signal_state, tile, td).0 {
+        if new_state != w.view().signal_state_by_trackdir(tile, td) {
             if presignal_exit(kind) {
                 add_global(Item {
                     tile,
@@ -452,11 +549,11 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                 tile: other,
                 dir: INVALID_DIAGDIR,
             });
-        } else if kind == MP_RAILWAY && read!(w, rail, is_rail_depot, tile) {
+        } else if kind == MP_RAILWAY && w.view().is_rail_depot(tile) {
             if w.native.assertions {
                 source_assert(
                     w,
-                    dir == INVALID_DIAGDIR || dir == read!(w, rail, rail_depot_direction, tile).0,
+                    dir == INVALID_DIAGDIR || dir == w.view().rail_depot_dir(tile),
                 );
             }
             add_tbd(Item {

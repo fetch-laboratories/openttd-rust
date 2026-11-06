@@ -1491,9 +1491,6 @@ pub(crate) mod tests {
     extern "C" fn yes(_: u32) -> bool {
         true
     }
-    extern "C" fn no(_: u32) -> bool {
-        false
-    }
     extern "C" fn no_signal(_: u32, _: u8) -> bool {
         false
     }
@@ -1588,27 +1585,14 @@ pub(crate) mod tests {
         RailMapServices {
             ground: std::ptr::null(),
             traversal: unused(),
-            signal_presence: unused(),
-            signal_update: unused(),
             station_admission: unused(),
-            crossing_admission: unused(),
             wormhole_admission: unused(),
-            is_rail_depot: no,
-            rail_depot_direction: unused(),
-            has_signal_trackdir: no_signal,
-            signal_state: unused(),
             set_signal_state: unused(),
             other_tunnel_bridge_end: unused(),
-            has_signals: unused(),
-            signal_type: unused(),
             invalid_rail_type: unused(),
-            rail_type: unused(),
             set_rail_type: unused(),
-            rail_tile_type: unused(),
             set_track_bits: unused(),
-            present_signals: unused(),
             set_present_signals: unused(),
-            signal_states: unused(),
             set_signal_states: unused(),
             set_has_signals: unused(),
             set_signal_type: unused(),
@@ -1621,12 +1605,6 @@ pub(crate) mod tests {
             set_depot_exit: unused(),
             make_rail_normal: unused(),
             make_rail_depot: unused(),
-            crossing_rail_bits: unused(),
-            crossing_road_axis: unused(),
-            has_station_rail: unused(),
-            is_rail_station: unused(),
-            station_blocked: unused(),
-            station_track: unused(),
             wormhole_reserved: unused(),
         }
     }

@@ -169,9 +169,6 @@ impl Services {
     fn world(&self) -> &crate::station_service::World {
         unsafe { &*self.commands().station }
     }
-    fn rail(&self) -> &crate::services::RailMapServices {
-        unsafe { &*(*self.commands().rail).rail }
-    }
     fn map(&self) -> Map {
         self.shared().map()
     }
@@ -290,7 +287,7 @@ fn find_end(
         {
             break;
         }
-        if !(native.rail().has_station_rail)(next) {
+        if !crate::map_func::World::new(native.shared()).station_has_rail(next) {
             break;
         }
         if check_type && (native.commands().custom_rail_index)(next) != kind {
@@ -698,7 +695,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x42 => {
             (native.shared().terrain_type)(tile)
                 | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
-                    (native.rail().rail_type)(tile).0,
+                    crate::map_func::World::new(native.shared()).rail_type(tile),
                     (native.shared().specs().station().file)(spec),
                 )) << 8)
         }

@@ -578,30 +578,6 @@ static OpenTTDRailTraversal SharedRail_traversal(uint32_t tile) noexcept
 	if (!r.depot) r.tracks = RustRailTracks(tile);
 	return r;
 }
-static OpenTTDRailSignalPresence SharedRail_signal_presence(uint32_t tile, uint8_t masked_tracks, uint8_t td) noexcept
-{
-	Trackdir dir = static_cast<Trackdir>(td);
-	OpenTTDRailSignalPresence r{.signals = RustRailHasSignals(tile), .track = false, .kind = SIGTYPE_BLOCK, .forward = false, .reverse = false};
-	if (r.signals) {
-		Track track = TrackBitsToTrack(static_cast<TrackBits>(masked_tracks));
-		uint present = RustRailPresentSignals(tile);
-		r.track = (present & SignalOnTrack(track)) != 0;
-		if (r.track) {
-			r.kind = RustRailSignalType(tile, track);
-			r.forward = (present & SignalAlongTrackdir(dir)) != 0;
-			r.reverse = (present & SignalAlongTrackdir(ReverseTrackdir(dir))) != 0;
-		}
-	}
-	return r;
-}
-static OpenTTDRailSignalUpdate SharedRail_signal_update(uint32_t tile, uint8_t td) noexcept
-{
-	assert(RustRailHasSignalTrackdir(tile, td));
-	SignalType kind = RustRailSignalType(tile, TrackdirToTrack(static_cast<Trackdir>(td)));
-	OpenTTDRailSignalUpdate r{.kind = kind, .reservations = TRACK_BIT_NONE};
-	if (IsPbsSignal(kind)) r.reservations = RustRailReservation(tile);
-	return r;
-}
 static OpenTTDRailStationAdmission SharedRail_station_admission(uint32_t tile, uint8_t owner, uint8_t dir) noexcept
 {
 	TileIndex t(tile);
@@ -612,15 +588,6 @@ static OpenTTDRailStationAdmission SharedRail_station_admission(uint32_t tile, u
 			r.axis = RustRailStationAxis(tile);
 			if (DiagDirToAxis(static_cast<DiagDirection>(dir)) == r.axis) r.blocked = RustStationBlocked(tile);
 		}
-	}
-	return r;
-}
-static OpenTTDRailCrossingAdmission SharedRail_crossing_admission(uint32_t tile, uint8_t owner) noexcept
-{
-	OpenTTDRailCrossingAdmission r{.crossing = MapSvcRoadIsLevelCrossing(tile), .owner = INVALID_OWNER.base(), .axis = AXIS_X};
-	if (r.crossing) {
-		r.owner = RustTileOwnerValue(tile);
-		if (r.owner == owner) r.axis = RustCrossingRoadAxis(tile);
 	}
 	return r;
 }
@@ -639,29 +606,16 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 	static const OpenTTDRailMapServices services{
 		.ground = &GetRustRailGroundServices(),
 		.traversal = SharedRail_traversal,
-		.signal_presence = SharedRail_signal_presence,
-		.signal_update = SharedRail_signal_update,
 		.station_admission = SharedRail_station_admission,
-		.crossing_admission = SharedRail_crossing_admission,
 		.wormhole_admission = SharedRail_wormhole_admission,
 
-		.is_rail_depot = RustRailIsDepot,
-		.rail_depot_direction = RustRailDepotDirection,
-		.has_signal_trackdir = RustRailHasSignalTrackdir,
-		.signal_state = RustRailSignalState,
 		.set_signal_state = RustRailSetSignalState,
 		.other_tunnel_bridge_end = RustOtherTunnelBridgeEnd,
 
-		.has_signals = RustRailHasSignals,
-		.signal_type = RustRailSignalType,
 		.invalid_rail_type = RustInvalidRailType,
-		.rail_type = RustRailType,
 		.set_rail_type = RustSetRailType,
-		.rail_tile_type = RustRailTileType,
 		.set_track_bits = RustSetTrackBits,
-		.present_signals = RustRailPresentSignals,
 		.set_present_signals = RustSetPresentSignals,
-		.signal_states = RustSignalStates,
 		.set_signal_states = RustSetSignalStates,
 		.set_has_signals = RustSetHasSignals,
 		.set_signal_type = RustSetSignalType,
@@ -675,12 +629,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.set_depot_exit = RustSetDepotExit,
 		.make_rail_normal = RustMakeRailNormal,
 		.make_rail_depot = RustMakeRailDepot,
-		.crossing_rail_bits = RustCrossingRailBits,
-		.crossing_road_axis = RustCrossingRoadAxis,
-		.has_station_rail = RustHasStationRail,
-		.is_rail_station = RustIsRailStation,
-		.station_blocked = RustStationBlocked,
-		.station_track = RustRailStationTrack,
 		.wormhole_reserved = RustWormholeReserved,
 	};
 	return services;

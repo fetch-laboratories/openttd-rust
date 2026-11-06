@@ -328,8 +328,10 @@ impl<'a> World<'a> {
                 }
             }
             RAIL => {
-                result =
-                    result.saturating_add((self.r.rail_clear_cost)((self.rail.rail_type)(tile).0));
+                result = result.saturating_add((self.r.rail_clear_cost)(
+                    crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile))
+                        .0,
+                ));
             }
             WATER => result = price(PR_CLEAR_AQUEDUCT),
             _ => (),
@@ -479,7 +481,10 @@ impl<'a> World<'a> {
                 }
                 _ => (),
             }
-            if transport == RAIL && (self.rail.rail_type)(start).0 != railtype {
+            if transport == RAIL
+                && crate::services::RailType(crate::map_func::World::new(self.s).rail_type(start)).0
+                    != railtype
+            {
                 return cost.error(self.a.strings.demolish_bridge);
             }
             if transport == ROAD {
@@ -1087,7 +1092,10 @@ impl<'a> World<'a> {
                 if (self.s.company_valid)(owner) {
                     (self.r.rail_infrastructure)(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.s).rail_type(tile),
+                        )
+                        .0,
                         length
                             .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
                             .wrapping_neg(),
@@ -1185,7 +1193,10 @@ impl<'a> World<'a> {
                 if (self.s.company_valid)(owner) {
                     (self.r.rail_infrastructure)(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.s).rail_type(tile),
+                        )
+                        .0,
                         length
                             .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
                             .wrapping_neg(),
@@ -1327,9 +1338,18 @@ impl<'a> World<'a> {
             return;
         }
         if transport == RAIL {
-            (self.r.rail_infrastructure)(old, (self.rail.rail_type)(tile).0, pieces.wrapping_neg());
+            (self.r.rail_infrastructure)(
+                old,
+                crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile)).0,
+                pieces.wrapping_neg(),
+            );
             if new != INVALID_OWNER {
-                (self.r.rail_infrastructure)(new, (self.rail.rail_type)(tile).0, pieces);
+                (self.r.rail_infrastructure)(
+                    new,
+                    crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile))
+                        .0,
+                    pieces,
+                );
             }
         } else if transport == WATER {
             (self.stations.water_infrastructure)(old, pieces.wrapping_neg());

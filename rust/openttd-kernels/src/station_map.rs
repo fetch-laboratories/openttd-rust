@@ -194,6 +194,13 @@ impl crate::map_func::World<'_> {
     pub(crate) fn is_rail_station(&self, t: u32) -> bool {
         self.asserted(|m| get_station_type(m, TileIndex(t))).0 == crate::station_type::STATION_RAIL
     }
+    /// `HasStationRail`, with `GetStationType`'s tile-type assertion.
+    pub(crate) fn station_has_rail(&self, t: u32) -> bool {
+        matches!(
+            self.asserted(|m| get_station_type(m, TileIndex(t))).0,
+            crate::station_type::STATION_RAIL | RAIL_WAYPOINT
+        )
+    }
     /// `IsBuoy`, with `GetStationType`'s tile-type assertion.
     pub(crate) fn buoy(&self, t: u32) -> bool {
         self.asserted(|m| get_station_type(m, TileIndex(t))).0 == crate::station_type::BUOY

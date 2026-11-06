@@ -1152,10 +1152,10 @@ impl Ctx<'_> {
         }
     }
     fn rail_station(&self, tile: u32) -> bool {
-        (self.rail_map().is_rail_station)(tile)
+        crate::map_func::World::new(self.shared).rail_station(tile)
     }
     fn station_axis(&self, tile: u32) -> u8 {
-        (self.rail_map().station_track)(tile).0
+        crate::services::Track(crate::map_func::World::new(self.shared).station_track(tile)).0
     }
     fn buildable_area(&self, tile: u32, w: u16, h: u16) -> bool {
         (self.shared.tile_valid)(tile)
@@ -1261,10 +1261,16 @@ impl Ctx<'_> {
             }
         } else {
             if rt != (self.rail_map().invalid_rail_type)().0 && (self.shared.is_plain_rail)(tile) {
-                if (self.rail_map().has_signals)(tile) {
+                if crate::map_func::World::new(self.shared).has_signals(tile) {
                     return cost.error(self.s.strings.remove_signals);
                 }
-                if (self.rail().powered_rail)((self.rail_map().rail_type)(tile).0, rt) {
+                if (self.rail().powered_rail)(
+                    crate::services::RailType(
+                        crate::map_func::World::new(self.shared).rail_type(tile),
+                    )
+                    .0,
+                    rt,
+                ) {
                     let bits = (self.rail_map().traversal)(tile).tracks.0;
                     let track = bits.trailing_zeros() as u8;
                     if bits & bits.wrapping_sub(1) == 0 && track == axis {
@@ -1587,10 +1593,13 @@ impl Ctx<'_> {
                     }
                 }
                 if self.rail_station(t) {
-                    if !(self.rail_map().station_blocked)(t) {
+                    if !crate::map_func::World::new(self.shared).station_blocked(t) {
                         (self.rail().rail_infrastructure)(
                             owner,
-                            (self.rail_map().rail_type)(t).0,
+                            crate::services::RailType(
+                                crate::map_func::World::new(self.shared).rail_type(t),
+                            )
+                            .0,
                             u32::MAX,
                         );
                     }
@@ -1598,7 +1607,7 @@ impl Ctx<'_> {
                 }
                 crate::animated_tile::openttd_rust_animation_delete(t, false);
                 let old = if (self.shared.tile_type)(t) == MP_STATION
-                    && (self.rail_map().has_station_rail)(t)
+                    && crate::map_func::World::new(self.shared).station_has_rail(t)
                 {
                     (self.s.custom_rail_index)(t) as u8
                 } else {
@@ -1649,7 +1658,7 @@ impl Ctx<'_> {
                     );
                 }
                 self.set_rail_flags(t, spec);
-                if !(self.rail_map().station_blocked)(t) {
+                if !crate::map_func::World::new(self.shared).station_blocked(t) {
                     (self.rail().rail_infrastructure)(owner, rt, 1);
                 }
                 (self.s.station_infrastructure)(owner, 1);
@@ -1680,7 +1689,7 @@ impl Ctx<'_> {
             }
         };
         for t in update.tiles(self.map()) {
-            if (self.rail_map().station_blocked)(t) {
+            if crate::map_func::World::new(self.shared).station_blocked(t) {
                 continue;
             }
             let dir = 2 - axis;
@@ -1787,7 +1796,7 @@ impl Ctx<'_> {
         error.zero();
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
-                || !(self.rail_map().has_station_rail)(tile)
+                || !crate::map_func::World::new(self.shared).station_has_rail(tile)
             {
                 continue;
             }
@@ -1818,7 +1827,7 @@ impl Ctx<'_> {
                 }
             }
             quantity += 1;
-            if keep || (self.rail_map().station_blocked)(tile) {
+            if keep || crate::map_func::World::new(self.shared).station_blocked(tile) {
                 cost.add_money(crate::company::price(27).saturating_neg());
             }
             if flags & 1 == 0 {
@@ -1827,7 +1836,9 @@ impl Ctx<'_> {
             let index = (self.s.custom_rail_index)(tile);
             let track = self.station_axis(tile);
             let owner = (self.shared.tile_owner)(tile);
-            let rt = (self.rail_map().rail_type)(tile).0;
+            let rt =
+                crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile))
+                    .0;
             let mut train = std::ptr::null_mut();
             if (self.s.reserved)(tile) {
                 train = crate::pbs::Pbs::acquire(self.shared)
@@ -1838,8 +1849,9 @@ impl Ctx<'_> {
                     self.free_reservation(train);
                 }
             }
-            let build_rail = keep && !(self.rail_map().station_blocked)(tile);
-            if !build_rail && !(self.rail_map().station_blocked)(tile) {
+            let build_rail =
+                keep && !crate::map_func::World::new(self.shared).station_blocked(tile);
+            if !build_rail && !crate::map_func::World::new(self.shared).station_blocked(tile) {
                 (self.rail().rail_infrastructure)(owner, rt, u32::MAX);
             }
             crate::ground::clear_square(tile, self.shared);
@@ -4098,8 +4110,11 @@ impl Ctx<'_> {
             let kind = (self.shared.station_type)(tile).0;
             match kind {
                 0 | 7 => {
-                    if !(self.rail_map().station_blocked)(tile) {
-                        let rt = (self.rail_map().rail_type)(tile).0;
+                    if !crate::map_func::World::new(self.shared).station_blocked(tile) {
+                        let rt = crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0;
                         (self.rail().rail_infrastructure)(old, rt, u32::MAX);
                         (self.rail().rail_infrastructure)(new, rt, 1);
                     }

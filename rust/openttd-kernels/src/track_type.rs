@@ -64,6 +64,8 @@ pub const TRACK_LEFT: u8 = 4;
 pub const TRACK_RIGHT: u8 = 5;
 /// `INVALID_TRACK`.
 pub const INVALID_TRACK: u8 = 0xFF;
+/// `INVALID_TRACK_BIT`.
+pub const INVALID_TRACK_BIT: u8 = 0xFF;
 /// `TRACKDIR_UPPER_E`.
 pub const TRACKDIR_UPPER_E: u8 = 2;
 /// `TRACKDIR_LOWER_E`.

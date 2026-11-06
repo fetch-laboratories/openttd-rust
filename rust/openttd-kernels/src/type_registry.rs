@@ -527,12 +527,15 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
         let convert = match (s.tile_type)(tile) {
             MP_RAILWAY => true,
             MP_ROAD => crate::map_func::World::new(s).level_crossing_tile(tile),
-            MP_STATION => (map.has_station_rail)(tile),
+            MP_STATION => crate::map_func::World::new(s).station_has_rail(tile),
             MP_TUNNELBRIDGE => (s.tunnel_transport)(tile) == TRANSPORT_RAIL,
             _ => false,
         };
         if convert {
-            (map.set_rail_type)(tile, conversion[usize::from((map.rail_type)(tile).0)]);
+            (map.set_rail_type)(
+                tile,
+                conversion[usize::from(crate::map_func::World::new(s).rail_type(tile))],
+            );
         }
     }
 }

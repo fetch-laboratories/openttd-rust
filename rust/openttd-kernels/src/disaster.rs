@@ -371,7 +371,7 @@ impl<'a> World<'a> {
         match (self.shared.tile_type)(tile) {
             MP_RAILWAY => {
                 if (self.s.human)((self.shared.tile_owner)(tile))
-                    && !(unsafe { &*self.s.rail_map }.is_rail_depot)(tile)
+                    && !crate::map_func::World::new(self.shared).is_rail_depot(tile)
                 {
                     (self.s.clear)(tile, crate::company_type::OWNER_WATER);
                     (self.s.update_signals)();

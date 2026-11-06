@@ -63,9 +63,6 @@ struct FollowerFixture {
 		orders.vehicle = [](void *) noexcept { return &active->order_state; };
 		movement.orders = &orders;
 		ground.tracks = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m5 & 63); };
-		rail.rail_tile_type = [](uint32_t t) noexcept { return static_cast<RailTileType>(active->tiles.base[t].m5 >> 6); };
-		rail.is_rail_depot = [](uint32_t t) noexcept { return active->tiles.base[t].m5 >> 6 == 3; };
-		rail.has_signal_trackdir = [](uint32_t, uint8_t) noexcept { return false; };
 		rail.rail_reservation = [](uint32_t t) noexcept { return static_cast<TrackBits>(active->tiles.base[t].m2 & 63); };
 		physics.rail_speed = [](RailType) noexcept -> uint16_t { return 0; };
 		physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { return 100; };

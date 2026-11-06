@@ -53,7 +53,6 @@ pub struct WaterServices {
     pub set_tree_ground: extern "C" fn(u32, TreeGround, u32),
     pub make_sea: extern "C" fn(u32),
     pub buoy_or_dock: extern "C" fn(u32) -> bool,
-    pub canal_or_river: extern "C" fn(u32) -> bool,
     pub region_context: extern "C" fn() -> crate::water_regions::Context,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub airport_tile: extern "C" fn(u32) -> bool,
@@ -471,11 +470,19 @@ impl<'a> World<'a> {
         crate::ground::hit(crate::ground::Witness::BridgeEnd);
         self.vehicles_on_tile(end, z);
     }
+    /// `IsCanal(t) || IsRiver(t)`, with the canal test first.
+    fn canal_or_river(&self, t: u32) -> bool {
+        use crate::water_map::{get_water_class, is_river, is_water};
+        self.types.asserted(self.s, |m| {
+            Some(
+                is_water(m, t)? && get_water_class(m, t)? == crate::water_type::WATER_CLASS_CANAL.0,
+            )
+        }) || self.types.asserted(self.s, |m| is_river(m, t))
+    }
     fn dirty_neighbours(&self, tile: u32) {
         for direction in 0..8 {
             let target = offset(tile, direction, self.size_x);
-            if self.valid(target) && self.tile_type(target) == 6 && (self.w.canal_or_river)(target)
-            {
+            if self.valid(target) && self.tile_type(target) == 6 && self.canal_or_river(target) {
                 (self.s.mark_dirty)(target);
             }
         }
@@ -786,7 +793,6 @@ crate::abi::layouts! {
         set_tree_ground,
         make_sea,
         buoy_or_dock,
-        canal_or_river,
         region_context,
         remove_rail,
         airport_tile,
@@ -833,7 +839,6 @@ pub(crate) fn fixture() -> WaterServices {
         set_tree_ground: unused3,
         make_sea: unused1,
         buoy_or_dock: unused1,
-        canal_or_river: unused1,
         region_context: unused_region_context,
         remove_rail: unused3,
         airport_tile: unused1,
