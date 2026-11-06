@@ -44,7 +44,6 @@ struct OpenTTDCompanyVehicleGroupFlags { bool engine_countable, primary; };
 struct OpenTTDCompanyVehicleProfit { int64_t profit_last_year; int32_t economy_age; };
 struct OpenTTDCompanyStationTimes { uint8_t since_load, since_unload; };
 struct OpenTTDCompanyTownRights { int16_t rating; uint16_t have_ratings; uint8_t exclusive_counter, exclusivity; };
-struct OpenTTDCompanySignalTile { bool railway, crossing; uint8_t owner; bool has_signals; uint8_t tracks; };
 struct OpenTTDCompanyPriceBase { int64_t start_price; uint8_t category; };
 /** error: 0 ok, 1 CMD_ERROR, 2 max loan (param), 3 repaid, 4 currency required (param), 5 insufficient funds, 6 too many vehicles. */
 struct OpenTTDCompanyCost { int64_t cost, param; uint8_t error, expense; };
@@ -177,8 +176,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *copy_service_interval_defaults)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_service_interval_defaults);
 	void (OPENTTD_RUST_CALL *update_autoreplace)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_autoreplace);
 	uint32_t (OPENTTD_RUST_CALL *map_size)() noexcept OPENTTD_SERVICE_DEFAULT(map_size);
-	OpenTTDCompanySignalTile (OPENTTD_RUST_CALL *signal_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_tile);
-	bool (OPENTTD_RUST_CALL *has_signal_on_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal_on_track);
 	void (OPENTTD_RUST_CALL *add_track_to_signal_buffer)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_track_to_signal_buffer);
 	void (OPENTTD_RUST_CALL *update_signals_in_buffer)() noexcept OPENTTD_SERVICE_DEFAULT(update_signals_in_buffer);
 	void (OPENTTD_RUST_CALL *add_airport_infrastructure)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_airport_infrastructure);

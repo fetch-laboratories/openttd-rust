@@ -135,17 +135,6 @@ pub struct TownRights {
     pub exclusive_counter: u8,
     pub exclusivity: u8,
 }
-/// `IsTileType(MP_RAILWAY)`, `IsLevelCrossingTile`, `GetTileOwner` (only for those
-/// two), `HasSignals` and `GetTrackBits` (only for signalled railway).
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct SignalTile {
-    pub railway: bool,
-    pub crossing: bool,
-    pub owner: u8,
-    pub has_signals: bool,
-    pub tracks: u8,
-}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PriceBase {
@@ -326,8 +315,6 @@ pub struct Services {
     pub copy_service_interval_defaults: extern "C" fn(u8, u8),
     pub update_autoreplace: extern "C" fn(u8),
     pub map_size: extern "C" fn() -> u32,
-    pub signal_tile: extern "C" fn(u32) -> SignalTile,
-    pub has_signal_on_track: extern "C" fn(u32, u8) -> bool,
     pub add_track_to_signal_buffer: extern "C" fn(u32, u8, u8),
     pub update_signals_in_buffer: extern "C" fn(),
     pub add_airport_infrastructure: extern "C" fn(u8, u8),
@@ -1344,9 +1331,18 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     }
     if new != INVALID_OWNER {
         for tile in 0..map_size {
-            let t = (s.signal_tile)(tile);
-            if t.railway && t.owner == new && t.has_signals {
-                let mut tracks = t.tracks;
+            // `IsTileType(MP_RAILWAY)`, then `IsLevelCrossingTile` off rail; only those two
+            // kinds read `GetTileOwner`. `HasSignals` follows the owner test.
+            let world = crate::map_func::World::new(s.shared);
+            let railway = world.kind(tile) == crate::tile_type::MP_RAILWAY;
+            let crossing = !railway && world.level_crossing_tile(tile);
+            let owner = if railway || crossing {
+                world.owner(tile)
+            } else {
+                0
+            };
+            if railway && owner == new && world.has_signals(tile) {
+                let mut tracks = world.tracks(tile);
                 loop {
                     // RemoveFirstTrack: INVALID_TRACK leaves NONE/INVALID bits unchanged.
                     let track = if tracks != 0 && tracks != 0xFF {
@@ -1356,14 +1352,14 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
                     } else {
                         0xFF
                     };
-                    if (s.has_signal_on_track)(tile, track) {
+                    if crate::map_func::World::new(s.shared).has_signal_on_track(tile, track) {
                         (s.add_track_to_signal_buffer)(tile, track, new);
                     }
                     if tracks == 0 {
                         break;
                     }
                 }
-            } else if t.crossing && t.owner == new {
+            } else if crossing && owner == new {
                 (s.shared.update_level_crossing)(tile, true);
             }
         }
@@ -2289,8 +2285,6 @@ crate::abi::layouts! {
         copy_service_interval_defaults,
         update_autoreplace,
         map_size,
-        signal_tile,
-        has_signal_on_track,
         add_track_to_signal_buffer,
         update_signals_in_buffer,
         add_airport_infrastructure,
@@ -2346,13 +2340,6 @@ crate::abi::layouts! {
         have_ratings,
         exclusive_counter,
         exclusivity,
-    };
-    "OpenTTDCompanySignalTile" ["company_economy"] => SignalTile {
-        railway,
-        crossing,
-        owner,
-        has_signals,
-        tracks,
     };
     "OpenTTDCompanyPriceBase" ["company_economy"] => PriceBase {
         start_price,

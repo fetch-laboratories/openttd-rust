@@ -49,16 +49,8 @@ const OpenTTDSharedServices *MovementWorld()
 	world.map = &movement_map.statics;
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
 	world.map_max_y = []() noexcept -> uint32_t { return 63; };
-	world.road_tile_kind = [](uint32_t) noexcept { return static_cast<RoadTileType>(0); };
-	world.normal_road_bits = [](uint32_t, uint8_t) noexcept -> RoadBits {
-		constexpr RoadBits bits[]{static_cast<RoadBits>(10), static_cast<RoadBits>(5), static_cast<RoadBits>(9), static_cast<RoadBits>(6), static_cast<RoadBits>(3), static_cast<RoadBits>(12)};
-		return bits[std::countr_zero(static_cast<unsigned>(fixture_dirs)) & 7];
-	};
-	world.disallowed_road_directions = [](uint32_t) noexcept -> uint8_t { return fixture_dirs > 255 ? 1 : 2; };
-	world.has_road_works = [](uint32_t) noexcept { return false; };
 	movement.shared = &world;
 	movement.road_kind = [](OpenTTDVehicle *) noexcept { return RTT_ROAD; };
-	movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
 	SetFixtureDirs(fixture_dirs);
 	return &world;
 }
@@ -229,9 +221,6 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 		 * centre is above flat tile 129 and the accepted step pays the uphill penalty. */
 		map.tiles.base[128].height = 1;
 		map.shared.apply_foundation = GetRustSharedServices().apply_foundation;
-		OpenTTDRoadGroundServices road{};
-		road.all_bits = [](uint32_t t) noexcept { return static_cast<RoadBits>(FollowerFixture::active->tiles.base[t].m5 & 15); };
-		map.movement.road = &road;
 		RoadOrder::limits.clear();
 		map.physics.display_max_speed = [](OpenTTDVehicle *) noexcept -> int32_t { RoadOrder::limits.push_back('D'); return 100; };
 		map.orders.vehicle = [](void *) noexcept { RoadOrder::limits.push_back('O'); return &FollowerFixture::active->order_state; };

@@ -233,7 +233,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 
 	/* This fixture models flat, empty ground without roads, depots or bridges. */
 	services.is_road_depot = [](uint32_t) noexcept { return false; };
-	services.is_any_road_stop = [](uint32_t) noexcept { return false; };
 	services.is_bay_stop = [](uint32_t) noexcept { return false; };
 	services.road_bits = [](uint32_t, uint8_t, bool) noexcept -> uint8_t { return 0; };
 	services.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
@@ -248,7 +247,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
-	services.bridge_above = [](uint32_t) noexcept { return false; };
 	services.has_water_ground = [](uint32_t) noexcept { return false; };
 	services.mark_dirty = [](uint32_t) noexcept {};
 	services.clear_square_services.docking = [](uint32_t) noexcept { return false; };

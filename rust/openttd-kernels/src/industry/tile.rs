@@ -629,7 +629,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
 ) {
     let (shared, t, p, c) = unsafe { (&*shared, &*tiles, &*policy, &*costs) };
     if (shared.autoslope)() {
-        let old_slope = (shared.tile_slope)(tile);
+        let old_slope = crate::map_func::World::new(shared).tile_slope(tile);
         if !is_steep_slope(old_slope)
             && !is_steep_slope(slope_new)
             && unsafe { (p.tile_max_z)(tile) } == z_new.wrapping_add(get_slope_max_z(slope_new))

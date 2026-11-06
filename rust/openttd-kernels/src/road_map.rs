@@ -188,6 +188,26 @@ impl crate::map_func::World<'_> {
     pub(crate) fn level_crossing_tile(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD && self.road_tile_type(t).0 == ROAD_TILE_CROSSING
     }
+    /// `IsLevelCrossing`, with `GetRoadTileType`'s tile-type assertion.
+    pub(crate) fn level_crossing(&self, t: u32) -> bool {
+        self.road_tile_type(t).0 == ROAD_TILE_CROSSING
+    }
+    /// `IsCrossingBarred`.
+    pub(crate) fn crossing_barred(&self, t: u32) -> bool {
+        self.check(self.level_crossing(t));
+        crate::bitmath_func::has_bit(Self::byte(self.types.m5(t)), 5)
+    }
+    /// `GetCrossingRailBits`: `AxisToTrackBits(GetCrossingRailAxis(t))`.
+    pub(crate) fn crossing_rail_bits(&self, t: u32) -> u8 {
+        self.check(self.level_crossing(t));
+        let check = |ok| self.check(ok);
+        let axis = crate::direction_func::other_axis(self.crossing_road_axis(t), check);
+        crate::track_func::axis_to_track_bits(axis, check)
+    }
+    /// `GetAllRoadBits`.
+    pub(crate) fn all_road_bits(&self, t: u32) -> u8 {
+        self.road_bits(t, false) | self.road_bits(t, true)
+    }
     /// `GetCrossingRoadAxis`, with its `IsLevelCrossing` assertion.
     pub(crate) fn crossing_road_axis(&self, t: u32) -> u8 {
         self.check(self.road_tile_type(t).0 == ROAD_TILE_CROSSING);
@@ -267,7 +287,7 @@ impl crate::map_func::World<'_> {
 /// `HasTownOwnedRoad`, preserving the short circuit before `GetRoadOwner`.
 pub(crate) fn has_town_owned_road(world: &crate::map_func::World<'_>, tile: u32) -> bool {
     world.road_type(tile, false) != crate::road_type::INVALID_ROADTYPE
-        && (world.shared.road_owner)(tile) == crate::company_type::OWNER_TOWN
+        && world.road_owner(tile, false) == crate::company_type::OWNER_TOWN
 }
 
 /// `GetPresentRoadTypes` over the canonical map fields.

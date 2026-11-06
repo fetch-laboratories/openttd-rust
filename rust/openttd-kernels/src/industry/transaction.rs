@@ -288,7 +288,7 @@ impl Engine<'_> {
             }
             if gfx == crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 if !(self.s.shared().is_water_tile)(current)
-                    || (self.s.shared().tile_slope)(current) != 0
+                    || crate::map_func::World::new(self.s.shared()).tile_slope(current) != 0
                 {
                     return self.fail(self.e.site);
                 }
@@ -297,7 +297,7 @@ impl Engine<'_> {
                 if !self.succeeded() {
                     return false;
                 }
-                if (self.s.shared().bridge_above)(current) {
+                if crate::map_func::World::new(self.s.shared()).bridge_above(current) {
                     return self.fail(self.e.site);
                 }
                 let spec = industrytype::tile(gfx);
@@ -381,9 +381,10 @@ impl Engine<'_> {
                         return false;
                     }
                 } else {
-                    refused |= slope_refused((self.s.shared().tile_slope)(current), unsafe {
-                        (*spec).slopes_refused
-                    });
+                    refused |= slope_refused(
+                        crate::map_func::World::new(self.s.shared()).tile_slope(current),
+                        unsafe { (*spec).slopes_refused },
+                    );
                 }
             }
         }
@@ -728,9 +729,10 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     let parameter = (u32::from(call.creation) << 8) | call.layout_index as u32;
     let result = unsafe { (e.x.resolve_shape)(shell, call.current, call.gfx, parameter) };
     if result.callback == 0xffff {
-        if !slope_refused((e.s.shared().tile_slope)(call.current), unsafe {
-            (*call.spec).slopes_refused
-        }) {
+        if !slope_refused(
+            crate::map_func::World::new(e.s.shared()).tile_slope(call.current),
+            unsafe { (*call.spec).slopes_refused },
+        ) {
             e.success();
         } else {
             e.fail(e.e.site);

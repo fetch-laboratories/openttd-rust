@@ -537,11 +537,13 @@ impl World<'_> {
             let shared = unsafe { &*a.shared };
             if unsafe { shared.settings().freeform_edges.read() } {
                 let map = shared.map();
+                let view = crate::map_func::World::new(shared);
+                let freeform = || unsafe { shared.settings().freeform_edges.read() };
                 for x in 0..map.size_x() {
-                    (a.make_void)(map.tile_xy(x, 0));
+                    crate::void_map::make_void(&view, map.tile_xy(x, 0), freeform);
                 }
                 for y in 0..=(shared.map_max_y)() {
-                    (a.make_void)(map.tile_xy(0, y));
+                    crate::void_map::make_void(&view, map.tile_xy(0, y), freeform);
                 }
             }
             if crate::session::mode() != GameMode::MENU {
