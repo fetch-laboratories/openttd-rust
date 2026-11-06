@@ -54,7 +54,6 @@ struct OpenTTDContentServices {
 	bool (*string_empty)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(string_empty);
 	void *(*tag)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(tag);
 	const OpenTTDNetworkTcpServices *tcp;
-	void (*tcp_close)() noexcept OPENTTD_SERVICE_DEFAULT(tcp_close);
 	void (*tree_push)(ConstContentVector *, const OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(tree_push);
 	void *(*url)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(url);
 	void *(*version)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(version);

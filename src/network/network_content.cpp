@@ -332,7 +332,6 @@ const OpenTTDContentServices &GetRustContentServices() noexcept
 		.string_empty = [](const void *text) noexcept { return static_cast<const std::string *>(text)->empty(); },
 		.tag = [](OpenTTDContentInfo *ci) noexcept -> void * { return &Info(ci).tags.emplace_back(); },
 		.tcp = &GetRustNetworkTcpServices(),
-		.tcp_close = []() noexcept { c.NetworkTCPSocketHandler::CloseConnection(); },
 		.tree_push = [](ConstContentVector *tree, const OpenTTDContentInfo *ci) noexcept { tree->push_back(static_cast<const ContentInfo *>(ci)); },
 		.url = [](OpenTTDContentInfo *ci) noexcept -> void * { return &Info(ci).url; },
 		.version = [](OpenTTDContentInfo *ci) noexcept -> void * { return &Info(ci).version; },

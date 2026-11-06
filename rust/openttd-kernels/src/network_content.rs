@@ -100,8 +100,6 @@ pub struct Services {
     /// Append an empty tag and return it.
     pub tag: extern "C" fn(*mut ContentInfo) -> *mut c_void,
     pub tcp: &'static tcp::Services,
-    /// `NetworkTCPSocketHandler::CloseConnection`.
-    pub tcp_close: extern "C" fn(),
     pub tree_push: extern "C" fn(*mut ConstContentVector, *const ContentInfo),
     pub url: extern "C" fn(*mut ContentInfo) -> *mut c_void,
     pub version: extern "C" fn(*mut ContentInfo) -> *mut c_void,
@@ -240,7 +238,7 @@ fn connect(s: &Services) {
 }
 
 fn close_connection(s: &Services) {
-    (s.tcp_close)();
+    unsafe { tcp::openttd_rust_tcp_close(s.tcp, s.client) };
     if !unsafe { crate::network_tcp::is_connected(s.client) } {
         return;
     }
@@ -1299,7 +1297,7 @@ crate::abi::layouts! {
         file_create, file_open, file_write, filename, has_content, http_get, http_mirror,
         info_assign, info_delete, info_new, list_get, list_release, list_size, name,
         queue_reset, string_assign,
-        string_empty, tag, tcp, tcp_close, tree_push, url, version,
+        string_empty, tag, tcp, tree_push, url, version,
     };
 }
 
