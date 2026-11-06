@@ -8,8 +8,7 @@
 /** @file town_protocol.hpp Narrow expansion-mode and callback-reentry gaps absent from console saves. */
 #ifndef TOWN_PROTOCOL_HPP
 #define TOWN_PROTOCOL_HPP
-#include "../rust/town_ffi.h"
-#include "../rust/rust_vector.h"
+#include "../town.h"
 #include "fixture_map.hpp"
 #include "../rust/type_registry_ffi.h"
 #include "../core/backup_type.hpp"
@@ -22,44 +21,10 @@
 #include "../rust/abi_ffi.h"
 #include <cstdlib>
 
-/** Plain fixture view of the Rust OpenTTDTownRecord, for fixtures built without
- * the game's field types. Every use checks it against the Rust layout. */
-struct TownProtocolRecord {
-	void *shell;
-	uint64_t valid_history;
-	uint32_t xy, num_houses, population, squared_town_zone_radius[5], goal[6];
-	int16_t ratings[15];
-	OpenTTDTownReceived received[6];
-	uint16_t noise_reached, time_until_rebuild, statues, have_ratings, grow_counter, growth_rate, townnametype;
-	uint8_t unwanted[15], exclusivity, exclusive_counter;
-	bool larger_town;
-	uint8_t layout, fund_buildings_months, road_build_months, flags, part_of_subsidy;
-	uint32_t townnamegrfid, townnameparts;
-	RustVector<PersistentStorage *> psa_list;
-	RustVector<uint8_t> cached_name;
-};
-
-/** The record of a fixture town owner: the owner's first member. */
-inline TownProtocolRecord *TownProtocolRecordOf(OpenTTDTownState *owner)
+/** The canonical record is the fixture owner's first member. */
+inline OpenTTDTownRecord *TownProtocolRecordOf(OpenTTDTownState *owner)
 {
-	static const bool checked = [] {
-		const size_t offsets[] = {
-			offsetof(TownProtocolRecord, shell), offsetof(TownProtocolRecord, valid_history), offsetof(TownProtocolRecord, xy),
-			offsetof(TownProtocolRecord, num_houses), offsetof(TownProtocolRecord, population), offsetof(TownProtocolRecord, squared_town_zone_radius),
-			offsetof(TownProtocolRecord, goal), offsetof(TownProtocolRecord, ratings), offsetof(TownProtocolRecord, received),
-			offsetof(TownProtocolRecord, noise_reached), offsetof(TownProtocolRecord, time_until_rebuild), offsetof(TownProtocolRecord, statues),
-			offsetof(TownProtocolRecord, have_ratings), offsetof(TownProtocolRecord, grow_counter), offsetof(TownProtocolRecord, growth_rate),
-			offsetof(TownProtocolRecord, townnametype), offsetof(TownProtocolRecord, unwanted), offsetof(TownProtocolRecord, exclusivity),
-			offsetof(TownProtocolRecord, exclusive_counter), offsetof(TownProtocolRecord, larger_town), offsetof(TownProtocolRecord, layout),
-			offsetof(TownProtocolRecord, fund_buildings_months), offsetof(TownProtocolRecord, road_build_months), offsetof(TownProtocolRecord, flags),
-			offsetof(TownProtocolRecord, part_of_subsidy), offsetof(TownProtocolRecord, townnamegrfid), offsetof(TownProtocolRecord, townnameparts), offsetof(TownProtocolRecord, psa_list), offsetof(TownProtocolRecord, cached_name),
-		};
-		bool same = openttd_rust_abi_layout_named("OpenTTDTownRecord", 0) == sizeof(TownProtocolRecord);
-		for (size_t i = 0; i < std::size(offsets); i++) same &= openttd_rust_abi_layout_named("OpenTTDTownRecord", 2 + 2 * i) == offsets[i];
-		return same && openttd_rust_abi_layout_named("OpenTTDTownRecord", 2 + 2 * std::size(offsets)) == SIZE_MAX;
-	}();
-	if (!checked) std::abort();
-	return reinterpret_cast<TownProtocolRecord *>(owner);
+	return reinterpret_cast<OpenTTDTownRecord *>(owner);
 }
 #include "../rust/ground_ffi.h"
 #include "../rust/movement_ffi.h"
@@ -254,7 +219,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	openttd_rust_town_global_id_counts_resize(std::max<size_t>(5, saved_ids.size()));
 	openttd_rust_town_global_class_counts_resize(std::max<size_t>(2, saved_classes.size()));
 	TownProtocolWorld w{}; w.owner = owner.get(); w.regions = regions.get(); town_protocol_world = &w;
-	auto *fields = TownProtocolRecordOf(owner.get()); fields->xy = 2080; std::fill_n(fields->squared_town_zone_radius, 5, 100);
+	auto *fields = TownProtocolRecordOf(owner.get()); fields->xy = TileIndex{2080}; fields->squared_town_zone_radius.fill(100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
 	services.company_human = [](uint8_t) noexcept { return true; };
@@ -269,7 +234,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	resolver.shared = &services;
 	services.town_by_id = [](uint32_t) noexcept -> OpenTTDTownHandle * { return nullptr; };
 	resolver.evaluate = [](const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept -> uint16_t {
-		TownProtocolRecordOf(town_protocol_world->owner)->flags = 0x88;
+		TownProtocolRecordOf(town_protocol_world->owner)->flags = TownFlags(0x88);
 		return UINT16_MAX;
 	};
 	const auto *previous_resolver = openttd_rust_house_resolver_exchange(&resolver);
@@ -346,7 +311,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 2);
 	check(w.roads == 1 && w.draws == 1 && w.company == 7);
 	/* Expansion updates radii; restore the isolated house-placement setup. */
-	std::fill_n(fields->squared_town_zone_radius, 5, 100);
+	fields->squared_town_zone_radius.fill(100);
 	w.clears = 0; w.clear_ok = false;
 	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 2);
 	check(w.clears == 25 * 13 && w.company == 7 && w.draws == 1);
@@ -356,7 +321,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	/* A growing town rebuilds the expired house: one draw, clear, then TryBuildTownHouse. */
 	const auto rebuild = [&] {
 		fields->time_until_rebuild = 1; fields->num_houses++;
-		TownProtocolRecordOf(owner.get())->flags |= 1;
+		TownProtocolRecordOf(owner.get())->flags.Set(TownFlag::IsGrowing);
 		w.owner_reads = 0; w.map_reads = 0;
 		openttd_rust_house_tile_loop(&leaves, &services, 2080);
 		check(w.owner_reads == 1 && w.map_reads == 1);
@@ -369,7 +334,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	check(w.writes.empty() && w.draws == 3);
 	w.house_class = 0; class_counts[1] = 0;
 	rebuild();
-	check(fields->num_houses == 1 && w.writes.size() == 1 && w.animations == 1 && TownProtocolRecordOf(owner.get())->flags == 0x88);
+	check(fields->num_houses == 1 && w.writes.size() == 1 && w.animations == 1 && TownProtocolRecordOf(owner.get())->flags.base() == 0x88);
 	check(w.square_clears == 3);
 	/* CmdPlaceHouse executes a completed, protected 2x2 house through BuildTownHouse. */
 	w.placing = true; w.writes.clear(); w.house_callback = false; w.clears = 0; w.animations = 0; w.house_count = 5;
