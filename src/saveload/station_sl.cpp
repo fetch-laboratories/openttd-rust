@@ -28,7 +28,7 @@
 
 static SaveLoad StationLoadingVehicles(SaveLoadVersion from, SaveLoadVersion to)
 {
-	return {"loading_vehicles", SL_REFLIST, REF_VEHICLE, 0, from, to, [](void *object, size_t) -> void * {
+	return {"loading_vehicles", SL_REFLIST, REF_VEHICLE_RECORD, 0, from, to, [](void *object, size_t) -> void * {
 		return RustStationLoadingQueueSaveScope::Address(static_cast<Station *>(object)->loading_vehicles);
 	}, 0, nullptr};
 }

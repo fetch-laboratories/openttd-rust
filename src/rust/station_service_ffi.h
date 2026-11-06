@@ -216,12 +216,12 @@ void openttd_rust_station_service_destroy(OpenTTDStationService *);
 OpenTTDStationFields *openttd_rust_station_service_fields(OpenTTDStationService *);
 OpenTTDStationCargo *openttd_rust_station_service_cargo(OpenTTDStationService *, uint8_t);
 size_t openttd_rust_station_queue_size(const OpenTTDStationService *);
-void openttd_rust_station_queue_push(OpenTTDStationService *, void *);
-void openttd_rust_station_queue_remove(OpenTTDStationService *, void *);
+void openttd_rust_station_queue_push(OpenTTDStationService *, OpenTTDVehicle *);
+void openttd_rust_station_queue_remove(OpenTTDStationService *, OpenTTDVehicle *);
 void openttd_rust_station_queue_clear(OpenTTDStationService *);
 OpenTTDStationQueueEntry *openttd_rust_station_queue_first(const OpenTTDStationService *);
 OpenTTDStationQueueEntry *openttd_rust_station_queue_next(const OpenTTDStationService *, const OpenTTDStationQueueEntry *);
-void *openttd_rust_station_queue_value(const OpenTTDStationQueueEntry *);
+OpenTTDVehicle *openttd_rust_station_queue_value(const OpenTTDStationQueueEntry *);
 OpenTTDStationQueueEntry *openttd_rust_station_queue_erase_node(OpenTTDStationService *, OpenTTDStationQueueEntry *);
 /* An empty queue touches only its Rust owner; service tables may be null then. */
 struct OpenTTDVehicleVisits;

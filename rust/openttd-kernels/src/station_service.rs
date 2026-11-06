@@ -166,7 +166,7 @@ pub unsafe extern "C" fn openttd_rust_station_service_cargo(
     }
 }
 pub struct QueueEntry {
-    vehicle: *mut c_void,
+    vehicle: *mut crate::vehicle_base::VehicleRecord,
     next: *mut QueueEntry,
 }
 impl Drop for Service {
@@ -197,7 +197,7 @@ pub unsafe extern "C" fn openttd_rust_station_queue_size(state: *const Service) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_push(
     state: *mut Service,
-    vehicle: *mut c_void,
+    vehicle: *mut crate::vehicle_base::VehicleRecord,
 ) {
     let entry = Box::into_raw(Box::new(QueueEntry {
         vehicle,
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn openttd_rust_station_queue_push(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_remove(
     state: *mut Service,
-    vehicle: *mut c_void,
+    vehicle: *mut crate::vehicle_base::VehicleRecord,
 ) {
     unsafe {
         (*state).queue.retain(|&entry| {
@@ -256,7 +256,9 @@ pub unsafe extern "C" fn openttd_rust_station_queue_next(
     unsafe { (&raw const (*entry).next).read().cast() }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_queue_value(entry: *const QueueEntry) -> *mut c_void {
+pub unsafe extern "C" fn openttd_rust_station_queue_value(
+    entry: *const QueueEntry,
+) -> *mut crate::vehicle_base::VehicleRecord {
     unsafe { (&raw const (*entry).vehicle).read() }
 }
 #[unsafe(no_mangle)]
@@ -975,9 +977,7 @@ unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &
     let mut node = unsafe { openttd_rust_station_queue_first(state) };
     while !node.is_null() {
         let mut current =
-            NonNull::new(unsafe { openttd_rust_station_queue_value(node) }).map(|shell| unsafe {
-                VehicleRef::from_shell(shell.as_ptr(), (*l.vehicle_resolver).vehicle)
-            });
+            NonNull::new(unsafe { openttd_rust_station_queue_value(node) }).map(VehicleRef);
         while let Some(vehicle) = current {
             if u32::from((l.cargo_type)(vehicle)) == u32::from(cargo) {
                 unsafe {
@@ -1523,7 +1523,7 @@ fn refit_vehicle(
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     let st = (w.station)(front.last_station());
     unsafe {
-        openttd_rust_station_queue_push(st.state, front.shell().cast());
+        openttd_rust_station_queue_push(st.state, front.0.as_ptr());
     }
     (l.set_loading_finished)(front, false);
     (l.set_load_ticks)(front, 1);
@@ -1918,7 +1918,7 @@ unsafe fn load_station_queue(
     let mut last = None;
     while !node.is_null() {
         let v =
-            unsafe { VehicleRef::from_shell(openttd_rust_station_queue_value(node), &*l.vehicle) };
+            VehicleRef(unsafe { NonNull::new_unchecked(openttd_rust_station_queue_value(node)) });
         if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
             let ticks = (l.load_unload_ticks)(v).wrapping_sub(1);
             (l.set_load_ticks)(v, ticks);
@@ -1934,7 +1934,7 @@ unsafe fn load_station_queue(
     node = unsafe { openttd_rust_station_queue_first(state) };
     while !node.is_null() {
         let v =
-            unsafe { VehicleRef::from_shell(openttd_rust_station_queue_value(node), &*l.vehicle) };
+            VehicleRef(unsafe { NonNull::new_unchecked(openttd_rust_station_queue_value(node)) });
         if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
                 load_vehicle(v, w, l, refit, visits);

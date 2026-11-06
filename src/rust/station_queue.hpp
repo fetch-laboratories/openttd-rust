@@ -10,6 +10,7 @@
 #define RUST_STATION_QUEUE_HPP
 
 #include "station_service_ffi.h"
+#include "../vehicle_base.h"
 #include <iterator>
 
 struct Vehicle;
@@ -38,7 +39,9 @@ public:
 		using iterator_category = std::forward_iterator_tag;
 
 		iterator() = default;
-		Vehicle *operator*() const { return static_cast<Vehicle *>(openttd_rust_station_queue_value(this->node)); }
+		/** Raw reference values remain unresolved between load and pointer fixup. */
+		OpenTTDVehicle *Record() const { return openttd_rust_station_queue_value(this->node); }
+		Vehicle *operator*() const { return VehicleFromRecord(this->Record()); }
 		iterator &operator++()
 		{
 			this->node = openttd_rust_station_queue_next(this->state, this->node);
@@ -62,9 +65,10 @@ public:
 	size_t size() const { return openttd_rust_station_queue_size(this->state); }
 	bool empty() const { return this->size() == 0; }
 	Vehicle *front() const { return *this->begin(); }
-	void push_back(Vehicle *vehicle) { openttd_rust_station_queue_push(this->state, vehicle); }
+	void PushRecord(OpenTTDVehicle *record) { openttd_rust_station_queue_push(this->state, record); }
+	void push_back(Vehicle *vehicle) { this->PushRecord(vehicle == nullptr ? nullptr : vehicle->record); }
 	iterator erase(iterator position) { return {this->state, openttd_rust_station_queue_erase_node(this->state, position.node)}; }
-	void remove(Vehicle *vehicle) { openttd_rust_station_queue_remove(this->state, vehicle); }
+	void remove(Vehicle *vehicle) { openttd_rust_station_queue_remove(this->state, vehicle == nullptr ? nullptr : vehicle->record); }
 	void clear() { openttd_rust_station_queue_clear(this->state); }
 };
 

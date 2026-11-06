@@ -266,7 +266,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	CHECK(probe.staged);
 	CHECK_FALSE(probe.frame_live);
 	CHECK(cargo->rating == 6);
-	CHECK(openttd_rust_station_queue_value(openttd_rust_station_queue_first(owner.get())) == &probe.vehicle);
+	CHECK(openttd_rust_station_queue_value(openttd_rust_station_queue_first(owner.get())) == &record);
 	_station_loading_probe = nullptr;
 }
 
@@ -285,7 +285,7 @@ TEST_CASE("Station service - stable aliases, ordered queue and replacement")
 	CHECK(cargo->last_age == 255);
 	cargo->rating = 1;
 	fields->delete_ctr = 7;
-	int first, second;
+	OpenTTDVehicle first{}, second{};
 	for (size_t i = 0; i < 128; ++i) openttd_rust_station_queue_push(owner, &first);
 	openttd_rust_station_queue_push(owner, &second);
 	openttd_rust_station_queue_push(owner, &first);
@@ -311,10 +311,10 @@ TEST_CASE("Station service - loading facade keeps list node identity")
 {
 	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
 	RustStationLoadingQueue queue(owner.get());
-	int first, second, third;
-	auto *a = reinterpret_cast<Vehicle *>(&first);
-	auto *b = reinterpret_cast<Vehicle *>(&second);
-	auto *c = reinterpret_cast<Vehicle *>(&third);
+	MockEnvironment::Instance();
+	REQUIRE(Vehicle::CanAllocateItem(3));
+	std::unique_ptr<Vehicle> first(new Vehicle(VEH_EFFECT)), second(new Vehicle(VEH_EFFECT)), third(new Vehicle(VEH_EFFECT));
+	auto *a = first.get(), *b = second.get(), *c = third.get();
 	for (Vehicle *v : {a, b, a, c}) queue.push_back(v);
 	auto retained = queue.begin();
 	++retained;
@@ -343,12 +343,17 @@ TEST_CASE("Station service - loading save staging retains partial and nested eff
 	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
 	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> nested_owner(openttd_rust_station_service_new(), openttd_rust_station_service_destroy);
 	RustStationLoadingQueue queue(owner.get()), nested(nested_owner.get());
-	int first, second;
-	auto *a = reinterpret_cast<Vehicle *>(&first);
-	auto *b = reinterpret_cast<Vehicle *>(&second);
-	queue.push_back(a);
-	queue.push_back(b);
-	nested.push_back(b);
+	OpenTTDVehicle first{}, second{};
+	auto *a = &first, *b = &second;
+	auto *encoded = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{0x123});
+	auto records = [](const RustStationLoadingQueue &list) {
+		std::vector<OpenTTDVehicle *> result;
+		for (auto it = list.begin(); it != list.end(); ++it) result.push_back(it.Record());
+		return result;
+	};
+	queue.PushRecord(a);
+	queue.PushRecord(b);
+	nested.PushRecord(b);
 	{
 		RustStationLoadingQueueSaveScope save(&queue, false);
 		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(queue));
@@ -363,10 +368,11 @@ TEST_CASE("Station service - loading save staging retains partial and nested eff
 		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(queue));
 		list->clear();
 		list->push_back(a);
+		list->push_back(encoded);
 		list->emplace_back();
 		throw 1;
 	} catch (int) {}
-	CHECK(std::vector<Vehicle *>(queue.begin(), queue.end()) == std::vector<Vehicle *>{a, nullptr});
+	CHECK(records(queue) == std::vector<OpenTTDVehicle *>{a, encoded, nullptr});
 	/* A later nested error keeps each fixed prefix and restores the outer
 	 * descriptor's context before it unwinds. */
 	try {
@@ -380,11 +386,11 @@ TEST_CASE("Station service - loading save staging retains partial and nested eff
 			CHECK(RustStationLoadingQueueSaveScope::Address(queue) == list);
 			throw 2;
 		} catch (int) {}
-		CHECK(nested.front() == a);
+		CHECK(nested.begin().Record() == a);
 		CHECK(RustStationLoadingQueueSaveScope::Address(queue) == list);
 		throw 3;
 	} catch (int) {}
-	CHECK(std::vector<Vehicle *>(queue.begin(), queue.end()) == std::vector<Vehicle *>{b, nullptr});
+	CHECK(records(queue) == std::vector<OpenTTDVehicle *>{b, encoded, nullptr});
 }
 TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 {

@@ -29,7 +29,7 @@ class RustStationLoadingQueueSaveScope {
 public:
 	RustStationLoadingQueueSaveScope(RustStationLoadingQueue *queue, bool write) : previous(current), queue(queue), write(write)
 	{
-		if (queue != nullptr) for (Vehicle *vehicle : *queue) this->vehicles.push_back(vehicle);
+		if (queue != nullptr) for (auto it = queue->begin(); it != queue->end(); ++it) this->vehicles.push_back(it.Record());
 		current = this;
 	}
 	RustStationLoadingQueueSaveScope(const RustStationLoadingQueueSaveScope &) = delete;
@@ -38,7 +38,7 @@ public:
 	{
 		if (this->write && this->accessed) {
 			this->queue->clear();
-			for (void *vehicle : this->vehicles) this->queue->push_back(static_cast<Vehicle *>(vehicle));
+			for (void *vehicle : this->vehicles) this->queue->PushRecord(static_cast<OpenTTDVehicle *>(vehicle));
 		}
 		current = this->previous;
 	}

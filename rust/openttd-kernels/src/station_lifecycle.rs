@@ -448,10 +448,9 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
             break;
         }
         let vehicle = unsafe {
-            VehicleRef::from_shell(
+            VehicleRef(std::ptr::NonNull::new_unchecked(
                 crate::station_service::openttd_rust_station_queue_value(front),
-                visits.vehicles(),
-            )
+            ))
         };
         crate::vehicle::visits::leave_station(vehicle, visits);
     }
