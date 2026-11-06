@@ -83,7 +83,8 @@ static void CargoFlowFinish(void *context, uint16_t node, uint8_t clear) noexcep
 static OpenTTDCargoFlowServices CargoFlowServices(CargoFlowContext *context)
 {
 	LinkGraphJob *job = context->job;
-	OpenTTDLiveGraph *live = job == nullptr ? nullptr : GetRustLiveGraphServices().get_if_valid(job->LinkGraphIndex().base());
+	LinkGraph *graph = job == nullptr ? nullptr : LinkGraph::GetIfValid(job->LinkGraphIndex());
+	OpenTTDLiveGraph *live = graph == nullptr ? nullptr : graph->RustState();
 	return {
 		.job = job == nullptr ? nullptr : &job->Record(),
 		.live_graph = live,

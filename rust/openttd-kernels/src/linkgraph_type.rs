@@ -22,6 +22,16 @@ impl crate::pool::PoolId for LinkGraphID {
     }
 }
 
+/// `LinkGraphJobID`, with the source u16 index/end/null representation.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LinkGraphJobID(pub u16);
+impl crate::pool::PoolId for LinkGraphJobID {
+    fn index(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
 /// `EdgeUpdateModes`, the `EnumBitSet<EdgeUpdateMode, uint8_t>` base value.
 #[repr(transparent)]
 #[derive(Clone, Copy)]

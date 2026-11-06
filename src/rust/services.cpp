@@ -719,7 +719,6 @@ static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noe
 static void LiveGraphDelete(OpenTTDLiveGraph *graph) noexcept { delete graph->shell; }
 
 static uint16_t LiveGraphStationNode(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->goods[cargo].node; }
-static OpenTTDLiveGraph *LiveGraphGetIfValid(uint16_t id) noexcept { auto *graph = LinkGraph::GetIfValid(LinkGraphID(id)); return graph == nullptr ? nullptr : graph->RustState(); }
 const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 {
 	static const OpenTTDLiveGraphServices services{
@@ -728,8 +727,7 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 #else
 		.assertions = false,
 #endif
-		.get = RustLinkGraphGet,
-		.get_if_valid = LiveGraphGetIfValid,
+		.pool = &_link_graph_pool.descriptor,
 		.station_id = RustBaseStationID<const BaseStation>,
 		.index = RustLinkGraphIndex,
 		.station = LiveGraphStation,

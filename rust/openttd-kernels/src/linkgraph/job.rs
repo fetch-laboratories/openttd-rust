@@ -17,6 +17,10 @@ pub struct NativeJob {
     _private: [u8; 0],
 }
 
+/// Typed job view; its records are live only from binding through post-join retirement.
+pub(crate) type Pool =
+    crate::pool::TypedPool<crate::linkgraph_type::LinkGraphJobID, JobRecord, NativeJob>;
+
 crate::abi::shared_records! {
     fn abi_record;
     #[derive(Clone, Copy)]

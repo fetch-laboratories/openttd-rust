@@ -39,14 +39,9 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 	},
 	.can_allocate = +[]() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.destroy_job = +[](OpenTTDLinkGraphJobRecord *j) noexcept { delete j->shell; },
-	.graph_get = RustLinkGraphGet,
-	.graph_valid = RustLinkGraphValid,
+	.graph_pool = &_link_graph_pool.descriptor,
+	.job_pool = &_link_graph_job_pool.descriptor,
 	.new_job = +[](const OpenTTDLiveGraph *g) noexcept { return &(new LinkGraphJob(*g->shell))->Record(); },
-	.next_graph = RustLinkGraphNext,
-	.next_job = +[](uint32_t *from) noexcept -> OpenTTDLinkGraphJobRecord * {
-		for (LinkGraphJob *j : LinkGraphJob::Iterate(*from)) { *from = j->index.base() + 1U; return &j->Record(); }
-		return nullptr;
-	},
 	.shared = &_rust_shared_services,
 	.start_thread = +[](OpenTTDLinkGraphJobRecord *j) noexcept { return j->shell->StartThread(); },
 	.vehicle = &_rust_vehicle_services,

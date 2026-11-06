@@ -430,8 +430,7 @@ pub struct StationInput {
 #[repr(C)]
 pub struct Services {
     pub assertions: bool,
-    pub get: extern "C" fn(u16) -> *mut Graph,
-    pub get_if_valid: extern "C" fn(u16) -> *mut Graph,
+    pub pool: *const *const crate::pool::PoolDescriptor,
     pub station_id: extern "C" fn(*const crate::station::BaseStation) -> u16,
     pub index: extern "C" fn(*const Graph) -> LinkGraphID,
     pub station: extern "C" fn(u16, u8) -> StationInput,
@@ -442,6 +441,14 @@ pub struct Services {
     pub node: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
     pub available: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8) -> *mut Graph,
+}
+/// Typed view of the single shared pool; private snapshots are never in its slots.
+pub(crate) type Pool = crate::pool::TypedPool<LinkGraphID, Graph, super::NativeGraph>;
+impl Services {
+    pub(crate) fn get(&self, id: LinkGraphID) -> *mut Graph {
+        // The binding points at the actual stable native descriptor member, not a copy.
+        unsafe { Pool::from_descriptor(*self.pool).record(id) }
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
@@ -557,7 +564,7 @@ pub(crate) fn station_graph(
     cargo: u8,
     services: &Services,
 ) -> *mut Graph {
-    (services.get_if_valid)((services.graph_id)(station, cargo))
+    services.get(LinkGraphID((services.graph_id)(station, cargo)))
 }
 pub(crate) unsafe fn join(graph: *mut Graph, station: u16, services: &Services) {
     let index = (services.index)(graph);
@@ -600,7 +607,7 @@ pub(crate) unsafe fn station_supply(
             std::ptr::null_mut()
         }
     } else {
-        (services.get)(id)
+        services.get(LinkGraphID(id))
     };
     if !graph.is_null() {
         let owner = graph;
@@ -615,7 +622,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, get, get_if_valid, station_id, index, station, attach, set_node, delete_graph, graph_id, node, available, allocate, };
+        assertions, pool, station_id, index, station, attach, set_node, delete_graph, graph_id, node, available, allocate, };
 }
 
 #[unsafe(no_mangle)]

@@ -554,9 +554,13 @@ TEST_CASE("Link graph pools - canonical slots isolate nonpooled owners and retir
 	REQUIRE(LinkGraph::CanAllocateItem());
 	auto *after_clean = new LinkGraph(4);
 	CHECK(after_clean->index == LinkGraphID{0});
+	CHECK(after_clean->Record().cargo == 4);
+	CHECK(after_clean->Record().nodes.empty());
 	CHECK(graphs->slots[0].record == &after_clean->Record());
 	REQUIRE(LinkGraphJob::CanAllocateItem());
 	auto *job_after_clean = new LinkGraphJob();
 	CHECK(job_after_clean->index == LinkGraphJobID{0});
+	CHECK(!job_after_clean->Record().aborted.load(std::memory_order_acquire));
+	CHECK(!job_after_clean->Record().completed.load(std::memory_order_acquire));
 	CHECK(jobs->slots[0].record == &job_after_clean->Record());
 }

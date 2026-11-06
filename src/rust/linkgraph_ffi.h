@@ -24,6 +24,7 @@ using OpenTTDLinkGraph = LinkGraph;
 #include "rust_vector.h"
 #include <atomic>
 struct OpenTTDCargoFlowMap;
+struct RustPoolDescriptor;
 #include "abi-record-station_service.h"
 #ifdef __cplusplus
 extern "C" {
@@ -57,8 +58,8 @@ void openttd_rust_live_edge_release(OpenTTDLiveEdge *);
 struct OpenTTDLiveStationInput { uint32_t xy, demand; };
 struct OpenTTDLiveGraphServices {
 	bool assertions;
-	OpenTTDLiveGraph *(*get)(uint16_t) noexcept;
-	OpenTTDLiveGraph *(*get_if_valid)(uint16_t) noexcept;
+	/* Canonical member address: load at game entry, after construction and before teardown. */
+	const RustPoolDescriptor *const *pool;
 	uint16_t (*station_id)(const OpenTTDBaseStation *) noexcept;
 	uint16_t (*index)(const OpenTTDLiveGraph *) noexcept;
 	OpenTTDLiveStationInput (*station)(uint16_t, uint8_t) noexcept;

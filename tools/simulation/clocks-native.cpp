@@ -22,6 +22,9 @@ GameMode _game_mode = GM_NORMAL;
 GameSettings _settings_game{}, _settings_newgame{};
 #ifdef WITH_RUST
 #include "rust/clock_native.hpp"
+#include "rust/pool_ffi.h"
+static const RustPoolDescriptor no_graphs{};
+static const RustPoolDescriptor *const graph_pool = &no_graphs;
 static const OpenTTDSharedServices shared{.vehicle_next = [](uint32_t) noexcept -> OpenTTDVehicle * { return nullptr; }};
 const OpenTTDClockServices &GetRustClockServices() noexcept
 {
@@ -29,7 +32,7 @@ const OpenTTDClockServices &GetRustClockServices() noexcept
 		.shared = &shared,
 		.minutes_per_calendar_year = []() noexcept { return _settings_game.economy.minutes_per_calendar_year; },
 		.using_wallclock_units = [](bool newgame) noexcept { return (newgame ? _settings_newgame : _settings_game).economy.timekeeping_units == TKU_WALLCLOCK; },
-		.next_graph = [](uint32_t *) noexcept -> OpenTTDLiveGraph * { return nullptr; },
+		.graph_pool = &graph_pool,
 	};
 	return services;
 }

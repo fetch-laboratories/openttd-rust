@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Whole `LinkGraphSchedule` owner. Workers only touch native job snapshots.
-#![allow(unsafe_code)]
+//! Whole `LinkGraphSchedule` owner. Workers only touch Rust job-private snapshots.
+#![allow(unsafe_code, clippy::cast_possible_truncation)]
 use crate::game_state::GameState;
 use crate::{
     linkgraph::{
@@ -26,18 +26,16 @@ pub(crate) struct Services {
     begin_measurement: extern "C" fn(*mut c_void, bool),
     can_allocate: extern "C" fn() -> bool,
     destroy_job: extern "C" fn(*mut Job),
-    pub(crate) graph_get: extern "C" fn(u16) -> *mut Graph,
-    graph_valid: extern "C" fn(u16) -> bool,
+    graph_pool: *const *const crate::pool::PoolDescriptor,
+    job_pool: *const *const crate::pool::PoolDescriptor,
     new_job: extern "C" fn(*const Graph) -> *mut Job,
-    next_graph: extern "C" fn(*mut u32) -> *mut Graph,
-    next_job: extern "C" fn(*mut u32) -> *mut Job,
     shared: &'static crate::services::Services,
     start_thread: extern "C" fn(*mut Job) -> bool,
     vehicle: *const crate::vehicle::VehicleServices,
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, graph_get, graph_valid, new_job, next_graph, next_job, shared, start_thread, vehicle };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -129,10 +127,10 @@ fn join_next(s: &Services) {
         return;
     }
     access(|q| q.running.pop_front());
-    let id = unsafe { (*next).graph_index.0 };
+    let id = unsafe { (*next).graph_index };
     (s.destroy_job)(next); // joins and applies results; may reenter this owner.
-    if (s.graph_valid)(id) {
-        let graph = (s.graph_get)(id);
+    let graph = unsafe { live::Pool::from_descriptor(*s.graph_pool).record(id) };
+    if !graph.is_null() {
         openttd_rust_schedule_dequeue(graph);
         openttd_rust_schedule_queue(s, graph);
         witness::hit(witness::SCHEDULE_REQUEUE);
@@ -164,21 +162,27 @@ extern "C" fn openttd_rust_schedule_clear() {
 }
 #[unsafe(no_mangle)]
 pub(crate) extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32) {
+    let graphs = unsafe { live::Pool::from_descriptor(*s.graph_pool) };
+    let jobs = unsafe { crate::linkgraph::job::Pool::from_descriptor(*s.job_pool) };
     let mut from = 0;
     loop {
-        let graph = (s.next_graph)(&raw mut from);
-        if graph.is_null() {
+        let index = unsafe { graphs.next_index(from, usize::from(u16::MAX)) };
+        if index == usize::from(u16::MAX) {
             break;
         }
-        // SAFETY: pool iteration yields a live shell; no borrow crosses a callback.
+        from = index + 1;
+        let graph = unsafe { graphs.record(crate::linkgraph_type::LinkGraphID(index as u16)) };
+        // Pure record mutation: no callback can grow/reset the pool in this interval.
         unsafe { live::openttd_rust_live_graph_shift(graph, interval) };
     }
     from = 0;
     loop {
-        let job = (s.next_job)(&raw mut from);
-        if job.is_null() {
+        let index = unsafe { jobs.next_index(from, usize::from(u16::MAX)) };
+        if index == usize::from(u16::MAX) {
             break;
         }
+        from = index + 1;
+        let job = unsafe { jobs.record(crate::linkgraph_type::LinkGraphJobID(index as u16)) };
         unsafe {
             (*job).join_date = (*job).join_date.wrapping_add(interval);
         }

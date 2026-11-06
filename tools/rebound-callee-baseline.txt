@@ -177,10 +177,6 @@ rebound | RustIndustryTileIndex | src/rust/disaster_adapter.hpp | industry_index
 rebound | RustIsLocalCompany | src/economy.cpp | local_company
 rebound | RustIsLocalCompany | src/rust/fleet_transaction_services.hpp | local
 rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
-rebound | RustLinkGraphGet | src/linkgraph/linkgraphschedule.cpp | graph_get
-rebound | RustLinkGraphGet | src/rust/services.cpp | get
-rebound | RustLinkGraphNext | src/linkgraph/linkgraphschedule.cpp | next_graph
-rebound | RustLinkGraphNext | src/timer/timer_game_common.cpp | next_graph
 rebound | RustLocalCompanyID | src/rust/company_adapter.cpp | local_company
 rebound | RustLocalCompanyID | src/rust/engine_adapter.hpp | local_company
 rebound | RustLocalCompanyID | src/subsidy.cpp | local_company

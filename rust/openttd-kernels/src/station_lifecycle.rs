@@ -462,7 +462,9 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let graphs = w.graphs;
     let storage = links.storage();
     for cargo in 0..NUM_CARGO {
-        let graph = (graphs.get_if_valid)((graphs.graph_id)(st, cargo));
+        let graph = graphs.get(crate::linkgraph_type::LinkGraphID((graphs.graph_id)(
+            st, cargo,
+        )));
         if graph.is_null() {
             continue;
         }
