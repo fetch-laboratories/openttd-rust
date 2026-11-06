@@ -945,7 +945,6 @@ impl Links {
         unsafe { &*(*self.station_resolver).cargo }
     }
     pub(crate) fn station_cargo(
-        &self,
         st: *mut BaseStation,
         cargo: u8,
     ) -> *const crate::cargo_storage::List {
@@ -958,7 +957,7 @@ impl Links {
 unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, l: &Links) {
     let storage = l.storage();
     let goods = (l.goods_entry)(st, cargo);
-    let list = l.station_cargo(st, cargo);
+    let list = Links::station_cargo(st, cargo);
     if !list.is_null() {
         unsafe {
             crate::cargo_storage::reroute_station(list.cast_mut(), storage, goods, avoid, avoid2);

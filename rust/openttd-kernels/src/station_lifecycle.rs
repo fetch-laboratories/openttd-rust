@@ -437,7 +437,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let state = crate::station_record::service_of(st.cast());
     if (s.cleaning_pool)() {
         for cargo in 0..NUM_CARGO {
-            let list = links.station_cargo(st, cargo);
+            let list = crate::station_service::Links::station_cargo(st, cargo);
             if !list.is_null() {
                 unsafe {
                     crate::cargo_storage::openttd_rust_cargo_list_clear(list.cast_mut());
@@ -545,7 +545,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     (s.delete_news)(id);
     for cargo in 0..NUM_CARGO {
-        let list = links.station_cargo(st, cargo);
+        let list = crate::station_service::Links::station_cargo(st, cargo);
         if !list.is_null() {
             unsafe {
                 crate::cargo_storage::truncate_station(

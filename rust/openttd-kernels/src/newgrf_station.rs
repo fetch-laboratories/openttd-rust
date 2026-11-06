@@ -164,7 +164,7 @@ impl Services {
     fn map(&self) -> Map {
         self.shared().map()
     }
-    fn count(&self, st: *mut BaseStation, cargo: u8) -> u32 {
+    fn count(st: *mut BaseStation, cargo: u8) -> u32 {
         let list = crate::station_record::existing_cargo(st, cargo);
         if list.is_null() {
             0
@@ -172,9 +172,9 @@ impl Services {
             unsafe { crate::cargo_storage::openttd_rust_cargo_list_station_total(list) }
         }
     }
-    fn get_empty_mask(&self, st: *mut BaseStation) -> u64 {
+    fn get_empty_mask(st: *mut BaseStation) -> u64 {
         (0..NUM_CARGO).fold(0, |mask, c| {
-            if self.count(st, c) == 0 {
+            if Self::count(st, c) == 0 {
                 mask | 1_u64 << c
             } else {
                 mask
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn openttd_rust_station_resolver_init(
     } else if crate::station_record::is_station(st.cast()) {
         for i in 0..(native.group_count)(spec) {
             let c = (native.group_cargo)(spec, i);
-            if c < NUM_CARGO && native.count(st, c) > 0 {
+            if c < NUM_CARGO && Services::count(st, c) > 0 {
                 cargo = c;
                 break;
             }
@@ -495,7 +495,7 @@ fn cargo_variable(
 ) -> u32 {
     match var {
         0x60 => {
-            let count = native.count(st, c);
+            let count = Services::count(st, c);
             if legacy { count } else { count.min(4095) }
         }
         0x63 | 0x68 => {
@@ -608,7 +608,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
         return match (variable - 0x8c) & 7 {
             0 => cargo_variable(native, st, owner, c, 0x60, true),
             1 => {
-                native.count(st, c).min(4095) & 15
+                Services::count(st, c).min(4095) & 15
                     | (unsafe {
                         crate::station_service::newgrf_cargo_variable(owner, c, 0x65, true)
                     } << 4)
@@ -793,8 +793,8 @@ pub unsafe extern "C" fn openttd_rust_station_resolve_real(
     let c = unsafe { (*state).cargo };
     let mut cargo = match c {
         INVALID_CARGO | SG_PURCHASE | SG_DEFAULT_NA => 0,
-        SG_DEFAULT => (0..NUM_CARGO).fold(0_u32, |n, c| n.wrapping_add(native.count(st, c))),
-        _ => native.count(st, c),
+        SG_DEFAULT => (0..NUM_CARGO).fold(0_u32, |n, c| n.wrapping_add(Services::count(st, c))),
+        _ => Services::count(st, c),
     };
     let spec = (native.spec)(unsafe { (*state).spec });
     if spec.divide {
@@ -853,14 +853,13 @@ pub unsafe extern "C" fn openttd_rust_station_random_triggers(state: *const Stat
     }
 }
 /// Canonical existing-goods count used by other feature root selectors.
-/// The station resolver services are installed before synchronous gameplay.
 pub(crate) fn cargo_count(st: *mut BaseStation, cargo: u8) -> u32 {
-    services().count(st, cargo)
+    Services::count(st, cargo)
 }
 /// Shared `GetEmptyMask` reducer for remaining native callers.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_empty_mask(st: *mut BaseStation) -> u64 {
-    services().get_empty_mask(st)
+    Services::get_empty_mask(st)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_randomisation(
@@ -875,7 +874,7 @@ pub extern "C" fn openttd_rust_station_randomisation(
         return;
     }
     let empty = if trigger == SRT_CARGO_TAKEN {
-        native.get_empty_mask(st)
+        Services::get_empty_mask(st)
     } else {
         0
     };
