@@ -262,7 +262,7 @@ The reviewer verified every finding acted on. These are scoped comparisons, not 
    - The work-order table again shows each issue estimate beside the measured change ([cost decisions](planning.md#cost-decisions)).
    - Pooled production shells bind by index, not by scan ([world-state](design/world-state.md#shared-pool-policy-716)).
 3. **Two recounts per PR; status edits at milestones only.** Run the whole-fork metric at the first concrete boundary and at the integrating head. Briefs ask for no other recounts. Status comments change at milestones only ([planning](planning.md#cost-decisions), [workflow](workflow.md#records)).
-4. **Host kills (#724; the user decides).** Start long jobs with `exec`. A wrapper exit 143 with no logged failure means a host kill: read the log, then rerun once incrementally. Add no waiters or duplicate runs ([team](team.md#spawning)). Root adds each new kill time to #724.
+4. **Host kills (#724; no user action).** Start long jobs with `exec`. A wrapper exit 143 with no logged failure means a host kill: read the log, then rerun once incrementally. Add no waiters or duplicate runs ([team](team.md#spawning)). T3's protocol log rules out a T3-ordered kill, so the sender is still unknown. Root adds the small signal-witness wrapper described in #724, alone as a fix needed by live drafts. The first kill it witnesses names the sender. Root adds each new kill time to #724.
 5. **Disk.**
    - Profile 96 is accepted on #275, so release the superseded profile trees `t3-44649657` (92) and `t3-b7a95131` (94), and the steering-30 audit tree `t3-96affac3`.
    - Release the merged-PR evidence trees `t3-e897547d` (#706), `t3-57a288c6` (#720) and `t3-44e4f3b0` (#721) once their PRs hold that evidence.
@@ -288,8 +288,8 @@ The reviewer verified every finding acted on. These are scoped comparisons, not 
 | Per-checkpoint recounts in briefs (root) | Outside the rules: 37 recounts. See action 3. |
 
 **Issue verdicts.** The survey found 32 open issues and none unplaced.
-- New: #724 (question for the user), #725 (phase-2 queue) and #726 (maintenance batch).
-- #710 stays open for the user's host-repair decision. #724 is a separate mechanism.
+- New: #724 (root identifies the kill sender), #725 (phase-2 queue) and #726 (maintenance batch).
+- #710 stays open. Its one user choice is whether to turn off T3's "Auto-settle on merge" sidebar setting, which detached a thread with live jobs. #724 is a separate mechanism.
 - The exclusions are unchanged and their return conditions unmet: #12, #26, #41, #67, #71 and #83 under #513, and #650.
 - #693 stays queued for a selected evidence and tools batch.
 - No issue closes.
@@ -354,7 +354,7 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 
 ## Work order
 
-The retrospective repairs (#709, #705's findings, #707, #708, #710's tools) integrated as 89 to 91. Root resumed in Codex at 08:28 on 2026-11-06. The #710 host investigation is complete, and host repairs need the user's direction (#710, #724).
+The retrospective repairs (#709, #705's findings, #707, #708, #710's tools) integrated as 89 to 91. Root resumed in Codex at 08:28 on 2026-11-06. The #710 host investigation is complete. Its only user choice is T3's "Auto-settle on merge" setting; root identifies #724's kill sender itself.
 
 There is one ranked list. Each free slot takes the highest unblocked item that fits the six-branch limit and the disjoint-service rule. Finishing review and integration of an open branch comes first, and a lower rank can run while a higher one waits. Scopes live in issues; per-PR changes live in each PR's steering comment.
 
