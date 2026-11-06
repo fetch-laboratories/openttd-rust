@@ -269,15 +269,8 @@ rebound | RustStationAirportMember | src/water_cmd.cpp | airport_member
 rebound | RustStationGet | src/animated_tile.cpp | station_base
 rebound | RustStationGet | src/newgrf_airport.cpp | get_station
 rebound | RustStationGet | src/subsidy.cpp | station
-rebound | RustStationSetRandomBits | src/newgrf_roadstop.cpp | set_random_bits
-rebound | RustStationSetRandomBits | src/newgrf_station.cpp | set_random
-rebound | RustStationSetWaitingTriggers | src/newgrf_roadstop.cpp | set_waiting
-rebound | RustStationSetWaitingTriggers | src/newgrf_station.cpp | set_waiting
 rebound | RustStationSpread | src/rust/station_command_services.hpp | spread
 rebound | RustStationSpread | src/station.cpp | spread
-rebound | RustStationStationTown | src/economy.cpp | station_town
-rebound | RustStationStationTown | src/rust/station_command_services.hpp | station_town
-rebound | RustStationStationTown | src/town_cmd.cpp | station_town
 rebound | RustStationTileFlagCount | src/rust/station_command_services.hpp | tile_flag_count
 rebound | RustStationTileFlagCount | src/rust/station_definitions.cpp | station_tileflags_size
 rebound | RustStationTileRandomBits | src/newgrf_airport.cpp | tile_random

@@ -120,8 +120,6 @@ pub struct Services {
     axis: extern "C" fn(u32) -> crate::services::Axis,
     tile_add: extern "C" fn(u32, i32) -> u32,
     tile_random: extern "C" fn(u32) -> u8,
-    set_waiting: extern "C" fn(*mut BaseStation, u8),
-    set_random: extern "C" fn(*mut BaseStation, u16),
     spec_cargo: extern "C" fn(*const RailSpec) -> u64,
     resolve_random: extern "C" fn(*const RailSpec, *mut BaseStation, u32, u8) -> Reseed,
     resolve_callback: extern "C" fn(
@@ -436,7 +434,7 @@ unsafe fn resolver_town(state: *mut State) -> *const crate::services::TownHandle
     let st = unsafe { (*state).station };
     let tile = unsafe { (*state).tile };
     let town = if !st.is_null() {
-        (native.commands().station_town)(st)
+        crate::station_record::station_town(st)
     } else if tile != crate::tile_type::INVALID_TILE {
         crate::town::spatial::closest(native.shared(), tile, u32::MAX)
     } else {
@@ -883,7 +881,7 @@ pub extern "C" fn openttd_rust_station_randomisation(
     } else {
         0
     };
-    (native.set_waiting)(
+    crate::station_record::set_waiting_triggers(
         st,
         crate::station_record::read(st.cast(), |r| r.waiting_random_triggers)
             | (1_u8.wrapping_shl(u32::from(trigger))),
@@ -935,19 +933,19 @@ pub extern "C" fn openttd_rust_station_randomisation(
             }
         }
     }
-    (native.set_waiting)(
+    crate::station_record::set_waiting_triggers(
         st,
         crate::station_record::read(st.cast(), |r| r.waiting_random_triggers) & !used,
     );
     if whole & 0xffff != 0 {
         // The native compound assignments publish the cleared station bits
         // before Random, then read the live bits again for the final OR.
-        (native.set_random)(
+        crate::station_record::set_random_bits(
             st,
             (u32::from(crate::station_record::read(st.cast(), |r| r.random_bits)) & !whole) as u16,
         );
         let random = native.shared().random() & whole;
-        (native.set_random)(
+        crate::station_record::set_random_bits(
             st,
             (u32::from(crate::station_record::read(st.cast(), |r| r.random_bits)) | random) as u16,
         );
@@ -1026,7 +1024,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverSpec" ["station_service"] => Spec { threshold, divide };
  "OpenTTDStationSlopeResult" ["station_service"] => SlopeResult { callback, registers };
  "OpenTTDStationResolverServices" ["station_service"] => Services {
- shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count, loading, loaded, axis, tile_add, tile_random, set_waiting, set_random, spec_cargo, resolve_random, resolve_callback, company, nearby_station, airport_ttd_type, identity, town_scope, default_scope, slope_error
+ shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count, loading, loaded, axis, tile_add, tile_random, spec_cargo, resolve_random, resolve_callback, company, nearby_station, airport_ttd_type, identity, town_scope, default_scope, slope_error
  };
 }
 

@@ -10,7 +10,6 @@ use crate::objects::{Object, ObjectServices, QueryServices};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Map, Services, TownHandle};
 use crate::slope_func::is_steep_slope;
 use crate::station::BaseStation;
-use crate::station::Station;
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{
     INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_ROAD, MP_TREES, MP_TUNNELBRIDGE,
@@ -50,8 +49,6 @@ pub struct CommandServices {
     pub rights_events: extern "C" fn(u16),
     pub station_views_dirty: extern "C" fn(),
     pub next_station: extern "C" fn(u32) -> StationCursor,
-    pub station_town: extern "C" fn(*mut BaseStation) -> *const TownHandle,
-    pub station_airport: extern "C" fn(*const Station) -> bool,
     pub local_company: extern "C" fn() -> bool,
     pub bribe_error: extern "C" fn(),
     pub next_waypoint: extern "C" fn(u32) -> Relation,
@@ -306,7 +303,7 @@ impl<'a> Commands<'a> {
                     break;
                 }
                 from = st.next;
-                if (self.s.station_town)(st.shell) == t.shell
+                if crate::station_record::station_town(st.shell) == t.shell
                     && crate::station_record::owner_company(st.shell.cast()) == company
                 {
                     let owner = crate::station_record::service_of(st.shell.cast());
@@ -398,8 +395,10 @@ impl<'a> Commands<'a> {
                 break;
             }
             from = st.next;
-            if (self.s.station_town)(st.shell) == t.shell {
-                if !(self.s.station_airport)(st.shell.cast())
+            if crate::station_record::station_town(st.shell) == t.shell {
+                if crate::station_record::facilities(st.shell)
+                    & crate::station_type::FACILITY_AIRPORT
+                    == 0
                     || crate::station_record::read(st.shell.cast(), |r| r.airport.r#type)
                         != crate::airport::AT_OILRIG
                 {
@@ -869,8 +868,6 @@ crate::abi::layouts! {
         rights_events,
         station_views_dirty,
         next_station,
-        station_town,
-        station_airport,
         local_company,
         bribe_error,
         next_waypoint,

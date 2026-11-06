@@ -70,8 +70,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.axis = RustRailStationAxis,
 		.tile_add = RustTileAdd,
 		.tile_random = RustStationTileRandomBits,
-		.set_waiting = RustStationSetWaitingTriggers,
-		.set_random = RustStationSetRandomBits,
 		.spec_cargo = RustStationCargoTriggers,
 		.resolve_random = [](const StationSpec *s, BaseStation *st, uint32_t t, uint8_t waiting) noexcept {
 			StationResolverObject object(s, st, TileIndex{t}, CBID_RANDOM_TRIGGER, 0);
@@ -108,7 +106,6 @@ const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcep
 		.clear = RustStationSpecClear,
 		.set_slot = RustStationSetSpecSlot,
 		.rebind = RustStationRebindSpec,
-		.set_cached = RustStationSetCachedTriggers,
 	};
 	return services;
 }

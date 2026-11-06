@@ -92,3 +92,6 @@ pub const NUM_AIRPORTTILES: u16 = 256;
 pub(crate) const AT_SMALL: u8 = 0;
 /// `airport.h::AT_LARGE`.
 pub(crate) const AT_LARGE: u8 = 1;
+
+/// `AirportBlock::AirportClosed`.
+pub(crate) const AIRPORT_CLOSED: u64 = 1 << 63;

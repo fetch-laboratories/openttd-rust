@@ -346,22 +346,6 @@ pub(crate) unsafe fn rect(state: *mut Service) -> *mut StationRect {
     unsafe { &raw mut (*state).record.rect }
 }
 
-/// Facility fields `GetCatchmentRadius` observes, at its source observation point.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct RadiusFacilities {
-    /// `bus_stops != nullptr`.
-    pub bus: bool,
-    /// `truck_stops != nullptr`.
-    pub truck: bool,
-    /// `train_station.tile`.
-    pub train: u32,
-    /// `ship_station.tile`.
-    pub ship: u32,
-    /// `airport.tile`.
-    pub airport: u32,
-}
-
 /// Typed native services for station catchment. All leaves are direct,
 /// synchronous and noexcept; none unwinds during ordinary play.
 #[repr(C)]
@@ -377,7 +361,6 @@ pub struct CatchmentServices {
     pub visits: *const crate::vehicle::visits::Services,
     pub station_count: extern "C" fn() -> usize,
     pub id: extern "C" fn(*mut BaseStation) -> StationID,
-    pub radius_facilities: extern "C" fn(*mut BaseStation) -> RadiusFacilities,
     pub modified_catchment: extern "C" fn() -> bool,
     pub spread: extern "C" fn() -> u8,
     pub industry_by_id: extern "C" fn(IndustryID) -> *mut ShellHandle,
@@ -466,29 +449,30 @@ fn airport_catchment(st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
 }
 /// `Station::GetCatchmentRadius`.
 pub(crate) fn catchment_radius(st: *mut BaseStation, c: &Ctx<'_>) -> u32 {
-    let f = (c.c.radius_facilities)(st);
+    // SAFETY: Live station record; each read ends before any callback.
+    let record = unsafe { crate::station_record::record_of(st) };
     let mut ret = CA_NONE;
     if (c.c.modified_catchment)() {
-        if f.bus {
+        if !crate::raw_field::read_field!(record, bus_stops).is_null() {
             ret = ret.max(CA_BUS);
         }
-        if f.truck {
+        if !crate::raw_field::read_field!(record, truck_stops).is_null() {
             ret = ret.max(CA_TRUCK);
         }
-        if f.train != INVALID_TILE {
+        if crate::raw_field::read_field!(record, train_station.tile).0 != INVALID_TILE {
             ret = ret.max(CA_TRAIN);
         }
-        if f.ship != INVALID_TILE {
+        if crate::raw_field::read_field!(record, ship_station.tile).0 != INVALID_TILE {
             ret = ret.max(CA_DOCK);
         }
-        if f.airport != INVALID_TILE {
+        if crate::raw_field::read_field!(record, airport.area.tile).0 != INVALID_TILE {
             ret = ret.max(airport_catchment(st, c));
         }
-    } else if f.bus
-        || f.truck
-        || f.train != INVALID_TILE
-        || f.ship != INVALID_TILE
-        || f.airport != INVALID_TILE
+    } else if !crate::raw_field::read_field!(record, bus_stops).is_null()
+        || !crate::raw_field::read_field!(record, truck_stops).is_null()
+        || crate::raw_field::read_field!(record, train_station.tile).0 != INVALID_TILE
+        || crate::raw_field::read_field!(record, ship_station.tile).0 != INVALID_TILE
+        || crate::raw_field::read_field!(record, airport.area.tile).0 != INVALID_TILE
     {
         ret = CA_UNMODIFIED;
     }
@@ -1158,7 +1142,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationListEntry" ["station_service"] => StationListEntry { station, id };
     "OpenTTDIndustryListEntry" ["station_service"] => IndustryListEntry { distance, industry, id };
-    "OpenTTDStationRadiusFacilities" ["station_service"] => RadiusFacilities { bus, truck, train, ship, airport };
     "OpenTTDStationCatchmentServices" ["station_service"] => CatchmentServices {
         shared,
         airport,
@@ -1169,7 +1152,6 @@ crate::abi::layouts! {
         visits,
         station_count,
         id,
-        radius_facilities,
         modified_catchment,
         spread,
         industry_by_id,

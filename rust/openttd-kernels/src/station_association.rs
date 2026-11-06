@@ -37,7 +37,6 @@ pub struct Services {
     clear: unsafe extern "C" fn(*mut BaseStation),
     set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RailSpec, u32, u16),
     rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RailSpec),
-    set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64),
 }
 pub(crate) fn allocate(
     s: *const Services,
@@ -99,7 +98,7 @@ pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
         cargo |= triggers.cargo;
     }
     unsafe {
-        (s.set_cached)(st, anim, cargo);
+        crate::station_record::set_cached_triggers(st, anim, cargo);
     }
 }
 pub(crate) fn assign(
@@ -167,7 +166,7 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
         } else {
             unsafe {
                 (s.clear)(st);
-                (s.set_cached)(st, 0, 0);
+                crate::station_record::set_cached_triggers(st, 0, 0);
             }
             return;
         }
@@ -227,5 +226,5 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationSpecTriggers" ["station_service"] => Triggers { animation, cargo };
     "OpenTTDStationSpecVacancy" ["station_service"] => Vacancy { spec, grfid };
-    "OpenTTDStationAssociationServices" ["station_service"] => Services { triggers, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind, set_cached };
+    "OpenTTDStationAssociationServices" ["station_service"] => Services { triggers, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind };
 }

@@ -310,7 +310,7 @@ pub unsafe extern "C" fn openttd_rust_airport_town(
         return c.town;
     }
     let town = if !c.station.is_null() {
-        (s.commands().station_town)(c.station).cast_mut()
+        crate::station_record::station_town(c.station).cast_mut()
     } else if c.tile != INVALID_TILE {
         crate::town::spatial::closest(s.shared(), c.tile, u32::MAX).cast_mut()
     } else {

@@ -201,7 +201,9 @@ impl Ctx<'_> {
                 || crate::station_record::in_use(wp.cast())
                 || crate::station_record::read(wp.cast(), |r| r.string_id) != string
                 || crate::station_record::owner_company(wp.cast()) != owner
-                || crate::station_record::read(wp.cast(), |r| r.waypoint_flags & 1 != 0) != road
+                || crate::station_record::read(wp.cast(), |r| {
+                    crate::waypoint_base::is_road(r.waypoint_flags)
+                }) != road
             {
                 continue;
             }
@@ -391,10 +393,10 @@ impl Ctx<'_> {
         if wp.is_null() {
             wp = (self.s.new_waypoint)(start);
         } else if !crate::station_record::in_use(wp.cast()) {
-            (self.s.set_location)(wp, start);
+            crate::station_record::set_location(wp, start);
         }
         let owner = (self.shared.tile_owner)(start);
-        (self.s.set_station_owner)(wp, owner);
+        crate::station_record::set_station_owner(wp, owner);
         self.before_add_rect(
             ret,
             wp,
@@ -407,11 +409,11 @@ impl Ctx<'_> {
         );
         crate::station_association::assign(self.s.rail_association, spec, wp, specindex.value);
         Self::reset_delete_counter(wp);
-        (self.s.set_facility_bits)(wp, FACILITY_TRAIN);
-        (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
-        (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
+        crate::station_record::set_facility_bits(wp, FACILITY_TRAIN);
+        crate::station_record::set_build_date(wp, crate::timer_game_common::calendar_date().0);
+        crate::station_record::set_string_id(wp, self.s.strings.waypoint_name);
         crate::station_record::set_area(crate::station_record::train_area(wp), area);
-        if (self.s.station_town)(wp).is_null() {
+        if crate::station_record::station_town(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
         }
         (self.s.virtual_coord)(wp);
@@ -562,7 +564,9 @@ impl Ctx<'_> {
             );
         }
         if !wp.is_null() {
-            if !crate::station_record::read(wp.cast(), |r| r.waypoint_flags & 1 != 0) {
+            if !crate::station_record::read(wp.cast(), |r| {
+                crate::waypoint_base::is_road(r.waypoint_flags)
+            }) {
                 return cost.error(INVALID_STRING_ID);
             }
             if crate::station_record::owner_company(wp.cast()) != (self.shared.current_company)() {
@@ -594,12 +598,12 @@ impl Ctx<'_> {
         }
         if wp.is_null() {
             wp = (self.s.new_waypoint)(start);
-            (self.s.set_road_waypoint)(wp);
+            crate::station_record::set_road_waypoint(wp);
         } else if !crate::station_record::in_use(wp.cast()) {
-            (self.s.set_location)(wp, start);
+            crate::station_record::set_location(wp, start);
         }
         let owner = (self.shared.current_company)();
-        (self.s.set_station_owner)(wp, owner);
+        crate::station_record::set_station_owner(wp, owner);
         self.before_add_rect(ret, wp, area, ADD_TRY);
         unsafe {
             crate::newgrf_roadstop::openttd_rust_roadstop_assign(
@@ -613,10 +617,10 @@ impl Ctx<'_> {
             (self.s.road_triggers)(wp, spec);
         }
         Self::reset_delete_counter(wp);
-        (self.s.set_facility_bits)(wp, FACILITY_BUS | FACILITY_TRUCK);
-        (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
-        (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
-        if (self.s.station_town)(wp).is_null() {
+        crate::station_record::set_facility_bits(wp, FACILITY_BUS | FACILITY_TRUCK);
+        crate::station_record::set_build_date(wp, crate::timer_game_common::calendar_date().0);
+        crate::station_record::set_string_id(wp, self.s.strings.waypoint_name);
+        if crate::station_record::station_town(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
         }
         (self.s.virtual_coord)(wp);
@@ -726,15 +730,15 @@ impl Ctx<'_> {
         if wp.is_null() {
             wp = (self.s.new_waypoint)(tile);
         } else {
-            (self.s.set_location)(wp, tile);
+            crate::station_record::set_location(wp, tile);
             (self.s.waypoint_view_invalidate)(wp);
         }
         self.before_add_tile(ret, wp, tile, ADD_TRY);
-        (self.s.set_string_id)(wp, self.s.strings.buoy_name);
-        (self.s.set_facility_bits)(wp, FACILITY_DOCK);
-        (self.s.set_station_owner)(wp, OWNER_NONE);
-        (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
-        if (self.s.station_town)(wp).is_null() {
+        crate::station_record::set_string_id(wp, self.s.strings.buoy_name);
+        crate::station_record::set_facility_bits(wp, FACILITY_DOCK);
+        crate::station_record::set_station_owner(wp, OWNER_NONE);
+        crate::station_record::set_build_date(wp, crate::timer_game_common::calendar_date().0);
+        if crate::station_record::station_town(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
         }
         let clear = unsafe { &*self.s.clear };
@@ -782,7 +786,7 @@ impl Ctx<'_> {
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
-            (self.s.reset_facilities)(wp, FACILITY_DOCK);
+            crate::station_record::reset_facilities(wp, FACILITY_DOCK);
             (self.s.waypoint_view_invalidate)(wp);
             unsafe {
                 crate::water::openttd_rust_water_restore(

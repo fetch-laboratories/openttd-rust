@@ -32,8 +32,6 @@ struct OpenTTDIndustryListEntry { uint32_t distance; Industry *industry; uint16_
 /** Borrowed ordered members, valid until the list next changes. */
 struct OpenTTDStationListView { const OpenTTDStationListEntry *data; size_t size; };
 struct OpenTTDIndustryListView { const OpenTTDIndustryListEntry *data; size_t size; };
-/** Facility fields GetCatchmentRadius observes. */
-struct OpenTTDStationRadiusFacilities { bool bus, truck; uint32_t train, ship, airport; };
 
 /* Serialized by the game-state mutex. Every leaf is a direct synchronous noexcept
  * call; none unwinds during ordinary play. Rust ends container borrows before each. */
@@ -47,7 +45,6 @@ struct OpenTTDStationCatchmentServices {
 	const OpenTTDVehicleVisits *visits;
 	size_t (*station_count)() noexcept OPENTTD_SERVICE_DEFAULT(station_count);
 	uint16_t (*id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(id);
-	OpenTTDStationRadiusFacilities (*radius_facilities)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(radius_facilities);
 	bool (*modified_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(modified_catchment);
 	uint8_t (*spread)() noexcept OPENTTD_SERVICE_DEFAULT(spread);
 	Industry *(*industry_by_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_by_id);

@@ -55,8 +55,6 @@ struct OpenTTDSharedServices;
 struct OpenTTDCargoServices {
 	void (OPENTTD_RUST_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	const OpenTTDCargoRegistryServices *registry;
-	uint8_t (OPENTTD_RUST_CALL *station_company)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_company);
-	const OpenTTDTownHandle *(OPENTTD_RUST_CALL *station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	const OpenTTDIndustryResolverServices *resolver;
 	const OpenTTDSubsidyServices *(OPENTTD_RUST_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
 	const OpenTTDIndustryDeliveryServices *industry_delivery;

@@ -768,8 +768,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.rights_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); Game::NewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); },
 		.station_views_dirty = []() noexcept { SetWindowClassesDirty(WC_STATION_VIEW); },
 		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = RustBaseStationID(st) + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
-		.station_town = RustStationStationTown,
-		.station_airport = RustStationHasAirport,
 		.local_company = RustIsLocalCompany,
 		.bribe_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_BRIBE_FAILED), {}, WL_INFO); },
 		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = RustBaseStationID(wp) + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },

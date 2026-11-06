@@ -30,8 +30,6 @@ struct OpenTTDStationResolverServices {
 	Axis (*axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(axis);
 	uint32_t (*tile_add)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add);
 	uint8_t (*tile_random)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_random);
-	void (*set_waiting)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_waiting);
-	void (*set_random)(BaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_random);
 	uint64_t (*spec_cargo)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_cargo);
 	OpenTTDStationReseed (*resolve_random)(const StationSpec *, BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_random);
 	uint16_t (*resolve_callback)(uint16_t, uint32_t, uint32_t, const StationSpec *, BaseStation *, uint32_t, uint8_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);

@@ -271,7 +271,7 @@ pub const AIR_HELICOPTER: u8 = 0;
 pub const AIR_AIRCRAFT: u8 = 2;
 const NOTHING: u64 = 1 << 30;
 const ZEPPELIN: u64 = 1 << 62;
-const CLOSED: u64 = 1 << 63;
+use crate::airport::AIRPORT_CLOSED as CLOSED;
 const NO_CLAMP: i64 = 1;
 const TAKING_OFF: i64 = 2;
 const SLOW_TURN: i64 = 4;

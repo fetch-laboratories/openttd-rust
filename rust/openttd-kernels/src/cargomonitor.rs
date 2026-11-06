@@ -209,7 +209,7 @@ pub extern "C" fn openttd_rust_monitor_insert_delivery(key: u32, amount: u32) {
 
 #[repr(C)]
 pub struct Services {
-    pub station_town: extern "C" fn(*const Station) -> u16,
+    pub authority: *const crate::town::AuthorityServices,
     pub check: extern "C" fn(bool),
 }
 /// `AddCargoDelivery`. `station` and its owner `state` are resolved at the
@@ -242,7 +242,8 @@ pub fn add_delivery(
             PICKUPS.add(key, amount);
         }
     }
-    let town = (s.station_town)(station);
+    let town =
+        unsafe { ((*s.authority).town_index)(crate::station_record::station_town(station.cast())) };
     DELIVERIES.add(
         openttd_rust_monitor_encode_town(company, cargo, town, s.check),
         amount,
@@ -263,6 +264,6 @@ pub fn add_delivery(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCargoMonitorServices" ["probe"] => Services {
-        station_town, check,
+        authority, check,
     };
 }

@@ -12,12 +12,13 @@
 #include <cstdint>
 struct Station;
 struct Industry;
+struct OpenTTDTownAuthorityServices;
 /** Serialized by the game-state mutex. Native handles/cursors are call-scoped;
  * no map borrow crosses a leaf or SlObject. Leaves cannot reset catchments or
  * pools, yield, retain arguments or throw. Rust panics abort. Save/load keeps
  * SlObject/SlError native, inserting only complete rows, with no transaction. */
 struct OpenTTDCargoMonitorServices {
-	uint16_t (*station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
+	const OpenTTDTownAuthorityServices *authority;
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 };
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept;

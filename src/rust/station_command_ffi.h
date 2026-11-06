@@ -88,12 +88,10 @@ struct OpenTTDStationCommandServices {
 	void (*select_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(select_invalidate);
 	bool (*station_available)() noexcept OPENTTD_SERVICE_DEFAULT(station_available);
 	BaseStation *(*new_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_station);
-	void (*set_town)(BaseStation *, const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
 	const OpenTTDStationLifecycleServices *lifecycle;
 	void (*have_rating)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(have_rating);
 	bool (*name_equals)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(name_equals);
 	void (*set_name)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
-	void (*flip_airport_closed)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(flip_airport_closed);
 	void (*closed_widget)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(closed_widget);
 	bool (*distant_join)() noexcept OPENTTD_SERVICE_DEFAULT(distant_join);
 	const OpenTTDStationAssociationServices *rail_association;
@@ -119,7 +117,6 @@ struct OpenTTDStationCommandServices {
 	void (*set_tile_flags)(uint32_t, bool, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_flags);
 	void (*station_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_infrastructure);
 	void (*mark_tiles)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(mark_tiles);
-	void (*reset_facilities)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_facilities);
 	void (*orders_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(orders_dirty);
 	const OpenTTDVehicleServices *vehicle;
 	bool (*stop_on_town_road)() noexcept OPENTTD_SERVICE_DEFAULT(stop_on_town_road);
@@ -154,9 +151,7 @@ struct OpenTTDStationCommandServices {
 	void (*iterator_next)(TileIterator *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_next);
 	uint8_t (*airport_noise)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_noise);
 	uint16_t (*town_max_noise)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_max_noise);
-	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	bool (*airport_airplanes)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_airplanes);
-	void (*set_airport_details)(BaseStation *, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_airport_details);
 	void (*make_airport)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_airport);
 	bool (*airport_animated)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_animated);
 
@@ -169,7 +164,6 @@ struct OpenTTDStationCommandServices {
 	void (*close_hangar)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_hangar);
 	void (*close_airport_tile_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_airport_tile_inspect);
 	void (*delete_airport_storage)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_airport_storage);
-	void (*clear_airport)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_airport);
 	void (*close_airport_inspect)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(close_airport_inspect);
 	const OpenTTDShipLeaves *ship;
 	const OpenTTDClearServices *clear;
@@ -180,10 +174,6 @@ struct OpenTTDStationCommandServices {
 	BaseStation *(*neutral_for_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(neutral_for_tile);
 	void (*associate_industry)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(associate_industry);
 	void (*make_oilrig)(uint32_t, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_oilrig);
-	void (*set_station_owner)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);
-	void (*set_airport_kind_rotation)(BaseStation *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_airport_kind_rotation);
-	void (*set_facilities)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_facilities);
-	void (*set_build_date)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_build_date);
 	BaseStation *(*industry_neutral)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_neutral);
 	void (*clear_industry_neutral)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(clear_industry_neutral);
 	OpenTTDStationArea (*industry_area)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_area);
@@ -196,11 +186,7 @@ struct OpenTTDStationCommandServices {
 	BaseStation *(*new_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_waypoint);
 	Axis (*rail_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_axis);
 	const OpenTTDRoadGroundServices *road_ground;
-	void (*set_facility_bits)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_facility_bits);
-	void (*set_location)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_location);
 	void (*set_rail_station_reservation)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_station_reservation);
-	void (*set_road_waypoint)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(set_road_waypoint);
-	void (*set_string_id)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_string_id);
 	bool (*tile_flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_flat);
 	bool (*waypoint_available)() noexcept OPENTTD_SERVICE_DEFAULT(waypoint_available);
 	void (*waypoint_default_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_default_name);

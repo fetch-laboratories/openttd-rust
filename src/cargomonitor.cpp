@@ -17,10 +17,11 @@
 #include "rust/services_station.h"
 #include "rust/services_assert.h"
 #include "rust/town_services.h"
+#include "rust/town_ffi.h"
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
 {
 	static const OpenTTDCargoMonitorServices services = {
-		.station_town = RustStationTownID,
+		.authority = &GetRustTownAuthorityServices(),
 		.check = RustAssertCondition,
 	};
 	return services;

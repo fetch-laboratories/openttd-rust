@@ -50,8 +50,6 @@ pub struct Fields {
 pub struct Services {
     pub(crate) spec: extern "C" fn(u8, *mut Spec),
     pub(crate) registry: *const crate::cargo_registry::Services,
-    pub(crate) station_company: extern "C" fn(*const Station) -> CompanyID,
-    pub(crate) station_town: extern "C" fn(*const Station) -> *const crate::town_type::TownHandle,
     pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub(crate) industry_delivery: *const crate::industry::DeliveryServices,
@@ -166,7 +164,7 @@ fn deliver(
         }
         let supplier = unsafe { crate::industry::exclusive_supplier(owner) };
         if supplier.0 != crate::company_type::INVALID_OWNER
-            && supplier != (s.station_company)(native)
+            && supplier != CompanyID(crate::station_record::owner_company(native.cast()))
         {
             return true;
         }
@@ -208,7 +206,7 @@ fn deliver(
     let finances = (finance.company_finances)(company.0);
     unsafe { crate::company::record_delivery(finances, cargo, accepted) };
     let effect = crate::cargo_registry::town_acceptance(cargo);
-    let town = (s.station_town)(native);
+    let town = crate::station_record::station_town(native.cast());
     let town = (subsidies.shared().town_owner)(town);
     unsafe { crate::town::record_delivery(town, effect, accepted) };
     let mut profit = income(s, accepted, distance, periods, cargo);
@@ -465,8 +463,6 @@ crate::abi::layouts! {
     "OpenTTDCargoServices" ["probe"] => Services {
         spec,
         registry,
-        station_company,
-        station_town,
         resolver,
         subsidies,
         industry_delivery,

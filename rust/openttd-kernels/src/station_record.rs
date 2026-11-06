@@ -318,6 +318,128 @@ pub(crate) fn clear_area(area: *mut crate::tilearea::TileArea) {
     unsafe { (*area).clear() };
 }
 
+/// Store the canonical `town` field at the original native setter point.
+#[inline]
+pub(crate) fn set_town(shell: *const BaseStation, value: *const crate::services::TownHandle) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, town, value.cast_mut().cast());
+}
+/// Store the canonical `owner` field at the original native setter point.
+#[inline]
+pub(crate) fn set_station_owner(shell: *const BaseStation, value: u8) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, owner, crate::company_type::CompanyID(value));
+}
+/// Store the canonical `facilities` field at the original native setter point.
+#[inline]
+pub(crate) fn set_facilities(shell: *const BaseStation, value: u8) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, facilities, value);
+}
+/// Store the canonical `build_date` field at the original native setter point.
+#[inline]
+pub(crate) fn set_build_date(shell: *const BaseStation, value: i32) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, build_date, value);
+}
+/// Store the canonical `xy` field at the original native setter point.
+#[inline]
+pub(crate) fn set_location(shell: *const BaseStation, value: u32) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, xy, crate::tile_type::TileIndex(value));
+}
+/// Store the canonical `string_id` field at the original native setter point.
+#[inline]
+pub(crate) fn set_string_id(shell: *const BaseStation, value: u32) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, string_id, value);
+}
+/// Store the canonical `waiting_random_triggers` field at the original native setter point.
+#[inline]
+pub(crate) fn set_waiting_triggers(shell: *const BaseStation, value: u8) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, waiting_random_triggers, value);
+}
+/// Store the canonical `random_bits` field at the original native setter point.
+#[inline]
+pub(crate) fn set_random_bits(shell: *const BaseStation, value: u16) {
+    // SAFETY: The live shell owns a writable record during this serialized access.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, random_bits, value);
+}
+/// The station's canonical town link, as the shared native town handle.
+#[inline]
+pub(crate) fn station_town(shell: *const BaseStation) -> *const crate::services::TownHandle {
+    read(shell, |r| r.town.cast_const().cast())
+}
+/// `StationFacilities::Reset` at the original station observation point.
+pub(crate) fn reset_facilities(shell: *const BaseStation, bits: u8) {
+    // SAFETY: This live record is serialized; no borrow spans any callback.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(
+        record,
+        facilities,
+        crate::raw_field::read_field!(record, facilities) & !bits
+    );
+}
+/// `StationFacilities::Set` at the original station observation point.
+pub(crate) fn set_facility_bits(shell: *const BaseStation, bits: u8) {
+    // SAFETY: This live record is serialized; no borrow spans any callback.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(
+        record,
+        facilities,
+        crate::raw_field::read_field!(record, facilities) | bits
+    );
+}
+/// The station command's airport type/layout, cleared blocks and rotation stores.
+pub(crate) fn set_airport_details(shell: *const BaseStation, kind: u8, layout: u8, rotation: u8) {
+    // SAFETY: These field-sized stores address the live record and call nothing.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, airport.r#type, kind);
+    crate::raw_field::write_field!(record, airport.layout, layout);
+    crate::raw_field::write_field!(record, airport.blocks, 0);
+    crate::raw_field::write_field!(record, airport.rotation, rotation);
+}
+/// The oil-rig command's airport type and rotation stores.
+pub(crate) fn set_airport_kind_rotation(shell: *const BaseStation, kind: u8, rotation: u8) {
+    // SAFETY: These field-sized stores address the live record and call nothing.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, airport.r#type, kind);
+    crate::raw_field::write_field!(record, airport.rotation, rotation);
+}
+/// `AirportBlocks::Flip(AirportClosed)`.
+pub(crate) fn flip_airport_closed(shell: *const BaseStation) {
+    // SAFETY: The live record's mask is serialized at this immediate write.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(
+        record,
+        airport.blocks,
+        crate::raw_field::read_field!(record, airport.blocks) ^ crate::airport::AIRPORT_CLOSED
+    );
+}
+/// The station command's cached animation/cargo trigger publication.
+pub(crate) fn set_cached_triggers(shell: *const BaseStation, animation: u16, cargo: u64) {
+    // SAFETY: Stores end before returning to any resolver callback.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, cached_anim_triggers, animation);
+    crate::raw_field::write_field!(record, cached_cargo_triggers, cargo);
+}
+/// The road-stop command's cached animation/cargo trigger publication.
+pub(crate) fn set_cached_roadstop_triggers(shell: *const BaseStation, animation: u16, cargo: u64) {
+    // SAFETY: Stores end before returning to any resolver callback.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(record, cached_roadstop_anim_triggers, animation);
+    crate::raw_field::write_field!(record, cached_roadstop_cargo_triggers, cargo);
+}
+
 /// `BaseStation::GetPoolSize()`: the pool's live extent.
 pub(crate) fn pool_size(s: &crate::services::Services) -> usize {
     // SAFETY: The live extent is a scalar of the canonical pool.
@@ -526,4 +648,16 @@ impl StationRecord {
             last_vehicle_type: 255,
         }
     }
+}
+
+/// `SetBit(Waypoint::waypoint_flags, WPF_ROAD)`.
+pub(crate) fn set_road_waypoint(shell: *const BaseStation) {
+    // SAFETY: A live waypoint owns this serialized field.
+    let record = unsafe { record_of(shell) };
+    crate::raw_field::write_field!(
+        record,
+        waypoint_flags,
+        crate::raw_field::read_field!(record, waypoint_flags)
+            | (1 << crate::waypoint_base::WPF_ROAD)
+    );
 }

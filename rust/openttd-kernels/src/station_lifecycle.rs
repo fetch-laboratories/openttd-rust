@@ -163,7 +163,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
     let size_y = (s.shared.map_max_y)() + 1;
     let freeform = (unsafe { &*s.catchment.station }.environment.freeform_edges)();
     let n = &s.names;
-    let town = (s.commands().station_town)(st);
+    let town = crate::station_record::station_town(st);
     let mut info = NameInformation {
         used: [false; 256],
         industries: [false; NUM_INDUSTRYTYPES as usize],
@@ -175,7 +175,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             break;
         }
         from = u32::from((s.catchment.id)(other).0) + 1;
-        if other == st || (s.commands().station_town)(other) != town {
+        if other == st || crate::station_record::station_town(other) != town {
             continue;
         }
         let kind = crate::station_record::read(other.cast(), |r| r.indtype);
@@ -314,9 +314,9 @@ pub(crate) fn add_facility(st: *mut BaseStation, facility: u8, tile: u32, s: &Se
             ((*s.roadstop).set_random_bits)(st, (s.shared.random)(std::ptr::null_mut()) as u16);
         }
     }
-    (c.set_facility_bits)(st, 1 << facility);
-    (c.set_station_owner)(st, (s.shared.current_company)());
-    (c.set_build_date)(st, crate::timer_game_common::calendar_date().0);
+    crate::station_record::set_facility_bits(st, 1 << facility);
+    crate::station_record::set_station_owner(st, (s.shared.current_company)());
+    crate::station_record::set_build_date(st, crate::timer_game_common::calendar_date().0);
     (c.orders_dirty)();
 }
 

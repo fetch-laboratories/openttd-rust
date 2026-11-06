@@ -22,7 +22,6 @@ struct OpenTTDStationAssociationServices {
 	void (*clear)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*set_slot)(BaseStation *, uint8_t, const StationSpec *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_slot);
 	void (*rebind)(BaseStation *, size_t, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rebind);
-	void (*set_cached)(BaseStation *, uint16_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cached);
 };
 const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcept;
 extern "C" {

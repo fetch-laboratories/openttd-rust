@@ -270,8 +270,6 @@ static const OpenTTDCargoServices _cargo_services = {
 		*out = {cs->current_payment.base(), uint8_t(cs->IsValid()), uint8_t(cs->callback_mask.Test(CargoCallbackMask::ProfitCalc)), cs->transit_periods[0], cs->transit_periods[1]};
 	},
 	.registry = &GetRustCargoRegistryServices(),
-	.station_company = RustStationOwnerByte<const Station>,
-	.station_town = RustStationStationTown<const Station>,
 	.resolver = &GetIndustryResolverServices(),
 	.subsidies = RustSubsidyServices,
 	.industry_delivery = &GetIndustryDeliveryServices(),

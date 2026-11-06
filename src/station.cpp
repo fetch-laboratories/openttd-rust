@@ -204,10 +204,6 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.visits = &GetRustVehicleVisits(),
 		.station_count = []() noexcept -> size_t { return Station::GetNumItems(); },
 		.id = RustBaseStationID<BaseStation>,
-		.radius_facilities = [](BaseStation *handle) noexcept -> OpenTTDStationRadiusFacilities {
-			const Station *st = Station::From(handle);
-			return {st->GetBusStops() != nullptr, st->GetTruckStops() != nullptr, RustStationTrainTile(st), RustStationShipTile(st), RustStationAirportTile(st)};
-		},
 		.modified_catchment = RustModifiedCatchment,
 		.spread = RustStationSpread,
 		.industry_by_id = RustIndustryByID<uint16_t>,

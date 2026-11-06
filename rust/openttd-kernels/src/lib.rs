@@ -174,6 +174,7 @@ mod viewport_func;
 mod water;
 mod water_cmd;
 mod water_type;
+mod waypoint_base;
 mod widget_parser;
 mod witness;
 mod yapf_node;
