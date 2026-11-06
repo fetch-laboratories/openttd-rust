@@ -175,6 +175,26 @@ impl Map {
         let (x, y) = tile_index_diff_c_by_diag_dir(dir);
         self.diff(x, y)
     }
+    /// `DiagdirBetweenTiles`.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn diagdir_between_tiles(self, from: u32, to: u32) -> u8 {
+        use crate::direction_type::{
+            DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, INVALID_DIAGDIR,
+        };
+        let dx = (self.tile_x(to) as i32).wrapping_sub(self.tile_x(from) as i32);
+        let dy = (self.tile_y(to) as i32).wrapping_sub(self.tile_y(from) as i32);
+        if dx == 0 {
+            if dy == 0 {
+                return INVALID_DIAGDIR;
+            }
+            return if dy < 0 { DIAGDIR_NW } else { DIAGDIR_SE };
+        }
+        if dy != 0 {
+            return INVALID_DIAGDIR;
+        }
+        if dx < 0 { DIAGDIR_NE } else { DIAGDIR_SW }
+    }
     /// `tile + TileOffsByDiagDir(dir)`.
     #[must_use]
     #[inline]
@@ -333,7 +353,7 @@ macro_rules! tile_fields {
 }
 impl TileFields<'_> {
     tile_fields! { base => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
-    tile_fields! { extended => m6: u8, m8: u16 }
+    tile_fields! { extended => m6: u8, m7: u8, m8: u16 }
 }
 
 // Stores write one scalar of the canonical allocation, whose native owner is mutable.
@@ -512,7 +532,7 @@ impl TileTypeAccess {
     }
     // Named, field-sized loads. No Rust reference or record value is formed.
     map_fields! { base: BaseTileLayout => kind: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
-    map_fields! { extended: ExtendedTileLayout => m6: u8, m8: u16 }
+    map_fields! { extended: ExtendedTileLayout => m6: u8, m7: u8, m8: u16 }
     map_stores! { base: BaseTileLayout => set_kind.kind: u8, set_height.height: u8, set_m1.m1: u8, set_m2.m2: u16, set_m4.m4: u8, set_m5.m5: u8 }
     map_stores! { extended: ExtendedTileLayout => set_m6.m6: u8, set_m7.m7: u8 }
 }

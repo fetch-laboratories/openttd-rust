@@ -222,3 +222,32 @@ This is the selected phase 2 design; its first implementation issue is [#570](ht
 - Consume #560's integrated follower and `GetPlatformLength` interfaces without claiming its credit. #562 owns station lifecycle and native loading-list removal; preserve stable shell pointers and PreDestructor reentry.
 - Coordinate overlapping train/vehicle service files at final base update without an unmerged service dependency. Root sequences this implementation with the queued base vehicle lifecycle owner.
 - Root must obtain #566's reference/candidate image and instruction comparison before calling this port drawing-validated or integrating it. Implementation may proceed while #566 is underway; `-vnull` play cannot substitute. #566 is selected but has no integrated workload/result at this design checkpoint; the merged-tip profile will measure savings.
+
+## Later pool record placement (#634, #635; decided 2026-11-05 after integration 82)
+
+Later pool records sit beside their shells, as #570's do. The decision and its measurements are on [#634](https://github.com/fetch-laboratories/openttd-rust/issues/634#issuecomment-6671702315).
+
+**Speed impact**, measured at integration 82:
+- Beside placement costs +1 Ir per C++ read, at most 0.033% of play-save loop Ir.
+- The predicted gap to inside placement is at most 0.024% for stations, 0.016% for towns and 0.005% for industries.
+- Drawing (#566) barely tests vehicles; it draws about 50.
+
+**Conditions, which every brief states:**
+1. **No out-of-line record↔shell call.**
+   - Rust's typed ID resolution returns the record.
+   - Slot iteration reaches the record in one load.
+   - C++ reads through inline `Record()` accessors (`this->record->field`).
+2. **No stored references.** Every reference member is replaced, including the 448 `GoodsEntry` references per station and the town and industry blocks.
+
+**Per family:**
+- Station, waypoint, `GoodsEntry`, airport, road stop, town, industry and subsidy: beside.
+- Cargo packet and payment: beside now. Co-allocating the record in the same pool slot is decided at #634's pool-completion checkpoint. Their second allocation is the one measurable cost: 0.052% on P2016 and 0.011% on Opus.
+- Vehicles stay beside, with no conversion. Two out-of-line hops cost 0.44% to 0.51% gross and go to #656 or a #275 repair batch:
+  - `VehicleSvcTileLinks`: move `tile_links` into the record.
+  - `VehicleRecordFromShell`: give the scheduler and the station loading queue record pointers.
+
+**If inside placement is ever chosen**, use allocation in the pool slot just before the shell, not a C++ member or base class. A base class can reuse tail padding on Itanium and not on MSVC, and the vehicle record has 4 bytes of it.
+
+**Revisit a family's placement** at its pool-allocation step if either of these happens:
+- its record↔shell hops reach 0.5% of loop Ir (#275's threshold);
+- cache profiling shows misses on record lines.

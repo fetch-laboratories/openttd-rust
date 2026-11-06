@@ -8,6 +8,14 @@
 use crate::slope_func::{get_slope_max_pixel_z, is_halftile_slope};
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE};
 
+/// `GetSlopeZInCorner` (`landscape.cpp`); `check` is the native assertion.
+pub(crate) fn get_slope_z_in_corner(tileh: u8, corner: u8, check: impl Fn(bool) + Copy) -> i32 {
+    use crate::slope_func::{slope_with_one_corner_raised, steep_slope};
+    check(!is_halftile_slope(tileh));
+    i32::from(tileh & slope_with_one_corner_raised(corner, check) != 0)
+        + i32::from(tileh == steep_slope(corner, check))
+}
+
 /// Original ordered `IsMapSurroundedByWater` scan, including duplicate corners.
 pub(crate) fn scan_water_edges(
     width: u32,

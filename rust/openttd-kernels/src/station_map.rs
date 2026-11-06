@@ -31,6 +31,16 @@ pub(crate) fn get_station_type(
     ))
 }
 
+/// `IsDock`.
+pub(crate) fn is_dock(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    Some(get_station_type(m, tile)?.0 == crate::station_type::STATION_DOCK)
+}
+
+/// `IsBuoy`.
+pub(crate) fn is_buoy(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    Some(get_station_type(m, tile)?.0 == crate::station_type::BUOY)
+}
+
 /// `IsTruckStop`.
 #[allow(clippy::inline_always)]
 #[inline(always)]
@@ -77,7 +87,7 @@ pub(crate) fn is_rail_waypoint(tile: u32, s: &Services) -> bool {
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) fn is_rail_waypoint_tile(tile: u32, s: &Services) -> bool {
-    (s.tile_type)(tile) == MP_STATION && is_rail_waypoint(tile, s)
+    crate::map_func::World::new(s).rail_waypoint_tile(tile)
 }
 /// `IsRoadWaypointTile`.
 #[allow(clippy::inline_always)]
@@ -189,6 +199,34 @@ impl crate::map_func::World<'_> {
                 .expect("station tile")
                 .0
                 == crate::station_type::STATION_RAIL
+    }
+    /// `IsDriveThroughStopTile`.
+    pub(crate) fn drive_through_stop_tile(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && is_any_road_stop(&self.types, TileIndex(t)).expect("station tile")
+            && self.station_gfx(t) >= GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET
+    }
+    /// `GetDriveThroughStopAxis`.
+    pub(crate) fn drive_through_axis(&self, t: u32) -> u8 {
+        self.check(self.drive_through_stop_tile(t));
+        self.station_gfx(t)
+            .wrapping_sub(GFX_TRUCK_BUS_DRIVETHROUGH_OFFSET)
+    }
+    /// `GetRoadStopType`: `RoadStopType::Truck` or `Bus`.
+    pub(crate) fn road_stop_type(&self, t: u32) -> u8 {
+        let kind = get_station_type(&self.types, TileIndex(t))
+            .expect("station tile")
+            .0;
+        self.check(kind == STATION_TRUCK || kind == STATION_BUS);
+        u8::from(kind == STATION_TRUCK)
+    }
+    /// `IsRailWaypointTile`.
+    pub(crate) fn rail_waypoint_tile(&self, t: u32) -> bool {
+        self.kind(t) == MP_STATION
+            && get_station_type(&self.types, TileIndex(t))
+                .expect("station tile")
+                .0
+                == RAIL_WAYPOINT
     }
     #[allow(clippy::inline_always)]
     #[inline(always)]

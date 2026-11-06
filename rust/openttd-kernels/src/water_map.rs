@@ -10,6 +10,10 @@
 use crate::map_func::{TileFields, TileTypeAccess};
 
 use crate::tile_type::{MP_INDUSTRY, MP_OBJECT, MP_STATION, MP_TREES, MP_WATER};
+/// `WaterTileType::Lock`.
+pub(crate) const WATER_TILE_LOCK: u8 = 2;
+/// `WaterTileType::Depot`.
+pub(crate) const WATER_TILE_DEPOT: u8 = 3;
 /// `WaterTileType::Coast`.
 const COAST: u8 = 1;
 #[allow(clippy::inline_always)]
@@ -76,6 +80,21 @@ pub(crate) fn is_non_flooding_water_tile(m: &TileTypeAccess, t: u32) -> Option<b
 /// `IsWater`.
 pub(crate) fn is_water(m: &TileTypeAccess, tile: u32) -> Option<bool> {
     Some(get_water_tile_type(m, tile)? == 0)
+}
+
+/// `IsSea`.
+pub(crate) fn is_sea(m: &TileTypeAccess, tile: u32) -> Option<bool> {
+    Some(is_water(m, tile)? && get_water_class(m, tile)? == crate::water_type::WATER_CLASS_SEA.0)
+}
+
+/// `IsRiver`.
+pub(crate) fn is_river(m: &TileTypeAccess, tile: u32) -> Option<bool> {
+    Some(is_water(m, tile)? && get_water_class(m, tile)? == crate::water_type::WATER_CLASS_RIVER.0)
+}
+
+/// `IsCanal`.
+pub(crate) fn is_canal(m: &TileTypeAccess, tile: u32) -> Option<bool> {
+    Some(is_water(m, tile)? && get_water_class(m, tile)? == crate::water_type::WATER_CLASS_CANAL.0)
 }
 
 #[cfg(test)]

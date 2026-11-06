@@ -34,6 +34,7 @@ include = [
     "tools/test-preflight.py",
     "tools/simulation/commands.py",
     "tools/simulation/script_host.py",
+    "tools/simulation/script_infrastructure.py",
     "tools/simulation/community_ai.py",
     "tools/simulation/newgrf_sets.py",
     "tools/simulation/community_newgrf.py",
@@ -107,6 +108,14 @@ include = [
     "tools/company-command-comparison.py",
     "tools/industry-production-comparison.py",
     "tools/landscape-comparison.py",
+    "tools/simulation/aircraft.py",
+    "tools/simulation/rails.py",
+    "tools/simulation/stations.py",
+    "tools/simulation/towns.py",
+    "tools/shared-accessors.py",
+    "tools/test-shared-accessors.py",
+    "tools/test-simulation.py",
+    "tools/train-edge-comparison.py",
 ]
 
 [analysis]

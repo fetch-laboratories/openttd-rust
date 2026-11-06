@@ -29,7 +29,7 @@ pub fn diag_dir_to_diag_track(direction: u8, check: impl Fn(bool) + Copy) -> u8 
 
 /// `CornerToTrackBits`, with a valid native corner.
 pub fn corner_to_track_bits(c: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if c >= 4 {
+    if !crate::slope_func::is_valid_corner(c) {
         check(false);
     }
     [
@@ -121,6 +121,26 @@ pub const fn trackdir_to_track(td: u8) -> u8 {
 #[allow(clippy::cast_possible_truncation)]
 pub const fn trackdir_bits_to_track_bits(bits: u16) -> u8 {
     ((bits | (bits >> 8)) & crate::track_type::TRACK_BIT_MASK as u16) as u8
+}
+
+/// `IsValidTrackdir`.
+pub const fn is_valid_trackdir(trackdir: u8) -> bool {
+    trackdir != crate::track_type::INVALID_TRACKDIR
+        && (1_u32.wrapping_shl(trackdir as u32) & crate::track_type::TRACKDIR_BIT_MASK) != 0
+}
+
+/// `FindFirstTrack`.
+pub const fn find_first_track(tracks: u8) -> u8 {
+    find_first_track_u32(tracks as u32)
+}
+
+/// `FindFirstTrack` for the ship controller's promoted track masks.
+pub const fn find_first_track_u32(tracks: u32) -> u8 {
+    if tracks == 0 {
+        crate::track_type::INVALID_TRACK
+    } else {
+        crate::bitmath_func::find_first_bit(tracks as u64)
+    }
 }
 
 /// `ReverseTrackdir`.

@@ -46,7 +46,7 @@ const MODE_TEST: u8 = 2;
 /// `ScriptError::ERR_NONE`.
 const ERR_NONE: u32 = 0;
 /// `ScriptError::ERR_PRECONDITION_INVALID_COMPANY`.
-const ERR_PRECONDITION_INVALID_COMPANY: u32 = 4;
+pub(crate) const ERR_PRECONDITION_INVALID_COMPANY: u32 = 4;
 
 crate::abi::shared_records! {
     fn abi_record;
@@ -160,6 +160,42 @@ unsafe fn owner<'a>(host: *mut Host) -> &'a mut Owner {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_script_context() -> *mut Context {
     CONTEXT.get()
+}
+
+/// `ScriptObject::GetCompany` of the active instance.
+pub(crate) fn active_company() -> u8 {
+    // SAFETY: script API entries run with an active instance whose host is live.
+    unsafe { (*(*CONTEXT.get()).active).company }
+}
+
+/// `ScriptObject::GetRailType` of the active instance.
+pub(crate) fn active_rail_type() -> u8 {
+    // SAFETY: as for `active_company`.
+    unsafe { (*(*CONTEXT.get()).active).rail_type }
+}
+
+/// `ScriptObject::SetRailType` on the active instance.
+pub(crate) fn set_active_rail_type(rail_type: u8) {
+    // SAFETY: as for `active_company`; no other reference to the host is live.
+    unsafe { (*(*CONTEXT.get()).active).rail_type = rail_type };
+}
+
+/// `ScriptObject::GetRoadType` of the active instance.
+pub(crate) fn active_road_type() -> u8 {
+    // SAFETY: as for `active_company`.
+    unsafe { (*(*CONTEXT.get()).active).road_type }
+}
+
+/// `ScriptObject::SetRoadType` on the active instance.
+pub(crate) fn set_active_road_type(road_type: u8) {
+    // SAFETY: as for `active_company`; no other reference to the host is live.
+    unsafe { (*(*CONTEXT.get()).active).road_type = road_type };
+}
+
+/// `ScriptObject::SetLastError` on the active instance.
+pub(crate) fn set_active_error(error: u32) {
+    // SAFETY: as for `active_company`; no other reference to the host is live.
+    unsafe { (*(*CONTEXT.get()).active).last_error = error };
 }
 
 /// `ScriptStorage::ScriptStorage` for `instance`.

@@ -14,6 +14,7 @@
 #include "script_company.hpp"
 #include "../../slope_type.h"
 #include "../../transport_type.h"
+#include "../../rust/script_tile_ffi.h"
 
 /**
  * Class that handles all tile related functions.
@@ -148,7 +149,7 @@ public:
 	 * @note For rail you also might want to check for ScriptRoad::IsRoad(),
 	 *   as in some cases you can build rails on road-tiles.
 	 */
-	static bool IsBuildable(TileIndex tile);
+	static bool IsBuildable(TileIndex tile) { return openttd_rust_script_tile_is_buildable(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if this tile is buildable in a rectangle around a tile, with the
@@ -161,7 +162,7 @@ public:
 	 * @pre height > 0.
 	 * @return True if it is buildable, false if not.
 	 */
-	static bool IsBuildableRectangle(TileIndex tile, SQInteger width, SQInteger height);
+	static bool IsBuildableRectangle(TileIndex tile, SQInteger width, SQInteger height) { return openttd_rust_script_tile_is_buildable_rectangle(&GetRustScriptHostServices(), tile.base(), width, height); }
 
 	/**
 	 * Checks whether the given tile is actually a sea tile.
@@ -169,7 +170,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is a sea tile.
 	 */
-	static bool IsSeaTile(TileIndex tile);
+	static bool IsSeaTile(TileIndex tile) { return openttd_rust_script_tile_is_sea(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a river tile.
@@ -177,7 +178,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is a river tile.
 	 */
-	static bool IsRiverTile(TileIndex tile);
+	static bool IsRiverTile(TileIndex tile) { return openttd_rust_script_tile_is_river(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a water tile.
@@ -186,7 +187,7 @@ public:
 	 * @return True if and only if the tile is a water tile.
 	 * @note Returns false when a buoy is on the tile.
 	 */
-	static bool IsWaterTile(TileIndex tile);
+	static bool IsWaterTile(TileIndex tile) { return openttd_rust_script_tile_is_water(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a coast tile.
@@ -196,7 +197,7 @@ public:
 	 * @note Building on coast tiles in general is more expensive. This is not
 	 *  true if there are also trees on the tile, see #HasTreeOnTile.
 	 */
-	static bool IsCoastTile(TileIndex tile);
+	static bool IsCoastTile(TileIndex tile) { return openttd_rust_script_tile_is_coast(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is a station tile of any station.
@@ -204,7 +205,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is a station tile.
 	 */
-	static bool IsStationTile(TileIndex tile);
+	static bool IsStationTile(TileIndex tile) { return openttd_rust_script_tile_is_station(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if a tile has a steep slope.
@@ -213,7 +214,7 @@ public:
 	 * @pre slope != SLOPE_INVALID.
 	 * @return True if the slope is a steep slope.
 	 */
-	static bool IsSteepSlope(Slope slope);
+	static bool IsSteepSlope(Slope slope) { return openttd_rust_script_tile_is_steep_slope(static_cast<uint32_t>(slope)); }
 
 	/**
 	 * Check if a tile has a halftile slope.
@@ -223,7 +224,7 @@ public:
 	 * @return True if the slope is a halftile slope.
 	 * @note Currently there is no API function that would return or accept a halftile slope.
 	 */
-	static bool IsHalftileSlope(Slope slope);
+	static bool IsHalftileSlope(Slope slope) { return openttd_rust_script_tile_is_halftile_slope(static_cast<uint32_t>(slope)); }
 
 	/**
 	 * Check if the tile has any tree on it.
@@ -231,7 +232,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if there is a tree on the tile.
 	 */
-	static bool HasTreeOnTile(TileIndex tile);
+	static bool HasTreeOnTile(TileIndex tile) { return openttd_rust_script_tile_has_tree(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if the tile is a farmland tile.
@@ -239,7 +240,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is farmland.
 	 */
-	static bool IsFarmTile(TileIndex tile);
+	static bool IsFarmTile(TileIndex tile) { return openttd_rust_script_tile_is_farm(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if the tile is a rock tile.
@@ -247,7 +248,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is rock tile.
 	 */
-	static bool IsRockTile(TileIndex tile);
+	static bool IsRockTile(TileIndex tile) { return openttd_rust_script_tile_is_rock(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if the tile is a rough tile.
@@ -255,7 +256,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is rough tile.
 	 */
-	static bool IsRoughTile(TileIndex tile);
+	static bool IsRoughTile(TileIndex tile) { return openttd_rust_script_tile_is_rough(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if the tile without buildings or infrastructure is a snow tile.
@@ -264,7 +265,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is snow tile.
 	 */
-	static bool IsSnowTile(TileIndex tile);
+	static bool IsSnowTile(TileIndex tile) { return openttd_rust_script_tile_is_snow(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if the tile without buildings or infrastructure is a desert tile.
@@ -273,7 +274,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is desert tile.
 	 */
-	static bool IsDesertTile(TileIndex tile);
+	static bool IsDesertTile(TileIndex tile) { return openttd_rust_script_tile_is_desert(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Check if the tile is town house/building
@@ -281,7 +282,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is house tile.
 	 */
-	static bool IsHouseTile(TileIndex tile);
+	static bool IsHouseTile(TileIndex tile) { return openttd_rust_script_tile_is_house(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Get the type of terrain regardless of buildings or infrastructure.
@@ -291,7 +292,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return The #TerrainType.
 	 */
-	static TerrainType GetTerrainType(TileIndex tile);
+	static TerrainType GetTerrainType(TileIndex tile) { return static_cast<TerrainType>(openttd_rust_script_tile_terrain_type(&GetRustScriptHostServices(), tile.base())); }
 
 	/**
 	 * Get the slope of a tile.
@@ -300,7 +301,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return Bit mask encoding the slope. See #Slope for a description of the returned values.
 	 */
-	static Slope GetSlope(TileIndex tile);
+	static Slope GetSlope(TileIndex tile) { return static_cast<Slope>(openttd_rust_script_tile_slope(&GetRustScriptHostServices(), tile.base())); }
 
 	/**
 	 * Get the complement of the slope.
@@ -311,7 +312,7 @@ public:
 	 * @return The complement of a slope. This means that all corners that
 	 *  weren't raised, are raised, and visa versa.
 	 */
-	static Slope GetComplementSlope(Slope slope);
+	static Slope GetComplementSlope(Slope slope) { return static_cast<Slope>(openttd_rust_script_tile_complement_slope(static_cast<uint32_t>(slope))); }
 
 	/**
 	 * Get the minimal height on a tile.
@@ -320,7 +321,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return The height of the lowest corner of the tile, ranging from 0 to 15.
 	 */
-	static SQInteger GetMinHeight(TileIndex tile);
+	static SQInteger GetMinHeight(TileIndex tile) { return openttd_rust_script_tile_min_height(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Get the maximal height on a tile.
@@ -329,7 +330,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return The height of the highest corner of the tile, ranging from 0 to 15.
 	 */
-	static SQInteger GetMaxHeight(TileIndex tile);
+	static SQInteger GetMaxHeight(TileIndex tile) { return openttd_rust_script_tile_max_height(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Get the height of a certain corner of a tile.
@@ -339,7 +340,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return The height of the lowest corner of the tile, ranging from 0 to 15.
 	 */
-	static SQInteger GetCornerHeight(TileIndex tile, Corner corner);
+	static SQInteger GetCornerHeight(TileIndex tile, Corner corner) { return openttd_rust_script_tile_corner_height(&GetRustScriptHostServices(), tile.base(), static_cast<uint32_t>(corner)); }
 
 	/**
 	 * Get the owner of the tile.
@@ -348,7 +349,7 @@ public:
 	 * @return The CompanyID of the owner of the tile, or COMPANY_INVALID if
 	 *  there is no owner (grass/industry/water tiles, etc.).
 	 */
-	static ScriptCompany::CompanyID GetOwner(TileIndex tile);
+	static ScriptCompany::CompanyID GetOwner(TileIndex tile) { return static_cast<ScriptCompany::CompanyID>(openttd_rust_script_tile_owner(&GetRustScriptHostServices(), tile.base())); }
 
 	/**
 	 * Checks whether the given tile contains parts suitable for the given
@@ -366,7 +367,7 @@ public:
 	 *       doesn't make sense for TRANSPORT_AIR.
 	 * @return True if and only if the tile has the given TransportType.
 	 */
-	static bool HasTransportType(TileIndex tile, TransportType transport_type);
+	static bool HasTransportType(TileIndex tile, TransportType transport_type) { return openttd_rust_script_tile_has_transport_type(&GetRustScriptHostServices(), tile.base(), static_cast<uint32_t>(transport_type)); }
 
 	/**
 	 * Check how much cargo this tile accepts.
@@ -409,7 +410,7 @@ public:
 	 * @param tile_to The tile to get the distance to.
 	 * @return The distance between the two tiles.
 	 */
-	static SQInteger GetDistanceManhattanToTile(TileIndex tile_from, TileIndex tile_to);
+	static SQInteger GetDistanceManhattanToTile(TileIndex tile_from, TileIndex tile_to) { return openttd_rust_script_map_distance_manhattan(&GetRustScriptHostServices(), tile_from.base(), tile_to.base()); }
 
 	/**
 	 * Get the square distance from the tile to the tile.
@@ -417,7 +418,7 @@ public:
 	 * @param tile_to The tile to get the distance to.
 	 * @return The distance between the two tiles.
 	 */
-	static SQInteger GetDistanceSquareToTile(TileIndex tile_from, TileIndex tile_to);
+	static SQInteger GetDistanceSquareToTile(TileIndex tile_from, TileIndex tile_to) { return openttd_rust_script_map_distance_square(&GetRustScriptHostServices(), tile_from.base(), tile_to.base()); }
 
 	/**
 	 * Raise the given corners of the tile. The corners can be combined,
@@ -535,7 +536,7 @@ public:
 	 * @param build_type the type to build
 	 * @return The baseprice of building or removing the given object.
 	 */
-	static Money GetBuildCost(BuildType build_type);
+	static Money GetBuildCost(BuildType build_type) { return openttd_rust_script_tile_build_cost(static_cast<uint32_t>(build_type)); }
 };
 
 #endif /* SCRIPT_TILE_HPP */

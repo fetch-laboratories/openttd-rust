@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as directory:
     for name in ["src/rust", "tools", "migration"]:
         (root / name).mkdir(parents=True)
 
-    def git(*args):
+    def git(*args: str) -> str:
         return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
 
     git("init", "-q")
@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory() as directory:
     git("commit", "-qm", "Add: Empty duplicate baseline")
     base = git("rev-parse", "HEAD")
 
-    def check():
+    def check() -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["python3", "tools/shared-accessors.py", "--base-ref", base],
             cwd=root,

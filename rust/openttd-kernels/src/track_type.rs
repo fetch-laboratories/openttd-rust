@@ -53,3 +53,30 @@ pub const TRACK_BIT_MASK: u8 = 0x3f;
 
 /// `TRACK_END`.
 pub const TRACK_END: u8 = 6;
+
+/// `TRACK_X`.
+pub const TRACK_X: u8 = 0;
+/// `TRACK_Y`.
+pub const TRACK_Y: u8 = 1;
+/// `TRACK_LEFT`.
+pub const TRACK_LEFT: u8 = 4;
+/// `TRACK_RIGHT`.
+pub const TRACK_RIGHT: u8 = 5;
+/// `INVALID_TRACK`.
+pub const INVALID_TRACK: u8 = 0xFF;
+/// `TRACKDIR_UPPER_E`.
+pub const TRACKDIR_UPPER_E: u8 = 2;
+/// `TRACKDIR_LOWER_E`.
+pub const TRACKDIR_LOWER_E: u8 = 3;
+/// `TRACKDIR_LEFT_S`.
+pub const TRACKDIR_LEFT_S: u8 = 4;
+/// `TRACKDIR_RIGHT_S`.
+pub const TRACKDIR_RIGHT_S: u8 = 5;
+/// `TRACKDIR_UPPER_W`.
+pub const TRACKDIR_UPPER_W: u8 = 10;
+/// `TRACKDIR_LOWER_W`.
+pub const TRACKDIR_LOWER_W: u8 = 11;
+/// `TRACKDIR_LEFT_N`.
+pub const TRACKDIR_LEFT_N: u8 = 12;
+/// `TRACKDIR_RIGHT_N`.
+pub const TRACKDIR_RIGHT_N: u8 = 13;
