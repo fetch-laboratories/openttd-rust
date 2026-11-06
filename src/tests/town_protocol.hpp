@@ -345,7 +345,11 @@ template <typename Check> void CheckTownProtocol(Check check)
 	/* The isolated world supplies the same canonical slot layout as a game pool.
 	 * This is a borrowed view of its existing owner, with no second record. */
 	const RustPoolSlot town_slot{.shell = nullptr, .record = owner.get()};
-	const RustPoolDescriptor town_descriptor{.slots = {&town_slot, 1, 0}, .first_unused = 1, .items = 1};
+	const RustPoolDescriptor town_descriptor{
+		.slots = {&town_slot, 1, 0}, .used_bitmap = {},
+		.first_free = 0, .first_unused = 1, .items = 1, .checked = 0,
+		.cleaning = false, .alloc_cache = nullptr,
+	};
 	const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
 	services.town_pool = &town_descriptor_ptr;
 	openttd_rust_town_rebuild_index(&services);

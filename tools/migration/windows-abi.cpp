@@ -154,7 +154,9 @@ static void Calls()
 		std::vector<RustPoolSlot> town_slots(UINT16_MAX);
 		town_slots[UINT16_MAX - 1].record = owner;
 		const RustPoolDescriptor town_descriptor{
-			.slots = {town_slots.data(), town_slots.size(), 0}, .first_unused = UINT16_MAX, .items = 1,
+			.slots = {town_slots.data(), town_slots.size(), 0}, .used_bitmap = {},
+			.first_free = 0, .first_unused = UINT16_MAX, .items = 1, .checked = 0,
+			.cleaning = false, .alloc_cache = nullptr,
 		};
 		const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
 		shared.town_pool = &town_descriptor_ptr;
