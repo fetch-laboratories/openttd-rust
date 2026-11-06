@@ -47,7 +47,7 @@ Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
   - #636's `track-follower`: the follower probe passed vehicle shells where Rust expects records.
   - #628's commands console: it read the moved command queue.
 
-  Reviews pick scenarios by name prefix, and harness consoles compile only when their scenario runs. From now on, root briefs for PRs that change the Rust/C++ boundary (moved records, deleted services, changed signatures) require the full default simulation set locally before Full.
+  Reviews pick scenarios by name prefix, and harness consoles compile only when their scenario runs. From now on, root briefs for PRs that change the Rust/C++ boundary (moved records, deleted services, changed signatures) require a CI `native` profile run (`python3 tools/ci.py request PR --profile native`) before review and Full. That profile is the full migration comparison and simulation shards, about 10 to 20 minutes. Running 481 scenarios locally at `--jobs 3` takes more than 4 hours here, and #628's local attempt hit the 2-hour background limit at 214 scenarios.
 - Host: unchanged. #678 (TSan startup aborts) and #693 remain tools maintenance.
 
 ## Phases
@@ -368,7 +368,7 @@ six-branch limit and the disjoint-service rule; finishing review and integration
 of an open branch comes first. A lower rank can run while a higher one waits.
 Scopes live in issues; per-PR changes live in each PR's steering comment.
 
-1. **Finish the open branches in readiness order.** Children check `.local/deep.lock.holders` before a native build, link or game, and pass `--jobs 3`. Rebuild an open PR's worktree only when its work resumes, after pulling it to the PR head. Briefs for PRs that change the Rust/C++ boundary require the full default simulation set locally before Full (stocktake 83's process lesson).
+1. **Finish the open branches in readiness order.** Children check `.local/deep.lock.holders` before a native build, link or game, and pass `--jobs 3`. Rebuild an open PR's worktree only when its work resumes, after pulling it to the PR head. Briefs for PRs that change the Rust/C++ boundary require a CI `native` profile run before review and Full (stocktake 83's process lesson), not a local full set.
    - **#574 / #628.** Scoped review accepted, then Full failed: the commands console read the moved command queue.
      - `/root/fix-628-commands-console` reads the queue through a test-support-only entry and merges #636.
      - It then runs the full default simulation set.
@@ -394,7 +394,7 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
      Estimated compiled C++ removed: 300 to 600. It completes the phase-2 boundary and creates no phase-1 owner.
    - #500 typing adoption and the #168/#199 residual boundary cleanup attach to the owner touching those records. Completed-job publication stays with link graph and jobs.
    - **#678** (TSan startup aborts counted as clean runs) and **#693** (the mixed multiplayer diagnostic's late sync under host load) fold into the next tools maintenance PR, with that PR's reviewer and Full. Neither may change the original's frame and sync behavior or weaken an evidence check.
-4. **Ranked phase-2 queue (#570 integrated as 82).** Before briefing #634 or #635, root decides whether later records sit beside or inside shells using the merged #570 profile and #566 drawing workload. Use the dependent-load table/profile checklist in the twenty-eighth #636 steering comment; record a material placement decision in the [world-state design](design/world-state.md).
+4. **Ranked phase-2 queue (#570 integrated as 82).** Placement is decided: later records sit **beside** their shells ([world-state design](design/world-state.md#later-pool-record-placement-634-635-decided-2026-11-05-after-integration-82)). Briefs state its two conditions: no out-of-line record↔shell call, and no stored references. Cargo-packet co-allocation is decided at #634's pool-completion checkpoint.
 
    | Rank | Owner | Estimated compiled C++ removed | Selection event / coupled scope |
    | ---: | --- | ---: | --- |
