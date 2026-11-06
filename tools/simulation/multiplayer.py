@@ -28,6 +28,11 @@ AUTH_SECRET = "0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a"
 AUTH_PUBLIC = "54558C3F5FABC16BE191BFE5D2A9F97227952A99F6F2E7286D02E6A3FE5F932B"
 SOURCE = core.ROOT / "migration/saves/opus-55-167-002.sav"
 STOP = (727960, 0, 84677)  # Calendar callback precedes economy/tick advancement.
+# Server lines that check() rejects and that leave the client waiting at the menu.
+NETWORK_FAILURE = re.compile(
+    r"SendError\(\)|Receive_CLIENT_ERROR\(\)|connection lost|has been disconnected",
+    re.I,
+)
 # Untagged builds suffix the network revision with the modified flag and hash.
 REVISION_FIELDS = (
     "_openttd_revision",
@@ -266,6 +271,18 @@ def session(
         }
     ready = threading.Event()
     errors: list[str] = []
+    failures: list[str] = []
+    clients: list[subprocess.Popen[bytes]] = []
+    stopping = threading.Lock()
+
+    def stop_client(child: subprocess.Popen[bytes] | None = None) -> None:
+        with stopping:
+            if child is not None:
+                clients.append(child)
+            if failures:
+                for process in clients:
+                    process.kill()
+
     with (
         core.game_slot(),
         subprocess.Popen(
@@ -292,6 +309,9 @@ def session(
                         log.flush()
                         if line.strip() == "MIXED_READY":
                             ready.set()
+                        if not failures and NETWORK_FAILURE.search(line):
+                            failures.append(line.strip())
+                            stop_client()
                         if "status = ACTIVE" in line and not active:
                             active = True
                             # One line avoids dedicated std::getline/select read-ahead.
@@ -316,8 +336,11 @@ def session(
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     timeout=timeout,
+                    started=stop_client,
                 )
             result.exits["client"] = client.returncode
+            if failures:
+                raise RuntimeError(f"server network failure: {failures[0]}")
             writer.write("exit\n")
             writer.flush()
             result.exits["server"] = server.wait(timeout=30)

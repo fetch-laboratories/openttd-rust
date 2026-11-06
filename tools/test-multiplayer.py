@@ -2,12 +2,17 @@
 """Reject incomplete mixed-network evidence using real save decoding/comparison."""
 
 import json
+import re
 import shutil
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from simulation import core, multiplayer
+from simulation import core, multiplayer, network_protocol
 
 SERVER = """MIXED_READY
 client[2] Receive_CLIENT_ACK(): frame=24
@@ -204,6 +209,86 @@ class MultiplayerTests(unittest.TestCase):
         before = multiplayer.game_objects(build, False)
         obj.write_bytes(b"changed object")
         self.assertNotEqual(before, multiplayer.game_objects(build, False))
+
+    def test_rejected_join_fails_at_once_naming_the_error(self) -> None:
+        # A rejected client stays at the menu and the server keeps running, so
+        # only the reported error ends the session before the per-game timeout.
+        error = "client[1] SendError(): error=8"
+        binaries = {}
+        for role, body in (
+            (
+                "reference",
+                f"echo MIXED_READY\nsleep 0.2\necho '{error}'\nexec sleep 60\n",
+            ),
+            ("candidate", "exec sleep 60\n"),
+        ):
+            binary = self.root / role / "openttd"
+            binary.parent.mkdir()
+            binary.write_text("#!/bin/sh\n" + body)
+            binary.chmod(0o755)
+            binaries[role] = binary
+        started = time.monotonic()
+        with (
+            patch.object(core, "GAME_LOCK", self.root / "game.lock"),
+            self.assertRaisesRegex(RuntimeError, f"failure: {re.escape(error)}"),
+        ):
+            multiplayer.session(
+                binaries, self.source, self.root / "rejected", "reference", 60
+            )
+        self.assertLess(time.monotonic() - started, 20)
+        execution = json.loads((self.root / "rejected/execution.json").read_text())
+        self.assertNotEqual(execution["exits"]["client"], 0)
+
+    def test_protocol_waits_fail_at_once_on_errors_beyond_those_allowed(self) -> None:
+        def peer(name: str, lines: list[str]) -> network_protocol.Peer:
+            folder = self.root / name
+            folder.mkdir()
+            script = "".join(f"print({line!r}, flush=True)\n" for line in lines)
+            process = subprocess.Popen(
+                [sys.executable, "-c", script + "import time; time.sleep(60)"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            self.addCleanup(process.wait)
+            self.addCleanup(process.kill)
+            return network_protocol.Peer(process, folder, 60)
+
+        error = "client[1] SendError(): error=8"
+        for name, lines, count, failure, allowed, message in (
+            ("rejected", [error], 1, network_protocol.JOIN_FAILURE, 0, error),
+            (
+                "dropped",
+                ["Client #1 closed connection"],
+                1,
+                network_protocol.JOIN_FAILURE,
+                0,
+                "closed connection",
+            ),
+            (
+                "invalid",
+                [error, "status = ACTIVE"],
+                1,
+                network_protocol.SEND_ERROR,
+                1,
+                None,
+            ),
+            ("second", [error, error], 1, network_protocol.SEND_ERROR, 1, error),
+        ):
+            with self.subTest(name=name):
+                server = peer(name, lines)
+                started = time.monotonic()
+                if message is None:
+                    server.wait("status = ACTIVE", count, failure, allowed)
+                else:
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        f"{name}: .*{re.escape(message)}.* before status = ACTIVE of 1",
+                    ):
+                        server.wait("status = ACTIVE", count, failure, allowed)
+                self.assertLess(time.monotonic() - started, 20)
+                server.process.kill()
+                server.reader.join()
 
 
 if __name__ == "__main__":

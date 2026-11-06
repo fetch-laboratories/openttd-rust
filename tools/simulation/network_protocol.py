@@ -15,6 +15,16 @@ from . import core, multiplayer
 from .console_adapter import console_adapter, prepared_console
 
 NAME = "network-protocol-loopback"
+# A rejected or dropped client leaves both processes running; without this the
+# join waits last the per-game timeout. Closes and errors are expected only after
+# the invalid admission, which sends one error.
+JOIN_FAILURE = re.compile(
+    r"SendError\(\)|Receive_SERVER_ERROR\(\)|Receive_CLIENT_ERROR\(\)"
+    r"|closed connection|connection lost|has been disconnected"
+)
+SEND_ERROR = re.compile(
+    r"SendError\(\)|Receive_SERVER_ERROR\(\)|Receive_CLIENT_ERROR\(\)"
+)
 CALLBACK = "_Z30CcPlaySound_CONSTRUCTION_OTHER8CommandsRK11CommandCostN10StrongType7TypedefIj12TileIndexTagJNS3_7CompareENS3_7IntegerENS3_10CompatibleIiEENS8_IlEEEEE"
 
 
@@ -111,14 +121,33 @@ class Peer:
                 self.ended = True
                 self.condition.notify_all()
 
-    def wait(self, marker: str, count: int = 1) -> None:
+    def wait(
+        self,
+        marker: str,
+        count: int = 1,
+        failure: re.Pattern[str] | None = None,
+        allowed: int = 0,
+    ) -> None:
+        """Wait for `count` markers; fail at once on more than `allowed` failures."""
+
+        def failed() -> list[str]:
+            if failure is None:
+                return []
+            return [line for line in self.lines if failure.search(line)][allowed:]
+
         with self.condition:
             reached = self.condition.wait_for(
                 lambda: (
-                    sum(marker in line for line in self.lines) >= count or self.ended
+                    sum(marker in line for line in self.lines) >= count
+                    or self.ended
+                    or bool(failed())
                 ),
                 timeout=self.timeout,
             )
+            if failed():
+                raise RuntimeError(
+                    f"{self.folder.name}: {failed()[0]} before {marker} of {count}"
+                )
             if not reached or sum(marker in line for line in self.lines) < count:
                 raise RuntimeError(f"{self.folder.name}: missing {marker} of {count}")
 
@@ -368,8 +397,8 @@ def session(
                 env,
             )
             peers.append(issuer)
-            issuer.wait("NET574 ready issuer")
-            server.wait("status = ACTIVE")
+            issuer.wait("NET574 ready issuer", failure=JOIN_FAILURE)
+            server.wait("status = ACTIVE", failure=JOIN_FAILURE)
             joiner = start(
                 binaries[client_role],
                 folder / "joiner",
@@ -381,14 +410,15 @@ def session(
                 env,
             )
             peers.append(joiner)
-            joiner.wait(" 23 17")  # Decrypted SERVER_MAP_DONE, before its handler runs.
+            # Decrypted SERVER_MAP_DONE, before its handler runs.
+            joiner.wait(" 23 17", failure=JOIN_FAILURE)
             issuer.trigger("issue")
             issuer.wait("NET574 callback ", 8)
             with (joiner.folder / "map-release").open("w") as release:
                 release.write("release\n")
             issuer.wait("NET574 callback ", 24)
-            joiner.wait("NET574 ready hold")
-            server.wait("status = ACTIVE", 2)
+            joiner.wait("NET574 ready hold", failure=JOIN_FAILURE)
+            server.wait("status = ACTIVE", 2, JOIN_FAILURE)
             with socket.create_connection((host, port), timeout=timeout) as invalid:
                 invalid.sendall(bytes((3, 0, 29)))
                 with invalid.makefile("rb") as response:
@@ -400,8 +430,8 @@ def session(
                         raise RuntimeError("invalid-admission response size differs")
                     rejected = header + response.read(size - 2)
             issuer.trigger("reconnect 1")
-            issuer.wait("NET574 ready issuer", 2)
-            server.wait("status = ACTIVE", 3)
+            issuer.wait("NET574 ready issuer", 2, SEND_ERROR)
+            server.wait("status = ACTIVE", 3, SEND_ERROR, allowed=1)
             assert server.process.stdin is not None
             server.process.stdin.write("unpause\n")
             server.process.stdin.flush()
