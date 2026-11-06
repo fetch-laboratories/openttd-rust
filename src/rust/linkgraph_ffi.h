@@ -39,7 +39,6 @@ struct OpenTTDLiveGraph;
 struct OpenTTDLiveEdge;
 OpenTTDLiveGraph *openttd_rust_live_graph_new(uint8_t);
 OpenTTDLiveGraph *openttd_rust_live_graph_new_empty();
-OpenTTDLiveGraph *openttd_rust_live_graph_copy(const OpenTTDLiveGraph *);
 void openttd_rust_live_graph_delete(OpenTTDLiveGraph *);
 void openttd_rust_live_graph_init(OpenTTDLiveGraph *, uint32_t);
 void openttd_rust_live_graph_shift(OpenTTDLiveGraph *, int32_t);
@@ -52,9 +51,6 @@ void openttd_rust_live_node_update_edge(OpenTTDLiveGraph *, uint16_t, uint16_t, 
 OpenTTDLiveEdge *openttd_rust_live_node_append_edge(OpenTTDLiveGraph *, uint16_t);
 void openttd_rust_live_node_add_edge(OpenTTDLiveGraph *, uint16_t, uint16_t, uint32_t, uint32_t, uint32_t, uint8_t);
 void openttd_rust_live_edge_init(OpenTTDLiveEdge *, uint16_t);
-void openttd_rust_live_edge_update(OpenTTDLiveEdge *, uint32_t, uint32_t, uint32_t, uint8_t);
-void openttd_rust_live_edge_restrict(OpenTTDLiveEdge *);
-void openttd_rust_live_edge_release(OpenTTDLiveEdge *);
 struct OpenTTDLiveStationInput { uint32_t xy, demand; };
 struct OpenTTDLiveGraphServices {
 	bool assertions;

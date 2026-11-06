@@ -44,11 +44,6 @@ public:
 	 */
 	struct BaseEdge : OpenTTDLiveEdge {
 		BaseEdge(NodeID dest_node = INVALID_NODE) { openttd_rust_live_edge_init(this, dest_node); }
-		uint32_t TravelTime() const { return LinkGraph::EdgeTravelTime(*this); }
-		TimerGameEconomy::Date LastUpdate() const { return std::max(this->last_unrestricted_update, this->last_restricted_update); }
-		void Update(uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(this->capacity > 0); assert(capacity >= usage); openttd_rust_live_edge_update(this, capacity, usage, time, modes.base()); }
-		void Restrict() { openttd_rust_live_edge_restrict(this); }
-		void Release() { openttd_rust_live_edge_release(this); }
 	};
 	static uint32_t EdgeTravelTime(const OpenTTDLiveEdge &edge) { return static_cast<uint32_t>(edge.travel_time_sum / edge.capacity); }
 
@@ -71,7 +66,6 @@ public:
 		bool HasEdgeTo(NodeID to) const { const auto &edges = this->Record().edges; auto it = std::ranges::lower_bound(edges, to, {}, &OpenTTDLiveEdge::dest_node); return it != edges.end() && it->dest_node == to; }
 		const OpenTTDLiveEdge &operator[](NodeID to) const { const auto &edges = this->Record().edges; auto it = std::ranges::lower_bound(edges, to, {}, &OpenTTDLiveEdge::dest_node); assert(it != edges.end() && it->dest_node == to); return *it; }
 		std::span<const OpenTTDLiveEdge> Edges() const { return this->Record().edges; }
-		OpenTTDLiveEdge &AppendEdge() { return *openttd_rust_live_node_append_edge(this->owner, this->id); }
 	};
 
 	typedef std::vector<BaseNode> NodeVector;
@@ -100,7 +94,7 @@ public:
 
 	LinkGraph() : owner(openttd_rust_live_graph_new_empty()) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
 	LinkGraph(CargoType cargo) : owner(openttd_rust_live_graph_new(cargo)) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
-	LinkGraph(const LinkGraph &other) : LinkGraphPool::PoolItem<&_link_graph_pool>(other), owner(openttd_rust_live_graph_copy(other.owner)) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
+	LinkGraph(const LinkGraph &) = delete;
 	~LinkGraph() { _link_graph_pool.RetireUnboundRecord(this->owner); openttd_rust_live_graph_delete(this->owner); }
 	LinkGraph &operator=(const LinkGraph &) = delete;
 	void Init(uint size) { assert(this->Size() == 0); openttd_rust_live_graph_init(this->owner, size); }
@@ -110,8 +104,6 @@ public:
 	OpenTTDLiveGraph *RustState() const { return this->owner; }
 	OpenTTDLiveGraph &Record() { return *this->owner; }
 	const OpenTTDLiveGraph &Record() const { return *this->owner; }
-	int32_t &SaveCompression() { return this->Record().last_compression; }
-	uint8_t &SaveCargo() { return this->Record().cargo; }
 
 	/* Splitting link graphs is intentionally not implemented.
 	 * The overhead in determining connectedness would probably outweigh the

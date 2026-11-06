@@ -311,10 +311,6 @@ pub extern "C" fn openttd_rust_live_graph_new_empty() -> *mut Graph {
     new_graph(crate::cargo_type::INVALID_CARGO, 0)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_copy(graph: *const Graph) -> *mut Graph {
-    Box::into_raw(Box::new(unsafe { &*graph }.clone()))
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_delete(graph: *mut Graph) {
     drop(unsafe { Box::from_raw(graph) });
 }
@@ -406,6 +402,7 @@ pub unsafe extern "C" fn openttd_rust_live_edge_init(edge: *mut Edge, dest: u16)
     }
 }
 #[unsafe(no_mangle)]
+#[cfg(feature = "native-test-support")]
 pub unsafe extern "C" fn openttd_rust_live_edge_update(
     edge: *mut Edge,
     capacity: u32,
@@ -417,10 +414,12 @@ pub unsafe extern "C" fn openttd_rust_live_edge_update(
     unsafe { &mut *edge }.update(capacity, usage, time, modes, date);
 }
 #[unsafe(no_mangle)]
+#[cfg(feature = "native-test-support")]
 pub unsafe extern "C" fn openttd_rust_live_edge_restrict(edge: *mut Edge) {
     unsafe { &mut *edge }.restrict();
 }
 #[unsafe(no_mangle)]
+#[cfg(feature = "native-test-support")]
 pub unsafe extern "C" fn openttd_rust_live_edge_release(edge: *mut Edge) {
     unsafe { &mut *edge }.release();
 }

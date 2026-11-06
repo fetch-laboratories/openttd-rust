@@ -10,6 +10,16 @@
 use crate::map_func::{MapStatics, TileTypeAccess};
 use crate::tile_map::{get_tile_z, get_tropic_zone};
 
+/// Observe the production edge timestamp calculation in the original graph trace.
+/// # Safety
+/// `edge` is a live canonical edge, read under serialized fixture execution.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_linkgraph_last_update(
+    edge: *const crate::linkgraph::live::Edge,
+) -> i32 {
+    unsafe { &*edge }.last_update()
+}
+
 /// Compare production industry removal arithmetic with native `Money` operators.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {

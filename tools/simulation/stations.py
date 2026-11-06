@@ -768,11 +768,17 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 }
 
 /* #378: real graph mutations plus arithmetic outside ordinary play's range. */
+#ifdef WITH_RUST
+extern "C" int32_t OPENTTD_RUST_CALL openttd_test_linkgraph_last_update(const OpenTTDLiveEdge *) noexcept;
+extern "C" void OPENTTD_RUST_CALL openttd_rust_live_edge_update(OpenTTDLiveEdge *, uint32_t, uint32_t, uint32_t, uint8_t) noexcept;
+extern "C" void OPENTTD_RUST_CALL openttd_rust_live_edge_restrict(OpenTTDLiveEdge *) noexcept;
+extern "C" void OPENTTD_RUST_CALL openttd_rust_live_edge_release(OpenTTDLiveEdge *) noexcept;
+#endif
 static void StationGraphs()
 {
 	auto last_update = [](const auto &edge) {
 #ifdef WITH_RUST
-		return std::max(edge.last_unrestricted_update, edge.last_restricted_update).base();
+		return openttd_test_linkgraph_last_update(&edge);
 #else
 		return edge.LastUpdate().base();
 #endif
@@ -797,7 +803,13 @@ static void StationGraphs()
 	(*first)[0].AddEdge(1, 65535, 5, 120, {EdgeUpdateMode::Increase, EdgeUpdateMode::Restricted});
 	(*second)[0].UpdateEdge(1, 65536, 4, 17, {EdgeUpdateMode::Unrestricted});
 	(*second)[0].UpdateSupply(11);
+#ifdef WITH_RUST
+	const auto *settings = reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph);
+	std::unique_ptr<OpenTTDLinkGraphJobRecord, decltype(&openttd_rust_linkgraph_job_delete)> copy(
+		openttd_rust_linkgraph_job_new(second->RustState(), second->index.base(), settings), &openttd_rust_linkgraph_job_delete);
+#else
 	LinkGraph copy(*second);
+#endif
 	stations[2]->goods[cargo].status.Reset(GoodsEntry::State::Acceptance);
 	first->Merge(second);
 #ifdef WITH_RUST
@@ -805,7 +817,12 @@ static void StationGraphs()
 #else
 	StationNeed((*first)[2].demand == 0, __LINE__);
 #endif
-	fmt::print(stderr, "STCMD graph merge {} {} {} {} {}\n", first->Size(), copy.Size(), stations[2]->goods[cargo].node, last_update((*first)[2][3]), (*first)[2][3].travel_time_sum);
+#ifdef WITH_RUST
+	const size_t copy_size = copy->graph->nodes.size();
+#else
+	const size_t copy_size = copy.Size();
+#endif
+	fmt::print(stderr, "STCMD graph merge {} {} {} {} {}\n", first->Size(), copy_size, stations[2]->goods[cargo].node, last_update((*first)[2][3]), (*first)[2][3].travel_time_sum);
 	first->RemoveNode(1);
 	fmt::print(stderr, "STCMD graph nonlast {} {} {}\n", first->Size(), stations[3]->goods[cargo].node, (*first)[2][1].dest_node);
 	first->RemoveNode(first->Size() - 1);
@@ -814,11 +831,18 @@ static void StationGraphs()
 	for (size_t i = 0; i < stations.size(); i++) { stations[i]->goods[cargo].link_graph = graphs[i]; stations[i]->goods[cargo].node = nodes[i]; }
 	delete first;
 	for (uint cap : {1U, 65535U, 65536U, UINT32_MAX}) {
-		LinkGraph graph(cargo); graph.Init(1);
+#ifdef WITH_RUST
+		StationNeed(LinkGraph::CanAllocateItem(), __LINE__);
+		auto graph_owner = std::make_unique<LinkGraph>(cargo);
+		auto &graph = *graph_owner;
+#else
+		LinkGraph graph(cargo);
+#endif
+		graph.Init(1);
 		graph[0].UpdateSupply(UINT32_MAX); graph[0].UpdateSupply(2);
 		{
 #ifdef WITH_RUST
-			auto &edge = graph[0].AppendEdge();
+			auto &edge = *openttd_rust_live_node_append_edge(graph.RustState(), 0);
 #else
 			auto &edge = graph[0].edges.emplace_back();
 #endif
@@ -833,11 +857,18 @@ static void StationGraphs()
 	}
 	for (uint64_t sum : {uint64_t{0}, UINT64_MAX - 1}) {
 		LinkGraph::BaseEdge edge(0); edge.capacity = UINT32_MAX - 2; edge.usage = UINT32_MAX - 3; edge.travel_time_sum = sum;
+#ifdef WITH_RUST
+		openttd_rust_live_edge_update(&edge, 7, 6, 100, (EdgeUpdateModes{EdgeUpdateMode::Increase, EdgeUpdateMode::Refresh, EdgeUpdateMode::Restricted}).base());
+		openttd_rust_live_edge_update(&edge, 11, 3, 0, (EdgeUpdateModes{EdgeUpdateMode::Refresh, EdgeUpdateMode::Unrestricted}).base());
+		openttd_rust_live_edge_update(&edge, 5, 1, 0, (EdgeUpdateModes{EdgeUpdateMode::Increase}).base());
+		openttd_rust_live_edge_restrict(&edge); openttd_rust_live_edge_release(&edge);
+#else
 		edge.Update(7, 6, 100, {EdgeUpdateMode::Increase, EdgeUpdateMode::Refresh, EdgeUpdateMode::Restricted});
 		edge.Update(11, 3, 0, {EdgeUpdateMode::Refresh, EdgeUpdateMode::Unrestricted});
 		edge.Update(5, 1, 0, {EdgeUpdateMode::Increase});
 		edge.Restrict(); edge.Release();
-		fmt::print(stderr, "STCMD graph update {} {} {} {} {}\n", edge.capacity, edge.usage, edge.travel_time_sum, edge.TravelTime(), edge.LastUpdate().base());
+#endif
+		fmt::print(stderr, "STCMD graph update {} {} {} {} {}\n", edge.capacity, edge.usage, edge.travel_time_sum, travel_time(edge), last_update(edge));
 	}
 	fmt::print(stderr, "STCMD complete\n");
 }

@@ -428,30 +428,32 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 #include "../linkgraph/linkgraphschedule.h"
 TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime")
 {
-	LinkGraph graph(0); graph.index = LinkGraphID::Invalid(); graph.Init(1);
+	auto *graph = openttd_rust_live_graph_new(0);
+	openttd_rust_live_graph_init(graph, 1);
 	{
-		auto *fields = &graph.Record().nodes[0];
+		auto *fields = &graph->nodes[0];
 		fields->supply = 0xFEDCBA98; fields->demand = 17; fields->station = 42; fields->xy = 1234; fields->last_update = -1;
-		CHECK(&fields->supply == &graph.Record().nodes[0].supply);
-		auto &edge = graph[0].AppendEdge(); edge.dest_node = 0; edge.capacity = 65536; edge.travel_time_sum = UINT64_C(0xFEDCBA9876543210);
+		auto &edge = *openttd_rust_live_node_append_edge(graph, 0); edge.dest_node = 0; edge.capacity = 65536; edge.travel_time_sum = UINT64_C(0xFEDCBA9876543210);
 	}
 	{
-		LinkGraphJob job(graph);
-		CHECK(job.Graph()->nodes[0].station == 42);
-		CHECK(job.Graph() != graph.RustState());
-		CHECK(job.Graph()->shell == nullptr); // Private snapshots never bind to a live pool.
-		CHECK(job.Graph()->nodes[0].supply == 0xFEDCBA98);
-		CHECK(job.Graph()->nodes[0].edges[0].travel_time_sum == UINT64_C(0xFEDCBA9876543210));
-		CHECK(job.Graph()->nodes[0].edges.items != graph[0].Edges().data());
-		graph[0].UpdateSupply(1);
-		CHECK(job.Graph()->nodes[0].supply == 0xFEDCBA98);
+		const auto *settings = reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph);
+		auto *job = openttd_rust_linkgraph_job_new(graph, 0, settings);
+		CHECK(job->graph->nodes[0].station == 42);
+		CHECK(job->graph != graph);
+		CHECK(job->graph->shell == nullptr); // Private snapshots never bind to a live pool.
+		CHECK(job->graph->nodes[0].supply == 0xFEDCBA98);
+		CHECK(job->graph->nodes[0].edges[0].travel_time_sum == UINT64_C(0xFEDCBA9876543210));
+		CHECK(job->graph->nodes[0].edges.items != graph->nodes[0].edges.items);
+		openttd_rust_live_node_update_supply(graph, 0, 1);
+		CHECK(job->graph->nodes[0].supply == 0xFEDCBA98);
+		openttd_rust_linkgraph_job_delete(job);
 	}
-	CHECK(graph[0].Supply() == 0xFEDCBA99);
-	CHECK(graph[0].Station() == StationID(42));
-	CHECK(GetRustLiveGraphServices().index(graph.RustState()) == graph.index.base());
+	CHECK(graph->nodes[0].supply == 0xFEDCBA99);
+	CHECK(graph->nodes[0].station == 42);
+	openttd_rust_live_graph_delete(graph);
 }
 
-TEST_CASE("Link graph pools - canonical slots isolate nonpooled owners and retire before free")
+TEST_CASE("Link graph pools - canonical slots retire before free")
 {
 	MockEnvironment::Instance();
 	LinkGraphSchedule::Clear();
@@ -478,26 +480,6 @@ TEST_CASE("Link graph pools - canonical slots isolate nonpooled owners and retir
 		CHECK(graphs->items == 1);
 		CHECK(jobs->items == 1);
 	};
-	isolated();
-	{
-		LinkGraph stack(0); // index remains uninitialized throughout binding.
-		isolated();
-		stack.index = LinkGraphID::Invalid();
-		{
-			LinkGraph copy(*sibling); // Preserve the source's copied index.
-			CHECK(copy.index == graph_id);
-			CHECK(copy.RustState() != sibling_record);
-			CHECK(copy.Record().shell == &copy);
-			isolated();
-			{
-				LinkGraphJob stack_job(stack);
-				CHECK(stack_job.Graph()->shell == nullptr);
-				isolated();
-			}
-			isolated();
-		}
-		isolated();
-	}
 	isolated();
 
 	const LinkGraphID indexed_graph_id{37};
