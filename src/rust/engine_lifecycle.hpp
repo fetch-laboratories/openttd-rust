@@ -9,6 +9,7 @@
 #ifndef RUST_ENGINE_LIFECYCLE_HPP
 #define RUST_ENGINE_LIFECYCLE_HPP
 #include "byte_span_ffi.h"
+#include "../company_type.h"
 #include "../engine_type.h"
 #include "../vehicle_type.h"
 #include "../newgrf_badge_type.h"
