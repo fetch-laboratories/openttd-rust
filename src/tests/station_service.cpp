@@ -425,6 +425,7 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 }
 
 #include "../linkgraph/linkgraphjob.h"
+#include "../linkgraph/linkgraphschedule.h"
 TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime")
 {
 	LinkGraph graph(0); graph.index = LinkGraphID::Invalid(); graph.Init(1);
@@ -438,6 +439,7 @@ TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime"
 		LinkGraphJob job(graph);
 		CHECK(job.Graph()->nodes[0].station == 42);
 		CHECK(job.Graph() != graph.RustState());
+		CHECK(job.Graph()->shell == nullptr); // Private snapshots never bind to a live pool.
 		CHECK(job.Graph()->nodes[0].supply == 0xFEDCBA98);
 		CHECK(job.Graph()->nodes[0].edges[0].travel_time_sum == UINT64_C(0xFEDCBA9876543210));
 		CHECK(job.Graph()->nodes[0].edges.items != graph[0].Edges().data());
@@ -447,4 +449,114 @@ TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime"
 	CHECK(graph[0].Supply() == 0xFEDCBA99);
 	CHECK(graph[0].Station() == StationID(42));
 	CHECK(GetRustLiveGraphServices().index(graph.RustState()) == graph.index.base());
+}
+
+TEST_CASE("Link graph pools - canonical slots isolate nonpooled owners and retire before free")
+{
+	MockEnvironment::Instance();
+	LinkGraphSchedule::Clear();
+	_link_graph_job_pool.CleanPool();
+	_link_graph_pool.CleanPool();
+	struct Cleanup {
+		~Cleanup() { LinkGraphSchedule::Clear(); _link_graph_job_pool.CleanPool(); _link_graph_pool.CleanPool(); }
+	} cleanup;
+	const auto *graphs = _link_graph_pool.descriptor;
+	const auto *jobs = _link_graph_job_pool.descriptor;
+	REQUIRE(LinkGraph::CanAllocateItem());
+	auto *sibling = new LinkGraph(0);
+	const auto graph_id = sibling->index;
+	auto *sibling_record = &sibling->Record();
+	REQUIRE(LinkGraphJob::CanAllocateItem());
+	auto *sibling_job = new LinkGraphJob();
+	const auto job_id = sibling_job->index;
+	auto *job_record = &sibling_job->Record();
+	auto isolated = [&] {
+		CHECK(graphs->slots[graph_id.base()].shell == sibling);
+		CHECK(graphs->slots[graph_id.base()].record == sibling_record);
+		CHECK(jobs->slots[job_id.base()].shell == sibling_job);
+		CHECK(jobs->slots[job_id.base()].record == job_record);
+		CHECK(graphs->items == 1);
+		CHECK(jobs->items == 1);
+	};
+	isolated();
+	{
+		LinkGraph stack(0); // index remains uninitialized throughout binding.
+		isolated();
+		stack.index = LinkGraphID::Invalid();
+		{
+			LinkGraph copy(*sibling); // Preserve the source's copied index.
+			CHECK(copy.index == graph_id);
+			CHECK(copy.RustState() != sibling_record);
+			CHECK(copy.Record().shell == &copy);
+			isolated();
+			{
+				LinkGraphJob stack_job(stack);
+				CHECK(stack_job.Graph()->shell == nullptr);
+				isolated();
+			}
+			isolated();
+		}
+		isolated();
+	}
+	isolated();
+
+	const LinkGraphID indexed_graph_id{37};
+	auto *indexed_graph = new (indexed_graph_id) LinkGraph(1);
+	CHECK(graphs == _link_graph_pool.descriptor); // Descriptor survives slot growth.
+	CHECK(graphs->slots[37].shell == indexed_graph);
+	CHECK(graphs->slots[37].record == &indexed_graph->Record());
+	indexed_graph->~LinkGraph(); // Observe the real destructor before actual sized delete.
+	CHECK(graphs->slots[37].shell == indexed_graph);
+	CHECK(graphs->slots[37].record == nullptr);
+	LinkGraph::operator delete(indexed_graph, sizeof(LinkGraph));
+	CHECK(graphs->slots[37].shell == nullptr);
+	CHECK(graphs->first_unused == 38);
+	const LinkGraphJobID indexed_job_id{37};
+	auto *indexed_job = new (indexed_job_id) LinkGraphJob();
+	CHECK(jobs == _link_graph_job_pool.descriptor);
+	CHECK(jobs->slots[37].record == &indexed_job->Record());
+	indexed_job->~LinkGraphJob();
+	CHECK(jobs->slots[37].shell == indexed_job);
+	CHECK(jobs->slots[37].record == nullptr);
+	LinkGraphJob::operator delete(indexed_job, sizeof(LinkGraphJob));
+	CHECK(jobs->slots[37].shell == nullptr);
+	CHECK(jobs->first_unused == 38);
+	isolated();
+
+	REQUIRE(LinkGraph::CanAllocateItem());
+	auto *normal_graph = new LinkGraph(2);
+	CHECK(normal_graph->index == LinkGraphID{1}); // Indexed allocation did not advance first_free.
+	delete normal_graph;
+	CHECK(graphs->slots[1].shell == nullptr);
+	CHECK(graphs->slots[1].record == nullptr);
+	REQUIRE(LinkGraphJob::CanAllocateItem());
+	auto *normal_job = new LinkGraphJob();
+	CHECK(normal_job->index == LinkGraphJobID{1});
+	delete normal_job;
+	CHECK(jobs->slots[1].shell == nullptr);
+	CHECK(jobs->slots[1].record == nullptr);
+	isolated();
+
+	auto *reused_graph = new (indexed_graph_id) LinkGraph(3);
+	CHECK(reused_graph->Record().cargo == 3);
+	CHECK(graphs->slots[37].record == &reused_graph->Record());
+	auto *reused_job = new (indexed_job_id) LinkGraphJob();
+	CHECK(jobs->slots[37].record == &reused_job->Record());
+	reused_job->Record().aborted.store(true, std::memory_order_release);
+	_link_graph_job_pool.CleanPool(); // Aborted jobs join/retire without normal publication.
+	CHECK(jobs->slots.empty());
+	CHECK(jobs->items == 0);
+	CHECK(!jobs->cleaning);
+	_link_graph_pool.CleanPool();
+	CHECK(graphs->slots.empty());
+	CHECK(graphs->items == 0);
+	CHECK(!graphs->cleaning);
+	REQUIRE(LinkGraph::CanAllocateItem());
+	auto *after_clean = new LinkGraph(4);
+	CHECK(after_clean->index == LinkGraphID{0});
+	CHECK(graphs->slots[0].record == &after_clean->Record());
+	REQUIRE(LinkGraphJob::CanAllocateItem());
+	auto *job_after_clean = new LinkGraphJob();
+	CHECK(job_after_clean->index == LinkGraphJobID{0});
+	CHECK(jobs->slots[0].record == &job_after_clean->Record());
 }

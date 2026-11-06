@@ -10,7 +10,7 @@
 #ifndef LINKGRAPH_H
 #define LINKGRAPH_H
 
-#include "../core/pool_type.hpp"
+#include "../rust/pool.hpp"
 #include "../station_base.h"
 #include "../cargotype.h"
 #include "../timer/timer_game_economy.h"
@@ -27,7 +27,7 @@ class LinkGraph;
  * Type of the pool for link graph components. Each station can be in at up to
  * 32 link graphs. So we allow for plenty of them to be created.
  */
-using LinkGraphPool = Pool<LinkGraph, LinkGraphID, 32>;
+using LinkGraphPool = RustPool<LinkGraph, LinkGraphID, 32>;
 /** The actual pool with link graphs. */
 extern LinkGraphPool _link_graph_pool;
 
@@ -98,10 +98,10 @@ public:
 		return openttd_rust_live_graph_scale(val, target_age.base(), orig_age.base());
 	}
 
-	LinkGraph() : owner(openttd_rust_live_graph_new_empty()) { this->owner->shell = this; }
-	LinkGraph(CargoType cargo) : owner(openttd_rust_live_graph_new(cargo)) { this->owner->shell = this; }
-	LinkGraph(const LinkGraph &other) : LinkGraphPool::PoolItem<&_link_graph_pool>(other), owner(openttd_rust_live_graph_copy(other.owner)) { this->owner->shell = this; }
-	~LinkGraph() { openttd_rust_live_graph_delete(this->owner); }
+	LinkGraph() : owner(openttd_rust_live_graph_new_empty()) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
+	LinkGraph(CargoType cargo) : owner(openttd_rust_live_graph_new(cargo)) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
+	LinkGraph(const LinkGraph &other) : LinkGraphPool::PoolItem<&_link_graph_pool>(other), owner(openttd_rust_live_graph_copy(other.owner)) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
+	~LinkGraph() { _link_graph_pool.RetireUnboundRecord(this->owner); openttd_rust_live_graph_delete(this->owner); }
 	LinkGraph &operator=(const LinkGraph &) = delete;
 	void Init(uint size) { assert(this->Size() == 0); openttd_rust_live_graph_init(this->owner, size); }
 	void ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_live_graph_shift(this->owner, interval.base()); }

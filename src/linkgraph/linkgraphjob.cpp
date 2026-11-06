@@ -8,7 +8,6 @@
 /** @file linkgraphjob.cpp Definition of link graph job classes used for cargo distribution. */
 
 #include "../stdafx.h"
-#include "../core/pool_func.hpp"
 #include "../window_func.h"
 #include "linkgraphjob.h"
 #include "../rust/services_linkgraph.h"
@@ -21,10 +20,9 @@
 
 /* Initialize the link-graph-job-pool */
 LinkGraphJobPool _link_graph_job_pool("LinkGraphJob");
-INSTANTIATE_POOL_METHODS(LinkGraphJob)
 
-LinkGraphJob::LinkGraphJob() : record(openttd_rust_linkgraph_job_new(nullptr, LinkGraphID::Invalid().base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; }
-LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgraph_job_new(orig.RustState(), orig.index.base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; }
+LinkGraphJob::LinkGraphJob() : record(openttd_rust_linkgraph_job_new(nullptr, LinkGraphID::Invalid().base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; _link_graph_job_pool.BindRecordIfOwned(this, this->record); }
+LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgraph_job_new(orig.RustState(), orig.index.base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; _link_graph_job_pool.BindRecordIfOwned(this, this->record); }
 
 /** Start the native worker; Rust executes the synchronous failure fallback. */
 bool LinkGraphJob::StartThread()
@@ -110,6 +108,7 @@ LinkGraphJob::~LinkGraphJob()
 		auto services = CargoFlowServices(&context);
 		openttd_rust_flow_apply(&services);
 	}
+	_link_graph_job_pool.RetireUnboundRecord(this->record);
 	openttd_rust_linkgraph_job_delete(this->record);
 }
 

@@ -17,7 +17,7 @@
 class LinkGraphJob;
 
 /** Type of the pool for link graph jobs. */
-using LinkGraphJobPool = Pool<LinkGraphJob, LinkGraphJobID, 32>;
+using LinkGraphJobPool = RustPool<LinkGraphJob, LinkGraphJobID, 32>;
 /** The actual pool with link graph jobs. */
 extern LinkGraphJobPool _link_graph_job_pool;
 
