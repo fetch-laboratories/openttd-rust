@@ -280,6 +280,24 @@ generic template remains until its final instantiation retires; credit that
 deletion once. Records, containers and control-flow completion remain separate
 obligations of each owner.
 
+All-pools-before-map includes the non-simulation Pool registrations:
+NetworkClientInfoPool and NetworkClientSocketPool transfer with #669 network
+core/discovery/resource ownership, NetworkAdminSocketPool with its admin owner,
+and SpriteGroupPool with GRF publication/lifetime. These phase-3 deliveries run
+beside phase 2 and supply actual allocation/bookkeeping/lifetime closure before
+map allocation. Native read-only iterator wrappers may remain with their named
+reader/support/GUI consumers; they are not a second mutable pool authority and
+retire with the final candidate-C++ consumers. Generic template deletion remains
+one final-use credit.
+
+The tested shell-identity BindRecordIfOwned extension from #719 is promoted
+unchanged through #704 Industry's first required real pooled/nonpooled adoption,
+unless root selects another earlier real consumer. Do not infer membership from
+an uninitialized or copied index, or retire a caller-owned record when destroying
+a borrowed shell. Preserve the normal vehicle indexed path, explicit O(extent)
+scan cost and original owner/drop timing. Other drafts reconcile the same
+pool.hpp definition at necessary updates; no extra support branch is required.
+
 ## Link graph and job storage (#717)
 
 The selected owner moves graph/job records, private graph/settings snapshots,
