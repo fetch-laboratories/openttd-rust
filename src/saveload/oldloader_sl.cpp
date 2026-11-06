@@ -421,7 +421,7 @@ static bool FixTTOEngines()
 			TimerGameCalendar::date -= CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 
 			/* Make sure for example monorail and maglev are available when they should be */
-			if (TimerGameCalendar::date >= e->Record().intro_date && e->info.climates.Test(LandscapeType::Temperate)) {
+			if (TimerGameCalendar::date >= e->Record().intro_date && e->Record().info.climates.Test(LandscapeType::Temperate)) {
 				e->Record().flags.Set(EngineFlag::Available);
 				e->Record().company_avail.Set();
 				e->Record().age = TimerGameCalendar::date > e->Record().intro_date ? (TimerGameCalendar::date - e->Record().intro_date).base() / 30 : 0;
@@ -454,7 +454,7 @@ static bool FixTTOEngines()
 				}
 			}
 
-			e->info.climates = LandscapeType::Temperate;
+			e->Record().info.climates = LandscapeType::Temperate;
 		}
 
 		e->Record().preview_company = CompanyID::Invalid();

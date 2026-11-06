@@ -607,7 +607,7 @@ uint8_t GetBestFittingSubType(Vehicle *v_from, Vehicle *v_for, CargoType dest_ca
 	subtypes.clear();
 	for (; v_from != nullptr; v_from = v_from->HasArticulatedPart() ? v_from->GetNextArticulatedPart() : nullptr) {
 		const Engine *e_from = v_from->GetEngine();
-		if (!e_from->CanCarryCargo() || !e_from->info.callback_mask.Test(VehicleCallbackMask::CargoSuffix)) continue;
+		if (!e_from->CanCarryCargo() || !e_from->Record().info.callback_mask.Test(VehicleCallbackMask::CargoSuffix)) continue;
 		include(subtypes, GetCargoSubtypeText(v_from));
 	}
 
@@ -617,8 +617,8 @@ uint8_t GetBestFittingSubType(Vehicle *v_from, Vehicle *v_for, CargoType dest_ca
 		/* Check whether any articulated part is refittable to 'dest_cargo_type' with a subtype listed in 'subtypes' */
 		for (Vehicle *v = v_for; v != nullptr; v = v->HasArticulatedPart() ? v->GetNextArticulatedPart() : nullptr) {
 			const Engine *e = v->GetEngine();
-			if (!e->CanCarryCargo() || !e->info.callback_mask.Test(VehicleCallbackMask::CargoSuffix)) continue;
-			if (!HasBit(e->info.refit_mask, dest_cargo_type) && v->cargo_type != dest_cargo_type) continue;
+			if (!e->CanCarryCargo() || !e->Record().info.callback_mask.Test(VehicleCallbackMask::CargoSuffix)) continue;
+			if (!HasBit(e->Record().info.refit_mask, dest_cargo_type) && v->cargo_type != dest_cargo_type) continue;
 
 			CargoType old_cargo_type = v->cargo_type;
 			uint8_t old_cargo_subtype = v->cargo_subtype;
@@ -778,13 +778,13 @@ struct RefitWindow : public Window {
 		do {
 			if (v->GetType() == VEH_TRAIN && std::ranges::find(vehicles_to_refit, v->index) == vehicles_to_refit.end()) continue;
 			const Engine *e = v->GetEngine();
-			CargoTypes cmask = e->info.refit_mask;
-			VehicleCallbackMasks callback_mask = e->info.callback_mask;
+			CargoTypes cmask = e->Record().info.refit_mask;
+			VehicleCallbackMasks callback_mask = e->Record().info.callback_mask;
 
 			/* Skip this engine if it does not carry anything */
 			if (!e->CanCarryCargo()) continue;
 			/* Skip this engine if we build the list for auto-refitting and engine doesn't allow it. */
-			if (this->auto_refit && !e->info.misc_flags.Test(EngineMiscFlag::AutoRefit)) continue;
+			if (this->auto_refit && !e->Record().info.misc_flags.Test(EngineMiscFlag::AutoRefit)) continue;
 
 			/* Loop through all cargoes in the refit mask */
 			for (const auto &cs : _sorted_cargo_specs) {
@@ -985,7 +985,7 @@ struct RefitWindow : public Window {
 				break;
 
 			case WID_VR_INFO:
-				size.width = this->information_width + padding.height;
+				size.width = this->Record().information_width + padding.height;
 				break;
 		}
 	}
@@ -1155,8 +1155,8 @@ struct RefitWindow : public Window {
 					}
 				}
 
-				if (this->information_width < max_width) {
-					this->information_width = max_width;
+				if (this->Record().information_width < max_width) {
+					this->Record().information_width = max_width;
 					this->ReInit();
 				}
 				[[fallthrough]];

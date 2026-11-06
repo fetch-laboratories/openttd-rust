@@ -40,7 +40,7 @@
 StringID GetEngineCategoryName(EngineID engine)
 {
 	const Engine *e = Engine::Get(engine);
-	switch (e->type) {
+	switch (e->Record().type) {
 		default: NOT_REACHED();
 		case VEH_ROAD:
 			return GetRoadTypeInfo(e->VehInfo<RoadVehicleInfo>().roadtype)->strings.new_engine;
@@ -90,7 +90,7 @@ struct EnginePreviewWindow : Window {
 		int x_offs, y_offs;
 
 		const Engine *e = Engine::Get(engine);
-		switch (e->type) {
+		switch (e->Record().type) {
 			default: NOT_REACHED();
 			case VEH_TRAIN:    GetTrainSpriteSize(   engine, x, y, x_offs, y_offs, image_type); break;
 			case VEH_ROAD:     GetRoadVehSpriteSize( engine, x, y, x_offs, y_offs, image_type); break;
@@ -327,7 +327,7 @@ void DrawVehicleEngine(int left, int right, int preferred_x, int y, EngineID eng
 {
 	const Engine *e = Engine::Get(engine);
 
-	switch (e->type) {
+	switch (e->Record().type) {
 		case VEH_TRAIN:
 			DrawTrainEngine(left, right, preferred_x, y, engine, pal, image_type);
 			break;

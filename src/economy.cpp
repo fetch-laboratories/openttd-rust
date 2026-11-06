@@ -349,16 +349,16 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.load_engine = [](OpenTTDVehicle *handle) noexcept -> OpenTTDLoadEngine {
 		const Engine *engine = VehicleOf(handle)->GetEngine();
-		return {RustEngine(engine), engine->info.load_amount};
+		return {RustEngine(engine), engine->Record().info.load_amount};
 	},
 	.grf_version = [](const OpenTTDEngine *handle) noexcept -> uint8_t {
 		return RustEngineGRFVersion(EngineOf(handle));
 	},
 	.engine_load_callback = [](const OpenTTDEngine *handle) noexcept -> bool {
-		return EngineOf(handle)->info.callback_mask.Test(VehicleCallbackMask::LoadAmount);
+		return EngineOf(handle)->Record().info.callback_mask.Test(VehicleCallbackMask::LoadAmount);
 	},
 	.engine_no_multiplier = [](const OpenTTDEngine *handle) noexcept -> bool {
-		return EngineOf(handle)->info.misc_flags.Test(EngineMiscFlag::NoDefaultCargoMultiplier);
+		return EngineOf(handle)->Record().info.misc_flags.Test(EngineMiscFlag::NoDefaultCargoMultiplier);
 	},
 	.cargo_capacity = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoCapacity {
 		Vehicle *v = VehicleOf(handle);

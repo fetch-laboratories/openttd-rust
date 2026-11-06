@@ -226,7 +226,7 @@ void Train::GetImage(Direction direction, EngineImageType image_type, VehicleSpr
 		GetCustomVehicleSprite(this, direction, image_type, result);
 		if (result->IsValid()) return;
 
-		spritenum = this->GetEngine()->original_image_index;
+		spritenum = this->GetEngine()->Record().original_image_index;
 	}
 
 	assert(IsValidImageIndex<VEH_TRAIN>(spritenum));
@@ -252,7 +252,7 @@ static void GetRailIcon(EngineID engine, bool rear_head, int &y, EngineImageType
 			return;
 		}
 
-		spritenum = Engine::Get(engine)->original_image_index;
+		spritenum = Engine::Get(engine)->Record().original_image_index;
 	}
 
 	if (rear_head) spritenum++;

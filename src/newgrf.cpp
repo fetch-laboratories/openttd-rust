@@ -572,7 +572,7 @@ static void FinaliseBadges()
 		for (Engine *e : Engine::Iterate()) {
 			if (e->grf_prop.grffile != &file) continue;
 			e->badges.push_back(badge->index);
-			badge->features.Set(static_cast<GrfSpecFeature>(GSF_TRAINS + e->type));
+			badge->features.Set(static_cast<GrfSpecFeature>(GSF_TRAINS + e->Record().type));
 		}
 
 		AddBadgeToSpecs(file.stations, GSF_STATIONS, *badge);

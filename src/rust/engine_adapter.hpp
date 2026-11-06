@@ -49,7 +49,7 @@ static OpenTTDEngineRef EnginePrototype(const Engine *e) noexcept
 }
 static OpenTTDEngineSyncVariant Engine_sync_variant(const OpenTTDEngine *e) noexcept
 {
-	const auto &info = EngineOf(e)->info;
+	const auto &info = EngineOf(e)->Record().info;
 	return {.parent = RustEngineVariant(e), .sync = info.extra_flags.Test(ExtraEngineFlag::SyncReliability)};
 }
 static OpenTTDEngineDisplayVariant Engine_display_variant(const OpenTTDEngine *shell) noexcept
@@ -59,28 +59,28 @@ static OpenTTDEngineDisplayVariant Engine_display_variant(const OpenTTDEngine *s
 }
 static OpenTTDEnginePreviewVariant Engine_preview_variant(const OpenTTDEngine *e) noexcept
 {
-	const auto &info = EngineOf(e)->info;
+	const auto &info = EngineOf(e)->Record().info;
 	return {.parent = RustEngineVariant(e), .join = info.extra_flags.Test(ExtraEngineFlag::JoinPreview)};
 }
 static OpenTTDEngineReliability Engine_reliability(const OpenTTDEngine *shell) noexcept
 {
-	const auto &info = EngineOf(shell)->info;
+	const auto &info = EngineOf(shell)->Record().info;
 	return {.base_life = info.base_life.base(), .retire_early = info.retire_early};
 }
 static OpenTTDEngineStartup Engine_startup(const OpenTTDEngine *shell) noexcept
 {
-	const Engine *e = EngineOf(shell); const auto &info = e->info;
+	const Engine *e = EngineOf(shell); const auto &info = e->Record().info;
 	return {.base_intro = RustEngineBaseIntro(shell), .base_life = info.base_life.base(), .decay_speed = info.decay_speed, .climate = RustEngineClimate(shell)};
 }
 static OpenTTDEngineSeed Engine_seed_config(const OpenTTDEngine *e) noexcept
 {
-	const auto &info = EngineOf(e)->info;
+	const auto &info = EngineOf(e)->Record().info;
 	return {.base_intro = RustEngineBaseIntro(e), .lifelength = info.lifelength.base(), .decay_speed = info.decay_speed, .retire_early = info.retire_early};
 }
 static OpenTTDEngineYear Engine_aging_year(const OpenTTDEngine *shell) noexcept
 {
 	const Engine *e = EngineOf(shell);
-	return {.base_intro = RustEngineBaseIntro(shell), .lifelength = e->info.lifelength.base()};
+	return {.base_intro = RustEngineBaseIntro(shell), .lifelength = e->Record().info.lifelength.base()};
 }
 
 static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.starting_year = RustStartingYear(), .date = TimerGameCalendar::date.base()}; }
@@ -89,7 +89,7 @@ static OpenTTDEngineStartSettings Engine_start_settings() noexcept { return {.st
 static void Engine_clear_last_variant(const OpenTTDEngine *shell) noexcept
 {
 	const Engine *removed = EngineOf(shell);
-	for (Engine *e : Engine::IterateType(removed->type)) {
+	for (Engine *e : Engine::IterateType(removed->Record().type)) {
 		if (e->display_last_variant == removed->index) e->display_last_variant = EngineID::Invalid();
 	}
 }

@@ -762,7 +762,7 @@ private:
 		this->can_do_autorefit = false;
 		for (const Vehicle *w = this->vehicle; w != nullptr; w = w->IsGroundVehicle() ? w->Next() : nullptr) {
 			if (IsEngineRefittable(w->GetEngineType())) this->can_do_refit = true;
-			if (Engine::Get(w->GetEngineType())->info.misc_flags.Test(EngineMiscFlag::AutoRefit)) this->can_do_autorefit = true;
+			if (Engine::Get(w->GetEngineType())->Record().info.misc_flags.Test(EngineMiscFlag::AutoRefit)) this->can_do_autorefit = true;
 		}
 	}
 

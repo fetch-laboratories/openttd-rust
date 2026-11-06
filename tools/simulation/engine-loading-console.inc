@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** Real FILE-loaded engine definitions, native EIDS reload and construction/refit commands. */
+#include "engine-record-fixture.hpp"
 #include "newgrf.h"
 #include "vehicle-record-fixture.hpp"
 #include "newgrf_config.h"
@@ -60,10 +61,10 @@ static void LoadingInspect()
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *a = LoadingEngine(1, type, 300), *b = LoadingEngine(2, type, 300), *c = LoadingEngine(3, type, 300);
 		LoadingRequire((a->index != b->index) == dynamic && a == c, "scopes-overrides");
-		LoadingRequire(a->info.cargo_type == goods && a->info.refit_mask == ((CargoTypes{1} << goods) | (CargoTypes{1} << mail)), "custom-refit-v8");
-		LoadingRequire(b->info.cargo_type == (dynamic ? mail : goods), "local-slot-version");
+		LoadingRequire(EngineFields(a).info.cargo_type == goods && EngineFields(a).info.refit_mask == ((CargoTypes{1} << goods) | (CargoTypes{1} << mail)), "custom-refit-v8");
+		LoadingRequire(EngineFields(b).info.cargo_type == (dynamic ? mail : goods), "local-slot-version");
 		LoadingRequire(_engine_mngr.GetID(type, 0, dynamic ? INVALID_GRFID : GetFileByGRFID(0x4700A001)->grfid) == EngineID::Invalid(), "reservation");
-		fmt::print(stderr, "ENGINE loading-engine {} {} {} {} {} {} {} {} {}\n", type, a->index, b->index, a->GetGRFID(), a->info.cargo_type, a->info.refit_mask, a->info.climates.base(), a->info.variant_id, a->info.callback_mask.base());
+		fmt::print(stderr, "ENGINE loading-engine {} {} {} {} {} {} {} {} {}\n", type, a->index, b->index, a->GetGRFID(), EngineFields(a).info.cargo_type, EngineFields(a).info.refit_mask, EngineFields(a).info.climates.base(), EngineFields(a).info.variant_id, EngineFields(a).info.callback_mask.base());
 		const auto map = LoadingMappings(type);
 		LoadingRequire(std::ranges::is_sorted(map, std::less{}, EngineIDMappingKeyProjection{}), "mapping-order");
 		uint64_t digest = 14695981039346656037ULL;
@@ -74,18 +75,18 @@ static void LoadingInspect()
 			LoadingRequire(result == expected, "file-callback");
 		}
 	}
-	for (uint16_t local : {302, 304, 309, 314}) LoadingRequire(LoadingEngine(1, VEH_TRAIN, local)->info.climates.None(), "disabled-cargo-or-label");
-	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 301)->info.cargo_type == passengers && LoadingEngine(1, VEH_TRAIN, 301)->info.refit_mask == 0 && LoadingEngine(1, VEH_TRAIN, 301)->IsEnabled(), "empty-refit");
-	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 312)->info.cargo_type == passengers && LoadingEngine(1, VEH_TRAIN, 312)->info.refit_mask == _cargo_mask, "unset-refit");
-	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 313)->info.cargo_type == mail && LoadingEngine(1, VEH_TRAIN, 313)->info.refit_mask == (CargoTypes{1} << mail), "required-classes");
-	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 315)->info.cargo_type == mail, "missing-cargo-label");
+	for (uint16_t local : {302, 304, 309, 314}) LoadingRequire(EngineFields(LoadingEngine(1, VEH_TRAIN, local)).info.climates.None(), "disabled-cargo-or-label");
+	LoadingRequire(EngineFields(LoadingEngine(1, VEH_TRAIN, 301)).info.cargo_type == passengers && EngineFields(LoadingEngine(1, VEH_TRAIN, 301)).info.refit_mask == 0 && LoadingEngine(1, VEH_TRAIN, 301)->IsEnabled(), "empty-refit");
+	LoadingRequire(EngineFields(LoadingEngine(1, VEH_TRAIN, 312)).info.cargo_type == passengers && EngineFields(LoadingEngine(1, VEH_TRAIN, 312)).info.refit_mask == _cargo_mask, "unset-refit");
+	LoadingRequire(EngineFields(LoadingEngine(1, VEH_TRAIN, 313)).info.cargo_type == mail && EngineFields(LoadingEngine(1, VEH_TRAIN, 313)).info.refit_mask == (CargoTypes{1} << mail), "required-classes");
+	LoadingRequire(EngineFields(LoadingEngine(1, VEH_TRAIN, 315)).info.cargo_type == mail, "missing-cargo-label");
 	const auto stale = _engine_mngr.GetID(VEH_TRAIN, 450, dynamic ? 0x4700A005 : INVALID_GRFID);
-	LoadingRequire(Engine::IsValidID(stale) && GetFileByGRFID(0x4700A005) == nullptr && Engine::Get(stale)->info.string_id == STR_NEWGRF_INVALID_ENGINE, "persistent-mapping");
+	LoadingRequire(Engine::IsValidID(stale) && GetFileByGRFID(0x4700A005) == nullptr && EngineFields(Engine::Get(stale)).info.string_id == STR_NEWGRF_INVALID_ENGINE, "persistent-mapping");
 	fmt::print(stderr, "ENGINE loading-stale {}\n", stale);
 	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 303)->VehInfo<RailVehicleInfo>().railtypes == RailTypes{RAILTYPE_RAIL, RAILTYPE_ELECTRIC}, "rail-label-list");
-	for (uint16_t local : {305, 306, 310}) LoadingRequire(LoadingEngine(1, VEH_TRAIN, local)->info.variant_id == EngineID::Invalid(), "variant-cycle");
-	LoadingRequire(LoadingEngine(1, VEH_TRAIN, 307)->info.variant_id == LoadingEngine(1, VEH_TRAIN, 308)->index && LoadingEngine(1, VEH_TRAIN, 308)->display_flags.Test(EngineDisplayFlag::HasVariants), "variant-parent");
-	for (uint16_t local : {302, 303}) LoadingRequire(LoadingEngine(1, VEH_ROAD, local)->info.climates.None(), "road-label-class");
+	for (uint16_t local : {305, 306, 310}) LoadingRequire(EngineFields(LoadingEngine(1, VEH_TRAIN, local)).info.variant_id == EngineID::Invalid(), "variant-cycle");
+	LoadingRequire(EngineFields(LoadingEngine(1, VEH_TRAIN, 307)).info.variant_id == LoadingEngine(1, VEH_TRAIN, 308)->index && LoadingEngine(1, VEH_TRAIN, 308)->display_flags.Test(EngineDisplayFlag::HasVariants), "variant-parent");
+	for (uint16_t local : {302, 303}) LoadingRequire(EngineFields(LoadingEngine(1, VEH_ROAD, local)).info.climates.None(), "road-label-class");
 	LoadingRequire(LoadingEngine(1, VEH_ROAD, 301)->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_ROAD && LoadingEngine(1, VEH_ROAD, 304)->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_TRAM, "road-tram-labels");
 	LoadingRequire(LoadingEngine(1, VEH_ROAD, 300)->VehInfo<RoadVehicleInfo>().max_speed == 292, "road-speed");
 	const GRFFile *names = GetFileByGRFID(0x4700A004);
@@ -111,17 +112,17 @@ static void RuntimeInspect()
 	SavedRandomSeeds before, after; SaveRandomSeeds(&before);
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *e = LoadingEngine(1, type, 500);
-		Backup<EngineInfo> info(e->info);
+		Backup<EngineInfo> info(EngineFields(e).info);
 		Backup<CargoGRFFileProps> props(e->grf_prop);
 		GRFFile file; file.grfid = 0x613A0003; file.grf_version = 8;
 		e->grf_prop.grffile = nullptr;
 		LoadingRequire(e->GetGRFID() == 0, "runtime-null-grf");
 		e->grf_prop.grffile = &file; e->grf_prop.grfid = 0xBAD;
 		LoadingRequire(e->GetGRFID() == file.grfid, "runtime-action3-grf");
-		e->info.climates = {}; LoadingRequire(!e->IsEnabled(), "runtime-climate");
-		e->info.climates.Set(); e->info.string_id = STR_NEWGRF_INVALID_ENGINE;
+		EngineFields(e).info.climates = {}; LoadingRequire(!e->IsEnabled(), "runtime-climate");
+		EngineFields(e).info.climates.Set(); EngineFields(e).info.string_id = STR_NEWGRF_INVALID_ENGINE;
 		LoadingRequire(!e->IsEnabled(), "runtime-invalid-engine");
-		e->info.string_id = STR_EMPTY; LoadingRequire(e->IsEnabled(), "runtime-enabled");
+		EngineFields(e).info.string_id = STR_EMPTY; LoadingRequire(e->IsEnabled(), "runtime-enabled");
 		if (!SpriteGroup::CanAllocateItem(2)) FixtureAbort(__LINE__);
 		auto value = std::make_unique<CallbackResultSpriteGroup>(32767);
 		auto observer = std::make_unique<RuntimeObserver>(); observer->result = value.get();
@@ -173,7 +174,7 @@ static void RuntimeInspect()
 		}
 		for (uint8_t extension : {0, 255}) {
 			Backup<uint8_t> setting(_settings_game.vehicle.extend_vehicle_life, extension);
-			e->info.lifelength = TimerGameCalendar::Year{65536};
+			EngineFields(e).info.lifelength = TimerGameCalendar::Year{65536};
 			LoadingRequire(e->GetLifeLengthInDays().base() == (65536 + extension) * CalendarTime::DAYS_IN_LEAP_YEAR, "runtime-life");
 			setting.Restore();
 		}
@@ -189,10 +190,10 @@ static void PropertiesInspect()
 	LoadingRequire(_loaded_newgrf_features.has_2CC, "properties-2cc");
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *e = LoadingEngine(1, type, 500), *b = LoadingEngine(1, type, 501), *c = LoadingEngine(1, type, 502);
-		LoadingRequire(e->info.decay_speed == 17 && e->info.lifelength == TimerGameCalendar::Year{60} && e->info.base_life == TimerGameCalendar::Year{90} && e->info.load_amount == 7, "properties-common");
-		LoadingRequire(e->info.callback_mask.base() == 0x220 && e->info.misc_flags.base() == 2 && e->info.extra_flags.None(), "properties-masks");
-		LoadingRequire(c->list_position < b->list_position && b->list_position < e->list_position, "properties-order");
-		fmt::print(stderr, "ENGINE properties-state {} {} {} {} {} {} {} {} {} {}\n", type, e->index, e->info.base_intro, e->info.cargo_type, e->info.refit_mask, e->info.callback_mask.base(), e->info.misc_flags.base(), c->list_position, b->list_position, e->list_position);
+		LoadingRequire(EngineFields(e).info.decay_speed == 17 && EngineFields(e).info.lifelength == TimerGameCalendar::Year{60} && EngineFields(e).info.base_life == TimerGameCalendar::Year{90} && EngineFields(e).info.load_amount == 7, "properties-common");
+		LoadingRequire(EngineFields(e).info.callback_mask.base() == 0x220 && EngineFields(e).info.misc_flags.base() == 2 && EngineFields(e).info.extra_flags.None(), "properties-masks");
+		LoadingRequire(EngineFields(c).list_position < EngineFields(b).list_position && EngineFields(b).list_position < EngineFields(e).list_position, "properties-order");
+		fmt::print(stderr, "ENGINE properties-state {} {} {} {} {} {} {} {} {} {}\n", type, e->index, EngineFields(e).info.base_intro, EngineFields(e).info.cargo_type, EngineFields(e).info.refit_mask, EngineFields(e).info.callback_mask.base(), EngineFields(e).info.misc_flags.base(), EngineFields(c).list_position, EngineFields(b).list_position, EngineFields(e).list_position);
 	}
 	const auto &train = LoadingEngine(1, VEH_TRAIN, 500)->VehInfo<RailVehicleInfo>();
 	LoadingRequire(train.railveh_type == RAILVEH_MULTIHEAD && train.power == 700 && train.max_speed == 80 && train.weight == 86 && train.running_cost_class == static_cast<Price>(42) && train.visual_effect == 0xcf && train.curve_speed_mod == -384 && train.cost_factor == 53 && train.running_cost == 29, "properties-train");
@@ -229,14 +230,14 @@ static void PropertiesReadFailures()
 	const auto old_list = file->badge_list; file->badge_list = {new_badge};
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *e = LoadingEngine(1, type, 500), *next = LoadingEngine(1, type, 501);
-		const auto old_mask = e->info.callback_mask, next_mask = next->info.callback_mask;
+		const auto old_mask = EngineFields(e).info.callback_mask, next_mask = EngineFields(next).info.callback_mask;
 		const auto old_badges = e->badges; e->badges = {old_badge};
 		const std::array<uint8_t, 1> one{0xa5};
 		const int mask = std::array{0x1e, 0x17, 0x12, 0x14}[type], badges = std::array{0x33, 0x2a, 0x26, 0x24}[type];
-		LoadingRequire(failed(type, 502, mask, one) == 0 && e->info.callback_mask.base() == 0x2a5 && next->info.callback_mask == next_mask, "properties-partial-range");
+		LoadingRequire(failed(type, 502, mask, one) == 0 && EngineFields(e).info.callback_mask.base() == 0x2a5 && EngineFields(next).info.callback_mask == next_mask, "properties-partial-range");
 		const std::array<uint8_t, 5> partial_badges{2, 0, 0, 0, 0};
 		LoadingRequire(failed(type, 501, badges, partial_badges) == 1 && e->badges == std::vector<BadgeID>{old_badge} && GetBadge(new_badge)->features.Test(static_cast<GrfSpecFeature>(type)), "properties-partial-badges");
-		e->badges = old_badges; e->info.callback_mask = old_mask;
+		e->badges = old_badges; EngineFields(e).info.callback_mask = old_mask;
 		const std::array<uint8_t, 3> order{0xff, 0xf6, 1};
 		const int order_prop = std::array{0x1a, 0x20, 0x1b, 0x1b}[type];
 		LoadingRequire(failed(type, 502, order_prop, order) == 0, "properties-partial-order");

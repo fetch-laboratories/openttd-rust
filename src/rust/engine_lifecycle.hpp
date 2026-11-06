@@ -9,11 +9,14 @@
 #ifndef RUST_ENGINE_LIFECYCLE_HPP
 #define RUST_ENGINE_LIFECYCLE_HPP
 #include "byte_span_ffi.h"
+#include "../engine_type.h"
+#include "../vehicle_type.h"
 #include <utility>
 #include "rust_vector.h"
 #include "abi-record-engine.h"
 extern "C" {
 OpenTTDEngineLifecycle *openttd_rust_engine_new();
+void openttd_rust_engine_construct(OpenTTDEngineLifecycle *, const OpenTTDEngineDefaults *, VehicleType, uint16_t);
 void openttd_rust_engine_destroy(OpenTTDEngineLifecycle *);
 void openttd_rust_engine_set_name(OpenTTDEngineLifecycle *, OpenTTDByteSpan);
 }

@@ -109,7 +109,7 @@ void VehicleScopeResolver::SetVehicle(const Vehicle *v) { openttd_rust_vehicle_s
 
 GrfSpecFeature VehicleResolverObject::GetFeature() const
 {
-	switch (Engine::Get(EngineID(this->self_scope.self_type))->type) {
+	switch (Engine::Get(EngineID(this->self_scope.self_type))->Record().type) {
 		case VEH_TRAIN: return GSF_TRAINS;
 		case VEH_ROAD: return GSF_ROADVEHICLES;
 		case VEH_SHIP: return GSF_SHIPS;
@@ -195,7 +195,7 @@ static void GetRotorOverrideSprite(EngineID engine, const struct Aircraft *v, En
 	const Engine *e = Engine::Get(engine);
 
 	/* Only valid for helicopters */
-	assert(e->type == VEH_AIRCRAFT);
+	assert(e->Record().type == VEH_AIRCRAFT);
 	assert(!(e->VehInfo<AircraftVehicleInfo>().subtype & AIR_CTOL));
 
 	/* We differ from TTDPatch by resolving the sprite using the primary vehicle 'v', and not using the rotor vehicle 'v->Next()->Next()'.
@@ -207,7 +207,7 @@ static void GetRotorOverrideSprite(EngineID engine, const struct Aircraft *v, En
 	result->Clear();
 	uint rotor_pos = v == nullptr || rotor_in_gui ? 0 : v->Next()->Next()->state;
 
-	bool sprite_stack = e->info.misc_flags.Test(EngineMiscFlag::SpriteStack);
+	bool sprite_stack = e->Record().info.misc_flags.Test(EngineMiscFlag::SpriteStack);
 	uint max_stack = sprite_stack ? static_cast<uint>(std::size(result->seq)) : 1;
 	for (uint stack = 0; stack < max_stack; ++stack) {
 		object.callback_param1 = image_type | (stack << 8);

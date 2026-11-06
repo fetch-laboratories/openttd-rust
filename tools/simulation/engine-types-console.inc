@@ -122,13 +122,13 @@ static void TypeEngineInputs(Company *c)
 {
 	struct Saved { Engine *e; LandscapeTypes climates; CompanyMask avail; TimerGameCalendar::Date intro; EngineFlags flags; };
 	std::vector<Saved> saved;
-	for (Engine *e : Engine::Iterate()) { saved.push_back({e, e->info.climates, EngineFields(e).company_avail, EngineFields(e).intro_date, EngineFields(e).flags}); e->info.climates = {}; EngineFields(e).flags = {}; }
+	for (Engine *e : Engine::Iterate()) { saved.push_back({e, EngineFields(e).info.climates, EngineFields(e).company_avail, EngineFields(e).intro_date, EngineFields(e).flags}); EngineFields(e).info.climates = {}; EngineFields(e).flags = {}; }
 	Engine *e = nullptr;
-	for (auto &s : saved) if (s.e->type == VEH_TRAIN && s.e->VehInfo<RailVehicleInfo>().railveh_type != RAILVEH_WAGON) { e = s.e; break; }
-	Engine *r = nullptr; for (auto &s : saved) if (s.e->type == VEH_ROAD) { r = s.e; break; }
+	for (auto &s : saved) if (EngineFields(s.e).type == VEH_TRAIN && s.e->VehInfo<RailVehicleInfo>().railveh_type != RAILVEH_WAGON) { e = s.e; break; }
+	Engine *r = nullptr; for (auto &s : saved) if (EngineFields(s.e).type == VEH_ROAD) { r = s.e; break; }
 	if (e == nullptr || r == nullptr) FixtureAbort(__LINE__);
 	auto railinfo = e->VehInfo<RailVehicleInfo>(); auto roadinfo = r->VehInfo<RoadVehicleInfo>(); auto flags = EngineFields(e).flags;
-	e->info.climates = _settings_game.game_creation.landscape; r->info.climates = _settings_game.game_creation.landscape;
+	EngineFields(e).info.climates = _settings_game.game_creation.landscape; EngineFields(r).info.climates = _settings_game.game_creation.landscape;
 	e->VehInfo<RailVehicleInfo>().railtypes = RailTypes{static_cast<RailType>(59), static_cast<RailType>(63)};
 	r->VehInfo<RoadVehicleInfo>().roadtype = static_cast<RoadType>(62);
 	EngineFields(e).company_avail = {}; EngineFields(r).company_avail = {}; EngineFields(e).intro_date = EngineFields(r).intro_date = TimerGameCalendar::date - 364;
@@ -143,9 +143,9 @@ static void TypeEngineInputs(Company *c)
 	e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_WAGON;
 	TypeRequire(GetRailTypes(false).None() && GetCompanyRailTypes(c->index, false).None(), "wagon-only");
 	e->VehInfo<RailVehicleInfo>().railveh_type = railinfo.railveh_type;
-	e->info.climates = {}; r->info.climates = {};
+	EngineFields(e).info.climates = {}; EngineFields(r).info.climates = {};
 	TypeRequire(GetRailTypes(false).None() && GetRoadTypes(false).None(), "climate");
-	e->info.climates = _settings_game.game_creation.landscape; r->info.climates = _settings_game.game_creation.landscape;
+	EngineFields(e).info.climates = _settings_game.game_creation.landscape; EngineFields(r).info.climates = _settings_game.game_creation.landscape;
 	EngineFields(e).intro_date = EngineFields(r).intro_date = TimerGameCalendar::date + 365;
 	Backup<CompanyID> actor(_current_company, OWNER_DEITY);
 	auto on = Command<CMD_ENGINE_CTRL>::Do(DoCommandFlag::Execute, e->index, c->index, true);
@@ -163,7 +163,7 @@ static void TypeEngineInputs(Company *c)
 	TypeRequire(EngineFields(e).company_avail.base() == UINT16_MAX && EngineFields(r).company_avail.base() == UINT16_MAX && c->avail_railtypes.Test(static_cast<RailType>(60)) && c->avail_roadtypes.Test(static_cast<RoadType>(60)), "monthly-publication");
 	fmt::print(stderr, "ENGINE types-masks monthly {:016x} {:016x}\n", c->avail_railtypes.base(), c->avail_roadtypes.base());
 	e->VehInfo<RailVehicleInfo>() = railinfo; r->VehInfo<RoadVehicleInfo>() = roadinfo; EngineFields(e).flags = flags;
-	for (auto &s : saved) { s.e->info.climates = s.climates; EngineFields(s.e).company_avail = s.avail; EngineFields(s.e).intro_date = s.intro; EngineFields(s.e).flags = s.flags; }
+	for (auto &s : saved) { EngineFields(s.e).info.climates = s.climates; EngineFields(s.e).company_avail = s.avail; EngineFields(s.e).intro_date = s.intro; EngineFields(s.e).flags = s.flags; }
 }
 
 #include "newgrf_config.h"
@@ -303,7 +303,7 @@ static bool DefinitionScenario(std::span<std::string_view> args)
 			}
 			EngineID engine = EngineID::Invalid();
 			for (const Engine *e : Engine::IterateType(kind == 0 ? VEH_TRAIN : VEH_ROAD)) {
-				if (!IsEngineBuildable(e->index, e->type, company->index)) continue;
+				if (!IsEngineBuildable(e->index, EngineFields(e).type, company->index)) continue;
 				if (kind == 0 ? !e->VehInfo<RailVehicleInfo>().railtypes.Test(rail) : e->VehInfo<RoadVehicleInfo>().roadtype != road) continue;
 				if (std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Failed()) continue;
 				engine = e->index; break;

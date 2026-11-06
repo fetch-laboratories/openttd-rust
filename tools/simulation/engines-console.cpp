@@ -69,7 +69,7 @@ static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	if (args[1].starts_with("runtime-invalid-")) {
-		Engine *e = *Engine::Iterate().begin(); e->type = VEH_INVALID;
+		Engine *e = *Engine::Iterate().begin(); EngineFields(e).type = VEH_INVALID;
 		fmt::print(stderr, "ENGINE runtime-fatal {}\n", args[1]); std::fflush(stderr);
 		if (args[1] == "runtime-invalid-cost") (void)e->GetCost();
 		else if (args[1] == "runtime-invalid-running") (void)e->GetRunningCost();
@@ -100,7 +100,7 @@ static bool EnginesScenario(std::span<std::string_view> args)
 		EngineFields(e).company_avail.Set(c->index);
 		EngineFields(e).flags.Set(EngineFlag::Available);
 		bool special_bits = true;
-		for (uint8_t id : {16, 17, 32, 33, 48, 49, 63}) special_bits &= !IsEngineBuildable(e->index, e->type, CompanyID{id});
+		for (uint8_t id : {16, 17, 32, 33, 48, 49, 63}) special_bits &= !IsEngineBuildable(e->index, EngineFields(e).type, CompanyID{id});
 		fmt::print(stderr, "ENGINE company-bits {}\n", special_bits);
 		EngineFields(e).company_hidden.Set(c->index);
 		ClearEnginesHiddenFlagOfCompany(CompanyID{16});
@@ -123,8 +123,8 @@ static bool EnginesScenario(std::span<std::string_view> args)
 		if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	} else if (args[1] == "preview") {
 		/* Input specs attach a joined variant; stock saves contain no NewGRF. */
-		variant->info.variant_id = e->index;
-		variant->info.extra_flags.Set(ExtraEngineFlag::JoinPreview);
+		EngineFields(variant).info.variant_id = e->index;
+		EngineFields(variant).info.extra_flags.Set(ExtraEngineFlag::JoinPreview);
 		for (Engine *other : Engine::Iterate()) other->flags.Reset(EngineFlag::ExclusivePreview);
 		for (Company *other : Company::Iterate()) BlockPreview(other) = 0;
 		EngineFields(e).flags = EngineFlag::ExclusivePreview;
@@ -144,7 +144,7 @@ static bool EnginesScenario(std::span<std::string_view> args)
 	} else if (args[1] == "reliability") {
 		_settings_game.vehicle.never_expire_vehicles = false;
 		/* Exercise the native Calendar::Year domain beyond byte-sized NewGRF inputs. */
-		e->info.base_life = TimerGameCalendar::Year{511};
+		EngineFields(e).info.base_life = TimerGameCalendar::Year{511};
 		StartupOneEngine(e, TimerGameCalendar::ConvertDateToYMD(TimerGameCalendar::date), 0);
 		fmt::print(stderr, "ENGINE startup-life {}\n", EngineFields(e).duration_phase_2 > 5000);
 		EngineFields(e).age = 60;
@@ -161,8 +161,8 @@ static bool EnginesScenario(std::span<std::string_view> args)
 		EngineFields(e).reliability_max = 345;
 		CalcEngineReliability(e, false);
 		fmt::print(stderr, "ENGINE never-expire {} {}\n", EngineFields(e).company_avail.Any(), EngineFields(e).reliability == 345);
-		variant->info.variant_id = e->index;
-		variant->info.extra_flags.Set(ExtraEngineFlag::SyncReliability);
+		EngineFields(variant).info.variant_id = e->index;
+		EngineFields(variant).info.extra_flags.Set(ExtraEngineFlag::SyncReliability);
 		EngineFields(variant).duration_phase_1 = EngineFields(e).duration_phase_1;
 		EngineFields(variant).duration_phase_2 = EngineFields(e).duration_phase_2;
 		EngineFields(variant).duration_phase_3 = EngineFields(e).duration_phase_3;
@@ -171,8 +171,8 @@ static bool EnginesScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "ENGINE synced {}\n", EngineFields(variant).reliability == EngineFields(e).reliability);
 		/* Declared zero-life/1980 specs keep the original default cutoff at 2050. */
 		for (Engine *other : Engine::Iterate()) {
-			other->info.lifelength = TimerGameCalendar::Year{0};
-			other->info.base_intro = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{1980}, 0, 1);
+			EngineFields(other).info.lifelength = TimerGameCalendar::Year{0};
+			EngineFields(other).info.base_intro = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{1980}, 0, 1);
 		}
 		SetYearEngineAgingStops();
 		TimerGameCalendar::SetDate(TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{2050}, 0, 1), 0);

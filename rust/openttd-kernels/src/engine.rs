@@ -18,6 +18,7 @@
     clippy::struct_excessive_bools,
     clippy::fn_params_excessive_bools
 )]
+pub(crate) mod records;
 use crate::industrytype::NativeVec;
 use crate::raw_field::{read_field, write_field};
 use crate::services::ByteSpan;
@@ -43,6 +44,12 @@ crate::abi::shared_records! {
         pub preview_company: u8 => "CompanyID",
         pub preview_wait: u8,
         pub name: NativeVec<u8> => "RustVector<uint8_t>",
+        pub info: records::EngineInfo,
+        pub vehicle_info: records::VehicleInfo,
+        pub vehicle_info_type: VehicleType => "VehicleType",
+        pub original_image_index: u8,
+        pub r#type: VehicleType => "VehicleType",
+        pub list_position: u16,
     }
 }
 impl Default for Lifecycle {
@@ -65,6 +72,12 @@ impl Default for Lifecycle {
             preview_company: 255,
             preview_wait: 0,
             name: NativeVec::new(),
+            info: records::EngineInfo::default(),
+            vehicle_info: records::VehicleInfo::default(),
+            vehicle_info_type: VehicleType(crate::vehicle_type::VEH_INVALID),
+            original_image_index: 0,
+            r#type: VehicleType(crate::vehicle_type::VEH_INVALID),
+            list_position: 0,
         }
     }
 }

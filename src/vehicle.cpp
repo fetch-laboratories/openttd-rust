@@ -1320,7 +1320,7 @@ static PaletteID GetEngineColourMap(EngineID engine_type, CompanyID company, Eng
 	const Engine *e = Engine::Get(engine_type);
 
 	/* Check if we should use the colour map callback */
-	if (e->info.callback_mask.Test(VehicleCallbackMask::ColourRemap)) {
+	if (e->Record().info.callback_mask.Test(VehicleCallbackMask::ColourRemap)) {
 		uint16_t callback = GetVehicleCallback(CBID_VEHICLE_COLOUR_MAPPING, 0, 0, engine_type, v);
 		/* Failure means "use the default two-colour" */
 		if (callback != CALLBACK_FAILED) {
@@ -1336,7 +1336,7 @@ static PaletteID GetEngineColourMap(EngineID engine_type, CompanyID company, Eng
 		}
 	}
 
-	bool twocc = e->info.misc_flags.Test(EngineMiscFlag::Uses2CC);
+	bool twocc = e->Record().info.misc_flags.Test(EngineMiscFlag::Uses2CC);
 
 	if (map == PAL_NONE) map = twocc ? (PaletteID)SPR_2CCMAP_BASE : (PaletteID)PALETTE_RECOLOUR_START;
 

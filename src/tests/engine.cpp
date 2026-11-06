@@ -27,6 +27,7 @@
 #include "../road.h"
 #include "../core/backup_type.hpp"
 #include "../rust/newgrf_translation_ffi.h"
+#include "../timer/timer_game_tick.h"
 #include "abi_layout.hpp"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../safeguards.h"
@@ -36,12 +37,17 @@ TEST_CASE("Engine lifecycle canonical ABI", "[rust][engine][abi]")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-engine.inc"
 #include "abi-layout-engine_loading.inc"
+#include "abi-layout-engine_spec.inc"
 }
 
 TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][engine][lifetime]")
 {
 	std::vector<Engine> staged;
 	staged.emplace_back();
+	CHECK(staged[0].Record().type == VEH_INVALID);
+	CHECK_THROWS_AS(staged[0].VehInfo<RailVehicleInfo>(), std::bad_variant_access);
+	CHECK(staged[0].Record().info.cargo_label.value == 0);
+	CHECK_FALSE(staged[0].Record().info.cargo_label.mixed);
 	staged[0].Record().age = -123;
 	staged[0].Record().preview_company = CompanyID{3};
 	staged[0].SetName(std::string_view("name\0bytes", 10));
@@ -63,6 +69,31 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 	staged[0].rust_lifecycle.state->age = INT32_MIN;
 	REQUIRE(staged[0].Record().age == INT32_MIN);
 	staged.clear();
+}
+
+TEST_CASE("Engine typed prototypes keep original out-of-range defaults", "[rust][engine][lifetime]")
+{
+	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; ++type) {
+		Engine prototype(type, UINT16_MAX);
+		CHECK(prototype.Record().type == type);
+		CHECK(prototype.Record().vehicle_info_type == type);
+		CHECK(prototype.Record().info.base_life == TimerGameCalendar::Year{0xFF});
+		CHECK(prototype.Record().info.cargo_type == INVALID_CARGO);
+		CHECK(prototype.Record().info.cargo_label.value == (type == VEH_AIRCRAFT ? CT_INVALID.base() : CT_PASSENGERS.base()));
+		CHECK_FALSE(prototype.Record().info.cargo_label.mixed);
+		CHECK(prototype.Record().info.cargo_age_period == Ticks::CARGO_AGING_TICKS);
+		CHECK(prototype.Record().info.variant_id == EngineID::Invalid());
+		switch (type) {
+			case VEH_TRAIN:
+				CHECK(prototype.VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON);
+				CHECK(prototype.VehInfo<RailVehicleInfo>().railtypes == RailTypes{RAILTYPE_RAIL});
+				break;
+			case VEH_ROAD: CHECK(prototype.VehInfo<RoadVehicleInfo>().tractive_effort == 0x4C); break;
+			case VEH_SHIP: CHECK(prototype.VehInfo<ShipVehicleInfo>().acceleration == 1); break;
+			case VEH_AIRCRAFT: CHECK(prototype.VehInfo<AircraftVehicleInfo>().subtype == 0); break;
+			default: NOT_REACHED();
+		}
+	}
 }
 
 TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement metadata", "[engine][loading]")
@@ -114,7 +145,7 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 		Case{VEH_SHIP, 0, 0, 0, true}, Case{VEH_AIRCRAFT, 0, INVALID_CARGO, INVALID_CARGO, false},
 	}) {
 		Engine e(c.type, 0);
-		e.info.cargo_type = c.cargo;
+		e.Record().info.cargo_type = c.cargo;
 		if (c.type == VEH_TRAIN) e.VehInfo<RailVehicleInfo>().capacity = c.capacity;
 		if (c.type == VEH_ROAD) e.VehInfo<RoadVehicleInfo>().capacity = c.capacity;
 		const auto carrying = RustEngineCarrying(RustEngine(&e));
@@ -123,8 +154,8 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 		CHECK(carrying.default_cargo == c.observed_cargo);
 		CHECK(e.CanCarryCargo() == c.carries);
 		e.index = EngineID{60000};
-		e.info.callback_mask = {VehicleCallbackMask::RefitCapacity, VehicleCallbackMask::ArticEngine};
-		e.info.misc_flags = {EngineMiscFlag::NoDefaultCargoMultiplier, EngineMiscFlag::NoBreakdownSmoke};
+		e.Record().info.callback_mask = {VehicleCallbackMask::RefitCapacity, VehicleCallbackMask::ArticEngine};
+		e.Record().info.misc_flags = {EngineMiscFlag::NoDefaultCargoMultiplier, EngineMiscFlag::NoBreakdownSmoke};
 		const auto config = RustEngineCapacityConfig(RustEngine(&e));
 		CHECK(config.id == 60000);
 		CHECK(config.callbacks == 24);
@@ -281,17 +312,17 @@ TEST_CASE("Engine runtime enablement short circuits and lifetime retains widths"
 	Engine e(VEH_ROAD, 0);
 	auto engine = EngineServices();
 	engine.climate = [](const OpenTTDEngine *) noexcept -> bool { FAIL("Invalid strings must short circuit climate"); return false; };
-	e.info.string_id = STR_NEWGRF_INVALID_ENGINE;
+	e.Record().info.string_id = STR_NEWGRF_INVALID_ENGINE;
 	CHECK_FALSE(openttd_rust_engine_enabled(&engine, RustEngine(&e)));
-	e.info.string_id = STR_EMPTY;
+	e.Record().info.string_id = STR_EMPTY;
 	for (bool climate : {false, true}) {
-		e.info.climates = climate ? LandscapeTypes{_settings_game.game_creation.landscape} : LandscapeTypes{};
+		e.Record().info.climates = climate ? LandscapeTypes{_settings_game.game_creation.landscape} : LandscapeTypes{};
 		CHECK(e.IsEnabled() == climate);
 	}
 	for (uint8_t extension : {0, 1, 255}) {
 		Backup<uint8_t> setting(_settings_game.vehicle.extend_vehicle_life, extension);
 		for (int32_t years : {0, 255, 65536, INT32_MAX, INT32_MIN}) {
-			e.info.lifelength = TimerGameCalendar::Year{years};
+			e.Record().info.lifelength = TimerGameCalendar::Year{years};
 			const uint32_t bits = (static_cast<uint32_t>(years) + extension) * CalendarTime::DAYS_IN_LEAP_YEAR;
 			CHECK(e.GetLifeLengthInDays().base() == static_cast<int32_t>(bits));
 		}
