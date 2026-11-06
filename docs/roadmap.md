@@ -388,6 +388,14 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 
 ## Work order
 
+**User-directed retrospective repairs (2026-11-06, #710).** This session may
+complete #709, the two review findings on #705, and the tools batch covering
+#707, #708, #275's identity correction and #710's small fact collectors. Create
+the two discoverable port-review and storage-brief skills, reusing the existing
+guidance. Opus 5.5 reviews these changes. Check existing host completion support
+before proposing a host repair; do not edit host databases. Establish no
+cadence, schedules or automatic supervisor. Other ownership work remains paused.
+
 One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and the disjoint-service rule; finishing review and integration
 of an open branch comes first. A lower rank can run while a higher one waits.
@@ -401,7 +409,7 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
    - Done when the ANN ignore list is empty and `ty.toml` covers all of `tools/`.
    - **#673's consolidation PR** follows typing and the #707/#708/#275 tools batch. Inventory, scenario digests and comparison results must stay identical. It is the only harness refactor; no broader rewrite.
 3. **Maintenance and measurement.**
-   - **#707, #708 and #275's identity correction** join the next tools batch after #705: complete C++ evidence accounting, repair finished-worktree/retained-profile cleanup and resolve non-behavioral configuration identity. No new metric or ownership gate.
+   - **#707, #708, #275's identity correction and #710** join the next tools batch after #705: complete C++ evidence accounting, repair finished-worktree/retained-profile cleanup, resolve non-behavioral configuration identity, and compose existing PR/CI/metric data into small read-only readiness, latency and stocktake commands. No new metric or ownership gate.
    - **#156**: repair script sweep high-bit observations in the next evidence batch; establish the nonempty network execution-queue seam before choosing its observation. Threaded cancellation remains with the socket/resource owner or user-requested threaded work.
    - **#686 (the user's request):** measured and its capacity decision resolved on 2026-11-06: the repository's lower subagent caps are lifted and Codex has 12 slots. The next steering review checks review/resume turnaround under that limit. #699's cache repair integrated as #701 and its issue is closed.
    - **TGP Ir attribution**: done on #275. The `tile_loop::run` gate repair went into #698. The vehicle record↔shell hops (0.44% to 0.51%) went to #656.
