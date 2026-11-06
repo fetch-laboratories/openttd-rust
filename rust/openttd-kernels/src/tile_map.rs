@@ -241,14 +241,11 @@ impl crate::map_func::World<'_> {
             self.types.count() >> self.dimensions.log_x,
         )
     }
-    /// Run a header helper whose `None` is a failed precondition. The failure
-    /// retries with each source assertion dispatched to the native handler.
+    /// Run a header helper with the entry's native handler at each source assertion.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn asserted<T>(&self, read: impl Fn(&TileTypeAccess) -> Option<T>) -> T {
-        self.types
-            .without_native_assert()
-            .asserted(self.shared, read)
+        self.types.asserted(self.shared, read)
     }
     /// `GetTilePixelSlope`.
     #[allow(clippy::inline_always)]
@@ -552,36 +549,45 @@ mod tests {
                 .iter()
                 .map(|&(name, read, expected, asserts)| (name, read, 4096, expected, asserts));
             for (name, read, tile, expected, asserts) in road_cases.chain(height_cases) {
-                // SAFETY: Both arrays hold 8192 initialized tiles that outlive the reader.
-                let types = unsafe {
-                    crate::map_func::TileTypeAccess::raw(
-                        TileTypeAllocation {
-                            base: base.as_ptr(),
-                            extended: extended.as_ptr(),
-                            count: 4096,
-                            assertions,
-                        },
-                        no_callback,
-                    )
+                let allocation = TileTypeAllocation {
+                    base: base.as_ptr(),
+                    extended: extended.as_ptr(),
+                    count: 4096,
+                    assertions,
                 };
+                // SAFETY: Both arrays hold 8192 initialized tiles that outlive the reader.
+                let types =
+                    unsafe { crate::map_func::TileTypeAccess::raw(allocation, no_callback) };
                 let world = World {
                     types,
                     shared: &shared,
                     dimensions: crate::map_func::Map::from_log_x(6),
                 };
-                ASSERTS.set(0);
-                assert_eq!(
-                    read(&world, tile),
-                    expected,
-                    "{name}, tile {tile}, assertions {assertions}"
-                );
-                let asserts = if assertions { asserts } else { 0 };
-                assert_eq!(
-                    ASSERTS.get(),
-                    asserts,
-                    "{name}, tile {tile}, assertions {assertions}"
-                );
+                crate::map_func::fixture::set(allocation, 6);
+                for world in [world, World::new(&shared)] {
+                    ASSERTS.set(0);
+                    assert_eq!(
+                        read(&world, tile),
+                        expected,
+                        "{name}, tile {tile}, assertions {assertions}"
+                    );
+                    let asserts = if assertions { asserts } else { 0 };
+                    assert_eq!(
+                        ASSERTS.get(),
+                        asserts,
+                        "{name}, tile {tile}, assertions {assertions}"
+                    );
+                }
             }
         }
+        crate::map_func::fixture::set(
+            TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 0,
+                assertions: true,
+            },
+            6,
+        );
     }
 }

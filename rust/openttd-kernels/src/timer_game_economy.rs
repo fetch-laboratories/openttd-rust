@@ -118,17 +118,17 @@ pub(crate) unsafe fn elapsed(
             from = (services.vehicle_id)(vehicle.shell().cast()).wrapping_add(1);
             (services.vehicle_shift_dates)(vehicle, -days);
         }
+        let graphs = unsafe { crate::linkgraph::live::Pool::from_descriptor(*services.graph_pool) };
         let mut from = 0;
         loop {
-            let graph = (services.next_graph)(&raw mut from);
-            if graph.is_null() {
+            let index = unsafe { graphs.next_index(from, usize::from(u16::MAX)) };
+            if index == usize::from(u16::MAX) {
                 break;
             }
+            from = index + 1;
+            let graph = unsafe { graphs.record(crate::linkgraph_type::LinkGraphID(index as u16)) };
             unsafe {
-                crate::linkgraph::live::openttd_rust_live_graph_shift(
-                    (services.graph_owner)(graph),
-                    -days,
-                );
+                crate::linkgraph::live::openttd_rust_live_graph_shift(graph, -days);
             }
         }
     }

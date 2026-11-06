@@ -46,19 +46,11 @@ impl<T> NativeVec<T> {
     pub(crate) const fn as_mut_ptr(&self) -> *mut T {
         self.items
     }
-    /// Temporarily recover the sole Vec allocation for a local mutation.
-    /// The closure must not call native code or expose a borrow of this descriptor.
-    pub(crate) fn with_vec<R>(&mut self, mutate: impl FnOnce(&mut Vec<T>) -> R) -> R {
-        let mut vec = std::mem::take(self).into_vec();
-        let result = mutate(&mut vec);
-        *self = Self::from_vec(vec);
-        result
-    }
     pub(crate) fn resize(&mut self, count: usize, value: T)
     where
         T: Clone,
     {
-        self.with_vec(|vec| vec.resize(count, value));
+        self.edit(|vec| vec.resize(count, value));
     }
     pub fn as_slice(&self) -> &[T] {
         if self.count == 0 {
@@ -85,11 +77,28 @@ impl<T> NativeVec<T> {
         self.count = 0;
         vec
     }
+    // The canonical owner is empty while editing; unwind drops the detached vector.
+    // Callers finish edits before callbacks can observe native aliases.
+    pub(crate) fn edit<R>(&mut self, edit: impl FnOnce(&mut Vec<T>) -> R) -> R {
+        let mut vec = std::mem::take(self).into_vec();
+        let result = edit(&mut vec);
+        *self = Self::from_vec(vec);
+        result
+    }
+    pub(crate) fn pop(&mut self) -> Option<T> {
+        self.edit(Vec::pop)
+    }
+    pub(crate) fn insert(&mut self, index: usize, value: T) {
+        self.edit(|vec| vec.insert(index, value));
+    }
+    pub(crate) fn resize_with(&mut self, size: usize, make: impl FnMut() -> T) {
+        self.edit(|vec| vec.resize_with(size, make));
+    }
     pub fn clear(&mut self) {
-        self.with_vec(Vec::clear);
+        self.edit(Vec::clear);
     }
     pub fn push(&mut self, value: T) {
-        self.with_vec(|vec| vec.push(value));
+        self.edit(|vec| vec.push(value));
     }
 }
 impl<T> std::ops::Deref for NativeVec<T> {
@@ -100,13 +109,22 @@ impl<T> std::ops::Deref for NativeVec<T> {
 }
 impl<T> std::ops::DerefMut for NativeVec<T> {
     fn deref_mut(&mut self) -> &mut [T] {
-        // SAFETY: The mutable descriptor is exclusively borrowed; the slice
-        // cannot outlive or resize its owner. Empty borrowed views need no data.
-        if self.count == 0 {
-            &mut []
-        } else {
-            unsafe { std::slice::from_raw_parts_mut(self.items, self.count) }
-        }
+        // SAFETY: mutable access is only used for Rust-owned vectors.
+        unsafe { std::slice::from_raw_parts_mut(self.items, self.count) }
+    }
+}
+impl<'a, T> IntoIterator for &'a NativeVec<T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+impl<'a, T> IntoIterator for &'a mut NativeVec<T> {
+    type Item = &'a mut T;
+    type IntoIter = std::slice::IterMut<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
     }
 }
 impl NativeVec<u32> {
@@ -133,6 +151,14 @@ impl<T> Drop for NativeVec<T> {
 impl<T: Clone> Clone for NativeVec<T> {
     fn clone(&self) -> Self {
         Self::from_vec(self.as_slice().to_vec())
+    }
+    fn clone_from(&mut self, source: &Self) {
+        self.edit(|vec| {
+            vec.truncate(source.len());
+            let existing = vec.len();
+            vec.clone_from_slice(&source.as_slice()[..existing]);
+            vec.extend_from_slice(&source.as_slice()[existing..]);
+        });
     }
 }
 

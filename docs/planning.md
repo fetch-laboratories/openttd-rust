@@ -39,7 +39,8 @@ Readers: Root and agents selecting or planning work.
 
 ## Cost decisions
 
-- Decide an ownership port's cost at its first concrete boundary or evidence checkpoint using its compiled-C++ change and tooling: make a bounded repair or explain the necessary cost specifically. Do not create separate implementation, native-test and tooling approval gates or replan solely to force a line ratio; fix source and boundary defects.
+- Decide an ownership port's cost at its first concrete boundary or evidence checkpoint using its compiled-C++ change and tooling: make a bounded repair or explain the necessary cost specifically. Run the whole-fork metric twice per PR, at that boundary and at the integrating head; briefs request no other recounts.
+- The roadmap shows each owner's issue estimate beside its measured change. A revised bound cites its source evidence and is listed next to the estimate, never in place of it. Do not create separate implementation, native-test and tooling approval gates or replan solely to force a line ratio; fix source and boundary defects.
 - A new evidence requirement names the observable behavior existing checks cannot distinguish. Tracing pure helpers solely to reproduce the source call sequence is unnecessary.
 - Infrastructure (CI, caches and evidence plumbing, excluding scenario or test support within an ownership port) states expected tooling size in its issue and prefers platform defaults and settings such as LRU eviction and concurrency groups to custom controllers.
 - Root decides infrastructure cost at the first draft as for an ownership port, explaining necessary cost in the PR. An overrun alone parks nothing and needs no user decision (user, 2026-10-26). Review fixes only defects that can change a game comparison or speed decision on this host or in CI; hypothetical defects go in PR limits.

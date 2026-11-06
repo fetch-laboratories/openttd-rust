@@ -266,7 +266,7 @@ pub unsafe extern "C" fn openttd_rust_industry_produced_reserve(
     count: usize,
 ) {
     unsafe {
-        (*vector).with_vec(|vec| reserve(vec, count));
+        (*vector).edit(|vec| reserve(vec, count));
     }
 }
 /// # Safety
@@ -277,7 +277,7 @@ pub unsafe extern "C" fn openttd_rust_industry_accepted_reserve(
     count: usize,
 ) {
     unsafe {
-        (*vector).with_vec(|vec| reserve(vec, count));
+        (*vector).edit(|vec| reserve(vec, count));
     }
 }
 /// # Safety
@@ -288,7 +288,7 @@ pub unsafe extern "C" fn openttd_rust_industry_produced_resize(
     count: usize,
 ) {
     unsafe {
-        (*vector).with_vec(|vec| vec.resize_with(count, Produced::default));
+        (*vector).edit(|vec| vec.resize_with(count, Produced::default));
     }
 }
 /// # Safety
@@ -299,7 +299,7 @@ pub unsafe extern "C" fn openttd_rust_industry_accepted_resize(
     count: usize,
 ) {
     unsafe {
-        (*vector).with_vec(|vec| vec.resize_with(count, Accepted::default));
+        (*vector).edit(|vec| vec.resize_with(count, Accepted::default));
     }
 }
 /// # Safety
@@ -331,7 +331,7 @@ pub unsafe extern "C" fn openttd_rust_industry_produced_shrink_to_fit(
     vector: *mut NativeVec<Produced>,
 ) {
     unsafe {
-        (*vector).with_vec(Vec::shrink_to_fit);
+        (*vector).edit(Vec::shrink_to_fit);
     }
 }
 /// # Safety
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn openttd_rust_industry_accepted_shrink_to_fit(
     vector: *mut NativeVec<Accepted>,
 ) {
     unsafe {
-        (*vector).with_vec(Vec::shrink_to_fit);
+        (*vector).edit(Vec::shrink_to_fit);
     }
 }
 /// # Safety
@@ -1417,13 +1417,13 @@ pub unsafe extern "C" fn openttd_rust_industry_trim(i: *mut Industry) {
     unsafe {
         let a = &mut (*i).record.accepted;
         let n = a.iter().rposition(|a| valid(a.cargo)).map_or(0, |n| n + 1);
-        a.with_vec(|v| {
+        a.edit(|v| {
             v.truncate(n);
             v.shrink_to_fit();
         });
         let p = &mut (*i).record.produced;
         let n = p.iter().rposition(|p| valid(p.cargo)).map_or(0, |n| n + 1);
-        p.with_vec(|v| {
+        p.edit(|v| {
             v.truncate(n);
             v.shrink_to_fit();
         });
@@ -1900,7 +1900,7 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_insert(
 ) {
     let registry = unsafe { &mut (*owner).fields.registry[usize::from(kind)] };
     if let Err(index) = registry.binary_search(&id) {
-        registry.with_vec(|values| values.insert(index, id));
+        registry.edit(|values| values.insert(index, id));
     }
 }
 /// # Safety
@@ -1913,7 +1913,7 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_erase(
 ) {
     let registry = unsafe { &mut (*owner).fields.registry[usize::from(kind)] };
     if let Ok(index) = registry.binary_search(&id) {
-        registry.with_vec(|values| values.remove(index));
+        registry.edit(|values| values.remove(index));
     }
 }
 /// # Safety

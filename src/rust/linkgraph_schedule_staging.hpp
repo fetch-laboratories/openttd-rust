@@ -12,8 +12,8 @@
  * or reset pools, so their borrowed spans remain valid until the copies finish. */
 struct ScheduleStaging {
 	inline static ScheduleStaging *active = nullptr;
-	std::vector<LinkGraph *> schedule;
-	std::vector<LinkGraphJob *> running;
+	std::vector<OpenTTDLiveGraph *> schedule;
+	std::vector<OpenTTDLinkGraphJobRecord *> running;
 	bool import;
 	explicit ScheduleStaging(bool import) : import(import)
 	{

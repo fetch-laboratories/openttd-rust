@@ -12,27 +12,44 @@
 
 use crate::debug::debug;
 use crate::{
-    linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH, INVALID_NODE},
+    linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH, INVALID_NODE, LinkGraphID},
     station_type::INVALID_STATION,
     tile_type::INVALID_TILE,
     timer_game_common::INVALID_DATE,
     witness,
 };
-use std::ptr::addr_of_mut;
 
 pub(crate) const MIN_TIMEOUT_DISTANCE: u32 = 32;
 pub(crate) const STALE_LINK_DEPOT_TIMEOUT: i32 = 1024;
 pub(crate) const COMPRESSION_INTERVAL: i32 = 256;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Edge {
-    pub capacity: u32,
-    pub usage: u32,
-    pub travel_time_sum: u64,
-    pub last_unrestricted_update: i32,
-    pub last_restricted_update: i32,
-    pub dest_node: u16,
+use crate::industrytype::NativeVec;
+crate::abi::shared_records! {
+    fn abi_record;
+    #[derive(Clone, Copy)]
+    "OpenTTDLiveEdge" ["station_service"] => pub struct Edge {
+        pub capacity: u32,
+        pub usage: u32,
+        pub travel_time_sum: u64,
+        pub last_unrestricted_update: i32 => "TimerGameEconomy::Date",
+        pub last_restricted_update: i32 => "TimerGameEconomy::Date",
+        pub dest_node: u16,
+    }
+    "OpenTTDLiveNode" ["station_service"] => pub struct Node {
+        pub supply: u32,
+        pub demand: u32,
+        pub station: u16,
+        pub xy: u32,
+        pub last_update: i32,
+        pub edges: NativeVec<Edge> => "RustVector<OpenTTDLiveEdge>",
+    }
+    "OpenTTDLiveGraph" ["station_service"] => pub struct Graph {
+        /// Stable shell identity; worker clones have no shell.
+        pub shell: *mut super::NativeGraph => "LinkGraph *",
+        pub cargo: u8,
+        pub last_compression: i32,
+        pub nodes: NativeVec<Node> => "RustVector<OpenTTDLiveNode>",
+    }
 }
 impl Edge {
     // The two heterogeneous BaseEdge comparison operators from linkgraph.h.
@@ -67,7 +84,14 @@ impl Edge {
         witness::hit(witness::LINKGRAPH_RELEASE);
         self.last_restricted_update = INVALID_DATE;
     }
-    fn update(&mut self, capacity: u32, usage: u32, time: u32, modes: EdgeUpdateModes, date: i32) {
+    pub(crate) fn update(
+        &mut self,
+        capacity: u32,
+        usage: u32,
+        time: u32,
+        modes: EdgeUpdateModes,
+        date: i32,
+    ) {
         if modes.test(EdgeUpdateModes::INCREASE) {
             if self.travel_time_sum == 0 {
                 self.travel_time_sum =
@@ -104,14 +128,6 @@ impl Edge {
     }
 }
 
-pub(crate) struct Node {
-    pub supply: u32,
-    pub demand: u32,
-    pub station: u16,
-    pub xy: u32,
-    pub last_update: i32,
-    pub edges: Vec<Edge>,
-}
 impl Clone for Node {
     fn clone(&self) -> Self {
         Self {
@@ -140,7 +156,7 @@ impl Node {
             station,
             xy,
             last_update: INVALID_DATE,
-            edges: Vec::new(),
+            edges: NativeVec::new(),
         }
     }
     fn update_supply(&mut self, supply: u32, date: i32) {
@@ -199,17 +215,23 @@ impl Node {
         }
     }
     pub(crate) fn remove_edge(&mut self, to: u16) {
-        let first = self.edges.partition_point(|e| e.before(to));
-        let last = self.edges.partition_point(|e| !e.after(to));
-        self.edges.drain(first..last);
+        let first = self.edges.partition_point(|edge| edge.before(to));
+        let last = self.edges.partition_point(|edge| !edge.after(to));
+        self.edges.edit(|edges| {
+            edges.drain(first..last);
+        });
     }
 }
 
-#[derive(Clone)]
-pub struct Graph {
-    pub(crate) cargo: u8,
-    pub(crate) last_compression: i32,
-    pub(crate) nodes: Vec<Node>,
+impl Clone for Graph {
+    fn clone(&self) -> Self {
+        Self {
+            shell: std::ptr::null_mut(),
+            cargo: self.cargo,
+            last_compression: self.last_compression,
+            nodes: self.nodes.clone(),
+        }
+    }
 }
 impl Graph {
     pub(crate) fn size(&self) -> u16 {
@@ -281,9 +303,10 @@ pub(crate) fn scale(value: u32, target_age: i32, orig_age: i32) -> u32 {
 // Allocation/panics abort; entries never call throwing C++ services.
 fn new_graph(cargo: u8, date: i32) -> *mut Graph {
     Box::into_raw(Box::new(Graph {
+        shell: std::ptr::null_mut(),
         cargo,
         last_compression: date,
-        nodes: Vec::new(),
+        nodes: NativeVec::new(),
     }))
 }
 #[unsafe(no_mangle)]
@@ -295,24 +318,8 @@ pub extern "C" fn openttd_rust_live_graph_new_empty() -> *mut Graph {
     new_graph(crate::cargo_type::INVALID_CARGO, 0)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_copy(graph: *const Graph) -> *mut Graph {
-    Box::into_raw(Box::new(unsafe { &*graph }.clone()))
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_delete(graph: *mut Graph) {
     drop(unsafe { Box::from_raw(graph) });
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_size(graph: *const Graph) -> u16 {
-    unsafe { &*graph }.size()
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_cargo(graph: *mut Graph) -> *mut u8 {
-    unsafe { addr_of_mut!((*graph).cargo) }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_date(graph: *mut Graph) -> *mut i32 {
-    unsafe { addr_of_mut!((*graph).last_compression) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_init(graph: *mut Graph, size: u32) {
@@ -357,42 +364,6 @@ pub unsafe extern "C" fn openttd_rust_live_graph_monthly(graph: *const Graph, va
             .wrapping_add(1) as u32
 }
 
-/// Save-only address carrier pointing at the live fields.
-#[repr(C)]
-pub struct NodeFields {
-    pub supply: *mut u32,
-    pub demand: *mut u32,
-    pub station: *mut u16,
-    pub xy: *mut u32,
-    pub last_update: *mut i32,
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_fields(graph: *mut Graph, id: u16) -> NodeFields {
-    let n = unsafe { (*graph).nodes.as_ptr().add(usize::from(id)).cast_mut() };
-    NodeFields {
-        supply: unsafe { addr_of_mut!((*n).supply) },
-        demand: unsafe { addr_of_mut!((*n).demand) },
-        station: unsafe { addr_of_mut!((*n).station) },
-        xy: unsafe { addr_of_mut!((*n).xy) },
-        last_update: unsafe { addr_of_mut!((*n).last_update) },
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_supply(graph: *const Graph, id: u16) -> u32 {
-    unsafe { &*graph }.nodes[usize::from(id)].supply
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_station(graph: *const Graph, id: u16) -> u16 {
-    unsafe { &*graph }.nodes[usize::from(id)].station
-}
-/// Immutable job annotations borrow only this canonical scalar until join/drop.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_station_address(
-    graph: *const Graph,
-    id: u16,
-) -> *const u16 {
-    std::ptr::addr_of!(unsafe { &*graph }.nodes[usize::from(id)].station)
-}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_location(graph: *mut Graph, id: u16, xy: u32) {
     unsafe { &mut *graph }.nodes[usize::from(id)].xy = xy;
@@ -406,28 +377,6 @@ pub unsafe extern "C" fn openttd_rust_live_node_update_supply(
     let date = crate::timer_game_common::economy_date().0;
     let n = &mut unsafe { &mut *graph }.nodes[usize::from(id)];
     n.update_supply(supply, date);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_edges(
-    graph: *const Graph,
-    id: u16,
-    len: *mut usize,
-) -> *const Edge {
-    let edges = &unsafe { &*graph }.nodes[usize::from(id)].edges;
-    unsafe {
-        *len = edges.len();
-    }
-    edges.as_ptr()
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_edge(
-    graph: *const Graph,
-    id: u16,
-    to: u16,
-) -> *const Edge {
-    unsafe { &*graph }.nodes[usize::from(id)]
-        .edge(to)
-        .map_or(std::ptr::null(), std::ptr::from_ref)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_update_edge(
@@ -459,82 +408,56 @@ pub unsafe extern "C" fn openttd_rust_live_edge_init(edge: *mut Edge, dest: u16)
         edge.write(Edge::new(dest));
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_edge_update(
-    edge: *mut Edge,
-    capacity: u32,
-    usage: u32,
-    time: u32,
-    modes: EdgeUpdateModes,
-) {
-    let date = crate::timer_game_common::economy_date().0;
-    unsafe { &mut *edge }.update(capacity, usage, time, modes, date);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_edge_restrict(edge: *mut Edge) {
-    unsafe { &mut *edge }.restrict();
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_edge_release(edge: *mut Edge) {
-    unsafe { &mut *edge }.release();
-}
 
 #[repr(C)]
 pub struct StationInput {
     pub xy: u32,
     pub demand: u32,
 }
-#[repr(C)]
-pub struct Access {
-    pub owner: *mut Graph,
-    pub index: u16,
-}
 /// Typed native shell/station leaves; no opcode dispatch or registered globals.
 #[repr(C)]
 pub struct Services {
     pub assertions: bool,
-    pub get: extern "C" fn(u16) -> *mut super::NativeGraph,
-    pub get_if_valid: extern "C" fn(u16) -> *mut super::NativeGraph,
+    pub pool: *const *const crate::pool::PoolDescriptor,
     pub station_id: extern "C" fn(*const crate::station::BaseStation) -> u16,
-    pub owner: extern "C" fn(*mut super::NativeGraph) -> *mut Graph,
-    pub access: extern "C" fn(*mut super::NativeGraph) -> Access,
+    pub index: extern "C" fn(*const Graph) -> LinkGraphID,
     pub station: extern "C" fn(u16, u8) -> StationInput,
     pub attach: extern "C" fn(u16, u8, u16, u16),
     pub set_node: extern "C" fn(u16, u8, u16),
-    pub delete_graph: extern "C" fn(*mut super::NativeGraph),
+    pub delete_graph: extern "C" fn(*mut Graph),
     pub graph_id: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
     pub node: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
     pub available: extern "C" fn() -> bool,
-    pub allocate: extern "C" fn(u8) -> *mut super::NativeGraph,
+    pub allocate: extern "C" fn(u8) -> *mut Graph,
 }
-struct GraphAccess {
-    owner: *mut Graph,
-    index: u16,
-}
-/// Resolve once per Rust caller entry; the shell remains live under the game mutex.
-pub(crate) unsafe fn resolve(graph: *mut super::NativeGraph, services: &Services) -> *mut Graph {
-    (services.owner)(graph)
+/// Typed view of the single shared pool; private snapshots are never in its slots.
+pub(crate) type Pool = crate::pool::TypedPool<LinkGraphID, Graph, super::NativeGraph>;
+impl Services {
+    pub(crate) fn get(&self, id: LinkGraphID) -> *mut Graph {
+        // The binding points at the actual stable native descriptor member, not a copy.
+        unsafe { Pool::from_descriptor(*self.pool).record(id) }
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
-    graph: *mut super::NativeGraph,
+    graph: *mut Graph,
     station: u16,
     services: *const Services,
 ) -> u16 {
     let services = unsafe { &*services };
-    let owner = unsafe { resolve(graph, services) };
+    let owner = graph;
     let cargo = unsafe { (*owner).cargo };
     let input = (services.station)(station, cargo);
     unsafe { &mut *owner }.add_node(input.xy, station, input.demand)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_remove(
-    graph: *mut super::NativeGraph,
+    graph: *mut Graph,
     id: u16,
     services: *const Services,
 ) {
     let services = unsafe { &*services };
-    let owner = unsafe { resolve(graph, services) };
+    let owner = graph;
     let (station, cargo) = {
         let g = unsafe { &*owner };
         (
@@ -547,21 +470,17 @@ pub unsafe extern "C" fn openttd_rust_live_graph_remove(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_merge(
-    graph: *mut super::NativeGraph,
-    other: *mut super::NativeGraph,
+    graph: *mut Graph,
+    other: *mut Graph,
     services: *const Services,
 ) {
     let date = crate::timer_game_common::economy_date().0;
     let services = unsafe { &*services };
     witness::hit(witness::LINKGRAPH_MERGE);
-    let native = (services.access)(graph);
-    let access = GraphAccess {
-        owner: native.owner,
-        index: native.index,
-    };
-    let source = unsafe { resolve(other, services) };
+    let index = (services.index)(graph);
+    let source = other;
     let (cargo, first, age, other_age, size) = {
-        let g = unsafe { &*access.owner };
+        let g = unsafe { &*graph };
         let other = unsafe { &*source };
         (
             g.cargo,
@@ -574,14 +493,13 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     for id in 0..size {
         let station = unsafe { &*source }.nodes[usize::from(id)].station;
         let input = (services.station)(station, cargo);
-        let new = unsafe { &mut *access.owner }.add_node(input.xy, station, input.demand);
+        let new = unsafe { &mut *graph }.add_node(input.xy, station, input.demand);
         let supply = unsafe { &*source }.nodes[usize::from(id)].supply;
-        unsafe { &mut *access.owner }.nodes[usize::from(new)].supply =
-            scale(supply, age, other_age);
+        unsafe { &mut *graph }.nodes[usize::from(new)].supply = scale(supply, age, other_age);
         // No graph borrow crosses station mutation or deletion/reentry.
-        (services.attach)(station, cargo, access.index, new);
+        (services.attach)(station, cargo, index.0, new);
         let from = &unsafe { &*source }.nodes[usize::from(id)];
-        let to = &mut unsafe { &mut *access.owner }.nodes[usize::from(new)];
+        let to = &mut unsafe { &mut *graph }.nodes[usize::from(new)];
         for edge in &from.edges {
             let mut added = Edge::new(first.wrapping_add(edge.dest_node));
             added.capacity = scale(edge.capacity, age, other_age);
@@ -597,15 +515,13 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
 /// Run the existing computation from its distinct immutable snapshot. This
 /// replaces native packing of the same two temporary input arrays, not the job
 /// algorithm or its publication/join policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_run(
+pub(crate) unsafe fn run(
     graph: *const Graph,
-    settings: *const super::Settings,
-    context: *const std::ffi::c_void,
-    aborted: unsafe extern "C" fn(*const std::ffi::c_void) -> u8,
-) -> *mut super::Result {
+    settings: &super::Settings,
+    aborted: impl Fn() -> bool,
+) -> super::Result {
     let g = unsafe { &*graph };
-    let s = unsafe { &*settings };
+    let s = settings;
     let map = crate::map_func::Map::from_log_x((s.map_max_x + 1).ilog2());
     let mut nodes = Vec::with_capacity(usize::from(g.size()));
     let mut edges = Vec::new();
@@ -627,17 +543,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_run(
             });
         }
     }
-    unsafe {
-        super::openttd_rust_linkgraph_run(
-            nodes.as_ptr(),
-            nodes.len(),
-            edges.as_ptr(),
-            edges.len(),
-            settings,
-            context,
-            aborted,
-        )
-    }
+    super::run(&nodes, &edges, *settings, aborted)
 }
 
 /// Station membership remains native; all callers share these typed leaves.
@@ -645,19 +551,15 @@ pub(crate) fn station_graph(
     station: *mut crate::station::BaseStation,
     cargo: u8,
     services: &Services,
-) -> *mut super::NativeGraph {
-    (services.get_if_valid)((services.graph_id)(station, cargo))
+) -> *mut Graph {
+    services.get(LinkGraphID((services.graph_id)(station, cargo)))
 }
-pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
-    let native = (services.access)(graph);
-    let access = GraphAccess {
-        owner: native.owner,
-        index: native.index,
-    };
-    let cargo = unsafe { (*access.owner).cargo };
+pub(crate) unsafe fn join(graph: *mut Graph, station: u16, services: &Services) {
+    let index = (services.index)(graph);
+    let cargo = unsafe { (*graph).cargo };
     let input = (services.station)(station, cargo);
-    let node = unsafe { &mut *access.owner }.add_node(input.xy, station, input.demand);
-    (services.attach)(station, cargo, access.index, node);
+    let node = unsafe { &mut *graph }.add_node(input.xy, station, input.demand);
+    (services.attach)(station, cargo, index.0, node);
 }
 pub(crate) unsafe fn station_demand(
     station: *mut crate::station::BaseStation,
@@ -667,7 +569,7 @@ pub(crate) unsafe fn station_demand(
 ) {
     let graph = station_graph(station, cargo, services);
     if !graph.is_null() {
-        let owner = unsafe { resolve(graph, services) };
+        let owner = graph;
         let node = (services.node)(station, cargo);
         unsafe { &mut *owner }.nodes[usize::from(node)].set_demand(demand);
     }
@@ -693,10 +595,10 @@ pub(crate) unsafe fn station_supply(
             std::ptr::null_mut()
         }
     } else {
-        (services.get)(id)
+        services.get(LinkGraphID(id))
     };
     if !graph.is_null() {
-        let owner = unsafe { resolve(graph, services) };
+        let owner = graph;
         let date = crate::timer_game_common::economy_date().0;
         let node = (services.node)(station, cargo);
         let n = &mut unsafe { &mut *owner }.nodes[usize::from(node)];
@@ -706,16 +608,9 @@ pub(crate) unsafe fn station_supply(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "LinkGraph::BaseEdge" ["station_service"] => Edge {
-        capacity, usage, travel_time_sum, last_unrestricted_update, last_restricted_update, dest_node,
-    };
-    "OpenTTDLiveNodeFields" ["station_service"] => NodeFields {
-        supply, demand, station, xy, last_update,
-    };
-    "OpenTTDLiveGraphAccess" ["station_service"] => Access { owner, index, };
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, get, get_if_valid, station_id, owner, access, station, attach, set_node, delete_graph, graph_id, node, available, allocate, };
+        assertions, pool, station_id, index, station, attach, set_node, delete_graph, graph_id, node, available, allocate, };
 }
 
 #[unsafe(no_mangle)]
@@ -730,12 +625,4 @@ pub unsafe extern "C" fn openttd_rust_live_node_add_edge(
 ) {
     let date = crate::timer_game_common::economy_date().0;
     unsafe { &mut *graph }.nodes[usize::from(id)].add_edge(to, capacity, usage, time, modes, date);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_edge_travel_time(edge: *const Edge) -> u32 {
-    unsafe { &*edge }.travel_time()
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_edge_last_update(edge: *const Edge) -> i32 {
-    unsafe { &*edge }.last_update()
 }
