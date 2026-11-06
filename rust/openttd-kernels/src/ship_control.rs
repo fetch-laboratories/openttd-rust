@@ -389,11 +389,11 @@ impl Game<'_> {
         let mut best = None;
         let mut best_distance = u32::MAX;
         let pool = unsafe { crate::depot_type::pool() };
-        let mut index = unsafe { pool.next_index(0, 64000) };
-        while index < 64000 {
+        let mut index = unsafe { pool.next_index(0, crate::depot_type::DepotID::END) };
+        while index < crate::depot_type::DepotID::END {
             let record = unsafe { pool.record(crate::depot_type::DepotID(index as u16)) };
             let tile = unsafe { (*record).xy.0 };
-            index = unsafe { pool.next_index(index + 1, 64000) };
+            index = unsafe { pool.next_index(index + 1, crate::depot_type::DepotID::END) };
             if !(self.leaves.is_depot)(tile)
                 || u32::from((self.services.tile_owner)(tile)) != observed_owner
             {

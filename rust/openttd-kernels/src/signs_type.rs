@@ -6,6 +6,7 @@
 pub struct SignID(pub u16);
 impl SignID {
     pub const INVALID: Self = Self(u16::MAX);
+    pub const END: usize = 64000;
 }
 /// Opaque native `Sign`; valid only while its native pool shell lives.
 #[repr(C)]
@@ -50,11 +51,11 @@ pub extern "C" fn openttd_rust_sign_record_new(shell: *mut Sign, index: SignID) 
     Box::into_raw(Box::new(SignRecord {
         shell,
         index,
-        name: Default::default(),
+        name: crate::industrytype::NativeVec::new(),
         x: 0,
         y: 0,
         z: 0,
-        owner: crate::company_type::CompanyID(0xff),
+        owner: crate::company_type::Owner::INVALID,
     }))
 }
 /// The shell has completed its destructor and retired its live slot's record.

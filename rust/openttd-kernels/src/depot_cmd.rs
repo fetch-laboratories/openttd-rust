@@ -33,13 +33,13 @@ crate::abi::layouts! {
 fn unique(text: ByteSpan) -> bool {
     unsafe {
         let pool = crate::depot_type::pool();
-        let mut index = pool.next_index(0, 64000);
-        while index < 64000 {
+        let mut index = pool.next_index(0, crate::depot_type::DepotID::END);
+        while index < crate::depot_type::DepotID::END {
             let d = pool.record(DepotID(index as u16));
             if !(*d).name.is_empty() && (*d).name.as_slice() == text.bytes() {
                 return false;
             }
-            index = pool.next_index(index + 1, 64000);
+            index = pool.next_index(index + 1, crate::depot_type::DepotID::END);
         }
     }
     true

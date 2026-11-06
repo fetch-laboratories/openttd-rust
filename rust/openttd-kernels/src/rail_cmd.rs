@@ -1154,7 +1154,7 @@ impl<'a> Ctx<'a> {
                 let depot = (self.s.new_depot)(tile);
                 (self.rail.make_rail_depot)(tile, self.current(), depot, dir, railtype);
                 unsafe {
-                    crate::depot_cmd::default_name(self.shared, crate::depot_type::DepotID(depot))
+                    crate::depot_cmd::default_name(self.shared, crate::depot_type::DepotID(depot));
                 };
                 self.rail_infra(self.current(), railtype, 1);
                 (self.command.infrastructure_dirty)(self.current());

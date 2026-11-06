@@ -1381,13 +1381,13 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     );
     unsafe {
         let pool = crate::signs_type::pool();
-        let mut index = pool.next_index(0, 64000);
-        while index < 64000 {
+        let mut index = pool.next_index(0, crate::signs_type::SignID::END);
+        while index < crate::signs_type::SignID::END {
             let record = pool.record(crate::signs_type::SignID(index as u16));
             if (*record).owner.0 == old {
                 (*record).owner = crate::company_type::CompanyID(owner);
             }
-            index = pool.next_index(index + 1, 64000);
+            index = pool.next_index(index + 1, crate::signs_type::SignID::END);
         }
     }
     each(

@@ -4,6 +4,9 @@
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DepotID(pub u16);
+impl DepotID {
+    pub const END: usize = 64000;
+}
 /// Opaque native `Depot`; valid only while its native pool shell lives.
 #[repr(C)]
 pub struct Depot {
@@ -54,9 +57,9 @@ pub extern "C" fn openttd_rust_depot_record_new(
         shell,
         index,
         town_cn: 0,
-        xy: crate::tile_type::TileIndex(u32::MAX),
+        xy: crate::tile_type::TileIndex::INVALID,
         town: std::ptr::null_mut(),
-        name: Default::default(),
+        name: crate::industrytype::NativeVec::new(),
         build_date: 0,
     }))
 }

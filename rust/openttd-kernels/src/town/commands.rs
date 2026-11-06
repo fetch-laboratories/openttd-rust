@@ -431,14 +431,14 @@ impl<'a> Commands<'a> {
         }
         unsafe {
             let pool = crate::depot_type::pool();
-            let mut index = pool.next_index(0, 64000);
-            while index < 64000 {
+            let mut index = pool.next_index(0, crate::depot_type::DepotID::END);
+            while index < crate::depot_type::DepotID::END {
                 let record = pool.record(crate::depot_type::DepotID(index as u16));
                 if (*record).town == t.shell {
                     self.error(out);
                     return;
                 }
-                index = pool.next_index(index + 1, 64000);
+                index = pool.next_index(index + 1, crate::depot_type::DepotID::END);
             }
         }
         for tile in 0..self.map_size() {

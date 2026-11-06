@@ -604,7 +604,12 @@ fn native_vehicle(v: *mut c_void, base: &VehicleServices) -> VehicleRef {
 }
 
 impl Game {
-    fn depot_tile(self, id: u16) -> u64 {
+    fn shared_services(self) -> &'static crate::services::Services {
+        // SAFETY: The native station-command table retains the immutable shared table.
+        unsafe { &*(*self.0.station_commands).shared }
+    }
+    fn depot_tile(id: u16) -> u64 {
+        // SAFETY: The source branch requires a live depot; no record borrow escapes.
         unsafe {
             u64::from(
                 (*crate::depot_type::pool().record(crate::depot_type::DepotID(id)))
@@ -613,7 +618,8 @@ impl Game {
             )
         }
     }
-    fn valid_depot(self, id: u16) -> u64 {
+    fn valid_depot(id: u16) -> u64 {
+        // SAFETY: Serialized lookup reads current occupancy without retaining a borrow.
         unsafe {
             u64::from(
                 !crate::depot_type::pool()
@@ -624,26 +630,25 @@ impl Game {
     }
     fn depot_owner(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
-                .owner(self.depot_tile(id) as u32),
+            crate::map_func::World::new(self.shared_services()).owner(Self::depot_tile(id) as u32),
         )
     }
     fn rail_depot(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
-                .rail_depot(self.depot_tile(id) as u32),
+            crate::map_func::World::new(self.shared_services())
+                .rail_depot(Self::depot_tile(id) as u32),
         )
     }
     fn road_depot(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
-                .road_depot(self.depot_tile(id) as u32),
+            crate::map_func::World::new(self.shared_services())
+                .road_depot(Self::depot_tile(id) as u32),
         )
     }
     fn ship_depot(self, id: u16) -> u64 {
         u64::from(
-            crate::map_func::World::new(unsafe { &*(*self.0.station_commands).shared })
-                .ship_depot(self.depot_tile(id) as u32),
+            crate::map_func::World::new(self.shared_services())
+                .ship_depot(Self::depot_tile(id) as u32),
         )
     }
 }
@@ -3032,7 +3037,7 @@ impl Game {
                 (if self.vehicle_type(v) == u64::from(VEH_AIRCRAFT) {
                     self.station_tile(order.destination)
                 } else {
-                    self.depot_tile(order.destination)
+                    Self::depot_tile(order.destination)
                 }) as u32
             }
             _ => u32::MAX,
@@ -3125,7 +3130,7 @@ impl Control {
                         }
                     } else {
                         if g.vehicle_type(v) != u64::from(VEH_AIRCRAFT) {
-                            let tile = g.depot_tile(order.destination);
+                            let tile = Game::depot_tile(order.destination);
                             g.set_destination(v, tile as u32);
                         } else {
                             let destination = g.current(v).destination;
@@ -3389,7 +3394,7 @@ impl Control {
                             return self.g.error(output, 0);
                         }
                     } else {
-                        if g.valid_depot(destination as u16) == 0 {
+                        if Game::valid_depot(destination as u16) == 0 {
                             return self.g.error(output, 0);
                         }
                         if !self

@@ -55,7 +55,7 @@ mod tests {
                     data: std::ptr::null(),
                     size: 0,
                 },
-            )
+            );
         };
         assert!(bytes.is_empty());
     }
