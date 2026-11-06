@@ -17,6 +17,7 @@
 #include "timer/timer_game_economy.h"
 #include "settings_type.h"
 #include "group.h"
+#include "rust/unit_numbers_ffi.h"
 
 static const Money COMPANY_MAX_LOAN_DEFAULT = INT64_MIN;
 
@@ -51,17 +52,24 @@ struct CompanyInfrastructure {
 	inline uint32_t GetTramTotal() const { return GetRoadTramTotal(RTT_TRAM); }
 };
 
+/** Rust-owned bitmap; native calls preserve Company member lifetime and copy order. */
 class FreeUnitIDGenerator {
 public:
-	UnitID NextID() const;
-	UnitID UseID(UnitID index);
-	void ReleaseID(UnitID index);
+	FreeUnitIDGenerator() = default;
+	FreeUnitIDGenerator(const FreeUnitIDGenerator &other) { openttd_rust_unit_numbers_copy(&this->state, &other.state); }
+	FreeUnitIDGenerator &operator=(const FreeUnitIDGenerator &other) { openttd_rust_unit_numbers_copy(&this->state, &other.state); return *this; }
+	FreeUnitIDGenerator(FreeUnitIDGenerator &&other) noexcept : state(std::exchange(other.state, {})) {}
+	FreeUnitIDGenerator &operator=(FreeUnitIDGenerator &&other) noexcept { if (this != &other) { openttd_rust_unit_numbers_drop(&this->state); this->state = std::exchange(other.state, {}); } return *this; }
+	~FreeUnitIDGenerator() { openttd_rust_unit_numbers_drop(&this->state); }
+	UnitID NextID() const { return openttd_rust_unit_numbers_next(&this->state); }
+	UnitID UseID(UnitID index) { return openttd_rust_unit_numbers_use(&this->state, index); }
+	void ReleaseID(UnitID index) { openttd_rust_unit_numbers_release(&this->state, index, Check); }
+	OpenTTDUnitNumberState &Record() { return this->state; }
+	const OpenTTDUnitNumberState &Record() const { return this->state; }
 
 private:
-	using BitmapStorage = size_t;
-	static constexpr size_t BITMAP_SIZE = std::numeric_limits<BitmapStorage>::digits;
-
-	std::vector<BitmapStorage> used_bitmap{};
+	static void OPENTTD_RUST_CALL Check(bool condition) noexcept { assert(condition); }
+	OpenTTDUnitNumberState state{};
 };
 
 typedef Pool<Company, CompanyID, 1> CompanyPool;

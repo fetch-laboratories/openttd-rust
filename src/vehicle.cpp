@@ -1127,53 +1127,6 @@ VehicleEnterTileStates VehicleEnterTile(Vehicle *v, TileIndex tile, int x, int y
 }
 
 /**
- * Find first unused unit number.
- * This does not mark the unit number as used.
- * @returns First unused unit number.
- */
-UnitID FreeUnitIDGenerator::NextID() const
-{
-	for (auto it = std::begin(this->used_bitmap); it != std::end(this->used_bitmap); ++it) {
-		BitmapStorage available = ~(*it);
-		if (available == 0) continue;
-		return static_cast<UnitID>(std::distance(std::begin(this->used_bitmap), it) * BITMAP_SIZE + FindFirstBit(available) + 1);
-	}
-	return static_cast<UnitID>(this->used_bitmap.size() * BITMAP_SIZE + 1);
-}
-
-/**
- * Use a unit number. If the unit number is not valid it is ignored.
- * @param index Unit number to use.
- * @returns Unit number used.
- */
-UnitID FreeUnitIDGenerator::UseID(UnitID index)
-{
-	if (index == 0 || index == UINT16_MAX) return index;
-
-	index--;
-
-	size_t slot = index / BITMAP_SIZE;
-	if (slot >= this->used_bitmap.size()) this->used_bitmap.resize(slot + 1);
-	SetBit(this->used_bitmap[index / BITMAP_SIZE], index % BITMAP_SIZE);
-
-	return index + 1;
-}
-
-/**
- * Release a unit number. If the unit number is not valid it is ignored.
- * @param index Unit number to release.
- */
-void FreeUnitIDGenerator::ReleaseID(UnitID index)
-{
-	if (index == 0 || index == UINT16_MAX) return;
-
-	index--;
-
-	assert(index / BITMAP_SIZE < this->used_bitmap.size());
-	ClrBit(this->used_bitmap[index / BITMAP_SIZE], index % BITMAP_SIZE);
-}
-
-/**
  * Get an unused unit number for a vehicle (if allowed).
  * @param type Type of vehicle
  * @return A unused unit number for the given type of vehicle if it is allowed to build one, else \c UINT16_MAX.

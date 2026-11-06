@@ -11,6 +11,7 @@
 #include "service_defaults.hpp"
 #include "vehicle_ffi.h"
 #include "services_ffi.h"
+#include "unit_numbers_ffi.h"
 enum OrderType : uint8_t;
 struct Company;
 struct OpenTTDSharedServices;

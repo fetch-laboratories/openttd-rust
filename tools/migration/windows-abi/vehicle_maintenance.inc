@@ -12,6 +12,19 @@
  * shells are never dereferenced; the game target checks real member stores. */
 static void VehicleMaintenanceBoundary()
 {
+	/* Actual native Company-member facade copy/move and Rust bitmap call ABI. */
+	FreeUnitIDGenerator numbers;
+	CHECK(numbers.NextID() == 1 && numbers.UseID(65) == 65);
+	CHECK(numbers.UseID(1) == 1 && numbers.NextID() == 2);
+	FreeUnitIDGenerator copied = numbers;
+	CHECK(copied.UseID(2) == 2 && numbers.NextID() == 2);
+	numbers = copied;
+	CHECK(numbers.NextID() == 3);
+	numbers.ReleaseID(1);
+	CHECK(numbers.NextID() == 1 && copied.NextID() == 3);
+	FreeUnitIDGenerator moved = std::move(copied);
+	CHECK(moved.NextID() == 3 && copied.NextID() == 1);
+
 	static size_t dirty;
 	dirty = 0;
 	auto &maintenance = _vehicle_maintenance_probe;
