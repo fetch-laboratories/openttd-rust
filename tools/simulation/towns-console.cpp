@@ -41,6 +41,7 @@
 #include "newgrf_badge.h"
 #include "animated_tile_func.h"
 #include "station_base.h"
+#include "vehicle-record-fixture.hpp"
 #include "station_kdtree.h"
 #include "waypoint_base.h"
 #include "depot_base.h"
@@ -453,7 +454,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 #else
 	_station_kdtree.Insert(station->index);
 #endif
-	station->town = town; station->owner = company->index;
+	FIXTURE_FIELD(station, town) = town; FIXTURE_SET(station, Owner, owner, company->index);
 	TownActionMoney(town, company, other);
 	TownStatueSearch(town, company);
 	fmt::print(stderr, "TOWN action-mask {} {}\n", GetMaskOfTownActions(company->index, town).base(), GetMaskOfTownActions(COMPANY_SPECTATOR, town).base());
@@ -476,8 +477,8 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	_station_kdtree.Insert(stations[i]->index);
 #endif
 
-		stations[i]->town = i < 2 ? town : neighbour;
-		stations[i]->owner = i % 2 == 0 ? company->index : other->index;
+		FIXTURE_FIELD(stations[i], town) = i < 2 ? town : neighbour;
+		FIXTURE_SET(stations[i], Owner, owner, i % 2 == 0 ? company->index : other->index);
 	}
 	Backup<CompanyID> local(_local_company, company->index);
 	/* Observe ShowErrorMessage without creating a GUI window under -vnull. */
@@ -492,7 +493,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		town->unwanted[company->index] = 0; town->ratings[company->index] = initial;
 		town->exclusivity = other->index; town->exclusive_counter = 12;
 		for (size_t i = 0; i < stations.size(); ++i) {
-			for (size_t cargo = 0; cargo < stations[i]->goods.size(); ++cargo) stations[i]->goods[cargo].rating = 70 + 20 * i + cargo;
+			for (size_t cargo = 0; cargo < FIXTURE_GOODS_RANGE(stations[i]).size(); ++cargo) FIXTURE_VFIELD(FIXTURE_GOODS(stations[i], cargo), rating) = 70 + 20 * i + cargo;
 		}
 		fmt::print(stderr, "TOWN bribe-input {} {} {} {} {} {} {} {} {} {} {}\n", initial, failed, seed, id.base(), company->index.base(), other->index.base(), neighbour_id.base(), stations[0]->index.base(), stations[1]->index.base(), stations[2]->index.base(), stations[3]->index.base());
 		auto save = [&](const char *phase) {
@@ -507,7 +508,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		Cost("bribe-exec", CmdDoTownAction(DoCommandFlag::Execute, id, TownAction::Bribe));
 		fmt::print(stderr, "TOWN bribe-outcome {} {} {} {} {} {} {}\n", initial, bribe_errors, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
 		save("after");
-		fmt::print(stderr, "TOWN bribe {} {} {} {} {} {} {}\n", failed, town->ratings[company->index], town->unwanted[company->index], station->goods[0].rating, town->exclusive_counter, town->exclusivity.base(), GetMaskOfTownActions(company->index, town).base());
+		fmt::print(stderr, "TOWN bribe {} {} {} {} {} {} {}\n", failed, town->ratings[company->index], town->unwanted[company->index], FIXTURE_VFIELD(FIXTURE_GOODS(station, 0), rating), town->exclusive_counter, town->exclusivity.base(), GetMaskOfTownActions(company->index, town).base());
 	}
 	duration.Restore(); local.Restore();
 	/* Querying a different company must retain the original _current_company comparison. */
@@ -546,7 +547,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		if (industry == nullptr) std::abort();
 		industry->town = target; oilrig = industry->index;
 		for (TileIndex part : industry->location) if (IsTileType(part, MP_INDUSTRY) && GetIndustryGfx(part) == GFX_OILRIG_1 && IsTileType(part + TileDiffXY(0, 1), MP_INDUSTRY)) { BuildOilRig(part); break; }
-		for (Station *st : Station::Iterate()) if (st->industry == industry) st->town = target;
+		for (Station *st : Station::Iterate()) if (FIXTURE_FIELD(st, industry) == industry) FIXTURE_FIELD(st, town) = target;
 		break;
 	}
 	restrictions.Restore();
@@ -561,11 +562,11 @@ static bool CommandsScenario(std::span<std::string_view> args)
 #else
 	_station_kdtree.Insert(veto->index);
 #endif
-	veto->town = target; veto->owner = company->index;
+	FIXTURE_FIELD(veto, town) = target; FIXTURE_SET(veto, Owner, owner, company->index);
 	Cost("delete-station-veto", CmdDeleteTown(DoCommandFlag::Execute, removed));
 	delete veto;
 	if (!Waypoint::CanAllocateItem()) std::abort();
-	Waypoint *waypoint = new Waypoint(target->xy); waypoint->town = target; waypoint->owner = company->index;
+	Waypoint *waypoint = new Waypoint(target->xy); FIXTURE_FIELD(waypoint, town) = target; FIXTURE_SET(waypoint, Owner, owner, company->index);
 	Cost("delete-waypoint-veto", CmdDeleteTown({}, removed)); delete waypoint;
 	if (!Depot::CanAllocateItem()) std::abort();
 	Depot *depot = new Depot(target->xy); depot->town = target;

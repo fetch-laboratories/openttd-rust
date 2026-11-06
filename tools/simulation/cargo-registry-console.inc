@@ -148,11 +148,11 @@ static void CargoProfitFixture()
 	for (Vehicle *v : Vehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_payment == nullptr && Station::IsValidID(FIXTURE_GET(v, LastStationVisited, last_station_visited))) { front = v; break; }
 	CARGO_REQUIRE(front != nullptr);
 	Station *station = Station::Get(FIXTURE_GET(front, LastStationVisited, last_station_visited));
-	SubsidyClean(); SetBit(station->always_accepted, cargo);
+	SubsidyClean(); SetBit(FIXTURE_FIELD(station, always_accepted), cargo);
 	CARGO_REQUIRE(CargoPayment::CanAllocateItem() && CargoPacket::CanAllocateItem());
-	auto *packet = new CargoPacket(station->index, 31, {station->town->index, SourceType::Town}); packet->UpdateLoadingTile(station->xy);
+	auto *packet = new CargoPacket(station->index, 31, {FIXTURE_FIELD(station, town)->index, SourceType::Town}); packet->UpdateLoadingTile(FIXTURE_GET(station, XY, xy));
 	auto *payment = new CargoPayment(front);
-	TileIndex destination = TileXY((TileX(station->xy) + 17) % Map::SizeX(), TileY(station->xy));
+	TileIndex destination = TileXY((TileX(FIXTURE_GET(station, XY, xy)) + 17) % Map::SizeX(), TileY(FIXTURE_GET(station, XY, xy)));
 	observer.SetRegister(0x102, -1);
 	payment->PayFinalDelivery(cargo, packet, 31, destination);
 	CARGO_REQUIRE(payment->route_profit == income && payment->visual_profit == income && observer.GetRegister(0x102) == CBID_CARGO_PROFIT_CALC);
@@ -186,16 +186,16 @@ static void CargoRatingFixture()
 	program.default_result = {false, &result};
 	cs->grffile = &file; cs->group = &program; cs->callback_mask.Set(CargoCallbackMask::StationRatingCalc);
 	Station *station = nullptr;
-	for (Station *st : Station::Iterate()) if (st->IsInUse() && !st->facilities.Test(StationFacility::Waypoint)) { station = st; break; }
+	for (Station *st : Station::Iterate()) if (st->IsInUse() && !FIXTURE_GET(st, Facilities, facilities).Test(StationFacility::Waypoint)) { station = st; break; }
 	CARGO_REQUIRE(station != nullptr);
 	Backup<bool> select(_settings_game.order.selectgoods, false);
 	ResolverObject observer(nullptr);
 	for (uint16_t value : std::array<uint16_t, 3>{255, 0x4001, CALLBACK_FAILED}) {
 		result.result = value;
-		for (BaseStation *st : BaseStation::Iterate()) st->delete_ctr = 0;
-		station->delete_ctr = Ticks::STATION_RATING_TICKS - 1; station->last_vehicle_type = VEH_ROAD;
-		GoodsEntry &ge = station->goods[cargo]; ge.status.Set(GoodsEntry::State::Rating);
-		ge.rating = 128; ge.time_since_pickup = 4; ge.last_speed = 100; ge.max_waiting_cargo = 321;
+		for (BaseStation *st : BaseStation::Iterate()) FIXTURE_FIELD(st, delete_ctr) = 0;
+		FIXTURE_FIELD(station, delete_ctr) = Ticks::STATION_RATING_TICKS - 1; FIXTURE_FIELD(station, last_vehicle_type) = VEH_ROAD;
+		auto &&ge = FIXTURE_GOODS(station, cargo); FIXTURE_VSET(ge, Status, status, FIXTURE_VGET(ge, Status, status).Set(GoodsEntry::State::Rating));
+		FIXTURE_VFIELD(ge, rating) = 128; FIXTURE_VFIELD(ge, time_since_pickup) = 4; FIXTURE_VFIELD(ge, last_speed) = 100; FIXTURE_VFIELD(ge, max_waiting_cargo) = 321;
 		observer.SetRegister(0x102, -1);
 		Randomizer before = _random;
 #ifdef WITH_RUST
@@ -204,8 +204,8 @@ static void CargoRatingFixture()
 		OnTick_Station();
 #endif
 		CARGO_REQUIRE(observer.GetRegister(0x102) == CBID_CARGO_STATION_RATING_CALC && observer.GetRegister(0x101) == 0x11 && observer.GetRegister(0x100) == (5 | (321 << 8) | (100 << 24)));
-		if (value != CALLBACK_FAILED) CARGO_REQUIRE(ge.rating == (value == 255 ? 130 : 126));
-		fmt::print(stderr, "CARGO rating {} {} {} {} {} {} {} {} {}\n", value, ge.rating, observer.GetRegister(0x100), observer.GetRegister(0x101), observer.GetRegister(0x102), before.state[0], before.state[1], _random.state[0], _random.state[1]);
+		if (value != CALLBACK_FAILED) CARGO_REQUIRE(FIXTURE_VFIELD(ge, rating) == (value == 255 ? 130 : 126));
+		fmt::print(stderr, "CARGO rating {} {} {} {} {} {} {} {} {}\n", value, FIXTURE_VFIELD(ge, rating), observer.GetRegister(0x100), observer.GetRegister(0x101), observer.GetRegister(0x102), before.state[0], before.state[1], _random.state[0], _random.state[1]);
 	}
 	*cs = saved; select.Restore();
 	fmt::print(stderr, "CARGO rating-controls true\n");

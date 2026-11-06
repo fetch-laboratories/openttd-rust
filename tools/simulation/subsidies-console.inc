@@ -45,7 +45,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	 * and lists industry j; town b and industry i lie outside it. */
 	Station *st = nullptr; Town *a = nullptr; Industry *j = nullptr;
 	for (Station *candidate : Station::Iterate()) {
-		if (st != nullptr || !HasBit(candidate->always_accepted, cargo) || candidate->industries_near.begin() == candidate->industries_near.end()) continue;
+		if (st != nullptr || !HasBit(FIXTURE_FIELD(candidate, always_accepted), cargo) || candidate->industries_near.begin() == candidate->industries_near.end()) continue;
 		BitmapTileIterator it(candidate->catchment_tiles);
 		for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) {
 			if (!IsTileType(tile, MP_HOUSE)) continue;
@@ -75,7 +75,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 		SubsidyClean(); _settings_game.difficulty.subsidy_multiplier = multiplier;
 		for (Source dst : {town, other, industry, destination}) CmdCreateSubsidy(DoCommandFlag::Execute, cargo, town, dst);
 		if (!CargoPacket::CanAllocateItem() || !CargoPayment::CanAllocateItem()) FixtureAbort(__LINE__);
-		CargoPacket *cp = new CargoPacket(st->index, 10, town); cp->UpdateLoadingTile(st->xy); TileIndex tile = TileXY((TileX(st->xy) + 10) % Map::SizeX(), TileY(st->xy));
+		CargoPacket *cp = new CargoPacket(st->index, 10, town); cp->UpdateLoadingTile(FIXTURE_GET(st, XY, xy)); TileIndex tile = TileXY((TileX(FIXTURE_GET(st, XY, xy)) + 10) % Map::SizeX(), TileY(FIXTURE_GET(st, XY, xy)));
 		CargoPayment *payment = new CargoPayment(front); Money base = GetTransportedGoodsIncome(10, cp->GetDistance(tile), cp->GetPeriodsInTransit(), cargo);
 		payment->PayFinalDelivery(cargo, cp, 10, tile);
 		Money expected = multiplier == 0 ? base + (base >> 1) : base * (multiplier + 1);

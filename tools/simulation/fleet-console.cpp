@@ -204,7 +204,7 @@ static Vehicle *BuildFixture(VehicleType type)
 	CompanyMoney(Company::Get(_current_company)) = Money(1000000000);
 	TileIndex tile = INVALID_TILE;
 	if (type == VEH_AIRCRAFT) {
-		for (Station *st : Station::Iterate()) if (st->owner == _current_company && st->airport.GetNumHangars() != 0) { tile = st->airport.GetHangarTile(0); break; }
+		for (Station *st : Station::Iterate()) if (FIXTURE_GET(st, Owner, owner) == _current_company && FIXTURE_AIRPORT(st).GetNumHangars() != 0) { tile = FIXTURE_AIRPORT(st).GetHangarTile(0); break; }
 	} else {
 		for (Depot *depot : Depot::Iterate()) {
 			if (GetTileOwner(depot->xy) != _current_company) continue;
@@ -655,7 +655,7 @@ static void ResolverAircraft(Aircraft *v)
 {
 	const Station *st = GetTargetAirportIfValid(v);
 	if (st == nullptr) FixtureAbort(__LINE__);
-	const AirportFTAClass *airport = st->airport.GetFTA();
+	const AirportFTAClass *airport = FIXTURE_AIRPORT(st).GetFTA();
 	Backup<uint8_t> state(v->state), pos(v->pos);
 	Backup<Order> order(v->current_order);
 	VehicleResolverObject ro(FIXTURE_GET(v, EngineType, engine_type), v, VehicleResolverObject::WO_NONE);

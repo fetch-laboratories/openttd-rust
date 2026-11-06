@@ -23,14 +23,14 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		StationNeed(Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, waytile, AXIS_X, 1, 1, STAT_CLASS_WAYP, 0, StationID::Invalid(), false).Succeeded(), __LINE__);
 		wp = Waypoint::GetByTile(waytile); wp->name = "Resolver waypoint";
 		StationNeed(CargoPacket::CanAllocateItem(2), __LINE__);
-		st->goods[0].GetOrCreateData().cargo.Append(new CargoPacket(4133, 5, st->index, tile, 0), StationID::Invalid());
-		st->goods[1].GetOrCreateData().cargo.Append(new CargoPacket(9, 13, st->index, tile, 0), StationID::Invalid());
+		FIXTURE_GOODS(st, 0).GetOrCreateData().cargo.Append(new CargoPacket(4133, 5, st->index, tile, 0), StationID::Invalid());
+		FIXTURE_GOODS(st, 1).GetOrCreateData().cargo.Append(new CargoPacket(9, 13, st->index, tile, 0), StationID::Invalid());
 	}
-	TileIndex tile = st->train_station.tile, waytile = wp->train_station.tile;
-	st->truck_stops->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free);
-	st->airport.blocks.Set({AirportBlock::Term1, AirportBlock::RunwayIn, AirportBlock::AirportClosed});
+	TileIndex tile = FIXTURE_GET(st, TrainStation, train_station).tile, waytile = FIXTURE_GET(wp, TrainStation, train_station).tile;
+	FIXTURE_SET(FIXTURE_GET(st, TruckStops, truck_stops), Status, status, FIXTURE_GET(FIXTURE_GET(st, TruckStops, truck_stops), Status, status).Reset(RoadStop::RoadStopStatusFlag::Bay0Free));
+	FIXTURE_VSET(FIXTURE_AIRPORT(st), Blocks, blocks, FIXTURE_VGET(FIXTURE_AIRPORT(st), Blocks, blocks).Set({AirportBlock::Term1, AirportBlock::RunwayIn, AirportBlock::AirportClosed}));
 
-	fmt::print(stderr, "STCMD resolver-reconstruction {} {} {} {}\n", reloaded, st->index.base(), st->goods[0].TotalCount(), st->goods[0].GetData().cargo.PeriodsInTransit());
+	fmt::print(stderr, "STCMD resolver-reconstruction {} {} {} {}\n", reloaded, st->index.base(), FIXTURE_GOODS(st, 0).TotalCount(), FIXTURE_GOODS(st, 0).GetData().cargo.PeriodsInTransit());
 	GRFFile file; file.grfid = 0x52533939; file.grf_version = 8;
 	StationSpec spec; spec.grf_prop.grffile = &file; spec.grf_prop.grfid = file.grfid; spec.grf_prop.local_id = 19;
 	StationNeed(SpriteGroup::CanAllocateItem(6), __LINE__);
@@ -60,7 +60,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	 * cargo encodings and unavailable branches. Associations are transient. */
 	st->speclist.resize(2); st->speclist[1] = {&spec, file.grfid, 19};
 	wp->speclist.resize(2); wp->speclist[1] = {&spec, file.grfid, 19};
-	for (TileIndex t : st->train_station) if (st->TileBelongsToRailStation(t)) SetCustomStationSpecIndex(t, 1);
+	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) SetCustomStationSpecIndex(t, 1);
 	SetCustomStationSpecIndex(waytile, 1);
 	file.cargo_list = {CargoSpec::Get(0)->label, CargoSpec::Get(1)->label};
 	auto variables = [&](const char *kind, BaseStation *base, TileIndex t, Axis axis) {
@@ -77,8 +77,8 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	};
 	for (uint8_t version : {6, 7, 8}) for (uint8_t status : {0, 1, 2, 0x3C, 0x3F}) {
 		file.grf_version = version;
-		auto &ge = st->goods[0]; ge.status = GoodsEntry::States(status); ge.time_since_pickup = 27; ge.rating = 123;
-		ge.last_speed = status == 0 ? 0 : 77; ge.last_age = 11;
+		auto &&ge = FIXTURE_GOODS(st, 0); FIXTURE_VSET(ge, Status, status, GoodsEntry::States(status)); FIXTURE_VFIELD(ge, time_since_pickup) = 27; FIXTURE_VFIELD(ge, rating) = 123;
+		FIXTURE_VFIELD(ge, last_speed) = status == 0 ? 0 : 77; FIXTURE_VFIELD(ge, last_age) = 11;
 		variables("station", st, tile, INVALID_AXIS);
 		fmt::print(stderr, "STCMD resolver-state {} {}\n", status, ge.ConvertState());
 	}
@@ -88,13 +88,13 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	/* Lazy town selection remains stable over repeated resolutions; a parent
 	 * Action2 program exercises native persistent storage reentry. */
 	StationNeed(object.GetTown() != nullptr, __LINE__);
-	auto *parent = object.GetTown(); auto *original_town = st->town; st->town = nullptr;
+	auto *parent = object.GetTown(); auto *original_town = FIXTURE_FIELD(st, town); FIXTURE_FIELD(st, town) = nullptr;
 #ifdef WITH_RUST
 	StationNeed(object.GetTown() == parent && parent->context.town == original_town, __LINE__);
 #else
 	StationNeed(object.GetTown() == parent && parent->t == original_town, __LINE__);
 #endif
-	st->town = original_town;
+	FIXTURE_FIELD(st, town) = original_town;
 	det->var_scope = VSG_SCOPE_PARENT;
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x399}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 3}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 3, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}};
 	std::array<int32_t, 2> parent_regs{}; StationNeed(object.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__);
@@ -110,8 +110,8 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	StationNeed(object.ResolveCallback({}) == CALLBACK_FAILED, __LINE__); det->var_scope = VSG_SCOPE_PARENT;
 	/* A readonly purchase parent cannot change the shared town storage. */
 	det->adjusts[2].and_mask = 0x400; StationNeed(prototype.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__); det->adjusts[2].and_mask = 0x399;
-	st->town = nullptr; StationResolverObject retry(&spec, st, tile);
-	StationNeed(retry.ResolveCallback({}) == CALLBACK_FAILED, __LINE__); st->town = original_town;
+	FIXTURE_FIELD(st, town) = nullptr; StationResolverObject retry(&spec, st, tile);
+	StationNeed(retry.ResolveCallback({}) == CALLBACK_FAILED, __LINE__); FIXTURE_FIELD(st, town) = original_town;
 	StationNeed(retry.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__);
 	fmt::print(stderr, "STCMD resolver-scope-fallback parent relative readonly retry\n");
 
@@ -177,45 +177,45 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	spec.grf_prop.spritegroups.clear(); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random); spec.cargo_triggers = 1;
 	st->speclist.resize(2); st->speclist[1] = {&spec, file.grfid, 19};
 	uint count = 0;
-	for (TileIndex t : st->train_station) if (st->TileBelongsToRailStation(t)) { SetCustomStationSpecIndex(t, 1); ++count; }
-	st->cached_cargo_triggers = 1;
+	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) { SetCustomStationSpecIndex(t, 1); ++count; }
+	FIXTURE_FIELD(st, cached_cargo_triggers) = 1;
 	auto expected = _random; for (uint i = 0; i < count + 1; ++i) expected.Next();
 	TriggerStationRandomisation(st, tile, StationRandomTrigger::NewCargo, 0);
 	StationNeed(_random.state[0] == expected.state[0] && _random.state[1] == expected.state[1], __LINE__);
-	fmt::print(stderr, "STCMD resolver-rng lower {} {} {} {}\n", count, st->waiting_random_triggers.base(), _random.state[0], _random.state[1]);
+	fmt::print(stderr, "STCMD resolver-rng lower {} {} {} {}\n", count, FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), _random.state[0], _random.state[1]);
 	/* Upper-only, combined, trigger mismatch, cached-mask exits and CargoTaken
 	 * all-empty gating. Ordered per-tile bits and final consumed-trigger removal
 	 * are observable, including publication before each common resolution. */
 	for (uint8_t bit : {0, 16, 17}) for (auto trigger : {StationRandomTrigger::NewCargo, StationRandomTrigger::CargoTaken, StationRandomTrigger::VehicleArrives, StationRandomTrigger::VehicleDeparts, StationRandomTrigger::VehicleLoads, StationRandomTrigger::PathReservation}) {
 		random->lowest_randbit = bit; random->triggers = 1U << to_underlying(trigger);
 		for (CargoTypes mask : {CargoTypes{0}, CargoTypes{1}, CargoTypes{2}, CargoTypes{1} << 63}) {
-			spec.cargo_triggers = mask; st->cached_cargo_triggers = mask;
+			spec.cargo_triggers = mask; FIXTURE_FIELD(st, cached_cargo_triggers) = mask;
 			TriggerStationRandomisation(st, tile, trigger, 0);
-			fmt::print(stderr, "STCMD resolver-rng cases {} {} {} {} {} {} {}", bit, to_underlying(trigger), mask, st->waiting_random_triggers.base(), st->random_bits, _random.state[0], _random.state[1]);
-			for (TileIndex t : st->train_station) if (st->TileBelongsToRailStation(t)) fmt::print(stderr, " {}:{}", t.base(), GetStationTileRandomBits(t));
+			fmt::print(stderr, "STCMD resolver-rng cases {} {} {} {} {} {} {}", bit, to_underlying(trigger), mask, FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), FIXTURE_FIELD(st, random_bits), _random.state[0], _random.state[1]);
+			for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) fmt::print(stderr, " {}:{}", t.base(), GetStationTileRandomBits(t));
 			fmt::print(stderr, "\n");
 		}
 	}
 	/* ALL consumes a previously waiting CargoTaken together with NewCargo. */
-	random->cmp_mode = RSG_CMP_ALL; random->triggers = 3; random->lowest_randbit = 0; spec.cargo_triggers = 1; st->cached_cargo_triggers = 1;
+	random->cmp_mode = RSG_CMP_ALL; random->triggers = 3; random->lowest_randbit = 0; spec.cargo_triggers = 1; FIXTURE_FIELD(st, cached_cargo_triggers) = 1;
 	TriggerStationRandomisation(st, tile, StationRandomTrigger::NewCargo, 0);
-	StationNeed(st->waiting_random_triggers.None(), __LINE__);
-	fmt::print(stderr, "STCMD resolver-rng all {} {} {}\n", st->random_bits, _random.state[0], _random.state[1]); random->cmp_mode = RSG_CMP_ANY;
+	StationNeed(FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).None(), __LINE__);
+	fmt::print(stderr, "STCMD resolver-rng all {} {} {}\n", FIXTURE_FIELD(st, random_bits), _random.state[0], _random.state[1]); random->cmp_mode = RSG_CMP_ANY;
 	/* Nested lower/upper groups combine masks in one resolution. */
 	auto *upper = new RandomizedSpriteGroup(); upper->var_scope = VSG_SCOPE_SELF; upper->triggers = 1; upper->lowest_randbit = 16; upper->groups = {result, result};
-	random->lowest_randbit = 0; random->triggers = 1; random->groups = {upper, upper}; spec.cargo_triggers = 1; st->cached_cargo_triggers = 1;
+	random->lowest_randbit = 0; random->triggers = 1; random->groups = {upper, upper}; spec.cargo_triggers = 1; FIXTURE_FIELD(st, cached_cargo_triggers) = 1;
 	TriggerStationRandomisation(st, tile, StationRandomTrigger::NewCargo, INVALID_CARGO);
-	fmt::print(stderr, "STCMD resolver-rng combined {} {} {} {}\n", st->random_bits, GetStationTileRandomBits(tile), _random.state[0], _random.state[1]);
+	fmt::print(stderr, "STCMD resolver-rng combined {} {} {} {}\n", FIXTURE_FIELD(st, random_bits), GetStationTileRandomBits(tile), _random.state[0], _random.state[1]);
 	random->groups = {result, result}; random->lowest_randbit = 17;
 	/* Waypoints use the same runtime without station cargo ownership. */
-	random->triggers = 4; wp->cached_cargo_triggers = 1;
+	random->triggers = 4; FIXTURE_FIELD(wp, cached_cargo_triggers) = 1;
 	TriggerStationRandomisation(wp, waytile, StationRandomTrigger::VehicleArrives, INVALID_CARGO);
-	fmt::print(stderr, "STCMD resolver-rng waypoint {} {} {} {} {}\n", wp->waiting_random_triggers.base(), wp->random_bits, GetStationTileRandomBits(waytile), _random.state[0], _random.state[1]);
+	fmt::print(stderr, "STCMD resolver-rng waypoint {} {} {} {} {}\n", FIXTURE_GET(wp, WaitingRandomTriggers, waiting_random_triggers).base(), FIXTURE_FIELD(wp, random_bits), GetStationTileRandomBits(waytile), _random.state[0], _random.state[1]);
 	/* A cargo absent from the station admits CargoTaken and its whole-area draw. */
-	random->triggers = 2; spec.cargo_triggers = CargoTypes{1} << 63; st->cached_cargo_triggers = spec.cargo_triggers;
+	random->triggers = 2; spec.cargo_triggers = CargoTypes{1} << 63; FIXTURE_FIELD(st, cached_cargo_triggers) = spec.cargo_triggers;
 	TriggerStationRandomisation(st, tile, StationRandomTrigger::CargoTaken, 63);
-	fmt::print(stderr, "STCMD resolver-rng empty {} {} {} {}\n", st->waiting_random_triggers.base(), st->random_bits, _random.state[0], _random.state[1]);
-	for (TileIndex t : st->train_station) if (st->TileBelongsToRailStation(t)) SetCustomStationSpecIndex(t, 0);
+	fmt::print(stderr, "STCMD resolver-rng empty {} {} {} {}\n", FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), FIXTURE_FIELD(st, random_bits), _random.state[0], _random.state[1]);
+	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) SetCustomStationSpecIndex(t, 0);
 	SetCustomStationSpecIndex(waytile, 0); wp->speclist.clear(); StationUpdateCachedTriggers(wp);
 	st->speclist.clear(); StationUpdateCachedTriggers(st);
 	/* Saved random/waiting/cargo fields persist; local Action2 programs and spec
@@ -285,7 +285,7 @@ static void StationDefinitionMissing()
 			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
 			fmt::print(stderr, "STCMD definitions-identity missing-road {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
 		}
-		StationNeed(st->cached_anim_triggers.None() && st->cached_cargo_triggers == 0 && st->cached_roadstop_anim_triggers.None() && st->cached_roadstop_cargo_triggers == 0, __LINE__);
+		StationNeed(FIXTURE_GET(st, CachedAnimTriggers, cached_anim_triggers).None() && FIXTURE_FIELD(st, cached_cargo_triggers) == 0 && FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
 		if (st->name == "Definitions station") {
 			StationSpec spec{};
 			auto next = AllocateSpecToStation(&spec, st);
@@ -380,13 +380,13 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	for (BaseStation *st : {static_cast<BaseStation *>(station), static_cast<BaseStation *>(waypoint)}) {
 		for (const auto &slot : st->speclist) if (slot.grfid != 0) {
 			StationNeed(slot.spec == StationClass::GetByGrf(slot.grfid, slot.localidx), __LINE__);
-			fmt::print(stderr, "STCMD definitions-identity rail {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, st->cached_anim_triggers.base(), st->cached_cargo_triggers);
+			fmt::print(stderr, "STCMD definitions-identity rail {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, FIXTURE_GET(st, CachedAnimTriggers, cached_anim_triggers).base(), FIXTURE_FIELD(st, cached_cargo_triggers));
 		}
 	}
 	for (BaseStation *st : {static_cast<BaseStation *>(stop), static_cast<BaseStation *>(roadpoint)}) {
 		for (const auto &slot : st->roadstop_speclist) if (slot.grfid != 0) {
 			StationNeed(slot.spec == RoadStopClass::GetByGrf(slot.grfid, slot.localidx), __LINE__);
-			fmt::print(stderr, "STCMD definitions-identity road {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, st->cached_roadstop_anim_triggers.base(), st->cached_roadstop_cargo_triggers);
+			fmt::print(stderr, "STCMD definitions-identity road {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).base(), FIXTURE_FIELD(st, cached_roadstop_cargo_triggers));
 		}
 	}
 	uint occupied = 0;
@@ -397,8 +397,8 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		fmt::print(stderr, "STCMD definitions-occupied {} {} {}\n", tile.base(), to_underlying(GetStationType(tile)), HasStationTileRail(tile) ? GetCustomStationSpecIndex(tile) : GetCustomRoadStopSpecIndex(tile));
 	}
 	StationNeed(occupied == 7, __LINE__);
-	StationResolverObject rail_query(rail, station, station->train_station.tile);
-	RoadStopResolverObject road_query(road, stop, stop->bus_stops->xy, ROADTYPE_ROAD, StationType::Bus, 0);
+	StationResolverObject rail_query(rail, station, FIXTURE_GET(station, TrainStation, train_station).tile);
+	RoadStopResolverObject road_query(road, stop, FIXTURE_GET(FIXTURE_GET(stop, BusStops, bus_stops), XY, xy), ROADTYPE_ROAD, StationType::Bus, 0);
 	for (CargoType cargo : {CargoGRFFileProps::SG_DEFAULT, CargoType{0}}) {
 		rail_query.root_spritegroup = rail->grf_prop.GetSpriteGroup(cargo);
 		road_query.root_spritegroup = road->grf_prop.GetSpriteGroup(cargo);
@@ -406,7 +406,7 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		StationNeed(r == (cargo == 0 ? 0x402 : 0x400) && r == b, __LINE__);
 		fmt::print(stderr, "STCMD definitions-callbacks {} {} {}\n", cargo, r, b);
 	}
-	TriggerStationRandomisation(station, station->train_station.tile, StationRandomTrigger::NewCargo, 0);
-	TriggerRoadStopRandomisation(stop, stop->bus_stops->xy, StationRandomTrigger::NewCargo, 0);
-	fmt::print(stderr, "STCMD definitions-rng {} {} {} {} {}\n", reload, _random.state[0], _random.state[1], station->waiting_random_triggers.base(), stop->waiting_random_triggers.base());
+	TriggerStationRandomisation(station, FIXTURE_GET(station, TrainStation, train_station).tile, StationRandomTrigger::NewCargo, 0);
+	TriggerRoadStopRandomisation(stop, FIXTURE_GET(FIXTURE_GET(stop, BusStops, bus_stops), XY, xy), StationRandomTrigger::NewCargo, 0);
+	fmt::print(stderr, "STCMD definitions-rng {} {} {} {} {}\n", reload, _random.state[0], _random.state[1], FIXTURE_GET(station, WaitingRandomTriggers, waiting_random_triggers).base(), FIXTURE_GET(stop, WaitingRandomTriggers, waiting_random_triggers).base());
 }

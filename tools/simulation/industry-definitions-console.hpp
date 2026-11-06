@@ -109,7 +109,7 @@ static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 	for (const Industry *source : Industry::Iterate()) {
 		if (source->type != 0) continue;
 		for (const Station *station : source->stations_near) {
-			AutoRestoreBackup company(_current_company, station->owner);
+			AutoRestoreBackup company(_current_company, FIXTURE_GET(station, Owner, owner));
 			for (TileIndex at{0}; at < Map::Size(); ++at) {
 				if (!station->TileIsInCatchment(at) || !IsTileType(at, MP_CLEAR) || CmdBuildIndustry({}, at, 0, 0, true, 0x475).Failed()) continue;
 				CommandCost result = Command<CMD_BUILD_INDUSTRY>::Do(DoCommandFlag::Execute, at, IndustryType{0}, 0, true, 0x475);

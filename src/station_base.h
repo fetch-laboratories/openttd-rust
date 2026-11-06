@@ -216,6 +216,7 @@ struct GoodsRange {
 	};
 	iterator begin() const { return {this->first}; }
 	iterator end() const { return {this->first + NUM_CARGO}; }
+	static constexpr size_t size() { return NUM_CARGO; }
 };
 
 /** All airport-related information. Only valid if tile != INVALID_TILE.

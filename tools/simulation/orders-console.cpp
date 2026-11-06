@@ -53,9 +53,9 @@ static void ReservedDeparture()
 	for (Vehicle *u : Vehicle::Iterate()) {
 		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING) || FIXTURE_FIELD(u, cargo_cap) < u->cargo.TotalCount() + 7) continue;
 		Station *st = Station::Get(FIXTURE_GET(u, LastStationVisited, last_station_visited));
-		auto &cargo = st->goods[u->cargo_type].GetOrCreateData().cargo;
+		auto &&cargo = FIXTURE_GOODS(st, u->cargo_type).GetOrCreateData().cargo;
 		if (!CargoPacket::CanAllocateItem()) std::abort();
-		cargo.Append(new CargoPacket(7, 3, st->index, st->xy, Money(133)), StationID::Invalid());
+		cargo.Append(new CargoPacket(7, 3, st->index, FIXTURE_GET(st, XY, xy), Money(133)), StationID::Invalid());
 		const std::array<StationID, 1> next{StationID::Invalid()};
 		uint amount = cargo.Reserve(7, &u->cargo, next, FIXTURE_GET(u, Tile, tile));
 		uint waiting = cargo.AvailableCount(), reserved = cargo.ReservedCount();
@@ -126,7 +126,7 @@ static bool VisitsScenario(std::span<std::string_view> args)
 	/* Depot orders at the depot nearest each first stop: a paid refit, a free one
 	 * (a bus cannot carry mail, so no part changes) and a halt. */
 	auto depot = [&](Vehicle *u, VehicleOrderID index, OrderDepotActionFlags action, CargoType cargo) {
-		TileIndex from = Station::Get(u->GetOrder(0)->GetDestination().ToStationID())->xy;
+		TileIndex from = FIXTURE_GET(Station::Get(u->GetOrder(0)->GetDestination().ToStationID()), XY, xy);
 		const Depot *best = nullptr;
 		for (const Depot *d : Depot::Iterate()) {
 			if (GetTileOwner(d->xy) != FIXTURE_GET(u, Owner, owner) || !(FIXTURE_GET(u, Type, type) == VEH_TRAIN ? IsRailDepotTile(d->xy) : IsRoadDepotTile(d->xy))) continue;

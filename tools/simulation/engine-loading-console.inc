@@ -263,7 +263,7 @@ static void LoadingBuild(uint16_t local = 300)
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		TileIndex tile = INVALID_TILE;
 		if (type == VEH_AIRCRAFT) {
-			for (Station *station : Station::Iterate()) if (station->owner == company->index && station->airport.GetNumHangars() != 0) { tile = station->airport.GetHangarTile(0); break; }
+			for (Station *station : Station::Iterate()) if (FIXTURE_GET(station, Owner, owner) == company->index && FIXTURE_AIRPORT(station).GetNumHangars() != 0) { tile = FIXTURE_AIRPORT(station).GetHangarTile(0); break; }
 		} else {
 			for (Depot *depot : Depot::Iterate()) {
 				if (GetTileOwner(depot->xy) != company->index) continue;

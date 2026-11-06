@@ -27,7 +27,7 @@ static std::vector<Station *> Station602Visit(const char *phase, TileIndex tile,
 	int16_t rating = INT16_MAX;
 	fmt::print(stderr, "STCMD spatial602-visit {} {} {}", phase, tile.base(), radius);
 	for (const Station *st : visits) {
-		bool active = st->time_since_load <= 20 || st->time_since_unload <= 20;
+		bool active = FIXTURE_FIELD(st, time_since_load) <= 20 || FIXTURE_FIELD(st, time_since_unload) <= 20;
 		rating = active ? std::min<int>(rating + 12, INT16_MAX) : std::max<int>(rating - 15, INT16_MIN);
 		fmt::print(stderr, " {}:{}:{}", st->index.base(), active, rating);
 	}
@@ -89,13 +89,13 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 		}
 	}
 	v->cargo_type = 0; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
-	RoadStop *bay = st->bus_stops; auto status = bay->status; bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free); bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay1Free); bay->status.Set(RoadStop::RoadStopStatusFlag::EntryBusy);
+	RoadStop *bay = FIXTURE_GET(st, BusStops, bus_stops); auto status = FIXTURE_GET(bay, Status, status); FIXTURE_SET(bay, Status, status, FIXTURE_GET(bay, Status, status).Reset(RoadStop::RoadStopStatusFlag::Bay0Free)); FIXTURE_SET(bay, Status, status, FIXTURE_GET(bay, Status, status).Reset(RoadStop::RoadStopStatusFlag::Bay1Free)); FIXTURE_SET(bay, Status, status, FIXTURE_GET(bay, Status, status).Set(RoadStop::RoadStopStatusFlag::EntryBusy));
 	StationNeed(Station602Primary(st, v) == bay, __LINE__);
 	FIXTURE_FIELD(part, subtype) = 0; part->SetArticulatedPart(); v->SetNext(part);
 	RoadStop *drive = Station602Primary(st, v);
-	StationNeed(drive != nullptr && IsDriveThroughStopTile(drive->xy) && Station602Next(drive, v) == nullptr, __LINE__);
+	StationNeed(drive != nullptr && IsDriveThroughStopTile(FIXTURE_GET(drive, XY, xy)) && Station602Next(drive, v) == nullptr, __LINE__);
 	fmt::print(stderr, "STCMD spatial602-stop occupied-articulated {} {}\n", bay->index.base(), drive->index.base());
-	v->SetNext(nullptr); FIXTURE_FIELD(part, subtype) = part_subtype; bay->status = status;
+	v->SetNext(nullptr); FIXTURE_FIELD(part, subtype) = part_subtype; FIXTURE_SET(bay, Status, status, status);
 	v->cargo_type = cargo_before; v->compatible_roadtypes = compatible_before;
 	for (RoadVehicle *vehicle : {part, v}) StationNeed(Command<CMD_SELL_VEHICLE>::Do(exec, vehicle->index, false, false, INVALID_CLIENT_ID).Succeeded(), __LINE__);
 	StationNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(exec, depot).Succeeded(), __LINE__);
@@ -115,8 +115,8 @@ static void Station602Triggers(Station *st, Axis axis)
 	animation->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = 0x7F}};
 	auto *random = new RandomizedSpriteGroup(); random->var_scope = VSG_SCOPE_SELF; random->lowest_randbit = 16; random->groups = {result, result};
 	st->speclist.resize(2); st->speclist[1] = {&spec, file.grfid, 0};
-	TileIndex start = st->train_station.tile, middle = start + TileOffsByAxis(axis), end = start + 2 * TileOffsByAxis(axis);
-	for (TileIndex t : st->train_station) SetCustomStationSpecIndex(t, 1);
+	TileIndex start = FIXTURE_GET(st, TrainStation, train_station).tile, middle = start + TileOffsByAxis(axis), end = start + 2 * TileOffsByAxis(axis);
+	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) SetCustomStationSpecIndex(t, 1);
 	for (bool blocked : {false, true}) for (uint8_t mode = 0; mode < 3; ++mode) {
 		SetStationTileBlocked(end, blocked);
 		auto covered = [&](TileIndex t) {
@@ -125,16 +125,16 @@ static void Station602Triggers(Station *st, Axis axis)
 			return (axis == AXIS_X ? TileY(t) == TileY(start) : TileX(t) == TileX(start)) && (!blocked || t != end);
 		};
 		auto trigger = mode == 0 ? StationAnimationTrigger::Built : mode == 1 ? StationAnimationTrigger::VehicleArrives : StationAnimationTrigger::NewCargo;
-		spec.animation.triggers = {trigger}; st->cached_anim_triggers = {trigger};
+		spec.animation.triggers = {trigger}; FIXTURE_SET(st, CachedAnimTriggers, cached_anim_triggers, StationAnimationTriggers{trigger});
 		spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, animation);
 		StationNeed(GetStationSpec(middle) == &spec, __LINE__);
 		StationResolverObject program(&spec, st, middle, CBID_STATION_ANIMATION_TRIGGER, 0x12345678, 7);
 		StationNeed(program.root_spritegroup == animation && program.station_scope.cargo_type == CargoGRFFileProps::SG_DEFAULT && program.ResolveCallback({}) == 0x78, __LINE__);
-		for (TileIndex t : st->train_station) SetAnimationFrame(t, 0x80);
+		for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) SetAnimationFrame(t, 0x80);
 		auto expected = _random; expected.Next();
 		TriggerStationAnimation(st, middle, trigger);
 		fmt::print(stderr, "STCMD spatial602-animation {} {} {}", axis, blocked, mode);
-		for (TileIndex t : st->train_station) {
+		for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) {
 			uint8_t frame = covered(t) ? expected.Next() & 0x7F : 0x80;
 			if (GetAnimationFrame(t) != frame) fmt::print(stderr, " STCMD spatial602-frame-mismatch {} {} {} {} {} {}\n", axis, blocked, mode, t.base(), GetAnimationFrame(t), frame);
 			StationNeed(GetAnimationFrame(t) == frame, __LINE__);
@@ -145,16 +145,16 @@ static void Station602Triggers(Station *st, Axis axis)
 		/* Random triggers have platform and whole coverage, without a tile case. */
 		if (mode == 0) continue;
 		auto rt = mode == 1 ? StationRandomTrigger::VehicleArrives : StationRandomTrigger::NewCargo;
-		random->triggers = 1U << to_underlying(rt); st->cached_cargo_triggers = 1;
+		random->triggers = 1U << to_underlying(rt); FIXTURE_FIELD(st, cached_cargo_triggers) = 1;
 		spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random);
 		StationResolverObject reseed(&spec, st, middle, CBID_RANDOM_TRIGGER);
 		StationNeed(reseed.root_spritegroup == random && reseed.station_scope.cargo_type == CargoGRFFileProps::SG_DEFAULT, __LINE__);
 		reseed.SetWaitingRandomTriggers(StationRandomTriggers{rt}); reseed.ResolveRerandomisation();
 		StationNeed(reseed.GetReseedSum() == (1U << 16) && reseed.GetUsedRandomTriggers().base() == random->triggers, __LINE__);
-		for (TileIndex t : st->train_station) SetStationTileRandomBits(t, 0);
+		for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) SetStationTileRandomBits(t, 0);
 		expected = _random; TriggerStationRandomisation(st, middle, rt);
 		fmt::print(stderr, "STCMD spatial602-random {} {} {}", axis, blocked, mode);
-		for (TileIndex t : st->train_station) {
+		for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) {
 			uint8_t bits = covered(t) ? expected.Next() & 1 : 0;
 			StationNeed(GetStationTileRandomBits(t) == bits, __LINE__);
 			fmt::print(stderr, " {}:{}", t.base(), GetStationTileRandomBits(t));
@@ -163,7 +163,7 @@ static void Station602Triggers(Station *st, Axis axis)
 		fmt::print(stderr, " rng {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 	}
 	SetStationTileBlocked(end, false);
-	for (TileIndex t : st->train_station) SetCustomStationSpecIndex(t, 0);
+	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) SetCustomStationSpecIndex(t, 0);
 	st->speclist.clear(); StationUpdateCachedTriggers(st);
 	delete random; delete animation; delete result;
 }
@@ -212,9 +212,9 @@ static uint _station602_crash_step = 0, _station602_crash_victims = 0, _station6
 static Randomizer _station602_crash_rng;
 static void Station602CrashStep(uint step, const char *operation)
 {
-	if (_station602_crash_step != step || _station602_crash->goods[0].rating != (step == 3 ? 40 : 200)) fmt::print(stderr, "STCMD spatial602-crash-step-mismatch {} {} {}\n", step, _station602_crash_step, _station602_crash->goods[0].rating);
-	StationNeed(_station602_crash_step++ == step && _station602_crash->goods[0].rating == (step == 3 ? 40 : 200), __LINE__);
-	fmt::print(stderr, "STCMD spatial602-crash {} {} {}\n", step, operation, _station602_crash->goods[0].rating);
+	if (_station602_crash_step != step || FIXTURE_VFIELD(FIXTURE_GOODS(_station602_crash, 0), rating) != (step == 3 ? 40 : 200)) fmt::print(stderr, "STCMD spatial602-crash-step-mismatch {} {} {}\n", step, _station602_crash_step, FIXTURE_VFIELD(FIXTURE_GOODS(_station602_crash, 0), rating));
+	StationNeed(_station602_crash_step++ == step && FIXTURE_VFIELD(FIXTURE_GOODS(_station602_crash, 0), rating) == (step == 3 ? 40 : 200), __LINE__);
+	fmt::print(stderr, "STCMD spatial602-crash {} {} {}\n", step, operation, FIXTURE_VFIELD(FIXTURE_GOODS(_station602_crash, 0), rating));
 }
 static void Station602CrashEvent(uint step, const char *operation, ScriptEvent *event)
 {
@@ -264,9 +264,9 @@ static void Station602Crash(bool reload)
 {
 	if (reload) {
 		Station *st = nullptr; for (Station *s : Station::Iterate()) if (s->name == "Spatial602 crash") st = s;
-		fmt::print(stderr, "STCMD spatial602-crash-reload-state {} {} {}\n", st != nullptr, st == nullptr ? -1 : st->goods[0].rating, FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed));
-		StationNeed(st != nullptr && st->goods[0].rating == 40 && FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
-		fmt::print(stderr, "STCMD spatial602-crash-reload {}\n", st->goods[0].rating); return;
+		fmt::print(stderr, "STCMD spatial602-crash-reload-state {} {} {}\n", st != nullptr, st == nullptr ? -1 : FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating), FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed));
+		StationNeed(st != nullptr && FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating) == 40 && FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
+		fmt::print(stderr, "STCMD spatial602-crash-reload {}\n", FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating)); return;
 	}
 	/* Same command-built crossing and live vehicles as roads-level-crossing. */
 	auto *train = Train::Get(VehicleID(17)); auto *bus = RoadVehicle::Get(VehicleID(21));
@@ -280,8 +280,8 @@ static void Station602Crash(bool reload)
 #else
 	train->track = TRACK_BIT_X; bus->state = 1;
 #endif
-	Station *st = Station562New(FIXTURE_GET(bus, Tile, tile), "Spatial602 crash"); st->owner = FIXTURE_GET(bus, Owner, owner);
-	st->goods[0].status.Set(GoodsEntry::State::Acceptance); st->goods[0].rating = 200;
+	Station *st = Station562New(FIXTURE_GET(bus, Tile, tile), "Spatial602 crash"); FIXTURE_SET(st, Owner, owner, FIXTURE_GET(bus, Owner, owner));
+	FIXTURE_VSET(FIXTURE_GOODS(st, 0), Status, status, FIXTURE_VGET(FIXTURE_GOODS(st, 0), Status, status).Set(GoodsEntry::State::Acceptance)); FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating) = 200;
 	Backup<bool> sound(_settings_client.sound.disaster, true);
 	uint passengers = 0;
 	for (RoadVehicle *part = bus; part != nullptr; part = part->Next()) if (IsCargoInClass(part->cargo_type, CargoClass::Passengers)) passengers += part->cargo.TotalCount();
@@ -290,7 +290,7 @@ static void Station602Crash(bool reload)
 	_station602_crash_rng = _random; _station602_crash_victims = _station602_crash_rng.Next(passengers + 1) + 1;
 	fmt::print(stderr, "STCMD spatial602-crash-input {} {} {} {} {} {}\n", passengers, _station602_crash_victims, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]);
 	_station602_crash_step = 0; _station602_other_events = 0; _station602_crash = st; StationNeed(bus->Tick(), __LINE__); _station602_crash = nullptr;
-	StationNeed(_station602_crash_step == 4 && st->goods[0].rating == 40 && FIXTURE_GET(bus, VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
+	StationNeed(_station602_crash_step == 4 && FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating) == 40 && FIXTURE_GET(bus, VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
 	sound.Restore(); Station562Rng("spatial602-crash");
 }
 static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload)
@@ -301,14 +301,14 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 	if (!reload) {
 		for (uint i = 0; i < 20; ++i) {
 			Station *st = Station562New(origin + TileDiffXY(i % 3, i % 5), "Spatial602 seed");
-			st->time_since_load = i % 2 == 0 ? 20 : 21; st->time_since_unload = 255;
-			st->goods[0].status.Set(GoodsEntry::State::Acceptance); st->goods[0].rating = i;
-			if (i == 19) st->owner = OWNER_NONE;
+			FIXTURE_FIELD(st, time_since_load) = i % 2 == 0 ? 20 : 21; FIXTURE_FIELD(st, time_since_unload) = 255;
+			FIXTURE_VSET(FIXTURE_GOODS(st, 0), Status, status, FIXTURE_VGET(FIXTURE_GOODS(st, 0), Status, status).Set(GoodsEntry::State::Acceptance)); FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating) = i;
+			if (i == 19) FIXTURE_SET(st, Owner, owner, OWNER_NONE);
 			seeds.push_back(st);
 		}
 	} else {
 		for (Station *st : Station::Iterate()) if (st->name == "Spatial602 seed") seeds.push_back(st);
-		StationNeed(!seeds.empty(), __LINE__); origin = seeds.front()->xy;
+		StationNeed(!seeds.empty(), __LINE__); origin = FIXTURE_GET(seeds.front(), XY, xy);
 	}
 	Station602Rebuild();
 	auto visits = Station602Visit(reload ? "reload" : "build", origin, 8);
@@ -317,10 +317,10 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 	for (uint radius : {0U, 1U, 2U, 8U}) for (int amount : {-160, -1, 0, 1, 255}) {
 		Station602Rating(origin, radius, amount);
 		fmt::print(stderr, "STCMD spatial602-rating {} {}", radius, amount);
-		for (Station *st : seeds) fmt::print(stderr, " {}:{}", st->index.base(), st->goods[0].rating);
+		for (Station *st : seeds) fmt::print(stderr, " {}:{}", st->index.base(), FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating));
 		fmt::print(stderr, "\n");
 	}
-	Town *town = seeds.front()->town;
+	Town *town = FIXTURE_FIELD(seeds.front(), town);
 	Backup<TileIndex> location(town->xy, origin);
 	Backup<std::array<uint32_t, NUM_HOUSE_ZONES>> radii(town->cache.squared_town_zone_radius); town->cache.squared_town_zone_radius.fill(1000);
 	for (int16_t initial : {INT16_MIN, -1000, 999, INT16_MAX}) {
@@ -334,13 +334,13 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 	}
 	location.Restore(); radii.Restore();
 	if (!reload) {
-		Station *moving = seeds[1]; TileIndex old = moving->xy;
-		moving->rect.left = TileX(origin); moving->rect.top = TileY(origin); moving->rect.right = TileX(origin) + 4; moving->rect.bottom = TileY(origin) + 4;
-		auto collision = std::get<0>(CmdMoveStationName({}, moving->index, seeds[0]->xy));
+		Station *moving = seeds[1]; TileIndex old = FIXTURE_GET(moving, XY, xy);
+		FIXTURE_FIELD(moving, rect).left = TileX(origin); FIXTURE_FIELD(moving, rect).top = TileY(origin); FIXTURE_FIELD(moving, rect).right = TileX(origin) + 4; FIXTURE_FIELD(moving, rect).bottom = TileY(origin) + 4;
+		auto collision = std::get<0>(CmdMoveStationName({}, moving->index, FIXTURE_GET(seeds[0], XY, xy)));
 		StationNeed(Waypoint::CanAllocateItem(), __LINE__);
-		Waypoint *wp = new Waypoint(old); wp->owner = _current_company; wp->town = moving->town;
-		wp->rect.left = moving->rect.left; wp->rect.top = moving->rect.top; wp->rect.right = moving->rect.right; wp->rect.bottom = moving->rect.bottom;
-		auto waypoint_collision = std::get<0>(CmdMoveWaypointName({}, wp->index, seeds[0]->xy));
+		Waypoint *wp = new Waypoint(old); FIXTURE_SET(wp, Owner, owner, _current_company); FIXTURE_FIELD(wp, town) = FIXTURE_FIELD(moving, town);
+		FIXTURE_FIELD(wp, rect).left = FIXTURE_FIELD(moving, rect).left; FIXTURE_FIELD(wp, rect).top = FIXTURE_FIELD(moving, rect).top; FIXTURE_FIELD(wp, rect).right = FIXTURE_FIELD(moving, rect).right; FIXTURE_FIELD(wp, rect).bottom = FIXTURE_FIELD(moving, rect).bottom;
+		auto waypoint_collision = std::get<0>(CmdMoveWaypointName({}, wp->index, FIXTURE_GET(seeds[0], XY, xy)));
 		StationNeed(collision.Failed() && waypoint_collision.Failed(), __LINE__);
 		fmt::print(stderr, "STCMD spatial602-collisions {} {}\n", collision.Failed(), waypoint_collision.Failed()); delete wp;
 		for (auto [phase, to] : {std::pair{"move-unchanged", old}, std::pair{"move-away", old + TileDiffXY(2, 0)}, std::pair{"move-back", old}}) {
@@ -354,7 +354,7 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 		delete seeds[3]; delete seeds[0]; Station602Visit("remove", origin, 8);
 		Station562New(origin, "Spatial602 seed"); Station602Visit("reuse", origin, 8);
 		Station *tie_a = Station562New(origin + TileDiffXY(20, 5), "Spatial602 tie");
-		Station *tie_b = Station562New(tie_a->xy, "Spatial602 tie");
+		Station *tie_b = Station562New(FIXTURE_GET(tie_a, XY, xy), "Spatial602 tie");
 		StationID lower = std::min(tie_a->index, tie_b->index);
 		TileIndex reuse_tile = origin + TileDiffXY(20, 6);
 		StationNeed(Command<CMD_BUILD_RAIL_STATION>::Do(exec, reuse_tile, RAILTYPE_RAIL, AXIS_X, 1, 1, STAT_CLASS_DFLT, 0, StationID::Invalid(), true).Succeeded(), __LINE__);

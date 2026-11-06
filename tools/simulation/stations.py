@@ -480,8 +480,8 @@ static void StationPathPush(RoadVehicle *v, Trackdir trackdir, TileIndex tile)
 static void StationRoadStops(const char *label)
 {
 	for (const RoadStop *rs : RoadStop::Iterate()) {
-		fmt::print(stderr, "STCMD road-stop {} {} {} {}", label, rs->index.base(), rs->xy.base(), rs->status.base());
-		if (IsDriveThroughStopTile(rs->xy)) {
+		fmt::print(stderr, "STCMD road-stop {} {} {} {}", label, rs->index.base(), FIXTURE_GET(rs, XY, xy).base(), FIXTURE_GET(rs, Status, status).base());
+		if (IsDriveThroughStopTile(FIXTURE_GET(rs, XY, xy))) {
 			const auto &east = rs->GetEntry(DIAGDIR_NE), &west = rs->GetEntry(DIAGDIR_NW);
 			fmt::print(stderr, " east {} {} west {} {}", east.GetLength(), east.GetOccupied(), west.GetLength(), west.GetOccupied());
 		}
@@ -567,7 +567,7 @@ static RoadResolverFixture &RoadResolverSpecs(bool waypoint)
 }
 static void RoadResolverState(const char *label, BaseStation *st)
 {
-	fmt::print(stderr, "STCMD resolver-state {} {} {} {} {} {} rng {} {}\n", label, st->index.base(), st->roadstop_speclist.size(), st->cached_roadstop_anim_triggers.base(), st->cached_roadstop_cargo_triggers, st->waiting_random_triggers.base(), _random.state[0], _random.state[1]);
+	fmt::print(stderr, "STCMD resolver-state {} {} {} {} {} {} rng {} {}\n", label, st->index.base(), st->roadstop_speclist.size(), FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).base(), FIXTURE_FIELD(st, cached_roadstop_cargo_triggers), FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), _random.state[0], _random.state[1]);
 	for (size_t i = 0; i < st->roadstop_speclist.size(); i++) { const auto &slot = st->roadstop_speclist[i]; fmt::print(stderr, "STCMD resolver-slot {} {} {} {} {}\n", label, i, slot.spec != nullptr, slot.grfid, slot.localidx); }
 	for (const auto &data : st->custom_roadstop_tile_data) fmt::print(stderr, "STCMD resolver-tile {} {} {} {} {}\n", label, data.tile.base(), GetCustomRoadStopSpecIndex(data.tile), st->GetRoadStopRandomBits(data.tile), st->GetRoadStopAnimationFrame(data.tile));
 }
@@ -592,10 +592,10 @@ static void RoadResolverQueries(BaseStation *st, TileIndex tile, bool waypoint)
 	StationNeed(root() == 13, __LINE__);
 	if (!waypoint) {
 		Station *station = Station::From(st);
-		for (CargoType c : {1, 0}) { StationNeed(CargoPacket::CanAllocateItem(), __LINE__); station->goods[c].GetOrCreateData().cargo.Append(new CargoPacket(st->index, 7, Source{st->town->index, SourceType::Town}), StationID::Invalid()); }
+		for (CargoType c : {1, 0}) { StationNeed(CargoPacket::CanAllocateItem(), __LINE__); FIXTURE_GOODS(station, c).GetOrCreateData().cargo.Append(new CargoPacket(st->index, 7, Source{FIXTURE_FIELD(st, town)->index, SourceType::Town}), StationID::Invalid()); }
 		StationNeed(root() == 17, __LINE__);
-		station->goods[0].GetData().cargo.Truncate(); StationNeed(root() == 23, __LINE__);
-		station->goods[1].GetData().cargo.Truncate(); StationNeed(root() == 13, __LINE__);
+		FIXTURE_GOODS(station, 0).GetData().cargo.Truncate(); StationNeed(root() == 23, __LINE__);
+		FIXTURE_GOODS(station, 1).GetData().cargo.Truncate(); StationNeed(root() == 13, __LINE__);
 	}
 	spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, nullptr); StationNeed(root() == 1, __LINE__);
 	spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, f.empty);
@@ -617,7 +617,7 @@ static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 		lower->triggers = mask & 1 ? 1 << to_underlying(trigger) : 0; upper->triggers = mask & 2 ? 1 << to_underlying(trigger) : 0;
 		publication->default_result.group = mask == 1 ? lower : upper;
 		spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, publication);
-		st->waiting_random_triggers = {}; st->random_bits = 0xA55A;
+		FIXTURE_SET(st, WaitingRandomTriggers, waiting_random_triggers, StationRandomTriggers{}); FIXTURE_FIELD(st, random_bits) = 0xA55A;
 		StationNeed(std::ranges::any_of(st->custom_roadstop_tile_data, [tile](const auto &data) { return data.tile == tile; }), __LINE__);
 		for (auto &data : st->custom_roadstop_tile_data) if (data.tile == tile) data.random_bits = 0x69;
 		RoadStopUpdateCachedTriggers(st);
@@ -625,22 +625,22 @@ static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 		uint32_t expected_mask = (mask & 1 ? 8 : 0) | (mask & 2 ? 1 << 18 : 0);
 		StationNeed(object.GetReseedSum() == expected_mask && object.GetUsedRandomTriggers().Test(trigger), __LINE__);
 		Randomizer interactive = _interactive_random; Randomizer unarmed = _random; TriggerRoadStopRandomisation(st, tile, trigger, INVALID_CARGO);
-		StationNeed(std::ranges::equal(_random.state, unarmed.state) && std::ranges::equal(_interactive_random.state, interactive.state) && st->waiting_random_triggers.Test(trigger) && st->random_bits == 0xA55A && st->GetRoadStopRandomBits(tile) == 0x69, __LINE__);
+		StationNeed(std::ranges::equal(_random.state, unarmed.state) && std::ranges::equal(_interactive_random.state, interactive.state) && FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).Test(trigger) && FIXTURE_FIELD(st, random_bits) == 0xA55A && st->GetRoadStopRandomBits(tile) == 0x69, __LINE__);
 		ResolverObject registers(&f.file); StationNeed(registers.GetRegister(0x105) == (1 << to_underlying(trigger)) && registers.GetRegister(0x106) == CBID_NO_CALLBACK, __LINE__);
 		fmt::print(stderr, "STCMD resolver-unarmed {} {} {} no-reseed waiting-retained published\n", waypoint, mask, to_underlying(trigger));
 		fmt::print(stderr, "STCMD resolver-mask {} {} {} {} {} {}\n", waypoint, mask, to_underlying(trigger), object.GetReseedSum(), object.GetUsedRandomTriggers().base(), object.roadstop_scope.GetRandomBits());
 	}
 	Randomizer before = _random;
-	st->waiting_random_triggers = {}; spec->cargo_triggers = 0; RoadStopUpdateCachedTriggers(st); TriggerRoadStopRandomisation(st, tile, StationRandomTrigger::VehicleArrives);
-	StationNeed(st->waiting_random_triggers.None() && std::ranges::equal(_random.state, before.state), __LINE__);
+	FIXTURE_SET(st, WaitingRandomTriggers, waiting_random_triggers, StationRandomTriggers{}); spec->cargo_triggers = 0; RoadStopUpdateCachedTriggers(st); TriggerRoadStopRandomisation(st, tile, StationRandomTrigger::VehicleArrives);
+	StationNeed(FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).None() && std::ranges::equal(_random.state, before.state), __LINE__);
 	spec->cargo_triggers = 3; RoadStopUpdateCachedTriggers(st); TriggerRoadStopRandomisation(st, tile, StationRandomTrigger::NewCargo, 2);
-	StationNeed(st->waiting_random_triggers.None() && std::ranges::equal(_random.state, before.state), __LINE__);
+	StationNeed(FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).None() && std::ranges::equal(_random.state, before.state), __LINE__);
 	if (!waypoint) {
-		auto &cargo = Station::From(st)->goods[1].GetOrCreateData().cargo; StationNeed(CargoPacket::CanAllocateItem(), __LINE__); cargo.Append(new CargoPacket(st->index, 1, Source{st->town->index, SourceType::Town}), StationID::Invalid());
+		auto &&cargo = FIXTURE_GOODS(Station::From(st), 1).GetOrCreateData().cargo; StationNeed(CargoPacket::CanAllocateItem(), __LINE__); cargo.Append(new CargoPacket(st->index, 1, Source{FIXTURE_FIELD(st, town)->index, SourceType::Town}), StationID::Invalid());
 		TriggerRoadStopRandomisation(st, tile, StationRandomTrigger::CargoTaken, 0);
-		StationNeed(st->waiting_random_triggers.Test(StationRandomTrigger::CargoTaken) && std::ranges::equal(_random.state, before.state), __LINE__); cargo.Truncate();
+		StationNeed(FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).Test(StationRandomTrigger::CargoTaken) && std::ranges::equal(_random.state, before.state), __LINE__); cargo.Truncate();
 	}
-	st->waiting_random_triggers = {}; spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, f.empty);
+	FIXTURE_SET(st, WaitingRandomTriggers, waiting_random_triggers, StationRandomTriggers{}); spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, f.empty);
 	delete publication; delete upper; delete lower;
 	fmt::print(stderr, "STCMD resolver-gating {} cached cargo all-empty\n", waypoint);
 }
@@ -674,7 +674,7 @@ static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags te
 	StationNeed(!AllocateSpecToRoadStop(&f.specs[3], st).has_value() && build(test, f.indices[3], 1, id).Failed() && !IsAnyRoadStopTile(tile), __LINE__);
 	for (uint8_t index = 62; index > 1; index--) DeallocateSpecFromRoadStop(st, index);
 	StationNeed(st->roadstop_speclist.size() == 2 && AllocateSpecToRoadStop(nullptr, st) == 0 && AllocateSpecToRoadStop(&f.specs[0], nullptr) == 1, __LINE__);
-	StationNeed(remove(tile + step).Succeeded() && st->roadstop_speclist.empty() && st->cached_roadstop_anim_triggers.None() && st->cached_roadstop_cargo_triggers == 0, __LINE__);
+	StationNeed(remove(tile + step).Succeeded() && st->roadstop_speclist.empty() && FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
 	StationNeed(build(exec, f.indices[0], 2, id).Succeeded(), __LINE__);
 	RoadResolverState("lifecycle", st);
 	fmt::print(stderr, "STCMD resolver-lifecycle {} test execute reuse full partial clear shrink\n", waypoint);
@@ -685,10 +685,10 @@ static void StationRoadResolverReload(bool waypoint)
 	for (BaseStation *candidate : BaseStation::Iterate()) if (candidate->name == (waypoint ? "Owner410 waypoint" : "Owner410 stop")) st = candidate;
 	StationNeed(st != nullptr && st->roadstop_speclist.size() == 2, __LINE__);
 	StationNeed(st->roadstop_speclist[1].spec == nullptr && st->roadstop_speclist[1].grfid == (waypoint ? 0x41000002U : 0x41000001U), __LINE__);
-	StationNeed(st->cached_roadstop_anim_triggers.None() && st->cached_roadstop_cargo_triggers == 0, __LINE__);
+	StationNeed(FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
 	RoadResolverState("missing-reload", st);
 	auto &f = RoadResolverSpecs(waypoint); AssignSpecToRoadStop(&f.specs[0], st, 1); RoadStopUpdateCachedTriggers(st);
-	StationNeed(st->cached_roadstop_anim_triggers.Test(StationAnimationTrigger::Built) && st->cached_roadstop_cargo_triggers == 3, __LINE__);
+	StationNeed(FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).Test(StationAnimationTrigger::Built) && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 3, __LINE__);
 	RoadResolverState("reattached-cache", st); RoadResolverQueries(st, st->custom_roadstop_tile_data.front().tile, waypoint);
 	fmt::print(stderr, "STCMD resolver-reload {} missing reattached cache\n", waypoint);
 }
@@ -722,8 +722,8 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 		check("wp-long-name", Command<CMD_RENAME_WAYPOINT>::Do(test, id, std::string(32, 'x')), false);
 		check("wp-move", std::get<0>(Command<CMD_MOVE_WAYPOINT_NAME>::Do(exec, id, rail + step)));
 		check("wp-move-outside", std::get<0>(Command<CMD_MOVE_WAYPOINT_NAME>::Do(test, id, at(30, 30))), false);
-		Owner owner = wp->owner; wp->owner = OWNER_NONE;
-		check("wp-neutral-rename", Command<CMD_RENAME_WAYPOINT>::Do(test, id, "Neutral")); wp->owner = owner;
+		Owner owner = FIXTURE_GET(wp, Owner, owner); FIXTURE_SET(wp, Owner, owner, OWNER_NONE);
+		check("wp-neutral-rename", Command<CMD_RENAME_WAYPOINT>::Do(test, id, "Neutral")); FIXTURE_SET(wp, Owner, owner, owner);
 		check("wp-reset", Command<CMD_RENAME_WAYPOINT>::Do(exec, id, ""));
 		check("wp-rename", Command<CMD_RENAME_WAYPOINT>::Do(exec, id, name));
 		for (uint i = 0; i < 3; ++i) check("wp-remove", Command<CMD_REMOVE_FROM_RAIL_WAYPOINT>::Do(exec, rail + i * step, rail + i * step, true));
@@ -773,31 +773,31 @@ static void StationGraphs()
 	constexpr CargoType cargo = 0;
 	std::array<Station *, 4> stations; std::array<LinkGraphID, 4> graphs; std::array<NodeID, 4> nodes;
 	auto it = Station::Iterate().begin();
-	for (size_t i = 0; i < stations.size(); i++, ++it) { StationNeed(it != Station::Iterate().end(), __LINE__); stations[i] = *it; graphs[i] = stations[i]->goods[cargo].link_graph; nodes[i] = stations[i]->goods[cargo].node; }
-	auto join = [cargo](LinkGraph *g, Station *st) { st->goods[cargo].link_graph = g->index; st->goods[cargo].node = g->AddNode(st); };
+	for (size_t i = 0; i < stations.size(); i++, ++it) { StationNeed(it != Station::Iterate().end(), __LINE__); stations[i] = *it; graphs[i] = FIXTURE_VGET(FIXTURE_GOODS(stations[i], cargo), LinkGraph, link_graph); nodes[i] = FIXTURE_VFIELD(FIXTURE_GOODS(stations[i], cargo), node); }
+	auto join = [cargo](LinkGraph *g, Station *st) { FIXTURE_VSET(FIXTURE_GOODS(st, cargo), LinkGraph, link_graph, g->index); FIXTURE_VFIELD(FIXTURE_GOODS(st, cargo), node) = g->AddNode(st); };
 	StationNeed(LinkGraph::CanAllocateItem(2), __LINE__);
 	LinkGraph *first = new LinkGraph(cargo), *second = new LinkGraph(cargo);
-	Backup<GoodsEntry::States> acceptance(stations[2]->goods[cargo].status);
-	stations[2]->goods[cargo].status.Set(GoodsEntry::State::Acceptance);
+	const GoodsEntry::States acceptance = FIXTURE_VGET(FIXTURE_GOODS(stations[2], cargo), Status, status);
+	FIXTURE_VSET(FIXTURE_GOODS(stations[2], cargo), Status, status, FIXTURE_VGET(FIXTURE_GOODS(stations[2], cargo), Status, status).Set(GoodsEntry::State::Acceptance));
 	join(first, stations[0]); join(first, stations[1]); join(second, stations[2]); join(second, stations[3]);
 	(*first)[0].AddEdge(1, 65535, 5, 120, {EdgeUpdateMode::Increase, EdgeUpdateMode::Restricted});
 	(*second)[0].UpdateEdge(1, 65536, 4, 17, {EdgeUpdateMode::Unrestricted});
 	(*second)[0].UpdateSupply(11);
 	LinkGraph copy(*second);
-	stations[2]->goods[cargo].status.Reset(GoodsEntry::State::Acceptance);
+	FIXTURE_VSET(FIXTURE_GOODS(stations[2], cargo), Status, status, FIXTURE_VGET(FIXTURE_GOODS(stations[2], cargo), Status, status).Reset(GoodsEntry::State::Acceptance));
 	first->Merge(second);
 #ifdef WITH_RUST
 	StationNeed(*openttd_rust_live_node_fields(first->RustState(), 2).demand == 0, __LINE__);
 #else
 	StationNeed((*first)[2].demand == 0, __LINE__);
 #endif
-	fmt::print(stderr, "STCMD graph merge {} {} {} {} {}\n", first->Size(), copy.Size(), stations[2]->goods[cargo].node, (*first)[2][3].LastUpdate().base(), (*first)[2][3].travel_time_sum);
+	fmt::print(stderr, "STCMD graph merge {} {} {} {} {}\n", first->Size(), copy.Size(), FIXTURE_VFIELD(FIXTURE_GOODS(stations[2], cargo), node), (*first)[2][3].LastUpdate().base(), (*first)[2][3].travel_time_sum);
 	first->RemoveNode(1);
-	fmt::print(stderr, "STCMD graph nonlast {} {} {}\n", first->Size(), stations[3]->goods[cargo].node, (*first)[2][1].dest_node);
+	fmt::print(stderr, "STCMD graph nonlast {} {} {}\n", first->Size(), FIXTURE_VFIELD(FIXTURE_GOODS(stations[3], cargo), node), (*first)[2][1].dest_node);
 	first->RemoveNode(first->Size() - 1);
 	fmt::print(stderr, "STCMD graph last {}\n", first->Size());
-	acceptance.Restore();
-	for (size_t i = 0; i < stations.size(); i++) { stations[i]->goods[cargo].link_graph = graphs[i]; stations[i]->goods[cargo].node = nodes[i]; }
+	FIXTURE_VSET(FIXTURE_GOODS(stations[2], cargo), Status, status, acceptance);
+	for (size_t i = 0; i < stations.size(); i++) { FIXTURE_VSET(FIXTURE_GOODS(stations[i], cargo), LinkGraph, link_graph, graphs[i]); FIXTURE_VFIELD(FIXTURE_GOODS(stations[i], cargo), node) = nodes[i]; }
 	delete first;
 	for (uint cap : {1U, 65535U, 65536U, UINT32_MAX}) {
 		LinkGraph graph(cargo); graph.Init(1);
@@ -837,7 +837,7 @@ static void CatchmentDump(const char *label)
 			BitmapTileIterator it(st->catchment_tiles);
 			for (TileIndex t = it; t != INVALID_TILE; t = ++it) { hash = hash * 1000003 + t.base(); ++count; }
 		}
-		fmt::print(stderr, "STCMD catchment {} station {} rect {} {} {} {} empty {} radius {} area {} {} {} tiles {} {}", label, st->index.base(), st->rect.left, st->rect.top, st->rect.right, st->rect.bottom, st->rect.IsEmpty(), st->GetCatchmentRadius(), area.tile.base(), area.w, area.h, count, hash);
+		fmt::print(stderr, "STCMD catchment {} station {} rect {} {} {} {} empty {} radius {} area {} {} {} tiles {} {}", label, st->index.base(), FIXTURE_FIELD(st, rect).left, FIXTURE_FIELD(st, rect).top, FIXTURE_FIELD(st, rect).right, FIXTURE_FIELD(st, rect).bottom, FIXTURE_RECT(st).IsEmpty(), st->GetCatchmentRadius(), area.tile.base(), area.w, area.h, count, hash);
 		for (const auto &entry : st->industries_near) fmt::print(stderr, " ind {}:{}", entry.industry->index.base(), entry.distance);
 		fmt::print(stderr, "\n");
 	}
@@ -866,7 +866,7 @@ static void CatchmentCargo(const char *label, TileIndex tile, int w, int h, int 
 	fmt::print(stderr, "\n");
 	for (Station *st : Station::Iterate()) {
 		UpdateStationAcceptance(st, false);
-		fmt::print(stderr, "STCMD catchment-acceptance {} {} {} {}\n", label, st->index.base(), GetAcceptanceMask(st), st->always_accepted);
+		fmt::print(stderr, "STCMD catchment-acceptance {} {} {} {}\n", label, st->index.base(), GetAcceptanceMask(st), FIXTURE_FIELD(st, always_accepted));
 	}
 }
 static void CatchmentSetting(const char *name, int32_t value)
@@ -981,12 +981,12 @@ static void StationCatchmentInspect(const DoCommandFlags &exec)
 {
 	CatchmentDump("reloaded");
 	Station *found = nullptr;
-	for (Station *st : Station::Iterate()) if (found == nullptr && st->facilities.Test(StationFacility::Train)) found = st;
+	for (Station *st : Station::Iterate()) if (found == nullptr && FIXTURE_GET(st, Facilities, facilities).Test(StationFacility::Train)) found = st;
 	StationNeed(found != nullptr, __LINE__);
-	TileIndex t = found->train_station.tile;
+	TileIndex t = FIXTURE_GET(found, TrainStation, train_station).tile;
 	StationCost("catchment-reload-remove", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, t, t, true));
 	CatchmentDump("reloaded-mutated");
-	CatchmentCargo("reloaded", found->xy, 1, 1, 4);
+	CatchmentCargo("reloaded", FIXTURE_GET(found, XY, xy), 1, 1, 4);
 }
 // OWNER399
 static bool StationCommands(std::span<std::string_view> args)
@@ -1062,7 +1062,7 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationNeed(found != nullptr, __LINE__);
 		StationCost("reload-name", Command<CMD_RENAME_STATION>::Do(exec, found->index, "Reloaded station"));
 		UpdateStationDockingTiles(found);
-		fmt::print(stderr, "STCMD reloaded {} {}\n", found->index.base(), found->facilities.base());
+		fmt::print(stderr, "STCMD reloaded {} {}\n", found->index.base(), FIXTURE_GET(found, Facilities, facilities).base());
 	} else {
 		TileIndex origin = StationPatch();
 		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
@@ -1184,14 +1184,14 @@ static bool StationCommands(std::span<std::string_view> args)
 			/* Bays: first bay, busy refusal, second bay, full refusal. */
 			stop(tile(24, 4), false, AXIS_X, NEW_STATION);
 			RoadStop *bay = nullptr;
-			for (RoadStop *rs : RoadStop::Iterate()) if (rs->xy == tile(24, 4)) bay = rs;
+			for (RoadStop *rs : RoadStop::Iterate()) if (FIXTURE_GET(rs, XY, xy) == tile(24, 4)) bay = rs;
 			StationNeed(bay != nullptr, __LINE__);
 			StationRoadEnter(buses[4], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
 			StationRoadEnter(buses[5], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
-			bay->status.Reset(RoadStop::RoadStopStatusFlag::EntryBusy);
+			FIXTURE_SET(bay, Status, status, FIXTURE_GET(bay, Status, status).Reset(RoadStop::RoadStopStatusFlag::EntryBusy));
 			StationRoadEnter(buses[5], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
 			StationRoadStops("bays");
-			bay->status.Reset(RoadStop::RoadStopStatusFlag::EntryBusy);
+			FIXTURE_SET(bay, Status, status, FIXTURE_GET(bay, Status, status).Reset(RoadStop::RoadStopStatusFlag::EntryBusy));
 			StationRoadEnter(buses[6], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
 			StationRoadStops("bays-full");
 			/* Free bay 1, then admit the previously refused vehicle into it. */
@@ -1249,10 +1249,10 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationID other = GetStationIndex(tile(7, 1));
 		StationCost("rename-duplicate", Command<CMD_RENAME_STATION>::Do(test, other, "Migration station"));
 		/* Mixed ownership reaches the original accumulated-error/partial effects. */
-		Station::Get(other)->owner = OWNER_NONE;
+		FIXTURE_SET(Station::Get(other), Owner, owner, OWNER_NONE);
 		StationCost("rail-partial-test", CmdRemoveFromRailStation(test, tile(1, 1), tile(7, 1), true));
 		StationCost("rail-partial", CmdRemoveFromRailStation(exec, tile(1, 1), tile(7, 1), true));
-		Station::Get(other)->owner = company->index;
+		FIXTURE_SET(Station::Get(other), Owner, owner, company->index);
 		StationCost("clear-rail", Command<CMD_LANDSCAPE_CLEAR>::Do(exec, tile(7, 1)));
 		StationCost("rail-delete", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, tile(1, 2), tile(3, 4), true));
 		StationCost("rail-reuse", rail(exec, tile(1, 1), StationID::Invalid(), 1, 2));
@@ -1286,7 +1286,7 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationNeed(IsAirportTile(tile(20, 1)), __LINE__);
 		StationID airport = GetStationIndex(tile(20, 1));
 		Backup<bool> noise_setting(_settings_game.economy.station_noise_level, true);
-		uint distance; Town *nearest = AirportGetNearestTown(AirportSpec::Get(AT_SMALL), Station::Get(airport)->airport.rotation, tile(20, 1), AirportTileIterator(Station::Get(airport)), distance);
+		uint distance; Town *nearest = AirportGetNearestTown(AirportSpec::Get(AT_SMALL), FIXTURE_VGET(FIXTURE_AIRPORT(Station::Get(airport)), Rotation, rotation), tile(20, 1), AirportTileIterator(Station::Get(airport)), distance);
 		Backup<uint16_t> noise(nearest->noise_reached, UINT16_MAX);
 		auto noisy = Command<CMD_BUILD_AIRPORT>::Do(test, tile(20, 1), AT_SMALL, 0, NEW_STATION, true);
 		StationCost("airport-noise-limit", noisy); StationNeed(noisy.GetErrorMessage() == STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE, __LINE__);

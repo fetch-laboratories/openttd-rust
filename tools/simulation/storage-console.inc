@@ -219,25 +219,25 @@ static bool StorageScenario(std::span<std::string_view> args)
 	Town *town = *Town::Iterate().begin();
 	Industry *industry = *Industry::Iterate().begin();
 	Station *station = nullptr;
-	for (Station *st : Station::Iterate()) if (st->facilities.Test(StationFacility::Airport)) { station = st; break; }
+	for (Station *st : Station::Iterate()) if (FIXTURE_GET(st, Facilities, facilities).Test(StationFacility::Airport)) { station = st; break; }
 	Require(station != nullptr);
 	GRFFile grf; grf.grfid = 0x39312345;
 	ResolverObject ro(&grf), anonymous(nullptr);
 	TownScopeResolver writable(ro, town, false), readonly(ro, nullptr, true), no_grf(anonymous, town, false);
 	IndustriesScopeResolver ind(ro, industry->location.tile, industry, industry->type);
-	AirportScopeResolver airport(ro, station->airport.tile, station, nullptr, 0), preview(ro, TileIndex{}, nullptr, nullptr, 0);
+	AirportScopeResolver airport(ro, FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(station)), station, nullptr, 0), preview(ro, TileIndex{}, nullptr, nullptr, 0);
 	bool available = true;
 	if (args[1] == "storage-inspect") {
 		ro.SetRegister(0x100, -1);
 		Require(town->psa_list.size() == 2 && writable.GetVariable(0x7C, 0, available) == 0x80000000 && writable.GetVariable(0x7C, 255, available) == INT32_MAX);
-		Require(industry->psa != nullptr && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa != nullptr && station->airport.psa->GetValue(255) == 393);
-		Require(industry->psa->feature == GSF_INDUSTRIES && industry->psa->tile == industry->location.tile && station->airport.psa->feature == GSF_AIRPORTS && station->airport.psa->tile == station->airport.tile);
+		Require(industry->psa != nullptr && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa) != nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa)->GetValue(255) == 393);
+		Require(industry->psa->feature == GSF_INDUSTRIES && industry->psa->tile == industry->location.tile && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa)->feature == GSF_AIRPORTS && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa)->tile == FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(station)));
 		for (auto *psa : town->psa_list) Require(psa->feature == GSF_FAKE_TOWNS && psa->tile == town->xy);
 		CommonAction2(industry, grf);
 		fmt::print(stderr, "STORAGE reloaded true\n");
 		return true;
 	}
-	Require(town->psa_list.empty() && industry->psa == nullptr && station->airport.psa == nullptr);
+	Require(town->psa_list.empty() && industry->psa == nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa) == nullptr);
 	Require(ind.GetVariable(0x7C, 15, available) == 0);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
@@ -245,16 +245,16 @@ static bool StorageScenario(std::span<std::string_view> args)
 	ro.SetRegister(0x100, 123); writable.StorePSA(0, 7);
 	ind.StorePSA(0, 0); airport.StorePSA(0, 0);
 	{ Backup<IndustryID> invalid(industry->index, IndustryID::Invalid()); ind.StorePSA(0, 7); }
-	Require(town->psa_list.empty() && industry->psa == nullptr && station->airport.psa == nullptr);
+	Require(town->psa_list.empty() && industry->psa == nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa) == nullptr);
 	/* Airports without a GRF create the default-GRF array. */
-	AirportScopeResolver default_airport(anonymous, station->airport.tile, station, nullptr, 0);
+	AirportScopeResolver default_airport(anonymous, FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(station)), station, nullptr, 0);
 	default_airport.StorePSA(256, 7);
-	Require(station->airport.psa != nullptr && station->airport.psa->grfid == 0);
-	delete station->airport.psa; station->airport.psa = nullptr;
+	Require(FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa) != nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa)->grfid == 0);
+	delete FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa); FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa) = nullptr;
 	/* Nonzero out-of-range writes allocate industry/airport, town even for zero. */
 	ro.SetRegister(0x100, -1); writable.StorePSA(256, 0); ind.StorePSA(256, 7); airport.StorePSA(256, 7);
-	Require(town->psa_list.size() == 1 && industry->psa != nullptr && station->airport.psa != nullptr);
-	Require(industry->psa->grfid == GetIndustrySpec(industry->type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
+	Require(town->psa_list.size() == 1 && industry->psa != nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa) != nullptr);
+	Require(industry->psa->grfid == GetIndustrySpec(industry->type)->grf_prop.grfid && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa)->grfid == grf.grfid);
 	writable.StorePSA(0, INT32_MIN); writable.StorePSA(255, INT32_MAX); ind.StorePSA(15, -393); airport.StorePSA(255, 393);
 	Require(ind.GetVariable(0x7C, 0, available) == 0 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
 	Require(ind.GetVariable(0x7C, 256, available) == 0 && ind.GetVariable(0x7C, UINT32_MAX, available) == 0);
@@ -278,7 +278,7 @@ static bool StorageScenario(std::span<std::string_view> args)
 	writable.StorePSA(0, 1); ind.StorePSA(15, 2); airport.StorePSA(255, 3);
 	Require(ind.GetVariable(0x7C, 15, available) == 2);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_TESTMODE);
-	Require(writable.GetVariable(0x7C, 0, available) == 0x80000000 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa->GetValue(255) == 393);
+	Require(writable.GetVariable(0x7C, 0, available) == 0x80000000 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa)->GetValue(255) == 393);
 	/* Destroy a registered array and require native pool ID reuse. */
 	Require(PersistentStorage::CanAllocateItem());
 	auto *pending = new PersistentStorage(0, GSF_INVALID, TileIndex{}); auto id = pending->index; pending->StoreValue(0, 1); delete pending;
@@ -288,7 +288,7 @@ static bool StorageScenario(std::span<std::string_view> args)
 	/* Real PSAC saving restores temporary payloads; the next switch still visits them. */
 	writable.StorePSA(0, 4); ind.StorePSA(15, 5); airport.StorePSA(255, 6);
 	Require(args.size() == 3 && SaveOrLoad(args[2], SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK);
-	Require(writable.GetVariable(0x7C, 0, available) == 0x80000000 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa->GetValue(255) == 393);
+	Require(writable.GetVariable(0x7C, 0, available) == 0x80000000 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), psa)->GetValue(255) == 393);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
 	fmt::print(stderr, "STORAGE policies rollback reuse saved true\n");
 	return true;

@@ -218,7 +218,7 @@ static bool FollowerProbe([[maybe_unused]] std::span<std::string_view> args)
 	clear(); MakeRailBridgeRamp(old, Owner(0), 0, DIAGDIR_NE, RAILTYPE_RAIL); MakeRailBridgeRamp(tile - 2, Owner(0), 0, DIAGDIR_SW, RAILTYPE_RAIL);
 	for (TileIndex t = tile; t > tile - 2; --t) SetBridgeMiddle(t, AXIS_X);
 	FollowerCase("bridge_skip", ft, old, TRACKDIR_X_NE, true, 0);
-	Station *station = nullptr; for (Station *s : Station::Iterate()) if (s->facilities.Test(StationFacility::Train)) { station = s; break; }
+	Station *station = nullptr; for (Station *s : Station::Iterate()) if (FIXTURE_GET(s, Facilities, facilities).Test(StationFacility::Train)) { station = s; break; }
 	PbsRequire(station != nullptr);
 	rail(); for (uint i = 0; i < 3; ++i) MakeRailStation(tile - i, Owner(0), station->index, AXIS_X, 0, RAILTYPE_RAIL);
 	FollowerCase("platform_skip", ft, old, TRACKDIR_X_NE, true, 0);

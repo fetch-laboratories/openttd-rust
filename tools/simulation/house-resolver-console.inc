@@ -137,11 +137,11 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 #else
 	_station_kdtree.Insert(station->index);
 #endif
-	station->town = town; station->owner = OWNER_NONE;
-		station->goods[cargo].status = GoodsEntry::States{states[stations.size()]};
-		station->rect.BeforeAddTile(near, StationRect::ADD_FORCE);
+	FIXTURE_FIELD(station, town) = town; FIXTURE_SET(station, Owner, owner, OWNER_NONE);
+		FIXTURE_VSET(FIXTURE_GOODS(station, cargo), Status, status, GoodsEntry::States{states[stations.size()]});
+		FIXTURE_RECT(station).BeforeAddTile(near, StationRect::ADD_FORCE);
 		MakeRailStation(near, OWNER_NONE, station->index, AXIS_X, 0, RAILTYPE_RAIL);
-		station->train_station = TileArea(near, 1, 1); station->facilities.Set(StationFacility::Train);
+		FIXTURE_SET(station, TrainStation, train_station, TileArea(near, 1, 1)); FIXTURE_SET(station, Facilities, facilities, FIXTURE_GET(station, Facilities, facilities).Set(StationFacility::Train));
 		stations.push_back(station);
 	}
 	require(stations.size() == states.size());

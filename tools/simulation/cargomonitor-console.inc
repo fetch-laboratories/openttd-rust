@@ -16,13 +16,13 @@ static MonitorSite FindMonitorSite(CargoType pax)
 {
 	MonitorSite site;
 	for (Station *st : Station::Iterate()) {
-		if (site.st != nullptr || !HasBit(st->always_accepted, pax)) continue;
+		if (site.st != nullptr || !HasBit(FIXTURE_FIELD(st, always_accepted), pax)) continue;
 		for (const auto &entry : st->industries_near) {
 			if (site.st != nullptr) break;
 			Industry *ind = entry.industry;
 			if (ind->exclusive_supplier != INVALID_OWNER) continue;
 			for (const auto &a : ind->accepted) {
-				if (!IsValidCargoType(a.cargo) || HasBit(st->always_accepted, a.cargo) || a.waiting != 0) continue;
+				if (!IsValidCargoType(a.cargo) || HasBit(FIXTURE_FIELD(st, always_accepted), a.cargo) || a.waiting != 0) continue;
 				site.st = st; site.near = ind; site.accepted = a.cargo; break;
 			}
 		}
@@ -41,9 +41,9 @@ static MonitorSite FindMonitorSite(CargoType pax)
 static void MonitorDeliver(const MonitorSite &site, CargoType cargo, Source src, uint count, uint repeat = 1)
 {
 	if (!CargoPacket::CanAllocateItem() || !CargoPayment::CanAllocateItem()) FixtureAbort(__LINE__);
-	CargoPacket *cp = new CargoPacket(site.st->index, UINT16_MAX, src); cp->UpdateLoadingTile(site.st->xy);
+	CargoPacket *cp = new CargoPacket(site.st->index, UINT16_MAX, src); cp->UpdateLoadingTile(FIXTURE_GET(site.st, XY, xy));
 	CargoPayment *payment = new CargoPayment(site.front);
-	for (uint n = 0; n < repeat; ++n) payment->PayFinalDelivery(cargo, cp, count, site.st->xy);
+	for (uint n = 0; n < repeat; ++n) payment->PayFinalDelivery(cargo, cp, count, FIXTURE_GET(site.st, XY, xy));
 	payment->route_profit = payment->visual_profit = payment->visual_transfer = 0; delete payment; delete cp;
 }
 static bool MonitorScenario(std::span<std::string_view> args)
@@ -58,8 +58,8 @@ static bool MonitorScenario(std::span<std::string_view> args)
 	Station *st = site.st;
 	Backup<FIXTURE_FIELD_TYPE(site.front, last_station_visited)> last(FIXTURE_FIELD(site.front, last_station_visited), FixtureRaw(st->index));
 	CompanyID company = FIXTURE_GET(site.front, Owner, owner);
-	auto town = EncodeCargoTownMonitor(company, pax, st->town->index);
-	Source source{st->town->index, SourceType::Town};
+	auto town = EncodeCargoTownMonitor(company, pax, FIXTURE_FIELD(st, town)->index);
+	Source source{FIXTURE_FIELD(st, town)->index, SourceType::Town};
 	ClearCargoPickupMonitoring(); ClearCargoDeliveryMonitoring();
 	if (args[1] == "monitors-load") {
 		/* The chunk rows use monitors 1 and 2. */
@@ -82,9 +82,9 @@ static bool MonitorScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "MONITOR load {} {} true\n", args[3], args[4]); std::fflush(stderr); std::_Exit(0);
 	}
 	Industry *i = site.near, *j = site.far;
-	auto town_cargo = EncodeCargoTownMonitor(company, site.accepted, st->town->index);
+	auto town_cargo = EncodeCargoTownMonitor(company, site.accepted, FIXTURE_FIELD(st, town)->index);
 	auto industry = EncodeCargoIndustryMonitor(company, site.accepted, i->index), other = EncodeCargoIndustryMonitor(company, site.accepted, j->index);
-	bool good = DecodeMonitorCompany(industry) == company && DecodeMonitorCargoType(industry) == site.accepted && DecodeMonitorIndustry(industry) == i->index && DecodeMonitorTown(town) == st->town->index;
+	bool good = DecodeMonitorCompany(industry) == company && DecodeMonitorCargoType(industry) == site.accepted && DecodeMonitorIndustry(industry) == i->index && DecodeMonitorTown(town) == FIXTURE_FIELD(st, town)->index;
 	good &= GetPickupAmount(town, false) == 0 && GetDeliveryAmount(town, true) == 0 && GetPickupAmount(town, true) == 0;
 	/* Industry cargo reaches the listed industry only and credits the supplier's
 	 * pickup; the station's remainder delivery adds zero. */
@@ -98,7 +98,7 @@ static bool MonitorScenario(std::span<std::string_view> args)
 	GetPickupAmount(town, true); GetDeliveryAmount(town, true);
 	MonitorDeliver(site, pax, source, 9);
 	good &= GetPickupAmount(town, true) == 9 && GetDeliveryAmount(town, true) == 9 && GetDeliveryAmount(industry, true) == 0;
-	for (Source src : {Source{Source::Invalid, SourceType::Town}, Source{st->town->index, SourceType::Headquarters}}) {
+	for (Source src : {Source{Source::Invalid, SourceType::Town}, Source{FIXTURE_FIELD(st, town)->index, SourceType::Headquarters}}) {
 		MonitorDeliver(site, pax, src, 9);
 		good &= GetPickupAmount(town, true) == 0 && GetDeliveryAmount(town, true) == 9 && GetDeliveryAmount(industry, true) == 0;
 	}

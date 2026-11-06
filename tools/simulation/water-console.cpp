@@ -223,7 +223,7 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 	WaterState("partial-first", tile); WaterState("partial-second", tile + 1);
 	bool checked_docking = false;
 	for (Station *st : Station::Iterate()) {
-		for (TileIndex t : st->docking_station) {
+		for (TileIndex t : FIXTURE_GET(st, DockingStation, docking_station)) {
 			if (!IsWaterTile(t) || !IsDockingTile(t)) continue;
 			MakeWaterKeepingClass(t, GetTileOwner(t));
 			ChangeTileOwner(t, GetTileOwner(t), Owner(0));

@@ -52,24 +52,24 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
 		check("airport-build-test", test, tile, 0, true); check("airport-build", exec, tile, 0, true);
 		st = Station::GetByTile(tile); st->name = "Airport resolver";
-		StationNeed(st->airport.psa != nullptr && st->airport.psa->GetValue(7) == 0x418, __LINE__);
+		StationNeed(FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa) != nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa)->GetValue(7) == 0x418, __LINE__);
 	}
-	TileIndex tile = st->airport.tile + ToTileIndexDiff(spec->layouts[0].tiles.front().ti);
+	TileIndex tile = FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(st)) + ToTileIndexDiff(spec->layouts[0].tiles.front().ti);
 	/* A real Built event after reload reinstalls the transient program. This is
 	 * runtime evidence, not proof of loading an external GRF file. */
 	StationNeed(TriggerAirportTileAnimation(st, tile, AirportAnimationTrigger::Built), __LINE__);
 	AirportTileResolverObject callback(ats, tile, st, CBID_AIRPTILE_ANIMATION_TRIGGER);
 	std::array<int32_t, 4> registers{}; StationNeed(callback.ResolveCallback(registers) == 3 && registers[0] == 0x418, __LINE__);
-	StationNeed(st->airport.psa->GetValue(9) == CBID_AIRPTILE_ANIMATION_TRIGGER, __LINE__);
+	StationNeed(FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa)->GetValue(9) == CBID_AIRPTILE_ANIMATION_TRIGGER, __LINE__);
 	fmt::print(stderr, "STCMD airport-built {} {} {} {} {}\n", reloaded, registers[0], registers[1], registers[2], registers[3]);
-	result->result = 0; AnimateAirportTile(tile); StationNeed(st->airport.psa->GetValue(9) == CBID_AIRPTILE_ANIMATION_NEXT_FRAME, __LINE__); result->result = 3; fmt::print(stderr, "STCMD airport-animation {} {}\n", GetAnimationFrame(tile), st->airport.psa->GetValue(7));
+	result->result = 0; AnimateAirportTile(tile); StationNeed(FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa)->GetValue(9) == CBID_AIRPTILE_ANIMATION_NEXT_FRAME, __LINE__); result->result = 3; fmt::print(stderr, "STCMD airport-animation {} {}\n", GetAnimationFrame(tile), FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa)->GetValue(7));
 
 	/* A real parent-scope zero write must not allocate airport storage. */
-	auto *persistent = st->airport.psa; st->airport.psa = nullptr; auto program = det->adjusts;
+	auto *persistent = FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa); FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa) = nullptr; auto program = det->adjusts;
 	det->var_scope = VSG_SCOPE_PARENT;
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 17}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 17, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
-	StationNeed(callback.ResolveCallback(registers) == 3 && registers[0] == 0 && st->airport.psa == nullptr, __LINE__);
-	st->airport.psa = persistent; det->adjusts = std::move(program); det->var_scope = VSG_SCOPE_SELF;
+	StationNeed(callback.ResolveCallback(registers) == 3 && registers[0] == 0 && FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa) == nullptr, __LINE__);
+	FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa) = persistent; det->adjusts = std::move(program); det->var_scope = VSG_SCOPE_SELF;
 	fmt::print(stderr, "STCMD airport-storage-zero no-allocation\n");
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, other);
 	/* Native direct availability and actual deterministic Action2 agree. Logs,
@@ -84,7 +84,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		}
 	};
 	for (uint8_t version : {7, 8}) {
-		file.grf_version = version; AirportResolverObject airport(tile, st, spec, st->airport.layout); AirportTileResolverObject tiles(ats, tile, st);
+		file.grf_version = version; AirportResolverObject airport(tile, st, spec, FIXTURE_VFIELD(FIXTURE_AIRPORT(st), layout)); AirportTileResolverObject tiles(ats, tile, st);
 		variables("airport", airport, airport.airport_scope); variables("tile", tiles, tiles.tiles_scope);
 	}
 	file.grf_version = 8;
@@ -97,8 +97,8 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	AirportResolverObject preview(tile, nullptr, spec, 2), nowhere(INVALID_TILE, nullptr, spec, 3);
 	variables("preview", preview, preview.airport_scope); variables("nowhere", nowhere, nowhere.airport_scope);
 	for (int32_t date : {0, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() - 1, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() + 65536}) {
-		auto old = st->build_date; st->build_date = TimerGameCalendar::Date(date); AirportResolverObject query(tile, st, spec, 0); bool ok = true;
-		fmt::print(stderr, "STCMD airport-date {} {}\n", date, query.airport_scope.GetVariable(0xFA, 0, ok)); st->build_date = old;
+		auto old = FIXTURE_GET(st, BuildDate, build_date); FIXTURE_SET(st, BuildDate, build_date, TimerGameCalendar::Date(date)); AirportResolverObject query(tile, st, spec, 0); bool ok = true;
+		fmt::print(stderr, "STCMD airport-date {} {}\n", date, query.airport_scope.GetVariable(0xFA, 0, ok)); FIXTURE_SET(st, BuildDate, build_date, old);
 	}
 
 	AirportResolverObject narrow(tile, st, spec, 0);
@@ -109,8 +109,8 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		fmt::print(stderr, "STCMD airport-parameter {} {} {} {}\n", var, parameter, ok, value);
 	}
 	AirportResolverObject airport(tile, st, spec, 0); auto *town = airport.GetTown(); StationNeed(town != nullptr, __LINE__);
-	auto *original_town = st->town; st->town = nullptr; StationNeed(airport.GetTown() == town, __LINE__);
-	AirportResolverObject retry(tile, st, spec, 0); StationNeed(retry.GetTown() == nullptr, __LINE__); st->town = original_town;
+	auto *original_town = FIXTURE_FIELD(st, town); FIXTURE_FIELD(st, town) = nullptr; StationNeed(airport.GetTown() == town, __LINE__);
+	AirportResolverObject retry(tile, st, spec, 0); StationNeed(retry.GetTown() == nullptr, __LINE__); FIXTURE_FIELD(st, town) = original_town;
 #ifdef WITH_RUST
 	StationNeed(retry.GetTown() != nullptr && preview.GetTown()->context.readonly && nowhere.GetTown() == nullptr, __LINE__);
 #else
@@ -147,13 +147,13 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		fmt::print(stderr, "STCMD airport-offset {} {} {}\n", var, offset, regs[0]);
 	}
 
-	auto north = st->airport.tile;
+	auto north = FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(st));
 	for (TileIndex base : {tile + TileDiffXY(1, 2), TileXY(Map::SizeX() - 1, Map::SizeY() - 1)}) {
-		st->airport.tile = base; det->adjusts[0].variable = 0x43;
+		FIXTURE_SET_AIRPORT_TILE(st, base); det->adjusts[0].variable = 0x43;
 		AirportTileResolverObject query(ats, tile, st); std::array<int32_t, 1> regs{}; query.ResolveCallback(regs);
 		fmt::print(stderr, "STCMD airport-relative-wrap {} {}\n", base.base(), regs[0]);
 	}
-	st->airport.tile = north;
+	FIXTURE_SET_AIRPORT_TILE(st, north);
 	/* Live selection: missing/disabled custom, substitute and its override. */
 	std::vector<EntityIDMapping> mappings(_airport_mngr.mappings.begin(), _airport_mngr.mappings.end()); auto *new_spec = AirportFixtureBaseSpec(NEW_AIRPORT_OFFSET); AirportSpec saved_new = *new_spec;
 	for (bool enabled : {false, true}) for (uint32_t grfid : {0U, file.grfid}) for (uint16_t substitute : {uint16_t{AT_INVALID}, uint16_t{AT_SMALL}}) {
@@ -161,7 +161,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		for (uint16_t over : {uint16_t{AT_INVALID}, uint16_t{AT_LARGE}}) { spec->grf_prop.override_id = over; fmt::print(stderr, "STCMD airport-selection {} {} {} {} {}\n", enabled, grfid, substitute, over, AirportSpec::Get(NEW_AIRPORT_OFFSET)->GetIndex()); }
 	}
 	std::copy(mappings.begin(), mappings.end(), _airport_mngr.mappings.begin()); *new_spec = std::move(saved_new);
-	fmt::print(stderr, "STCMD airport-state {} {} {} {} {}\n", st->index.base(), st->random_bits, st->airport.psa->GetValue(7), _random.state[0], _random.state[1]);
+	fmt::print(stderr, "STCMD airport-state {} {} {} {} {}\n", st->index.base(), FIXTURE_FIELD(st, random_bits), FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa)->GetValue(7), _random.state[0], _random.state[1]);
 	*ats = std::move(saved_tile); *spec = std::move(saved);
 	delete random; delete det; delete parent; delete other; delete result;
 }
@@ -273,20 +273,20 @@ static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		EngineID engine = EngineID::Invalid();
 		for (const Engine *e : Engine::IterateType(VEH_AIRCRAFT)) if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_AIRCRAFT, _current_company) && e->VehInfo<AircraftVehicleInfo>().subtype & AIR_CTOL) engine = e->index;
 		StationNeed(engine != EngineID::Invalid(), __LINE__);
-		auto hangar = station->airport.GetHangarTile(0);
+		auto hangar = FIXTURE_AIRPORT(station).GetHangarTile(0);
 		auto [built, vehicle, refit, capacity, cargo] = Command<CMD_BUILD_VEHICLE>::Do(exec, hangar, engine, false, INVALID_CARGO, INVALID_CLIENT_ID); StationCost("airport-def-aircraft", built); StationNeed(built.Succeeded(), __LINE__);
 		Vehicle *plane = Vehicle::Get(vehicle); plane->name = "Airport definition plane";
 		for (StationID target : {other->index, station->index}) { Order order; order.MakeGoToStation(target); order.SetStopLocation(OrderStopLocation::FarEnd); StationNeed(Command<CMD_INSERT_ORDER>::Do(exec, vehicle, VehicleOrderID(plane->GetNumOrders()), order).Succeeded(), __LINE__); }
 		StationNeed(Command<CMD_START_STOP_VEHICLE>::Do(exec, vehicle, false).Succeeded(), __LINE__);
 	}
 	else for (Station *st : Station::Iterate()) if (st->name == "Airport definitions") station = st;
-	StationNeed(station != nullptr && station->airport.type == type && station->airport.GetSpec() == spec, __LINE__);
-	TileIndex at = station->airport.tile; StationNeed(GetAirportGfx(at) == gfx, __LINE__);
+	StationNeed(station != nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), type) == type && FIXTURE_AIRPORT(station).GetSpec() == spec, __LINE__);
+	TileIndex at = FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(station)); StationNeed(GetAirportGfx(at) == gfx, __LINE__);
 	AirportTileResolverObject callback(tile_spec, at, station, CBID_AIRPTILE_ANIMATION_TRIGGER);
 	StationNeed(callback.ResolveCallback({}) == 3 && TriggerAirportTileAnimation(station, at, AirportAnimationTrigger::Built), __LINE__);
 	AnimateAirportTile(at); StationNeed(GetAnimationFrame(at) == 3, __LINE__);
 	fmt::print(stderr, "STCMD airport-def-callbacks {} {} {}\n", station->index.base(), callback.ResolveCallback({}), GetAnimationFrame(at));
-	fmt::print(stderr, "STCMD airport-def-occupied {} {} {} {}\n", station->airport.type, GetAirportGfx(at), spec->grf_prop.grfid, tile_spec->grf_prop.local_id);
+	fmt::print(stderr, "STCMD airport-def-occupied {} {} {} {}\n", FIXTURE_VFIELD(FIXTURE_AIRPORT(station), type), GetAirportGfx(at), spec->grf_prop.grfid, tile_spec->grf_prop.local_id);
 	for (Aircraft *plane : Aircraft::Iterate()) if (plane->name == "Airport definition plane") fmt::print(stderr, "STCMD airport-def-plane {} {} {} {}\n", plane->index.base(), FIXTURE_FIELD(plane, x_pos), FIXTURE_FIELD(plane, y_pos), FIXTURE_FIELD(plane, z_pos));
 	fmt::print(stderr, "STCMD airport-def-rng {} {}\n", _random.state[0], _random.state[1]);
 }

@@ -10,6 +10,7 @@
 #include "newgrf_airporttiles.h"
 #include "newgrf_roadstop.h"
 #include "timer/timer_game_tick.h"
+#include "vehicle-record-fixture.hpp"
 #ifdef WITH_RUST
 #include "rust/animation_ffi.h"
 #include "rust/animation_save.hpp"
@@ -224,7 +225,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		auto *st = BaseStation::GetByTile(tile);
 		std::vector<TileIndex> members;
 		if constexpr (std::is_same_v<Spec, StationSpec>) {
-			for (TileIndex t : st->train_station) if (st->TileBelongsToRailStation(t)) members.push_back(t);
+			for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) members.push_back(t);
 		} else {
 			for (TileIndex t : Map::Iterate()) if (IsAnyRoadStopTile(t) && GetStationIndex(t) == st->index) members.push_back(t);
 		}
@@ -236,10 +237,17 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 			else { index = GetCustomRoadStopSpecIndex(t); SetCustomRoadStopSpecIndex(t, 1); }
 			saved.emplace_back(t, index, GetAnimationFrame(t), GetAnimatedTileState(t));
 		}
-		auto &cached = [&]() -> StationAnimationTriggers & {
-			if constexpr (std::is_same_v<Spec, StationSpec>) return st->cached_anim_triggers;
-			else return st->cached_roadstop_anim_triggers;
-		}();
+		auto get_cached = [&]() -> StationAnimationTriggers {
+			if constexpr (std::is_same_v<Spec, StationSpec>) return FIXTURE_GET(st, CachedAnimTriggers, cached_anim_triggers);
+			else return FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers);
+		};
+		auto set_cached = [&](StationAnimationTriggers value) {
+			if constexpr (std::is_same_v<Spec, StationSpec>) FIXTURE_SET(st, CachedAnimTriggers, cached_anim_triggers, value);
+			else FIXTURE_SET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers, value);
+		};
+		/* Restore the station's cached triggers when the original backup would. */
+		struct CachedRestore { decltype(set_cached) &set; StationAnimationTriggers value; ~CachedRestore() { this->set(this->value); } } restore_cached{set_cached, get_cached()};
+		StationAnimationTriggers cached = get_cached();
 		Backup<StationAnimationTriggers> old_cached(cached);
 		Backup<std::vector<RoadStopTileData>> data(st->custom_roadstop_tile_data);
 		if constexpr (std::is_same_v<Spec, RoadStopSpec>) {
@@ -249,7 +257,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		for (bool trigger : {false, true}) for (bool ambient : {false, true}) for (uint16_t result : {0xFFFF, 0x1FD, 0x1FE, 0x1FF, 0x103, 0x107, 0x8003}) {
 			AutoRestoreBackup<bool> sound(_settings_client.sound.ambient, ambient);
 			spec->callback_mask = {next}; spec->animation.speed = 0; spec->animation.status = AnimationStatus::NonLooping;
-			spec->animation.triggers = {StationAnimationTrigger::Built}; cached = spec->animation.triggers;
+			spec->animation.triggers = {StationAnimationTrigger::Built}; set_cached(spec->animation.triggers);
 			group->next = result; random(false); frame(7);
 			RestoreAnimationQueue({tile}); SetAnimatedTileState(tile, trigger && (result & 0xFF) != 0xFF ? AnimatedTileState::Deleted : AnimatedTileState::Animated);
 			animation_case = fmt::format("{}-{}-{}-{}", name, trigger, ambient, result); animation_tile = tile;
@@ -262,7 +270,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		}
 		if constexpr (std::is_same_v<Spec, StationSpec>) {
 			for (auto rejection : {"cached", "nonmember", "nullspec", "disabled", "accepted"}) {
-				cached = std::string_view(rejection) == "cached" ? StationAnimationTriggers{} : StationAnimationTriggers{StationAnimationTrigger::Built};
+				set_cached(std::string_view(rejection) == "cached" ? StationAnimationTriggers{} : StationAnimationTriggers{StationAnimationTrigger::Built});
 				spec->animation.triggers = std::string_view(rejection) == "disabled" ? StationAnimationTriggers{} : StationAnimationTriggers{StationAnimationTrigger::Built};
 				SetCustomStationSpecIndex(tile, std::string_view(rejection) == "nullspec" ? 0 : 1);
 				uint calls = 0; group->observation = [&](ResolverObject &) { ++calls; }; group->next = 0xFD;
@@ -276,7 +284,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		group->next = 0xFD; file.cargo_map[0] = 37;
 		for (uint8_t phase = 0; phase < 4; phase++) for (uint8_t value = 0; value < 9; value++) {
 			auto event = static_cast<StationAnimationTrigger>(value);
-			cached = phase == 0 ? StationAnimationTriggers{} : StationAnimationTriggers{event};
+			set_cached(phase == 0 ? StationAnimationTriggers{} : StationAnimationTriggers{event});
 			spec->animation.triggers = phase == 1 ? StationAnimationTriggers{} : StationAnimationTriggers{event};
 			group->observation = [&, phase](ResolverObject &ro) {
 				TileIndex t;
@@ -310,17 +318,23 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 	}
 	if constexpr (std::is_same_v<Spec, AirportTileSpec>) {
 		auto *st = Station::GetByTile(tile);
-		const auto airport_tile = st->airport.tile; Backup<TileIndex> origin(st->airport.tile);
-		Backup<uint16_t> width(st->airport.w, st->airport.w + 1); // Include nonmembers; the real traversal must filter them.
+#ifdef WITH_RUST
+		auto &area = st->Record().airport.area;
+#else
+		TileArea &area = st->airport;
+#endif
+		using AirportTile = std::remove_reference_t<decltype(area.tile)>;
+		const AirportTile airport_tile = area.tile; Backup<AirportTile> origin(area.tile);
+		Backup<uint16_t> width(area.w, area.w + 1); // Include nonmembers; the real traversal must filter them.
 		std::vector<std::pair<AirportTileSpec *, AirportTileSpec>> saved;
-		for (TileIndex t : st->airport) if (st->TileBelongsToAirport(t)) {
+		for (TileIndex t : FIXTURE_AIRPORT(st)) if (st->TileBelongsToAirport(t)) {
 			auto *ats = const_cast<AirportTileSpec *>(AirportTileSpec::GetByTile(t));
 			if (std::ranges::none_of(saved, [ats](const auto &entry) { return entry.first == ats; })) saved.emplace_back(ats, *ats);
 		}
 		if (saved.size() < 3) std::abort();
 		group->next = 0xFD; file.cargo_map[0] = 37;
 		for (uint8_t phase = 0; phase < 5; phase++) {
-			st->airport.tile = phase == 0 ? INVALID_TILE : airport_tile;
+			area.tile = phase == 0 ? AirportTile{FixtureRaw(INVALID_TILE)} : airport_tile;
 			size_t index = 0;
 			for (auto &[ats, old] : saved) {
 				ats->grf_prop.grffile = phase == 1 || (phase == 3 && index % 3 == 0) ? nullptr : &file;
@@ -354,7 +368,7 @@ static std::array<TileIndex, 6> AnimationFixtureTiles()
 	for (TileIndex t : Map::Iterate()) {
 		if (IsTileType(t, MP_HOUSE)) tiles[0] = t;
 		if (IsTileType(t, MP_INDUSTRY)) tiles[1] = t;
-		if (HasStationTileRail(t) && (tiles[2] == INVALID_TILE || BaseStation::GetByTile(t)->train_station.w * BaseStation::GetByTile(t)->train_station.h > BaseStation::GetByTile(tiles[2])->train_station.w * BaseStation::GetByTile(tiles[2])->train_station.h)) tiles[2] = t;
+		if (HasStationTileRail(t) && (tiles[2] == INVALID_TILE || FIXTURE_GET(BaseStation::GetByTile(t), TrainStation, train_station).w * FIXTURE_GET(BaseStation::GetByTile(t), TrainStation, train_station).h > FIXTURE_GET(BaseStation::GetByTile(tiles[2]), TrainStation, train_station).w * FIXTURE_GET(BaseStation::GetByTile(tiles[2]), TrainStation, train_station).h)) tiles[2] = t;
 		if (IsTileType(t, MP_STATION) && IsAirport(t)) tiles[3] = t;
 		if (IsAnyRoadStopTile(t)) stops[GetStationIndex(t)].push_back(t);
 		if (IsTileType(t, MP_OBJECT)) tiles[5] = t;
