@@ -3005,7 +3005,7 @@ impl Ctx<'_> {
     }
     fn noise_pointer(&self, town: *const crate::services::TownHandle) -> *mut u16 {
         let owner = (self.shared.town_owner)(town);
-        let fields = unsafe { crate::town::record(owner) };
+        let fields = crate::town::record(owner);
         unsafe { &raw mut (*fields).noise_reached }
     }
     fn build_airport(
@@ -3309,7 +3309,7 @@ pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const Com
         }
         from = id + 1;
         let owner = (c.shared.town_owner_by_id)(id);
-        let fields = unsafe { crate::town::record(owner) };
+        let fields = crate::town::record(owner);
         unsafe {
             (&raw mut (*fields).noise_reached).write(0);
         }
