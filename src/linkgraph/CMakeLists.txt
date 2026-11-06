@@ -1,9 +1,4 @@
 add_files(
-    demands.cpp
-    demands.h
-    flowmapper.cpp
-    flowmapper.h
-    init.h
     linkgraph.cpp
     linkgraph.h
     linkgraph_base.h
@@ -12,11 +7,8 @@ add_files(
     linkgraph_type.h
     linkgraphjob.cpp
     linkgraphjob.h
-    linkgraphjob_base.h
     linkgraphschedule.cpp
     linkgraphschedule.h
-    mcf.cpp
-    mcf.h
     refresh.cpp
     refresh.h
 )

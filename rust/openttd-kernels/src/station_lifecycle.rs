@@ -459,13 +459,13 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let graphs = w.graphs;
     let storage = links.storage();
     for cargo in 0..NUM_CARGO {
-        let graph = (graphs.get_if_valid)(crate::station_record::read(st.cast(), |r| {
-            r.goods[usize::from(cargo)].link_graph
-        }));
+        let graph = graphs.get(crate::linkgraph_type::LinkGraphID(
+            crate::station_record::read(st.cast(), |r| r.goods[usize::from(cargo)].link_graph),
+        ));
         if graph.is_null() {
             continue;
         }
-        let owner = (graphs.owner)(graph);
+        let owner = graph;
         let mut node = 0;
         while node < unsafe { &*owner }.size() {
             let other_id = unsafe { &*owner }.nodes[usize::from(node)].station;

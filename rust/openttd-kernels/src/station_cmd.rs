@@ -667,7 +667,7 @@ impl Ctx<'_> {
             let node = crate::station_record::read(st.cast(), |r| r.goods[usize::from(cargo)].node);
             unsafe {
                 crate::linkgraph::live::openttd_rust_live_node_location(
-                    crate::linkgraph::live::resolve(graph, self.links().graphs),
+                    graph,
                     node,
                     crate::station_record::xy(st.cast()),
                 );

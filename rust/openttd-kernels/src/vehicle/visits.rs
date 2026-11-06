@@ -191,7 +191,7 @@ pub(crate) fn increase_stats(
                 debug!(misc, 0, "Can't allocate link graph");
             }
         } else {
-            graph = (l.graphs.get)(second_id);
+            graph = l.graphs.get(crate::linkgraph_type::LinkGraphID(second_id));
         }
         if !graph.is_null() {
             unsafe {
@@ -199,19 +199,16 @@ pub(crate) fn increase_stats(
             }
         }
     } else if second_id == INVALID_LINK_GRAPH {
-        graph = (l.graphs.get)(first_id);
+        graph = l.graphs.get(crate::linkgraph_type::LinkGraphID(first_id));
         witness::hit(witness::VISITS_GRAPH_JOIN);
         unsafe {
             live::join(graph, (l.graphs.station_id)(st2), l.graphs);
         }
     } else {
-        graph = (l.graphs.get)(first_id);
+        graph = l.graphs.get(crate::linkgraph_type::LinkGraphID(first_id));
         if first_id != second_id {
-            let second = (l.graphs.get)(second_id);
-            if unsafe {
-                (&*live::resolve(graph, l.graphs)).size()
-                    < (&*live::resolve(second, l.graphs)).size()
-            } {
+            let second = l.graphs.get(crate::linkgraph_type::LinkGraphID(second_id));
+            if unsafe { (&*graph).size() < (&*second).size() } {
                 witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
                 unsafe {
                     linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
@@ -232,7 +229,7 @@ pub(crate) fn increase_stats(
         let from = crate::station_record::read(st.cast(), |r| r.goods[usize::from(cargo)].node);
         let to = crate::station_record::read(st2.cast(), |r| r.goods[usize::from(cargo)].node);
         unsafe {
-            (&mut *live::resolve(graph, l.graphs)).nodes[usize::from(from)].update_edge(
+            (&mut *graph).nodes[usize::from(from)].update_edge(
                 to,
                 capacity,
                 usage,
