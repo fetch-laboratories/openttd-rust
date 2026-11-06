@@ -429,8 +429,6 @@ pub struct Services {
     pub town_next_id: extern "C" fn(u32) -> u32,
     /// Canonical native town shell resolver.
     pub town_by_id: extern "C" fn(u32) -> *mut TownHandle,
-    /// Canonical shared `town_owner_by_id` service.
-    pub town_owner_by_id: extern "C" fn(u32) -> *mut crate::town::State,
     /// Address of the town facade's stable canonical slot descriptor pointer.
     pub town_pool: *const *const crate::pool::PoolDescriptor,
     /// Canonical shared `utf8_length` service.
@@ -826,7 +824,6 @@ crate::abi::layouts! {
         tile_animation_set_frame,
         town_next_id,
         town_by_id,
-        town_owner_by_id,
         town_pool,
         utf8_length,
         vehicle_next,
@@ -1124,7 +1121,6 @@ pub fn fixture(
         tile_animation_set_frame: zone,
         town_next_id: word,
         town_by_id: fixture_town_by_id,
-        town_owner_by_id: unused_town_owner_by_id,
         town_pool: std::ptr::null(),
         utf8_length: unused_utf8_length,
         vehicle_next: unused_vehicle_next,
@@ -1470,10 +1466,6 @@ extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")
 }
 
-#[cfg(test)]
-extern "C" fn unused_town_owner_by_id(_: u32) -> *mut crate::town::State {
-    panic!("unused town lookup");
-}
 #[cfg(test)]
 extern "C" fn unused_utf8_length(_: *const u8, _: usize) -> usize {
     panic!("unused text length");

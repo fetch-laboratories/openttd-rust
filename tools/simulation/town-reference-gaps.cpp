@@ -159,7 +159,6 @@ static Town *ClosestTownFromTile(TileIndex tile, uint32_t threshold)
 
 /* Rust retains this fixture shell only as an opaque identity; the native FFI
  * tag is global Town, while the reference body uses TownReference::Town. */
-static OpenTTDTownState *ResolveOwner(uint32_t id) noexcept { assert(id == world->town.index); return world->owner; }
 static ::Town *ResolveShell(uint32_t id) noexcept { assert(id == world->town.index); return reinterpret_cast<::Town *>(&world->town); }
 static uint32_t Random(void *) noexcept { world->draws++; return 0; }
 static uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
@@ -179,11 +178,19 @@ static bool Candidate()
 	TownProtocolRecordOf(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
-	leaves.resolve_owner = ResolveOwner;
 	auto house_services = *leaves.houses;
 	leaves.houses = &house_services;
 	leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+	std::vector<RustPoolSlot> town_slots(world->town.index + 1);
+	town_slots[world->town.index] = {.shell = ResolveShell(world->town.index), .record = world->owner};
+	const RustPoolDescriptor town_descriptor{
+		.slots = {town_slots.data(), town_slots.size(), 0}, .used_bitmap = {},
+		.first_free = 0, .first_unused = town_slots.size(), .items = 1, .checked = 0,
+		.cleaning = false, .alloc_cache = nullptr,
+	};
+	const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
+	services.town_pool = &town_descriptor_ptr;
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
 	services.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(ResolveShell(id)); };
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
@@ -284,6 +291,7 @@ static void CompareRatings()
 	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(nullptr), openttd_rust_town_destroy);
 	auto leaves = TownProtocolServices(); leaves.dirty_authority = RatingDirty;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+
 	services.company_valid = RatingCompanyValid;
 	uint32_t checked = 0;
 	auto reset = [&](int16_t initial) {

@@ -61,7 +61,6 @@ static inline uint64_t TownProtocolLeaf(uint32_t op, uint32_t id, uint32_t a, ui
 	}
 	return 0;
 }
-static inline OpenTTDTownState *TownProtocolResolveOwner(uint32_t) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; }
 static inline uint32_t TownProtocolRandom(void *) noexcept { town_protocol_world->draws++; return 0xABCDEF01; }
 static inline uint32_t TownProtocolIndustry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 
@@ -179,7 +178,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.house_extra_flags = TownProtocol_house_extra_flags,
 		.house_callbacks = TownProtocol_house_callbacks,
 		.road_info = TownProtocol_road_info,
-		.resolve_owner = TownProtocolResolveOwner,
 		.dirty_authority = TownProtocol_dirty_town,
 		.dirty_town = TownProtocol_dirty_town,
 
@@ -222,6 +220,16 @@ template <typename Check> void CheckTownProtocol(Check check)
 	auto *fields = TownProtocolRecordOf(owner.get()); fields->xy = TileIndex{2080}; fields->squared_town_zone_radius.fill(100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
+	/* The isolated world supplies the same canonical slot layout as a game pool.
+	 * This is a borrowed view of its existing owner, with no second record. */
+	const RustPoolSlot town_slot{.shell = nullptr, .record = owner.get()};
+	const RustPoolDescriptor town_descriptor{
+		.slots = {&town_slot, 1, 0}, .used_bitmap = {},
+		.first_free = 0, .first_unused = 1, .items = 1, .checked = 0,
+		.cleaning = false, .alloc_cache = nullptr,
+	};
+	const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
+	services.town_pool = &town_descriptor_ptr;
 	services.company_human = [](uint8_t) noexcept { return true; };
 	/* The removed allow_roads fixture leaf returned false; the catalog keeps that setting. */
 	static const bool town_roads = false;
@@ -341,17 +349,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 	TownProtocolCost cost{};
 	services.town_count = []() noexcept -> size_t { return 1; };
 	services.town_next_id = [](uint32_t from) noexcept -> uint32_t { return from == 0 ? 0 : UINT32_MAX; };
-	services.town_owner_by_id = [](uint32_t) noexcept { return town_protocol_world->owner; };
-	/* The isolated world supplies the same canonical slot layout as a game pool.
-	 * This is a borrowed view of its existing owner, with no second record. */
-	const RustPoolSlot town_slot{.shell = nullptr, .record = owner.get()};
-	const RustPoolDescriptor town_descriptor{
-		.slots = {&town_slot, 1, 0}, .used_bitmap = {},
-		.first_free = 0, .first_unused = 1, .items = 1, .checked = 0,
-		.cleaning = false, .alloc_cache = nullptr,
-	};
-	const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
-	services.town_pool = &town_descriptor_ptr;
 	openttd_rust_town_rebuild_index(&services);
 	services.town_owner = [](const OpenTTDTownHandle *) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; };
 	w.owner_reads = 0; w.map_reads = 0;
@@ -370,15 +367,15 @@ template <typename Check> void CheckTownProtocol(Check check)
 	w.owner_reads = 0; w.map_reads = 0;
 	openttd_rust_house_animate(&leaves, &services, 2080);
 	check(w.owner_reads == 0 && w.map_reads == 0);
-	/* Ordinary growth binds its town before walking the road; construction
-	 * triggers must reuse that context rather than resolve the owner again. */
+	/* Ordinary growth reads its canonical owner before walking the road;
+	 * preserve construction effects and its single map observation. */
 	services.road_bits = [](uint32_t tile, uint8_t, bool) noexcept -> uint8_t { return tile == 2080 ? 1 : 0; };
 	services.tile_type = [](uint32_t tile) noexcept -> uint8_t { return tile == 2080 ? 2 : 0; };
 	services.road_type = [](uint32_t tile) noexcept -> uint8_t { return tile == 2080 ? 0 : 63; };
 	w.writes.clear(); w.animations = 0; w.house_count = 1;
 	w.owner_reads = 0; w.map_reads = 0;
 	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 1);
-	check(w.writes.size() == 1 && w.animations == 1 && w.owner_reads == 1 && w.map_reads == 1);
+	check(w.writes.size() == 1 && w.animations == 1 && w.map_reads == 1);
 	openttd_rust_town_global_id_counts_resize(saved_ids.size());
 	openttd_rust_town_global_class_counts_resize(saved_classes.size());
 	std::copy(saved_ids.begin(), saved_ids.end(), static_cast<uint32_t *>(openttd_rust_town_global_id_counts().data));

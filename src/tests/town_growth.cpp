@@ -25,6 +25,8 @@ TEST_CASE("Town lifecycle - canonical metadata, histories and descriptor aliases
 	CHECK(a->Record().xy == TileIndex{41});
 	CHECK(a->Record().exclusivity == CompanyID::Invalid());
 	a->Record().population = 999;
+	Town::Get(TownID(19))->Record().population = 1001;
+	CHECK(GetWorldPopulation() == 2000);
 	a->Record().ratings[CompanyID(2)] = -123;
 	a->Record().received[TAE_FOOD].old_act = 65535;
 	a->Record().goal[TAE_WATER] = TOWN_GROWTH_DESERT;
@@ -50,6 +52,7 @@ TEST_CASE("Town lifecycle - canonical metadata, histories and descriptor aliases
 	a->Record().population = 1000;
 	CHECK((snapshot.population == 999 && snapshot != a->CopyTownCache()));
 	_town_pool.CleanPool();
+	CHECK(GetWorldPopulation() == 0);
 	a = new (TownID(17)) Town();
 	CHECK((a->supplied.empty() && a->Record().population == 0));
 	_town_pool.CleanPool();

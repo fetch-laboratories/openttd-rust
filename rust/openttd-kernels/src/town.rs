@@ -360,16 +360,15 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, town: u32, amoun
     (leaves.population_changed)(town);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leaves) -> u32 {
-    // SAFETY: Immutable table remains live; no owner access spans pool iteration.
-    let leaves = unsafe { &*leaves };
+pub unsafe extern "C" fn openttd_rust_town_world_population(s: *const Services) -> u32 {
+    // SAFETY: Serialized live pool; all reads end before iteration advances.
+    let towns = pool(unsafe { &*s });
     let mut total = 0_u32;
-    let mut town = (leaves.next_town)(0);
-    while town != u32::MAX {
-        let owner = (leaves.resolve_owner)(town);
-        // SAFETY: Iterator supplied a live shell; copy read ends before next callback.
+    let mut index = unsafe { towns.next_index(0, u32::MAX as usize) };
+    while index != u32::MAX as usize {
+        let owner = unsafe { towns.record(TownId(index as u16)) };
         total = total.wrapping_add(unsafe { population(owner) });
-        town = (leaves.next_town)(town.wrapping_add(1));
+        index = unsafe { towns.next_index(index + 1, u32::MAX as usize) };
     }
     total
 }
@@ -756,7 +755,6 @@ pub struct Leaves {
     pub house_extra_flags: extern "C" fn(u16) -> u8,
     pub house_callbacks: extern "C" fn(u16) -> u16,
     pub road_info: extern "C" fn(u8) -> RoadChoice,
-    pub resolve_owner: extern "C" fn(u32) -> *mut State,
     pub dirty_authority: extern "C" fn(u32),
     pub dirty_town: extern "C" fn(u32),
     pub terraform_price: extern "C" fn() -> i64,
@@ -839,7 +837,7 @@ impl Engine<'_> {
         unsafe { u32::from((*self.owner).record.received[at].old_act) }
     }
     fn bind(mut self, town: u32) -> Self {
-        self.owner = (self.leaves.resolve_owner)(town);
+        self.owner = unsafe { pool(self.services).record(TownId(town as u16)) };
         self
     }
     fn modify_flags(&self, clear: u16, set: u16) {
@@ -2136,7 +2134,7 @@ impl Engine<'_> {
                 // per-town engine did, without copying that engine each tick.
                 self.map.take();
                 self.house_shell.take();
-                self.owner = (self.leaves.resolve_owner)(id);
+                self.owner = unsafe { pool(self.services).record(TownId(id as u16)) };
                 self.tick(id);
                 id = (self.leaves.next_town)(id + 1);
             }
@@ -2562,7 +2560,6 @@ crate::abi::layouts! {
         house_extra_flags,
         house_callbacks,
         road_info,
-        resolve_owner,
         dirty_authority,
         dirty_town,
         terraform_price,

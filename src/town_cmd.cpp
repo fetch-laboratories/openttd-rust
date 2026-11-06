@@ -241,7 +241,7 @@ void ClearAllTownCachedNames()
  * Get the total population, the sum of all towns in the world.
  * @return The calculated population of the world
  */
-uint32_t GetWorldPopulation() { return openttd_rust_town_world_population(&GetRustTownServices()); }
+uint32_t GetWorldPopulation() { return openttd_rust_town_world_population(&GetRustSharedServices()); }
 
 static void AddProducedCargo_Town(TileIndex tile, CargoArray &produced)
 {
@@ -523,7 +523,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.house_extra_flags = [](uint16_t house) noexcept -> uint8_t { return RustTownHouseExtraFlags(HouseSpec::Get(house)); },
 		.house_callbacks = [](uint16_t house) noexcept -> uint16_t { return RustTownHouseCallbacks(HouseSpec::Get(house)); },
 		.road_info = RustTownRoadInfo,
-		.resolve_owner = OpenTTDTownOwnerByID,
 		.dirty_authority = RustTownDirtyAuthority,
 		.dirty_town = RustTown_dirty_town,
 

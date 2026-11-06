@@ -176,7 +176,7 @@ impl ImportServices {
             }
             towns.push((
                 town,
-                (shared.town_owner_by_id)(u32::from(town.0)),
+                unsafe { super::pool(shared).record(town) },
                 feature.population,
             ));
         }

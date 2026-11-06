@@ -138,7 +138,7 @@ pub unsafe extern "C" fn openttd_rust_house_counts_init(
     };
     let mut id = (l.next_town)(0);
     while id != u32::MAX {
-        let owner = (s.town_owner_by_id)(id);
+        let owner = unsafe { super::pool(s).record(crate::town_type::TownId(id as u16)) };
         unsafe { initialize_counts(owner, specs, classes) };
         id = (l.next_town)(id + 1);
     }

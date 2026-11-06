@@ -54,7 +54,6 @@ struct OpenTTDTownLeaves {
 	uint8_t (*house_extra_flags)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_extra_flags);
 	uint16_t (*house_callbacks)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_callbacks);
 	OpenTTDTownRoadChoice (*road_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_info);
-	OpenTTDTownState *(*resolve_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_owner);
 	void (*dirty_authority)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dirty_authority);
 	void (*dirty_town)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(dirty_town);
 	int64_t (*terraform_price)() noexcept OPENTTD_SERVICE_DEFAULT(terraform_price);
@@ -95,7 +94,7 @@ void openttd_rust_town_set_name(OpenTTDTownState *, OpenTTDByteSpan);
 void openttd_rust_town_authority_station(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint32_t, bool);
 void openttd_rust_town_authority_remove(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, const OpenTTDTownHandle *, bool, uint8_t);
 void openttd_rust_town_update_radius(OpenTTDTownState *);
-uint32_t openttd_rust_town_world_population(const OpenTTDTownLeaves *);
+uint32_t openttd_rust_town_world_population(const OpenTTDSharedServices *);
 OpenTTDTownSlots openttd_rust_town_supplied_view(OpenTTDTownState *);
 OpenTTDTownSuppliedEntry openttd_rust_town_supplied_entry(OpenTTDTownState *, uint8_t);
 size_t openttd_rust_town_supplied_find(const OpenTTDTownState *, uint8_t);

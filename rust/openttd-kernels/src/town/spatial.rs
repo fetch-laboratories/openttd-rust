@@ -62,7 +62,7 @@ pub(crate) fn close(s: &Services, tile: u32, distance: u32) -> bool {
         return false;
     }
     let id = nearest(s, tile);
-    let xy = unsafe { super::position((s.town_owner_by_id)(u32::from(id.0))) };
+    let xy = unsafe { super::position(super::pool(s).record(id)) };
     s.map().distance_manhattan(tile, xy) < distance
 }
 pub(crate) fn calc_closest(
@@ -74,7 +74,7 @@ pub(crate) fn calc_closest(
         return ptr::null();
     }
     let id = nearest(s, tile);
-    let xy = unsafe { super::position((s.town_owner_by_id)(u32::from(id.0))) };
+    let xy = unsafe { super::position(super::pool(s).record(id)) };
     if s.map().distance_manhattan(tile, xy) < threshold {
         (s.town_by_id)(u32::from(id.0))
     } else {
@@ -133,7 +133,7 @@ pub(crate) fn random(s: &Services) -> TownRef {
     }
     TownRef {
         shell: (s.town_by_id)(id),
-        state: (s.town_owner_by_id)(id),
+        state: unsafe { super::pool(s).record(TownId(id as u16)) },
         id: TownId(id as u16),
     }
 }

@@ -137,7 +137,9 @@ impl Services {
     fn position(&self, source: Source) -> u32 {
         unsafe {
             if source.kind == Source::TOWN {
-                town::position((self.shared().town_owner_by_id)(u32::from(source.id)))
+                town::position(
+                    town::pool(self.shared()).record(crate::town_type::TownId(source.id)),
+                )
             } else {
                 industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
             }
@@ -148,7 +150,9 @@ impl Services {
     fn source_flags(&self, source: Source) -> *mut u8 {
         match source.kind {
             Source::TOWN => {
-                let owner = (self.shared().town_owner_by_id)(u32::from(source.id));
+                let owner = unsafe {
+                    town::pool(self.shared()).record(crate::town_type::TownId(source.id))
+                };
                 unsafe { &raw mut (*owner).record.part_of_subsidy }
             }
             Source::INDUSTRY => {

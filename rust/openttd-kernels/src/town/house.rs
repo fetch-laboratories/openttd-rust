@@ -1236,7 +1236,7 @@ impl<'a> House<'a> {
     fn towns(&self, mut visit: impl FnMut(*mut State)) {
         let mut town = (self.l.next_town)(0);
         while town != u32::MAX {
-            visit((self.l.resolve_owner)(town));
+            visit(unsafe { super::pool(self.s).record(crate::town_type::TownId(town as u16)) });
             town = (self.l.next_town)(town.wrapping_add(1));
         }
     }
@@ -1263,7 +1263,7 @@ impl<'a> House<'a> {
                 continue;
             }
             let rec = (self.h.cache)(tile);
-            let state = (self.l.resolve_owner)(u32::from(rec.town));
+            let state = unsafe { super::pool(self.s).record(crate::town_type::TownId(rec.town)) };
             let class = (self.l.house_class)(rec.house);
             // SAFETY: Live owner; each access ends before the next spec query.
             unsafe { super::increase_building(state, rec.house, class) };

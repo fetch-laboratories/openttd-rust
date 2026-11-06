@@ -148,7 +148,6 @@ static void Calls()
 		reinterpret_cast<OpenTTDTownRecord *>(owner)->xy = TileIndex{2080};
 		shared.town_count = []() noexcept -> size_t { return 1; };
 		shared.town_next_id = [](uint32_t from) noexcept -> uint32_t { return from == 0 ? UINT16_MAX - 1 : UINT32_MAX; };
-		shared.town_owner_by_id = [](uint32_t id) noexcept { CHECK(id == UINT16_MAX - 1); return owner; };
 		/* Preserve the sparse boundary ID while coordinates read canonical slots.
 		 * The borrowed descriptor points at the same isolated owner as the callbacks. */
 		std::vector<RustPoolSlot> town_slots(UINT16_MAX);

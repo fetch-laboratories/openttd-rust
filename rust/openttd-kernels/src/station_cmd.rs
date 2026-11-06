@@ -3334,7 +3334,8 @@ pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const Com
             break;
         }
         from = id + 1;
-        let owner = (c.shared.town_owner_by_id)(id);
+        let owner =
+            unsafe { crate::town::pool(c.shared).record(crate::town_type::TownId(id as u16)) };
         let fields = crate::town::record(owner);
         unsafe {
             (&raw mut (*fields).noise_reached).write(0);

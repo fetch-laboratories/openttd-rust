@@ -435,7 +435,9 @@ impl<'a> Ctx<'a> {
         crate::movement::native_assert(self.s, ok);
     }
     fn town_by_tile(&self, tile: u32) -> *mut crate::town::State {
-        (self.s.town_owner_by_id)(u32::from((self.s.town_index)(tile)))
+        unsafe {
+            crate::town::pool(self.s).record(crate::town_type::TownId((self.s.town_index)(tile)))
+        }
     }
     fn industry_index(&self, tile: u32) -> IndustryID {
         // SAFETY: Live immutable table.
@@ -612,7 +614,7 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
     }
     let id = (c.c.id)(st);
     for town in towns {
-        let owner = (c.s.town_owner_by_id)(u32::from(town));
+        let owner = unsafe { crate::town::pool(c.s).record(crate::town_type::TownId(town)) };
         // SAFETY: Live town owner; immediate mutation.
         unsafe { (*crate::town::stations_near(owner)).erase(id) };
     }
@@ -752,8 +754,13 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
 pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
     let mut town = (c.s.town_next_id)(0);
     while town != u32::MAX {
+        // The native iterator widens a live uint16 TownID to this u32 ABI.
+        #[allow(clippy::cast_possible_truncation)]
+        let id = crate::town_type::TownId(town as u16);
         // SAFETY: Live town owner; immediate mutation.
-        unsafe { (*crate::town::stations_near((c.s.town_owner_by_id)(town))).clear() };
+        unsafe {
+            (*crate::town::stations_near(crate::town::pool(c.s).record(id))).clear();
+        };
         town = (c.s.town_next_id)(town + 1);
     }
     let mut industry = (c.c.next_industry)(0);

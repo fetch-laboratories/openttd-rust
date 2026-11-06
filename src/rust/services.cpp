@@ -323,11 +323,6 @@ static OpenTTDTownState *SharedTownOwner(const OpenTTDTownHandle *town) noexcept
 	return reinterpret_cast<const Town *>(town)->growth_owner.get();
 }
 
-OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
-{
-	return SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDTownShellByID(id)));
-}
-
 OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 {
 	Town *t = OpenTTDTownShellByID(id);
@@ -501,7 +496,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_animation_set_frame = OpenTTDSetAnimationFrame,
 	.town_next_id = OpenTTDNextTownID,
 	.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(OpenTTDTownShellByID(id)); },
-	.town_owner_by_id = OpenTTDTownOwnerByID,
 	.town_pool = &_town_pool.descriptor,
 	.utf8_length = RustUtf8Length,
 	.vehicle_next = RustNextVehicle,
