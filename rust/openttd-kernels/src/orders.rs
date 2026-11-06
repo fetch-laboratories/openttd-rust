@@ -2960,10 +2960,10 @@ impl Game {
             )),
             1 => ((self.reliability(v) * 101) >> 16) as i32,
             7 => {
-                (i32::from((self.maintenance().engine_reliability)(native_vehicle(
-                    v,
-                    self.0.base,
-                ))) * 101)
+                (i32::from(
+                    self.maintenance()
+                        .engine_reliability(native_vehicle(v, self.0.base)),
+                ) * 101)
                     >> 16
             }
             2 => (self.display_speed(v) as i32).wrapping_mul(10) / 16,
@@ -4524,7 +4524,8 @@ impl VisitOrders {
     }
     /// `v->orders`, the native `OrderList` shell or null.
     pub(crate) fn list(self, v: VehicleRef) -> *mut c_void {
-        read_field!(read_field!(v.0.as_ptr(), orders), orders)
+        let owner = read_field!(v.0.as_ptr(), orders);
+        read_field!(owner, orders)
     }
     /// `OrderList::GetNumOrders()`.
     pub(crate) fn count(self, list: *mut c_void) -> u8 {

@@ -56,6 +56,11 @@ pub struct Services {
 }
 
 impl Services {
+    pub(crate) fn engine_reliability(&self, v: VehicleRef) -> u16 {
+        let engine = (self.settings().engines.resolve)(v.engine_id());
+        read_field!(engine.state, reliability)
+    }
+
     /// Reuse the command/Company registry's existing settings table route at
     /// game entry, avoiding a second binding or a static-initialization cycle.
     fn settings(&self) -> &'static crate::settings_table::Services {
@@ -78,11 +83,6 @@ macro_rules! branch {
             crate::witness::hit(crate::witness::$name);
         }
     };
-}
-
-fn engine_reliability(s: &Services, v: VehicleRef) -> u16 {
-    let engine = (s.settings().engines.resolve)(v.engine_id());
-    read_field!(engine.state, reliability)
 }
 
 unsafe fn renew<const C: bool>(
@@ -119,7 +119,7 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
     loop {
         let economy_date = crate::timer_game_common::economy_date();
         let calendar_date = crate::timer_game_common::calendar_date();
-        let reliability = engine_reliability(s, v);
+        let reliability = s.engine_reliability(v);
         let old_chance = v.breakdown_chance();
         let breakdowns = unsafe { (*s.shared).settings().vehicle_breakdowns.read() };
         let chance = if breakdowns == 1 {
@@ -171,7 +171,7 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     branch!(C, VEHICLE_MAINT_SERVICE);
     if percent {
         branch!(C, VEHICLE_MAINT_PERCENT);
-        let engine_reliability = engine_reliability(s, v);
+        let engine_reliability = s.engine_reliability(v);
         if i32::from(reliability)
             >= i32::from(engine_reliability).wrapping_mul(100 - i32::from(interval)) / 100
         {
