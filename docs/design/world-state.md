@@ -251,3 +251,48 @@ Later pool records sit beside their shells, as #570's do. The decision and its m
 **Revisit a family's placement** at its pool-allocation step if either of these happens:
 - its record↔shell hops reach 0.5% of loop Ir (#275's threshold);
 - cache profiling shows misses on record lines.
+
+
+## Shared pool policy (#716)
+
+Root supplies one reusable Rust allocation/bookkeeping primitive for the selected
+station, town/industry/subsidy and vehicle owners. Its generated canonical
+slot/descriptor storage carries shell and record identities, occupancy, cursors,
+counts, native assertion credit, cleaning and cache state. Typed IDs load records
+from slots directly; native consumers read the shared layout inline. Reuse the
+existing shared-layout/vector machinery where applicable, without a second
+metadata authority or stored field references.
+
+Native allocation/deallocation, pool-index access and actual shell destruction
+remain typed operations while C++ shells exist. Preserve publication before
+construction, the live shell slot throughout destruction, record binding and
+retirement at their existing owner-member points, and free-before-post-hook
+ordering. No borrow spans hooks or storage invalidation. Indexed load errors
+return to C++ before `SlErrorCorruptFmt` can throw. Native registration and
+cleanup-mask order remain unchanged; borrowed resolver shells stay nonpooled.
+
+The first checkpoint supplies the reusable core and source-derived tests,
+without orphan exports or production-pool completion credit. Vehicle #714 is the initial typed-adoption target because its records are
+already integrated; the first ready selected owner may adopt the shared facade
+without waiting for another draft. #700/#704 and later pools use the same definition. Root coordinates
+one native compatibility facade when it has a production consumer. The native
+generic template remains until its final instantiation retires; credit that
+deletion once. Records, containers and control-flow completion remain separate
+obligations of each owner.
+
+## Link graph and job storage (#717)
+
+The selected owner moves graph/job records, private graph/settings snapshots,
+annotations, flows, join/abort state and completed-job publication into their
+canonical Rust owners. It uses #716 for shared pool policy and preserves
+allocation IDs, source worker startup/failure fallback, cancellation/join/reset
+order and save references. A native thread handle may remain behind named
+start/join operations until platform threading moves; Rust-used state has no
+field-callback exception.
+
+Station #634 owns its record/container adaptation; #717 owns flow contents and
+completion publication at the original observation points. Both reuse one
+shared definition. Worker-private snapshots cannot borrow live-world storage;
+publication, destruction and reset end affected borrows before reentry. Native
+GUI, save, script and network consumers retain only their named later-owned
+shell operations and inline shared-field reads.
