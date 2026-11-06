@@ -475,7 +475,7 @@ pub(crate) fn rail_foundation(s: u8, b: u8, check: impl Fn(bool) + Copy) -> u8 {
         if b == TRACK_BIT_Y {
             return FOUNDATION_INCLINED_Y;
         }
-        let corner = get_highest_slope_corner(s);
+        let corner = get_highest_slope_corner(s, || unreachable!("native highest slope corner"));
         let higher = crate::track_func::corner_to_track_bits(corner, check);
         if b == higher {
             return halftile_foundation(corner, check);
@@ -572,7 +572,10 @@ pub(crate) fn road_foundation(mut s: u8, b: u8, check: impl Fn(bool) + Copy) -> 
         return FOUNDATION_NONE;
     }
     if is_steep_slope(s) {
-        s = slope_with_one_corner_raised(get_highest_slope_corner(s), check);
+        s = slope_with_one_corner_raised(
+            get_highest_slope_corner(s, || unreachable!("native highest slope corner")),
+            check,
+        );
     }
     if crate::road_cmd::INVALID_SLOPES[0][usize::from(s)] & b == 0 {
         return FOUNDATION_LEVELED;
