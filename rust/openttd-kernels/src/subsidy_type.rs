@@ -6,6 +6,23 @@
  */
 
 //! Named cache flags from `subsidy_type.h`.
+/// Native `SubsidyID`, including the invalid sentinel.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct SubsidyId(pub u16);
+
+impl crate::pool::PoolId for SubsidyId {
+    fn index(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
+/// Opaque native subsidy shell; its record is stored separately in the pool slot.
+#[repr(C)]
+pub struct SubsidyHandle {
+    _private: [u8; 0],
+}
+
 /// Native `PartOfSubsidy : uint8_t`.
 #[repr(u8)]
 #[derive(Clone, Copy)]

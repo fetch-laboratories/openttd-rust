@@ -15,6 +15,7 @@
 #endif
 #include "service_defaults.hpp"
 #include "town_ffi.h"
+#include "pool_ffi.h"
 #include "abi-record-subsidy_record.h"
 struct OpenTTDIndustry;
 struct Industry;
@@ -28,11 +29,11 @@ struct OpenTTDSubsidyServices {
 	const OpenTTDSharedServices * shared;
 	const OpenTTDTownLeaves * town;
 	const OpenTTDIndustryServices * industry;
+	RustPoolCore *const *pool;
 	OpenTTDIndustry *(*industry_owner)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_owner);
 	uint16_t (*industry_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_id);
 	uint32_t (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
 	bool (*valid_source)(Source) noexcept OPENTTD_SERVICE_DEFAULT(valid_source);
-	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	uint16_t (*allocate)(CargoType, Source, Source, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	void (*destroy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	uint16_t (*duration)() noexcept OPENTTD_SERVICE_DEFAULT(duration);
@@ -54,8 +55,8 @@ struct OpenTTDSubsidyServices {
 };
 extern "C" {
 /* A record with the original member defaults. */
-OpenTTDSubsidyRecord *openttd_rust_subsidy_new(uint16_t);
-void openttd_rust_subsidy_destroy(uint16_t, OpenTTDSubsidyRecord *);
+OpenTTDSubsidyRecord *openttd_rust_subsidy_new();
+void openttd_rust_subsidy_destroy(OpenTTDSubsidyRecord *);
 void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
 void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
 uint8_t openttd_rust_subsidy_command_abi(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);

@@ -5,9 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Subsidy owners, route searches, expiry and delivery awards. Pool shells keep identity
-//! and allocation order; script events enqueue without entering a VM. Source arithmetic
-//! keeps its narrowing and wrapping.
+//! Subsidy records and canonical pool policy, route searches, expiry and delivery awards.
+//! Native shells retain construction/destruction and script events enqueue without
+//! entering a VM. Field access ends before effects; source arithmetic keeps its narrowing.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -16,10 +16,10 @@
     clippy::comparison_chain,
     clippy::if_not_else
 )]
-use crate::game_state::GameState;
+use crate::pool::{PoolCore, TypedPool};
 pub use crate::source_type::Source;
 use crate::station::Station;
-use crate::subsidy_type::PartOfSubsidy;
+use crate::subsidy_type::{PartOfSubsidy, SubsidyHandle, SubsidyId};
 use crate::{
     cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type},
     subsidy_base::{
@@ -29,7 +29,7 @@ use crate::{
     timer_game_common::MONTHS_IN_YEAR,
 };
 use crate::{industry, services::Services as Shared, town};
-use std::{ffi::c_void, ptr};
+use std::ffi::c_void;
 crate::abi::shared_records! {
     fn abi_record;
     /// The fields of one native `Subsidy` shell, read and written in place by
@@ -59,11 +59,12 @@ pub struct Services {
     pub shared: *const crate::services::Services,
     pub town: *const crate::town::Leaves,
     pub industry: *const crate::industry::Services,
+    /// Address of the native facade's canonical owner pointer, initialized at startup.
+    pub pool: *const *mut PoolCore,
     pub industry_owner: extern "C" fn(*mut c_void) -> *mut crate::industry::Industry,
     pub industry_id: extern "C" fn(*mut c_void) -> u16,
     pub next_industry: extern "C" fn(u32) -> u32,
     pub valid_source: extern "C" fn(Source) -> bool,
-    pub can_allocate: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8, Source, Source, u16) -> u16,
     pub destroy: extern "C" fn(u16),
     pub duration: extern "C" fn() -> u16,
@@ -83,58 +84,50 @@ pub struct Services {
     pub dirty: extern "C" fn(),
     pub station: extern "C" fn(u16) -> *const Station,
 }
-struct RegistryState {
-    slots: [*mut State; 256],
-    limit: u16,
-}
-static OWNERS: GameState<RegistryState> = GameState::new(RegistryState {
-    slots: [ptr::null_mut(); 256],
-    limit: 0,
-});
-fn owner(id: u16) -> *mut State {
-    // SAFETY: Serialized native pool index; no registry borrow crosses callbacks.
-    unsafe { (*OWNERS.get()).slots[usize::from(id)] }
-}
-fn each(mut visit: impl FnMut(u16, *mut State)) {
-    let mut id = 0;
-    while id < unsafe { (*OWNERS.get()).limit } {
-        let state = owner(id);
-        if !state.is_null() {
-            visit(id, state);
-        }
-        id += 1;
-    }
-}
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_subsidy_new(id: u16) -> *mut State {
-    let state = Box::into_raw(Box::new(State {
+pub extern "C" fn openttd_rust_subsidy_new() -> *mut State {
+    Box::into_raw(Box::new(State {
         cargo_type: INVALID_CARGO,
         remaining: 0,
         awarded: 255,
         src: Source::default(),
         dst: Source::default(),
-    }));
-    // SAFETY: The constructing native pool shell owns this stable allocation.
-    unsafe {
-        (*OWNERS.get()).slots[usize::from(id)] = state;
-        (*OWNERS.get()).limit = (*OWNERS.get()).limit.max(id + 1);
-    }
-    state
+    }))
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_destroy(id: u16, state: *mut State) {
-    // SAFETY: Native pool destroys exactly once, after every scalar alias ends.
-    unsafe {
-        (*OWNERS.get()).slots[usize::from(id)] = ptr::null_mut();
-        while (*OWNERS.get()).limit > 0
-            && (*OWNERS.get()).slots[usize::from((*OWNERS.get()).limit - 1)].is_null()
-        {
-            (*OWNERS.get()).limit -= 1;
-        }
-        drop(Box::from_raw(state));
-    }
+pub unsafe extern "C" fn openttd_rust_subsidy_destroy(state: *mut State) {
+    // SAFETY: Native owner retires the slot before dropping its unique record.
+    unsafe { drop(Box::from_raw(state)) };
 }
 impl Services {
+    fn core(&self) -> *mut PoolCore {
+        // SAFETY: The native facade's owner is initialized before game entries.
+        unsafe { *self.pool }
+    }
+    fn pool(&self) -> TypedPool<SubsidyId, State, SubsidyHandle> {
+        // SAFETY: The registered pool outlives entries, including allocation and cleanup.
+        unsafe { TypedPool::from_descriptor(PoolCore::descriptor(self.core())) }
+    }
+    fn owner(&self, id: u16) -> *mut State {
+        unsafe { self.pool().record(SubsidyId(id)) }
+    }
+    fn each(&self, mut visit: impl FnMut(u16, *mut State)) {
+        let descriptor = unsafe { PoolCore::descriptor(self.core()) };
+        let pool = self.pool();
+        let mut id = 0;
+        // Reread the live extent and slot after effects that may allocate or delete.
+        while id < unsafe { (*descriptor).first_unused } {
+            let state = unsafe { pool.record(SubsidyId(id as u16)) };
+            if !state.is_null() {
+                visit(id as u16, state);
+            }
+            id += 1;
+        }
+    }
+    fn can_allocate(&self) -> bool {
+        unsafe { PoolCore::can_allocate(self.core(), 1) }
+    }
+
     pub(crate) fn shared(&self) -> &Shared {
         unsafe { &*self.shared }
     }
@@ -196,15 +189,15 @@ impl Services {
             unsafe { *self.source_flags(Source::industry(id as u16)) = 0 };
             id = (self.next_industry)(id + 1);
         }
-        each(|_, state| {
+        self.each(|_, state| {
             let (src, dst) = unsafe { ((*state).src, (*state).dst) };
             self.flag(src, PartOfSubsidy::Source);
             self.flag(dst, PartOfSubsidy::Destination);
         });
     }
-    fn duplicate(cargo: u8, src: Source, dst: Source) -> bool {
+    fn duplicate(&self, cargo: u8, src: Source, dst: Source) -> bool {
         let mut found = false;
-        each(|_, state| {
+        self.each(|_, state| {
             found |= unsafe {
                 (*state).cargo_type == cargo && (*state).src == src && (*state).dst == dst
             };
@@ -221,7 +214,7 @@ impl Services {
         crate::witness::hit(crate::witness::SUBSIDY_CREATE);
     }
     fn award(&self, id: u16, company: u8) {
-        let state = owner(id);
+        let state = self.owner(id);
         // This private callee is reached after the original IsAwarded test.
         unsafe {
             (*state).awarded = company;
@@ -236,7 +229,7 @@ impl Services {
         crate::witness::hit(crate::witness::SUBSIDY_AWARD);
     }
     fn passenger(&self) -> bool {
-        if !(self.can_allocate)() {
+        if !self.can_allocate() {
             return false;
         }
         let n = self
@@ -262,7 +255,7 @@ impl Services {
         let b = Source::town(dst.id.0);
         let from = unsafe { town::position(src.state) };
         let to = unsafe { town::position(dst.state) };
-        if !self.distance_tiles(from, to) || Self::duplicate(cargo, a, b) {
+        if !self.distance_tiles(from, to) || self.duplicate(cargo, a, b) {
             return false;
         }
         self.create(cargo, a, b);
@@ -316,7 +309,7 @@ impl Services {
     }
 
     fn town_route(&self, scratch: Cargo) -> bool {
-        if !(self.can_allocate)() {
+        if !self.can_allocate() {
             return false;
         }
         let src = town::spatial::random(unsafe { &*self.shared });
@@ -357,7 +350,7 @@ impl Services {
         self.destination(scratch, cargo, Source::town(src.id.0))
     }
     fn industry_route(&self, scratch: Cargo) -> bool {
-        if !(self.can_allocate)() {
+        if !self.can_allocate() {
             return false;
         }
         let shell = industry::random_industry(self.industry());
@@ -398,7 +391,7 @@ impl Services {
             }
             Source::industry((self.industry_id)(shell))
         };
-        if src == dst || !self.distance(src, dst) || Self::duplicate(cargo, src, dst) {
+        if src == dst || !self.distance(src, dst) || self.duplicate(cargo, src, dst) {
             return false;
         }
         self.create(cargo, src, dst);
@@ -409,7 +402,7 @@ impl Services {
 impl Services {
     fn monthly(&self, scratch: Cargo) {
         let mut modified = false;
-        each(|id, state| {
+        self.each(|id, state| {
             let remaining = unsafe { (*state).remaining.wrapping_sub(1) };
             unsafe {
                 (*state).remaining = remaining;
@@ -457,7 +450,7 @@ impl Services {
     }
     pub(crate) fn delete_with(&self, source: Source) {
         let mut dirty = false;
-        each(|id, state| {
+        self.each(|id, state| {
             if unsafe { (*state).src == source || (*state).dst == source } {
                 (self.destroy)(id);
                 dirty = true;
@@ -469,7 +462,7 @@ impl Services {
         }
     }
     pub(crate) fn transfer(&self, old: u8, new: u8) {
-        each(|id, state| {
+        self.each(|id, state| {
             if unsafe { (*state).awarded } != old {
                 return;
             }
@@ -499,7 +492,7 @@ impl Services {
         // SAFETY: The live station owner; immediate read.
         if !unsafe { crate::station::rect_is_empty(station_state) } {
             let mut needed = false;
-            each(|_, state| {
+            self.each(|_, state| {
                 needed |= unsafe {
                     (*state).dst.kind == Source::TOWN
                         && (*state).cargo_type == cargo
@@ -524,7 +517,7 @@ impl Services {
             }
         }
         let mut subsidised = false;
-        each(|id, state| {
+        self.each(|id, state| {
             let (applies, dst) = unsafe {
                 (
                     (*state).cargo_type == cargo
@@ -578,7 +571,7 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command_abi(
     dst: Source,
 ) -> u8 {
     let s = unsafe { &*s };
-    if !(s.can_allocate)()
+    if !s.can_allocate()
         || (s.shared().current_company)() != crate::company_type::OWNER_DEITY
         || cargo >= NUM_CARGO
         || !(s.cargo_valid)(cargo)
@@ -614,11 +607,11 @@ crate::abi::layouts! {
         shared,
         town,
         industry,
+        pool,
         industry_owner,
         industry_id,
         next_industry,
         valid_source,
-        can_allocate,
         allocate,
         destroy,
         duration,

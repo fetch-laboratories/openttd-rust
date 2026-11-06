@@ -14,15 +14,19 @@
 #include "company_type.h"
 #include "source_type.h"
 #include "subsidy_type.h"
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
 #include "rust/subsidy_ffi.h"
 
-using SubsidyPool = Pool<Subsidy, SubsidyID, 1>;
+using SubsidyPool = RustPool<Subsidy, SubsidyID, 1>;
 extern SubsidyPool _subsidy_pool;
 
 /** Struct about subsidies, offered and awarded */
 struct Subsidy : SubsidyPool::PoolItem<&_subsidy_pool> {
-	OpenTTDSubsidyRecord *const record = openttd_rust_subsidy_new(this->index.base()); ///< The shared record, owned by Rust.
+	OpenTTDSubsidyRecord *const record = [this] {
+		auto *state = openttd_rust_subsidy_new();
+		_subsidy_pool.BindRecord(this->index.base(), this, state);
+		return state;
+	}(); ///< The shared record, owned by Rust.
 	inline OpenTTDSubsidyRecord &Record() { return *this->record; }
 	inline const OpenTTDSubsidyRecord &Record() const { return *this->record; }
 
@@ -38,11 +42,10 @@ struct Subsidy : SubsidyPool::PoolItem<&_subsidy_pool> {
 		this->record->dst = dst;
 	}
 
-	/**
-	 * (Empty) destructor has to be defined else operator delete might be called with nullptr parameter
-	 */
+	/** Retire the record while shell/index are live, before sized deletion frees the slot. */
 	~Subsidy() {
-		openttd_rust_subsidy_destroy(this->index.base(), this->record);
+		_subsidy_pool.RetireRecord(this->index.base(), this, this->record);
+		openttd_rust_subsidy_destroy(this->record);
 	}
 
 	/**

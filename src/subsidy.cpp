@@ -147,9 +147,9 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 {
 	static const OpenTTDSubsidyServices services = {
 		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industry = &GetIndustryRustServices(),
+		.pool = &_subsidy_pool.owner,
 		.industry_owner = RustIndustryCanonicalOwner<void *>, .industry_id = RustIndustryID<void *>, .next_industry = RustIndustryNextID,
 		.valid_source = [](Source source) noexcept { return source.type == SourceType::Town ? Town::IsValidID(source.ToTownID()) : source.type == SourceType::Industry && Industry::IsValidID(source.ToIndustryID()); },
-		.can_allocate = []() noexcept { return Subsidy::CanAllocateItem(); },
 		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
 		.destroy = [](uint16_t id) noexcept { delete Subsidy::Get(id); },
 		.duration = OpenTTDSubsidyDuration,

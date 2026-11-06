@@ -9,6 +9,7 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../industry.h"
+#include "../subsidy_base.h"
 #include "abi_layout.hpp"
 #include "fixture_map.hpp"
 #include "../rust/industry_generation_adapter.hpp"
@@ -36,6 +37,57 @@ static_assert(sizeof(IndustryID) == sizeof(uint16_t) && alignof(IndustryID) == a
 static_assert(sizeof(Owner) == sizeof(uint8_t) && alignof(Owner) == alignof(uint8_t));
 static_assert(sizeof(Colours) == sizeof(uint8_t));
 static_assert(sizeof(TimerGameCalendar::Date) == sizeof(int32_t));
+
+TEST_CASE("Subsidy - canonical slots, allocation credit and ID reuse")
+{
+	REQUIRE(Subsidy::GetNumItems() == 0);
+	_subsidy_pool.CleanPool();
+	const auto *descriptor = _subsidy_pool.descriptor;
+	REQUIRE(Subsidy::CanAllocateItem(2));
+	auto *a = new (SubsidyID{17}) Subsidy();
+	auto *b = new (SubsidyID{19}) Subsidy();
+	CHECK(descriptor->items == 2);
+	CHECK(descriptor->first_unused == 20);
+	CHECK(descriptor->first_free == 0);
+#ifdef WITH_ASSERT
+	CHECK(descriptor->checked == 2);
+#endif
+	CHECK(descriptor->slots[17].shell == a);
+	CHECK(descriptor->slots[17].record == std::addressof(a->Record()));
+	CHECK(descriptor->slots[19].record == std::addressof(b->Record()));
+	auto *c = new Subsidy();
+	auto *d = new Subsidy();
+	CHECK(c->index == SubsidyID{0});
+	CHECK(d->index == SubsidyID{1});
+	CHECK(descriptor->checked == 0);
+	std::vector<uint16_t> ids;
+	for (const Subsidy *s : Subsidy::Iterate()) ids.push_back(s->index.base());
+	CHECK(ids == (std::vector<uint16_t>{0, 1, 17, 19}));
+	c->Record().remaining = 54321;
+	delete c;
+	CHECK(descriptor->slots[0].shell == nullptr);
+	CHECK(descriptor->slots[0].record == nullptr);
+	CHECK(descriptor->first_unused == 20);
+	REQUIRE(Subsidy::CanAllocateItem());
+	c = new Subsidy();
+	CHECK(c->index == SubsidyID{0});
+	CHECK(c->Record().remaining == 0);
+	CHECK(c->Record().awarded == CompanyID::Invalid());
+	CHECK(descriptor->slots[0].record == std::addressof(c->Record()));
+	delete a;
+	delete b;
+	delete c;
+	delete d;
+	CHECK(descriptor->items == 0);
+	CHECK(descriptor->alloc_cache == nullptr);
+	_subsidy_pool.CleanPool();
+	CHECK(descriptor->first_unused == 0);
+	CHECK(descriptor->first_free == 0);
+	CHECK(descriptor->checked == 0);
+	CHECK_FALSE(descriptor->cleaning);
+	CHECK(descriptor->slots.empty());
+	CHECK(descriptor->used_bitmap.empty());
+}
 
 TEST_CASE("Industry - canonical native layouts")
 {
