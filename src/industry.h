@@ -126,12 +126,8 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	RustStationList<Station> StationsNear() const;
 	mutable std::string cached_name{}; ///< NOSAVE: Cache of the resolved name of the industry
 
-	bool HasText() const { return openttd_rust_industry_text(this->production_owner.get()).size != 0; }
-	EncodedString GetText() const
-	{
-		auto view = openttd_rust_industry_text(this->production_owner.get());
-		return EncodedString(std::string(reinterpret_cast<const char *>(view.data), view.size));
-	}
+	bool HasText() const;
+	EncodedString GetText() const;
 	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
 	void SetText(const EncodedString &value) { auto text = TextView(value); openttd_rust_industry_set_text(this->production_owner.get(), text.data, text.size); }
 
@@ -291,6 +287,8 @@ inline const Industry::ProducedCargoes &Industry::Produced() const { return this
 inline Industry::AcceptedCargoes &Industry::Accepted() { return this->Record().accepted; }
 inline const Industry::AcceptedCargoes &Industry::Accepted() const { return this->Record().accepted; }
 inline RustStationList<Station> Industry::StationsNear() const { return RustStationList<Station>(&this->Record().stations_near); }
+inline bool Industry::HasText() const { return !this->Record().text.empty(); }
+inline EncodedString Industry::GetText() const { const auto &text = this->Record().text; return EncodedString(std::string(reinterpret_cast<const char *>(text.items), text.size())); }
 inline Industry::Industry(TileIndex tile) { this->Record().location = TileArea(tile, 0, 0); }
 inline Industry::Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { this->Record().location = TileArea(INVALID_TILE, 0, 0); }
 

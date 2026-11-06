@@ -104,6 +104,8 @@ crate::abi::shared_records! {
         pub id_counts: crate::industrytype::NativeVec<u16> => "RustVector<uint16_t>",
         pub class_counts: crate::industrytype::NativeVec<u16> => "RustVector<uint16_t>",
         pub supplied: crate::industrytype::NativeVec<Supplied> => "RustTownSupplied<TownSuppliedCargo>",
+        pub name: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
+        pub text: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
     }
 }
 impl Default for TownRecord {
@@ -142,6 +144,8 @@ impl Default for TownRecord {
             id_counts: crate::industrytype::NativeVec::new(),
             class_counts: crate::industrytype::NativeVec::new(),
             supplied: crate::industrytype::NativeVec::new(),
+            name: crate::industrytype::NativeVec::new(),
+            text: crate::industrytype::NativeVec::new(),
         }
     }
 }
@@ -176,8 +180,6 @@ pub struct Slots {
 #[derive(Default)]
 pub struct State {
     pub(crate) record: TownRecord,
-    name: Vec<u8>,
-    text: Vec<u8>,
 }
 /// The record of a live town owner: its first member, at the same address.
 #[inline]

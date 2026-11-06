@@ -29,8 +29,6 @@ struct IndustrySpec;
 typedef struct OpenTTDIndustry OpenTTDIndustry;
 typedef struct OpenTTDIndustryBuilder OpenTTDIndustryBuilder;
 struct OpenTTDIndustryBuildFields;
-/* Borrowed until text mutation or owner destruction; consume before any callback. */
-OpenTTDByteSpan openttd_rust_industry_text(const OpenTTDIndustry *owner);
 void openttd_rust_industry_set_text(OpenTTDIndustry *owner, const uint8_t *text, size_t length);
 void openttd_rust_industry_registry_insert(OpenTTDIndustryBuilder *owner, uint8_t type, uint16_t id);
 void openttd_rust_industry_registry_erase(OpenTTDIndustryBuilder *owner, uint8_t type, uint16_t id);

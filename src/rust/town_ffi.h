@@ -85,9 +85,7 @@ extern "C++" inline bool openttd_rust_town_check_road_types(const OpenTTDTownLea
 uint8_t openttd_rust_town_radius_group(const OpenTTDTownState *, const OpenTTDSharedServices *, uint32_t);
 uint8_t openttd_rust_town_first_cargo(uint8_t);
 uint16_t openttd_rust_town_climate_mask(uint8_t);
-OpenTTDByteSpan openttd_rust_town_text(const OpenTTDTownState *);
 void openttd_rust_town_set_text(OpenTTDTownState *, OpenTTDByteSpan);
-OpenTTDByteSpan openttd_rust_town_name(const OpenTTDTownState *);
 void openttd_rust_town_set_name(OpenTTDTownState *, OpenTTDByteSpan);
 void openttd_rust_town_authority_station(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint32_t, bool);
 void openttd_rust_town_authority_remove(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, const OpenTTDTownHandle *, bool, uint8_t);

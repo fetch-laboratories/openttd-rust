@@ -18,7 +18,7 @@ struct RustTownName {
 	OpenTTDTownState *owner;
 	std::string presentation{};
 	explicit RustTownName(OpenTTDTownState *owner) : owner(owner) {}
-	std::string_view View() const { auto b = openttd_rust_town_name(this->owner); return {reinterpret_cast<const char *>(b.data), b.size}; }
+	std::string_view View() const;
 	bool empty() const { return this->View().empty(); }
 	void clear() { openttd_rust_town_set_name(this->owner, {nullptr, 0}); this->presentation.clear(); }
 	RustTownName &operator=(std::string_view text) { openttd_rust_town_set_name(this->owner, {reinterpret_cast<const uint8_t *>(text.data()), text.size()}); this->presentation = this->View(); return *this; }

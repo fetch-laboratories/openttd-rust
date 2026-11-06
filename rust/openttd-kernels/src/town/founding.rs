@@ -583,7 +583,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
                 names::openttd_rust_town_set_name(town.state, text);
             }
             observed!((f.s.name_changed)(town.shell, unsafe {
-                names::openttd_rust_town_name(town.state)
+                names::custom_name(town.state)
             }));
             observed!((f.s.update_virt)(town.shell));
         }
@@ -628,7 +628,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     }
     let mut town = observed!((f.names.next)(0));
     while !town.shell.is_null() {
-        let custom = unsafe { names::openttd_rust_town_name(town.state) };
+        let custom = unsafe { names::custom_name(town.state) };
         let name = if custom.size == 0 {
             unsafe { names::openttd_rust_town_cached_name(town.state, f.names, name_frame) }
         } else {
@@ -728,7 +728,7 @@ pub unsafe extern "C" fn openttd_rust_town_rename(
             names::openttd_rust_town_set_name(town.state, text);
         }
         observed!((f.s.name_changed)(town.shell, unsafe {
-            names::openttd_rust_town_name(town.state)
+            names::custom_name(town.state)
         }));
         observed!((f.s.update_virt)(town.shell));
         observed!((f.s.directory_resort)());

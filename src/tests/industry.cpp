@@ -315,11 +315,11 @@ TEST_CASE("Industry - construction owner and ascending type registry")
 	CHECK(record->location.h == 9);
 	const uint8_t text[] = {0, 0xFF, 0x1E, 'a'};
 	openttd_rust_industry_set_text(owner.get(), text, sizeof(text));
-	auto text_view = openttd_rust_industry_text(owner.get());
-	CHECK(text_view.size == sizeof(text));
-	CHECK(std::equal(std::begin(text), std::end(text), text_view.data));
+	const auto &text_view = reinterpret_cast<OpenTTDIndustryRecord *>(owner.get())->text;
+	CHECK(text_view.size() == sizeof(text));
+	CHECK(std::equal(std::begin(text), std::end(text), text_view.items));
 	openttd_rust_industry_set_text(owner.get(), nullptr, 0);
-	CHECK(openttd_rust_industry_text(owner.get()).size == 0);
+	CHECK(reinterpret_cast<OpenTTDIndustryRecord *>(owner.get())->text.empty());
 	RustIndustryBuilderOwner builder{openttd_rust_industry_builder_new(), openttd_rust_industry_builder_destroy};
 	for (uint16_t id : {9, 1, 9, 5}) openttd_rust_industry_registry_insert(builder.get(), 3, id);
 	const uint16_t expected[] = {1, 5, 9};

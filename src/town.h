@@ -70,6 +70,7 @@ struct TownSuppliedCargo {
 
 /* The shared town record, generated from Rust; its field types are declared above. */
 #include "abi-record-town_record.h"
+inline std::string_view RustTownName::View() const { const auto &name = reinterpret_cast<const OpenTTDTownRecord *>(this->owner)->name; return {reinterpret_cast<const char *>(name.items), name.size()}; }
 
 /** Data structure with cached data of towns. */
 struct TownCache {
@@ -123,11 +124,11 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	SuppliedCargoes &Supplied() { return this->Record().supplied; }
 	const SuppliedCargoes &Supplied() const { return this->Record().supplied; }
 
-	bool HasText() const { return openttd_rust_town_text(this->growth_owner.get()).size != 0; }
+	bool HasText() const { return !this->Record().text.empty(); }
 	EncodedString GetText() const
 	{
-		auto view = openttd_rust_town_text(this->growth_owner.get());
-		return EncodedString(std::string(reinterpret_cast<const char *>(view.data), view.size));
+		const auto &text = this->Record().text;
+		return EncodedString(std::string(reinterpret_cast<const char *>(text.items), text.size()));
 	}
 	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
 	void SetText(const EncodedString &value) { openttd_rust_town_set_text(this->growth_owner.get(), TextView(value)); }

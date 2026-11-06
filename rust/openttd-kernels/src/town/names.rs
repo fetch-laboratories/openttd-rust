@@ -41,10 +41,9 @@ pub(super) unsafe fn bytes<'a>(value: ByteSpan) -> &'a [u8] {
 }
 /// # Safety
 /// The owner is live and serialized by the game mutex. Returned bytes remain valid until its next name mutation or destruction.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_name(state: *const State) -> ByteSpan {
+pub(super) unsafe fn custom_name(state: *const State) -> ByteSpan {
     // SAFETY: Native shell supplies its live owner, serialized by the game mutex.
-    let name = unsafe { &(*state).name };
+    let name = unsafe { &(*state).record.name };
     ByteSpan {
         data: name.as_ptr(),
         size: name.len(),
@@ -59,7 +58,7 @@ pub unsafe extern "C" fn openttd_rust_town_set_name(state: *mut State, text: Byt
     let name = unsafe { bytes(text) }.to_vec();
     // SAFETY: No owner reference survives allocation or another callback.
     unsafe {
-        (*state).name = name;
+        (*state).record.name = crate::industrytype::NativeVec::from_vec(name);
     }
 }
 #[unsafe(no_mangle)]
@@ -97,7 +96,10 @@ pub(super) unsafe fn unique_custom(s: &NameServices, name: ByteSpan) -> bool {
     let mut town = observed!((s.next)(0));
     while !town.shell.is_null() {
         // SAFETY: Iteration supplies a live owner; borrow ends before next callback.
-        let equal = unsafe { !(*town.state).name.is_empty() && (*town.state).name == bytes(name) };
+        let equal = unsafe {
+            !(*town.state).record.name.is_empty()
+                && (*town.state).record.name.as_slice() == bytes(name)
+        };
         if equal {
             return false;
         }
@@ -193,7 +195,7 @@ pub(super) unsafe fn verify(
     let mut town = observed!((s.next)(0));
     while !town.shell.is_null() {
         // SAFETY: Short canonical name observation before resolver reentry.
-        let custom = unsafe { openttd_rust_town_name(town.state) };
+        let custom = unsafe { custom_name(town.state) };
         let other = if custom.size == 0 {
             let params = unsafe { crate::townname_type::from_town(&*town.state) };
             let seed = unsafe { (*town.state).record.townnameparts };
@@ -377,10 +379,10 @@ mod tests {
                     size: input.len(),
                 },
             );
-            let view = openttd_rust_town_name(&raw const owner);
+            let view = custom_name(&raw const owner);
             assert_eq!(bytes(view), input);
             openttd_rust_town_set_name(&raw mut owner, view);
-            assert_eq!(bytes(openttd_rust_town_name(&raw const owner)), input);
+            assert_eq!(bytes(custom_name(&raw const owner)), input);
             openttd_rust_town_set_name(
                 &raw mut owner,
                 ByteSpan {
@@ -388,7 +390,7 @@ mod tests {
                     size: 0,
                 },
             );
-            assert_eq!(owner.name, [] as [u8; 0]);
+            assert!(owner.record.name.is_empty());
         }
     }
 }

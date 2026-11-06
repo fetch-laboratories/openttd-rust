@@ -136,6 +136,7 @@ crate::abi::shared_records! {
         pub produced: NativeVec<Produced> => "Industry::ProducedCargoes",
         pub accepted: NativeVec<Accepted> => "Industry::AcceptedCargoes",
         pub stations_near: crate::station::StationList => "OpenTTDStationList",
+        pub text: NativeVec<u8> => "RustVector<uint8_t>",
     }
     #[derive(Default, Clone, Copy)]
     "OpenTTDIndustryBuildFields" ["industry_build_fields"] => pub struct BuildFields {
@@ -187,6 +188,7 @@ impl Default for IndustryRecord {
             produced: NativeVec::new(),
             accepted: NativeVec::new(),
             stations_near: crate::station::StationList::default(),
+            text: NativeVec::new(),
         }
     }
 }
@@ -196,7 +198,6 @@ impl Default for IndustryRecord {
 #[derive(Default)]
 pub struct Industry {
     pub(crate) record: IndustryRecord,
-    text: Vec<u8>,
 }
 /// The industry's nearby station set, for immediate borrows only.
 pub(crate) fn stations_near(owner: *mut Industry) -> *mut crate::station::StationList {
@@ -1856,19 +1857,6 @@ pub unsafe extern "C" fn openttd_rust_industry_daily_start(
 }
 
 /// # Safety
-/// Live owner. The returned full byte span stays valid until text mutation or
-/// owner destruction. Copy or inspect it before any callback that can mutate it.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_text(
-    owner: *const Industry,
-) -> crate::services::ByteSpan {
-    let text = unsafe { &(*owner).text };
-    crate::services::ByteSpan {
-        data: text.as_ptr(),
-        size: text.len(),
-    }
-}
-/// # Safety
 /// Live owner; text points to length initialized bytes, disjoint from this owner.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_set_text(
@@ -1876,11 +1864,13 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text(
     text: *const u8,
     length: usize,
 ) {
-    let target = unsafe { &mut (*owner).text };
-    target.clear();
-    if length != 0 {
-        target.extend_from_slice(unsafe { std::slice::from_raw_parts(text, length) });
-    }
+    let target = unsafe { &mut (*owner).record.text };
+    target.edit(|target| {
+        target.clear();
+        if length != 0 {
+            target.extend_from_slice(unsafe { std::slice::from_raw_parts(text, length) });
+        }
+    });
 }
 /// # Safety
 /// Live builder and valid original type. No registry view survives this call.

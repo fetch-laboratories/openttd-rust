@@ -532,20 +532,14 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
     (c.cost.zero)(out);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_text(state: *const State) -> ByteSpan {
-    let text = unsafe { &(*state).text };
-    ByteSpan {
-        data: text.as_ptr(),
-        size: text.len(),
-    }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_set_text(state: *mut State, text: ByteSpan) {
-    let target = unsafe { &mut (*state).text };
-    target.clear();
-    if text.size != 0 {
-        target.extend_from_slice(unsafe { std::slice::from_raw_parts(text.data, text.size) });
-    }
+    let target = unsafe { &mut (*state).record.text };
+    target.edit(|target| {
+        target.clear();
+        if text.size != 0 {
+            target.extend_from_slice(unsafe { std::slice::from_raw_parts(text.data, text.size) });
+        }
+    });
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_text_command(
