@@ -94,7 +94,6 @@ struct OpenTTDVehicleResolverServices {
 	int64_t (*profit_this)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_this);
 	int64_t (*profit_last)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_last);
 	uint16_t (*vehicle_flags)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_flags);
-	const OpenTTDStation * (*target_airport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(target_airport);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
 	uint16_t (*moving_flags)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving_flags);
 	RoadType (*roadtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(roadtype);

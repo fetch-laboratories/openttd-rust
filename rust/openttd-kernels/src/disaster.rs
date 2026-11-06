@@ -134,12 +134,6 @@ pub struct IndustryLocation {
     pub tile: u32,
     pub town: u16,
 }
-#[repr(C)]
-pub struct StationTarget {
-    pub next: u32,
-    pub tile: u32,
-    pub airport_type: u8,
-}
 /// Immutable tables outlive each synchronous entry and nested entry. Native shells
 /// obey the original pool lifetimes; no Rust borrow spans a service call. Callbacks
 /// are noexcept, and environmental failures terminate. No map/Vehicle layout is exposed.
@@ -169,7 +163,6 @@ pub struct Services {
     pub next_train: extern "C" fn(u32) -> Vehicle,
     pub road_count: extern "C" fn(u8) -> u16,
     pub human: extern "C" fn(u8) -> bool,
-    pub next_station: extern "C" fn(u32) -> StationTarget,
     pub next_industry: extern "C" fn(u32) -> IndustryTarget,
     pub industry: extern "C" fn(u32) -> IndustryTarget,
     pub industry_location: extern "C" fn(*mut c_void) -> IndustryLocation,
@@ -925,20 +918,20 @@ impl<'a> World<'a> {
                 let tile = self.random_tile();
                 let mut x = (self.map().tile_x(tile) * TILE_SIZE + TILE_SIZE / 2) as i32;
                 if kind == 0 {
+                    let mut pool = (self.shared.station_pool)();
                     let mut from = 0;
-                    loop {
-                        let st = (self.s.next_station)(from);
-                        if st.next == u32::MAX {
-                            break;
-                        }
-                        if st.tile != INVALID_TILE
-                            && (st.airport_type == crate::airport::AT_SMALL
-                                || st.airport_type == crate::airport::AT_LARGE)
+                    while let Some((_, record)) = unsafe {
+                        crate::station_record::next_station(self.shared, &mut pool, &mut from)
+                    } {
+                        let (tile, airport_type) =
+                            unsafe { ((*record).airport.area.tile.0, (*record).airport.r#type) };
+                        if tile != INVALID_TILE
+                            && (airport_type == crate::airport::AT_SMALL
+                                || airport_type == crate::airport::AT_LARGE)
                         {
-                            x = ((self.map().tile_x(st.tile) + 2) * TILE_SIZE) as i32;
+                            x = ((self.map().tile_x(tile) + 2) * TILE_SIZE) as i32;
                             break;
                         }
-                        from = st.next;
                     }
                 }
                 let (y, dir, subtype) = if kind == 4 {
@@ -1275,8 +1268,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterRoadTarget" ["probe"] => RoadTarget { handle, state, id, };
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, kind, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
-    "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
 }
 
 #[cfg(test)]

@@ -77,12 +77,6 @@ static OpenTTDDisasterVehicle OPENTTD_RUST_CALL DisasterNextTrain(uint32_t from)
 	return DisasterBaseHandle(nullptr);
 }
 static uint16_t OPENTTD_RUST_CALL DisasterRoadCount(uint8_t company) noexcept { return RustCompanyRoadVehicleCount(Company::Get(CompanyID{company})); }
-static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32_t from) noexcept
-{
-	const Station *st = OpenTTDNextStation(from);
-	return st == nullptr ? OpenTTDDisasterStationTarget{.next = UINT32_MAX, .tile = INVALID_TILE.base(), .airport_type = 0} :
-		OpenTTDDisasterStationTarget{.next = uint32_t{RustBaseStationID(st)} + 1, .tile = RustStationAirportTile(st), .airport_type = st->GetAirport().Record().type};
-}
 static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
 {
 	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i), .kind = i == nullptr ? IT_INVALID : i->type};
@@ -158,7 +152,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.next_train = DisasterNextTrain,
 		.road_count = DisasterRoadCount,
 		.human = RustCompanyIsHuman,
-		.next_station = DisasterNextStation,
 		.next_industry = DisasterNextIndustry,
 		.industry = DisasterIndustry,
 		.industry_location = DisasterIndustryLocation,

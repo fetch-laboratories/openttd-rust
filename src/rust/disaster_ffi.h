@@ -37,11 +37,6 @@ struct OpenTTDDisasterIndustryLocation {
 	uint32_t tile;
 	uint16_t town;
 };
-struct OpenTTDDisasterStationTarget {
-	uint32_t next;
-	uint32_t tile;
-	uint8_t airport_type;
-};
 struct OpenTTDDisasterServices {
 	const OpenTTDSharedServices * shared;
 	const OpenTTDVehicleServices * vehicles;
@@ -67,7 +62,6 @@ struct OpenTTDDisasterServices {
 	OpenTTDDisasterVehicle (OPENTTD_RUST_CALL *next_train)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_train);
 	uint16_t (OPENTTD_RUST_CALL *road_count)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
 	bool (OPENTTD_RUST_CALL *human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(human);
-	OpenTTDDisasterStationTarget (OPENTTD_RUST_CALL *next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
 	OpenTTDDisasterIndustryTarget (OPENTTD_RUST_CALL *next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
 	OpenTTDDisasterIndustryTarget (OPENTTD_RUST_CALL *industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry);
 	OpenTTDDisasterIndustryLocation (OPENTTD_RUST_CALL *industry_location)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_location);

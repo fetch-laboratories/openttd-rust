@@ -154,7 +154,6 @@ pub struct Services {
     profit_this: unsafe extern "C" fn(V) -> i64,
     profit_last: unsafe extern "C" fn(V) -> i64,
     vehicle_flags: unsafe extern "C" fn(V) -> u16,
-    target_airport: unsafe extern "C" fn(V) -> *const crate::station::Station,
     airport_ttd_type: unsafe extern "C" fn(
         *const crate::station_cmd::AirportSpec,
     ) -> crate::newgrf_airport::TtdpAirportType,
@@ -843,6 +842,24 @@ const AMA_TTDP_PAD1_TO_TAKEOFF: u32 = 13;
 const AMA_TTDP_LANDING_TO_HANGAR: u32 = 17;
 const AMA_TTDP_IN_FLIGHT: u32 = 18;
 
+/// `GetTargetAirportIfValid`: preserve its aircraft assertion and Station specialization.
+fn target_airport(s: &Services, v: V) -> *mut crate::station_record::StationRecord {
+    let v = VehicleRef::of(v);
+    crate::movement::native_assert(s.shared, v.vehicle_type() == 3);
+    let id = crate::raw_field::read_field!(v.aircraft_state(), targetairport);
+    let record = crate::station_record::get_station_record_if_valid(
+        s.shared,
+        crate::station_type::StationID(id),
+    );
+    if !record.is_null()
+        && unsafe { (*record).airport.area.tile.0 } != crate::tile_type::INVALID_TILE
+    {
+        record
+    } else {
+        null_mut()
+    }
+}
+
 unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
     use crate::airport::{
         AMD_BRAKE, AMD_EXACT_POSITION, AMD_HELI_LOWER, AMD_HELI_RAISE, AMD_HOLD, AMD_SLOW_TURN,
@@ -851,7 +868,12 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
         TERM6, TERM7, TERM8,
     };
     unsafe {
-        let st = (s.target_airport)(v);
+        let station = target_airport(s, v);
+        let st: *const crate::station::Station = if station.is_null() {
+            null()
+        } else {
+            (*station).shell.cast_const().cast()
+        };
         if st.is_null() {
             return AMS_TTDP_FLIGHT_TO_TOWER;
         } // AMS_TTDP_FLIGHT_TO_TOWER
@@ -1055,7 +1077,12 @@ unsafe fn variable(
                     .z()
                     .wrapping_sub((handle(w)).z())
                     .clamp(0, i32::from(u16::MAX));
-                let st = (s.target_airport)(v);
+                let station = target_airport(s, v);
+                let st: *const crate::station::Station = if station.is_null() {
+                    null()
+                } else {
+                    (*station).shell.cast_const().cast()
+                };
                 let airport = if !st.is_null()
                     && crate::station_record::read(st.cast(), |r| r.airport.area.tile.0)
                         != crate::tile_type::INVALID_TILE
@@ -1688,7 +1715,7 @@ crate::abi::layouts! {
         overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };
