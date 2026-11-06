@@ -67,8 +67,6 @@ extern "C" {
 OpenTTDIndustryListView openttd_rust_station_industries_near(OpenTTDStationService *);
 OpenTTDStationRect *openttd_rust_station_rect(OpenTTDStationService *);
 struct OpenTTDBitmapTileArea *openttd_rust_station_catchment_tiles(OpenTTDStationService *);
-OpenTTDStationList *openttd_rust_town_stations_near(OpenTTDTownState *);
-OpenTTDStationList *openttd_rust_industry_stations_near(OpenTTDIndustry *);
 uint8_t openttd_rust_station_rect_empty_abi(const OpenTTDStationRect *);
 extern "C++" inline bool openttd_rust_station_rect_empty(const OpenTTDStationRect *a0) { return openttd_rust_station_rect_empty_abi(a0) != 0; }
 uint8_t openttd_rust_station_rect_pt_in_extended_rect_abi(const OpenTTDStationRect *, int32_t, int32_t, int32_t);

@@ -117,7 +117,7 @@ static bool IndustryDefinitionsScenario(std::span<std::string_view> args)
 	bool funded = false;
 	for (const Industry *source : Industry::Iterate()) {
 		if (FIXTURE_POOL_RECORD(source).type != 0) continue;
-		for (const Station *station : source->stations_near) {
+		for (const Station *station : FIXTURE_STATIONS_NEAR(source)) {
 			AutoRestoreBackup company(_current_company, station->owner);
 			for (TileIndex at{0}; at < Map::Size(); ++at) {
 				if (!station->TileIsInCatchment(at) || !IsTileType(at, MP_CLEAR) || CmdBuildIndustry({}, at, 0, 0, true, 0x475).Failed()) continue;

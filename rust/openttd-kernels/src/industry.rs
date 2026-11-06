@@ -135,6 +135,7 @@ crate::abi::shared_records! {
         pub psa: *mut crate::newgrf_storage::PersistentStorage => "PersistentStorage *",
         pub produced: NativeVec<Produced> => "Industry::ProducedCargoes",
         pub accepted: NativeVec<Accepted> => "Industry::AcceptedCargoes",
+        pub stations_near: crate::station::StationList => "OpenTTDStationList",
     }
     #[derive(Default, Clone, Copy)]
     "OpenTTDIndustryBuildFields" ["industry_build_fields"] => pub struct BuildFields {
@@ -185,6 +186,7 @@ impl Default for IndustryRecord {
             psa: ptr::null_mut(),
             produced: NativeVec::new(),
             accepted: NativeVec::new(),
+            stations_near: crate::station::StationList::default(),
         }
     }
 }
@@ -195,21 +197,11 @@ impl Default for IndustryRecord {
 pub struct Industry {
     pub(crate) record: IndustryRecord,
     text: Vec<u8>,
-    stations_near: crate::station::StationList,
 }
 /// The industry's nearby station set, for immediate borrows only.
 pub(crate) fn stations_near(owner: *mut Industry) -> *mut crate::station::StationList {
     // SAFETY: Live owner supplied by the caller's resolved shell.
-    unsafe { &raw mut (*owner).stations_near }
-}
-/// Native `Industry::stations_near` facade storage.
-/// # Safety
-/// `owner` is live; the alias ends with the owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_stations_near(
-    owner: *mut Industry,
-) -> *mut crate::station::StationList {
-    stations_near(owner)
+    unsafe { &raw mut (*owner).record.stations_near }
 }
 /// `Industry::location`, from the canonical metadata.
 pub(crate) fn location(owner: *mut Industry) -> TileArea {

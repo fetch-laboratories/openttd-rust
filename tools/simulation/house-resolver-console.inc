@@ -147,7 +147,7 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	}
 	require(stations.size() == states.size());
 	Station::RecomputeCatchmentForAll();
-	for (Station *station : stations) require(town->stations_near.find(station) != town->stations_near.end());
+	for (Station *station : stations) require(FIXTURE_STATIONS_NEAR(town).find(station) != FIXTURE_STATIONS_NEAR(town).end());
 	offset = 0;
 	require(run("acceptance-history", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 0, false, tile) == 31);
 	offset = 0xFFFF;

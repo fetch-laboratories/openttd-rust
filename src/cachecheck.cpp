@@ -170,10 +170,10 @@ void CheckCaches()
 		return copy;
 	};
 	std::vector<StationsNear> old_town_stations_near;
-	for (Town *t : Town::Iterate()) old_town_stations_near.push_back(copy_stations(t->stations_near));
+	for (Town *t : Town::Iterate()) old_town_stations_near.push_back(copy_stations(t->StationsNear()));
 
 	std::vector<StationsNear> old_industry_stations_near;
-	for (Industry *ind : Industry::Iterate()) old_industry_stations_near.push_back(copy_stations(ind->stations_near));
+	for (Industry *ind : Industry::Iterate()) old_industry_stations_near.push_back(copy_stations(ind->StationsNear()));
 
 	std::vector<IndustriesNear> old_station_industries_near;
 	for (Station *st : Station::Iterate()) old_station_industries_near.push_back(copy_industries(st->industries_near));
@@ -222,14 +222,14 @@ void CheckCaches()
 	/* Check stations_near */
 	i = 0;
 	for (Town *t : Town::Iterate()) {
-		if (copy_stations(t->stations_near) != old_town_stations_near[i]) {
+		if (copy_stations(t->StationsNear()) != old_town_stations_near[i]) {
 			Debug(desync, 2, "warning: town stations near mismatch: town {}", t->index);
 		}
 		i++;
 	}
 	i = 0;
 	for (Industry *ind : Industry::Iterate()) {
-		if (copy_stations(ind->stations_near) != old_industry_stations_near[i]) {
+		if (copy_stations(ind->StationsNear()) != old_industry_stations_near[i]) {
 			Debug(desync, 2, "warning: industry stations near mismatch: industry {}", ind->index);
 		}
 		i++;

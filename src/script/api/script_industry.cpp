@@ -144,7 +144,7 @@
 	if (!IsValidIndustry(industry_id)) return -1;
 
 	const Industry *ind = ::Industry::Get(industry_id);
-	return ind->stations_near.size();
+	return ind->StationsNear().size();
 }
 
 /* static */ SQInteger ScriptIndustry::GetDistanceManhattanToTile(IndustryID industry_id, TileIndex tile)

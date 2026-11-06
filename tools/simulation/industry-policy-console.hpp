@@ -61,18 +61,18 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 				!spec->IsRawIndustry() || spec->UsesOriginalEconomy()
 #endif
 				) continue;
-			if (candidate->stations_near.empty() == (outcome == 0)) { ind = candidate; break; }
+			if (FIXTURE_STATIONS_NEAR(candidate).empty() == (outcome == 0)) { ind = candidate; break; }
 		}
 		IndustryPolicyRequire(ind != nullptr);
 		FIXTURE_POOL_RECORD(ind).ctlflags.Set(IndustryControlFlag::NoClosure);
 		vehicle->cargo_type = FIXTURE_POOL_RECORD(ind).produced[0].cargo;
-		if (outcome != 0) vehicle->GetOrder(0)->MakeGoToStation((*ind->stations_near.begin())->index);
+		if (outcome != 0) vehicle->GetOrder(0)->MakeGoToStation((*FIXTURE_STATIONS_NEAR(ind).begin())->index);
 		std::vector<std::pair<Vehicle *, OrderList *>> original_orders;
 		OrderList *wide = nullptr;
 		if (outcome == 2) {
 			/* Orders() retains entries beyond the uint8 GetNumOrders() count in loaded lists. */
 			std::vector<Order> entries(257);
-			entries.back().MakeGoToStation((*ind->stations_near.begin())->index);
+			entries.back().MakeGoToStation((*FIXTURE_STATIONS_NEAR(ind).begin())->index);
 			IndustryPolicyRequire(OrderList::CanAllocateItem());
 			wide = new OrderList(std::move(entries), vehicle);
 			for (Vehicle *v : Vehicle::Iterate()) {

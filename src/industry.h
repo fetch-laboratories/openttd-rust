@@ -123,7 +123,7 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	AcceptedCargoes &Accepted();
 	const AcceptedCargoes &Accepted() const;
 
-	RustStationList<Station> stations_near{openttd_rust_industry_stations_near(production_owner.get())};
+	RustStationList<Station> StationsNear() const;
 	mutable std::string cached_name{}; ///< NOSAVE: Cache of the resolved name of the industry
 
 	bool HasText() const { return openttd_rust_industry_text(this->production_owner.get()).size != 0; }
@@ -290,6 +290,7 @@ inline Industry::ProducedCargoes &Industry::Produced() { return this->Record().p
 inline const Industry::ProducedCargoes &Industry::Produced() const { return this->Record().produced; }
 inline Industry::AcceptedCargoes &Industry::Accepted() { return this->Record().accepted; }
 inline const Industry::AcceptedCargoes &Industry::Accepted() const { return this->Record().accepted; }
+inline RustStationList<Station> Industry::StationsNear() const { return RustStationList<Station>(const_cast<OpenTTDStationList *>(&this->Record().stations_near)); }
 inline Industry::Industry(TileIndex tile) { this->Record().location = TileArea(tile, 0, 0); }
 inline Industry::Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { this->Record().location = TileArea(INVALID_TILE, 0, 0); }
 

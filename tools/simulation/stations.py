@@ -889,14 +889,14 @@ static void CatchmentDump(const char *label)
 		fmt::print(stderr, "\n");
 	}
 	for (const Town *t : Town::Iterate()) {
-		if (t->stations_near.empty()) continue;
+		if (FIXTURE_STATIONS_NEAR(t).empty()) continue;
 		fmt::print(stderr, "STCMD catchment {} town {}", label, t->index.base());
-		for (const Station *st : t->stations_near) fmt::print(stderr, " {}", st->index.base());
+		for (const Station *st : FIXTURE_STATIONS_NEAR(t)) fmt::print(stderr, " {}", st->index.base());
 		fmt::print(stderr, "\n");
 	}
 	for (const Industry *i : Industry::Iterate()) {
-		fmt::print(stderr, "STCMD catchment {} industry {} size {}", label, i->index.base(), i->stations_near.size());
-		for (const Station *st : i->stations_near) fmt::print(stderr, " {}", st->index.base());
+		fmt::print(stderr, "STCMD catchment {} industry {} size {}", label, i->index.base(), FIXTURE_STATIONS_NEAR(i).size());
+		for (const Station *st : FIXTURE_STATIONS_NEAR(i)) fmt::print(stderr, " {}", st->index.base());
 		fmt::print(stderr, "\n");
 	}
 }
@@ -943,7 +943,7 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 		StationNeed(!houses.empty() && houses.back() == t, __LINE__);
 	};
 	/* Membership through the shared nearby lists, not the dumped labels alone. */
-	auto town_near = [](const Town *t, const Station *st) { for (const Station *s : t->stations_near) if (s == st) return true; return false; };
+	auto town_near = [](const Town *t, const Station *st) { for (const Station *s : FIXTURE_STATIONS_NEAR(t)) if (s == st) return true; return false; };
 	place_house(tile(4, 4));
 	CatchmentDump("houses-before");
 	auto rail = [&](DoCommandFlags f, TileIndex t, StationID join, uint8_t n, uint8_t len) { return Command<CMD_BUILD_RAIL_STATION>::Do(f, t, RAILTYPE_RAIL, AXIS_X, n, len, STAT_CLASS_DFLT, 0, join, true); };
@@ -987,7 +987,7 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 		StationNeed(built != nullptr, __LINE__);
 		const Station *st = Station::Get(station);
 		bool industry_near = false, delivers = false;
-		for (const Station *s : built->stations_near) industry_near |= s == st;
+		for (const Station *s : FIXTURE_STATIONS_NEAR(built)) industry_near |= s == st;
 		for (const auto &entry : st->industries_near) delivers |= entry.industry == built;
 		StationNeed(industry_near && delivers, __LINE__);
 	}

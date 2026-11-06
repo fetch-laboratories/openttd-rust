@@ -100,6 +100,7 @@ crate::abi::shared_records! {
         pub townnameparts: u32,
         pub psa_list: crate::industrytype::NativeVec<*mut crate::newgrf_storage::PersistentStorage> => "RustVector<PersistentStorage *>",
         pub cached_name: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
+        pub stations_near: crate::station::StationList => "OpenTTDStationList",
     }
 }
 impl Default for TownRecord {
@@ -134,6 +135,7 @@ impl Default for TownRecord {
             townnameparts: 0,
             psa_list: crate::industrytype::NativeVec::new(),
             cached_name: crate::industrytype::NativeVec::new(),
+            stations_near: crate::station::StationList::default(),
         }
     }
 }
@@ -173,7 +175,6 @@ pub struct State {
     supplied: Vec<Supplied>,
     id_counts: Vec<u16>,
     class_counts: Vec<u16>,
-    stations_near: crate::station::StationList,
 }
 /// The record of a live town owner: its first member, at the same address.
 #[inline]
@@ -216,16 +217,7 @@ pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32)
 /// The town's nearby station set, for immediate borrows only.
 pub(crate) fn stations_near(state: *mut State) -> *mut crate::station::StationList {
     // SAFETY: Live owner supplied by the caller's resolved town.
-    unsafe { &raw mut (*state).stations_near }
-}
-/// Native `Town::stations_near` facade storage.
-/// # Safety
-/// `state` is live; the alias ends with the owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_stations_near(
-    state: *mut State,
-) -> *mut crate::station::StationList {
-    stations_near(state)
+    unsafe { &raw mut (*state).record.stations_near }
 }
 /// `Town::GetCargoSupplied` followed by the original history-period lookup.
 /// SAFETY: Live serialized canonical owner; the returned value is a copy.
