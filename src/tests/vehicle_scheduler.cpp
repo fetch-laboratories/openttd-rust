@@ -260,13 +260,11 @@ static std::vector<uint32_t> VehicleCursorTrace(bool rust, bool indexing_growth 
 	new (VehicleID(0)) Vehicle(VEH_EFFECT);
 	new (VehicleID(2)) Vehicle(VEH_EFFECT);
 	new (VehicleID(4)) Vehicle(VEH_EFFECT);
-	const auto &services = GetRustVehicleSchedulerServices();
-	auto cursor = services.pool();
-	static_assert(std::is_same_v<decltype(cursor.slots), const RustPoolSlot *>);
-	static_assert(std::is_same_v<decltype(cursor.first_unused), const size_t *>);
-	CHECK(cursor.slots == _vehicle_pool.descriptor->slots.items);
-	CHECK(cursor.slots_len == _vehicle_pool.descriptor->slots.size());
-	CHECK(cursor.first_unused == &_vehicle_pool.descriptor->first_unused);
+	const auto &services = GetRustVehicleServices();
+	static_assert(std::is_same_v<decltype(services.pool), const RustPoolDescriptor *const *>);
+	CHECK(services.pool == &_vehicle_pool.descriptor);
+	const auto *descriptor = *services.pool;
+	CHECK(descriptor == _vehicle_pool.descriptor);
 	std::vector<uint32_t> trace;
 	auto Mutate = [&](Vehicle *v) {
 		const auto id = v->index.base();
@@ -279,7 +277,7 @@ static std::vector<uint32_t> VehicleCursorTrace(bool rust, bool indexing_growth 
 			new (VehicleID(2)) Vehicle(VEH_EFFECT); // Reuse ahead must still be visited.
 			new (VehicleID(3)) Vehicle(VEH_EFFECT);
 			new (VehicleID(6)) Vehicle(VEH_EFFECT); // Raise extent without indexing growth.
-			CHECK(*cursor.first_unused == 7);
+			CHECK(descriptor->first_unused == 7);
 		} else if (id == 2) {
 			delete Vehicle::Get(VehicleID(4)); // Hole ahead.
 			if (indexing_growth) {
@@ -288,21 +286,20 @@ static std::vector<uint32_t> VehicleCursorTrace(bool rust, bool indexing_growth 
 				new (VehicleID(growth)) Vehicle(VEH_EFFECT); // Growth invalidates captured slots.
 				new (VehicleID(growth + 1)) Vehicle(VEH_EFFECT);
 			}
-			CHECK(*cursor.first_unused == _vehicle_pool.descriptor->first_unused); // Stable canonical address.
+			CHECK(descriptor->first_unused == _vehicle_pool.descriptor->first_unused); // Stable canonical address.
 		}
 	};
 	if (rust) {
 		size_t from = 0;
-		while (auto *shell = openttd_rust_vehicle_cursor_next(&services, &cursor, &from)) Mutate(VehicleOf(shell));
-		CHECK(cursor.slots == _vehicle_pool.descriptor->slots.items);
-		CHECK(cursor.slots_len == _vehicle_pool.descriptor->slots.size());
+		while (auto *shell = openttd_rust_vehicle_cursor_next(&services, &from)) Mutate(VehicleOf(shell));
+		CHECK(*services.pool == descriptor);
 	} else {
 		for (Vehicle *v : Vehicle::Iterate()) Mutate(v);
 	}
 	_vehicle_pool.CleanPool();
-	cursor = services.pool(); // Fresh acquisition after reset; empty pool ends.
+	CHECK(descriptor->first_unused == 0); // The stable owner now exposes reset storage.
 	size_t from = 0;
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == nullptr);
+	CHECK(openttd_rust_vehicle_cursor_next(&services, &from) == nullptr);
 	return trace;
 }
 TEST_CASE("Base vehicle scheduler - live cursor equals unchanged PoolIterator")
@@ -323,7 +320,6 @@ TEST_CASE("Base vehicle scheduler - live cursor equals unchanged PoolIterator")
  * bundle fill, post-Tick type mutation, then deletion with no bundle write. */
 static bool _scheduler_tick_scope_ended;
 static uint32_t _scheduler_post_visits;
-static uint32_t _scheduler_pool_reads;
 struct SchedulerProbeVehicle final : Vehicle {
 	SchedulerProbeVehicle() : Vehicle(VEH_EFFECT) {}
 	bool Tick() override
@@ -345,12 +341,9 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	_vehicle_pool.CleanPool();
 	REQUIRE(Vehicle::CanAllocateItem());
 	new (VehicleID(0)) SchedulerProbeVehicle();
-	_scheduler_post_visits = _scheduler_pool_reads = 0;
+	_scheduler_post_visits = 0;
+	const auto size = _vehicle_pool.descriptor->slots.size();
 	auto services = GetRustVehicleSchedulerServices();
-	services.pool = []() noexcept {
-		++_scheduler_pool_reads;
-		return GetRustVehicleSchedulerServices().pool();
-	};
 	services.tick = [](OpenTTDVehicle *shell, OpenTTDVehiclePostTick *out) noexcept {
 		out->type = VEH_INVALID;
 		const bool survives = GetRustVehicleSchedulerServices().tick(shell, out);
@@ -391,7 +384,7 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	fixture.tables = tables;
 	CHECK(fixture.Run());
 	CHECK(_scheduler_tick_scope_ended);
-	CHECK(_scheduler_pool_reads == 2);
+	CHECK(_vehicle_pool.descriptor->slots.size() > size);
 	CHECK(_scheduler_post_visits == 1); // Deleted higher shell must never be dereferenced.
 	CHECK(_vehicle_pool.GetNumItems() == 1);
 	_vehicle_pool.CleanPool();

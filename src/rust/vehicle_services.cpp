@@ -183,6 +183,7 @@ static OpenTTDVehicle *VehicleRecordFromShell(void *shell) noexcept { return she
 static void VehicleRecordAssertNext([[maybe_unused]] OpenTTDVehicle *v, [[maybe_unused]] OpenTTDVehicle *next) noexcept { assert(v != next); }
 
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
+	.pool = &_vehicle_pool.descriptor,
 	.assert_next = VehicleRecordAssertNext,
 	.record_from_shell = VehicleRecordFromShell,
 	.map_log_x = OpenTTDMapLogX,
@@ -235,10 +236,6 @@ static_assert(VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT =
 static_assert(GVSF_FRONT == 0 && GVSF_ENGINE == 3 && AIR_AIRCRAFT == 2);
 static_assert(VehStates{VehState::TrainSlowing}.base() == 16 && Ticks::DAY_TICKS == 74);
 
-static OpenTTDVehiclePoolCursor OPENTTD_RUST_CALL VehicleSchedulerPool() noexcept
-{
-	return {.slots = _vehicle_pool.descriptor->slots.items, .slots_len = _vehicle_pool.descriptor->slots.size(), .first_unused = &_vehicle_pool.descriptor->first_unused};
-}
 /* Existing virtual facades own the original controller timing scopes. The
  * timing destructor completes before this callback returns to Rust assertions.
  * Only a surviving vehicle fills the post-Tick address bundle; the fill reads
@@ -274,7 +271,6 @@ static void OPENTTD_RUST_CALL VehicleSchedulerResetAccumulators() noexcept
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept
 {
 	static const OpenTTDVehicleSchedulerServices services{
-		.pool = VehicleSchedulerPool,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 		.assertions = true,
 #else

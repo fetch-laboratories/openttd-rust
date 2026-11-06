@@ -1324,6 +1324,7 @@ pub(crate) mod tests {
     }
     fn vehicle_table() -> crate::vehicle::VehicleServices {
         crate::vehicle::VehicleServices {
+            pool: std::ptr::null(),
             record_from_shell: resolve_record,
             assert_next: unused(),
             map_log_x: unused(),

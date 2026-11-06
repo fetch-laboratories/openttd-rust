@@ -29,8 +29,6 @@ struct OpenTTDSettingServices {
 	OpenTTDEnvironmentServices environment;
 	VehicleDefaultSettings *(*client_vehicle_defaults)() noexcept OPENTTD_SERVICE_DEFAULT(client_vehicle_defaults);
 	VehicleDefaultSettings *(*company_vehicle_defaults)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_vehicle_defaults);
-	void (*set_service_interval)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_service_interval);
-	void (*set_service_interval_percent)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_service_interval_percent);
 	uint16_t (*newgame_minutes_per_year)() noexcept OPENTTD_SERVICE_DEFAULT(newgame_minutes_per_year);
 	void (*set_minutes_per_year)(bool, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_minutes_per_year);
 	void (*set_newgame_wallclock)() noexcept OPENTTD_SERVICE_DEFAULT(set_newgame_wallclock);

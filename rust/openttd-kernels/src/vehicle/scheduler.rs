@@ -26,13 +26,6 @@ const FRONT: u8 = 1 << GVSF_FRONT;
 const ENGINE: u8 = 1 << GVSF_ENGINE;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
-pub struct PoolCursor {
-    pub slots: *const crate::pool::PoolSlot,
-    pub slots_len: usize,
-    pub first_unused: *const usize,
-}
-#[repr(C)]
 pub struct PostTick {
     pub vehicle_type: VehicleType,
     pub period: *const u16,
@@ -47,7 +40,6 @@ pub struct PostTick {
 }
 #[repr(C)]
 pub struct SchedulerServices {
-    pub pool: extern "C" fn() -> PoolCursor,
     pub assertions: bool,
     /// Runs the virtual Tick; fills `out` only when the vehicle survives.
     /// Caller supplies writable, aligned stack storage for one `PostTick`.
@@ -86,49 +78,51 @@ macro_rules! svc {
     };
 }
 
-/// Refresh before ANY cached slot read after callbacks. `ResizeFor` grows only
-/// when allocating at/above old size; `AllocateItem` raises canonical `first_unused`
-/// above that size before return. `FreeItem` never lowers it. `CleanPool` is excluded
-/// during this entry; the descriptor ends before load/reset or fleet drain.
-unsafe fn extent<const COUNTED: bool>(s: &SchedulerServices, pool: &mut PoolCursor) -> usize {
-    let live = unsafe { scalar_read::<_, COUNTED>(pool.first_unused) };
-    if live > pool.slots_len {
-        *pool = svc!(COUNTED, s.pool);
-        if COUNTED {
-            crate::witness::hit(crate::witness::VEHICLE_POOL_GROWTH);
-        }
-    }
-    live
+/// Pool metadata lives through this entry; each access reloads the current slot
+/// buffer and extent after effectful callbacks. No view survives pool destruction.
+unsafe fn extent<const COUNTED: bool>(pool: *const crate::pool::PoolDescriptor) -> usize {
+    unsafe { scalar_read::<_, COUNTED>(std::ptr::addr_of!((*pool).first_unused)) }
 }
-/// # Safety
-/// Call-scoped descriptor from `pool()`, serialized pool; no `CleanPool`/load/reset.
+unsafe fn record<const COUNTED: bool>(
+    pool: *const crate::pool::PoolDescriptor,
+    index: usize,
+) -> *mut super::OpenTTDVehicle {
+    let view = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(pool) };
+    if COUNTED {
+        crate::witness::add(
+            crate::witness::VEHICLE_SCALAR_READ_BYTES,
+            std::mem::size_of::<*mut super::OpenTTDVehicle>() as u64,
+        );
+    }
+    unsafe {
+        view.record(crate::vehicle_type::VehicleID(
+            u32::try_from(index).unwrap(),
+        ))
+    }
+}
 unsafe fn next<const COUNTED: bool>(
-    s: &SchedulerServices,
-    pool: &mut PoolCursor,
+    pool: *const crate::pool::PoolDescriptor,
     from: &mut usize,
 ) -> Option<VehicleRef> {
-    while *from < unsafe { extent::<COUNTED>(s, pool) } {
-        let vehicle = unsafe {
-            scalar_read::<_, COUNTED>(std::ptr::addr_of!((*pool.slots.add(*from)).record))
-        };
+    while *from < unsafe { extent::<COUNTED>(pool) } {
+        let vehicle = unsafe { record::<COUNTED>(pool, *from) };
         *from += 1;
         if !vehicle.is_null() {
-            // SAFETY: The slot carries its live owner record directly.
-            return Some(VehicleRef::of(vehicle.cast()));
+            return Some(VehicleRef::of(vehicle));
         }
     }
     None
 }
-/// Native transient probe uses the same cursor as scheduler, with actual pool storage.
+/// Native transient probe uses the production traversal over actual pool storage.
 /// # Safety
-/// As next; native test owns writable descriptor and numeric cursor for the call.
+/// The live service catalog and pool outlive this call; `from` is writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_cursor_next(
-    s: *const SchedulerServices,
-    pool: *mut PoolCursor,
+    base: *const VehicleServices,
     from: *mut usize,
 ) -> Option<VehicleRef> {
-    unsafe { next::<false>(&*s, &mut *pool, &mut *from) }
+    let pool = unsafe { (&*base).pool_descriptor() };
+    unsafe { next::<false>(pool, &mut *from) }
 }
 unsafe fn day<const COUNTED: bool>(
     tables: &Tables,
@@ -136,10 +130,9 @@ unsafe fn day<const COUNTED: bool>(
     calendar: bool,
     mut id: usize,
 ) {
-    let mut pool = svc!(COUNTED, s.pool);
-    while id < unsafe { extent::<COUNTED>(s, &mut pool) } {
-        let vehicle =
-            unsafe { scalar_read::<_, COUNTED>(std::ptr::addr_of!((*pool.slots.add(id)).record)) };
+    let pool = unsafe { (&*s.vehicle).pool_descriptor() };
+    while id < unsafe { extent::<COUNTED>(pool) } {
+        let vehicle = unsafe { record::<COUNTED>(pool, id) };
         id += DAY_TICKS as usize;
         if vehicle.is_null() {
             continue;
@@ -413,9 +406,9 @@ unsafe fn run_ticks<const COUNTED: bool>(
         cargo: tables.cargo,
     };
     {
-        let mut pool = svc!(COUNTED, s.pool);
+        let pool = unsafe { (&*s.vehicle).pool_descriptor() };
         let mut id = 0;
-        while let Some(vehicle) = unsafe { next::<COUNTED>(s, &mut pool, &mut id) } {
+        while let Some(vehicle) = unsafe { next::<COUNTED>(pool, &mut id) } {
             let current_id = id - 1;
             let shell = vehicle.shell();
             if COUNTED {
@@ -427,10 +420,10 @@ unsafe fn run_ticks<const COUNTED: bool>(
             // SAFETY: bundle is aligned writable storage, unused until success.
             let survives = unsafe { svc!(COUNTED, s.tick, vehicle, bundle.as_mut_ptr()) };
             if s.assertions {
-                let _ = unsafe { extent::<COUNTED>(s, &mut pool) };
+                let view = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(pool) };
                 let actual = unsafe {
-                    scalar_read::<_, COUNTED>(std::ptr::addr_of!(
-                        (*pool.slots.add(current_id)).shell
+                    view.shell(crate::vehicle_type::VehicleID(
+                        u32::try_from(current_id).unwrap(),
                     ))
                 };
                 assert!(
@@ -465,11 +458,6 @@ unsafe fn run_ticks<const COUNTED: bool>(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVehiclePoolCursor" ["scheduler"] => PoolCursor {
-        slots,
-        slots_len,
-        first_unused,
-    };
     "OpenTTDVehiclePostTick" ["scheduler"] => PostTick {
         vehicle_type => type,
         period,
@@ -483,7 +471,6 @@ crate::abi::layouts! {
         status,
     };
     "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
-        pool,
         assertions,
         tick,
         calendar_day,

@@ -1800,8 +1800,6 @@ const OpenTTDSettingServices &GetRustSettingServices() noexcept
 		.environment = GetRustEnvironmentServices(),
 		.client_vehicle_defaults = RustClientVehicleDefaults,
 		.company_vehicle_defaults = RustCompanyVehicleDefaults,
-		.set_service_interval = RustIndexedVehicleWrite<uint16_t, RustVehicleSetServiceInterval>,
-		.set_service_interval_percent = RustIndexedVehicleWrite<bool, RustVehicleSetServiceIntervalIsPercent>,
 		.newgame_minutes_per_year = RustNewgameMinutesPerCalendarYear,
 		.set_minutes_per_year = RustSetMinutesPerCalendarYear,
 		.set_newgame_wallclock = RustSetNewgameWallclockUnits,

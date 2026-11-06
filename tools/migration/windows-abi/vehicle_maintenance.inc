@@ -134,32 +134,28 @@ static void VehicleSchedulerBoundary()
 	/* Opaque shells are never dereferenced: this target tests the pointer/size_t
 	 * call ABI; the game target compares real pool mutations to PoolIterator. */
 	static RustPoolSlot slots[5];
-	static size_t live;
-	static size_t size;
 	std::array<uint8_t, 2> opaque{};
 	slots[0].shell = &opaque[0];
 	slots[1] = {};
 	slots[2].shell = &opaque[1];
 	slots[3] = slots[4] = {};
-	live = size = 2;
 	static OpenTTDVehicle records[2]{};
-	OpenTTDVehicleServices base{};
 	slots[0].record = &records[0];
 	slots[2].record = &records[1];
-	OpenTTDVehicleSchedulerServices services{};
-	services.vehicle = &base;
-	services.pool = []() noexcept { return OpenTTDVehiclePoolCursor{.slots = slots, .slots_len = size, .first_unused = &live}; };
-	auto cursor = services.pool();
+	RustPoolDescriptor descriptor{};
+	descriptor.slots = {slots, 2, 0};
+	descriptor.first_unused = 2;
+	const RustPoolDescriptor *const owner = &descriptor;
+	OpenTTDVehicleServices base{};
+	base.pool = &owner;
 	size_t from = 0;
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == &records[0]);
+	CHECK(openttd_rust_vehicle_cursor_next(&base, &from) == &records[0]);
 	CHECK(from == 1);
-	live = 3;
-	size = 5;
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == &records[1]);
-	CHECK(cursor.slots_len == 5);
-	CHECK(cursor.first_unused == &live);
+	descriptor.first_unused = 3;
+	descriptor.slots.count = 5;
+	CHECK(openttd_rust_vehicle_cursor_next(&base, &from) == &records[1]);
 	CHECK(from == 3);
-	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == nullptr);
+	CHECK(openttd_rust_vehicle_cursor_next(&base, &from) == nullptr);
 }
 
 /* These initialize the maintenance table consumed by the road and aircraft probes. */

@@ -51,7 +51,8 @@ struct SessionFixture {
 	OpenTTDAnimationServices animation{};
 	std::optional<RustAnimationScope> animation_scope;
 	std::optional<RustAnimationSave> animation_queue;
-	static inline size_t empty_extent = 0;
+	RustPoolDescriptor empty_vehicles{};
+	const RustPoolDescriptor *vehicle_pool = &this->empty_vehicles;
 	static void Nothing() noexcept {}
 	static void FrameNothing(OpenTTDSessionFrame *) noexcept {}
 	SessionFixture()
@@ -79,7 +80,7 @@ struct SessionFixture {
 		group.current_company = []() noexcept -> uint8_t { return 0; };
 		pending.set_current = [](uint8_t) noexcept {};
 		loop = {{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false, .ambient_callback = false}, &tiles};
-		scheduler.pool = []() noexcept { return OpenTTDVehiclePoolCursor{nullptr, 0, &empty_extent}; };
+		vehicles.pool = &this->vehicle_pool;
 		scheduler.vehicle = &vehicles;
 		scheduler.shared = &shared;
 		scheduler.with_loading_timer = [](const OpenTTDVehicleSchedulerTables *, void (*)(const OpenTTDVehicleSchedulerTables *)) noexcept {};

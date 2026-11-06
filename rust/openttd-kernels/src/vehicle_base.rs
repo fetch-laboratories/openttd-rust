@@ -98,6 +98,9 @@ pub struct OpenTTDVehicleShell {
     _private: [u8; 0],
 }
 
+pub(crate) type VehiclePool =
+    crate::pool::TypedPool<crate::vehicle_type::VehicleID, VehicleRecord, OpenTTDVehicleShell>;
+
 crate::abi::shared_records! {
     fn abi_record;
     /// Common movement and consist fields of one native shell, read and written
@@ -428,6 +431,29 @@ impl crate::vehicle::VehicleRef {
         let orders = crate::raw_field::read_field!(self.0.as_ptr(), orders);
         // SAFETY: The native Order lifetime begins during Vehicle construction.
         unsafe { std::ptr::addr_of_mut!((*orders).current).cast() }
+    }
+    pub(crate) fn vehicle_flags(self) -> u16 {
+        let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
+        crate::raw_field::read_field!(consist, flags)
+    }
+    pub(crate) fn write_vehicle_flags(self, value: u16) {
+        let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
+        crate::raw_field::write_field!(consist, flags, value);
+    }
+    pub(crate) fn service_interval_is_custom(self) -> bool {
+        self.vehicle_flags() & (1 << 8) != 0
+    }
+    pub(crate) fn set_service_interval_percent(self, value: bool) {
+        let flags = self.vehicle_flags();
+        self.write_vehicle_flags(if value {
+            flags | (1 << 9)
+        } else {
+            flags & !(1 << 9)
+        });
+    }
+    pub(crate) fn write_service_interval(self, value: u16) {
+        let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
+        crate::raw_field::write_field!(consist, service_interval, value);
     }
     pub(crate) fn service_interval(self) -> u16 {
         let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);

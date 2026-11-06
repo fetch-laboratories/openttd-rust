@@ -135,6 +135,7 @@ pub struct Breakdown {
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
+    pub pool: *const *const crate::pool::PoolDescriptor,
     pub assert_next: extern "C" fn(*mut OpenTTDVehicle, *mut OpenTTDVehicle),
     /// Resolve a legacy opaque native shell to its canonical record.
     pub record_from_shell: extern "C" fn(*mut std::ffi::c_void) -> *mut OpenTTDVehicle,
@@ -189,6 +190,12 @@ pub struct VehicleServices {
 // The visit table and its entries are native-supplied static Rust functions.
 #[allow(unsafe_code)]
 impl VehicleServices {
+    /// Load the canonical pool after native construction. The member address is
+    /// process-stable; every view ends before native pool destruction. Slots are
+    /// reloaded after callbacks because growth or reset invalidates their buffer.
+    pub(crate) unsafe fn pool_descriptor(&self) -> *const crate::pool::PoolDescriptor {
+        unsafe { self.pool.read() }
+    }
     /// `Vehicle::SetNext` for legacy native shell contexts.
     ///
     /// # Safety
@@ -293,6 +300,7 @@ crate::abi::layouts! {
         tile,
     };
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
+        pool,
         assert_next,
         record_from_shell,
         map_log_x,

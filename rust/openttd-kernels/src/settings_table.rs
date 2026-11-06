@@ -71,8 +71,6 @@ pub struct Services {
     pub client_vehicle_defaults: extern "C" fn() -> *mut VehicleDefaults,
     /// `&Company::Get(c)->settings.vehicle`.
     pub company_vehicle_defaults: extern "C" fn(CompanyID) -> *mut VehicleDefaults,
-    pub set_service_interval: extern "C" fn(VehicleID, u16),
-    pub set_service_interval_percent: extern "C" fn(VehicleID, bool),
     /// `_settings_newgame.economy.minutes_per_calendar_year`.
     pub newgame_minutes_per_year: extern "C" fn() -> u16,
     /// Store minutes per year in the new-game (true) or current game settings.
@@ -146,17 +144,24 @@ fn vehicle_defaults(s: &Services) -> (*mut VehicleDefaults, Option<CompanyID>) {
     }
 }
 
-/// `Vehicle::Iterate()` filtered by `owner == company`, yielding index and type.
-fn owned_vehicles(s: &Services, company: CompanyID, mut each: impl FnMut(VehicleID, u8)) {
-    let mut from = 0;
-    loop {
-        let mut kind = 0;
-        let id = (s.company.vehicle_next_owned)(company.0, from, &raw mut kind);
-        if id == u32::MAX {
-            break;
+/// Live pool order filtered by owner; no field reference survives the loop body.
+fn owned_vehicles(
+    s: &Services,
+    company: CompanyID,
+    mut each: impl FnMut(VehicleID, VehicleRef, u8),
+) {
+    let descriptor = unsafe { vehicle_services(s).pool_descriptor() };
+    let pool = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(descriptor) };
+    let mut index = 0;
+    while index < unsafe { (*descriptor).first_unused } {
+        let id = VehicleID(u32::try_from(index).unwrap());
+        index += 1;
+        let Some(v) = std::ptr::NonNull::new(unsafe { pool.record(id) }).map(VehicleRef) else {
+            continue;
+        };
+        if v.owner() == company.0 {
+            each(id, v, v.vehicle_type());
         }
-        from = id.wrapping_add(1);
-        each(VehicleID(id), kind);
     }
 }
 
@@ -186,16 +191,14 @@ fn update_all_service_interval(s: &Services, new_value: i32) {
 
     if let Some(company) = company {
         hit(witness::SETTINGS_SERVICE_DEFAULTS);
-        owned_vehicles(s, company, |id, kind| {
-            if (s.company.vehicle_is_primary)(id.0)
-                && !(s.company.vehicle_service_interval_is_custom)(id.0)
-            {
+        owned_vehicles(s, company, |id, v, kind| {
+            if (s.company.vehicle_is_primary)(id.0) && !v.service_interval_is_custom() {
                 hit(witness::SETTINGS_SERVICE_VEHICLE);
                 // `SetServiceInterval` takes the `int` of `CompanyServiceInterval` as uint16_t.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let interval = s.transactions.interval_default(company.0, kind) as u16;
-                (s.set_service_interval)(id, interval);
-                (s.set_service_interval_percent)(id, new_value != 0);
+                v.write_service_interval(interval);
+                v.set_service_interval_percent(new_value != 0);
             }
         });
     }
@@ -212,15 +215,15 @@ fn update_service_interval(s: &Services, kind: u8, new_value: i32) {
     if !menu() {
         let company = CompanyID((s.shared.current_company)());
         if (s.shared.company_valid)(company.0) {
-            owned_vehicles(s, company, |id, vehicle_kind| {
+            owned_vehicles(s, company, |id, v, vehicle_kind| {
                 if vehicle_kind == kind
                     && (s.company.vehicle_is_primary)(id.0)
-                    && !(s.company.vehicle_service_interval_is_custom)(id.0)
+                    && !v.service_interval_is_custom()
                 {
                     hit(witness::SETTINGS_SERVICE_TYPE);
                     // `SetServiceInterval(uint16_t)` truncates the setting value.
                     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    (s.set_service_interval)(id, new_value as u16);
+                    v.write_service_interval(new_value as u16);
                 }
             });
         }
@@ -693,8 +696,7 @@ crate::abi::layouts! {
     "OpenTTDSettingRange" ["settings"] => Range { min, max, };
     "OpenTTDSettingServices" ["settings"] => Services {
         shared, clock, company, transactions, refit, objectives, schedule, engines, environment,
-        client_vehicle_defaults, company_vehicle_defaults, set_service_interval,
-        set_service_interval_percent, newgame_minutes_per_year,
+        client_vehicle_defaults, company_vehicle_defaults, newgame_minutes_per_year,
         set_minutes_per_year, set_newgame_wallclock, setting, company_setting, setting_current,
         setting_int, setting_editable, change_game_setting, change_company_setting,
         window_classes_dirty, error_message, edges_not_empty,

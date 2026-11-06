@@ -123,9 +123,11 @@ unsafe fn update_bucket(v: VehicleRef, links: *mut Links, new: *mut Shell) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::SchedulerServices) {
     crate::witness::hit(crate::witness::OCCUPANCY_RESET);
-    let pool = (s.pool)();
-    for i in 0..unsafe { *pool.first_unused } {
-        let record = unsafe { (*pool.slots.add(i)).record };
+    let descriptor = unsafe { (&*s.vehicle).pool_descriptor() };
+    let pool = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(descriptor) };
+    for i in 0..unsafe { (*descriptor).first_unused } {
+        let id = crate::vehicle_type::VehicleID(u32::try_from(i).unwrap());
+        let record = unsafe { pool.record(id) };
         if !record.is_null() {
             unsafe {
                 let v = VehicleRef::of(record.cast());

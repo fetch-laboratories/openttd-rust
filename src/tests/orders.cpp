@@ -145,7 +145,9 @@ TEST_CASE("Base consist copies preserve values with independent aliases")
 	original.vehicle_flags.Set(VehicleFlag::LoadingFinished);
 	BaseConsist copied(original);
 	CHECK(copied.round_trip_time == 4200);
+	CHECK(copied.ConsistRecord().round_trip == 4200);
 	CHECK(copied.GetServiceInterval() == 139);
+	CHECK(copied.ConsistRecord().service_interval == 139);
 	CHECK(copied.depot_unbunching_last_departure == 1700);
 	CHECK(copied.cur_real_order_index == 23);
 	CHECK(copied.vehicle_flags == original.vehicle_flags);
@@ -156,7 +158,9 @@ TEST_CASE("Base consist copies preserve values with independent aliases")
 	CHECK(original.round_trip_time == 4200);
 	copied = original;
 	CHECK(copied.round_trip_time == 4200);
+	CHECK(copied.ConsistRecord().round_trip == 4200);
 	CHECK(copied.GetServiceInterval() == 139);
+	CHECK(copied.ConsistRecord().service_interval == 139);
 }
 TEST_CASE("Order list owners retire and reconstruct at a reused pool index")
 {

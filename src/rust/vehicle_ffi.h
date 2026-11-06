@@ -45,6 +45,7 @@ struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
+	const RustPoolDescriptor *const *pool = nullptr;
 	void (*assert_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(assert_next);
 	OpenTTDVehicle *(*record_from_shell)(void *) noexcept OPENTTD_SERVICE_DEFAULT(record_from_shell);
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
@@ -99,12 +100,6 @@ struct OpenTTDStationLoading;
 struct OpenTTDFleetPendingServices;
 struct OpenTTDFleetTransactionServices;
 struct OpenTTDFleetGroupServices;
-/** Call-scoped actual indexing storage; growth invalidates slots but not first_unused. */
-struct OpenTTDVehiclePoolCursor {
-	const RustPoolSlot *slots;
-	size_t slots_len;
-	const size_t *first_unused;
-};
 /** Named actual scalar members. No reference into the shell crosses a callback. */
 struct OpenTTDVehiclePostTick {
 	VehicleType type;
@@ -120,7 +115,6 @@ struct OpenTTDVehiclePostTick {
 };
 struct OpenTTDVehicleSchedulerTables;
 struct OpenTTDVehicleSchedulerServices {
-	OpenTTDVehiclePoolCursor (OPENTTD_RUST_CALL *pool)() noexcept OPENTTD_SERVICE_DEFAULT(pool);
 	bool assertions;
 	/** Runs the virtual Tick; fills the bundle only when the vehicle survives. */
 	bool (OPENTTD_RUST_CALL *tick)(OpenTTDVehicle *, OpenTTDVehiclePostTick *) noexcept OPENTTD_SERVICE_DEFAULT(tick);
@@ -167,6 +161,6 @@ OpenTTDVehicleNear openttd_rust_occupancy_near(const OpenTTDVehicleServices *, i
 void openttd_rust_occupancy_near_advance(const OpenTTDVehicleServices *, OpenTTDVehicleNear *);
 }
 extern "C" {
-OpenTTDVehicle *openttd_rust_vehicle_cursor_next(const OpenTTDVehicleSchedulerServices *, OpenTTDVehiclePoolCursor *, size_t *);
+OpenTTDVehicle *openttd_rust_vehicle_cursor_next(const OpenTTDVehicleServices *, size_t *);
 }
 #endif /* RUST_VEHICLE_FFI_H */

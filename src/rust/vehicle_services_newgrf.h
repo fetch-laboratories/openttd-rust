@@ -73,7 +73,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.old_order = [](OpenTTDVehicle * v) noexcept -> uint16_t { return VehicleOf(v)->current_order.MapOldOrder(); },
 		.num_orders = RustVehicleRead<uint8_t, RustVehicleNumOrders>,
 		.real_order = RustVehicleRead<uint8_t, RustVehicleRealOrderIndex>,
-		.vehicle_flags = [](OpenTTDVehicle * v) noexcept -> uint16_t { return VehicleOf(v)->vehicle_flags.base(); },
 		.target_airport = [](OpenTTDVehicle * v) noexcept -> const OpenTTDStation * { return RustStation(GetTargetAirportIfValid(Aircraft::From(VehicleOf(v)))); },
 		.airport_ttd_type = RustAirportTTDType,
 		.moving_flags = [](const void * airport, uint8_t pos) noexcept -> uint16_t { return RustAirportMovingFlags(static_cast<const AirportFTAClass *>(airport)->MovingData(pos)); },
