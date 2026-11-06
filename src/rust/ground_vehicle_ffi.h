@@ -28,12 +28,6 @@ struct OpenTTDGroundPhysicsServices {
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	uint64_t (*cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);
 	uint64_t (*train_cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo_weight);
-	uint16_t (*engine_power)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_power);
-	uint16_t (*engine_weight)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_weight);
-	uint8_t (*engine_te)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_te);
-	uint8_t (*engine_drag)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_drag);
-	uint16_t (*wagon_power)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(wagon_power);
-	uint8_t (*wagon_weight)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(wagon_weight);
 	bool (*powered)(uint64_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(powered);
 	RailType (*rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);
 	VehicleAccelerationModel (*rail_acceleration)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_acceleration);

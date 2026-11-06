@@ -77,10 +77,13 @@ static void RoadBoundary()
 	effect_test_world = &world;
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
 	RoadTestTables t(&services);
+	road_abi_engine->vehicle_info.road.visual_effect = road_abi_new_engine->vehicle_info.road.visual_effect = 0x40;
+	t.vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * {
+		return road_abi_probe->engine_replaced ? road_abi_new_engine : road_abi_engine;
+	};
 	static uint8_t cache_visual_byte = 0;
 	OpenTTDVisualServices cache_visual{
 		.vehicle = &t.vehicle, .shared = &t.shared,
-		.engine = [](OpenTTDVehicle *) noexcept -> OpenTTDVisualEngine { return {.engine = nullptr, .kind = VEH_ROAD, .visual = 0x40, .callback = false}; },
 	};
 	road_abi_vehicle.visual = road_abi_second.visual = road_abi_hidden.visual = &cache_visual_byte;
 	auto previous_visual = openttd_rust_visual_bind(&cache_visual);

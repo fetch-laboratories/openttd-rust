@@ -73,14 +73,8 @@ inline OpenTTDEngineVehicle Engine_vehicle_next(uint32_t from) noexcept
 	return v == nullptr ? OpenTTDEngineVehicle{nullptr, UINT32_MAX, 0, VEH_INVALID} : OpenTTDEngineVehicle{RustVehicle(v), RustVehicleIndexOpaque(v), RustVehicleOwner(v), RustVehicleVehicleType(v)};
 }
 inline uint16_t RustRailEnginePower(const RailVehicleInfo *info) noexcept { return info->power; }
-inline uint16_t RustRailEngineWeight(const RailVehicleInfo *info) noexcept { return info->weight; }
 inline uint16_t RustGroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RustRailEnginePower(RailVehInfo(v->GetEngineType())) : RoadVehInfo(v->GetEngineType())->power; }
-inline uint16_t RustGroundEngineWeight(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RustRailEngineWeight(RailVehInfo(v->GetEngineType())) : RoadVehInfo(v->GetEngineType())->weight; }
-inline uint8_t RustGroundEngineTE(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RailVehInfo(v->GetEngineType())->tractive_effort : RoadVehInfo(v->GetEngineType())->tractive_effort; }
-inline uint8_t RustGroundEngineDrag(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RailVehInfo(v->GetEngineType())->air_drag : RoadVehInfo(v->GetEngineType())->air_drag; }
 inline uint16_t RustEngineWagonPower(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_power; }
-inline uint8_t RustEngineWagonWeight(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_weight; }
-inline uint8_t RustEngineGRFVersionOpaque(const OpenTTDEngine *e) noexcept { return RustEngineGRFVersion(EngineOf(e)); }
 inline void RustEngineArticulatedWarning(const OpenTTDEngine *e) noexcept { RustVehicleShowNewGRFError(EngineOf(e)->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false); }
 inline OpenTTDEngineRef EngineRef(const Engine *e) noexcept
 {

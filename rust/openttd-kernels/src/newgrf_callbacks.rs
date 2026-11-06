@@ -97,3 +97,6 @@ pub const VEHICLE_CARGO_SUFFIX: u16 = 1 << 5;
 
 /// `VehicleCallbackMask::CustomRefit`.
 pub const VEHICLE_CUSTOM_REFIT: u16 = 1 << 9;
+
+/// `VehicleCallbackMask::VisualEffect`.
+pub const VEHICLE_VISUAL_EFFECT: u16 = 1;

@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Engine handles borrow one live canonical record for a serialized entry. Each method
-//! copies only its named fields; no record reference is retained across callbacks/drop.
+//! reads fields without retaining a record reference across callbacks/drop.
 #![allow(unsafe_code)]
 use crate::engine::Lifecycle;
 use crate::raw_field::read_field;
@@ -99,6 +99,56 @@ impl EngineRef {
     }
     pub(crate) fn refit_cost(self) -> u8 {
         read_field!(self.0.as_ptr(), info.refit_cost)
+    }
+    pub(crate) fn visual_effect(self) -> u8 {
+        match self.kind() {
+            VehicleType::TRAIN => read_field!(Lifecycle::rail(self.0.as_ptr()), visual_effect),
+            VehicleType::ROAD => read_field!(Lifecycle::road(self.0.as_ptr()), visual_effect),
+            VehicleType::SHIP => read_field!(Lifecycle::ship(self.0.as_ptr()), visual_effect),
+            _ => 1 << crate::engine_type::VE_DISABLE_EFFECT,
+        }
+    }
+    pub(crate) fn grf_version(self, shared: &crate::services::Services) -> u8 {
+        let file = self.grf();
+        if file.is_null() {
+            0
+        } else {
+            (shared.grf_file_version)(file)
+        }
+    }
+    pub(crate) fn ground_power(self, kind: VehicleType) -> u16 {
+        if kind == VehicleType::TRAIN {
+            read_field!(Lifecycle::rail(self.0.as_ptr()), power)
+        } else {
+            u16::from(read_field!(Lifecycle::road(self.0.as_ptr()), power))
+        }
+    }
+    pub(crate) fn ground_weight(self, kind: VehicleType) -> u16 {
+        if kind == VehicleType::TRAIN {
+            read_field!(Lifecycle::rail(self.0.as_ptr()), weight)
+        } else {
+            u16::from(read_field!(Lifecycle::road(self.0.as_ptr()), weight))
+        }
+    }
+    pub(crate) fn ground_te(self, kind: VehicleType) -> u8 {
+        if kind == VehicleType::TRAIN {
+            read_field!(Lifecycle::rail(self.0.as_ptr()), tractive_effort)
+        } else {
+            read_field!(Lifecycle::road(self.0.as_ptr()), tractive_effort)
+        }
+    }
+    pub(crate) fn ground_drag(self, kind: VehicleType) -> u8 {
+        if kind == VehicleType::TRAIN {
+            read_field!(Lifecycle::rail(self.0.as_ptr()), air_drag)
+        } else {
+            read_field!(Lifecycle::road(self.0.as_ptr()), air_drag)
+        }
+    }
+    pub(crate) fn wagon_power(self) -> u16 {
+        read_field!(Lifecycle::rail(self.0.as_ptr()), pow_wag_power)
+    }
+    pub(crate) fn wagon_weight(self) -> u8 {
+        read_field!(Lifecycle::rail(self.0.as_ptr()), pow_wag_weight)
     }
     pub(crate) fn ground(self) -> bool {
         matches!(self.kind(), VehicleType::TRAIN | VehicleType::ROAD)
