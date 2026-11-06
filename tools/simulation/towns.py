@@ -8,8 +8,9 @@ import shutil
 import struct
 import subprocess
 import threading
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict, cast
 
 from . import core
 from .console_adapter import prepared_console
@@ -24,6 +25,22 @@ from .core import (
     read_save,
     run_game,
 )
+
+
+class Scenario(core.Scenario):
+    town_style: NotRequired[int]
+    town_seeds: NotRequired[bool]
+    town_growth: NotRequired[str]
+    yearly_age_witness: NotRequired[bool]
+    growth_assignments: NotRequired[dict[int, str]]
+    town_founding: NotRequired[str]
+    town_branches: NotRequired[list[str]]
+    house_mode: NotRequired[str]
+    house_reload: NotRequired[bool]
+    house_definition_dir: NotRequired[str]
+    town_commands_reload: NotRequired[bool]
+    town_data_reload: NotRequired[bool]
+
 
 TOWN_STYLES = (
     "english french german american latin silly swedish dutch finnish polish "
@@ -83,11 +100,18 @@ TOWN_SEEDS = (
 )
 
 
-def prepare_town_names(scenario, binaries, builds, out, timeout, env):
+def prepare_town_names(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+) -> tuple[Scenario, dict[str, Any]]:
     """Patch only CITY name type/parts in a reference-produced input fixture."""
     setup = {k: v for k, v in scenario.items() if k not in ("town_style", "console")}
     run = run_game(
-        setup,
+        cast(Scenario, setup),
         binaries["reference"],
         builds["reference"],
         out / scenario["name"] / "prepare",
@@ -103,7 +127,8 @@ def prepare_town_names(scenario, binaries, builds, out, timeout, env):
     # schema rather than silently modifying a different field's bytes.
     if (
         city["kind"] != 3
-        or city["header"][:4]
+        # A kind 3 chunk is a table with a header.
+        or cast(list[core.Field], city["header"])[:4]
         != [
             {"type": 6, "key": "xy"},
             {"type": 6, "key": "townnamegrfid"},
@@ -117,7 +142,7 @@ def prepare_town_names(scenario, binaries, builds, out, timeout, env):
     data = bytearray(source)
     reader = Reader(source, city["span"][0] + 5)
     reader.take(reader.gamma() - 1)  # table header
-    assignments = []
+    assignments: list[list[int]] = []
     for index, body in city["elements"]:
         length = reader.gamma() - 1
         if reader.take(length) != body:
@@ -138,14 +163,17 @@ def prepare_town_names(scenario, binaries, builds, out, timeout, env):
     for (index, a), (other_index, b) in zip(
         city["elements"], check["CITY"]["elements"], strict=True
     ):
-        left, right = decode_element(city, a), decode_element(check["CITY"], b)
+        left, right = (
+            cast(core.Row, decode_element(city, a)),
+            cast(core.Row, decode_element(check["CITY"], b)),
+        )
         left.update(
             townnametype=0x20C0 + scenario["town_style"],
             townnameparts=TOWN_SEEDS[index % len(TOWN_SEEDS)],
         )
         if index != other_index or left != right or a[:8] != b[:8] or a[14:] != b[14:]:
             raise RuntimeError("town-name input changed unrelated CITY fields")
-    return dict(scenario, kind="save", save=str(normalized)), {
+    return {**scenario, "kind": "save", "save": str(normalized)}, {
         "reference": str(fixture),
         "normalized": str(normalized),
         "reference_sha256": hashlib.sha256(source).hexdigest(),
@@ -156,10 +184,10 @@ def prepare_town_names(scenario, binaries, builds, out, timeout, env):
     }
 
 
-def check_town_observer(scenario, run):
+def check_town_observer(scenario: Scenario, run: core.Run) -> None:
     """Require every exact rendered row; equal empty or truncated logs cannot pass."""
     city = read_save(run["snapshots"][-1])["CITY"]
-    expected = []
+    expected: list[int] = []
     for index, body in city["elements"]:
         fields = decode_element(city, body)
         if (
@@ -205,10 +233,10 @@ GROWTH_CASES = ("normal", "custom", "none", "funded", "blocked", "supplied")
 # Growth saves build bridges and terraform, but never build a tunnel. Keep this
 # bounded unchanged-body comparison in the component module, not another harness.
 _TUNNEL_LOCK = threading.Lock()
-_TUNNEL_REPORTS = {}
+_TUNNEL_REPORTS: dict[Path, dict[str, Any]] = {}
 
 
-def tunnel_reference_gap(out, archive=None):
+def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, Any]:
     """Compare unchanged pinned tunnel control with Rust over controlled services."""
     import probe
 
@@ -219,7 +247,7 @@ def tunnel_reference_gap(out, archive=None):
     report_path.unlink(missing_ok=True)
     migration.ensure_reference()
     source = (migration.REFERENCE / "src/town_cmd.cpp").read_text()
-    bodies = {}
+    bodies: dict[str, str] = {}
     signatures = {
         "CanRoadContinueIntoNextTile": "static bool CanRoadContinueIntoNextTile(",
         "GrowTownWithTunnel": "static bool GrowTownWithTunnel(",
@@ -270,7 +298,7 @@ def tunnel_reference_gap(out, archive=None):
     (out / "stderr.txt").write_bytes(run.stderr)
     if run.returncode != 0:
         raise RuntimeError(f"town tunnel reference gap failed: {run.stderr.decode()}")
-    counts = {}
+    counts: dict[str, int] = {}
     for kind in ("tunnel", "history", "rating", "radius", "authority", "percent"):
         found = re.search(
             rb"\nPASS (\d+) unchanged-reference %s cases\n" % kind.encode()
@@ -293,17 +321,27 @@ def tunnel_reference_gap(out, archive=None):
     return report
 
 
-def town_growth_rows(chunks):
+def town_growth_rows(chunks: core.Chunks) -> dict[int, core.Row]:
     city = chunks["CITY"]
-    return {index: decode_element(city, body) for index, body in city["elements"]}
+    return {
+        index: cast(core.Row, decode_element(city, body))
+        for index, body in city["elements"]
+    }
 
 
-def prepare_growth(scenario, binaries, builds, out, timeout, env):
+def prepare_growth(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+) -> tuple[Scenario, dict[str, Any]]:
     """Patch only growth inputs in an unchanged-reference-produced modern save."""
     setup = {k: v for k, v in scenario.items() if k != "town_growth"}
     setup["ticks"] = 2 * SNAPSHOT_TICKS + TICKS_PER_DAY
     run = run_game(
-        setup,
+        cast(Scenario, setup),
         binaries["reference"],
         builds["reference"],
         out / scenario["name"] / "prepare",
@@ -318,18 +356,20 @@ def prepare_growth(scenario, binaries, builds, out, timeout, env):
     if city["kind"] != 3 or len(city["elements"]) < len(GROWTH_CASES):
         raise RuntimeError("town-growth fixture needs six modern CITY records")
     source = fixture.read_bytes()
-    data, patches, assignments = bytearray(source), [], {}
+    patches: list[list[Any]] = []
+    assignments: dict[int, str] = {}
+    data = bytearray(source)
     reader = Reader(source, city["span"][0] + 5)
     reader.take(reader.gamma() - 1)
     for ordinal, (index, body) in enumerate(city["elements"]):
         length = reader.gamma() - 1
         if reader.take(length) != body:
             raise RuntimeError("unexpected CITY element framing")
-        fields = decode_element(city, body)
-        spans = field_spans(body, city["header"])
+        fields = cast(core.Row, decode_element(city, body))
+        spans = field_spans(body, cast(list[core.Field], city["header"]))
         case = GROWTH_CASES[ordinal % len(GROWTH_CASES)]
         assignments[index] = case
-        values = {
+        values: dict[str, int | tuple[int, ...]] = {
             "flags": fields["flags"] & 6 | (0 if case == "normal" else 9),
             "grow_counter": 0,
             "growth_rate": 511,
@@ -339,7 +379,11 @@ def prepare_growth(scenario, binaries, builds, out, timeout, env):
         }
         if case == "none":
             values.update(
-                flags=fields["flags"] & 6 | 8, grow_counter=65535, growth_rate=65535
+                {
+                    "flags": fields["flags"] & 6 | 8,
+                    "grow_counter": 65535,
+                    "growth_rate": 65535,
+                }
             )
         if case == "funded":
             values["flags"] = fields["flags"] & 6 | 1
@@ -373,9 +417,13 @@ def prepare_growth(scenario, binaries, builds, out, timeout, env):
     normalized = fixture.parent / "town-growth-input.sav"
     core.strip_glog(data, normalized)
     normalized_data = normalized.read_bytes()
-    return dict(
-        scenario, kind="save", save=str(normalized), growth_assignments=assignments
-    ), {
+    prepared: Scenario = {
+        **scenario,
+        "kind": "save",
+        "save": str(normalized),
+        "growth_assignments": assignments,
+    }
+    return prepared, {
         "reference": str(fixture),
         "normalized": str(normalized),
         "reference_sha256": hashlib.sha256(source).hexdigest(),
@@ -386,7 +434,7 @@ def prepare_growth(scenario, binaries, builds, out, timeout, env):
     }
 
 
-def check_growth(scenario, run):
+def check_growth(scenario: Scenario, run: core.Run) -> dict[str, Any]:
     """Require physical growth and saved control transitions, not equal emptiness."""
     paths = [Path(scenario["save"]), *run["snapshots"]]
     chunks = [read_save(path) for path in paths]
@@ -475,7 +523,7 @@ def check_growth(scenario, run):
     ):
         if not bridges or not heights:
             raise RuntimeError("temperate growth did not build a bridge/terraform")
-    witnesses = {}
+    witnesses: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for case in GROWTH_CASES:
         ids = [
             index
@@ -552,7 +600,7 @@ def check_growth(scenario, run):
     }
 
 
-def growth_scenarios(soak):
+def growth_scenarios(soak: bool) -> list[Scenario]:
     # Natural generated roads witness bridges/terraform but this corpus builds
     # no tunnels. Roads-only expansion needs a deity/editor command; it has no
     # existing console entry point. Do not mistake zero counts for coverage.
@@ -568,9 +616,9 @@ def growth_scenarios(soak):
                 ("toyland", "tropic", "arctic", "temperate")
             )
         ]
-    scenarios = []
+    scenarios: list[Scenario] = []
     for index, (layout, climate, mode) in enumerate(cases):
-        scenario = {
+        scenario: Scenario = {
             "name": f"town-growth-{layout}-{climate}-{mode}-reload",
             "kind": "generate",
             "seed": 12345 if soak else 1,
@@ -592,9 +640,8 @@ def growth_scenarios(soak):
             },
         }
         if index == 5:
-            scenario.update(
-                kind="save", save=str(ROOT / "migration/saves/opus-55-167-002.sav")
-            )
+            scenario["kind"] = "save"
+            scenario["save"] = str(ROOT / "migration/saves/opus-55-167-002.sav")
         scenarios.append(scenario)
     return scenarios
 
@@ -731,27 +778,35 @@ def house_definition_fixtures(folder: Path) -> None:
 
 
 def prepare_house_definitions(
-    scenario: dict[str, Any],
+    scenario: Scenario,
     binaries: dict[str, Path],
     builds: dict[str, Path],
     out: Path,
-    timeout: float,
+    timeout: int,
     env: dict[str, str],
-    result: dict[str, Any],
-) -> dict[str, Any]:
+    result: core.Result,
+) -> Scenario:
     folder = out / scenario["name"] / "input"
     house_definition_fixtures(folder / "grfs")
     executables = prepared_console("towns", adapter, binaries, builds, folder, env)
-    scenario = dict(
-        scenario, executables=executables, house_definition_dir=str(folder / "grfs")
-    )
+    scenario = {
+        **scenario,
+        "executables": executables,
+        "house_definition_dir": str(folder / "grfs"),
+    }
     saves = {role: folder / role / "houses.sav" for role in executables}
+
+    def capture_scenario(role: str) -> Scenario:
+        return {
+            **scenario,
+            "console": [
+                f'towns_scenario definitions "{folder / "grfs"}" "{saves[role]}"'
+            ],
+            "ticks": 1,
+        }
+
     runs = core.capture_pair(
-        lambda role: dict(
-            scenario,
-            console=[f'towns_scenario definitions "{folder / "grfs"}" "{saves[role]}"'],
-            ticks=1,
-        ),
+        capture_scenario,
         executables,
         builds,
         folder,
@@ -781,19 +836,19 @@ def prepare_house_definitions(
         raise RuntimeError(
             "house definition eligibility, placement, cargo or RNG differs"
         )
-    result["house_definition_capture"] = HouseDefinitionCapture(
+    core.findings(result)["house_definition_capture"] = HouseDefinitionCapture(
         definition_rows=len(traces["reference"]),
         hids=len(read_save(saves["reference"])["HIDS"]["elements"]),
     )
-    return dict(
-        scenario,
-        kind="save",
-        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["towns_scenario definitions-inspect", "unpause"],
-    )
+    return {
+        **scenario,
+        "kind": "save",
+        "role_inputs": {role: {"save": str(save)} for role, save in saves.items()},
+        "console": ["towns_scenario definitions-inspect", "unpause"],
+    }
 
 
-def adapter(build, folder, env):
+def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
     import probe
 
     import migration
@@ -824,23 +879,31 @@ def adapter(build, folder, env):
     )
 
 
-def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
+def prepare_founding(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if scenario["town_founding"] == "definitions":
         return prepare_house_definitions(
             scenario, binaries, builds, out, timeout, env, result
         )
     folder = out / scenario["name"] / "input"
     executables = prepared_console("towns", adapter, binaries, builds, folder, env)
-    scenario = dict(scenario, executables=executables)
+    scenario = {**scenario, "executables": executables}
     if scenario["town_founding"] == "road-types":
-        return dict(scenario, console=["towns_scenario road-types", "unpause"])
+        return {**scenario, "console": ["towns_scenario road-types", "unpause"]}
     if scenario["town_founding"] == "data" and not scenario["town_data_reload"]:
-        return dict(scenario, console=["towns_scenario data", "unpause"])
+        return {**scenario, "console": ["towns_scenario data", "unpause"]}
     if scenario["town_founding"] == "data":
         from .core import normalize
 
         save = folder / "reference" / "town-data.sav"
-        setup = dict(scenario, console=[f'towns_scenario data "{save}"'])
+        setup: Scenario = {**scenario, "console": [f'towns_scenario data "{save}"']}
         run = run_game(
             setup,
             executables["reference"],
@@ -853,26 +916,35 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         if run["exit"] or not save.is_file():
             raise RuntimeError("town data reload capture failed")
         check_town_data(run)
-        save, result["town_data_reload_input"] = normalize(save, folder / "normalized")
-        return dict(
-            scenario,
-            kind="save",
-            save=str(save),
-            console=["towns_scenario data-inspect", "unpause"],
+        save, core.findings(result)["town_data_reload_input"] = normalize(
+            save, folder / "normalized"
         )
+        return {
+            **scenario,
+            "kind": "save",
+            "save": str(save),
+            "console": ["towns_scenario data-inspect", "unpause"],
+        }
     if scenario["town_founding"] == "storage":
         from .core import normalize
 
-        source, result["storage_source_input"] = normalize(
+        source, core.findings(result)["storage_source_input"] = normalize(
             Path(scenario["save"]), folder / "source"
         )
-        scenario = dict(scenario, save=str(source))
-        captures, action2 = {}, {}
+        scenario = {**scenario, "save": str(source)}
+        captures: dict[str, list[core.Row]] = {}
+        action2: dict[str, list[str]] = {}
         saves = {role: folder / role / "storage.sav" for role in executables}
+
+        def capture_scenario(role: str) -> Scenario:
+            return {
+                **scenario,
+                "console": [f'towns_scenario storage "{saves[role]}"'],
+                "ticks": 1,
+            }
+
         runs = core.capture_pair(
-            lambda role: dict(
-                scenario, console=[f'towns_scenario storage "{saves[role]}"'], ticks=1
-            ),
+            capture_scenario,
             executables,
             builds,
             folder,
@@ -894,7 +966,10 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                 raise RuntimeError(f"{role} real common Action2 cases missing")
             action2[role] = markers
             chunk = read_save(save)["PSAC"]
-            values = [decode_element(chunk, body) for _, body in chunk["elements"]]
+            values = [
+                cast(core.Row, decode_element(chunk, body))
+                for _, body in chunk["elements"]
+            ]
             if len(values) != 4 or not all(any(row["storage"]) for row in values):
                 raise RuntimeError(f"{role} nonempty PSAC marker missing")
             captures[role] = values
@@ -915,22 +990,24 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         storage_load_probes(
             scenario, executables, builds, folder, saves["reference"], timeout, env
         )
-        save, result["storage_reload_input"] = normalize(
+        save, core.findings(result)["storage_reload_input"] = normalize(
             saves["reference"], folder / "normalized"
         )
-        return dict(
-            scenario,
-            kind="save",
-            save=str(save),
-            console=["towns_scenario storage-inspect", "unpause"],
-        )
+        return {
+            **scenario,
+            "kind": "save",
+            "save": str(save),
+            "console": ["towns_scenario storage-inspect", "unpause"],
+        }
     if scenario["town_founding"] == "authority":
         if not scenario.get("town_commands_reload"):
-            return dict(scenario, console=["towns_scenario authority", "unpause"])
+            return {**scenario, "console": ["towns_scenario authority", "unpause"]}
         save = folder / "reference" / "town-commands.sav"
-        setup = dict(
-            scenario, console=[f'towns_scenario authority "{save}"', "unpause"], ticks=1
-        )
+        setup: Scenario = {
+            **scenario,
+            "console": [f'towns_scenario authority "{save}"', "unpause"],
+            "ticks": 1,
+        }
         run = run_game(
             setup,
             executables["reference"],
@@ -951,22 +1028,26 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         check_statue_search(scenario, run, "capture", "reference", result)
         from .core import normalize
 
-        save, result["town_reload_input"] = normalize(save, folder / "normalized")
-        return dict(
-            scenario,
-            kind="save",
-            save=str(save),
-            console=["towns_scenario authority-inspect", "unpause"],
+        save, core.findings(result)["town_reload_input"] = normalize(
+            save, folder / "normalized"
         )
+        return {
+            **scenario,
+            "kind": "save",
+            "save": str(save),
+            "console": ["towns_scenario authority-inspect", "unpause"],
+        }
     if scenario["town_founding"] == "houses":
         mode = scenario["house_mode"]
         if scenario.get("house_reload"):
             from .core import normalize
 
             save = folder / "reference" / "house-resolver.sav"
-            setup = dict(
-                scenario, console=[f'towns_scenario houses recession "{save}"'], ticks=1
-            )
+            setup: Scenario = {
+                **scenario,
+                "console": [f'towns_scenario houses recession "{save}"'],
+                "ticks": 1,
+            }
             run = run_game(
                 setup,
                 executables["reference"],
@@ -983,24 +1064,28 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                 not in run["log"]
             ):
                 raise RuntimeError("house resolver reload capture failed")
-            save, result["house_reload_input"] = normalize(save, folder / "normalized")
-            scenario = dict(scenario, kind="save", save=str(save))
-        return dict(
-            scenario,
-            console=[
+            save, core.findings(result)["house_reload_input"] = normalize(
+                save, folder / "normalized"
+            )
+            scenario = {**scenario, "kind": "save", "save": str(save)}
+        return {
+            **scenario,
+            "console": [
                 f"setting economy.town_cargogen_mode {int(mode == 'binomial')}",
                 f"towns_scenario houses {'recession' if mode == 'original' else ''}",
                 "unpause",
             ],
-        )
+        }
     if scenario["town_founding"] != "reload":
-        return dict(scenario, console=["towns_scenario commands", "unpause"])
+        return {**scenario, "console": ["towns_scenario commands", "unpause"]}
     from .core import normalize
 
     save = folder / "reference" / "towns.sav"
-    setup = dict(
-        scenario, console=[f'towns_scenario commands "{save}"', "unpause"], ticks=1
-    )
+    setup: Scenario = {
+        **scenario,
+        "console": [f'towns_scenario commands "{save}"', "unpause"],
+        "ticks": 1,
+    }
     run = run_game(
         setup,
         executables["reference"],
@@ -1016,16 +1101,26 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         or "TOWN lifetime true true true" not in run["log"]
     ):
         raise RuntimeError("town command reload capture failed")
-    save, result["town_reload_input"] = normalize(save, folder / "normalized")
-    return dict(
-        scenario,
-        kind="save",
-        save=str(save),
-        console=["towns_scenario inspect", "unpause"],
+    save, core.findings(result)["town_reload_input"] = normalize(
+        save, folder / "normalized"
     )
+    return {
+        **scenario,
+        "kind": "save",
+        "save": str(save),
+        "console": ["towns_scenario inspect", "unpause"],
+    }
 
 
-def storage_load_probes(scenario, executables, builds, folder, capture, timeout, env):
+def storage_load_probes(
+    scenario: Scenario,
+    executables: dict[str, Path],
+    builds: dict[str, Path],
+    folder: Path,
+    capture: Path,
+    timeout: int,
+    env: dict[str, str],
+) -> None:
     """Real PSAC header failure, incremental partial publication and 16-word import."""
     from .core import gamma
 
@@ -1052,11 +1147,11 @@ def storage_load_probes(scenario, executables, builds, folder, capture, timeout,
         path = folder / f"PSAC-{case}.bin"
         path.write_bytes(raw)
         for role, executable in executables.items():
-            probe = dict(
-                scenario,
-                console=[f'towns_scenario storage-load "{path}" {case}'],
-                ticks=1,
-            )
+            probe: Scenario = {
+                **scenario,
+                "console": [f'towns_scenario storage-load "{path}" {case}'],
+                "ticks": 1,
+            }
             run = run_game(
                 probe,
                 executable,
@@ -1072,50 +1167,51 @@ def storage_load_probes(scenario, executables, builds, folder, capture, timeout,
                 )
 
 
-def founding_scenarios(soak):
+def founding_scenarios(soak: bool) -> list[Scenario]:
     cases = growth_scenarios(soak)[:5]
     for layout, scenario in enumerate(cases):
         scenario.pop("town_growth")
         scenario.pop("yearly_age_witness")
-        scenario.update(
-            name=f"town-founding-{layout}",
-            ticks=(3 if soak else 2) * SNAPSHOT_TICKS,
-            town_founding="reload" if layout == 4 else "commands",
-        )
-        scenario["settings"]["game_creation"]["custom_town_number"] = 1
-        scenario["settings"]["economy"]["town_layout"] = layout
+        scenario["name"] = f"town-founding-{layout}"
+        scenario["ticks"] = (3 if soak else 2) * SNAPSHOT_TICKS
+        scenario["town_founding"] = "reload" if layout == 4 else "commands"
+        # Each growth scenario builds its own nested settings dictionaries.
+        settings = cast(dict[str, dict[str, Any]], scenario["settings"])
+        settings["game_creation"]["custom_town_number"] = 1
+        settings["economy"]["town_layout"] = layout
     # larger_towns 0 makes GenerateTowns skip its city-offset Random() draw.
     cases.append(copy.deepcopy(cases[0]))
-    cases[-1].update(name="town-founding-no-cities", town_branches=["no_cities"])
-    cases[-1]["settings"]["economy"]["larger_towns"] = 0
+    cases[-1]["name"] = "town-founding-no-cities"
+    cases[-1]["town_branches"] = ["no_cities"]
+    cast(dict[str, dict[str, Any]], cases[-1]["settings"])["economy"][
+        "larger_towns"
+    ] = 0
     return cases
 
 
-def house_scenarios(soak):
+def house_scenarios(soak: bool) -> list[Scenario]:
     """Placement, clearance, autoslope, lift, rebuild and both cargo modes."""
-    cases = []
+    cases: list[Scenario] = []
     for mode in ("original", "binomial"):
         scenario = founding_scenarios(soak)[0]
-        scenario.update(
-            name=f"town-houses-{mode}",
-            town_founding="houses",
-            house_mode=mode,
-            ticks=(90 if soak else 60) * TICKS_PER_DAY + SNAPSHOT_TICKS,
-        )
+        scenario["name"] = f"town-houses-{mode}"
+        scenario["town_founding"] = "houses"
+        scenario["house_mode"] = mode
+        scenario["ticks"] = (90 if soak else 60) * TICKS_PER_DAY + SNAPSHOT_TICKS
         cases.append(scenario)
-    cases.append(dict(cases[0], name="town-houses-reload", house_reload=True))
+    cases.append({**cases[0], "name": "town-houses-reload", "house_reload": True})
     definitions = founding_scenarios(soak)[0]
-    definitions.update(
-        name="town-house-definitions-reload",
-        town_founding="definitions",
-        ticks=1,
-        short_checkpoint=True,
-    )
+    definitions["name"] = "town-house-definitions-reload"
+    definitions["town_founding"] = "definitions"
+    definitions["ticks"] = 1
+    definitions["short_checkpoint"] = True
     cases.append(definitions)
     return cases
 
 
-def town(name: str, population: object, city: object, x: object, y: object) -> dict:
+def town(
+    name: object, population: object, city: object, x: object, y: object
+) -> dict[str, object]:
     return {"name": name, "population": population, "city": city, "x": x, "y": y}
 
 
@@ -1201,7 +1297,7 @@ TOWN_DATA_INPUTS: tuple[tuple[str, str | None, int, int, int], ...] = (
 )
 
 
-def check_town_data(run: dict[str, Any]) -> None:
+def check_town_data(run: core.Run) -> None:
     """Each input reports its founded towns, failure signs and error lines."""
     rows = {
         p[2]: p[3:6]
@@ -1219,7 +1315,7 @@ def check_town_data(run: dict[str, Any]) -> None:
         raise RuntimeError("imported town records missing")
 
 
-def town_data_scenarios(soak: bool) -> list[dict[str, Any]]:
+def town_data_scenarios(soak: bool) -> list[Scenario]:
     return [
         {
             "name": "town-data-import" + ("-reload" if reload else ""),
@@ -1240,21 +1336,19 @@ def town_data_scenarios(soak: bool) -> list[dict[str, Any]]:
     ]
 
 
-def command_scenarios(soak):
-    cases = []
+def command_scenarios(soak: bool) -> list[Scenario]:
+    cases: list[Scenario] = []
     for reload in (False, True):
         scenario = founding_scenarios(soak)[0]
-        scenario.update(
-            name="town-commands" + ("-reload" if reload else ""),
-            town_founding="authority",
-            town_commands_reload=reload,
-            ticks=(390 if reload else 14) * TICKS_PER_DAY + SNAPSHOT_TICKS,
-        )
+        scenario["name"] = "town-commands" + ("-reload" if reload else "")
+        scenario["town_founding"] = "authority"
+        scenario["town_commands_reload"] = reload
+        scenario["ticks"] = (390 if reload else 14) * TICKS_PER_DAY + SNAPSHOT_TICKS
         cases.append(scenario)
     return cases
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     return (
         core.WITNESS_ENVIRONMENT
         if scenario.get("town_founding") and scenario.get("witnesses")
@@ -1271,7 +1365,7 @@ class TownRoadTypeGrowthCapture(TypedDict):
     random_state: tuple[int, int, int, int]
 
 
-def check_road_type_growth(run: dict[str, Any]) -> TownRoadTypeGrowthCapture:
+def check_road_type_growth(run: core.Run) -> TownRoadTypeGrowthCapture:
     inputs = [line for line in run["log"] if line.startswith("TOWN road-growth input ")]
     outputs = [
         line for line in run["log"] if line.startswith("TOWN road-growth output ")
@@ -1296,8 +1390,8 @@ def check_road_type_growth(run: dict[str, Any]) -> TownRoadTypeGrowthCapture:
     )
 
 
-def scenarios(soak):
-    scenarios = []
+def scenarios(soak: bool) -> list[Scenario]:
+    scenarios: list[Scenario] = []
     for style, label in enumerate(TOWN_STYLES):
         for prepared in (False, True):
             scenarios.append(
@@ -1356,7 +1450,15 @@ def scenarios(soak):
     )
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     if "town_founding" in scenario:
         return prepare_founding(scenario, binaries, builds, out, timeout, env, result)
     if "town_growth" in scenario:
@@ -1366,12 +1468,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     _TUNNEL_REPORTS[out] = tunnel_reference_gap(
                         out / "town-reference-gaps"
                     )
-                result["tunnel_reference_gap"] = _TUNNEL_REPORTS[out]
-        scenario, result["reload_input"] = prepare_growth(
+                core.findings(result)["tunnel_reference_gap"] = _TUNNEL_REPORTS[out]
+        scenario, core.findings(result)["reload_input"] = prepare_growth(
             scenario, binaries, builds, out, timeout, env
         )
     if scenario.get("town_seeds"):
-        scenario, result["town_name_input"] = prepare_town_names(
+        scenario, core.findings(result)["town_name_input"] = prepare_town_names(
             scenario, binaries, builds, out, timeout, env
         )
     return scenario
@@ -1388,7 +1490,13 @@ FOUNDING_BRANCHES = (
 ).split()
 
 
-def check_action_money(scenario, run, mode, role, result):
+def check_action_money(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode | Literal["capture"],
+    role: core.Role,
+    result: core.Result,
+) -> None:
     """Affordability masks and real command refusal/success, before time advances."""
     prices = [
         list(map(int, line.split()[2:]))
@@ -1447,13 +1555,19 @@ def check_action_money(scenario, run, mode, role, result):
             )
         for phase, path in saves.items():
             chunks = read_save(path)
-            finances = decode_element(
-                chunks["PLYR"], dict(chunks["PLYR"]["elements"])[int(company)]
+            finances = cast(
+                core.Row,
+                decode_element(
+                    chunks["PLYR"], dict(chunks["PLYR"]["elements"])[int(company)]
+                ),
             )
             if finances["money"] != int(price) + int(delta):
                 raise RuntimeError("town funding prepared balance changed")
-            city = decode_element(
-                chunks["CITY"], dict(chunks["CITY"]["elements"])[int(town)]
+            city = cast(
+                core.Row,
+                decode_element(
+                    chunks["CITY"], dict(chunks["CITY"]["elements"])[int(town)]
+                ),
             )
             if city["fund_buildings_months"] != (
                 3 if delta == "0" and phase == "after" else 0
@@ -1486,10 +1600,16 @@ def check_action_money(scenario, run, mode, role, result):
     rng = [line for line in run["log"] if line.startswith("TOWN money-rng ")]
     if len(rng) != 1 or not rng[0].endswith(" true"):
         raise RuntimeError("town affordability changed simulation/interactive RNG")
-    result[mode + "_town_money_saves"] = captures
+    core.findings(result)[mode + "_town_money_saves"] = captures
 
 
-def check_statue_search(scenario, run, mode, role, result):
+def check_statue_search(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode | Literal["capture"],
+    role: core.Role,
+    result: core.Result,
+) -> None:
     """No suitable statue site versus the sole opening at search position 81."""
     rows = [
         line.split()[2:] for line in run["log"] if line.startswith("TOWN statue-input ")
@@ -1553,8 +1673,11 @@ def check_statue_search(scenario, run, mode, role, result):
         before = dict(read_save(saves["before"])["OBJS"]["elements"])
         for phase, path in saves.items():
             chunks = read_save(path)
-            city = decode_element(
-                chunks["CITY"], dict(chunks["CITY"]["elements"])[int(town)]
+            city = cast(
+                core.Row,
+                decode_element(
+                    chunks["CITY"], dict(chunks["CITY"]["elements"])[int(town)]
+                ),
             )
             built = opening == "true" and phase == "after"
             if bool(city["statues"] & (1 << int(company))) != built:
@@ -1564,7 +1687,9 @@ def check_statue_search(scenario, run, mode, role, result):
             if len(added) != int(built):
                 raise RuntimeError("town statue saved object count differs")
             if built:
-                obj = decode_element(chunks["OBJS"], objects[added.pop()])
+                obj = cast(
+                    core.Row, decode_element(chunks["OBJS"], objects[added.pop()])
+                )
                 if (obj["location.tile"], obj["town"], obj["type"]) != (
                     int(tile),
                     int(town) + 1,
@@ -1584,10 +1709,16 @@ def check_statue_search(scenario, run, mode, role, result):
                     f"town statue immediate semantic state differs: {differences}"
                 )
             captures.append(path.name)
-    result[mode + "_town_statue_saves"] = captures
+    core.findings(result)[mode + "_town_statue_saves"] = captures
 
 
-def check_bribes(scenario, run, mode, role, result):
+def check_bribes(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode | Literal["capture"],
+    role: core.Role,
+    result: core.Result,
+) -> None:
     """Require real threshold/filter inputs and compare their immediate saves."""
     inputs = [
         line.split()[2:] for line in run["log"] if line.startswith("TOWN bribe-input ")
@@ -1615,14 +1746,17 @@ def check_bribes(scenario, run, mode, role, result):
         }
         if not all(path.is_file() for path in saves.values()):
             raise RuntimeError("town bribe immediate semantic save missing")
-        stats = {"chunks": 0, "elements": 0, "masked": {}}
+        stats: core.Stats = {"chunks": 0, "elements": 0, "masked": {}}
         if differences := core.compare_saves(
             saves["before"], saves["test"], scenario["name"], 10, stats
         ):
             raise RuntimeError(f"town bribe test mutated state: {differences}")
         before, after = (read_save(saves[phase]) for phase in ("before", "after"))
         cities = [
-            decode_element(chunks["CITY"], dict(chunks["CITY"]["elements"])[town])
+            cast(
+                core.Row,
+                decode_element(chunks["CITY"], dict(chunks["CITY"]["elements"])[town]),
+            )
             for chunks in (before, after)
         ]
         if (
@@ -1636,8 +1770,11 @@ def check_bribes(scenario, run, mode, role, result):
             raise RuntimeError("town bribe CITY rating/cooloff/rights outcome missing")
         for index, station in enumerate(stations):
             for phase, chunks in (("before", before), ("after", after)):
-                st = decode_element(
-                    chunks["STNN"], dict(chunks["STNN"]["elements"])[int(station)]
+                st = cast(
+                    core.Row,
+                    decode_element(
+                        chunks["STNN"], dict(chunks["STNN"]["elements"])[int(station)]
+                    ),
                 )
                 # Saved pool references are one-based; owner IDs are raw values.
                 if st["normal[0]/base[0]/town"] != (
@@ -1688,10 +1825,16 @@ def check_bribes(scenario, run, mode, role, result):
                 raise RuntimeError(
                     f"town bribe {label} semantic state differs: {differences}"
                 )
-    result[key] = list(captures)
+    core.findings(result)[key] = list(captures)
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode | Literal["capture"],
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario.get("town_founding") == "data":
         if scenario["town_data_reload"]:
             if "TOWN data-reloaded 6 2" not in run["log"]:
@@ -1699,7 +1842,9 @@ def check(scenario, run, mode, role, result):
         else:
             check_town_data(run)
     elif scenario.get("town_founding") == "road-types" and not run["exit"]:
-        result[f"{mode}_{role}_road_type_growth"] = check_road_type_growth(run)
+        core.findings(result)[f"{mode}_{role}_road_type_growth"] = (
+            check_road_type_growth(run)
+        )
     elif scenario.get("town_founding") == "definitions" and not run["exit"]:
         if "TOWN definition-reloaded true" not in run["log"]:
             raise RuntimeError(
@@ -1717,7 +1862,7 @@ def check(scenario, run, mode, role, result):
             "common_action2",
             "binary error indirect linear procedure reseed storage".split(),
         ):
-            result[mode + "_common_action2_branches"] = counts
+            core.findings(result)[mode + "_common_action2_branches"] = counts
     elif scenario.get("town_founding") == "authority" and not run["exit"]:
         for phase in (
             ("reload",)
@@ -1754,7 +1899,7 @@ def check(scenario, run, mode, role, result):
             else "action bribe_failed bribe_success delete delete_bridge delete_oilrig destruct expand goal object_detach object_rehome rate rating rights_cancel statue text".split()
         )
         if counts := branch_witnesses(scenario, run, role, "town_command", required):
-            result[mode + "_town_command_branches"] = counts
+            core.findings(result)[mode + "_town_command_branches"] = counts
         markers = (
             ("authority-reload true",)
             if scenario["town_commands_reload"]
@@ -1771,13 +1916,13 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError("town authority/deletion witness missing")
         if scenario["town_commands_reload"] and run["snapshots"]:
             city = read_save(run["snapshots"][-1])["CITY"]
-            town = decode_element(city, dict(city["elements"])[0])
+            town = cast(core.Row, decode_element(city, dict(city["elements"])[0]))
             if town["exclusive_counter"] or any(town["unwanted"]):
                 raise RuntimeError("town rights/unwanted expiration witness missing")
     elif scenario.get("town_founding") == "houses" and not run["exit"]:
         required = HOUSE_BRANCHES + HOUSE_MODE_BRANCHES[scenario["house_mode"]]
         if counts := branch_witnesses(scenario, run, role, "house", required):
-            result[mode + "_house_branches"] = counts
+            core.findings(result)[mode + "_house_branches"] = counts
         markers = (
             "class-reset true",
             "parent-readonly-null true",
@@ -1805,7 +1950,7 @@ def check(scenario, run, mode, role, result):
         required = [*required, *scenario.get("town_branches", ())]
         counts = branch_witnesses(scenario, run, role, "town", required)
         if counts:
-            result[mode + "_town_branches"] = counts
+            core.findings(result)[mode + "_town_branches"] = counts
         expected = (
             ("reloaded true",)
             if scenario["town_founding"] == "reload"
@@ -1824,12 +1969,14 @@ def check(scenario, run, mode, role, result):
         if any("TOWN " + line not in run["log"] for line in expected):
             raise RuntimeError("town command/lifetime/cancellation witness missing")
     if "town_growth" in scenario:
-        result[f"{mode}_{role}_town_growth"] = check_growth(scenario, run)
+        core.findings(result)[f"{mode}_{role}_town_growth"] = check_growth(
+            scenario, run
+        )
     if "town_style" in scenario:
         check_town_observer(scenario, run)
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if scenario.get("town_founding") == "data":
         (run_dir / "town-data").mkdir(exist_ok=True)
         for name, text, *_ in TOWN_DATA_INPUTS:
@@ -1852,7 +1999,7 @@ def install(scenario, run_dir):
         shutil.copytree(scenario["scenario_ai"], run_dir / "ai/town-names")
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return ["-d", "script=2"] if "town_style" in scenario else []
 
 
@@ -1862,7 +2009,7 @@ PREPARE_ORDER = 1
 AI_FOLDER = "town-name-observer"
 
 
-def uses_ai(scenario):
+def uses_ai(scenario: Scenario) -> bool:
     return "town_style" in scenario
 
 
