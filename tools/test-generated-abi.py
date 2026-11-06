@@ -83,7 +83,7 @@ class GeneratedAbiTests(unittest.TestCase):
                 'static_assert(std::is_same_v<decltype(Ops::allocate), Allocate>);\n'
                 'static_assert(std::is_same_v<decltype(Ops::destroy), Destroy>);\n'
             )
-            subprocess.run(["c++", "-std=c++20", "-fsyntax-only", "-I", str(ROOT / "src"), str(source)], check=True)
+            subprocess.run(["c++", "-std=c++20", "-fsyntax-only", "-I", str(ROOT / "src/rust"), str(source)], check=True)
 
     def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self) -> None:
         fragments = GENERATOR["generate"]()
