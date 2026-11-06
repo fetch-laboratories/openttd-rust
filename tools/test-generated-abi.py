@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = runpy.run_path(str(ROOT / "tools/generate-abi.py"))
@@ -15,13 +16,13 @@ LAYOUT = re.compile(r'Layout\("([^"]+)", \{(.*)\}\);')
 ITEM = re.compile(r"\w+\((?:[^()]|\([^()]*\))*\)")
 
 
-def layouts(fragments):
+def layouts(fragments: dict[str, str]) -> dict[str, tuple[str, list[str]]]:
     """Map each generated layout name to its fragment and ordered items."""
-    result = {}
+    result: dict[str, tuple[str, list[str]]] = {}
     for path, contents in fragments.items():
         if path.startswith("abi-layout-"):
             for line in contents.splitlines():
-                name, values = LAYOUT.fullmatch(line).groups()
+                name, values = cast(re.Match[str], LAYOUT.fullmatch(line)).groups()
                 result[name] = (path, ITEM.findall(values))
     return result
 
@@ -57,7 +58,7 @@ class GeneratedAbiTests(unittest.TestCase):
                 ["c++", "-std=c++20", "-fsyntax-only", str(source)], check=True
             )
 
-    def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self):
+    def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self) -> None:
         fragments = GENERATOR["generate"]()
         generated = layouts(fragments)
         records = list(GENERATOR["declarations"]())
@@ -107,7 +108,7 @@ class GeneratedAbiTests(unittest.TestCase):
                 self.assertIn(visits, ([], [(field, field) for field in cpp]))
                 self.assertNotIn("reinterpret_cast", visitor)
 
-    def test_generation_is_deterministic_and_build_directory_only(self):
+    def test_generation_is_deterministic_and_build_directory_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             subprocess.run(
                 [
@@ -287,7 +288,7 @@ class GeneratedAbiTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, error):
                         GENERATOR["generate"](root)
 
-    def test_synthetic_tree_aliases_widths_and_callback_retirement(self):
+    def test_synthetic_tree_aliases_widths_and_callback_retirement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             rust = root / "rust/openttd-kernels/src"

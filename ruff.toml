@@ -4,7 +4,3 @@ line-length = 88
 
 [lint]
 select = ["E4", "E7", "E9", "F", "B", "I", "ANN"]
-
-# Existing modules convert under #501; remove entries as they gain annotations.
-[lint.per-file-ignores]
-"tools/test-generated-abi.py" = ["ANN"]
