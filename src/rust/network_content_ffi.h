@@ -24,7 +24,6 @@ struct OpenTTDContentServices {
 	void (*callback_disconnect)(ContentCallback *) noexcept OPENTTD_SERVICE_DEFAULT(callback_disconnect);
 	void (*callback_progress)(ContentCallback *, const OpenTTDContentInfo *, int) noexcept OPENTTD_SERVICE_DEFAULT(callback_progress);
 	void (*callback_receive)(ContentCallback *, const OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(callback_receive);
-	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 	NetworkTCPSocketHandler *client;
 	void (*close_socket)() noexcept OPENTTD_SERVICE_DEFAULT(close_socket);
 	void (*connect)() noexcept OPENTTD_SERVICE_DEFAULT(connect);
@@ -52,10 +51,7 @@ struct OpenTTDContentServices {
 	void *(*name)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(name);
 	int64_t (*now)() noexcept OPENTTD_SERVICE_DEFAULT(now);
 	void (*queue_reset)() noexcept OPENTTD_SERVICE_DEFAULT(queue_reset);
-	Packet *(*receive_packet)() noexcept OPENTTD_SERVICE_DEFAULT(receive_packet);
 	void (*send_packet)(OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(send_packet);
-	void (*send_packets)() noexcept OPENTTD_SERVICE_DEFAULT(send_packets);
-	void (*string_append)(void *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(string_append);
 	void (*string_assign)(void *, const void *) noexcept OPENTTD_SERVICE_DEFAULT(string_assign);
 	bool (*string_empty)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(string_empty);
 	void *(*tag)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(tag);

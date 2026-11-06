@@ -15,6 +15,8 @@ use crate::network_config::TCP_MTU;
 use crate::network_tcp::{self as tcp, NetworkTCPSocketHandler, Packet};
 use crate::packet::{self, State as PacketState};
 use crate::services::ByteSpan;
+use crate::services_assert::RustAssertCondition as check;
+use crate::string_services::RustStringAppend;
 use crate::tcp_content_type::{self as ct, ContentInfo, state};
 use std::collections::BTreeMap;
 use std::ffi::c_void;
@@ -55,7 +57,6 @@ pub struct Services {
     pub callback_disconnect: extern "C" fn(*mut ContentCallback),
     pub callback_progress: extern "C" fn(*mut ContentCallback, *const ContentInfo, i32),
     pub callback_receive: extern "C" fn(*mut ContentCallback, *const ContentInfo),
-    pub check: extern "C" fn(bool),
     /// `_network_content_client`.
     pub client: *mut NetworkTCPSocketHandler,
     /// `CloseSocket`.
@@ -96,10 +97,7 @@ pub struct Services {
     pub now: extern "C" fn() -> i64,
     /// `_request_queue_timeout.Reset()`.
     pub queue_reset: extern "C" fn(),
-    pub receive_packet: extern "C" fn() -> *mut Packet,
     pub send_packet: extern "C" fn(*mut PacketState),
-    pub send_packets: extern "C" fn(),
-    pub string_append: extern "C" fn(*mut c_void, *const u8, usize),
     pub string_assign: extern "C" fn(*mut c_void, *const c_void),
     pub string_empty: extern "C" fn(*const c_void) -> bool,
     /// Append an empty tag and return it.
@@ -218,17 +216,17 @@ fn on_download_complete(s: &Services, cid: u32) {
 }
 
 fn new_packet(s: &Services, kind: u8, limit: usize) -> PacketState {
-    unsafe { packet::new_outgoing(socket(s), s.tcp.packet, s.check, kind, limit) }
+    unsafe { packet::new_outgoing(socket(s), s.tcp.packet, check, kind, limit) }
 }
 fn send_packet(s: &Services, mut p: PacketState) {
-    unsafe { packet::prepare_to_send(&raw mut p, s.tcp.packet, s.check) };
+    unsafe { packet::prepare_to_send(&raw mut p, s.tcp.packet, check) };
     (s.send_packet)(&raw mut p);
 }
 
 fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
     unsafe {
-        packet::recv_string_into(p, s.tcp.packet, s.check, length, settings, |bytes| {
-            (s.string_append)(text, bytes.as_ptr(), bytes.len());
+        packet::recv_string_into(p, s.tcp.packet, check, length, settings, |bytes| {
+            RustStringAppend(text, bytes.as_ptr(), bytes.len());
         });
     }
 }
@@ -282,6 +280,29 @@ fn handle_packet(s: &Services, p: *mut PacketState) -> bool {
     }
 }
 
+/// `NetworkTCPSocketHandler::ReceivePacket` using the integrated TCP and packet owners.
+fn receive_packet(s: &Services) -> *mut Packet {
+    match unsafe { tcp::openttd_rust_tcp_receive(s.tcp, s.client, check) } {
+        tcp::Receive::None => std::ptr::null_mut(),
+        tcp::Receive::Close => {
+            close_connection(s);
+            std::ptr::null_mut()
+        }
+        tcp::Receive::Ready => {
+            let p = (s.tcp.receive_packet)(s.client);
+            if !unsafe { packet::prepare_to_read(p, s.tcp.packet) } {
+                debug!(
+                    net,
+                    0, "Invalid packet received (too small / decryption error)"
+                );
+                close_connection(s);
+                return std::ptr::null_mut();
+            }
+            (s.tcp.receive_take)(s.client)
+        }
+    }
+}
+
 /// `NetworkContentSocketHandler::ReceivePackets`: a bounded batch per call.
 fn receive_packets(s: &Services) -> bool {
     let mut i = MAX_PACKETS_TO_RECEIVE;
@@ -290,7 +311,7 @@ fn receive_packets(s: &Services) -> bool {
         if i == 0 {
             break;
         }
-        let p = (s.receive_packet)();
+        let p = receive_packet(s);
         if p.is_null() {
             break;
         }
@@ -424,11 +445,11 @@ fn request_content_list_type(s: &Services, kind: u8) {
         ct::PACKET_CONTENT_CLIENT_INFO_LIST,
         crate::network_config::COMPAT_MTU,
     );
-    p.send_uint8(kind, s.check);
-    p.send_uint32(0xffff_ffff, s.check);
-    p.send_uint8(1, s.check);
-    p.send_string(b"vanilla", s.check);
-    p.send_string(unsafe { (s.content_version)().bytes() }, s.check);
+    p.send_uint8(kind, check);
+    p.send_uint32(0xffff_ffff, check);
+    p.send_uint8(1, check);
+    p.send_string(b"vanilla", check);
+    p.send_string(unsafe { (s.content_version)().bytes() }, check);
     send_packet(s, p);
 }
 
@@ -442,9 +463,9 @@ fn request_content_list_ids(s: &Services, content_ids: &[u32]) {
     for chunk in content_ids.chunks(MAX_CONTENT_IDS_PER_PACKET) {
         let mut p = new_packet(s, ct::PACKET_CONTENT_CLIENT_INFO_ID, TCP_MTU);
         #[allow(clippy::cast_possible_truncation)]
-        p.send_uint16(chunk.len() as u16, s.check);
+        p.send_uint16(chunk.len() as u16, check);
         for &id in chunk {
-            p.send_uint32(id, s.check);
+            p.send_uint32(id, check);
         }
         send_packet(s, p);
     }
@@ -458,8 +479,8 @@ fn request_content_list_vector(s: &Services, cv: *mut ContentVector, send_md5sum
     connect(s);
 
     let count = (s.list_size)(cv);
-    (s.check)(count < 255);
-    (s.check)(count < (TCP_MTU - 2 - 1 - 1) / (1 + 4 + if send_md5sum { 16 } else { 0 }));
+    check(count < 255);
+    check(count < (TCP_MTU - 2 - 1 - 1) / (1 + 4 + if send_md5sum { 16 } else { 0 }));
 
     let kind = if send_md5sum {
         ct::PACKET_CONTENT_CLIENT_INFO_EXTID_MD5
@@ -468,11 +489,11 @@ fn request_content_list_vector(s: &Services, cv: *mut ContentVector, send_md5sum
     };
     let mut p = new_packet(s, kind, TCP_MTU);
     #[allow(clippy::cast_possible_truncation)]
-    p.send_uint8(count as u8, s.check);
+    p.send_uint8(count as u8, check);
     for i in 0..count {
         let ci = info((s.list_get)(cv, i));
-        p.send_uint8(ci.r#type, s.check);
-        p.send_uint32(ci.unique_id, s.check);
+        p.send_uint8(ci.r#type, check);
+        p.send_uint32(ci.unique_id, check);
         if send_md5sum {
             p.send_bytes(&ci.md5sum);
         }
@@ -551,9 +572,9 @@ fn download_selected_content_fallback(s: &Services, content: &[u32]) {
     for chunk in content.chunks(MAX_CONTENT_IDS_PER_PACKET) {
         let mut p = new_packet(s, ct::PACKET_CONTENT_CLIENT_CONTENT, TCP_MTU);
         #[allow(clippy::cast_possible_truncation)]
-        p.send_uint16(chunk.len() as u16, s.check);
+        p.send_uint16(chunk.len() as u16, check);
         for &id in chunk {
-            p.send_uint32(id, s.check);
+            p.send_uint32(id, check);
         }
         send_packet(s, p);
     }
@@ -631,8 +652,8 @@ fn transfer_out(s: &Services, p: *mut PacketState) -> isize {
         return 0;
     }
     let (position, size, data) = unsafe { ((*p).position, (*p).size, (*p).data) };
-    (s.check)(usize::from(position) < size);
-    (s.check)(usize::from(position).wrapping_add(amount) <= size);
+    check(usize::from(position) < size);
+    check(usize::from(position).wrapping_add(amount) <= size);
     #[allow(clippy::cast_possible_wrap)]
     let bytes = (s.file_write)(unsafe { data.add(usize::from(position)) }, amount) as isize;
     unsafe { (*p).transfer_commit(bytes) };
@@ -872,7 +893,7 @@ fn parse_response_line(s: &Services, ci: *mut ContentInfo) -> Option<()> {
             filename = &filename[..pos];
         }
 
-        (s.string_append)((s.filename)(ci), filename.as_ptr(), filename.len());
+        unsafe { RustStringAppend((s.filename)(ci), filename.as_ptr(), filename.len()) };
 
         // Request the next file.
         if !before_download(s) {
@@ -1126,7 +1147,9 @@ pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
         with(|c| c.last_activity = now);
     }
 
-    (s.send_packets)();
+    if unsafe { tcp::openttd_rust_tcp_send(s.tcp, s.client, false, check) } == tcp::Send::Close {
+        close_connection(s);
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -1279,7 +1302,7 @@ pub unsafe extern "C" fn openttd_rust_content_http_data(
     data: *const u8,
     length: usize,
 ) {
-    (s.check)(data.is_null() || length != 0);
+    check(data.is_null() || length != 0);
     let bytes = if data.is_null() {
         &[]
     } else {
@@ -1297,11 +1320,11 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDContentServices" ["probe"] => Services {
         callback_complete, callback_connect, callback_disconnect, callback_progress,
-        callback_receive, check, client, close_socket, connect, content_version, dependencies,
+        callback_receive, client, close_socket, connect, content_version, dependencies,
         dependency_push, description, error_extract, error_not_writable, extract, file_close,
         file_create, file_open, file_write, filename, has_content, http_get, http_mirror,
         info_assign, info_delete, info_new, list_get, list_release, list_size, name, now,
-        queue_reset, receive_packet, send_packet, send_packets, string_append, string_assign,
+        queue_reset, send_packet, string_assign,
         string_empty, tag, tcp, tcp_close, tree_push, url, version,
     };
 }
