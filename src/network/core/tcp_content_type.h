@@ -65,8 +65,8 @@ enum class ContentInfoState : uint8_t {
 #include "abi-record-content.h"
 
 extern "C" {
-bool openttd_rust_content_is_selected(const OpenTTDContentInfo *info) noexcept;
-bool openttd_rust_content_is_valid(const OpenTTDContentInfo *info) noexcept;
+uint8_t openttd_rust_content_is_selected(const OpenTTDContentInfo *info) noexcept;
+uint8_t openttd_rust_content_is_valid(const OpenTTDContentInfo *info) noexcept;
 }
 
 /** Container for all important information about a piece of content; Rust owns the scalars in its base record. */
@@ -83,8 +83,8 @@ struct ContentInfo : OpenTTDContentInfo {
 
 	ContentInfo() : OpenTTDContentInfo{.type = INVALID_CONTENT_TYPE, .id = INVALID_CONTENT_ID, .filesize = 0, .unique_id = 0, .md5sum = {}, .state = State::Unselected, .upgrade = false} {}
 
-	bool IsSelected() const { return openttd_rust_content_is_selected(this); }
-	bool IsValid() const { return openttd_rust_content_is_valid(this); }
+	bool IsSelected() const { return openttd_rust_content_is_selected(this) != 0; }
+	bool IsValid() const { return openttd_rust_content_is_valid(this) != 0; }
 	std::optional<std::string> GetTextfile(TextfileType type) const;
 };
 

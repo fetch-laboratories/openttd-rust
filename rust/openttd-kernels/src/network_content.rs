@@ -1289,8 +1289,8 @@ pub unsafe extern "C" fn openttd_rust_content_http_data(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_content_http_cancelled() -> bool {
-    CANCELLED.load(Ordering::Relaxed)
+pub extern "C" fn openttd_rust_content_http_cancelled() -> u8 {
+    u8::from(CANCELLED.load(Ordering::Relaxed))
 }
 
 crate::abi::layouts! {

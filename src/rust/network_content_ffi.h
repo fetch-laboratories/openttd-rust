@@ -74,7 +74,7 @@ void openttd_rust_content_close(const OpenTTDContentServices *) noexcept;
 void openttd_rust_content_connect(const OpenTTDContentServices *) noexcept;
 void openttd_rust_content_connected(const OpenTTDContentServices *, bool) noexcept;
 void openttd_rust_content_download(const OpenTTDContentServices *, uint32_t *, uint32_t *, bool) noexcept;
-bool openttd_rust_content_http_cancelled() noexcept;
+uint8_t openttd_rust_content_http_cancelled() noexcept;
 void openttd_rust_content_http_data(const OpenTTDContentServices *, const uint8_t *, size_t) noexcept;
 void openttd_rust_content_http_failure(const OpenTTDContentServices *) noexcept;
 OpenTTDContentInfo *const *openttd_rust_content_infos(size_t *) noexcept;

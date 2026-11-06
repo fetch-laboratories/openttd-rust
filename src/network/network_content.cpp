@@ -218,7 +218,7 @@ ClientNetworkContentSocketHandler::ClientNetworkContentSocketHandler()
 
 bool ClientNetworkContentSocketHandler::IsCancelled() const
 {
-	return openttd_rust_content_http_cancelled();
+	return openttd_rust_content_http_cancelled() != 0;
 }
 
 void ClientNetworkContentSocketHandler::OnFailure()

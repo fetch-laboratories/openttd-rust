@@ -70,16 +70,16 @@ impl ContentInfo {
 /// # Safety
 /// `info` is a live record.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_content_is_selected(info: *const ContentInfo) -> bool {
-    unsafe { &*info }.is_selected()
+pub unsafe extern "C" fn openttd_rust_content_is_selected(info: *const ContentInfo) -> u8 {
+    u8::from(unsafe { &*info }.is_selected())
 }
 
 /// `ContentInfo::IsValid` for the native method.
 /// # Safety
 /// `info` is a live record.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_content_is_valid(info: *const ContentInfo) -> bool {
-    unsafe { &*info }.is_valid()
+pub unsafe extern "C" fn openttd_rust_content_is_valid(info: *const ContentInfo) -> u8 {
+    u8::from(unsafe { &*info }.is_valid())
 }
 
 #[cfg(test)]
