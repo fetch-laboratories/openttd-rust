@@ -255,7 +255,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	/* No stations exist, so placed houses find no nearby station. */
 	static OpenTTDStationCatchmentServices catchment{};
 	catchment.shared = &services;
-	catchment.station_count = []() noexcept -> size_t { return 0; };
+	services.station_pool = []() noexcept -> const RustPoolDescriptor * { static const RustPoolDescriptor pool{}; return &pool; };
 	services.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &catchment; };
 	services.map = &map.statics;
 	services.map_max_x = []() noexcept -> uint32_t { return 63; };
