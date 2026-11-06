@@ -344,10 +344,11 @@ template <typename Check> void CheckTownProtocol(Check check)
 	TownProtocolCost cost{};
 	town_slot.shell = &w; town_descriptor.items = 1;
 	openttd_rust_town_rebuild_index(&services);
-	services.town_owner = [](const OpenTTDTownHandle *) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; };
 	w.owner_reads = 0; w.map_reads = 0;
 	openttd_rust_house_place(&leaves, &services, reinterpret_cast<OpenTTDCommandCost *>(&cost), 1, 2080, 1, true, false);
-	check(w.owner_reads == 1 && w.map_reads == 1);
+	/* Closest-town resolution now carries the canonical slot record directly;
+	 * construction, map observations and RNG remain checked independently. */
+	check(w.map_reads == 1);
 	check(cost.ok && w.landscape_clears == 4 && w.clears == 4 && w.animations == 4 && w.writes.size() == 4);
 	check(w.writes[0][0] == 2080 && w.writes[1][0] == 2144 && w.writes[2][0] == 2081 && w.writes[3][0] == 2145);
 	check(w.writes[0][2] == 1 && w.writes[1][2] == 2 && w.writes[2][2] == 3 && w.writes[3][2] == 4);
