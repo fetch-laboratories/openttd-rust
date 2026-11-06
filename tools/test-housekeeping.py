@@ -192,6 +192,58 @@ class HousekeepingTests(unittest.TestCase):
         items = housekeeping.plan_worktrees(self.main, entries, pr_state)
         self.assertTrue(next(i for i in items if i.path == tree).remove)
 
+    def test_recent_completed_tasks_bypass_only_activity_fallback(self) -> None:
+        merged = self.review_checkout("recent-merged", "merged")
+        closed = self.review_checkout("recent-closed", "closed")
+        unpushed = self.review_checkout("recent-unpushed", "closed-local")
+        ambiguous = self.t3_tree("recent-ambiguous", detached=True)
+        protected = {
+            name: self.review_checkout(f"recent-{name}", "merged")
+            for name in ("dirty", "locked", "reference", "cwd", "writer")
+        }
+        for tree in (merged, closed, unpushed, ambiguous, *protected.values()):
+            admin = Path(git(tree, "rev-parse", "--absolute-git-dir").strip())
+            os.utime(admin / "HEAD")
+        write(protected["dirty"] / "untracked")
+        git(self.main, "worktree", "lock", str(protected["locked"]))
+        cwd = self.proc / "123/cwd"
+        cwd.parent.mkdir()
+        cwd.symlink_to(protected["cwd"])
+        output = write(protected["writer"] / ".local/output.log")
+        references = str(protected["reference"])
+        states = {
+            closed.name: "CLOSED",
+            unpushed.name: "CLOSED",
+        }
+        with patch.dict(PR_STATES, states), held_output(output) as child:
+            (self.proc / str(child.pid)).symlink_to(Path("/proc") / str(child.pid))
+            items = {
+                item.path: item
+                for item in housekeeping.plan_worktrees(
+                    self.main,
+                    housekeeping.list_worktrees(self.main)[1:],
+                    pr_state,
+                    references,
+                )
+            }
+            for tree in (merged, closed):
+                self.assertTrue(items[tree].remove, items[tree].reason)
+                self.assertIn(
+                    "referenced",
+                    housekeeping.remove(self.main, items[tree], str(tree)) or "",
+                )
+                late_cwd = self.proc / "124/cwd"
+                late_cwd.parent.mkdir(exist_ok=True)
+                late_cwd.symlink_to(tree)
+                self.assertIn("cwd", housekeeping.remove(self.main, items[tree]) or "")
+                late_cwd.unlink()
+                self.assertIsNone(housekeeping.remove(self.main, items[tree]))
+                self.assertFalse(tree.exists())
+            for tree in (unpushed, ambiguous, *protected.values()):
+                self.assertFalse(items[tree].remove, (tree, items[tree].reason))
+                self.assertTrue(tree.exists())
+            child_write(child)
+
     def test_finished_t3_and_protected_tasks(self) -> None:
         finished = self.t3_tree("t3-finished")
         detached = self.t3_tree("t3-detached", detached=True)
@@ -464,6 +516,33 @@ class HousekeepingTests(unittest.TestCase):
             write(local / "mystery/output").parent,
         }
 
+    def test_explicit_older_profile_references_survive_symlinked_output(self) -> None:
+        local = self.main / ".local"
+        simulation = local / "simulation"
+        older = simulation / "20260102T000000Z-2"
+        unreferenced = simulation / "20260101T000000Z-1"
+        profile = older / "scenario/plain/candidate/callgrind.out"
+        storage = self.top / "storage"
+        storage.mkdir()
+        simulation.rename(storage / "simulation")
+        simulation.symlink_to(storage / "simulation", target_is_directory=True)
+        local.rename(storage / "local")
+        local.symlink_to(storage / "local", target_is_directory=True)
+        for reference in (
+            "`.local/simulation/20260102T000000Z-2`",
+            "Retained profiles under `.local/simulation/`:\n  - older profile, `20260102T000000Z-2`;",
+            str(older),
+            str(profile),
+            str(older.resolve()),
+            str(profile.resolve()),
+        ):
+            with self.subTest(reference=reference):
+                removals = self.run_main(references=reference)
+                self.assertNotIn(older, removals)
+                self.assertIn(unreferenced, removals)
+                self.assertTrue(profile.is_file())
+        self.assertIn(older, self.run_main())
+
     def test_partial_profile_keeps_other_scenarios_until_replaced(self) -> None:
         simulation = self.main / ".local/simulation"
         earlier = simulation / "20260103T000000Z-3"
@@ -614,12 +693,18 @@ class HousekeepingTests(unittest.TestCase):
                 self.assertTrue(retained.exists())
 
     def run_main(
-        self, *arguments: str, issues: housekeeping.IssueState = lambda *_: "OPEN"
+        self,
+        *arguments: str,
+        issues: housekeeping.IssueState = lambda *_: "OPEN",
+        references: str = "",
     ) -> list[Path]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             code = housekeeping.main(
-                [*arguments, "--repo", str(self.main)], pr_state, lambda _: "", issues
+                [*arguments, "--repo", str(self.main)],
+                pr_state,
+                lambda _: references,
+                issues,
             )
         self.assertEqual(code, 0)
         lines = output.getvalue().splitlines()

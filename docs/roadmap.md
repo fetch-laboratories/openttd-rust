@@ -82,23 +82,23 @@ revisions. Comments, blanks and preprocessor lines are excluded.
 | Vendored | 55,148 | 2,317 (0) | 52,831 (0) | 0 (0) | 52,831 (0) |
 | Upstream tests | 2,248 | 14 (+14) | 2,234 (-14) | 5,685 (+393) | 7,919 (+379) |
 | Boundary layer | 0 | 0 (0) | 0 (0) | 17,581 (-1,216) | 17,581 (-1,216) |
-| **Measured source total** | **284,355** | **61,415 (+5,239)** | **222,940 (-5,239)** | **35,281 (+950)** | **258,221 (-4,289)** |
+| **src/ + generated record total** | **284,355** | **61,415 (+5,239)** | **222,940 (-5,239)** | **35,281 (+950)** | **258,221 (-4,289)** |
 | C++ evidence source in tools/ | 0 | 0 | 0 | 17,139 (+101) | 17,139 (+101) * |
 | Generated ABI visitors/layout checks | 0 | 0 | 0 | 5,785 (-467) | 5,785 (-467) * |
 
-The first total is `port-metrics.py --whole-fork`: 21.60% original retirement
+The first total is the `src/` plus generated-record series in `port-metrics.py --whole-fork`: 21.60% original retirement
 (+1.84 percentage points), with 90.81% of the original-sized C++ inventory
 remaining (-1.51 points). A rewritten native consumer counts as retired original
 plus new glue and does not reduce C++. This source/guard inventory covers all
 platforms, not the preprocessed contents of one executable. Source area names
 are accounting buckets, not phase boundaries.
 
-The two starred rows complete the known source census outside that metric:
+The two starred rows are the separate `evidence_cpp` source census:
 22,924 C++ evidence lines (-366). They mix candidate, shared and reference-only
 support; **do not add all of them to candidate build distance**. The combined
 fork source census is 281,145 lines (-4,655), and reference-only fork adapters
-remain retirement work. #707 will split those dependencies and include all
-generated ABI checks. Counted with the same
+remain retirement work. #707 reports direct candidate/shared dependencies, reference-only support and
+conservatively included unresolved sources, with all generated ABI checks. Counted with the same
 pinned lexer over archived tracked sources and each revision's generator,
 including `src/rust/` for visitors. Generated record headers (313, formerly 60)
 are already in the first total. The pinned original has no C++ source outside
