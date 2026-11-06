@@ -228,7 +228,11 @@ static void Station634Visit(TileIndex origin, bool reload)
 			delete Station::Get(StationID(base + 4));
 			Create(base + 4, "Owner634 reused");
 			delete Station::Get(StationID(base + 5));
+#ifdef WITH_RUST
+			growth = static_cast<uint32_t>(_station_pool.descriptor->slots.capacity);
+#else
 			growth = static_cast<uint32_t>(_station_pool.data.capacity());
+#endif
 			StationNeed(growth > base + 5 && growth < StationID::End().base(), __LINE__);
 			Create(growth, "Owner634 growth");
 		};

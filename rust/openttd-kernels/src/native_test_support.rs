@@ -489,15 +489,25 @@ pub unsafe extern "C" fn openttd_test_station_primary_stop(
     st: *mut crate::station::BaseStation,
     vehicle: VehicleRef,
 ) -> *mut crate::road_stop::Stop {
-    crate::road_stop::primary_for_vehicle(unsafe { &*s }, st, vehicle)
+    let state = crate::road_stop::primary_for_vehicle(unsafe { &*s }, st, vehicle);
+    if state.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe { (*state).shell }
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_next_stop(
     s: *const Services,
-    stop: *const crate::road_stop::Stop,
+    stop: *const crate::road_stop::State,
     vehicle: VehicleRef,
 ) -> *mut crate::road_stop::Stop {
-    crate::road_stop::next_for_vehicle(unsafe { &*s }, stop, vehicle)
+    let state = crate::road_stop::next_for_vehicle(unsafe { &*s }, stop, vehicle);
+    if state.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe { (*state).shell }
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_rail_area(

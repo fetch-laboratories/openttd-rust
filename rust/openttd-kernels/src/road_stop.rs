@@ -7,8 +7,8 @@
 
 //! Road stops (`roadstop.cpp`): bay admission, entrance status and drive-through entry
 //! topology and occupancy. Each `RoadStop` shell owns one `State`; the `BaseEntry` stop of a
-//! drive-through line owns the `Entries` every stop of the line points at. The pool, stop
-//! lists, map and vehicle hash stay native.
+//! drive-through line owns the `Entries` every stop of the line points at. The
+//! map and vehicle hash stay native; stop records, lists and pool policy are Rust-owned.
 #![allow(unsafe_code, clippy::many_single_char_names)]
 use crate::direction_func::dir_to_diag_dir;
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
@@ -49,21 +49,11 @@ pub struct Entries {
     pub east: Entry,
     pub west: Entry,
 }
+/// Opaque native shell used only by remaining native consumers.
+pub use crate::station_record::RoadStop as Stop;
 /// The shared record beside each native shell: position, list link, the saved
 /// status byte and the shared entries pointer, which the `BaseEntry` holder owns.
 pub use crate::station_record::RoadStopRecord as State;
-/// Opaque native `RoadStop` shell; never dereferenced in Rust.
-#[repr(C)]
-pub struct Stop {
-    _private: [u8; 0],
-}
-/// The next live pool item at or after an index; `state` is null at the end.
-#[repr(C)]
-pub struct PoolStop {
-    pub state: *mut State,
-    pub xy: u32,
-    pub index: u32,
-}
 /// `GroundVehicleCache::cached_total_length` of a live road record.
 fn total_length(v: VehicleRef) -> u16 {
     crate::raw_field::read_field!(v.ground_cache(), cached_total_length)
@@ -76,20 +66,10 @@ pub struct RoadStopServices {
     pub vehicle: *const VehicleServices,
     /// Shared road ground vehicle table.
     pub ground: *const GroundServices,
-    /// `Station::GetByTile(tile)->GetPrimaryRoadStop(type)`.
-    pub primary: extern "C" fn(u32, RoadStopType) -> *mut Stop,
-    /// The station's bus or truck stop list head.
-    pub head: extern "C" fn(*mut BaseStation, bool) -> *mut Stop,
     /// `RoadVehicle::IsBus`, preserving its front-engine assertion.
     pub is_bus: extern "C" fn(VehicleRef) -> bool,
-    /// `RoadStop::next`.
-    pub next: extern "C" fn(*const Stop) -> *mut Stop,
-    /// `RoadStop::xy`.
-    pub tile: extern "C" fn(*const Stop) -> u32,
-    /// The shell's Rust owner.
-    pub state: extern "C" fn(*const Stop) -> *mut State,
-    /// First live `RoadStop::Iterate(index)` item.
-    pub pool_next: extern "C" fn(u32) -> PoolStop,
+    /// Stable descriptor of the canonical Rust road-stop pool.
+    pub pool: extern "C" fn() -> *const crate::pool::PoolDescriptor,
 }
 
 /// Map dimensions read at the entry's use.
@@ -112,28 +92,42 @@ pub(crate) fn primary_for_vehicle(
     s: &Services,
     station: *mut BaseStation,
     v: VehicleRef,
-) -> *mut Stop {
-    let stops = table(s);
-    let head = (stops.head)(station, !is_bus(s, v));
+) -> *mut State {
+    let head = head(station, !is_bus(s, v));
     accessible(s, head, v)
 }
 /// `RoadStop::GetNextRoadStop`: retain the native linked-list order.
-pub(crate) fn next_for_vehicle(s: &Services, stop: *const Stop, v: VehicleRef) -> *mut Stop {
-    accessible(s, (table(s).next)(stop), v)
+pub(crate) fn next_for_vehicle(s: &Services, stop: *const State, v: VehicleRef) -> *mut State {
+    accessible(s, unsafe { (*stop).next }, v)
 }
-fn accessible(s: &Services, mut stop: *mut Stop, v: VehicleRef) -> *mut Stop {
+/// Bus/truck selection has the same original unfiltered Station precondition.
+pub(crate) fn head(station: *const BaseStation, truck: bool) -> *mut State {
+    crate::station_record::read(station, |r| if truck { r.truck_stops } else { r.bus_stops })
+}
+/// Publish the source list head at the original command observation.
+pub(crate) fn set_head(station: *const BaseStation, truck: bool, stop: *mut State) {
+    let record = unsafe { crate::station_record::record_of(station) };
+    unsafe {
+        if truck {
+            (*record).truck_stops = stop;
+        } else {
+            (*record).bus_stops = stop;
+        }
+    }
+}
+fn accessible(s: &Services, mut stop: *mut State, v: VehicleRef) -> *mut State {
     let stops = table(s);
     let movement = crate::movement::table(s);
     let ground = unsafe { &*stops.ground };
     let world = crate::map_func::World::new(s);
     while !stop.is_null() {
-        let tile = (stops.tile)(stop);
+        let tile = unsafe { (*stop).xy.0 };
         if crate::road_map::has_tile_any_road_type(&world, tile, (movement.road_compatible)(v))
             && (!world.bay_stop(tile) || !(ground.has_articulated)(v))
         {
             break;
         }
-        stop = (stops.next)(stop);
+        stop = unsafe { (*stop).next };
     }
     stop
 }
@@ -222,15 +216,24 @@ pub(crate) fn continuation(s: &Services, rs: u32, next: u32) -> bool {
 
 /// `RoadStop::GetByTile`: the shell and its owner.
 pub(crate) fn get_by_tile(s: &Services, tile: u32, kind: RoadStopType) -> (*mut Stop, *mut State) {
-    let t = table(s);
-    let mut rs = (t.primary)(tile, kind);
-    loop {
-        if (t.tile)(rs) == tile {
-            return (rs, (t.state)(rs));
+    let station = crate::station_record::get_station_record_if_valid(
+        s,
+        crate::station_type::StationID((s.station_index)(tile)),
+    );
+    let mut state = unsafe {
+        if kind.0 == 0 {
+            (*station).bus_stops
+        } else {
+            (*station).truck_stops
         }
-        let next = (t.next)(rs);
+    };
+    loop {
+        if unsafe { (*state).xy.0 } == tile {
+            return (unsafe { (*state).shell }, state);
+        }
+        let next = unsafe { (*state).next };
         debug_assert!(!next.is_null());
-        rs = next;
+        state = next;
     }
 }
 /// `RoadStop::GetByTile(tile, GetRoadStopType(tile))`.
@@ -724,47 +727,38 @@ pub unsafe extern "C" fn openttd_rust_road_stop_check_integrity(
 pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
     // SAFETY: Caller's contract.
     let s = unsafe { &*s };
-    let t = table(s);
-    let mut index = 0;
-    loop {
-        let rs = (t.pool_next)(index);
-        if rs.state.is_null() {
-            break;
+    let pool = (table(s).pool)();
+    for rebuild_entries in [false, true] {
+        let mut index = 0;
+        // Reload the slot buffer and live extent at each visit; no span survives a callback.
+        while index < unsafe { (*pool).first_unused } {
+            let state: *mut State = unsafe { (*pool).slots.as_slice()[index].record.cast() };
+            index += 1;
+            if state.is_null() {
+                continue;
+            }
+            let xy = unsafe { (*state).xy.0 };
+            if !rebuild_entries {
+                if crate::map_func::World::new(s).drive_through_stop_tile(xy) {
+                    make_drive_through(s, xy, state);
+                }
+            } else if status(state) & BASE_ENTRY != 0 {
+                crate::witness::hit(crate::witness::ROAD_STOP_AFTER_LOAD);
+                rebuild(s, xy, state, true);
+                rebuild(s, xy, state, false);
+            }
         }
-        if crate::map_func::World::new(s).drive_through_stop_tile(rs.xy) {
-            make_drive_through(s, rs.xy, rs.state);
-        }
-        index = rs.index + 1;
-    }
-    index = 0;
-    loop {
-        let rs = (t.pool_next)(index);
-        if rs.state.is_null() {
-            break;
-        }
-        if status(rs.state) & BASE_ENTRY != 0 {
-            crate::witness::hit(crate::witness::ROAD_STOP_AFTER_LOAD);
-            rebuild(s, rs.xy, rs.state, true);
-            rebuild(s, rs.xy, rs.state, false);
-        }
-        index = rs.index + 1;
     }
 }
 
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRoadStopEntry" ["probe"] => crate::road_stop::Entry { length, occupied, };
-    "OpenTTDRoadStopPoolItem" ["probe"] => crate::road_stop::PoolStop { state, xy, index, };
     "OpenTTDRoadStopEntries" ["probe"] => crate::road_stop::Entries { east, west, };
     "OpenTTDRoadStopServices" ["probe"] => crate::road_stop::RoadStopServices {
         vehicle,
         ground,
-        primary,
-        head,
         is_bus,
-        next,
-        tile,
-        state,
-        pool_next,
+        pool,
     };
 }

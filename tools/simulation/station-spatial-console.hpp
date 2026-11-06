@@ -54,7 +54,7 @@ static RoadStop *Station602Primary(Station *st, RoadVehicle *v)
 static RoadStop *Station602Next(RoadStop *stop, RoadVehicle *v)
 {
 #ifdef WITH_RUST
-	return openttd_test_station_next_stop(&GetRustSharedServices(), stop, RustVehicle(v));
+	return openttd_test_station_next_stop(&GetRustSharedServices(), stop->GetRustState(), RustVehicle(v));
 #else
 	return stop->GetNextRoadStop(v);
 #endif

@@ -49,6 +49,21 @@
 
 /** The pool of stations. */
 StationPool _station_pool("Station");
+
+StationRecordOwner::StationRecordOwner(BaseStation *shell, TileIndex xy) : record(openttd_rust_station_record_new(shell, xy.base(), this->OffsetIn(shell)))
+{
+	const auto index = shell->index.base();
+	_station_pool.BindRecord(index, shell, this->record);
+}
+
+StationRecordOwner::~StationRecordOwner()
+{
+	BaseStation *shell = this->record->shell;
+	const auto index = shell->index.base();
+	/* Record callbacks retain the published slot through final owner release. */
+	openttd_rust_station_record_delete(this->record);
+	_station_pool.RetireRecord(index, shell, this->record);
+}
 INSTANTIATE_POOL_METHODS(Station)
 
 

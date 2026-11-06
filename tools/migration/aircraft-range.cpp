@@ -77,11 +77,13 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	auto leaves = AircraftTestLeaves(vehicle, shared);
 	static OpenTTDFixtureMap map{6, 4096};
 	shared.map = &map.statics;
-	shared.station_pool = []() noexcept {
-		static std::array<BaseStation *, 2> slots;
-		static const size_t first_unused = slots.size();
-		for (size_t i = 0; i < slots.size(); ++i) slots[i] = valid[i] ? reinterpret_cast<BaseStation *>(&station_records[i]) : nullptr;
-		return OpenTTDStationPool{slots.data(), slots.size(), &first_unused};
+	shared.station_pool = []() noexcept -> const RustPoolDescriptor * {
+		static std::array<RustPoolSlot, 2> slots;
+		static RustPoolDescriptor pool{};
+		for (size_t i = 0; i < slots.size(); ++i) slots[i] = {valid[i] ? reinterpret_cast<BaseStation *>(&station_records[i]) : nullptr, valid[i] ? station_records[i].record : nullptr};
+		pool.slots = {slots.data(), slots.size(), 0};
+		pool.first_unused = slots.size();
+		return &pool;
 	};
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.current_order.type); };
 	vehicle.order_destination = [](OpenTTDVehicle *) noexcept { return fixture->aircraft.current_order.destination; };

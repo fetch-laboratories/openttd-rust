@@ -20,8 +20,9 @@ struct RoadAbiProbe {
 	OpenTTDRoadState *state = openttd_rust_road_new();
 	GroundStateOwner ground, tail_ground;
 	uint16_t &speed = road_abi_vehicle.cur_speed;
-	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> stop{openttd_rust_road_stop_new(nullptr, UINT32_MAX), openttd_rust_road_stop_destroy};
+	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> stop{openttd_rust_road_stop_new(nullptr, 100), openttd_rust_road_stop_destroy};
 	OpenTTDRoadStopEntries entries{};
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> station{openttd_rust_station_record_new(nullptr, 100, 0), openttd_rust_station_record_delete};
 	const OpenTTDRoadLeaves *leaves = nullptr;
 	OpenTTDRoadEntry entry{.ground = ground.state, .acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
 	uint32_t &dest = road_abi_vehicle.dest_tile;
@@ -42,16 +43,8 @@ static RoadAbiProbe *road_abi_probe;
 static OpenTTDVehicle road_abi_second{}, road_abi_hidden{};
 static int road_abi_engine, road_abi_new_engine;
 static OpenTTDVehicle *RoadAbiHandle() { road_abi_vehicle.shell = reinterpret_cast<OpenTTDVehicleShell *>(&road_abi_vehicle); return &road_abi_vehicle; }
-static int road_abi_stop; ///< Its address is the opaque road stop shell.
-/* The road controller calls the Rust road stop owner directly; these native
- * shell services resolve the probe's single stop at tile 100. */
-static const OpenTTDRoadStopServices road_abi_stops{
-	.vehicle = nullptr,
-	.ground = nullptr,
-	.primary = [](uint32_t tile, RoadStopType) noexcept { CHECK(tile == 100); return reinterpret_cast<RoadStop *>(&road_abi_stop); },
-	.tile = [](const RoadStop *) noexcept -> uint32_t { return 100; },
-	.state = [](const RoadStop *) noexcept { return road_abi_probe->stop.get(); },
-};
+/* The road controller resolves the probe's real station and stop records at tile 100. */
+static const OpenTTDRoadStopServices road_abi_stops{};
 static void RoadBoundary()
 {
 	RoadAbiProbe probe;
@@ -105,6 +98,15 @@ static void RoadBoundary()
 	stop_map.extended[100].m6 = 3 << 3;
 	t.shared.map = &stop_map.statics;
 	t.shared.road_stops = []() noexcept { return &road_abi_stops; };
+	probe.station->bus_stops = probe.station->truck_stops = probe.stop.get();
+	t.shared.station_pool = []() noexcept -> const RustPoolDescriptor * {
+		static RustPoolSlot slot{};
+		static RustPoolDescriptor pool{};
+		slot = {nullptr, road_abi_probe->station.get()};
+		pool.slots = {&slot, 1, 0};
+		pool.first_unused = 1;
+		return &pool;
+	};
 	t.shared.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	probe.stop->entries = &probe.entries;
 	probe.entries.east.occupied = 8;

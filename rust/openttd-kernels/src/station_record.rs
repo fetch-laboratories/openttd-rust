@@ -259,26 +259,21 @@ pub(crate) fn owner_company(shell: *const BaseStation) -> u8 {
 /// `BaseStation::Get(id)`: the live shell at a valid station index.
 /// `id` is a valid index of the canonical pool, as `Get` asserts natively.
 pub(crate) fn station_get(s: &crate::services::Services, id: u16) -> *mut BaseStation {
-    let pool = (s.station_pool)();
-    let index = usize::from(id);
-    // SAFETY: The live extent and slot array come from the canonical pool.
-    unsafe {
-        assert!(index < pool.first_unused.read());
-        pool.slots.add(index).read()
+    let record = get_record(s, crate::station_type::StationID(id));
+    if record.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe { (*record).shell }
     }
 }
 
-/// `BaseStation::GetIfValid(id)`: the live shell, or null for a hole or an index
-/// at or beyond the pool's live extent.
+/// `BaseStation::GetIfValid`: keep index/hole validity without a type filter.
 pub(crate) fn station_get_if_valid(s: &crate::services::Services, id: u16) -> *mut BaseStation {
-    let pool = (s.station_pool)();
-    let index = usize::from(id);
-    // SAFETY: The live extent and slot array come from the canonical pool.
-    unsafe {
-        if index >= pool.first_unused.read() {
-            return std::ptr::null_mut();
-        }
-        pool.slots.add(index).read()
+    let record = get_record_if_valid(s, crate::station_type::StationID(id));
+    if record.is_null() {
+        std::ptr::null_mut()
+    } else {
+        unsafe { (*record).shell }
     }
 }
 
@@ -289,8 +284,12 @@ pub(crate) fn get_record(
     s: &crate::services::Services,
     id: crate::station_type::StationID,
 ) -> *mut StationRecord {
-    // SAFETY: The caller supplies a live ID, as the original Get required.
-    unsafe { record_of(station_get(s, id.0)) }
+    let pool = (s.station_pool)();
+    let index = usize::from(id.0);
+    unsafe {
+        assert!(index < (*pool).first_unused);
+        (*pool).slots.as_slice()[index].record.cast()
+    }
 }
 
 /// `BaseStation::GetIfValid`: preserve index/hole validity without adding a
@@ -300,12 +299,14 @@ pub(crate) fn get_record_if_valid(
     s: &crate::services::Services,
     id: crate::station_type::StationID,
 ) -> *mut StationRecord {
-    let shell = station_get_if_valid(s, id.0);
-    if shell.is_null() {
-        std::ptr::null_mut()
-    } else {
-        // SAFETY: The slot currently holds a live shell with its canonical record.
-        unsafe { record_of(shell) }
+    let pool = (s.station_pool)();
+    let index = usize::from(id.0);
+    unsafe {
+        if index >= (*pool).first_unused {
+            std::ptr::null_mut()
+        } else {
+            (*pool).slots.as_slice()[index].record.cast()
+        }
     }
 }
 
@@ -584,10 +585,23 @@ pub(crate) fn set_cached_roadstop_triggers(shell: *const BaseStation, animation:
     crate::raw_field::write_field!(record, cached_roadstop_cargo_triggers, cargo);
 }
 
+/// `Station::GetIfValid`: include the original specialization filter.
+pub(crate) fn get_station_record_if_valid(
+    s: &crate::services::Services,
+    id: crate::station_type::StationID,
+) -> *mut StationRecord {
+    let record = get_record_if_valid(s, id);
+    if record.is_null() || unsafe { (*record).facilities } & FACILITY_WAYPOINT != 0 {
+        std::ptr::null_mut()
+    } else {
+        record
+    }
+}
+
 /// `BaseStation::GetPoolSize()`: the pool's live extent.
 pub(crate) fn pool_size(s: &crate::services::Services) -> usize {
     // SAFETY: The live extent is a scalar of the canonical pool.
-    unsafe { (s.station_pool)().first_unused.read() }
+    unsafe { (*(s.station_pool)()).first_unused }
 }
 
 /// `StationFacilities` of a live shell.
@@ -610,15 +624,8 @@ pub(crate) fn is_station(shell: *const BaseStation) -> bool {
     facilities(shell) & FACILITY_WAYPOINT == 0
 }
 
-/// Call-scoped view of the native station pool's slot array. Growth relocates
-/// `slots`, but never lowers `first_unused`; refresh before reading past `slots_len`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct StationPool {
-    pub slots: *const *mut BaseStation,
-    pub slots_len: usize,
-    pub first_unused: *const usize,
-}
+/// Stable descriptor; its Rust-owned slot buffer may grow between visits.
+pub type StationPool = *const crate::pool::PoolDescriptor;
 
 /// `StationFacility::Waypoint`.
 pub(crate) const FACILITY_WAYPOINT: u8 = 1 << 7;
@@ -630,27 +637,22 @@ pub(crate) const FACILITY_WAYPOINT: u8 = 1 << 7;
 /// Serialized game state; `pool` came from the shared services in this entry; no
 /// pool reset or load runs while the cursor lives.
 unsafe fn next_base_station(
-    s: &crate::services::Services,
+    _s: &crate::services::Services,
     pool: &mut StationPool,
     from: &mut usize,
 ) -> Option<(*mut BaseStation, *mut StationRecord)> {
     loop {
-        // SAFETY: The live extent is a scalar of the canonical pool.
-        let live = unsafe { pool.first_unused.read() };
-        if *from >= live {
+        let index = *from;
+        // Read the live descriptor again after each callback and mutation.
+        if index >= unsafe { (**pool).first_unused } {
             return None;
         }
-        if live > pool.slots_len {
-            *pool = (s.station_pool)();
-        }
-        // SAFETY: `*from` is below the live extent, inside the refreshed slot array.
-        let shell = unsafe { pool.slots.add(*from).read() };
+        let record: *mut StationRecord = unsafe { (**pool).slots.as_slice()[index].record.cast() };
         *from += 1;
-        if shell.is_null() {
+        if record.is_null() {
             continue;
         }
-        // SAFETY: A non-null slot holds a live shell.
-        let record = unsafe { record_of(shell) };
+        let shell = unsafe { (*record).shell };
         return Some((shell, record));
     }
 }
@@ -711,11 +713,6 @@ pub(crate) fn for_each_station(
         #[allow(clippy::cast_possible_truncation)]
         visit(shell.cast_const().cast(), record.cast(), (from - 1) as u16);
     }
-}
-
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDStationPool" ["station"] => crate::station_record::StationPool { slots, slots_len, first_unused, };
 }
 
 /// `INVALID_TILE`.

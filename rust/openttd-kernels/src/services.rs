@@ -1463,11 +1463,18 @@ extern "C" fn unused_vehicle_next(_: u32) -> Option<crate::vehicle::VehicleRef> 
 
 #[cfg(test)]
 extern "C" fn fixture_station_pool() -> crate::station_record::StationPool {
-    crate::station_record::StationPool {
-        slots: std::ptr::null(),
-        slots_len: 0,
-        first_unused: &0,
-    }
+    static EMPTY: crate::game_state::GameState<crate::pool::PoolDescriptor> =
+        crate::game_state::GameState::new(crate::pool::PoolDescriptor {
+            slots: crate::industrytype::NativeVec::new(),
+            used_bitmap: crate::industrytype::NativeVec::new(),
+            first_free: 0,
+            first_unused: 0,
+            items: 0,
+            checked: 0,
+            cleaning: false,
+            alloc_cache: std::ptr::null_mut(),
+        });
+    EMPTY.get().cast_const()
 }
 #[cfg(test)]
 extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {

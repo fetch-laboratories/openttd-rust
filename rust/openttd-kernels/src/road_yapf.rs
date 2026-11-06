@@ -640,7 +640,8 @@ impl Search<'_> {
             }
             let stops = unsafe { &*(shared.road_stops)() };
             let world = crate::map_func::World::new(shared);
-            if world.station_road_stop((stops.tile)(stop)) && !world.bay_stop((stops.tile)(stop))
+            if world.station_road_stop(unsafe { (*stop).xy.0 })
+                && !world.bay_stop(unsafe { (*stop).xy.0 })
                 || !crate::road_stop::next_for_vehicle(shared, stop, vehicle).is_null()
             {
                 // SAFETY: The selected stop rectangle belongs to this live station.

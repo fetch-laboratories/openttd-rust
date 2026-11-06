@@ -402,9 +402,9 @@ static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
-static OpenTTDStationPool SharedStationPool() noexcept
+static const RustPoolDescriptor *SharedStationPool() noexcept
 {
-	return {.slots = _station_pool.data.data(), .slots_len = _station_pool.data.size(), .first_unused = &_station_pool.first_unused};
+	return _station_pool.descriptor;
 }
 
 /** Stateless STL permutation primitive; storage and tree control flow belong to Rust. */

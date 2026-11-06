@@ -96,7 +96,7 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 			delete Station::Get(StationID(4));
 			Create(4); // Reused ahead: visited now.
 			delete Station::Get(StationID(5)); // A new hole must be skipped.
-			growth = static_cast<uint32_t>(_station_pool.data.capacity());
+			growth = static_cast<uint32_t>(_station_pool.descriptor->slots.capacity);
 			Create(growth); // Relocates the pool's slot array during the callback.
 		};
 		if (shared) {

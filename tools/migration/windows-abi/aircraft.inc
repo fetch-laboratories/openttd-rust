@@ -47,11 +47,13 @@ static void AircraftDirectBoundary()
 	auto &vehicle = p.vehicle_services;
 	auto &shared = p.shared_services;
 	auto &leaves = p.leaves;
-	p.shared_services.station_pool = []() noexcept {
-		static std::array<BaseStation *, 8> slots;
-		static const size_t first_unused = slots.size();
-		slots.fill(reinterpret_cast<BaseStation *>(aircraft_probe.station));
-		return OpenTTDStationPool{slots.data(), slots.size(), &first_unused};
+	p.shared_services.station_pool = []() noexcept -> const RustPoolDescriptor * {
+		static std::array<RustPoolSlot, 8> slots;
+		static RustPoolDescriptor pool{};
+		slots.fill({reinterpret_cast<BaseStation *>(aircraft_probe.station), aircraft_probe.station->record});
+		pool.slots = {slots.data(), slots.size(), 0};
+		pool.first_unused = slots.size();
+		return &pool;
 	};
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_owner->vehicle->current.type; };
 	vehicle.maintenance = &_vehicle_maintenance_probe;
@@ -165,11 +167,13 @@ static void AircraftPhaseBoundary()
 	auto &v = p.vehicle_services;
 	auto &s = p.shared_services;
 	auto &leaves = p.leaves;
-	p.shared_services.station_pool = []() noexcept {
-		static std::array<BaseStation *, 8> slots;
-		static const size_t first_unused = slots.size();
-		slots.fill(reinterpret_cast<BaseStation *>(aircraft_probe.station));
-		return OpenTTDStationPool{slots.data(), slots.size(), &first_unused};
+	p.shared_services.station_pool = []() noexcept -> const RustPoolDescriptor * {
+		static std::array<RustPoolSlot, 8> slots;
+		static RustPoolDescriptor pool{};
+		slots.fill({reinterpret_cast<BaseStation *>(aircraft_probe.station), aircraft_probe.station->record});
+		pool.slots = {slots.data(), slots.size(), 0};
+		pool.first_unused = slots.size();
+		return &pool;
 	};
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
 	p.vehicle = {&p.record, state.get(), 17};

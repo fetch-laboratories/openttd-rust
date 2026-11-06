@@ -11,12 +11,12 @@
 #define ROADSTOP_BASE_H
 
 #include "station_type.h"
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
 #include "vehicle_type.h"
 #include "rust/road_stop_ffi.h"
 #include <memory>
 
-using RoadStopPool = Pool<RoadStop, RoadStopID, 32>;
+using RoadStopPool = RustPool<RoadStop, RoadStopID, 32>;
 extern RoadStopPool _roadstop_pool;
 
 /** A Stop for a Road Vehicle */
@@ -37,10 +37,10 @@ struct RoadStop : RoadStopPool::PoolItem<&_roadstop_pool> {
 	OpenTTDRoadStopState *const record;
 
 	/** Initializes a RoadStop */
-	inline RoadStop(TileIndex tile = INVALID_TILE) : record(openttd_rust_road_stop_new(this, tile.base())) { }
+	inline RoadStop(TileIndex tile = INVALID_TILE) : record(openttd_rust_road_stop_new(this, tile.base())) { _roadstop_pool.BindRecord(this->index.base(), this, this->record); }
 	RoadStop(const RoadStop &) = delete;
 	RoadStop &operator=(const RoadStop &) = delete;
-	inline ~RoadStop() { openttd_rust_road_stop_destroy(this->record); }
+	inline ~RoadStop() { openttd_rust_road_stop_destroy(this->record); _roadstop_pool.RetireRecord(this->index.base(), this, this->record); }
 
 	inline OpenTTDRoadStopState &Record() { return *this->record; }
 	inline const OpenTTDRoadStopState &Record() const { return *this->record; }

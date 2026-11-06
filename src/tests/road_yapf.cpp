@@ -44,9 +44,9 @@ const OpenTTDSharedServices *MovementWorld()
 	movement.vehicle = &vehicle;
 	static OpenTTDStationCatchmentServices stations{};
 	world.station_catchment = []() noexcept -> const OpenTTDStationCatchmentServices * { return &stations; };
-	world.station_pool = []() noexcept {
-		static const size_t first_unused = 0;
-		return OpenTTDStationPool{nullptr, 0, &first_unused};
+	world.station_pool = []() noexcept -> const RustPoolDescriptor * {
+		static const RustPoolDescriptor pool{};
+		return &pool;
 	};
 	world.movement = &movement;
 	world.map = &movement_map.statics;

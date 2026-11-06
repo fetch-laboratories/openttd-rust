@@ -4,14 +4,8 @@
 #define RUST_STATION_RECORD_FFI_H
 #include "call_ffi.h"
 #include "rust_vector.h"
+#include "pool_ffi.h"
 #include "abi-record-station.h"
-/** Call-scoped view of the station pool's slot array for Rust slot iteration.
- * Growth relocates slots but never lowers first_unused. */
-struct OpenTTDStationPool {
-	BaseStation *const *slots;
-	size_t slots_len;
-	const size_t *first_unused;
-};
 extern "C" {
 /* One record per BaseStation shell, created before the shell's members and
  * released after its whole base destructor. The record is the first member of

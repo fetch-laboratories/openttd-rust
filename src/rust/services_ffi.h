@@ -198,7 +198,7 @@ struct OpenTTDSharedServices {
 	void (*set_fence)(uint32_t, DiagDirection, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_fence);
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
-	OpenTTDStationPool (*station_pool)() noexcept OPENTTD_SERVICE_DEFAULT(station_pool); ///< The canonical station pool's live slot descriptor.
+	const RustPoolDescriptor *(*station_pool)() noexcept OPENTTD_SERVICE_DEFAULT(station_pool); ///< The canonical station pool's live slot descriptor.
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 	uint32_t (*nearby_tile)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile);
 	uint32_t (*nearby_tile_information)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_tile_information);

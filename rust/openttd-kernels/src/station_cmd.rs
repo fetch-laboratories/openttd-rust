@@ -23,7 +23,7 @@ use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBR
 use crate::tilearea::TileArea;
 mod waypoint;
 use crate::rail_cmd::RailCommandServices;
-use crate::road_stop::{RoadStopServices, Stop};
+use crate::road_stop::{State as StopState, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_slope};
 use crate::station::BaseStation;
@@ -225,9 +225,7 @@ pub struct CommandServicesTable {
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub road_boolean: extern "C" fn(*const RoadSpec, u16) -> bool,
     pub road_triggers: extern "C" fn(*mut BaseStation, *const RoadSpec),
-    pub new_stop: extern "C" fn(u32) -> *mut Stop,
-    pub set_stop_head: extern "C" fn(*mut BaseStation, bool, *mut Stop),
-    pub set_stop_next: extern "C" fn(*mut Stop, *mut Stop),
+    pub new_stop: extern "C" fn(u32) -> *mut StopState,
     pub make_drive_stop: extern "C" fn(u32, u8, u8, u8, u16, u8, u8, u8, u8),
     pub make_bay_stop: extern "C" fn(u32, u8, u16, u8, u8, u8, u8),
     pub delete_stop: extern "C" fn(*mut Stop),
@@ -2008,10 +2006,6 @@ impl Ctx<'_> {
     fn vehicle(&self) -> &crate::vehicle::VehicleServices {
         unsafe { &*self.s.vehicle }
     }
-    fn stops(&self) -> &RoadStopServices {
-        // SAFETY: The shared table returns a static immutable table.
-        unsafe { &*(self.shared.road_stops)() }
-    }
     fn road_type(&self, tile: u32, tram: bool) -> u8 {
         if tram {
             (self.shared.tram_type)(tile).0
@@ -2456,15 +2450,17 @@ impl Ctx<'_> {
                 (self.s.road_triggers)(st, spec);
             }
             let stop = (self.s.new_stop)(tile);
-            let head = (self.stops().head)(st, truck);
+            let head = crate::road_stop::head(st, truck);
             if head.is_null() {
-                (self.s.set_stop_head)(st, truck, stop);
+                crate::road_stop::set_head(st, truck, stop);
             } else {
                 let mut tail = head;
-                while !(self.stops().next)(tail).is_null() {
-                    tail = (self.stops().next)(tail);
+                while !unsafe { (*tail).next }.is_null() {
+                    tail = unsafe { (*tail).next };
                 }
-                (self.s.set_stop_next)(tail, stop);
+                unsafe {
+                    (*tail).next = stop;
+                }
             }
             self.area_add(crate::station_record::stop_area(st, truck), tile);
             crate::station_lifecycle::add_facility(st, if truck { 1 } else { 2 }, tile, unsafe {
@@ -2499,7 +2495,7 @@ impl Ctx<'_> {
                 (self.s.make_drive_stop)(
                     tile, owner, road_owner, tram_owner, id, kind, road, tram, axis,
                 );
-                crate::road_stop::make_drive_through(self.shared, tile, (self.stops().state)(stop));
+                crate::road_stop::make_drive_through(self.shared, tile, stop);
             } else {
                 if road == 63 && crate::road::road_type_is_road(rt) {
                     road = rt;
@@ -2634,20 +2630,22 @@ impl Ctx<'_> {
         };
         if flags & 1 != 0 {
             if !waypoint {
-                let head = (self.stops().head)(st, truck);
-                let next = (self.stops().next)(stop);
-                if head == stop {
-                    (self.s.set_stop_head)(st, truck, next);
+                let head = crate::road_stop::head(st, truck);
+                let next = unsafe { (*stop_state).next };
+                if head == stop_state {
+                    crate::road_stop::set_head(st, truck, next);
                     if next.is_null() {
                         crate::station_record::reset_facilities(st, if truck { 2 } else { 4 });
                         (self.s.orders_dirty)();
                     }
                 } else {
                     let mut pred = head;
-                    while (self.stops().next)(pred) != stop {
-                        pred = (self.stops().next)(pred);
+                    while unsafe { (*pred).next } != stop_state {
+                        pred = unsafe { (*pred).next };
                     }
-                    (self.s.set_stop_next)(pred, next);
+                    unsafe {
+                        (*pred).next = next;
+                    }
                 }
             }
             for tram in [false, true] {
@@ -2707,13 +2705,12 @@ impl Ctx<'_> {
                 }
             } else {
                 crate::station_record::clear_area(crate::station_record::stop_area(st, truck));
-                let mut next = (self.stops().head)(st, truck);
+                let mut next = crate::road_stop::head(st, truck);
                 while !next.is_null() {
-                    self.area_add(
-                        crate::station_record::stop_area(st, truck),
-                        (self.stops().tile)(next),
-                    );
-                    next = (self.stops().next)(next);
+                    self.area_add(crate::station_record::stop_area(st, truck), unsafe {
+                        (*next).xy.0
+                    });
+                    next = unsafe { (*next).next };
                 }
             }
         }
@@ -4304,8 +4301,6 @@ crate::abi::layouts! {
         road_boolean,
         road_triggers,
         new_stop,
-        set_stop_head,
-        set_stop_next,
         make_drive_stop,
         make_bay_stop,
         delete_stop,

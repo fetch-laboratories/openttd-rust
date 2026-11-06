@@ -26,18 +26,12 @@ struct OpenTTDRoadStopEntry {
 /** Both entry points of a drive-through line, owned by its BaseEntry stop. */
 struct OpenTTDRoadStopEntries { OpenTTDRoadStopEntry east, west; };
 #include "station_record_ffi.h"
-struct OpenTTDRoadStopPoolItem { OpenTTDRoadStopState *state; uint32_t xy, index; };
 /* Typed noexcept services; none reenters a road stop, runs scripts or throws. */
 struct OpenTTDRoadStopServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDGroundServices *ground;
-	RoadStop *(*primary)(uint32_t, RoadStopType) noexcept OPENTTD_SERVICE_DEFAULT(primary);
-	RoadStop *(*head)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(head);
 	bool (*is_bus)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(is_bus);
-	RoadStop *(*next)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(next);
-	uint32_t (*tile)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	OpenTTDRoadStopState *(*state)(const RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(state);
-	OpenTTDRoadStopPoolItem (*pool_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_next);
+	const RustPoolDescriptor *(*pool)() noexcept OPENTTD_SERVICE_DEFAULT(pool);
 };
 const OpenTTDRoadStopServices &GetRustRoadStopServices() noexcept;
 extern "C" {

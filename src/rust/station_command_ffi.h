@@ -125,9 +125,7 @@ struct OpenTTDStationCommandServices {
 	const OpenTTDRoadStopResolverServices *roadstop_resolver;
 	bool (*road_boolean)(const RoadStopSpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_boolean);
 	void (*road_triggers)(BaseStation *, const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
-	RoadStop *(*new_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_stop);
-	void (*set_stop_head)(BaseStation *, bool, RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(set_stop_head);
-	void (*set_stop_next)(RoadStop *, RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(set_stop_next);
+	OpenTTDRoadStopState *(*new_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_stop);
 	void (*make_drive_stop)(uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_drive_stop);
 	void (*make_bay_stop)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_bay_stop);
 	void (*delete_stop)(RoadStop *) noexcept OPENTTD_SERVICE_DEFAULT(delete_stop);

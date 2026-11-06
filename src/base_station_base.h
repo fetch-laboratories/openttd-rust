@@ -10,7 +10,7 @@
 #ifndef BASE_STATION_BASE_H
 #define BASE_STATION_BASE_H
 
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
 #include "command_type.h"
 #include "viewport_type.h"
 #include "station_map.h"
@@ -19,7 +19,7 @@
 #include "rust/station_catchment_ffi.h"
 #include "rust/station_record_ffi.h"
 
-typedef Pool<BaseStation, StationID, 32> StationPool;
+typedef RustPool<BaseStation, StationID, 32> StationPool;
 extern StationPool _station_pool;
 
 template <typename T> struct SpecMappingType;
@@ -51,10 +51,10 @@ struct StationRecordOwner {
 	OpenTTDStationRecord *const record; ///< Shared record of the moved fields.
 
 	/* Rust reaches the record from a shell by this member's fixed offset in the shell. */
-	StationRecordOwner(BaseStation *shell, TileIndex xy) : record(openttd_rust_station_record_new(shell, xy.base(), this->OffsetIn(shell))) {}
+	StationRecordOwner(BaseStation *shell, TileIndex xy);
 	StationRecordOwner(const StationRecordOwner &) = delete;
 	StationRecordOwner &operator=(const StationRecordOwner &) = delete;
-	~StationRecordOwner() { openttd_rust_station_record_delete(this->record); }
+	~StationRecordOwner();
 
 private:
 	size_t OffsetIn(const BaseStation *shell) const { return reinterpret_cast<const char *>(&this->record) - reinterpret_cast<const char *>(shell); }
