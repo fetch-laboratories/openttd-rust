@@ -16,7 +16,9 @@ struct OpenTTDScheduleQueues {
  * No queue borrow spans a callback. Leaves are noexcept; panics abort.
  * Exported spans live only until the next owner mutation; copy in native code
  * before SlObject. Native staging publishes partial state on return and unwind, including recursive null cleanup. */
+struct OpenTTDSharedServices;
 struct OpenTTDScheduleServices {
+	const OpenTTDSharedServices *shared;
 	OpenTTDLiveGraph *(OPENTTD_RUST_CALL *graph_owner)(LinkGraph *) noexcept;
 	void (OPENTTD_RUST_CALL *assert_graph)(const LinkGraph *) noexcept;
 	bool (OPENTTD_RUST_CALL *can_allocate)() noexcept;
@@ -33,7 +35,6 @@ struct OpenTTDScheduleServices {
 	LinkGraph *(OPENTTD_RUST_CALL *next_graph)(uint32_t *) noexcept;
 	LinkGraphJob *(OPENTTD_RUST_CALL *next_job)(uint32_t *) noexcept;
 	void (OPENTTD_RUST_CALL *shift_job)(LinkGraphJob *, int32_t) noexcept;
-	void (OPENTTD_RUST_CALL *post_pause)(PauseMode, bool) noexcept;
 	void (OPENTTD_RUST_CALL *begin_measurement)(void *, bool) noexcept;
 };
 extern "C" {

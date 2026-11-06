@@ -7,6 +7,9 @@
 #include "industry_cmd.h"
 #include "saveload/saveload.h"
 #include "table/strings.h"
+#ifdef WITH_RUST
+#include "rust/industry_definition_ffi.h"
+#endif
 
 static uint32_t DefinitionGRFID(const char *text)
 {
@@ -22,7 +25,12 @@ static void DefinitionInspect(bool reused)
 	const uint32_t main = DefinitionGRFID("I475");
 	const auto *file = GetFileByGRFID(main);
 	DefinitionRequire(file != nullptr && GetGRFConfig(main)->status == GCS_ACTIVATED, "main-active");
+#ifdef WITH_RUST
+	/* Rust stages per-file specs; the badge hook finds none once finalisation drops them. */
+	DefinitionRequire(!openttd_rust_industry_file_badge(file, false, BadgeID{}) && !openttd_rust_industry_file_badge(file, true, BadgeID{}), "staging-cleared");
+#else
 	DefinitionRequire(file->industryspec.empty() && file->indtspec.empty(), "staging-cleared");
+#endif
 	DefinitionRequire(_industry_mngr.GetID(17, main) == 0, "first-industry-override");
 	uint16_t type = _industry_mngr.GetID(18, main);
 	DefinitionRequire(type < NEW_INDUSTRYOFFSET && type != 0, "disabled-original-slot");
@@ -32,25 +40,25 @@ static void DefinitionInspect(bool reused)
 	DefinitionRequire(spec->cost_multiplier == 1 && spec->minimal_cargo == 0 && spec->map_colour.p == 77 && spec->behaviour.None() && spec->prospecting_chance == 0xFEDCBA98 && spec->removal_cost_multiplier == 12345 && spec->station_name == STR_NULL, "scalars");
 	DefinitionRequire(spec->produced_cargo[0] == 1 && spec->produced_cargo[1] == INVALID_CARGO && spec->accepts_cargo[0] == INVALID_CARGO && spec->production_rate[0] == 80 && spec->production_rate[1] == 0 && spec->input_cargo_multiplier[0][0] == 256 && spec->input_cargo_multiplier[0][1] == 512 && spec->input_cargo_multiplier[1][0] == 768 && spec->input_cargo_multiplier[1][1] == 1024 && spec->input_cargo_multiplier[2][0] == 0, "cargo-multipliers");
 	const IndustrySpec *water = GetIndustrySpec(type);
-	DefinitionRequire(water->layouts.size() == 1 && water->layouts[0][0].ti.x == -1 && water->layouts[0][0].ti.y == 2 && water->layouts[0][0].gfx == GFX_WATERTILE_SPECIALCHECK && water->random_sounds == std::vector<uint8_t>({3, 4}), "pre-v8-water-offset");
+	DefinitionRequire(water->layouts.size() == 1 && water->layouts[0][0].ti.x == -1 && water->layouts[0][0].ti.y == 2 && water->layouts[0][0].gfx == GFX_WATERTILE_SPECIALCHECK && std::ranges::equal(water->random_sounds, std::vector<uint8_t>({3, 4})), "pre-v8-water-offset");
 	IndustryGfx gfx = _industile_mngr.GetID(0, main);
-	DefinitionRequire(gfx == NEW_INDUSTRYTILEOFFSET && _industry_tile_specs[0].grf_prop.override_id == gfx && !_industry_tile_specs[0].enabled, "first-tile-override");
-	const auto &tile = _industry_tile_specs[gfx];
+	DefinitionRequire(gfx == NEW_INDUSTRYTILEOFFSET && (*GetIndustryTileSpec(0)).grf_prop.override_id == gfx && !(*GetIndustryTileSpec(0)).enabled, "first-tile-override");
+	const auto &tile = (*GetIndustryTileSpec(gfx));
 	DefinitionRequire(tile.animation.frames == 3 && tile.animation.speed == 4 && tile.accepts_cargo[0] == 1 && tile.acceptance[0] == 8 && tile.accepts_cargo[1] == 0 && tile.acceptance[1] == -4 && tile.accepts_cargo[2] == INVALID_CARGO, "tile-properties");
 	DefinitionRequire(_industile_mngr.GetID(79, main) == 254 && _industile_mngr.GetID(80, main) == 256 && _industile_mngr.GetID(81, main) == 257, "water-marker-slot-excluded");
 	uint16_t conflict = _industry_mngr.GetID(17, DefinitionGRFID("C475"));
 	DefinitionRequire(conflict < NUM_INDUSTRYTYPES && conflict != 0 && GetIndustrySpec(conflict)->grf_prop.override_id == (reused ? 0 : IT_INVALID), "industry-override-conflict");
-	DefinitionRequire(tile.badges.size() == 1 && spec->badges == tile.badges, "badge-publication");
+	DefinitionRequire(tile.badges.size() == 1 && std::ranges::equal(spec->badges, tile.badges), "badge-publication");
 	for (const char *name : {"P475", "B475", "Q475", "X475"}) {
 		const auto *config = GetGRFConfig(DefinitionGRFID(name));
 		DefinitionRequire(config != nullptr && config->status == GCS_DISABLED && config->errors.size() == 1, "disabled-file");
 		DefinitionRequire(config->errors.front().message == (name[0] == 'X' ? STR_NEWGRF_ERROR_INVALID_ID : STR_NEWGRF_ERROR_READ_BOUNDS), "native-error");
 	}
 	uint16_t partial_tile = _industile_mngr.GetID(0, DefinitionGRFID("P475"));
-	DefinitionRequire(partial_tile < NUM_INDUSTRYTILES && _industry_tile_specs[partial_tile].animation.frames == 7, "incremental-animation-failure");
+	DefinitionRequire(partial_tile < NUM_INDUSTRYTILES && (*GetIndustryTileSpec(partial_tile)).animation.frames == 7, "incremental-animation-failure");
 	const auto *badge_file = GetFileByGRFID(DefinitionGRFID("Q475"));
 	uint16_t badge_tile = _industile_mngr.GetID(0, DefinitionGRFID("Q475"));
-	DefinitionRequire(badge_file != nullptr && badge_file->badge_list.size() == 2 && _industry_tile_specs[badge_tile].badges == std::vector<BadgeID>{badge_file->badge_list[1]} && GetBadge(badge_file->badge_list[0])->features.Test(GSF_INDUSTRYTILES), "partial-badge-effects");
+	DefinitionRequire(badge_file != nullptr && badge_file->badge_list.size() == 2 && std::ranges::equal((*GetIndustryTileSpec(badge_tile)).badges, std::vector<BadgeID>{badge_file->badge_list[1]}) && GetBadge(badge_file->badge_list[0])->features.Test(GSF_INDUSTRYTILES), "partial-badge-effects");
 	uint16_t partial_industry = _industry_mngr.GetID(19, DefinitionGRFID("B475"));
 	DefinitionRequire(partial_industry < NUM_INDUSTRYTYPES && GetIndustrySpec(partial_industry)->cost_multiplier == 93, "incremental-industry-failure");
 	for (uint16_t id : {uint16_t(0), type, conflict, partial_industry}) {

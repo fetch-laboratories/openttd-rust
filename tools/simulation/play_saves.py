@@ -102,7 +102,12 @@ def scheduler_reference(out: Path) -> str:
         "-I" + str(build / "generated-abi"),
         "-I" + str(out),
         str(Path(__file__).with_name("linkgraph-schedule-reference.cpp")),
-        str(migration.rust_archive(build)),
+        # The native-test archive carries the pause observer the fixture installs.
+        str(
+            migration.rust_archive(
+                build, target_dir=build / "cargo-native-test-support"
+            )
+        ),
         *migration.rust_configuration(build)["native_libraries"],
         "-o",
         str(binary),

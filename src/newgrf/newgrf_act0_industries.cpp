@@ -19,9 +19,8 @@
 #include "newgrf_stringmapping.h"
 
 #include "table/strings.h"
-#include "../table/build_industry.h"
 
-#include "../rust/industry_property_ffi.h"
+#include "../rust/industry_definition_ffi.h"
 #include "../rust/newgrf_loading_ffi.h"
 #include "../rust/newgrf_bytereader_services.h"
 
@@ -32,7 +31,7 @@ static ChangeInfoResult IndustrytilesChangeInfo(uint first, uint last, int prop,
 	GRFFile *file = _cur_gps.grffile;
 	const OpenTTDIndustryPropertyContext context{file, file->grfid, file->grf_version, to_underlying(_settings_game.game_creation.landscape)};
 	int32_t result;
-	if (!openttd_rust_industry_tile_properties(first, last, prop, &buf, &context, &GetRustByteReaderServices(), &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &GetRustGrfLoadingServices(), &result)) RustGRFRethrowReadError();
+	if (!openttd_rust_industry_tile_properties(first, last, prop, &buf, &context, &GetRustByteReaderServices(), &GetRustGrfLoadingServices(), &result)) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }
 
@@ -41,7 +40,7 @@ static ChangeInfoResult IndustriesChangeInfo(uint first, uint last, int prop, By
 	GRFFile *file = _cur_gps.grffile;
 	const OpenTTDIndustryPropertyContext context{file, file->grfid, file->grf_version, to_underlying(_settings_game.game_creation.landscape)};
 	int32_t result;
-	if (!openttd_rust_industry_properties(first, last, prop, &buf, &context, &GetRustByteReaderServices(), &GetIndustryDefinitionServices(), &GetIndustryPropertyServices(), &GetRustGrfLoadingServices(), &result)) RustGRFRethrowReadError();
+	if (!openttd_rust_industry_properties(first, last, prop, &buf, &context, &GetRustByteReaderServices(), &GetRustGrfLoadingServices(), &result)) RustGRFRethrowReadError();
 	return static_cast<ChangeInfoResult>(result);
 }
 

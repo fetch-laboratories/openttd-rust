@@ -71,7 +71,7 @@ IndustryTileResolverObject::IndustryTileResolverObject(IndustryGfx gfx, TileInde
 	ind_scope(*this, tile, indus, indus->type),
 	gfx(gfx)
 {
-	this->root_spritegroup = openttd_rust_industry_tile_root(&this->indtile_scope.context, gfx, &GetIndustryResolverServices());
+	this->root_spritegroup = openttd_rust_industry_tile_root(&this->indtile_scope.context, gfx);
 }
 
 GrfSpecFeature IndustryTileResolverObject::GetFeature() const
@@ -174,7 +174,7 @@ const OpenTTDIndustryAnimation &GetIndustryAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<IndustryTileSpec, Industry, int, GetSimpleIndustryCallback>(
 		[](uint32_t t) noexcept -> OpenTTDIndustryAnimationEntry { const auto *s = GetIndustryTileSpec(GetIndustryGfx(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, RustIndustryByTile(t)}; },
-		[](const IndustryTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(IndustryTileCallbackMask::AnimationSpeed), s->callback_mask.Test(IndustryTileCallbackMask::AnimationNextFrame), s->special_flags.Test(IndustryTileSpecialFlag::NextFrameRandomBits), true}; });
+		openttd_rust_industry_tile_animation_info);
 	return binding;
 }
 

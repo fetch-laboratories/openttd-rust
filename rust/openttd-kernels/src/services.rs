@@ -138,6 +138,12 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
+    /// Shared command metadata from the native traits table.
+    pub command_flags: extern "C" fn(u8) -> u16,
+    /// Original command type for pause admission.
+    pub command_type: extern "C" fn(u8) -> u8,
+    /// Original command-range validation.
+    pub command_valid: extern "C" fn(u8) -> bool,
     /// Canonical native finance owner resolution and presentation leaves.
     pub finance: &'static crate::company::FinanceServices,
     /// Current infinite-money difficulty setting.
@@ -277,6 +283,8 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Typed Rust post lifecycles and native argument codecs.
+    pub command_post: extern "C" fn() -> &'static crate::command_post::Services,
     /// Complete synchronous movement owner; immutable process-lifetime table.
     pub movement: *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
@@ -295,6 +303,8 @@ pub struct Services {
     pub build_on_slopes: extern "C" fn() -> bool,
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
+    /// Whether this company pool ID is a live human company.
+    pub company_human: extern "C" fn(u8) -> bool,
     /// Whether this company pool ID is live.
     pub company_valid: extern "C" fn(u8) -> bool,
     /// Opaque context for test fixtures; production leaves ignore it.
@@ -520,14 +530,20 @@ pub struct Services {
     pub nearby_tile: extern "C" fn(u8, u32) -> u32,
     /// `GetNearbyTileInformation`.
     pub nearby_tile_information: extern "C" fn(u32, bool) -> u32,
+    /// Native client-info pool lookup; null when the ID is unknown.
+    pub network_client_info: extern "C" fn(u32) -> *mut c_void,
     /// `MarkWholeScreenDirty`.
     pub screen_dirty: extern "C" fn(),
+    /// `std::string` at `ptr`: `data()`, with `size()` in `length`.
+    pub string_data: extern "C" fn(ptr: *const c_void, length: *mut usize) -> *const u8,
     /// `GetTerrainType`.
     pub terrain_type: extern "C" fn(u32) -> u32,
     /// `GRFFile::grf_version` of a non-null file.
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
     /// `GRFFile::cargo_map` entry of a non-null file.
     pub grf_cargo_map: extern "C" fn(*const c_void, u8) -> u8,
+    /// `ConvertBooleanCallback` for a non-null file.
+    pub grf_boolean_callback: extern "C" fn(*const c_void, u16, u16) -> bool,
     /// Loaded GRF file at an index, or null past the end.
     pub grf_file_at_or_null: extern "C" fn(usize) -> *mut c_void,
     /// `GRFFile::grfid` of a non-null file.
@@ -542,6 +558,8 @@ pub struct Services {
     pub newgrf_specs: *const crate::newgrf_specs::Specs,
     /// `ResolverObject::grffile`.
     pub resolver_grf_file: extern "C" fn(*const c_void) -> *const c_void,
+    /// `GetBadgeVariableResult` for the resolver's file and a badge list.
+    pub resolver_badges: extern "C" fn(*const c_void, *const u32, usize, u32) -> u32,
     /// `GRFFile::grfid` of the resolver's non-null file.
     pub resolver_grf_file_id: extern "C" fn(*const c_void) -> u32,
     /// `GRFFile::grf_version` of the resolver's non-null file.
@@ -747,6 +765,7 @@ crate::abi::layouts! {
         wormhole_reserved,
     };
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
+        command_flags, command_type, command_valid,
         finance,
         infinite_money,
         money_error,
@@ -796,6 +815,7 @@ crate::abi::layouts! {
         generating_world,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        command_post,
         movement,
         set_tile_owner,
         autoslope,
@@ -805,6 +825,7 @@ crate::abi::layouts! {
         bridge_speed,
         build_on_slopes,
         clear_square_services,
+        company_human,
         company_valid,
         context,
         cost_animation,
@@ -915,10 +936,13 @@ crate::abi::layouts! {
         road_stops,
         nearby_tile,
         nearby_tile_information,
+        network_client_info,
         screen_dirty,
+        string_data,
         terrain_type,
         grf_file_version,
         grf_cargo_map,
+        grf_boolean_callback,
         grf_file_at_or_null,
         grf_file_id,
         grf_file_name,
@@ -926,6 +950,7 @@ crate::abi::layouts! {
         grf_parameter,
         newgrf_specs,
         resolver_grf_file,
+        resolver_badges,
         resolver_grf_file_id,
         resolver_grf_version,
         show_error,
@@ -1037,6 +1062,12 @@ pub fn fixture(
     extern "C" fn unexpected_path() {
         std::process::abort()
     }
+    extern "C" fn unexpected_string_data(_: *const c_void, _: *mut usize) -> *const u8 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_client_info(_: u32) -> *mut c_void {
+        std::process::abort()
+    }
     extern "C" fn unexpected_nearby(_: u8, _: u32) -> u32 {
         std::process::abort()
     }
@@ -1050,6 +1081,12 @@ pub fn fixture(
         std::process::abort()
     }
     extern "C" fn unexpected_cargo_map(_: *const c_void, _: u8) -> u8 {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_boolean(_: *const c_void, _: u16, _: u16) -> bool {
+        std::process::abort()
+    }
+    extern "C" fn unexpected_badges(_: *const c_void, _: *const u32, _: usize, _: u32) -> u32 {
         std::process::abort()
     }
     extern "C" fn unexpected_file_at(_: usize) -> *mut c_void {
@@ -1067,9 +1104,14 @@ pub fn fixture(
     extern "C" fn unexpected_file(_: *const c_void) -> *const c_void {
         std::process::abort()
     }
+    extern "C" fn unexpected_post() -> &'static crate::command_post::Services {
+        std::process::abort()
+    }
     Services {
+        command_post: unexpected_post,
         grf_file_version: unexpected_version,
         grf_cargo_map: unexpected_cargo_map,
+        grf_boolean_callback: unexpected_boolean,
         grf_file_at_or_null: unexpected_file_at,
         grf_file_id: unexpected_file_id,
         grf_file_name: unexpected_file_name,
@@ -1077,11 +1119,14 @@ pub fn fixture(
         grf_parameter: unexpected_parameter,
         newgrf_specs: std::ptr::null(),
         resolver_grf_file: unexpected_file,
+        resolver_badges: unexpected_badges,
         resolver_grf_file_id: unexpected_file_id,
         resolver_grf_version: unexpected_version,
         nearby_tile: unexpected_nearby,
         nearby_tile_information: unexpected_information,
+        network_client_info: unexpected_client_info,
         screen_dirty: unexpected_path,
+        string_data: unexpected_string_data,
         terrain_type: unexpected_terrain,
         show_error: unexpected_error,
         not_reached: unexpected_path,
@@ -1097,6 +1142,7 @@ pub fn fixture(
             docking: flag,
             generating_world: flag0,
         },
+        company_human: unused_company_valid,
         company_valid: unused_company_valid,
         context,
         cost_animation: fixture_cost_animation,

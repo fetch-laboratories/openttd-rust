@@ -17,6 +17,7 @@
 #include "../rust/linkgraph_schedule_ffi.h"
 #include "../rust/command_services.h"
 #include "../rust/services_ffi.h"
+#include "../rust/services_ffi.h"
 #include "../rust/services_linkgraph.h"
 
 #include "../safeguards.h"
@@ -31,6 +32,7 @@
 static_assert(LinkGraphSchedule::SPAWN_JOIN_TICK == 21 && EconomyTime::SECONDS_PER_DAY == 2);
 using ScheduleDate = TimerGameEconomy::Date;
 constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
+	.shared = &_rust_shared_services,
 	.graph_owner = LiveGraphOwner,
 	.assert_graph = +[]([[maybe_unused]] const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
 	.can_allocate = +[]() noexcept { return LinkGraphJob::CanAllocateItem(); },
@@ -50,7 +52,6 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 		return nullptr;
 	},
 	.shift_job = +[](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(ScheduleDate(interval)); },
-	.post_pause = RustPostPause,
 	.begin_measurement = +[](void *storage, bool client) noexcept {
 		if (client) static_cast<std::optional<PerformanceMeasurer> *>(storage)->emplace(PFE_GL_LINKGRAPH);
 		else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);

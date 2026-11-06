@@ -12,6 +12,10 @@
 #include "object_base.h"
 #include "object_map.h"
 #include "saveload/saveload.h"
+#ifdef WITH_RUST
+extern "C" const OpenTTDCommandQueue *openttd_test_network_wait_queue();
+extern "C" void openttd_test_network_wait_queue_clear();
+#endif
 
 static bool command_throw = false;
 static uint command_diagnostics = 0;
@@ -101,6 +105,20 @@ static bool CommandsScenario([[maybe_unused]] std::span<std::string_view> args)
 	finance.money = money;
 	CommandNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile).Succeeded(), __LINE__);
 	_networking = true;
+#ifdef WITH_RUST
+	/* #628 owns the local wait queue in Rust; each check reads its records afresh, in the reference order. */
+	CommandNeed(openttd_test_network_wait_queue()->size == 0, __LINE__);
+	const Money before_send = finance.money;
+	CommandNeed(post() && command_callbacks == 1 && IsTileType(tile, MP_CLEAR) && finance.money == before_send, __LINE__);
+	CommandNeed(openttd_test_network_wait_queue()->size == 1, __LINE__);
+	const OpenTTDCommandPacket &packet = openttd_test_network_wait_queue()->data[0];
+	CommandNeed(packet.cmd == CMD_BUILD_OBJECT && packet.company == actor.base() && packet.callback == reinterpret_cast<const void *>(&CommandObserve), __LINE__);
+	CommandNeed(std::ranges::equal(std::span<const uint8_t>(packet.data.data, packet.data.size), EndianBufferWriter<CommandDataBuffer>::FromValue(std::make_tuple(tile, OBJECT_OWNED_LAND, uint8_t{0}))), __LINE__);
+	fmt::print(stderr, "INVOCATION network-send {} {} {}\n", static_cast<Commands>(packet.cmd), packet.company, packet.frame == _frame_counter_max + 1);
+	openttd_test_network_wait_queue_clear();
+	CommandNeed(Command<CMD_BUILD_OBJECT>::PostFromNet(0, &CommandObserve, true, std::make_tuple(tile, OBJECT_OWNED_LAND, uint8_t{0})), __LINE__);
+	CommandNeed(command_callbacks == 2 && IsObjectTypeTile(tile, OBJECT_OWNED_LAND) && openttd_test_network_wait_queue()->size == 0, __LINE__);
+#else
 	CommandNeed(_local_wait_queue.empty(), __LINE__);
 	const Money before_send = finance.money;
 	CommandNeed(post() && command_callbacks == 1 && IsTileType(tile, MP_CLEAR) && finance.money == before_send, __LINE__);
@@ -112,6 +130,7 @@ static bool CommandsScenario([[maybe_unused]] std::span<std::string_view> args)
 	_local_wait_queue.clear();
 	CommandNeed(Command<CMD_BUILD_OBJECT>::PostFromNet(0, &CommandObserve, true, std::make_tuple(tile, OBJECT_OWNED_LAND, uint8_t{0})), __LINE__);
 	CommandNeed(command_callbacks == 2 && IsObjectTypeTile(tile, OBJECT_OWNED_LAND) && _local_wait_queue.empty(), __LINE__);
+#endif
 	_networking = false;
 	/* Throw at the native AI startup boundary after the real company allocation. */
 	const auto count = Company::GetNumItems();

@@ -53,7 +53,13 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		Industry *ind = nullptr;
 		for (Industry *candidate : Industry::Iterate()) {
 			const auto *spec = GetIndustrySpec(candidate->type);
-			if (candidate->produced.empty() || !IsValidCargoType(candidate->produced[0].cargo) || candidate->produced[0].cargo == GetCargoTypeByLabel(CT_PASSENGERS) || !spec->IsRawIndustry() || spec->UsesOriginalEconomy()) continue;
+			if (candidate->produced.empty() || !IsValidCargoType(candidate->produced[0].cargo) || candidate->produced[0].cargo == GetCargoTypeByLabel(CT_PASSENGERS) ||
+#ifdef WITH_RUST
+				!IsRawIndustry(spec) || UsesOriginalEconomy(spec)
+#else
+				!spec->IsRawIndustry() || spec->UsesOriginalEconomy()
+#endif
+				) continue;
 			if (candidate->stations_near.empty() == (outcome == 0)) { ind = candidate; break; }
 		}
 		IndustryPolicyRequire(ind != nullptr);

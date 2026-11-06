@@ -91,7 +91,9 @@ pub struct Services {
     pub read_word: unsafe extern "C" fn(*mut ByteReader, *mut u16) -> bool,
     pub read_dword: unsafe extern "C" fn(*mut ByteReader, *mut u32) -> bool,
     pub skip: unsafe extern "C" fn(*mut ByteReader, usize) -> bool,
-    pub read_badges: unsafe extern "C" fn(*mut ByteReader, u8, *mut BadgeList) -> bool,
+    pub assign_badges: unsafe extern "C" fn(*mut BadgeList, *const u32, usize),
+    pub read_badge_ids:
+        unsafe extern "C" fn(*mut ByteReader, u8, u16, *mut u32, *mut usize) -> bool,
     pub skip_badges: unsafe extern "C" fn(*mut ByteReader) -> bool,
 }
 pub struct Reader<'a> {
@@ -171,8 +173,28 @@ impl<'a> Reader<'a> {
         feature: u8,
         destination: *mut BadgeList,
     ) -> Result<(), ReadError> {
-        if unsafe { (self.services.read_badges)(self.native, feature, destination) } {
-            Ok(())
+        let ids = self.badge_ids(feature)?;
+        unsafe { (self.services.assign_badges)(destination, ids.as_ptr(), ids.len()) };
+        Ok(())
+    }
+    /// `ReadBadgeList`: reserve from the count, then let the native leaf fill the
+    /// allocation. On failure the destination stays untouched and native badge effects remain.
+    pub fn badge_ids(&mut self, feature: u8) -> Result<Vec<u32>, ReadError> {
+        let count = self.word()?;
+        let mut ids = Vec::with_capacity(usize::from(count));
+        let mut len = 0;
+        if unsafe {
+            (self.services.read_badge_ids)(
+                self.native,
+                feature,
+                count,
+                ids.as_mut_ptr(),
+                &raw mut len,
+            )
+        } {
+            // SAFETY: the native leaf wrote at most `count` IDs and initialized `len`.
+            unsafe { ids.set_len(len) };
+            Ok(ids)
         } else {
             Err(ReadError)
         }
@@ -188,7 +210,7 @@ impl<'a> Reader<'a> {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDGrfCursor" ["act2"] => Cursor { data, len, pos };
-    "OpenTTDByteReaderServices" ["services"] => Services { has_data, peek_dword, read_bytes, read_byte, read_word, read_dword, skip, read_badges, skip_badges };
+    "OpenTTDByteReaderServices" ["services"] => Services { has_data, peek_dword, read_bytes, read_byte, read_word, read_dword, skip, assign_badges, read_badge_ids, skip_badges };
 }
 
 /// `ReadVarSize` is called only with 1, 2 or 4 from Action2's six type cases.

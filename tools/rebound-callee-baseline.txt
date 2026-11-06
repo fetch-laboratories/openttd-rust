@@ -170,8 +170,6 @@ rebound | RustEngineType | src/rust/engine_capabilities_services.hpp | kind
 rebound | RustEngineType | src/rust/vehicle_refit_services.hpp | engine_kind
 rebound | RustHouseSpec | src/animated_tile.cpp | house_spec
 rebound | RustHouseSpec | src/rust/house_definition_services.hpp | get
-rebound | RustIndustryBehaviour | src/industry_cmd.cpp | behaviour
-rebound | RustIndustryBehaviour | src/rust/disaster_adapter.hpp | industry_behaviour
 rebound | RustIndustryBuilderState | src/genworld.cpp | industry_builder
 rebound | RustIndustryBuilderState | src/rust/newgrf_spritegroup_services.cpp | industry_builder
 rebound | RustIndustryByID | src/industry_cmd.cpp | industry
@@ -183,8 +181,6 @@ rebound | RustIndustryID | src/station.cpp | industry_id
 rebound | RustIndustryID | src/subsidy.cpp | industry_id
 rebound | RustIndustryNeutralBaseStation | src/rust/station_command_services.hpp | industry_neutral
 rebound | RustIndustryNeutralBaseStation | src/station.cpp | industry_neutral
-rebound | RustIndustrySpecCallbackMask | src/industry_cmd.cpp | callback_mask
-rebound | RustIndustrySpecCallbackMask | src/rust/industry_property_services.cpp | callbacks
 rebound | RustIndustryTileIndex | src/industry_cmd.cpp | industry_index
 rebound | RustIndustryTileIndex | src/rust/disaster_adapter.hpp | industry_index
 rebound | RustIsLocalCompany | src/economy.cpp | local_company
@@ -260,7 +256,6 @@ rebound | RustSetTunnelBridgeReservation | src/tunnelbridge_cmd.cpp | set_reserv
 rebound | RustSpecGRFVersion8 | src/newgrf_airporttiles.cpp | version8
 rebound | RustSpecGRFVersion8 | src/rust/animation_binding.hpp | version8
 rebound | RustSpecRegisterName | src/rust/airport_definitions.cpp | airport_name
-rebound | RustSpecRegisterName | src/rust/industry_property_services.cpp | map_name
 rebound | RustSpecRegisterName | src/rust/station_definitions.cpp | road_name
 rebound | RustSpecRegisterName | src/rust/station_definitions.cpp | station_name
 rebound | RustStationAirportMember | src/animated_tile.cpp | airport_belongs

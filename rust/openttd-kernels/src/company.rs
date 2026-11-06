@@ -255,7 +255,6 @@ pub struct Services {
     pub company_vehicle_counts: extern "C" fn(u8) -> VehicleCounts,
     pub vehicle_limits: extern "C" fn() -> VehicleCounts,
     pub company_in_trouble: extern "C" fn(u8),
-    pub post_company_delete: extern "C" fn(u8),
     pub hq_location: extern "C" fn(u8) -> u32,
     pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
     pub performance_detail_dirty: extern "C" fn(),
@@ -290,7 +289,7 @@ pub struct Services {
     pub company_ctrl_windows: extern "C" fn(),
     pub close_network_status: extern "C" fn(),
     pub network_spectate: extern "C" fn(u32),
-    pub network_company_new: extern "C" fn(u8, u32, bool),
+    pub admin_company_new: extern "C" fn(u8),
     pub network_own_company: extern "C" fn(u8, u32) -> *mut crate::company_type::OpenTTDCompany,
     pub network_own_company_settings: extern "C" fn(*mut crate::company_type::OpenTTDCompany),
     pub assert_new_ai_slot: extern "C" fn(u8),
@@ -923,7 +922,7 @@ fn bankruptcy(s: &Services, m: &Month, p: *mut Finances, id: u8) {
                 write_field!(p, asked, u16::MAX);
             } else if !networking || (s.network_server)() {
                 // Singleplayer executes the deletion synchronously; `p` is dead after it.
-                (s.post_company_delete)(id);
+                crate::command_post::delete_company(s.shared, id);
                 return;
             }
         }
@@ -1414,7 +1413,11 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     (f.set_current_company)(current);
     (s.shared.screen_dirty)();
 }
-fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control) -> bool {
+pub(crate) fn control(
+    s: &Services,
+    ownership: &crate::tile_owner::Context,
+    c: &mut Control,
+) -> bool {
     if c.stage == 0 {
         (s.company_league_dirty)();
         match c.action {
@@ -1441,7 +1444,7 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
                     (s.network_spectate)(c.client);
                 } else {
                     let id = startup_frame.company as u8;
-                    (s.network_company_new)(id, c.client, true);
+                    network_new(s, id, Some(c.client));
                     let company = (s.network_own_company)(id, c.client);
                     if !company.is_null() {
                         set_local_company(s, (s.identity.company_id)(company));
@@ -1514,7 +1517,7 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
         }
         c.stage = 2;
         if c.startup.company != INVALID {
-            (s.network_company_new)(c.startup.company as u8, 0, false);
+            network_new(s, c.startup.company as u8, None);
         }
     }
     (s.company_ctrl_windows)();
@@ -2215,7 +2218,6 @@ crate::abi::layouts! {
         company_vehicle_counts,
         vehicle_limits,
         company_in_trouble,
-        post_company_delete,
         hq_location,
         object_services,
         performance_detail_dirty,
@@ -2250,7 +2252,7 @@ crate::abi::layouts! {
         company_ctrl_windows,
         close_network_status,
         network_spectate,
-        network_company_new,
+        admin_company_new,
         network_own_company,
         network_own_company_settings,
         assert_new_ai_slot,
@@ -2398,4 +2400,15 @@ crate::abi::layouts! {
         construction_cost,
         inflation,
     };
+}
+
+fn network_new(s: &Services, id: u8, client: Option<u32>) {
+    (s.admin_company_new)(id);
+    let f = ((s.shared.command_post)().network)();
+    let f = (f.network)();
+    let company = (s.identity.company)(crate::company_type::CompanyID(id));
+    let info = client.map_or(std::ptr::null_mut(), |id| {
+        (s.shared.network_client_info)(id)
+    });
+    crate::network_lifecycle::new_company(f.lifecycle, f, company, info);
 }

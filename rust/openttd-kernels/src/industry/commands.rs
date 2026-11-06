@@ -7,7 +7,7 @@
 
 //! Industry metadata commands and native shell ownership changes.
 //! Lookups resolve once; command checks and writes follow the native source order.
-use super::{Industry, Services, ShellHandle};
+use super::{Industry, ShellHandle};
 use crate::services::ByteSpan;
 
 #[repr(C)]
@@ -53,7 +53,6 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     execute: bool,
     level: u8,
     services: *const IndustryCommandServices,
-    production: *const Services,
 ) -> u8 {
     let s = unsafe { &*services };
     if !unsafe { (s.deity)() } || !(4..=128).contains(&level) {
@@ -69,7 +68,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
             (*owner).fields.ctlflags |= 8;
             (*owner).fields.prod_level = level;
         }
-        super::recompute(shell.cast(), owner, unsafe { &*production });
+        super::recompute(owner);
     }
     u8::from(true)
 }

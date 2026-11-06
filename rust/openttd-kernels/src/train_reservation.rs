@@ -1336,10 +1336,8 @@ pub(crate) mod tests {
             owned_land: unused(),
             object_foundation: unused(),
             house_foundation: unused(),
-            house_boolean: unused(),
             industry_foundation: unused(),
             industry_callback: unused(),
-            industry_boolean: unused(),
         }
     }
     fn vehicle_table() -> crate::vehicle::VehicleServices {

@@ -5,6 +5,7 @@
 #include "services_station.h"
 #include "services_industry.h"
 #include "town_services.h"
+#include "network_frame_ffi.h"
 #include "abi-visit-OpenTTDSessionServices.hpp"
 static void RustSessionRealtime()
 {
@@ -26,18 +27,14 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 	static const OpenTTDSessionServices services{
 		.clock = &GetRustClockServices(),
 		.company = &GetRustCompanyServices(),
+		.network = &GetRustNetworkFrameServices(),
 		.shared = &GetRustSharedServices(),
 		.schedule = &LinkGraphSchedule::services,
 		.world = []() noexcept { return &GetRustWorldServices(); },
 		.server_requested = []() noexcept { return _is_network_server; },
 		.clear_server_requested = []() noexcept { _is_network_server = false; },
 		.network_available = RustNetworkAvailable,
-		.network_reboot = []() noexcept { NetworkReboot(); },
-		.network_disconnect = []() noexcept { NetworkDisconnect(); },
-		.network_server_start = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { NetworkServerStart(); }); },
 		.network_background = []() noexcept { NetworkBackgroundLoop(); },
-		.network_start_game = []() noexcept { NetworkOnGameStart(); },
-		.network_join = []() noexcept { NetworkClientJoinGame(); },
 		.kill_ai = []() noexcept { AI::KillAll(); },
 		.load_config = []() noexcept { LoadFromConfig(); },
 		.reset_session_stats = []() noexcept { _game_session_stats.start_time = std::chrono::steady_clock::now(); _game_session_stats.savegame_size = std::nullopt; },
@@ -74,7 +71,6 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.starting_colour = []() noexcept { return _settings_client.gui.starting_colour; },
 		.settings_elrail = [](bool value) noexcept { SettingsDisableElrail(value); },
 		.company_settings = []() noexcept { Company::Get(CompanyID::Begin())->settings = _settings_client.company; },
-		.company_colour = [](bool primary, Colours colour) noexcept { Command<CMD_SET_COMPANY_COLOUR>::Post(LS_DEFAULT, primary, colour); },
 		.reset_ai_config = [](uint8_t c) noexcept { _settings_game.script_config.ai[CompanyID(c)].reset(); },
 		.reset_game_config = []() noexcept { _settings_game.script_config.game.reset(); },
 		.publish_settings = []() noexcept { _settings_game = _settings_newgame; },
@@ -89,13 +85,10 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.pause_change = [](uint8_t prev, PauseMode mode) noexcept { NetworkHandlePauseChange(PauseModes{prev}, mode); },
 		.pause_dirty = []() noexcept { SetWindowDirty(WC_STATUS_BAR, 0); SetWindowDirty(WC_MAIN_TOOLBAR, 0); },
 		.full_animation = []() noexcept { return HasBit(_display_opt, DO_FULL_ANIMATION); },
-		.reconnect_due = []() noexcept { return _network_reconnect > 0 && --_network_reconnect == 0; },
 		.console_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { IConsoleCmdExec("exec scripts/game_start.scr 0"); }); },
 		.game_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { Game::GameLoop(); }); },
 		.ai_script = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { AI::GameLoop(); }); },
 		.startup_company = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { DoStartupNewCompany(false); }); },
-		.network_loop = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkGameLoop(); }); },
-		.network_reconnect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { NetworkClientConnectGame(_settings_client.network.last_joined, COMPANY_SPECTATOR); }); },
 		.state_frame_begin = [](OpenTTDSessionFrameStorage *storage) noexcept { return new (storage) OpenTTDSessionFrame; },
 		.state_frame_end = [](OpenTTDSessionFrame *parent, OpenTTDSessionFrame *f) noexcept { parent->exception = f->exception; std::destroy_at(f); return !parent->exception; },
 		.real_time = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [=] { RustSessionRealtime(); }); },
@@ -109,6 +102,7 @@ const OpenTTDSessionServices &GetRustSessionServices() noexcept
 		.load = [](OpenTTDSessionFrame *f, OpenTTDSessionLoad *load) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = load == nullptr ? SaveOrLoad(_file_to_saveload.name, _file_to_saveload.file_op, _file_to_saveload.ftype.detailed, NO_DIRECTORY) : load->filter == nullptr ? SaveOrLoad(load->filename, load->operation, load->type, load->subdir) : LoadWithFilter(std::move(load->filter)); }); return result; },
 		.intro_load = [](OpenTTDSessionFrame *f) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = SaveOrLoad("opntitle.dat", SLO_LOAD, DFT_GAME_FILE, BASESET_DIR); }); return result; },
 		.save = [](OpenTTDSessionFrame *f) noexcept { SaveOrLoadResult result = SL_ERROR; SessionException(f, [&] { result = SaveOrLoad(_file_to_saveload.name, SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY); }); return result; },
+		.network_actions = [](OpenTTDSessionFrame *f) noexcept { return &f->network_actions; },
 		.failed = [](OpenTTDSessionFrame *f) noexcept { return f->exception != nullptr; },
 		.console_exception = [](OpenTTDSessionFrame *f) noexcept { return reinterpret_cast<OpenTTDConsoleException *>(&f->exception); },
 		.state_begin = [](OpenTTDSessionFrame *f) noexcept { f->framerate.emplace(PFE_GAMELOOP); PerformanceAccumulator::Reset(PFE_GL_LANDSCAPE); },

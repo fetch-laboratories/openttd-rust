@@ -72,36 +72,52 @@ public:
 	 * Accepts clients from the sockets.
 	 * @param ls Socket to accept clients from.
 	 */
-	static void AcceptClient(SOCKET ls)
+	static SOCKET AcceptOne(SOCKET ls, NetworkAddress &address)
 	{
 		for (;;) {
 			struct sockaddr_storage sin{};
 			socklen_t sin_len = sizeof(sin);
 			SOCKET s = accept(ls, (struct sockaddr*)&sin, &sin_len);
-			if (s == INVALID_SOCKET) return;
+			if (s == INVALID_SOCKET) return s;
 #ifdef __EMSCRIPTEN__
 			sin_len = FixAddrLenForEmscripten(sin);
 #endif
-
 			SetNonBlocking(s); // XXX error handling?
-
-			NetworkAddress address(sin, sin_len);
+			address = NetworkAddress(sin, sin_len);
 			Debug(net, 3, "[{}] Client connected from {} on frame {}", Tsocket::GetName(), address.GetHostname(), _frame_counter);
-
 			SetNoDelay(s); // XXX error handling?
-
-			if (!Tsocket::ValidateClient(s, address)) continue;
-			Tsocket::AcceptConnection(s, address);
+			if (Tsocket::ValidateClient(s, address)) return s;
 		}
 	}
 
+	static void AcceptClient(SOCKET ls)
+	{
+		NetworkAddress address;
+		for (SOCKET s; (s = AcceptOne(ls, address)) != INVALID_SOCKET;) Tsocket::AcceptConnection(s, address);
+	}
+
+	/** Resume ready listeners after the caller allocates each accepted client's identity. */
+	static SOCKET AcceptReady(fd_set &read_fd, size_t &listener, NetworkAddress &address)
+	{
+		auto it = sockets.begin();
+		std::advance(it, listener);
+		while (it != sockets.end()) {
+			if (FD_ISSET(it->first, &read_fd)) {
+				SOCKET s = AcceptOne(it->first, address);
+				if (s != INVALID_SOCKET) return s;
+			}
+			++it;
+			++listener;
+		}
+		return INVALID_SOCKET;
+	}
+
 	/**
-	 * Handle the receiving of packets.
+	 * Build descriptor sets, select and accept ready listener sockets.
 	 * @return true if everything went okay.
 	 */
-	static bool Receive()
+	static bool SelectReceive(fd_set &read_fd, fd_set &write_fd)
 	{
-		fd_set read_fd, write_fd;
 		struct timeval tv;
 
 		FD_ZERO(&read_fd);
@@ -121,10 +137,26 @@ public:
 		tv.tv_sec = tv.tv_usec = 0; // don't block at all.
 		if (select(FD_SETSIZE, &read_fd, &write_fd, nullptr, &tv) < 0) return false;
 
+		return true;
+	}
+
+	static bool PrepareReceive(fd_set &read_fd, fd_set &write_fd)
+	{
+		if (!SelectReceive(read_fd, write_fd)) return false;
+
 		/* accept clients.. */
 		for (auto &s : sockets) {
 			if (FD_ISSET(s.first, &read_fd)) AcceptClient(s.first);
 		}
+
+		return true;
+	}
+
+	/** Handle the receiving of admin packets. */
+	static bool Receive()
+	{
+		fd_set read_fd, write_fd;
+		if (!PrepareReceive(read_fd, write_fd)) return false;
 
 		/* read stuff from clients */
 		for (Tsocket *cs : Tsocket::Iterate()) {
