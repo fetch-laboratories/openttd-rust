@@ -121,8 +121,6 @@ pub struct Services {
     default_cargo: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     engine_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     cargo_info: unsafe extern "C" fn(u8) -> CargoInfo,
-    pub(crate) build_year: unsafe extern "C" fn(V) -> i32,
-    last_service: unsafe extern "C" fn(V) -> i32,
     primary: unsafe extern "C" fn(V) -> bool,
     train_services: unsafe extern "C" fn() -> *const crate::train::Leaves,
     road_acceleration: unsafe extern "C" fn() -> u8,
@@ -132,16 +130,6 @@ pub struct Services {
     num_orders: unsafe extern "C" fn(V) -> u8,
     real_order: unsafe extern "C" fn(V) -> u8,
     service_interval: unsafe extern "C" fn(V) -> u16,
-    age: unsafe extern "C" fn(V) -> i32,
-    max_age: unsafe extern "C" fn(V) -> i32,
-    breakdowns: unsafe extern "C" fn(V) -> u8,
-    breakdown_delay: unsafe extern "C" fn(V) -> u8,
-    breakdown_chance: unsafe extern "C" fn(V) -> u8,
-    reliability: unsafe extern "C" fn(V) -> u16,
-    reliability_decay: unsafe extern "C" fn(V) -> u16,
-    value: unsafe extern "C" fn(V) -> i64,
-    profit_this: unsafe extern "C" fn(V) -> i64,
-    profit_last: unsafe extern "C" fn(V) -> i64,
     vehicle_flags: unsafe extern "C" fn(V) -> u16,
     target_airport: unsafe extern "C" fn(V) -> *const crate::station::Station,
     airport_ttd_type: unsafe extern "C" fn(
@@ -1086,7 +1074,7 @@ unsafe fn variable(
             0x46 => return crate::vehicle::VehicleRef::of(v).motion_counter(),
             0x47 => return cargo_info(s, handle(v).cargo_type(), grf),
             0x48 => return u32::from((s.engine_flags)((s.vehicle.engine)(h).0.as_ptr())),
-            0x49 => return (s.build_year)(v) as u32,
+            0x49 => return handle(v).build_year() as u32,
             0x4a => {
                 let tile = (h).tile();
                 match kind() {
@@ -1111,7 +1099,7 @@ unsafe fn variable(
                     _ => return 0,
                 }
             }
-            0x4b => return (s.last_service)(v) as u32,
+            0x4b => return handle(v).date_of_last_service_newgrf().0 as u32,
             0x4c => {
                 return if (s.primary)(v) {
                     current_max_speed(s, v, kind()) as u32
@@ -1354,7 +1342,7 @@ unsafe fn variable(
                 };
                 return high(ticks);
             }
-            0x92 | 0x93 => return high(service_date((s.last_service)(v))),
+            0x92 | 0x93 => return high(service_date(handle(v).date_of_last_service_newgrf().0)),
             0x94 | 0x95 => return high(u32::from((s.service_interval)(v))),
             0x96 => return u32::from((h).last_station()),
             0x97 => return u32::from((h).tick()),
@@ -1398,9 +1386,9 @@ unsafe fn variable(
                 return crate::cargo_storage::openttd_rust_cargo_list_periods((s.cargo_owner)(v))
                     .min(u32::from(u8::MAX));
             }
-            0xc0 | 0xc1 => return high((s.age)(v).clamp(0, i32::from(u16::MAX)) as u32),
-            0xc2 | 0xc3 => return high((s.max_age)(v).clamp(0, i32::from(u16::MAX)) as u32),
-            0xc4 => return old_year((s.build_year)(v)),
+            0xc0 | 0xc1 => return high(handle(v).age().0.clamp(0, i32::from(u16::MAX)) as u32),
+            0xc2 | 0xc3 => return high(handle(v).max_age().0.clamp(0, i32::from(u16::MAX)) as u32),
+            0xc4 => return old_year(handle(v).build_year()),
             0xc5 => return u32::from(handle(v).unit_number()),
             0xc6 | 0xc7 => {
                 return high(u32::from((s.shared.engine_local_id)(
@@ -1421,17 +1409,17 @@ unsafe fn variable(
                 );
             }
             0xc9 => return u32::from((h).day()),
-            0xca => return u32::from((s.breakdowns)(v)),
+            0xca => return u32::from(handle(v).breakdowns_since_last_service()),
             0xcb => return u32::from(crate::vehicle::VehicleRef::of(v).breakdown_counter()),
-            0xcc => return u32::from((s.breakdown_delay)(v)),
-            0xcd => return u32::from((s.breakdown_chance)(v)),
-            0xce | 0xcf => return high(u32::from((s.reliability)(v))),
-            0xd0 | 0xd1 => return high(u32::from((s.reliability_decay)(v))),
+            0xcc => return u32::from(handle(v).breakdown_delay()),
+            0xcd => return u32::from(handle(v).breakdown_chance()),
+            0xce | 0xcf => return high(u32::from(handle(v).reliability())),
+            0xd0 | 0xd1 => return high(u32::from(handle(v).reliability_spd_dec())),
             0xd2..=0xd9 | 0xdc..=0xdf => {
                 let value = match variable {
-                    0xd2..=0xd5 => (s.profit_this)(v),
-                    0xd6..=0xd9 => (s.profit_last)(v),
-                    _ => (s.value)(v),
+                    0xd2..=0xd5 => handle(v).profit_this_year() >> 8,
+                    0xd6..=0xd9 => handle(v).profit_last_year() >> 8,
+                    _ => handle(v).value(),
                 }
                 .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as u32;
                 let shift = u32::from(match variable {
@@ -1683,7 +1671,7 @@ crate::abi::layouts! {
         cargo_classes, cargo_bitnum, valid_company, livery, company_info,
         overrides, override_at, override_engine, spritegroup, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, service_interval, age, max_age, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, default_cargo, engine_flags, cargo_info, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, service_interval, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

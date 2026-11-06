@@ -49,8 +49,6 @@ struct OpenTTDDisasterServices {
 	const OpenTTDEnvironmentServices * environment;
 	const OpenTTDAircraftLeaves * aircraft;
 	const OpenTTDRoadLeaves * road;
-	int32_t (OPENTTD_RUST_CALL *age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);
-	void (OPENTTD_RUST_CALL *write_age)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_age);
 	void (OPENTTD_RUST_CALL *write_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_sprite);
 	void (OPENTTD_RUST_CALL *write_first_sprite)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_sprite);
 	OpenTTDDisasterState *(OPENTTD_RUST_CALL *owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(owner);

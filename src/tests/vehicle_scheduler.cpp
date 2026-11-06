@@ -410,50 +410,50 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 	REQUIRE(Vehicle::GetNumItems() == 0);
 	REQUIRE(Vehicle::CanAllocateItem());
 	Vehicle *v = new Vehicle(VEH_EFFECT);
-	v->age = CalendarTime::MAX_DATE - 1;
+	v->SetAge(CalendarTime::MAX_DATE - 1);
 	AgeVehicle(v);
-	CHECK(v->age == CalendarTime::MAX_DATE);
+	CHECK(v->GetAge() == CalendarTime::MAX_DATE);
 	AgeVehicle(v);
-	CHECK(v->age == CalendarTime::MAX_DATE);
-	v->economy_age = EconomyTime::MAX_DATE - 1;
+	CHECK(v->GetAge() == CalendarTime::MAX_DATE);
+	v->SetEconomyAge(EconomyTime::MAX_DATE - 1);
 	EconomyAgeVehicle(v);
-	CHECK(v->economy_age == EconomyTime::MAX_DATE);
+	CHECK(v->GetEconomyAge() == EconomyTime::MAX_DATE);
 	EconomyAgeVehicle(v);
-	CHECK(v->economy_age == EconomyTime::MAX_DATE);
-	v->value = Money{65535};
+	CHECK(v->GetEconomyAge() == EconomyTime::MAX_DATE);
+	v->SetValue(Money{65535});
 	DecreaseVehicleValue(v);
-	CHECK(v->value == 65280);
-	v->value = Money{-257};
+	CHECK(v->GetValue() == 65280);
+	v->SetValue(Money{-257});
 	DecreaseVehicleValue(v);
-	CHECK(v->value == -255);
+	CHECK(v->GetValue() == -255);
 	v->Record().breakdown_ctr = 1;
-	v->breakdown_delay = 3;
+	v->Record().breakdown_delay = 3;
 	v->SetType(VEH_TRAIN);
 	for (uint8_t tick : {1, 2, 3}) {
 		v->Record().tick_counter = tick;
 		CHECK(v->HandleBreakdown());
-		CHECK(v->breakdown_delay == 3);
+		CHECK(v->Record().breakdown_delay == 3);
 	}
 	v->Record().tick_counter = 4;
 	CHECK(v->HandleBreakdown());
-	CHECK(v->breakdown_delay == 2);
+	CHECK(v->Record().breakdown_delay == 2);
 	v->SetType(VEH_ROAD);
-	v->breakdown_delay = 1;
+	v->Record().breakdown_delay = 1;
 	v->Record().tick_counter = 2;
 	CHECK(v->HandleBreakdown());
 	CHECK(v->Record().breakdown_ctr == 0);
-	CHECK(v->breakdown_delay == 0);
+	CHECK(v->Record().breakdown_delay == 0);
 	v->SetType(VEH_AIRCRAFT);
 	v->Record().breakdown_ctr = 1;
-	v->breakdown_delay = 1;
+	v->Record().breakdown_delay = 1;
 	CHECK_FALSE(v->HandleBreakdown());
-	CHECK(v->breakdown_delay == 1);
+	CHECK(v->Record().breakdown_delay == 1);
 	CHECK(v->Record().breakdown_ctr == 1);
 	v->SetType(VEH_ROAD);
 	v->Record().breakdown_ctr = 1;
-	v->breakdown_delay = 0;
+	v->Record().breakdown_delay = 0;
 	CHECK(v->HandleBreakdown());
-	CHECK(v->breakdown_delay == 255); // Native uint8_t pre-decrement wraps.
+	CHECK(v->Record().breakdown_delay == 255); // Native uint8_t pre-decrement wraps.
 	/* A sound/dirty callback may change current state. Rust must reacquire the
 	 * hidden flag before smoke, and current type after the dirty callbacks. */
 	auto maintenance = _rust_vehicle_maintenance_services;
@@ -464,7 +464,7 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 		Vehicle *current = VehicleOf(handle);
 		CHECK(current->Record().cur_speed == 0);
 		CHECK(current->Record().breakdown_ctr == 1);
-		CHECK(current->breakdowns_since_last_service == 255);
+		CHECK(current->Record().breakdowns_since_last_service == 255);
 		current->SetVehStatus(current->GetVehStatus().Set(VehState::Hidden));
 		return true;
 	};
@@ -474,10 +474,10 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 	};
 	v->Record().cur_speed = 10;
 	v->Record().breakdown_ctr = 2;
-	v->breakdown_delay = 5;
-	v->breakdowns_since_last_service = 255;
+	v->Record().breakdown_delay = 5;
+	v->Record().breakdowns_since_last_service = 255;
 	CHECK_FALSE(openttd_rust_vehicle_handle_breakdown(RustVehicle(v), &base));
-	CHECK(v->breakdown_delay == 5);
+	CHECK(v->Record().breakdown_delay == 5);
 	CHECK(v->GetType() == VEH_AIRCRAFT);
 	v->SetType(VEH_EFFECT);
 	v->Record().breakdown_ctr = 3;

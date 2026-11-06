@@ -566,7 +566,7 @@ uint32_t Vehicle::GetGRFID() const
  */
 void Vehicle::ShiftDates(TimerGameEconomy::Date interval)
 {
-	this->date_of_last_service = std::max(this->date_of_last_service + interval, TimerGameEconomy::Date(0));
+	this->SetLastServiceDate(std::max(this->GetLastServiceDate() + interval, TimerGameEconomy::Date(0)));
 	/* date_of_last_service_newgrf is not updated here as it must stay stable
 	 * for vehicles outside of a depot. */
 }
@@ -1616,7 +1616,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_vehicles_yearly({TimerGame
 		if (v->IsPrimaryVehicle()) {
 			/* show warning if vehicle is not generating enough income last 2 years (corresponds to a red icon in the vehicle list) */
 			Money profit = v->GetDisplayProfitThisYear();
-			if (v->economy_age >= VEHICLE_PROFIT_MIN_AGE && profit < 0) {
+			if (v->GetEconomyAge() >= VEHICLE_PROFIT_MIN_AGE && profit < 0) {
 				if (_settings_client.gui.vehicle_income_warn && v->GetOwner() == _local_company) {
 					AddVehicleAdviceNewsItem(AdviceType::VehicleUnprofitable,
 						GetEncodedString(TimerGameEconomy::UsingWallclockUnits() ? STR_NEWS_VEHICLE_UNPROFITABLE_PERIOD : STR_NEWS_VEHICLE_UNPROFITABLE_YEAR, v->index, profit),
@@ -1625,8 +1625,8 @@ static const IntervalTimer<TimerGameEconomy> _economy_vehicles_yearly({TimerGame
 				AI::NewEvent(v->GetOwner(), new ScriptEventVehicleUnprofitable(v->index));
 			}
 
-			v->profit_last_year = v->profit_this_year;
-			v->profit_this_year = 0;
+			v->SetProfitLastYear(v->GetProfitThisYear());
+			v->SetProfitThisYear(0);
 			SetWindowDirty(WC_VEHICLE_DETAILS, v->index);
 		}
 	}

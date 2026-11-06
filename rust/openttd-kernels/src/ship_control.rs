@@ -965,8 +965,8 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     if ticks != 0 {
         let cost = unsafe { game.vs().running_cost(vehicle) };
         let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
-        let profit = (game.vs().profit)(vehicle).saturating_sub(cost);
-        (game.vs().write_profit)(vehicle, profit);
+        let profit = vehicle.profit_this_year().saturating_sub(cost);
+        vehicle.write_profit_this_year(profit);
         game.vehicle().write_running(0);
         (game.leaves.pay_running)(id, cost);
         // SAFETY: The base table names its immutable maintenance table.
@@ -1115,9 +1115,9 @@ pub(crate) unsafe fn ship_build(
     (game.leaves.update_delta)(id);
     (game.leaves.build_properties)(id, engine);
     let cap = unsafe { (&*(game.vs().newgrf)()).capabilities };
-    (game.vs().set_max_age)(v, unsafe {
+    (v).write_max_age(crate::services::CalendarDate(unsafe {
         crate::engine_capabilities::openttd_rust_engine_life_days(cap, (cap.engine)(engine as u16))
-    });
+    }));
     game.set_state(DEPOT);
     (game.leaves.build_dates)(id);
     (game.leaves.build_random)(id, game.services.random() as u16);

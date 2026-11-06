@@ -33,7 +33,7 @@ void DrawAircraftDetails(const Aircraft *v, const Rect &r)
 	int y = r.top;
 	for (const Aircraft *u = v; u != nullptr; u = u->Next()) {
 		if (u->IsNormalAircraft()) {
-			DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(u->GetEngineType(), EngineNameContext::VehicleDetails), u->build_year, u->value));
+			DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(u->GetEngineType(), EngineNameContext::VehicleDetails), u->GetBuildYear(), u->GetValue()));
 			y += GetCharacterHeight(FS_NORMAL);
 
 			if (u->Next()->Record().cargo_cap != 0) {

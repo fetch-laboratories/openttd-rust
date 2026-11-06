@@ -61,8 +61,6 @@ struct OpenTTDVehicleResolverServices {
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	uint8_t (*engine_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_flags);
 	OpenTTDVehicleCargoInfo (*cargo_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_info);
-	int32_t (*build_year)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(build_year);
-	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	const OpenTTDTrainServices *(*train_services)() noexcept OPENTTD_SERVICE_DEFAULT(train_services);
 	uint8_t (*road_acceleration)() noexcept OPENTTD_SERVICE_DEFAULT(road_acceleration);
@@ -72,16 +70,6 @@ struct OpenTTDVehicleResolverServices {
 	uint8_t (*num_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(num_orders);
 	uint8_t (*real_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(real_order);
 	uint16_t (*service_interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
-	int32_t (*age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);
-	int32_t (*max_age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_age);
-	uint8_t (*breakdowns)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdowns);
-	uint8_t (*breakdown_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay);
-	uint8_t (*breakdown_chance)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_chance);
-	uint16_t (*reliability)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reliability);
-	uint16_t (*reliability_decay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reliability_decay);
-	int64_t (*value)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(value);
-	int64_t (*profit_this)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_this);
-	int64_t (*profit_last)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit_last);
 	uint16_t (*vehicle_flags)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_flags);
 	const OpenTTDStation * (*target_airport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(target_airport);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);

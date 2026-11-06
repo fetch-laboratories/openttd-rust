@@ -168,12 +168,6 @@ static OpenTTDEngineForLength OPENTTD_RUST_CALL VehicleSvcEngineForLength(OpenTT
 }
 
 
-static void OPENTTD_RUST_CALL VehicleSvcWriteProfit(OpenTTDVehicle *v, int64_t value) noexcept { VehicleOf(v)->profit_this_year = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteEconomyService(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->date_of_last_service = TimerGameEconomy::Date{value}; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteCalendarService(OpenTTDVehicle *v, int32_t value) noexcept { VehicleOf(v)->date_of_last_service_newgrf = TimerGameCalendar::Date{value}; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteBreakdowns(OpenTTDVehicle *v, uint8_t value) noexcept { VehicleOf(v)->breakdowns_since_last_service = value; }
-static void OPENTTD_RUST_CALL VehicleSvcWriteReliability(OpenTTDVehicle *v, uint16_t value) noexcept { VehicleOf(v)->reliability = value; }
-static int64_t OPENTTD_RUST_CALL VehicleSvcProfit(OpenTTDVehicle *v) noexcept { return RustVehicleProfit(VehicleOf(v)); }
 static void OPENTTD_RUST_CALL VehicleSvcMakeDummy(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.MakeDummy(); }
 
 
@@ -208,7 +202,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
 	.property = openttd_rust_vehicle_shell_property,
 	.callback = openttd_rust_vehicle_shell_callback,
-	.set_max_age = RustVehicleSetMaxAge,
 	.length_changed = VehicleSvcLengthChanged,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
 	.play_sound = VehicleSvcPlaySound,
@@ -222,12 +215,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.order_type = VehicleSvcOrderType,
 	.order_destination = VehicleSvcOrderDestination,
 	.order_nonstop = VehicleSvcOrderNonStop,
-	.write_profit = VehicleSvcWriteProfit,
-	.write_economy_service = VehicleSvcWriteEconomyService,
-	.write_calendar_service = VehicleSvcWriteCalendarService,
-	.write_breakdowns = VehicleSvcWriteBreakdowns,
-	.write_reliability = VehicleSvcWriteReliability,
-	.profit = VehicleSvcProfit,
 	.make_dummy = VehicleSvcMakeDummy,
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
 	.maintenance = &_rust_vehicle_maintenance_services,
@@ -320,7 +307,6 @@ static OpenTTDVehicleMaintenanceReset OPENTTD_RUST_CALL MaintenanceReset(OpenTTD
 	const Vehicle *v = VehicleOf(handle);
 	return {.economy_date = MaintenanceDate(TimerGameEconomy::date), .calendar_date = MaintenanceDate(TimerGameCalendar::date), .reliability = RustEngineReliability(v->GetEngine()), .chance = RustVehicleBreakdownChance(v), .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
 }
-static bool OPENTTD_RUST_CALL MaintenanceHasEngine(OpenTTDVehicle *handle) noexcept { return RustVehicleHasEngine(VehicleOf(handle)); }
 static OpenTTDVehicleMaintenanceInterval OPENTTD_RUST_CALL MaintenanceInterval(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -357,51 +343,9 @@ static OpenTTDVehicleMaintenanceBreakdownTrigger OPENTTD_RUST_CALL MaintenanceBr
 	const Vehicle *v = VehicleOf(handle);
 	return {.reliability = RustVehicleReliability(v), .chance = RustVehicleBreakdownChance(v), .kind = RustVehicleVehicleType(v), .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
 }
-static void OPENTTD_RUST_CALL MaintenanceChanceWrite(OpenTTDVehicle *handle, uint8_t chance) noexcept { VehicleOf(handle)->breakdown_chance = chance; }
-static void OPENTTD_RUST_CALL MaintenanceTrigger(OpenTTDVehicle *handle, uint8_t counter, uint8_t delay) noexcept
-{
-	Vehicle *v = VehicleOf(handle);
-	RustVehicleWriteBreakdown(v, counter, delay);
-	v->breakdown_chance = 0;
-}
-static OpenTTDVehicleMaintenanceBreakdownProbe OPENTTD_RUST_CALL MaintenanceBreakdownProbe(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.counter = RustVehicleBreakdownCounter(v), .status = RustVehicleStatus(v)};
-}
-static OpenTTDVehicleMaintenanceBreakdownStart OPENTTD_RUST_CALL MaintenanceBreakdownStart(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.since = RustVehicleBreakdownsSinceService(v), .kind = RustVehicleVehicleType(v)};
-}
-static void OPENTTD_RUST_CALL MaintenanceBreakdownStartWrite(OpenTTDVehicle *handle, uint8_t counter, uint8_t since) noexcept
-{
-	Vehicle *v = VehicleOf(handle);
-	v->Record().breakdown_ctr = counter;
-	v->breakdowns_since_last_service = since;
-}
-static OpenTTDVehicleMaintenanceBreakdownActive OPENTTD_RUST_CALL MaintenanceBreakdownActive(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.kind = RustVehicleVehicleType(v), .tick = RustVehicleTick(v), .delay = RustVehicleBreakdownDelay(v)};
-}
-static OpenTTDVehicleMaintenanceBreakdownCountdown OPENTTD_RUST_CALL MaintenanceBreakdownCountdown(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.order_type = RustVehicleOrderType(v), .counter = RustVehicleBreakdownCounter(v)};
-}
-static void OPENTTD_RUST_CALL MaintenanceBreakdownDelayWrite(OpenTTDVehicle *handle, uint8_t delay) noexcept { VehicleOf(handle)->breakdown_delay = delay; }
 static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
-static void OPENTTD_RUST_CALL MaintenanceAircraftBroken(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->SetVehStatus(VehicleOf(handle)->GetVehStatus().Set(VehState::AircraftBroken)); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
-static OpenTTDVehicleMaintenanceAge OPENTTD_RUST_CALL MaintenanceAge(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.age = MaintenanceDate(RustVehicleAge(v)), .max_age = MaintenanceDate(RustVehicleMaxAge(v)), .decay = RustVehicleReliabilityDecay(v)};
-}
-static void OPENTTD_RUST_CALL MaintenanceAgeWrite(OpenTTDVehicle *handle, OpenTTDCalendarDate age) noexcept { RustWriteVehicleAge(VehicleOf(handle), age.value); }
-static void OPENTTD_RUST_CALL MaintenanceDecayWrite(OpenTTDVehicle *handle, uint16_t decay) noexcept { VehicleOf(handle)->reliability_spd_dec = decay; }
 static OpenTTDVehicleMaintenanceWarning OPENTTD_RUST_CALL MaintenanceWarning(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -423,10 +367,7 @@ static void OPENTTD_RUST_CALL MaintenanceOldNews(OpenTTDVehicle *handle, StringI
 	VehicleID id = VehicleOf(handle)->index;
 	AddVehicleAdviceNewsItem(AdviceType::VehicleOld, GetEncodedString(message, id), id);
 }
-static OpenTTDEconomyDate OPENTTD_RUST_CALL MaintenanceEconomyAge(OpenTTDVehicle *handle) noexcept { return MaintenanceDate(RustVehicleEconomyAge(VehicleOf(handle))); }
-static void OPENTTD_RUST_CALL MaintenanceEconomyAgeWrite(OpenTTDVehicle *handle, OpenTTDEconomyDate age) noexcept { VehicleOf(handle)->economy_age = TimerGameEconomy::Date{age.value}; }
 static void OPENTTD_RUST_CALL MaintenanceReachedMinAge(OpenTTDVehicle *handle) noexcept { GroupStatistics::VehicleReachedMinAge(VehicleOf(handle)); }
-static void OPENTTD_RUST_CALL MaintenanceValueWrite(OpenTTDVehicle *handle, int64_t value) noexcept { VehicleOf(handle)->value = Money(value); }
 static_assert(to_underlying(LandscapeType::Toyland) == 3);
 static_assert(EconomyTime::DAYS_IN_ECONOMY_MONTH == 30 && CalendarTime::DAYS_IN_LEAP_YEAR == 366 && NUM_CARGO == 64);
 static_assert(SND_0F_BREAKDOWN_ROADVEHICLE == 13 && SND_10_BREAKDOWN_TRAIN_SHIP == 14 && SND_35_BREAKDOWN_ROADVEHICLE_TOYLAND == 53 && SND_3A_BREAKDOWN_TRAIN_SHIP_TOYLAND == 58);
@@ -437,7 +378,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.company = &GetRustCompanyIdentityServices(),
 	.renewal = MaintenanceRenewal,
 	.reset = MaintenanceReset,
-	.has_engine = MaintenanceHasEngine,
 	.interval = MaintenanceInterval,
 	.engine_reliability = MaintenanceEngineReliability,
 	.replacement = MaintenanceReplacement,
@@ -447,33 +387,16 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.check_breakdown = MaintenanceCheckBreakdown,
 	.breakdown_guard = MaintenanceBreakdownGuard,
 	.breakdown_trigger = MaintenanceBreakdownTrigger,
-	.chance_write = MaintenanceChanceWrite,
-	.trigger = MaintenanceTrigger,
-	.breakdown_probe = MaintenanceBreakdownProbe,
-	.breakdown_start = MaintenanceBreakdownStart,
-	.breakdown_start_write = MaintenanceBreakdownStartWrite,
-	.breakdown_active = MaintenanceBreakdownActive,
-	.breakdown_countdown = MaintenanceBreakdownCountdown,
-	.breakdown_delay_write = MaintenanceBreakdownDelayWrite,
 	.smoke_disabled = MaintenanceSmokeDisabled,
-	.smoke_delay = RustVehicleRead<uint8_t, RustVehicleBreakdownDelay>,
-	.aircraft_broken = MaintenanceAircraftBroken,
 	.mark_dirty = MaintenanceMarkDirty,
 	.view_dirty = MaintenanceViewDirty,
 	.details_dirty = RustVehicleDetailsDirty,
-	.age = MaintenanceAge,
-	.age_write = MaintenanceAgeWrite,
-	.decay_write = MaintenanceDecayWrite,
 	.warning = MaintenanceWarning,
 	.warning_company = MaintenanceWarningCompany,
 	.engine_available_any = MaintenanceEngineAvailableAny,
 	.replacement_active = MaintenanceReplacementActive,
 	.old_news = MaintenanceOldNews,
-	.economy_age = MaintenanceEconomyAge,
-	.economy_age_write = MaintenanceEconomyAgeWrite,
 	.reached_min_age = MaintenanceReachedMinAge,
-	.value = RustVehicleRead<int64_t, RustVehicleValue>,
-	.value_write = MaintenanceValueWrite,
 	.max_calendar_date = MaintenanceDate(CalendarTime::MAX_DATE),
 	.max_economy_date = MaintenanceDate(EconomyTime::MAX_DATE),
 	.profit_min_age = MaintenanceDate(VEHICLE_PROFIT_MIN_AGE),

@@ -23,6 +23,7 @@ static std::vector<std::tuple<uint8_t, int64_t, int64_t>> settlement;
 static CompanyFinances finances;
 static bool local, custom_sound, valid_company;
 static uint8_t current;
+static OpenTTDVehicle *settlement_record;
 TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 {
 	OpenTTDCargoServices s = CargoTestServices();
@@ -32,15 +33,13 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 	finance.company_finances = [](uint8_t id) noexcept -> CompanyFinances * { CHECK(id == 3); return valid_company ? &finances : nullptr; };
 	finance.invalidate_company_windows = [](uint8_t id) noexcept { settlement.emplace_back(3, id, 0); };
 	OpenTTDVehicleServices vehicles{};
-	vehicles.write_profit = [](OpenTTDVehicle *, int64_t value) noexcept { settlement.emplace_back(4, value, 0); };
 	vehicles.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == VSE_LOAD_UNLOAD); settlement.emplace_back(6, 0, 0); return custom_sound; };
 	vehicles.play_sound = [](OpenTTDVehicle *, uint16_t sound) noexcept { CHECK(sound == SND_14_CASHTILL); settlement.emplace_back(7, 0, 0); };
 	s.finance = &finance;
 	s.vehicles = &vehicles;
 	s.detach_payment = [](OpenTTDVehicle *) noexcept { settlement.emplace_back(0, 0, 0); };
-	s.local_company = []() noexcept { settlement.emplace_back(5, 0, 0); return local; };
+	s.local_company = []() noexcept { settlement.emplace_back(4, settlement_record->profit_this_year, 0); settlement.emplace_back(5, 0, 0); return local; };
 	s.expense = [](OpenTTDVehicle *, bool income) noexcept { CHECK(income); return EXPENSES_TRAIN_REVENUE; };
-	s.profit = [](OpenTTDVehicle *) noexcept -> int64_t { return 1000; };
 	OpenTTDSharedServices shared{};
 	s.shared = &shared;
 	shared.cost_animation = [](int32_t x, int32_t y, int32_t z, int64_t income) noexcept { CHECK(std::tuple{x, y, z} == std::tuple{11, 22, 33}); settlement.emplace_back(9, 0, income); };
@@ -54,6 +53,8 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 		valid_company = valid;
 		OpenTTDVehicle record{};
 		record.owner = 3;
+		record.profit_this_year = 1000;
+		settlement_record = &record;
 		record.x_pos = 11;
 		record.y_pos = 22;
 		record.z_pos = 33;
@@ -79,6 +80,7 @@ TEST_CASE("Cargo payment - settlement order, Money boundaries and cleanup")
 		CHECK(current == 17);
 	}
 	settlement.clear();
+	settlement_record = nullptr;
 	auto *p = openttd_rust_cargo_payment_new(nullptr, 0xFFFF);
 	p->fields = {nullptr, INT64_MAX, 0, 0};
 	openttd_rust_cargo_payment_destroy(p, &s, 0);

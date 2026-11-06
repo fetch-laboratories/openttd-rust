@@ -107,17 +107,20 @@ static void ShipBoundary()
 	leaves.state_owner = [](uint32_t) noexcept { return ship_probe.owner; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
 	ship_vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
-	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
-		CHECK(ship_probe.stage++ == 0);
-		CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
-		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0};
-	};
 	ControllerOrders orders(&ship_vehicle);
 	static ControllerOrders *ship_orders;
 	ship_orders = &orders;
 	static OpenTTDVehicle *orders_shell;
 	orders_shell = shell;
-	ship_vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &ship_orders->services; };
+	ship_vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * {
+		/* Counter/time writes precede the first order operation after breakdown. */
+		if (ship_probe.stage == 0) {
+			CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
+			CHECK(ship_probe.record.breakdown_ctr == 0 && ship_probe.record.vehstatus == 0);
+			++ship_probe.stage;
+		}
+		return &ship_orders->services;
+	};
 	ship_vehicle.ship_get = [](uint32_t id) noexcept { CHECK(id == 4); return orders_shell; };
 	orders.services.vehicle = [](void *v) noexcept { CHECK(v == &ship_probe); return ship_orders->vehicle.get(); };
 	orders.services.consist = [](void *) noexcept { return &ship_orders->consist; };

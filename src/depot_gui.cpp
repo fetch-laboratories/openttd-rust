@@ -389,7 +389,7 @@ struct DepotWindow : Window {
 			Rect flag = r.WithWidth(this->flag_size.width, rtl).WithHeight(this->flag_size.height).Translate(0, diff_y);
 			DrawSpriteIgnorePadding((v->GetVehStatus().Test(VehState::Stopped)) ? SPR_FLAG_VEH_STOPPED : SPR_FLAG_VEH_RUNNING, PAL_NONE, flag, SA_CENTER);
 
-			DrawString(text, GetString(STR_JUST_COMMA, v->Record().unitnumber), (v->max_age - CalendarTime::DAYS_IN_LEAP_YEAR) >= v->age ? TC_BLACK : TC_RED);
+			DrawString(text, GetString(STR_JUST_COMMA, v->Record().unitnumber), (v->GetMaxAge() - CalendarTime::DAYS_IN_LEAP_YEAR) >= v->GetAge() ? TC_BLACK : TC_RED);
 		}
 	}
 

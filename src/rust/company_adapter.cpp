@@ -305,7 +305,7 @@ static bool Co_aircraft_is_normal(uint32_t id) noexcept { return Aircraft::From(
 static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
 {
 	const Vehicle *v = Vehicle::Get(id);
-	return {v->profit_last_year.base(), RustVehicleEconomyAge(v).base()};
+	return {v->GetProfitLastYear().base(), RustVehicleEconomyAge(v).base()};
 }
 static OpenTTDCompanyVehicleGroupFlags Co_vehicle_group_flags(uint32_t id) noexcept
 {

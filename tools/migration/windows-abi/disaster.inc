@@ -7,9 +7,8 @@
 
 struct DisasterProbe {
 	OpenTTDVehicle record{};
-	DisasterProbe() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); this->record.tick_counter = 255; this->record.subtype = 13; this->record.type = VEH_DISASTER; }
+	DisasterProbe() { this->record.shell = reinterpret_cast<OpenTTDVehicleShell *>(this); this->record.age = 8880; this->record.tick_counter = 255; this->record.subtype = 13; this->record.type = VEH_DISASTER; }
 	uint32_t draws = 0, random = 0, viewports = 0, deletes = 0, clears = 0, signals = 0, news = 0, tile_types = 0;
-	int32_t age = 8880;
 	uint8_t tile_type = 0, clear_owner = 0;
 	std::vector<uint32_t> script{};
 	size_t scripted = 0;
@@ -37,8 +36,6 @@ static void Disasters()
 	OpenTTDDisasterServices services{};
 	services.shared = &shared;
 	services.vehicles = &vehicles;
-	services.age = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v->shell)->age; };
-	services.write_age = [](OpenTTDVehicle *v, int32_t age) noexcept { reinterpret_cast<DisasterProbe *>(v->shell)->age = age; };
 	services.disasters_enabled = []() noexcept { return false; };
 	probe.services = &services;
 	StateOwner state(openttd_rust_disaster_state_create(1048575), openttd_rust_disaster_state_destroy);
@@ -53,7 +50,7 @@ static void Disasters()
 	openttd_rust_disaster_startup(&services); CHECK(*delay == 730 && probe.draws == 2);
 	CHECK(delay == openttd_rust_disaster_delay() && state.get() == address && state->state == 65535 && state->flags == 0xAB && state->image_override == UINT32_MAX);
 	CHECK(!openttd_rust_disaster_tick(&services, vehicle));
-	CHECK(probe.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 2);
+	CHECK(probe.record.age == 8881 && probe.record.tick_counter == 0 && probe.deletes == 1 && probe.draws == 2);
 
 	vehicles.map_log_x = []() noexcept { return 6U; };
 

@@ -60,7 +60,6 @@ pub struct Services {
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
     pub(crate) local_company: extern "C" fn() -> bool,
     pub(crate) expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> crate::services::ExpenseType,
-    pub(crate) profit: extern "C" fn(*mut OpenTTDVehicle) -> i64,
     pub(crate) shared: *const crate::services::Services,
     pub(crate) feeder_animation: extern "C" fn(i32, i32, i32, i64, i64),
     pub(crate) subsidy_multiplier: extern "C" fn() -> u8,
@@ -299,13 +298,13 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_destroy(
             let front = crate::vehicle::VehicleRef(unsafe {
                 std::ptr::NonNull::new_unchecked(fields.front)
             });
-            let profit = (s.profit)(fields.front).saturating_add(
+            let profit = front.profit_this_year().saturating_add(
                 fields
                     .visual_profit
                     .saturating_add(fields.visual_transfer)
                     .wrapping_shl(8),
             );
-            (vehicles.write_profit)(front, profit);
+            front.write_profit_this_year(profit);
             if fields.route_profit != 0
                 && (s.local_company)()
                 && !(vehicles.play_vehicle_sound)(front, crate::newgrf_sound::VSE_LOAD_UNLOAD)
@@ -476,7 +475,6 @@ crate::abi::layouts! {
         vehicles,
         local_company,
         expense,
-        profit,
         shared,
         feeder_animation,
         subsidy_multiplier,

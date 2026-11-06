@@ -83,9 +83,9 @@ pub(crate) unsafe fn road(
     let info = (a.road_info)(e, true);
     (a.set_part)(v, info.image, (a.default_cargo)(e), info.capacity, true);
     (k.engine_common)(v, e);
-    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
-        crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
-    });
+    (unsafe { vehicle_ref(v, r.common.vehicles) }).write_max_age(crate::services::CalendarDate(
+        unsafe { crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e) },
+    ));
     (k.service_dates)(v, b.interval_default(company, VehicleType::ROAD.0) as u16);
     (k.build_stamp)(v);
     (a.random_bits)(v, b.shared.random() as u16);
@@ -193,9 +193,9 @@ pub(crate) unsafe fn aircraft(
     }
     (b.clear_name)(v);
     (k.engine_common)(v, e);
-    (r.common.vehicles.set_max_age)(unsafe { vehicle_ref(v, r.common.vehicles) }, unsafe {
-        crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e)
-    });
+    (unsafe { vehicle_ref(v, r.common.vehicles) }).write_max_age(crate::services::CalendarDate(
+        unsafe { crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e) },
+    ));
     let subtype = if info.subtype & AIR_CTOL != 0 {
         AIR_AIRCRAFT
     } else {

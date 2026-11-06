@@ -2168,8 +2168,8 @@ impl Game<'_> {
             return;
         }
         let cost = self.running_cost(v).saturating_mul(i64::from(running)) / YEAR_TICKS;
-        let profit = service!(self.vs.profit)(v.v).saturating_sub(cost);
-        service!(self.vs.write_profit)(v.v, profit);
+        let profit = v.v.profit_this_year().saturating_sub(cost);
+        v.v.write_profit_this_year(profit);
         v.v.write_running(0);
         service!(self.l.pay_running)(v.v, cost);
     }

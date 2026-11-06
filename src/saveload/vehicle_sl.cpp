@@ -411,7 +411,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 		if (IsSavegameVersionBefore(SLV_VEHICLE_ECONOMY_AGE)) {
 			/* Set vehicle economy age based on calendar age. */
 			for (Vehicle *v : Vehicle::Iterate()) {
-				v->economy_age = TimerGameEconomy::Date{v->age.base()};
+				v->SetEconomyAge(TimerGameEconomy::Date{v->GetAge().base()});
 			}
 		}
 	}
@@ -742,39 +742,39 @@ public:
 		SLE_CONDVARNAME(Vehicle, old_orders, "orders", SLE_UINT32,                 SLV_69, SLV_105),
 		SLE_CONDREF(Vehicle, orders,                REF_ORDERLIST,              SLV_105, SL_MAX_VERSION),
 
-		SLE_CONDVAR(Vehicle, age,                   SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
-		SLE_CONDVAR(Vehicle, age,                   SLE_INT32,                   SLV_31, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, economy_age,           SLE_INT32,  SLV_VEHICLE_ECONOMY_AGE, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, max_age,               SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
-		SLE_CONDVAR(Vehicle, max_age,               SLE_INT32,                   SLV_31, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, date_of_last_service,  SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
-		SLE_CONDVAR(Vehicle, date_of_last_service,  SLE_INT32,                   SLV_31, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, date_of_last_service_newgrf, SLE_INT32,             SLV_NEWGRF_LAST_SERVICE, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().age, "age",                   SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
+		SLE_CONDVARNAME(Vehicle, Record().age, "age",                   SLE_INT32,                   SLV_31, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().economy_age, "economy_age",           SLE_INT32,  SLV_VEHICLE_ECONOMY_AGE, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().max_age, "max_age",               SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
+		SLE_CONDVARNAME(Vehicle, Record().max_age, "max_age",               SLE_INT32,                   SLV_31, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().date_of_last_service, "date_of_last_service",  SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
+		SLE_CONDVARNAME(Vehicle, Record().date_of_last_service, "date_of_last_service",  SLE_INT32,                   SLV_31, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().date_of_last_service_newgrf, "date_of_last_service_newgrf", SLE_INT32,             SLV_NEWGRF_LAST_SERVICE, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, service_interval,      SLE_UINT16,                   SL_MIN_VERSION,  SLV_31),
 		SLE_CONDVAR(Vehicle, service_interval,      SLE_FILE_U32 | SLE_VAR_U16,  SLV_31, SLV_180),
 		SLE_CONDVAR(Vehicle, service_interval,      SLE_UINT16,                 SLV_180, SL_MAX_VERSION),
-		    SLE_VAR(Vehicle, reliability,           SLE_UINT16),
-		    SLE_VAR(Vehicle, reliability_spd_dec,   SLE_UINT16),
+		    SLE_VARNAME(Vehicle, Record().reliability, "reliability",           SLE_UINT16),
+		    SLE_VARNAME(Vehicle, Record().reliability_spd_dec, "reliability_spd_dec",   SLE_UINT16),
 		    SLE_CONDVARNAME(Vehicle, Record().breakdown_ctr, "breakdown_ctr", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
-		    SLE_VAR(Vehicle, breakdown_delay,       SLE_UINT8),
-		    SLE_VAR(Vehicle, breakdowns_since_last_service, SLE_UINT8),
-		    SLE_VAR(Vehicle, breakdown_chance,      SLE_UINT8),
-		SLE_CONDVAR(Vehicle, build_year,            SLE_FILE_U8 | SLE_VAR_I32,    SL_MIN_VERSION,  SLV_31),
-		SLE_CONDVAR(Vehicle, build_year,            SLE_INT32,                   SLV_31, SL_MAX_VERSION),
+		    SLE_VARNAME(Vehicle, Record().breakdown_delay, "breakdown_delay",       SLE_UINT8),
+		    SLE_VARNAME(Vehicle, Record().breakdowns_since_last_service, "breakdowns_since_last_service", SLE_UINT8),
+		    SLE_VARNAME(Vehicle, Record().breakdown_chance, "breakdown_chance",      SLE_UINT8),
+		SLE_CONDVARNAME(Vehicle, Record().build_year, "build_year",            SLE_FILE_U8 | SLE_VAR_I32,    SL_MIN_VERSION,  SLV_31),
+		SLE_CONDVARNAME(Vehicle, Record().build_year, "build_year",            SLE_INT32,                   SLV_31, SL_MAX_VERSION),
 
 		    SLE_CONDVARNAME(Vehicle, Record().load_unload_ticks, "load_unload_ticks", SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION),
 		SLEG_CONDVAR("cargo_paid_for", _cargo_paid_for, SLE_UINT16,              SLV_45, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, vehicle_flags,         SLE_FILE_U8 | SLE_VAR_U16,   SLV_40, SLV_180),
 		SLE_CONDVAR(Vehicle, vehicle_flags,         SLE_UINT16,                 SLV_180, SL_MAX_VERSION),
 
-		SLE_CONDVAR(Vehicle, profit_this_year,      SLE_FILE_I32 | SLE_VAR_I64,   SL_MIN_VERSION,  SLV_65),
-		SLE_CONDVAR(Vehicle, profit_this_year,      SLE_INT64,                   SLV_65, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, profit_last_year,      SLE_FILE_I32 | SLE_VAR_I64,   SL_MIN_VERSION,  SLV_65),
-		SLE_CONDVAR(Vehicle, profit_last_year,      SLE_INT64,                   SLV_65, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().profit_this_year, "profit_this_year",      SLE_FILE_I32 | SLE_VAR_I64,   SL_MIN_VERSION,  SLV_65),
+		SLE_CONDVARNAME(Vehicle, Record().profit_this_year, "profit_this_year",      SLE_INT64,                   SLV_65, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().profit_last_year, "profit_last_year",      SLE_FILE_I32 | SLE_VAR_I64,   SL_MIN_VERSION,  SLV_65),
+		SLE_CONDVARNAME(Vehicle, Record().profit_last_year, "profit_last_year",      SLE_INT64,                   SLV_65, SL_MAX_VERSION),
 		SLEG_CONDVAR("cargo_feeder_share", _cargo_feeder_share, SLE_FILE_I32 | SLE_VAR_I64,  SLV_51,  SLV_65),
 		SLEG_CONDVAR("cargo_feeder_share", _cargo_feeder_share, SLE_INT64,                   SLV_65,  SLV_68),
-		SLE_CONDVAR(Vehicle, value,                 SLE_FILE_I32 | SLE_VAR_I64,   SL_MIN_VERSION,  SLV_65),
-		SLE_CONDVAR(Vehicle, value,                 SLE_INT64,                   SLV_65, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().value, "value",                 SLE_FILE_I32 | SLE_VAR_I64,   SL_MIN_VERSION,  SLV_65),
+		SLE_CONDVARNAME(Vehicle, Record().value, "value",                 SLE_INT64,                   SLV_65, SL_MAX_VERSION),
 
 		SLE_CONDVARNAME(Vehicle, Record().random_bits, "random_bits",           SLE_FILE_U8 | SLE_VAR_U16,    SLV_2, SLV_EXTEND_VEHICLE_RANDOM),
 		SLE_CONDVARNAME(Vehicle, Record().random_bits, "random_bits",           SLE_UINT16,                   SLV_EXTEND_VEHICLE_RANDOM, SL_MAX_VERSION),
@@ -1119,8 +1119,8 @@ public:
 		SLE_CONDVARNAME(DisasterVehicle, State(), "state",                       SLE_UINT16,                SLV_DISASTER_VEH_STATE, SL_MAX_VERSION),
 
 		    SLE_VAR(Vehicle, sprite_cache.sprite_seq.seq[0].sprite, SLE_FILE_U16 | SLE_VAR_U32),
-		SLE_CONDVAR(Vehicle, age,                   SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
-		SLE_CONDVAR(Vehicle, age,                   SLE_INT32,                   SLV_31, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().age, "age",                   SLE_FILE_U16 | SLE_VAR_I32,   SL_MIN_VERSION,  SLV_31),
+		SLE_CONDVARNAME(Vehicle, Record().age, "age",                   SLE_INT32,                   SLV_31, SL_MAX_VERSION),
 		    SLE_CONDVARNAME(Vehicle, Record().tick_counter, "tick_counter", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
 		SLE_CONDVARNAME(DisasterVehicle, ImageOverride(), "image_override",            SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION, SLV_191),

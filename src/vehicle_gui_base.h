@@ -56,9 +56,9 @@ struct GUIVehicleGroup {
 	TimerGameEconomy::Date GetOldestVehicleAge() const
 	{
 		const Vehicle *oldest = *std::max_element(this->vehicles_begin, this->vehicles_end, [](const Vehicle *v_a, const Vehicle *v_b) {
-			return v_a->economy_age < v_b->economy_age;
+			return v_a->GetEconomyAge() < v_b->GetEconomyAge();
 		});
-		return oldest->economy_age;
+		return oldest->GetEconomyAge();
 	}
 };
 

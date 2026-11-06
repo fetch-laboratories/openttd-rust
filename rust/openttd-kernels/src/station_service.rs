@@ -1724,10 +1724,9 @@ unsafe fn load_vehicle(
             unsafe {
                 (&raw mut (*ge).last_speed).write(speed.clamp(0, 255) as u8);
             }
-            let resolver = unsafe { &*(vehicle.newgrf)() };
             let age = crate::timer_game_common::calendar_year()
                 .0
-                .wrapping_sub(unsafe { (resolver.build_year)(front.0.as_ptr()) });
+                .wrapping_sub(front.build_year());
             unsafe {
                 (&raw mut (*ge).last_age).write(age.clamp(0, 255) as u8);
             }

@@ -60,7 +60,6 @@ struct OpenTTDVehicleServices {
 	const OpenTTDVehicleResolverServices *(*newgrf)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf);
 	int32_t (OPENTTD_RUST_CALL *property)(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
 	uint16_t (OPENTTD_RUST_CALL *callback)(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, CallbackID) noexcept OPENTTD_SERVICE_DEFAULT(callback);
-	void (*set_max_age)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_max_age);
 	void (OPENTTD_RUST_CALL *length_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
 	bool (OPENTTD_RUST_CALL *play_vehicle_sound)(OpenTTDVehicle *, VehicleSoundEvent) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);
 	void (OPENTTD_RUST_CALL *play_sound)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
@@ -74,12 +73,6 @@ struct OpenTTDVehicleServices {
 	uint8_t (OPENTTD_RUST_CALL *order_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_type);
 	uint16_t (OPENTTD_RUST_CALL *order_destination)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_destination);
 	uint8_t (OPENTTD_RUST_CALL *order_nonstop)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_nonstop);
-	void (OPENTTD_RUST_CALL *write_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(write_profit);
-	void (OPENTTD_RUST_CALL *write_economy_service)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_economy_service);
-	void (OPENTTD_RUST_CALL *write_calendar_service)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_calendar_service);
-	void (OPENTTD_RUST_CALL *write_breakdowns)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_breakdowns);
-	void (OPENTTD_RUST_CALL *write_reliability)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_reliability);
-	int64_t (OPENTTD_RUST_CALL *profit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit);
 	void (OPENTTD_RUST_CALL *make_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(make_dummy);
 	void (OPENTTD_RUST_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
 	const OpenTTDVehicleMaintenanceServices *maintenance;

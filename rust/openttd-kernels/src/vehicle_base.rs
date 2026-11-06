@@ -87,6 +87,7 @@ pub const VS_SHADOW: u8 = 1 << 5;
 
 use crate::company_type::CompanyID;
 use crate::engine_type::EngineID;
+use crate::services::{CalendarDate, EconomyDate};
 use crate::station_type::StationID;
 use crate::tile_type::TileIndex;
 use crate::vehicle_type::VehicleType;
@@ -108,6 +109,20 @@ crate::abi::shared_records! {
         pub next: *mut VehicleRecord,
         /// Stable NOSAVE links for the canonical tile index.
         pub tile_links: crate::vehicle::occupancy::Links,
+        pub profit_this_year: i64,
+        pub profit_last_year: i64,
+        pub value: i64,
+        pub build_year: i32,
+        pub age: CalendarDate,
+        pub economy_age: EconomyDate,
+        pub max_age: CalendarDate,
+        pub date_of_last_service: EconomyDate,
+        pub date_of_last_service_newgrf: CalendarDate,
+        pub reliability: u16,
+        pub reliability_spd_dec: u16,
+        pub breakdown_delay: u8,
+        pub breakdowns_since_last_service: u8,
+        pub breakdown_chance: u8,
         pub cargo_type: u8,
         pub cargo_subtype: u8,
         pub trip_occupancy: i8,
@@ -177,6 +192,20 @@ pub extern "C" fn openttd_rust_vehicle_record_new(
         shell,
         next: std::ptr::null_mut(),
         tile_links: crate::vehicle::occupancy::Links::default(),
+        profit_this_year: 0,
+        profit_last_year: 0,
+        value: 0,
+        build_year: 0,
+        age: CalendarDate(0),
+        economy_age: EconomyDate(0),
+        max_age: CalendarDate(0),
+        date_of_last_service: EconomyDate(0),
+        date_of_last_service_newgrf: CalendarDate(0),
+        reliability: 0,
+        reliability_spd_dec: 0,
+        breakdown_delay: 0,
+        breakdowns_since_last_service: 0,
+        breakdown_chance: 0,
         cargo_type: 0,
         cargo_subtype: 0,
         trip_occupancy: 0,
@@ -446,6 +475,81 @@ impl crate::vehicle::VehicleRef {
     }
     pub(crate) fn write_waiting_random_triggers(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), waiting_random_triggers, value);
+    }
+    pub(crate) fn profit_this_year(self) -> i64 {
+        crate::raw_field::read_field!(self.0.as_ptr(), profit_this_year)
+    }
+    pub(crate) fn write_profit_this_year(self, value: i64) {
+        crate::raw_field::write_field!(self.0.as_ptr(), profit_this_year, value);
+    }
+    pub(crate) fn profit_last_year(self) -> i64 {
+        crate::raw_field::read_field!(self.0.as_ptr(), profit_last_year)
+    }
+    pub(crate) fn value(self) -> i64 {
+        crate::raw_field::read_field!(self.0.as_ptr(), value)
+    }
+    pub(crate) fn write_value(self, value: i64) {
+        crate::raw_field::write_field!(self.0.as_ptr(), value, value);
+    }
+    pub(crate) fn build_year(self) -> i32 {
+        crate::raw_field::read_field!(self.0.as_ptr(), build_year)
+    }
+    pub(crate) fn age(self) -> CalendarDate {
+        crate::raw_field::read_field!(self.0.as_ptr(), age)
+    }
+    pub(crate) fn write_age(self, value: CalendarDate) {
+        crate::raw_field::write_field!(self.0.as_ptr(), age, value);
+    }
+    pub(crate) fn economy_age(self) -> EconomyDate {
+        crate::raw_field::read_field!(self.0.as_ptr(), economy_age)
+    }
+    pub(crate) fn write_economy_age(self, value: EconomyDate) {
+        crate::raw_field::write_field!(self.0.as_ptr(), economy_age, value);
+    }
+    pub(crate) fn max_age(self) -> CalendarDate {
+        crate::raw_field::read_field!(self.0.as_ptr(), max_age)
+    }
+    pub(crate) fn write_max_age(self, value: CalendarDate) {
+        crate::raw_field::write_field!(self.0.as_ptr(), max_age, value);
+    }
+    pub(crate) fn write_date_of_last_service(self, value: EconomyDate) {
+        crate::raw_field::write_field!(self.0.as_ptr(), date_of_last_service, value);
+    }
+    pub(crate) fn date_of_last_service_newgrf(self) -> CalendarDate {
+        crate::raw_field::read_field!(self.0.as_ptr(), date_of_last_service_newgrf)
+    }
+    pub(crate) fn write_date_of_last_service_newgrf(self, value: CalendarDate) {
+        crate::raw_field::write_field!(self.0.as_ptr(), date_of_last_service_newgrf, value);
+    }
+    pub(crate) fn reliability(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), reliability)
+    }
+    pub(crate) fn write_reliability(self, value: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), reliability, value);
+    }
+    pub(crate) fn reliability_spd_dec(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), reliability_spd_dec)
+    }
+    pub(crate) fn write_reliability_spd_dec(self, value: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), reliability_spd_dec, value);
+    }
+    pub(crate) fn breakdown_delay(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), breakdown_delay)
+    }
+    pub(crate) fn write_breakdown_delay(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), breakdown_delay, value);
+    }
+    pub(crate) fn breakdowns_since_last_service(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), breakdowns_since_last_service)
+    }
+    pub(crate) fn write_breakdowns_since_last_service(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), breakdowns_since_last_service, value);
+    }
+    pub(crate) fn breakdown_chance(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), breakdown_chance)
+    }
+    pub(crate) fn write_breakdown_chance(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), breakdown_chance, value);
     }
     pub(crate) fn cargo_type(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), cargo_type)

@@ -1209,7 +1209,7 @@ static const OldChunks vehicle_chunk[] = {
 	OCL_SVAR(  OC_UINT8, Vehicle, cur_implicit_order_index ),
 	OCL_SVAR(   OC_TILE, Vehicle, Record().dest_tile ),
 	OCL_SVAR( OC_UINT16, Vehicle, Record().load_unload_ticks ),
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, date_of_last_service ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, Record().date_of_last_service ),
 	OCL_SVAR( OC_UINT16, Vehicle, service_interval ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().last_station_visited ),
 	OCL_SVAR( OC_TTD | OC_UINT8, Vehicle, Record().tick_counter ),
@@ -1247,9 +1247,9 @@ static const OldChunks vehicle_chunk[] = {
 
 	OCL_SVAR( OC_TTO | OC_UINT8, Vehicle, Record().tick_counter ),
 
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, age ),
-	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, max_age ),
-	OCL_SVAR( OC_FILE_U8 | OC_VAR_I32, Vehicle, build_year ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, Record().age ),
+	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, Record().max_age ),
+	OCL_SVAR( OC_FILE_U8 | OC_VAR_I32, Vehicle, Record().build_year ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().unitnumber ),
 
 	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, Record().engine_type ),
@@ -1258,22 +1258,22 @@ static const OldChunks vehicle_chunk[] = {
 	OCL_SVAR(  OC_UINT8, Vehicle, Record().spritenum ),
 	OCL_SVAR(  OC_UINT8, Vehicle, Record().day_counter ),
 
-	OCL_SVAR(  OC_UINT8, Vehicle, breakdowns_since_last_service ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().breakdowns_since_last_service ),
 	OCL_SVAR(  OC_UINT8, Vehicle, Record().breakdown_ctr ),
-	OCL_SVAR(  OC_UINT8, Vehicle, breakdown_delay ),
-	OCL_SVAR(  OC_UINT8, Vehicle, breakdown_chance ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().breakdown_delay ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().breakdown_chance ),
 
 	OCL_CNULL( OC_TTO, 1 ),
 
-	OCL_SVAR( OC_UINT16, Vehicle, reliability ),
-	OCL_SVAR( OC_UINT16, Vehicle, reliability_spd_dec ),
+	OCL_SVAR( OC_UINT16, Vehicle, Record().reliability ),
+	OCL_SVAR( OC_UINT16, Vehicle, Record().reliability_spd_dec ),
 
-	OCL_SVAR( OC_FILE_I32 | OC_VAR_I64, Vehicle, profit_this_year ),
-	OCL_SVAR( OC_FILE_I32 | OC_VAR_I64, Vehicle, profit_last_year ),
+	OCL_SVAR( OC_FILE_I32 | OC_VAR_I64, Vehicle, Record().profit_this_year ),
+	OCL_SVAR( OC_FILE_I32 | OC_VAR_I64, Vehicle, Record().profit_last_year ),
 
 	OCL_VAR ( OC_UINT16,   1, &_old_next_ptr ),
 
-	OCL_SVAR( OC_FILE_U32 | OC_VAR_I64, Vehicle, value ),
+	OCL_SVAR( OC_FILE_U32 | OC_VAR_I64, Vehicle, Record().value ),
 
 	OCL_VAR ( OC_UINT16,   1, &_old_string_id ),
 

@@ -63,7 +63,7 @@ void DrawShipDetails(const Vehicle *v, const Rect &r)
 {
 	int y = r.top;
 
-	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->build_year, v->value));
+	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->GetBuildYear(), v->GetValue()));
 	y += GetCharacterHeight(FS_NORMAL);
 
 	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->Record().cargo_type, v->Record().cargo_cap, GetCargoSubtypeText(v)));

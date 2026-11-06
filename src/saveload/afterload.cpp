@@ -1469,8 +1469,8 @@ bool AfterLoadGame()
 		for (Industry *i : Industry::Iterate())  i->last_prod_year   += EconomyTime::ORIGINAL_BASE_YEAR;
 
 		for (Vehicle *v : Vehicle::Iterate()) {
-			v->date_of_last_service += EconomyTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
-			v->build_year += CalendarTime::ORIGINAL_BASE_YEAR;
+			v->SetLastServiceDate(v->GetLastServiceDate() + EconomyTime::DAYS_TILL_ORIGINAL_BASE_YEAR);
+			v->SetBuildYear(v->GetBuildYear() + CalendarTime::ORIGINAL_BASE_YEAR);
 		}
 	}
 
@@ -1971,8 +1971,8 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_88)) {
 		/* Profits are now with 8 bit fract */
 		for (Vehicle *v : Vehicle::Iterate()) {
-			v->profit_this_year <<= 8;
-			v->profit_last_year <<= 8;
+			v->SetProfitThisYear(v->GetProfitThisYear() << 8);
+			v->SetProfitLastYear(v->GetProfitLastYear() << 8);
 			v->Record().running_ticks = 0;
 		}
 	}
@@ -3321,7 +3321,7 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_NEWGRF_LAST_SERVICE)) {
 		/* Set service date provided to NewGRF. */
 		for (Vehicle *v : Vehicle::Iterate()) {
-			v->date_of_last_service_newgrf = TimerGameCalendar::Date{v->date_of_last_service.base()};
+			v->SetCalendarServiceDate(TimerGameCalendar::Date{v->GetLastServiceDate().base()});
 		}
 	}
 

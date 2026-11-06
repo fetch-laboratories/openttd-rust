@@ -41,9 +41,9 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 
 	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
-	v->date_of_last_service = TimerGameEconomy::date;
-	v->date_of_last_service_newgrf = TimerGameCalendar::date;
-	v->build_year = TimerGameCalendar::year;
+	v->SetLastServiceDate(TimerGameEconomy::date);
+	v->SetCalendarServiceDate(TimerGameCalendar::date);
+	v->SetBuildYear(TimerGameCalendar::year);
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 	return v;
 }
@@ -77,8 +77,8 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
-	v->reliability = e->reliability;
-	v->reliability_spd_dec = e->reliability_spd_dec;
+	v->Record().reliability = e->reliability;
+	v->Record().reliability_spd_dec = e->reliability_spd_dec;
 	return v;
 }
 static void RailEngineDates(void *shell, const OpenTTDEngine *engine) noexcept
@@ -89,9 +89,9 @@ static void RailEngineDates(void *shell, const OpenTTDEngine *engine) noexcept
 	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
 
 	RustVehicleSetServiceInterval(v, Company::Get(_current_company)->settings.vehicle.servint_trains);
-	v->date_of_last_service = TimerGameEconomy::date;
-	v->date_of_last_service_newgrf = TimerGameCalendar::date;
-	v->build_year = TimerGameCalendar::year;
+	v->SetLastServiceDate(TimerGameEconomy::date);
+	v->SetCalendarServiceDate(TimerGameCalendar::date);
+	v->SetBuildYear(TimerGameCalendar::year);
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 /* Original `AddRearEngineToMultiheadedTrain` statements through the sprite cache,
@@ -100,8 +100,8 @@ static void *RailNewRear(void *front) noexcept
 {
 	Train *v = static_cast<Train *>(front);
 	Train *u = new Train();
-	v->value >>= 1;
-	u->value = v->value;
+	v->SetValue(v->GetValue() >> 1);
+	u->SetValue(v->GetValue());
 	u->SetDirection(v->GetDirection());
 	RustVehicleSetOwner(RustVehicle(u), RustVehicleOwner(v));
 	RustWriteVehicleTile(u, v->GetTile());
@@ -118,9 +118,9 @@ static void *RailNewRear(void *front) noexcept
 	u->Record().refit_cap = v->Record().refit_cap;
 	u->SetRailTypes(RailTypes{RustTrainRailTypes(v)});
 	RustVehicleSetEngine(RustVehicle(u), RustVehicleEngineID(v));
-	u->date_of_last_service = v->date_of_last_service;
-	u->date_of_last_service_newgrf = RustVehicleCalendarService(v);
-	u->build_year = RustVehicleBuildYear(v);
+	u->SetLastServiceDate(v->GetLastServiceDate());
+	u->SetCalendarServiceDate(RustVehicleCalendarService(v));
+	u->SetBuildYear(RustVehicleBuildYear(v));
 	RustWriteVehicleSpriteSequence(u, SPR_IMG_QUERY);
 	return u;
 }

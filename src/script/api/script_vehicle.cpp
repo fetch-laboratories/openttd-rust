@@ -311,7 +311,7 @@
 {
 	if (!IsValidVehicle(vehicle_id)) return -1;
 
-	return ::Vehicle::Get(vehicle_id)->age.base();
+	return ::Vehicle::Get(vehicle_id)->GetAge().base();
 }
 
 /* static */ SQInteger ScriptVehicle::GetWagonAge(VehicleID vehicle_id, SQInteger wagon)
@@ -323,21 +323,21 @@
 	if (v->GetType() == VEH_TRAIN) {
 		while (wagon-- > 0) v = ::Train::From(v)->GetNextUnit();
 	}
-	return v->age.base();
+	return v->GetAge().base();
 }
 
 /* static */ SQInteger ScriptVehicle::GetMaxAge(VehicleID vehicle_id)
 {
 	if (!IsPrimaryVehicle(vehicle_id)) return -1;
 
-	return ::Vehicle::Get(vehicle_id)->max_age.base();
+	return ::Vehicle::Get(vehicle_id)->GetMaxAge().base();
 }
 
 /* static */ SQInteger ScriptVehicle::GetAgeLeft(VehicleID vehicle_id)
 {
 	if (!IsPrimaryVehicle(vehicle_id)) return -1;
 
-	return (::Vehicle::Get(vehicle_id)->max_age - ::Vehicle::Get(vehicle_id)->age).base();
+	return (::Vehicle::Get(vehicle_id)->GetMaxAge() - ::Vehicle::Get(vehicle_id)->GetAge()).base();
 }
 
 /* static */ SQInteger ScriptVehicle::GetCurrentSpeed(VehicleID vehicle_id)
@@ -388,7 +388,7 @@
 {
 	if (!IsValidVehicle(vehicle_id)) return -1;
 
-	return ::Vehicle::Get(vehicle_id)->value;
+	return ::Vehicle::Get(vehicle_id)->GetValue();
 }
 
 /* static */ ScriptVehicle::VehicleType ScriptVehicle::GetVehicleType(VehicleID vehicle_id)
@@ -471,7 +471,7 @@
 	if (!IsPrimaryVehicle(vehicle_id)) return -1;
 
 	const Vehicle *v = ::Vehicle::Get(vehicle_id);
-	return ::ToPercent16(v->reliability);
+	return ::ToPercent16(v->Record().reliability);
 }
 
 /* static */ SQInteger ScriptVehicle::GetMaximumOrderDistance(VehicleID vehicle_id)

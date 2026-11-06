@@ -360,9 +360,9 @@ pub(crate) unsafe fn build(
         let a = k.articulated;
         let company = (x.t.shared.current_company)();
         v = x.rec((s.new_engine)(tile, e));
-        (x.c.vehicles.set_max_age)(Ctx::vref(v), unsafe {
+        (Ctx::vref(v)).write_max_age(crate::services::CalendarDate(unsafe {
             crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
-        });
+        }));
         (s.engine_dates)(Ctx::sh(v), e);
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
         (k.service_flags)(

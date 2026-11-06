@@ -274,7 +274,7 @@ static void TrainOrderFree(OpenTTDTrainHandle id) noexcept
 static void TrainPayRunning(OpenTTDTrainHandle id, int64_t a) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	CommandCost cost(EXPENSES_TRAIN_RUN, Money(static_cast<int64_t>(a))); v->profit_this_year -= cost.GetCost(); SubtractMoneyFromCompanyFract(v->GetOwner(), cost);
+	CommandCost cost(EXPENSES_TRAIN_RUN, Money(static_cast<int64_t>(a))); v->SetProfitThisYear(v->GetProfitThisYear() - (cost.GetCost())); SubtractMoneyFromCompanyFract(v->GetOwner(), cost);
 }
 static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 {

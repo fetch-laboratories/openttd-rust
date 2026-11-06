@@ -1459,7 +1459,7 @@ static bool VehicleNameSorter(const Vehicle * const &a, const Vehicle * const &b
 /** Sort vehicles by their age */
 static bool VehicleAgeSorter(const Vehicle * const &a, const Vehicle * const &b)
 {
-	auto r = a->age - b->age;
+	auto r = a->GetAge() - b->GetAge();
 	return (r != 0) ? r < 0 : VehicleNumberSorter(a, b);
 }
 
@@ -1499,7 +1499,7 @@ static bool VehicleCargoSorter(const Vehicle * const &a, const Vehicle * const &
 /** Sort vehicles by their reliability */
 static bool VehicleReliabilitySorter(const Vehicle * const &a, const Vehicle * const &b)
 {
-	int r = a->reliability - b->reliability;
+	int r = a->Record().reliability - b->Record().reliability;
 	return (r != 0) ? r < 0 : VehicleNumberSorter(a, b);
 }
 
@@ -1523,8 +1523,8 @@ static bool VehicleValueSorter(const Vehicle * const &a, const Vehicle * const &
 	const Vehicle *u;
 	Money diff = 0;
 
-	for (u = a; u != nullptr; u = u->Next()) diff += u->value;
-	for (u = b; u != nullptr; u = u->Next()) diff -= u->value;
+	for (u = a; u != nullptr; u = u->Next()) diff += u->GetValue();
+	for (u = b; u != nullptr; u = u->Next()) diff -= u->GetValue();
 
 	int r = ClampTo<int32_t>(diff);
 	return (r != 0) ? r < 0 : VehicleNumberSorter(a, b);
@@ -1540,7 +1540,7 @@ static bool VehicleLengthSorter(const Vehicle * const &a, const Vehicle * const 
 /** Sort vehicles by the time they can still live */
 static bool VehicleTimeToLiveSorter(const Vehicle * const &a, const Vehicle * const &b)
 {
-	int r = ClampTo<int32_t>((a->max_age - a->age) - (b->max_age - b->age));
+	int r = ClampTo<int32_t>((a->GetMaxAge() - a->GetAge()) - (b->GetMaxAge() - b->GetAge()));
 	return (r != 0) ? r < 0 : VehicleNumberSorter(a, b);
 }
 
@@ -1830,7 +1830,7 @@ void BaseVehicleListWindow::DrawVehicleListItems(VehicleID selected_vehicle, int
 				if (v->IsChainInDepot()) {
 					tc = TC_BLUE;
 				} else {
-					tc = (v->age > v->max_age - CalendarTime::DAYS_IN_LEAP_YEAR) ? TC_RED : TC_BLACK;
+					tc = (v->GetAge() > v->GetMaxAge() - CalendarTime::DAYS_IN_LEAP_YEAR) ? TC_RED : TC_BLACK;
 				}
 
 				DrawString(ir.left, ir.right, ir.top + WidgetDimensions::scaled.framerect.top, GetString(STR_JUST_COMMA, v->Record().unitnumber), tc);
@@ -2585,9 +2585,9 @@ struct VehicleDetailsWindow : Window {
 				/* Draw running cost */
 				DrawString(tr,
 					GetString(TimerGameEconomy::UsingWallclockUnits() ? STR_VEHICLE_INFO_AGE_RUNNING_COST_PERIOD : STR_VEHICLE_INFO_AGE_RUNNING_COST_YR,
-						(v->age + CalendarTime::DAYS_IN_YEAR < v->max_age) ? STR_VEHICLE_INFO_AGE : STR_VEHICLE_INFO_AGE_RED,
-						TimerGameCalendar::DateToYear(v->age),
-						TimerGameCalendar::DateToYear(v->max_age),
+						(v->GetAge() + CalendarTime::DAYS_IN_YEAR < v->GetMaxAge()) ? STR_VEHICLE_INFO_AGE : STR_VEHICLE_INFO_AGE_RED,
+						TimerGameCalendar::DateToYear(v->GetAge()),
+						TimerGameCalendar::DateToYear(v->GetMaxAge()),
 						v->GetDisplayRunningCost()));
 				tr.top += GetCharacterHeight(FS_NORMAL);
 
@@ -2630,7 +2630,7 @@ struct VehicleDetailsWindow : Window {
 				tr.top += GetCharacterHeight(FS_NORMAL);
 
 				/* Draw breakdown & reliability */
-				DrawString(tr, GetString(STR_VEHICLE_INFO_RELIABILITY_BREAKDOWNS, ToPercent16(v->reliability), v->breakdowns_since_last_service));
+				DrawString(tr, GetString(STR_VEHICLE_INFO_RELIABILITY_BREAKDOWNS, ToPercent16(v->Record().reliability), v->Record().breakdowns_since_last_service));
 				break;
 			}
 
@@ -2664,7 +2664,7 @@ struct VehicleDetailsWindow : Window {
 
 				/* We're using wallclock units. Show minutes since last serviced. */
 				if (TimerGameEconomy::UsingWallclockUnits()) {
-					int minutes_since_serviced = (TimerGameEconomy::date - v->date_of_last_service).base() / EconomyTime::DAYS_IN_ECONOMY_MONTH;
+					int minutes_since_serviced = (TimerGameEconomy::date - v->GetLastServiceDate()).base() / EconomyTime::DAYS_IN_ECONOMY_MONTH;
 					DrawString(tr.left, tr.right, CentreBounds(r.top, r.bottom, GetCharacterHeight(FS_NORMAL)),
 							GetString(v->ServiceIntervalIsPercent() ? STR_VEHICLE_DETAILS_SERVICING_INTERVAL_PERCENT : STR_VEHICLE_DETAILS_SERVICING_INTERVAL_MINUTES,
 									v->GetServiceInterval(), STR_VEHICLE_DETAILS_LAST_SERVICE_MINUTES_AGO, minutes_since_serviced));
@@ -2674,7 +2674,7 @@ struct VehicleDetailsWindow : Window {
 				/* We're using calendar dates. Show the date of last service. */
 				DrawString(tr.left, tr.right, CentreBounds(r.top, r.bottom, GetCharacterHeight(FS_NORMAL)),
 						GetString(v->ServiceIntervalIsPercent() ? STR_VEHICLE_DETAILS_SERVICING_INTERVAL_PERCENT : STR_VEHICLE_DETAILS_SERVICING_INTERVAL_DAYS,
-								v->GetServiceInterval(), STR_VEHICLE_DETAILS_LAST_SERVICE_DATE, v->date_of_last_service));
+								v->GetServiceInterval(), STR_VEHICLE_DETAILS_LAST_SERVICE_DATE, v->GetLastServiceDate()));
 				break;
 			}
 		}

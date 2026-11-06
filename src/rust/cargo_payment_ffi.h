@@ -65,7 +65,6 @@ struct OpenTTDCargoServices {
 	const OpenTTDVehicleServices *vehicles;
 	bool (OPENTTD_RUST_CALL *local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	ExpensesType (OPENTTD_RUST_CALL *expense)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(expense);
-	int64_t (OPENTTD_RUST_CALL *profit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(profit);
 	const OpenTTDSharedServices *shared;
 	void (OPENTTD_RUST_CALL *feeder_animation)(int32_t, int32_t, int32_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(feeder_animation);
 	uint8_t (OPENTTD_RUST_CALL *subsidy_multiplier)() noexcept OPENTTD_SERVICE_DEFAULT(subsidy_multiplier);

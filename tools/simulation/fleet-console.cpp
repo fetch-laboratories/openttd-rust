@@ -504,7 +504,7 @@ static void CapabilitiesProbe()
 			Checked("capability-name-clone", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, clone, std::string(CAPABILITY_CHAIN_NAME)));
 			CapabilityLive(Vehicle::Get(clone), "persist");
 			Checked("capability-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, e->index, e->index, true));
-			built->age = TimerGameCalendar::Date(built->max_age.base() + 366);
+			FIXTURE_SET(built, Age, age, TimerGameCalendar::Date(FIXTURE_GET(built, MaxAge, max_age).base() + 366));
 			Cost("capability-replace-test", Command<CMD_AUTOREPLACE_VEHICLE>::Do({}, id));
 			Cost("capability-replace", Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, id));
 			if (Vehicle::IsValidID(id)) Checked("capability-sell", Command<CMD_SELL_VEHICLE>::Do(DoCommandFlag::Execute, id, true, false, INVALID_CLIENT_ID));
@@ -1309,7 +1309,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		Cost("mass-send", Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do(DoCommandFlag::Execute, VehicleID::Invalid(), {DepotCommandFlag::MassSend, DepotCommandFlag::Service}, list));
 		Checked("mass-stop", Command<CMD_MASS_START_STOP>::Do(DoCommandFlag::Execute, tile, false, false, list));
 		bool stopped = FIXTURE_GET(v, VehStatus, vehstatus).Test(VehState::Stopped);
-		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
+		FIXTURE_SET(v, Age, age, TimerGameCalendar::Date(FIXTURE_GET(v, MaxAge, max_age).base() + 366));
 		Checked("mass-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, FIXTURE_GET(v, EngineType, engine_type), FIXTURE_GET(v, EngineType, engine_type), true));
 		SavedRandomSeeds before, after;
 		SaveRandomSeeds(&before);
@@ -1542,7 +1542,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		if (FIXTURE_GET(v, Type, type) != VEH_ROAD || FIXTURE_GET(v, VehStatus, vehstatus).Test(VehState::Stopped) || !v->current_order.IsType(OT_GOTO_DEPOT) || FIXTURE_GET(v, Owner, owner) != _local_company) FixtureAbort(__LINE__);
 		Company *c = Company::Get(FIXTURE_GET(v, Owner, owner));
 		c->settings.engine_renew = true;
-		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
+		FIXTURE_SET(v, Age, age, TimerGameCalendar::Date(FIXTURE_GET(v, MaxAge, max_age).base() + 366));
 		if (args[1] == "drain-cash") CompanyMoney(c) = Money(c->settings.engine_renew_money);
 		_drain_vehicle = v->index;
 		_drain_unit = FIXTURE_FIELD(v, unitnumber);
@@ -1552,10 +1552,10 @@ static bool FleetScenario(std::span<std::string_view> args)
 	}
 	if (args[1] == "drain-inspect") {
 		const Vehicle *old = Vehicle::GetIfValid(_drain_vehicle);
-		fmt::print(stderr, "FLEET drain old {} {} {} money {}\n", old != nullptr, old != nullptr && FIXTURE_GET(old, VehStatus, vehstatus).Test(VehState::Stopped), old != nullptr ? old->age.base() : -1, CompanyMoney(Company::Get(_local_company)));
+		fmt::print(stderr, "FLEET drain old {} {} {} money {}\n", old != nullptr, old != nullptr && FIXTURE_GET(old, VehStatus, vehstatus).Test(VehState::Stopped), old != nullptr ? FIXTURE_GET(old, Age, age).base() : -1, CompanyMoney(Company::Get(_local_company)));
 		for (const Vehicle *u : Vehicle::Iterate()) {
 			if (FIXTURE_GET(u, Type, type) != VEH_ROAD || !u->IsPrimaryVehicle() || FIXTURE_FIELD(u, unitnumber) != _drain_unit || u->index == _drain_vehicle) continue;
-			fmt::print(stderr, "FLEET drain new {} {} {} {} {}\n", u->index, FIXTURE_GET(u, EngineType, engine_type), u->age.base(), FIXTURE_GET(u, VehStatus, vehstatus).Test(VehState::Stopped), u->IsInDepot());
+			fmt::print(stderr, "FLEET drain new {} {} {} {} {}\n", u->index, FIXTURE_GET(u, EngineType, engine_type), FIXTURE_GET(u, Age, age).base(), FIXTURE_GET(u, VehStatus, vehstatus).Test(VehState::Stopped), u->IsInDepot());
 		}
 		for (const NewsItem &ni : GetNews()) {
 			if (ni.advice_type != AdviceType::AutorenewFailed) continue;
@@ -1652,7 +1652,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		VehicleID free_head = build(wagon);
 		VehicleID free_engine = build(engine);
 		Checked("free-chain", Command<CMD_MOVE_RAIL_VEHICLE>::Do(DoCommandFlag::Execute, free_engine, free_head, false));
-		for (VehicleID id : {train, free_engine}) Vehicle::Get(id)->age = TimerGameCalendar::Date(Vehicle::Get(id)->max_age.base() + 366);
+		for (VehicleID id : {train, free_engine}) FIXTURE_SET(Vehicle::Get(id), Age, age, TimerGameCalendar::Date(FIXTURE_GET(Vehicle::Get(id), MaxAge, max_age).base() + 366));
 		uint16_t old_length = Train::Get(train)->gcache.cached_total_length;
 		fmt::print(stderr, "FLEET wagons-input {} {}\n", moved.size() + 1, old_length);
 		auto [group_cost, group] = Command<CMD_CREATE_GROUP>::Do(DoCommandFlag::Execute, VEH_TRAIN, GroupID::Invalid());
@@ -1670,7 +1670,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		bool free_rng = SameRandom(before, after);
 		Checked("free-execute", Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, free_engine));
 		const Train *head = Train::Get(free_head);
-		fmt::print(stderr, "FLEET free-replaced {} {} {} {}\n", free_rng, !Vehicle::IsValidID(free_engine), head->IsFreeWagon(), head->GetNextUnit() != nullptr && FIXTURE_GET(head->GetNextUnit(), EngineType, engine_type) == engine && head->GetNextUnit()->age == 0);
+		fmt::print(stderr, "FLEET free-replaced {} {} {} {}\n", free_rng, !Vehicle::IsValidID(free_engine), head->IsFreeWagon(), head->GetNextUnit() != nullptr && FIXTURE_GET(head->GetNextUnit(), EngineType, engine_type) == engine && FIXTURE_GET(head->GetNextUnit(), Age, age) == 0);
 		/* ReplaceChain: a different, longer engine; replaced wagons that no longer fit are sold. */
 		VehicleID original = train;
 		uint vehicles = 0;
@@ -1691,7 +1691,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 	} else {
 		Company *c = Company::Get(FIXTURE_GET(v, Owner, owner));
 		/* Typed inputs: old-enough actual command-built vehicles, carrying cargo. */
-		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
+		FIXTURE_SET(v, Age, age, TimerGameCalendar::Date(FIXTURE_GET(v, MaxAge, max_age).base() + 366));
 		uint injected = 0;
 		StationID first = StationID::Invalid();
 		for (const Order &order : v->Orders()) if (order.IsType(OT_GOTO_STATION)) { first = order.GetDestination().ToStationID(); break; }
@@ -1730,7 +1730,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 			Checked("execute", Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, original));
 			fmt::print(stderr, "FLEET replaced {}\n", !Vehicle::IsValidID(original));
 			bool transferred = false;
-			for (Vehicle *u : Vehicle::Iterate()) if (u->IsPrimaryVehicle() && FIXTURE_GET(u, EngineType, engine_type) == engine && u->age == 0 && u->GetNumOrders() == orders && CargoCount(u) == old_count) transferred = true;
+			for (Vehicle *u : Vehicle::Iterate()) if (u->IsPrimaryVehicle() && FIXTURE_GET(u, EngineType, engine_type) == engine && FIXTURE_GET(u, Age, age) == 0 && u->GetNumOrders() == orders && CargoCount(u) == old_count) transferred = true;
 			fmt::print(stderr, "FLEET transferred {} {}\n", transferred, old_count > 0);
 		}
 	}

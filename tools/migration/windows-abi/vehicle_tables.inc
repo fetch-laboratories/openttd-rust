@@ -30,12 +30,6 @@ struct RoadTestTables {
 
 
 		VEHICLE_UNUSED(vehicle, check_orders_only);
-		VEHICLE_UNUSED(vehicle, write_profit);
-		VEHICLE_UNUSED(vehicle, write_economy_service);
-		VEHICLE_UNUSED(vehicle, write_calendar_service);
-		VEHICLE_UNUSED(vehicle, write_breakdowns);
-		VEHICLE_UNUSED(vehicle, write_reliability);
-		VEHICLE_UNUSED(vehicle, profit);
 		VEHICLE_UNUSED(vehicle, make_dummy);
 		VEHICLE_UNUSED(vehicle, order_type);
 		VEHICLE_UNUSED(vehicle, order_destination);
@@ -52,7 +46,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, base_viewport);
 		VEHICLE_UNUSED(vehicle, property);
 		VEHICLE_UNUSED(vehicle, callback);
-		VEHICLE_UNUSED(vehicle, set_max_age);
 		VEHICLE_UNUSED(vehicle, length_changed);
 		VEHICLE_UNUSED(vehicle, play_vehicle_sound);
 		VEHICLE_UNUSED(vehicle, play_sound);

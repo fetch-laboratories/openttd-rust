@@ -139,8 +139,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.environment = &GetRustEnvironmentServices(),
 		.aircraft = &GetRustAircraftLeaves(),
 		.road = &GetRustRoadLeaves(),
-		.age = RustVehicleRead<int32_t, RustVehicleAgeValue>,
-		.write_age = RustVehicleInvoke<RustWriteVehicleAge, int32_t>,
 		.write_sprite = RustVehicleInvoke<RustWriteVehicleSpriteSequence, SpriteID>,
 		.write_first_sprite = RustVehicleInvoke<RustWriteVehicleFirstSprite, SpriteID>,
 		.owner = DisasterOwner,

@@ -12,6 +12,7 @@
 #include "linkgraph/linkgraph.h"
 #include "saveload/saveload.h"
 #include "clock-fixture.hpp"
+#include "vehicle-record-fixture.hpp"
 
 static void Check(const char *label, bool value)
 {
@@ -25,11 +26,11 @@ static void MaxEconomy(bool wallclock)
 	E::SetDate(E::ConvertYMDToDate(EconomyTime::MAX_YEAR + 1, 0, 1) - 1, 73);
 	std::vector<std::pair<Vehicle *, E::Date>> vehicles;
 	std::vector<std::pair<LinkGraph *, E::Date>> graphs;
-	for (Vehicle *v : Vehicle::Iterate()) vehicles.emplace_back(v, v->date_of_last_service);
+	for (Vehicle *v : Vehicle::Iterate()) vehicles.emplace_back(v, FIXTURE_GET(v, LastServiceDate, date_of_last_service));
 	for (LinkGraph *g : LinkGraph::Iterate()) graphs.emplace_back(g, g->LastCompression());
 	FixtureClockElapsed<E>();
 	bool shifted = !vehicles.empty() && !graphs.empty();
-	for (auto [vehicle, date] : vehicles) shifted &= vehicle->date_of_last_service == std::max(date - 366, E::Date{0});
+	for (auto [vehicle, date] : vehicles) shifted &= FIXTURE_GET(vehicle, LastServiceDate, date_of_last_service) == std::max(date - 366, E::Date{0});
 	for (auto [graph, date] : graphs) shifted &= graph->LastCompression() == date - 366;
 	Check(wallclock ? "wallclock-max-shifts" : "calendar-max-shifts", shifted && E::year == EconomyTime::MAX_YEAR && E::date == E::ConvertYMDToDate(EconomyTime::MAX_YEAR + 1, 0, 1) - 366);
 }

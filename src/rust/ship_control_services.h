@@ -208,17 +208,17 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
-	v->reliability = RustEngineReliability(e);
-	v->reliability_spd_dec = e->reliability_spd_dec;
+	v->Record().reliability = RustEngineReliability(e);
+	v->Record().reliability_spd_dec = e->reliability_spd_dec;
 }
 
 static void Ship_build_dates(uint32_t id) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
 	RustVehicleSetServiceInterval(v, Company::Get(_current_company)->settings.vehicle.servint_ships);
-	v->date_of_last_service = TimerGameEconomy::date;
-	v->date_of_last_service_newgrf = TimerGameCalendar::date;
-	v->build_year = TimerGameCalendar::year;
+	v->SetLastServiceDate(TimerGameEconomy::date);
+	v->SetCalendarServiceDate(TimerGameCalendar::date);
+	v->SetBuildYear(TimerGameCalendar::year);
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 

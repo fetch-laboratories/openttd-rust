@@ -270,9 +270,24 @@ public:
 	inline VehStates GetVehStatus() const { return VehStates{this->record->vehstatus}; } ///< Status.
 	inline void SetVehStatus(VehStates status) { this->record->vehstatus = status.base(); }
 
-	Money profit_this_year = 0; ///< Profit this year << 8, low 8 bits are fract
-	Money profit_last_year = 0; ///< Profit last year << 8, low 8 bits are fract
-	Money value = 0; ///< Value of the vehicle
+	Money GetProfitThisYear() const { return Money{this->Record().profit_this_year}; }
+	void SetProfitThisYear(Money value) { this->Record().profit_this_year = value.base(); }
+	Money GetProfitLastYear() const { return Money{this->Record().profit_last_year}; }
+	void SetProfitLastYear(Money value) { this->Record().profit_last_year = value.base(); }
+	Money GetValue() const { return Money{this->Record().value}; }
+	void SetValue(Money value) { this->Record().value = value.base(); }
+	TimerGameCalendar::Year GetBuildYear() const { return TimerGameCalendar::Year{this->Record().build_year}; }
+	void SetBuildYear(TimerGameCalendar::Year value) { this->Record().build_year = value.base(); }
+	TimerGameCalendar::Date GetAge() const { return TimerGameCalendar::Date{this->Record().age}; }
+	void SetAge(TimerGameCalendar::Date value) { this->Record().age = value.base(); }
+	TimerGameEconomy::Date GetEconomyAge() const { return TimerGameEconomy::Date{this->Record().economy_age}; }
+	void SetEconomyAge(TimerGameEconomy::Date value) { this->Record().economy_age = value.base(); }
+	TimerGameCalendar::Date GetMaxAge() const { return TimerGameCalendar::Date{this->Record().max_age}; }
+	void SetMaxAge(TimerGameCalendar::Date value) { this->Record().max_age = value.base(); }
+	TimerGameEconomy::Date GetLastServiceDate() const { return TimerGameEconomy::Date{this->Record().date_of_last_service}; }
+	void SetLastServiceDate(TimerGameEconomy::Date value) { this->Record().date_of_last_service = value.base(); }
+	TimerGameCalendar::Date GetCalendarServiceDate() const { return TimerGameCalendar::Date{this->Record().date_of_last_service_newgrf}; }
+	void SetCalendarServiceDate(TimerGameCalendar::Date value) { this->Record().date_of_last_service_newgrf = value.base(); }
 
 	CargoPayment *cargo_payment = nullptr; ///< The cargo payment we're currently in
 
@@ -280,20 +295,6 @@ public:
 
 	Vehicle *hash_viewport_next = nullptr; ///< NOSAVE: Next vehicle in the visual location hash.
 	Vehicle **hash_viewport_prev = nullptr; ///< NOSAVE: Previous vehicle in the visual location hash.
-
-
-	/* Related to age and service time */
-	TimerGameCalendar::Year build_year{}; ///< Year the vehicle has been built.
-	TimerGameCalendar::Date age{}; ///< Age in calendar days.
-	TimerGameEconomy::Date economy_age{}; ///< Age in economy days.
-	TimerGameCalendar::Date max_age{}; ///< Maximum age
-	TimerGameEconomy::Date date_of_last_service{}; ///< Last economy date the vehicle had a service at a depot.
-	TimerGameCalendar::Date date_of_last_service_newgrf{}; ///< Last calendar date the vehicle had a service at a depot, unchanged by the date cheat to protect against unsafe NewGRF behavior.
-	uint16_t reliability = 0; ///< Reliability.
-	uint16_t reliability_spd_dec = 0; ///< Reliability decrease speed.
-	uint8_t breakdown_delay = 0; ///< Counter for managing breakdown length.
-	uint8_t breakdowns_since_last_service = 0; ///< Counter for the amount of breakdowns.
-	uint8_t breakdown_chance = 0; ///< Current chance of breakdowns.
 
 
 	SpriteBounds bounds{}; ///< Bounding box of vehicle.
@@ -564,13 +565,13 @@ public:
 	 * Gets the profit vehicle had this year. It can be sent into string parameters for string processing.
 	 * @return the vehicle's profit this year
 	 */
-	Money GetDisplayProfitThisYear() const { return (this->profit_this_year >> 8); }
+	Money GetDisplayProfitThisYear() const { return (this->GetProfitThisYear() >> 8); }
 
 	/**
 	 * Gets the profit vehicle had last year. It can be sent into string parameters for string processing.
 	 * @return the vehicle's profit last year
 	 */
-	Money GetDisplayProfitLastYear() const { return (this->profit_last_year >> 8); }
+	Money GetDisplayProfitLastYear() const { return (this->GetProfitLastYear() >> 8); }
 
 	void SetNext(Vehicle *next);
 
@@ -741,8 +742,8 @@ public:
 		this->current_order = src->current_order;
 		this->StoreDestTile(src->GetDestTile());
 
-		this->profit_this_year = src->profit_this_year;
-		this->profit_last_year = src->profit_last_year;
+		this->SetProfitThisYear(src->GetProfitThisYear());
+		this->SetProfitLastYear(src->GetProfitLastYear());
 
 		src->Record().unitnumber = 0;
 	}

@@ -157,8 +157,6 @@ pub struct VehicleServices {
     /// `GetVehicleCallback(callback, 0, 0, v->engine_type, v)`.
     pub callback:
         extern "C" fn(*const crate::newgrf_vehicle::Services, VehicleRef, CallbackID) -> u16,
-    /// Native `max_age` store after the Rust engine lifetime decision.
-    pub set_max_age: extern "C" fn(VehicleRef, i32),
     pub length_changed: extern "C" fn(VehicleRef),
     /// `PlayVehicleSound(v, event)`.
     pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
@@ -177,12 +175,6 @@ pub struct VehicleServices {
     pub order_type: extern "C" fn(VehicleRef) -> u8,
     pub order_destination: extern "C" fn(VehicleRef) -> u16,
     pub order_nonstop: extern "C" fn(VehicleRef) -> u8,
-    pub write_profit: extern "C" fn(VehicleRef, i64),
-    pub write_economy_service: extern "C" fn(VehicleRef, i32),
-    pub write_calendar_service: extern "C" fn(VehicleRef, i32),
-    pub write_breakdowns: extern "C" fn(VehicleRef, u8),
-    pub write_reliability: extern "C" fn(VehicleRef, u16),
-    pub profit: extern "C" fn(VehicleRef) -> i64,
     pub make_dummy: extern "C" fn(VehicleRef),
     pub check_orders_only: extern "C" fn(VehicleRef),
     pub maintenance: *const maintenance::Services,
@@ -316,7 +308,6 @@ crate::abi::layouts! {
         newgrf,
         property,
         callback,
-        set_max_age,
         length_changed,
         play_vehicle_sound,
         play_sound,
@@ -330,12 +321,6 @@ crate::abi::layouts! {
         order_type,
         order_destination,
         order_nonstop,
-        write_profit,
-        write_economy_service,
-        write_calendar_service,
-        write_breakdowns,
-        write_reliability,
-        profit,
         make_dummy,
         check_orders_only,
         maintenance,

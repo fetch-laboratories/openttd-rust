@@ -25,7 +25,6 @@ inline OpenTTDCargoServices CargoTestServices()
 		.vehicles = nullptr,
 		.local_company = []() noexcept -> bool { std::abort(); },
 		.expense = [](OpenTTDVehicle *, bool) noexcept -> ExpensesType { std::abort(); },
-		.profit = [](OpenTTDVehicle *) noexcept -> int64_t { std::abort(); },
 		.shared = nullptr,
 		.feeder_animation = [](int32_t, int32_t, int32_t, int64_t, int64_t) noexcept { std::abort(); },
 		.subsidy_multiplier = []() noexcept -> uint8_t { std::abort(); },

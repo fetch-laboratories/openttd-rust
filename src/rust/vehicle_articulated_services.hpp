@@ -22,12 +22,12 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 	const Vehicle *first = static_cast<Vehicle *>(head);
 	v->SetDirection(first->GetDirection()); RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(first)); RustWriteVehicleTile(v, first->GetTile());
 	RustWriteVehicleX(v, first->Record().x_pos); RustWriteVehicleY(v, first->Record().y_pos); RustWriteVehicleZ(v, first->Record().z_pos);
-	v->date_of_last_service = first->date_of_last_service;
-	v->date_of_last_service_newgrf = RustVehicleCalendarService(first);
-	v->build_year = RustVehicleBuildYear(first);
+	v->SetLastServiceDate(first->GetLastServiceDate());
+	v->SetCalendarServiceDate(RustVehicleCalendarService(first));
+	v->SetBuildYear(RustVehicleBuildYear(first));
 	RustWriteVehicleStatus(v, first->GetVehStatus()); v->SetVehStatus(v->GetVehStatus().Reset(VehState::Stopped));
 	RustVehicleSetCargoSubtype(RustVehicle(v), 0);
-	v->max_age = CalendarTime::MIN_DATE; RustVehicleSetEngine(RustVehicle(v), engine); v->value = 0;
+	v->SetMaxAge(CalendarTime::MIN_DATE); RustVehicleSetEngine(RustVehicle(v), engine); v->SetValue(0);
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept

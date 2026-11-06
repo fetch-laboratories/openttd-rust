@@ -80,7 +80,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.current_order.type); };
 	vehicle.order_destination = [](OpenTTDVehicle *) noexcept { return fixture->aircraft.current_order.destination; };
 	vehicle.maintenance = &maintenance;
-	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	range_orders = std::make_unique<ControllerOrders>(&vehicle);
 	/* Matching current/list station orders take the ordinary unchanged-order
 	 * path. This preserves the range reference's deliberate no-op orders. */

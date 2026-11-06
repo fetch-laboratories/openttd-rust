@@ -96,20 +96,20 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
-	v->reliability = RustEngineReliability(e);
-	v->reliability_spd_dec = e->reliability_spd_dec;
+	v->Record().reliability = RustEngineReliability(e);
+	v->Record().reliability_spd_dec = e->reliability_spd_dec;
 }
 static void VehicleConstructServiceDates(void *shell, uint16_t interval) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	RustVehicleSetServiceInterval(v, interval);
-	v->date_of_last_service = TimerGameEconomy::date;
-	v->date_of_last_service_newgrf = TimerGameCalendar::date;
+	v->SetLastServiceDate(TimerGameEconomy::date);
+	v->SetCalendarServiceDate(TimerGameCalendar::date);
 }
 static void VehicleConstructStamp(void *shell) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
-	v->build_year = TimerGameCalendar::year;
+	v->SetBuildYear(TimerGameCalendar::year);
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 static void VehicleConstructServiceFlags(void *shell, bool prototype, bool percent) noexcept
@@ -138,7 +138,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 }
 static uint32_t VehicleBuildShipTile(uint32_t tile) noexcept { return GetShipDepotNorthTile(TileIndex(tile)).base(); }
 static void *VehicleBuildNewShip(uint32_t tile) noexcept { Ship *v = new Ship(); RustWriteVehicleTile(v, TileIndex(tile)); return v; }
-static void VehicleBuildSetPurchase(void *shell, uint16_t unit, int64_t value) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->Record().unitnumber = unit; v->value = value; }
+static void VehicleBuildSetPurchase(void *shell, uint16_t unit, int64_t value) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->Record().unitnumber = unit; v->SetValue(value); }
 static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);

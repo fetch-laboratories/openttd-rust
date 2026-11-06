@@ -234,9 +234,9 @@ static void TrainDetailsInfoTab(const Vehicle *v, int left, int right, int y)
 {
 	std::string str;
 	if (RailVehInfo(v->GetEngineType())->railveh_type == RAILVEH_WAGON) {
-		str = GetString(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->value);
+		str = GetString(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->GetValue());
 	} else {
-		str = GetString(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->build_year, v->value);
+		str = GetString(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->GetBuildYear(), v->GetValue());
 	}
 	DrawString(left, right, y, str);
 }

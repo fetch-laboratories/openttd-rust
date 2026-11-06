@@ -323,10 +323,6 @@ static void RoadBoundary()
 	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == INT32_MIN && probe.running == 0 && probe.progress == 7 && world.draws == 0);
 
 	/* Stopped parts preserve running ticks; later status resets must survive the entry. */
-	const auto breakdown_probe = _vehicle_maintenance_probe.breakdown_probe;
-	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = road_abi_probe->status};
-	};
 	const auto last_speed_dirty = t.physics_vehicle.start_stop_dirty;
 	probe.ground.state->cache.last_speed = UINT16_MAX;
 	t.physics_vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {
@@ -338,7 +334,6 @@ static void RoadBoundary()
 	probe.progress = 0;
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	CHECK(probe.running == UINT8_MAX && probe.order_time == INT32_MIN && probe.status == 0);
-	_vehicle_maintenance_probe.breakdown_probe = breakdown_probe;
 	t.physics_vehicle.start_stop_dirty = last_speed_dirty;
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
@@ -452,7 +447,6 @@ static void RoadServiceBoundary()
 	/* Direct maintenance: aged out, no reliability decay, no breakdown, service due. */
 	auto &maintenance = _vehicle_maintenance_probe;
 	maintenance.max_economy_date = OpenTTDEconomyDate{0};
-	maintenance.economy_age = [](OpenTTDVehicle *) noexcept { return OpenTTDEconomyDate{0}; };
 	maintenance.check_breakdown = [](OpenTTDVehicle *) noexcept {
 		OpenTTDVehicleMaintenanceCheckBreakdown r{};
 		r.no_service = true;
@@ -471,12 +465,7 @@ static void RoadServiceBoundary()
 	};
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
 	/* The tail record is linked; its part has no engine type, so only the head is serviced. */
-	maintenance.has_engine = [](OpenTTDVehicle *) noexcept { return false; };
 	maintenance.reset = [](OpenTTDVehicle *) noexcept { ++road_service_probe->services; return OpenTTDVehicleMaintenanceReset{}; };
-	t.vehicle.write_economy_service = t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t) noexcept {};
-	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t) noexcept {};
-	t.vehicle.write_reliability = [](OpenTTDVehicle *, uint16_t) noexcept {};
-	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t) noexcept {};
 
 
 	t.leaves.is_road_depot_tile = [](uint32_t tile) noexcept { CHECK(tile == road_service_probe->tile); return road_service_probe->depot_tile; };
@@ -498,7 +487,7 @@ static void RoadServiceBoundary()
 	};
 	t.vehicle.check_orders_only = [](OpenTTDVehicle *) noexcept {};
 	auto day = [&]() {
-		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->type = VEH_ROAD; record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
+		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->type = i == 0 ? VEH_ROAD : VEH_EFFECT; record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
 		openttd_rust_road_economy_day(RoadServiceHandle(0), probe.head, true, &t.leaves); };
 	for (bool moving : {true, false}) {
 		probe.speed = moving ? 5 : 0;

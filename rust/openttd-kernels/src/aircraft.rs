@@ -528,14 +528,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         layout_next_position(self; ap: *const c_void, pos: u8) -> u8 => unsafe { (self.leaves.layout_next_position)(ap, pos) };
         layout_next(self; ap: *const c_void, pos: u8) -> *const c_void => unsafe { (self.leaves.layout_next)(ap, pos) };
         layout_route(self; ap: *const c_void, pos: u8) -> LayoutRoute => unsafe { (self.leaves.layout_route)(ap, pos) };
-        profit(self; v: Vehicle) -> i64 => (self.vs.profit)(v.base());
 
         set_order_time(self; v: Vehicle, value: i64) -> () => v.base().write_order_time(value as i32);
-        set_profit(self; v: Vehicle, value: i64) -> () => (self.vs.write_profit)(v.base(), value as i64);
-        set_economy_service(self; v: Vehicle, value: i64) -> () => (self.vs.write_economy_service)(v.base(), value as i32);
-        set_calendar_service(self; v: Vehicle, value: i64) -> () => (self.vs.write_calendar_service)(v.base(), value as i32);
-        set_breakdowns(self; v: Vehicle, value: i64) -> () => (self.vs.write_breakdowns)(v.base(), value as u8);
-        set_reliability(self; v: Vehicle, value: i64) -> () => (self.vs.write_reliability)(v.base(), value as u16);
         airport_blocks(self; s: *const Station) -> *mut u64 => unsafe { (self.leaves.airport_blocks)(s) };
         node(self; airport: *const c_void, pos: u8) -> *const c_void => unsafe { (self.leaves.node)(airport, pos) };
         fta(self; node: *const c_void) -> Node => unsafe { (self.leaves.fta)(node) };
@@ -1613,10 +1607,17 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                         && self.subtype(id) == 0
                         && self.helipads(ap) > 0
                     {
-                        self.set_economy_service(id, self.economy_date());
-                        self.set_calendar_service(id, self.calendar_date());
-                        self.set_breakdowns(id, 0);
-                        self.set_reliability(id, self.engine_reliability(id));
+                        id.base()
+                            .write_date_of_last_service(crate::services::EconomyDate(
+                                self.economy_date() as i32,
+                            ));
+                        id.base()
+                            .write_date_of_last_service_newgrf(crate::services::CalendarDate(
+                                self.calendar_date() as i32,
+                            ));
+                        id.base().write_breakdowns_since_last_service(0);
+                        id.base()
+                            .write_reliability(self.engine_reliability(id) as u16);
                         self.dirty_details(id);
                     }
                     return;
@@ -1966,7 +1967,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let divisor = YEAR_TICKS;
         // Money's saturating multiplication is provided by the shared Money service.
         let cost = cost.saturating_mul(ticks) / divisor;
-        self.set_profit(id, self.profit(id).saturating_sub(cost));
+        id.base()
+            .write_profit_this_year(id.base().profit_this_year().saturating_sub(cost));
         self.set_running_ticks(id, 0);
         self.subtract_cost(id, cost);
         self.dirty_lists(id);

@@ -151,8 +151,6 @@ pub struct Services {
     pub environment: *const crate::services::EnvironmentServices,
     pub aircraft: *const crate::aircraft::Leaves,
     pub road: *const crate::road::Leaves,
-    pub age: extern "C" fn(VehicleRef) -> i32,
-    pub write_age: extern "C" fn(VehicleRef, i32),
     pub write_sprite: extern "C" fn(VehicleRef, u32),
     pub write_first_sprite: extern "C" fn(VehicleRef, u32),
     pub owner: extern "C" fn(VehicleRef) -> *mut State,
@@ -231,15 +229,15 @@ impl<'a> World<'a> {
     fn set_dest(v: Vehicle, tile: u32) {
         (v.vehicle()).write_dest(tile);
     }
-    fn age(&self, v: Vehicle) -> i32 {
-        (self.s.age)(v.vehicle())
+    fn age(v: Vehicle) -> i32 {
+        v.vehicle().age().0
     }
-    fn set_age(&self, v: Vehicle, age: i32) {
-        (self.s.write_age)(v.vehicle(), age);
+    fn set_age(v: Vehicle, age: i32) {
+        v.vehicle().write_age(crate::services::CalendarDate(age));
     }
-    fn increment_age(&self, v: Vehicle) -> i32 {
-        let age = self.age(v).wrapping_add(1);
-        self.set_age(v, age);
+    fn increment_age(v: Vehicle) -> i32 {
+        let age = Self::age(v).wrapping_add(1);
+        Self::set_age(v, age);
         age
     }
     fn tick(v: Vehicle) -> u8 {
@@ -403,9 +401,9 @@ impl<'a> World<'a> {
             }
             self.move_flight(v);
             if v.state() == 1 {
-                if self.increment_age(v) == 38 {
+                if Self::increment_age(v) == 38 {
                     v.set_state(2);
-                    self.set_age(v, 0);
+                    Self::set_age(v, 0);
                 }
                 if Self::tick(v) & 7 == 0 {
                     Self::effect_rel(v, 0, -17, 2, crate::effectvehicle_func::EV_CRASH_SMOKE);
@@ -414,7 +412,7 @@ impl<'a> World<'a> {
                 let tile = Self::tile(v);
                 if (self.shared.tile_valid)(tile) && (self.s.airport_tile)(tile) {
                     v.set_state(1);
-                    self.set_age(v, 0);
+                    Self::set_age(v, 0);
                     (self.s.zeppelin_news)(tile, (self.shared.station_index)(tile));
                     (self.s.zeppelin_crashed)(Self::tile(v));
                 }
@@ -429,7 +427,7 @@ impl<'a> World<'a> {
             (self.s.airport_blocks)((self.shared.station_index)(tile), true);
         }
         if v.state() > 2 {
-            if self.increment_age(v) <= 13320 {
+            if Self::increment_age(v) <= 13320 {
                 return true;
             }
             let tile = Self::tile(v);
@@ -448,7 +446,7 @@ impl<'a> World<'a> {
             z = (v.vehicle()).z().wrapping_sub(1);
         }
         self.update_position(v, p.0, p.1, z);
-        let age = self.increment_age(v);
+        let age = Self::increment_age(v);
         if age == 1 {
             Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
             self.sound_vehicle(v);
@@ -468,7 +466,7 @@ impl<'a> World<'a> {
             }
         } else if age == 350 {
             v.set_state(3);
-            self.set_age(v, 0);
+            Self::set_age(v, 0);
         }
         true
     }
@@ -490,7 +488,7 @@ impl<'a> World<'a> {
                 self.move_flight(v);
                 return true;
             }
-            if self.increment_age(v) < 6 {
+            if Self::increment_age(v) < 6 {
                 Self::set_dest(v, self.random_tile());
                 return true;
             }
@@ -528,7 +526,7 @@ impl<'a> World<'a> {
                             return self.delete(v);
                         }
                         Self::set_dest(v, target.id);
-                        self.set_age(v, 0);
+                        Self::set_age(v, 0);
                         (self.s.write_road_disaster)(target.vehicle(), v.id);
                         break;
                     }
@@ -546,8 +544,7 @@ impl<'a> World<'a> {
             && crate::raw_field::read_field!(target.handle, breakdown_ctr) == 0
         {
             target.vehicle().write_breakdown_counter(3);
-            // SAFETY: The immutable shared table and current vehicle remain live.
-            unsafe { ((*self.v.maintenance).breakdown_delay_write)(target.vehicle(), 140) };
+            target.vehicle().write_breakdown_delay(140);
         }
         (v.vehicle()).write_direction((self.s.toward)(v.vehicle(), t.0, t.1));
         let gp = (self.v.new_position)(v.vehicle());
@@ -557,7 +554,7 @@ impl<'a> World<'a> {
         }
         self.update_position(v, gp.x, gp.y, z);
         if z <= (target.vehicle()).z() {
-            self.increment_age(v);
+            Self::increment_age(v);
             if (target.vehicle()).status() & VS_HIDDEN == 0
                 && unsafe { crate::road::crashed_counter(target.state) } == 0
             {
@@ -574,7 +571,7 @@ impl<'a> World<'a> {
                 (self.s.road_crashed)(target.vehicle(), victims);
             }
         }
-        if self.age(v) > 50 {
+        if Self::age(v) > 50 {
             Self::effect_rel(v, 0, 7, 8, crate::effectvehicle_func::EV_EXPLOSION_LARGE);
             self.sound_vehicle(v);
             return self.delete(v);
@@ -613,14 +610,14 @@ impl<'a> World<'a> {
                     ((r >> 12) & 15) as i32,
                     crate::effectvehicle_func::EV_EXPLOSION_SMALL,
                 );
-                if self.increment_age(v) >= 55 {
+                if Self::increment_age(v) >= 55 {
                     v.set_state(3);
                 }
             }
         } else if v.state() == 1 {
-            if self.increment_age(v) == 112 {
+            if Self::increment_age(v) == 112 {
                 v.set_state(2);
-                self.set_age(v, 0);
+                Self::set_age(v, 0);
                 let i = (self.s.industry)(Self::dest(v));
                 self.destruct_industry(i.industry);
                 let location = (self.s.industry_location)(i.industry);
@@ -656,7 +653,7 @@ impl<'a> World<'a> {
                 != 0
             {
                 v.set_state(1);
-                self.set_age(v, 0);
+                Self::set_age(v, 0);
             }
         }
         true
@@ -719,10 +716,7 @@ impl<'a> World<'a> {
                     let p = (v.vehicle().x(), v.vehicle().y());
                     if distance(t.0, t.1, p.0, p.1) <= 12 * TILE_SIZE as i32 {
                         target.vehicle().write_breakdown_counter(5);
-                        // SAFETY: The immutable shared table and current vehicle remain live.
-                        unsafe {
-                            ((*self.v.maintenance).breakdown_delay_write)(target.vehicle(), 0xF0);
-                        };
+                        target.vehicle().write_breakdown_delay(0xF0);
                     }
                 }
                 from = target.id + 1;
@@ -761,7 +755,7 @@ impl<'a> World<'a> {
                 self.move_flight(v);
                 return true;
             }
-            if self.increment_age(v) < 6 {
+            if Self::increment_age(v) < 6 {
                 Self::set_dest(v, self.random_tile());
                 return true;
             }
@@ -793,7 +787,7 @@ impl<'a> World<'a> {
                     n = n.wrapping_sub(1);
                     if old == 0 {
                         Self::set_dest(v, Self::tile(train));
-                        self.set_age(v, 0);
+                        Self::set_age(v, 0);
                         break;
                     }
                 }
@@ -853,7 +847,7 @@ impl<'a> World<'a> {
     }
     fn submarine(&self, v: Vehicle) -> bool {
         Self::increment_tick(v);
-        if self.increment_age(v) > 8880 {
+        if Self::increment_age(v) > 8880 {
             return self.delete(v);
         }
         if Self::tick(v) & 1 == 0 {
@@ -1169,7 +1163,7 @@ impl<'a> World<'a> {
         v.set_state(0);
         Self::set_dest(v, self.random_tile());
         (v.vehicle()).write_z(self.bounds(v));
-        self.set_age(v, 0);
+        Self::set_age(v, 0);
     }
 }
 fn delta(a: i32, b: i32) -> i32 {
@@ -1276,7 +1270,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, kind, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
 }
 
 #[cfg(test)]

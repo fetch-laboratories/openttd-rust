@@ -280,7 +280,6 @@ static const OpenTTDCargoServices _cargo_services = {
 	.vehicles = &GetRustVehicleServices(),
 	.local_company = RustIsLocalCompany,
 	.expense = RustVehicleExpense,
-	.profit = RustVehicleRead<int64_t, RustVehicleProfit>,
 	.shared = &GetRustSharedServices(),
 	.feeder_animation = RustFeederIncomeAnimation,
 	.subsidy_multiplier = RustSubsidyMultiplier,
@@ -423,7 +422,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.subtract_profit = [](OpenTTDVehicle *handle, int64_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
-		front->profit_this_year -= value;
+		front->SetProfitThisYear(front->GetProfitThisYear() - value);
 	},
 	.unknown_load_result = [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
