@@ -210,34 +210,64 @@ class MultiplayerTests(unittest.TestCase):
         obj.write_bytes(b"changed object")
         self.assertNotEqual(before, multiplayer.game_objects(build, False))
 
-    def test_rejected_join_fails_at_once_naming_the_error(self) -> None:
+    def test_server_errors_and_closes_stop_only_unexpected_sessions(self) -> None:
         # A rejected client stays at the menu and the server keeps running, so
         # only the reported error ends the session before the per-game timeout.
-        error = "client[1] SendError(): error=8"
-        binaries = {}
-        for role, body in (
+        quit_message = (
+            "[2026-11-06 04:00:00] dbg: [net:9] client[2] Receive_CLIENT_QUIT()"
+        )
+        close = (
+            "[2026-11-06 04:00:00] dbg: [net:3] [server] Client #2 closed connection"
+        )
+        for name, lines, failure in (
+            ("rejected", ["client[1] SendError(): error=8"], True),
+            ("preauth-close", [close], True),
             (
-                "reference",
-                f"echo MIXED_READY\nsleep 0.2\necho '{error}'\nexec sleep 60\n",
+                "different-client-close",
+                [quit_message, close.replace("#2", "#3")],
+                True,
             ),
-            ("candidate", "exec sleep 60\n"),
+            ("close-before-quit", [close, quit_message], True),
+            ("duplicate-close", [quit_message, close, close], True),
+            ("normal-quit-close", [quit_message, close], False),
         ):
-            binary = self.root / role / "openttd"
-            binary.parent.mkdir()
-            binary.write_text("#!/bin/sh\n" + body)
-            binary.chmod(0o755)
-            binaries[role] = binary
-        started = time.monotonic()
-        with (
-            patch.object(core, "GAME_LOCK", self.root / "game.lock"),
-            self.assertRaisesRegex(RuntimeError, f"failure: {re.escape(error)}"),
-        ):
-            multiplayer.session(
-                binaries, self.source, self.root / "rejected", "reference", 60
-            )
-        self.assertLess(time.monotonic() - started, 20)
-        execution = json.loads((self.root / "rejected/execution.json").read_text())
-        self.assertNotEqual(execution["exits"]["client"], 0)
+            binaries = {}
+            for role, body in (
+                (
+                    "reference",
+                    "echo MIXED_READY\nsleep 0.2\n"
+                    + "".join(f"echo '{line}'\n" for line in lines)
+                    + "read command\n",
+                ),
+                ("candidate", f"exec sleep {60 if failure else 1}\n"),
+            ):
+                binary = self.root / name / role / "openttd"
+                binary.parent.mkdir(parents=True)
+                binary.write_text("#!/bin/sh\n" + body)
+                binary.chmod(0o755)
+                binaries[role] = binary
+            folder = self.root / name / "session"
+            started = time.monotonic()
+            with (
+                self.subTest(name=name),
+                patch.object(core, "GAME_LOCK", self.root / "game.lock"),
+            ):
+                if failure:
+                    error = close if name == "close-before-quit" else lines[-1]
+                    with self.assertRaisesRegex(
+                        RuntimeError, f"failure: {re.escape(error)}"
+                    ):
+                        multiplayer.session(
+                            binaries, self.source, folder, "reference", 60
+                        )
+                else:
+                    session = multiplayer.session(
+                        binaries, self.source, folder, "reference", 60
+                    )
+                    self.assertEqual(session.exits, {"client": 0, "server": 0})
+                self.assertLess(time.monotonic() - started, 20)
+                execution = json.loads((folder / "execution.json").read_text())
+                self.assertEqual(execution["exits"]["client"] != 0, failure)
 
     def test_protocol_waits_fail_at_once_on_errors_beyond_those_allowed(self) -> None:
         def peer(name: str, lines: list[str]) -> network_protocol.Peer:

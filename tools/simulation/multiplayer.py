@@ -28,9 +28,9 @@ AUTH_SECRET = "0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a"
 AUTH_PUBLIC = "54558C3F5FABC16BE191BFE5D2A9F97227952A99F6F2E7286D02E6A3FE5F932B"
 SOURCE = core.ROOT / "migration/saves/opus-55-167-002.sav"
 STOP = (727960, 0, 84677)  # Calendar callback precedes economy/tick advancement.
-# Server lines that check() rejects and that leave the client waiting at the menu.
+# Server failures that leave the client waiting at the menu.
 NETWORK_FAILURE = re.compile(
-    r"SendError\(\)|Receive_CLIENT_ERROR\(\)|connection lost|has been disconnected",
+    r"SendError\(\)|Receive_CLIENT_ERROR\(\)|closed connection|connection lost|has been disconnected",
     re.I,
 )
 # Untagged builds suffix the network revision with the modified flag and hash.
@@ -302,6 +302,7 @@ def session(
 
         def collect() -> None:
             active = False
+            quitting: set[str] = set()
             try:
                 with (folder / "server/stderr.log").open("w") as log:
                     for line in output:
@@ -309,7 +310,17 @@ def session(
                         log.flush()
                         if line.strip() == "MIXED_READY":
                             ready.set()
-                        if not failures and NETWORK_FAILURE.search(line):
+                        if quit_message := re.search(
+                            r"client\[(\d+)\] Receive_CLIENT_QUIT\(\)$", line.rstrip()
+                        ):
+                            quitting.add(quit_message[1])
+                        closed = re.search(
+                            r"\[server\] Client #(\d+) closed connection$",
+                            line.rstrip(),
+                        )
+                        if closed is not None and closed[1] in quitting:
+                            quitting.remove(closed[1])
+                        elif not failures and NETWORK_FAILURE.search(line):
                             failures.append(line.strip())
                             stop_client()
                         if "status = ACTIVE" in line and not active:
