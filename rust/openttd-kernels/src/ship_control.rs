@@ -201,15 +201,11 @@ pub struct Leaves {
     pub check_orders: extern "C" fn(u32),
     pub cost_divisor: extern "C" fn() -> u32,
     pub pay_running: extern "C" fn(u32, i64),
-    pub speed_default: extern "C" fn(u32) -> u32,
-    pub age_default: extern "C" fn(u32) -> u32,
-    pub speed_frac: extern "C" fn(u32, bool) -> u32,
     pub cache_invalidate: extern "C" fn(u32),
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub sprite_direction: extern "C" fn(u32),
     pub tile_x: extern "C" fn(u32) -> u32,
     pub tile_y: extern "C" fn(u32) -> u32,
-    pub build_flag: extern "C" fn(u32) -> bool,
     pub build_random: extern "C" fn(u32, u16),
     pub new_position: extern "C" fn(u32) -> Position,
     pub exit_dir: extern "C" fn(u32, u32) -> u32,
@@ -229,7 +225,6 @@ pub struct Leaves {
     pub build_z: extern "C" fn(u32),
     pub build_properties: extern "C" fn(u32, u32),
     pub build_dates: extern "C" fn(u32),
-    pub build_acceleration: extern "C" fn(u32, u32),
     pub build_prototype: extern "C" fn(u32),
     pub build_interval_percent: extern "C" fn(u32),
     pub order_destination: extern "C" fn(u32) -> u32,
@@ -434,20 +429,20 @@ impl Game<'_> {
             (self.leaves.start_dirty)(id);
         }
     }
-    fn cache(&self, id: u32, v: VehicleRef) {
+    fn cache(&self, v: VehicleRef) {
         let observed_tile = self.vehicle().tile();
         let sea = (self.leaves.water_class)(observed_tile) == 0;
-        let speed = (self.leaves.speed_default)(id);
+        let speed = u32::from((self.vs().engine)(v).ship_speed());
         let raw = (self.vs().property)(
             (self.vs().newgrf)(),
             v,
             crate::newgrf_properties::PROP_SHIP_SPEED,
             speed as i32,
         ) as u32;
-        let frac = (self.leaves.speed_frac)(id, sea);
+        let frac = u32::from((self.vs().engine)(v).ship_speed_fraction(sea));
         self.vehicle()
             .write_max_speed((raw.wrapping_mul(256 - frac) / 256) as u16);
-        let period = (self.leaves.age_default)(id);
+        let period = u32::from((self.vs().engine)(v).cargo_age());
         let age = (self.vs().property)(
             (self.vs().newgrf)(),
             v,
@@ -809,7 +804,7 @@ impl Game<'_> {
                             != (self.leaves.water_class)(new_tile)
                         {
                             crate::witness::hit(crate::witness::SHIP_WATER_CHANGE);
-                            self.cache(id, v);
+                            self.cache(v);
                         }
                     }
                     let diff = u32::from(direction)
@@ -979,7 +974,7 @@ pub unsafe extern "C" fn openttd_rust_ship_cache(
     services: *const Services,
 ) {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id), Some(v));
-    game.cache(id, v);
+    game.cache(v);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_destination(
@@ -1118,9 +1113,13 @@ pub(crate) unsafe fn ship_build(
     game.set_state(DEPOT);
     (game.leaves.build_dates)(id);
     (game.leaves.build_random)(id, game.services.random() as u16);
-    (game.leaves.build_acceleration)(id, engine);
-    game.cache(id, v);
-    if (game.leaves.build_flag)(engine) {
+    crate::raw_field::write_field!(
+        v.0.as_ptr(),
+        acceleration,
+        crate::vehicle::EngineRef::of((cap.engine)(engine as u16)).ship_acceleration()
+    );
+    game.cache(v);
+    if crate::vehicle::EngineRef::of((cap.engine)(engine as u16)).exclusive_preview() {
         (game.leaves.build_prototype)(id);
     }
     (game.leaves.build_interval_percent)(id);
@@ -1196,15 +1195,11 @@ crate::abi::layouts! {
         check_orders,
         cost_divisor,
         pay_running,
-        speed_default,
-        age_default,
-        speed_frac,
         cache_invalidate,
         capabilities,
         sprite_direction,
         tile_x,
         tile_y,
-        build_flag,
         build_random,
         new_position,
         exit_dir,
@@ -1224,7 +1219,6 @@ crate::abi::layouts! {
         build_z,
         build_properties,
         build_dates,
-        build_acceleration,
         build_prototype,
         build_interval_percent,
         order_destination,

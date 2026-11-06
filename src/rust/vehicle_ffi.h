@@ -36,12 +36,7 @@ struct OpenTTDVehicleNear {
 	uint32_t hxmin, hxmax, hymin, hymax, hx, hy;
 	OpenTTDVehicle *current;
 };
-/** Captured immutable engine context, valid across synchronous vehicle callbacks. */
 struct OpenTTDEngine;
-struct OpenTTDEngineForLength {
-	const OpenTTDEngine *engine;
-	uint8_t grf_version;
-};
 struct OpenTTDVehicleNewPosition {
 	int32_t x;
 	int32_t y;
@@ -77,7 +72,6 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_RUST_CALL *destroy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	void (OPENTTD_RUST_CALL *set_dest_tile)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_dest_tile);
 	const OpenTTDEngine *(OPENTTD_RUST_CALL *engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
-	OpenTTDEngineForLength (OPENTTD_RUST_CALL *engine_for_length)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_for_length);
 	uint8_t (OPENTTD_RUST_CALL *order_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_type);
 	uint16_t (OPENTTD_RUST_CALL *order_destination)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_destination);
 	uint8_t (OPENTTD_RUST_CALL *order_nonstop)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_nonstop);

@@ -27,6 +27,7 @@
 #include "../road.h"
 #include "../core/backup_type.hpp"
 #include "../rust/newgrf_translation_ffi.h"
+#include "../timer/timer_game_tick.h"
 #include "abi_layout.hpp"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../safeguards.h"
@@ -36,33 +37,65 @@ TEST_CASE("Engine lifecycle canonical ABI", "[rust][engine][abi]")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-engine.inc"
 #include "abi-layout-engine_loading.inc"
+#include "abi-layout-engine_spec.inc"
 }
 
 TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][engine][lifetime]")
 {
 	std::vector<Engine> staged;
 	staged.emplace_back();
-	staged[0].age = -123;
-	staged[0].preview_company = CompanyID{3};
-	staged[0].name = std::string_view("name\0bytes", 10);
+	CHECK(staged[0].Record().type == VEH_INVALID);
+	CHECK_THROWS_AS(staged[0].VehInfo<RailVehicleInfo>(), std::bad_variant_access);
+	CHECK(staged[0].Record().info.cargo_label.value == 0);
+	CHECK_FALSE(staged[0].Record().info.cargo_label.mixed);
+	staged[0].Record().age = -123;
+	staged[0].Record().preview_company = CompanyID{3};
+	staged[0].SetName(std::string_view("name\0bytes", 10));
 	auto *allocation = staged[0].rust_lifecycle.state;
-	auto *age = &staged[0].age;
+	auto *age = &staged[0].Record().age;
 	for (size_t i = 1; i < 1024; ++i) staged.emplace_back();
 	REQUIRE(staged[0].rust_lifecycle.state == allocation);
-	REQUIRE(&staged[0].age == age);
-	REQUIRE(staged[0].age == -123);
-	REQUIRE(staged[0].preview_company == CompanyID{3});
-	REQUIRE(staged[0].name.View() == std::string_view("name\0bytes", 10));
+	REQUIRE(EngineOf(allocation) == &staged[0]);
+	REQUIRE(RustEngine(&staged[0]) == allocation);
+	REQUIRE(&staged[0].Record().age == age);
+	REQUIRE(staged[0].Record().age == -123);
+	REQUIRE(staged[0].Record().preview_company == CompanyID{3});
+	REQUIRE(staged[0].Name() == std::string_view("name\0bytes", 10));
 	/* Placement replacement is used by FixTTOEngines after native staging. */
 	staged[0].~Engine();
 	::new (&staged[0]) Engine();
-	REQUIRE(staged[0].age == 0);
-	REQUIRE(staged[0].preview_company == CompanyID::Invalid());
-	REQUIRE(staged[0].name.empty());
-	/* Canonical aliases immediately see partial decoded writes. */
+	REQUIRE(staged[0].Record().age == 0);
+	REQUIRE(staged[0].Record().preview_company == CompanyID::Invalid());
+	REQUIRE(staged[0].Name().empty());
+	/* Decoded writes address the canonical record. */
 	staged[0].rust_lifecycle.state->age = INT32_MIN;
-	REQUIRE(staged[0].age == INT32_MIN);
+	REQUIRE(staged[0].Record().age == INT32_MIN);
 	staged.clear();
+}
+
+TEST_CASE("Engine typed prototypes keep original out-of-range defaults", "[rust][engine][lifetime]")
+{
+	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; ++type) {
+		Engine prototype(type, UINT16_MAX);
+		CHECK(prototype.Record().type == type);
+		CHECK(prototype.Record().vehicle_info_type == type);
+		CHECK(prototype.Record().info.base_life == TimerGameCalendar::Year{0xFF});
+		CHECK(prototype.Record().info.cargo_type == INVALID_CARGO);
+		CHECK(prototype.Record().info.cargo_label.value == (type == VEH_AIRCRAFT ? CT_INVALID.base() : CT_PASSENGERS.base()));
+		CHECK_FALSE(prototype.Record().info.cargo_label.mixed);
+		CHECK(prototype.Record().info.cargo_age_period == Ticks::CARGO_AGING_TICKS);
+		CHECK(prototype.Record().info.variant_id == EngineID::Invalid());
+		switch (type) {
+			case VEH_TRAIN:
+				CHECK(prototype.VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON);
+				CHECK(prototype.VehInfo<RailVehicleInfo>().railtypes == RailTypes{RAILTYPE_RAIL});
+				break;
+			case VEH_ROAD: CHECK(prototype.VehInfo<RoadVehicleInfo>().tractive_effort == 0x4C); break;
+			case VEH_SHIP: CHECK(prototype.VehInfo<ShipVehicleInfo>().acceleration == 1); break;
+			case VEH_AIRCRAFT: CHECK(prototype.VehInfo<AircraftVehicleInfo>().subtype == 0); break;
+			default: NOT_REACHED();
+		}
+	}
 }
 
 TEST_CASE("Engine mappings preserve reservation, sorted identity and replacement metadata", "[engine][loading]")
@@ -114,21 +147,12 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 		Case{VEH_SHIP, 0, 0, 0, true}, Case{VEH_AIRCRAFT, 0, INVALID_CARGO, INVALID_CARGO, false},
 	}) {
 		Engine e(c.type, 0);
-		e.info.cargo_type = c.cargo;
+		e.Record().info.cargo_type = c.cargo;
 		if (c.type == VEH_TRAIN) e.VehInfo<RailVehicleInfo>().capacity = c.capacity;
 		if (c.type == VEH_ROAD) e.VehInfo<RoadVehicleInfo>().capacity = c.capacity;
-		const auto carrying = RustEngineCarrying(RustEngine(&e));
-		CHECK(carrying.kind == c.type);
-		CHECK(carrying.ground_capacity == c.capacity);
-		CHECK(carrying.default_cargo == c.observed_cargo);
 		CHECK(e.CanCarryCargo() == c.carries);
 		e.index = EngineID{60000};
-		e.info.callback_mask = {VehicleCallbackMask::RefitCapacity, VehicleCallbackMask::ArticEngine};
-		e.info.misc_flags = {EngineMiscFlag::NoDefaultCargoMultiplier, EngineMiscFlag::NoBreakdownSmoke};
-		const auto config = RustEngineCapacityConfig(RustEngine(&e));
-		CHECK(config.id == 60000);
-		CHECK(config.callbacks == 24);
-		CHECK(config.misc == 96);
+		CHECK(RustEngineID(RustEngine(&e)) == 60000);
 	}
 }
 
@@ -210,7 +234,8 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 	static OpenTTDVehicleResolverServices resolver;
 	static uint16_t result, observed_engine;
 	static uint32_t observed_property, calls;
-	resolver.spritegroup = [](uint16_t, uint8_t) noexcept -> const SpriteGroup * { return nullptr; };
+	static const OpenTTDEngine *runtime_engine;
+	resolver.engine_by_id = [](uint16_t id) noexcept -> const OpenTTDEngine * { CHECK(id == 123); return runtime_engine; };
 	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t engine, uint16_t cb, uint32_t property, uint32_t p2, int32_t *, size_t count) noexcept -> uint16_t {
 		CHECK(cb == CBID_VEHICLE_MODIFY_PROPERTY);
 		CHECK(p2 == 0);
@@ -230,13 +255,14 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 		Case{VEH_AIRCRAFT, PR_BUILD_VEHICLE_AIRCRAFT, PR_RUNNING_AIRCRAFT, PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_RUNNING_COST_FACTOR},
 	}) {
 		Engine e(c.type, 0); e.index = EngineID{123};
+		Backup<const OpenTTDEngine *> live_engine(runtime_engine, RustEngine(&e));
 		GRFFile file; file.grfid = 0x613A0003;
-		e.grf_prop.grfid = 0xBAD;
-		e.grf_prop.grffile = &file;
+		e.Record().bindings.grf_prop.grfid = 0xBAD;
+		e.Record().bindings.grf_prop.grffile = &file;
 		CHECK(e.GetGRFID() == file.grfid);
-		e.grf_prop.grffile = nullptr;
+		e.Record().bindings.grf_prop.grffile = nullptr;
 		CHECK(e.GetGRFID() == 0);
-		e.grf_prop.grffile = &file;
+		e.Record().bindings.grf_prop.grffile = &file;
 		if (c.type == VEH_TRAIN) { auto &i = e.VehInfo<RailVehicleInfo>(); i.railveh_type = RAILVEH_SINGLEHEAD; i.running_cost_class = c.running; i.cost_factor = 53; i.running_cost = 29; }
 		if (c.type == VEH_ROAD) { auto &i = e.VehInfo<RoadVehicleInfo>(); i.running_cost_class = c.running; i.cost_factor = 53; i.running_cost = 29; }
 		if (c.type == VEH_SHIP) { auto &i = e.VehInfo<ShipVehicleInfo>(); i.cost_factor = 53; i.running_cost = 29; }
@@ -273,6 +299,8 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 			result = 32767; CHECK(openttd_rust_engine_range(&services, RustEngine(&e)) == 32767);
 			CHECK(observed_property == PROP_AIRCRAFT_RANGE);
 		}
+		live_engine.Restore();
+		e.Record().bindings.grf_prop.grffile = nullptr;
 	}
 }
 
@@ -280,18 +308,19 @@ TEST_CASE("Engine runtime enablement short circuits and lifetime retains widths"
 {
 	Engine e(VEH_ROAD, 0);
 	auto engine = EngineServices();
-	engine.climate = [](const OpenTTDEngine *) noexcept -> bool { FAIL("Invalid strings must short circuit climate"); return false; };
-	e.info.string_id = STR_NEWGRF_INVALID_ENGINE;
+	/* Invalid strings must return before dereferencing shared climate settings. */
+	engine.shared = nullptr;
+	e.Record().info.string_id = STR_NEWGRF_INVALID_ENGINE;
 	CHECK_FALSE(openttd_rust_engine_enabled(&engine, RustEngine(&e)));
-	e.info.string_id = STR_EMPTY;
+	e.Record().info.string_id = STR_EMPTY;
 	for (bool climate : {false, true}) {
-		e.info.climates = climate ? LandscapeTypes{_settings_game.game_creation.landscape} : LandscapeTypes{};
+		e.Record().info.climates = climate ? LandscapeTypes{_settings_game.game_creation.landscape} : LandscapeTypes{};
 		CHECK(e.IsEnabled() == climate);
 	}
 	for (uint8_t extension : {0, 1, 255}) {
 		Backup<uint8_t> setting(_settings_game.vehicle.extend_vehicle_life, extension);
 		for (int32_t years : {0, 255, 65536, INT32_MAX, INT32_MIN}) {
-			e.info.lifelength = TimerGameCalendar::Year{years};
+			e.Record().info.lifelength = TimerGameCalendar::Year{years};
 			const uint32_t bits = (static_cast<uint32_t>(years) + extension) * CalendarTime::DAYS_IN_LEAP_YEAR;
 			CHECK(e.GetLifeLengthInDays().base() == static_cast<int32_t>(bits));
 		}

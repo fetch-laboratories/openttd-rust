@@ -4,11 +4,13 @@
 #define OPENTTD_AIRCRAFT_BOUNDARY_HPP
 #include "rust/aircraft_ffi.h"
 #include "rust/airport_resolver_ffi.h"
+#include "rust/engine_lifecycle.hpp"
 #include "rust/spec_services_ffi.h"
 #include "rust/station_command_ffi.h"
 #include "rust/station_service_ffi.h"
 #include <cstdlib>
 #include <cstdio>
+#include <memory>
 /* Every function pointer is valid. A fixture explicitly supplies every service
  * it expects to use, so an unexpected crossing fails instead of silently passing. */
 static OpenTTDAirportResolverServices &AircraftTestAirportServices() { static OpenTTDAirportResolverServices services; return services; }
@@ -38,9 +40,15 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	shared.newgrf_specs = &specs;
 	runtime.fta = [](const AirportSpec *spec) noexcept { return reinterpret_cast<const AirportFTAClass *>(spec); };
 	runtime.check = [](bool condition) noexcept { if (!condition) std::abort(); };
-	runtime.engine_if_valid = [](uint16_t) noexcept { return reinterpret_cast<const OpenTTDEngine *>(&airport_tag); };
-	runtime.engine_kind = [](const OpenTTDEngine *) noexcept { return static_cast<VehicleType>(3); };
-	runtime.engine_subtype = [](const OpenTTDEngine *) noexcept { return uint8_t{1}; };
+	static std::unique_ptr<OpenTTDEngine, decltype(&openttd_rust_engine_destroy)> engine{
+		[] {
+			auto *record = openttd_rust_engine_new();
+			const OpenTTDEngineDefaults defaults{};
+			openttd_rust_engine_construct(record, &defaults, VEH_AIRCRAFT, UINT16_MAX);
+			record->vehicle_info.aircraft.subtype = 1;
+			return record;
+		}(), openttd_rust_engine_destroy};
+	runtime.engine_if_valid = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine.get(); };
 	runtime.fta_flags = [](const AirportFTAClass *) noexcept { return uint8_t{3}; };
 	auto &commands = AircraftTestAirportCommands(); commands = OpenTTDStationCommandServices{};
 	auto &world = AircraftTestAirportWorld(); world = OpenTTDStationServices{};

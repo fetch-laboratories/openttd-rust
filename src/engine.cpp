@@ -77,73 +77,17 @@ static_assert(lengthof(_orig_rail_vehicle_info) + lengthof(_orig_road_vehicle_in
 
 Engine::Engine(VehicleType type, uint16_t local_id)
 {
-	this->type = type;
-	this->grf_prop.local_id = local_id;
-	this->list_position = local_id;
-	this->preview_company = CompanyID::Invalid();
-	this->display_last_variant = EngineID::Invalid();
-
-	/* Check if this base engine is within the original engine data range */
-	if (local_id >= _engine_counts[type]) {
-		/* Initialise default type-specific information. */
-		switch (type) {
-			case VEH_TRAIN: this->vehicle_info.emplace<RailVehicleInfo>(); break;
-			case VEH_ROAD: this->vehicle_info.emplace<RoadVehicleInfo>(); break;
-			case VEH_SHIP: this->vehicle_info.emplace<ShipVehicleInfo>(); break;
-			case VEH_AIRCRAFT: this->vehicle_info.emplace<AircraftVehicleInfo>(); break;
-			default: break;
-		}
-		/* Set model life to maximum to make wagons available */
-		this->info.base_life = TimerGameCalendar::Year{0xFF};
-		/* Aircraft must have CT_INVALID as default, as there is no property */
-		this->info.cargo_type = INVALID_CARGO;
-		this->info.cargo_label = (type == VEH_AIRCRAFT) ? CT_INVALID : CT_PASSENGERS;
-		/* Set cargo aging period to the default value. */
-		this->info.cargo_age_period = Ticks::CARGO_AGING_TICKS;
-		/* Not a variant */
-		this->info.variant_id = EngineID::Invalid();
-		return;
-	}
-
-	/* Copy the original engine info for this slot */
-	this->info = _orig_engine_info[_engine_offsets[type] + local_id];
-
-	/* Copy the original engine data for this slot */
-	switch (type) {
-		default: NOT_REACHED();
-
-		case VEH_TRAIN: {
-			RailVehicleInfo &rvi = this->vehicle_info.emplace<RailVehicleInfo>(_orig_rail_vehicle_info[local_id]);
-			this->original_image_index = rvi.image_index;
-			this->info.string_id = STR_VEHICLE_NAME_TRAIN_ENGINE_RAIL_KIRBY_PAUL_TANK_STEAM + local_id;
-
-			/* Set the default model life of original wagons to "infinite" */
-			if (rvi.railveh_type == RAILVEH_WAGON) this->info.base_life = TimerGameCalendar::Year{0xFF};
-
-			break;
-		}
-
-		case VEH_ROAD: {
-			RoadVehicleInfo &rvi = this->vehicle_info.emplace<RoadVehicleInfo>(_orig_road_vehicle_info[local_id]);
-			this->original_image_index = rvi.image_index;
-			this->info.string_id = STR_VEHICLE_NAME_ROAD_VEHICLE_MPS_REGAL_BUS + local_id;
-			break;
-		}
-
-		case VEH_SHIP: {
-			ShipVehicleInfo &svi = this->vehicle_info.emplace<ShipVehicleInfo>(_orig_ship_vehicle_info[local_id]);
-			this->original_image_index = svi.image_index;
-			this->info.string_id = STR_VEHICLE_NAME_SHIP_MPS_OIL_TANKER + local_id;
-			break;
-		}
-
-		case VEH_AIRCRAFT: {
-			AircraftVehicleInfo &avi = this->vehicle_info.emplace<AircraftVehicleInfo>(_orig_aircraft_vehicle_info[local_id]);
-			this->original_image_index = avi.image_index;
-			this->info.string_id = STR_VEHICLE_NAME_AIRCRAFT_SAMPSON_U52 + local_id;
-			break;
-		}
-	}
+	static const OpenTTDEngineDefaults defaults{
+		.info = _orig_engine_info,
+		.rail = _orig_rail_vehicle_info,
+		.road = _orig_road_vehicle_info,
+		.ship = _orig_ship_vehicle_info,
+		.aircraft = _orig_aircraft_vehicle_info,
+		.counts = {_engine_counts[0], _engine_counts[1], _engine_counts[2], _engine_counts[3]},
+		.offsets = {_engine_offsets[0], _engine_offsets[1], _engine_offsets[2], _engine_offsets[3]},
+		.first_names = {STR_VEHICLE_NAME_TRAIN_ENGINE_RAIL_KIRBY_PAUL_TANK_STEAM, STR_VEHICLE_NAME_ROAD_VEHICLE_MPS_REGAL_BUS, STR_VEHICLE_NAME_SHIP_MPS_OIL_TANKER, STR_VEHICLE_NAME_AIRCRAFT_SAMPSON_U52},
+	};
+	openttd_rust_engine_construct(&this->Record(), &defaults, type, local_id);
 }
 
 /**
@@ -212,7 +156,7 @@ Money Engine::GetCost() const
  */
 uint Engine::GetDisplayMaxSpeed() const
 {
-	switch (this->type) {
+	switch (this->Record().type) {
 		case VEH_TRAIN:
 			return GetEngineProperty(this->index, PROP_TRAIN_SPEED, this->VehInfo<RailVehicleInfo>().max_speed);
 
@@ -245,7 +189,7 @@ uint Engine::GetDisplayMaxSpeed() const
 uint Engine::GetPower() const
 {
 	/* Only trains and road vehicles have 'power'. */
-	switch (this->type) {
+	switch (this->Record().type) {
 		case VEH_TRAIN:
 			return GetEngineProperty(this->index, PROP_TRAIN_POWER, this->VehInfo<RailVehicleInfo>().power);
 		case VEH_ROAD:
@@ -263,7 +207,7 @@ uint Engine::GetPower() const
 uint Engine::GetDisplayWeight() const
 {
 	/* Only trains and road vehicles have 'weight'. */
-	switch (this->type) {
+	switch (this->Record().type) {
 		case VEH_TRAIN:
 			return GetEngineProperty(this->index, PROP_TRAIN_WEIGHT, this->VehInfo<RailVehicleInfo>().weight) << (this->VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_MULTIHEAD ? 1 : 0);
 		case VEH_ROAD:
@@ -281,7 +225,7 @@ uint Engine::GetDisplayWeight() const
 uint Engine::GetDisplayMaxTractiveEffort() const
 {
 	/* Only trains and road vehicles have 'tractive effort'. */
-	switch (this->type) {
+	switch (this->Record().type) {
 		case VEH_TRAIN:
 			return (GROUND_ACCELERATION * this->GetDisplayWeight() * GetEngineProperty(this->index, PROP_TRAIN_TRACTIVE_EFFORT, this->VehInfo<RailVehicleInfo>().tractive_effort)) / 256;
 		case VEH_ROAD:
@@ -315,7 +259,7 @@ uint16_t Engine::GetRange() const
  */
 StringID Engine::GetAircraftTypeText() const
 {
-	switch (this->type) {
+	switch (this->Record().type) {
 		case VEH_AIRCRAFT:
 			switch (this->VehInfo<AircraftVehicleInfo>().subtype) {
 				case AIR_HELI: return STR_LIVERY_HELICOPTER;

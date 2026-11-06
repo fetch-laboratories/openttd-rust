@@ -72,9 +72,7 @@ static const uint VEHICLEINFO_FULL_VEHICLE_WIDTH    = 32;
 
 struct VehicleSpriteSeq;
 
-void SetWagonOverrideSprites(EngineID engine, CargoType cargo, const struct SpriteGroup *group, std::span<EngineID> engine_ids);
 const SpriteGroup *GetWagonOverrideSpriteSet(EngineID engine, CargoType cargo, EngineID overriding_engine);
-void SetCustomEngineSprites(EngineID engine, CargoType cargo, const struct SpriteGroup *group);
 
 void GetCustomVehicleSprite(const Vehicle *v, Direction direction, EngineImageType image_type, VehicleSpriteSeq *result);
 void GetCustomVehicleIcon(EngineID engine, Direction direction, EngineImageType image_type, VehicleSpriteSeq *result);
@@ -86,7 +84,6 @@ void GetCustomRotorIcon(EngineID engine, EngineImageType image_type, VehicleSpri
  * elsewhere... */
 struct GRFFile;
 
-void SetEngineGRF(EngineID engine, const struct GRFFile *file);
 
 uint16_t GetVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> regs100 = {});
 uint16_t GetVehicleCallbackParent(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, const Vehicle *parent, std::span<int32_t> regs100 = {});

@@ -14,27 +14,27 @@ Same metric v2 implementation `f4e2c5b45420…` versus98: compiled source/record
 
 No duplicate census: retained 98 endpoint and the single final99 census are reused. Its measured head0f91aa4845 remains explicit; the only source difference to actual100 is the existing prerequisite include repair and two qualifiers in a fork-only header, with identical pinned Pygments2.19.2 code-line count and unchanged Rust/generated/evidence/binding/export sources. Raw records/provenance remain in main `.local/stocktake-after100.json` and `.local/integration-records/99/`.
 
-The retirement course stays focused on banking completed field ownership. #722's fresh P2 fix review passes, five focused cases pass, final measured source reduction is851 with native/generated costs charged, and corrected exact-head Full is running. #714's two fresh reviews found residual moved-field services; root owns those repairs, with its19games/73snapshots and same-tip pixel/Ir evidence retained separately from boundary acceptance. Positive #704's prior measurement is not accepted; coherent field/container deletion continues. #723's ObjectSpec validation is still in progress. No interim checkpoint censuses or blanket native gates are added.
+The retirement course stays focused on banking completed field ownership. #722's fresh P2 fix review passes, five focused cases pass, final measured source reduction is851 with native/generated costs charged, and its repaired standalone ABI probe passes. Full's fixture failure is fixed; a targeted platform matrix now checks the explicit initializer repair before final Full. #714's two fresh reviews found residual moved-field services; root owns those repairs, with its19games/73snapshots and same-tip pixel/Ir evidence retained separately from boundary acceptance. Positive #704's prior measurement is not accepted; coherent field/container deletion continues. #723's ObjectSpec validation is still in progress. No interim checkpoint censuses or blanket native gates are added.
 
-[Profile 98 is accepted](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6693962852): seven canonical and retained 96 comparisons, all full logs/stdout/end moments and drawing pass; identities/anchors remain fixed and no policy trigger applies. Profile 100 is running at fixed clean100 under the signal witness; platform cadence 100 is [42285350057](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42285350057), pending. Existing limits and rollback rules remain.
+[Profile 100 is accepted](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6695636889): seven canonical and retained98 comparisons, full states/logs/byte stdout/end moments and drawing pass at fixed clean100. Root independently recomputed every floored projection; identities and anchors remain fixed, with no rise/band/quiet trigger. Platform cadence100 [42285350057](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42285350057) passed actual builds/tests but failed four missing-initializer annotations in the existing linkgraph ABI fixture. Root's explicit fixture repair is pushed in #722; integrations remain held until repaired-platform validation. Existing limits and rollback rules remain.
 
 The freed sixth source slot selects the ready #669 network core/discovery/resource owner as #730. Its original700-1100 net-C++ estimate remains; the source-derived first coherent pool/TCP/payload/lifetime checkpoint is110-240 (central170), not full-owner completion. #726's TCP-tail consolidation is assigned only there. Ready PR integration retains priority; #730 publishes the constructor/allocation/readers/destruction/evidence inventory before rewrite.
 
 Retirement by phase is unchanged since 98: phase 1 38,244; phase 2 3,096; phase 3 12,968; phase 4 5,383; phase 5 348; phase 6 2,317; upstream tests: 14 separately. Source C++ is575 below navigation 88 and 34 above 94; no earlier positive interval is erased.
 
-Five ownership drafts remain; #730 selects the sixth source slot. Completed #728/#729 occupy none. Platform100 is pending, not a passed cadence; any red result must be repaired before another integration. There is no confirmed main-branch regression. Host #724 remains 16 kills with sender unknown. Disk has 35 GB free (84% used); ordinary cleanup removed 765.1 MB after100 and 5.7 GB after98. Retained failed logs/metrics live in main integration records. Issue placement finds 36 open and none unplaced; generic exclusion-text matches and deferred return conditions remain unchanged.
+Six ownership drafts are active, including #730's #731. Completed #728/#729 occupy none. Platform100's annotation failure remains a repair hold before another integration. There is no confirmed main-branch regression. Host #724 remains 16 kills with sender unknown. Disk has 35 GB free (84% used); ordinary cleanup removed 765.1 MB after100 and 5.7 GB after98. Retained failed logs/metrics live in main integration records. Issue placement finds 36 open and none unplaced; generic exclusion-text matches and deferred return conditions remain unchanged.
 
-Latest accepted profile 98 uses unchanged `27de6f8c18` anchors. Its six records stay below bands under the existing floored factor2 policy, with no quiet/rise trigger; no wall-speed or isolated #719 credit applies. Profile 100 passed build/list and all seven retained 98/anchor preparation identities, and seven instruction comparisons run in `t3-a6181dc7`, session `48057`, fixed clean `dbbb502073`. No wall pass or host hold.
+Latest accepted profile100 uses unchanged `27de6f8c18` anchors. Its six records stay below bands under the floored factor2 policy, with no quiet/rise trigger. Seven actual canonical and retained98 comparisons passed in `t3-a6181dc7` at fixed clean `dbbb502073`; raw profiles, full comparisons and frozen runtimes remain retained. This is combined99/100 instruction evidence, with no isolated PR speed/retirement or net-boundary-cost credit. No wall pass or host hold.
 
-| Scenario | Original Ir | Candidate Ir (98) | Accepted projection (98) |
+| Scenario | Original Ir | Candidate Ir (100) | Accepted projection (100) |
 | --- | ---: | ---: | ---: |
-| TGP | 2,265,528,237 | 2,777,035,219 | 1.162967x |
-| Opus | 21,773,343,583 | 27,771,457,780 | 1.345115x |
-| Grok | 20,969,727,163 | 26,477,310,354 | 1.346652x |
-| P1996 | 3,600,502,896 | 4,590,360,948 | 1.352193x |
-| P2000 | 6,049,922,238 | 7,549,011,291 | 1.444531x |
-| P2016 | 11,343,424,651 | 13,827,078,327 | 1.382593x |
-| Drawing | 2,149,015,961 | 2,154,524,865 | 1.004635x |
+| TGP | 2,265,528,237 | 2,782,269,348 | 1.167346x |
+| Opus | 21,773,343,583 | 27,916,561,893 | 1.345115x |
+| Grok | 20,969,727,163 | 26,626,873,969 | 1.346652x |
+| P1996 | 3,600,502,896 | 4,593,990,046 | 1.352193x |
+| P2000 | 6,049,922,238 | 7,583,890,696 | 1.444531x |
+| P2016 | 11,343,424,651 | 13,931,397,338 | 1.382593x |
+| Drawing | 2,149,015,961 | 2,154,521,531 | 1.004635x |
 
 ## Phases
 
@@ -346,7 +346,7 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 | 97 | Host signal witness #724/#727 | `4cc6ee4b20` | Independent source review and exact-head Full/tree match. Four signal/process tests; future long jobs use the integrated wrapper. C++ and Rust unchanged; no live sender identified yet. |
 | 98 | Graph/job indexed pool checkpoint #719 | `9867694d02` | Both steering fixes/source review/focused/native and exact Full/tree pass. Source C++-153, fork-151; actual station publication remains717. |
 | 99 | Shared nearby StationList #728 | `8faa77f296` | Source review/exact Full/tree pass. Source C+++6, evidence+1; necessary shared support, no completion/retirement credit. |
-| 100 | Const nearby StationList views #729 | `dbbb502073` | Two qualifiers, same descriptor/lifetime. Source review/exact Full/tree pass; counters unchanged. Cadence/profile100 running. |
+| 100 | Const nearby StationList views #729 | `dbbb502073` | Two qualifiers, same descriptor/lifetime. Source review/exact Full/tree pass; counters unchanged. Profile100 accepted; cadence100 annotation repair pending. |
 
 ## Work order
 
@@ -354,7 +354,7 @@ The retrospective repairs (#709, #705's findings, #707, #708, #710's tools) inte
 
 There is one ranked list. Each free slot takes the highest unblocked item that fits the six-branch limit and the disjoint-service rule. Finishing review and integration of an open branch comes first, and a lower rank can run while a higher one waits. Scopes live in issues; per-PR changes live in each PR's steering comment.
 
-0. **Development is active through integration 100.** Stocktake 100 and accepted profile 98 are recorded above; profile 100 is running. Apply steering 31's actions first.
+0. **Development is active through integration 100.** Stocktake100 and accepted profile100 are recorded above; the cadence100 annotation repair remains an integration hold. Apply steering 31's actions first.
 1. **Bank converging owners, then finish them** ([integration](workflow.md#integration)). The [resume checkpoint](#resume-checkpoint-2026-11-06-development-through-integration-100) holds heads and next actions.
    - Integrate a checkpoint at -100 or better once it meets the integration rule, and continue the owner in a fresh PR on its issue.
    - #719 banked its reviewed checkpoint in98; the actual publication remainder stays on717.
@@ -422,8 +422,8 @@ There is one ranked list. Each free slot takes the highest unblocked item that f
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect merely to fill a slot. Deep execution remains user-only.
 
 Recurring:
-- After every second integration, take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Stocktake 100 is complete and profile 100 is running; the next stocktake/profile follows102. Profile the merged tip in the background ([speed](speed.md#instruction-projections)).
-- Run the platform cadence after every fifth integration; integration 95's cadence passed at `5391a8ee49` ([run](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42225369211)); cadence100 is running at exact100, then next after105. Integration 85's failure was repaired by #702 and its rerun passed. A new failure stops integrations. After two hosted-capacity macOS cancellations, use `CI_MACOS_HEAVY` as documented, and delete it afterwards.
+- After every second integration, take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Stocktake100 and profile100 are complete and accepted; the next stocktake/profile follows102. Profile the merged tip in the background ([speed](speed.md#instruction-projections)).
+- Run the platform cadence after every fifth integration; integration 95's cadence passed at `5391a8ee49` ([run](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42225369211)); cadence100's actual builds/tests passed but annotations failed; repair validation is pending, then next after105. Integration 85's failure was repaired by #702 and its rerun passed. A new failure stops integrations. After two hosted-capacity macOS cancellations, use `CI_MACOS_HEAVY` as documented, and delete it afterwards.
 - This host's first quiet pass integrated with #676 (77). Further passes follow the [speed policy](speed.md#policy) triggers.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
@@ -435,9 +435,9 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 
 ## Resume checkpoint (2026-11-06, development through integration 100)
 
-Root is Codex (`gpt-6.1-sol`, ultra, Fast off). Main code is `dbbb502073`, tree `1fc1fb00434436830f5351f4796bf14668a56f45`. Shared #728/#729 passed fresh source review and exact Fulls42275822581/42281563672 before99/100. #719 remains banked as98; actual publication stays on #717. `CI_ON_DEMAND` is true. Platform cadence 100 is [42285350057](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42285350057), pending; a red result must be repaired before further integration.
+Root is Codex (`gpt-6.1-sol`, ultra, Fast off). Main code is `dbbb502073`, tree `1fc1fb00434436830f5351f4796bf14668a56f45`. Shared #728/#729 passed fresh source review and exact Fulls42275822581/42281563672 before99/100. #719 remains banked as98; actual publication stays on #717. `CI_ON_DEMAND` is true. Platform cadence 100 is [42285350057](https://github.com/fetch-laboratories/openttd-rust/actions/runs/42285350057), red on four fixture initializer annotations, with actual builds/tests passed; repair validation must pass before further integration.
 
-Stocktake 100 records six necessary shared C++ lines added since 98, with original estimates and positive 95/96 interval visible. Profile 98 is accepted; profile 100 runs at fixed 100 with no quiet/deep action. Root owns the consolidated #714 boundary repair in its separate checkout; the owner is clean/idle. Engine722 has measured-851 and a corrected final Full in progress. The sixth source slot selects #730, with the detailed brief already published and726 TCP overlap assigned once.
+Stocktake 100 records six necessary shared C++ lines added since 98, with original estimates and positive 95/96 interval visible. Profile100 is accepted at fixed100, with no quiet/deep action. Root owns the consolidated #714 boundary repair in its separate checkout; the owner is clean/idle. Engine722 has measured-851; its fixture context recovery passes at9490aeb106 and platform diagnosis precedes final Full. The sixth source slot selects #730, with the detailed brief already published and726 TCP overlap assigned once.
 
 Pooled owners publish/retire by initialized index. Real nonpooled owners avoid uninitialized-index reads and retiring caller-owned state. Native allocation or finance operations do not exempt moved-field read/write bounces. Shared definitions stay singular, without parking a whole owner behind a draft.
 
@@ -456,17 +456,17 @@ modify host settings/databases without user direction.
 | #635 / #704 town records | `743a72880b` | Canonical nearby/count/supplied/name/text descriptors retire getters and stored views. Prior seven games36snap/eight native cases pass; short gates/Cargo104 pass and focused42740 runs. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/704#issuecomment-6675927407). | Finish Town-owner routes and same-tick Industry evidence; retain measured+36 head beside original500–1,000. Fresh review includes NativeVec::edit resolution. No interim census. | `t3-8cd4fc03` |
 | #656/#598/#599 / #714 vehicle owner | `6f3c5b5d8b` | Nineteen games73snap and same-tip giant drawing pixels/Ir pass; prior774 native104/97/242 passes. Fresh [A](https://github.com/fetch-laboratories/openttd-rust/pull/714#pullrequestreview-5806274430)/[B](https://github.com/fetch-laboratories/openttd-rust/pull/714#pullrequestreview-5806258719) have blocking field routes. | Root repairs construction/articulated/rail/ship/loading/cargo/ground/Consist interfaces, profit/train finance/order-unit and new orphan/stale fixture reads; owner stays idle. Fresh fix review, then final cost/Full. Genuine operations and full lifecycle/directTick stay named remainder. | Owner`t3-a4c94f5a`; root`.local/worktrees/root-review-714` |
 | #717 / #719 graph/jobs | `69868838a8` (merged98) | Final-153 source C++, review/focused/native/Full/tree accepted. [Acceptance](https://github.com/fetch-laboratories/openttd-rust/pull/719#issuecomment-6691520299). | No #719 source/jobs. Actual attachment/publication follows700 closure in fresh717 PR. | Completed; owner checkout removed ordinarily |
-| #637/#497 / #722 engine/renewal | `8412135457` | Fresh P2 fix review and five focused comparisons pass. Base100 merge clean; final ledger-851 source/-994 fork. Two stale baseline entries fixed; corrected Full42286818330 runs. [Disposition](https://github.com/fetch-laboratories/openttd-rust/pull/722#issuecomment-6694392015). | Root validates exact head/base/tree then banks. Preserve raw measured b6 plus baseline-only tooling-2 proof. Actual pools and named native consumers follow same issue. No owner jobs/new scope/census. | Root`.local/worktrees/root-review-722`; owner`t3-c376a5e0` |
+| #637/#497 / #722 engine/renewal | `9490aeb106` | Fresh P2 fix review and five focused comparisons pass. Base100 merge clean; final ledger-851 source/-972 fork including two CI fixture fixes. Full42286818330 found the standalone road ABI context failure; targeted repaired ABI passes and platform diagnosis runs. [Disposition](https://github.com/fetch-laboratories/openttd-rust/pull/722#issuecomment-6694392015). | Root validates exact head/base/tree then banks. Preserve raw measured b6 plus baseline tooling-2 and fixture evidence/tooling+22 proofs. Actual pools and named native consumers follow same issue. No owner jobs/new scope/census. | Root`.local/worktrees/root-review-722`; owner`t3-c376a5e0` |
 | #638/#498 / #723 small pools/ObjectSpec | `ec67e3a81b` | Nine pools/PSA c477 passed Cargo/97ref/244candidate; seven Object games19snap and town-storage1snap pass. ObjectSpec owner/parser/publication pushed; scope initializer fixed, Cargo59227 runs. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/723#issuecomment-6687670929). | Validate actual parser/publication/class/partial-state and native paths, then fresh scoped review. Preserve nullable StorageServices/base-registry versus derived-shell identities and shared Object/animation axes. No interim census. | `t3-c19acd32` |
 | #669 / #730 network core/resources | Selected after100 | Source-derived constructors/pools/readers/destruction/evidence brief published. Original700–1,100; first coherent110–240 (central170). TCP overlap assigned once. | Start fresh implementation from current integrated base. Client pools/TCP/packet-command-map lifetimes first; authorization/discovery/connect remainder named. No parallel helpers or generic credit. | New T3 checkout; status on730 |
 
-Shared #728/#729 is integrated; no shared-support source PR remains. Raw ledger/proof/failed CI records are in main `.local/integration-records/`. Profile 100 runs in`t3-a6181dc7`, fixed 100, session48057.
+Shared #728/#729 is integrated; no shared-support source PR remains. Raw ledger/proof/failed CI records are in main `.local/integration-records/`. Profile100 is accepted in`t3-a6181dc7` at fixed100; its completed raw and frozen-runtime evidence stays retained.
 
 Preserve the following:
 - the active open-PR checkouts above, each while its PR is open; old paused copies remain subject to ordinary clean/pushed-head housekeeping;
 - `t3-8ed2642d`, completed integration-96 profile/preparation and cross-tip state/log evidence;
 - `t3-62945724`, completed accepted98 profile/cross-tip evidence and frozen runtimes;
-- `t3-a6181dc7`, active100 profile and frozen runtime;
+- `t3-a6181dc7`, completed accepted100 profile/full comparisons and frozen runtime;
 - `.local/worktrees/root-review-714`, dirty root repair work; never overwrite from the owner;
 - `.local/worktrees/root-review-722`, active final CI/ledger until integration, then ordinary cleanup;
 - main `.local/integration-records/`, retained metrics/proof/failure outputs; merged shared-support checkouts remain ordinary-cleanup eligible;

@@ -77,8 +77,8 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
-	v->reliability = e->reliability;
-	v->reliability_spd_dec = e->reliability_spd_dec;
+	v->reliability = e->Record().reliability;
+	v->reliability_spd_dec = e->Record().reliability_spd_dec;
 	return v;
 }
 static void RailEngineDates(void *shell, const OpenTTDEngine *engine) noexcept
@@ -160,8 +160,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.cargo_capacity = &GetRustCargoCapacityServices(),
 		.strings = {.rear_follow = STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, .depot_only = STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT, .no_orders = STR_ERROR_NO_MORE_SPACE_FOR_ORDERS},
 		.train_if_valid = RustTrainGetIfValid,
-		.compatible = RustEngineCompatibleRail,
-		.powered = RustEngineHasPowerOnRail,
 		.new_wagon = RailNewWagon,
 		.new_engine = RailNewEngine,
 		.engine_dates = RailEngineDates,

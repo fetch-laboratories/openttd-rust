@@ -804,7 +804,6 @@ const OpenTTDMovementServices _rust_movement_services{
 	.road_kind = RustMovementRoadKind,
 	.road_vehicle = &GetRustRoadLeaves(),
 	.resolve = RustMovementResolve,
-	.train_engine_class = RustMovementTrainEngineClass,
 	.depot_invalidate = RustMovementDepotInvalidate,
 	.native_assert = RustAssertCondition,
 	.add_by_diag_dir = RustTileAddByDiagDir,

@@ -178,9 +178,6 @@ pub struct Leaves {
     pub node: unsafe extern "C" fn(*const c_void, u8) -> *const c_void,
     pub fta: unsafe extern "C" fn(*const c_void) -> Node,
     pub moving: unsafe extern "C" fn(*const c_void, u8) -> Moving,
-    pub engine_speed: unsafe extern "C" fn(Vehicle) -> u16,
-    pub engine_subtype: unsafe extern "C" fn(Vehicle) -> u8,
-    pub engine_sound: unsafe extern "C" fn(Vehicle) -> u16,
     pub airport_entry: unsafe extern "C" fn(*const c_void, u8) -> u8,
     pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
     pub hangar_height:
@@ -215,7 +212,6 @@ pub struct Leaves {
     pub invalid_position: unsafe extern "C" fn(Vehicle, *const c_void),
     pub invalid_scheme: unsafe extern "C" fn(Vehicle),
     pub unreachable: unsafe extern "C" fn(Vehicle),
-    pub cargo_age_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
     pub vehicle_crash: unsafe extern "C" fn(Vehicle, bool) -> u32,
@@ -497,10 +493,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         helipads(self; airport: *const c_void) => unsafe { (self.leaves.helipads)(airport) };
         airport_flags(self; airport: *const c_void) => unsafe { (self.leaves.airport_flags)(airport) };
         airport_delta_z(self; airport: *const c_void) => unsafe { (self.leaves.airport_delta_z)(airport) };
-        engine_speed(self; v: Vehicle) => unsafe { (self.leaves.engine_speed)(v) };
-        engine_subtype(self; v: Vehicle) => unsafe { (self.leaves.engine_subtype)(v) };
-        engine_sound(self; v: Vehicle) => unsafe { (self.leaves.engine_sound)(v) };
-        engine_reliability(self; v: Vehicle) => (self.maintenance().engine_reliability)(v.base());
+        engine_speed(self; v: Vehicle) => (self.vs.engine)(v.base()).aircraft_speed();
+        engine_subtype(self; v: Vehicle) => (self.vs.engine)(v.base()).aircraft_subtype();
+        engine_sound(self; v: Vehicle) => (self.vs.engine)(v.base()).aircraft_sound();
+        engine_reliability(self; v: Vehicle) => (self.vs.engine)(v.base()).reliability();
         slope(self; x: i64, y: i64) => self.movement.get().pixel_z_at(x as i32,y as i32,false);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
         tile_height(self; tile: i64) => crate::tile_map::tile_height_in(&crate::map_func::World::new(self.ss), tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;
@@ -514,8 +510,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         part_of_orders(self; v: Vehicle) => unsafe { (self.leaves.part_of_orders)(v) };
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
         speed_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
-        cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, i32::from(unsafe { (self.leaves.cargo_age_default)(v) })) as u32;
-        range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, i32::from(unsafe { ((&*(self.vs.newgrf)()).capabilities.aircraft_range)((self.vs.engine)(v.base()).0.as_ptr()) })) as u32;
+        cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, i32::from((self.vs.engine)(v.base()).cargo_age())) as u32;
+        range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, i32::from((self.vs.engine)(v.base()).aircraft_range())) as u32;
         start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);
         rotor_image_if_changed(self; v: Vehicle) => unsafe { (self.leaves.rotor_image_if_changed)(v) };
         vehicle_crash(self; v: Vehicle, flooded: i64) => unsafe { (self.leaves.vehicle_crash)(v, flooded != 0) };
@@ -2486,9 +2482,6 @@ crate::abi::layouts! {
         node,
         fta,
         moving,
-        engine_speed,
-        engine_subtype,
-        engine_sound,
         airport_entry,
         direction_towards,
         hangar_height,
@@ -2521,7 +2514,6 @@ crate::abi::layouts! {
         invalid_position,
         invalid_scheme,
         unreachable,
-        cargo_age_default,
         rotor_image_if_changed,
         update_rotor_image,
         vehicle_crash,

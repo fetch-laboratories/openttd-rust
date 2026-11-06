@@ -159,6 +159,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
         env,
         ADAPTER,
         "fleet",
+        native_test_support=True,
         wraps=(
             "_Z20InvalidateWindowData11WindowClass12WindowNumberib",
             "_Z27InvalidateWindowClassesData11WindowClassib",

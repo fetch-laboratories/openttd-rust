@@ -18,12 +18,6 @@
 #include "timer/timer_game_calendar.h"
 #include "rust/engine_lifecycle.hpp"
 
-struct WagonOverride {
-	std::vector<EngineID> engines;
-	CargoType cargo;
-	const SpriteGroup *group;
-};
-
 /** Flags used client-side in the purchase/autorenew engine list. */
 enum class EngineDisplayFlag : uint8_t {
 	HasVariants, ///< Set if engine has variants.
@@ -38,45 +32,22 @@ extern EnginePool _engine_pool;
 
 class Engine : public EnginePool::PoolItem<&_engine_pool> {
 public:
-	EngineLifecycleOwner rust_lifecycle;
-	CompanyMask &company_avail = this->rust_lifecycle.state->company_avail;
-	CompanyMask &company_hidden = this->rust_lifecycle.state->company_hidden;
-	CompanyMask &preview_asked = this->rust_lifecycle.state->preview_asked;
-	TimerGameCalendar::Date &intro_date = this->rust_lifecycle.state->intro_date;
-	int32_t &age = this->rust_lifecycle.state->age;
-	uint16_t &reliability = this->rust_lifecycle.state->reliability;
-	uint16_t &reliability_spd_dec = this->rust_lifecycle.state->reliability_spd_dec;
-	uint16_t &reliability_start = this->rust_lifecycle.state->reliability_start;
-	uint16_t &reliability_max = this->rust_lifecycle.state->reliability_max;
-	uint16_t &reliability_final = this->rust_lifecycle.state->reliability_final;
-	uint16_t &duration_phase_1 = this->rust_lifecycle.state->duration_phase_1;
-	uint16_t &duration_phase_2 = this->rust_lifecycle.state->duration_phase_2;
-	uint16_t &duration_phase_3 = this->rust_lifecycle.state->duration_phase_3;
-	EngineFlags &flags = this->rust_lifecycle.state->flags;
-	CompanyID &preview_company = this->rust_lifecycle.state->preview_company;
-	uint8_t &preview_wait = this->rust_lifecycle.state->preview_wait;
-	EngineName name{this->rust_lifecycle.state};
-	uint8_t original_image_index = 0; ///< Original vehicle image index, thus the image index of the overridden vehicle
-	VehicleType type = VEH_INVALID; ///< %Vehicle type, ie #VEH_ROAD, #VEH_TRAIN, etc.
+	EngineLifecycleOwner rust_lifecycle{this};
+	OpenTTDEngineLifecycle &Record() { return *this->rust_lifecycle.state; }
+	const OpenTTDEngineLifecycle &Record() const { return *this->rust_lifecycle.state; }
+	std::string_view Name() const { return {reinterpret_cast<const char *>(this->Record().name.items), this->Record().name.count}; }
+	void SetName(std::string_view text) { openttd_rust_engine_set_name(&this->Record(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}); }
 
 	EngineDisplayFlags display_flags{}; ///< NOSAVE client-side-only display flags for build engine list.
 	EngineID display_last_variant = EngineID::Invalid(); ///< NOSAVE client-side-only last variant selected.
-	EngineInfo info{};
 
-	uint16_t list_position = 0;
 
-	/* NewGRF related data */
-	CargoGRFFileProps grf_prop{}; ///< Link to NewGRF
-	std::vector<WagonOverride> overrides{};
-	std::vector<BadgeID> badges{};
-
-private:
-	/* Vehicle-type specific information. */
-	std::variant<std::monostate, RailVehicleInfo, RoadVehicleInfo, ShipVehicleInfo, AircraftVehicleInfo> vehicle_info{};
-
-public:
 	Engine() {}
-	Engine(Engine &&) noexcept = default;
+	Engine(Engine &&other) noexcept
+		: rust_lifecycle(std::move(other.rust_lifecycle)), display_flags(other.display_flags), display_last_variant(other.display_last_variant)
+	{
+		this->Record().shell = this;
+	}
 	Engine(const Engine &) = delete;
 	Engine &operator=(const Engine &) = delete;
 	Engine(VehicleType type, uint16_t local_id);
@@ -95,7 +66,7 @@ public:
 	 */
 	CargoType GetDefaultCargoType() const
 	{
-		return this->info.cargo_type;
+		return this->Record().info.cargo_type;
 	}
 
 	uint DetermineCapacity(const Vehicle *v, uint16_t *mail_capacity = nullptr) const;
@@ -135,7 +106,7 @@ public:
 	 */
 	inline bool IsHidden(CompanyID c) const
 	{
-		return c < MAX_COMPANIES && this->company_hidden.Test(c);
+		return c < MAX_COMPANIES && this->Record().company_hidden.Test(c);
 	}
 
 	/**
@@ -156,7 +127,7 @@ public:
 	 */
 	inline bool IsGroundVehicle() const
 	{
-		return this->type == VEH_TRAIN || this->type == VEH_ROAD;
+		return this->Record().type == VEH_TRAIN || this->Record().type == VEH_ROAD;
 	}
 
 	/**
@@ -166,7 +137,7 @@ public:
 	 */
 	const GRFFile *GetGRF() const
 	{
-		return this->grf_prop.grffile;
+		return this->Record().bindings.grf_prop.grffile;
 	}
 
 	uint32_t GetGRFID() const;
@@ -174,19 +145,29 @@ public:
 	struct EngineTypeFilter {
 		VehicleType vt;
 
-		bool operator() (size_t index) { return Engine::Get(index)->type == this->vt; }
+		bool operator() (size_t index) { return Engine::Get(index)->Record().type == this->vt; }
 	};
 
 	template <typename T>
 	inline T &VehInfo()
 	{
-		return std::get<T>(this->vehicle_info);
+		return const_cast<T &>(std::as_const(*this).VehInfo<T>());
 	}
 
 	template <typename T>
 	inline const T &VehInfo() const
 	{
-		return std::get<T>(this->vehicle_info);
+		const auto &record = this->Record();
+		if constexpr (std::is_same_v<T, RailVehicleInfo>) {
+			if (record.vehicle_info_type == VEH_TRAIN) return record.vehicle_info.rail;
+		} else if constexpr (std::is_same_v<T, RoadVehicleInfo>) {
+			if (record.vehicle_info_type == VEH_ROAD) return record.vehicle_info.road;
+		} else if constexpr (std::is_same_v<T, ShipVehicleInfo>) {
+			if (record.vehicle_info_type == VEH_SHIP) return record.vehicle_info.ship;
+		} else if constexpr (std::is_same_v<T, AircraftVehicleInfo>) {
+			if (record.vehicle_info_type == VEH_AIRCRAFT) return record.vehicle_info.aircraft;
+		}
+		throw std::bad_variant_access{};
 	}
 
 	/**
@@ -242,7 +223,7 @@ extern EngineOverrideManager _engine_mngr;
 
 inline const EngineInfo *EngInfo(EngineID e)
 {
-	return &Engine::Get(e)->info;
+	return &Engine::Get(e)->Record().info;
 }
 
 inline const RailVehicleInfo *RailVehInfo(EngineID e)

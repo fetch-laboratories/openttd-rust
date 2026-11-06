@@ -33,14 +33,14 @@
 	/* AIs have only access to engines they can purchase or still have in use.
 	 * Deity has access to all engined that will be or were available ever. */
 	::CompanyID company = ScriptObject::GetCompany();
-	return ScriptCompanyMode::IsDeity() || ::IsEngineBuildable(engine_id, e->type, company) || ::Company::Get(company)->group_all[e->type].GetNumEngines(engine_id) > 0;
+	return ScriptCompanyMode::IsDeity() || ::IsEngineBuildable(engine_id, e->Record().type, company) || ::Company::Get(company)->group_all[e->Record().type].GetNumEngines(engine_id) > 0;
 }
 
 /* static */ bool ScriptEngine::IsBuildable(EngineID engine_id)
 {
 	EnforceDeityOrCompanyModeValid(false);
 	const Engine *e = ::Engine::GetIfValid(engine_id);
-	return e != nullptr && ::IsEngineBuildable(engine_id, e->type, ScriptObject::GetCompany());
+	return e != nullptr && ::IsEngineBuildable(engine_id, e->Record().type, ScriptObject::GetCompany());
 }
 
 /* static */ std::optional<std::string> ScriptEngine::GetName(EngineID engine_id)
@@ -85,7 +85,7 @@
 	if (!IsValidEngine(engine_id)) return -1;
 
 	const Engine *e = ::Engine::Get(engine_id);
-	switch (e->type) {
+	switch (e->Record().type) {
 		case VEH_ROAD:
 		case VEH_TRAIN: {
 			CargoArray capacities = GetCapacityOfArticulatedParts(engine_id);
@@ -108,7 +108,7 @@
 	if (!IsValidEngine(engine_id)) return -1;
 	if (GetVehicleType(engine_id) == ScriptVehicle::VT_RAIL && IsWagon(engine_id)) return -1;
 
-	return ::ToPercent16(::Engine::Get(engine_id)->reliability);
+	return ::ToPercent16(::Engine::Get(engine_id)->Record().reliability);
 }
 
 /* static */ SQInteger ScriptEngine::GetMaxSpeed(EngineID engine_id)
@@ -117,7 +117,7 @@
 
 	const Engine *e = ::Engine::Get(engine_id);
 	uint max_speed = e->GetDisplayMaxSpeed(); // km-ish/h
-	if (e->type == VEH_AIRCRAFT) max_speed /= _settings_game.vehicle.plane_speed;
+	if (e->Record().type == VEH_AIRCRAFT) max_speed /= _settings_game.vehicle.plane_speed;
 	return max_speed;
 }
 
@@ -173,14 +173,14 @@
 {
 	if (!IsValidEngine(engine_id)) return ScriptDate::DATE_INVALID;
 
-	return (ScriptDate::Date)::Engine::Get(engine_id)->intro_date.base();
+	return (ScriptDate::Date)::Engine::Get(engine_id)->Record().intro_date.base();
 }
 
 /* static */ ScriptVehicle::VehicleType ScriptEngine::GetVehicleType(EngineID engine_id)
 {
 	if (!IsValidEngine(engine_id)) return ScriptVehicle::VT_INVALID;
 
-	switch (::Engine::Get(engine_id)->type) {
+	switch (::Engine::Get(engine_id)->Record().type) {
 		case VEH_ROAD:     return ScriptVehicle::VT_ROAD;
 		case VEH_TRAIN:    return ScriptVehicle::VT_RAIL;
 		case VEH_SHIP:     return ScriptVehicle::VT_WATER;

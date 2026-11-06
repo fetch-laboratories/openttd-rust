@@ -11,11 +11,8 @@ struct OpenTTDRoadTypeConstruction { uint32_t label; int32_t date; bool hidden, 
  * pools nor yield. Engine lifecycle scalar reads end before every callback.
  * Panics and environmental exceptions abort; ordinary play has no throwing leaf. */
 struct OpenTTDTypeAvailabilityServices {
+	const OpenTTDSharedServices *shared;
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
-	OpenTTDEngineRailAvailability (*rail_availability)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_availability);
-	OpenTTDEngineRoadAvailability (*road_availability)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_availability);
-	uint64_t (*engine_railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_railtypes);
-	RoadType (*engine_roadtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_roadtype);
 	OpenTTDTypeIntroduction (*rail_introduction)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduction);
 	OpenTTDTypeIntroduction (*road_introduction)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_introduction);
 	uint64_t (*rail_introduces)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_introduces);

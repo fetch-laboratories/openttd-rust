@@ -94,3 +94,15 @@ pub const CBID_VEHICLE_ARTIC_ENGINE: CallbackID = CallbackID(0x16);
 pub const VEHICLE_REFIT_CAPACITY: u16 = 1 << 3;
 pub const VEHICLE_ARTIC_ENGINE: u16 = 1 << 4;
 pub const VEHICLE_CARGO_SUFFIX: u16 = 1 << 5;
+
+/// `VehicleCallbackMask::CustomRefit`.
+pub const VEHICLE_CUSTOM_REFIT: u16 = 1 << 9;
+
+/// `VehicleCallbackMask::VisualEffect`.
+pub const VEHICLE_VISUAL_EFFECT: u16 = 1;
+
+/// `VehicleCallbackMask::Length`.
+pub const VEHICLE_LENGTH: u16 = 1 << 1;
+
+/// `VehicleCallbackMask::LoadAmount`.
+pub const VEHICLE_LOAD_AMOUNT: u16 = 1 << 2;
