@@ -29,7 +29,6 @@ use crate::tcp_game::{
 #[repr(C)]
 pub struct Services {
     pub client_chat: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
-    pub client_id: extern "C" fn(*mut GameSocket) -> u32,
     pub client_move: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub client_rcon: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
     pub client_set_name: extern "C" fn(*mut GameSocket, *mut Packet, *mut Frame) -> u8,
@@ -54,7 +53,7 @@ fn illegal(s: &Network, game: *mut GameSocket, kind: u8) -> u8 {
         0,
         "[tcp/game] Received illegal packet type {} from client {}",
         kind,
-        (s.dispatch.client_id)(game)
+        socket::client_id(game)
     );
     NETWORK_RECV_STATUS_MALFORMED_PACKET
 }
@@ -76,7 +75,7 @@ fn handle(
             net,
             0,
             "[tcp/game] Received invalid packet from client {}",
-            (s.dispatch.client_id)(game)
+            socket::client_id(game)
         );
         socket::close(s, game, work);
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
@@ -289,7 +288,7 @@ fn handle(
                 0,
                 "[tcp/game] Received invalid packet type {} from client {}",
                 kind,
-                (s.dispatch.client_id)(game)
+                socket::client_id(game)
             );
             socket::close(s, game, work);
             NETWORK_RECV_STATUS_MALFORMED_PACKET
@@ -400,7 +399,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkDispatchServices" ["probe"] => Services {
         client_chat,
-        client_id,
         client_move,
         client_rcon,
         client_set_name,

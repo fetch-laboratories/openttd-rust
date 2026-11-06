@@ -58,3 +58,12 @@ pub const INVALID_CLIENT_ID: u32 = 0;
 pub const NETWORK_ERROR_CHEATER: u8 = 13;
 /// `NETWORK_ERROR_TOO_MANY_COMMANDS`.
 pub const NETWORK_ERROR_TOO_MANY_COMMANDS: u8 = 15;
+
+/// Coordinate of a client-info/socket pool slot; distinct from semantic NetworkClientID.
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct ClientPoolID(pub u16);
+
+impl crate::pool::PoolId for ClientPoolID {
+    fn index(self) -> usize { usize::from(self.0) }
+}

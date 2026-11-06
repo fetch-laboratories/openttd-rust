@@ -85,7 +85,7 @@ ClientNetworkGameSocketHandler::~ClientNetworkGameSocketHandler()
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::CloseConnection(NetworkRecvStatus status)
 {
-	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_close(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), static_cast<OpenTTDNetworkGameSocket *>(this), status));
+	return static_cast<NetworkRecvStatus>(openttd_rust_network_client_close(&GetRustNetworkClientServices(), &GetRustNetworkFrameServices(), this->GameRecord(), status));
 }
 
 /** Our client's connection. */
@@ -197,7 +197,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CLIENT_INFO(Pac
 	std::string name = p.Recv_string(NETWORK_NAME_LENGTH);
 	std::string public_key = p.Recv_string(NETWORK_PUBLIC_KEY_LENGTH);
 
-	if (this->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+	if (this->GameRecord()->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 	if (this->HasClientQuit()) return NETWORK_RECV_STATUS_CLIENT_QUIT;
 	/* The server validates the name when receiving it from clients, so when it is wrong
 	 * here something went really wrong. In the best case the packet got malformed on its
@@ -261,7 +261,7 @@ class ClientGamePasswordRequestHandler : public NetworkAuthenticationPasswordReq
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CHAT(Packet &p)
 {
-	if (this->status != STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+	if (this->GameRecord()->status != STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 
 	std::string name;
 	const NetworkClientInfo *ci = nullptr, *ci_to;
@@ -311,7 +311,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CHAT(Packet &p)
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_EXTERNAL_CHAT(Packet &p)
 {
-	if (this->status != STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+	if (this->GameRecord()->status != STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 
 	std::string source = p.Recv_string(NETWORK_CHAT_LENGTH);
 	TextColour colour = (TextColour)p.Recv_uint16();
@@ -329,7 +329,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_EXTERNAL_CHAT(P
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_RCON(Packet &p)
 {
-	if (this->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+	if (this->GameRecord()->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 
 	Debug(net, 9, "Client::Receive_SERVER_RCON()");
 
@@ -345,7 +345,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_RCON(Packet &p)
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MOVE(Packet &p)
 {
-	if (this->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+	if (this->GameRecord()->status < STATUS_AUTHORIZED) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 
 	/* Nothing more in this packet... */
 	ClientID client_id   = (ClientID)p.Recv_uint32();
@@ -375,7 +375,7 @@ NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_MOVE(Packet &p)
 
 NetworkRecvStatus ClientNetworkGameSocketHandler::Receive_SERVER_CONFIG_UPDATE(Packet &p)
 {
-	if (this->status < STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
+	if (this->GameRecord()->status < STATUS_ACTIVE) return NETWORK_RECV_STATUS_MALFORMED_PACKET;
 
 	_network_server_max_companies = p.Recv_uint8();
 	_network_server_name = p.Recv_string(NETWORK_NAME_LENGTH);
@@ -603,14 +603,14 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 		.join_waiting = &_network_join_waiting,
 		.leave = [](void *info) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", STR_NETWORK_MESSAGE_CLIENT_LEAVING); },
 		.leave_error = [](void *info, uint8_t error) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error))); },
-		.map_create = [](void *game) noexcept { auto *cs = ClientFromGame(game); cs->savegame = std::make_shared<PacketReader>(); cs->map_reader = cs->savegame->state; },
+		.map_create = [](void *game) noexcept { auto *cs = ClientFromGame(game); cs->savegame = std::make_shared<PacketReader>(); cs->GameRecord()->map_reader = cs->savegame->state; },
 		.map_load_prepare = [](void *game, OpenTTDSessionLoad *load) noexcept {
 			auto *cs = ClientFromGame(game);
 			ClearErrorMessages();
 			_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
 			load->filter = cs->savegame;
 		},
-		.map_release = [](void *game) noexcept { auto *cs = ClientFromGame(game); cs->savegame = nullptr; cs->map_reader = nullptr; },
+		.map_release = [](void *game) noexcept { auto *cs = ClientFromGame(game); cs->savegame = nullptr; cs->GameRecord()->map_reader = nullptr; },
 		.own_client_id = reinterpret_cast<uint32_t *>(&_network_own_client_id),
 		.reconnect = &_network_reconnect,
 		.revision = []() noexcept -> OpenTTDByteSpan { auto value = GetNetworkRevisionString(); return {reinterpret_cast<const uint8_t *>(value.data()), value.size()}; },

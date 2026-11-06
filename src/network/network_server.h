@@ -11,13 +11,14 @@
 #define NETWORK_SERVER_H
 
 #include "network_internal.h"
+#include "../rust/pool.hpp"
 #include "core/tcp_listen.h"
 
 class ServerNetworkGameSocketHandler;
 /** Make the code look slightly nicer/simpler. */
 typedef ServerNetworkGameSocketHandler NetworkClientSocket;
 /** Pool with all client sockets. */
-using NetworkClientSocketPool = Pool<NetworkClientSocket, ClientPoolID, 8, PoolType::NetworkClient>;
+using NetworkClientSocketPool = RustPool<NetworkClientSocket, ClientPoolID, 8, PoolType::NetworkClient>;
 extern NetworkClientSocketPool _networkclientsocket_pool;
 
 /** Class for handling the server side of the game connection. */
@@ -51,7 +52,11 @@ public:
 		STATUS_END,           ///< Must ALWAYS be on the end of this list!! (period).
 	};
 
-	CommandQueue outgoing_queue{}; ///< The command-queue awaiting delivery; conceptually more a bucket to gather commands in, after which the whole bucket is sent to the client.
+	/** Retain the original outgoing member's destruction point before peer-key/auth teardown. */
+	struct OutgoingQueueOwner {
+		OpenTTDNetworkGameSocket *state;
+		~OutgoingQueueOwner() { openttd_rust_network_server_queue_drop(this->state); }
+	} outgoing_queue_owner{this->GameRecord()};
 
 	std::shared_ptr<struct PacketWriter> savegame = nullptr; ///< Writer used to write the savegame.
 	NetworkAddress client_address{}; ///< IP-address of the client (so they can be banned)

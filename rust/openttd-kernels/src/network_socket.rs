@@ -13,17 +13,21 @@ crate::abi::shared_records! {
     fn abi_record;
     "OpenTTDNetworkGameSocket" ["probe"] => pub struct GameSocket {
         pub base: *mut NetworkSocketHandler,
+        pub client_id: u32,
         pub game: *mut c_void,
-        pub incoming: *mut CommandQueue,
+        pub incoming: CommandQueue,
+        pub info: *mut c_void,
         pub last_packet_ns: i64,
         pub map_reader: *mut crate::network_map::MapReader,
         pub map_writer: *mut crate::network_map::MapWriter,
-        pub outgoing: *mut CommandQueue,
+        pub outgoing: CommandQueue,
         pub pending: bool,
+        /// Captured only in the initialized pooled server constructor body; MAX is nonpooled.
+        pub pool_index: usize,
         pub role: u8,
         pub server: *mut c_void,
         pub status: u8,
-        pub sync: *mut SocketSync,
+        pub sync: SocketSync,
         pub tcp: *mut NetworkTCPSocketHandler,
     }
 }
@@ -40,13 +44,19 @@ pub(crate) fn tcp(socket: *mut GameSocket) -> *mut NetworkTCPSocketHandler {
     read_field!(socket, tcp)
 }
 pub(crate) fn sync(socket: *mut GameSocket) -> *mut SocketSync {
-    read_field!(socket, sync)
+    unsafe { &raw mut (*socket).sync }
 }
 pub(crate) fn incoming(socket: *mut GameSocket) -> *mut CommandQueue {
-    read_field!(socket, incoming)
+    unsafe { &raw mut (*socket).incoming }
 }
 pub(crate) fn outgoing(socket: *mut GameSocket) -> *mut CommandQueue {
-    read_field!(socket, outgoing)
+    unsafe { &raw mut (*socket).outgoing }
+}
+pub(crate) fn client_id(socket: *mut GameSocket) -> u32 {
+    read_field!(socket, client_id)
+}
+pub(crate) fn info(socket: *mut GameSocket) -> *mut c_void {
+    read_field!(socket, info)
 }
 pub(crate) fn status(socket: *mut GameSocket) -> u8 {
     read_field!(socket, status)
@@ -59,6 +69,56 @@ pub(crate) fn last_packet(socket: *mut GameSocket) -> i64 {
 }
 pub(crate) fn set_last_packet(socket: *mut GameSocket, time: i64) {
     write_field!(socket, last_packet_ns, time);
+}
+
+/// Native MI base construction, before any derived pooled coordinate is available.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_network_game_new(
+    base: *mut NetworkSocketHandler,
+    tcp: *mut NetworkTCPSocketHandler,
+    game: *mut c_void,
+    role: u8,
+    frame: u32,
+    time: i64,
+) -> *mut GameSocket {
+    Box::into_raw(Box::new(GameSocket {
+        base,
+        client_id: 0,
+        game,
+        incoming: CommandQueue::EMPTY,
+        info: std::ptr::null_mut(),
+        last_packet_ns: time,
+        map_reader: std::ptr::null_mut(),
+        map_writer: std::ptr::null_mut(),
+        outgoing: CommandQueue::EMPTY,
+        pending: false,
+        pool_index: usize::MAX,
+        role,
+        server: std::ptr::null_mut(),
+        status: 0,
+        sync: SocketSync {
+            receive_limit: 0,
+            last_frame: frame,
+            last_frame_server: frame,
+            last_token_frame: 0,
+            lag_test: 0,
+            last_token: 0,
+            token: 0,
+        },
+        tcp,
+    }))
+}
+
+/// Original server outgoing member destruction, before native peer-key/auth members.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_server_queue_drop(socket: *mut GameSocket) {
+    unsafe { (*socket).outgoing = CommandQueue::EMPTY };
+}
+
+/// The indexed pool binding is retired; incoming payloads precede TCP base destruction.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_game_drop(socket: *mut GameSocket) {
+    unsafe { drop(Box::from_raw(socket)) };
 }
 
 use crate::game_state::GameState;

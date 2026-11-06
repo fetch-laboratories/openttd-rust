@@ -152,33 +152,19 @@ public:
 /** Command parameters of a queued packet. */
 inline std::span<const uint8_t> CommandPacketData(const OpenTTDCommandPacket &cp) { return {cp.data.data, cp.data.size}; }
 
-/**
- * A "queue" of CommandPackets, owned and ordered by Rust.
- * Not a std::queue because, when paused, some commands remain on the queue.
- * In other words, you do not always pop the first element from this queue.
- */
-class CommandQueue : public OpenTTDCommandQueue {
-public:
-	CommandQueue() : OpenTTDCommandQueue{} {}
-	CommandQueue(const CommandQueue &) = delete;
-	CommandQueue &operator=(const CommandQueue &) = delete;
-	~CommandQueue() { openttd_rust_command_queue_free(this); }
-
-	size_t Count() const { return this->size; }
-};
-
 /** Base socket handler for all TCP sockets; frame and lag fields are the Rust sync record. */
-class NetworkGameSocketHandler : public NetworkTCPSocketHandler, public OpenTTDNetworkSocketSync, public OpenTTDNetworkGameSocket {
+class NetworkGameSocketHandler : public NetworkTCPSocketHandler {
 /* TODO: rewrite into a proper class */
 private:
-	NetworkClientInfo *info = nullptr; ///< Client info related to this socket
+	OpenTTDNetworkGameSocket *const game_record;
 
 protected:
 	NetworkGameSocketHandler(SOCKET s, uint8_t role = 2);
 public:
-	ClientID client_id = INVALID_CLIENT_ID; ///< Client identifier
-	CommandQueue incoming_queue; ///< The command-queue awaiting handling
-	std::chrono::steady_clock::time_point LastPacket() const { return std::chrono::steady_clock::time_point{std::chrono::steady_clock::duration{this->last_packet_ns}}; }
+	OpenTTDNetworkGameSocket *GameRecord() const { return this->game_record; }
+	OpenTTDNetworkSocketSync *SyncRecord() const { return &this->game_record->sync; }
+	ClientID GetClientID() const { return static_cast<ClientID>(this->game_record->client_id); }
+	std::chrono::steady_clock::time_point LastPacket() const { return std::chrono::steady_clock::time_point{std::chrono::steady_clock::duration{this->game_record->last_packet_ns}}; }
 
 	NetworkRecvStatus CloseConnection(bool error = true) override;
 
@@ -187,7 +173,7 @@ public:
 	 * @param status The reason the connection got closed.
 	 */
 	virtual NetworkRecvStatus CloseConnection(NetworkRecvStatus status) = 0;
-	virtual ~NetworkGameSocketHandler() = default;
+	~NetworkGameSocketHandler() override;
 
 	/**
 	 * Sets the client info for this socket handler.
@@ -195,8 +181,8 @@ public:
 	 */
 	inline void SetInfo(NetworkClientInfo *info)
 	{
-		assert(info != nullptr && this->info == nullptr);
-		this->info = info;
+		assert(info != nullptr && this->game_record->info == nullptr);
+		this->game_record->info = info;
 	}
 
 	/**
@@ -205,12 +191,12 @@ public:
 	 */
 	inline NetworkClientInfo *GetInfo() const
 	{
-		return this->info;
+		return static_cast<NetworkClientInfo *>(this->game_record->info);
 	}
 
 	NetworkRecvStatus ReceivePackets();
 
-	bool IsPendingDeletion() const { return this->pending; }
+	bool IsPendingDeletion() const { return this->game_record->pending; }
 
 	void DeferDeletion();
 	static void ProcessDeferredDeletions();

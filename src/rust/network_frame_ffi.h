@@ -65,6 +65,9 @@ struct OpenTTDNetworkFrameServices {
 const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept;
 void RustNetworkCompleteActions(OpenTTDSessionFrame *);
 extern "C" {
+OpenTTDNetworkGameSocket *openttd_rust_network_game_new(OpenTTDNetworkSocket *, OpenTTDNetworkTcpSocket *, void *, uint8_t, uint32_t, int64_t);
+void openttd_rust_network_game_drop(OpenTTDNetworkGameSocket *);
+void openttd_rust_network_server_queue_drop(OpenTTDNetworkGameSocket *);
 uint8_t openttd_rust_network_game_close(const OpenTTDNetworkFrameServices *, OpenTTDNetworkGameSocket *, OpenTTDNetworkActionsStorage *);
 void openttd_rust_network_defer(OpenTTDNetworkGameSocket *);
 void openttd_rust_network_process_deferred(const OpenTTDNetworkFrameServices *);

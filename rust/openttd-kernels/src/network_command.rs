@@ -132,6 +132,12 @@ impl CommandQueue {
     }
 }
 
+impl Drop for CommandQueue {
+    fn drop(&mut self) {
+        unsafe { drop(Self::edit(self, std::mem::take)) };
+    }
+}
+
 /// Native leaves for `network_command.cpp`; see `network_command_ffi.h`.
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -147,6 +153,7 @@ pub struct Services {
     pub allow_list_key: extern "C" fn(ByteSpan, *mut c_void),
     pub callback: extern "C" fn(usize) -> *const c_void,
     pub callback_count: usize,
+    pub clients: *const crate::pool::PoolDescriptor,
     pub commands_per_frame: extern "C" fn() -> u16,
     pub commands_per_frame_server: extern "C" fn() -> u16,
     pub company: &'static crate::company::Services,
@@ -162,7 +169,6 @@ pub struct Services {
     pub info_key_equals: extern "C" fn(*mut c_void, *mut c_void) -> bool,
     pub max_commands_in_queue: extern "C" fn() -> u16,
     pub network: extern "C" fn() -> &'static crate::network_frame::Services,
-    pub next_client: extern "C" fn(usize, *mut Client) -> bool,
     pub next_info: extern "C" fn(*mut u32) -> *mut c_void,
     pub replace_client_id: extern "C" fn(u8, ByteSpan, u32) -> CommandData,
     pub sanitize_strings: extern "C" fn(u8, ByteSpan) -> CommandData,
@@ -186,14 +192,18 @@ pub(crate) fn clear_wait_queue() {
 }
 
 pub(crate) fn next_client(s: &Services, cursor: &mut usize) -> Option<Client> {
-    let mut client = Client {
-        socket: null_mut(),
-        index: 0,
+    use crate::network_type::ClientPoolID;
+    let pool = unsafe {
+        crate::pool::TypedPool::<ClientPoolID, socket::GameSocket, c_void>::from_descriptor(s.clients)
     };
-    (s.next_client)(*cursor, &raw mut client).then(|| {
-        *cursor = client.index + 1;
-        client
-    })
+    let index = unsafe { pool.next_index(*cursor, crate::network_config::MAX_CLIENTS + 1) };
+    if index == crate::network_config::MAX_CLIENTS + 1 {
+        return None;
+    }
+    *cursor = index + 1;
+    // Native PoolItem retains its u16 coordinate; semantic ClientID is unrelated.
+    let id = ClientPoolID(u16::try_from(index).expect("bounded client pool index"));
+    Some(Client { socket: unsafe { pool.record(id) }, index })
 }
 
 /// `NetworkSendCommand`.
@@ -428,7 +438,7 @@ fn send_packet(
             net,
             9,
             "client[{}] SendCommand(): cmd={}",
-            (f.dispatch.client_id)(game),
+            socket::client_id(game),
             cp.cmd
         );
         crate::tcp_game::PACKET_SERVER_COMMAND
@@ -580,7 +590,7 @@ pub(crate) fn receive_client(
         net,
         9,
         "client[{}] Receive_CLIENT_COMMAND()",
-        (f.dispatch.client_id)(game)
+        socket::client_id(game)
     );
     let mut cp = empty_packet();
     let err = receive_packet(f, p, &mut cp);
@@ -593,14 +603,14 @@ pub(crate) fn receive_client(
     }
     let commands = commands(s);
     if (commands.command_flags)(cp.cmd) & CommandFlag::SERVER != 0
-        && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
+        && socket::client_id(game) != CLIENT_ID_SERVER
     {
         (s.console_server_only)(shell, cp.cmd);
         return fail(NETWORK_ERROR_KICKED);
     }
     if (commands.command_flags)(cp.cmd) & CommandFlag::SPECTATOR == 0
         && !(s.company.shared.company_valid)(cp.company)
-        && (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
+        && socket::client_id(game) != CLIENT_ID_SERVER
     {
         (s.console_spectator)(shell, cp.cmd);
         return fail(NETWORK_ERROR_KICKED);
@@ -623,12 +633,12 @@ pub(crate) fn receive_client(
             return fail(NETWORK_ERROR_CHEATER);
         }
         if (s.company.company_count)() >= usize::from((f.connection.max_companies)()) {
-            (s.server_full)((f.dispatch.client_id)(game));
+            (s.server_full)(socket::client_id(game));
             return NETWORK_RECV_STATUS_OKAY;
         }
     }
     if cp.cmd == CMD_COMPANY_ALLOW_LIST_CTRL {
-        if (f.dispatch.client_id)(game) != CLIENT_ID_SERVER
+        if socket::client_id(game) != CLIENT_ID_SERVER
             && (f.connection.client_company)(shell) != cp.company
         {
             return NETWORK_RECV_STATUS_OKAY;
@@ -652,7 +662,7 @@ pub(crate) fn receive_client(
         }
     }
     if (commands.command_flags)(cp.cmd) & CommandFlag::CLIENT_ID != 0 {
-        cp.data = (s.replace_client_id)(cp.cmd, cp.data.span(), (f.dispatch.client_id)(game));
+        cp.data = (s.replace_client_id)(cp.cmd, cp.data.span(), socket::client_id(game));
     }
     unsafe {
         CommandQueue::edit(socket::incoming(game), |q| q.push(cp));
@@ -680,16 +690,6 @@ pub unsafe extern "C" fn openttd_rust_command_data_free(data: *mut CommandData) 
     unsafe { drop((*data).take()) };
 }
 
-/// # Safety
-/// `queue` is live and holds parts from this module or zeroes; it is left empty.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_queue_free(queue: *mut CommandQueue) {
-    unsafe {
-        drop(CommandQueue::edit(queue, std::mem::take));
-        *queue = CommandQueue::EMPTY;
-    }
-}
-
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkCommandServices" ["probe"] => Services {
@@ -697,6 +697,7 @@ crate::abi::layouts! {
         allow_list_key,
         callback,
         callback_count,
+        clients,
         commands_per_frame,
         commands_per_frame_server,
         company,
@@ -712,7 +713,6 @@ crate::abi::layouts! {
         info_key_equals,
         max_commands_in_queue,
         network,
-        next_client,
         next_info,
         replace_client_id,
         sanitize_strings,
@@ -748,7 +748,7 @@ mod tests {
             assert_eq!((*queue.data.add(1)).frame, 8);
             CommandQueue::edit(&raw mut queue, |q| drop(q.remove(0)));
             assert_eq!((*queue.data).frame, 8);
-            openttd_rust_command_queue_free(&raw mut queue);
+            queue = CommandQueue::EMPTY;
         }
         assert!(queue.data.is_null() && queue.size == 0 && queue.capacity == 0);
     }

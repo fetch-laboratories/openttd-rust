@@ -9,6 +9,7 @@ struct OpenTTDCommandServices;
 struct OpenTTDNetworkFrameServices;
 enum class OpenTTDNetworkCommandDecodeError : uint8_t { None, InvalidCommand, Offline, InvalidCallback };
 struct OpenTTDNetworkSocketSync;
+struct RustPoolDescriptor;
 #include "../newgrf_badge_type.h"
 #include "abi-record-probe.h"
 /** Native leaves of the command queues; packet pointers are valid only during the call. */
@@ -17,6 +18,7 @@ struct OpenTTDNetworkCommandServices {
 	void (*allow_list_key)(OpenTTDByteSpan, void *) noexcept OPENTTD_SERVICE_DEFAULT(allow_list_key);
 	const void *(*callback)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
 	size_t callback_count;
+	const RustPoolDescriptor *clients;
 	uint16_t (*commands_per_frame)() noexcept OPENTTD_SERVICE_DEFAULT(commands_per_frame);
 	uint16_t (*commands_per_frame_server)() noexcept OPENTTD_SERVICE_DEFAULT(commands_per_frame_server);
 	const OpenTTDCompanyServices *company;
@@ -32,7 +34,6 @@ struct OpenTTDNetworkCommandServices {
 	bool (*info_key_equals)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(info_key_equals);
 	uint16_t (*max_commands_in_queue)() noexcept OPENTTD_SERVICE_DEFAULT(max_commands_in_queue);
 	const OpenTTDNetworkFrameServices &(*network)() noexcept OPENTTD_SERVICE_DEFAULT(network);
-	bool (*next_client)(size_t, OpenTTDNetworkCommandClient *) noexcept OPENTTD_SERVICE_DEFAULT(next_client);
 	void *(*next_info)(uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(next_info);
 	OpenTTDCommandData (*replace_client_id)(uint8_t, OpenTTDByteSpan, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(replace_client_id);
 	OpenTTDCommandData (*sanitize_strings)(uint8_t, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(sanitize_strings);
@@ -45,6 +46,5 @@ uint8_t openttd_rust_network_registered_callback(const OpenTTDNetworkCommandServ
 void openttd_rust_network_send_command(const OpenTTDNetworkCommandServices *, uint8_t cmd, uint32_t err_msg, const void *callback, uint8_t company, OpenTTDByteSpan data);
 void openttd_rust_command_data_grow(OpenTTDCommandData *);
 void openttd_rust_command_data_free(OpenTTDCommandData *);
-void openttd_rust_command_queue_free(OpenTTDCommandQueue *);
 }
 #endif /* RUST_NETWORK_COMMAND_FFI_H */

@@ -8,7 +8,6 @@ struct OpenTTDSessionLoad;
 struct Packet;
 struct OpenTTDNetworkDispatchServices {
 	uint8_t (*client_chat)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_chat);
-	uint32_t (*client_id)(OpenTTDNetworkGameSocket *) noexcept OPENTTD_SERVICE_DEFAULT(client_id);
 	uint8_t (*client_move)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_move);
 	uint8_t (*client_rcon)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_rcon);
 	uint8_t (*client_set_name)(OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(client_set_name);

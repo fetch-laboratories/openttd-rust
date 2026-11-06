@@ -54,7 +54,6 @@ pub struct Services {
     pub error_announcement: extern "C" fn(*mut c_void, u32, crate::services::ByteSpan, bool, bool),
     pub error_message: extern "C" fn(u8) -> u32,
     pub grf: &'static crate::newgrf_loading::Services,
-    pub info: extern "C" fn(*mut c_void) -> *mut c_void,
     pub join_date: extern "C" fn(*mut c_void) -> i32,
     pub joined: extern "C" fn(*mut c_void),
     pub lost_connection_announcement: extern "C" fn(*mut c_void),
@@ -94,7 +93,6 @@ crate::abi::layouts! {
         error_announcement,
         error_message,
         grf,
-        info,
         join_date,
         joined,
         lost_connection_announcement,
@@ -197,7 +195,7 @@ pub(crate) fn send_welcome(
         net,
         9,
         "client[{}] SendWelcome()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     if status(s, socket) != NEWGRFS_CHECK {
         return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
@@ -206,21 +204,21 @@ pub(crate) fn send_welcome(
         net,
         9,
         "client[{}] status = AUTHORIZED",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     set_status(s, socket, AUTHORIZED);
     reset_lag(s, socket);
     unsafe { s.clients_on.write(s.clients_on.read().wrapping_add(1)) };
     let game = socket;
     let mut p = packet_new(f, game, PACKET_SERVER_WELCOME); // PACKET_SERVER_WELCOME
-    p.send_uint32((f.dispatch.client_id)(socket), packet_check(f));
+    p.send_uint32(socket::client_id(socket), packet_check(f));
     packet_send(f, game, &mut p);
     let mut cursor = 0;
     while let Some(client) = next_client(f.command, &mut cursor) {
         if client.socket != socket && socket::status(client.socket) >= AUTHORIZED {
             (s.send_client_info)(
                 socket::server(socket),
-                (s.info)(socket::server(client.socket)),
+                socket::info(client.socket),
             );
         }
     }
@@ -235,7 +233,7 @@ pub(crate) fn send_wait(s: &Services, f: &FrameServices, socket: *mut socket::Ga
         net,
         9,
         "client[{}] SendWait()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     let mut waiting = 1_u32;
     let mut cursor = 0;
@@ -246,7 +244,7 @@ pub(crate) fn send_wait(s: &Services, f: &FrameServices, socket: *mut socket::Ga
         if (s.join_date)(socket::server(client.socket)) < (s.join_date)(socket::server(socket))
             || ((s.join_date)(socket::server(client.socket))
                 == (s.join_date)(socket::server(socket))
-                && (f.dispatch.client_id)(client.socket) < (f.dispatch.client_id)(socket))
+                && socket::client_id(client.socket) < socket::client_id(socket))
         {
             waiting += 1;
         }
@@ -270,7 +268,7 @@ pub(crate) fn next_map(
         net,
         9,
         "client[{}] CheckNextClientToSendMap()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     let mut best: *mut socket::GameSocket = std::ptr::null_mut();
     let mut cursor = 0;
@@ -284,7 +282,7 @@ pub(crate) fn next_map(
                     > (s.join_date)(socket::server(client.socket))
                 || ((s.join_date)(socket::server(best))
                     == (s.join_date)(socket::server(client.socket))
-                    && (f.dispatch.client_id)(best) > (f.dispatch.client_id)(client.socket)))
+                    && socket::client_id(best) > socket::client_id(client.socket)))
         {
             best = client.socket;
         }
@@ -331,7 +329,7 @@ pub(crate) fn send_map(
             net,
             9,
             "client[{}] SendMap(): first_packet",
-            (f.dispatch.client_id)(socket)
+            socket::client_id(socket)
         );
         (s.map_create)(socket::server(socket));
         let game = socket;
@@ -345,7 +343,7 @@ pub(crate) fn send_map(
             net,
             9,
             "client[{}] status = MAP",
-            (f.dispatch.client_id)(socket)
+            socket::client_id(socket)
         );
         set_status(s, socket, MAP);
         reset_lag(s, socket);
@@ -407,14 +405,14 @@ pub(crate) fn map_transfer(f: &FrameServices, socket: *mut socket::GameSocket, w
             net,
             9,
             "client[{}] SendMap(): last_packet",
-            (f.dispatch.client_id)(socket)
+            socket::client_id(socket)
         );
         (s.map_destroy)(socket::server(socket));
         debug!(
             net,
             9,
             "client[{}] status = DONE_MAP",
-            (f.dispatch.client_id)(socket)
+            socket::client_id(socket)
         );
         set_status(s, socket, DONE_MAP);
         next_map(s, f, socket, std::ptr::null_mut(), work);
@@ -435,7 +433,7 @@ pub(crate) fn receive_getmap(
         net,
         9,
         "client[{}] Receive_CLIENT_GETMAP()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     let mut cursor = 0;
     while let Some(client) = next_client(f.command, &mut cursor) {
@@ -444,7 +442,7 @@ pub(crate) fn receive_getmap(
                 net,
                 9,
                 "client[{}] status = MAP_WAIT",
-                (f.dispatch.client_id)(socket)
+                socket::client_id(socket)
             );
             set_status(s, socket, MAP_WAIT);
             return send_wait(s, f, socket);
@@ -465,14 +463,14 @@ pub(crate) fn receive_map_ok(
             net,
             9,
             "client[{}] Receive_CLIENT_MAP_OK()",
-            (f.dispatch.client_id)(socket)
+            socket::client_id(socket)
         );
         (s.joined)(socket::server(socket));
         debug!(
             net,
             9,
             "client[{}] status = PRE_ACTIVE",
-            (f.dispatch.client_id)(socket)
+            socket::client_id(socket)
         );
         set_status(s, socket, PRE_ACTIVE);
         unsafe {
@@ -490,9 +488,9 @@ pub(crate) fn receive_map_ok(
             if socket::status(client.socket) >= AUTHORIZED {
                 (s.send_client_info)(
                     socket::server(client.socket),
-                    (s.info)(socket::server(socket)),
+                    socket::info(socket),
                 );
-                send_join(s, f, client.socket, (f.dispatch.client_id)(socket));
+                send_join(s, f, client.socket, socket::client_id(socket));
             }
         }
         (s.admin_joined)(socket::server(socket));
@@ -511,7 +509,7 @@ pub(crate) fn send_newgrf_check(
         net,
         9,
         "client[{}] SendNewGRFCheck()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     if status(s, socket) != IDENTIFY {
         return close_connection(s, f, socket, NETWORK_RECV_STATUS_MALFORMED_PACKET, work);
@@ -520,7 +518,7 @@ pub(crate) fn send_newgrf_check(
         net,
         9,
         "client[{}] status = NEWGRFS_CHECK",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     set_status(s, socket, NEWGRFS_CHECK);
     if unsafe { (s.grf.config_at)(0) }.is_null() {
@@ -580,7 +578,7 @@ pub(crate) fn receive_newgrfs_checked(
         net,
         9,
         "client[{}] Receive_CLIENT_NEWGRFS_CHECKED()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     send_welcome(s, f, socket, work)
 }
@@ -594,7 +592,7 @@ pub(crate) fn receive_game_info(
         net,
         9,
         "client[{}] Receive_CLIENT_GAME_INFO()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     (s.send_game_info)(socket::server(socket))
 }
@@ -637,7 +635,7 @@ pub(crate) fn receive_join(
         net,
         9,
         "client[{}] Receive_CLIENT_JOIN(): client_revision={}, newgrf_version={}",
-        (f.dispatch.client_id)(socket),
+        socket::client_id(socket),
         Bytes(unsafe {
             let mut size = 0;
             let data = (f.command.company.shared.string_data)(text, &raw mut size);
@@ -667,7 +665,7 @@ pub(crate) fn receive_identify(
         net,
         9,
         "client[{}] Receive_CLIENT_IDENTIFY()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     packet_recv_string(
         f,
@@ -735,7 +733,7 @@ pub(crate) fn send_error(
         net,
         9,
         "client[{}] SendError(): error={}",
-        (f.dispatch.client_id)(socket),
+        socket::client_id(socket),
         error
     );
     let game = socket;
@@ -766,7 +764,7 @@ pub(crate) fn send_error(
                 ) {
                     error = NETWORK_ERROR_ILLEGAL_PACKET;
                 }
-                send_error_quit(s, f, client.socket, (f.dispatch.client_id)(socket), error);
+                send_error_quit(s, f, client.socket, socket::client_id(socket), error);
             }
         }
         (s.admin_error)(socket::server(socket), error);
@@ -798,7 +796,7 @@ pub(crate) fn send_error_quit(
         net,
         9,
         "client[{}] SendErrorQuit(): client_id={}, errorno={}",
-        (f.dispatch.client_id)(socket),
+        socket::client_id(socket),
         client_id,
         error
     );
@@ -820,7 +818,7 @@ pub(crate) fn send_quit(
         net,
         9,
         "client[{}] SendQuit(): client_id={}",
-        (f.dispatch.client_id)(socket),
+        socket::client_id(socket),
         client_id
     );
     let game = socket;
@@ -840,7 +838,7 @@ pub(crate) fn send_join(
         net,
         9,
         "client[{}] SendJoin(): client_id={}",
-        (f.dispatch.client_id)(socket),
+        socket::client_id(socket),
         client_id
     );
     let game = socket;
@@ -859,7 +857,7 @@ pub(crate) fn send_shutdown(
         net,
         9,
         "client[{}] SendShutdown()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     let game = socket;
     let mut p = packet_new(f, game, PACKET_SERVER_SHUTDOWN);
@@ -876,7 +874,7 @@ pub(crate) fn send_newgame(
         net,
         9,
         "client[{}] SendNewGame()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     let game = socket;
     let mut p = packet_new(f, game, PACKET_SERVER_NEWGAME);
@@ -897,7 +895,7 @@ pub(crate) fn receive_error(
         net,
         9,
         "client[{}] Receive_CLIENT_ERROR(): errorno={}",
-        (f.dispatch.client_id)(socket),
+        socket::client_id(socket),
         error
     );
     if status(s, socket) < DONE_MAP || crate::network_frame::socket_has_quit(f, socket) {
@@ -907,7 +905,7 @@ pub(crate) fn receive_error(
     let mut cursor = 0;
     while let Some(client) = next_client(f.command, &mut cursor) {
         if socket::status(client.socket) >= AUTHORIZED {
-            send_error_quit(s, f, client.socket, (f.dispatch.client_id)(socket), error);
+            send_error_quit(s, f, client.socket, socket::client_id(socket), error);
         }
     }
     (s.admin_error)(socket::server(socket), error);
@@ -928,13 +926,13 @@ pub(crate) fn receive_quit(
         net,
         9,
         "client[{}] Receive_CLIENT_QUIT()",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     (s.quit_announcement)(socket::server(socket));
     let mut cursor = 0;
     while let Some(client) = next_client(f.command, &mut cursor) {
         if socket::status(client.socket) >= AUTHORIZED && client.socket != socket {
-            send_quit(s, f, client.socket, (f.dispatch.client_id)(socket));
+            send_quit(s, f, client.socket, socket::client_id(socket));
         }
     }
     (s.admin_quit)(socket::server(socket));
@@ -966,7 +964,7 @@ fn close_connection(
                     s,
                     f,
                     client.socket,
-                    (f.dispatch.client_id)(socket),
+                    socket::client_id(socket),
                     NETWORK_ERROR_CONNECTION_LOST,
                 );
             }
@@ -995,7 +993,7 @@ pub(crate) fn close_tail(
         3,
         "[{}] Client #{} closed connection",
         "server",
-        (f.dispatch.client_id)(socket)
+        socket::client_id(socket)
     );
     if status(s, socket) >= AUTHORIZED {
         unsafe { s.clients_on.write(s.clients_on.read().wrapping_sub(1)) };

@@ -550,7 +550,7 @@ fn close(s: &Services, f: &FrameServices, game: *mut socket::GameSocket, result:
             net,
             3,
             "Closed client connection {}",
-            (f.dispatch.client_id)(game)
+            socket::client_id(game)
         );
         socket::send_closing(f, game);
         (s.wait_for_quit_packets)();

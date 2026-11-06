@@ -282,7 +282,7 @@ pub(crate) fn send_sync(s: &Services, game: *mut socket::GameSocket) -> u8 {
         net,
         9,
         "client[{}] SendSync(), frame_counter={}, sync_seed_1={}",
-        (s.dispatch.client_id)(game),
+        socket::client_id(game),
         frame_counter(),
         state!(sync_seed_1)
     );
@@ -314,7 +314,7 @@ pub(crate) unsafe fn receive_ack(
         net,
         9,
         "client[{}] Receive_CLIENT_ACK(): frame={}",
-        (s.dispatch.client_id)(socket),
+        socket::client_id(socket),
         frame
     );
     // The client is catching up with the server.
@@ -326,7 +326,7 @@ pub(crate) unsafe fn receive_ack(
             net,
             9,
             "client[{}] status = ACTIVE",
-            (s.dispatch.client_id)(socket)
+            socket::client_id(socket)
         );
         write_field!(socket, status, ACTIVE);
         write_field!(sync, last_token_frame, frame_counter());

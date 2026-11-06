@@ -200,6 +200,7 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 		.allow_list_key = [](OpenTTDByteSpan data, void *text) noexcept { *static_cast<std::string *>(text) = std::get<1>(EndianBufferReader::ToValue<CommandTraits<CMD_COMPANY_ALLOW_LIST_CTRL>::Args>(std::span(data.data, data.size))); },
 		.callback = [](size_t index) noexcept { return reinterpret_cast<const void *>(_callback_table[index]); },
 		.callback_count = _callback_table.size(),
+		.clients = _networkclientsocket_pool.descriptor,
 		.commands_per_frame = RustCommandsPerFrame,
 		.commands_per_frame_server = RustCommandsPerFrameServer,
 		.company = &GetRustCompanyServices(),
@@ -231,13 +232,7 @@ const OpenTTDNetworkCommandServices &GetRustNetworkCommandServices() noexcept
 		.info_key_equals = [](void *info, void *text) noexcept { return static_cast<NetworkClientInfo *>(info)->public_key == *static_cast<std::string *>(text); },
 		.max_commands_in_queue = RustMaxCommandsInQueue,
 		.network = GetRustNetworkFrameServices,
-		.next_client = [](size_t from, OpenTTDNetworkCommandClient *client) noexcept {
-			for (NetworkClientSocket *cs : NetworkClientSocket::Iterate(from)) {
-				*client = {static_cast<OpenTTDNetworkGameSocket *>(cs), cs->index.base()};
-				return true;
-			}
-			return false;
-		},
+
 		.next_info = [](uint32_t *from) noexcept -> void * {
 			for (NetworkClientInfo *info : NetworkClientInfo::Iterate(*from)) { *from = info->index.base() + 1; return info; }
 			return nullptr;

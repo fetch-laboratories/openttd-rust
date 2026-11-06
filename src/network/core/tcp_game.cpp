@@ -40,8 +40,15 @@ static struct DeferredNetworkSockets {
  * @param s The socket to connect with.
  */
 NetworkGameSocketHandler::NetworkGameSocketHandler(SOCKET s, uint8_t role) : NetworkTCPSocketHandler(s),
-		OpenTTDNetworkSocketSync{.receive_limit = 0, .last_frame = _frame_counter, .last_frame_server = _frame_counter, .last_token_frame = 0, .lag_test = 0, .last_token = 0, .token = 0},
-		OpenTTDNetworkGameSocket{.base = this->BaseRecord(), .game = this, .incoming = &this->incoming_queue, .last_packet_ns = std::chrono::steady_clock::now().time_since_epoch().count(), .outgoing = nullptr, .pending = false, .role = role, .server = nullptr, .status = 0, .sync = this, .tcp = this->TcpRecord()} {}
+		game_record(openttd_rust_network_game_new(this->BaseRecord(), this->TcpRecord(), this, role, _frame_counter, std::chrono::steady_clock::now().time_since_epoch().count())) {}
+
+NetworkGameSocketHandler::~NetworkGameSocketHandler()
+{
+	if (this->game_record->pool_index != SIZE_MAX) {
+		_networkclientsocket_pool.RetireRecord(this->game_record->pool_index, static_cast<NetworkClientSocket *>(this->game_record->server), this->game_record);
+	}
+	openttd_rust_network_game_drop(this->game_record);
+}
 static_assert(std::is_same_v<std::chrono::steady_clock::duration, std::chrono::nanoseconds>);
 
 /**
@@ -54,7 +61,7 @@ static_assert(std::is_same_v<std::chrono::steady_clock::duration, std::chrono::n
 NetworkRecvStatus NetworkGameSocketHandler::CloseConnection(bool)
 {
 	OpenTTDSessionFrame frame;
-	auto result = openttd_rust_network_game_close(&GetRustNetworkFrameServices(), this, &frame.network_actions);
+	auto result = openttd_rust_network_game_close(&GetRustNetworkFrameServices(), this->GameRecord(), &frame.network_actions);
 	frame.Rethrow();
 	return static_cast<NetworkRecvStatus>(result);
 }
@@ -62,14 +69,14 @@ NetworkRecvStatus NetworkGameSocketHandler::CloseConnection(bool)
 NetworkRecvStatus NetworkGameSocketHandler::ReceivePackets()
 {
 	OpenTTDSessionFrame frame;
-	openttd_rust_network_receive_packets(&GetRustSessionServices(), &GetRustNetworkFrameServices(), this, &frame, &frame.network_actions);
+	openttd_rust_network_receive_packets(&GetRustSessionServices(), &GetRustNetworkFrameServices(), this->GameRecord(), &frame, &frame.network_actions);
 	frame.Rethrow();
 	return static_cast<NetworkRecvStatus>(openttd_rust_network_actions_result(&frame.network_actions));
 }
 
 void NetworkGameSocketHandler::DeferDeletion()
 {
-	openttd_rust_network_defer(this);
+	openttd_rust_network_defer(this->GameRecord());
 }
 
 /* static */ void NetworkGameSocketHandler::ProcessDeferredDeletions()
@@ -89,7 +96,6 @@ const OpenTTDNetworkDispatchServices &GetRustNetworkDispatchServices() noexcept
 {
 	static const OpenTTDNetworkDispatchServices services{
 		.client_chat = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_CHAT>,
-		.client_id = [](OpenTTDNetworkGameSocket *socket) noexcept -> uint32_t { return static_cast<NetworkGameSocketHandler *>(socket->game)->client_id; },
 		.client_move = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_MOVE>,
 		.client_rcon = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_RCON>,
 		.client_set_name = ReceiveGamePacket<ServerNetworkGameSocketHandler, &ServerNetworkGameSocketHandler::Receive_CLIENT_SET_NAME>,
