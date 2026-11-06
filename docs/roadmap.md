@@ -396,12 +396,18 @@ guidance. Opus 5.5 reviews these changes. Check existing host completion support
 before proposing a host repair; do not edit host databases. Establish no
 cadence, schedules or automatic supervisor. Other ownership work remains paused.
 
+Recovery #709 integrated as **89**, `6426473252`, through #711 after focused
+scenarios, an unrepaired-binary negative control, Opus 5.5 review and exact-head
+Full. The two #705 fixes are also Opus-reviewed; update that PR from the repaired
+base and run its final Full next. The skills are installed and Opus-reviewed in
+`39aa4dc2db`. #710 retains the host-completion limitation and the tools work.
+
 One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and the disjoint-service rule; finishing review and integration
 of an open branch comes first. A lower rank can run while a higher one waits.
 Scopes live in issues; per-PR changes live in each PR's steering comment.
 
-0. **Recover #709 before further integrations.** Restore native fatal reporting for the reachable script road slope input, with scoped review and exact-head Full. Later code prevents bounded rollback. Other draft implementation/review may proceed; after recovery preserve the user's typing-first priority.
+0. **Recovery #709 is complete** through #711 at integration 89. Preserve the user's typing-first priority by integrating #705 next, then complete the selected retrospective tools batch. Other ownership work remains paused under this session's scope.
 1. **Finish the open branches in readiness order.** The [integration-88 checkpoint](#resume-checkpoint-2026-11-06-stocktake-88) holds current heads and concrete next actions for #705, #700, #704, #698 and #706. Integration 85's cadence is repaired; #692 and #628 integrated together as 88, clearing their dependency events. Children check `.local/deep.lock.holders` before a native build, link or game, and pass `--jobs 3`. Rebuild an open PR's worktree only when its work resumes, after pulling it to the PR head. Use focused local checks and diagnostic CI subsets for concrete failures; no universal native profile precedes review and Full ([checks](workflow.md#checks)). #698 does not wait for PR speed evidence.
 2. **Type checking first (user, 2026-11-05).** Typing takes each slot an integration frees, ahead of the harness batch and new owners.
    - Batches 1 to 8 integrated (#677, #680, #681, #682, #688, #689, #694 and #695 as #696).
