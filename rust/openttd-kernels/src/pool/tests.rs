@@ -73,6 +73,12 @@ unsafe extern "C" fn destroy(context: *mut c_void, shell: *mut c_void) {
         assert_eq!((*(*view).slots.as_mut_ptr().add(index)).shell, shell);
         (*c).events
             .push(('D', index, usize::from((*view).cleaning)));
+        let record = (*(*view).slots.as_mut_ptr().add(index))
+            .record
+            .cast::<usize>();
+        if !record.is_null() {
+            (*c).events.push(('R', index, *record));
+        }
         if (*c).grow_on_destroy {
             (*c).grow_on_destroy = false;
             PoolCore::allocate_at(pool, SIZE, 8).unwrap();
