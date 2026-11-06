@@ -45,16 +45,17 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	 * and lists industry j; town b and industry i lie outside it. */
 	Station *st = nullptr; Town *a = nullptr; Industry *j = nullptr;
 	for (Station *candidate : Station::Iterate()) {
-		if (st != nullptr || !HasBit(FIXTURE_FIELD(candidate, always_accepted), cargo) || candidate->industries_near.begin() == candidate->industries_near.end()) continue;
-		BitmapTileIterator it(candidate->catchment_tiles);
+		if (st != nullptr || !HasBit(FIXTURE_FIELD(candidate, always_accepted), cargo) || FIXTURE_INDUSTRIES_NEAR(candidate).begin() == FIXTURE_INDUSTRIES_NEAR(candidate).end()) continue;
+		const auto &catchment = FIXTURE_CATCHMENT(candidate);
+		BitmapTileIterator it(catchment);
 		for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) {
 			if (!IsTileType(tile, MP_HOUSE)) continue;
-			st = candidate; a = Town::GetByTile(tile); j = candidate->industries_near.begin()->industry; break;
+			st = candidate; a = Town::GetByTile(tile); j = FIXTURE_INDUSTRIES_NEAR(candidate).begin()->industry; break;
 		}
 	}
 	if (st == nullptr) FixtureAbort(__LINE__);
-	auto covers_town = [st](const Town *t) { BitmapTileIterator it(st->catchment_tiles); for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) if (IsTileType(tile, MP_HOUSE) && GetTownIndex(tile) == t->index) return true; return false; };
-	auto lists = [st](const Industry *ind) { for (const auto &entry : st->industries_near) if (entry.industry == ind) return true; return false; };
+	auto covers_town = [st](const Town *t) { const auto &catchment = FIXTURE_CATCHMENT(st); BitmapTileIterator it(catchment); for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) if (IsTileType(tile, MP_HOUSE) && GetTownIndex(tile) == t->index) return true; return false; };
+	auto lists = [st](const Industry *ind) { for (const auto &entry : FIXTURE_INDUSTRIES_NEAR(st)) if (entry.industry == ind) return true; return false; };
 	Town *b = nullptr; for (Town *t : Town::Iterate()) if (b == nullptr && !covers_town(t)) b = t;
 	Industry *i = nullptr; for (Industry *ind : Industry::Iterate()) if (i == nullptr && !lists(ind)) i = ind;
 	if (b == nullptr || i == nullptr) FixtureAbort(__LINE__);

@@ -17,7 +17,7 @@ static MonitorSite FindMonitorSite(CargoType pax)
 	MonitorSite site;
 	for (Station *st : Station::Iterate()) {
 		if (site.st != nullptr || !HasBit(FIXTURE_FIELD(st, always_accepted), pax)) continue;
-		for (const auto &entry : st->industries_near) {
+		for (const auto &entry : FIXTURE_INDUSTRIES_NEAR(st)) {
 			if (site.st != nullptr) break;
 			Industry *ind = entry.industry;
 			if (ind->exclusive_supplier != INVALID_OWNER) continue;
@@ -30,7 +30,7 @@ static MonitorSite FindMonitorSite(CargoType pax)
 	if (site.st == nullptr) FixtureAbort(__LINE__);
 	for (Industry *ind : Industry::Iterate()) {
 		bool listed = false;
-		for (const auto &entry : site.st->industries_near) listed |= entry.industry == ind;
+		for (const auto &entry : FIXTURE_INDUSTRIES_NEAR(site.st)) listed |= entry.industry == ind;
 		if (!listed) { site.far = ind; break; }
 	}
 	for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == VEH_TRAIN && v->IsPrimaryVehicle() && v->cargo_payment == nullptr) { site.front = v; break; }
