@@ -4,6 +4,7 @@
 #define RUST_NETWORK_TCP_FFI_H
 #include "byte_span_ffi.h"
 #include "packet_ffi.h"
+#include "../newgrf_badge_type.h"
 #include "abi-record-probe.h"
 class NetworkTCPSocketHandler;
 class NetworkError;

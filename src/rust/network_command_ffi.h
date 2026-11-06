@@ -9,6 +9,7 @@ struct OpenTTDCommandServices;
 struct OpenTTDNetworkFrameServices;
 enum class OpenTTDNetworkCommandDecodeError : uint8_t { None, InvalidCommand, Offline, InvalidCallback };
 struct OpenTTDNetworkSocketSync;
+#include "../newgrf_badge_type.h"
 #include "abi-record-probe.h"
 /** Native leaves of the command queues; packet pointers are valid only during the call. */
 struct OpenTTDNetworkCommandServices {

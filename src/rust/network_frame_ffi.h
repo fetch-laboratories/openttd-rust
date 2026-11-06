@@ -13,6 +13,7 @@ struct OpenTTDNetworkDispatchServices;
 struct OpenTTDNetworkConnectionServices;
 struct OpenTTDNetworkClientServices;
 struct OpenTTDNetworkLifecycleServices;
+#include "../newgrf_badge_type.h"
 #include "abi-record-probe.h"
 enum class OpenTTDNetworkPoll : uint8_t { Error, Ready, Exception };
 /** Native leaves of the frame protocol: `game` is a NetworkGameSocketHandler, `socket` a NetworkClientSocket, packets are owned until sent. */
