@@ -137,7 +137,6 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 }
 static uint32_t VehicleBuildShipTile(uint32_t tile) noexcept { return GetShipDepotNorthTile(TileIndex(tile)).base(); }
 static void *VehicleBuildNewShip(uint32_t tile) noexcept { Ship *v = new Ship(); RustWriteVehicleTile(v, TileIndex(tile)); return v; }
-static void VehicleBuildSetPurchase(void *shell, uint16_t unit, int64_t value) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->Record().unitnumber = unit; v->SetValue(value); }
 static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
@@ -153,7 +152,7 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 		.depot_kind = VehicleBuildDepotKind, .default_cargo = RustEngineDefaultCargo,
 		.pool_available = RustVehicleCanAllocate,
 		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
-		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
+		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip,
 
 		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation,
 		.too_many = STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, .unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
@@ -161,14 +160,6 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 	return services;
 }
 
-static void VehicleCloneCopyService(void *source, void *destination) noexcept
-{
-	const Vehicle *v = static_cast<Vehicle *>(source);
-	Vehicle *w = static_cast<Vehicle *>(destination);
-	w->SetServiceInterval(v->GetServiceInterval());
-	w->SetServiceIntervalIsCustom(v->ServiceIntervalIsCustom());
-	RustVehicleSetServiceIntervalIsPercent(w, v->ServiceIntervalIsPercent());
-}
 static long VehicleCloneParseSuffix(OpenTTDByteSpan suffix) noexcept
 {
 	long num;
@@ -184,7 +175,7 @@ const OpenTTDVehicleCloneServices &GetRustVehicleCloneServices() noexcept
 		.next_vehicle = RustOpaqueVehicleRead<void *, RustVehicleNextVehicle<Vehicle>>,
 		.has_articulated = RustOpaqueVehicleRead<bool, RustGroundHasArticulated<Vehicle>>,
 		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>,
-		.copy_service = VehicleCloneCopyService, .parse_suffix = VehicleCloneParseSuffix,
+		.parse_suffix = VehicleCloneParseSuffix,
 	};
 	return services;
 }

@@ -30,7 +30,6 @@ pub struct Services {
     pub rail: &'static rail::Services,
     pub ship_tile: extern "C" fn(u32) -> u32,
     pub new_ship: extern "C" fn(u32) -> *mut (),
-    pub set_purchase: extern "C" fn(*mut (), u16, i64),
     pub is_engine: extern "C" fn(*mut ()) -> bool,
     pub presentation: extern "C" fn(*mut (), VehicleType),
     pub too_many: u32,
@@ -167,7 +166,10 @@ pub(crate) unsafe fn build(
     // still follows the original accounting, temporary sale and restoration.
     if value.ok() {
         if subflags & DoCommandFlag::EXECUTE != 0 {
-            (s.set_purchase)(v, unit, value.money());
+            let purchase_value = value.money();
+            let record = crate::fleet::record(b.groups, v);
+            record.write_unit_number(unit);
+            record.write_value(purchase_value);
             result.id = unsafe { (b.groups.vehicle_id)(v) };
         }
         if refitting {
@@ -311,7 +313,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleBuildResult" ["probe"] => Result { id, capacity, };
     "OpenTTDVehicleBuildServices" ["probe"] => Services {
         refit, mass, random, depot_kind, default_cargo, pool_available,
-        construct, rail, ship_tile, new_ship, set_purchase,
+        construct, rail, ship_tile, new_ship,
         is_engine, presentation, too_many, unavailable,
     };
 }

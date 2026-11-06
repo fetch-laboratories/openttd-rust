@@ -12,7 +12,6 @@ pub struct Services {
     pub next_vehicle: extern "C" fn(*mut ()) -> *mut (),
     pub has_articulated: extern "C" fn(*mut ()) -> bool,
     pub next_articulated: extern "C" fn(*mut ()) -> *mut (),
-    pub copy_service: extern "C" fn(*mut (), *mut ()),
     pub parse_suffix: extern "C" fn(ByteSpan) -> c_long,
 }
 unsafe fn sell(s: &Services, out: *mut CommandCost, flags: u16, v: *mut ()) {
@@ -247,7 +246,12 @@ unsafe fn clone(
                     }
                 } else {
                     front = w;
-                    (s.copy_service)(v, w);
+                    let source = crate::fleet::record(b.groups, v);
+                    let destination = crate::fleet::record(b.groups, w);
+                    destination.write_service_interval(source.service_interval());
+                    destination.set_service_interval_custom(source.service_interval_is_custom());
+                    destination
+                        .set_service_interval_percent(source.vehicle_flags() & (1 << 9) != 0);
                 }
                 rear = w;
             }
@@ -414,6 +418,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_clone(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleCloneServices" ["probe"] => Services {
-        build, next_vehicle, has_articulated, next_articulated, copy_service, parse_suffix,
+        build, next_vehicle, has_articulated, next_articulated, parse_suffix,
     };
 }

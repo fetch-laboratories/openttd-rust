@@ -443,6 +443,14 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn service_interval_is_custom(self) -> bool {
         self.vehicle_flags() & (1 << 8) != 0
     }
+    pub(crate) fn set_service_interval_custom(self, value: bool) {
+        let flags = self.vehicle_flags();
+        self.write_vehicle_flags(if value {
+            flags | (1 << 8)
+        } else {
+            flags & !(1 << 8)
+        });
+    }
     pub(crate) fn set_service_interval_percent(self, value: bool) {
         let flags = self.vehicle_flags();
         self.write_vehicle_flags(if value {

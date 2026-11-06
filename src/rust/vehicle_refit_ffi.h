@@ -126,7 +126,6 @@ struct OpenTTDVehicleBuildServices {
 	const OpenTTDRailConstructionServices *rail;
 	uint32_t (*ship_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_tile);
 	void *(*new_ship)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_ship);
-	void (*set_purchase)(void *, uint16_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_purchase);
 	bool (*is_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(is_engine);
 	void (*presentation)(void *, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(presentation);
 	uint32_t too_many, unavailable;
@@ -136,7 +135,6 @@ struct OpenTTDVehicleCloneServices {
 	void *(*next_vehicle)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	bool (*has_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
 	void *(*next_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_articulated);
-	void (*copy_service)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(copy_service);
 	long (*parse_suffix)(OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(parse_suffix);
 };
 const OpenTTDVehicleCloneServices &GetRustVehicleCloneServices() noexcept;
