@@ -185,6 +185,8 @@ impl crate::map_func::World<'_> {
         self.asserted(|m| get_road_tile_type(m, t))
     }
     /// `IsLevelCrossingTile`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn level_crossing_tile(&self, t: u32) -> bool {
         self.kind(t) == crate::tile_type::MP_ROAD && self.road_tile_type(t).0 == ROAD_TILE_CROSSING
     }

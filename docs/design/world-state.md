@@ -280,6 +280,29 @@ generic template remains until its final instantiation retires; credit that
 deletion once. Records, containers and control-flow completion remain separate
 obligations of each owner.
 
+All-pools-before-map includes the non-simulation Pool registrations:
+NetworkClientInfoPool and NetworkClientSocketPool transfer with #669 network
+core/discovery/resource ownership, NetworkAdminSocketPool with its admin owner,
+and SpriteGroupPool with GRF publication/lifetime. These phase-3 deliveries run
+beside phase 2 and supply actual allocation/bookkeeping/lifetime closure before
+map allocation. Native read-only iterator wrappers may remain with their named
+reader/support/GUI consumers; they are not a second mutable pool authority and
+retire with the final candidate-C++ consumers. Generic template deletion remains
+one final-use credit.
+
+The tested shell-identity BindRecordIfOwned extension from #719 is promoted
+unchanged through #704 Industry's first required real pooled/nonpooled adoption,
+unless root selects another earlier real consumer. Do not infer membership from
+an uninitialized or copied index, or retire a caller-owned record when destroying
+a borrowed shell. Preserve the normal vehicle indexed path and original
+owner/drop timing. Pooled production shells bind and retire by index (steering
+31). The O(extent) shell-identity scan serves only nonpooled shells. Delete
+fixture-only stack or copy shells rather than keeping the scan alive for them.
+At #719's head every production LinkGraph/Job shell is pooled, so the scan
+makes LGRP load and CleanPool quadratic. CargoPacket churn would make it a hot
+path. Other drafts reconcile the same
+pool.hpp definition at necessary updates; no extra support branch is required.
+
 ## Link graph and job storage (#717)
 
 The selected owner moves graph/job records, private graph/settings snapshots,
@@ -336,3 +359,76 @@ engine/renewal/resolver/reload scenarios, newgrf-loading-bindings and properties
 observations, and existing drawing checks; extend only a concrete uncovered
 allocation or lifetime observation. Final independent review and exact-head Full
 remain the existing acceptance path.
+
+## Small simulation pools and ObjectSpec (#638 with #498)
+
+This selected phase-2 owner contains nine pools: Object, Depot, Sign, Goal,
+StoryPage, StoryPageElement, LeagueTable, LeagueTableElement and PersistentStorage.
+ObjectSpec global/per-file allocations and ordered publication are coupled #498,
+not another phase-3 owner. The combined estimate is 300 to 550 net compiled C++
+lines removed, including generated declarations, consumer rewrites and evidence.
+Use beside-shell records with no stored reference members or out-of-line
+record/shell conversion. Reuse the existing shared-record generator, NativeVec,
+PoolCore, NativeOps, PoolConfig, TypedPool and RustPool definitions.
+
+| Allocation | Canonical Rust state and consumers | Lifetime and retained native owner |
+| --- | --- | --- |
+| Object | Type, town link, area, build date, colour and view; commands, generation, resolver and animation owners read records directly. | Preserve map publication/default order and stale-object deletion during old-save fixup. Drawing, scripts and OBJS read the shared record through inline access. |
+| Depot | Town number, tile/link, owned name bytes and build date; rail/road/water, orders, fleet and town consumers use the record. | Preserve cleaning and missing/mismatched-tile returns. Otherwise reset order backups, remove depot orders, close depot window, then depot-list window. |
+| Sign | Owned name, coordinates and owner. | Allocate, initialize, position, then notify lists; removal dirties/removes viewport entry before deletion and notification. Only Sign::sign remains with phase-5 viewport/drawing. |
+| Goal and story records | Company/type/destination/progress/completion and encoded bytes; page date/sort/title; element page/type/reference/text. | Preserve validation/test-execute ordering and page-element cascade iteration. Reconstruct next-sort with source wrapping; IDs do not extend referenced lifetimes. |
+| League records | Table title/header/footer and element table/rating/company/text/score/link. | Preserve signed ratings, tie order, link validation and reset invalidation. GUI/script/save readers use canonical fields. |
+| PersistentStorage | Existing Rust values, backup and transaction ownership consolidate with native grfid/feature/tile metadata and actual pool state. | Preserve native BasePersistentStorageArray pointer identity/order in the transaction registry. ClearChanges restores values without unregistering; actual destruction unregisters before payload release. Legacy arrays remain separate nonpooled owners. |
+| ObjectSpec | Canonical global specs, stable per-file definitions, defaults, empty fallback, containers and borrowed GRF/SpriteGroup links. | Deferred string writes read the definition's current class. Finish resize/move before class binding; views expire on growth/reset/reload. Drawing/script/native resolvers use the shared payload until their consumer phases migrate. |
+
+All nine pools are Normal and uncached. Object uses u32 IDs, maximum 0xFF0000,
+invalid FFFFFFFF and growth 64; PersistentStorage uses u32, maximum 0xFF000,
+invalid FFFFF and growth 1. LeagueTable uses u8, maximum 255, invalid FF and
+growth 4. Other IDs are u16, maximum 64000 and invalid FFFF; growth is 64 except
+Sign's 16. Preserve registration/cleanup masks, publication before construction,
+assertion credit, occupancy/cursors/counts, indexed reuse and free-before-post-hook
+order. Descriptor buffers expire on growth; separately allocated live shells and
+records remain stable. Bind at the actual owning-member point and retire before
+record destruction while the native shell slot is still live. Generic Pool
+retirement is credited once at its last instantiation.
+
+PersistentStorage needs a concrete nonpooled distinction: OldPersistentStorage
+has static legacy instances and tests use stack 16/256-value arrays. Its storage
+base initializes Rust payload before the PoolItem base; never read an uninitialized
+index or bind every base array. Preserve the actual native base-subobject address
+used by the registry. Reuse the one shell-identity binding extension from #719
+when required; root promotes coherent shared support rather than introducing a
+parallel helper or an unrelated whole-draft wait. Town/industry attachment
+vectors belong to #635; #638 owns the PSA payload and pool. Reconcile the existing
+create/destroy/reference table once with #704 and #700's airport consumers.
+
+ObjectSpec includes IgnoreObjectProperty, ObjectChangeInfo, ResetObjects,
+BindToClasses, SetEntitySpec and FinaliseObjectsArray. Reuse override_manager,
+newgrf_class::object, strings and badge owners. Preserve limit-check-before-resize,
+resize-before-interpretation otherwise, ignored widths/greatest result, property08
+allocation before class dword, current-class deferred names, size/view repair,
+build-to-clear cost copy, dword dates, sticky 2CC, separate animation writes and
+atomic badge destination publication with partial seen state. Finalize in source
+file/spec order, consult saved mapping before transmitter allocation, preserve
+exhaustion logging/return, clear/shrink per-file payloads, then bind classes.
+ResetObjects does not reset mappings; persistent-NewGRF reset omits object manager;
+OBID resets separately. Register only the real global manager.
+
+Adapt existing save adapters without moving chunk orchestration from phase 3.
+Preserve OBID/OBJS, DEPT, SIGN, GOAL, STPA/STPE, LEAT/LEAE and PSAC identity,
+widths, gates and index-plus-one references. This includes OBJS 148/155/186,
+DEPT 6/141/142, SIGN 5/6/83/84/103/164/171, goal 182, story 185, signed league
+rating at SLV_LINKGRAPH_EDGES, and PSAC 16-to-256 extension/grfid gate6/pre161
+industry-airport copies and REF_STORAGE fixups. Reuse existing object, sign,
+objective, depot, storage and reload observations. The planned objects-definitions
+and reload scenarios are not yet present; add production parsing/publication
+observations where saved states erase definitions, class order or partial parser
+behavior. Keep arbitrary-GRF, malformed-save, GUI/thread and uncovered exhaustion
+limits on #156.
+
+The first coherent checkpoint completes Depot/Sign records, owned names, native
+inline consumers, direct Rust routes and actual pool adoption while preserving
+cleanup and viewport notifications. Measure its cost against the whole-owner
+estimate; seven other pools and ObjectSpec remain explicit until completed.
+Existing focused checks, independent fixing review and root's exact-head Full
+apply; this creates no separate implementation or native-test gate.

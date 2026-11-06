@@ -145,18 +145,21 @@ impl State {
         }
         crate::direction_type::INVALID_DIAGDIR
     }
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn query(&mut self, w: &World<'_>, road: Option<&RoadContext>) -> bool {
         self.new_td_bits = if self.mode == RAIL && w.plain_rail(self.new_tile.0) {
             u16::from(w.tracks(self.new_tile.0)) * 0x101
         } else if self.mode == ROAD {
-            crate::pathfinder_func::road_trackdirs(
+            crate::pathfinder_func::road_trackdirs_in_world(
                 crate::movement::table(w.shared),
+                w,
                 self.new_tile.0,
                 self.tram(w, road),
             )
         } else {
-            track_status_to_trackdir_bits(crate::movement::track_status(
-                w.shared,
+            track_status_to_trackdir_bits(crate::movement::table(w.shared).track_status_in_world(
+                w,
                 self.new_tile.0,
                 self.mode,
                 0,
@@ -349,6 +352,8 @@ impl State {
     pub(crate) fn follow(&mut self, s: &Services, tile: u32, td: u8) -> bool {
         self.follow_with_road(s, tile, td, None)
     }
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn follow_with_road(
         &mut self,
         s: &Services,
@@ -369,13 +374,15 @@ impl State {
                         let sub = u32::from(
                             self.mode == ROAD && !self.veh.is_null() && self.tram(&w, road),
                         );
-                        track_status_to_trackdir_bits(crate::movement::track_status(
-                            s,
-                            self.old_tile.0,
-                            self.mode,
-                            sub,
-                            crate::direction_type::INVALID_DIAGDIR,
-                        )) & trackdir_to_trackdir_bits(self.old_td)
+                        track_status_to_trackdir_bits(
+                            crate::movement::table(s).track_status_in_world(
+                                &w,
+                                self.old_tile.0,
+                                self.mode,
+                                sub,
+                                crate::direction_type::INVALID_DIAGDIR,
+                            ),
+                        ) & trackdir_to_trackdir_bits(self.old_td)
                             != 0
                     },
             );
