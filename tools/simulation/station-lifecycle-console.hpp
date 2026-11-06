@@ -194,3 +194,59 @@ static void Station562InspectNames()
 	}
 	StationNeed(found == 8, __LINE__); Station562Rng("names-reloaded");
 }
+
+/* A visit may retire its current record and mutate slots ahead of the live cursor. */
+static void Station634Visit(TileIndex origin, bool reload)
+{
+	if (!reload) {
+		const uint32_t base = static_cast<uint32_t>(Station::GetPoolSize());
+		const auto Create = [&](uint32_t id, const char *name) {
+			auto *st = new (StationID(id)) Station(origin);
+			FIXTURE_SET(st, Owner, owner, OWNER_NONE);
+			FIXTURE_FIELD(st, town) = ClosestTownFromTile(origin, UINT_MAX);
+			st->name = name;
+#ifdef WITH_RUST
+			openttd_test_station_insert(&GetRustSharedServices(), st);
+#else
+			_station_kdtree.Insert(st->index);
+#endif
+		};
+		for (uint32_t delta : {0, 2, 4, 5}) Create(base + delta, "Owner634 seed");
+		auto *wp = new (StationID(base + 1)) Waypoint(origin);
+		FIXTURE_SET(wp, Owner, owner, OWNER_NONE);
+		FIXTURE_FIELD(wp, town) = ClosestTownFromTile(origin, UINT_MAX);
+		wp->name = "Owner634 waypoint";
+		std::vector<uint32_t> trace;
+		uint32_t growth = UINT32_MAX;
+		auto Visit = [&](uint16_t id) {
+			if (id < base) return;
+			trace.push_back(id - base);
+			if (id == base) delete Station::Get(StationID(id));
+			if (id != base + 2) return;
+			Create(base, "Owner634 reborn");
+			Create(base + 3, "Owner634 ahead");
+			delete Station::Get(StationID(base + 4));
+			Create(base + 4, "Owner634 reused");
+			delete Station::Get(StationID(base + 5));
+			growth = static_cast<uint32_t>(_station_pool.data.capacity());
+			StationNeed(growth > base + 5 && growth < StationID::End().base(), __LINE__);
+			Create(growth, "Owner634 growth");
+		};
+#ifdef WITH_RUST
+		openttd_test_station_for_each(&GetRustSharedServices(), &Visit, [](void *context, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t id) {
+			(*static_cast<decltype(Visit) *>(context))(id);
+		});
+#else
+		for (Station *st : Station::Iterate()) Visit(st->index.base());
+#endif
+		StationNeed(trace == std::vector<uint32_t>{0, 2, 3, 4, growth - base}, __LINE__);
+		StationNeed(!Station::IsValidID(StationID(base + 5)), __LINE__);
+		fmt::print(stderr, "STCMD owner634-visit mutation 1 1 1 1\n");
+	}
+	uint stations = 0, waypoints = 0;
+	for (Station *st : Station::Iterate()) if (st->name.starts_with("Owner634 ")) ++stations;
+	for (Waypoint *wp : Waypoint::Iterate()) if (wp->name == "Owner634 waypoint") ++waypoints;
+	StationNeed(stations == 5 && waypoints == 1, __LINE__);
+	fmt::print(stderr, "STCMD owner634-visit state {} {}\n", stations, waypoints);
+	Station562Rng("visit634");
+}

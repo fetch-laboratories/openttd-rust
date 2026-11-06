@@ -141,6 +141,8 @@ def scenarios(soak: bool) -> list[Scenario]:
                 "owner562-tropic-reload",
                 "owner562-delete",
                 "owner562-delete-reload",
+                "owner634-visit",
+                "owner634-visit-reload",
             )
         ]
     )
@@ -1016,6 +1018,15 @@ static bool StationCommands(std::span<std::string_view> args)
 		if (!reload && args.size() == 3) StationNeed(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
 		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
 	}
+	if (args[1].starts_with("owner634-visit")) {
+		_interactive_random.SetSeed(0x634);
+		const Randomizer interactive = _interactive_random;
+		const bool reload = args[1].ends_with("inspect");
+		Station634Visit(reload ? INVALID_TILE : StationPatch(), reload);
+		StationNeed(std::ranges::equal(_interactive_random.state, interactive.state), __LINE__);
+		if (!reload && args.size() == 3) StationNeed(SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK, __LINE__);
+		fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
+	}
 	if (args[1].starts_with("owner562-")) {
 		/* Interactive RNG is process-time seeded and is not saved. */
 		_interactive_random.SetSeed(0x562);
@@ -1332,6 +1343,7 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 
 
 RELOADS = {
+    "owner634-visit-reload": ("owner634-visit", "owner634-visit-inspect"),
     "spatial602-reload": ("spatial602", "spatial602-inspect"),
     "owner562-names-reload": ("owner562-names", "owner562-names-inspect"),
     "owner562-arctic-reload": ("owner562-arctic", "owner562-arctic-inspect"),
@@ -1874,6 +1886,17 @@ def check_commands(
 ) -> None:
     if scenario["station_commands"].startswith("spatial602"):
         check_spatial602(run["log"], scenario["station_commands"].endswith("reload"))
+        return
+    if scenario["station_commands"].startswith("owner634-visit"):
+        required = {"STCMD owner634-visit state 5 1", "STCMD complete"}
+        if not scenario["station_commands"].endswith("reload"):
+            required.add("STCMD owner634-visit mutation 1 1 1 1")
+        if not required.issubset(run["log"]) or not any(
+            line.startswith("STCMD owner562-rng visit634 ") for line in run["log"]
+        ):
+            raise RuntimeError(
+                "station mid-visit fixture lacks mutation/reload evidence"
+            )
         return
     if scenario["station_commands"].startswith("owner562-"):
         kind = scenario["station_commands"].split("-")[1]
