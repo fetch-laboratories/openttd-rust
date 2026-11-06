@@ -252,7 +252,7 @@ static_assert(VehStates{VehState::TrainSlowing}.base() == 16 && Ticks::DAY_TICKS
 
 static OpenTTDVehiclePoolCursor OPENTTD_RUST_CALL VehicleSchedulerPool() noexcept
 {
-	return {.slots = _vehicle_pool.data.data(), .slots_len = _vehicle_pool.data.size(), .first_unused = &_vehicle_pool.first_unused};
+	return {.slots = _vehicle_pool.descriptor->slots.items, .slots_len = _vehicle_pool.descriptor->slots.size(), .first_unused = &_vehicle_pool.descriptor->first_unused};
 }
 /* Existing virtual facades own the original controller timing scopes. The
  * timing destructor completes before this callback returns to Rust assertions.
