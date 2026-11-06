@@ -84,12 +84,12 @@ fn add_location(owner: *mut Industry, tile: u32, size_x: u32) {
     let nx = x.min(tx);
     let ny = y.min(ty);
     unsafe {
-        (*owner).metadata.tile = ny.wrapping_mul(size_x).wrapping_add(nx);
-        (*owner).metadata.width = x
+        (*owner).record.location.tile = ny.wrapping_mul(size_x).wrapping_add(nx);
+        (*owner).record.location.w = x
             .wrapping_add(u32::from(area.w))
             .max(tx.wrapping_add(1))
             .wrapping_sub(nx) as u16;
-        (*owner).metadata.height = y
+        (*owner).record.location.h = y
             .wrapping_add(u32::from(area.h))
             .max(ty.wrapping_add(1))
             .wrapping_sub(ny) as u16;
@@ -253,10 +253,10 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     let c = unsafe { &*c };
     let spec = industrytype::industry(u16::from(r.kind));
     unsafe {
-        (*owner).metadata.tile = r.tile;
-        (*owner).metadata.width = 1;
-        (*owner).metadata.height = 1;
-        (*owner).metadata.kind = r.kind;
+        (*owner).record.location.tile = r.tile;
+        (*owner).record.location.w = 1;
+        (*owner).record.location.h = 1;
+        (*owner).record.r#type = r.kind;
         super::openttd_rust_industry_registry_insert(builder, r.kind, r.id);
     }
     let lists = unsafe {
@@ -310,25 +310,25 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     }
     unsafe {
         (c.set_town)(industry, r.town);
-        (*owner).metadata.owner = 16;
+        (*owner).record.owner = 16;
     }
     let random = s.shared().random() as u16;
     let f = fields(owner);
     unsafe {
-        (*owner).metadata.random_colour = (random & 15) as u8;
+        (*owner).record.random_colour = (random & 15) as u8;
         (*f).counter = random >> 4;
-        (*owner).metadata.random = r.random_bits;
+        (*owner).record.random = r.random_bits;
         (*f).was_cargo_delivered = 0;
     }
     let year = unsafe { (s.economy_year)() };
     unsafe {
         (*f).last_prod_year = year;
-        (*owner).metadata.founder = r.founder;
+        (*owner).record.founder = r.founder;
         (*f).ctlflags = 0;
     }
     let date = crate::timer_game_common::calendar_date().0;
     unsafe {
-        (*owner).metadata.construction_date = date;
+        (*owner).record.construction_date = date;
     }
     let construction_type = if (g.environment.editor)() {
         3
@@ -338,10 +338,10 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
         1
     };
     unsafe {
-        (*owner).metadata.construction_type = construction_type;
-        (*owner).metadata.selected_layout = r.layout_index.wrapping_add(1) as u8;
-        (*owner).metadata.exclusive_supplier = 255;
-        (*owner).metadata.exclusive_consumer = 255;
+        (*owner).record.construction_type = construction_type;
+        (*owner).record.selected_layout = r.layout_index.wrapping_add(1) as u8;
+        (*owner).record.exclusive_supplier = 255;
+        (*owner).record.exclusive_consumer = 255;
         (*f).prod_level = 16;
     }
     if callbacks & (1 << 14) != 0 {
@@ -406,7 +406,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 }
             }
             unsafe {
-                (*owner).metadata.random_colour = (res & 15) as u8;
+                (*owner).record.random_colour = (res & 15) as u8;
             }
         }
     }
@@ -455,7 +455,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
             }
         },
     );
-    let kind = unsafe { (*owner).metadata.kind };
+    let kind = unsafe { (*owner).record.r#type };
     let behaviour = unsafe { (*industrytype::industry(u16::from(kind))).behaviour };
     if behaviour & (1 << 6) != 0 {
         let map = Map {

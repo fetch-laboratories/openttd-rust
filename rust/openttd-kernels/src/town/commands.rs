@@ -168,7 +168,7 @@ impl<'a> Commands<'a> {
         let mut buttons = 0;
         if cid != crate::company_type::COMPANY_SPECTATOR
             && !((self.s.bribe)()
-                && unsafe { (*t.state).simulation.unwanted[usize::from(cid)] } != 0)
+                && unsafe { (*t.state).record.unwanted[usize::from(cid)] } != 0)
         {
             // SAFETY: Canonical resolver returns a live owner or null as GetAvailableMoney permits.
             let c = unsafe { &*self.f.command };
@@ -183,22 +183,22 @@ impl<'a> Commands<'a> {
                     if !(self.s.bribe)() {
                         continue;
                     }
-                    if i32::from(unsafe { (*t.state).simulation.ratings[usize::from(cid)] })
+                    if i32::from(unsafe { (*t.state).record.ratings[usize::from(cid)] })
                         >= RATING_BRIBE_MAXIMUM
                     {
-                        if unsafe { (*t.state).simulation.exclusivity }
+                        if unsafe { (*t.state).record.exclusivity }
                             == (self.shared.current_company)()
                         {
                             continue;
                         }
-                        if unsafe { (*t.state).simulation.exclusive_counter } == 0 {
+                        if unsafe { (*t.state).record.exclusive_counter } == 0 {
                             continue;
                         }
                     }
                 }
                 if action == 6
                     && (!(self.s.exclusive_rights)()
-                        || unsafe { (*t.state).simulation.exclusive_counter } != 0)
+                        || unsafe { (*t.state).record.exclusive_counter } != 0)
                 {
                     continue;
                 }
@@ -208,7 +208,7 @@ impl<'a> Commands<'a> {
                 if action == 3 && !(self.s.fund_roads)() {
                     continue;
                 }
-                if action == 4 && unsafe { (*t.state).simulation.statues } & (1 << cid) != 0 {
+                if action == 4 && unsafe { (*t.state).record.statues } & (1 << cid) != 0 {
                     continue;
                 }
                 let cost = i64::from(action_cost(action))
@@ -291,7 +291,7 @@ impl<'a> Commands<'a> {
             }
             let company = (self.shared.current_company)();
             unsafe {
-                (*t.state).simulation.statues |= 1 << company;
+                (*t.state).record.statues |= 1 << company;
             }
             (self.shared.mark_dirty)(best);
             w::hit(w::TOWN_COMMAND_STATUE);
@@ -302,7 +302,7 @@ impl<'a> Commands<'a> {
         let company = (self.shared.current_company)();
         if crate::random_func::chance16_i(1, 14, self.shared.random()) {
             unsafe {
-                (*t.state).simulation.unwanted[usize::from(company)] = 6;
+                (*t.state).record.unwanted[usize::from(company)] = 6;
             }
             let mut from = 0;
             loop {
@@ -324,11 +324,11 @@ impl<'a> Commands<'a> {
             if (self.s.local_company)() {
                 (self.s.bribe_error)();
             }
-            if i32::from(unsafe { (*t.state).simulation.ratings[usize::from(company)] })
+            if i32::from(unsafe { (*t.state).record.ratings[usize::from(company)] })
                 > RATING_BRIBE_DOWN_TO
             {
                 unsafe {
-                    (*t.state).simulation.ratings[usize::from(company)] =
+                    (*t.state).record.ratings[usize::from(company)] =
                         RATING_BRIBE_DOWN_TO as i16;
                 }
                 (unsafe { &*self.f.growth }.dirty_authority)(u32::from(t.id.0));
@@ -354,12 +354,12 @@ impl<'a> Commands<'a> {
                         .bulldozer)(),
                 );
             }
-            if unsafe { (*t.state).simulation.exclusivity } != company
-                && unsafe { (*t.state).simulation.exclusivity } != INVALID_OWNER
+            if unsafe { (*t.state).record.exclusivity } != company
+                && unsafe { (*t.state).record.exclusivity } != INVALID_OWNER
             {
                 unsafe {
-                    (*t.state).simulation.exclusivity = INVALID_OWNER;
-                    (*t.state).simulation.exclusive_counter = 0;
+                    (*t.state).record.exclusivity = INVALID_OWNER;
+                    (*t.state).record.exclusive_counter = 0;
                 }
                 w::hit(w::TOWN_COMMAND_RIGHTS_CANCEL);
             }
@@ -517,7 +517,7 @@ pub unsafe extern "C" fn openttd_rust_town_cargo_goal(
     }
     if flags & DoCommandFlag::EXECUTE != 0 {
         unsafe {
-            (*t.state).simulation.goal[usize::from(effect.0)] = goal;
+            (*t.state).record.goal[usize::from(effect.0)] = goal;
         }
         c.growth(t).update_growth(u32::from(id));
         (s.invalidate_view)(id);
@@ -601,7 +601,7 @@ pub unsafe extern "C" fn openttd_rust_town_rating_command(
     let rating = i32::from(rating).clamp(RATING_MINIMUM, RATING_MAXIMUM) as i16;
     if flags & DoCommandFlag::EXECUTE != 0 {
         unsafe {
-            (*t.state).simulation.ratings[usize::from(company)] = rating;
+            (*t.state).record.ratings[usize::from(company)] = rating;
         }
         (s.invalidate_authority)(id);
         w::hit(w::TOWN_COMMAND_RATING);
@@ -698,7 +698,7 @@ pub unsafe extern "C" fn openttd_rust_town_action(
             }
             if execute {
                 unsafe {
-                    (*t.state).growth.road = 6;
+                    (*t.state).record.road_build_months = 6;
                 }
                 (s.road_news)(id);
                 (s.road_events)(id);
@@ -721,15 +721,15 @@ pub unsafe extern "C" fn openttd_rust_town_action(
         }
         6 => {
             if !(s.exclusive_rights)()
-                || unsafe { (*t.state).simulation.exclusivity } != INVALID_OWNER
+                || unsafe { (*t.state).record.exclusivity } != INVALID_OWNER
             {
                 c.error(out);
                 return;
             }
             if execute {
                 unsafe {
-                    (*t.state).simulation.exclusive_counter = 12;
-                    (*t.state).simulation.exclusivity = (c.shared.current_company)();
+                    (*t.state).record.exclusive_counter = 12;
+                    (*t.state).record.exclusivity = (c.shared.current_company)();
                 }
                 crate::station::spatial::modify_rating_around(
                     c.shared,

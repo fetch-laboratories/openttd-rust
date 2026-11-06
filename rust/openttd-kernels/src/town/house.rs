@@ -416,12 +416,12 @@ impl<'a> House<'a> {
         }
         // SAFETY: Immediate owner mutations; no service runs while accessed.
         unsafe {
-            let fields = &raw mut (*town.state).simulation;
+            let fields = &raw mut (*town.state).record;
             (*fields).num_houses = (*fields).num_houses.wrapping_sub(1);
             if flags & CHURCH != 0 {
-                (*town.state).growth.flags &= !2;
+                (*town.state).record.flags &= !2;
             } else if flags & STADIUM != 0 {
-                (*town.state).growth.flags &= !4;
+                (*town.state).record.flags &= !4;
             }
         }
         self.clear_part(town, tile, house);
@@ -766,13 +766,13 @@ impl<'a> House<'a> {
         let company = (self.l.exchange_company)(u32::from(OWNER_TOWN));
         // SAFETY: Immediate owner reads/writes in source short-circuit order;
         // each access ends before the next service.
-        let growing = unsafe { (*town.state).growth.flags } & 1 != 0;
+        let growing = unsafe { (*town.state).record.flags } & 1 != 0;
         if flags & HAS_1_TILE != 0
             && growing
             && self.can_delete(town, tile, house)
             && rec.age >= spec.minimum_life
             && unsafe {
-                let rebuild = &raw mut (*town.state).simulation.time_until_rebuild;
+                let rebuild = &raw mut (*town.state).record.time_until_rebuild;
                 *rebuild = (*rebuild).wrapping_sub(1);
                 *rebuild == 0
             }
@@ -780,7 +780,7 @@ impl<'a> House<'a> {
             witness::hit(W_REBUILD);
             // SAFETY: Immediate owner write before clearing services.
             unsafe {
-                (*town.state).simulation.time_until_rebuild = ((r >> 16) & 0xFF) as u16 + 192;
+                (*town.state).record.time_until_rebuild = ((r >> 16) & 0xFF) as u16 + 192;
             };
             self.clear_town_house(town, tile, house);
             if r >> 24 >= 12 {
@@ -885,7 +885,7 @@ impl<'a> House<'a> {
             }
             // SAFETY: Valid company; immediate canonical (not scratch) rating read.
             let current =
-                i32::from(unsafe { (*town.state).simulation.ratings[usize::from(company)] });
+                i32::from(unsafe { (*town.state).record.ratings[usize::from(company)] });
             if rating > current && (authority.council_tolerance)() != 3 {
                 witness::hit(W_CLEAR_REFUSED);
                 (c.error_param)(result, self.h.errors.refuses, u64::from(town.id.0));
@@ -1255,8 +1255,8 @@ impl<'a> House<'a> {
         crate::town::spatial::rebuild(self.s);
         // SAFETY: Immediate owner writes; no service runs while accessed.
         self.towns(|state| unsafe {
-            (*state).simulation.population = 0;
-            (*state).simulation.num_houses = 0;
+            (*state).record.population = 0;
+            (*state).record.num_houses = 0;
         });
         let map = self.map();
         for tile in 0..self.map_size() {
@@ -1272,7 +1272,7 @@ impl<'a> House<'a> {
                 let population = (self.l.house_population)(rec.house);
                 // SAFETY: As above.
                 unsafe {
-                    let fields = &raw mut (*state).simulation;
+                    let fields = &raw mut (*state).record;
                     (*fields).population = (*fields).population.wrapping_add(u32::from(population));
                 }
             }
@@ -1280,7 +1280,7 @@ impl<'a> House<'a> {
             if self.north_part(&mut house, map) == 0 {
                 // SAFETY: As above.
                 unsafe {
-                    let fields = &raw mut (*state).simulation;
+                    let fields = &raw mut (*state).record;
                     (*fields).num_houses = (*fields).num_houses.wrapping_add(1);
                 }
             }

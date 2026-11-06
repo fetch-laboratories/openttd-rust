@@ -920,7 +920,7 @@ impl<'a> World<'a> {
                 );
             } else if object.kind == STATUE && flags & DoCommandFlag::EXECUTE != 0 {
                 let town = (self.s.statue_town)(object.object);
-                let fields = crate::town::openttd_rust_town_simulation(town.state);
+                let fields = crate::town::record(town.state);
                 (*fields).statues &= !((1_u64 << self.owner(tile)) as u16);
                 ((*self.s.town).dirty_authority)(u32::from(town.id.0));
             }
@@ -1401,7 +1401,7 @@ impl World<'_> {
                 }
             } else if kind == STATUE {
                 let town = (self.s.statue_town)((self.query().by_tile)(tile));
-                let fields = crate::town::openttd_rust_town_simulation(town.state);
+                let fields = crate::town::record(town.state);
                 (*fields).statues &= !((1_u64 << old) as u16);
                 if new != INVALID_OWNER && (*fields).statues & ((1_u64 << new) as u16) == 0 {
                     (*fields).statues |= (1_u64 << new) as u16;

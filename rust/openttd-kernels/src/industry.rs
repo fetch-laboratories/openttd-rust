@@ -98,42 +98,57 @@ impl Drop for Accepted {
         }
     }
 }
-#[repr(C)]
-#[derive(Default, Clone, Copy)]
-pub struct Fields {
-    pub valid_history: u64,
-    pub last_prod_year: i32,
-    pub counter: u16,
-    pub prod_level: u8,
-    pub was_cargo_delivered: u8,
-    pub ctlflags: u8,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// The fields of one native `Industry` shell, read and written in place by
+    /// both languages. It is the first member of the canonical owner, so the
+    /// owner's address is the record's. Widths and defaults are the original members'.
+    "OpenTTDIndustryRecord" ["industry_record"] => pub struct IndustryRecord {
+        /// Owning native shell; stable while the record lives. Null for a
+        /// synchronous resolver owner on the Rust stack.
+        pub shell: *mut crate::industry_type::Industry => "Industry *",
+        /// `Industry::town`, the nearest town.
+        pub town: *mut crate::town_type::TownHandle => "Town *",
+        /// NOSAVE `Industry::neutral_station`.
+        pub neutral_station: *mut crate::station::Station => "Station *",
+        pub valid_history: u64 => "ValidHistoryMask",
+        pub location: crate::tilearea::TileArea => "TileArea",
+        pub construction_date: i32 => "TimerGameCalendar::Date",
+        pub last_prod_year: i32 => "TimerGameEconomy::Year",
+        pub random: u16,
+        pub counter: u16,
+        pub r#type: u8 => "IndustryType",
+        pub owner: u8 => "Owner",
+        pub random_colour: u8 => "Colours",
+        pub founder: u8 => "Owner",
+        pub construction_type: u8,
+        pub selected_layout: u8,
+        pub exclusive_supplier: u8 => "Owner",
+        pub exclusive_consumer: u8 => "Owner",
+        pub prod_level: u8,
+        pub was_cargo_delivered: u8,
+        pub ctlflags: u8 => "IndustryControlFlags",
+        /// NOSAVE `Industry::part_of_subsidy`.
+        pub part_of_subsidy: u8 => "PartsOfSubsidy",
+    }
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Metadata {
-    pub tile: u32,
-    pub width: u16,
-    pub height: u16,
-    pub construction_date: i32,
-    pub random: u16,
-    pub kind: u8,
-    pub owner: u8,
-    pub random_colour: u8,
-    pub founder: u8,
-    pub construction_type: u8,
-    pub selected_layout: u8,
-    pub exclusive_supplier: u8,
-    pub exclusive_consumer: u8,
-}
-impl Default for Metadata {
+impl Default for IndustryRecord {
     fn default() -> Self {
         Self {
-            tile: u32::MAX,
-            width: 0,
-            height: 0,
+            shell: ptr::null_mut(),
+            town: ptr::null_mut(),
+            neutral_station: ptr::null_mut(),
+            valid_history: 0,
+            location: crate::tilearea::TileArea {
+                tile: u32::MAX,
+                w: 0,
+                h: 0,
+            },
             construction_date: 0,
+            last_prod_year: 0,
             random: 0,
-            kind: 0,
+            counter: 0,
+            r#type: 0,
             owner: 255,
             random_colour: 0,
             founder: 255,
@@ -141,13 +156,19 @@ impl Default for Metadata {
             selected_layout: 0,
             exclusive_supplier: 255,
             exclusive_consumer: 255,
+            prod_level: 0,
+            was_cargo_delivered: 0,
+            ctlflags: 0,
+            part_of_subsidy: 0,
         }
     }
 }
+/// The canonical industry owner. The record is its first member, so a record
+/// pointer is also the owner's address.
+#[repr(C)]
 #[derive(Default)]
 pub struct Industry {
-    fields: Fields,
-    metadata: Metadata,
+    pub(crate) record: IndustryRecord,
     text: Vec<u8>,
     produced: Vec<Produced>,
     accepted: Vec<Accepted>,
@@ -212,8 +233,10 @@ pub struct Slots {
 }
 /// Allocate a canonical owner. Allocation failure aborts.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_industry_new() -> *mut Industry {
-    Box::into_raw(Box::default())
+pub extern "C" fn openttd_rust_industry_new(shell: *mut crate::industry_type::Industry) -> *mut Industry {
+    let mut owner = Box::<Industry>::default();
+    owner.record.shell = shell;
+    Box::into_raw(owner)
 }
 /// # Safety
 /// Handle is live and uniquely owned; all C++ slot/history/scalar views have ended.
@@ -222,12 +245,6 @@ pub unsafe extern "C" fn openttd_rust_industry_destroy(owner: *mut Industry) {
     unsafe {
         drop(Box::from_raw(owner));
     }
-}
-/// # Safety
-/// Live shell handle. Returned fields are nonowning; no concurrent accesses.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_fields(owner: *mut Industry) -> *mut Fields {
-    unsafe { ptr::addr_of_mut!((*owner).fields) }
 }
 fn view<T>(v: &mut Vec<T>) -> Slots {
     Slots {
@@ -463,7 +480,7 @@ const SND_37_LUMBER_MILL_2: u16 = 0x37;
 use crate::landscape_type::{ARCTIC, TROPIC};
 /// `GetIndustrySpec(i->type)` through the owner's type.
 fn spec_of(owner: *mut Industry) -> *const crate::industrytype::IndustrySpec {
-    crate::industrytype::industry(u16::from(unsafe { (*owner).metadata.kind }))
+    crate::industrytype::industry(u16::from(unsafe { (*owner).record.r#type }))
 }
 fn observe(owner: *mut Industry) -> Observation {
     let spec = spec_of(owner);
@@ -473,7 +490,7 @@ fn observe(owner: *mut Industry) -> Observation {
             behaviour: (*spec).behaviour,
             callbacks: (*spec).callback_mask,
             life: (*spec).life_type,
-            kind: (*owner).metadata.kind,
+            kind: (*owner).record.r#type,
             up_text: (*spec).production_up_text,
             down_text: (*spec).production_down_text,
             closure_text: (*spec).closure_text,
@@ -489,8 +506,8 @@ fn range(s: &Services, n: u32) -> u32 {
 fn chance(s: &Services, a: u32, b: u32) -> bool {
     chance16_i(a, b, rand(s))
 }
-fn fields(owner: *mut Industry) -> *mut Fields {
-    unsafe { ptr::addr_of_mut!((*owner).fields) }
+fn fields(owner: *mut Industry) -> *mut IndustryRecord {
+    unsafe { ptr::addr_of_mut!((*owner).record) }
 }
 fn produced(owner: *mut Industry, slot: usize) -> *mut Produced {
     unsafe { (*owner).produced.as_mut_ptr().add(slot) }
@@ -557,7 +574,7 @@ pub(crate) unsafe fn get_cargo_accepted(owner: *const Industry, cargo: u8) -> Op
 }
 /// SAFETY: Live serialized industry owner; observe after the refusal callback.
 pub(crate) unsafe fn exclusive_supplier(owner: *const Industry) -> crate::company_type::CompanyID {
-    unsafe { crate::company_type::CompanyID((*owner).metadata.exclusive_supplier) }
+    unsafe { crate::company_type::CompanyID((*owner).record.exclusive_supplier) }
 }
 /// SAFETY: Live accepted slot selected by `GetCargoAccepted`; the date leaf cannot resize slots.
 pub(crate) unsafe fn accept_delivery(
@@ -615,7 +632,7 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
     if unsafe { (*f).counter.is_multiple_of(64) } {
         let r = rand(s);
         if chance16_i(1, 14, r) {
-            let kind = unsafe { (*owner).metadata.kind };
+            let kind = unsafe { (*owner).record.r#type };
             let sounds = unsafe {
                 (*crate::industrytype::industry(u16::from(kind)))
                     .random_sounds
@@ -775,7 +792,7 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
                 cw,
                 source,
                 stations_near(owner),
-                (*owner).metadata.exclusive_consumer,
+                (*owner).record.exclusive_consumer,
                 c,
             )
         };
@@ -791,7 +808,7 @@ pub unsafe extern "C" fn openttd_rust_industry_transport_abi(
 fn recompute(owner: *mut Industry) {
     let f = fields(owner);
     for n in 0..produced_count(owner) {
-        let spec = crate::industrytype::industry(u16::from(unsafe { (*owner).metadata.kind }));
+        let spec = crate::industrytype::industry(u16::from(unsafe { (*owner).record.r#type }));
         let rate = u32::from(unsafe { (*spec).production_rate[n] });
         let value = rate * unsafe { u32::from((*f).prod_level) };
         unsafe {
@@ -1609,9 +1626,9 @@ pub(crate) unsafe fn trigger_delivery(
     use crate::newgrf_callbacks::{
         INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
     };
-    let spec = resolver::ResolverServices::spec(unsafe { (*owner).metadata.kind });
+    let spec = resolver::ResolverServices::spec(unsafe { (*owner).record.r#type });
     let mask = unsafe { (*spec).callback_mask };
-    unsafe { (*owner).fields.was_cargo_delivered = 1 };
+    unsafe { (*owner).record.was_cargo_delivered = 1 };
     if mask & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) != 0 {
         if mask & INDUSTRY_PRODUCTION_CARGO_ARRIVAL != 0 {
             let mut storage = std::mem::MaybeUninit::<ProductionStorage>::uninit();
@@ -1825,13 +1842,6 @@ pub unsafe extern "C" fn openttd_rust_industry_daily_start(
 }
 
 /// # Safety
-/// Live owner with serial field-sized accesses. The facade placement-constructs
-/// its native `TileArea` prefix once with pinned scalar layout; no reference spans a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_metadata(owner: *mut Industry) -> *mut Metadata {
-    unsafe { ptr::addr_of_mut!((*owner).metadata) }
-}
-/// # Safety
 /// Live owner. The returned full byte span stays valid until text mutation or
 /// owner destruction. Copy or inspect it before any callback that can mutate it.
 #[unsafe(no_mangle)]
@@ -1903,7 +1913,7 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_clear(owner: *mut Builde
 /// Subsidy search reads only the original industry location.
 /// SAFETY: Live serialized industry owner, immediate read with no callbacks.
 pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> u32 {
-    unsafe { (*owner).metadata.tile }
+    unsafe { (*owner).record.location.tile }
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
 pub(crate) unsafe fn subsidy_produced_count(owner: *const Industry) -> u32 {
@@ -2108,21 +2118,6 @@ crate::abi::layouts! {
         increase_progress,
         missing_warning,
     };
-    "OpenTTDIndustryMetadata" ["industry"] => Metadata {
-        tile,
-        width,
-        height,
-        construction_date,
-        random,
-        kind => type,
-        owner,
-        random_colour,
-        founder,
-        construction_type,
-        selected_layout,
-        exclusive_supplier,
-        exclusive_consumer,
-    };
     "OpenTTDIndustryCleanupTile" ["industry"] => crate::industry::CleanupTile {
         industry,
         kind => type,
@@ -2167,14 +2162,6 @@ crate::abi::layouts! {
         set_random_bits,
         animation_spec,
 
-    };
-    "OpenTTDIndustryFields" ["industry"] => Fields {
-        valid_history,
-        last_prod_year,
-        counter,
-        prod_level,
-        was_cargo_delivered,
-        ctlflags,
     };
     "OpenTTDIndustryBuildFields" ["industry"] => BuildFields {
         probability,

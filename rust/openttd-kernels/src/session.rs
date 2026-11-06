@@ -641,7 +641,7 @@ impl<'a> Session<'a> {
             }
             from = u32::from(entry.id) + 1;
             unsafe {
-                (*crate::industry::openttd_rust_industry_fields(entry.owner)).last_prod_year =
+                (*entry.owner.cast::<crate::industry::IndustryRecord>()).last_prod_year =
                     crate::timer_game_common::economy_year().0;
             }
         }

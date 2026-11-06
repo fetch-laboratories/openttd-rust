@@ -15,13 +15,13 @@
 #endif
 #include "service_defaults.hpp"
 #include "town_ffi.h"
+#include "abi-record-subsidy_record.h"
 struct OpenTTDIndustry;
 struct Industry;
 struct OpenTTDIndustryServices;
-/** Native aliases address this sole Rust allocation. Calls are serialized by the
+/* The subsidy record is the sole Rust allocation. Calls are serialized by the
  * game-state mutex. No owner borrow survives allocation, news, events or deletion;
  * noexcept shared leaves terminate environmental failures and never run a VM. */
-struct OpenTTDSubsidyState { CargoType cargo_type; uint16_t remaining; CompanyID awarded; Source src, dst; };
 /** The contiguous scalar data of a native stack CargoArray. */
 struct OpenTTDSubsidyCargo { uint32_t *data; };
 struct OpenTTDSubsidyServices {
@@ -57,8 +57,9 @@ struct OpenTTDSubsidyServices {
 	void (*assert_destination)(Source) noexcept OPENTTD_SERVICE_DEFAULT(assert_destination);
 };
 extern "C" {
-OpenTTDSubsidyState *openttd_rust_subsidy_new(uint16_t);
-void openttd_rust_subsidy_destroy(uint16_t, OpenTTDSubsidyState *);
+/* A record with the original member defaults. */
+OpenTTDSubsidyRecord *openttd_rust_subsidy_new(uint16_t);
+void openttd_rust_subsidy_destroy(uint16_t, OpenTTDSubsidyRecord *);
 void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
 void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
 uint8_t openttd_rust_subsidy_command_abi(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);

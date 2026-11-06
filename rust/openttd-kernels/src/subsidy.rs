@@ -30,14 +30,20 @@ use crate::{
 };
 use crate::{industry, services::Services as Shared, town};
 use std::{ffi::c_void, ptr};
-#[repr(C)]
-pub struct State {
-    pub cargo_type: u8,
-    pub remaining: u16,
-    pub awarded: u8,
-    pub src: Source,
-    pub dst: Source,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// The fields of one native `Subsidy` shell, read and written in place by
+    /// both languages. Widths and defaults are the original members'.
+    "OpenTTDSubsidyRecord" ["subsidy_record"] => pub struct SubsidyRecord {
+        pub cargo_type: u8 => "CargoType",
+        pub remaining: u16,
+        pub awarded: u8 => "CompanyID",
+        pub src: Source => "Source",
+        pub dst: Source => "Source",
+    }
 }
+/// The subsidy owner is its record.
+pub type State = SubsidyRecord;
 impl State {
     fn is_awarded(&self) -> bool {
         self.awarded != u8::MAX
@@ -584,7 +590,6 @@ pub unsafe extern "C" fn openttd_rust_subsidy_check_abi(
 crate::abi::layouts! {
     fn abi_layout;
     "Source" ["probe"] => crate::subsidy::Source { id, kind => type, };
-    "OpenTTDSubsidyState" ["probe"] => State { cargo_type, remaining, awarded, src, dst, };
     "OpenTTDSubsidyCargo" ["probe"] => Cargo { data, };
     "OpenTTDSubsidyServices" ["probe"] => Services {
         shared,

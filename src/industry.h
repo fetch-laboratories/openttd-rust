@@ -58,6 +58,9 @@ enum class IndustryControlFlag : uint8_t {
 };
 using IndustryControlFlags = EnumBitSet<IndustryControlFlag, uint8_t, IndustryControlFlag::End>;
 
+/* The shared industry record, generated from Rust; its field types are declared above. */
+#include "abi-record-industry_record.h"
+
 /**
  * Defines the internal data of a functional industry.
  */
@@ -105,37 +108,17 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 
 	using ProducedCargoes = RustIndustryVector<ProducedCargo, true>;
 	using AcceptedCargoes = RustIndustryVector<AcceptedCargo, false>;
-	RustIndustryOwner production_owner{openttd_rust_industry_new(), openttd_rust_industry_destroy};
-	OpenTTDIndustryMetadata &construction_fields = *openttd_rust_industry_metadata(this->production_owner.get());
-	OpenTTDIndustryMetadata &Metadata() const { return this->construction_fields; }
-	OpenTTDIndustryFields &ProductionFields() const { return *openttd_rust_industry_fields(this->production_owner.get()); }
+	RustIndustryOwner production_owner{openttd_rust_industry_new(this), openttd_rust_industry_destroy};
+	/** The shared record: the canonical owner's first member, at its address. */
+	inline OpenTTDIndustryRecord &Record() { return *reinterpret_cast<OpenTTDIndustryRecord *>(this->production_owner.get()); }
+	inline const OpenTTDIndustryRecord &Record() const { return *reinterpret_cast<const OpenTTDIndustryRecord *>(this->production_owner.get()); }
 
-	TileArea &location = *reinterpret_cast<TileArea *>(&this->Metadata().tile);
-	Town *town = nullptr; ///< Nearest town
-	Station *neutral_station = nullptr; ///< Associated neutral station
-	ValidHistoryMask &valid_history = *reinterpret_cast<ValidHistoryMask *>(&this->ProductionFields().valid_history);
 	ProducedCargoes produced{this->production_owner.get()};
 	AcceptedCargoes accepted{this->production_owner.get()};
-	uint8_t &prod_level = this->ProductionFields().prod_level;
-	uint16_t &counter = this->ProductionFields().counter;
 
-	IndustryType &type = this->Metadata().type;
-	Owner &owner = *reinterpret_cast<Owner *>(&this->Metadata().owner);
-	Colours &random_colour = *reinterpret_cast<Colours *>(&this->Metadata().random_colour);
-	TimerGameEconomy::Year &last_prod_year = *reinterpret_cast<TimerGameEconomy::Year *>(&this->ProductionFields().last_prod_year);
-	uint8_t &was_cargo_delivered = this->ProductionFields().was_cargo_delivered;
-	IndustryControlFlags &ctlflags = *reinterpret_cast<IndustryControlFlags *>(&this->ProductionFields().ctlflags);
-
-	PartsOfSubsidy part_of_subsidy{}; ///< NOSAVE: is this industry a source/destination of a subsidy?
 	RustStationList<Station> stations_near{openttd_rust_industry_stations_near(production_owner.get())};
 	mutable std::string cached_name{}; ///< NOSAVE: Cache of the resolved name of the industry
 
-	Owner &founder = *reinterpret_cast<Owner *>(&this->Metadata().founder);
-	TimerGameCalendar::Date &construction_date = *reinterpret_cast<TimerGameCalendar::Date *>(&this->Metadata().construction_date);
-	uint8_t &construction_type = this->Metadata().construction_type;
-	uint8_t &selected_layout = this->Metadata().selected_layout;
-	Owner &exclusive_supplier = *reinterpret_cast<Owner *>(&this->Metadata().exclusive_supplier);
-	Owner &exclusive_consumer = *reinterpret_cast<Owner *>(&this->Metadata().exclusive_consumer);
 	bool HasText() const { return openttd_rust_industry_text(this->production_owner.get()).size != 0; }
 	EncodedString GetText() const
 	{
@@ -145,13 +128,11 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
 	void SetText(const EncodedString &value) { auto text = TextView(value); openttd_rust_industry_set_text(this->production_owner.get(), text.data, text.size); }
 
-	uint16_t &random = this->Metadata().random;
-
 	PersistentStorage *psa = nullptr; ///< Persistent storage for NewGRF industries.
 
-	Industry(TileIndex tile = INVALID_TILE) { std::construct_at(&this->location, tile, 0, 0); }
+	Industry(TileIndex tile = INVALID_TILE) { this->Record().location = TileArea(tile, 0, 0); }
 	/** Synchronous resolver shell; its Rust stack owner outlives this shell. */
-	explicit Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { std::construct_at(&this->location, INVALID_TILE, 0, 0); }
+	explicit Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { this->Record().location = TileArea(INVALID_TILE, 0, 0); }
 	~Industry();
 
 	void RecomputeProductionMultipliers();

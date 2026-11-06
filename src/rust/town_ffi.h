@@ -22,21 +22,7 @@ struct Town;
 struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
 
 struct OpenTTDHouseServices;
-struct OpenTTDTownGrowthFields { uint16_t counter, rate; uint8_t funding, road, flags; };
 struct OpenTTDTownReceived { uint16_t old_max, new_max, old_act, new_act; };
-struct OpenTTDTownSimulationFields {
-	uint64_t valid_history;
-	uint32_t xy, num_houses, population, radius[5], goal[6];
-	int16_t ratings[15];
-	OpenTTDTownReceived received[6];
-	uint16_t noise_reached, time_until_rebuild, statues, have_ratings;
-	uint8_t unwanted[15], exclusivity, exclusive_counter;
-	bool larger_town;
-	uint8_t layout;
-	uint32_t townnamegrfid;
-	uint16_t townnametype;
-	uint32_t townnameparts;
-};
 struct OpenTTDTownSuppliedHistory { uint32_t production, transported; };
 struct OpenTTDTownSupplied { uint8_t cargo; OpenTTDTownSuppliedHistory history[61]; };
 struct OpenTTDTownSuppliedEntry { OpenTTDTownSupplied *entry; bool created; };
@@ -109,7 +95,6 @@ void openttd_rust_town_authority_station(const OpenTTDTownAuthorityServices *, c
 void openttd_rust_town_authority_remove(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, const OpenTTDTownHandle *, bool, uint8_t);
 void openttd_rust_town_update_radius(OpenTTDTownState *);
 uint32_t openttd_rust_town_world_population(const OpenTTDTownLeaves *);
-OpenTTDTownSimulationFields *openttd_rust_town_simulation(OpenTTDTownState *);
 OpenTTDTownSlots openttd_rust_town_supplied_view(OpenTTDTownState *);
 OpenTTDTownSuppliedEntry openttd_rust_town_supplied_entry(OpenTTDTownState *, uint8_t);
 size_t openttd_rust_town_supplied_find(const OpenTTDTownState *, uint8_t);
@@ -128,9 +113,9 @@ OpenTTDTownSuppliedHistory openttd_rust_town_sum_history(const OpenTTDTownSuppli
 void openttd_rust_town_rating_test(bool);
 int32_t openttd_rust_town_rating(const OpenTTDTownState *, uintptr_t, uint8_t);
 void openttd_rust_town_change_rating(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDTownState *, uint32_t, uintptr_t, uint8_t, int32_t, int32_t, bool, bool);
-OpenTTDTownState *openttd_rust_town_new();
+/* The owner's first member is its shared OpenTTDTownRecord, at the same address. */
+OpenTTDTownState *openttd_rust_town_new(Town *shell);
 void openttd_rust_town_destroy(OpenTTDTownState *);
-OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
 void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 uint8_t openttd_test_town_tunnel(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t tile, uint32_t dir);

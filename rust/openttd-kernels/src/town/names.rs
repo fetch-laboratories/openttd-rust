@@ -162,7 +162,7 @@ pub(super) unsafe fn verify(
         let custom = unsafe { openttd_rust_town_name(town.state) };
         let other = if custom.size == 0 {
             let params = unsafe { crate::townname_type::from_town(&*town.state) };
-            let seed = unsafe { (*town.state).simulation.townnameparts };
+            let seed = unsafe { (*town.state).record.townnameparts };
             unsafe { render(s, frame, &params, seed, true, &mut other_text) }
         } else {
             custom

@@ -39,7 +39,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
     if execute {
         let owner = unsafe { (s.owner)(shell) };
         unsafe {
-            (*owner).fields.ctlflags = value;
+            (*owner).record.ctlflags = value;
         }
     }
     u8::from(true)
@@ -65,8 +65,8 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     if execute {
         let owner = unsafe { (s.owner)(shell) };
         unsafe {
-            (*owner).fields.ctlflags |= 8;
-            (*owner).fields.prod_level = level;
+            (*owner).record.ctlflags |= 8;
+            (*owner).record.prod_level = level;
         }
         super::recompute(owner);
     }
@@ -97,9 +97,9 @@ pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command_abi(
         let owner = unsafe { (s.owner)(shell) };
         unsafe {
             if consumer {
-                (*owner).metadata.exclusive_consumer = company;
+                (*owner).record.exclusive_consumer = company;
             } else {
-                (*owner).metadata.exclusive_supplier = company;
+                (*owner).record.exclusive_supplier = company;
             }
         }
     }
@@ -136,14 +136,14 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text_command_abi(
 /// Live owner, with no callbacks or surviving reference to metadata.
 pub(crate) unsafe fn openttd_rust_industry_change_owner(owner: *mut Industry, old: u8, new: u8) {
     unsafe {
-        if (*owner).metadata.founder == old {
-            (*owner).metadata.founder = if new == 255 { 16 } else { new };
+        if (*owner).record.founder == old {
+            (*owner).record.founder = if new == 255 { 16 } else { new };
         }
-        if (*owner).metadata.exclusive_supplier == old {
-            (*owner).metadata.exclusive_supplier = new;
+        if (*owner).record.exclusive_supplier == old {
+            (*owner).record.exclusive_supplier = new;
         }
-        if (*owner).metadata.exclusive_consumer == old {
-            (*owner).metadata.exclusive_consumer = new;
+        if (*owner).record.exclusive_consumer == old {
+            (*owner).record.exclusive_consumer = new;
         }
     }
 }

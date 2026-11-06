@@ -29,12 +29,6 @@ struct IndustrySpec;
 typedef struct OpenTTDIndustryStationHandle OpenTTDIndustryStationHandle;
 typedef struct OpenTTDIndustry OpenTTDIndustry;
 typedef struct OpenTTDIndustryBuilder OpenTTDIndustryBuilder;
-typedef struct OpenTTDIndustryFields {
-	uint64_t valid_history;
-	int32_t last_prod_year;
-	uint16_t counter;
-	uint8_t prod_level, was_cargo_delivered, ctlflags;
-} OpenTTDIndustryFields;
 typedef struct OpenTTDIndustryBuildFields {
 	uint32_t probability;
 	uint8_t min_number;
@@ -46,14 +40,6 @@ typedef struct OpenTTDIndustryBuilderFields {
 	uint8_t sound_ctr;
 } OpenTTDIndustryBuilderFields;
 typedef struct OpenTTDIndustrySlots { void *data; size_t size; } OpenTTDIndustrySlots;
-typedef struct OpenTTDIndustryMetadata {
-	uint32_t tile;
-	uint16_t width, height;
-	int32_t construction_date;
-	uint16_t random;
-	uint8_t type, owner, random_colour, founder, construction_type, selected_layout, exclusive_supplier, exclusive_consumer;
-} OpenTTDIndustryMetadata;
-OpenTTDIndustryMetadata *openttd_rust_industry_metadata(OpenTTDIndustry *owner);
 /* Borrowed until text mutation or owner destruction; consume before any callback. */
 OpenTTDByteSpan openttd_rust_industry_text(const OpenTTDIndustry *owner);
 void openttd_rust_industry_set_text(OpenTTDIndustry *owner, const uint8_t *text, size_t length);
@@ -61,9 +47,9 @@ OpenTTDIndustrySlots openttd_rust_industry_registry_view(OpenTTDIndustryBuilder 
 void openttd_rust_industry_registry_insert(OpenTTDIndustryBuilder *owner, uint8_t type, uint16_t id);
 void openttd_rust_industry_registry_erase(OpenTTDIndustryBuilder *owner, uint8_t type, uint16_t id);
 void openttd_rust_industry_registry_clear(OpenTTDIndustryBuilder *owner, uint8_t type);
-OpenTTDIndustry *openttd_rust_industry_new(void);
+/* The owner's first member is its shared OpenTTDIndustryRecord, at the same address. */
+OpenTTDIndustry *openttd_rust_industry_new(Industry *shell);
 void openttd_rust_industry_destroy(OpenTTDIndustry *owner);
-OpenTTDIndustryFields *openttd_rust_industry_fields(OpenTTDIndustry *owner);
 /* One entry per vector operation; any mutation invalidates outstanding views. */
 OpenTTDIndustrySlots openttd_rust_industry_produced_view(OpenTTDIndustry *owner);
 OpenTTDIndustrySlots openttd_rust_industry_accepted_view(OpenTTDIndustry *owner);

@@ -270,12 +270,12 @@ impl<'a> Founding<'a> {
         let previous = super::openttd_rust_town_generating_exchange_abi(true) != 0;
         // SAFETY: Immediate canonical field writes; no borrow spans callbacks.
         unsafe {
-            (*town.state).simulation.xy = tile.0;
-            (*town.state).simulation.num_houses = 0;
-            (*town.state).simulation.time_until_rebuild = 10;
+            (*town.state).record.xy = tile.0;
+            (*town.state).record.num_houses = 0;
+            (*town.state).record.time_until_rebuild = 10;
             update_radius(town.state);
-            (*town.state).growth.flags = 0;
-            (*town.state).simulation.population = 0;
+            (*town.state).record.flags = 0;
+            (*town.state).record.population = 0;
         }
         // SAFETY: Fresh canonical owner; no count view exists yet.
         unsafe {
@@ -287,8 +287,8 @@ impl<'a> Founding<'a> {
             );
         };
         unsafe {
-            (*town.state).growth.counter = town.id.0 % 70;
-            (*town.state).growth.rate = town_ticks_to_game_ticks(250);
+            (*town.state).record.grow_counter = town.id.0 % 70;
+            (*town.state).record.growth_rate = town_ticks_to_game_ticks(250);
         }
         // Town's native default initializes show_zone=false before this creation entry.
         super::spatial::insert(self.shared, town.id);
@@ -296,40 +296,40 @@ impl<'a> Founding<'a> {
             1 => {
                 if crate::cargo_registry::first_town_acceptance(5).is_some() {
                     unsafe {
-                        (*town.state).simulation.goal[5] = 0xffff_fffe;
+                        (*town.state).record.goal[5] = 0xffff_fffe;
                     }
                 }
             }
             2 => {
                 if crate::cargo_registry::first_town_acceptance(5).is_some() {
                     unsafe {
-                        (*town.state).simulation.goal[5] = u32::MAX;
+                        (*town.state).record.goal[5] = u32::MAX;
                     }
                 }
                 if crate::cargo_registry::first_town_acceptance(4).is_some() {
                     unsafe {
-                        (*town.state).simulation.goal[4] = u32::MAX;
+                        (*town.state).record.goal[4] = u32::MAX;
                     }
                 }
             }
             _ => {}
         }
         unsafe {
-            (*town.state).growth.funding = 0;
-            (*town.state).simulation.ratings = [500; 15];
-            (*town.state).simulation.have_ratings = 0;
-            (*town.state).simulation.exclusivity = u8::MAX;
-            (*town.state).simulation.exclusive_counter = 0;
-            (*town.state).simulation.statues = 0;
+            (*town.state).record.fund_buildings_months = 0;
+            (*town.state).record.ratings = [500; 15];
+            (*town.state).record.have_ratings = 0;
+            (*town.state).record.exclusivity = u8::MAX;
+            (*town.state).record.exclusive_counter = 0;
+            (*town.state).record.statues = 0;
         }
         let parameters =
             unsafe { crate::townname_type::from_style(observed!((self.s.name_style)())) };
         unsafe {
-            (*town.state).simulation.townnamegrfid = parameters.grfid;
-            (*town.state).simulation.townnametype = parameters.kind;
-            (*town.state).simulation.townnameparts = parts;
+            (*town.state).record.townnamegrfid = parameters.grfid;
+            (*town.state).record.townnametype = parameters.kind;
+            (*town.state).record.townnameparts = parts;
             initialize_layout(town.state, layout, self.map().size_x());
-            (*town.state).simulation.larger_town = city;
+            (*town.state).record.larger_town = city;
         }
         let mut x = i32::from(size.0).wrapping_mul(16).wrapping_add(3);
         if size.0 == 3 {
@@ -456,7 +456,7 @@ unsafe fn initialize_layout(state: *mut State, layout: TownLayout, size_x: u32) 
         layout.0
     };
     unsafe {
-        (*state).simulation.layout = result;
+        (*state).record.layout = result;
     }
 }
 /// # Safety

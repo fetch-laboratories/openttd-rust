@@ -63,9 +63,9 @@ pub struct LifecycleServices {
 pub(super) unsafe fn location(owner: *mut Industry) -> TileArea {
     unsafe {
         TileArea {
-            tile: ptr::read(ptr::addr_of!((*owner).metadata.tile)),
-            w: ptr::read(ptr::addr_of!((*owner).metadata.width)),
-            h: ptr::read(ptr::addr_of!((*owner).metadata.height)),
+            tile: ptr::read(ptr::addr_of!((*owner).record.location.tile)),
+            w: ptr::read(ptr::addr_of!((*owner).record.location.w)),
+            h: ptr::read(ptr::addr_of!((*owner).record.location.h)),
         }
     }
 }
@@ -98,16 +98,16 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     if cleaning {
         return;
     }
-    let width = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.width)) };
+    let width = unsafe { ptr::read(ptr::addr_of!((*owner).record.location.w)) };
     if width == 0 {
         return;
     }
     let has_neutral_station = !unsafe { (w.neutral_station)(industry) }.is_null();
     let area = unsafe {
         TileArea {
-            tile: ptr::read(ptr::addr_of!((*owner).metadata.tile)),
+            tile: ptr::read(ptr::addr_of!((*owner).record.location.tile)),
             w: width,
-            h: ptr::read(ptr::addr_of!((*owner).metadata.height)),
+            h: ptr::read(ptr::addr_of!((*owner).record.location.h)),
         }
     };
     tiles(area, map.size_x, |tile| unsafe {
@@ -133,9 +133,9 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
             (w.clear_docking)(tile);
         });
     }
-    let kind = unsafe { (*owner).metadata.kind };
+    let kind = unsafe { (*owner).record.r#type };
     if unsafe { (*crate::industrytype::industry(u16::from(kind))).behaviour } & 1 != 0 {
-        let tile = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.tile)) };
+        let tile = unsafe { ptr::read(ptr::addr_of!((*owner).record.location.tile)) };
         let x = tile % map.size_x;
         let y = tile / map.size_x;
         let sx = x.saturating_sub(21);
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     unsafe {
         (w.release_disasters)(id);
         (w.delete_storage)(industry);
-        let kind = ptr::read(ptr::addr_of!((*owner).metadata.kind));
+        let kind = ptr::read(ptr::addr_of!((*owner).record.r#type));
         super::openttd_rust_industry_registry_erase(builder, kind, id);
         (w.delete_news)(id);
         (w.close_view)(id);
@@ -204,7 +204,7 @@ unsafe fn reseed_industry(owner: *mut Industry, reseed: u32, s: &Services) {
     }
     let random_bits = s.shared().random() as u16;
     unsafe {
-        let field = ptr::addr_of_mut!((*owner).metadata.random);
+        let field = ptr::addr_of_mut!((*owner).record.random);
         let old = ptr::read(field);
         // Historical &= reseed (not &= ~reseed) is the specification.
         ptr::write(field, (old & reseed as u16) | (random_bits & reseed as u16));

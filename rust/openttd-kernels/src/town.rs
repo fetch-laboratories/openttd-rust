@@ -60,38 +60,55 @@ pub struct Received {
     pub old_act: u16,
     pub new_act: u16,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct SimulationFields {
-    pub valid_history: u64,
-    pub xy: u32,
-    pub num_houses: u32,
-    pub population: u32,
-    pub radius: [u32; 5],
-    pub goal: [u32; 6],
-    pub ratings: [i16; 15],
-    pub received: [Received; 6],
-    pub noise_reached: u16,
-    pub time_until_rebuild: u16,
-    pub statues: u16,
-    pub have_ratings: u16,
-    pub unwanted: [u8; 15],
-    pub exclusivity: u8,
-    pub exclusive_counter: u8,
-    pub larger_town: bool,
-    pub layout: u8,
-    pub townnamegrfid: u32,
-    pub townnametype: u16,
-    pub townnameparts: u32,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// The fields of one native `Town` shell, read and written in place by both
+    /// languages. It is the first member of the canonical owner, so the owner's
+    /// address is the record's. Widths and defaults are the original members'.
+    "OpenTTDTownRecord" ["town_record"] => pub struct TownRecord {
+        /// Owning native shell; stable while the record lives.
+        pub shell: *mut crate::town_type::TownHandle => "Town *",
+        pub valid_history: u64 => "ValidHistoryMask",
+        pub xy: u32 => "TileIndex",
+        /// `TownCache::num_houses`.
+        pub num_houses: u32,
+        /// `TownCache::population`.
+        pub population: u32,
+        /// `TownCache::squared_town_zone_radius`.
+        pub squared_town_zone_radius: [u32; 5] => "std::array<uint32_t, NUM_HOUSE_ZONES>",
+        pub goal: [u32; 6] => "std::array<uint32_t, NUM_TAE>",
+        pub ratings: [i16; 15] => "TypedIndexContainer<std::array<int16_t, MAX_COMPANIES>, CompanyID>",
+        pub received: [Received; 6] => "std::array<TransportedCargoStat<uint16_t>, NUM_TAE>",
+        pub noise_reached: u16,
+        pub time_until_rebuild: u16,
+        pub statues: u16 => "CompanyMask",
+        pub have_ratings: u16 => "CompanyMask",
+        pub grow_counter: u16,
+        pub growth_rate: u16,
+        pub townnametype: u16,
+        pub unwanted: [u8; 15] => "TypedIndexContainer<std::array<uint8_t, MAX_COMPANIES>, CompanyID>",
+        pub exclusivity: u8 => "CompanyID",
+        pub exclusive_counter: u8,
+        pub larger_town: bool,
+        pub layout: u8 => "TownLayout",
+        pub fund_buildings_months: u8,
+        pub road_build_months: u8,
+        pub flags: u8 => "TownFlags",
+        /// NOSAVE `TownCache::part_of_subsidy`.
+        pub part_of_subsidy: u8 => "PartsOfSubsidy",
+        pub townnamegrfid: u32,
+        pub townnameparts: u32,
+    }
 }
-impl Default for SimulationFields {
+impl Default for TownRecord {
     fn default() -> Self {
         Self {
+            shell: std::ptr::null_mut(),
             valid_history: 0,
             xy: u32::MAX,
             num_houses: 0,
             population: 0,
-            radius: [0; 5],
+            squared_town_zone_radius: [0; 5],
             goal: [0; 6],
             ratings: [0; 15],
             received: [Received::default(); 6],
@@ -99,13 +116,19 @@ impl Default for SimulationFields {
             time_until_rebuild: 0,
             statues: 0,
             have_ratings: 0,
+            grow_counter: 0,
+            growth_rate: 0,
+            townnametype: 0,
             unwanted: [0; 15],
             exclusivity: u8::MAX,
             exclusive_counter: 0,
             larger_town: false,
             layout: 0,
+            fund_buildings_months: 0,
+            road_build_months: 0,
+            flags: 0,
+            part_of_subsidy: 0,
             townnamegrfid: 0,
-            townnametype: 0,
             townnameparts: 0,
         }
     }
@@ -135,30 +158,28 @@ pub struct Slots {
     pub data: *mut c_void,
     pub size: usize,
 }
+/// The canonical town owner. The record is its first member, so a record
+/// pointer is also the owner's address.
 #[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct GrowthFields {
-    pub counter: u16,
-    pub rate: u16,
-    pub funding: u8,
-    pub road: u8,
-    pub flags: u8,
-}
 #[derive(Default)]
 pub struct State {
+    pub(crate) record: TownRecord,
     name: Vec<u8>,
     text: Vec<u8>,
-    pub(crate) simulation: SimulationFields,
     supplied: Vec<Supplied>,
     id_counts: Vec<u16>,
     class_counts: Vec<u16>,
-    growth: GrowthFields,
     stations_near: crate::station::StationList,
+}
+/// The record of a live town owner: its first member, at the same address.
+#[inline]
+pub(crate) fn record(state: *mut State) -> *mut TownRecord {
+    state.cast()
 }
 /// SAFETY: Live serialized town owner and original cargo acceptance effect.
 pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
     unsafe {
-        let count = &mut (*owner).simulation.received[usize::from(effect)].new_act;
+        let count = &mut (*owner).record.received[usize::from(effect)].new_act;
         *count = count.wrapping_add(amount as u16);
     }
 }
@@ -192,19 +213,19 @@ unsafe fn supplied_history(state: *const State, cargo: u8, period: u8) -> Option
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
 pub(crate) unsafe fn position(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
-    unsafe { (*state).simulation.xy }
+    unsafe { (*state).record.xy }
 }
 /// Read only the canonical population at the original observation point.
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
 pub(crate) unsafe fn population(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
-    unsafe { (*state).simulation.population }
+    unsafe { (*state).record.population }
 }
 /// Read only the canonical house count at the original observation point.
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
 pub(crate) unsafe fn num_houses(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
-    unsafe { (*state).simulation.num_houses }
+    unsafe { (*state).record.num_houses }
 }
 fn radius_group(funded: bool, radii: &[u32; 5], distance: u32) -> u8 {
     if funded && distance <= 25 {
@@ -227,9 +248,9 @@ pub(crate) unsafe fn get_radius_group(
 ) -> u8 {
     let state = unsafe { &*state };
     radius_group(
-        state.growth.funding != 0,
-        &state.simulation.radius,
-        map.distance_square(tile, state.simulation.xy),
+        state.record.fund_buildings_months != 0,
+        &state.record.squared_town_zone_radius,
+        map.distance_square(tile, state.record.xy),
     )
 }
 /// `GetTownRadiusGroup` for a live native shell, resolving its canonical owner once.
@@ -245,14 +266,14 @@ pub(crate) unsafe fn radius_from_shell(
 pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -> (u8, u8, u32) {
     // SAFETY: Immediate reads only, caller establishes owner lifetime.
     let state = unsafe { &*state };
-    let xy = state.simulation.xy;
+    let xy = state.record.xy;
     // Native TileX/TileY operate on the power-of-two map dimensions.
     let mask = size_x - 1;
     let shift = size_x.trailing_zeros();
     let dx = (tile & mask).abs_diff(xy & mask);
     let dy = (tile >> shift).abs_diff(xy >> shift);
     let zone = unsafe { get_radius_group(state, tile, crate::map_func::Map::from_log_x(shift)) };
-    (state.growth.road, zone, dx + dy)
+    (state.record.road_build_months, zone, dx + dy)
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
 pub extern "C" fn openttd_rust_town_generating_exchange_abi(generating: bool) -> u8 {
@@ -291,7 +312,7 @@ unsafe fn update_radius(state: *mut State) {
         [121, 81, 0, 49, 36],
     ];
     // SAFETY: Immediate field accesses on live owner; this helper invokes no services.
-    let houses = unsafe { (*state).simulation.num_houses };
+    let houses = unsafe { (*state).record.num_houses };
     let radius = if houses < 92 {
         RADII[(houses / 4) as usize]
     } else {
@@ -306,7 +327,7 @@ unsafe fn update_radius(state: *mut State) {
     };
     // SAFETY: No callback or competing native access during this owner mutation.
     unsafe {
-        (*state).simulation.radius = radius;
+        (*state).record.squared_town_zone_radius = radius;
     }
 }
 #[unsafe(no_mangle)]
@@ -319,7 +340,7 @@ pub unsafe extern "C" fn openttd_rust_town_update_radius(state: *mut State) {
 unsafe fn change_population(leaves: &Leaves, state: *mut State, town: u32, amount: i32) {
     // SAFETY: Field mutation ends before the presentation service can reenter.
     unsafe {
-        (*state).simulation.population = population(state).wrapping_add(amount as u32);
+        (*state).record.population = population(state).wrapping_add(amount as u32);
     }
     // SAFETY: Immediate serialized read ends before presentation callbacks.
     if unsafe { *GENERATING_TOWN.get() } {
@@ -342,8 +363,10 @@ pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leave
     total
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_town_new() -> *mut State {
-    Box::into_raw(Box::default())
+pub extern "C" fn openttd_rust_town_new(shell: *mut crate::town_type::TownHandle) -> *mut State {
+    let mut state = Box::<State>::default();
+    state.record.shell = shell;
+    Box::into_raw(state)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_destroy(state: *mut State) {
@@ -351,17 +374,6 @@ pub unsafe extern "C" fn openttd_rust_town_destroy(state: *mut State) {
     unsafe {
         drop(Box::from_raw(state));
     }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_growth(state: *mut State) -> *mut GrowthFields {
-    // SAFETY: Stable owner allocation; native trivial aliases live until destruction.
-    unsafe { &raw mut (*state).growth }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_simulation(state: *mut State) -> *mut SimulationFields {
-    // SAFETY: Stable shell-owned allocation. C++ starts the matching trivial native
-    // object's lifetime here; aliases remain valid until owner destruction.
-    unsafe { &raw mut (*state).simulation }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_supplied_view(state: *mut State) -> Slots {
@@ -658,7 +670,7 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
     }
     let owner = (s.town_owner)(town);
     // SAFETY: Live single owner and valid company; immediate copy ends here.
-    let rating = unsafe { (*owner).simulation.ratings[usize::from(company)] };
+    let rating = unsafe { (*owner).record.ratings[usize::from(company)] };
     if rating > -200 {
         (c.zero)(result);
     } else {
@@ -775,7 +787,7 @@ impl Engine<'_> {
     fn change_house_count(&self, amount: u32) {
         write_field!(
             self.owner,
-            simulation.num_houses,
+            record.num_houses,
             self.num_houses().wrapping_add(amount)
         );
     }
@@ -784,20 +796,20 @@ impl Engine<'_> {
         unsafe { population(self.owner) }
     }
     fn layout(&self) -> u8 {
-        read_field!(self.owner, simulation.layout)
+        read_field!(self.owner, record.layout)
     }
     fn is_city(&self) -> bool {
-        read_field!(self.owner, simulation.larger_town)
+        read_field!(self.owner, record.larger_town)
     }
     fn radius(&self) -> [u32; 5] {
-        read_field!(self.owner, simulation.radius)
+        read_field!(self.owner, record.squared_town_zone_radius)
     }
     fn goals(&self) -> [u32; 6] {
-        read_field!(self.owner, simulation.goal)
+        read_field!(self.owner, record.goal)
     }
     fn old_received(&self, at: usize) -> u32 {
         // SAFETY: Source bounds and immediate owner access before any callback.
-        unsafe { u32::from((*self.owner).simulation.received[at].old_act) }
+        unsafe { u32::from((*self.owner).record.received[at].old_act) }
     }
     fn bind(mut self, town: u32) -> Self {
         self.owner = (self.leaves.resolve_owner)(town);
@@ -808,42 +820,42 @@ impl Engine<'_> {
     }
     fn counter(&self) -> u16 {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
-        unsafe { (*self.owner).growth.counter }
+        unsafe { (*self.owner).record.grow_counter }
     }
     fn set_counter(&self, value: u16) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
-            (*self.owner).growth.counter = value;
+            (*self.owner).record.grow_counter = value;
         }
     }
     fn rate(&self) -> u16 {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
-        unsafe { (*self.owner).growth.rate }
+        unsafe { (*self.owner).record.growth_rate }
     }
     fn set_rate(&self, value: u16) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
-            (*self.owner).growth.rate = value;
+            (*self.owner).record.growth_rate = value;
         }
     }
     fn funding(&self) -> u16 {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
-        unsafe { u16::from((*self.owner).growth.funding) }
+        unsafe { u16::from((*self.owner).record.fund_buildings_months) }
     }
     fn set_funding(&self, value: u16) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
-            (*self.owner).growth.funding = value as u8;
+            (*self.owner).record.fund_buildings_months = value as u8;
         }
     }
     fn flags(&self) -> u16 {
         // SAFETY: Entry resolves its live owner once; immediate access ends here.
-        unsafe { u16::from((*self.owner).growth.flags) }
+        unsafe { u16::from((*self.owner).record.flags) }
     }
     fn set_flags(&self, value: u16) {
         // SAFETY: No owner reference spans a callback or possible reentry.
         unsafe {
-            (*self.owner).growth.flags = value as u8;
+            (*self.owner).record.flags = value as u8;
         }
     }
     fn chance(&self, a: u32, b: u32) -> bool {
@@ -1796,7 +1808,7 @@ impl Engine<'_> {
     ) {
         // SAFETY: Entry bound its owner once; this mutation ends before spec queries.
         unsafe {
-            (*self.owner).simulation.num_houses = self.num_houses().wrapping_add(1);
+            (*self.owner).record.num_houses = self.num_houses().wrapping_add(1);
         }
 
         let mut counter = 0;
@@ -2209,16 +2221,16 @@ impl Engine<'_> {
     fn monthly_statistics(&self, month: u8) {
         // SAFETY: No callback or service spans this borrow of canonical histories.
         let state = unsafe { &mut *self.owner };
-        if state.growth.road != 0 {
-            state.growth.road -= 1;
+        if state.record.road_build_months != 0 {
+            state.record.road_build_months -= 1;
         }
-        if state.growth.funding != 0 {
-            state.growth.funding -= 1;
+        if state.record.fund_buildings_months != 0 {
+            state.record.fund_buildings_months -= 1;
         }
-        if state.simulation.exclusive_counter != 0 {
-            state.simulation.exclusive_counter -= 1;
-            if state.simulation.exclusive_counter == 0 {
-                state.simulation.exclusivity = u8::MAX;
+        if state.record.exclusive_counter != 0 {
+            state.record.exclusive_counter -= 1;
+            if state.record.exclusive_counter == 0 {
+                state.record.exclusivity = u8::MAX;
             }
         }
         // Company traversal is external, so this borrow ends before it.
@@ -2226,7 +2238,7 @@ impl Engine<'_> {
         while company != u8::MAX {
             // SAFETY: Live canonical owner; no reference spans the next pool callback.
             unsafe {
-                let unwanted = &mut (*self.owner).simulation.unwanted[usize::from(company)];
+                let unwanted = &mut (*self.owner).record.unwanted[usize::from(company)];
                 if *unwanted != 0 {
                     *unwanted -= 1;
                 }
@@ -2236,8 +2248,8 @@ impl Engine<'_> {
         // SAFETY: Reacquire only after traversal; no callback spans history writes.
         let state = unsafe { &mut *self.owner };
         for range in history_ranges() {
-            state.simulation.valid_history =
-                crate::history::update(state.simulation.valid_history, range, u32::from(month));
+            state.record.valid_history =
+                crate::history::update(state.record.valid_history, range, u32::from(month));
         }
         for supplied in &mut state.supplied {
             for range in history_ranges() {
@@ -2250,7 +2262,7 @@ impl Engine<'_> {
                 if range.total_division == 1 {
                     supplied.history[first] = supplied.history[first - 1];
                     supplied.history[0] = SuppliedHistory::default();
-                } else if state.simulation.valid_history & (1 << (range.first - range.division))
+                } else if state.record.valid_history & (1 << (range.first - range.division))
                     != 0
                 {
                     supplied.history[first] =
@@ -2258,7 +2270,7 @@ impl Engine<'_> {
                 }
             }
         }
-        for received in &mut state.simulation.received {
+        for received in &mut state.record.received {
             received.old_max = received.new_max;
             received.new_max = 0;
             received.old_act = received.new_act;
@@ -2270,7 +2282,7 @@ impl Engine<'_> {
         while company != u8::MAX {
             // SAFETY: Immediate field update; borrow ends before pool traversal.
             unsafe {
-                let rating = &mut (*self.owner).simulation.ratings[usize::from(company)];
+                let rating = &mut (*self.owner).record.ratings[usize::from(company)];
                 if *rating < 200 {
                     *rating = (i32::from(*rating) + 5).min(200) as i16;
                 }
@@ -2293,7 +2305,7 @@ impl Engine<'_> {
                 return;
             }
             unsafe {
-                let rating = &mut (*self.owner).simulation.ratings[usize::from(owner)];
+                let rating = &mut (*self.owner).record.ratings[usize::from(owner)];
                 *rating = if active {
                     (i32::from(*rating) + 12).min(i32::from(i16::MAX)) as i16
                 } else {
@@ -2303,7 +2315,7 @@ impl Engine<'_> {
         });
         // SAFETY: All station visitors returned; no callback spans clamping.
         unsafe {
-            for rating in &mut (*self.owner).simulation.ratings {
+            for rating in &mut (*self.owner).record.ratings {
                 *rating = (*rating).clamp(-1000, 1000);
             }
         }
@@ -2376,7 +2388,7 @@ pub unsafe extern "C" fn openttd_rust_town_rating(
         }
     }
     // SAFETY: Original source invokes this only with live owner and valid company.
-    unsafe { i32::from((*state).simulation.ratings[usize::from(company)]) }
+    unsafe { i32::from((*state).record.ratings[usize::from(company)]) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_change_rating(
@@ -2421,8 +2433,8 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     if !testing {
         // SAFETY: Field writes finish before native window invalidation.
         unsafe {
-            (*state).simulation.have_ratings |= 1 << company;
-            (*state).simulation.ratings[usize::from(company)] = rating as i16;
+            (*state).record.have_ratings |= 1 << company;
+            (*state).record.ratings[usize::from(company)] = rating as i16;
         }
         // SAFETY: Live immutable typed service table.
         (unsafe { (*leaves).dirty_authority })(town);
@@ -2463,28 +2475,6 @@ crate::abi::layouts! {
         state,
         id,
     };
-    "OpenTTDTownSimulationFields" ["probe"] => SimulationFields {
-        valid_history,
-        xy,
-        num_houses,
-        population,
-        radius,
-        goal,
-        ratings,
-        received,
-        noise_reached,
-        time_until_rebuild,
-        statues,
-        have_ratings,
-        unwanted,
-        exclusivity,
-        exclusive_counter,
-        larger_town,
-        layout,
-        townnamegrfid,
-        townnametype,
-        townnameparts,
-    };
     "OpenTTDTownReceived" ["probe"] => Received {
         old_max,
         new_max,
@@ -2518,13 +2508,6 @@ crate::abi::layouts! {
     "OpenTTDTownStationActivity" ["probe"] => StationActivity {
         time_since_load,
         time_since_unload,
-    };
-    "OpenTTDTownGrowthFields" ["probe"] => GrowthFields {
-        counter,
-        rate,
-        funding,
-        road,
-        flags,
     };
     "OpenTTDTownSlots" ["probe"] => Slots {
         data,
@@ -2585,7 +2568,7 @@ mod tests {
             class_counts: vec![0; 16],
             ..State::default()
         };
-        owner.simulation.ratings[0] = 77;
+        owner.record.ratings[0] = 77;
         let address = (&raw mut owner) as usize;
         assert_eq!(openttd_rust_town_generating_exchange_abi(true), 0);
         clear_house_candidates();

@@ -22,24 +22,27 @@ extern SubsidyPool _subsidy_pool;
 
 /** Struct about subsidies, offered and awarded */
 struct Subsidy : SubsidyPool::PoolItem<&_subsidy_pool> {
-	OpenTTDSubsidyState *rust_state = new (openttd_rust_subsidy_new(this->index.base())) OpenTTDSubsidyState{INVALID_CARGO, 0, CompanyID::Invalid(), {}, {}};
-	CargoType &cargo_type = this->rust_state->cargo_type;
-	uint16_t &remaining = this->rust_state->remaining;
-	CompanyID &awarded = this->rust_state->awarded;
-	Source &src = this->rust_state->src;
-	Source &dst = this->rust_state->dst;
+	OpenTTDSubsidyRecord *const record = openttd_rust_subsidy_new(this->index.base()); ///< The shared record, owned by Rust.
+	inline OpenTTDSubsidyRecord &Record() { return *this->record; }
+	inline const OpenTTDSubsidyRecord &Record() const { return *this->record; }
 
 	/**
 	 * We need an (empty) constructor so struct isn't zeroed (as C++ standard states)
 	 */
 	Subsidy() { }
-	Subsidy(CargoType cargo_type, Source src, Source dst, uint16_t remaining) { this->cargo_type = cargo_type; this->remaining = remaining; this->src = src; this->dst = dst; }
+	Subsidy(CargoType cargo_type, Source src, Source dst, uint16_t remaining)
+	{
+		this->record->cargo_type = cargo_type;
+		this->record->remaining = remaining;
+		this->record->src = src;
+		this->record->dst = dst;
+	}
 
 	/**
 	 * (Empty) destructor has to be defined else operator delete might be called with nullptr parameter
 	 */
 	~Subsidy() {
-		openttd_rust_subsidy_destroy(this->index.base(), this->rust_state);
+		openttd_rust_subsidy_destroy(this->index.base(), this->record);
 	}
 
 	/**
@@ -48,7 +51,7 @@ struct Subsidy : SubsidyPool::PoolItem<&_subsidy_pool> {
 	 */
 	inline bool IsAwarded() const
 	{
-		return this->awarded != CompanyID::Invalid();
+		return this->record->awarded != CompanyID::Invalid();
 	}
 
 };

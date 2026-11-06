@@ -27,7 +27,7 @@ pub(crate) unsafe fn from_style(style: u8) -> NameParams {
 
 /// `TownNameParams(const Town *)`, including the missing-GRF fallback.
 pub(crate) unsafe fn from_town(town: &crate::town::State) -> NameParams {
-    let simulation = &town.simulation;
+    let simulation = &town.record;
     let mut params = NameParams {
         grfid: simulation.townnamegrfid,
         kind: simulation.townnametype,

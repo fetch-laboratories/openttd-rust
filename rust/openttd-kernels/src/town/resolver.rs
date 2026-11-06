@@ -201,7 +201,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         if (s.larger_towns)() == 0 {
             return 2;
         }
-        return u32::from(unsafe { (*scope.owner).simulation.larger_town });
+        return u32::from(unsafe { (*scope.owner).record.larger_town });
     }
     if (0xBA..=0xC9).contains(&variable) {
         let index = variable - 0xBA;
@@ -232,28 +232,28 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         let state = &*scope.owner;
         match variable {
             0x41 => u32::from(scope.id),
-            0x80 => state.simulation.xy,
-            0x81 => (state.simulation.xy >> 8) & 255,
-            0x82 | 0x83 => state.simulation.population.min(65535) >> (8 * (variable & 1)),
-            0x8A => u32::from(state.growth.counter / TOWN_GROWTH_TICKS),
-            0x92 => u32::from(state.growth.flags),
+            0x80 => state.record.xy,
+            0x81 => (state.record.xy >> 8) & 255,
+            0x82 | 0x83 => state.record.population.min(65535) >> (8 * (variable & 1)),
+            0x8A => u32::from(state.record.grow_counter / TOWN_GROWTH_TICKS),
+            0x92 => u32::from(state.record.flags),
             0x93 => 0,
             0x94..=0x9D => {
-                state.simulation.radius[usize::from((variable - 0x94) / 2)].min(65535)
+                state.record.squared_town_zone_radius[usize::from((variable - 0x94) / 2)].min(65535)
                     >> (8 * (variable & 1))
             }
             0x9E..=0xAD => {
-                let rating = state.simulation.ratings[usize::from((variable - 0x9E) / 2)];
+                let rating = state.record.ratings[usize::from((variable - 0x9E) / 2)];
                 if variable & 1 == 0 {
                     rating as u32
                 } else {
                     u32::from((rating as u16) >> 8)
                 }
             }
-            0xAE => u32::from(state.simulation.have_ratings),
-            0xB2 => u32::from(state.simulation.statues),
-            0xB6 => state.simulation.num_houses.min(65535),
-            0xB9 => u32::from(state.growth.rate / TOWN_GROWTH_TICKS),
+            0xAE => u32::from(state.record.have_ratings),
+            0xB2 => u32::from(state.record.statues),
+            0xB6 => state.record.num_houses.min(65535),
+            0xB9 => u32::from(state.record.growth_rate / TOWN_GROWTH_TICKS),
             0xCC..=0xD3 => {
                 let index = variable - 0xCC;
                 let effect = if index & 2 == 0 {
@@ -261,7 +261,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
                 } else {
                     crate::cargotype::TAE_WATER
                 };
-                let received = state.simulation.received[usize::from(effect)];
+                let received = state.record.received[usize::from(effect)];
                 let value = if index < 4 {
                     received.new_act
                 } else {
@@ -269,8 +269,8 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
                 };
                 u32::from(value) >> (8 * (index & 1))
             }
-            0xD4 => u32::from(state.growth.road),
-            0xD5 => u32::from(state.growth.funding),
+            0xD4 => u32::from(state.record.road_build_months),
+            0xD5 => u32::from(state.record.fund_buildings_months),
             _ => {
                 // End the canonical borrow before diagnostics below.
                 debug!(grf, 1, "Unhandled town variable 0x{:X}", variable);
@@ -428,9 +428,9 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             unsafe {
                 let state = &*scope.town.owner;
                 u32::from(super::radius_group(
-                    state.growth.funding != 0,
-                    &state.simulation.radius,
-                    map.distance_square(tile, state.simulation.xy),
+                    state.record.fund_buildings_months != 0,
+                    &state.record.squared_town_zone_radius,
+                    map.distance_square(tile, state.record.xy),
                 ))
             }
         }

@@ -242,7 +242,7 @@ impl Engine<'_> {
             for n in 0..self.registry_count(other) {
                 let shell = unsafe { (self.x.industry)(self.registry_id(other, n)) };
                 let owner = unsafe { (self.m.owner)(shell) };
-                let position = unsafe { (*owner).metadata.tile };
+                let position = unsafe { (*owner).record.location.tile };
                 if self.distance(tile, position) <= 14 {
                     return self.fail(self.e.conflict);
                 }
@@ -683,16 +683,16 @@ unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandl
     let e = call.engine;
     let owner = unsafe { (e.m.owner)(shell) };
     unsafe {
-        (*owner).metadata.tile = call.tile;
-        (*owner).metadata.width = 0;
-        (*owner).metadata.kind = call.kind;
-        (*owner).metadata.selected_layout = call.layout_index as u8;
+        (*owner).record.location.tile = call.tile;
+        (*owner).record.location.w = 0;
+        (*owner).record.r#type = call.kind;
+        (*owner).record.selected_layout = call.layout_index as u8;
     }
     let town = crate::town::spatial::closest(unsafe { &*e.s.shared }, call.tile, u32::MAX);
     unsafe {
         (e.c.set_town)(shell.cast(), town);
-        (*owner).metadata.random = call.bits;
-        (*owner).metadata.founder = call.founder;
+        (*owner).record.random = call.bits;
+        (*owner).record.founder = call.founder;
     }
     let result =
         unsafe { (e.x.resolve_location)(shell, call.tile, call.kind, call.random, call.creation) };
@@ -719,11 +719,11 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     let e = call.engine;
     let owner = unsafe { (e.m.owner)(shell) };
     unsafe {
-        (*owner).metadata.tile = call.tile;
-        (*owner).metadata.width = 0;
-        (*owner).metadata.kind = call.kind;
-        (*owner).metadata.random = call.bits;
-        (*owner).metadata.founder = call.founder;
+        (*owner).record.location.tile = call.tile;
+        (*owner).record.location.w = 0;
+        (*owner).record.r#type = call.kind;
+        (*owner).record.random = call.bits;
+        (*owner).record.founder = call.founder;
     }
     let parameter = (u32::from(call.creation) << 8) | call.layout_index as u32;
     let result = unsafe { (e.x.resolve_shape)(shell, call.current, call.gfx, parameter) };

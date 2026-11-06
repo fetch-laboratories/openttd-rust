@@ -166,7 +166,7 @@ fn closest(
             continue;
         }
         let other = unsafe { (s.get)(id) };
-        let other_tile = unsafe { (*other.owner).metadata.tile };
+        let other_tile = unsafe { (*other.owner).record.location.tile };
         best = best.min(map.distance_manhattan(tile, other_tile));
     }
     best
@@ -185,7 +185,7 @@ fn count_and_distance(
     } else {
         if grfid == u32::MAX {
             grfid = unsafe {
-                (*industrytype::industry(u16::from((*current.owner).metadata.kind)))
+                (*industrytype::industry(u16::from((*current.owner).record.r#type)))
                     .grf_prop
                     .grfid
             };
@@ -197,7 +197,7 @@ fn count_and_distance(
         return 0xffff;
     }
     let map = s.map();
-    let tile = unsafe { (*current.owner).metadata.tile };
+    let tile = unsafe { (*current.owner).record.location.tile };
     let mut count: u8 = 0;
     let mut distance = u32::MAX;
     if layout == 0 && !town {
@@ -212,11 +212,11 @@ fn count_and_distance(
                 continue;
             }
             let other = unsafe { (s.get)(id) };
-            if (layout == 0 || unsafe { (*other.owner).metadata.selected_layout } == layout)
+            if (layout == 0 || unsafe { (*other.owner).record.selected_layout } == layout)
                 && (!town || other.town == current.town)
             {
                 distance = distance
-                    .min(map.distance_manhattan(tile, unsafe { (*other.owner).metadata.tile }));
+                    .min(map.distance_manhattan(tile, unsafe { (*other.owner).record.location.tile }));
                 count = count.wrapping_add(1);
             }
         }
@@ -270,7 +270,7 @@ fn variable(
             0x81 => return (c.tile >> 8) & 255,
             0x82 => return town_id(c.town, s),
             0x83..=0x85 => debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic"),
-            0x86 => return u32::from(unsafe { (*i).metadata.selected_layout }),
+            0x86 => return u32::from(unsafe { (*i).record.selected_layout }),
             0x87 => return (s.shared().terrain_type)(c.tile),
             0x88 => {
                 return u32::from(unsafe {
@@ -296,7 +296,7 @@ fn variable(
                 return unsafe {
                     (s.water_distance)(
                         c.tile,
-                        ResolverServices::behaviour(ResolverServices::spec((*i).metadata.kind))
+                        ResolverServices::behaviour(ResolverServices::spec((*i).record.r#type))
                             & BUILT_ON_WATER
                             == 0,
                     )
@@ -324,7 +324,7 @@ fn variable(
                 return 0;
             }
             let multiplier = if ResolverServices::behaviour(spec) & PROD_MULTI_HANDLING != 0 {
-                let level = unsafe { (*i).fields.prod_level };
+                let level = unsafe { (*i).record.prod_level };
                 if level == 0 {
                     return 0;
                 }
@@ -343,18 +343,18 @@ fn variable(
                 ResolverServices::behaviour(spec) & BUILT_ON_WATER == 0,
             )
         },
-        0x44 => u32::from(unsafe { (*i).metadata.selected_layout }),
+        0x44 => u32::from(unsafe { (*i).record.selected_layout }),
         0x45 => {
-            let founder = unsafe { (*i).metadata.founder };
+            let founder = unsafe { (*i).record.founder };
             {
                 let info = unsafe { (s.founder_info)(founder) };
                 u32::from(founder) | (u32::from(info.is_ai) << 16) | (u32::from(info.colours) << 24)
             }
         }
-        0x46 => (unsafe { (*i).metadata.construction_date }) as u32,
-        0x47 => u32::from(unsafe { (*i).fields.ctlflags }),
+        0x46 => (unsafe { (*i).record.construction_date }) as u32,
+        0x47 => u32::from(unsafe { (*i).record.ctlflags }),
         0x60 => id_at_offset(
-            unsafe { (s.nearby)(parameter as u8, (*i).metadata.tile, false) },
+            unsafe { (s.nearby)(parameter as u8, (*i).record.location.tile, false) },
             c.id,
             (s.shared().resolver_grf_file_id)(ro),
             s,
@@ -466,15 +466,15 @@ fn variable(
                     as u32
             }
         }
-        0x80 => unsafe { (*i).metadata.tile },
-        0x81 => (unsafe { (*i).metadata.tile } >> 8) & 255,
+        0x80 => unsafe { (*i).record.location.tile },
+        0x81 => (unsafe { (*i).record.location.tile } >> 8) & 255,
         0x82 => town_id(c.town, s),
         0x83..=0x85 => {
             debug!(grf, 0, "NewGRFs shouldn't be doing pointer magic");
             unavailable(variable, available, false, false, callback, s)
         }
-        0x86 => u32::from(unsafe { (*i).metadata.width }),
-        0x87 => u32::from(unsafe { (*i).metadata.height }),
+        0x86 => u32::from(unsafe { (*i).record.location.w }),
+        0x87 => u32::from(unsafe { (*i).record.location.h }),
         0x88 | 0x89 => {
             u32::from(unsafe { (*super::get_produced(i, usize::from(variable - 0x88))).cargo })
         }
@@ -493,7 +493,7 @@ fn variable(
         0x90..=0x92 => {
             u32::from(unsafe { (*super::get_accepted(i, usize::from(variable - 0x90))).cargo })
         }
-        0x93 => u32::from(unsafe { (*i).fields.prod_level }),
+        0x93 => u32::from(unsafe { (*i).record.prod_level }),
         0x94..=0x9b | 0x9e..=0xa5 => {
             let (base, month) = if variable < 0x9c {
                 (0x94, THIS_MONTH)
@@ -519,18 +519,18 @@ fn variable(
                 .pct_transported()
         }),
         0xa6 => u32::from(unsafe { (*spec).grf_prop.local_id }),
-        0xa7 => u32::from(unsafe { (*i).metadata.founder }),
-        0xa8 => u32::from(unsafe { (*i).metadata.random_colour }),
-        0xa9 => unsafe { (*i).fields.last_prod_year }
+        0xa7 => u32::from(unsafe { (*i).record.founder }),
+        0xa8 => u32::from(unsafe { (*i).record.random_colour }),
+        0xa9 => unsafe { (*i).record.last_prod_year }
             .wrapping_sub(ORIGINAL_BASE_YEAR)
             .clamp(0, 255) as u32,
-        0xaa => u32::from(unsafe { (*i).fields.counter }),
-        0xab => u32::from(unsafe { (*i).fields.counter } >> 8),
-        0xac => u32::from(unsafe { (*i).fields.was_cargo_delivered }),
-        0xb0 => unsafe { (*i).metadata.construction_date }
+        0xaa => u32::from(unsafe { (*i).record.counter }),
+        0xab => u32::from(unsafe { (*i).record.counter } >> 8),
+        0xac => u32::from(unsafe { (*i).record.was_cargo_delivered }),
+        0xb0 => unsafe { (*i).record.construction_date }
             .wrapping_sub(DAYS_TILL_ORIGINAL_BASE_YEAR)
             .clamp(0, 65535) as u32,
-        0xb3 => u32::from(unsafe { (*i).metadata.construction_type }),
+        0xb3 => u32::from(unsafe { (*i).record.construction_type }),
         0xb4 => {
             let accepted = unsafe { &(*i).accepted };
             accepted.iter().map(|a| a.last_accepted).max()
@@ -564,7 +564,7 @@ fn tile_variable(
             let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
             u32::from(unsafe { crate::town::radius_from_shell(s.shared(), town.cast(), c.tile) })
         }
-        0x43 => relative_position(c.tile, unsafe { (*c.owner).metadata.tile }, s.map()),
+        0x43 => relative_position(c.tile, unsafe { (*c.owner).record.location.tile }, s.map()),
         0x44 => {
             if s.is_industry(c.tile) {
                 u32::from(unsafe { (s.tile().frame)(c.tile) })
@@ -644,7 +644,7 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_random(c: *const Resolve
     if owner.is_null() {
         0
     } else {
-        u32::from(unsafe { (*owner).metadata.random })
+        u32::from(unsafe { (*owner).record.random })
     }
 }
 /// # Safety
@@ -834,12 +834,12 @@ pub(crate) unsafe fn refuses(
     s: &ResolverServices,
 ) -> bool {
     witness::hit(witness::INDUSTRY_RESOLVER_REFUSAL);
-    let kind = unsafe { (*owner).metadata.kind };
+    let kind = unsafe { (*owner).record.r#type };
     let spec = ResolverServices::spec(kind);
     if unsafe { (*spec).callback_mask } & INDUSTRY_REFUSE_CARGO != 0 {
         let file = unsafe { (*spec).grf_prop.grffile };
         let parameter = (s.shared().grf_cargo_map)(file, cargo);
-        let tile = unsafe { (*owner).metadata.tile };
+        let tile = unsafe { (*owner).record.location.tile };
         let result = unsafe {
             (s.callback)(
                 CBID_INDUSTRY_REFUSE_CARGO,

@@ -458,10 +458,10 @@ pub(crate) unsafe fn tile_loop(
         143 => {
             let industry = unsafe { (t.industry)(tile) };
             let delivered =
-                unsafe { ptr::read(ptr::addr_of!((*industry.owner).fields.was_cargo_delivered)) };
+                unsafe { ptr::read(ptr::addr_of!((*industry.owner).record.was_cargo_delivered)) };
             if delivered != 0 {
                 unsafe {
-                    (*industry.owner).fields.was_cargo_delivered = 0;
+                    (*industry.owner).record.was_cargo_delivered = 0;
                     (t.set_animation_loop)(tile, 0);
                     crate::animated_tile::openttd_rust_animation_add(tile, true);
                 }
@@ -585,7 +585,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
 ) {
     let (t, p, c, g) = unsafe { (&*tiles, &*policy, &*costs, &*generation) };
     let industry = unsafe { (t.industry)(tile) };
-    let kind = unsafe { (*industry.owner).metadata.kind };
+    let kind = unsafe { (*industry.owner).record.r#type };
     let spec = industrytype::industry(u16::from(kind));
     if (unsafe { (p.current_company)() } != 17
         && !(g.environment.editor)()

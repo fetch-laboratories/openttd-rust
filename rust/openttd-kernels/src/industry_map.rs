@@ -33,5 +33,5 @@ pub(crate) fn get_industry_type(
     check(m.read(tile) == crate::tile_type::MP_INDUSTRY);
     let shell = get_industry_by_tile(m, tile, get, check);
     check(!shell.is_null());
-    unsafe { (*crate::industry::openttd_rust_industry_metadata(owner(shell))).kind }
+    unsafe { (*owner(shell).cast::<crate::industry::IndustryRecord>()).r#type }
 }
