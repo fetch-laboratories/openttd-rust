@@ -2,6 +2,7 @@
 //! Literal observations from the pinned original `core/pool_func.hpp`.
 use super::*;
 use std::alloc::{Layout, alloc, dealloc};
+use std::ptr;
 
 #[repr(C)]
 struct Shell {

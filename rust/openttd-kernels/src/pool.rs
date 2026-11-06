@@ -15,29 +15,40 @@
 use crate::industrytype::NativeVec;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::{self, null_mut};
+use std::ptr::null_mut;
 
 crate::abi::shared_records! {
     fn abi_record;
     /// Shell and record have independent construction/destruction observation points.
     #[derive(Clone, Copy)]
     "RustPoolSlot" ["pool"] => pub struct PoolSlot {
+        /// Native shell, published before construction and retained through destruction.
         pub shell: *mut c_void,
+        /// Rust record, published and retired by its actual owner.
         pub record: *mut c_void,
     }
     /// Intrusive link in dead, natively allocated shell bytes.
     "RustPoolCacheLink" ["pool"] => pub struct PoolCacheLink {
+        /// Previous cache head; stored only after shell destruction.
         pub next: *mut PoolCacheLink,
     }
     /// Canonical storage; its address stays stable until the owner is dropped.
     "RustPoolDescriptor" ["pool"] => pub struct PoolDescriptor {
+        /// Initialized slots, with canonical buffer pointer, length and capacity.
         pub slots: NativeVec<PoolSlot> => "RustVector<RustPoolSlot>",
+        /// Native-size occupancy words, including occupied tail padding.
         pub used_bitmap: NativeVec<usize> => "RustVector<std::size_t>",
+        /// Ordinary search starts at the word containing this coordinate.
         pub first_free: usize,
+        /// Live extent; freeing a slot never decreases it.
         pub first_unused: usize,
+        /// Number of occupied shell slots.
         pub items: usize,
+        /// WITH_ASSERT allocation credit; untouched when assertions are disabled.
         pub checked: usize,
+        /// Suppresses bitmap clearing and post hooks during cleanup.
         pub cleaning: bool,
+        /// LIFO list of dead native shell allocations.
         pub alloc_cache: *mut PoolCacheLink,
     }
 }
@@ -332,6 +343,12 @@ pub trait PoolId: Copy {
     fn index(self) -> usize;
 }
 
+impl PoolId for crate::vehicle_type::VehicleID {
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 /// Nonowning typed access, invalidated when the owner is destroyed.
 #[derive(Clone, Copy)]
 pub struct TypedPool<I, R, S> {
@@ -348,7 +365,7 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
         }
     }
     /// Resolve the current record directly, with one slot pointer load; a hole returns null.
-    pub unsafe fn record(self, id: I) -> *mut R {
+    pub unsafe fn record(&self, id: I) -> *mut R {
         unsafe {
             let index = id.index();
             if index < (*self.view).first_unused {
@@ -359,7 +376,7 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
         }
     }
     /// Native shell identity remains distinct from the typed Rust record.
-    pub unsafe fn shell(self, id: I) -> *mut S {
+    pub unsafe fn shell(&self, id: I) -> *mut S {
         unsafe {
             let index = id.index();
             if index < (*self.view).first_unused {
@@ -370,7 +387,7 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
         }
     }
     /// `PoolIterator::ValidateIndex`: reread live extent/slots, using the native end sentinel.
-    pub unsafe fn next_index(self, mut index: usize, max_size: usize) -> usize {
+    pub unsafe fn next_index(&self, mut index: usize, max_size: usize) -> usize {
         unsafe {
             while index < (*self.view).first_unused {
                 if !(*(*self.view).slots.as_mut_ptr().add(index))
