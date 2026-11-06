@@ -199,7 +199,7 @@ static const uint GEN_HASHY_MASK = ((1 << GEN_HASHY_BITS) - 1) << GEN_HASHX_BITS
 
 /** The pool with all our precious vehicles. */
 VehiclePool _vehicle_pool("Vehicle");
-INSTANTIATE_POOL_METHODS(Vehicle)
+
 
 
 /**
@@ -359,11 +359,25 @@ void VehicleLengthChanged(const Vehicle *u)
 	}
 }
 
-/**
- * Vehicle constructor.
- * @param type Type of the new vehicle.
- */
-Vehicle::Vehicle(VehicleType type) : BaseVehicle(type)
+/** Bind at record-owner initialization, before subsequent base/member construction. */
+BaseVehicle::BaseVehicle(VehicleType type, Vehicle *shell, VehicleID index) : record(openttd_rust_vehicle_record_new(nullptr, type))
+{
+	_vehicle_pool.BindRecord(index.base(), shell, this->record);
+}
+
+BaseVehicle::~BaseVehicle()
+{
+	Vehicle *shell = VehicleFromRecord(this->record);
+	if (shell == nullptr) {
+		_vehicle_pool.RetireUnboundRecord(this->record);
+	} else {
+		_vehicle_pool.RetireRecord(shell->index.base(), shell, this->record);
+	}
+	openttd_rust_vehicle_record_delete(this->record);
+}
+
+/** Vehicle constructor; common shell and owner links start at their original point. */
+Vehicle::Vehicle(VehicleType type) : BaseVehicle(type, this, this->index)
 {
 	this->record->shell      = reinterpret_cast<OpenTTDVehicleShell *>(this);
 	this->record->consist    = this->rust_orders.get();

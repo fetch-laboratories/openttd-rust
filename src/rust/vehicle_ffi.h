@@ -16,6 +16,7 @@ enum CallbackID : uint16_t;
 enum VehicleSoundEvent : uint8_t;
 enum Direction : uint8_t;
 #include "call_ffi.h"
+#include "pool_ffi.h"
 /** Typed vehicle handles identify shared records; legacy void* contexts identify
  * native shells. Handles stay live for the synchronous call; a service may destroy
  * them. No owner reference spans a service that mutates or reenters Rust. */
@@ -107,7 +108,7 @@ struct OpenTTDFleetTransactionServices;
 struct OpenTTDFleetGroupServices;
 /** Call-scoped actual indexing storage; growth invalidates slots but not first_unused. */
 struct OpenTTDVehiclePoolCursor {
-	Vehicle *const *slots;
+	const RustPoolSlot *slots;
 	size_t slots_len;
 	const size_t *first_unused;
 };

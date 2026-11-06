@@ -50,12 +50,12 @@ struct SchedulerLifetimeVehicle final : Vehicle {
 			new (VehicleID(4)) SchedulerLifetimeVehicle(); // Ahead: visited this tick.
 			new (VehicleID(3)) SchedulerLifetimeVehicle(); // Inside initialized storage.
 			delete Vehicle::Get(VehicleID(5)); // Hole ahead must be skipped.
-			const auto old_slots = reinterpret_cast<uintptr_t>(_vehicle_pool.data.data());
-			_lifetime_growth = static_cast<uint32_t>(_vehicle_pool.data.capacity());
+			const auto old_slots = reinterpret_cast<uintptr_t>(_vehicle_pool.descriptor->slots.items);
+			_lifetime_growth = static_cast<uint32_t>(_vehicle_pool.descriptor->slots.capacity);
 			REQUIRE(Vehicle::CanAllocateItem(2));
 			new (VehicleID(_lifetime_growth)) SchedulerLifetimeVehicle();
 			new (VehicleID(_lifetime_growth + 1)) SchedulerLifetimeVehicle();
-			CHECK(reinterpret_cast<uintptr_t>(_vehicle_pool.data.data()) != old_slots);
+			CHECK(reinterpret_cast<uintptr_t>(_vehicle_pool.descriptor->slots.items) != old_slots);
 		}
 		if (id == _lifetime_growth) {
 			delete this; // Newly discovered shell dies before the next slot is read.
@@ -105,7 +105,7 @@ TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation 
 				for (Vehicle *v : Vehicle::Iterate()) v->Tick();
 			}
 		}
-		CHECK(_vehicle_pool.items == 5);
+		CHECK(_vehicle_pool.GetNumItems() == 5);
 		CHECK(_lifetime_visits == std::vector<uint32_t>{0, 2, 3, 4, _lifetime_growth, _lifetime_growth + 1, 0, 2, 3, 4, _lifetime_growth + 1});
 		_vehicle_pool.CleanPool();
 		return _lifetime_visits;
@@ -118,6 +118,56 @@ TEST_CASE("Base vehicle scheduler - consumed boundary layouts")
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-scheduler.inc"
 }
+/* Observe actual C++ owner-member teardown, which the raw Rust pool fixture cannot reach. */
+struct PoolRecordLifetimeVehicle final : Vehicle {
+	PoolRecordLifetimeVehicle() : Vehicle(VEH_EFFECT)
+	{
+		const auto &slot = _vehicle_pool.descriptor->slots[this->index.base()];
+		CHECK(slot.shell == this);
+		CHECK(slot.record == this->record);
+	}
+	~PoolRecordLifetimeVehicle() override
+	{
+		const auto &slot = _vehicle_pool.descriptor->slots[this->index.base()];
+		CHECK(slot.shell == this);
+		CHECK(slot.record == this->record);
+	}
+	static void operator delete(void *memory, size_t size)
+	{
+		auto *shell = static_cast<PoolRecordLifetimeVehicle *>(memory);
+		{
+			const auto &slot = _vehicle_pool.descriptor->slots[shell->index.base()];
+			CHECK(slot.shell == memory);
+			CHECK(slot.record == nullptr); // BaseVehicle retired its owner before sized delete.
+		}
+		VehiclePool::PoolItem<&_vehicle_pool>::operator delete(memory, size);
+	}
+};
+TEST_CASE("Vehicle pool - native owner record publication and retirement")
+{
+	struct Restore { ~Restore() { _vehicle_pool.CleanPool(); } } restore;
+	_vehicle_pool.CleanPool();
+	REQUIRE(Vehicle::CanAllocateItem());
+	auto *shell = new PoolRecordLifetimeVehicle();
+	const auto id = shell->index;
+	CHECK(_vehicle_pool.descriptor->items == 1);
+	/* An unrelated shell/record cannot attach to this live ID or retire its owner. */
+	OpenTTDVehicle unrelated{};
+	_vehicle_pool.BindRecord(id.base(), nullptr, &unrelated);
+	_vehicle_pool.RetireRecord(id.base(), nullptr, shell->record);
+	CHECK(_vehicle_pool.descriptor->slots[id.base()].record == shell->record);
+	delete shell;
+	CHECK(_vehicle_pool.descriptor->slots[id.base()].shell == nullptr);
+	CHECK(_vehicle_pool.descriptor->slots[id.base()].record == nullptr);
+	CHECK(_vehicle_pool.descriptor->items == 0);
+	REQUIRE(Vehicle::CanAllocateItem());
+	new PoolRecordLifetimeVehicle();
+	CHECK(Vehicle::IsValidID(id)); // The original lowest free ID is reused.
+	_vehicle_pool.CleanPool(); // Native typed deletion observes the same owner order.
+	CHECK(_vehicle_pool.descriptor->first_unused == 0);
+	CHECK(_vehicle_pool.descriptor->slots.empty());
+}
+
 TEST_CASE("Vehicle records - distinct native shells and inline scalar aliases")
 {
 	REQUIRE(Vehicle::CanAllocateItem());
@@ -187,7 +237,7 @@ TEST_CASE("Base vehicle scheduler - scalar member identity and lifetime")
 	CHECK(part->Record().cargo_age_counter == UINT16_MAX);
 	CHECK(part->Record().motion_counter == UINT32_MAX);
 	const auto old_id = v->index;
-	const auto grow_id = VehicleID(static_cast<uint32_t>(_vehicle_pool.data.size()));
+	const auto grow_id = VehicleID(static_cast<uint32_t>(_vehicle_pool.descriptor->slots.size()));
 	REQUIRE(Vehicle::CanAllocateItem());
 	new (grow_id) RoadVehicle();
 	CHECK(SurvivingPostTick(part).counter == post.counter);
@@ -212,11 +262,11 @@ static std::vector<uint32_t> VehicleCursorTrace(bool rust, bool indexing_growth 
 	new (VehicleID(4)) Vehicle(VEH_EFFECT);
 	const auto &services = GetRustVehicleSchedulerServices();
 	auto cursor = services.pool();
-	static_assert(std::is_same_v<decltype(cursor.slots), Vehicle *const *>);
+	static_assert(std::is_same_v<decltype(cursor.slots), const RustPoolSlot *>);
 	static_assert(std::is_same_v<decltype(cursor.first_unused), const size_t *>);
-	CHECK(cursor.slots == _vehicle_pool.data.data());
-	CHECK(cursor.slots_len == _vehicle_pool.data.size());
-	CHECK(cursor.first_unused == &_vehicle_pool.first_unused);
+	CHECK(cursor.slots == _vehicle_pool.descriptor->slots.items);
+	CHECK(cursor.slots_len == _vehicle_pool.descriptor->slots.size());
+	CHECK(cursor.first_unused == &_vehicle_pool.descriptor->first_unused);
 	std::vector<uint32_t> trace;
 	auto Mutate = [&](Vehicle *v) {
 		const auto id = v->index.base();
@@ -233,19 +283,19 @@ static std::vector<uint32_t> VehicleCursorTrace(bool rust, bool indexing_growth 
 		} else if (id == 2) {
 			delete Vehicle::Get(VehicleID(4)); // Hole ahead.
 			if (indexing_growth) {
-				const auto growth = static_cast<uint32_t>(_vehicle_pool.data.size());
+				const auto growth = static_cast<uint32_t>(_vehicle_pool.descriptor->slots.size());
 				REQUIRE(Vehicle::CanAllocateItem(2));
 				new (VehicleID(growth)) Vehicle(VEH_EFFECT); // Growth invalidates captured slots.
 				new (VehicleID(growth + 1)) Vehicle(VEH_EFFECT);
 			}
-			CHECK(*cursor.first_unused == _vehicle_pool.first_unused); // Stable canonical address.
+			CHECK(*cursor.first_unused == _vehicle_pool.descriptor->first_unused); // Stable canonical address.
 		}
 	};
 	if (rust) {
 		size_t from = 0;
 		while (auto *shell = openttd_rust_vehicle_cursor_next(&services, &cursor, &from)) Mutate(VehicleOf(shell));
-		CHECK(cursor.slots == _vehicle_pool.data.data());
-		CHECK(cursor.slots_len == _vehicle_pool.data.size());
+		CHECK(cursor.slots == _vehicle_pool.descriptor->slots.items);
+		CHECK(cursor.slots_len == _vehicle_pool.descriptor->slots.size());
 	} else {
 		for (Vehicle *v : Vehicle::Iterate()) Mutate(v);
 	}
@@ -282,7 +332,7 @@ struct SchedulerProbeVehicle final : Vehicle {
 		_scheduler_tick_scope_ended = false;
 		if (this->index.base() == 0) {
 			CHECK(Vehicle::CanAllocateItem());
-			new (VehicleID(static_cast<uint32_t>(_vehicle_pool.data.size()))) SchedulerProbeVehicle();
+			new (VehicleID(static_cast<uint32_t>(_vehicle_pool.descriptor->slots.size()))) SchedulerProbeVehicle();
 			this->SetType(VEH_DISASTER);
 			return true;
 		}
@@ -343,7 +393,7 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	CHECK(_scheduler_tick_scope_ended);
 	CHECK(_scheduler_pool_reads == 2);
 	CHECK(_scheduler_post_visits == 1); // Deleted higher shell must never be dereferenced.
-	CHECK(_vehicle_pool.items == 1);
+	CHECK(_vehicle_pool.GetNumItems() == 1);
 	_vehicle_pool.CleanPool();
 }
 

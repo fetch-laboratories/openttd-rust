@@ -12,6 +12,7 @@
 
 #include "sprite.h"
 #include "rust/vehicle_ffi.h"
+#include "rust/pool.hpp"
 #include "rust/newgrf_vehicle_ffi.h"
 #include "track_type.h"
 #include "command_type.h"
@@ -186,7 +187,7 @@ struct MutableSpriteCache {
 };
 
 /** A vehicle pool for a little over 1 million vehicles. */
-typedef Pool<Vehicle, VehicleID, 512> VehiclePool;
+typedef RustPool<Vehicle, VehicleID, 512> VehiclePool;
 extern VehiclePool _vehicle_pool;
 
 /* Some declarations of functions, so we can make them friendly */

@@ -51,40 +51,41 @@ crate::abi::shared_records! {
         /// LIFO list of dead native shell allocations.
         pub alloc_cache: *mut PoolCacheLink,
     }
-}
+    /// Native leaves, copied before callbacks so no Rust owner borrow survives reentry.
+    #[derive(Clone, Copy)]
+    "RustPoolNativeOps" ["pool"] => pub struct NativeOps {
+        /// Stable native binding context; not a pool metadata mirror.
+        pub context: *mut c_void,
+        /// `std::allocator<uint8_t>::allocate(size)`; does not zero bytes.
+        pub allocate: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
+        /// Matching native byte allocator, with the original size.
+        pub deallocate: unsafe extern "C" fn(*mut c_void, *mut c_void, usize),
+        /// Write `PoolItem::index` through its actual native layout.
+        pub set_index: unsafe extern "C" fn(*mut c_void, *mut c_void, usize),
+        /// `delete Titem *`, including record teardown and sized delete.
+        pub destroy: unsafe extern "C" fn(*mut c_void, *mut c_void),
+        /// `Titem::PostDestructor(index)`; may reuse this index immediately.
+        pub post_destructor: unsafe extern "C" fn(*mut c_void, usize),
+        /// Native assertion, called only on failure with native assertions enabled.
+        pub assertion: unsafe extern "C" fn(*mut c_void, bool),
+    }
 
-/// Native leaves, copied before callbacks so no Rust owner borrow survives reentry.
-#[derive(Clone, Copy)]
-pub struct NativeOps {
-    /// Stable native binding context; not a pool metadata mirror.
-    pub context: *mut c_void,
-    /// `std::allocator<uint8_t>::allocate(size)`; does not zero bytes.
-    pub allocate: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,
-    /// Matching native byte allocator, with the original size.
-    pub deallocate: unsafe extern "C" fn(*mut c_void, *mut c_void, usize),
-    /// Write `PoolItem::index` through its actual native layout.
-    pub set_index: unsafe extern "C" fn(*mut c_void, *mut c_void, usize),
-    /// `delete Titem *`, including record teardown and sized delete.
-    pub destroy: unsafe extern "C" fn(*mut c_void, *mut c_void),
-    /// `Titem::PostDestructor(index)`; may reuse this index immediately.
-    pub post_destructor: unsafe extern "C" fn(*mut c_void, usize),
-    /// Native assertion, called only on failure with native assertions enabled.
-    pub assertion: unsafe extern "C" fn(*mut c_void, bool),
-}
+    /// Immutable native instantiation parameters.
+    #[derive(Clone, Copy)]
+    "RustPoolConfig" ["pool"] => pub struct PoolConfig {
+        /// `Tindex::End().base()`.
+        pub max_size: usize,
+        /// Power-of-two `Tgrowth_step` required by original `Align`.
+        pub growth_step: usize,
+        /// `Tcache`.
+        pub cache: bool,
+        /// `sizeof(Titem)` for cached reuse/drain, not a derived allocation size.
+        pub item_size: usize,
+        /// Native `WITH_ASSERT`, independent of Rust build profile.
+        pub assertions: bool,
+    }
 
-/// Immutable native instantiation parameters.
-#[derive(Clone, Copy)]
-pub struct PoolConfig {
-    /// `Tindex::End().base()`.
-    pub max_size: usize,
-    /// Power-of-two `Tgrowth_step` required by original `Align`.
-    pub growth_step: usize,
-    /// `Tcache`.
-    pub cache: bool,
-    /// `sizeof(Titem)` for cached reuse/drain, not a derived allocation size.
-    pub item_size: usize,
-    /// Native `WITH_ASSERT`, independent of Rust build profile.
-    pub assertions: bool,
+
 }
 
 /// Allocation failures returned before the native caller formats/throws an error.
@@ -412,3 +413,78 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
 
 #[cfg(test)]
 mod tests;
+
+/// Native pool facade construction; parameters and operation table are copied.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_new(
+    config: *const PoolConfig,
+    ops: *const NativeOps,
+) -> *mut PoolCore {
+    unsafe { Box::into_raw(PoolCore::new(*config, *ops)) }
+}
+/// Release buffers after the native facade's final use; shells are cleaned explicitly.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_drop(pool: *mut PoolCore) {
+    unsafe {
+        drop(Box::from_raw(pool));
+    }
+}
+/// Stable canonical metadata, invalidated only when the owner is dropped.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_descriptor(pool: *mut PoolCore) -> *mut PoolDescriptor {
+    unsafe { PoolCore::descriptor(pool) }
+}
+/// Source `CanAllocate` with native assertion-credit behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_can_allocate(pool: *mut PoolCore, count: usize) -> u8 {
+    u8::from(unsafe { PoolCore::can_allocate(pool, count) })
+}
+/// Null means `Exhausted`; the native caller formats `FatalError` after return.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_allocate(
+    pool: *mut PoolCore,
+    size: usize,
+) -> *mut c_void {
+    unsafe { PoolCore::allocate(pool, size).unwrap_or(null_mut()) }
+}
+/// Null means `OutOfRange` or `AlreadyUsed`; index distinguishes the native error text.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_allocate_at(
+    pool: *mut PoolCore,
+    size: usize,
+    index: usize,
+) -> *mut c_void {
+    unsafe { PoolCore::allocate_at(pool, size, index).unwrap_or(null_mut()) }
+}
+/// Publish at record-owner initialization, after native shell publication.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_bind_record(
+    pool: *mut PoolCore,
+    index: usize,
+    record: *mut c_void,
+) {
+    unsafe {
+        PoolCore::bind_record(pool, index, record);
+    }
+}
+/// Retire before dropping the owning record allocation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_retire_record(pool: *mut PoolCore, index: usize) {
+    unsafe {
+        PoolCore::retire_record(pool, index);
+    }
+}
+/// Native sized delete preserves free-before-PostDestructor ordering.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_free(pool: *mut PoolCore, size: usize, index: usize) {
+    unsafe {
+        PoolCore::free_item(pool, size, index);
+    }
+}
+/// Native `PoolBase` keeps registration/cleanup-mask order.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pool_clean(pool: *mut PoolCore) {
+    unsafe {
+        PoolCore::clean(pool);
+    }
+}
