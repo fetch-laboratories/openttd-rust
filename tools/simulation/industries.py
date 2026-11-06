@@ -471,6 +471,22 @@ def prepare(
             if not core.findings(result)["industry_field_input"]:
                 raise RuntimeError("reference farm has no associated fields to remove")
         changes["INDY"] = {chosen: {"prod_level": 0}}
+        if mode == "closure":
+            following = sorted(index for index in industries if index > chosen)
+            if len(following) < 3:
+                raise RuntimeError(
+                    "closure input needs two closing and two surviving IDs"
+                )
+            closing = [chosen, following[1]]
+            survivors = [following[0], following[2]]
+            changes["INDY"].update({index: {"prod_level": 0} for index in closing})
+            # Actual monthly traversal must continue past each deleted shell.
+            # The existing control flags keep the two history witnesses alive.
+            changes["INDY"].update(
+                {index: {"ctlflags": 15, "valid_history": 0} for index in survivors}
+            )
+            core.findings(result)["industry_closing"] = closing
+            core.findings(result)["industry_survivors"] = survivors
         console.append("setting difficulty.industry_density 0")
     if mode == "builder":
         changes["IBLD"] = {0: {"wanted_inds": 200 << 16}}
@@ -743,6 +759,27 @@ def check(
         chosen = core.findings(result)["industry_chosen"]
         if chosen in rows[-1]:
             result["problems"].append(f"{mode}/{role}: selected industry did not close")
+        if kind == "closure":
+            closing = cast("list[int]", core.findings(result)["industry_closing"])
+            survivors = cast("list[int]", core.findings(result)["industry_survivors"])
+            # Snapshots first observe the monthly pass after both deletions;
+            # plain mode retains the same independent history check at exit.
+            sample = rows[0]
+            histories = [
+                sample.get(index, {}).get("valid_history", 0) for index in survivors
+            ]
+            facts["closure_deleted"] = [
+                index for index in closing if index not in sample
+            ]
+            facts["closure_survivor_history"] = histories
+            if (
+                len(facts["closure_deleted"]) != 2
+                or 0 in histories
+                or len(set(histories)) != 1
+            ):
+                result["problems"].append(
+                    f"{mode}/{role}: monthly traversal did not continue past both deletions"
+                )
         if kind == "farm-cleanup":
             facts["remaining_associated_fields"] = len(
                 industry_fields(saved[-1], chosen)
