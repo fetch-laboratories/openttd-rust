@@ -663,7 +663,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDAirportSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecServices.hpp"
 #include "abi-visit-OpenTTDHouseSpecServices.hpp"
-#include "abi-visit-OpenTTDObjectSpecServices.hpp"
 #include "abi-visit-OpenTTDRoadStopSpecServices.hpp"
 #include "abi-visit-OpenTTDStationSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecAnimation.hpp"
@@ -672,7 +671,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDAirportSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecStandard.hpp"
 #include "abi-visit-OpenTTDHouseSpecStandard.hpp"
-#include "abi-visit-OpenTTDObjectSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDHouseSpecSubstitute.hpp"
@@ -684,7 +682,6 @@ static bool NewGRFSpecsComplete()
 	return complete(s.airport) && complete(s.airport->standard) && complete(s.airport->substitute) &&
 		complete(s.airport_tile) && complete(s.airport_tile->animation) && complete(s.airport_tile->standard) && complete(s.airport_tile->substitute) &&
 		complete(s.house) && complete(s.house->standard) && complete(s.house->substitute) &&
-		complete(s.object) && complete(s.object->standard) &&
 		complete(s.road_stop) && complete(s.road_stop->animation) &&
 		complete(s.station) && complete(s.station->animation);
 }
