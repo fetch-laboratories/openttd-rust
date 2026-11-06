@@ -936,18 +936,16 @@ mod tests {
         ));
         shared.station_pool = station_pool;
         let world = crate::station_service::World {
+            company: std::ptr::null(),
             graphs,
             station_exclusivity: unused!((*mut crate::station::BaseStation) -> crate::station_service::StationExclusivity),
-            rating_counts: unused!((*mut crate::station::BaseStation, u8) -> crate::station_service::RatingCounts),
             environment: crate::services::EnvironmentServices {
                 editor: unused!(() -> bool),
                 freeform_edges: unused!(() -> bool),
             },
-            local_owner: unused!((*mut crate::station::BaseStation) -> bool),
             town_statue: unused!((*mut crate::station::BaseStation) -> bool),
             select_goods: unused!(() -> bool),
             rating_cheat: unused!(() -> bool),
-            available: unused!((*mut crate::station::BaseStation, u8) -> u32),
             cargo_valid: unused!((u8) -> bool),
             rating_callback_enabled: unused!((u8) -> bool),
             passenger_cargo: unused!((u8) -> bool),
@@ -978,9 +976,6 @@ mod tests {
         let links = crate::station_service::Links {
             graphs,
             automatic_distribution,
-            edge: unused!((*mut crate::station::BaseStation, u16) -> crate::station_service::Edge),
-            delete_flows: unused!((*mut crate::station::BaseStation, u8, u16)),
-            restrict_flows: unused!((*mut crate::station::BaseStation, u8, u16)),
             order_list: unused!((u16) -> *mut crate::orders::NativeOrderList),
             order_pool_size: unused!(() -> usize),
             order_count: unused!((*mut crate::orders::NativeOrderList) -> usize),

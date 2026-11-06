@@ -9,6 +9,7 @@
 
 #include "stdafx.h"
 #include "rust/animation_ffi.h"
+#include "rust/company_adapter.h"
 #include "core/flatset_type.hpp"
 #include "aircraft.h"
 #include "bridge_map.h"
@@ -261,6 +262,7 @@ struct RustStationTruncation {
 	StationCargoAmountMap::iterator iterator;
 };
 static const OpenTTDStationServices _rust_station_services = {
+	.company = &GetRustCompanyServices(),
 	.graphs = &GetRustLiveGraphServices(),
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
 		const Town *town = OpenTTDBaseStationTown(static_cast<BaseStation *>(handle));
@@ -268,16 +270,7 @@ static const OpenTTDStationServices _rust_station_services = {
 			town->exclusive_counter, town->exclusivity.base()
 		};
 	},
-	.rating_counts = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDRatingCounts {
-		GoodsEntry ge = Station::From(static_cast<BaseStation *>(handle))->GetGoods(cargo);
-		return {
-			ge.AvailableCount(), ge.HasData() ? static_cast<uint32_t>(ge.GetData().cargo.MapSize()) : 0
-		};
-	},
 	.environment = GetRustEnvironmentServices(),
-	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return static_cast<BaseStation *>(handle)->GetOwner() == _local_company;
-	},
 	.town_statue = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return Company::IsValidID(static_cast<BaseStation *>(handle)->GetOwner()) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->statues.Test(static_cast<BaseStation *>(handle)->GetOwner());
 	},
@@ -286,9 +279,6 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.rating_cheat = []() noexcept -> bool {
 		return _cheats.station_rating.value;
-	},
-	.available = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint32_t {
-		return Station::From(static_cast<BaseStation *>(handle))->GetGoods(cargo).AvailableCount();
 	},
 	.cargo_valid = OpenTTDCargoSpecValid,
 	.rating_callback_enabled = [](uint8_t cargo) noexcept -> bool {
@@ -348,18 +338,6 @@ static const OpenTTDStationServices _rust_station_services = {
 static const OpenTTDStationLinks _rust_station_links = {
 	.graphs = &GetRustLiveGraphServices(),
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
-	.edge = [](OpenTTDBaseStation *from, uint16_t destination) noexcept -> OpenTTDStationEdge {
-		Station *to = Station::Get(StationID(destination));
-		return {to, OpenTTDDistanceManhattan(RustStationLocation(from), RustStationLocation(to))};
-	},
-	.delete_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry ge = static_cast<Station *>(handle)->GetGoods(cargo);
-		if (ge.HasData()) ge.GetData().flows.DeleteFlows(StationID(destination));
-	},
-	.restrict_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
-		GoodsEntry ge = static_cast<Station *>(handle)->GetGoods(cargo);
-		if (ge.HasData()) ge.GetData().flows.RestrictFlows(StationID(destination));
-	},
 	.order_list = [](uint16_t id) noexcept -> OpenTTDOrderList * {
 		return OrderList::GetIfValid(OrderListID(id));
 	},

@@ -44,6 +44,17 @@ pub(crate) fn airport_has_hangar(
 
 /// Canonical goods record; native presentation facades borrow this same storage.
 pub type GoodsEntry = crate::station_record::GoodsRecord;
+/// `GoodsEntry::AvailableCount`, without creating optional cargo data.
+/// # Safety
+/// The goods slot and optional cargo allocation are live and serialized.
+pub(crate) unsafe fn goods_available_count(goods: *const GoodsEntry) -> u32 {
+    let data = unsafe { (*goods).data };
+    if data.is_null() {
+        0
+    } else {
+        unsafe { crate::cargo_storage::openttd_rust_cargo_list_count((*data).cargo) }
+    }
+}
 /// `GoodsEntry::GetVia(source, excluded, excluded2)` over its resolved flow map.
 /// # Safety
 /// The map is live and serialized; the random callback changes only the RNG.

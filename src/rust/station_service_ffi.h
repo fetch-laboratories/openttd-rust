@@ -22,7 +22,7 @@ struct OpenTTDCargoRegistryServices;
 #include "station_record_ffi.h"
 extern "C" uint64_t openttd_rust_station_acceptance_mask(OpenTTDStationRecord *);
 /* Each BaseStation owns one stable allocation, its shared OpenTTDStationRecord followed by the
- * Rust-only queue and catchment, created for ordinary and indexed allocation and destroyed after
+ * Rust-only queue, created for ordinary and indexed allocation and destroyed after
  * the base destructor; C++ reads, saving and legacy loading address record fields in place.
  * Cargo status is a native EnumBitSet<uint8_t> byte; C++ converts it in GoodsEntry accessors.
  * Queue nodes keep std::list identity and erase semantics; the save facade loads into a call-local
@@ -30,10 +30,7 @@ extern "C" uint64_t openttd_rust_station_acceptance_mask(OpenTTDStationRecord *)
  * Queue reads require live entries and erase requires an entry from that owner; with_* callbacks
  * run once while native iterator frames live. GRF/engine handles keep their registry lifetime,
  * and native scalar aliases cannot overlap Rust references during world callbacks. */
-struct OpenTTDRatingCounts {
-	uint32_t available;
-	uint32_t destinations;
-};
+
 struct OpenTTDStationExclusivity {
 	uint8_t counter;
 	uint8_t exclusive;
@@ -82,16 +79,15 @@ struct OpenTTDLoadingStation {
 	OpenTTDBaseStation *base;
 	OpenTTDStationRecord *state;
 };
+struct OpenTTDCompanyServices;
 struct OpenTTDStationServices {
+	const OpenTTDCompanyServices *company;
 	const OpenTTDLiveGraphServices *graphs;
 	OpenTTDStationExclusivity (*station_exclusivity)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_exclusivity);
-	OpenTTDRatingCounts (*rating_counts)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_counts);
 	OpenTTDEnvironmentServices environment;
-	bool (*local_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(local_owner);
 	bool (*town_statue)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(town_statue);
 	bool (*select_goods)() noexcept OPENTTD_SERVICE_DEFAULT(select_goods);
 	bool (*rating_cheat)() noexcept OPENTTD_SERVICE_DEFAULT(rating_cheat);
-	uint32_t (*available)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(available);
 	bool (*cargo_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_valid);
 	bool (*rating_callback_enabled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_callback_enabled);
 	bool (*passenger_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(passenger_cargo);
@@ -111,19 +107,13 @@ struct OpenTTDStationServices {
 	const OpenTTDSharedServices *shared;
 };
 
-struct OpenTTDStationEdge {
-	OpenTTDBaseStation *destination;
-	uint32_t distance;
-};
+
 struct GoodsEntry;
 struct OpenTTDStationResolverServices;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDStationLinks {
 	const OpenTTDLiveGraphServices *graphs;
 	bool (*automatic_distribution)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(automatic_distribution);
-	OpenTTDStationEdge (*edge)(OpenTTDBaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(edge);
-	void (*delete_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_flows);
-	void (*restrict_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(restrict_flows);
 	OpenTTDOrderList * (*order_list)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_list);
 	size_t (*order_pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(order_pool_size);
 	size_t (*order_count)(OpenTTDOrderList *) noexcept OPENTTD_SERVICE_DEFAULT(order_count);

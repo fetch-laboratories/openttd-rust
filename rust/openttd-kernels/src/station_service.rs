@@ -251,11 +251,6 @@ pub unsafe extern "C" fn openttd_rust_station_queue_erase_node(
 }
 
 #[repr(C)]
-pub struct RatingCounts {
-    pub(crate) available: u32,
-    pub(crate) destinations: u32,
-}
-#[repr(C)]
 pub struct StationExclusivity {
     pub(crate) counter: u8,
     pub(crate) exclusive: u8,
@@ -313,15 +308,13 @@ pub struct TruncatedSource {
 }
 #[repr(C)]
 pub struct World {
+    pub(crate) company: *const crate::company::Services,
     pub(crate) graphs: &'static live::Services,
     pub(crate) station_exclusivity: extern "C" fn(*mut BaseStation) -> StationExclusivity,
-    pub(crate) rating_counts: extern "C" fn(*mut BaseStation, u8) -> RatingCounts,
     pub(crate) environment: crate::services::EnvironmentServices,
-    pub(crate) local_owner: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) town_statue: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) select_goods: extern "C" fn() -> bool,
     pub(crate) rating_cheat: extern "C" fn() -> bool,
-    pub(crate) available: extern "C" fn(*mut BaseStation, u8) -> u32,
     pub(crate) cargo_valid: extern "C" fn(u8) -> bool,
     pub(crate) rating_callback_enabled: extern "C" fn(u8) -> bool,
     pub(crate) passenger_cargo: extern "C" fn(u8) -> bool,
@@ -342,6 +335,11 @@ pub struct World {
     pub(crate) shared: *const crate::services::Services,
 }
 impl World {
+    fn available(st: *mut BaseStation, cargo: u8) -> u32 {
+        let goods = crate::station_record::goods(st, cargo);
+        // SAFETY: The source station and cargo slot stay live during this immediate query.
+        unsafe { crate::station_base::goods_available_count(goods) }
+    }
     /// The shared table, immutable for the process.
     fn shared(&self) -> &crate::services::Services {
         // SAFETY: the immutable shared table outlives every entry.
@@ -527,7 +525,7 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
         return;
     }
     if show != 0
-        && u32::from((w.local_owner)(st)) != 0
+        && crate::station_record::owner_company(st) == (unsafe { &*w.company }.local_company)()
         && u32::from(crate::station_record::in_use(st.cast())) != 0
     {
         let accepts = new & !old;
@@ -606,9 +604,18 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
         }
         let mut skip = false;
         let mut rating = 0_i32;
-        let counts = (w.rating_counts)(st, cargo);
-        let mut waiting = counts.available;
-        let num_dests = counts.destinations;
+        let list = crate::station_record::existing_cargo(st, cargo);
+        let (mut waiting, num_dests) = if list.is_null() {
+            (0, 0)
+        } else {
+            // SAFETY: The source AvailableCount and MapSize reads have no intervening effects.
+            unsafe {
+                (
+                    crate::cargo_storage::openttd_rust_cargo_list_count(list),
+                    crate::cargo_storage::openttd_rust_cargo_list_key_count(list) as u32,
+                )
+            }
+        };
         let waiting_avg = waiting / num_dests.wrapping_add(1);
         if u32::from((w.rating_cheat)()) != 0 {
             unsafe {
@@ -725,7 +732,7 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
             waiting = waiting.min(32768);
             waiting_changed = true;
         }
-        let available = (w.available)(st, cargo);
+        let available = World::available(st, cargo);
         if waiting_changed && waiting < available {
             unsafe {
                 (&raw mut (*ge).max_waiting_cargo).write(0);
@@ -908,18 +915,9 @@ pub(crate) unsafe fn distribute(
 }
 
 #[repr(C)]
-#[derive(Default)]
-pub struct Edge {
-    pub(crate) destination: *mut BaseStation,
-    pub(crate) distance: u32,
-}
-#[repr(C)]
 pub struct Links {
     pub(crate) graphs: &'static live::Services,
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
-    pub(crate) edge: extern "C" fn(*mut BaseStation, u16) -> Edge,
-    pub(crate) delete_flows: extern "C" fn(*mut BaseStation, u8, u16),
-    pub(crate) restrict_flows: extern "C" fn(*mut BaseStation, u8, u16),
     pub(crate) order_list: extern "C" fn(u16) -> *mut NativeOrderList,
     pub(crate) order_pool_size: extern "C" fn() -> usize,
     pub(crate) order_count: extern "C" fn(*mut NativeOrderList) -> usize,
@@ -1014,15 +1012,25 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                 let e = &g.nodes[usize::from(node)].edges[index];
                 (g.nodes[usize::from(e.dest_node)].station, e.last_update())
             };
-            let edge = (l.edge)(from, destination);
+            let shared = unsafe { &*l.graphs.shared };
+            let destination_record = crate::station_record::get_record(
+                shared,
+                crate::station_type::StationID(destination),
+            );
+            let to = crate::station_record::shell(destination_record);
+            let distance = shared
+                .map()
+                .distance_manhattan(crate::station_record::xy(from), unsafe {
+                    (*destination_record).xy.0
+                });
             let date = crate::timer_game_common::economy_date().0;
-            let timeout = live::MIN_TIMEOUT_DISTANCE.wrapping_add(edge.distance >> 3) as i32;
+            let timeout = live::MIN_TIMEOUT_DISTANCE.wrapping_add(distance >> 3) as i32;
             if date.wrapping_sub(last_update) > timeout {
                 let mut updated = false;
                 if auto {
                     let mut vehicles = Vec::new();
                     let from_id = (l.graphs.station_id)(from);
-                    let to_id = (l.graphs.station_id)(edge.destination);
+                    let to_id = (l.graphs.station_id)(to);
                     let order_count = (l.order_pool_size)();
                     for id in 0..order_count {
                         // OrderList pool IDs are bounded by their u16 representation.
@@ -1084,11 +1092,16 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                 }
                 if !updated {
                     crate::witness::hit(crate::witness::STATION_STALE_REMOVE);
-                    remove.push(crate::station_record::read(edge.destination.cast(), |r| {
+                    remove.push(crate::station_record::read(to.cast(), |r| {
                         r.goods[usize::from(cargo)].node
                     }));
-                    let to_id = (l.graphs.station_id)(edge.destination);
-                    (l.delete_flows)(from, cargo, to_id);
+                    let to_id = (l.graphs.station_id)(to);
+                    let goods = crate::station_record::goods(from, cargo);
+                    let flows = unsafe { crate::station_record::existing_flows(goods) };
+                    if !flows.is_null() {
+                        // SAFETY: End this map mutation before reroute can clear/recreate data.
+                        unsafe { (*flows).deleted(to_id) };
+                    }
                     unsafe {
                         reroute(from, cargo, to_id, (l.graphs.station_id)(from), l);
                     }
@@ -1099,8 +1112,15 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                 if unrestricted != INVALID_DATE && date.wrapping_sub(unrestricted) > timeout {
                     crate::witness::hit(crate::witness::STATION_STALE_RESTRICT);
                     unsafe { &mut *owner }.nodes[usize::from(node)].edges[index].restrict();
-                    let to_id = (l.graphs.station_id)(edge.destination);
-                    (l.restrict_flows)(from, cargo, to_id);
+                    let to_id = (l.graphs.station_id)(to);
+                    let goods = crate::station_record::goods(from, cargo);
+                    let flows = unsafe { crate::station_record::existing_flows(goods) };
+                    if !flows.is_null() {
+                        // SAFETY: The canonical restriction operation finishes before reroute.
+                        unsafe {
+                            crate::cargo_flow::openttd_rust_flow_map_change(flows, 2, 0, to_id, 0);
+                        };
+                    }
                     unsafe {
                         reroute(from, cargo, to_id, (l.graphs.station_id)(from), l);
                     }
@@ -1441,7 +1461,6 @@ fn refit_vehicle(
     st: LoadingStation,
     next: *mut c_void,
     mut new_cargo: u8,
-    w: &World,
     l: &Loading,
     refit: &RefitContext,
 ) {
@@ -1473,7 +1492,7 @@ fn refit_vehicle(
             if capacity > 0
                 && (capleft[usize::from(cargo)] < capleft[usize::from(new_cargo)]
                     || (capleft[usize::from(cargo)] == capleft[usize::from(new_cargo)]
-                        && (w.available)(st.base, cargo) > (w.available)(st.base, new_cargo)))
+                        && World::available(st.base, cargo) > World::available(st.base, new_cargo)))
             {
                 new_cargo = cargo;
             }
@@ -1700,7 +1719,7 @@ unsafe fn load_vehicle(
             }
             let refitted = control.refit && artic_part == 1;
             if refitted {
-                refit_vehicle(v, &mut capleft, st, next, control.refit_cargo, w, l, refit);
+                refit_vehicle(v, &mut capleft, st, next, control.refit_cargo, l, refit);
             }
             if refitted {
                 cargo = (l.cargo_type)(v);
@@ -1728,7 +1747,7 @@ unsafe fn load_vehicle(
                 unsafe {
                     (&raw mut (*ge).time_since_pickup).write(0);
                 }
-                if ((l.load_count)(v) > 0 || (w.available)(st.base, cargo) > 0)
+                if ((l.load_count)(v) > 0 || World::available(st.base, cargo) > 0)
                     && may_load(st, v, w)
                 {
                     if (l.stored_count)(v) == 0 {
@@ -1968,10 +1987,6 @@ crate::abi::layouts! {
         base,
         state,
     };
-    "OpenTTDRatingCounts" ["probe"] => RatingCounts {
-        available,
-        destinations,
-    };
     "OpenTTDStationExclusivity" ["probe"] => StationExclusivity {
         counter,
         exclusive,
@@ -2013,15 +2028,13 @@ crate::abi::layouts! {
         unloading,
     };
     "OpenTTDStationServices" ["probe"] => World {
+        company,
         graphs,
         station_exclusivity,
-        rating_counts,
         environment,
-        local_owner,
         town_statue,
         select_goods,
         rating_cheat,
-        available,
         cargo_valid,
         rating_callback_enabled,
         passenger_cargo,
@@ -2038,16 +2051,9 @@ crate::abi::layouts! {
         truncate_next,
         shared,
     };
-    "OpenTTDStationEdge" ["station_service"] => Edge {
-        destination,
-        distance,
-    };
     "OpenTTDStationLinks" ["probe"] => Links {
         graphs,
         automatic_distribution,
-        edge,
-        delete_flows,
-        restrict_flows,
         order_list,
         order_pool_size,
         order_count,
