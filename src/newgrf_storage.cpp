@@ -9,19 +9,17 @@
 
 #include "stdafx.h"
 #include "newgrf_storage.h"
-#include "core/pool_func.hpp"
 #include "debug.h"
 
 #include "safeguards.h"
 
 PersistentStoragePool _persistent_storage_pool("PersistentStorage");
-INSTANTIATE_POOL_METHODS(PersistentStorage)
 
 BasePersistentStorageArray::~BasePersistentStorageArray() = default;
 void RustStorageDiscard(void *shell) noexcept
 {
 	auto *it = static_cast<BasePersistentStorageArray *>(shell);
-	Debug(desync, 2, "warning: discarding persistent storage changes: Feature {}, GrfID {:08X}, Tile {}", it->feature, std::byteswap(it->grfid), it->tile);
+	Debug(desync, 2, "warning: discarding persistent storage changes: Feature {}, GrfID {:08X}, Tile {}", it->Metadata().feature, std::byteswap(it->Metadata().grfid), it->Metadata().tile);
 }
 void BasePersistentStorageArray::SwitchMode(PersistentStorageMode mode, bool ignore_prev_mode)
 {

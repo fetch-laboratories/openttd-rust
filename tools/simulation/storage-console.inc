@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /* Real resolver facades and native associations, without an external GRF program. */
 #include "saveload-codec-console.hpp"
+#include "vehicle-record-fixture.hpp"
 #include "newgrf_town.h"
 #include "newgrf_industries.h"
 #include "newgrf_airport.h"
@@ -207,12 +208,12 @@ static bool StorageScenario(std::span<std::string_view> args)
 		} else if (args[3] == "partial") {
 			Require(failed && PersistentStorage::GetNumItems() == 2);
 			auto *first = PersistentStorage::Get(PersistentStorageID{0}), *partial = PersistentStorage::Get(PersistentStorageID{1});
-			Require(first->grfid == 0x39312345 && first->GetValue(0) == INT32_MIN && first->GetValue(255) == INT32_MAX);
-			Require(partial->grfid == 0xAABBCCDD && partial->GetValue(0) == -7 && partial->GetValue(1) == 0);
+			Require(FIXTURE_PSA_FIELD(first, grfid) == 0x39312345 && first->GetValue(0) == INT32_MIN && first->GetValue(255) == INT32_MAX);
+			Require(FIXTURE_PSA_FIELD(partial, grfid) == 0xAABBCCDD && partial->GetValue(0) == -7 && partial->GetValue(1) == 0);
 		} else {
 			Require(!failed && PersistentStorage::GetNumItems() == 1);
 			auto *legacy = PersistentStorage::Get(PersistentStorageID{0});
-			Require(legacy->grfid == 0x39312345 && legacy->GetValue(0) == INT32_MIN && legacy->GetValue(15) == -393 && legacy->GetValue(16) == 0 && legacy->GetValue(255) == 0);
+			Require(FIXTURE_PSA_FIELD(legacy, grfid) == 0x39312345 && legacy->GetValue(0) == INT32_MIN && legacy->GetValue(15) == -393 && legacy->GetValue(16) == 0 && legacy->GetValue(255) == 0);
 		}
 		fmt::print(stderr, "STORAGE load {} true\n", args[3]); std::fflush(stderr); std::_Exit(0);
 	}
@@ -231,8 +232,8 @@ static bool StorageScenario(std::span<std::string_view> args)
 		ro.SetRegister(0x100, -1);
 		Require(town->psa_list.size() == 2 && writable.GetVariable(0x7C, 0, available) == 0x80000000 && writable.GetVariable(0x7C, 255, available) == INT32_MAX);
 		Require(industry->psa != nullptr && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa != nullptr && station->airport.psa->GetValue(255) == 393);
-		Require(industry->psa->feature == GSF_INDUSTRIES && industry->psa->tile == industry->location.tile && station->airport.psa->feature == GSF_AIRPORTS && station->airport.psa->tile == station->airport.tile);
-		for (auto *psa : town->psa_list) Require(psa->feature == GSF_FAKE_TOWNS && psa->tile == town->xy);
+		Require(FIXTURE_PSA_FIELD(industry->psa, feature) == GSF_INDUSTRIES && FIXTURE_PSA_FIELD(industry->psa, tile) == industry->location.tile && FIXTURE_PSA_FIELD(station->airport.psa, feature) == GSF_AIRPORTS && FIXTURE_PSA_FIELD(station->airport.psa, tile) == station->airport.tile);
+		for (auto *psa : town->psa_list) Require(FIXTURE_PSA_FIELD(psa, feature) == GSF_FAKE_TOWNS && FIXTURE_PSA_FIELD(psa, tile) == town->xy);
 		CommonAction2(industry, grf);
 		fmt::print(stderr, "STORAGE reloaded true\n");
 		return true;
@@ -249,12 +250,12 @@ static bool StorageScenario(std::span<std::string_view> args)
 	/* Airports without a GRF create the default-GRF array. */
 	AirportScopeResolver default_airport(anonymous, station->airport.tile, station, nullptr, 0);
 	default_airport.StorePSA(256, 7);
-	Require(station->airport.psa != nullptr && station->airport.psa->grfid == 0);
+	Require(station->airport.psa != nullptr && FIXTURE_PSA_FIELD(station->airport.psa, grfid) == 0);
 	delete station->airport.psa; station->airport.psa = nullptr;
 	/* Nonzero out-of-range writes allocate industry/airport, town even for zero. */
 	ro.SetRegister(0x100, -1); writable.StorePSA(256, 0); ind.StorePSA(256, 7); airport.StorePSA(256, 7);
 	Require(town->psa_list.size() == 1 && industry->psa != nullptr && station->airport.psa != nullptr);
-	Require(industry->psa->grfid == GetIndustrySpec(industry->type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
+	Require(FIXTURE_PSA_FIELD(industry->psa, grfid) == GetIndustrySpec(industry->type)->grf_prop.grfid && FIXTURE_PSA_FIELD(station->airport.psa, grfid) == grf.grfid);
 	writable.StorePSA(0, INT32_MIN); writable.StorePSA(255, INT32_MAX); ind.StorePSA(15, -393); airport.StorePSA(255, 393);
 	Require(ind.GetVariable(0x7C, 0, available) == 0 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
 	Require(ind.GetVariable(0x7C, 256, available) == 0 && ind.GetVariable(0x7C, UINT32_MAX, available) == 0);

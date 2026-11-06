@@ -54,8 +54,7 @@ pub struct ResolverServices {
     pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub founder_info: unsafe extern "C" fn(u8) -> FounderInfo,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
-    pub storage_owner:
-        unsafe extern "C" fn(*mut c_void) -> *mut crate::newgrf_storage::Payload<256>,
+    pub storage_owner: unsafe extern "C" fn(*mut c_void) -> *mut crate::newgrf_storage::Payload256,
     pub unhandled: unsafe extern "C" fn(u8, bool, bool, u16),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub existing_town: unsafe extern "C" fn(*mut c_void) -> *mut c_void,

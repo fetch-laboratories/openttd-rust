@@ -12,6 +12,7 @@
 #include "ground_vehicle.hpp"
 #include "signs_base.h"
 #include "goal_base.h"
+#include "newgrf_storage.h"
 #include "object_base.h"
 #include "story_base.h"
 #include "league_base.h"
@@ -119,6 +120,7 @@ static void Layouts()
 #include "abi-layout-goal_type.inc"
 #include "abi-layout-story_type.inc"
 #include "abi-layout-league_type.inc"
+#include "abi-layout-storage.inc"
 #include "abi-layout-object_type.inc"
 
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);

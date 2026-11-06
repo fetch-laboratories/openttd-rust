@@ -376,7 +376,7 @@ class NIHIndustry : public NIHelper {
 	{
 		const Industry *i = (const Industry *)this->GetInstance(index);
 		if (i->psa == nullptr) return {};
-		return i->psa->storage;
+		return i->psa->Record().storage;
 	}
 };
 
@@ -552,7 +552,7 @@ class NIHAirport : public NIHelper {
 	{
 		const Station *st = (const Station *)this->GetInstance(index);
 		if (st->airport.psa == nullptr) return {};
-		return st->airport.psa->storage;
+		return st->airport.psa->Record().storage;
 	}
 };
 
@@ -599,7 +599,7 @@ class NIHTown : public NIHelper {
 		Town *t = Town::Get(index);
 
 		for (const auto &it : t->psa_list) {
-			if (it->grfid == grfid) return it->storage;
+			if (it->Metadata().grfid == grfid) return it->Record().storage;
 		}
 
 		return {};

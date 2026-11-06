@@ -10,7 +10,8 @@
 #ifndef NEWGRF_STORAGE_H
 #define NEWGRF_STORAGE_H
 
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
+#include <array>
 #include "newgrf.h"
 #include "tile_type.h"
 #include "rust/newgrf_storage_ffi.h"
@@ -28,14 +29,20 @@ enum PersistentStorageMode : uint8_t {
 	PSM_LEAVE_TESTMODE,   ///< Leave command test mode, revert to previous mode.
 };
 
+using PersistentStorageID = PoolID<uint32_t, struct PersistentStorageIDTag, 0xFF000, 0xFFFFF>;
+struct PersistentStorage;
+#include "abi-record-storage.h"
+
 /**
  * Base class for all persistent NewGRF storage arrays. Nothing fancy, only here
  * so we have a generalised access to the virtual methods.
  */
 struct BasePersistentStorageArray {
-	uint32_t grfid = 0; ///< GRFID associated to this persistent storage. A value of zero means "default".
-	GrfSpecFeature feature = GSF_INVALID; ///< NOSAVE: Used to identify in the owner of the array in debug output.
-	TileIndex tile = INVALID_TILE; ///< NOSAVE: Used to identify in the owner of the array in debug output.
+protected:
+	OpenTTDPersistentStorageMetadata *metadata = nullptr; ///< Canonical fixed-data prefix; initialized by the array owner.
+public:
+	OpenTTDPersistentStorageMetadata &Metadata() { return *this->metadata; }
+	const OpenTTDPersistentStorageMetadata &Metadata() const { return *this->metadata; }
 
 	virtual ~BasePersistentStorageArray();
 
@@ -55,8 +62,11 @@ struct PersistentStorageArray : BasePersistentStorageArray {
 
 	static_assert(std::is_same_v<TYPE, int32_t> && (SIZE == 16 || SIZE == 256));
 	using RustStorage = std::conditional_t<SIZE == 16, OpenTTDStorage16, OpenTTDStorage256>;
-	RustStorage *rust_storage = RustStorageNew(std::integral_constant<uint, SIZE>{}, this);
-	StorageType &storage = *reinterpret_cast<StorageType *>(RustStorageData(this->rust_storage)); ///< Canonical save/debug alias.
+	RustStorage *rust_storage = RustStorageNew(std::integral_constant<uint, SIZE>{}, static_cast<BasePersistentStorageArray *>(this), &this->metadata);
+	using RecordType = std::conditional_t<SIZE == 16, OpenTTDLegacyPersistentStorageRecord, OpenTTDPersistentStorageRecord>;
+	/** Metadata is the first field of the generated fixed-data prefix. No view survives owner drop. */
+	RecordType &Record() { static_assert(offsetof(RecordType, metadata) == 0); return *reinterpret_cast<RecordType *>(this->metadata); }
+	const RecordType &Record() const { static_assert(offsetof(RecordType, metadata) == 0); return *reinterpret_cast<const RecordType *>(this->metadata); }
 
 	PersistentStorageArray() = default;
 	PersistentStorageArray(const PersistentStorageArray &) = delete;
@@ -88,10 +98,7 @@ struct TemporaryStorageArray {
 
 typedef PersistentStorageArray<int32_t, 16> OldPersistentStorage;
 
-using PersistentStorageID = PoolID<uint32_t, struct PersistentStorageIDTag, 0xFF000, 0xFFFFF>;
-
-struct PersistentStorage;
-using PersistentStoragePool = Pool<PersistentStorage, PersistentStorageID, 1>;
+using PersistentStoragePool = RustPool<PersistentStorage, PersistentStorageID, 1>;
 
 extern PersistentStoragePool _persistent_storage_pool;
 
@@ -102,12 +109,17 @@ struct PersistentStorage : PersistentStorageArray<int32_t, 256>, PersistentStora
 	/** We don't want GCC to zero our struct! It already is zeroed and has an index! */
 	PersistentStorage(const uint32_t new_grfid, GrfSpecFeature feature, TileIndex tile)
 	{
-		this->grfid = new_grfid;
-		this->feature = feature;
-		this->tile = tile;
+		this->Metadata().grfid = new_grfid;
+		this->Metadata().feature = feature;
+		this->Metadata().tile = tile;
+		/* Both bases now exist: legacy arrays never enter this indexed path. */
+		this->Record().shell = this;
+		this->Record().index = this->index;
+		_persistent_storage_pool.BindRecord(this->index.base(), this, &this->Record());
 	}
+	~PersistentStorage() override { _persistent_storage_pool.RetireRecord(this->index.base(), this, &this->Record()); }
 };
 
-static_assert(std::tuple_size_v<std::remove_reference_t<decltype(OldPersistentStorage::storage)>> <= std::tuple_size_v<std::remove_reference_t<decltype(PersistentStorage::storage)>>);
+static_assert(std::tuple_size_v<std::remove_reference_t<decltype(OldPersistentStorage::RecordType::storage)>> <= std::tuple_size_v<std::remove_reference_t<decltype(PersistentStorage::RecordType::storage)>>);
 
 #endif /* NEWGRF_STORAGE_H */

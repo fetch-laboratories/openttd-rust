@@ -277,20 +277,20 @@ static void InitializeWindowsAndCaches()
 	/* Identify owners of persistent storage arrays */
 	for (Industry *i : Industry::Iterate()) {
 		if (i->psa != nullptr) {
-			i->psa->feature = GSF_INDUSTRIES;
-			i->psa->tile = i->location.tile;
+			i->psa->Metadata().feature = GSF_INDUSTRIES;
+			i->psa->Metadata().tile = i->location.tile;
 		}
 	}
 	for (Station *s : Station::Iterate()) {
 		if (s->airport.psa != nullptr) {
-			s->airport.psa->feature = GSF_AIRPORTS;
-			s->airport.psa->tile = s->airport.tile;
+			s->airport.psa->Metadata().feature = GSF_AIRPORTS;
+			s->airport.psa->Metadata().tile = s->airport.tile;
 		}
 	}
 	for (Town *t : Town::Iterate()) {
 		for (auto &it : t->psa_list) {
-			it->feature = GSF_FAKE_TOWNS;
-			it->tile = t->xy;
+			it->Metadata().feature = GSF_FAKE_TOWNS;
+			it->Metadata().tile = t->xy;
 		}
 	}
 	for (RoadVehicle *rv : RoadVehicle::Iterate()) {
@@ -2833,7 +2833,7 @@ bool AfterLoadGame()
 
 				/* Check if the old storage was empty. */
 				bool is_empty = true;
-				for (uint i = 0; i < sizeof(ind->psa->storage); i++) {
+				for (uint i = 0; i < sizeof(ind->psa->Record().storage); i++) {
 					if (ind->psa->GetValue(i) != 0) {
 						is_empty = false;
 						break;
@@ -2841,7 +2841,7 @@ bool AfterLoadGame()
 				}
 
 				if (!is_empty) {
-					ind->psa->grfid = _industry_mngr.GetGRFID(ind->type);
+					ind->psa->Metadata().grfid = _industry_mngr.GetGRFID(ind->type);
 				} else {
 					delete ind->psa;
 					ind->psa = nullptr;
@@ -2856,7 +2856,7 @@ bool AfterLoadGame()
 
 				/* Check if the old storage was empty. */
 				bool is_empty = true;
-				for (uint i = 0; i < sizeof(st->airport.psa->storage); i++) {
+				for (uint i = 0; i < sizeof(st->airport.psa->Record().storage); i++) {
 					if (st->airport.psa->GetValue(i) != 0) {
 						is_empty = false;
 						break;
@@ -2864,7 +2864,7 @@ bool AfterLoadGame()
 				}
 
 				if (!is_empty) {
-					st->airport.psa->grfid = _airport_mngr.GetGRFID(st->airport.type);
+					st->airport.psa->Metadata().grfid = _airport_mngr.GetGRFID(st->airport.type);
 				} else {
 					delete st->airport.psa;
 					st->airport.psa = nullptr;

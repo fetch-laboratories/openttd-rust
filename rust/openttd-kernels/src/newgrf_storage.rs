@@ -1,7 +1,12 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! `NewGRF` payloads, the transactional registry and modes, and temporary registers. Statics
 //! have no destructor, so they outlive native global storage and pool destruction.
-#![allow(unsafe_code, clippy::missing_safety_doc, clippy::cast_sign_loss)]
+#![allow(
+    unsafe_code,
+    missing_docs,
+    clippy::missing_safety_doc,
+    clippy::cast_sign_loss
+)]
 use crate::game_state::GameState;
 use std::{
     collections::BTreeMap,
@@ -23,12 +28,107 @@ pub const PSM_ENTER_TESTMODE: u8 = 4;
 pub const PSM_LEAVE_TESTMODE: u8 = 5;
 
 type Check = extern "C" fn(bool);
-/// Stable allocation owned by one native shell; aliases point at `storage`.
-pub struct Payload<const N: usize> {
-    storage: [i32; N],
-    backup: Option<Box<[i32; N]>>,
-    shell: *mut c_void,
+/// Native pool index; legacy arrays never publish one.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct PersistentStorageID(pub u32);
+impl PersistentStorageID {
+    pub const INVALID: Self = Self(0x000F_FFFF);
 }
+impl crate::pool::PoolId for PersistentStorageID {
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+#[repr(C)]
+pub struct PersistentStorageShell {
+    _private: [u8; 0],
+}
+crate::abi::shared_records! {
+    fn abi_record;
+    "OpenTTDPersistentStorageMetadata" ["storage"] => pub struct Metadata {
+        pub grfid: u32,
+        pub feature: u8 => "GrfSpecFeature",
+        pub tile: crate::tile_type::TileIndex => "TileIndex",
+    }
+    "OpenTTDLegacyPersistentStorageRecord" ["storage"] => pub struct LegacyRecord {
+        pub metadata: Metadata => "OpenTTDPersistentStorageMetadata",
+        pub storage: [i32; 16] => "std::array<int32_t, 16>",
+    }
+    "OpenTTDPersistentStorageRecord" ["storage"] => pub struct PersistentStorageRecord {
+        pub metadata: Metadata => "OpenTTDPersistentStorageMetadata",
+        pub storage: [i32; 256] => "std::array<int32_t, 256>",
+        pub shell: *mut PersistentStorageShell => "PersistentStorage *",
+        pub index: PersistentStorageID => "PersistentStorageID",
+    }
+}
+impl Metadata {
+    fn new() -> Self {
+        Self {
+            grfid: 0,
+            feature: 0xFF,
+            tile: crate::tile_type::TileIndex::INVALID,
+        }
+    }
+}
+/// The two original fixed-array sizes share private transaction policy.
+pub trait FixedData<const N: usize> {
+    fn new() -> Self;
+    fn metadata(&mut self) -> *mut Metadata;
+    fn storage(&self) -> &[i32; N];
+    fn storage_mut(&mut self) -> &mut [i32; N];
+}
+impl FixedData<16> for LegacyRecord {
+    fn new() -> Self {
+        Self {
+            metadata: Metadata::new(),
+            storage: [0; 16],
+        }
+    }
+    fn metadata(&mut self) -> *mut Metadata {
+        &raw mut self.metadata
+    }
+    fn storage(&self) -> &[i32; 16] {
+        &self.storage
+    }
+    fn storage_mut(&mut self) -> &mut [i32; 16] {
+        &mut self.storage
+    }
+}
+impl FixedData<256> for PersistentStorageRecord {
+    fn new() -> Self {
+        Self {
+            metadata: Metadata::new(),
+            storage: [0; 256],
+            shell: std::ptr::null_mut(),
+            index: PersistentStorageID::INVALID,
+        }
+    }
+    fn metadata(&mut self) -> *mut Metadata {
+        &raw mut self.metadata
+    }
+    fn storage(&self) -> &[i32; 256] {
+        &self.storage
+    }
+    fn storage_mut(&mut self) -> &mut [i32; 256] {
+        &mut self.storage
+    }
+}
+/// One allocation. Generated fixed data is the repr(C) prefix; backup and the
+/// actual native BasePersistentStorageArray registry identity remain private.
+#[repr(C)]
+pub struct Payload<R: FixedData<N>, const N: usize> {
+    record: R,
+    backup: Option<Box<[i32; N]>>,
+    registry_shell: *mut c_void,
+}
+pub type Payload16 = Payload<LegacyRecord, 16>;
+pub type Payload256 = Payload<PersistentStorageRecord, 256>;
+// Native inline views and record-to-owner resolution use these guaranteed repr(C) prefixes.
+const _: () = assert!(std::mem::offset_of!(Payload16, record) == 0);
+const _: () = assert!(std::mem::offset_of!(Payload256, record) == 0);
+const _: () = assert!(std::mem::offset_of!(LegacyRecord, metadata) == 0);
+const _: () = assert!(std::mem::offset_of!(PersistentStorageRecord, metadata) == 0);
 #[derive(Clone, Copy)]
 struct Changed {
     owner: *mut c_void,
@@ -53,15 +153,20 @@ static OWNER: GameState<Runtime> = GameState::new(Runtime {
     initialized: [0; 0x110],
     key: 1,
 });
-unsafe fn clear<const N: usize>(owner: *mut c_void) {
-    let owner = unsafe { &mut *owner.cast::<Payload<N>>() };
+unsafe fn clear<R: FixedData<N>, const N: usize>(owner: *mut c_void) {
+    let owner = unsafe { &mut *owner.cast::<Payload<R, N>>() };
     if let Some(previous) = owner.backup.take() {
-        owner.storage = *previous;
+        *owner.record.storage_mut() = *previous;
     }
 }
-unsafe fn store<const N: usize>(owner: *mut Payload<N>, pos: u32, value: i32, check: Check) {
+unsafe fn store<R: FixedData<N>, const N: usize>(
+    owner: *mut Payload<R, N>,
+    pos: u32,
+    value: i32,
+    check: Check,
+) {
     let pos = pos as usize;
-    if pos >= N || unsafe { (*owner).storage[pos] } == value {
+    if pos >= N || unsafe { (*owner).record.storage()[pos] } == value {
         return;
     }
     let persistent = unsafe {
@@ -71,86 +176,88 @@ unsafe fn store<const N: usize>(owner: *mut Payload<N>, pos: u32, value: i32, ch
     if persistent {
         check(unsafe { (*owner).backup.is_none() });
     } else if unsafe { (*owner).backup.is_none() } {
-        let previous = Box::new(unsafe { (*owner).storage });
+        let previous = Box::new(unsafe { *(*owner).record.storage() });
         unsafe {
             (*owner).backup = Some(previous);
-            let shell = (*owner).shell;
+            let shell = (*owner).registry_shell;
             (*OWNER.get()).changed.insert(
                 shell as usize,
                 Changed {
                     owner: owner.cast(),
                     shell,
-                    clear: clear::<N>,
+                    clear: clear::<R, N>,
                 },
             );
         }
     }
     unsafe {
-        (*owner).storage[pos] = value;
+        (*owner).record.storage_mut()[pos] = value;
     }
 }
 macro_rules! payload_api {
-    ($n:literal, $new:ident, $delete:ident, $data:ident, $store:ident, $get:ident, $clear:ident) => {
+    ($n:literal, $record:ty, $payload:ty, $new:ident, $delete:ident, $store:ident, $get:ident, $clear:ident) => {
         #[unsafe(no_mangle)]
-        pub extern "C" fn $new(shell: *mut c_void) -> *mut Payload<$n> {
-            Box::into_raw(Box::new(Payload {
-                storage: [0; $n],
+        pub unsafe extern "C" fn $new(
+            shell: *mut c_void,
+            metadata: *mut *mut Metadata,
+        ) -> *mut $payload {
+            let mut owner = Box::new(Payload {
+                record: <$record>::new(),
                 backup: None,
-                shell,
-            }))
+                registry_shell: shell,
+            });
+            unsafe {
+                metadata.write(owner.record.metadata());
+            }
+            Box::into_raw(owner)
         }
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $delete(owner: *mut Payload<$n>) {
+        pub unsafe extern "C" fn $delete(owner: *mut $payload) {
             unsafe {
-                (*OWNER.get()).changed.remove(&((*owner).shell as usize));
+                (*OWNER.get())
+                    .changed
+                    .remove(&((*owner).registry_shell as usize));
                 drop(Box::from_raw(owner));
             }
         }
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $data(owner: *mut Payload<$n>) -> *mut i32 {
-            unsafe { std::ptr::addr_of_mut!((*owner).storage).cast() }
-        }
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $store(
-            owner: *mut Payload<$n>,
-            pos: u32,
-            value: i32,
-            check: Check,
-        ) {
+        pub unsafe extern "C" fn $store(owner: *mut $payload, pos: u32, value: i32, check: Check) {
             unsafe {
                 store(owner, pos, value, check);
             }
         }
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $get(owner: *const Payload<$n>, pos: u32) -> i32 {
+        pub unsafe extern "C" fn $get(owner: *const $payload, pos: u32) -> i32 {
             if pos as usize >= $n {
                 0
             } else {
-                unsafe { (*owner).storage[pos as usize] }
+                unsafe { (*owner).record.storage()[pos as usize] }
             }
         }
         #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $clear(owner: *mut Payload<$n>) {
+        pub unsafe extern "C" fn $clear(owner: *mut $payload) {
             unsafe {
-                clear::<$n>(owner.cast());
+                clear::<$record, $n>(owner.cast());
             }
         }
     };
 }
 payload_api!(
     16,
+    LegacyRecord,
+    Payload16,
     openttd_rust_storage16_new,
     openttd_rust_storage16_delete,
-    openttd_rust_storage16_data,
     openttd_rust_storage16_store,
     openttd_rust_storage16_get,
     openttd_rust_storage16_clear
 );
 payload_api!(
     256,
+    PersistentStorageRecord,
+    Payload256,
     openttd_rust_storage256_new,
     openttd_rust_storage256_delete,
-    openttd_rust_storage256_data,
     openttd_rust_storage256_store,
     openttd_rust_storage256_get,
     openttd_rust_storage256_clear
@@ -262,26 +369,24 @@ pub unsafe extern "C" fn openttd_rust_storage_temp_clear() {
 }
 
 #[repr(C)]
-pub struct StorageReference {
-    owner: *mut Payload<256>,
-    grfid: u32,
-}
-#[repr(C)]
 pub struct IndustryStorage {
-    owner: *mut Payload<256>,
+    owner: *mut Payload256,
     valid: bool,
 }
 #[repr(C)]
 pub struct Services {
     shared: *const crate::services::Services,
     check: Check,
+    create: extern "C" fn(u32, u8, u32) -> *mut PersistentStorageShell,
+    destroy: extern "C" fn(*mut PersistentStorageShell),
+    record: extern "C" fn(*const PersistentStorageShell) -> *mut PersistentStorageRecord,
     industry: extern "C" fn(*mut c_void) -> IndustryStorage,
-    create_industry: extern "C" fn(*mut c_void) -> *mut Payload<256>,
-    pub(crate) airport: extern "C" fn(*mut c_void) -> *mut Payload<256>,
-    create_airport: extern "C" fn(*mut c_void, u32) -> *mut Payload<256>,
+    create_industry: extern "C" fn(*mut c_void) -> *mut Payload256,
+    pub(crate) airport: extern "C" fn(*mut c_void) -> *mut Payload256,
+    create_airport: extern "C" fn(*mut c_void, u32) -> *mut Payload256,
     town_count: extern "C" fn(*const c_void) -> usize,
-    town_storage: extern "C" fn(*const c_void, usize) -> StorageReference,
-    create_town: extern "C" fn(*mut c_void, u32) -> *mut Payload<256>,
+    town_storage: extern "C" fn(*const c_void, usize) -> *mut PersistentStorageRecord,
+    create_town: extern "C" fn(*mut c_void, u32) -> *mut Payload256,
     append_town: extern "C" fn(*mut c_void, *mut c_void),
 }
 impl Services {
@@ -339,11 +444,13 @@ pub unsafe extern "C" fn openttd_rust_storage_airport(
         store(owner, pos, value, s.check);
     }
 }
-fn town_find(s: &Services, town: *const c_void, grfid: u32) -> *mut Payload<256> {
+fn town_find(s: &Services, town: *const c_void, grfid: u32) -> *mut Payload256 {
     for index in 0..(s.town_count)(town) {
         let entry = (s.town_storage)(town, index);
-        if entry.grfid == grfid {
-            return entry.owner;
+        // Serialized canonical owner resolution; no record borrow crosses the next call.
+        if unsafe { (*entry).metadata.grfid } == grfid {
+            // Payload is repr(C), with this generated record as its first field.
+            return entry.cast();
         }
     }
     std::ptr::null_mut()
@@ -381,7 +488,7 @@ pub unsafe extern "C" fn openttd_rust_storage_town(
     unsafe {
         store(owner, pos, value, s.check);
     }
-    (s.append_town)(town, unsafe { (*owner).shell });
+    (s.append_town)(town, unsafe { (*owner).registry_shell });
 }
 pub unsafe extern "C" fn openttd_rust_storage_town_get(
     s: &Services,
@@ -406,9 +513,8 @@ pub unsafe extern "C" fn openttd_rust_storage_town_get(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStorageServices" ["storage"] => Services {
-        shared, check, industry, create_industry, airport, create_airport,
+        shared, check, create, destroy, record, industry, create_industry, airport, create_airport,
         town_count, town_storage, create_town, append_town,
     };
-    "OpenTTDStorageReference" ["storage"] => StorageReference { owner, grfid };
     "OpenTTDIndustryStorage" ["storage"] => IndustryStorage { owner, valid };
 }

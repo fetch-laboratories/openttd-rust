@@ -489,12 +489,10 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 	using Modern = PersistentStorageArray<int32_t, 256>;
 	OldPersistentStorage legacy;
 	Modern modern;
-	CHECK(modern.storage.data() == RustStorageData(modern.rust_storage));
-	CHECK(legacy.storage.data() == RustStorageData(legacy.rust_storage));
 	ABI_LAYOUT_CHECK;
 #include "abi-layout-storage.inc"
-	legacy.storage[15] = -7;
-	std::copy(legacy.storage.begin(), legacy.storage.end(), modern.storage.begin());
+	legacy.Record().storage[15] = -7;
+	std::copy(legacy.Record().storage.begin(), legacy.Record().storage.end(), modern.Record().storage.begin());
 	CHECK(modern.GetValue(15) == -7);
 	CHECK(modern.GetValue(16) == 0);
 	modern.StoreValue(15, -8);
