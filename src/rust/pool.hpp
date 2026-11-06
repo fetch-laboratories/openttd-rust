@@ -45,17 +45,6 @@ struct RustPool : PoolBase {
 	{
 		if (index < this->GetPoolSize() && this->Get(index) == shell) openttd_rust_pool_bind_record(this->owner, index, record);
 	}
-	/** Index-free binding for pooled and stack/copy shells. No mutation/callback spans this scan.
-	 * O(first_unused), including holes; repeated binding/retirement can be quadratic. */
-	void BindRecordIfOwned(Titem *shell, void *record)
-	{
-		for (size_t index = 0; index < this->GetPoolSize(); ++index) {
-			if (this->descriptor->slots[index].shell == shell) {
-				this->BindRecord(index, shell, record);
-				return;
-			}
-		}
-	}
 	void RetireRecord(size_t index, Titem *shell, const void *record)
 	{
 		if (index < this->GetPoolSize() && this->Get(index) == shell && this->descriptor->slots[index].record == record) openttd_rust_pool_retire_record(this->owner, index);
