@@ -414,7 +414,7 @@ static Order GetOrderCmdFromTile(const Vehicle *v, TileIndex tile)
 			st = Station::GetByTile(tile);
 		} else {
 			const Industry *in = Industry::GetByTile(tile);
-			st = in->Record().neutral_station;
+			st = static_cast<Station *>(in->Record().neutral_station);
 		}
 		if (st != nullptr && (st->owner == _local_company || st->owner == OWNER_NONE)) {
 			StationFacilities facil;

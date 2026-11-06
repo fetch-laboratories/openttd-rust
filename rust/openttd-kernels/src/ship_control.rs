@@ -179,7 +179,6 @@ pub struct Leaves {
     pub dock: extern "C" fn(u32) -> bool,
     pub dock_water: extern "C" fn(u32) -> bool,
     pub station: extern "C" fn(u32) -> u32,
-    pub industry_station: extern "C" fn(u32) -> u32,
     pub oilrig: extern "C" fn(u32) -> bool,
     pub station_xy: extern "C" fn(u32) -> u32,
     pub station_dock: extern "C" fn(u32) -> bool,
@@ -616,9 +615,16 @@ impl Game<'_> {
             {
                 return true;
             }
-            if (self.leaves.tile_type)(adjacent) == u32::from(MP_INDUSTRY)
-                && (self.leaves.industry_station)(adjacent) == station
-            {
+            if (self.leaves.tile_type)(adjacent) == u32::from(MP_INDUSTRY) && {
+                let industry = crate::industry::by_tile(self.services, adjacent);
+                let neutral = crate::industry::neutral_station(industry.owner);
+                let id = if neutral.is_null() {
+                    u32::MAX
+                } else {
+                    u32::from((crate::station::Ctx::from_shared(self.services).c.id)(neutral).0)
+                };
+                id == station
+            } {
                 return true;
             }
             if (self.leaves.oilrig)(adjacent) && (self.leaves.station)(adjacent) == station {
@@ -1174,7 +1180,6 @@ crate::abi::layouts! {
         dock,
         dock_water,
         station,
-        industry_station,
         oilrig,
         station_xy,
         station_dock,

@@ -16,22 +16,21 @@ pub(crate) fn get_industry_index(
 pub(crate) fn get_industry_by_tile(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
-    get: extern "C" fn(crate::industry_type::IndustryID) -> *mut crate::industry::tile::ShellHandle,
+    shared: &crate::services::Services,
     check: extern "C" fn(bool),
-) -> *mut crate::industry::tile::ShellHandle {
+) -> crate::industry::Entry {
     check(m.read(tile) == crate::tile_type::MP_INDUSTRY);
-    get(get_industry_index(m, tile).unwrap())
+    crate::industry::reference(shared, get_industry_index(m, tile).unwrap())
 }
 /// `GetIndustryType`, with the source assertion before and after its lookup.
 pub(crate) fn get_industry_type(
     m: &crate::map_func::TileTypeAccess,
     tile: u32,
-    get: extern "C" fn(crate::industry_type::IndustryID) -> *mut crate::industry::tile::ShellHandle,
-    owner: extern "C" fn(*mut crate::industry::tile::ShellHandle) -> *mut crate::industry::Industry,
+    shared: &crate::services::Services,
     check: extern "C" fn(bool),
 ) -> u8 {
     check(m.read(tile) == crate::tile_type::MP_INDUSTRY);
-    let shell = get_industry_by_tile(m, tile, get, check);
-    check(!shell.is_null());
-    unsafe { (*owner(shell).cast::<crate::industry::IndustryRecord>()).r#type }
+    let entry = get_industry_by_tile(m, tile, shared, check);
+    check(!entry.industry.is_null());
+    unsafe { (*entry.owner).record.r#type }
 }

@@ -126,9 +126,7 @@ fn mine(tile: u32, m: &TileTypeAccess, s: &Services) -> bool {
     if m.read(tile) != MP_INDUSTRY {
         return false;
     }
-    let shell =
-        crate::industry_map::get_industry_by_tile(m, tile, s.catchment.industry_by_id, s.check());
-    let owner = (s.catchment.industry_owner)(shell);
+    let owner = crate::industry_map::get_industry_by_tile(m, tile, s.shared, s.check()).owner;
     let kind = unsafe { (*owner.cast::<crate::industry::IndustryRecord>()).r#type };
     if unsafe { (*Services::spec(kind)).life_type } & crate::industry_type::LIFE_EXTRACTIVE == 0 {
         return false;
@@ -197,13 +195,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         if m.read(at) != MP_INDUSTRY {
             continue;
         }
-        let kind = crate::industry_map::get_industry_type(
-            &m,
-            at,
-            s.catchment.industry_by_id,
-            s.catchment.industry_owner,
-            s.check(),
-        );
+        let kind = crate::industry_map::get_industry_type(&m, at, s.shared, s.check());
         let spec = Services::spec(kind);
         if unsafe { (*spec).station_name } == n.undefined {
             continue;

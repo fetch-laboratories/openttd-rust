@@ -161,7 +161,6 @@ template <class TStation> inline const OpenTTDTownHandle * RustStationStationTow
 inline void RustStationStationViewInvalidate(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_VIEW, st->index, data); }
 inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete Station::From(st)->airport.psa; }
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
-inline BaseStation *RustIndustryNeutralBaseStation(Industry *industry) noexcept { return RustIndustryNeutralStation(industry); }
 inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept { st->owner = Owner(owner); }
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
 template <typename TStation>

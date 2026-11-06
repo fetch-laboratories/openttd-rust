@@ -111,8 +111,8 @@ crate::abi::shared_records! {
         pub shell: *mut crate::industry_type::Industry => "Industry *",
         /// `Industry::town`, the nearest town.
         pub town: *mut crate::town_type::TownHandle => "Town *",
-        /// NOSAVE `Industry::neutral_station`.
-        pub neutral_station: *mut crate::station::Station => "Station *",
+        /// Neutral station link, restored by the versioned `REF_STATION` fixup.
+        pub neutral_station: *mut crate::station::BaseStation => "BaseStation *",
         pub valid_history: u64 => "ValidHistoryMask",
         pub location: crate::tilearea::TileArea => "TileArea",
         pub construction_date: i32 => "TimerGameCalendar::Date",
@@ -466,6 +466,36 @@ pub(crate) fn pool(
 ) -> crate::pool::TypedPool<IndustryID, Industry, crate::industry_type::Industry> {
     // SAFETY: Native startup initializes the facade before serialized game entries.
     unsafe { crate::pool::TypedPool::from_descriptor(*s.industry_pool) }
+}
+/// Source `Industry::Get`: its extent assertion precedes one canonical slot load.
+pub(crate) fn reference(s: &crate::services::Services, id: IndustryID) -> Entry {
+    unsafe {
+        let view = *s.industry_pool;
+        let index = usize::from(id.0);
+        if index >= (*view).first_unused {
+            (crate::movement::table(s).native_assert)(false);
+        }
+        let slot = *(*view).slots.as_mut_ptr().add(index);
+        Entry {
+            industry: slot.shell,
+            owner: slot.record.cast(),
+            id,
+        }
+    }
+}
+/// `Industry::GetByTile`, with the original map and pool assertion policy.
+pub(crate) fn by_tile(s: &crate::services::Services, tile: u32) -> Entry {
+    let world = crate::map_func::World::new(s);
+    crate::industry_map::get_industry_by_tile(
+        &world.types,
+        tile,
+        s,
+        crate::movement::table(s).native_assert,
+    )
+}
+/// Copied neutral shell identity; the owner must remain live through this read.
+pub(crate) fn neutral_station(owner: *const Industry) -> *mut crate::station::BaseStation {
+    unsafe { (*owner).record.neutral_station }
 }
 /// Live `GetNumItems` value at the original observation point.
 pub(crate) fn num_items(s: &crate::services::Services) -> usize {

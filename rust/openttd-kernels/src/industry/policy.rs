@@ -152,14 +152,13 @@ pub(crate) fn forest(tile: u32, s: &Services) -> bool {
     if world.types.read(tile) != crate::tile_type::MP_INDUSTRY {
         return false;
     }
-    let catchment = unsafe { &*(shared.station_catchment)() };
-    let shell = crate::industry_map::get_industry_by_tile(
+    let entry = crate::industry_map::get_industry_by_tile(
         &world.types,
         tile,
-        catchment.industry_by_id,
+        shared,
         crate::movement::table(shared).native_assert,
     );
-    let owner = (catchment.industry_owner)(shell);
+    let owner = entry.owner;
     let spec = super::resolver::ResolverServices::spec(unsafe { (*owner).record.r#type });
     if unsafe { (*spec).life_type } & LIFE_ORGANIC == 0 {
         return false;

@@ -297,17 +297,13 @@ pub struct CommandServicesTable {
     pub docking_area: extern "C" fn(*mut BaseStation) -> *mut TileArea,
     pub water_infrastructure: extern "C" fn(u8, u32),
     pub make_dock: extern "C" fn(u32, u8, u16, u8, u8),
-    pub neutral_for_tile: extern "C" fn(u32) -> *mut BaseStation,
-    pub associate_industry: extern "C" fn(*mut BaseStation, u32),
+    pub associate_industry: extern "C" fn(*mut BaseStation, *mut Industry),
     pub make_oilrig: extern "C" fn(u32, u16, u8),
     pub set_station_owner: extern "C" fn(*mut BaseStation, u8),
     pub set_airport_kind_rotation: extern "C" fn(*mut BaseStation, u8, u8),
     pub set_facilities: extern "C" fn(*mut BaseStation, u8),
     pub set_build_date: extern "C" fn(*mut BaseStation, i32),
     pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut Industry,
-    pub industry_neutral: extern "C" fn(*mut Industry) -> *mut BaseStation,
-    pub clear_industry_neutral: extern "C" fn(*mut Industry),
-    pub industry_area: extern "C" fn(*mut Industry) -> TileArea,
     pub autoslope_axis: extern "C" fn(u32, i32, u8, u8) -> bool,
     pub station_list_classes_invalidate: extern "C" fn(),
     // Waypoint command leaves; canonical shells and shared map services.
@@ -3412,7 +3408,9 @@ impl Ctx<'_> {
                 (self.s.set_docking)(tile, true);
             }
             if (self.shared.tile_type)(next) == MP_INDUSTRY {
-                let st = (self.s.neutral_for_tile)(next);
+                let st = crate::industry::neutral_station(
+                    crate::industry::by_tile(self.shared, next).owner,
+                );
                 if !st.is_null() {
                     self.area_add((self.s.docking_area)(st), tile);
                     (self.s.set_docking)(tile, true);
@@ -3433,7 +3431,7 @@ impl Ctx<'_> {
         let area = if industry.is_null() {
             Self::area((self.s.ship_station_area)(st))
         } else {
-            (self.s.industry_area)(industry)
+            crate::industry::location(self.catchment().industry_owner(industry.cast()))
         };
         if area.tile == u32::MAX {
             return;
@@ -3467,7 +3465,9 @@ impl Ctx<'_> {
                     self.update_docking(st);
                 }
             } else if (self.shared.tile_type)(next) == MP_INDUSTRY {
-                let st = (self.s.neutral_for_tile)(next);
+                let st = crate::industry::neutral_station(
+                    crate::industry::by_tile(self.shared, next).owner,
+                );
                 if !st.is_null() {
                     self.update_docking(st);
                 }
@@ -3753,7 +3753,9 @@ impl Ctx<'_> {
             st,
             crate::station_lifecycle::generate_name(st, tile, 3, unsafe { &*self.s.lifecycle }),
         );
-        (self.s.associate_industry)(st, tile);
+        let industry = crate::industry::by_tile(self.shared, tile);
+        (self.s.associate_industry)(st, industry.industry.cast());
+        unsafe { (*industry.owner).record.neutral_station = st };
         crate::animated_tile::openttd_rust_animation_delete(tile, false);
         (self.s.make_oilrig)(
             tile,
@@ -3775,7 +3777,7 @@ impl Ctx<'_> {
         if (self.shared.station_serve_neutral)() {
             let c = self.catchment();
             let industry = (c.c.associated_industry)(st);
-            let list = crate::industry::stations_near((c.c.industry_owner)(industry));
+            let list = crate::industry::stations_near(c.industry_owner(industry));
             // SAFETY: Live industry owner; the set is moved into a local before the visits.
             let nearby = unsafe { std::mem::take(&mut *list) };
             unsafe { (*list).clear() };
@@ -3809,8 +3811,11 @@ impl Ctx<'_> {
         }
         assert!((self.world().facilities)(st) == 24 && (self.s.airport_type)(st) == 9);
         let industry = (self.s.associated_industry)(st);
-        if !industry.is_null() && (self.s.industry_neutral)(industry) == st {
-            (self.s.clear_industry_neutral)(industry);
+        if !industry.is_null() {
+            let owner = self.catchment().industry_owner(industry.cast());
+            if crate::industry::neutral_station(owner) == st {
+                unsafe { (*owner).record.neutral_station = std::ptr::null_mut() };
+            }
         }
         (self.world().delete_station)(st);
     }
@@ -4391,7 +4396,6 @@ crate::abi::layouts! {
         docking_area,
         water_infrastructure,
         make_dock,
-        neutral_for_tile,
         associate_industry,
         make_oilrig,
         set_station_owner,
@@ -4399,9 +4403,6 @@ crate::abi::layouts! {
         set_facilities,
         set_build_date,
         associated_industry,
-        industry_neutral,
-        clear_industry_neutral,
-        industry_area,
         autoslope_axis,
         station_list_classes_invalidate,
         clear_cached_name,

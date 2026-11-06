@@ -191,17 +191,13 @@ struct OpenTTDStationCommandServices {
 	OrthogonalTileArea *(*docking_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(docking_area);
 	void (*water_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_infrastructure);
 	void (*make_dock)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_dock);
-	BaseStation *(*neutral_for_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(neutral_for_tile);
-	void (*associate_industry)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(associate_industry);
+	void (*associate_industry)(BaseStation *, Industry *) noexcept OPENTTD_SERVICE_DEFAULT(associate_industry);
 	void (*make_oilrig)(uint32_t, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_oilrig);
 	void (*set_station_owner)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);
 	void (*set_airport_kind_rotation)(BaseStation *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_airport_kind_rotation);
 	void (*set_facilities)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_facilities);
 	void (*set_build_date)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_build_date);
 	Industry *(*associated_industry)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(associated_industry);
-	BaseStation *(*industry_neutral)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_neutral);
-	void (*clear_industry_neutral)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(clear_industry_neutral);
-	OpenTTDStationArea (*industry_area)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_area);
 	bool (*autoslope_axis)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(autoslope_axis);
 	void (*station_list_classes_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(station_list_classes_invalidate);
 	void (*clear_cached_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_cached_name);

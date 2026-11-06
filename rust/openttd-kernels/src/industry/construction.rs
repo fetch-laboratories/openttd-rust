@@ -104,7 +104,7 @@ fn populate(
 ) {
     let cc = crate::station::Ctx::from_shared(s.shared());
     let shell = industry.cast::<crate::industry::tile::ShellHandle>();
-    let neutral = (cc.c.industry_neutral)(shell);
+    let neutral = super::neutral_station(owner);
     if !neutral.is_null() && !unsafe { (c.serve_neutral)() } {
         // The neutral station is used and other nearby stations are ignored.
         // SAFETY: Live owners; immediate mutations.

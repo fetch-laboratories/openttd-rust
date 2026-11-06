@@ -408,11 +408,7 @@ pub struct CatchmentServices {
     pub radius_facilities: extern "C" fn(*mut BaseStation) -> RadiusFacilities,
     pub modified_catchment: extern "C" fn() -> bool,
     pub spread: extern "C" fn() -> u8,
-    pub industry_by_id: extern "C" fn(IndustryID) -> *mut ShellHandle,
     pub industry_id: extern "C" fn(*mut ShellHandle) -> IndustryID,
-    pub industry_owner: extern "C" fn(*mut ShellHandle) -> *mut crate::industry::Industry,
-    pub industry_neutral: extern "C" fn(*mut ShellHandle) -> *mut BaseStation,
-    pub next_industry: extern "C" fn(u32) -> *mut ShellHandle,
 }
 
 /// Immutable tables and map dimensions captured once per synchronous entry.
@@ -459,8 +455,15 @@ impl<'a> Ctx<'a> {
     fn station_index(&self, tile: u32) -> StationID {
         StationID((self.s.station_index)(tile))
     }
-    fn industry_stations(&self, industry: *mut ShellHandle) -> *mut StationList {
-        crate::industry::stations_near((self.c.industry_owner)(industry))
+    pub(crate) fn industry_owner(
+        &self,
+        industry: *mut ShellHandle,
+    ) -> *mut crate::industry::Industry {
+        let id = (self.c.industry_id)(industry);
+        unsafe { crate::industry::pool(self.s).record(id) }
+    }
+    fn industry_stations(&self, industry: IndustryID) -> *mut StationList {
+        crate::industry::stations_near(unsafe { crate::industry::pool(self.s).record(industry) })
     }
 }
 
@@ -560,10 +563,11 @@ pub(crate) fn add_industry_to_deliver(
             return;
         }
     }
-    if !crate::industry::is_cargo_accepted((c.c.industry_owner)(ind)) {
+    let id = (c.c.industry_id)(ind);
+    let owner = unsafe { crate::industry::pool(c.s).record(id) };
+    if !crate::industry::is_cargo_accepted(owner) {
         return;
     }
-    let id = (c.c.industry_id)(ind);
     // SAFETY: Live owner; immediate mutation.
     unsafe {
         (*catchment(state))
@@ -632,7 +636,7 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
         unsafe { (*crate::town::stations_near(owner)).erase(id) };
     }
     for industry in industries {
-        let list = c.industry_stations((c.c.industry_by_id)(industry));
+        let list = c.industry_stations(industry);
         // SAFETY: Live industry owner; immediate mutation.
         unsafe { (*list).erase(id) };
     }
@@ -669,10 +673,11 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
     let industry = (c.c.associated_industry)(st);
     if !(c.s.station_serve_neutral)() && !industry.is_null() {
         // The station is associated with an industry, so it only delivers there.
-        let location = crate::industry::location((c.c.industry_owner)(industry));
+        let industry_id = (c.c.industry_id)(industry);
+        let owner = unsafe { crate::industry::pool(c.s).record(industry_id) };
+        let location = crate::industry::location(owner);
         // SAFETY: Live owner; immediate mutation.
         unsafe { (*catchment(state)).tiles.initialize(location) };
-        let industry_id = (c.c.industry_id)(industry);
         for tile in location.tiles(c.map) {
             if (c.s.tile_type)(tile) == MP_INDUSTRY && c.industry_index(tile) == industry_id {
                 // SAFETY: Live owner; immediate mutation.
@@ -684,7 +689,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
             }
         }
         // The industry's nearby set may predate its neutral station: clear and re-add.
-        let list = c.industry_stations(industry);
+        let list = c.industry_stations(industry_id);
         // SAFETY: Live industry owner; visits mutate only other stations' lists.
         unsafe {
             for_each_station(list, |near| {
@@ -752,12 +757,13 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
             unsafe { (*crate::town::stations_near(c.town_by_tile(tile))).insert(st, id) };
         }
         if kind == MP_INDUSTRY {
-            let i = (c.c.industry_by_id)(c.industry_index(tile));
+            let i = crate::industry::reference(c.s, c.industry_index(tile));
             // An industry with a neutral station cannot be served by this station.
-            if (c.s.station_serve_neutral)() || (c.c.industry_neutral)(i).is_null() {
+            if (c.s.station_serve_neutral)() || crate::industry::neutral_station(i.owner).is_null()
+            {
                 // SAFETY: Live industry owner; immediate mutation.
-                unsafe { (*c.industry_stations(i)).insert(st, id) };
-                add_industry_to_deliver(st, state, i, tile, c);
+                unsafe { (*c.industry_stations(i.id)).insert(st, id) };
+                add_industry_to_deliver(st, state, i.industry.cast(), tile, c);
             }
         }
         unsafe { it.advance(bitmap, c.map, check) };
@@ -776,11 +782,17 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
         };
         town = crate::town::next_id(c.s, town + 1);
     }
-    let mut industry = (c.c.next_industry)(0);
-    while !industry.is_null() {
+    let mut from = 0;
+    loop {
+        let pool = crate::industry::pool(c.s);
+        let index = unsafe { pool.next_index(from, u32::MAX as usize) };
+        if index == u32::MAX as usize {
+            break;
+        }
+        let industry = IndustryID(u16::try_from(index).unwrap());
         // SAFETY: Live industry owner; immediate mutation.
         unsafe { (*c.industry_stations(industry)).clear() };
-        industry = (c.c.next_industry)(u32::from((c.c.industry_id)(industry).0) + 1);
+        from = index + 1;
     }
     let mut st = (c.c.next_station)(0);
     while !st.is_null() {
@@ -910,12 +922,12 @@ pub(crate) fn production_around_tiles(
         crate::tile_cmd::add_produced_cargo(tile, &mut produced, c);
     }
     for industry in industries {
-        let i = (c.c.industry_by_id)(industry);
+        let i = crate::industry::reference(c.s, industry);
         // Skip an industry with a neutral station.
-        if !(c.c.industry_neutral)(i).is_null() && !(c.s.station_serve_neutral)() {
+        if !crate::industry::neutral_station(i.owner).is_null() && !(c.s.station_serve_neutral)() {
             continue;
         }
-        crate::industry::for_each_produced_cargo((c.c.industry_owner)(i), |cargo| {
+        crate::industry::for_each_produced_cargo(i.owner, |cargo| {
             if crate::cargo_type::is_valid_cargo_type(cargo) {
                 let slot = &mut produced[usize::from(cargo)];
                 *slot = slot.wrapping_add(1);
@@ -949,7 +961,10 @@ pub(crate) fn acceptance_around_tiles(
         // Ignore an industry with a neutral station.
         if !(c.s.station_serve_neutral)()
             && (c.s.tile_type)(tile) == MP_INDUSTRY
-            && !(c.c.industry_neutral)((c.c.industry_by_id)(c.industry_index(tile))).is_null()
+            && !crate::industry::neutral_station(
+                crate::industry::reference(c.s, c.industry_index(tile)).owner,
+            )
+            .is_null()
         {
             continue;
         }
@@ -1179,8 +1194,7 @@ crate::abi::layouts! {
     "OpenTTDStationCatchmentServices" ["station_service"] => CatchmentServices {
         shared, airport, industry_tile, object, town, station, visits, station_count, station_if_valid,
         next_station, owner, station_owner, id, location, associated_industry, radius_facilities,
-        modified_catchment, spread, industry_by_id, industry_id, industry_owner,
-        industry_neutral, next_industry,
+        modified_catchment, spread, industry_id,
     };
 }
 

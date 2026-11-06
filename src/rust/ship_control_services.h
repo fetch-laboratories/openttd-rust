@@ -61,13 +61,6 @@ static bool Ship_dock_water(uint32_t tile) noexcept { return IsDockWaterPart(Til
 
 static uint32_t Ship_station(uint32_t tile) noexcept { return GetRustSharedServices().station_index(tile); }
 
-static uint32_t Ship_industry_station(uint32_t tile) noexcept
-{
-	const Industry *i = RustIndustryByTile(tile);
-	const Station *station = RustIndustryNeutralStation(i);
-	return station == nullptr ? UINT32_MAX : RustBaseStationID(station);
-}
-
 static bool Ship_oilrig(uint32_t tile) noexcept { return IsTileType(TileIndex(tile), MP_STATION) && IsOilRig(TileIndex(tile)); }
 
 static uint32_t Ship_station_xy(uint32_t station) noexcept { return Station::Get(StationID(station))->xy.base(); }
@@ -278,7 +271,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
 		.dist_manhattan = OpenTTDDistanceManhattan, .docking = GetRustSharedServices().docking_tile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
-		.station = Ship_station, .industry_station = Ship_industry_station,
+		.station = Ship_station,
 		.oilrig = Ship_oilrig,
 		.station_xy = Ship_station_xy,
 		.station_dock = Ship_station_dock, .station_visits = Ship_station_visits,

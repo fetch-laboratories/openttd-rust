@@ -3176,7 +3176,7 @@ bool AfterLoadGame()
 		}
 	} else {
 		/* Link neutral station back to industry, as this is not saved. */
-		for (Industry *ind : Industry::Iterate()) if (ind->Record().neutral_station != nullptr) ind->Record().neutral_station->industry = ind;
+		for (Industry *ind : Industry::Iterate()) if (ind->Record().neutral_station != nullptr) static_cast<Station *>(ind->Record().neutral_station)->industry = ind;
 	}
 
 	if (IsSavegameVersionBefore(SLV_TREES_WATER_CLASS)) {
