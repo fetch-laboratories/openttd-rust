@@ -38,6 +38,7 @@
 #include "station_spatial_fixture.hpp"
 #include "../core/kdtree.hpp"
 extern "C" void openttd_test_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *);
+extern "C" void openttd_test_station_record_release_probe(void *, void (*)(void *, const OpenTTDStationRecord *));
 
 
 
@@ -441,6 +442,69 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	openttd_rust_station_rebuild_index(&GetRustSharedServices());
 	TimerGameTick::counter = old_counter;
 	_game_mode = old_mode;
+}
+
+TEST_CASE("Station records - last owner release retains aliases and published pool slots")
+{
+	MockEnvironment::Instance();
+	_station_pool.CleanPool();
+	openttd_rust_station_rebuild_index(&GetRustSharedServices());
+	struct Expected { const BaseStation *shell; uint16_t id; uint32_t xy; };
+	struct Probe {
+		std::map<const OpenTTDStationRecord *, Expected> expected;
+		std::vector<std::pair<uint16_t, bool>> releases;
+		bool cleaning = false;
+	} probe;
+	struct Restore {
+		~Restore()
+		{
+			openttd_test_station_record_release_probe(nullptr, nullptr);
+			_station_pool.CleanPool();
+			openttd_rust_station_rebuild_index(&GetRustSharedServices());
+		}
+	} restore;
+	openttd_test_station_record_release_probe(&probe, [](void *context, const OpenTTDStationRecord *record) {
+		auto &probe = *static_cast<Probe *>(context);
+		auto found = probe.expected.find(record);
+		CHECK(found != probe.expected.end());
+		if (found == probe.expected.end()) return;
+		const auto expected = found->second;
+		/* The shell's C++ lifetime has ended: compare its identity, never call it. */
+		CHECK(record->shell == expected.shell);
+		CHECK(BaseStation::GetIfValid(StationID(expected.id)) == expected.shell);
+		CHECK(record->xy == expected.xy);
+		CHECK(BaseStation::CleaningPool() == probe.cleaning);
+		for (const auto &goods : record->goods) CHECK(goods.data == nullptr);
+		CHECK(openttd_rust_station_queue_size(record) == 0);
+		probe.releases.emplace_back(expected.id, probe.cleaning);
+		probe.expected.erase(found); // Discard this record alias before its allocation retires.
+	});
+	const auto Create = [&](uint16_t id, uint32_t xy, bool waypoint = false) {
+		BaseStation *shell;
+		if (waypoint) {
+			shell = new (StationID(id)) Waypoint(TileIndex(xy));
+		} else {
+			auto *station = new (StationID(id)) Station(TileIndex(xy));
+			shell = station;
+			openttd_test_station_insert(&GetRustSharedServices(), station);
+			/* Destruction must release real optional owners after scoped views end. */
+			station->GetGoods(7).GetOrCreateData().flows.AddFlow(StationID(40), StationID(5), 11);
+			CHECK(station->GetGoods(7).GetData().flows.GetFlow() == 11);
+		}
+		shell->SetOwner(OWNER_NONE);
+		probe.expected.emplace(&shell->Record(), Expected{shell, id, xy});
+	};
+	Create(40, 1);
+	Create(5, 2);
+	Create(20, 3);
+	delete Station::Get(StationID(20));
+	CHECK_FALSE(BaseStation::IsValidID(StationID(20)));
+	Create(20, 4, true); // The same live ID now identifies a different object.
+	probe.cleaning = true;
+	_station_pool.CleanPool();
+	CHECK(probe.expected.empty());
+	CHECK(BaseStation::GetNumItems() == 0);
+	CHECK(probe.releases == std::vector<std::pair<uint16_t, bool>>{{20, false}, {5, true}, {20, true}, {40, true}});
 }
 
 #include "../linkgraph/linkgraphjob.h"

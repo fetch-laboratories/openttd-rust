@@ -10,6 +10,34 @@
 use crate::map_func::{MapStatics, TileTypeAccess};
 use crate::tile_map::{get_tile_z, get_tropic_zone};
 
+type StationReleaseProbe =
+    extern "C" fn(*mut std::ffi::c_void, *const crate::station_record::StationRecord);
+static STATION_RELEASE_PROBE: crate::game_state::GameState<(
+    *mut std::ffi::c_void,
+    Option<StationReleaseProbe>,
+)> = crate::game_state::GameState::new((std::ptr::null_mut(), None));
+
+/// Observe the last owner member's release, after native station/base destruction
+/// and before Rust releases the record. No record borrow spans the callback.
+pub(crate) fn station_record_retiring(record: *const crate::station_record::StationRecord) {
+    // SAFETY: Native fixture installation and all station deletion hold the game-state mutex.
+    let (context, probe) = unsafe { *STATION_RELEASE_PROBE.get() };
+    if let Some(probe) = probe {
+        probe(context, record);
+    }
+}
+
+/// Install a scoped native destruction observer; unset it before its context dies.
+/// # Safety
+/// The context and callback stay live until reset, under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_record_release_probe(
+    context: *mut std::ffi::c_void,
+    probe: Option<StationReleaseProbe>,
+) {
+    unsafe { *STATION_RELEASE_PROBE.get() = (context, probe) };
+}
+
 /// Compare production industry removal arithmetic with native `Money` operators.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {

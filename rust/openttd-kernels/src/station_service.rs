@@ -124,6 +124,8 @@ pub extern "C" fn openttd_rust_station_record_new(
 pub unsafe extern "C" fn openttd_rust_station_record_delete(
     record: *mut crate::station_record::StationRecord,
 ) {
+    #[cfg(feature = "native-test-support")]
+    crate::native_test_support::station_record_retiring(record);
     // SAFETY: The record is the first member of its boxed owner.
     unsafe {
         drop(Box::from_raw(record.cast::<Service>()));
