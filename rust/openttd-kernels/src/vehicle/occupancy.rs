@@ -125,15 +125,17 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
     crate::witness::hit(crate::witness::OCCUPANCY_RESET);
     let descriptor = unsafe { (&*s.vehicle).pool_descriptor() };
     let pool = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(descriptor) };
-    for i in 0..unsafe { (*descriptor).first_unused } {
-        let id = crate::vehicle_type::VehicleID(u32::try_from(i).unwrap());
-        let record = unsafe { pool.record(id) };
-        if !record.is_null() {
-            unsafe {
-                let v = VehicleRef::of(record.cast());
-                (*record_links(v.0.as_ptr())).current = ptr::null_mut();
-            }
+    let end = crate::vehicle_type::VehicleID::END.0 as usize;
+    let mut from = 0;
+    loop {
+        let index = unsafe { pool.next_index(from, end) };
+        if index == end {
+            break;
         }
+        let id = crate::vehicle_type::VehicleID(u32::try_from(index).unwrap());
+        let v = VehicleRef::of(unsafe { pool.record(id) });
+        unsafe { (*record_links(v.0.as_ptr())).current = ptr::null_mut() };
+        from = index + 1;
     }
     unsafe {
         ptr::write_bytes(BUCKETS.get().cast::<Shell>(), 0, TOTAL);

@@ -46,7 +46,6 @@ pub struct Services {
     pub(crate) chain_depot: unsafe extern "C" fn(*mut ()) -> bool,
     /// Resolves shells to their canonical records.
     pub(crate) vehicles: &'static crate::vehicle::VehicleServices,
-    pub(crate) cargo_type: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub(crate) stopped_in_depot: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) max_length: unsafe extern "C" fn() -> u8,
@@ -503,7 +502,7 @@ unsafe fn new_cargo(
                     vehicle_ref_for_build(v, (w.common)().vehicles).0.as_ptr(),
                 )
             } {
-                let cargo = unsafe { (w.cargo_type)(v) };
+                let cargo = unsafe { vehicle_ref_for_build(v, w.vehicles) }.cargo_type();
                 if available & 1_u64.wrapping_shl(u32::from(cargo)) != 0 {
                     return cargo;
                 }
@@ -1272,7 +1271,6 @@ crate::abi::layouts! {
         commands,
         chain_depot,
         vehicles,
-        cargo_type,
         capabilities,
         stopped_in_depot,
         max_length,

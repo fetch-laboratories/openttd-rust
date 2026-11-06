@@ -97,7 +97,6 @@ struct OpenTTDFleetTransactionServices {
 	const OpenTTDCommandServices *commands;
 	bool (*chain_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(chain_depot);
 	const OpenTTDVehicleServices *vehicles;
-	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	uint8_t (*max_length)() noexcept OPENTTD_SERVICE_DEFAULT(max_length);

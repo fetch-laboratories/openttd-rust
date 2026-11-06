@@ -177,13 +177,6 @@ static Result RustVehicleEngineRead(OpenTTDVehicle *v) noexcept { return Read(Ru
 /** Signature adapter for a typed controller handle's shared engine observation. */
 template <typename Result, typename Handle, auto Read>
 static Result RustVehicleEngineObservation(Handle handle) noexcept { return RustVehicleEngineRead<Result, Read>(handle.handle); }
-uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept;
-uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept;
-void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
-void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
-void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept;
-void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept;
-void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept;
 void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept;
 ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
 /** Canonical cached consist length, shared by narrow and compound observations. */
@@ -210,7 +203,6 @@ inline const uint8_t *RustVehicleVehicleTypeAddress(const Vehicle *v) noexcept {
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return v->GetType(); }
 
 inline const uint16_t *RustVehicleCargoPeriodAddress(const Vehicle *v) noexcept { return &v->Record().cached_cargo_age_period; }
-inline uint16_t *RustVehicleCargoCapacityAddress(Vehicle *v) noexcept { return &v->Record().cargo_cap; }
 inline uint16_t *RustVehicleCargoCounterAddress(Vehicle *v) noexcept { return &v->Record().cargo_age_counter; }
 inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->Record().motion_counter; }
 

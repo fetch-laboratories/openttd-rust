@@ -17,8 +17,6 @@ struct OpenTTDEngineCapabilitiesServices;
 #include "ship_control_ffi.h"
 #include "cargo_storage_ffi.h"
 struct OpenTTDVehicleRefitCapacity { uint32_t total; uint16_t mail; uint32_t cargo[64]; };
-struct OpenTTDRefitCargoKind { uint8_t cargo, subtype; };
-struct OpenTTDRefitCommit { uint8_t cargo; uint16_t capacity; };
 struct OpenTTDRefitEngine { uint64_t mask; bool automatic; };
 struct OpenTTDRefitCargo { uint16_t classes; uint8_t local; };
 struct OpenTTDRefitPrices {
@@ -37,7 +35,6 @@ struct OpenTTDVehicleRefitServices {
 	const OpenTTDGroundServices *road_ground;
 	OpenTTDRefitPrices prices;
 	const OpenTTDEngine *(*engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
-	const OpenTTDEngine *(*vehicle_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_engine);
 	bool (*has_grf)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_grf);
 	uint8_t (*refit_cost)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_cost);
 	OpenTTDRefitCargo (*refit_cargo)(const OpenTTDEngine *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(refit_cargo);
@@ -45,12 +42,8 @@ struct OpenTTDVehicleRefitServices {
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	OpenTTDRefitEngine (*refit_engine)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_engine);
-	OpenTTDRefitCargoKind (*cargo_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_kind);
-	void (*set_cargo_kind)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_kind);
 	ExpensesType (*expense)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(expense);
 	void (*invalidate_chain)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_chain);
-	OpenTTDRefitCommit (*commit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(commit);
-	void (*write_refit)(OpenTTDVehicle *, uint8_t, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_refit);
 	OpenTTDTrainHandle (*train_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_handle);
 	OpenTTDRoadState *(*road_state)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_state);
 	OpenTTDAircraftVehicle (*aircraft_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_handle);
@@ -95,9 +88,7 @@ struct OpenTTDVehicleConstructServices {
 	OpenTTDAircraftInfo (*aircraft_info)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_info);
 	void (*aircraft_properties)(void *, void *, const OpenTTDEngine *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_properties);
 	void (*rotor)(void *, void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(rotor);
-	uint16_t *(*mail_capacity_address)(void *) noexcept OPENTTD_SERVICE_DEFAULT(mail_capacity_address);
 	void (*road_capacity)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_capacity);
-	void (*set_cargo_type)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_type);
 	void (*engine_common)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_common);
 	void (*service_dates)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_dates);
 	void (*build_stamp)(void *) noexcept OPENTTD_SERVICE_DEFAULT(build_stamp);

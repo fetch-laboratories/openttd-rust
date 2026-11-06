@@ -367,12 +367,10 @@ BaseVehicle::BaseVehicle(VehicleType type, Vehicle *shell, VehicleID index) : re
 
 BaseVehicle::~BaseVehicle()
 {
-	Vehicle *shell = VehicleFromRecord(this->record);
-	if (shell == nullptr) {
-		_vehicle_pool.RetireUnboundRecord(this->record);
-	} else {
-		_vehicle_pool.RetireRecord(shell->index.base(), shell, this->record);
-	}
+	/* PoolItem is an earlier base and stays alive through this owner destructor,
+	 * including unwinding before Vehicle initializes record->shell. */
+	Vehicle *shell = static_cast<Vehicle *>(this);
+	_vehicle_pool.RetireRecord(shell->index.base(), shell, this->record);
 	openttd_rust_vehicle_record_delete(this->record);
 }
 

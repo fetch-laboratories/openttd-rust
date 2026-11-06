@@ -194,7 +194,6 @@ rebound | RustOnWater | src/industry_cmd.cpp | on_water
 rebound | RustOnWater | src/landscape.cpp | on_water
 rebound | RustOpaqueVehicleInvoke | src/rust/rail_construction_services.hpp | invalidate_grf
 rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_articulated_services.hpp | flip_image
-rebound | RustOpaqueVehicleInvoke | src/rust/vehicle_build_services.hpp | mail_capacity_address
 rebound | RustOpaqueVehicleInvoke | src/vehicle_cmd.cpp | flip_stopped
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_bridge_end
 rebound | RustOtherTunnelBridgeEnd | src/rust/services.cpp | other_tunnel_end
@@ -317,9 +316,6 @@ rebound | RustVehicleDisplaySpeed | src/rust/ground_vehicle_services.cpp | displ
 rebound | RustVehicleDisplaySpeed | src/vehicle.cpp | display_speed
 rebound | RustVehicleExpense | src/economy.cpp | expense
 rebound | RustVehicleExpense | src/rust/vehicle_refit_services.hpp | expense
-rebound | RustVehicleGetEngine | src/rust/engine_capabilities_services.hpp | vehicle_engine_object
-rebound | RustVehicleGetEngine | src/rust/vehicle_refit_services.hpp | vehicle_engine
-rebound | RustVehicleGetEngine | src/rust/vehicle_services.cpp | engine
 rebound | RustVehicleIndexOpaque | src/pbs.cpp | index
 rebound | RustVehicleIndexOpaque | src/timer/timer_game_common.cpp | vehicle_id
 rebound | RustVehicleTrain | src/rust/vehicle_refit_services.hpp | train_handle

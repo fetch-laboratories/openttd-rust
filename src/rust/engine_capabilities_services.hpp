@@ -33,8 +33,6 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.pool_available = RustVehicleCanAllocate,
 		.new_temporary = EngineTemporaryNew,
 		.destroy_temporary = GetRustVehicleServices().destroy,
-		.vehicle_engine_object = RustVehicleGetEngine,
-		.vehicle_subtype = RustVehicleRead<uint8_t, RustVehicleCargoSubtype>,
 		.shared = &GetRustSharedServices(),
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 		.assertions = true,

@@ -10,10 +10,10 @@ static void VehicleArticSetPart(void *shell, uint8_t image, uint8_t cargo, uint1
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	RustWriteVehicleSprite(v, image);
-	RustVehicleSetCargoType(RustVehicle(v), cargo);
+	v->Record().cargo_type = cargo;
 	if (validate) assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
-	RustVehicleSetCargoCap(RustVehicle(v), capacity);
-	RustVehicleSetRefitCap(RustVehicle(v), 0);
+	v->Record().cargo_cap = capacity;
+	v->Record().refit_cap = 0;
 }
 template <class T> static void VehicleArticMark(void *v) noexcept { static_cast<T *>(v)->SetArticulatedPart(); }
 static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noexcept
@@ -26,7 +26,7 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 	v->SetCalendarServiceDate(RustVehicleCalendarService(first));
 	v->SetBuildYear(RustVehicleBuildYear(first));
 	RustWriteVehicleStatus(v, first->GetVehStatus()); v->SetVehStatus(v->GetVehStatus().Reset(VehState::Stopped));
-	RustVehicleSetCargoSubtype(RustVehicle(v), 0);
+	v->Record().cargo_subtype = 0;
 	v->SetMaxAge(CalendarTime::MIN_DATE); RustVehicleSetEngine(RustVehicle(v), engine); v->SetValue(0);
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }

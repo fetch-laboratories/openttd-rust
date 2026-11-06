@@ -201,10 +201,10 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	const auto &svi = e->VehInfo<ShipVehicleInfo>();
 	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette});
 	RustWriteVehicleSprite(v, svi.image_index);
-	RustVehicleSetCargoType(RustVehicle(v), RustEngineDefaultCargo(RustEngine(e)));
+	v->Record().cargo_type = RustEngineDefaultCargo(RustEngine(e));
 	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
-	RustVehicleSetCargoCap(RustVehicle(v), RustEngineShipCapacity(RustEngine(e)));
-	RustVehicleSetRefitCap(RustVehicle(v), 0);
+	v->Record().cargo_cap = RustEngineShipCapacity(RustEngine(e));
+	v->Record().refit_cap = 0;
 	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());

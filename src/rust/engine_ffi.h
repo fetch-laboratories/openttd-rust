@@ -30,7 +30,6 @@ struct OpenTTDEngineStartSettings { int32_t starting_year, date; };
 struct OpenTTDEngineCompany { const Company *shell; uint8_t id; };
 struct OpenTTDEngineCompanyPreview { uint8_t blocked; int32_t performance; };
 struct OpenTTDEngineVehicle { OpenTTDVehicle *shell; uint32_t id; uint8_t owner; VehicleType type; };
-struct OpenTTDEngineVehicleCargo { const OpenTTDEngine *engine; uint8_t cargo; };
 struct OpenTTDEngineCarrying { VehicleType kind; uint8_t ground_capacity, default_cargo; };
 struct OpenTTDEngineCapacityConfig { uint16_t id, callbacks; uint8_t misc; };
 struct OpenTTDEngineRailAvailability { bool climate; RailVehicleTypes kind; uint64_t railtypes; };
@@ -69,7 +68,6 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineCompany (*company_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(company_next);
 	OpenTTDEngineCompanyPreview (*company_preview)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(company_preview);
 	OpenTTDEngineVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
-	OpenTTDEngineVehicleCargo (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	uint64_t (*compatible_railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(compatible_railtypes);

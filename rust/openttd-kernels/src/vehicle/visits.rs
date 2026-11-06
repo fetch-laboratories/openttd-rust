@@ -327,7 +327,7 @@ impl Refresher {
         let mut part = Some(self.vehicle);
         while let Some(v) = part {
             let shell = v.0.as_ptr();
-            let e = (r.vehicle_engine)(shell);
+            let e = (r.engine)(v.engine_id());
             if (r.refit_engine)(e).mask >> self.cargo & 1 == 0 {
                 index += 1;
                 part = (v).next();
@@ -338,13 +338,15 @@ impl Refresher {
 
             // Back up the vehicle's cargo type and subtype; the subtype callback
             // observes the new cargo type with the old subtype.
-            let temp = (r.cargo_kind)(shell);
-            (r.set_cargo_kind)(shell, self.cargo, temp.subtype);
+            let (old_cargo, old_subtype) = (v.cargo_type(), v.cargo_subtype());
+            v.write_cargo_type(self.cargo);
+            v.write_cargo_subtype(old_subtype);
             // SAFETY: `shell` is a live vehicle; the callback reads both shells only.
             let subtype = unsafe {
                 (r.common.transactions.subtype)(v.shell().cast(), v.shell().cast(), self.cargo)
             };
-            (r.set_cargo_kind)(shell, self.cargo, subtype);
+            v.write_cargo_type(self.cargo);
+            v.write_cargo_subtype(subtype);
 
             let mut mail_capacity = 0_u16;
             let amount = unsafe {
@@ -357,7 +359,8 @@ impl Refresher {
             };
 
             // Restore the original cargo type.
-            (r.set_cargo_kind)(shell, temp.cargo, temp.subtype);
+            v.write_cargo_type(old_cargo);
+            v.write_cargo_subtype(old_subtype);
 
             // Skip on next refit.
             let desc = self.refits[index];

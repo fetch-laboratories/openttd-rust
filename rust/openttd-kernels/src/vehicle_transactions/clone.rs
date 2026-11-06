@@ -276,16 +276,18 @@ unsafe fn clone(
                 if c.transactions.assertions {
                     unsafe { (c.transactions.check)(!w.is_null()) };
                 }
-                let cargo = unsafe { (c.transactions.cargo_type)(v) };
+                let cargo = unsafe { super::vehicle_ref(v, c.vehicles) }.cargo_type();
                 let subtype = unsafe { (c.transactions.subtype)(v, w, cargo) };
-                let new_cargo =
-                    (r.cargo_kind)(unsafe { super::vehicle_ref(w, c.vehicles) }.0.as_ptr());
+                let (new_cargo, new_subtype) = {
+                    let vehicle = unsafe { super::vehicle_ref(w, c.vehicles) };
+                    (vehicle.cargo_type(), vehicle.cargo_subtype())
+                };
                 // Subtype selection invokes NewGRF: observe the source cargo again.
-                if new_cargo.cargo != unsafe { (c.transactions.cargo_type)(v) }
-                    || new_cargo.subtype != subtype
+                if new_cargo != unsafe { super::vehicle_ref(v, c.vehicles) }.cargo_type()
+                    || new_subtype != subtype
                 {
                     let id = unsafe { (b.groups.vehicle_id)(w) };
-                    let cargo = unsafe { (c.transactions.cargo_type)(v) };
+                    let cargo = unsafe { super::vehicle_ref(v, c.vehicles) }.cargo_type();
                     crate::command::nested(
                         b.commands,
                         b.shared,
@@ -311,7 +313,7 @@ unsafe fn clone(
                     break;
                 }
             } else {
-                let e = (r.vehicle_engine)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
+                let e = (r.engine)(unsafe { super::vehicle_ref(v, c.vehicles) }.engine_id());
                 let initial = if unsafe {
                     crate::engine_capabilities::openttd_rust_engine_can_carry_abi(r.capabilities, e)
                         != 0
@@ -320,17 +322,19 @@ unsafe fn clone(
                 } else {
                     c.strings.invalid_cargo
                 };
-                let old_cargo =
-                    (r.cargo_kind)(unsafe { super::vehicle_ref(v, c.vehicles) }.0.as_ptr());
-                if old_cargo.cargo != initial && (c.valid_cargo)(initial) {
+                let (old_cargo, old_subtype) = {
+                    let vehicle = unsafe { super::vehicle_ref(v, c.vehicles) };
+                    (vehicle.cargo_type(), vehicle.cargo_subtype())
+                };
+                if old_cargo != initial && (c.valid_cargo)(initial) {
                     unsafe {
                         refit::get_cost(
                             r,
                             part,
                             ptr::null_mut(),
                             crate::fleet::record(b.groups, v).engine_id(),
-                            old_cargo.cargo,
-                            old_cargo.subtype,
+                            old_cargo,
+                            old_subtype,
                         )
                     };
                     total.add(Cost(part, b.cost));

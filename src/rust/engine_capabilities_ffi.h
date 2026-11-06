@@ -32,8 +32,6 @@ struct OpenTTDEngineCapabilitiesServices {
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	OpenTTDVehicle *(*new_temporary)() noexcept OPENTTD_SERVICE_DEFAULT(new_temporary);
 	void (*destroy_temporary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy_temporary);
-	const OpenTTDEngine *(*vehicle_engine_object)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_engine_object);
-	uint8_t (*vehicle_subtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_subtype);
 	const OpenTTDSharedServices *shared;
 	bool assertions;
 	uint8_t (*aircraft_cost)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_cost);

@@ -153,15 +153,18 @@ fn owned_vehicles(
     let descriptor = unsafe { vehicle_services(s).pool_descriptor() };
     let pool = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(descriptor) };
     let mut index = 0;
-    while index < unsafe { (*descriptor).first_unused } {
+    let end = VehicleID::END.0 as usize;
+    loop {
+        index = unsafe { pool.next_index(index, end) };
+        if index == end {
+            break;
+        }
         let id = VehicleID(u32::try_from(index).unwrap());
-        index += 1;
-        let Some(v) = std::ptr::NonNull::new(unsafe { pool.record(id) }).map(VehicleRef) else {
-            continue;
-        };
+        let v = VehicleRef::of(unsafe { pool.record(id) });
         if v.owner() == company.0 {
             each(id, v, v.vehicle_type());
         }
+        index += 1;
     }
 }
 

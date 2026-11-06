@@ -103,12 +103,6 @@ static OpenTTDEngineCompanyPreview Engine_company_preview(const Company *c) noex
 {
 	return {.blocked = c->Finances().block_preview, .performance = c->Finances().old_economy[0].performance_history};
 }
-static OpenTTDEngineVehicleCargo Engine_vehicle_cargo(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.engine = RustEngine(v->GetEngine()), .cargo = RustVehicleCargoType(handle)};
-}
-
 static uint Engine_company_engine_count(uint8_t company, uint16_t engine) noexcept { return GetGroupNumEngines(CompanyID{company}, ALL_GROUP, EngineID{engine}); }
 static void Engine_block_preview(uint8_t company) noexcept { Company::Get(CompanyID{company})->Finances().block_preview = 20; }
 
@@ -170,7 +164,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.company_next = Engine_company_next,
 		.company_preview = Engine_company_preview,
 		.vehicle_next = Engine_vehicle_next,
-		.vehicle_cargo = Engine_vehicle_cargo,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.company_valid = GetRustSharedServices().company_valid,
 		.compatible_railtypes = Engine_compatible_railtypes,

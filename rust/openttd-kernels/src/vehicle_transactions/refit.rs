@@ -27,16 +27,6 @@ impl Default for Capacity {
     }
 }
 #[repr(C)]
-pub struct CargoKind {
-    pub cargo: u8,
-    pub subtype: u8,
-}
-#[repr(C)]
-pub struct Commit {
-    pub cargo: u8,
-    pub capacity: u16,
-}
-#[repr(C)]
 pub struct Engine {
     pub mask: u64,
     pub automatic: bool,
@@ -73,7 +63,6 @@ pub struct Services {
     pub road_ground: &'static crate::vehicle::GroundServices,
     pub prices: Prices,
     pub engine: extern "C" fn(u16) -> *const OpenTTDEngine,
-    pub vehicle_engine: extern "C" fn(*mut OpenTTDVehicle) -> *const OpenTTDEngine,
     pub has_grf: extern "C" fn(*const OpenTTDEngine) -> bool,
     pub refit_cost: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub refit_cargo: extern "C" fn(*const OpenTTDEngine, u8) -> Cargo,
@@ -81,12 +70,8 @@ pub struct Services {
     pub rail_kind: extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub refit_engine: extern "C" fn(*const OpenTTDEngine) -> Engine,
-    pub cargo_kind: extern "C" fn(*mut OpenTTDVehicle) -> CargoKind,
-    pub set_cargo_kind: extern "C" fn(*mut OpenTTDVehicle, u8, u8),
     pub expense: extern "C" fn(*mut OpenTTDVehicle, bool) -> ExpenseType,
     pub invalidate_chain: extern "C" fn(*mut OpenTTDVehicle),
-    pub commit: extern "C" fn(*mut OpenTTDVehicle) -> Commit,
-    pub write_refit: extern "C" fn(*mut OpenTTDVehicle, u8, u16, u8),
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
     pub road_state: extern "C" fn(*mut OpenTTDVehicle) -> *mut crate::road::State,
     pub aircraft_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::aircraft::Vehicle,
@@ -159,7 +144,7 @@ unsafe fn cost_factor(
         }
     }
     let factor = (s.refit_cost)(e);
-    let changed = v.is_null() || unsafe { (s.common.transactions.cargo_type)(v) } != cargo;
+    let changed = v.is_null() || unsafe { vehicle_ref(v, s.common.vehicles) }.cargo_type() != cargo;
     (if changed { i32::from(factor) } else { 0 }, factor == 0)
 }
 pub(super) unsafe fn get_cost(
@@ -283,11 +268,7 @@ unsafe fn refit_chain(
             v = unsafe { next(s, v) };
             continue;
         }
-        let e = (s.vehicle_engine)(
-            unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                .0
-                .as_ptr(),
-        );
+        let e = (s.engine)(unsafe { vehicle_ref(v, c.vehicles) }.engine_id());
         if !unsafe {
             crate::engine_capabilities::openttd_rust_engine_can_carry_abi(s.capabilities, e) != 0
         } {
@@ -300,7 +281,7 @@ unsafe fn refit_chain(
         }
         let info = (s.refit_engine)(e);
         let refittable = info.mask & (1_u64 << cargo) != 0 && (!automatic || info.automatic);
-        if !refittable && unsafe { (c.transactions.cargo_type)(v) } != cargo {
+        if !refittable && unsafe { vehicle_ref(v, c.vehicles) }.cargo_type() != cargo {
             let amount = unsafe {
                 crate::engine_capabilities::openttd_rust_engine_capacity(
                     s.capabilities,
@@ -310,7 +291,7 @@ unsafe fn refit_chain(
                 )
             };
             if amount > 0 {
-                let original = unsafe { (c.transactions.cargo_type)(v) };
+                let original = unsafe { vehicle_ref(v, c.vehicles) }.cargo_type();
                 total.cargo[usize::from(original)] =
                     total.cargo[usize::from(original)].wrapping_add(amount);
             }
@@ -324,20 +305,15 @@ unsafe fn refit_chain(
         if actual_subtype == 0xff {
             actual_subtype = unsafe { (c.transactions.subtype)(v, v, cargo) };
         }
-        let old = (s.cargo_kind)(
-            unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                .0
-                .as_ptr(),
-        );
-        if refittable {
-            (s.set_cargo_kind)(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-                cargo,
-                actual_subtype,
-            );
-        }
+        let (old_cargo, old_subtype) = {
+            let vehicle = unsafe { vehicle_ref(v, c.vehicles) };
+            let old = (vehicle.cargo_type(), vehicle.cargo_subtype());
+            if refittable {
+                vehicle.write_cargo_type(cargo);
+                vehicle.write_cargo_subtype(actual_subtype);
+            }
+            old
+        };
         let mut mail = 0_u16;
         let amount = unsafe {
             crate::engine_capabilities::openttd_rust_engine_capacity(
@@ -357,19 +333,17 @@ unsafe fn refit_chain(
                 total.cargo[usize::from(mail_cargo)].wrapping_add(u32::from(mail));
         }
         if refittable {
-            (s.set_cargo_kind)(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-                old.cargo,
-                old.subtype,
-            );
+            {
+                let vehicle = unsafe { vehicle_ref(v, c.vehicles) };
+                vehicle.write_cargo_type(old_cargo);
+                vehicle.write_cargo_subtype(old_subtype);
+            }
             let engine = crate::fleet::record(b.groups, v).engine_id();
             let allowed = unsafe { get_cost(s, temp, v, engine, cargo, actual_subtype) };
             if automatic && flags & DoCommandFlag::QUERY_COST == 0 && !allowed {
                 total.total = total.total.wrapping_sub(amount);
                 mail_total = mail_total.wrapping_sub(u32::from(mail));
-                if unsafe { (c.transactions.cargo_type)(v) } == cargo {
+                if unsafe { vehicle_ref(v, c.vehicles) }.cargo_type() == cargo {
                     total.total = total.total.wrapping_add(u32::from(
                         crate::vehicle::VehicleRef::of(
                             unsafe { super::vehicle_ref(v, s.common.vehicles) }
@@ -410,33 +384,25 @@ unsafe fn refit_chain(
             // Copy only the private result; no Vec borrow crosses a callback.
             let result = transaction.0.results[index];
             let v = result.vehicle;
-            let old = (s.commit)(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-            );
-            let cap = if old.cargo == cargo {
-                (result.capacity as u16).min(old.capacity)
-            } else {
-                0
+            let cap = {
+                let vehicle = unsafe { vehicle_ref(v, c.vehicles) };
+                let cap = if vehicle.cargo_type() == cargo {
+                    (result.capacity as u16).min(vehicle.refit_cap())
+                } else {
+                    0
+                };
+                vehicle.write_refit_cap(cap);
+                cap
             };
-            crate::vehicle::VehicleRef::of(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-            )
-            .write_refit_cap(cap);
             unsafe {
                 truncate(s, v, cap);
             }
-            (s.write_refit)(
-                unsafe { super::vehicle_ref(v, s.common.vehicles) }
-                    .0
-                    .as_ptr(),
-                cargo,
-                result.capacity as u16,
-                result.subtype,
-            );
+            {
+                let vehicle = unsafe { vehicle_ref(v, c.vehicles) };
+                vehicle.write_cargo_type(cargo);
+                vehicle.write_cargo_cap(result.capacity as u16);
+                vehicle.write_cargo_subtype(result.subtype);
+            }
             if crate::fleet::record(b.groups, v).vehicle_type() == VehicleType::AIRCRAFT.0 {
                 let shadow = unsafe { next(s, v) };
                 if c.transactions.assertions {
@@ -664,12 +630,6 @@ crate::abi::layouts! {
     "OpenTTDVehicleRefitCapacity" ["probe"] => Capacity {
         total, mail, cargo,
     };
-    "OpenTTDRefitCargoKind" ["probe"] => CargoKind {
-        cargo, subtype,
-    };
-    "OpenTTDRefitCommit" ["probe"] => Commit {
-        cargo, capacity,
-    };
     "OpenTTDRefitEngine" ["probe"] => Engine {
         mask, automatic,
     };
@@ -680,6 +640,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, capabilities, refit_engine, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, write_refit, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, capabilities, refit_engine, expense, invalidate_chain, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
     };
 }

@@ -132,7 +132,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         let cargo = if can_carry {
             (s.default_cargo)(e)
         } else {
-            unsafe { (c.transactions.cargo_type)(first) }
+            unsafe { super::vehicle_ref(first, c.vehicles) }.cargo_type()
         };
         // The road-only assertion remains in its native field-store leaf.
         (s.set_part)(
@@ -181,11 +181,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
 pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
     let r = s.refit;
     let c = r.common;
-    let e = (r.vehicle_engine)(
-        unsafe { super::vehicle_ref(v, r.common.vehicles) }
-            .0
-            .as_ptr(),
-    );
+    let e = (r.engine)(unsafe { super::vehicle_ref(v, c.vehicles) }.engine_id());
     let mut purchase_union = 0;
     let mut purchase_intersection = 0;
     unsafe {
@@ -220,7 +216,7 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
         if mask != 0 {
             real_intersection &= mask;
         }
-        let cargo = unsafe { (c.transactions.cargo_type)(v) };
+        let cargo = unsafe { super::vehicle_ref(v, c.vehicles) }.cargo_type();
         if c.transactions.assertions {
             unsafe { (c.transactions.check)(cargo < c.strings.cargo_count) };
         }

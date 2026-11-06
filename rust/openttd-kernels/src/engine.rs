@@ -164,11 +164,6 @@ pub struct Vehicle {
     pub kind: VehicleType,
 }
 #[repr(C)]
-pub struct VehicleCargo {
-    pub engine: *const OpenTTDEngine,
-    pub cargo: u8,
-}
-#[repr(C)]
 pub struct RailAvailability {
     pub climate: bool,
     pub kind: RailVehicleTypes,
@@ -209,7 +204,6 @@ pub struct Services {
     pub company_next: unsafe extern "C" fn(u32) -> Company,
     pub company_preview: unsafe extern "C" fn(*const OpenTTDCompany) -> CompanyPreview,
     pub vehicle_next: unsafe extern "C" fn(u32) -> Vehicle,
-    pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub company_valid: unsafe extern "C" fn(u8) -> bool,
     pub compatible_railtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
@@ -682,13 +676,15 @@ unsafe fn preview_company(s: &Services, e: EngineRef) -> u8 {
             if v.owner != c.id || v.kind != e.kind {
                 continue;
             }
-            let cargo = unsafe { call!(s, vehicle_cargo, v.shell) };
+            let engine =
+                (s.capabilities.engine)(crate::vehicle::VehicleRef::of(v.shell).engine_id());
+            let cargo = crate::vehicle::VehicleRef::of(v.shell).cargo_type();
             if !unsafe {
                 crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                     s.capabilities,
-                    cargo.engine,
+                    engine,
                 ) != 0
-            } || mask & 1u64.wrapping_shl(u32::from(cargo.cargo)) == 0
+            } || mask & 1u64.wrapping_shl(u32::from(cargo)) == 0
             {
                 continue;
             }
@@ -1240,10 +1236,6 @@ crate::abi::layouts! {
         owner,
         kind => type,
     };
-    "OpenTTDEngineVehicleCargo" ["engine"] => VehicleCargo {
-        engine,
-        cargo,
-    };
     "OpenTTDEngineCarrying" ["engine"] => Carrying { kind, ground_capacity, default_cargo };
     "OpenTTDEngineCapacityConfig" ["engine"] => CapacityConfig { id, callbacks, misc };
     "OpenTTDEngineRailAvailability" ["engine"] => RailAvailability {
@@ -1284,7 +1276,6 @@ crate::abi::layouts! {
         company_next,
         company_preview,
         vehicle_next,
-        vehicle_cargo,
         capabilities,
         company_valid,
         compatible_railtypes,

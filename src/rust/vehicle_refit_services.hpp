@@ -11,18 +11,6 @@
 
 static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = RustCargoClasses(cargo), .local = RustGRFCargoMap(RustEngineGRF(e), cargo)}; }
 static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = RustEngineCargoRefitMask(e), .automatic = EngineMiscFlags(RustEngineMiscFlags(e)).Test(EngineMiscFlag::AutoRefit)}; }
-static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.cargo = RustVehicleCargoType(handle), .subtype = RustVehicleCargoSubtype(v)};
-}
-static OpenTTDRefitCommit VehicleRefitCommit(OpenTTDVehicle *v) noexcept { return {.cargo = RustVehicleCargoType(v), .capacity = RustVehicleRefitCap(v)}; }
-static void VehicleRefitWrite(OpenTTDVehicle *handle, uint8_t cargo, uint16_t cap, uint8_t subtype) noexcept
-{
-	RustVehicleSetCargoType(handle, cargo);
-	RustVehicleSetCargoCap(handle, cap);
-	RustVehicleSetCargoSubtype(handle, subtype);
-}
 static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); }
 static void VehicleRefitDetailsUI(OpenTTDVehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleOf(v)->index); }
 static void VehicleRefitListsUI(uint8_t type) noexcept { InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
@@ -46,7 +34,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 			.auto_refit = CCF_AUTOREFIT.base(), .refit = CCF_REFIT.base(),
 		},
 		.engine = RustEngineByID,
-		.vehicle_engine = RustVehicleGetEngine,
 		.has_grf = RustEngineHasGRF,
 		.refit_cost = RustEngineRefitCost,
 		.refit_cargo = VehicleRefitCargo,
@@ -54,12 +41,8 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.rail_kind = Engine_rail_kind,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.refit_engine = VehicleRefitEngine,
-		.cargo_kind = VehicleRefitCargoKind,
-		.set_cargo_kind = RustVehicleSetCargoKind,
 		.expense = RustVehicleExpense,
 		.invalidate_chain = RustVehicleInvalidateChain,
-		.commit = VehicleRefitCommit,
-		.write_refit = VehicleRefitWrite,
 
 		.train_handle = RustVehicleTrain,
 		.road_state = VehicleRefitRoadState,

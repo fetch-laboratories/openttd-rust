@@ -53,6 +53,8 @@ impl VehicleType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VehicleID(pub u32);
 impl VehicleID {
+    /// Native pool end, distinct from the invalid reference sentinel.
+    pub const END: Self = Self(0xFF000);
     /// Native invalid sentinel.
     pub const INVALID: Self = Self(0xFFFFF);
 }

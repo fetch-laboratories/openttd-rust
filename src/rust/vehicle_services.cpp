@@ -93,13 +93,6 @@ uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFV
 uint32_t RustGRFString(uint32_t grfid, uint32_t string) noexcept { return GetGRFStringID(grfid, GRFStringID(string)); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->SetVehStatus(v->GetVehStatus().Flip(VehState::Stopped)); }
 
-uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().refit_cap; }
-uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().cargo_cap; }
-void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->Record().refit_cap = cap; }
-void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->Record().cargo_cap = cap; }
-void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept { VehicleOf(v)->Record().cargo_type = cargo; }
-void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept { VehicleOf(v)->Record().cargo_subtype = subtype; }
-void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept { RustVehicleSetCargoType(v, cargo); RustVehicleSetCargoSubtype(v, subtype); }
 void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept { VehicleOf(v)->InvalidateNewGRFCacheOfChain(); }
 ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept { return VehicleOf(v)->GetExpenseType(income); }
 /* Values the Rust side names in rust/openttd-kernels/src/vehicle.rs. */
@@ -232,6 +225,7 @@ const OpenTTDVehicleServices &GetRustVehicleServices() noexcept
 
 
 /* New scheduler constants consumed by Rust branches. */
+static_assert(VehicleID::End().base() == 0xFF000 && VehicleID::Invalid().base() == 0xFFFFF);
 static_assert(VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2 && VEH_AIRCRAFT == 3 && VEH_EFFECT == 4 && VEH_DISASTER == 5 && VEH_END == 6 && VEH_INVALID == 255);
 static_assert(GVSF_FRONT == 0 && GVSF_ENGINE == 3 && AIR_AIRCRAFT == 2);
 static_assert(VehStates{VehState::TrainSlowing}.base() == 16 && Ticks::DAY_TICKS == 74);

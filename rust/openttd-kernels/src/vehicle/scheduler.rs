@@ -104,14 +104,14 @@ unsafe fn next<const COUNTED: bool>(
     pool: *const crate::pool::PoolDescriptor,
     from: &mut usize,
 ) -> Option<VehicleRef> {
-    while *from < unsafe { extent::<COUNTED>(pool) } {
-        let vehicle = unsafe { record::<COUNTED>(pool, *from) };
-        *from += 1;
-        if !vehicle.is_null() {
-            return Some(VehicleRef::of(vehicle));
-        }
+    let view = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(pool) };
+    let end = crate::vehicle_type::VehicleID::END.0 as usize;
+    let index = unsafe { view.next_index(*from, end) };
+    if index == end {
+        return None;
     }
-    None
+    *from = index + 1;
+    Some(VehicleRef::of(unsafe { record::<COUNTED>(pool, index) }))
 }
 /// Native transient probe uses the production traversal over actual pool storage.
 /// # Safety
@@ -132,13 +132,16 @@ unsafe fn day<const COUNTED: bool>(
 ) {
     let pool = unsafe { (&*s.vehicle).pool_descriptor() };
     while id < unsafe { extent::<COUNTED>(pool) } {
-        let vehicle = unsafe { record::<COUNTED>(pool, id) };
+        let index = id;
         id += DAY_TICKS as usize;
-        if vehicle.is_null() {
+        let view = unsafe { crate::vehicle_base::VehiclePool::from_descriptor(pool) };
+        let key = crate::vehicle_type::VehicleID(u32::try_from(index).unwrap());
+        // Fixed day stripes retain the source stride; validity is the native shell slot.
+        if unsafe { view.shell(key) }.is_null() {
             continue;
         }
-        // SAFETY: This published record remains live for its day callback.
-        let vehicle = VehicleRef::of(vehicle.cast());
+        // SAFETY: Game entries only visit published shells with bound live records.
+        let vehicle = VehicleRef::of(unsafe { record::<COUNTED>(pool, index) });
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }

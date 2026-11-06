@@ -36,7 +36,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 
 	v->Record().cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->Record().cargo_type));
-	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
+	v->Record().cargo_cap = RustEngineRailCapacity(engine);
 	v->Record().refit_cap = 0;
 
 	v->SetRailTypes(RailTypes{RustEngineRailTypes(e)});
@@ -69,7 +69,7 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	RustWriteVehicleSprite(v, rvi->image_index);
 	v->Record().cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->Record().cargo_type));
-	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
+	v->Record().cargo_cap = RustEngineRailCapacity(engine);
 	v->Record().refit_cap = 0;
 	v->SetLastStationVisited(StationID::Invalid());
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());

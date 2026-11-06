@@ -68,8 +68,6 @@ pub struct Services {
     pool_available: extern "C" fn(usize) -> bool,
     new_temporary: extern "C" fn() -> V,
     destroy_temporary: extern "C" fn(V),
-    vehicle_engine_object: extern "C" fn(V) -> E,
-    vehicle_subtype: extern "C" fn(V) -> u8,
     pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
     pub(crate) aircraft_cost: extern "C" fn(E) -> u8,
@@ -179,7 +177,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
         if config.callbacks & VEHICLE_REFIT_CAPACITY != 0
             && (new_multipliers
                 || default_cargo != cargo
-                || (!v.is_null() && (s.vehicle_subtype)(v) != 0))
+                || (!v.is_null() && crate::vehicle::VehicleRef::of(v).cargo_subtype() != 0))
         {
             let result = callback(s, CBID_VEHICLE_REFIT_CAPACITY.0, 0, config.id, v);
             if result != CALLBACK_FAILED {
@@ -379,7 +377,12 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
 }
 /// A live base shell, retained by its fleet/transaction caller.
 pub(crate) unsafe fn can_carry_vehicle(s: &Services, v: V) -> bool {
-    unsafe { openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(v)) != 0 }
+    unsafe {
+        openttd_rust_engine_can_carry_abi(
+            s,
+            (s.engine)(crate::vehicle::VehicleRef::of(v).engine_id()),
+        ) != 0
+    }
 }
 /// `Engine::GetDisplayDefaultCapacity` delegates to the capacity owner in purchase context.
 pub(crate) unsafe fn display_default_capacity(s: &Services, e: E, mail: *mut u16) -> u32 {
@@ -547,7 +550,10 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
         loop {
             let cargo = crate::vehicle::VehicleRef::of(v).cargo_type();
             if is_valid_cargo_type(cargo)
-                && (openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(v)) != 0)
+                && (openttd_rust_engine_can_carry_abi(
+                    s,
+                    (s.engine)(crate::vehicle::VehicleRef::of(v).engine_id()),
+                ) != 0)
             {
                 set_bit64(&mut cargoes, cargo);
                 if !is_valid_cargo_type(first) {
@@ -580,7 +586,7 @@ crate::abi::layouts! {
         ship_capacity, passenger_capacity, mail_capacity, train_class, aircraft_subtype, road_sound, rail_kind,
         grf, loading, cargo_classes, multiplier, pool_available,
         new_temporary, destroy_temporary,
-        vehicle_engine_object, vehicle_subtype, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
+        shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
     };
 }
 

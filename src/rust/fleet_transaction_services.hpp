@@ -79,7 +79,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.commands = &GetRustCommandServices(),
 	.chain_depot = FleetTransaction_chain_depot,
 	.vehicles = &GetRustVehicleServices(),
-	.cargo_type = RustOpaqueHandleRead<uint8_t, RustVehicleCargoType>,
 	.capabilities = &GetRustEngineCapabilitiesServices(),
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,
 	.max_length = FleetTransaction_max_length,
