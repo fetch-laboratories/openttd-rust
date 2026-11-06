@@ -55,7 +55,7 @@ def split_fields(body: str) -> list[str]:
             quoted = not quoted
         elif not quoted and char in "<[(":
             depth += 1
-        elif not quoted and char in ">])" and body[index - 1 : index + 1] != "=>":
+        elif not quoted and char in ">])" and body[index - 1 : index + 1] not in ("=>", "->"):
             depth -= 1
         elif not quoted and depth == 0 and char == ",":
             fields.append(body[start:index])
@@ -115,6 +115,11 @@ def shared_records(
 
     def native(rust: str) -> str:
         rust = rust.strip()
+        callback = re.fullmatch(r'(?:unsafe\s+)?extern\s+"C"\s+fn\((.*?)\)(?:\s*->\s*(.+))?', rust, re.S)
+        if callback:
+            arguments = ", ".join(native(argument) for argument in split_fields(callback[1]))
+            result = native(callback[2]) if callback[2] else "void"
+            return f"{result} (OPENTTD_RUST_CALL *)({arguments}) noexcept"
         array = re.fullmatch(r"\[(.+);\s*([\w:]+)\s*\]", rust, re.S)
         if array:
             element = native(array[1])
@@ -203,6 +208,8 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
         "#include <cstddef>",
         "#include <cstdint>",
     ]
+    if any("(OPENTTD_RUST_CALL *)" in field.cpp_type for record in entries for field in record.fields):
+        lines.append('#include "rust/call_ffi.h"')
     lines += [f"{tag} {name};" for name, tag in sorted(opaque.items())]
     lines += [f"struct {name};" for name in sorted(defined)]
     records = {record.cpp: record for record in entries}
@@ -218,10 +225,12 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
                 emit(records[field.cpp_type], active | {record.cpp})
         # Quoted native field types are declared by the includer.
         lines.append(f"struct {record.cpp} {{")
-        lines.extend(
-            f"\t{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name}{field.dimensions};"
-            for field in record.fields
-        )
+        for field in record.fields:
+            if "(OPENTTD_RUST_CALL *)" in field.cpp_type:
+                declaration = field.cpp_type.replace("(OPENTTD_RUST_CALL *)", f"(OPENTTD_RUST_CALL *{field.name})")
+            else:
+                declaration = f"{field.cpp_type}{'' if field.cpp_type.endswith('*') else ' '}{field.name}{field.dimensions}"
+            lines.append(f"\t{declaration};")
         lines.append("};")
         emitted.add(record.cpp)
 

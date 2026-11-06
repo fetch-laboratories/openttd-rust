@@ -33,7 +33,7 @@ pub(crate) use layouts;
 /// Records both languages access in place. `tools/generate-abi.py` emits each C++
 /// declaration from this field list; the layout lists size, alignment, then each
 /// field's offset and size. Field types are primitives, transparent newtypes of
-/// primitives, fixed arrays of those, same-group shared records, or raw pointers
+/// primitives, fixed arrays of those, same-group shared records, extern-C callback pointers, or raw pointers
 /// (`c_void` targets stay `void *`). A fixed array, nested or not, becomes a C array
 /// suffix whose bound is the dimension's last path segment (`T name[N]`).
 /// Opaque pointer fields use `=> class` to match a native class; `=> struct` and
