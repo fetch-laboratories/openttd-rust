@@ -308,7 +308,7 @@ unsafe fn properties(
             0x0c => {
                 unsafe { (*spec).size = r.byte()? };
                 let size = unsafe { (*spec).size };
-                if size & 15 == 0 || size >> 4 == 0 {
+                if size.trailing_zeros() >= 4 || size >> 4 == 0 {
                     grf_msg!(
                         0,
                         "ObjectChangeInfo: Invalid object size requested (0x{:X}) for object id {}. Ignoring.",
@@ -459,7 +459,7 @@ pub unsafe fn finalise(s: &crate::newgrf_loading::Services) {
             (*specs).edit(|v| {
                 v.clear();
                 v.shrink_to_fit();
-            })
+            });
         };
     }
     unsafe { bind() };

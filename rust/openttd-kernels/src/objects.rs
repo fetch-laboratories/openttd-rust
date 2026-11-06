@@ -628,7 +628,6 @@ impl<'a> World<'a> {
         u32::MAX
     }
     fn do_trigger(
-        &self,
         obj: *mut Object,
         tile: u32,
         trigger: AnimationTrigger,
@@ -653,7 +652,7 @@ impl<'a> World<'a> {
         spec: *const Spec,
     ) -> bool {
         let random = self.shared.random();
-        self.do_trigger(obj, tile, trigger, spec, random)
+        Self::do_trigger(obj, tile, trigger, spec, random)
     }
     fn trigger(&self, obj: *mut Object, trigger: AnimationTrigger, spec: *const Spec) -> bool {
         // SAFETY: native spec and object are live; original area is captured before
@@ -669,7 +668,7 @@ impl<'a> World<'a> {
             // only when the original whole-object iterator is constructed.
             let map = self.shared.map();
             for tile in area.tiles(map) {
-                if self.do_trigger(obj, tile, trigger, spec, random) {
+                if Self::do_trigger(obj, tile, trigger, spec, random) {
                     // SB also ORs high bits from the unmasked draw.
                     crate::bitmath_func::sb(&mut random, 0, 16, self.shared.random());
                 } else {
@@ -2492,6 +2491,25 @@ crate::abi::layouts! {
     };
 }
 
+pub(crate) unsafe fn animation_entry(
+    tile: u32,
+) -> crate::newgrf_animation_base::Entry<Spec, Object> {
+    unsafe {
+        let s = invocation_services();
+        let world = World::new::<false>(s);
+        let object = world.object_at(tile);
+        let spec = crate::object_spec::get((*object).r#type);
+        if (*spec).flags & ANIMATION == 0 {
+            crate::newgrf_animation_base::Entry {
+                spec: ptr::null(),
+                object: ptr::null_mut(),
+            }
+        } else {
+            crate::newgrf_animation_base::Entry { spec, object }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2536,24 +2554,5 @@ mod tests {
         assert_eq!(openttd_rust_object_areas_find(76, 6), usize::MAX);
         clear_areas();
         openttd_rust_object_counts_reset();
-    }
-}
-
-pub(crate) unsafe fn animation_entry(
-    tile: u32,
-) -> crate::newgrf_animation_base::Entry<Spec, Object> {
-    unsafe {
-        let s = invocation_services();
-        let world = World::new::<false>(s);
-        let object = world.object_at(tile);
-        let spec = crate::object_spec::get((*object).r#type);
-        if (*spec).flags & ANIMATION == 0 {
-            crate::newgrf_animation_base::Entry {
-                spec: ptr::null(),
-                object: ptr::null_mut(),
-            }
-        } else {
-            crate::newgrf_animation_base::Entry { spec, object }
-        }
     }
 }
