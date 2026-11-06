@@ -7,8 +7,18 @@
 #include "rust/spec_services_ffi.h"
 #include "rust/station_command_ffi.h"
 #include "rust/station_service_ffi.h"
+#include "rust/station_record_ffi.h"
 #include <cstdlib>
 #include <cstdio>
+/** Minimal shell owning the same canonical record as a game station. */
+struct AircraftTestStation {
+	OpenTTDStationRecord *record;
+
+	AircraftTestStation() : record(openttd_rust_station_record_new(reinterpret_cast<BaseStation *>(this), 0, 0)) {}
+	~AircraftTestStation() { openttd_rust_station_record_delete(this->record); }
+	AircraftTestStation(const AircraftTestStation &) = delete;
+	AircraftTestStation &operator=(const AircraftTestStation &) = delete;
+};
 /* Every function pointer is valid. A fixture explicitly supplies every service
  * it expects to use, so an unexpected crossing fails instead of silently passing. */
 static OpenTTDAirportResolverServices &AircraftTestAirportServices() { static OpenTTDAirportResolverServices services; return services; }
@@ -47,8 +57,6 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	commands.station = &world;
 	shared.station_commands = []() noexcept -> const OpenTTDStationCommandServices * { return &AircraftTestAirportCommands(); };
 
-	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{7}; };
-	leaves.airport_type = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 	openttd_rust_airport_exchange(&runtime);
 	return leaves;
 }

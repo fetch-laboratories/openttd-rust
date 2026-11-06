@@ -65,6 +65,7 @@ struct Fixture {
 };
 #include "aircraft-boundary.hpp"
 #include "controller-orders.hpp"
+static std::array<AircraftTestStation, 2> station_records;
 static Fixture *fixture;
 static OpenTTDVehicleServices vehicle;
 static OpenTTDVehicleMaintenanceServices maintenance;
@@ -76,8 +77,12 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	auto leaves = AircraftTestLeaves(vehicle, shared);
 	static OpenTTDFixtureMap map{6, 4096};
 	shared.map = &map.statics;
-	leaves.station = [](uint16_t id) noexcept -> const OpenTTDStation * { return reinterpret_cast<const OpenTTDStation *>(Station::GetIfValid(id)); };
-	leaves.airport_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
+	shared.station_pool = []() noexcept {
+		static std::array<BaseStation *, 2> slots;
+		static const size_t first_unused = slots.size();
+		for (size_t i = 0; i < slots.size(); ++i) slots[i] = valid[i] ? reinterpret_cast<BaseStation *>(&station_records[i]) : nullptr;
+		return OpenTTDStationPool{slots.data(), slots.size(), &first_unused};
+	};
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.current_order.type); };
 	vehicle.order_destination = [](OpenTTDVehicle *) noexcept { return fixture->aircraft.current_order.destination; };
 	vehicle.maintenance = &maintenance;
@@ -95,15 +100,11 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.destination_too_far = [](OpenTTDAircraftVehicle) noexcept { fixture->messages[1]++; fixture->messages[2]++; };
 	leaves.delete_range_news = [](OpenTTDAircraftVehicle) noexcept { fixture->messages[3]++; };
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&fixture->blocks); };
-	leaves.station_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
-	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
-	leaves.geometry = [](const OpenTTDStation *s) noexcept { auto tile = reinterpret_cast<const Station *>(s)->airport.tile; return OpenTTDAircraftGeometry{tile, 0, 7, 7, true}; };
 	AircraftTestAirportServices().dummy_fta = reinterpret_cast<const AirportFTAClass *>(&fixture->blocks);
 	leaves.airport_elements = [](const void *) noexcept { return uint8_t{1}; };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{0, 0, 16, 0}; };
 	leaves.node = [](const void *ap, uint8_t) noexcept -> const void * { return ap; };
 	leaves.fta = [](const void *) noexcept { return OpenTTDAircraftNode{nullptr, uint64_t{1} << 30, 0, 0, 0}; };
-	leaves.airport_blocks = [](const OpenTTDStation *) noexcept { return &fixture->blocks; };
 	/* Part IDs come from the resolver: the aircraft is 17, its shadow 18. */
 	static OpenTTDVehicleResolverServices resolver{};
 	resolver.id = [](OpenTTDVehicle *v) noexcept -> uint32_t { return v == &fixture->record ? 17 : 18; };
@@ -144,6 +145,13 @@ int main()
 	for (uint8_t state : {uint8_t{1}, uint8_t{10}, uint8_t{12}, uint8_t{14}, uint8_t{18}})
 	for (uint8_t flag : {uint8_t{0}, uint8_t{1}}) for (unsigned validity = 0; validity < 4; validity++) {
 		Fixture f; stations = {{{0}, {destination}}}; valid = {{(validity & 1) != 0, (validity & 2) != 0}};
+		for (size_t i = 0; i < station_records.size(); ++i) {
+			auto &record = *station_records[i].record;
+			record.xy = record.airport.area.tile = stations[i].airport.tile;
+			record.airport.area.w = record.airport.area.h = 7;
+			record.airport.rotation = 0;
+			record.airport.blocks = 0;
+		}
 		f.aircraft.acache.cached_max_range_sqr = range; f.aircraft.state = state; f.aircraft.flags = flag;
 		f.state->cached_max_range_sqr = range; f.state->state = state; f.state->flags = flag; f.state->targetairport = 0;
 		messages = {}; AircraftEventHandler(&f.aircraft, 0); auto expected = messages;

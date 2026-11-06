@@ -35,17 +35,7 @@ static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} 
 
 
 
-static uint64_t * OPENTTD_RUST_CALL Aircraft_airport_blocks(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return &st->GetAirport().Record().blocks;
-}
 
-static uint8_t OPENTTD_RUST_CALL Aircraft_had_vehicle(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return st->GetHadVehicleOfType();
-}
 
 
 static uint8_t OPENTTD_RUST_CALL Aircraft_airport_elements(const void * airport) noexcept
@@ -305,13 +295,6 @@ static OpenTTDAircraftBlockChoice OPENTTD_RUST_CALL Aircraft_block_choice(const 
 	return {.next = n->next.get(), .blocks = n->blocks.base(), .heading = n->heading};
 }
 
-static OpenTTDAircraftGeometry OPENTTD_RUST_CALL Aircraft_geometry(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	const uint32_t tile = RustStationAirportTile(st);
-	if (tile == INVALID_TILE.base()) return {.tile = RustStationLocation(st), .rotation = 0, .width = 1, .height = 1, .airport = false};
-	return {.tile = tile, .rotation = st->GetAirport().GetRotation(), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
-}
 static uint64_t OPENTTD_RUST_CALL Aircraft_layout_blocks(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].blocks.base(); }
 static uint8_t OPENTTD_RUST_CALL Aircraft_layout_next_position(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next_position; }
 static const void *OPENTTD_RUST_CALL Aircraft_layout_next(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next.get(); }
@@ -321,7 +304,6 @@ static OpenTTDAircraftLayoutRoute OPENTTD_RUST_CALL Aircraft_layout_route(const 
 	return {.node = n, .next = n->next.get(), .next_position = n->next_position, .heading = n->heading};
 }
 static const OpenTTDAircraftLeaves _aircraft_leaves{
-	.geometry = Aircraft_geometry,
 	.layout_blocks = Aircraft_layout_blocks,
 	.layout_heading = OpenTTDAirportLayoutHeading,
 	.layout_next_position = Aircraft_layout_next_position,
@@ -329,13 +311,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.layout_route = Aircraft_layout_route,
 	.vehicle = &GetRustVehicleServices(),
 	.shared = &GetRustSharedServices(),
-	.station = Aircraft_station,
-	.airport_tile = Aircraft_airport_tile,
-	.station_tile = Aircraft_station_tile,
-	.rotation = Aircraft_rotation,
-	.airport_type = Aircraft_airport_type,
-	.airport_blocks = Aircraft_airport_blocks,
-	.had_vehicle = Aircraft_had_vehicle,
 	.airport_elements = Aircraft_airport_elements,
 	.helipads = Aircraft_helipads,
 	.airport_flags = OpenTTDAirportFlags,

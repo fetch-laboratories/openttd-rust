@@ -129,9 +129,8 @@ struct NewPosition {
     y: i64,
     tile: u32,
 }
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Geometry {
+struct Geometry {
     pub tile: u32,
     pub rotation: u8,
     pub width: u16,
@@ -155,7 +154,6 @@ pub struct HangarCandidate {
 }
 #[repr(C)]
 pub struct Leaves {
-    pub geometry: unsafe extern "C" fn(*const Station) -> Geometry,
     pub layout_blocks: unsafe extern "C" fn(*const c_void, u8) -> u64,
     pub layout_heading: unsafe extern "C" fn(*const c_void, u8) -> u8,
     pub layout_next_position: unsafe extern "C" fn(*const c_void, u8) -> u8,
@@ -163,13 +161,6 @@ pub struct Leaves {
     pub layout_route: unsafe extern "C" fn(*const c_void, u8) -> LayoutRoute,
     pub vehicle: *const VehicleServices,
     pub shared: *const Services,
-    pub station: unsafe extern "C" fn(u16) -> *const Station,
-    pub airport_tile: unsafe extern "C" fn(*const Station) -> u32,
-    pub station_tile: unsafe extern "C" fn(*const Station) -> u32,
-    pub rotation: unsafe extern "C" fn(*const Station) -> u8,
-    pub airport_type: unsafe extern "C" fn(*const Station) -> u8,
-    pub airport_blocks: unsafe extern "C" fn(*const Station) -> *mut u64,
-    pub had_vehicle: unsafe extern "C" fn(*const Station) -> u8,
     pub airport_elements: unsafe extern "C" fn(*const c_void) -> u8,
     pub helipads: unsafe extern "C" fn(*const c_void) -> u8,
     pub airport_flags: unsafe extern "C" fn(*const c_void) -> u8,
@@ -439,6 +430,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
 
     record_fields! {
+        airport_tile(self; s: *const Station) -> i64 => i64::from(crate::station_record::read(s.cast(), |r| r.airport.area.tile.0));
+        station_tile(self; s: *const Station) -> i64 => i64::from(crate::station_record::xy(s.cast()));
+        rotation(self; s: *const Station) -> i64 => i64::from(crate::station_record::read(s.cast(), |r| r.airport.rotation));
+        airport_type(self; s: *const Station) -> i64 => i64::from(crate::station_record::read(s.cast(), |r| r.airport.r#type));
+        station_owner(self; s: *const Station) -> i64 => i64::from(crate::station_record::owner_company(s.cast()));
+        had_vehicle(self; s: *const Station) -> i64 => i64::from(crate::station_record::read(s.cast(), |r| r.had_vehicle_of_type));
+        airport_blocks(self; s: *const Station) -> *mut u64 => unsafe { &raw mut (*crate::station_record::record_of(s.cast())).airport.blocks };
         current_speed(self; v: Vehicle) -> i64 => i64::from((v.base()).speed());
         direction(self; v: Vehicle) -> i64 => i64::from((v.base()).direction());
         last_station(self; v: Vehicle) -> i64 => i64::from((v.base()).last_station());
@@ -486,12 +484,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         disaster_sound(self; ) => (self.ss.disaster_sound)();
         economy_date(self; ) => crate::timer_game_common::economy_date().0;
         calendar_date(self; ) => crate::timer_game_common::calendar_date().0;
-        airport_tile(self; s: *const Station) => unsafe { (self.leaves.airport_tile)(s) };
-        station_tile(self; s: *const Station) => unsafe { (self.leaves.station_tile)(s) };
-        rotation(self; s: *const Station) => unsafe { (self.leaves.rotation)(s) };
-        airport_type(self; s: *const Station) => unsafe { (self.leaves.airport_type)(s) };
-        station_owner(self; s: *const Station) => crate::station_record::owner_company(s.cast());
-        had_vehicle(self; s: *const Station) => unsafe { (self.leaves.had_vehicle)(s) };
         airport_elements(self; airport: *const c_void) => unsafe { (self.leaves.airport_elements)(airport) };
         helipads(self; airport: *const c_void) => unsafe { (self.leaves.helipads)(airport) };
         airport_flags(self; airport: *const c_void) => unsafe { (self.leaves.airport_flags)(airport) };
@@ -521,7 +513,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         send_to_depot(self; v: Vehicle, service: i64) => unsafe { (self.leaves.send_to_depot)(v, service != 0) };
     }
     direct_services! {
-        geometry(self; s: *const Station) -> Geometry => unsafe { (self.leaves.geometry)(s) };
         layout_blocks(self; ap: *const c_void, pos: u8) -> u64 => unsafe { (self.leaves.layout_blocks)(ap, pos) };
         layout_heading(self; ap: *const c_void, pos: u8) -> u8 => unsafe { (self.leaves.layout_heading)(ap, pos) };
         layout_next_position(self; ap: *const c_void, pos: u8) -> u8 => unsafe { (self.leaves.layout_next_position)(ap, pos) };
@@ -535,7 +526,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         set_calendar_service(self; v: Vehicle, value: i64) -> () => (self.vs.write_calendar_service)(v.base(), value as i32);
         set_breakdowns(self; v: Vehicle, value: i64) -> () => (self.vs.write_breakdowns)(v.base(), value as u8);
         set_reliability(self; v: Vehicle, value: i64) -> () => (self.vs.write_reliability)(v.base(), value as u16);
-        airport_blocks(self; s: *const Station) -> *mut u64 => unsafe { (self.leaves.airport_blocks)(s) };
         node(self; airport: *const c_void, pos: u8) -> *const c_void => unsafe { (self.leaves.node)(airport, pos) };
         fta(self; node: *const c_void) -> Node => unsafe { (self.leaves.fta)(node) };
         block_choice(self; node: *const c_void) -> BlockChoice => unsafe { (self.leaves.block_choice)(node) };
@@ -596,10 +586,31 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     fn station(&self, id: u32) -> *const Station {
         {
-            let result = unsafe { (self.leaves.station)(id as u16) };
+            let result = crate::station_record::station_get_if_valid(self.ss, id as u16).cast();
             Self::service_witness("station", std::mem::size_of_val(&result));
             result
         }
+    }
+    fn geometry(&self, s: *const Station) -> Geometry {
+        crate::station_record::read(s.cast(), |r| {
+            if r.airport.area.tile.0 == INVALID_TILE {
+                Geometry {
+                    tile: r.xy.0,
+                    rotation: 0,
+                    width: 1,
+                    height: 1,
+                    airport: false,
+                }
+            } else {
+                Geometry {
+                    tile: r.airport.area.tile.0,
+                    rotation: r.airport.rotation,
+                    width: r.airport.area.w,
+                    height: r.airport.area.h,
+                    airport: true,
+                }
+            }
+        })
     }
     fn moving(&self, airport: *const c_void, pos: i64) -> Movement {
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
@@ -658,13 +669,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.station(u32::from(self.target(id)))
     }
     fn airport_spec(&self, st: *const Station) -> *const crate::station_cmd::AirportSpec {
-        let tile = unsafe { (self.leaves.airport_tile)(st) };
+        let tile = self.airport_tile(st) as u32;
         if tile == INVALID_TILE {
             crate::newgrf_airport::runtime().dummy_spec
         } else {
             crate::station_base::airport_get_spec(
                 tile,
-                unsafe { (self.leaves.airport_type)(st) },
+                self.airport_type(st) as u8,
                 crate::newgrf_airport::runtime(),
             )
         }
@@ -2446,7 +2457,6 @@ crate::abi::layouts! {
         direction,
     };
     "OpenTTDAircraftLeaves" ["probe"] => Leaves {
-        geometry,
         layout_blocks,
         layout_heading,
         layout_next_position,
@@ -2454,13 +2464,6 @@ crate::abi::layouts! {
         layout_route,
         vehicle,
         shared,
-        station,
-        airport_tile,
-        station_tile,
-        rotation,
-        airport_type,
-        airport_blocks,
-        had_vehicle,
         airport_elements,
         helipads,
         airport_flags,
@@ -2526,13 +2529,6 @@ crate::abi::layouts! {
         next,
         blocks,
         heading,
-    };
-    "OpenTTDAircraftGeometry" ["probe"] => Geometry {
-        tile,
-        rotation,
-        width,
-        height,
-        airport,
     };
     "OpenTTDAircraftLayoutRoute" ["probe"] => LayoutRoute {
         node,

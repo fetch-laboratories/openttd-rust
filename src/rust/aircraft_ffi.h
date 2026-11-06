@@ -36,10 +36,8 @@ struct OpenTTDAircraftBlockChoice { const void *next; uint64_t blocks; uint8_t h
  * No borrow survives a callback, including reentry and PreDestructor deletion.
  * All native services are noexcept; environmental failures and Rust panics abort.
  * Flight helpers accept actual Vehicle identity, with null state for disasters. */
-struct OpenTTDAircraftGeometry { uint32_t tile; uint8_t rotation; uint16_t width, height; bool airport; };
 struct OpenTTDAircraftLayoutRoute { const void *node, *next; uint8_t next_position, heading; };
 struct OpenTTDAircraftLeaves {
-	OpenTTDAircraftGeometry (OPENTTD_RUST_CALL *geometry)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(geometry);
 	uint64_t (OPENTTD_RUST_CALL *layout_blocks)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_blocks);
 	uint8_t (OPENTTD_RUST_CALL *layout_heading)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_heading);
 	uint8_t (OPENTTD_RUST_CALL *layout_next_position)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_next_position);
@@ -47,13 +45,6 @@ struct OpenTTDAircraftLeaves {
 	OpenTTDAircraftLayoutRoute (OPENTTD_RUST_CALL *layout_route)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_route);
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDSharedServices *shared;
-	const OpenTTDStation *(OPENTTD_RUST_CALL *station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
-	uint32_t (OPENTTD_RUST_CALL *airport_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
-	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
-	uint8_t (OPENTTD_RUST_CALL *rotation)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(rotation);
-	uint8_t (OPENTTD_RUST_CALL *airport_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
-	uint64_t * (OPENTTD_RUST_CALL *airport_blocks)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_blocks);
-	uint8_t (OPENTTD_RUST_CALL *had_vehicle)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(had_vehicle);
 	uint8_t (OPENTTD_RUST_CALL *airport_elements)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_elements);
 	uint8_t (OPENTTD_RUST_CALL *helipads)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(helipads);
 	uint8_t (OPENTTD_RUST_CALL *airport_flags)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_flags);

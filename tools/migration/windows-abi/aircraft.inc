@@ -20,7 +20,7 @@ static struct AircraftBoundaryProbe {
 	OpenTTDVehicleRefitServices refit{};
 	OpenTTDVehicleVisits visits{};
 	OpenTTDVehicleTileLinks links[2];
-	uint64_t blocks = UINT64_MAX;
+	AircraftTestStation *station = nullptr;
 	unsigned orders = 0, deleted = 0, moves = 0;
 	OpenTTDConsistState consist{};
 	uint8_t order_kind = 0;
@@ -31,6 +31,10 @@ static struct AircraftBoundaryProbe {
 static void AircraftDirectBoundary()
 {
 	auto &p = aircraft_probe;
+	AircraftTestStation station;
+	p.station = &station;
+	station.record->airport.area = {7, 8, 8};
+	station.record->airport.blocks = UINT64_MAX;
 	p.record.consist = &p.consist;
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p.record.type = 3;
@@ -42,6 +46,12 @@ static void AircraftDirectBoundary()
 	auto &vehicle = p.vehicle_services;
 	auto &shared = p.shared_services;
 	auto &leaves = p.leaves;
+	p.shared_services.station_pool = []() noexcept {
+		static std::array<BaseStation *, 8> slots;
+		static const size_t first_unused = slots.size();
+		slots.fill(reinterpret_cast<BaseStation *>(aircraft_probe.station));
+		return OpenTTDStationPool{slots.data(), slots.size(), &first_unused};
+	};
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_owner->vehicle->current.type; };
 	vehicle.maintenance = &_vehicle_maintenance_probe;
 	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
@@ -98,10 +108,7 @@ static void AircraftDirectBoundary()
 	};
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, true));
 	CHECK(p.order_owner->consist.real_index == 1 && p.order_owner->consist.implicit_index == 1);
-	leaves.station = [](uint16_t) noexcept -> const OpenTTDStation * { CHECK(aircraft_probe.live); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
-	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{7}; };
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
-	leaves.airport_blocks = [](const OpenTTDStation *) noexcept { CHECK(aircraft_probe.live); return &aircraft_probe.blocks; };
 	leaves.node = [](const void *ap, uint8_t) noexcept -> const void * { return ap; };
 	leaves.fta = [](const void *) noexcept { return OpenTTDAircraftNode{nullptr, uint64_t{1} << 9, 0, 0, 0}; };
 	leaves.layout_blocks = [](const void *, uint8_t) noexcept { return uint64_t{1} << 9; };
@@ -110,7 +117,7 @@ static void AircraftDirectBoundary()
 		auto v = aircraft_probe.vehicle;
 		CHECK(aircraft_probe.live && v.state->crashed_counter == 10002);
 		openttd_rust_aircraft_release_blocks(&aircraft_probe.leaves, v);
-		CHECK((aircraft_probe.blocks & ((uint64_t{1} << 8) | (uint64_t{1} << 9) | (uint64_t{1} << 29))) == 0);
+		CHECK((aircraft_probe.station->record->airport.blocks & ((uint64_t{1} << 8) | (uint64_t{1} << 9) | (uint64_t{1} << 29))) == 0);
 		openttd_rust_aircraft_state_destroy(v.state);
 		aircraft_probe.live = false;
 		aircraft_probe.deleted++;
@@ -143,6 +150,10 @@ static void AircraftPhaseBoundary()
 {
 	auto &p = aircraft_probe;
 	p = {};
+	AircraftTestStation station;
+	p.station = &station;
+	station.record->airport.area = {7, 8, 8};
+	station.record->airport.blocks = UINT64_MAX;
 	p.record.consist = &p.consist;
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
 	p.record.type = 3;
@@ -153,6 +164,12 @@ static void AircraftPhaseBoundary()
 	auto &v = p.vehicle_services;
 	auto &s = p.shared_services;
 	auto &leaves = p.leaves;
+	p.shared_services.station_pool = []() noexcept {
+		static std::array<BaseStation *, 8> slots;
+		static const size_t first_unused = slots.size();
+		slots.fill(reinterpret_cast<BaseStation *>(aircraft_probe.station));
+		return OpenTTDStationPool{slots.data(), slots.size(), &first_unused};
+	};
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
 	p.vehicle = {&p.record, state.get(), 17};
 
@@ -184,8 +201,7 @@ static void AircraftPhaseBoundary()
 	p.order_owner->vehicle->current = openttd_rust_order_vector_data(p.order_owner->vector.get())[0];
 	v.order_type = [](OpenTTDVehicle *) noexcept { return uint8_t{1}; };
 	p.vehicle.state->state = 14; p.vehicle.state->targetairport = 7;
-	leaves.station = [](uint16_t station) noexcept { CHECK(station == 7); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
-	leaves.geometry = [](const OpenTTDStation *) noexcept { return OpenTTDAircraftGeometry{0, 0, 8, 8, true}; };
+	station.record->airport.area.tile = 0;
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
 	leaves.moving = [](const void *, uint8_t) noexcept { return OpenTTDAircraftMoving{16, 0, 16, 0}; };
 	static OpenTTDFixtureMap map{6, 4096};

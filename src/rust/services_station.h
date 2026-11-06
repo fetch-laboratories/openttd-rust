@@ -132,7 +132,6 @@ inline uint16_t RustStationTownID(const Station *station) noexcept { return Rust
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 template <class Handle> inline Handle RustNextStation(uint32_t from) noexcept { return OpenTTDNextStation(from); }
 template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept { return Station::GetIfValid(StationID{id}); }
-inline const OpenTTDStation *Aircraft_station(uint16_t id) noexcept { return RustStation(RustStationIfValid<Station *>(id)); }
 /** The canonical Rust service owner of a station or waypoint. */
 template <class TStation> inline OpenTTDStationRecord *RustStationServiceOwner(TStation *st) noexcept { return const_cast<OpenTTDStationRecord *>(&st->Record()); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->GetFacilities().Test(StationFacility::Airport); }
@@ -169,29 +168,9 @@ inline void RustMakeRailWaypoint(uint32_t tile, uint8_t owner, uint16_t id, uint
 template <class T> inline uint8_t RustStationOwnerByte(T *st) noexcept { return OpenTTDStationOwner(st).base(); }
 template <class Handle> inline uint64_t RustStationLegacyCompatible(Handle, uint32_t a, uint32_t b) noexcept { return RustCompatibleStationTiles(a, b); }
 inline void RustStationClearAirport(BaseStation *st) noexcept { Station::From(st)->GetAirport().Clear(); }
-inline uint32_t Aircraft_airport_tile(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationAirportTile(st);
-}
 
-inline uint32_t Aircraft_station_tile(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationLocation(st);
-}
 
-inline uint8_t Aircraft_rotation(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationAirportRotation(st);
-}
 
-inline uint8_t Aircraft_airport_type(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationAirportType(st);
-}
 
 inline void RustStationClosedWidget(BaseStation *st) noexcept { SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT); }
 inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTS, RustBaseStationID(st)); }
