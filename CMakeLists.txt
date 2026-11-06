@@ -249,6 +249,19 @@ endif()
 include(CTest)
 include(SourceList)
 
+# Component manifests register replacement tests and retire their native sources.
+# Reconfigure when a batch adds or edits a manifest.
+file(GLOB EVIDENCE_MANIFESTS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/migration/evidence-replacements/*.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/tools/evidence_replacements.py" ${EVIDENCE_MANIFESTS})
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/evidence_replacements.py"
+    --cmake "${CMAKE_BINARY_DIR}/evidence-replacements.cmake"
+    RESULT_VARIABLE evidence_result)
+if(NOT evidence_result EQUAL 0)
+    message(FATAL_ERROR "Invalid native evidence replacement registration")
+endif()
+include("${CMAKE_BINARY_DIR}/evidence-replacements.cmake")
+
 # Needed by everything that uses Squirrel
 include_directories(${CMAKE_SOURCE_DIR}/src/3rdparty/squirrel/include)
 
