@@ -41,7 +41,6 @@ pub struct ResolverServices {
     pub shared: *const crate::services::Services,
     pub lifecycle: *const LifecycleServices,
     pub tile: *const TileServices,
-    pub get: unsafe extern "C" fn(u16) -> *mut Industry,
     pub clean_gfx: unsafe extern "C" fn(u32) -> u16,
     pub nearby: unsafe extern "C" fn(u8, u32, bool) -> u32,
     pub water_distance: unsafe extern "C" fn(u32, bool) -> u32,
@@ -158,7 +157,7 @@ fn closest(
         if id == current.id {
             continue;
         }
-        let other = unsafe { (s.get)(id) };
+        let other = unsafe { super::pool(s.shared()).record(crate::industry_type::IndustryID(id)) };
         let other_tile = unsafe { (*other).record.location.tile };
         best = best.min(map.distance_manhattan(tile, other_tile));
     }
@@ -204,7 +203,8 @@ fn count_and_distance(
             if id == current.id {
                 continue;
             }
-            let other = unsafe { (s.get)(id) };
+            let other =
+                unsafe { super::pool(s.shared()).record(crate::industry_type::IndustryID(id)) };
             if (layout == 0 || unsafe { (*other).record.selected_layout } == layout)
                 && (!town || unsafe { (*other).record.town } == current.town)
             {
@@ -857,7 +857,6 @@ crate::abi::layouts! {
         shared,
         lifecycle,
         tile,
-        get,
         clean_gfx,
         nearby,
         water_distance,

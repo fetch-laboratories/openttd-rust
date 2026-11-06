@@ -431,6 +431,8 @@ pub struct Services {
     pub town_by_id: extern "C" fn(u32) -> *mut TownHandle,
     /// Address of the town facade's stable canonical slot descriptor pointer.
     pub town_pool: *const *const crate::pool::PoolDescriptor,
+    /// Address of the industry facade's stable canonical slot descriptor pointer.
+    pub industry_pool: *const *const crate::pool::PoolDescriptor,
     /// Canonical shared `utf8_length` service.
     pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
     /// Canonical shared `vehicle_next` service.
@@ -825,6 +827,7 @@ crate::abi::layouts! {
         town_next_id,
         town_by_id,
         town_pool,
+        industry_pool,
         utf8_length,
         vehicle_next,
         water_middle_lock,
@@ -1122,6 +1125,7 @@ pub fn fixture(
         town_next_id: word,
         town_by_id: fixture_town_by_id,
         town_pool: std::ptr::null(),
+        industry_pool: std::ptr::null(),
         utf8_length: unused_utf8_length,
         vehicle_next: unused_vehicle_next,
         water_middle_lock: flag,

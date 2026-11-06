@@ -27,7 +27,6 @@ struct OpenTTDIndustryResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDIndustryLifecycleServices *lifecycle;
 	const OpenTTDIndustryTileServices *tile;
-	OpenTTDIndustry *(*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
 	uint16_t (*clean_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clean_gfx);
 	uint32_t (*nearby)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
 	uint32_t (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);

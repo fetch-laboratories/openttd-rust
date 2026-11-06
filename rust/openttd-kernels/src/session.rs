@@ -634,12 +634,8 @@ impl<'a> Session<'a> {
         (self.s.reset_engine_overrides)();
         let services = unsafe { &*self.world().industry };
         let mut from = 0;
-        loop {
-            let entry = unsafe { (services.next_tick)(from) };
-            if entry.owner.is_null() {
-                break;
-            }
-            from = u32::from(entry.id) + 1;
+        while let Some(entry) = crate::industry::next(services, from) {
+            from = u32::from(entry.id.0) + 1;
             unsafe {
                 (*entry.owner.cast::<crate::industry::IndustryRecord>()).last_prod_year =
                     crate::timer_game_common::economy_year().0;

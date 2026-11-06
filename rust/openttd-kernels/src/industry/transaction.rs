@@ -8,9 +8,9 @@
 //! Industry construction, funding and prospecting transaction. The result is a native stack
 //! `CommandCost`; specs and layouts are immutable.
 use super::{
-    Builder, ConstructionRequest, ConstructionServices, GenerationServices, Industry,
-    IndustryCommandServices, IndustryCost, IndustryCostServices, LayoutHandle, LifecycleServices,
-    Services, ShellHandle, SpecHandle, TilePolicyServices, TileServices, TownHandle,
+    Builder, ConstructionRequest, ConstructionServices, GenerationServices, Industry, IndustryCost,
+    IndustryCostServices, LayoutHandle, LifecycleServices, Services, ShellHandle, SpecHandle,
+    TilePolicyServices, TileServices, TownHandle,
 };
 use crate::industrytype;
 use std::{ffi::c_void, ptr};
@@ -49,7 +49,6 @@ pub struct LocationResult {
 pub struct TransactionServices {
     pub raw_setting: unsafe extern "C" fn() -> u8,
     pub multiple_per_town: unsafe extern "C" fn() -> bool,
-    pub industry: unsafe extern "C" fn(u16) -> *mut ShellHandle,
     pub edge_distance: unsafe extern "C" fn(u32, u8) -> u32,
     pub refinery_limit: unsafe extern "C" fn() -> u8,
     pub tile_height: unsafe extern "C" fn(u32) -> u32,
@@ -85,7 +84,6 @@ pub struct TransactionContext {
     pub lifecycle: *const LifecycleServices,
     pub tiles: *const TileServices,
     pub tile_policy: *const TilePolicyServices,
-    pub commands: *const IndustryCommandServices,
     pub command_checks: *const crate::services::CommandServices,
     pub costs: *const IndustryCostServices,
     pub transaction: *const TransactionServices,
@@ -98,7 +96,6 @@ struct Engine<'a> {
     c: &'a ConstructionServices,
     t: &'a TileServices,
     p: &'a TilePolicyServices,
-    m: &'a IndustryCommandServices,
     cost: &'a IndustryCostServices,
     x: &'a TransactionServices,
     e: &'a ConstructionErrors,
@@ -237,8 +234,8 @@ impl Engine<'_> {
                 continue;
             }
             for n in 0..self.registry_count(other) {
-                let shell = unsafe { (self.x.industry)(self.registry_id(other, n)) };
-                let owner = unsafe { (self.m.owner)(shell) };
+                let id = crate::industry_type::IndustryID(self.registry_id(other, n));
+                let owner = unsafe { super::pool(self.s.shared()).record(id) };
                 let position = unsafe { (*owner).record.location.tile };
                 if self.distance(tile, position) <= 14 {
                     return self.fail(self.e.conflict);
@@ -251,8 +248,8 @@ impl Engine<'_> {
         let town = crate::town::spatial::closest(unsafe { &*self.s.shared }, tile, u32::MAX);
         if !unsafe { (self.x.multiple_per_town)() } {
             for n in 0..self.registry_count(kind) {
-                let shell = unsafe { (self.x.industry)(self.registry_id(kind, n)) };
-                let owner = unsafe { (self.m.owner)(shell) };
+                let id = crate::industry_type::IndustryID(self.registry_id(kind, n));
+                let owner = unsafe { super::pool(self.s.shared()).record(id) };
                 if unsafe { (*owner).record.town.cast_const() } == town {
                     self.fail(self.e.one_per_town);
                     return None;
@@ -531,6 +528,7 @@ impl Engine<'_> {
         let spec = industrytype::industry(u16::from(kind));
         let mut owner = Industry::default();
         let mut call = LocationCall {
+            owner: &raw mut owner,
             engine: self,
             spec,
             tile,
@@ -560,6 +558,7 @@ impl Engine<'_> {
     ) {
         let mut owner = Industry::default();
         let mut call = ShapeCall {
+            owner: &raw mut owner,
             engine: self,
             tile,
             current,
@@ -671,6 +670,7 @@ impl Engine<'_> {
     }
 }
 struct LocationCall<'a, 'b> {
+    owner: *mut Industry,
     engine: &'a Engine<'b>,
     spec: *const SpecHandle,
     tile: u32,
@@ -684,7 +684,7 @@ struct LocationCall<'a, 'b> {
 unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandle) {
     let call = unsafe { &*context.cast::<LocationCall<'_, '_>>() };
     let e = call.engine;
-    let owner = unsafe { (e.m.owner)(shell) };
+    let owner = call.owner;
     unsafe {
         (*owner).record.location.tile = call.tile;
         (*owner).record.location.w = 0;
@@ -706,6 +706,7 @@ unsafe extern "C" fn location_visit(context: *mut c_void, shell: *mut ShellHandl
     }
 }
 struct ShapeCall<'a, 'b> {
+    owner: *mut Industry,
     engine: &'a Engine<'b>,
     tile: u32,
     current: u32,
@@ -720,7 +721,7 @@ struct ShapeCall<'a, 'b> {
 unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) {
     let call = unsafe { &*context.cast::<ShapeCall<'_, '_>>() };
     let e = call.engine;
-    let owner = unsafe { (e.m.owner)(shell) };
+    let owner = call.owner;
     unsafe {
         (*owner).record.location.tile = call.tile;
         (*owner).record.location.w = 0;
@@ -783,7 +784,6 @@ unsafe fn engine<'a>(context: *const TransactionContext, out: *mut IndustryCost)
             c: &*context.construction,
             t: &*context.tiles,
             p: &*context.tile_policy,
-            m: &*context.commands,
             cost: &*context.costs,
             x: &*context.transaction,
             e: &*context.errors,

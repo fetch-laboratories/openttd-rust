@@ -509,13 +509,11 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	OpenTTDIndustryLifecycleServices lifecycle{};
 	OpenTTDIndustryTileServices tiles{};
 	OpenTTDIndustryTilePolicyServices policy{};
-	OpenTTDIndustryCommandServices commands{};
 	OpenTTDIndustryCostServices costs{};
 	OpenTTDIndustryTransactionServices transaction{};
 	OpenTTDIndustryConstructionErrors errors{};
 	errors.site = 1234;
 	tile_spec.grf_prop.grffile = &tile_file;
-	commands.owner = RustIndustryCanonicalOwner<Industry *>;
 	const OpenTTDFixtureMap map{Map::LogX()};
 	shared.map = &map.statics;
 	static const OpenTTDMovementServices movement{};
@@ -545,7 +543,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		.map = {},
 		.builder = nullptr, .production = &production, .generation = &generation,
 		.construction = &construction, .lifecycle = &lifecycle, .tiles = &tiles,
-		.tile_policy = &policy, .commands = &commands, .command_checks = nullptr, .costs = &costs,
+		.tile_policy = &policy, .command_checks = nullptr, .costs = &costs,
 		.transaction = &transaction, .errors = &errors,
 	};
 	const auto pool_count = Industry::GetNumItems();

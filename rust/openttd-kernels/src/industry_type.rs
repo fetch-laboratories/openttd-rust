@@ -30,6 +30,11 @@ pub const CAN_SUBSIDENCE: u32 = 1 << 13;
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IndustryID(pub u16);
+impl crate::pool::PoolId for IndustryID {
+    fn index(self) -> usize {
+        usize::from(self.0)
+    }
+}
 impl IndustryID {
     /// Native invalid sentinel.
     pub const INVALID: Self = Self(u16::MAX);

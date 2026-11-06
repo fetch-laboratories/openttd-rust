@@ -30,10 +30,6 @@ struct OpenTTDSubsidyServices {
 	const OpenTTDTownLeaves * town;
 	const OpenTTDIndustryServices * industry;
 	RustPoolCore *const *pool;
-	OpenTTDIndustry *(*industry_owner)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_owner);
-	uint16_t (*industry_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_id);
-	uint32_t (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
-	bool (*valid_source)(Source) noexcept OPENTTD_SERVICE_DEFAULT(valid_source);
 	uint16_t (*allocate)(CargoType, Source, Source, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	void (*destroy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	uint16_t (*duration)() noexcept OPENTTD_SERVICE_DEFAULT(duration);

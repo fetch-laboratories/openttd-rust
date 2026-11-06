@@ -162,13 +162,6 @@ rebound | RustHouseSpec | src/animated_tile.cpp | house_spec
 rebound | RustHouseSpec | src/rust/house_definition_services.hpp | get
 rebound | RustIndustryBuilderState | src/genworld.cpp | industry_builder
 rebound | RustIndustryBuilderState | src/rust/newgrf_spritegroup_services.cpp | industry_builder
-rebound | RustIndustryByID | src/industry_cmd.cpp | industry
-rebound | RustIndustryByID | src/station.cpp | industry_by_id
-rebound | RustIndustryCanonicalOwner | src/industry_cmd.cpp | owner
-rebound | RustIndustryCanonicalOwner | src/station.cpp | industry_owner
-rebound | RustIndustryCanonicalOwner | src/subsidy.cpp | industry_owner
-rebound | RustIndustryID | src/station.cpp | industry_id
-rebound | RustIndustryID | src/subsidy.cpp | industry_id
 rebound | RustIndustryNeutralBaseStation | src/rust/station_command_services.hpp | industry_neutral
 rebound | RustIndustryNeutralBaseStation | src/station.cpp | industry_neutral
 rebound | RustIndustryTileIndex | src/industry_cmd.cpp | industry_index

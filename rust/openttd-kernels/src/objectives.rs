@@ -152,7 +152,7 @@ impl Services {
     }
     fn industry_valid(&self, id: u32) -> bool {
         u16::try_from(id).is_ok_and(|id| unsafe {
-            ((*self.subsidy).valid_source)(crate::source_type::Source::industry(id))
+            (*self.subsidy).valid_source(crate::source_type::Source::industry(id))
         })
     }
     fn town_valid(&self, id: u32) -> bool {

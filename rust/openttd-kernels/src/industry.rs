@@ -22,6 +22,7 @@
     clippy::if_not_else
 )]
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
+use crate::industry_type::IndustryID;
 use crate::random_func::chance16_i;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
 use crate::tilearea::TileArea;
@@ -401,12 +402,12 @@ pub struct Map {
     pub size_y: u32,
     pub landscape: u8,
 }
-#[repr(C)]
+/// Rust-local resolved identity; no native reader carrier or stored reference.
 #[derive(Clone, Copy)]
-pub struct Entry {
+pub(crate) struct Entry {
     pub industry: *mut c_void,
     pub owner: *mut Industry,
-    pub id: u16,
+    pub id: IndustryID,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -427,7 +428,6 @@ pub struct Change {
 #[repr(C)]
 pub struct Services {
     pub shared: *const crate::services::Services,
-    pub next_tick: unsafe extern "C" fn(u32) -> Entry,
     pub industry_sound: unsafe extern "C" fn(*mut c_void, u32),
     pub play_sound: unsafe extern "C" fn(u16, u32),
     pub special_effect: unsafe extern "C" fn(*mut c_void, u32, u32) -> u16,
@@ -451,8 +451,6 @@ pub struct Services {
     pub opening_news: unsafe extern "C" fn(*mut c_void),
     pub opening_events: unsafe extern "C" fn(*mut c_void),
     pub create: unsafe extern "C" fn(u8, u8) -> *mut c_void,
-    pub num_items: unsafe extern "C" fn() -> u32,
-    pub get: unsafe extern "C" fn(u16) -> *mut c_void,
     pub type_count: unsafe extern "C" fn(u8) -> u16,
     pub resolver: *const resolver::ResolverServices,
     pub scale_by_map_size: unsafe extern "C" fn(u32) -> u32,
@@ -472,6 +470,31 @@ impl Services {
     fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }
+}
+/// Canonical industry slots; growth replaces buffers, never this descriptor.
+pub(crate) fn pool(
+    s: &crate::services::Services,
+) -> crate::pool::TypedPool<IndustryID, Industry, crate::industry_type::Industry> {
+    // SAFETY: Native startup initializes the facade before serialized game entries.
+    unsafe { crate::pool::TypedPool::from_descriptor(*s.industry_pool) }
+}
+/// Live `GetNumItems` value at the original observation point.
+pub(crate) fn num_items(s: &crate::services::Services) -> usize {
+    unsafe { (**s.industry_pool).items }
+}
+/// Reread extent and occupancy after every effectful visit, as `PoolIterator` did.
+pub(crate) fn next(s: &Services, from: u32) -> Option<Entry> {
+    let slots = pool(s.shared());
+    let index = unsafe { slots.next_index(from as usize, u32::MAX as usize) };
+    if index == u32::MAX as usize {
+        return None;
+    }
+    let id = IndustryID(index as u16);
+    Some(Entry {
+        industry: unsafe { slots.shell(id).cast() },
+        owner: unsafe { slots.record(id) },
+        id,
+    })
 }
 impl Map {
     fn coordinates(self) -> crate::services::Map {
@@ -699,7 +722,7 @@ fn produce(e: Entry, s: &Services, builder: *mut Builder) {
         };
         if act {
             if parameter == 0 {
-                farm(owner, e.id, tick_map(s), s);
+                farm(owner, e.id.0, tick_map(s), s);
             } else {
                 chop(i, owner, tick_map(s), s, builder);
             }
@@ -733,14 +756,10 @@ pub(crate) unsafe fn tick(builder: *mut Builder, services: *const Services) {
         return;
     }
     let mut from = 0;
-    loop {
-        let e = unsafe { (s.next_tick)(from) };
-        if e.industry.is_null() {
-            break;
-        }
-        from = u32::from(e.id) + 1;
+    while let Some(e) = next(s, from) {
+        from = u32::from(e.id.0) + 1;
         produce(e, s, builder);
-        if (s.shared().tick_counter)().wrapping_add(u64::from(e.id)) % DAY_TICKS as u64 == 0 {
+        if (s.shared().tick_counter)().wrapping_add(u64::from(e.id.0)) % DAY_TICKS as u64 == 0 {
             for n in 0..accepted_count(e.owner) {
                 let a = accepted(e.owner, n);
                 unsafe {
@@ -1380,12 +1399,8 @@ pub(crate) unsafe fn openttd_rust_industry_monthly(
     let company = unsafe { (s.company_none)() };
     build_monthly(builder, s);
     let mut from = 0;
-    loop {
-        let e = unsafe { (s.next_tick)(from) };
-        if e.industry.is_null() {
-            break;
-        }
-        from = u32::from(e.id) + 1;
+    while let Some(e) = next(s, from) {
+        from = u32::from(e.id.0) + 1;
         statistics(e.owner, s);
         if unsafe { (*fields(e.owner)).prod_level == 0 } {
             unsafe { (s.destroy)(e.industry) };
@@ -1978,7 +1993,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryTransactionServices" ["industry"] => crate::industry::TransactionServices {
         raw_setting,
         multiple_per_town,
-        industry,
 
         edge_distance,
         refinery_limit,
@@ -2007,7 +2021,6 @@ crate::abi::layouts! {
         lifecycle,
         tiles,
         tile_policy,
-        commands,
         command_checks,
         costs,
         transaction,
@@ -2030,9 +2043,8 @@ crate::abi::layouts! {
         success,
     };
     "OpenTTDIndustryCommandServices" ["industry"] => crate::industry::IndustryCommandServices {
+        shared,
         deity,
-        get,
-        owner,
         valid_company,
         invalidate_view,
     };
@@ -2199,7 +2211,6 @@ crate::abi::layouts! {
     };
     "OpenTTDIndustryServices" ["industry"] => Services {
         shared,
-        next_tick,
         industry_sound,
         play_sound,
         special_effect,
@@ -2223,8 +2234,6 @@ crate::abi::layouts! {
         opening_news,
         opening_events,
         create,
-        num_items,
-        get,
         type_count,
         resolver,
         scale_by_map_size,
@@ -2256,11 +2265,6 @@ crate::abi::layouts! {
         size_x,
         size_y,
         landscape,
-    };
-    "OpenTTDIndustryEntry" ["industry"] => Entry {
-        industry,
-        owner,
-        id,
     };
     "TileArea" ["industry"] => TileArea {
         tile,

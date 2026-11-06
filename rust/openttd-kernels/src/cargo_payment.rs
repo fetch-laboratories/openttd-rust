@@ -74,7 +74,14 @@ pub struct Payment {
 }
 #[derive(Default)]
 pub struct Delivery {
-    destinations: Vec<*mut ShellHandle>,
+    destinations: Vec<Destination>,
+}
+/// Preserve native shell membership/first-encounter order, with its stable pool ID.
+/// The delivery contract forbids destruction of the visited industry until flush.
+#[derive(Clone, Copy)]
+struct Destination {
+    shell: *mut ShellHandle,
+    id: IndustryID,
 }
 
 fn income(s: &Services, pieces: u32, distance: u32, periods: u16, cargo: u8) -> i64 {
@@ -158,7 +165,7 @@ fn deliver(
         if near.id == industry_source {
             return true;
         }
-        let owner = (subsidies.industry_owner)(ind.cast());
+        let owner = unsafe { crate::industry::pool(subsidies.shared()).record(near.id) };
         let Some(slot) = (unsafe { crate::industry::get_cargo_accepted(owner, cargo) }) else {
             return true;
         };
@@ -173,8 +180,14 @@ fn deliver(
         }
         // No owner borrow is alive during a world leaf; include preserves order.
         let destinations = unsafe { &mut (*d).destinations };
-        if !destinations.contains(&ind) {
-            destinations.push(ind);
+        if !destinations
+            .iter()
+            .any(|destination| destination.shell == ind)
+        {
+            destinations.push(Destination {
+                shell: ind,
+                id: near.id,
+            });
         }
         let amount = unsafe {
             crate::industry::accept_delivery(owner, slot, remaining, || {
@@ -424,14 +437,14 @@ pub unsafe extern "C" fn openttd_rust_cargo_delivery_flush(d: *mut Delivery, s: 
     let s = unsafe { &*s };
     let mut index = 0;
     while index < unsafe { (*d).destinations.len() } {
-        let ind = unsafe { (&(*d).destinations)[index] };
+        let destination = unsafe { (&(*d).destinations)[index] };
         let subsidies = unsafe { &*(s.subsidies)() };
-        let owner = (subsidies.industry_owner)(ind.cast());
+        let owner = unsafe { crate::industry::pool(subsidies.shared()).record(destination.id) };
         unsafe {
             crate::industry::trigger_delivery(
-                ind,
+                destination.shell,
                 owner,
-                IndustryID((subsidies.industry_id)(ind.cast())),
+                destination.id,
                 &*s.resolver,
                 &*subsidies.industry,
                 &*s.industry_delivery,

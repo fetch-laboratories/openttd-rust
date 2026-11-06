@@ -7,20 +7,19 @@
 
 //! Industry metadata commands and native shell ownership changes.
 //! Lookups resolve once; command checks and writes follow the native source order.
-use super::{Industry, ShellHandle};
+use super::Industry;
 use crate::services::ByteSpan;
 
 #[repr(C)]
 pub struct IndustryCommandServices {
+    pub shared: *const crate::services::Services,
     pub deity: unsafe extern "C" fn() -> bool,
-    pub get: unsafe extern "C" fn(u16) -> *mut ShellHandle,
-    pub owner: unsafe extern "C" fn(*mut ShellHandle) -> *mut Industry,
     pub valid_company: unsafe extern "C" fn(u8) -> bool,
     pub invalidate_view: unsafe extern "C" fn(u16),
 }
 /// # Safety
-/// Live synchronous pool services; the owner is resolved only for an executing
-/// command and no reference to its fields survives a callback.
+/// Live synchronous pool services; IDs resolve through canonical slots and only
+/// executing commands write fields. No field reference survives a callback.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
     id: u16,
@@ -32,12 +31,11 @@ pub unsafe extern "C" fn openttd_rust_industry_set_flags_command_abi(
     if !unsafe { (s.deity)() } {
         return u8::from(false);
     }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() || value & !15 != 0 {
+    let owner = unsafe { super::pool(&*s.shared).record(crate::industry_type::IndustryID(id)) };
+    if owner.is_null() || value & !15 != 0 {
         return u8::from(false);
     }
     if execute {
-        let owner = unsafe { (s.owner)(shell) };
         unsafe {
             (*owner).record.ctlflags = value;
         }
@@ -58,12 +56,11 @@ pub unsafe extern "C" fn openttd_rust_industry_set_production_command_abi(
     if !unsafe { (s.deity)() } || !(4..=128).contains(&level) {
         return u8::from(false);
     }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() {
+    let owner = unsafe { super::pool(&*s.shared).record(crate::industry_type::IndustryID(id)) };
+    if owner.is_null() {
         return u8::from(false);
     }
     if execute {
-        let owner = unsafe { (s.owner)(shell) };
         unsafe {
             (*owner).record.ctlflags |= 8;
             (*owner).record.prod_level = level;
@@ -86,15 +83,14 @@ pub unsafe extern "C" fn openttd_rust_industry_set_exclusivity_command_abi(
     if !unsafe { (s.deity)() } {
         return u8::from(false);
     }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() {
+    let owner = unsafe { super::pool(&*s.shared).record(crate::industry_type::IndustryID(id)) };
+    if owner.is_null() {
         return u8::from(false);
     }
     if company != 16 && company != 255 && company != 18 && !unsafe { (s.valid_company)(company) } {
         return u8::from(false);
     }
     if execute {
-        let owner = unsafe { (s.owner)(shell) };
         unsafe {
             if consumer {
                 (*owner).record.exclusive_consumer = company;
@@ -119,12 +115,11 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text_command_abi(
     if !unsafe { (s.deity)() } {
         return u8::from(false);
     }
-    let shell = unsafe { (s.get)(id) };
-    if shell.is_null() {
+    let owner = unsafe { super::pool(&*s.shared).record(crate::industry_type::IndustryID(id)) };
+    if owner.is_null() {
         return u8::from(false);
     }
     if execute {
-        let owner = unsafe { (s.owner)(shell) };
         unsafe {
             super::openttd_rust_industry_set_text(owner, text.data, text.size);
             (s.invalidate_view)(id);

@@ -76,7 +76,6 @@ const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
 const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
 static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices();
 static OpenTTDIndustryTransactionContext GetIndustryTransactionContext();
-static Industry *IndustryIfValid(uint16_t id) noexcept { return Industry::GetIfValid(IndustryID(id)); }
 
 static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == OWNER_DEITY; }
 
@@ -792,11 +791,6 @@ static Industry *RustIndustry(void *handle) noexcept { return static_cast<Indust
 /** One typed noexcept slot per original operation, in industry_ffi.h order. */
 static const OpenTTDIndustryServices _industry_services = {
 	.shared = &GetRustSharedServices(),
-	.next_tick = [](uint32_t from) noexcept -> OpenTTDIndustryEntry {
-		Industry *i = OpenTTDNextIndustry(from);
-		if (i == nullptr) return {};
-		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)};
-	},
 	.industry_sound = [](void *handle, uint32_t index) noexcept {
 		Industry *i = RustIndustry(handle);
 		RustPlayTileSound(RustIndustryTile(handle), GetIndustrySpec(i->Record().type)->random_sounds[index]);
@@ -864,8 +858,6 @@ static const OpenTTDIndustryServices _industry_services = {
 	.opening_news = [](void *i) noexcept { RustIndustryOpeningNews(RustIndustry(i)); },
 	.opening_events = [](void *i) noexcept { Industry *ind = RustIndustry(i); AI::BroadcastNewEvent(new ScriptEventIndustryOpen(ind->index)); Game::NewEvent(new ScriptEventIndustryOpen(ind->index)); },
 	.create = [](uint8_t type, uint8_t creation) noexcept -> void * { return CreateNewIndustry(RandomTile(), type, static_cast<IndustryAvailabilityCallType>(creation)); },
-	.num_items = []() noexcept -> uint32_t { return static_cast<uint32_t>(Industry::GetNumItems()); },
-	.get = [](uint16_t id) noexcept -> void * { return IndustryIfValid(id); },
 	.type_count = [](uint8_t type) noexcept -> uint16_t { return Industry::GetIndustryTypeCount(type); },
 	.resolver = &GetIndustryResolverServices(),
 	.scale_by_map_size = OpenTTDMapScaleSize,
@@ -998,9 +990,8 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices()
 {
 	static const OpenTTDIndustryCommandServices services = {
+		.shared = &GetRustSharedServices(),
 		.deity = IndustryCommandDeity,
-		.get = IndustryIfValid,
-		.owner = RustIndustryCanonicalOwner<Industry *>,
 		.valid_company = [](uint8_t company) noexcept -> bool { return Company::IsValidID(CompanyID(company)); },
 		.invalidate_view = [](uint16_t id) noexcept { InvalidateWindowData(WC_INDUSTRY_VIEW, IndustryID(id)); },
 	};
@@ -1037,7 +1028,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 	static const OpenTTDIndustryTransactionServices services = {
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
-		.industry = RustIndustryByID<uint16_t>,
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },
 		.refinery_limit = []() noexcept -> uint8_t { return _settings_game.game_creation.oil_refinery_limit; },
 		.tile_height = [](uint32_t tile) noexcept -> uint32_t { return TileHeight(TileIndex(tile)); },
@@ -1083,7 +1073,6 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 		.lifecycle = &GetIndustryLifecycleRustServices(),
 		.tiles = &GetIndustryTileServices(),
 		.tile_policy = &GetIndustryTilePolicyServices(),
-		.commands = &GetIndustryCommandServices(),
 		.command_checks = &GetRustCommandServices(),
 		.costs = &GetIndustryCostServices(),
 		.transaction = &GetIndustryTransactionServices(),

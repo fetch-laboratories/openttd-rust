@@ -247,7 +247,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.lifecycle = &GetIndustryLifecycleRustServices(),
 		.tile = &GetIndustryTileServices(),
-		.get = [](uint16_t id) noexcept { return RustIndustryCanonicalOwner(RustIndustryByID(id)); },
 		.clean_gfx = [](uint32_t tile) noexcept { return GetCleanIndustryGfx(TileIndex(tile)); },
 		.nearby = RustNearbyTile,
 		.water_distance = RustClosestWaterDistance,

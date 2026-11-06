@@ -113,7 +113,7 @@ impl<'a> Commands<'a> {
             .world
             .get_or_init(|| crate::map_func::World::new(self.shared));
         let id = crate::industry_map::get_industry_index(&world.types, tile).unwrap();
-        let owner = unsafe { ((*self.industry().resolver).get)(id.0) };
+        let owner = unsafe { crate::industry::pool(self.shared).record(id) };
         unsafe { (*owner).record.town }
     }
     fn resolve(&self, id: u16) -> TownRef {
@@ -771,12 +771,8 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
     (s.close_graph)(t.id.0);
     if s.assertions {
         let mut from = 0;
-        loop {
-            let i = unsafe { (c.industry().next_tick)(from) };
-            if i.industry.is_null() {
-                break;
-            }
-            from = u32::from(i.id) + 1;
+        while let Some(i) = crate::industry::next(c.industry(), from) {
+            from = u32::from(i.id.0) + 1;
             assert!(unsafe { (*i.owner).record.town } != t.shell);
         }
         from = 0;

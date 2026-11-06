@@ -29,7 +29,6 @@ use crate::{
     timer_game_common::MONTHS_IN_YEAR,
 };
 use crate::{industry, services::Services as Shared, town};
-use std::ffi::c_void;
 crate::abi::shared_records! {
     fn abi_record;
     /// The fields of one native `Subsidy` shell, read and written in place by
@@ -61,10 +60,6 @@ pub struct Services {
     pub industry: *const crate::industry::Services,
     /// Address of the native facade's canonical owner pointer, initialized at startup.
     pub pool: *const *mut PoolCore,
-    pub industry_owner: extern "C" fn(*mut c_void) -> *mut crate::industry::Industry,
-    pub industry_id: extern "C" fn(*mut c_void) -> u16,
-    pub next_industry: extern "C" fn(u32) -> u32,
-    pub valid_source: extern "C" fn(Source) -> bool,
     pub allocate: extern "C" fn(u8, Source, Source, u16) -> u16,
     pub destroy: extern "C" fn(u16),
     pub duration: extern "C" fn() -> u16,
@@ -134,6 +129,21 @@ impl Services {
     fn industry(&self) -> &industry::Services {
         unsafe { &*self.industry }
     }
+    pub(crate) fn valid_source(&self, source: Source) -> bool {
+        match source.kind {
+            Source::TOWN => unsafe {
+                !town::pool(self.shared())
+                    .shell(crate::town_type::TownId(source.id))
+                    .is_null()
+            },
+            Source::INDUSTRY => unsafe {
+                !industry::pool(self.shared())
+                    .shell(crate::industry_type::IndustryID(source.id))
+                    .is_null()
+            },
+            _ => false,
+        }
+    }
     fn position(&self, source: Source) -> u32 {
         unsafe {
             if source.kind == Source::TOWN {
@@ -141,7 +151,10 @@ impl Services {
                     town::pool(self.shared()).record(crate::town_type::TownId(source.id)),
                 )
             } else {
-                industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
+                industry::subsidy_position(
+                    industry::pool(self.shared())
+                        .record(crate::industry_type::IndustryID(source.id)),
+                )
             }
         }
     }
@@ -156,8 +169,10 @@ impl Services {
                 unsafe { &raw mut (*owner).record.part_of_subsidy }
             }
             Source::INDUSTRY => {
-                let shell = unsafe { (self.industry().get)(source.id) };
-                let owner = (self.industry_owner)(shell);
+                let owner = unsafe {
+                    industry::pool(self.shared())
+                        .record(crate::industry_type::IndustryID(source.id))
+                };
                 unsafe { &raw mut (*owner).record.part_of_subsidy }
             }
             _ => unreachable!("subsidy source type"),
@@ -188,10 +203,10 @@ impl Services {
             unsafe { *self.source_flags(Source::town(id as u16)) = 0 };
             id = (self.shared().town_next_id)(id + 1);
         }
-        let mut id = (self.next_industry)(0);
-        while id != u32::MAX {
-            unsafe { *self.source_flags(Source::industry(id as u16)) = 0 };
-            id = (self.next_industry)(id + 1);
+        let mut from = 0;
+        while let Some(entry) = industry::next(self.industry(), from) {
+            unsafe { *self.source_flags(Source::industry(entry.id.0)) = 0 };
+            from = u32::from(entry.id.0) + 1;
         }
         self.each(|_, state| {
             let (src, dst) = unsafe { ((*state).src, (*state).dst) };
@@ -357,11 +372,11 @@ impl Services {
         if !self.can_allocate() {
             return false;
         }
-        let shell = industry::random_industry(self.industry());
-        if shell.is_null() {
+        let entry = industry::random_entry(self.industry());
+        if entry.industry.is_null() {
             return false;
         }
-        let state = (self.industry_owner)(shell);
+        let state = entry.owner;
         let count = unsafe { industry::subsidy_produced_count(state) };
         if count == 0 {
             return false;
@@ -375,7 +390,7 @@ impl Services {
         {
             return false;
         }
-        self.destination(scratch, cargo, Source::industry((self.industry_id)(shell)))
+        self.destination(scratch, cargo, Source::industry(entry.id.0))
     }
     fn destination(&self, scratch: Cargo, cargo: u8, src: Source) -> bool {
         let dst = if crate::random_func::chance16_i(1, 2, self.shared().random()) {
@@ -386,14 +401,14 @@ impl Services {
             }
             Source::town(town.id.0)
         } else {
-            let shell = industry::random_industry(self.industry());
-            if shell.is_null() {
+            let entry = industry::random_entry(self.industry());
+            if entry.industry.is_null() {
                 return false;
             }
-            if !unsafe { industry::subsidy_accepts((self.industry_owner)(shell), cargo) } {
+            if !unsafe { industry::subsidy_accepts(entry.owner, cargo) } {
                 return false;
             }
-            Source::industry((self.industry_id)(shell))
+            Source::industry(entry.id.0)
         };
         if src == dst || !self.distance(src, dst) || self.duplicate(cargo, src, dst) {
             return false;
@@ -579,8 +594,8 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command_abi(
         || (s.shared().current_company)() != crate::company_type::OWNER_DEITY
         || cargo >= NUM_CARGO
         || !(s.cargo_valid)(cargo)
-        || !(s.valid_source)(src)
-        || !(s.valid_source)(dst)
+        || !s.valid_source(src)
+        || !s.valid_source(dst)
     {
         return u8::from(false);
     }
@@ -612,10 +627,6 @@ crate::abi::layouts! {
         town,
         industry,
         pool,
-        industry_owner,
-        industry_id,
-        next_industry,
-        valid_source,
         allocate,
         destroy,
         duration,

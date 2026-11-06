@@ -2,6 +2,7 @@
 #ifndef SIMULATION_SESSION_FIXTURE_HPP
 #define SIMULATION_SESSION_FIXTURE_HPP
 #include "../../src/rust/session_ffi.h"
+#include "../../src/rust/pool_ffi.h"
 #include "../../src/tests/fixture_map.hpp"
 #include "../../src/rust/fleet_ffi.h"
 #include "../../src/rust/station_lifecycle_ffi.h"
@@ -22,6 +23,8 @@ struct SessionFixture {
 	uint16_t recalc_interval = 4, industry_cargo_scale = 100;
 	bool ambient = false;
 	OpenTTDSharedServices shared{};
+	RustPoolDescriptor empty_industry_pool{};
+	const RustPoolDescriptor *empty_industry_view = &empty_industry_pool;
 	OpenTTDClockServices clock{};
 	OpenTTDLandscapeLoopServices tiles{};
 	OpenTTDStationLifecycleServices station_tiles{};
@@ -97,7 +100,7 @@ struct SessionFixture {
 		finance.company_finances = [](uint8_t) noexcept -> CompanyFinances * { return nullptr; };
 		companies.company_next = [](uint32_t) noexcept { return OpenTTDCompanyRef{nullptr, UINT32_MAX}; };
 		industries.shared = &shared;
-		industries.next_tick = [](uint32_t) noexcept { return OpenTTDIndustryEntry{}; };
+		shared.industry_pool = &empty_industry_view;
 		world.industry = &industries;
 		clock.shared = &shared;
 		clock.minutes_per_calendar_year = []() noexcept -> uint16_t { return 0; };
