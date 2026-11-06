@@ -651,10 +651,10 @@ static bool LoadOldTown(LoadgameState &ls, int num)
 			t->Record().townnametype = t->Record().townnametype == 0x10B6 ? 0x20C1 : t->Record().townnametype + 0x2A00;
 		}
 		/* Passengers and mail were always treated as slots 0 and 2 in older saves. */
-		auto &pass = t->supplied.emplace_back(0);
+		auto &pass = t->Supplied().emplace_back(0);
 		pass.history[LAST_MONTH] = _old_pass_supplied[LAST_MONTH];
 		pass.history[THIS_MONTH] = _old_pass_supplied[THIS_MONTH];
-		auto &mail = t->supplied.emplace_back(2);
+		auto &mail = t->Supplied().emplace_back(2);
 		mail.history[LAST_MONTH] = _old_mail_supplied[LAST_MONTH];
 		mail.history[THIS_MONTH] = _old_mail_supplied[THIS_MONTH];
 	} else {

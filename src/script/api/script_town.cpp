@@ -94,7 +94,7 @@
 	const Town *t = ::Town::Get(town_id);
 
 	auto it = t->GetCargoSupplied(cargo_type);
-	if (it == std::end(t->supplied)) return 0;
+	if (it == std::end(t->Supplied())) return 0;
 
 	return it->history[LAST_MONTH].production;
 }
@@ -107,7 +107,7 @@
 	const Town *t = ::Town::Get(town_id);
 
 	auto it = t->GetCargoSupplied(cargo_type);
-	if (it == std::end(t->supplied)) return 0;
+	if (it == std::end(t->Supplied())) return 0;
 
 	return it->history[LAST_MONTH].transported;
 }

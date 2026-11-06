@@ -1884,7 +1884,7 @@ struct TownCargoGraphWindow : BaseCargoGraphWindow {
 	{
 		CargoTypes cargo_types{};
 		const Town *t = Town::Get(window_number);
-		for (const auto &s : t->supplied) {
+		for (const auto &s : t->Supplied()) {
 			if (IsValidCargoType(s.cargo)) SetBit(cargo_types, s.cargo);
 		}
 		return cargo_types;
@@ -1923,7 +1923,7 @@ struct TownCargoGraphWindow : BaseCargoGraphWindow {
 		const Town *t = Town::Get(this->window_number);
 
 		this->data.clear();
-		for (const auto &s : t->supplied) {
+		for (const auto &s : t->Supplied()) {
 			if (!IsValidCargoType(s.cargo)) continue;
 			const CargoSpec *cs = CargoSpec::Get(s.cargo);
 

@@ -403,7 +403,7 @@ public:
 			for (const CargoSpec *cs : CargoSpec::town_production_cargoes[tpe]) {
 				CargoType cargo_type = cs->Index();
 				auto it = this->town->GetCargoSupplied(cargo_type);
-				if (it == std::end(this->town->supplied)) {
+				if (it == std::end(this->town->Supplied())) {
 					DrawString(tr, GetString(str_last_period, 1ULL << cargo_type, 0, 0));
 				} else {
 					DrawString(tr, GetString(str_last_period, 1ULL << cargo_type, it->history[LAST_MONTH].transported, it->history[LAST_MONTH].production));

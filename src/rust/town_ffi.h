@@ -24,7 +24,8 @@ struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
 
 struct OpenTTDHouseServices;
 struct OpenTTDTownSuppliedHistory { uint32_t production, transported; };
-struct OpenTTDTownSupplied { uint8_t cargo; OpenTTDTownSuppliedHistory history[61]; };
+struct TownSuppliedCargo;
+using OpenTTDTownSupplied = TownSuppliedCargo;
 struct OpenTTDTownSuppliedEntry { OpenTTDTownSupplied *entry; bool created; };
 struct OpenTTDTownSlots { void *data; size_t size; };
 using OpenTTDTownStationActivity = OpenTTDStationActivity;
@@ -92,12 +93,11 @@ void openttd_rust_town_authority_station(const OpenTTDTownAuthorityServices *, c
 void openttd_rust_town_authority_remove(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, const OpenTTDTownHandle *, bool, uint8_t);
 void openttd_rust_town_update_radius(OpenTTDTownState *);
 uint32_t openttd_rust_town_world_population(const OpenTTDSharedServices *);
-OpenTTDTownSlots openttd_rust_town_supplied_view(OpenTTDTownState *);
 OpenTTDTownSuppliedEntry openttd_rust_town_supplied_entry(OpenTTDTownState *, uint8_t);
 size_t openttd_rust_town_supplied_find(const OpenTTDTownState *, uint8_t);
 uint8_t openttd_rust_town_percent_transported(const OpenTTDTownSuppliedHistory *);
-void openttd_rust_town_supplied_reserve(OpenTTDTownState *, size_t);
-OpenTTDTownSupplied *openttd_rust_town_supplied_insert(OpenTTDTownState *, size_t, uint8_t);
+void openttd_rust_town_supplied_reserve(void *, size_t);
+OpenTTDTownSupplied *openttd_rust_town_supplied_insert(void *, size_t, uint8_t);
 void openttd_rust_town_id_counts_resize(OpenTTDTownState *, size_t);
 OpenTTDTownSlots openttd_rust_town_global_id_counts();
 void openttd_rust_town_global_id_counts_resize(size_t);

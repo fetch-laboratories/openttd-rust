@@ -35,22 +35,22 @@ TEST_CASE("Town lifecycle - canonical metadata, histories and descriptor aliases
 	CHECK(a->Record().shell == a);
 	a->GetOrCreateCargoSupplied(5).history[THIS_MONTH].production = 123;
 	a->GetOrCreateCargoSupplied(2).history[LAST_MONTH].transported = 77;
-	const auto view = openttd_rust_town_supplied_view(a->growth_owner.get());
-	REQUIRE(view.size == 2);
-	const auto *slots = static_cast<const OpenTTDTownSupplied *>(view.data);
+	const auto &view = a->Supplied();
+	REQUIRE(view.size() == 2);
+	const auto *slots = view.data();
 	CHECK((slots[0].cargo == 2 && slots[0].history[LAST_MONTH].transported == 77));
 	CHECK((slots[1].cargo == 5 && slots[1].history[THIS_MONTH].production == 123));
 	CHECK(a->GetOrCreateCargoSupplied(5).history[THIS_MONTH].production == 123);
 	CHECK(a->GetCargoSupplied(2)->history[LAST_MONTH].transported == 77);
-	CHECK(a->GetCargoSupplied(3) == a->supplied.end());
-	CHECK(a->GetCargoSupplied(INVALID_CARGO) == a->supplied.end());
+	CHECK(a->GetCargoSupplied(3) == a->Supplied().end());
+	CHECK(a->GetCargoSupplied(INVALID_CARGO) == a->Supplied().end());
 	const auto snapshot = a->CopyTownCache();
 	a->Record().population = 1000;
 	CHECK((snapshot.population == 999 && snapshot != a->CopyTownCache()));
 	_town_pool.CleanPool();
 	CHECK(GetWorldPopulation() == 0);
 	a = new (TownID(17)) Town();
-	CHECK((a->supplied.empty() && a->Record().population == 0));
+	CHECK((a->Supplied().empty() && a->Record().population == 0));
 	_town_pool.CleanPool();
 }
 

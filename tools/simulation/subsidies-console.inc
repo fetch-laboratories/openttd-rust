@@ -106,7 +106,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "SUBSIDY retries {}\n", retries); SubsidyClean();
 	_settings_game.linkgraph.distribution_pax = _settings_game.linkgraph.distribution_mail = _settings_game.linkgraph.distribution_armoured = _settings_game.linkgraph.distribution_default = DT_MANUAL;
 	std::vector<std::pair<Town *, uint32_t>> populations; std::vector<std::pair<uint32_t *, uint32_t>> histories;
-	for (Town *t : Town::Iterate()) { populations.emplace_back(t, FIXTURE_TOWN_CACHE(t).population); FIXTURE_TOWN_CACHE(t).population = 0; for (auto &entry : t->supplied) { auto &count = entry.history[LAST_MONTH].transported; histories.emplace_back(&count, count); count = 0; } }
+	for (Town *t : Town::Iterate()) { populations.emplace_back(t, FIXTURE_TOWN_CACHE(t).population); FIXTURE_TOWN_CACHE(t).population = 0; for (auto &entry : FIXTURE_TOWN_SUPPLIED(t)) { auto &count = entry.history[LAST_MONTH].transported; histories.emplace_back(&count, count); count = 0; } }
 	SubsidyChance(0); SubsidyMonthlyLoop(); fmt::print(stderr, "SUBSIDY retry-rng {} {}\n", _random.state[0], _random.state[1]);
 	for (auto [t, value] : populations) { FIXTURE_TOWN_CACHE(t).population = 2000; }
 	bool found[3]{}; uint index = 0;

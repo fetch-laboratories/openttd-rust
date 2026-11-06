@@ -50,6 +50,24 @@ enum class TownFlag : uint8_t {
 
 using TownFlags = EnumBitSet<TownFlag, uint8_t>;
 
+struct TownSuppliedHistory {
+	uint32_t production = 0; ///< Total produced
+	uint32_t transported = 0; ///< Total transported
+
+	uint8_t PctTransported() const
+	{
+		return openttd_rust_town_percent_transported(reinterpret_cast<const OpenTTDTownSuppliedHistory *>(this));
+	}
+};
+
+struct TownSuppliedCargo {
+	CargoType cargo = INVALID_CARGO;
+	HistoryData<TownSuppliedHistory> history{};
+
+	TownSuppliedCargo() = default;
+	TownSuppliedCargo(CargoType cargo) : cargo(cargo) {}
+};
+
 /* The shared town record, generated from Rust; its field types are declared above. */
 #include "abi-record-town_record.h"
 
@@ -93,35 +111,17 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	RustTownName name{growth_owner.get()};
 	mutable std::string cached_name_presentation{}; ///< Native string reference for formatting and GUI callers.
 
-	struct SuppliedHistory {
-		uint32_t production = 0; ///< Total produced
-		uint32_t transported = 0; ///< Total transported
-
-		uint8_t PctTransported() const
-		{
-			return openttd_rust_town_percent_transported(reinterpret_cast<const OpenTTDTownSuppliedHistory *>(this));
-		}
-	};
-
-	struct SuppliedCargo {
-		CargoType cargo = INVALID_CARGO;
-		HistoryData<SuppliedHistory> history{};
-
-		SuppliedCargo() = default;
-		SuppliedCargo(CargoType cargo) : cargo(cargo) {}
-	};
-
+	using SuppliedHistory = TownSuppliedHistory;
+	using SuppliedCargo = TownSuppliedCargo;
 	static_assert(sizeof(SuppliedHistory) == sizeof(OpenTTDTownSuppliedHistory));
 	static_assert(alignof(SuppliedHistory) == alignof(OpenTTDTownSuppliedHistory));
 	static_assert(offsetof(SuppliedHistory, production) == offsetof(OpenTTDTownSuppliedHistory, production));
 	static_assert(offsetof(SuppliedHistory, transported) == offsetof(OpenTTDTownSuppliedHistory, transported));
-	static_assert(HISTORY_RECORDS == 61 && sizeof(SuppliedCargo) == sizeof(OpenTTDTownSupplied));
-	static_assert(alignof(SuppliedCargo) == alignof(OpenTTDTownSupplied));
-	static_assert(offsetof(SuppliedCargo, cargo) == offsetof(OpenTTDTownSupplied, cargo));
-	static_assert(offsetof(SuppliedCargo, history) == offsetof(OpenTTDTownSupplied, history));
+	static_assert(HISTORY_RECORDS == 61);
 	using SuppliedCargoes = RustTownSupplied<SuppliedCargo>;
 
-	SuppliedCargoes supplied{growth_owner.get()};
+	SuppliedCargoes &Supplied() { return this->Record().supplied; }
+	const SuppliedCargoes &Supplied() const { return this->Record().supplied; }
 
 	bool HasText() const { return openttd_rust_town_text(this->growth_owner.get()).size != 0; }
 	EncodedString GetText() const
@@ -136,21 +136,21 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	{
 		assert(IsValidCargoType(cargo));
 		auto result = openttd_rust_town_supplied_entry(this->growth_owner.get(), cargo);
-		auto *entry = reinterpret_cast<SuppliedCargo *>(result.entry);
+		auto *entry = result.entry;
 		if (result.created) new (entry) SuppliedCargo(cargo);
 		return *entry;
 	}
 
 	inline SuppliedCargoes::const_iterator GetCargoSupplied(CargoType cargo) const
 	{
-		if (!IsValidCargoType(cargo)) return std::end(this->supplied);
-		return this->supplied.data() + openttd_rust_town_supplied_find(this->growth_owner.get(), cargo);
+		if (!IsValidCargoType(cargo)) return std::end(this->Supplied());
+		return this->Supplied().data() + openttd_rust_town_supplied_find(this->growth_owner.get(), cargo);
 	}
 
 	inline uint8_t GetPercentTransported(CargoType cargo_type) const
 	{
 		auto it = this->GetCargoSupplied(cargo_type);
-		if (it == std::end(this->supplied)) return 0;
+		if (it == std::end(this->Supplied())) return 0;
 
 		return it->history[LAST_MONTH].PctTransported();
 	}

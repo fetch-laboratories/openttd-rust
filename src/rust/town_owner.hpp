@@ -33,26 +33,21 @@ using RustTownOwner = std::unique_ptr<OpenTTDTownState, RustTownDelete>;
 
 /** Nonowning native views of the sole Rust supplied-history vector. Native
  * trivial slot lifetimes start on insertion; Rust alone allocates and frees. */
-template <typename T> class RustTownSupplied {
-	OpenTTDTownState *owner;
-public:
+template <typename T> struct RustTownSupplied : RustVector<T> {
 	using value_type = T;
 	using iterator = T *;
 	using const_iterator = const T *;
-	explicit RustTownSupplied(OpenTTDTownState *owner) : owner(owner) {}
-	T *data() { return static_cast<T *>(openttd_rust_town_supplied_view(this->owner).data); }
-	const T *data() const { return static_cast<const T *>(openttd_rust_town_supplied_view(this->owner).data); }
-	size_t size() const { return openttd_rust_town_supplied_view(this->owner).size; }
-	bool empty() const { return this->size() == 0; }
+	T *data() { return const_cast<T *>(this->items); }
+	const T *data() const { return this->items; }
 	iterator begin() { return this->data(); }
 	const_iterator begin() const { return this->data(); }
-	iterator end() { const auto v = openttd_rust_town_supplied_view(this->owner); return static_cast<T *>(v.data) + v.size; }
-	const_iterator end() const { const auto v = openttd_rust_town_supplied_view(this->owner); return static_cast<const T *>(v.data) + v.size; }
-	void reserve(size_t count) { openttd_rust_town_supplied_reserve(this->owner, count); }
+	iterator end() { return this->data() + this->count; }
+	const_iterator end() const { return this->data() + this->count; }
+	void reserve(size_t count) { openttd_rust_town_supplied_reserve(this, count); }
 	iterator emplace(iterator at, uint8_t cargo)
 	{
 		const size_t offset = this->empty() ? 0 : at - this->begin();
-		auto *slot = reinterpret_cast<T *>(openttd_rust_town_supplied_insert(this->owner, offset, cargo));
+		auto *slot = openttd_rust_town_supplied_insert(this, offset, cargo);
 		return new (slot) T(cargo);
 	}
 	T &emplace_back(uint8_t cargo = UINT8_MAX) { return *this->emplace(this->end(), cargo); }

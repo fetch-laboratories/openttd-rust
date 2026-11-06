@@ -103,6 +103,7 @@ crate::abi::shared_records! {
         pub stations_near: crate::station::StationList => "OpenTTDStationList",
         pub id_counts: crate::industrytype::NativeVec<u16> => "RustVector<uint16_t>",
         pub class_counts: crate::industrytype::NativeVec<u16> => "RustVector<uint16_t>",
+        pub supplied: crate::industrytype::NativeVec<Supplied> => "RustTownSupplied<TownSuppliedCargo>",
     }
 }
 impl Default for TownRecord {
@@ -140,6 +141,7 @@ impl Default for TownRecord {
             stations_near: crate::station::StationList::default(),
             id_counts: crate::industrytype::NativeVec::new(),
             class_counts: crate::industrytype::NativeVec::new(),
+            supplied: crate::industrytype::NativeVec::new(),
         }
     }
 }
@@ -176,7 +178,6 @@ pub struct State {
     pub(crate) record: TownRecord,
     name: Vec<u8>,
     text: Vec<u8>,
-    supplied: Vec<Supplied>,
 }
 /// The record of a live town owner: its first member, at the same address.
 #[inline]
@@ -229,7 +230,7 @@ unsafe fn supplied_history(state: *const State, cargo: u8, period: u8) -> Option
     }
     let index = unsafe { openttd_rust_town_supplied_find(state, cargo) };
     unsafe {
-        let rows = &(*state).supplied;
+        let rows = &(*state).record.supplied;
         rows.get(index).map(|s| s.history[usize::from(period)])
     }
 }
@@ -415,30 +416,27 @@ pub unsafe extern "C" fn openttd_rust_town_storage_replace(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_supplied_view(state: *mut State) -> Slots {
-    // SAFETY: Serialized shell-owned vector. Views end before reserve/insert.
-    let supplied = unsafe { &mut (*state).supplied };
-    Slots {
-        data: supplied.as_mut_ptr().cast(),
-        size: supplied.len(),
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_supplied_reserve(state: *mut State, capacity: usize) {
-    // SAFETY: No native vector views survive mutation, matching std::vector.
-    let supplied = unsafe { &mut (*state).supplied };
-    if capacity > supplied.len() {
-        supplied.reserve(capacity - supplied.len());
+pub unsafe extern "C" fn openttd_rust_town_supplied_reserve(
+    supplied: *mut crate::industrytype::NativeVec<Supplied>,
+    capacity: usize,
+) {
+    // SAFETY: No native vector view survives the Rust allocation operation.
+    unsafe {
+        (*supplied).edit(|rows| {
+            if capacity > rows.len() {
+                rows.reserve(capacity - rows.len());
+            }
+        });
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_supplied_insert(
-    state: *mut State,
+    supplied: *mut crate::industrytype::NativeVec<Supplied>,
     at: usize,
     cargo: u8,
 ) -> *mut Supplied {
     // SAFETY: Native facade supplies the source's valid insertion position.
-    let supplied = unsafe { &mut (*state).supplied };
+    let supplied = unsafe { &mut *supplied };
     supplied.insert(
         at,
         Supplied {
@@ -457,7 +455,7 @@ pub struct SuppliedEntry {
 }
 unsafe fn supplied_entry(state: *mut State, cargo: u8) -> SuppliedEntry {
     // SAFETY: Live sole owner, no native vector views survive its mutation.
-    let rows = unsafe { &mut (*state).supplied };
+    let rows = unsafe { &mut (*state).record.supplied };
     let at = rows.partition_point(|row| row.cargo < cargo);
     let created = at == rows.len() || rows[at].cargo != cargo;
     if created {
@@ -485,7 +483,7 @@ pub unsafe extern "C" fn openttd_rust_town_supplied_entry(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_supplied_find(state: *const State, cargo: u8) -> usize {
     // SAFETY: Immediate shared owner access, with no callbacks or mutation.
-    let rows = unsafe { &(*state).supplied };
+    let rows = unsafe { &(*state).record.supplied };
     let at = rows.partition_point(|row| row.cargo < cargo);
     if at == rows.len() || rows[at].cargo != cargo {
         rows.len()
@@ -2278,7 +2276,7 @@ impl Engine<'_> {
             state.record.valid_history =
                 crate::history::update(state.record.valid_history, range, u32::from(month));
         }
-        for supplied in &mut state.supplied {
+        for supplied in &mut state.record.supplied {
             for range in history_ranges() {
                 if !month.is_multiple_of(range.total_division) {
                     continue;
@@ -2472,7 +2470,7 @@ pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8)
     if !crate::cargo_type::is_valid_cargo_type(cargo) {
         return 0;
     }
-    let rows = unsafe { &(*state).supplied };
+    let rows = unsafe { &(*state).record.supplied };
     let at = unsafe { openttd_rust_town_supplied_find(state, cargo) };
     if at == rows.len() {
         return 0;
