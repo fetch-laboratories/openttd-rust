@@ -119,3 +119,57 @@ impl crate::map_func::World<'_> {
         gb(u32::from(Self::byte(self.types.m5(t))), 0, 2) as u8
     }
 }
+
+/// Native `RailTileType` with its unchanged uint8 representation.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RailTileType(pub u8);
+
+/// Native `RailGroundType` with its unchanged uint8 representation.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct RailGroundType(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl RailTileType {
+    /// Normal rail tile without signals
+    pub const Normal: Self = Self(0);
+    /// Normal rail tile with signals
+    pub const Signals: Self = Self(1);
+    /// Depot (one entrance)
+    pub const Depot: Self = Self(3);
+}
+
+#[allow(non_upper_case_globals)]
+impl RailGroundType {
+    /// Nothing (dirt)
+    pub const Barren: Self = Self(0);
+    /// Grassy
+    pub const Grass: Self = Self(1);
+    /// Grass with a fence at the NW edge
+    pub const FenceNW: Self = Self(2);
+    /// Grass with a fence at the SE edge
+    pub const FenceSE: Self = Self(3);
+    /// Grass with a fence at the NW and SE edges
+    pub const FenceSENW: Self = Self(4);
+    /// Grass with a fence at the NE edge
+    pub const FenceNE: Self = Self(5);
+    /// Grass with a fence at the SW edge
+    pub const FenceSW: Self = Self(6);
+    /// Grass with a fence at the NE and SW edges
+    pub const FenceNESW: Self = Self(7);
+    /// Grass with a fence at the eastern side
+    pub const FenceVert1: Self = Self(8);
+    /// Grass with a fence at the western side
+    pub const FenceVert2: Self = Self(9);
+    /// Grass with a fence at the southern side
+    pub const FenceHoriz1: Self = Self(10);
+    /// Grass with a fence at the northern side
+    pub const FenceHoriz2: Self = Self(11);
+    /// Icy or sandy
+    pub const SnowOrDesert: Self = Self(12);
+    /// Grass with a fence and shore or water on the free halftile
+    pub const HalfTileWater: Self = Self(13);
+    /// Snow only on higher part of slope (steep or one corner raised)
+    pub const HalfTileSnow: Self = Self(14);
+}

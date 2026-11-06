@@ -98,3 +98,24 @@ pub(crate) fn is_field_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
             && get_clear_ground(m, t)? == CLEAR_FIELDS,
     )
 }
+
+/// Native `ClearGround` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ClearGround(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl ClearGround {
+    /// 0-3
+    pub const CLEAR_GRASS: Self = Self(0);
+    /// 3
+    pub const CLEAR_ROUGH: Self = Self(1);
+    /// 3
+    pub const CLEAR_ROCKS: Self = Self(2);
+    /// 3
+    pub const CLEAR_FIELDS: Self = Self(3);
+    /// 0-3 (Not stored in map.)
+    pub const CLEAR_SNOW: Self = Self(4);
+    /// 1,3
+    pub const CLEAR_DESERT: Self = Self(5);
+}

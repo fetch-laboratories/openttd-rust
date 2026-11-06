@@ -13,3 +13,10 @@ pub struct Sign {
     _private: [u8; 0],
 }
 pub const MAX_LENGTH_SIGN_NAME_CHARS: usize = 32;
+
+impl SignID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}

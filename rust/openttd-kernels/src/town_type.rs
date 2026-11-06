@@ -45,3 +45,13 @@ pub const TSZ_SMALL: u8 = 0;
 pub const TOWN_EXPAND_BUILDINGS: u8 = 1 << 0;
 /// `TownExpandModes{TownExpandMode::Roads}`.
 pub const TOWN_EXPAND_ROADS: u8 = 1 << 1;
+
+impl TownId {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(64000);
+}
+
+/// Original header spelling for the existing town identity.
+pub use TownId as TownID;

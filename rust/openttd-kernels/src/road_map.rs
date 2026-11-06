@@ -313,3 +313,41 @@ pub(crate) fn has_tile_any_road_type(
     may_have_road(&world.types, crate::tile_type::TileIndex(tile)).expect("map tile")
         && get_present_road_types(world, tile) & types != 0
 }
+
+/// Native `Roadside` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Roadside(pub u8);
+
+/// Native road tile kind.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RoadTileType(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl RoadTileType {
+    /// Normal road
+    pub const Normal: Self = Self(0);
+    /// Level crossing
+    pub const Crossing: Self = Self(1);
+    /// Depot (one entrance)
+    pub const Depot: Self = Self(2);
+}
+
+#[allow(non_upper_case_globals)]
+impl Roadside {
+    /// Road on barren land
+    pub const Barren: Self = Self(0);
+    /// Road on grass
+    pub const Grass: Self = Self(1);
+    /// Road with paved sidewalks
+    pub const Paved: Self = Self(2);
+    /// Road with street lights on paved sidewalks
+    pub const StreetLights: Self = Self(3);
+    /// Road with trees on paved sidewalks
+    pub const Trees: Self = Self(5);
+    /// Road on grass with road works
+    pub const GrassRoadWorks: Self = Self(6);
+    /// Road with sidewalks and road works
+    pub const PavedRoadWorks: Self = Self(7);
+}

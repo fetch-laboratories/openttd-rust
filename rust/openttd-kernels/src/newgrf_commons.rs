@@ -76,11 +76,18 @@ pub(crate) fn airport_tile_check_valid_new_id(id: u16) -> bool {
 }
 
 /// Keys of `StandardGRFFileProps`.
-#[repr(u8)]
-#[derive(Clone, Copy)]
-pub enum StandardSpriteGroup {
-    /// Binding used by existing entities.
-    Default = 0,
-    /// Binding used by the purchase list.
-    Purchase = 1,
+
+/// Native `StandardSpriteGroup`, retaining every underlying `i32` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StandardSpriteGroup(pub i32);
+
+#[allow(non_upper_case_globals)]
+impl StandardSpriteGroup {
+    /// Default type used when no more-specific group matches.
+    pub const Default: Self = Self(0);
+    /// Used before an entity exists.
+    pub const Purchase: Self = Self(1);
+    /// Native `End`.
+    pub const End: Self = Self(2);
 }

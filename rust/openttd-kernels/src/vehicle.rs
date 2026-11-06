@@ -27,25 +27,6 @@ pub use crate::vehicle_type::OpenTTDVehicle;
 /// including sentinels and unnamed values, without Rust enum validity constraints.
 pub use crate::vehicle_type::VehicleType;
 
-/// Native `OrderType : uint8_t`, including every unnamed byte pattern.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct OrderType(pub u8);
-
-/// Native `RailVehicleTypes : uint8_t`, with the same unrestricted byte domain.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct RailVehicleTypes(pub u8);
-
-impl RailVehicleTypes {
-    /// Native `RAILVEH_SINGLEHEAD`.
-    pub const SINGLEHEAD: Self = Self(0);
-    /// Native `RAILVEH_MULTIHEAD`.
-    pub const MULTIHEAD: Self = Self(1);
-    /// Native `RAILVEH_WAGON`.
-    pub const WAGON: Self = Self(2);
-}
-
 /// Non-null live vehicle handle; `Option<VehicleRef>` crosses as a nullable pointer.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -439,3 +420,9 @@ mod tests {
         assert_eq!(advance_distance(3), 192);
     }
 }
+
+/// Compatibility import of the original header type.
+pub use crate::order_type::OrderType;
+
+/// Compatibility import of the original header type.
+pub use crate::engine_type::RailVehicleTypes;

@@ -7,11 +7,46 @@
 
 //! Named cache flags from `subsidy_type.h`.
 /// Native `PartOfSubsidy : uint8_t`.
-#[repr(u8)]
-#[derive(Clone, Copy)]
-pub enum PartOfSubsidy {
-    /// Source of a subsidised route.
-    Source = 0,
-    /// Destination of a subsidised route.
-    Destination = 1,
+
+/// Native `PartOfSubsidy`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PartOfSubsidy(pub u8);
+
+#[allow(non_upper_case_globals)]
+impl PartOfSubsidy {
+    /// town/industry is source of subsidised path
+    pub const Source: Self = Self(0);
+    /// town/industry is destination of subsidised path
+    pub const Destination: Self = Self(1);
+}
+
+/// Native `PartsOfSubsidy`, retaining every underlying `u8` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PartsOfSubsidy(pub u8);
+
+impl PartsOfSubsidy {
+    /// Empty native bit set.
+    pub const EMPTY: Self = Self(0);
+    /// Set containing the named element (the element is a bit position).
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn from_element(element: PartOfSubsidy) -> Self {
+        Self((1_u64 << element.0) as u8)
+    }
+}
+
+/// Native `SubsidyID`, retaining every underlying `u16` value.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SubsidyID(pub u16);
+
+impl SubsidyID {
+    /// Native `PoolID::Begin()`.
+    pub const BEGIN: Self = Self(0);
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(256);
+    /// Native `PoolID::Invalid()`.
+    pub const INVALID: Self = Self(65535);
 }

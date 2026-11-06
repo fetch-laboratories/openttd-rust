@@ -77,3 +77,8 @@ pub(crate) const CCA_DELETE: u8 = 2;
 pub(crate) const CRR_NONE: u8 = 0;
 /// `CompanyRemoveReason::CRR_BANKRUPT`.
 pub(crate) const CRR_BANKRUPT: u8 = 2;
+
+impl CompanyID {
+    /// Native `PoolID::End()`.
+    pub const END: Self = Self(15);
+}
