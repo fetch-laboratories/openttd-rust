@@ -13,8 +13,8 @@
 //! preserving the C++ pointer adjustment; Rust never dereferences a handle. Handles
 //! stay live until their owner is retired.
 //!
-//! Each station's rectangle, catchment bitmap and delivery list live in its
-//! `station_service::Service`; town and industry nearby sets live in their Rust
+//! Each station's rectangle, catchment bitmap and delivery list live in its shared
+//! `StationRecord`; town and industry nearby sets live in their Rust
 //! owners. Native facades borrow that storage and never outlive the owner. Every
 //! container borrow is immediate and ends before any service call, so callbacks
 //! may reenter and mutate other owners; cursors re-read live storage at each step.
@@ -23,7 +23,7 @@
 pub(crate) mod spatial;
 
 use crate::base_station_base::{ADD_FORCE, ADD_TEST, ADD_TRY};
-use crate::bitmap_type::{BitmapTileArea, BitmapTileIterator};
+use crate::bitmap_type::BitmapTileIterator;
 use crate::geometry_type::{rect_height, rect_width};
 use crate::industry::tile::ShellHandle;
 use crate::industry_type::IndustryID;
@@ -212,6 +212,18 @@ crate::abi::shared_records! {
         /// Native borrows expire on mutation; this is the only storage metadata.
         pub entries: NativeVec<StationListEntry> => "RustVector<OpenTTDStationListEntry>",
     }
+    /// One `IndustryList` member, ordered by distance and industry index.
+    #[derive(Clone, Copy)]
+    "OpenTTDIndustryListEntry" ["station"] => pub struct IndustryListEntry {
+        pub distance: u32,
+        pub industry: *mut ShellHandle => struct Industry,
+        pub id: IndustryID,
+    }
+    /// The delivery list owned by one station record.
+    #[derive(Default)]
+    "OpenTTDIndustryList" ["station"] => pub struct IndustryList {
+        pub entries: NativeVec<IndustryListEntry> => "RustVector<OpenTTDIndustryListEntry>",
+    }
 }
 impl StationList {
     /// `insert`, ignoring a station already present.
@@ -265,61 +277,45 @@ pub(crate) unsafe fn for_each_station(
     }
 }
 
-/// One `IndustryList` member.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct IndustryListEntry {
-    /// `IndustryListEntry::distance`.
-    pub distance: u32,
-    /// Live industry shell.
-    pub industry: *mut ShellHandle,
-    /// Its pool index, the `IndustryCompare` tie-breaker.
-    pub id: IndustryID,
-}
-/// `IndustryList`: ordered by distance, then industry index.
-#[derive(Default)]
-pub struct IndustryList(Vec<IndustryListEntry>);
 impl IndustryList {
     /// Set `insert`: an equal key is not inserted again.
     pub fn insert(&mut self, entry: IndustryListEntry) {
         if let Err(at) = self
-            .0
+            .entries()
             .binary_search_by_key(&(entry.distance, entry.id), |e| (e.distance, e.id))
         {
-            self.0.insert(at, entry);
+            let mut entries = std::mem::take(&mut self.entries).into_vec();
+            entries.insert(at, entry);
+            self.entries = NativeVec::from_vec(entries);
         }
     }
     fn position(&self, industry: *mut ShellHandle) -> Option<usize> {
-        self.0.iter().position(|e| e.industry == industry)
+        self.entries().iter().position(|e| e.industry == industry)
     }
-    /// `clear`.
+    fn remove(&mut self, position: usize) -> IndustryListEntry {
+        let mut entries = std::mem::take(&mut self.entries).into_vec();
+        let entry = entries.remove(position);
+        self.entries = NativeVec::from_vec(entries);
+        entry
+    }
+    /// `clear`, retaining the allocation.
     pub fn clear(&mut self) {
-        self.0.clear();
+        let mut entries = std::mem::take(&mut self.entries).into_vec();
+        entries.clear();
+        self.entries = NativeVec::from_vec(entries);
     }
     /// The member at `index`, in order.
     #[must_use]
     pub fn get(&self, index: usize) -> Option<IndustryListEntry> {
-        self.0.get(index).copied()
+        self.entries().get(index).copied()
     }
-    /// Ordered members.
+    /// Ordered members; spans end before mutation or callbacks.
     #[must_use]
     pub fn entries(&self) -> &[IndustryListEntry] {
-        &self.0
+        self.entries.as_slice()
     }
 }
 
-/// Catchment state of one `BaseStation`, held by its station service owner.
-#[derive(Default)]
-pub struct Catchment {
-    tiles: BitmapTileArea,
-    industries_near: IndustryList,
-}
-/// The canonical catchment of a live station owner.
-/// # Safety
-/// `state` is live; the pointer is used only for immediate borrows.
-pub(crate) unsafe fn catchment(state: *mut Service) -> *mut Catchment {
-    unsafe { crate::station_service::catchment(state) }
-}
 /// Visit `industries_near` in order, re-reading the live list before each visit.
 /// # Safety
 /// The station owner stays live across every visit.
@@ -329,7 +325,7 @@ pub(crate) unsafe fn for_each_industry_near(
 ) {
     let mut index = 0;
     // SAFETY: Caller contract; the lookup borrow ends before the visit.
-    while let Some(entry) = unsafe { (*catchment(state)).industries_near.get(index) } {
+    while let Some(entry) = unsafe { (*state).record.industries_near.get(index) } {
         if !visit(entry) {
             break;
         }
@@ -341,8 +337,9 @@ pub(crate) unsafe fn for_each_industry_near(
 /// `state` is a live station owner.
 pub(crate) unsafe fn tile_is_in_catchment(state: *mut Service, tile: u32, c: &Ctx<'_>) -> bool {
     unsafe {
-        (*catchment(state))
-            .tiles
+        (*state)
+            .record
+            .catchment_tiles
             .has_tile(tile, c.map, |ok| c.check(ok))
     }
 }
@@ -372,7 +369,6 @@ pub struct CatchmentServices {
     pub station: *const crate::station_service::World,
     /// `MoveGoodsToStation`'s vehicle visit services.
     pub visits: *const crate::vehicle::visits::Services,
-    pub station_count: extern "C" fn() -> usize,
     pub id: extern "C" fn(*mut BaseStation) -> StationID,
     pub modified_catchment: extern "C" fn() -> bool,
     pub spread: extern "C" fn() -> u8,
@@ -519,10 +515,10 @@ pub(crate) fn add_industry_to_deliver(
         .distance_max(crate::station_record::xy(st.cast()), tile);
     // SAFETY: Live owner; the list borrow ends before the industry services.
     unsafe {
-        let list = &mut (*catchment(state)).industries_near;
+        let list = &mut (*state).record.industries_near;
         if let Some(pos) = list.position(ind) {
-            if list.0[pos].distance > distance {
-                let mut entry = list.0.remove(pos);
+            if list.entries()[pos].distance > distance {
+                let mut entry = list.remove(pos);
                 entry.distance = distance;
                 list.insert(entry);
             }
@@ -535,13 +531,11 @@ pub(crate) fn add_industry_to_deliver(
     let id = (c.c.industry_id)(ind);
     // SAFETY: Live owner; immediate mutation.
     unsafe {
-        (*catchment(state))
-            .industries_near
-            .insert(IndustryListEntry {
-                distance,
-                industry: ind,
-                id,
-            });
+        (*state).record.industries_near.insert(IndustryListEntry {
+            distance,
+            industry: ind,
+            id,
+        });
     }
 }
 /// `Station::RemoveIndustryToDeliver`.
@@ -549,9 +543,9 @@ pub(crate) fn add_industry_to_deliver(
 /// `state` is a live station owner.
 pub(crate) unsafe fn remove_industry_to_deliver(state: *mut Service, ind: *mut ShellHandle) {
     unsafe {
-        let list = &mut (*catchment(state)).industries_near;
+        let list = &mut (*state).record.industries_near;
         if let Some(pos) = list.position(ind) {
-            list.0.remove(pos);
+            list.remove(pos);
         }
     }
 }
@@ -564,7 +558,7 @@ pub(crate) unsafe fn set_neutral_industry(
     id: IndustryID,
 ) {
     unsafe {
-        let list = &mut (*catchment(state)).industries_near;
+        let list = &mut (*state).record.industries_near;
         list.clear();
         list.insert(IndustryListEntry {
             distance: 0,
@@ -585,7 +579,7 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
     let mut towns = Vec::new();
     let mut industries = Vec::new();
     // SAFETY: Live owner; immediate geometry copy.
-    let area = unsafe { (*catchment(state)).tiles.area };
+    let area = unsafe { (*state).record.catchment_tiles.area };
     for tile in area.tiles(c.map) {
         let kind = (c.s.tile_type)(tile);
         if kind == MP_HOUSE {
@@ -610,7 +604,7 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
 /// # Safety
 /// `state` is a live station owner.
 pub(crate) unsafe fn catchment_covers_town(state: *mut Service, town: u16, c: &Ctx<'_>) -> bool {
-    let bitmap = unsafe { &raw const (*catchment(state)).tiles };
+    let bitmap = unsafe { &raw const (*state).record.catchment_tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
     while it.tile() != INVALID_TILE {
@@ -626,13 +620,13 @@ pub(crate) unsafe fn catchment_covers_town(state: *mut Service, town: u16, c: &C
 pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: bool, c: &Ctx<'_>) {
     let state = crate::station_record::service_of(st.cast());
     // SAFETY: Live owner; immediate mutation.
-    unsafe { (*catchment(state)).industries_near.clear() };
+    unsafe { (*state).record.industries_near.clear() };
     if !no_clear_nearby_lists {
         remove_from_all_nearby_lists(st, state, c);
     }
     // SAFETY: Live owner; immediate access.
     if unsafe { rect_is_empty(state) } {
-        unsafe { (*catchment(state)).tiles.reset() };
+        unsafe { (*state).record.catchment_tiles.reset() };
         return;
     }
     let industry = crate::station_record::read(st.cast(), |r| r.industry.cast::<ShellHandle>());
@@ -640,14 +634,15 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         // The station is associated with an industry, so it only delivers there.
         let location = crate::industry::location((c.c.industry_owner)(industry));
         // SAFETY: Live owner; immediate mutation.
-        unsafe { (*catchment(state)).tiles.initialize(location) };
+        unsafe { (*state).record.catchment_tiles.initialize(location) };
         let industry_id = (c.c.industry_id)(industry);
         for tile in location.tiles(c.map) {
             if (c.s.tile_type)(tile) == MP_INDUSTRY && c.industry_index(tile) == industry_id {
                 // SAFETY: Live owner; immediate mutation.
                 unsafe {
-                    (*catchment(state))
-                        .tiles
+                    (*state)
+                        .record
+                        .catchment_tiles
                         .set_tile(tile, c.map, |ok| c.check(ok));
                 };
             }
@@ -664,21 +659,20 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
             });
             (*list).clear();
             (*list).insert(st, (c.c.id)(st));
-            (*catchment(state))
-                .industries_near
-                .insert(IndustryListEntry {
-                    distance: 0,
-                    industry,
-                    id: industry_id,
-                });
+            (*state).record.industries_near.insert(IndustryListEntry {
+                distance: 0,
+                industry,
+                id: industry_id,
+            });
         }
         return;
     }
     let r = catchment_rect(st, state, c);
     // SAFETY: Live owner; immediate mutation.
     unsafe {
-        (*catchment(state))
-            .tiles
+        (*state)
+            .record
+            .catchment_tiles
             .initialize_rect(r.left, r.top, r.right, r.bottom, c.map);
     }
     // Loop finding all station tiles.
@@ -705,15 +699,16 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         for tile2 in ta2.tiles(c.map) {
             // SAFETY: Live owner; immediate mutation.
             unsafe {
-                (*catchment(state))
-                    .tiles
+                (*state)
+                    .record
+                    .catchment_tiles
                     .set_tile(tile2, c.map, |ok| c.check(ok));
             };
         }
     }
     // Search catchment tiles for towns and industries.
     // SAFETY: Live owner; the cursor re-reads the bitmap at each step.
-    let bitmap = unsafe { &raw const (*catchment(state)).tiles };
+    let bitmap = unsafe { &raw const (*state).record.catchment_tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
     while it.tile() != INVALID_TILE {
@@ -764,7 +759,8 @@ pub(crate) fn for_all_stations_around_tiles(
     c: &Ctx<'_>,
     mut func: impl FnMut(StationListEntry, u32) -> bool,
 ) {
-    if (c.c.station_count)() == 0 {
+    // SAFETY: Same canonical pool count as the native GetNumItems query.
+    if unsafe { (*(c.s.station_pool)()).items } == 0 {
         return;
     }
     let mut seen = Vec::new();
@@ -944,7 +940,7 @@ pub(crate) unsafe fn acceptance_around_station(
     if let Some(always) = unsafe { always_accepted.as_mut() } {
         *always = 0;
     }
-    let bitmap = unsafe { &raw const (*catchment(state)).tiles };
+    let bitmap = unsafe { &raw const (*state).record.catchment_tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
     while it.tile() != INVALID_TILE {
@@ -961,7 +957,7 @@ pub(crate) unsafe fn for_each_catchment_tile(
     c: &Ctx<'_>,
     mut visit: impl FnMut(u32),
 ) {
-    let bitmap = unsafe { &raw const (*catchment(state)).tiles };
+    let bitmap = unsafe { &raw const (*state).record.catchment_tiles };
     let check = |ok| c.check(ok);
     let mut it = unsafe { BitmapTileIterator::new(bitmap, c.map, check) };
     while it.tile() != INVALID_TILE {
@@ -995,34 +991,6 @@ pub(crate) unsafe fn move_goods_to_station(
     }
 }
 
-/// Native list view: the ordered members at the time of the call.
-#[repr(C)]
-pub struct ListView<T> {
-    pub data: *const T,
-    pub size: usize,
-}
-/// Borrowed view of a live `industries_near`; valid until the list next changes.
-/// # Safety
-/// `state` is a live station owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_industries_near(
-    state: *mut Service,
-) -> ListView<IndustryListEntry> {
-    let entries = unsafe { (*catchment(state)).industries_near.entries() };
-    ListView {
-        data: entries.as_ptr(),
-        size: entries.len(),
-    }
-}
-/// The canonical bitmap aliased by `Station::catchment_tiles`.
-/// # Safety
-/// `state` is live; the alias ends with the owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_catchment_tiles(
-    state: *mut Service,
-) -> *mut BitmapTileArea {
-    unsafe { &raw mut (*catchment(state)).tiles }
-}
 /// Native `StationRect::IsEmpty`.
 /// # Safety
 /// `r` is a live rectangle.
@@ -1141,7 +1109,6 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance_around(
 crate::abi::layouts! {
     fn abi_layout;
 
-    "OpenTTDIndustryListEntry" ["station_service"] => IndustryListEntry { distance, industry, id };
     "OpenTTDStationCatchmentServices" ["station_service"] => CatchmentServices {
         shared,
         airport,
@@ -1150,7 +1117,6 @@ crate::abi::layouts! {
         town,
         station,
         visits,
-        station_count,
         id,
         modified_catchment,
         spread,

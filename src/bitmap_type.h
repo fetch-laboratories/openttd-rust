@@ -12,6 +12,7 @@
 
 
 #include "rust/bitmap_ffi.h"
+#include "rust/services_ffi.h"
 /**
  * Facade over a Rust-owned bitmap, either allocated for this object or
  * borrowed from its owner. The live geometry is the storage's leading TileArea.

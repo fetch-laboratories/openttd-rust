@@ -188,7 +188,6 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.town = &GetRustTownServices(),
 		.station = &GetRustStationServices(),
 		.visits = &GetRustVehicleVisits(),
-		.station_count = []() noexcept -> size_t { return Station::GetNumItems(); },
 		.id = RustBaseStationID<BaseStation>,
 		.modified_catchment = RustModifiedCatchment,
 		.spread = RustStationSpread,

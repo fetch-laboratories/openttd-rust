@@ -25,12 +25,6 @@ struct OpenTTDVehicleVisits;
 struct OpenTTDIndustry;
 struct OpenTTDTownState;
 
-
-/** One IndustryList member, ordered by distance and industry ID. */
-struct OpenTTDIndustryListEntry { uint32_t distance; Industry *industry; uint16_t id; };
-/** Borrowed ordered members, valid until the list next changes. */
-struct OpenTTDIndustryListView { const OpenTTDIndustryListEntry *data; size_t size; };
-
 /* Serialized by the game-state mutex. Every leaf is a direct synchronous noexcept
  * call; none unwinds during ordinary play. Rust ends container borrows before each. */
 struct OpenTTDStationCatchmentServices {
@@ -41,7 +35,6 @@ struct OpenTTDStationCatchmentServices {
 	const OpenTTDTownLeaves *town;
 	const OpenTTDStationServices *station;
 	const OpenTTDVehicleVisits *visits;
-	size_t (*station_count)() noexcept OPENTTD_SERVICE_DEFAULT(station_count);
 	uint16_t (*id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	bool (*modified_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(modified_catchment);
 	uint8_t (*spread)() noexcept OPENTTD_SERVICE_DEFAULT(spread);
@@ -54,8 +47,6 @@ struct OpenTTDStationCatchmentServices {
 const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcept;
 
 extern "C" {
-OpenTTDIndustryListView openttd_rust_station_industries_near(OpenTTDStationRecord *);
-struct OpenTTDBitmapTileArea *openttd_rust_station_catchment_tiles(OpenTTDStationRecord *);
 OpenTTDStationList *openttd_rust_town_stations_near(OpenTTDTownState *);
 OpenTTDStationList *openttd_rust_industry_stations_near(OpenTTDIndustry *);
 uint8_t openttd_rust_station_rect_empty_abi(const OpenTTDStationRect *);
@@ -116,12 +107,12 @@ public:
 
 /** Borrowed facade over a station's Rust-owned delivery list. */
 class RustIndustryList {
-	OpenTTDStationRecord *owner;
+	const OpenTTDIndustryList *list;
 public:
-	explicit RustIndustryList(OpenTTDStationRecord *owner) : owner(owner) {}
+	explicit RustIndustryList(const OpenTTDIndustryList *list) : list(list) {}
 	RustIndustryList(const RustIndustryList &) = delete;
 	RustIndustryList &operator=(const RustIndustryList &) = delete;
-	const OpenTTDIndustryListEntry *begin() const { return openttd_rust_station_industries_near(this->owner).data; }
-	const OpenTTDIndustryListEntry *end() const { auto view = openttd_rust_station_industries_near(this->owner); return view.data + view.size; }
+	const OpenTTDIndustryListEntry *begin() const { return this->list->entries.begin(); }
+	const OpenTTDIndustryListEntry *end() const { return this->list->entries.end(); }
 };
 #endif /* RUST_STATION_CATCHMENT_FFI_H */

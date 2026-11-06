@@ -5,6 +5,7 @@
 #include "call_ffi.h"
 #include "rust_vector.h"
 #include "pool_ffi.h"
+#include "bitmap_ffi.h"
 #include "abi-record-station.h"
 extern "C" {
 /* One record per BaseStation shell, created before the shell's members and

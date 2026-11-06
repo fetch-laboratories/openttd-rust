@@ -391,11 +391,11 @@ public:
 	/** @return The goods entries of every cargo. */
 	inline GoodsRange Goods() const { return GoodsRange{const_cast<OpenTTDStationRecord &>(this->Record()).goods}; }
 
-	BitmapTileArea GetCatchmentTiles() const { return BitmapTileArea{openttd_rust_station_catchment_tiles(const_cast<OpenTTDStationRecord *>(&this->Record()))}; }
+	BitmapTileArea GetCatchmentTiles() const { return BitmapTileArea{&const_cast<OpenTTDStationRecord &>(this->Record()).catchment_tiles}; }
 
 	RustStationLoadingQueue LoadingVehicles() const { return RustStationLoadingQueue{const_cast<OpenTTDStationRecord *>(&this->Record())}; }
 
-	RustIndustryList IndustriesNear() const { return RustIndustryList{const_cast<OpenTTDStationRecord *>(&this->Record())}; }
+	RustIndustryList IndustriesNear() const { return RustIndustryList{&this->Record().industries_near}; }
 
 	Station(TileIndex tile = INVALID_TILE);
 	~Station();

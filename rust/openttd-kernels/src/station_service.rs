@@ -48,13 +48,6 @@ pub struct Service {
     // Each entry is raw-owned: native iterators retain raw pointers, so even a
     // temporary Box/&mut reborrow on a surviving entry would invalidate them.
     queue: Vec<*mut QueueEntry>,
-    catchment: crate::station::Catchment,
-}
-/// The station's catchment state, for immediate borrows only.
-/// # Safety
-/// `state` is a live owner.
-pub(crate) unsafe fn catchment(state: *mut Service) -> *mut crate::station::Catchment {
-    unsafe { &raw mut (*state).catchment }
 }
 /// SAFETY: Live serialized station owner; no callback occurs during these accesses.
 pub(crate) unsafe fn always_accepts(state: *const Service, cargo: u8) -> bool {
@@ -113,7 +106,6 @@ pub extern "C" fn openttd_rust_station_record_new(
     Box::into_raw(Box::new(Service {
         record: crate::station_record::StationRecord::new(shell, xy),
         queue: Vec::new(),
-        catchment: crate::station::Catchment::default(),
     }))
     .cast()
 }

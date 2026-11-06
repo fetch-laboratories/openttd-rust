@@ -8,10 +8,11 @@
 /** @file bitmap_ffi.h Rust-owned BitmapTileArea storage; its leading geometry is a TileArea. */
 #ifndef RUST_BITMAP_FFI_H
 #define RUST_BITMAP_FFI_H
-#include "services_ffi.h"
+#include "rust_vector.h"
+struct OpenTTDSharedServices;
 #include <cstdint>
-struct OpenTTDBitmapTileArea;
 struct OpenTTDBitmapArea { uint32_t tile; uint16_t w, h; };
+#include "abi-record-bitmap.h"
 extern "C" {
 OpenTTDBitmapTileArea *openttd_rust_bitmap_new();
 void openttd_rust_bitmap_destroy(OpenTTDBitmapTileArea *);

@@ -108,6 +108,7 @@ static void Layouts()
 #include "abi-layout-ground.inc"
 #include "abi-layout-train_state.inc"
 #include "abi-layout-airport_runtime.inc"
+#include "abi-layout-bitmap.inc"
 #include "abi-layout-station.inc"
 #include "abi-layout-content.inc"
 

@@ -17,13 +17,15 @@ use crate::map_func::Map;
 use crate::tile_type::INVALID_TILE;
 use crate::tilearea::{OrthogonalTileIterator, TileArea};
 
-/// `BitmapTileArea`: the inherited `TileArea` followed by one bit per tile.
-#[repr(C)]
-pub struct BitmapTileArea {
-    /// Inherited live geometry, aliased by native `TileArea` readers.
-    pub area: TileArea,
-    data: Vec<bool>,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// `BitmapTileArea`: inherited geometry followed by initialized bool storage.
+    "OpenTTDBitmapTileArea" ["bitmap"] => pub struct BitmapTileArea {
+        pub area: TileArea => "OpenTTDBitmapArea",
+        pub data: crate::industrytype::NativeVec<bool> => "RustVector<bool>",
+    }
 }
+
 impl Default for BitmapTileArea {
     fn default() -> Self {
         Self::new()
@@ -39,7 +41,7 @@ impl BitmapTileArea {
                 w: 0,
                 h: 0,
             },
-            data: Vec::new(),
+            data: crate::industrytype::NativeVec::new(),
         }
     }
     /// `Index(x, y)` in the original unsigned arithmetic.
@@ -60,7 +62,9 @@ impl BitmapTileArea {
             w: 0,
             h: 0,
         };
-        self.data.clear();
+        let mut data = std::mem::take(&mut self.data).into_vec();
+        data.clear();
+        self.data = crate::industrytype::NativeVec::from_vec(data);
     }
     /// `Initialize(const Rect &)`: inclusive widths narrow into the uint16 geometry.
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -74,19 +78,24 @@ impl BitmapTileArea {
     /// `Initialize(const TileArea &)`; the logical allocation is `Index(w, h)`.
     pub fn initialize(&mut self, ta: TileArea) {
         self.area = ta;
-        self.data.clear();
+        let mut data = std::mem::take(&mut self.data).into_vec();
+        data.clear();
         let size = self.index_xy(u32::from(ta.w), u32::from(ta.h));
-        self.data.resize(size as usize, false);
+        data.resize(size as usize, false);
+        self.data = crate::industrytype::NativeVec::from_vec(data);
     }
     /// `SetTile`, asserting containment.
     pub fn set_tile(&mut self, tile: u32, map: Map, check: impl Fn(bool)) {
         check(self.area.contains(tile, map, &check));
         let index = self.index(tile, map);
-        self.data[index] = true;
+        // SAFETY: This exclusive bitmap borrow owns the initialized bool allocation.
+        let data =
+            unsafe { std::slice::from_raw_parts_mut(self.data.as_mut_ptr(), self.data.len()) };
+        data[index] = true;
     }
     /// `HasTile`.
     pub fn has_tile(&self, tile: u32, map: Map, check: impl Fn(bool)) -> bool {
-        self.area.contains(tile, map, check) && self.data[self.index(tile, map)]
+        self.area.contains(tile, map, check) && self.data.as_slice()[self.index(tile, map)]
     }
 }
 
