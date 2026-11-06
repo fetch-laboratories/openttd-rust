@@ -16,6 +16,20 @@ CYCLE = re.compile(
     r"^  Cycle in lock order graph: ((?:M\d+ \(0x[0-9a-f]+\) => ){2,}M\d+)$"
 )
 FRAME = re.compile(r"^\s+#\d+ (?:0x[0-9a-f]+ (?:in )?)?(.+?) (\S+) \(([^)]+)\)")
+FATAL = re.compile(r"^.*FATAL: ThreadSanitizer.*$", re.M)
+
+
+def command(argv: Sequence[str]) -> list[str]:
+    """Disable address randomization, which GCC 13's TSan shadow layout cannot map
+    under Linux 6.8's high mmap randomization."""
+    return ["setarch", "-R", *argv]
+
+
+def check_started(output: str) -> None:
+    """Fail an aborted TSan start: under `exitcode=0` it exits 0 with no report."""
+    fatal = FATAL.search(output)
+    if fatal is not None:
+        raise RuntimeError(f"TSan aborted the run: {fatal[0].strip()}")
 
 
 def environment(run: Path) -> dict[str, str]:

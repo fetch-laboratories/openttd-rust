@@ -2,12 +2,17 @@
 """Reject incomplete mixed-network evidence using real save decoding/comparison."""
 
 import json
+import re
 import shutil
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from simulation import core, multiplayer
+from simulation import core, multiplayer, network_protocol
 
 SERVER = """MIXED_READY
 client[2] Receive_CLIENT_ACK(): frame=24
@@ -204,6 +209,142 @@ class MultiplayerTests(unittest.TestCase):
         before = multiplayer.game_objects(build, False)
         obj.write_bytes(b"changed object")
         self.assertNotEqual(before, multiplayer.game_objects(build, False))
+
+    def test_server_errors_and_closes_stop_only_unexpected_sessions(self) -> None:
+        # A rejected client stays at the menu and the server keeps running, so
+        # only the reported error ends the session before the per-game timeout.
+        quit_message = (
+            "[2026-11-06 04:00:00] dbg: [net:9] client[2] Receive_CLIENT_QUIT()"
+        )
+        close = (
+            "[2026-11-06 04:00:00] dbg: [net:3] [server] Client #2 closed connection"
+        )
+        for name, lines, failure in (
+            ("rejected", ["client[1] SendError(): error=8"], True),
+            ("preauth-close", [close], True),
+            (
+                "different-client-close",
+                [quit_message, close.replace("#2", "#3")],
+                True,
+            ),
+            ("close-before-quit", [close, quit_message], True),
+            ("duplicate-close", [quit_message, close, close], True),
+            ("normal-quit-close", [quit_message, close], False),
+        ):
+            binaries = {}
+            for role, body in (
+                (
+                    "reference",
+                    "echo MIXED_READY\nsleep 0.2\n"
+                    + "".join(f"echo '{line}'\n" for line in lines)
+                    + "read command\n",
+                ),
+                ("candidate", f"exec sleep {60 if failure else 1}\n"),
+            ):
+                binary = self.root / name / role / "openttd"
+                binary.parent.mkdir(parents=True)
+                binary.write_text("#!/bin/sh\n" + body)
+                binary.chmod(0o755)
+                binaries[role] = binary
+            folder = self.root / name / "session"
+            started = time.monotonic()
+            with (
+                self.subTest(name=name),
+                patch.object(core, "GAME_LOCK", self.root / "game.lock"),
+            ):
+                if failure:
+                    error = close if name == "close-before-quit" else lines[-1]
+                    with self.assertRaisesRegex(
+                        RuntimeError, f"failure: {re.escape(error)}"
+                    ):
+                        multiplayer.session(
+                            binaries, self.source, folder, "reference", 60
+                        )
+                else:
+                    session = multiplayer.session(
+                        binaries, self.source, folder, "reference", 60
+                    )
+                    self.assertEqual(session.exits, {"client": 0, "server": 0})
+                self.assertLess(time.monotonic() - started, 20)
+                execution = json.loads((folder / "execution.json").read_text())
+                self.assertEqual(execution["exits"]["client"] != 0, failure)
+
+    def test_protocol_waits_fail_at_once_on_errors_beyond_those_allowed(self) -> None:
+        def peer(name: str, lines: list[str]) -> network_protocol.Peer:
+            folder = self.root / name
+            folder.mkdir()
+            script = "".join(f"print({line!r}, flush=True)\n" for line in lines)
+            process = subprocess.Popen(
+                [sys.executable, "-c", script + "import time; time.sleep(60)"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            self.addCleanup(process.wait)
+            self.addCleanup(process.kill)
+            return network_protocol.Peer(process, folder, 60)
+
+        error = "client[1] SendError(): error=8"
+        expected = "client[4] SendError(): error=7"
+        allowed = network_protocol.INVALID_ADMISSION
+        for name, lines, failure, exemption, message in (
+            ("rejected", [error], network_protocol.JOIN_FAILURE, None, error),
+            (
+                "dropped",
+                ["Client #1 closed connection"],
+                network_protocol.JOIN_FAILURE,
+                None,
+                "closed connection",
+            ),
+            (
+                "invalid",
+                [expected, "status = ACTIVE"],
+                network_protocol.SEND_ERROR,
+                allowed,
+                None,
+            ),
+            (
+                "logged-invalid",
+                [f"[2026-11-06 04:00:00] dbg: [net:9] {expected}", "status = ACTIVE"],
+                network_protocol.SEND_ERROR,
+                allowed,
+                None,
+            ),
+            *(
+                (
+                    name,
+                    [*lines, "status = ACTIVE"],
+                    network_protocol.SEND_ERROR,
+                    allowed,
+                    lines[-1],
+                )
+                for name, lines in (
+                    ("wrong-reason", [error]),
+                    ("server-error", ["client[4] Receive_SERVER_ERROR(): error=7"]),
+                    ("client-error", ["client[4] Receive_CLIENT_ERROR(): error=7"]),
+                    ("client-method", ["Client::SendError(): error=7"]),
+                    ("trailing-text", [expected + " extra"]),
+                    ("second", [expected, expected]),
+                    ("second-client", [expected, "client[5] SendError(): error=7"]),
+                )
+            ),
+        ):
+            with self.subTest(name=name):
+                server = peer(name, lines)
+                started = time.monotonic()
+                if message is None:
+                    server.wait("status = ACTIVE", failure=failure, allowed=exemption)
+                else:
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        f"{name}: .*{re.escape(message)}.* before status = ACTIVE of 1",
+                    ):
+                        server.wait(
+                            "status = ACTIVE", failure=failure, allowed=exemption
+                        )
+                self.assertLess(time.monotonic() - started, 20)
+                server.process.kill()
+                server.reader.join()
 
 
 if __name__ == "__main__":
