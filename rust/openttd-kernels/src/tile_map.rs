@@ -268,6 +268,31 @@ impl crate::map_func::World<'_> {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn tile_slope_z(&self, t: u32) -> (u8, i32) {
+        let (_, size_y) = self.size();
+        if t < self.types.count() {
+            // Clamped corners of an in-range tile are in range: no `TileHeight` assertion fails.
+            let map = self.dimensions;
+            let (x1, y1) = (map.tile_x(t), map.tile_y(t));
+            let x2 = (x1 + 1).min(map.max_x());
+            let y2 = (y1 + 1).min(crate::map_func::Map::max_y(size_y));
+            let height = |c: u32| {
+                self.types
+                    .require_range(c)
+                    .map_or(0, |f| i32::from(f.height()))
+            };
+            return get_tile_slope_given_height([
+                height(t),
+                height(map.tile_xy(x2, y1)),
+                height(map.tile_xy(x1, y2)),
+                height(map.tile_xy(x2, y2)),
+            ]);
+        }
+        self.tile_slope_z_outside(t)
+    }
+    // An out-of-range tile keeps the native assertion policy of each `TileHeight`.
+    #[cold]
+    #[inline(never)]
+    fn tile_slope_z_outside(&self, t: u32) -> (u8, i32) {
         let (x, y) = self.size();
         self.asserted(|m| get_tile_slope_z(m, t, x, y))
     }

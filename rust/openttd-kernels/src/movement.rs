@@ -427,8 +427,11 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation_slope(
     tile: u32,
 ) -> FoundationSlope {
     let s = unsafe { &*s };
-    let (slope, z) = s.with_context(|c| c.world.tile_slope_z(tile));
-    let a = (s.shared().apply_foundation)(Foundation(s.foundation(tile, slope)), Slope(slope));
+    let (slope, z, foundation) = s.with_context(|c| {
+        let (slope, z) = c.world.tile_slope_z(tile);
+        (slope, z, c.foundation(tile, slope))
+    });
+    let a = (s.shared().apply_foundation)(Foundation(foundation), Slope(slope));
     FoundationSlope {
         z: z.wrapping_add(a.z),
         slope: a.slope,
