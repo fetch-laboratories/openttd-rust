@@ -18,6 +18,7 @@
     clippy::struct_excessive_bools,
     clippy::fn_params_excessive_bools
 )]
+mod access;
 pub(crate) mod bindings;
 pub(crate) mod records;
 use crate::industrytype::NativeVec;
@@ -1200,8 +1201,6 @@ crate::abi::layouts! {
         engine,
         cargo,
     };
-    "OpenTTDEngineCarrying" ["engine"] => Carrying { kind, ground_capacity, default_cargo };
-    "OpenTTDEngineCapacityConfig" ["engine"] => CapacityConfig { id, callbacks, misc };
     "OpenTTDEngineRailAvailability" ["engine"] => RailAvailability {
         climate,
         kind,
@@ -1285,5 +1284,8 @@ pub unsafe extern "C" fn openttd_rust_engine_enabled_abi(
     s: &Services,
     e: *const OpenTTDEngine,
 ) -> u8 {
-    u8::from(unsafe { (s.capabilities.valid_string)(e) && climate(s, e) })
+    u8::from(unsafe {
+        crate::vehicle::EngineRef::of(e).valid_string(s.capabilities.invalid_string_id)
+            && climate(s, e)
+    })
 }

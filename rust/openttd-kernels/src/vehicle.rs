@@ -81,7 +81,7 @@ impl VehicleRef {
     }
 }
 
-/// Opaque immutable C++ engine context captured before a callback.
+/// A live canonical Engine record captured under the serialized game lifetime.
 pub use crate::engine_type::OpenTTDEngine;
 #[repr(transparent)]
 #[derive(Clone, Copy)]

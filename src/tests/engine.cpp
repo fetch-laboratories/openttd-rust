@@ -150,18 +150,9 @@ TEST_CASE("Engine capability observations preserve type and zero-capacity gates"
 		e.Record().info.cargo_type = c.cargo;
 		if (c.type == VEH_TRAIN) e.VehInfo<RailVehicleInfo>().capacity = c.capacity;
 		if (c.type == VEH_ROAD) e.VehInfo<RoadVehicleInfo>().capacity = c.capacity;
-		const auto carrying = RustEngineCarrying(RustEngine(&e));
-		CHECK(carrying.kind == c.type);
-		CHECK(carrying.ground_capacity == c.capacity);
-		CHECK(carrying.default_cargo == c.observed_cargo);
 		CHECK(e.CanCarryCargo() == c.carries);
 		e.index = EngineID{60000};
-		e.Record().info.callback_mask = {VehicleCallbackMask::RefitCapacity, VehicleCallbackMask::ArticEngine};
-		e.Record().info.misc_flags = {EngineMiscFlag::NoDefaultCargoMultiplier, EngineMiscFlag::NoBreakdownSmoke};
-		const auto config = RustEngineCapacityConfig(RustEngine(&e));
-		CHECK(config.id == 60000);
-		CHECK(config.callbacks == 24);
-		CHECK(config.misc == 96);
+		CHECK(RustEngineID(RustEngine(&e)) == 60000);
 	}
 }
 

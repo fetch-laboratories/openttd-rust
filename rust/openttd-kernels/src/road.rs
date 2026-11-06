@@ -964,10 +964,7 @@ impl Game<'_> {
     fn start_sound(&self, v: Part) {
         if !service!(self.vs.play_vehicle_sound)(v.v, VSE_START) {
             let r = SoundRead {
-                sound: {
-                    let cap = unsafe { (*((self.vs.newgrf)())).capabilities };
-                    (cap.road_sound)((self.vs.engine)(v.v).0.as_ptr())
-                },
+                sound: (self.vs.engine)(v.v).road_sound(),
                 tick: v.v.tick(),
             };
             let mut sound = r.sound;
@@ -2031,19 +2028,25 @@ impl Game<'_> {
     fn running_cost(&self, v: Part) -> i64 {
         let cap = unsafe { (&*(self.vs.newgrf)()).capabilities };
         let e = (self.vs.engine)(v.v).0.as_ptr();
-        if (cap.road_price)(e) == INVALID_PRICE {
+        if crate::vehicle::EngineRef::of(e).road_price() == INVALID_PRICE {
             return 0;
         }
         let factor = service!(self.vs.property)(
             (self.vs.newgrf)(),
             v.v,
             crate::newgrf_properties::PROP_ROADVEH_RUNNING_COST_FACTOR,
-            i32::from((cap.road_running)(e)),
+            i32::from(crate::vehicle::EngineRef::of(e).road_running()),
         ) as u32;
         if factor == 0 {
             return 0;
         }
-        crate::engine_capabilities::price(cap, e, u32::from((cap.road_price)(e)), factor, 0)
+        crate::engine_capabilities::price(
+            cap,
+            e,
+            u32::from(crate::vehicle::EngineRef::of(e).road_price()),
+            factor,
+            0,
+        )
     }
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {

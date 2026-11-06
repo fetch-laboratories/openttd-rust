@@ -880,11 +880,12 @@ impl Game<'_> {
         let mut u = id;
         loop {
             let e = (vs.engine)(u.vehicle()).0.as_ptr();
-            if (cap.train_price)(e) != crate::economy_type::INVALID_PRICE {
+            if crate::vehicle::EngineRef::of(e).train_price() != crate::economy_type::INVALID_PRICE
+            {
                 let mut factor = self.property(
                     u,
                     u32::from(crate::newgrf_properties::PROP_TRAIN_RUNNING_COST_FACTOR),
-                    u64::from((cap.train_running)(e)),
+                    u64::from(crate::vehicle::EngineRef::of(e).train_running()),
                 ) as u32;
                 if factor != 0 {
                     if (u).multiheaded() != 0 {
@@ -893,7 +894,7 @@ impl Game<'_> {
                     cost = cost.saturating_add(crate::engine_capabilities::price(
                         cap,
                         e,
-                        u32::from((cap.train_price)(e)),
+                        u32::from(crate::vehicle::EngineRef::of(e).train_price()),
                         factor,
                         0,
                     ));

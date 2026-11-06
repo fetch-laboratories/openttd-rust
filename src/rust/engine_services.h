@@ -29,34 +29,19 @@ inline uint8_t RustEngineRoadCapacity(const OpenTTDEngine *e) noexcept { return 
 inline uint16_t RustEngineShipCapacity(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<ShipVehicleInfo>().capacity; }
 inline uint16_t RustEnginePassengerCapacity(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<AircraftVehicleInfo>().passenger_capacity; }
 inline uint8_t RustEngineMailCapacity(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<AircraftVehicleInfo>().mail_capacity; }
-inline bool RustEngineIsGroundVehicle(const OpenTTDEngine *e) noexcept { return EngineOf(e)->IsGroundVehicle(); }
 inline const OpenTTDEngine *RustEngineByIDIfValid(uint16_t id) noexcept { return RustEngine(Engine::GetIfValid(EngineID(id))); }
 inline uint8_t RustAircraftInfoSubtype(const AircraftVehicleInfo *info) noexcept { return info->subtype; }
 inline uint8_t RustEngineAircraftSubtype(const OpenTTDEngine *e) noexcept { return RustAircraftInfoSubtype(&EngineOf(e)->VehInfo<AircraftVehicleInfo>()); }
 inline const OpenTTDEngine *RustEngineByID(uint16_t id) noexcept { return RustEngine(Engine::Get(EngineID(id))); }
 inline bool RustEngineHasArticulatedCallback(uint16_t engine) noexcept { return VehicleCallbackMasks(RustEngineCallbackMask(RustEngineByID(engine))).Test(VehicleCallbackMask::ArticEngine); }
-inline uint8_t RustEngineAircraftCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<AircraftVehicleInfo>().cost_factor; }
-inline uint8_t RustEngineAircraftRunning(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<AircraftVehicleInfo>().running_cost; }
-inline uint8_t RustEngineRoadCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RoadVehicleInfo>().cost_factor; }
-inline Price RustEngineRoadPrice(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RoadVehicleInfo>().running_cost_class; }
-inline uint8_t RustEngineRoadRunning(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RoadVehicleInfo>().running_cost; }
-inline uint8_t RustEngineShipCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<ShipVehicleInfo>().cost_factor; }
-inline uint8_t RustEngineShipRunning(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<ShipVehicleInfo>().running_cost; }
-inline uint8_t RustEngineTrainCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RailVehicleInfo>().cost_factor; }
-inline Price RustEngineTrainPrice(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RailVehicleInfo>().running_cost_class; }
-inline uint8_t RustEngineTrainRunning(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<RailVehicleInfo>().running_cost; }
-inline int32_t RustEngineLifeYears(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().info.lifelength.base(); }
 inline StringID *RustEngineString(const OpenTTDEngine *e) noexcept { return &const_cast<Engine *>(EngineOf(e))->Record().info.string_id; }
-inline bool RustEngineValidString(const OpenTTDEngine *e) noexcept { return *RustEngineString(e) != STR_NEWGRF_INVALID_ENGINE; }
 
 inline uint16_t RustEngineCargoAge(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().info.cargo_age_period; }
-inline uint16_t RustEngineAircraftRange(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<AircraftVehicleInfo>().max_range; }
 inline uint8_t RustEngineDefaultCargo(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetDefaultCargoType(); }
 inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().type; }
 inline bool RustEngineExclusivePreview(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().flags.Test(EngineFlag::ExclusivePreview); }
 inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return e->bindings.grf_prop.grffile != nullptr; }
 inline uint8_t RustEngineRefitCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().info.refit_cost; }
-inline int32_t RustEnginePriceShift(const OpenTTDEngine *e, uint32_t price) noexcept { return RustGRFPriceShift(RustEngineGRF(e), price); }
 inline uint16_t RustEngineVariant(const Engine *e) noexcept { return e->Record().info.variant_id.base(); }
 inline uint16_t RustEngineVariant(const OpenTTDEngine *e) noexcept { return RustEngineVariant(EngineOf(e)); }
 
@@ -73,23 +58,7 @@ inline uint16_t RustEngineRoadSound(const OpenTTDEngine *shell) noexcept { retur
 inline void RustSetEngineListPosition(const OpenTTDEngine *e, uint16_t position) noexcept { const_cast<Engine *>(EngineOf(e))->Record().list_position = position; }
 template <typename Result, auto Read, typename Index = uint16_t>
 static Result RustIndexedEngineRead(Index id) noexcept { return Read(RustEngineByID(static_cast<uint16_t>(id))); }
-inline OpenTTDEngineCarrying RustEngineCarrying(const OpenTTDEngine *engine) noexcept
-{
-	OpenTTDEngineCarrying r{.kind = RustEngineType(engine), .ground_capacity = 0, .default_cargo = INVALID_CARGO};
-	switch (r.kind) {
-		case VEH_TRAIN: r.ground_capacity = RustEngineRailCapacity(engine); break;
-		case VEH_ROAD: r.ground_capacity = RustEngineRoadCapacity(engine); break;
-		default: break;
-	}
-	if ((r.kind == VEH_TRAIN || r.kind == VEH_ROAD) && r.ground_capacity == 0) return r;
-	r.default_cargo = RustEngineDefaultCargo(engine);
-	return r;
-}
 inline uint16_t RustEngineID(const OpenTTDEngine *e) noexcept { return EngineOf(e)->index.base(); }
-inline OpenTTDEngineCapacityConfig RustEngineCapacityConfig(const OpenTTDEngine *engine) noexcept
-{
-	return {.id = RustEngineID(engine), .callbacks = RustEngineCallbackMask(engine), .misc = RustEngineMiscFlags(engine)};
-}
 inline bool RustEngineClimate(const Engine *e) noexcept { return e->Record().info.climates.Test(OpenTTDLandscape()); }
 inline bool RustEngineClimate(const OpenTTDEngine *e) noexcept { return RustEngineClimate(EngineOf(e)); }
 inline uint8_t RustRailEngineClass(const RailVehicleInfo *info) noexcept { return info->engclass; }

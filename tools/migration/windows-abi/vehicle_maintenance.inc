@@ -55,6 +55,7 @@ static void VehicleMaintenanceBoundary()
 	engine_record = openttd_rust_engine_new();
 	const OpenTTDEngineDefaults engine_defaults{};
 	openttd_rust_engine_construct(engine_record, &engine_defaults, VEH_ROAD, UINT16_MAX);
+	engine_record->vehicle_info.road.cost_factor = 53;
 	static CompanyFinances *active_finances, *after_finances;
 	static bool infinite, after_infinite;
 	static uint8_t supplied_id;
@@ -78,12 +79,8 @@ static void VehicleMaintenanceBoundary()
 	};
 	capabilities.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	capabilities.engine = [](uint16_t) noexcept { return engine_record; };
-	capabilities.kind = [](const OpenTTDEngine *) noexcept { return VEH_ROAD; };
 	capabilities.id = [](const OpenTTDEngine *) noexcept -> uint16_t { return 123; };
-	capabilities.ground = [](const OpenTTDEngine *) noexcept { return false; };
-	capabilities.carrying = [](const OpenTTDEngine *) noexcept -> OpenTTDEngineCarrying { return {.kind = VEH_ROAD, .ground_capacity = 0, .default_cargo = INVALID_CARGO}; };
-	capabilities.road_cost = [](const OpenTTDEngine *) noexcept -> uint8_t { return 53; };
-	capabilities.price_shift = [](const OpenTTDEngine *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
+	capabilities.price_shift = [](const GRFFile *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
 	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities; transactions.commands = &commands;
 	maintenance.transaction = &transactions;
 

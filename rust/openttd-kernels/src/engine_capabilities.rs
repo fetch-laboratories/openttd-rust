@@ -34,7 +34,7 @@ use crate::newgrf_properties::{
     PROP_SHIP_RUNNING_COST_FACTOR, PROP_TRAIN_CARGO_CAPACITY, PROP_TRAIN_COST_FACTOR,
     PROP_TRAIN_RUNNING_COST_FACTOR,
 };
-use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
+use crate::vehicle::{EngineRef, OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use std::ffi::c_void;
 use std::ptr::null_mut;
 type E = *const OpenTTDEngine;
@@ -46,22 +46,7 @@ pub struct Services {
     pub(crate) resolver: extern "C" fn() -> *const crate::newgrf_vehicle::Services,
     pub(crate) engine: extern "C" fn(u16) -> E,
     engine_if_valid: extern "C" fn(u16) -> E,
-    pub(crate) kind: extern "C" fn(E) -> VehicleType,
-    ground: extern "C" fn(E) -> bool,
     pub(crate) id: extern "C" fn(E) -> u16,
-    default_cargo: extern "C" fn(E) -> u8,
-    callbacks: extern "C" fn(E) -> u16,
-    carrying: extern "C" fn(E) -> crate::engine::Carrying,
-    capacity_config: extern "C" fn(E) -> crate::engine::CapacityConfig,
-    refit_mask: extern "C" fn(E) -> u64,
-    ship_capacity: extern "C" fn(E) -> u16,
-    passenger_capacity: extern "C" fn(E) -> u16,
-    mail_capacity: extern "C" fn(E) -> u8,
-    train_class: extern "C" fn(E) -> u8,
-    aircraft_subtype: extern "C" fn(E) -> u8,
-    pub(crate) road_sound: extern "C" fn(E) -> u16,
-    pub(crate) rail_kind: extern "C" fn(E) -> RailVehicleTypes,
-    pub(crate) grf: extern "C" fn(E) -> *const c_void,
     pub(crate) loading: extern "C" fn() -> *const crate::engine_loading::Services,
     cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
@@ -73,21 +58,9 @@ pub struct Services {
     vehicle_subtype: extern "C" fn(V) -> u8,
     pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
-    pub(crate) aircraft_cost: extern "C" fn(E) -> u8,
-    pub(crate) aircraft_range: extern "C" fn(E) -> u16,
-    pub(crate) aircraft_running: extern "C" fn(E) -> u8,
     pub(crate) life_extension: extern "C" fn() -> i32,
-    pub(crate) life_years: extern "C" fn(E) -> i32,
-    pub(crate) price_shift: extern "C" fn(E, u32) -> i32,
-    pub(crate) road_cost: extern "C" fn(E) -> u8,
-    pub(crate) road_price: extern "C" fn(E) -> u8,
-    pub(crate) road_running: extern "C" fn(E) -> u8,
-    pub(crate) ship_cost: extern "C" fn(E) -> u8,
-    pub(crate) ship_running: extern "C" fn(E) -> u8,
-    pub(crate) train_cost: extern "C" fn(E) -> u8,
-    pub(crate) train_price: extern "C" fn(E) -> u8,
-    pub(crate) train_running: extern "C" fn(E) -> u8,
-    pub(crate) valid_string: extern "C" fn(E) -> bool,
+    pub(crate) price_shift: extern "C" fn(*const c_void, u32) -> i32,
+    pub(crate) invalid_string_id: u32,
 }
 unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
     unsafe {
@@ -130,8 +103,8 @@ fn can_carry(info: crate::engine::Carrying) -> bool {
     is_valid_cargo_type(info.default_cargo)
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_can_carry_abi(s: &Services, e: E) -> u8 {
-    u8::from(can_carry((s.carrying)(e)))
+pub unsafe extern "C" fn openttd_rust_engine_can_carry_abi(_s: &Services, e: E) -> u8 {
+    u8::from(can_carry(EngineRef::of(e).carrying()))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_capacity(
@@ -150,11 +123,11 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
         if !mail.is_null() {
             mail.write(0);
         }
-        let carrying = (s.carrying)(e);
+        let carrying = EngineRef::of(e).carrying();
         if !can_carry(carrying) {
             return 0;
         }
-        let config = (s.capacity_config)(e);
+        let config = EngineRef::of(e).capacity_config((s.id)(e));
         let new_multipliers = config.misc & NO_DEFAULT_CARGO_MULTIPLIER != 0;
         let mut default_cargo = carrying.default_cargo;
         let cargo = if v.is_null() {
@@ -173,7 +146,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
                 s,
                 config.id,
                 PROP_AIRCRAFT_MAIL_CAPACITY,
-                u32::from((s.mail_capacity)(e)),
+                u32::from(EngineRef::of(e).mail_capacity()),
                 v,
             ) as u16);
         }
@@ -197,7 +170,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
                     u32::from(carrying.ground_capacity),
                     v,
                 );
-                if v.is_null() && (s.rail_kind)(e) == RailVehicleTypes::MULTIHEAD {
+                if v.is_null() && EngineRef::of(e).rail_kind() == RailVehicleTypes::MULTIHEAD {
                     capacity = capacity.wrapping_add(u32::from(carrying.ground_capacity));
                 }
                 capacity
@@ -213,7 +186,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
                 s,
                 config.id,
                 PROP_SHIP_CARGO_CAPACITY,
-                u32::from((s.ship_capacity)(e)),
+                u32::from(EngineRef::of(e).ship_capacity()),
                 v,
             ),
             VehicleType::AIRCRAFT => {
@@ -221,7 +194,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
                     s,
                     config.id,
                     PROP_AIRCRAFT_PASSENGER_CAPACITY,
-                    u32::from((s.passenger_capacity)(e)),
+                    u32::from(EngineRef::of(e).passenger_capacity()),
                     v,
                 );
                 if !crate::cargotype::is_cargo_in_class(
@@ -232,7 +205,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
                         s,
                         config.id,
                         PROP_AIRCRAFT_MAIL_CAPACITY,
-                        u32::from((s.mail_capacity)(e)),
+                        u32::from(EngineRef::of(e).mail_capacity()),
                         v,
                     );
                 }
@@ -286,16 +259,16 @@ pub unsafe extern "C" fn openttd_rust_engine_refittable_abi(s: &Services, id: u1
         if e.is_null() || openttd_rust_engine_can_carry_abi(s, e) == 0 {
             return u8::from(false);
         }
-        if (s.refit_mask)(e) == 0 {
+        if EngineRef::of(e).refit_mask() == 0 {
             return u8::from(false);
         }
-        if (s.callbacks)(e) & VEHICLE_CARGO_SUFFIX != 0 {
+        if EngineRef::of(e).callbacks() & VEHICLE_CARGO_SUFFIX != 0 {
             return u8::from(true);
         }
-        let cargo = (s.default_cargo)(e);
+        let cargo = EngineRef::of(e).default_cargo();
         let mut mask = 0;
         set_bit64(&mut mask, cargo);
-        is_valid_cargo_type(cargo) && (s.refit_mask)(e) != mask
+        is_valid_cargo_type(cargo) && EngineRef::of(e).refit_mask() != mask
     })
 }
 pub(crate) unsafe fn openttd_rust_articulated_next(
@@ -317,7 +290,7 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
         if result == CALLBACK_FAILED {
             return INVALID_ENGINE;
         }
-        if (s.shared.grf_file_version)((s.grf)(e)) < 8 {
+        if (s.shared.grf_file_version)(EngineRef::of(e).grf()) < 8 {
             result = gb(u32::from(result), 0, 8) as u16;
             if result == 0xff {
                 return INVALID_ENGINE;
@@ -337,15 +310,15 @@ pub(crate) unsafe fn openttd_rust_articulated_next(
         }
         crate::engine_loading::openttd_rust_engine_new_id(
             &*(s.loading)(),
-            (s.grf)(e),
-            (s.kind)(e).0,
+            EngineRef::of(e).grf(),
+            EngineRef::of(e).kind().0,
             result,
         )
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_is_abi(s: &Services, engine: u16) -> u8 {
-    u8::from((s.callbacks)((s.engine)(engine)) & VEHICLE_ARTIC_ENGINE != 0)
+    u8::from(EngineRef::of((s.engine)(engine)).callbacks() & VEHICLE_ARTIC_ENGINE != 0)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_articulated_count(
@@ -391,7 +364,7 @@ unsafe fn default_capacity(s: &Services, engine: u16) -> (u8, u16) {
     unsafe {
         let e = (s.engine)(engine);
         let cargo = if openttd_rust_engine_can_carry_abi(s, e) != 0 {
-            (s.default_cargo)(e)
+            EngineRef::of(e).default_cargo()
         } else {
             INVALID_CARGO
         };
@@ -411,9 +384,9 @@ pub(crate) unsafe fn available_cargo(s: &Services, engine: u16, initial: bool) -
         if openttd_rust_engine_can_carry_abi(s, e) == 0 {
             return 0;
         }
-        let mut cargoes = (s.refit_mask)(e);
+        let mut cargoes = EngineRef::of(e).refit_mask();
         if initial {
-            set_bit64(&mut cargoes, (s.default_cargo)(e));
+            set_bit64(&mut cargoes, EngineRef::of(e).default_cargo());
         }
         cargoes
     }
@@ -421,7 +394,7 @@ pub(crate) unsafe fn available_cargo(s: &Services, engine: u16, initial: bool) -
 /// Complete query traversal; each caller preserves its original early return.
 unsafe fn parts(s: &Services, e: E, engine: u16, mut visit: impl FnMut(u16) -> bool) {
     unsafe {
-        if !(s.ground)(e) || (s.callbacks)(e) & VEHICLE_ARTIC_ENGINE == 0 {
+        if !EngineRef::of(e).ground() || EngineRef::of(e).callbacks() & VEHICLE_ARTIC_ENGINE == 0 {
             return;
         }
         for i in 1..MAX_ARTICULATED_PARTS {
@@ -577,18 +550,14 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, carrying, capacity_config, refit_mask,
-        ship_capacity, passenger_capacity, mail_capacity, train_class, aircraft_subtype, road_sound, rail_kind,
-        grf, loading, cargo_classes, multiplier, pool_available,
-        new_temporary, destroy_temporary,
-        vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
+        resolver, engine, engine_if_valid, id, loading, cargo_classes, multiplier, pool_available, new_temporary, destroy_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, price_shift, invalid_string_id,
     };
 }
 
 /// `Engine::GetGRFID` uses the file associated by Action 3, including null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_grfid(s: &Services, e: E) -> u32 {
-    let file = (s.grf)(e);
+    let file = EngineRef::of(e).grf();
     if file.is_null() {
         0
     } else {
@@ -598,7 +567,8 @@ pub unsafe extern "C" fn openttd_rust_engine_grfid(s: &Services, e: E) -> u32 {
 /// `Engine::GetLifeLengthInDays`; calendar Year and Date arithmetic is signed int32.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_life_days(s: &Services, e: E) -> i32 {
-    (s.life_years)(e)
+    EngineRef::of(e)
+        .life_years()
         .wrapping_add((s.life_extension)())
         .wrapping_mul(crate::timer_game_common::DAYS_IN_LEAP_YEAR)
 }
@@ -609,7 +579,7 @@ unsafe fn invalid_kind(s: &Services) -> ! {
 /// `Engine::GetRange` narrows the live property result to `uint16_t`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_range(s: &Services, e: E) -> u16 {
-    if (s.kind)(e) != VehicleType::AIRCRAFT {
+    if EngineRef::of(e).kind() != VehicleType::AIRCRAFT {
         unsafe { invalid_kind(s) };
     }
     unsafe {
@@ -617,7 +587,7 @@ pub unsafe extern "C" fn openttd_rust_engine_range(s: &Services, e: E) -> u16 {
             s,
             (s.id)(e),
             crate::newgrf_properties::PROP_AIRCRAFT_RANGE,
-            u32::from((s.aircraft_range)(e)),
+            u32::from(EngineRef::of(e).aircraft_range()),
             null_mut(),
         ) as u16
     }
@@ -625,9 +595,9 @@ pub unsafe extern "C" fn openttd_rust_engine_range(s: &Services, e: E) -> u16 {
 /// Original running price class observation, before resolving its factor.
 pub(crate) unsafe fn running_price(s: &Services, e: E) -> u32 {
     use crate::economy_type::{PR_RUNNING_AIRCRAFT, PR_RUNNING_SHIP};
-    match (s.kind)(e) {
-        VehicleType::TRAIN => u32::from((s.train_price)(e)),
-        VehicleType::ROAD => u32::from((s.road_price)(e)),
+    match EngineRef::of(e).kind() {
+        VehicleType::TRAIN => u32::from(EngineRef::of(e).train_price()),
+        VehicleType::ROAD => u32::from(EngineRef::of(e).road_price()),
         VehicleType::SHIP => PR_RUNNING_SHIP,
         VehicleType::AIRCRAFT => PR_RUNNING_AIRCRAFT,
         _ => unsafe { invalid_kind(s) },
@@ -635,11 +605,11 @@ pub(crate) unsafe fn running_price(s: &Services, e: E) -> u32 {
 }
 /// Live default factor read at the original property call.
 pub(crate) unsafe fn running_factor(s: &Services, e: E) -> u32 {
-    match (s.kind)(e) {
-        VehicleType::TRAIN => u32::from((s.train_running)(e)),
-        VehicleType::ROAD => u32::from((s.road_running)(e)),
-        VehicleType::SHIP => u32::from((s.ship_running)(e)),
-        VehicleType::AIRCRAFT => u32::from((s.aircraft_running)(e)),
+    match EngineRef::of(e).kind() {
+        VehicleType::TRAIN => u32::from(EngineRef::of(e).train_running()),
+        VehicleType::ROAD => u32::from(EngineRef::of(e).road_running()),
+        VehicleType::SHIP => u32::from(EngineRef::of(e).ship_running()),
+        VehicleType::AIRCRAFT => u32::from(EngineRef::of(e).aircraft_running()),
         _ => unsafe { invalid_kind(s) },
     }
 }
@@ -647,7 +617,12 @@ pub(crate) fn price(s: &Services, e: E, index: u32, factor: u32, shift: i32) -> 
     if index >= u32::from(crate::economy_type::PR_END) {
         return 0;
     }
-    crate::economy_func::get_price(index, factor, (s.price_shift)(e, index), shift)
+    crate::economy_func::get_price(
+        index,
+        factor,
+        (s.price_shift)(EngineRef::of(e).grf(), index),
+        shift,
+    )
 }
 /// `Engine::GetRunningCost` preserves `INVALID_PRICE` before any property callback.
 #[unsafe(no_mangle)]
@@ -656,7 +631,7 @@ pub unsafe extern "C" fn openttd_rust_engine_running_cost(s: &Services, e: E) ->
     if base == u32::from(crate::economy_type::INVALID_PRICE) {
         return 0;
     }
-    let prop = match (s.kind)(e) {
+    let prop = match EngineRef::of(e).kind() {
         VehicleType::TRAIN => PROP_TRAIN_RUNNING_COST_FACTOR,
         VehicleType::ROAD => PROP_ROADVEH_RUNNING_COST_FACTOR,
         VehicleType::SHIP => PROP_SHIP_RUNNING_COST_FACTOR,
@@ -669,30 +644,30 @@ pub unsafe extern "C" fn openttd_rust_engine_running_cost(s: &Services, e: E) ->
 /// `Engine::GetCost`, including the wagon price kind and dynamic factors.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_cost(s: &Services, e: E) -> i64 {
-    let (base, prop, fallback) = match (s.kind)(e) {
+    let (base, prop, fallback) = match EngineRef::of(e).kind() {
         VehicleType::TRAIN => (
-            if (s.rail_kind)(e) == RailVehicleTypes::WAGON {
+            if EngineRef::of(e).rail_kind() == RailVehicleTypes::WAGON {
                 PR_BUILD_VEHICLE_WAGON
             } else {
                 PR_BUILD_VEHICLE_TRAIN
             },
             PROP_TRAIN_COST_FACTOR,
-            (s.train_cost)(e),
+            EngineRef::of(e).train_cost(),
         ),
         VehicleType::ROAD => (
             PR_BUILD_VEHICLE_ROAD,
             PROP_ROADVEH_COST_FACTOR,
-            (s.road_cost)(e),
+            EngineRef::of(e).road_cost(),
         ),
         VehicleType::SHIP => (
             PR_BUILD_VEHICLE_SHIP,
             PROP_SHIP_COST_FACTOR,
-            (s.ship_cost)(e),
+            EngineRef::of(e).ship_cost(),
         ),
         VehicleType::AIRCRAFT => (
             PR_BUILD_VEHICLE_AIRCRAFT,
             PROP_AIRCRAFT_COST_FACTOR,
-            (s.aircraft_cost)(e),
+            EngineRef::of(e).aircraft_cost(),
         ),
         _ => unsafe { invalid_kind(s) },
     };
@@ -703,7 +678,7 @@ pub unsafe extern "C" fn openttd_rust_engine_cost(s: &Services, e: E) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_vehicle_running_cost(s: &Services, e: E, v: V) -> i64 {
     let base = unsafe { running_price(s, e) };
-    let prop = match (s.kind)(e) {
+    let prop = match EngineRef::of(e).kind() {
         VehicleType::SHIP => crate::newgrf_properties::PROP_SHIP_RUNNING_COST_FACTOR,
         VehicleType::AIRCRAFT => crate::newgrf_properties::PROP_AIRCRAFT_RUNNING_COST_FACTOR,
         _ => unsafe { invalid_kind(s) },
