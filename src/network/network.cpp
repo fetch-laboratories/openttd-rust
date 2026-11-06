@@ -972,11 +972,9 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 		.max_join_time = RustNetworkMaxJoinTime,
 		.max_lag_time = RustNetworkMaxLagTime,
 		.max_password_time = RustNetworkMaxPasswordTime,
-		.now = []() noexcept -> int64_t { return std::chrono::steady_clock::now().time_since_epoch().count(); },
 		/* Execute script for, e.g. MOTD */
 		.on_server_connect = [](OpenTTDSessionFrame *f) noexcept { return SessionException(f, [] { IConsoleCmdExec("exec scripts/on_server_connect.scr 0"); }); },
 		.packet = &Packet::Services(),
-		.packet_enqueue = [](void *game, OpenTTDPacketState *p) noexcept { static_cast<NetworkGameSocketHandler *>(game)->SendPreparedPacket(*p); },
 		.query_close = [](void *game, uint8_t result) noexcept -> uint8_t { return static_cast<NetworkGameSocketHandler *>(game)->CloseConnection(static_cast<NetworkRecvStatus>(result)); },
 		.random = _random.state,
 		.replay_commands = []() noexcept { NetworkReplayCommands(); },

@@ -28,7 +28,7 @@ const ENGINE: u8 = 1 << GVSF_ENGINE;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PoolCursor {
-    pub slots: *const *mut crate::vehicle_base::OpenTTDVehicleShell,
+    pub slots: *const crate::pool::PoolSlot,
     pub slots_len: usize,
     pub first_unused: *const usize,
 }
@@ -108,11 +108,13 @@ unsafe fn next<const COUNTED: bool>(
     from: &mut usize,
 ) -> Option<VehicleRef> {
     while *from < unsafe { extent::<COUNTED>(s, pool) } {
-        let vehicle = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(*from)) };
+        let vehicle = unsafe {
+            scalar_read::<_, COUNTED>(std::ptr::addr_of!((*pool.slots.add(*from)).record))
+        };
         *from += 1;
         if !vehicle.is_null() {
-            // SAFETY: A native slot holds a live shell, resolved once for this visit.
-            return Some(unsafe { VehicleRef::from_shell(vehicle.cast(), &*s.vehicle) });
+            // SAFETY: The slot carries its live owner record directly.
+            return Some(VehicleRef::of(vehicle.cast()));
         }
     }
     None
@@ -136,13 +138,14 @@ unsafe fn day<const COUNTED: bool>(
 ) {
     let mut pool = svc!(COUNTED, s.pool);
     while id < unsafe { extent::<COUNTED>(s, &mut pool) } {
-        let vehicle = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(id)) };
+        let vehicle =
+            unsafe { scalar_read::<_, COUNTED>(std::ptr::addr_of!((*pool.slots.add(id)).record)) };
         id += DAY_TICKS as usize;
         if vehicle.is_null() {
             continue;
         }
-        // SAFETY: A native slot holds a live shell for this day callback.
-        let vehicle = unsafe { VehicleRef::from_shell(vehicle.cast(), &*s.vehicle) };
+        // SAFETY: This published record remains live for its day callback.
+        let vehicle = VehicleRef::of(vehicle.cast());
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_DAYS);
         }
@@ -425,7 +428,11 @@ unsafe fn run_ticks<const COUNTED: bool>(
             let survives = unsafe { svc!(COUNTED, s.tick, vehicle, bundle.as_mut_ptr()) };
             if s.assertions {
                 let _ = unsafe { extent::<COUNTED>(s, &mut pool) };
-                let actual = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(current_id)) };
+                let actual = unsafe {
+                    scalar_read::<_, COUNTED>(std::ptr::addr_of!(
+                        (*pool.slots.add(current_id)).shell
+                    ))
+                };
                 assert!(
                     actual
                         == if survives {

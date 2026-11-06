@@ -287,6 +287,34 @@ with tempfile.TemporaryDirectory() as directory:
     port.write_text(original + seed)
     baseline.write_text("")
     assert check().returncode == 0, check().stdout
+    # Identical member spellings on unrelated storage types are different callees.
+    for first_type, second_type, member, copied in [
+        ("std::string", "EncodedString", "empty()", False),
+        ("std::string", "std::string", "empty()", True),
+        ("std::string", "std::string const", "empty()", True),
+        ("ContentVector", "VehicleList", "push_back(item)", False),
+        ("ContentVector", "ContentVector", "push_back(item)", True),
+    ]:
+        for cast_receiver in (False, True):
+            first = f"value->{member}"
+            second = (
+                f"static_cast<{second_type} *>(value)->{member}"
+                if cast_receiver
+                else f"value->{member}"
+            )
+            param = "void" if cast_receiver else second_type
+            qualifier = "const " if member == "empty()" else ""
+            port.write_text(
+                original
+                + f"void First({qualifier}{first_type} *value, void *item) noexcept {{ {first}; }}\n"
+                + f"void Second({param} *value, void *item) noexcept {{ {second}; }}\n"
+                + "OpenTTDFixtureServices first{.a = First,\n};\n"
+                + "OpenTTDFixtureServices second{.b = Second,\n};\n"
+            )
+            result = check()
+            assert ("callee |" in result.stdout) == copied, result.stdout
+            assert bool(result.returncode) == copied, result.stdout
+    port.write_text(original + seed)
     messages = [
         ("tile substitute {}", "industry substitute {}", False),
         ("tile substitute {}", "tile substitute {}", True),

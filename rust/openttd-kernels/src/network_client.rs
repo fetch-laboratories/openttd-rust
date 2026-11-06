@@ -410,7 +410,7 @@ pub(crate) fn map_loaded(
     success: bool,
 ) -> u8 {
     (s.map_release)(socket::shell(game));
-    socket::set_last_packet(game, (f.now)());
+    socket::set_last_packet(game, (f.tcp.now)());
     if !success {
         (s.show_savegame_error)();
         return NETWORK_RECV_STATUS_SAVEGAME;
@@ -623,7 +623,7 @@ pub(crate) fn check_connection(
     if status(s, game) < status::AUTHORIZED {
         return;
     }
-    let lag = (f.now)().wrapping_sub(socket::last_packet(game));
+    let lag = (f.tcp.now)().wrapping_sub(socket::last_packet(game));
     if lag < 5 * SECOND {
         return;
     }

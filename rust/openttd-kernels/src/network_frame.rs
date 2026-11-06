@@ -112,11 +112,8 @@ pub struct Services {
     pub max_join_time: extern "C" fn() -> u16,
     pub max_lag_time: extern "C" fn() -> u16,
     pub max_password_time: extern "C" fn() -> u16,
-    /// Steady-clock nanoseconds since its epoch.
-    pub now: extern "C" fn() -> i64,
     pub on_server_connect: extern "C" fn(*mut Frame) -> bool,
     pub packet: &'static packet::Services,
-    pub packet_enqueue: extern "C" fn(*mut c_void, *mut PacketState),
     pub query_close: extern "C" fn(*mut c_void, u8) -> u8,
     /// `_random.state`, read in place.
     pub random: *const u32,
@@ -158,7 +155,7 @@ pub(crate) fn packet_send(s: &Services, game: *mut socket::GameSocket, p: &mut P
     unsafe {
         packet::prepare_to_send(p, s.packet, packet_check(s));
     }
-    (s.packet_enqueue)(socket::shell(game), p);
+    (s.tcp.packet_enqueue)(socket::tcp(game), p);
 }
 pub(crate) fn packet_send_string(
     s: &Services,
@@ -522,7 +519,7 @@ pub(crate) fn server_tick_clients(
 
         let lag = unsafe { calculate_lag(s, sync) };
         let within = |milliseconds: u32| {
-            last_packet + i64::from(milliseconds) * NANOSECONDS_PER_MILLISECOND > (s.now)()
+            last_packet + i64::from(milliseconds) * NANOSECONDS_PER_MILLISECOND > (s.tcp.now)()
         };
         match status {
             ACTIVE => {
@@ -567,9 +564,9 @@ pub(crate) fn server_tick_clients(
             }
             MAP_WAIT => {
                 // Keep a waiting client informed every two seconds.
-                if (s.now)() > last_packet + 2000 * NANOSECONDS_PER_MILLISECOND {
+                if (s.tcp.now)() > last_packet + 2000 * NANOSECONDS_PER_MILLISECOND {
                     crate::network_connection::send_wait(s.connection, s, socket);
-                    socket::set_last_packet(socket, (s.now)());
+                    socket::set_last_packet(socket, (s.tcp.now)());
                 }
             }
             MAP => {
@@ -724,10 +721,8 @@ crate::abi::layouts! {
         max_join_time,
         max_lag_time,
         max_password_time,
-        now,
         on_server_connect,
         packet,
-        packet_enqueue,
         query_close,
         random,
         replay_commands,
