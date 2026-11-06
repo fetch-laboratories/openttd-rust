@@ -985,12 +985,12 @@ static void ResolverProbe()
 		fmt::print(stderr, "FLEET resolver-trigger {} {}\n", to_underlying(trigger), !SameRandom(before, after));
 		uint index = 0;
 		for (Train *u = v; u != nullptr; u = u->Next()) {
-			fmt::print(stderr, "FLEET resolver-random {} {} {} {} {}\n", to_underlying(trigger), index++, FIXTURE_FIELD(u, random_bits), u->waiting_random_triggers.base(), u->grf_cache.cache_valid);
+			fmt::print(stderr, "FLEET resolver-random {} {} {} {} {}\n", to_underlying(trigger), index++, FIXTURE_FIELD(u, random_bits), FIXTURE_GET(u, WaitingRandomTriggers, waiting_random_triggers).base(), u->grf_cache.cache_valid);
 		}
 	}
 	/* NewCargo propagates AnyNewCargo; its waiting bit must have been consumed. */
 	bool propagated = true;
-	for (Train *u = v; u != nullptr; u = u->Next()) propagated &= !u->waiting_random_triggers.Test(VehicleRandomTrigger::AnyNewCargo);
+	for (Train *u = v; u != nullptr; u = u->Next()) propagated &= !FIXTURE_GET(u, WaitingRandomTriggers, waiting_random_triggers).Test(VehicleRandomTrigger::AnyNewCargo);
 	fmt::print(stderr, "FLEET resolver-anynew {}\n", propagated);
 	/* A matching group with one outcome reseeds zero bits but still draws RNG. */
 	random->groups = {result};
@@ -998,11 +998,11 @@ static void ResolverProbe()
 	SavedRandomSeeds before, after;
 	SaveRandomSeeds(&before); TriggerVehicleRandomisation(v, VehicleRandomTrigger::Callback32); SaveRandomSeeds(&after);
 	fmt::print(stderr, "FLEET resolver-zero-reseed {} {}\n", bits == FIXTURE_FIELD(v, random_bits), !SameRandom(before, after));
-	v->waiting_random_triggers = VehicleRandomTriggers(0x10);
+	FIXTURE_SET(v, WaitingRandomTriggers, waiting_random_triggers, VehicleRandomTriggers(0x10));
 	FillNewGRFVehicleCache(v);
 	NewGRFCache cache = v->grf_cache;
 	VehicleID id = v->index;
-	uint8_t waiting = v->waiting_random_triggers.base();
+	uint8_t waiting = FIXTURE_GET(v, WaitingRandomTriggers, waiting_random_triggers).base();
 	bits = FIXTURE_FIELD(v, random_bits);
 	/* Native reload destroys these synthetic pooled groups and resets engine specs.
 	 * No group survives: reinstall fresh deterministic data afterwards. Shell random
@@ -1010,7 +1010,7 @@ static void ResolverProbe()
 	sprites.Trash(); file.Trash();
 	ReloadNewGRFData();
 	v = Train::Get(id); e = Engine::Get(FIXTURE_GET(v, EngineType, engine_type));
-	fmt::print(stderr, "FLEET resolver-grf-reload {} {} {} {}\n", cache.cache_valid == 31, bits == FIXTURE_FIELD(v, random_bits), waiting == v->waiting_random_triggers.base(), v->grf_cache.cache_valid);
+	fmt::print(stderr, "FLEET resolver-grf-reload {} {} {} {}\n", cache.cache_valid == 31, bits == FIXTURE_FIELD(v, random_bits), waiting == FIXTURE_GET(v, WaitingRandomTriggers, waiting_random_triggers).base(), v->grf_cache.cache_valid);
 	Backup<decltype(e->grf_prop.spritegroups)> reinstalled(e->grf_prop.spritegroups);
 	Backup<const GRFFile *> refile(e->grf_prop.grffile, &grf);
 	if (!SpriteGroup::CanAllocateItem()) FixtureAbort(__LINE__);
@@ -1028,7 +1028,7 @@ static void ResolverProbe()
 	}
 	reinstalled.Restore(); refile.Restore(); delete det;
 	v->InvalidateNewGRFCacheOfChain();
-	fmt::print(stderr, "FLEET resolver-persist {} {} {}\n", id.base(), FIXTURE_FIELD(v, random_bits), v->waiting_random_triggers.base());
+	fmt::print(stderr, "FLEET resolver-persist {} {} {}\n", id.base(), FIXTURE_FIELD(v, random_bits), FIXTURE_GET(v, WaitingRandomTriggers, waiting_random_triggers).base());
 
 	fmt::print(stderr, "FLEET resolver-checkpoint complete\n");
 }
@@ -1291,7 +1291,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		Train *v = nullptr;
 		for (Train *t : Train::Iterate()) if (t->IsFrontEngine() && t->Next() != nullptr) { v = t; break; }
 		if (v == nullptr) FixtureAbort(__LINE__);
-		fmt::print(stderr, "FLEET resolver-saved {} {} {}\n", v->index.base(), FIXTURE_FIELD(v, random_bits), v->waiting_random_triggers.base());
+		fmt::print(stderr, "FLEET resolver-saved {} {} {}\n", v->index.base(), FIXTURE_FIELD(v, random_bits), FIXTURE_GET(v, WaitingRandomTriggers, waiting_random_triggers).base());
 		ResolverVariables(v);
 		company.Restore(); return true;
 	}

@@ -53,8 +53,6 @@ struct OpenTTDVehicleResolverServices {
 	const SpriteGroup *(*cached_override)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_override);
 	void (*write_override)(OpenTTDVehicle *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(write_override);
 	const SpriteGroup *(*spritegroup)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spritegroup);
-	uint8_t (*waiting)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);
-	void (*write_waiting)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_waiting);
 	uint16_t (*resolve_callback)(OpenTTDVehicleResolverState *, uint16_t, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
 	OpenTTDVehicleRandomResult (*resolve_random)(OpenTTDVehicleResolverState *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_random);
 	OpenTTDVehicleLoadingOrder (*order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order);

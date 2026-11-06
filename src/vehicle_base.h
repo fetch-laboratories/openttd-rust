@@ -260,6 +260,10 @@ public:
 	inline void SetOwner(Owner owner) { this->record->owner = owner.base(); }
 	inline EngineID GetEngineType() const { return EngineID{this->record->engine_type}; } ///< The type of engine used for this vehicle.
 	inline void SetEngineType(EngineID engine) { this->record->engine_type = engine.base(); }
+	inline StationID GetLastLoadingStation() const { return StationID{this->Record().last_loading_station}; }
+	inline void SetLastLoadingStation(StationID station) { this->Record().last_loading_station = station.base(); }
+	inline VehicleRandomTriggers GetWaitingRandomTriggers() const { return VehicleRandomTriggers{this->Record().waiting_random_triggers}; }
+	inline void SetWaitingRandomTriggers(VehicleRandomTriggers triggers) { this->Record().waiting_random_triggers = triggers.base(); }
 	inline StationID GetLastStationVisited() const { return StationID{this->record->last_station_visited}; } ///< The last station we stopped at.
 	inline void SetLastStationVisited(StationID station) { this->record->last_station_visited = station.base(); }
 	inline VehStates GetVehStatus() const { return VehStates{this->record->vehstatus}; } ///< Status.
@@ -296,9 +300,7 @@ public:
 	TextEffectID fill_percent_te_id = INVALID_TE_ID; ///< a text-effect id to a loading indicator object
 
 
-	VehicleRandomTriggers waiting_random_triggers; ///< Triggers to be yet matched before rerandomizing the random bits.
 
-	StationID last_loading_station = StationID::Invalid(); ///< Last station the vehicle has stopped at and could possibly leave from with any cargo loaded.
 
 	VehicleCargoList cargo{}; ///< The cargo this vehicle is carrying
 

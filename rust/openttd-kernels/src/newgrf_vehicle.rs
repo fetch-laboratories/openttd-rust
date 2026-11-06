@@ -113,8 +113,6 @@ pub struct Services {
     cached_override: unsafe extern "C" fn(V) -> Group,
     write_override: unsafe extern "C" fn(V, Group),
     spritegroup: unsafe extern "C" fn(u16, u8) -> Group,
-    waiting: unsafe extern "C" fn(V) -> u8,
-    write_waiting: unsafe extern "C" fn(V, u8),
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
     order: unsafe extern "C" fn(V) -> OrderState,
@@ -494,7 +492,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_set(scope: *mut Scope, v: V)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_scope_random(
-    s: &Services,
+    _s: &Services,
     scope: *const Scope,
     triggers: bool,
 ) -> u32 {
@@ -504,7 +502,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_random(
             return 0;
         }
         if triggers {
-            u32::from((s.waiting)(v))
+            u32::from(handle(v).waiting_random_triggers())
         } else {
             u32::from(handle(v).random_bits())
         }
@@ -671,10 +669,12 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
     unsafe {
         crate::movement::native_assert(s.shared, !v.is_null());
         let mut state = init(s, engine(v), v, 2, false);
-        let waiting = (s.waiting)(v) | (1 << trigger);
-        (s.write_waiting)(v, waiting);
+        let waiting = handle(v).waiting_random_triggers() | (1 << trigger);
+        handle(v).write_waiting_random_triggers(waiting);
         let result = (s.resolve_random)(&raw mut state, engine(v), waiting);
-        (s.write_waiting)(v, (s.waiting)(v) & !(result.used as u8));
+        handle(v).write_waiting_random_triggers(
+            handle(v).waiting_random_triggers() & !(result.used as u8),
+        );
         let random = s.shared.random() as u16; // Draw even if reseed is zero.
         let bits = handle(v).random_bits();
         handle(v).write_random_bits(
@@ -1163,7 +1163,8 @@ unsafe fn variable(
                         return 0;
                     }
                     if parameter == 0x5f {
-                        return u32::from(handle(u).random_bits()) << 8 | u32::from((s.waiting)(u));
+                        return u32::from(handle(u).random_bits()) << 8
+                            | u32::from(handle(u).waiting_random_triggers());
                     }
                     return self::variable(
                         s,
@@ -1452,7 +1453,7 @@ unsafe fn variable(
             }
             0xf2 => return u32::from(handle(v).cargo_subtype()),
             0xfa => return u32::from(handle(v).random_bits()),
-            0xfb => return u32::from((s.waiting)(v)),
+            0xfb => return u32::from(handle(v).waiting_random_triggers()),
             _ => {}
         }
         match kind() {
@@ -1682,8 +1683,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, capabilities,
         cargo_classes, cargo_bitnum, valid_company, livery, company_info,
-        overrides, override_at, override_engine, cached_override, write_override, spritegroup, waiting,
-        write_waiting, resolve_callback, resolve_random, order, cargo_owner,
+        overrides, override_at, override_engine, cached_override, write_override, spritegroup, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
         engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, service_interval, age, max_age, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };

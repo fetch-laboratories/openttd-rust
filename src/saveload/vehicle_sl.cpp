@@ -695,7 +695,7 @@ public:
 		    SLE_CONDVARNAME(Vehicle, Record().vehstatus, "vehstatus", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 		SLE_CONDVARNAME(Vehicle, Record().last_station_visited, "last_station_visited", SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_5),
 		SLE_CONDVARNAME(Vehicle, Record().last_station_visited, "last_station_visited", SLE_UINT16,                   SLV_5, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, last_loading_station,  SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().last_loading_station, "last_loading_station",  SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
 
 		    SLE_CONDVARNAME(Vehicle, Record().cargo_type, "cargo_type", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 		SLE_CONDVARNAME(Vehicle, Record().cargo_subtype, "cargo_subtype",         SLE_UINT8,                   SLV_35, SL_MAX_VERSION),
@@ -778,7 +778,7 @@ public:
 
 		SLE_CONDVARNAME(Vehicle, Record().random_bits, "random_bits",           SLE_FILE_U8 | SLE_VAR_U16,    SLV_2, SLV_EXTEND_VEHICLE_RANDOM),
 		SLE_CONDVARNAME(Vehicle, Record().random_bits, "random_bits",           SLE_UINT16,                   SLV_EXTEND_VEHICLE_RANDOM, SL_MAX_VERSION),
-		SLE_CONDVARNAME(Vehicle, waiting_random_triggers, "waiting_triggers", SLE_UINT8, SLV_2, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().waiting_random_triggers, "waiting_triggers", SLE_UINT8, SLV_2, SL_MAX_VERSION),
 
 		SLE_CONDREF(Vehicle, next_shared,           REF_VEHICLE,                  SLV_2, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, group_id,              SLE_UINT16,                  SLV_60, SL_MAX_VERSION),
@@ -1211,7 +1211,7 @@ struct VEHSChunkHandler : ChunkHandler {
 				v->SetLastStationVisited(StationID::Invalid());
 			}
 
-			if (IsSavegameVersionBefore(SLV_182)) v->last_loading_station = StationID::Invalid();
+			if (IsSavegameVersionBefore(SLV_182)) v->SetLastLoadingStation(StationID::Invalid());
 
 			if (IsSavegameVersionBefore(SLV_5)) {
 				/* Convert the current_order.type (which is a mix of type and flags, because

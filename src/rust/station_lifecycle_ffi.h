@@ -29,7 +29,6 @@ struct OpenTTDStationLifecycleServices {
 	void (*delete_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_news);
 	bool (*sign_valid)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(sign_valid);
 	void (*remove_sign)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_sign);
-	uint16_t (*last_loading)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_loading);
 	uint16_t (*airport_maintenance)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_maintenance);
 	size_t maintenance_price;
 };

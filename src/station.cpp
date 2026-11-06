@@ -262,7 +262,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 		.delete_news = [](uint16_t id) noexcept { DeleteStationNews(StationID{id}); },
 		.sign_valid = RustStationSignValid,
 		.remove_sign = [](uint16_t id) noexcept { _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeStation(StationID{id})); },
-		.last_loading = RustVehicleLastLoadingStation,
 		.airport_maintenance = RustAirportSpecMaintenance,
 		.maintenance_price = PR_INFRASTRUCTURE_AIRPORT,
 	};

@@ -11,19 +11,6 @@
 #include "station_service_ffi.h"
 #include "vehicle_refit_ffi.h"
 
-/** One consist part's cargo_cap, refit_cap and cargo_type. */
-struct OpenTTDVisitCapacity {
-	uint16_t capacity;
-	uint16_t remaining;
-	uint8_t cargo;
-};
-/** Front loading fields read by one link prediction or arrival. */
-struct OpenTTDVisitPrediction {
-	uint64_t loading_tick;
-	uint16_t last_loading;
-	uint16_t last_station;
-	uint16_t ticks;
-};
 /** The loading indicator's colour strings. */
 struct OpenTTDVisitPercentStrings {
 	uint32_t up;
@@ -46,17 +33,12 @@ struct OpenTTDVehicleVisits {
 	const OpenTTDStationLoading *loading;
 	const OpenTTDVehicleRefitServices *refit;
 	const OpenTTDScheduleServices *schedule;
-	OpenTTDVisitCapacity (*capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
-	OpenTTDVisitPrediction (*prediction)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(prediction);
 	int32_t (*display_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_speed);
 	uint32_t (*location)(const OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	OpenTTDVisitPercentStrings percent;
-	void (*set_last_loading)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_last_loading);
-	void (*set_loading_tick)(OpenTTDVehicle *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_tick);
 	void (*arrival_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(arrival_dirty);
 	OpenTTDCargoList *(*station_cargo)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo);
 	void (*hide_filling)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(hide_filling);
-	void (*set_occupancy)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_occupancy);
 
 	void (*leave_sound)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_sound);
 	void (*depot_windows)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);

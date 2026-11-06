@@ -58,8 +58,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.cached_override = [](OpenTTDVehicle *v) noexcept { return Train::From(VehicleOf(v))->tcache.cached_override; },
 		.write_override = [](OpenTTDVehicle *v, const SpriteGroup *group) noexcept { Train::From(VehicleOf(v))->tcache.cached_override = group; },
 		.spritegroup = [](uint16_t engine, uint8_t cargo) noexcept { return RustSpecCargoSpriteGroup(Engine::Get(EngineID(engine)), cargo); },
-		.waiting = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->waiting_random_triggers.base(); },
-		.write_waiting = [](OpenTTDVehicle *v, uint8_t waiting) noexcept { VehicleOf(v)->waiting_random_triggers = VehicleRandomTriggers(waiting); },
 		.resolve_callback = VehicleResolverCallback, .resolve_random = VehicleResolverRandom,
 		.order = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicleLoadingOrder { const Vehicle *u = VehicleOf(v); return {to_underlying(RustVehicleOrderUnloadType(u)), to_underlying(RustVehicleOrderLoadType(u)), RustVehicleOrderType(u) == OT_LOADING}; },
 		.cargo_owner = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,

@@ -113,6 +113,8 @@ crate::abi::shared_records! {
         pub trip_occupancy: i8,
         pub unitnumber: u16,
         pub last_loading_tick: u64,
+        pub last_loading_station: StationID,
+        pub waiting_random_triggers: u8,
         pub load_unload_ticks: u16,
         pub random_bits: u16,
         /// Displayed sprite index: 0xfd custom, 0xfe second custom head, 0xff reserved.
@@ -180,6 +182,8 @@ pub extern "C" fn openttd_rust_vehicle_record_new(
         trip_occupancy: 0,
         unitnumber: 0,
         last_loading_tick: 0,
+        last_loading_station: StationID(u16::MAX),
+        waiting_random_triggers: 0,
         load_unload_ticks: 0,
         random_bits: 0,
         spritenum: 0,
@@ -421,6 +425,27 @@ impl crate::vehicle::VehicleRef {
         } else {
             self.status() & !VS_HIDDEN
         });
+    }
+    pub(crate) fn last_loading_station(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), last_loading_station).0
+    }
+    pub(crate) fn write_last_loading_station(self, station: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), last_loading_station, StationID(station));
+    }
+    pub(crate) fn last_loading_tick(self) -> u64 {
+        crate::raw_field::read_field!(self.0.as_ptr(), last_loading_tick)
+    }
+    pub(crate) fn write_last_loading_tick(self, tick: u64) {
+        crate::raw_field::write_field!(self.0.as_ptr(), last_loading_tick, tick);
+    }
+    pub(crate) fn write_trip_occupancy(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), trip_occupancy, value.cast_signed());
+    }
+    pub(crate) fn waiting_random_triggers(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), waiting_random_triggers)
+    }
+    pub(crate) fn write_waiting_random_triggers(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), waiting_random_triggers, value);
     }
     pub(crate) fn cargo_type(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), cargo_type)

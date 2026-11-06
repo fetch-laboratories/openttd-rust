@@ -64,7 +64,6 @@ pub struct Services {
     pub delete_news: extern "C" fn(StationID),
     pub sign_valid: extern "C" fn(*mut BaseStation) -> bool,
     pub remove_sign: extern "C" fn(StationID),
-    pub last_loading: extern "C" fn(VehicleRef) -> StationID,
     pub airport_maintenance: extern "C" fn(*const crate::station_cmd::AirportSpec) -> u16,
     pub maintenance_price: usize,
 }
@@ -511,8 +510,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         if v.last_station() == id.0 {
             v.write_last_station(INVALID_STATION);
         }
-        if (s.last_loading)(v) == id {
-            (visits.set_last_loading)(v, INVALID_STATION);
+        if v.last_loading_station() == id.0 {
+            v.write_last_loading_station(INVALID_STATION);
         }
     }
     unsafe {
@@ -585,5 +584,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, airport_maintenance, maintenance_price };
 }

@@ -51,11 +51,9 @@ inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return Vehic
 
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine.base(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->Record().random_bits = bits; }
-inline uint16_t RustVehicleLastLoadingStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->GetLastStationVisited().base(); }
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().load_unload_ticks; }
-inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
-inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->Record().last_loading_tick = tick; }
+inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->SetLastLoadingStation(StationID(station)); }
 inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->GetTile()); }
 inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
 inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
@@ -74,7 +72,6 @@ inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)
 inline void RustVehicleHideFilling(OpenTTDVehicle *v) noexcept { HideFillingPercent(&VehicleOf(v)->fill_percent_te_id); }
 inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, id); }
 inline void RustVehicleVisitInvalidateView(OpenTTDVehicle *v) noexcept { RustVehicleInvalidateView(VehicleOf(v)->index); }
-inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->Record().trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
 inline void RustVehicleShowNewGRFError(EngineID engine, StringID first, StringID second, GRFBug bug, bool critical) noexcept { ShowNewGrfVehicleError(engine, first, second, bug, critical); }
 

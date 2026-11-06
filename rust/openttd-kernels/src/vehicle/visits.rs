@@ -42,24 +42,24 @@ use crate::{
 };
 use std::{collections::BTreeSet, ffi::c_void};
 
-/// One consist part's `cargo_cap`, `refit_cap` and `cargo_type`.
-#[allow(clippy::struct_field_names)]
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Capacity {
-    pub capacity: u16,
-    pub remaining: u16,
-    pub cargo: u8,
-}
-
 /// Front loading fields; none changes during one prediction or arrival.
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Prediction {
+struct Prediction {
     pub loading_tick: u64,
     pub last_loading: u16,
     pub last_station: u16,
     pub ticks: u16,
+}
+
+impl Prediction {
+    fn read(v: VehicleRef) -> Self {
+        Self {
+            loading_tick: v.last_loading_tick(),
+            last_loading: v.last_loading_station(),
+            last_station: v.last_station(),
+            ticks: v.load_unload_ticks(),
+        }
+    }
 }
 
 /// `STR_PERCENT_UP`, `STR_PERCENT_DOWN`, `STR_PERCENT_UP_DOWN`, `STR_PERCENT_NONE`.
@@ -86,25 +86,17 @@ pub struct Services {
     pub loading: &'static Loading,
     pub refit: &'static refit::Services,
     pub(crate) schedule: &'static ScheduleServices,
-    pub capacity: extern "C" fn(VehicleRef) -> Capacity,
-    pub prediction: extern "C" fn(VehicleRef) -> Prediction,
     /// Virtual `GetDisplayMaxSpeed()`.
     pub display_speed: extern "C" fn(VehicleRef) -> i32,
     /// `BaseStation::xy`.
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub percent: PercentStrings,
-    /// `v->last_loading_station = station`.
-    pub set_last_loading: extern "C" fn(VehicleRef, u16),
-    /// `v->last_loading_tick = tick`.
-    pub set_loading_tick: extern "C" fn(VehicleRef, u64),
     /// Arrival window invalidation and `Station::MarkTilesDirty(true)`.
     pub arrival_dirty: extern "C" fn(VehicleRef),
     /// `&st->goods[cargo].GetOrCreateData().cargo`.
     pub station_cargo: extern "C" fn(*mut Station, u8) -> *mut List,
     /// `HideFillingPercent(&v->fill_percent_te_id)`.
     pub hide_filling: extern "C" fn(VehicleRef),
-    /// `v->trip_occupancy = value`.
-    pub set_occupancy: extern "C" fn(VehicleRef, u8),
     /// Station randomisation and animation triggers for a departing train.
 
     /// Road stop randomisation and animation triggers for a departing road vehicle.
@@ -258,16 +250,17 @@ fn increase_vehicle_stats(
 ) {
     let mut part = Some(front);
     while let Some(v) = part {
-        let c = (s.capacity)(v);
-        if c.remaining > 0 {
+        let remaining = v.refit_cap();
+        let cargo = v.cargo_type();
+        if remaining > 0 {
             // The stored count can exceed refit_cap after autoreplace/autorefit.
             witness::hit(witness::VISITS_ARRIVAL_STATS);
-            let usage = u32::from(c.remaining).min((s.loading.stored_count)(v));
+            let usage = u32::from(remaining).min((s.loading.stored_count)(v));
             increase_stats(
                 st,
-                c.cargo,
+                cargo,
                 next,
-                u32::from(c.remaining),
+                u32::from(remaining),
                 usage,
                 time,
                 EdgeUpdateModes::INCREASE,
@@ -667,20 +660,22 @@ pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: b
         cargo: INVALID_CARGO,
         allow_merge,
         full_loading: is_full_loading,
-        prediction: (s.prediction)(v),
+        prediction: Prediction::read(v),
     };
     let mut part = Some(v);
     while let Some(u) = part {
-        let c = (s.capacity)(u);
+        let capacity = u.cargo_cap();
+        let remaining = u.refit_cap();
+        let cargo = u.cargo_type();
         refresher.refits.push(RefitDesc {
-            cargo: c.cargo,
-            capacity: c.capacity,
-            remaining: c.remaining,
+            cargo,
+            capacity,
+            remaining,
         });
-        if c.remaining > 0 {
-            s.check(|| c.cargo < NUM_CARGO);
-            let total = refresher.capacity(c.cargo);
-            *total = total.wrapping_add(u32::from(c.remaining));
+        if remaining > 0 {
+            s.check(|| cargo < NUM_CARGO);
+            let total = refresher.capacity(cargo);
+            *total = total.wrapping_add(u32::from(remaining));
         }
         part = (u).next();
     }
@@ -824,7 +819,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
     s.check(|| {
         (s.shared.tile_type)((v).tile()) == MP_STATION || v.vehicle_type() == VehicleType::SHIP.0
     });
-    let front = (s.prediction)(v);
+    let front = Prediction::read(v);
     witness::hit(witness::VISITS_BEGIN_LOADING);
     let travel_time = (s.shared.tick_counter)().wrapping_sub(front.loading_tick);
     let o = s.orders();
@@ -868,7 +863,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
 
     let order = o.current(v);
     if order.load() != OLFB_NO_LOAD || order.unload() != OUFB_NO_UNLOAD {
-        let front = (s.prediction)(v);
+        let front = Prediction::read(v);
         if order.can_leave_with_cargo(front.last_loading != INVALID_STATION) {
             witness::hit(witness::VISITS_LEAVE_LOADED);
             // Refresh next hop stats at least once during the stop, with
@@ -877,12 +872,12 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
             refresh_links(v, true, false, s);
 
             // The vehicle could load here or stop with cargo loaded.
-            (s.set_last_loading)(v, front.last_station);
-            (s.set_loading_tick)(v, (s.shared.tick_counter)());
+            v.write_last_loading_station(front.last_station);
+            v.write_last_loading_tick((s.shared.tick_counter)());
         } else {
             // It had to unload or transfer everything and leaves empty.
             witness::hit(witness::VISITS_LEAVE_EMPTY);
-            (s.set_last_loading)(v, INVALID_STATION);
+            v.write_last_loading_station(INVALID_STATION);
         }
     }
 
@@ -895,7 +890,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     }
 
     (s.hide_filling)(v);
-    (s.set_occupancy)(v, percent_filled(v, None, s));
+    v.write_trip_occupancy(percent_filled(v, None, s));
 
     let kind = VehicleType(v.vehicle_type());
     if kind == VehicleType::TRAIN && (v).status() & VS_CRASHED == 0 {
@@ -1077,7 +1072,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
         // SAFETY: as in `entered_depot_this_tick`.
         unsafe { crate::fleet::pending::add(s.id(v), false) };
         // The link across this stop can't be predicted.
-        (s.set_last_loading)(v, INVALID_STATION);
+        v.write_last_loading_station(INVALID_STATION);
 
         o.reset_unbunching(v);
 
@@ -1168,17 +1163,12 @@ crate::abi::layouts! {
         loading,
         refit,
         schedule,
-        capacity,
-        prediction,
         display_speed,
         location,
         percent,
-        set_last_loading,
-        set_loading_tick,
         arrival_dirty,
         station_cargo,
         hide_filling,
-        set_occupancy,
 
         leave_sound,
         depot_windows,
@@ -1191,8 +1181,6 @@ crate::abi::layouts! {
     };
     "OpenTTDVisitCosts" ["probe"] => Costs { out, temporary, };
     "OpenTTDVisitPercentStrings" ["probe"] => PercentStrings { up, down, up_down, none, };
-    "OpenTTDVisitPrediction" ["probe"] => Prediction { loading_tick, last_loading, last_station, ticks, };
-    "OpenTTDVisitCapacity" ["probe"] => Capacity { capacity, remaining, cargo, };
 }
 
 #[cfg(test)]

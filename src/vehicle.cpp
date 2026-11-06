@@ -83,15 +83,6 @@ static_assert(VehicleRailFlags{VehicleRailFlag::Reversed}.base() == 128 && Vehic
 static_assert(CCF_ARRANGE.base() == 3 && TRACK_BIT_DEPOT == 0x80 && VehicleCargoList::MTA_LOAD == 3);
 static_assert(OrderDepotTypeFlags{OrderDepotTypeFlag::PartOfOrders}.base() == 2 && OrderDepotActionFlags{OrderDepotActionFlag::Halt}.base() == 1 && OrderDepotActionFlags{OrderDepotActionFlag::NearestDepot}.base() == 2);
 static_assert(to_underlying(OrderLoadType::FullLoad) == 2 && to_underlying(OrderLoadType::FullLoadAny) == 3);
-static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcept
-{
-	return {.capacity = RustVehicleCargoCap(handle), .remaining = RustVehicleRefitCap(handle), .cargo = RustVehicleCargoType(handle)};
-}
-static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.loading_tick = v->Record().last_loading_tick, .last_loading = RustVehicleLastLoadingStation(handle), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
-}
 static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 {
 	Vehicle *v = VehicleOf(handle);
@@ -151,17 +142,12 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.loading = &GetRustStationLoading(),
 		.refit = &GetRustVehicleRefitServices(),
 		.schedule = &LinkGraphSchedule::services,
-		.capacity = VehicleVisitCapacity,
-		.prediction = VehicleVisitPrediction,
 		.display_speed = RustVehicleDisplaySpeed,
 		.location = RustStationLocation,
 		.percent = {.up = STR_PERCENT_UP, .down = STR_PERCENT_DOWN, .up_down = STR_PERCENT_UP_DOWN, .none = STR_PERCENT_NONE},
-		.set_last_loading = RustVehicleSetLastLoadingStation,
-		.set_loading_tick = RustVehicleSetLastLoadingTick,
 		.arrival_dirty = VehicleVisitArrivalDirty,
 		.station_cargo = RustStationCargoOwner,
 		.hide_filling = RustVehicleHideFilling,
-		.set_occupancy = RustVehicleSetTripOccupancy,
 		.leave_sound = RustVehiclePlayLeaveSound,
 		.depot_windows = VehicleVisitDepotWindows,
 		.ship_depot_viewport = VehicleVisitShipDepotViewport,
@@ -388,7 +374,7 @@ Vehicle::Vehicle(VehicleType type) : BaseVehicle(type)
 	this->group_id           = DEFAULT_GROUP;
 	this->fill_percent_te_id = INVALID_TE_ID;
 	this->Record().colourmap          = PAL_NONE;
-	this->last_loading_station = StationID::Invalid();
+	this->SetLastLoadingStation(StationID::Invalid());
 }
 
 VehiclesOnTile::Iterator::Iterator(TileIndex tile) : cursor(openttd_rust_occupancy_on_tile(&GetRustVehicleServices(), tile.base())) {}
