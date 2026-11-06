@@ -202,10 +202,10 @@ static std::string GetTrainEngineInfoString(const Engine &e)
 	}
 
 	if (_settings_game.vehicle.train_acceleration_model != AM_ORIGINAL && !is_maglev) {
-		res << GetString(STR_ENGINE_PREVIEW_SPEED_POWER_MAX_TE, PackVelocity(e.GetDisplayMaxSpeed(), e.type), e.GetPower(), e.GetDisplayMaxTractiveEffort());
+		res << GetString(STR_ENGINE_PREVIEW_SPEED_POWER_MAX_TE, PackVelocity(e.GetDisplayMaxSpeed(), e.Record().type), e.GetPower(), e.GetDisplayMaxTractiveEffort());
 		res << '\n';
 	} else {
-		res << GetString(STR_ENGINE_PREVIEW_SPEED_POWER, PackVelocity(e.GetDisplayMaxSpeed(), e.type), e.GetPower());
+		res << GetString(STR_ENGINE_PREVIEW_SPEED_POWER, PackVelocity(e.GetDisplayMaxSpeed(), e.Record().type), e.GetPower());
 		res << '\n';
 	}
 
@@ -222,7 +222,7 @@ static std::string GetAircraftEngineInfoString(const Engine &e)
 {
 	std::stringstream res;
 
-	res << GetString(STR_ENGINE_PREVIEW_COST_MAX_SPEED, e.GetCost(), PackVelocity(e.GetDisplayMaxSpeed(), e.type));
+	res << GetString(STR_ENGINE_PREVIEW_COST_MAX_SPEED, e.GetCost(), PackVelocity(e.GetDisplayMaxSpeed(), e.Record().type));
 	res << '\n';
 
 	if (uint16_t range = e.GetRange(); range > 0) {
@@ -253,12 +253,12 @@ static std::string GetRoadVehEngineInfoString(const Engine &e)
 	std::stringstream res;
 
 	if (_settings_game.vehicle.roadveh_acceleration_model == AM_ORIGINAL) {
-		res << GetString(STR_ENGINE_PREVIEW_COST_MAX_SPEED, e.GetCost(), PackVelocity(e.GetDisplayMaxSpeed(), e.type));
+		res << GetString(STR_ENGINE_PREVIEW_COST_MAX_SPEED, e.GetCost(), PackVelocity(e.GetDisplayMaxSpeed(), e.Record().type));
 		res << '\n';
 	} else {
 		res << GetString(STR_ENGINE_PREVIEW_COST_WEIGHT, e.GetCost(), e.GetDisplayWeight());
 		res << '\n';
-		res << GetString(STR_ENGINE_PREVIEW_SPEED_POWER_MAX_TE, PackVelocity(e.GetDisplayMaxSpeed(), e.type), e.GetPower(), e.GetDisplayMaxTractiveEffort());
+		res << GetString(STR_ENGINE_PREVIEW_SPEED_POWER_MAX_TE, PackVelocity(e.GetDisplayMaxSpeed(), e.Record().type), e.GetPower(), e.GetDisplayMaxTractiveEffort());
 		res << '\n';
 	}
 
@@ -275,7 +275,7 @@ static std::string GetShipEngineInfoString(const Engine &e)
 {
 	std::stringstream res;
 
-	res << GetString(STR_ENGINE_PREVIEW_COST_MAX_SPEED, e.GetCost(), PackVelocity(e.GetDisplayMaxSpeed(), e.type));
+	res << GetString(STR_ENGINE_PREVIEW_COST_MAX_SPEED, e.GetCost(), PackVelocity(e.GetDisplayMaxSpeed(), e.Record().type));
 	res << '\n';
 
 	res << GetPreviewRunningCostString(e);
@@ -297,7 +297,7 @@ std::string GetEngineInfoString(EngineID engine)
 {
 	const Engine &e = *Engine::Get(engine);
 
-	switch (e.type) {
+	switch (e.Record().type) {
 		case VEH_TRAIN:
 			return GetTrainEngineInfoString(e);
 

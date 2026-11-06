@@ -320,7 +320,7 @@ static bool EnginePreSort(const EngineID &a, const EngineID &b)
 	const Engine &engine_b = *Engine::Get(b);
 
 	/* 1. Sort by engine type */
-	if (engine_a.type != engine_b.type) return static_cast<int>(engine_a.type) < static_cast<int>(engine_b.type);
+	if (engine_a.Record().type != engine_b.Record().type) return static_cast<int>(engine_a.Record().type) < static_cast<int>(engine_b.Record().type);
 
 	/* 2. Sort by scope-GRFID */
 	if (engine_a.grf_prop.grfid != engine_b.grf_prop.grfid) return engine_a.grf_prop.grfid < engine_b.grf_prop.grfid;
