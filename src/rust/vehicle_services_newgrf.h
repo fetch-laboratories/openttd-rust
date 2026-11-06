@@ -69,7 +69,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.real_at = [](const RealSpriteGroup *group, bool motion, uint32_t index) noexcept { return motion ? RustRealLoaded(group, index) : RustRealLoading(group, index); },
 		.engine_by_id = RustEngineByID,
 		.default_cargo = RustEngineDefaultCargo,
-		.engine_flags = [](const OpenTTDEngine * e) noexcept -> uint8_t { return EngineOf(e)->flags.base(); },
+		.engine_flags = [](const OpenTTDEngine * e) noexcept -> uint8_t { return EngineOf(e)->Record().flags.base(); },
 		.cargo_info = [](uint8_t cargo) noexcept -> OpenTTDVehicleCargoInfo { const CargoSpec *cs = RustCargoSpec(cargo); return {RustCargoSpecClasses(cs), cs->weight}; },
 		.build_year = [](OpenTTDVehicle * v) noexcept -> int32_t { return RustVehicleBuildYear(VehicleOf(v)).base(); },
 		.last_service = [](OpenTTDVehicle * v) noexcept -> int32_t { return RustVehicleCalendarService(VehicleOf(v)).base(); },
