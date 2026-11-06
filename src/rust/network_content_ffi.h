@@ -49,9 +49,7 @@ struct OpenTTDContentServices {
 	OpenTTDContentInfo *(*list_release)(ContentVector *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(list_release);
 	size_t (*list_size)(const ContentVector *) noexcept OPENTTD_SERVICE_DEFAULT(list_size);
 	void *(*name)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(name);
-	int64_t (*now)() noexcept OPENTTD_SERVICE_DEFAULT(now);
 	void (*queue_reset)() noexcept OPENTTD_SERVICE_DEFAULT(queue_reset);
-	void (*send_packet)(OpenTTDPacketState *) noexcept OPENTTD_SERVICE_DEFAULT(send_packet);
 	void (*string_assign)(void *, const void *) noexcept OPENTTD_SERVICE_DEFAULT(string_assign);
 	bool (*string_empty)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(string_empty);
 	void *(*tag)(OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(tag);

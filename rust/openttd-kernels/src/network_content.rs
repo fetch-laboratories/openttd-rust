@@ -93,11 +93,8 @@ pub struct Services {
     pub list_release: extern "C" fn(*mut ContentVector, usize) -> *mut ContentInfo,
     pub list_size: extern "C" fn(*const ContentVector) -> usize,
     pub name: extern "C" fn(*mut ContentInfo) -> *mut c_void,
-    /// Steady-clock nanoseconds since its epoch.
-    pub now: extern "C" fn() -> i64,
     /// `_request_queue_timeout.Reset()`.
     pub queue_reset: extern "C" fn(),
-    pub send_packet: extern "C" fn(*mut PacketState),
     pub string_assign: extern "C" fn(*mut c_void, *const c_void),
     pub string_empty: extern "C" fn(*const c_void) -> bool,
     /// Append an empty tag and return it.
@@ -220,7 +217,7 @@ fn new_packet(s: &Services, kind: u8, limit: usize) -> PacketState {
 }
 fn send_packet(s: &Services, mut p: PacketState) {
     unsafe { packet::prepare_to_send(&raw mut p, s.tcp.packet, check) };
-    (s.send_packet)(&raw mut p);
+    (s.tcp.packet_enqueue)(s.client, &raw mut p);
 }
 
 fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
@@ -929,7 +926,7 @@ fn request_queued_content_info(s: &Services) {
     }
 
     // Wait until data briefly stops arriving before making the request.
-    if (s.now)() <= with(|c| c.last_activity).wrapping_add(CONTENT_QUEUE_TIMEOUT) {
+    if (s.tcp.now)() <= with(|c| c.last_activity).wrapping_add(CONTENT_QUEUE_TIMEOUT) {
         (s.queue_reset)();
         return;
     }
@@ -1098,7 +1095,7 @@ fn check_dependency_state(s: &Services, ci: *mut ContentInfo) {
 /// Construction of `_network_content_client`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_init(s: &Services) {
-    let now = (s.now)();
+    let now = (s.tcp.now)();
     with(|c| c.last_activity = now);
 }
 
@@ -1111,7 +1108,7 @@ pub extern "C" fn openttd_rust_content_connect(s: &Services) {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_connected(s: &Services, success: bool) {
     if success {
-        let now = (s.now)();
+        let now = (s.tcp.now)();
         with(|c| c.last_activity = now);
     }
     with(|c| c.is_connecting = false);
@@ -1136,14 +1133,14 @@ pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
     }
 
     // Close the connection after inactivity; HTTP downloads can still be pending.
-    if (s.now)() > with(|c| c.last_activity).wrapping_add(IDLE_TIMEOUT) {
+    if (s.tcp.now)() > with(|c| c.last_activity).wrapping_add(IDLE_TIMEOUT) {
         close_connection(s);
         return;
     }
 
     // Activity counts once a packet arrives, not on every attempt.
     if (s.tcp.can_send_receive)(s.client) && receive_packets(s) {
-        let now = (s.now)();
+        let now = (s.tcp.now)();
         with(|c| c.last_activity = now);
     }
 
@@ -1323,8 +1320,8 @@ crate::abi::layouts! {
         callback_receive, client, close_socket, connect, content_version, dependencies,
         dependency_push, description, error_extract, error_not_writable, extract, file_close,
         file_create, file_open, file_write, filename, has_content, http_get, http_mirror,
-        info_assign, info_delete, info_new, list_get, list_release, list_size, name, now,
-        queue_reset, send_packet, string_assign,
+        info_assign, info_delete, info_new, list_get, list_release, list_size, name,
+        queue_reset, string_assign,
         string_empty, tag, tcp, tcp_close, tree_push, url, version,
     };
 }
