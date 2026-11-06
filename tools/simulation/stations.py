@@ -770,6 +770,20 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 /* #378: real graph mutations plus arithmetic outside ordinary play's range. */
 static void StationGraphs()
 {
+	auto last_update = [](const auto &edge) {
+#ifdef WITH_RUST
+		return std::max(edge.last_unrestricted_update, edge.last_restricted_update).base();
+#else
+		return edge.LastUpdate().base();
+#endif
+	};
+	auto travel_time = [](const auto &edge) {
+#ifdef WITH_RUST
+		return LinkGraph::EdgeTravelTime(edge);
+#else
+		return edge.TravelTime();
+#endif
+	};
 	constexpr CargoType cargo = 0;
 	std::array<Station *, 4> stations; std::array<LinkGraphID, 4> graphs; std::array<NodeID, 4> nodes;
 	auto it = Station::Iterate().begin();
@@ -791,7 +805,7 @@ static void StationGraphs()
 #else
 	StationNeed((*first)[2].demand == 0, __LINE__);
 #endif
-	fmt::print(stderr, "STCMD graph merge {} {} {} {} {}\n", first->Size(), copy.Size(), stations[2]->goods[cargo].node, (*first)[2][3].LastUpdate().base(), (*first)[2][3].travel_time_sum);
+	fmt::print(stderr, "STCMD graph merge {} {} {} {} {}\n", first->Size(), copy.Size(), stations[2]->goods[cargo].node, last_update((*first)[2][3]), (*first)[2][3].travel_time_sum);
 	first->RemoveNode(1);
 	fmt::print(stderr, "STCMD graph nonlast {} {} {}\n", first->Size(), stations[3]->goods[cargo].node, (*first)[2][1].dest_node);
 	first->RemoveNode(first->Size() - 1);
@@ -812,8 +826,9 @@ static void StationGraphs()
 			edge.last_restricted_update = TimerGameEconomy::date;
 		}
 		graph.Compress(); graph.ShiftDates(TimerGameEconomy::Date{9});
-		const auto &edge = graph[0][0];
-		fmt::print(stderr, "STCMD graph compress {} {} {} {} {} {} {}\n", cap, edge.capacity, edge.usage, edge.travel_time_sum, edge.last_unrestricted_update.base(), edge.LastUpdate().base(), edge.TravelTime());
+		const auto &graph_node = graph[0];
+		const auto &edge = graph_node[0];
+		fmt::print(stderr, "STCMD graph compress {} {} {} {} {} {} {}\n", cap, edge.capacity, edge.usage, edge.travel_time_sum, edge.last_unrestricted_update.base(), last_update(edge), travel_time(edge));
 		fmt::print(stderr, "STCMD graph scale {} {} {}\n", graph.Monthly(UINT32_MAX), LinkGraph::Scale(edge.travel_time_sum, TimerGameEconomy::Date{257}, TimerGameEconomy::Date{3}), LinkGraph::Scale(0, TimerGameEconomy::Date{1}, TimerGameEconomy::Date{-1}));
 	}
 	for (uint64_t sum : {uint64_t{0}, UINT64_MAX - 1}) {
