@@ -29,7 +29,7 @@ LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgrap
 /** Start the native worker; Rust executes the synchronous failure fallback. */
 bool LinkGraphJob::StartThread()
 {
-	return StartNewThread(&this->thread, "ottd:linkgraph", &openttd_rust_schedule_run, &LinkGraphSchedule::services, this->record);
+	return StartNewThread(&this->thread, "ottd:linkgraph", &openttd_rust_schedule_run, &LinkGraphSchedule::services, &this->Record());
 }
 
 /**
