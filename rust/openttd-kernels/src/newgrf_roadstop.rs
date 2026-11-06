@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Road-stop invocation and spec-association policy. Shells and vectors stay native; element
+//! Road-stop invocation and spec-association policy over Rust-owned lists; element
 //! observations end before resize or Action2 evaluation. Resolver invocations cannot reset
 //! the map or yield the game-state mutex.
 // Casts preserve the native uint8/uint16 assignments and accessor narrowing.
@@ -13,6 +13,8 @@
     clippy::cast_sign_loss
 )]
 use crate::cargo_type::NUM_CARGO;
+use crate::station_record::record_of;
+use crate::station_storage::road;
 use crate::station_type::{
     ROAD_WAYPOINT, SRT_CARGO_TAKEN, SRT_NEW_CARGO, STATION_BUS, STATION_TRUCK,
 };
@@ -37,16 +39,6 @@ pub struct State {
     pub cargo: u8,
 }
 #[repr(C)]
-pub struct SpecKey {
-    pub grfid: u32,
-    pub local_id: u16,
-}
-#[repr(C)]
-pub struct SpecVacancy {
-    pub spec: *const RoadSpec,
-    pub grfid: u32,
-}
-#[repr(C)]
 pub struct SpecTriggers {
     pub animation: u16,
     pub cargo: u64,
@@ -58,10 +50,8 @@ pub struct Reseed {
 }
 #[repr(C)]
 pub struct Services {
-    pub rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RoadSpec),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub by_tile: unsafe extern "C" fn(u32) -> *mut BaseStation,
-    pub clear: unsafe extern "C" fn(*mut BaseStation) -> (),
     pub company: unsafe extern "C" fn(u8, *const c_void) -> u32,
     pub custom: unsafe extern "C" fn(u32) -> bool,
     pub group: unsafe extern "C" fn(*const RoadSpec, u8) -> *const c_void,
@@ -69,17 +59,10 @@ pub struct Services {
     pub group_count: unsafe extern "C" fn(*const RoadSpec) -> usize,
     pub index: unsafe extern "C" fn(u32) -> u32,
     pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
-    pub resize: unsafe extern "C" fn(*mut BaseStation, usize) -> (),
     pub resolve_callback: unsafe extern "C" fn(*const State, u16, u32, u32, *mut i32, usize) -> u16,
     pub resolve_reseed: unsafe extern "C" fn(*const State, u8) -> Reseed,
-    pub set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RoadSpec, u32, u16) -> (),
     pub shared: *const Shared,
-    pub slot_grfid: unsafe extern "C" fn(*const BaseStation, usize) -> u32,
-    pub slot_key: unsafe extern "C" fn(*const BaseStation, usize) -> SpecKey,
-    pub slot_spec: unsafe extern "C" fn(*const BaseStation, usize) -> *const RoadSpec,
-    pub slot_vacancy: unsafe extern "C" fn(*const BaseStation, usize) -> SpecVacancy,
     pub spec_cargo: unsafe extern "C" fn(*const RoadSpec) -> u64,
-    pub spec_count: unsafe extern "C" fn(*const BaseStation) -> usize,
     pub spec_triggers: unsafe extern "C" fn(*const RoadSpec) -> SpecTriggers,
     pub station_id: unsafe extern "C" fn(*mut BaseStation) -> u16,
     pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
@@ -305,7 +288,7 @@ unsafe fn variable(
             }
             if variable == 0x6a {
                 return if unsafe { (s.custom)(tile) } {
-                    unsafe { (s.slot_grfid)((s.by_tile)(tile), (s.index)(tile) as usize) }
+                    unsafe { road::get((s.by_tile)(tile), (s.index)(tile) as usize).grfid }
                 } else {
                     0
                 };
@@ -313,11 +296,11 @@ unsafe fn variable(
             if variable == 0x6b && !unsafe { (s.custom)(tile) } {
                 return 0xfffe;
             }
-            let grfid = unsafe { (s.slot_grfid)(c.station, (s.index)(c.tile) as usize) };
+            let grfid = unsafe { road::get(c.station, (s.index)(c.tile) as usize).grfid };
             if variable == 0x6b {
-                let slot = unsafe { (s.slot_key)((s.by_tile)(tile), (s.index)(tile) as usize) };
+                let slot = unsafe { road::get((s.by_tile)(tile), (s.index)(tile) as usize) };
                 return if slot.grfid == grfid {
-                    u32::from(slot.local_id)
+                    u32::from(slot.localidx)
                 } else {
                     0xfffe
                 };
@@ -337,9 +320,9 @@ unsafe fn variable(
                 res |= 1 << 20;
             }
             if unsafe { (s.custom)(tile) } {
-                let slot = unsafe { (s.slot_key)((s.by_tile)(tile), (s.index)(tile) as usize) };
+                let slot = unsafe { road::get((s.by_tile)(tile), (s.index)(tile) as usize) };
                 res |= (1 << if slot.grfid == grfid { 8 } else { 9 })
-                    | u32::from(slot.local_id.min(255));
+                    | u32::from(slot.localidx.min(255));
             }
             return res;
         }
@@ -485,8 +468,8 @@ unsafe fn spec_entry(
     }
     let st = unsafe { (s.by_tile)(tile) };
     let index = unsafe { (s.index)(tile) } as usize;
-    if index < unsafe { (s.spec_count)(st) } {
-        entry.spec = unsafe { (s.slot_spec)(st, index) };
+    if index < road::count(st) {
+        entry.spec = road::get(st, index).spec;
         if !entry.spec.is_null() {
             entry.object = st;
         }
@@ -550,7 +533,6 @@ pub unsafe extern "C" fn openttd_rust_roadstop_animation_callback(
 pub unsafe extern "C" fn openttd_rust_roadstop_allocate(
     spec: *const RoadSpec,
     st: *mut BaseStation,
-    s: *const Services,
 ) -> i16 {
     if spec.is_null() {
         return 0;
@@ -558,17 +540,16 @@ pub unsafe extern "C" fn openttd_rust_roadstop_allocate(
     if st.is_null() {
         return 1;
     }
-    let s = unsafe { &*s };
-    let count = unsafe { (s.spec_count)(st) };
+    let count = road::count(st);
     let limit = crate::newgrf_roadstop::NUM_ROADSTOPSPECS_PER_STATION;
     for i in 1..count.min(limit) {
-        if unsafe { (s.slot_spec)(st, i) } == spec {
+        if road::get(st, i).spec == spec {
             return i as i16;
         }
     }
     let mut i = 1;
     while i < count && i < limit {
-        let slot = unsafe { (s.slot_vacancy)(st, i) };
+        let slot = road::get(st, i);
         if slot.spec.is_null() && slot.grfid == 0 {
             break;
         }
@@ -582,8 +563,8 @@ pub unsafe extern "C" fn openttd_rust_roadstop_cache(st: *mut BaseStation, s: *c
     let mut animation = 0;
     let mut cargo = 0;
     crate::station_record::set_cached_roadstop_triggers(st, 0, 0);
-    for i in 0..unsafe { (s.spec_count)(st) } {
-        let spec = unsafe { (s.slot_spec)(st, i) };
+    for i in 0..road::count(st) {
+        let spec = road::get(st, i).spec;
         if spec.is_null() {
             continue;
         }
@@ -604,13 +585,13 @@ pub unsafe extern "C" fn openttd_rust_roadstop_assign(
         return;
     }
     let services = unsafe { &*s };
-    if usize::from(index) >= unsafe { (services.spec_count)(st) } {
+    if usize::from(index) >= road::count(st) {
         unsafe {
-            (services.resize)(st, usize::from(index) + 1);
+            road::resize(record_of(st), usize::from(index) + 1);
         }
     }
     unsafe {
-        (services.set_slot)(
+        road::set(
             st,
             index,
             spec,
@@ -636,25 +617,23 @@ pub unsafe extern "C" fn openttd_rust_roadstop_deallocate(
             return;
         }
     }
-    unsafe {
-        (services.set_slot)(st, index, ptr::null(), 0, 0);
-    }
-    let count = unsafe { (services.spec_count)(st) };
+    road::set(st, index, ptr::null(), 0, 0);
+    let count = road::count(st);
     if usize::from(index) == count - 1 {
         let mut num = count - 1;
         while num > 0 {
-            if unsafe { (services.slot_grfid)(st, num) } != 0 {
+            if road::get(st, num).grfid != 0 {
                 break;
             }
             num -= 1;
         }
         if num > 0 {
             unsafe {
-                (services.resize)(st, num + 1);
+                road::resize(record_of(st), num + 1);
             }
         } else {
             unsafe {
-                (services.clear)(st);
+                road::resize(record_of(st), 0);
                 crate::station_record::set_cached_roadstop_triggers(st, 0, 0);
             }
             return;
@@ -747,11 +726,9 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRoadStopResolverState" ["station_service"] => State { station, spec, root, town_scope, tile, roadtype, kind => type, view, cargo, };
-    "OpenTTDRoadStopSpecKey" ["station_service"] => SpecKey { grfid, local_id, };
-    "OpenTTDRoadStopSpecVacancy" ["station_service"] => SpecVacancy { spec, grfid, };
     "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, base_scope, by_tile, clear, company, custom, group, group_cargo, group_count, index, make_town, resize, resolve_callback, resolve_reseed, set_slot, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_triggers, station_id, town_tile, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { base_scope, by_tile, company, custom, group, group_cargo, group_count, index, make_town, resolve_callback, resolve_reseed, shared, spec_cargo, spec_triggers, station_id, town_tile, };
 }
 
 /// Class index limit from `newgrf_roadstop.h`.

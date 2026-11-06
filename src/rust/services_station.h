@@ -43,26 +43,7 @@ inline size_t RustStationBridgeInfoCount(const Spec *spec) noexcept { return spe
 inline CargoTypes RustStationCargoTriggers(const StationSpec *spec) noexcept { return spec->cargo_triggers; }
 inline uint16_t RustStationAnimationTriggers(const StationSpec *spec) noexcept { return spec->animation.triggers.base(); }
 inline OpenTTDStationSpecTriggers RustStationSpecTriggers(const StationSpec *spec) noexcept { return {RustStationAnimationTriggers(spec), RustStationCargoTriggers(spec)}; }
-inline size_t RustStationSpecCount(const BaseStation *st) noexcept { return st->speclist.size(); }
-inline const StationSpec *RustStationSlotSpec(const BaseStation *st, size_t index) noexcept { return st->speclist[index].spec; }
-inline uint32_t RustStationSlotGRFID(const BaseStation *st, size_t index) noexcept { return st->speclist[index].grfid; }
-inline uint16_t RustStationSlotLocalID(const BaseStation *st, size_t index) noexcept { return st->speclist[index].localidx; }
-inline OpenTTDStationSpecVacancy RustStationSlotVacancy(const BaseStation *st, size_t index) noexcept { return {RustStationSlotSpec(st, index), RustStationSlotGRFID(st, index)}; }
-inline OpenTTDGRFClassIdentity RustStationSlotKey(const BaseStation *st, size_t index) noexcept { return {RustStationSlotGRFID(st, index), RustStationSlotLocalID(st, index)}; }
-inline void RustStationSpecResize(BaseStation *st, size_t size) noexcept { st->speclist.resize(size); }
-inline void RustStationSpecClear(BaseStation *st) noexcept { st->speclist.clear(); }
-inline void RustStationRebindSpec(BaseStation *st, size_t index, const StationSpec *spec) noexcept { st->speclist[index].spec = spec; }
-inline void RustStationSetSpecSlot(BaseStation *st, uint8_t index, const StationSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { RustStationRebindSpec(st, index, spec); auto &slot = st->speclist[index]; slot.grfid = grfid; slot.localidx = local_id; }
 inline uint32_t RustCustomStationIndex(uint32_t tile) noexcept { return GetCustomStationSpecIndex(TileIndex{tile}); }
-inline size_t RustRoadStopSpecCount(const BaseStation *st) noexcept { return st->roadstop_speclist.size(); }
-inline const RoadStopSpec *RustRoadStopSlotSpec(const BaseStation *st, size_t index) noexcept { return st->roadstop_speclist[index].spec; }
-inline uint32_t RustRoadStopSlotGRFID(const BaseStation *st, size_t index) noexcept { return st->roadstop_speclist[index].grfid; }
-inline OpenTTDRoadStopSpecKey RustRoadStopSlotKey(const BaseStation *st, size_t index) noexcept { return {RustRoadStopSlotGRFID(st, index), st->roadstop_speclist[index].localidx}; }
-inline OpenTTDRoadStopSpecVacancy RustRoadStopSlotVacancy(const BaseStation *st, size_t index) noexcept { return {RustRoadStopSlotSpec(st, index), RustRoadStopSlotGRFID(st, index)}; }
-inline void RustRoadStopSpecResize(BaseStation *st, size_t size) noexcept { st->roadstop_speclist.resize(size); }
-inline void RustRoadStopSpecClear(BaseStation *st) noexcept { st->roadstop_speclist.clear(); }
-inline void RustRoadStopRebindSpec(BaseStation *st, size_t index, const RoadStopSpec *spec) noexcept { st->roadstop_speclist[index].spec = spec; }
-inline void RustRoadStopSetSpecSlot(BaseStation *st, uint8_t index, const RoadStopSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { RustRoadStopRebindSpec(st, index, spec); auto &slot = st->roadstop_speclist[index]; slot.grfid = grfid; slot.localidx = local_id; }
 inline bool RustCustomRoadStopSpecIndex(uint32_t tile) noexcept { return IsCustomRoadStopSpecIndex(TileIndex(tile)); }
 inline uint32_t RustCustomRoadStopIndex(uint32_t tile) noexcept { return GetCustomRoadStopSpecIndex(TileIndex(tile)); }
 inline CargoTypes RustRoadStopCargoTriggers(const RoadStopSpec *spec) noexcept { return spec->cargo_triggers; }
@@ -81,7 +62,6 @@ inline uint16_t RustAirportMovingFlags(const AirportMovingData *moving) noexcept
 template <class Handle> inline Handle RustStationGet(uint16_t id) noexcept { return Station::Get(StationID{id}); }
 inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }
 inline bool RustStationAirportMember(const Station *st, uint32_t tile) noexcept { return st->TileBelongsToAirport(TileIndex{tile}); }
-inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
 inline uint8_t RustAirportLayoutHeading(const AirportFTAClass *airport, uint32_t index) noexcept { return airport->layout[index].heading; }
 inline uint8_t OpenTTDAirportLayoutHeading(const void *airport, uint8_t index) noexcept { return RustAirportLayoutHeading(static_cast<const AirportFTAClass *>(airport), index); }
 inline uint8_t RustAirportFlags(const AirportFTAClass *airport) noexcept { return airport->flags.base(); }

@@ -952,7 +952,7 @@ static void DrawTile_Station(TileInfo *ti)
 		if (IsCustomStationSpecIndex(ti->tile)) {
 			/* look for customization */
 			st = BaseStation::GetByTile(ti->tile);
-			statspec = st->speclist[GetCustomStationSpecIndex(ti->tile)].spec;
+			statspec = st->StationSpecs()[GetCustomStationSpecIndex(ti->tile)].spec;
 
 			if (statspec != nullptr) {
 				tile_layout = GetStationGfx(ti->tile);

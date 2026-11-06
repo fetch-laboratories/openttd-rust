@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Rail definition association policy. Native station shells and saved slot records remain
-//! canonical; typed container operations preserve their identity through resize and reload.
+//! Rail definition association policy over station-owned Rust reference lists.
+//! Definition pointers remain borrowed; saved identities survive resize and reload.
 //! Entries run under the game-state mutex. No native element borrow crosses a callback.
 #![allow(
     unsafe_code,
@@ -8,17 +8,13 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation
 )]
-use crate::newgrf_class::Identity;
 use crate::station_cmd::{RailSpec, SpecIndex};
+use crate::station_record::record_of;
+use crate::station_storage::{rail, road};
 use crate::station_type::BaseStation;
 use crate::tile_type::TileIndex;
 use std::ptr;
 const NUM_STATIONSSPECS_PER_STATION: usize = 255;
-#[repr(C)]
-pub struct Vacancy {
-    spec: *const RailSpec,
-    grfid: u32,
-}
 #[repr(C)]
 pub struct Triggers {
     animation: u16,
@@ -28,21 +24,8 @@ pub struct Triggers {
 pub struct Services {
     triggers: unsafe extern "C" fn(*const RailSpec) -> Triggers,
     shared: *const crate::services::Services,
-    roadstop: *const crate::newgrf_roadstop::Services,
-    count: unsafe extern "C" fn(*const BaseStation) -> usize,
-    vacancy: unsafe extern "C" fn(*const BaseStation, usize) -> Vacancy,
-    spec: unsafe extern "C" fn(*const BaseStation, usize) -> *const RailSpec,
-    key: unsafe extern "C" fn(*const BaseStation, usize) -> Identity,
-    resize: unsafe extern "C" fn(*mut BaseStation, usize),
-    clear: unsafe extern "C" fn(*mut BaseStation),
-    set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RailSpec, u32, u16),
-    rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RailSpec),
 }
-pub(crate) fn allocate(
-    s: *const Services,
-    spec: *const RailSpec,
-    st: *mut BaseStation,
-) -> SpecIndex {
+pub(crate) fn allocate(spec: *const RailSpec, st: *mut BaseStation) -> SpecIndex {
     if spec.is_null() {
         return SpecIndex {
             value: 0,
@@ -55,11 +38,10 @@ pub(crate) fn allocate(
             valid: true,
         };
     }
-    let s = unsafe { &*s };
-    let count = unsafe { (s.count)(st) };
+    let count = rail::count(st);
     let mut i = 1;
     while i < count && i < NUM_STATIONSSPECS_PER_STATION {
-        let slot = unsafe { (s.vacancy)(st, i) };
+        let slot = rail::get(st, i);
         if slot.spec.is_null() && slot.grfid == 0 {
             break;
         }
@@ -67,7 +49,7 @@ pub(crate) fn allocate(
     }
     if i == NUM_STATIONSSPECS_PER_STATION {
         for i in 1..count.min(NUM_STATIONSSPECS_PER_STATION) {
-            if unsafe { (s.spec)(st, i) } == spec {
+            if rail::get(st, i).spec == spec {
                 return SpecIndex {
                     value: i as u8,
                     valid: true,
@@ -88,8 +70,8 @@ pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
     let s = unsafe { &*native };
     let mut anim = 0;
     let mut cargo = 0;
-    for i in 0..unsafe { (s.count)(st) } {
-        let spec = unsafe { (s.spec)(st, i) };
+    for i in 0..rail::count(st) {
+        let spec = rail::get(st, i).spec;
         if spec.is_null() {
             continue;
         }
@@ -108,16 +90,13 @@ pub(crate) fn assign(
     if index == 0 {
         return;
     }
-    let s = unsafe { &*native };
-    if usize::from(index) >= unsafe { (s.count)(st) } {
+    if usize::from(index) >= rail::count(st) {
         unsafe {
-            (s.resize)(st, usize::from(index) + 1);
+            rail::resize(record_of(st), usize::from(index) + 1);
         }
     }
     let identity = unsafe { crate::newgrf_class::station_identity(spec) };
-    unsafe {
-        (s.set_slot)(st, index, spec, identity.grfid, identity.local_id);
-    }
+    rail::set(st, index, spec, identity.grfid, identity.local_id);
     cache(native, st);
 }
 pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u8) {
@@ -145,25 +124,23 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
             }
         }
     }
-    unsafe {
-        (s.set_slot)(st, index, ptr::null(), 0, 0);
-    }
-    let count = unsafe { (s.count)(st) };
+    rail::set(st, index, ptr::null(), 0, 0);
+    let count = rail::count(st);
     if usize::from(index) == count - 1 {
         let mut num = count - 1;
         while num > 0 {
-            if unsafe { (s.key)(st, num) }.grfid != 0 {
+            if rail::get(st, num).grfid != 0 {
                 break;
             }
             num -= 1;
         }
         if num > 0 {
             unsafe {
-                (s.resize)(st, num + 1);
+                rail::resize(record_of(st), num + 1);
             }
         } else {
             unsafe {
-                (s.clear)(st);
+                rail::resize(record_of(st), 0);
                 crate::station_record::set_cached_triggers(st, 0, 0);
             }
             return;
@@ -173,11 +150,10 @@ pub(crate) fn deallocate(native: *const Services, st: *mut BaseStation, index: u
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_spec_allocate(
-    s: *const Services,
     spec: *const RailSpec,
     st: *mut BaseStation,
 ) -> SpecIndex {
-    allocate(s, spec, st)
+    allocate(spec, st)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_spec_assign(
@@ -193,36 +169,26 @@ pub unsafe extern "C" fn openttd_rust_station_spec_cache(s: *const Services, st:
     cache(s, st);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_spec_rebind(
-    s: *const Services,
-    st: *mut BaseStation,
-) {
-    let s = unsafe { &*s };
-    for i in 0..unsafe { (s.count)(st) } {
-        let key = unsafe { (s.key)(st, i) };
+pub unsafe extern "C" fn openttd_rust_station_spec_rebind(st: *mut BaseStation) {
+    for i in 0..rail::count(st) {
+        let key = rail::get(st, i);
         if key.grfid == 0 {
             continue;
         }
-        let spec = unsafe { crate::newgrf_class::station::by_grf(key.grfid, key.local_id) };
-        unsafe {
-            (s.rebind)(st, i, spec);
-        }
+        let spec = unsafe { crate::newgrf_class::station::by_grf(key.grfid, key.localidx) };
+        rail::rebind(st, i, spec);
     }
-    let road = unsafe { &*s.roadstop };
-    for i in 0..unsafe { (road.spec_count)(st) } {
-        let key = unsafe { (road.slot_key)(st, i) };
+    for i in 0..road::count(st) {
+        let key = road::get(st, i);
         if key.grfid == 0 {
             continue;
         }
-        let spec = unsafe { crate::newgrf_class::roadstop::by_grf(key.grfid, key.local_id) };
-        unsafe {
-            (road.rebind)(st, i, spec);
-        }
+        let spec = unsafe { crate::newgrf_class::roadstop::by_grf(key.grfid, key.localidx) };
+        road::rebind(st, i, spec);
     }
 }
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationSpecTriggers" ["station_service"] => Triggers { animation, cargo };
-    "OpenTTDStationSpecVacancy" ["station_service"] => Vacancy { spec, grfid };
-    "OpenTTDStationAssociationServices" ["station_service"] => Services { triggers, shared, roadstop, count, vacancy, spec, key, resize, clear, set_slot, rebind };
+    "OpenTTDStationAssociationServices" ["station_service"] => Services { triggers, shared };
 }

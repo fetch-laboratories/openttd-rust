@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-spatial-console.hpp Unsorted station observations and actual query consumers. */
+#include "station-spec-fixture.hpp"
 #ifdef WITH_RUST
 #include "tests/station_spatial_fixture.hpp"
 #else
@@ -114,7 +115,7 @@ static void Station602Triggers(Station *st, Axis axis)
 	/* TriggerStationAnimation passes random bits in var10; var18 is the trigger. */
 	animation->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = 0x7F}};
 	auto *random = new RandomizedSpriteGroup(); random->var_scope = VSG_SCOPE_SELF; random->lowest_randbit = 16; random->groups = {result, result};
-	st->speclist.resize(2); st->speclist[1] = {&spec, file.grfid, 0};
+	FixtureSpecResize<StationSpec>(st, 2); FixtureSpecRow<StationSpec>(st, 1) = {&spec, file.grfid, 0};
 	TileIndex start = FIXTURE_GET(st, TrainStation, train_station).tile, middle = start + TileOffsByAxis(axis), end = start + 2 * TileOffsByAxis(axis);
 	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) SetCustomStationSpecIndex(t, 1);
 	for (bool blocked : {false, true}) for (uint8_t mode = 0; mode < 3; ++mode) {
@@ -164,7 +165,7 @@ static void Station602Triggers(Station *st, Axis axis)
 	}
 	SetStationTileBlocked(end, false);
 	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) SetCustomStationSpecIndex(t, 0);
-	st->speclist.clear(); StationUpdateCachedTriggers(st);
+	FixtureSpecResize<StationSpec>(st, 0); StationUpdateCachedTriggers(st);
 	delete random; delete animation; delete result;
 }
 static void Station602Rail(TileIndex tile, DoCommandFlags exec)

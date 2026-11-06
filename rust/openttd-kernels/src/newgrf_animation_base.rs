@@ -100,6 +100,40 @@ macro_rules! native_callback {
 native_callback!(i32);
 native_callback!(u64);
 #[derive(Default)]
+pub struct StationExtra;
+impl Callback<crate::station_cmd::RailSpec, BaseStation> for StationExtra {
+    type NativeEntry = ();
+    type Native = extern "C" fn(
+        u16,
+        u32,
+        u32,
+        *const crate::station_cmd::RailSpec,
+        *mut BaseStation,
+        u32,
+        i32,
+    ) -> u16;
+    fn entry(
+        a: &Services,
+        _: &Binding<crate::station_cmd::RailSpec, BaseStation, Self>,
+        tile: u32,
+    ) -> Entry<crate::station_cmd::RailSpec, BaseStation> {
+        crate::station_storage::rail_entry_by_tile(a.shared(), tile)
+    }
+    fn resolve(
+        _: &Services,
+        b: &Binding<crate::station_cmd::RailSpec, BaseStation, Self>,
+        cb: u16,
+        p1: u32,
+        p2: u32,
+        spec: *const crate::station_cmd::RailSpec,
+        object: *mut BaseStation,
+        tile: u32,
+        _: Self,
+    ) -> u16 {
+        (b.callback)(cb, p1, p2, spec, object, tile, 0)
+    }
+}
+#[derive(Default)]
 pub struct AirportExtra;
 impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for AirportExtra {
     type Native = ();
@@ -184,7 +218,7 @@ feature!(
     Station,
     crate::station_cmd::RailSpec,
     BaseStation,
-    i32,
+    StationExtra,
     TileFrame,
     CBID_STATION_ANIMATION_SPEED,
     CBID_STATION_ANIMATION_NEXT_FRAME

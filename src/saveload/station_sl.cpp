@@ -121,7 +121,7 @@ void AfterLoadStations()
 {
 	/* Update the speclists of all stations to point to the currently loaded custom stations. */
 	for (BaseStation *st : BaseStation::Iterate()) {
-		openttd_rust_station_spec_rebind(&GetStationAssociationServices(), st);
+		openttd_rust_station_spec_rebind(st);
 
 		if (Station::IsExpected(st)) {
 			Station *sta = Station::From(st);
@@ -200,7 +200,7 @@ static void SwapPackets(GoodsEntry *ge)
 }
 
 template <typename T>
-class SlStationSpecList : public VectorSaveLoadHandler<SlStationSpecList<T>, BaseStation, SpecMapping<T>> {
+class SlStationSpecList : public DefaultSaveLoadHandler<SlStationSpecList<T>, BaseStation> {
 public:
 	static inline const SaveLoad description[] = {
 		SLE_CONDVAR(SpecMapping<T>, grfid,    SLE_UINT32,                SLV_27,                    SL_MAX_VERSION),
@@ -211,11 +211,22 @@ public:
 
 	static inline uint8_t last_num_specs; ///< Number of specs of the last loaded station.
 
-	std::vector<SpecMapping<T>> &GetVector(BaseStation *bst) const override { return GetStationSpecList<T>(bst); }
-
-	size_t GetLength() const override
+	void Save(BaseStation *bst) const override
 	{
-		return IsSavegameVersionBefore(SLV_SAVELOAD_LIST_LENGTH) ? last_num_specs : SlGetStructListLength(UINT8_MAX);
+		const auto &rows = GetStationSpecList<T>(bst);
+		SlSetStructListLength(rows.size());
+		for (const auto &row : rows) SlObject(const_cast<SpecMapping<T> *>(&row), this->GetDescription());
+	}
+
+	void Load(BaseStation *bst) const override
+	{
+		size_t count = IsSavegameVersionBefore(SLV_SAVELOAD_LIST_LENGTH) ? last_num_specs : SlGetStructListLength(UINT8_MAX);
+		constexpr uint8_t road = std::is_same_v<T, RoadStopSpec>;
+		openttd_rust_station_specs_reserve(&bst->Record(), road, count);
+		while (count-- > 0) {
+			auto *row = static_cast<SpecMapping<T> *>(openttd_rust_station_specs_append(&bst->Record(), road));
+			SlObject(row, this->GetLoadDescription());
+		}
 	}
 };
 

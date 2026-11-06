@@ -29,5 +29,7 @@ void openttd_rust_station_roadstop_data_remove(OpenTTDStationRecord *, uint32_t 
 void openttd_rust_station_roadstop_data_clear(OpenTTDStationRecord *);
 void openttd_rust_station_roadstop_data_reserve(OpenTTDStationRecord *, size_t count);
 OpenTTDRoadStopTileData *openttd_rust_station_roadstop_data_append(OpenTTDStationRecord *);
+void openttd_rust_station_specs_reserve(OpenTTDStationRecord *, uint8_t road, size_t count);
+void *openttd_rust_station_specs_append(OpenTTDStationRecord *, uint8_t road);
 }
 #endif /* RUST_STATION_RECORD_FFI_H */

@@ -1042,7 +1042,7 @@ public:
 				items.insert({0, 0, STAT_CLASS_DFLT, 0});
 				default_added = true;
 			}
-			for (const auto &sm : st->speclist) {
+			for (const auto &sm : st->StationSpecs()) {
 				if (sm.spec == nullptr) continue;
 				items.insert({sm.grfid, sm.localidx, sm.spec->class_index, sm.spec->index});
 			}
@@ -1859,7 +1859,7 @@ public:
 				items.insert({0, 0, STAT_CLASS_WAYP, 0});
 				default_added = true;
 			}
-			for (const auto &sm : wp->speclist) {
+			for (const auto &sm : wp->StationSpecs()) {
 				if (sm.spec == nullptr) continue;
 				items.insert({sm.grfid, sm.localidx, sm.spec->class_index, sm.spec->index});
 			}

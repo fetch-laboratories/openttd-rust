@@ -78,7 +78,6 @@ struct OpenTTDStationCommandServices {
 	OpenTTDStationBridgeInfo (*road_bridge_info)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_bridge_info);
 	uint32_t (*southern_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(southern_bridge_end);
 	OpenTTDStationArea (*tile_area)(const BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_area);
-	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
 	const OpenTTDStationLinks *links;
 	void (*base_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_move_sign);
 	void (*waypoint_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_move_sign);

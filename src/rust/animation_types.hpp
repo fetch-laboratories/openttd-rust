@@ -17,4 +17,11 @@ struct OpenTTDAirportAnimation {
 	bool (*version8)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(version8);
 	void (*speed_error)(const AirportTileSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_error);
 };
+struct OpenTTDStationAnimation {
+	OpenTTDAnimationInfo (*info)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(info);
+	uint16_t (*callback)(uint16_t, uint32_t, uint32_t, const StationSpec *, BaseStation *, uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
+	void (*sound)(const StationSpec *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
+	bool (*version8)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(version8);
+	void (*speed_error)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_error);
+};
 #endif /* RUST_ANIMATION_TYPES_HPP */

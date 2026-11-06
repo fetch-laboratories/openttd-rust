@@ -61,6 +61,21 @@ pub unsafe extern "C" fn openttd_test_station_tile_data_observer(
     unsafe { *STATION_TILE_DATA_OBSERVER.get() = observer };
 }
 
+/// # Safety
+/// Live serialized station; fixture row aliases end before resize.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_specs_resize(
+    record: *mut crate::station_record::StationRecord,
+    road: u8,
+    count: usize,
+) {
+    if road != 0 {
+        crate::station_storage::road::resize(record, count);
+    } else {
+        crate::station_storage::rail::resize(record, count);
+    }
+}
+
 /// Compare production industry removal arithmetic with native `Money` operators.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {

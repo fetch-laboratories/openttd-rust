@@ -11,7 +11,6 @@ struct OpenTTDStationResolverState {
 	BaseStation *station; const StationSpec *spec; const Town *town;
 	uint32_t tile; uint8_t cargo; Axis axis; uint8_t valid; uint32_t cache[6];
 };
-struct OpenTTDStationSpecIdentity { uint32_t grfid; uint16_t local; };
 struct OpenTTDStationReseed { uint32_t reseed; uint8_t used; };
 struct OpenTTDStationResolverSpec { uint16_t threshold; bool divide; };
 struct OpenTTDStationSlopeResult { uint16_t callback; int32_t registers[16]; };
@@ -36,7 +35,6 @@ struct OpenTTDStationResolverServices {
 	uint32_t (*company)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company);
 	uint32_t (*nearby_station)(uint8_t, uint32_t, Axis) noexcept OPENTTD_SERVICE_DEFAULT(nearby_station);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
-	OpenTTDStationSpecIdentity (*identity)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	TownScopeResolver *(*town_scope)(StationResolverObject *, const Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(town_scope);
 	ScopeResolver *(*default_scope)(StationResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(default_scope);
 	void (*slope_error)(OpenTTDCommandCost *, const OpenTTDStationSlopeResult *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);

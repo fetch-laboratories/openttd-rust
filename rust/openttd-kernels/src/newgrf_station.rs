@@ -84,11 +84,6 @@ pub struct State {
     cache: [u32; 6],
 }
 #[repr(C)]
-pub struct SpecIdentity {
-    grfid: u32,
-    local: u16,
-}
-#[repr(C)]
 pub struct Reseed {
     reseed: u32,
     used: u8,
@@ -136,7 +131,6 @@ pub struct Services {
     airport_ttd_type: extern "C" fn(
         *const crate::station_cmd::AirportSpec,
     ) -> crate::newgrf_airport::TtdpAirportType,
-    identity: extern "C" fn(*mut BaseStation, u8) -> SpecIdentity,
     town_scope: extern "C" fn(*mut c_void, *const crate::services::TownHandle, bool) -> *mut c_void,
     default_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     slope_error: extern "C" fn(*mut CommandCost, *const SlopeResult, *const RailSpec),
@@ -736,7 +730,11 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
                 return 0xfffe;
             }
             let origin_id = if variable != 0x6a {
-                (native.identity)(st, (native.commands().custom_rail_index)(tile) as u8).grfid
+                crate::station_storage::rail::get(
+                    st,
+                    (native.commands().custom_rail_index)(tile) as usize,
+                )
+                .grfid
             } else {
                 0
             };
@@ -749,19 +747,19 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             };
             if index != 0 {
                 let base = (crate::pbs::Pbs::acquire(native.shared()).0.station)(nearby);
-                let id = (native.identity)(base, index as u8);
+                let id = crate::station_storage::rail::get(base, index as usize);
                 if variable == 0x6a {
                     return id.grfid;
                 }
                 if variable == 0x6b {
                     return if id.grfid == origin_id {
-                        u32::from(id.local)
+                        u32::from(id.localidx)
                     } else {
                         0xfffe
                     };
                 }
-                value |=
-                    (1 << if id.grfid != origin_id { 9 } else { 8 }) | u32::from(id.local.min(255));
+                value |= (1 << if id.grfid != origin_id { 9 } else { 8 })
+                    | u32::from(id.localidx.min(255));
             }
             value
         }
@@ -908,7 +906,7 @@ pub extern "C" fn openttd_rust_station_randomisation(
             if !(a.rail_belongs)(st, t) {
                 continue;
             }
-            let spec = (a.rail_spec)(t);
+            let spec = crate::station_storage::rail_spec_by_tile(a.shared(), t);
             if spec.is_null() {
                 continue;
             }
@@ -1021,12 +1019,11 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
 crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDStationResolverState" ["station_service"] => State { station, spec, town, tile, cargo, axis, valid, cache };
- "OpenTTDStationSpecIdentity" ["station_service"] => SpecIdentity { grfid, local };
  "OpenTTDStationReseed" ["station_service"] => Reseed { reseed, used };
  "OpenTTDStationResolverSpec" ["station_service"] => Spec { threshold, divide };
  "OpenTTDStationSlopeResult" ["station_service"] => SlopeResult { callback, registers };
  "OpenTTDStationResolverServices" ["station_service"] => Services {
- shared, cargo, group_count, group_cargo, group, spec, loading_count, loaded_count, loading, loaded, axis, tile_add, tile_random, spec_cargo, resolve_random, resolve_callback, company, nearby_station, airport_ttd_type, identity, town_scope, default_scope, slope_error
+ shared, cargo, group_count, group_cargo, group, spec, loading_count, loaded_count, loading, loaded, axis, tile_add, tile_random, spec_cargo, resolve_random, resolve_callback, company, nearby_station, airport_ttd_type, town_scope, default_scope, slope_error
  };
 }
 

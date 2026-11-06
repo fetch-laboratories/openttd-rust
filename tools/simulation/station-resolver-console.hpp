@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-resolver-console.hpp Controlled actual Action2 programs, run by both executables. */
+#include "station-spec-fixture.hpp"
 #include "newgrf_station.h"
 #include "newgrf.h"
 #include "newgrf_spritegroup.h"
@@ -58,8 +59,8 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	/* Every variable is observed natively for availability and through actual
 	 * deterministic Action2 for callback/register results, including deprecated
 	 * cargo encodings and unavailable branches. Associations are transient. */
-	st->speclist.resize(2); st->speclist[1] = {&spec, file.grfid, 19};
-	wp->speclist.resize(2); wp->speclist[1] = {&spec, file.grfid, 19};
+	FixtureSpecResize<StationSpec>(st, 2); FixtureSpecRow<StationSpec>(st, 1) = {&spec, file.grfid, 19};
+	FixtureSpecResize<StationSpec>(wp, 2); FixtureSpecRow<StationSpec>(wp, 1) = {&spec, file.grfid, 19};
 	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) SetCustomStationSpecIndex(t, 1);
 	SetCustomStationSpecIndex(waytile, 1);
 	file.cargo_list = {CargoSpec::Get(0)->label, CargoSpec::Get(1)->label};
@@ -175,7 +176,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	auto *random = new RandomizedSpriteGroup(); random->var_scope = VSG_SCOPE_SELF;
 	random->triggers = 1; random->lowest_randbit = 0; random->groups = {result, result};
 	spec.grf_prop.spritegroups.clear(); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random); spec.cargo_triggers = 1;
-	st->speclist.resize(2); st->speclist[1] = {&spec, file.grfid, 19};
+	FixtureSpecResize<StationSpec>(st, 2); FixtureSpecRow<StationSpec>(st, 1) = {&spec, file.grfid, 19};
 	uint count = 0;
 	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) { SetCustomStationSpecIndex(t, 1); ++count; }
 	FIXTURE_FIELD(st, cached_cargo_triggers) = 1;
@@ -216,8 +217,8 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	TriggerStationRandomisation(st, tile, StationRandomTrigger::CargoTaken, 63);
 	fmt::print(stderr, "STCMD resolver-rng empty {} {} {} {}\n", FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), FIXTURE_FIELD(st, random_bits), _random.state[0], _random.state[1]);
 	for (TileIndex t : FIXTURE_GET(st, TrainStation, train_station)) if (st->TileBelongsToRailStation(t)) SetCustomStationSpecIndex(t, 0);
-	SetCustomStationSpecIndex(waytile, 0); wp->speclist.clear(); StationUpdateCachedTriggers(wp);
-	st->speclist.clear(); StationUpdateCachedTriggers(st);
+	SetCustomStationSpecIndex(waytile, 0); FixtureSpecResize<StationSpec>(wp, 0); StationUpdateCachedTriggers(wp);
+	FixtureSpecResize<StationSpec>(st, 0); StationUpdateCachedTriggers(st);
 	/* Saved random/waiting/cargo fields persist; local Action2 programs and spec
 	 * associations are removed before save and reconstructed by resolver-inspect. */
 	delete real; delete other; delete upper; delete random; delete det; delete result;
@@ -277,11 +278,11 @@ static void StationDefinitionMissing()
 	uint count = 0;
 	for (BaseStation *st : BaseStation::Iterate()) {
 		if (!st->name.starts_with("Definitions ")) continue;
-		for (const auto &slot : st->speclist) if (slot.grfid != 0) {
+		for (const auto &slot : FixtureSpecList<StationSpec>(st)) if (slot.grfid != 0) {
 			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
 			fmt::print(stderr, "STCMD definitions-identity missing-rail {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
 		}
-		for (const auto &slot : st->roadstop_speclist) if (slot.grfid != 0) {
+		for (const auto &slot : FixtureSpecList<RoadStopSpec>(st)) if (slot.grfid != 0) {
 			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
 			fmt::print(stderr, "STCMD definitions-identity missing-road {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
 		}
@@ -354,7 +355,7 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		checked("definition-reuse", build(exec, at(2, 5), extra, station->index));
 		StationNeed(GetCustomStationSpecIndex(at(2, 5)) == 2, __LINE__);
 		checked("definition-remove-high", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, at(2, 4), at(3, 4), true));
-		StationNeed(station->speclist.size() == 3, __LINE__);
+		StationNeed(FixtureSpecList<StationSpec>(station).size() == 3, __LINE__);
 		checked("definition-way-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, at(8, 2), RAILTYPE_RAIL, TRACK_X, false));
 		auto build_way = [&](DoCommandFlags flags) { return Command<CMD_BUILD_RAIL_WAYPOINT>::Do(flags, at(8, 2), AXIS_X, 1, 1, way->class_index, way->index, NEW_STATION, true); };
 		price = checked("definition-way-test", build_way(test)); StationNeed(price == checked("definition-way-exec", build_way(exec)), __LINE__);
@@ -378,13 +379,13 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 	}
 	StationNeed(station != nullptr && stop != nullptr && waypoint != nullptr && roadpoint != nullptr, __LINE__);
 	for (BaseStation *st : {static_cast<BaseStation *>(station), static_cast<BaseStation *>(waypoint)}) {
-		for (const auto &slot : st->speclist) if (slot.grfid != 0) {
+		for (const auto &slot : FixtureSpecList<StationSpec>(st)) if (slot.grfid != 0) {
 			StationNeed(slot.spec == StationClass::GetByGrf(slot.grfid, slot.localidx), __LINE__);
 			fmt::print(stderr, "STCMD definitions-identity rail {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, FIXTURE_GET(st, CachedAnimTriggers, cached_anim_triggers).base(), FIXTURE_FIELD(st, cached_cargo_triggers));
 		}
 	}
 	for (BaseStation *st : {static_cast<BaseStation *>(stop), static_cast<BaseStation *>(roadpoint)}) {
-		for (const auto &slot : st->roadstop_speclist) if (slot.grfid != 0) {
+		for (const auto &slot : FixtureSpecList<RoadStopSpec>(st)) if (slot.grfid != 0) {
 			StationNeed(slot.spec == RoadStopClass::GetByGrf(slot.grfid, slot.localidx), __LINE__);
 			fmt::print(stderr, "STCMD definitions-identity road {} {} {} {} {} {}\n", st->index.base(), slot.grfid, slot.localidx, slot.spec->index, FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).base(), FIXTURE_FIELD(st, cached_roadstop_cargo_triggers));
 		}

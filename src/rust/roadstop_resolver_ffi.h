@@ -21,15 +21,11 @@ struct OpenTTDRoadStopResolverState {
 	uint32_t tile;
 	uint8_t roadtype, type, view, cargo;
 };
-struct OpenTTDRoadStopSpecKey { uint32_t grfid; uint16_t local_id; };
-struct OpenTTDRoadStopSpecVacancy { const RoadStopSpec *spec; uint32_t grfid; };
 struct OpenTTDRoadStopSpecTriggers { uint16_t animation; CargoTypes cargo; };
 struct OpenTTDRoadStopReseed { uint32_t reseed; uint8_t used; };
 struct OpenTTDRoadStopResolverServices {
-	void (*rebind)(BaseStation *, size_t, const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rebind);
 	ScopeResolver * (*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	BaseStation * (*by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(by_tile);
-	void (*clear)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	uint32_t (*company)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company);
 	bool (*custom)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(custom);
 	const SpriteGroup * (*group)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(group);
@@ -37,17 +33,10 @@ struct OpenTTDRoadStopResolverServices {
 	size_t (*group_count)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(group_count);
 	uint32_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
 	TownScopeResolver * (*make_town)(ResolverObject *, Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(make_town);
-	void (*resize)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resize);
 	uint16_t (*resolve_callback)(const OpenTTDRoadStopResolverState *, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
 	OpenTTDRoadStopReseed (*resolve_reseed)(const OpenTTDRoadStopResolverState *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_reseed);
-	void (*set_slot)(BaseStation *, uint8_t, const RoadStopSpec *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_slot);
 	const OpenTTDSharedServices *shared;
-	uint32_t (*slot_grfid)(const BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(slot_grfid);
-	OpenTTDRoadStopSpecKey (*slot_key)(const BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(slot_key);
-	const RoadStopSpec *(*slot_spec)(const BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(slot_spec);
-	OpenTTDRoadStopSpecVacancy (*slot_vacancy)(const BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(slot_vacancy);
 	CargoTypes (*spec_cargo)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_cargo);
-	size_t (*spec_count)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(spec_count);
 	OpenTTDRoadStopSpecTriggers (*spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_triggers);
 	uint16_t (*station_id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_id);
 	uint32_t (*town_tile)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
@@ -62,7 +51,7 @@ ScopeResolver *openttd_rust_roadstop_scope(OpenTTDRoadStopResolverState *, Resol
 uint16_t openttd_rust_roadstop_callback(uint16_t, uint32_t, uint32_t, const RoadStopSpec *, BaseStation *, uint32_t, uint8_t, uint8_t, uint8_t, int32_t *, size_t, const OpenTTDRoadStopResolverServices *);
 void openttd_rust_roadstop_randomise(BaseStation *, uint32_t, uint8_t, uint8_t, const OpenTTDRoadStopResolverServices *);
 const RoadStopSpec *openttd_rust_roadstop_spec(uint32_t, const OpenTTDRoadStopResolverServices *);
-int16_t openttd_rust_roadstop_allocate(const RoadStopSpec *, BaseStation *, const OpenTTDRoadStopResolverServices *);
+int16_t openttd_rust_roadstop_allocate(const RoadStopSpec *, BaseStation *);
 void openttd_rust_roadstop_assign(const RoadStopSpec *, BaseStation *, uint8_t, const OpenTTDRoadStopResolverServices *);
 void openttd_rust_roadstop_deallocate(BaseStation *, uint8_t, const OpenTTDRoadStopResolverServices *);
 void openttd_rust_roadstop_cache(BaseStation *, const OpenTTDRoadStopResolverServices *);

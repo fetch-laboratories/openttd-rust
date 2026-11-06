@@ -103,8 +103,6 @@ rebound | RustAirportTile | src/rust/disaster_adapter.hpp | airport_tile
 rebound | RustAirportTile | src/water_cmd.cpp | airport_tile
 rebound | RustAirportTileSpec | src/newgrf_airport.cpp | tile_spec
 rebound | RustAirportTileSpec | src/rust/airport_definitions.cpp | tile_base
-rebound | RustAnimationRailSpec | src/animated_tile.cpp | rail_spec
-rebound | RustAnimationRailSpec | src/rust/station_command_services.hpp | rail_spec
 rebound | RustAssertCondition | src/cargomonitor.cpp | check
 rebound | RustAssertCondition | src/landscape.cpp | assert_condition
 rebound | RustAssertCondition | src/landscape.cpp | native_assert

@@ -1278,7 +1278,7 @@ public:
 			if (roadstoptype == RoadStopType::Truck && !st->GetFacilities().Test(StationFacility::TruckStop)) continue;
 			if (roadstoptype == RoadStopType::Bus && !st->GetFacilities().Test(StationFacility::BusStop)) continue;
 			items.insert({0, 0, ROADSTOP_CLASS_DFLT, 0}); // We would need to scan the map to find out if default is used.
-			for (const auto &sm : st->roadstop_speclist) {
+			for (const auto &sm : st->RoadStopSpecs()) {
 				if (sm.spec == nullptr) continue;
 				if (roadstoptype == RoadStopType::Truck && sm.spec->stop_type != ROADSTOPTYPE_FREIGHT && sm.spec->stop_type != ROADSTOPTYPE_ALL) continue;
 				if (roadstoptype == RoadStopType::Bus && sm.spec->stop_type != ROADSTOPTYPE_PASSENGER && sm.spec->stop_type != ROADSTOPTYPE_ALL) continue;
@@ -1696,7 +1696,7 @@ public:
 		for (const Waypoint *wp : Waypoint::Iterate()) {
 			if (wp->GetOwner() != _local_company || !HasBit(wp->Record().waypoint_flags, WPF_ROAD)) continue;
 			items.insert({0, 0, ROADSTOP_CLASS_WAYP, 0}); // We would need to scan the map to find out if default is used.
-			for (const auto &sm : wp->roadstop_speclist) {
+			for (const auto &sm : wp->RoadStopSpecs()) {
 				if (sm.spec == nullptr) continue;
 				items.insert({sm.grfid, sm.localidx, sm.spec->class_index, sm.spec->index});
 			}

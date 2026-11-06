@@ -22,12 +22,10 @@
 typedef Pool<BaseStation, StationID, 32> StationPool;
 extern StationPool _station_pool;
 
-template <typename T>
-struct SpecMapping {
-	const T *spec = nullptr; ///< Custom spec.
-	uint32_t grfid = 0; ///< GRF ID of this custom spec.
-	uint16_t localidx = 0; ///< Local ID within GRF of this custom spec.
-};
+template <typename T> struct SpecMappingType;
+template <> struct SpecMappingType<StationSpec> { using type = OpenTTDStationSpecMapping; };
+template <> struct SpecMappingType<RoadStopSpec> { using type = OpenTTDRoadStopSpecMapping; };
+template <typename T> using SpecMapping = typename SpecMappingType<T>::type;
 
 using RoadStopTileData = OpenTTDRoadStopTileData;
 
@@ -75,8 +73,6 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	std::string name{}; ///< Custom name
 	mutable std::string cached_name; ///< NOSAVE: Cache of the resolved name of the station, if not using a custom name
 
-	std::vector<SpecMapping<StationSpec>> speclist{}; ///< List of rail station specs of this station.
-	std::vector<SpecMapping<RoadStopSpec>> roadstop_speclist{}; ///< List of road stop specs of this station
 
 
 	/* The shared record holds xy, string_id, town, owner, facilities, build_date,
@@ -197,6 +193,8 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	}
 
 	inline const RustVector<RoadStopTileData> &RoadStopTiles() const { return this->Record().custom_roadstop_tile_data; }
+	inline const RustVector<SpecMapping<StationSpec>> &StationSpecs() const { return this->Record().speclist; }
+	inline const RustVector<SpecMapping<RoadStopSpec>> &RoadStopSpecs() const { return this->Record().roadstop_speclist; }
 	inline void SetRoadStopRandomBits(TileIndex tile, uint8_t bits) { openttd_rust_station_roadstop_data_set(&this->Record(), tile.base(), bits, 0); }
 	inline bool SetRoadStopAnimationFrame(TileIndex tile, uint8_t frame) { return openttd_rust_station_roadstop_data_set(&this->Record(), tile.base(), frame, 1) != 0; }
 	inline void RemoveRoadStopTileData(TileIndex tile) { openttd_rust_station_roadstop_data_remove(&this->Record(), tile.base()); }
@@ -310,8 +308,8 @@ struct SpecializedStation : public BaseStation {
  * @param bst Station of custom spec list.
  * @return Speclist of custom spec type.
  */
-template <class T> std::vector<SpecMapping<T>> &GetStationSpecList(BaseStation *bst);
-template <> inline std::vector<SpecMapping<StationSpec>> &GetStationSpecList<StationSpec>(BaseStation *bst) { return bst->speclist; }
-template <> inline std::vector<SpecMapping<RoadStopSpec>> &GetStationSpecList<RoadStopSpec>(BaseStation *bst) { return bst->roadstop_speclist; }
+template <class T> const RustVector<SpecMapping<T>> &GetStationSpecList(const BaseStation *bst);
+template <> inline const RustVector<SpecMapping<StationSpec>> &GetStationSpecList<StationSpec>(const BaseStation *bst) { return bst->StationSpecs(); }
+template <> inline const RustVector<SpecMapping<RoadStopSpec>> &GetStationSpecList<RoadStopSpec>(const BaseStation *bst) { return bst->RoadStopSpecs(); }
 
 #endif /* BASE_STATION_BASE_H */

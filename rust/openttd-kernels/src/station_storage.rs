@@ -10,6 +10,131 @@ use crate::station_record::{RoadStopTileData, StationRecord, record_of};
 use crate::station_type::BaseStation;
 use crate::tile_type::TileIndex;
 
+macro_rules! spec_storage {
+    ($module:ident, $field:ident, $row:ident, $spec:ident) => {
+        pub(crate) mod $module {
+            use super::*;
+            use crate::station_cmd::$spec;
+            use crate::station_record::$row;
+
+            pub(crate) fn count(shell: *const BaseStation) -> usize {
+                unsafe { (*record_of(shell)).$field.len() }
+            }
+            /// Copy the row before callbacks can resize or clear its owner.
+            pub(crate) fn get(shell: *const BaseStation, index: usize) -> $row {
+                unsafe { (*record_of(shell)).$field.as_slice()[index] }
+            }
+            pub(crate) fn resize(record: *mut StationRecord, count: usize) {
+                unsafe { (*record).$field.resize(count, $row::default()) };
+            }
+            pub(crate) fn set(
+                shell: *const BaseStation,
+                index: u8,
+                spec: *const $spec,
+                grfid: u32,
+                localidx: u16,
+            ) {
+                unsafe {
+                    (*record_of(shell))
+                        .$field
+                        .as_mut_ptr()
+                        .add(usize::from(index))
+                        .write($row {
+                            spec,
+                            grfid,
+                            localidx,
+                        });
+                }
+            }
+            pub(crate) fn rebind(shell: *const BaseStation, index: usize, spec: *const $spec) {
+                unsafe { (*(*record_of(shell)).$field.as_mut_ptr().add(index)).spec = spec };
+            }
+            pub(super) fn reserve(record: *mut StationRecord, count: usize) {
+                let mut rows = unsafe { std::mem::take(&mut (*record).$field) }.into_vec();
+                rows.reserve(count.saturating_sub(rows.len()));
+                unsafe { (*record).$field = NativeVec::from_vec(rows) };
+            }
+            pub(super) fn append(record: *mut StationRecord) -> *mut std::ffi::c_void {
+                let rows = unsafe { &mut (*record).$field };
+                rows.push($row::default());
+                unsafe { rows.as_mut_ptr().add(rows.len() - 1).cast() }
+            }
+        }
+    };
+}
+spec_storage!(rail, speclist, RailSpecMapping, RailSpec);
+spec_storage!(road, roadstop_speclist, RoadSpecMapping, RoadSpec);
+
+/// `GetStationSpec`: a zero custom index needs no station lookup; stale saved
+/// indices outside the live list return null. The existing map leaf preserves
+/// the source rail-tile assertion before either branch.
+pub(crate) fn rail_spec_by_tile(
+    shared: &crate::services::Services,
+    tile: u32,
+) -> *const crate::station_cmd::RailSpec {
+    rail_entry_by_tile(shared, tile).spec
+}
+
+pub(crate) fn rail_entry_by_tile(
+    shared: &crate::services::Services,
+    tile: u32,
+) -> crate::newgrf_animation_base::Entry<crate::station_cmd::RailSpec, BaseStation> {
+    use crate::newgrf_animation_base::Entry;
+    let empty = Entry {
+        spec: std::ptr::null(),
+        object: std::ptr::null_mut(),
+    };
+    let commands = unsafe { &*(shared.station_commands)() };
+    let index = (commands.custom_rail_index)(tile) as usize;
+    if index == 0 {
+        return empty;
+    }
+    let id = crate::map_func::World::new(shared).station_index(tile);
+    let record = crate::station_record::get_record(shared, id);
+    let spec = unsafe { (*record).speclist.as_slice() }
+        .get(index)
+        .map_or(std::ptr::null(), |row| row.spec);
+    if spec.is_null() {
+        empty
+    } else {
+        Entry {
+            spec,
+            object: unsafe { (*record).shell },
+        }
+    }
+}
+
+/// # Safety
+/// Live serialized record; spec-row aliases end before growth. `road` selects
+/// the saved reference list, not the lifetime of the borrowed definitions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_specs_reserve(
+    record: *mut StationRecord,
+    road: u8,
+    count: usize,
+) {
+    if road != 0 {
+        road::reserve(record, count);
+    } else {
+        rail::reserve(record, count);
+    }
+}
+
+/// # Safety
+/// Same owner contract as reserve. Publish a null/zero row before native field
+/// loading; its pointer expires on growth or owner destruction.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_specs_append(
+    record: *mut StationRecord,
+    road: u8,
+) -> *mut std::ffi::c_void {
+    if road != 0 {
+        road::append(record)
+    } else {
+        rail::append(record)
+    }
+}
+
 fn edit<R>(record: *mut StationRecord, change: impl FnOnce(&mut Vec<RoadStopTileData>) -> R) -> R {
     // SAFETY: Serialized live owner; change is Rust-only and cannot reenter.
     let mut data = unsafe { std::mem::take(&mut (*record).custom_roadstop_tile_data) }.into_vec();

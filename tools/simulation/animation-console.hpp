@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file animation-console.hpp Controlled resolver programs on real tiles; both games execute their own bodies. */
+#include "station-spec-fixture.hpp"
 #include "animated_tile_map.h"
 #include "animated_tile_func.h"
 #include "industrytype.h"
@@ -456,16 +457,16 @@ static void AnimationBindingsProbe()
 	auto *i = const_cast<IndustryTileSpec *>(GetIndustryTileSpec(GetIndustryGfx(tiles[1])));
 	AnimationBindingProbe("industry", tiles[1], i, IndustryTileCallbackMask::AnimationSpeed, IndustryTileCallbackMask::AnimationNextFrame, AnimateNewIndustryTile, frame(tiles[1]), [i](bool bits) { i->special_flags.Set(IndustryTileSpecialFlag::NextFrameRandomBits, bits); });
 	auto *st = BaseStation::GetByTile(tiles[2]); StationSpec rail{};
-	Backup<std::vector<SpecMapping<StationSpec>>> rail_specs(st->speclist);
-	const auto rail_index = GetCustomStationSpecIndex(tiles[2]); st->speclist.resize(2); st->speclist[1].spec = &rail; SetCustomStationSpecIndex(tiles[2], 1);
+	FixtureSpecBackup<StationSpec> rail_specs(st);
+	const auto rail_index = GetCustomStationSpecIndex(tiles[2]); FixtureSpecResize<StationSpec>(st, 2); FixtureSpecRow<StationSpec>(st, 1).spec = &rail; SetCustomStationSpecIndex(tiles[2], 1);
 	AnimationBindingProbe("station", tiles[2], &rail, StationCallbackMask::AnimationSpeed, StationCallbackMask::AnimationNextFrame, AnimateStationTile, frame(tiles[2]), [&rail](bool bits) { rail.flags.Set(StationSpecFlag::Cb141RandomBits, bits); });
 	SetCustomStationSpecIndex(tiles[2], rail_index);
 	auto *a = const_cast<AirportTileSpec *>(AirportTileSpec::GetByTile(tiles[3]));
 	AnimationBindingProbe("airport", tiles[3], a, AirportTileCallbackMask::AnimationSpeed, AirportTileCallbackMask::AnimationNextFrame, AnimateAirportTile, frame(tiles[3]), [a](bool bits) { AssignBit(a->animation_special_flags, 0, bits); });
 	auto *rs = BaseStation::GetByTile(tiles[4]); RoadStopSpec road{};
-	Backup<std::vector<SpecMapping<RoadStopSpec>>> road_specs(rs->roadstop_speclist);
+	FixtureSpecBackup<RoadStopSpec> road_specs(rs);
 	AnimationRoadDataScope road_data(rs);
-	const auto road_index = GetCustomRoadStopSpecIndex(tiles[4]); rs->roadstop_speclist.resize(2); rs->roadstop_speclist[1].spec = &road; SetCustomRoadStopSpecIndex(tiles[4], 1);
+	const auto road_index = GetCustomRoadStopSpecIndex(tiles[4]); FixtureSpecResize<RoadStopSpec>(rs, 2); FixtureSpecRow<RoadStopSpec>(rs, 1).spec = &road; SetCustomRoadStopSpecIndex(tiles[4], 1);
 	AnimationBindingProbe("roadstop", tiles[4], &road, RoadStopCallbackMask::AnimationSpeed, RoadStopCallbackMask::AnimationNextFrame, AnimateRoadStopTile, [rs, t = tiles[4]](int value) { if (value >= 0) rs->SetRoadStopAnimationFrame(t, value); return rs->GetRoadStopAnimationFrame(t); }, [&road](bool bits) { road.flags.Set(RoadStopSpecFlag::Cb141RandomBits, bits); });
 	const auto zero_queue = AnimationQueue(); const auto zero_state = GetAnimatedTileState(tiles[4]);
 	AnimationClearRoadData(rs);

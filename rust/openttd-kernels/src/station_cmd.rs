@@ -177,7 +177,6 @@ pub struct CommandServicesTable {
     pub road_bridge_info: unsafe extern "C" fn(*const RoadSpec) -> BridgeSpan,
     pub southern_bridge_end: extern "C" fn(u32) -> u32,
     pub tile_area: extern "C" fn(*const BaseStation, u8) -> TileArea,
-    pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub links: *const crate::station_service::Links,
     pub base_move_sign: extern "C" fn(*mut BaseStation, u32),
     pub waypoint_move_sign: extern "C" fn(*mut BaseStation, u32),
@@ -603,7 +602,7 @@ pub unsafe extern "C" fn openttd_rust_station_build_above(
     let mut info = (c.s.default_bridge_info)(kind);
     match kind {
         0 | 7 => {
-            let spec = (c.s.rail_spec)(tile);
+            let spec = crate::station_storage::rail_spec_by_tile(c.shared, tile);
             if !spec.is_null() {
                 info = unsafe { (c.s.rail_bridge_info)(spec) };
             }
@@ -1495,7 +1494,7 @@ impl Ctx<'_> {
                 }
             }
         }
-        let specindex = crate::station_association::allocate(self.s.rail_association, spec, st);
+        let specindex = crate::station_association::allocate(spec, st);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
@@ -2389,13 +2388,7 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        let index = unsafe {
-            crate::newgrf_roadstop::openttd_rust_roadstop_allocate(
-                spec,
-                st,
-                self.s.roadstop_resolver,
-            )
-        };
+        let index = unsafe { crate::newgrf_roadstop::openttd_rust_roadstop_allocate(spec, st) };
         let specindex = SpecIndex {
             value: index as u8,
             valid: index >= 0,
@@ -4266,7 +4259,6 @@ crate::abi::layouts! {
         road_bridge_info,
         southern_bridge_end,
         tile_area,
-        rail_spec,
         links,
         base_move_sign,
         waypoint_move_sign,

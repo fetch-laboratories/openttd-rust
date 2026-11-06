@@ -81,7 +81,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.nearby_station = RustNearbyStationTile,
 
 		.airport_ttd_type = RustAirportTTDType,
-		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto key = RustStationSlotKey(st, i); return OpenTTDStationSpecIdentity{key.grfid, key.local_id}; },
 		/* Only shared native ScopeResolver frames are materialized here; Rust
 		 * selects and caches the owner before either synchronous shell call. */
 		.town_scope = RustResolverTownScope<StationResolverObject>,
@@ -96,15 +95,6 @@ const OpenTTDStationAssociationServices &GetStationAssociationServices() noexcep
 	static const OpenTTDStationAssociationServices services{
 		.triggers = RustStationSpecTriggers,
 		.shared = &GetRustSharedServices(),
-		.roadstop = &GetRoadStopResolverServices(),
-		.count = RustStationSpecCount,
-		.vacancy = RustStationSlotVacancy,
-		.spec = RustStationSlotSpec,
-		.key = RustStationSlotKey,
-		.resize = RustStationSpecResize,
-		.clear = RustStationSpecClear,
-		.set_slot = RustStationSetSpecSlot,
-		.rebind = RustStationRebindSpec,
 	};
 	return services;
 }
@@ -313,7 +303,7 @@ CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_til
  */
 std::optional<uint8_t> AllocateSpecToStation(const StationSpec *spec, BaseStation *st)
 {
-	auto index = openttd_rust_station_spec_allocate(&GetStationAssociationServices(), spec, st);
+	auto index = openttd_rust_station_spec_allocate(spec, st);
 	return index.valid ? std::optional<uint8_t>{index.value} : std::nullopt;
 }
 
@@ -413,7 +403,7 @@ const StationSpec *GetStationSpec(TileIndex t)
 
 	const BaseStation *st = BaseStation::GetByTile(t);
 	uint specindex = GetCustomStationSpecIndex(t);
-	return specindex < st->speclist.size() ? st->speclist[specindex].spec : nullptr;
+	return specindex < st->StationSpecs().size() ? st->StationSpecs()[specindex].spec : nullptr;
 }
 
 /** Wrapper for animation control, see GetStationCallback. */
@@ -425,8 +415,8 @@ uint16_t GetAnimStationCallback(CallbackID callback, uint32_t param1, uint32_t p
 /** Helper class for animation control. */
 const OpenTTDStationAnimation &GetStationAnimationBinding() noexcept
 {
-	static const auto binding = MakeRustAnimationBinding<StationSpec, BaseStation, int, GetAnimStationCallback>(
-		[](uint32_t t) noexcept -> OpenTTDStationAnimationEntry { const auto *s = RustAnimationRailSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, RustBaseStationByTile(t)}; },
+	static const auto binding = MakeRustAnimationBinding<StationSpec, BaseStation, int, GetAnimStationCallback, OpenTTDStationAnimation>(
+		nullptr,
 		[](const StationSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(StationCallbackMask::AnimationSpeed), s->callback_mask.Test(StationCallbackMask::AnimationNextFrame), s->flags.Test(StationSpecFlag::Cb141RandomBits), true}; });
 	return binding;
 }

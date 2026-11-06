@@ -274,7 +274,7 @@ const RoadStopSpec *GetRoadStopSpec(TileIndex t)
  */
 std::optional<uint8_t> AllocateSpecToRoadStop(const RoadStopSpec *spec, BaseStation *st)
 {
-	int16_t index = openttd_rust_roadstop_allocate(spec, st, &GetRoadStopResolverServices());
+	int16_t index = openttd_rust_roadstop_allocate(spec, st);
 	return index < 0 ? std::nullopt : std::make_optional(static_cast<uint8_t>(index));
 }
 
@@ -323,10 +323,8 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 	static_assert(CargoGRFFileProps::SG_DEFAULT_NA == NUM_CARGO + 2);
 	static_assert(CBID_STATION_AVAILABILITY == 0x13);
 	static const OpenTTDRoadStopResolverServices services{
-		.rebind = RustRoadStopRebindSpec,
 		.base_scope = RustResolverBaseScope,
 		.by_tile = RustBaseStationByTile,
-		.clear = RustRoadStopSpecClear,
 		.company = RustCompanyInfo,
 		.custom = RustCustomRoadStopSpecIndex,
 		.group = RustSpecCargoSpriteGroup<RoadStopSpec>,
@@ -334,17 +332,10 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.group_count = RustSpecCargoGroupCount<RoadStopSpec>,
 		.index = RustCustomRoadStopIndex,
 		.make_town = [](ResolverObject *ro, Town *town, bool readonly) noexcept { return &static_cast<RoadStopResolverObject *>(ro)->town_scope.emplace(*ro, town, readonly); },
-		.resize = RustRoadStopSpecResize,
 		.resolve_callback = [](const OpenTTDRoadStopResolverState *state, uint16_t cb, uint32_t p1, uint32_t p2, int32_t *regs, size_t size) noexcept { RoadStopResolverObject object(*state, static_cast<CallbackID>(cb), p1, p2); return object.ResolveCallback({regs, size}); },
 		.resolve_reseed = [](const OpenTTDRoadStopResolverState *state, uint8_t waiting) noexcept -> OpenTTDRoadStopReseed { RoadStopResolverObject object(*state); object.SetWaitingRandomTriggers(StationRandomTriggers(waiting)); object.ResolveRerandomisation(); return {object.GetReseedSum(), object.GetUsedRandomTriggers().base()}; },
-		.set_slot = RustRoadStopSetSpecSlot,
 		.shared = &GetRustSharedServices(),
-		.slot_grfid = RustRoadStopSlotGRFID,
-		.slot_key = RustRoadStopSlotKey,
-		.slot_spec = RustRoadStopSlotSpec,
-		.slot_vacancy = RustRoadStopSlotVacancy,
 		.spec_cargo = RustRoadStopCargoTriggers,
-		.spec_count = RustRoadStopSpecCount,
 		.spec_triggers = RustRoadStopSpecTriggers,
 		.station_id = RustBaseStationID<BaseStation>,
 		.town_tile = OpenTTDTownTile,

@@ -62,6 +62,20 @@ crate::abi::shared_records! {
         pub random_bits: u8,
         pub animation_frame: u8,
     }
+    /// A station's saved rail-spec reference; the definition is borrowed.
+    #[derive(Clone, Copy, Default)]
+    "OpenTTDStationSpecMapping" ["station"] => pub struct RailSpecMapping {
+        pub spec: *const crate::station_cmd::RailSpec => struct StationSpec,
+        pub grfid: u32,
+        pub localidx: u16,
+    }
+    /// A station's saved road-stop-spec reference; the definition is borrowed.
+    #[derive(Clone, Copy, Default)]
+    "OpenTTDRoadStopSpecMapping" ["station"] => pub struct RoadSpecMapping {
+        pub spec: *const crate::station_cmd::RoadSpec => struct RoadStopSpec,
+        pub grfid: u32,
+        pub localidx: u16,
+    }
     /// Optional station cargo and flow owners. Native views borrow these pointers
     /// only until clear/destruction; no facade owns either allocation.
     "OpenTTDStationGoodsData" ["station"] => pub struct StationGoodsData {
@@ -151,6 +165,8 @@ crate::abi::shared_records! {
         pub time_since_unload: u8,
         pub last_vehicle_type: u8,
         pub custom_roadstop_tile_data: crate::industrytype::NativeVec<RoadStopTileData> => "RustVector<OpenTTDRoadStopTileData>",
+        pub roadstop_speclist: crate::industrytype::NativeVec<RoadSpecMapping> => "RustVector<OpenTTDRoadStopSpecMapping>",
+        pub speclist: crate::industrytype::NativeVec<RailSpecMapping> => "RustVector<OpenTTDStationSpecMapping>",
     }
     /// The fields of one `RoadStop` shell.
     "OpenTTDRoadStopState" ["station"] => pub struct RoadStopRecord {
@@ -773,6 +789,8 @@ impl StationRecord {
             time_since_unload: 255,
             last_vehicle_type: 255,
             custom_roadstop_tile_data: crate::industrytype::NativeVec::new(),
+            roadstop_speclist: crate::industrytype::NativeVec::new(),
+            speclist: crate::industrytype::NativeVec::new(),
         }
     }
 }

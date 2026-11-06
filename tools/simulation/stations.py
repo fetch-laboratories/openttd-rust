@@ -454,6 +454,7 @@ COMMAND_SOURCE = r"""
 #include "newgrf_cargo.h"
 #include "saveload/saveload.h"
 #include "settings_func.h"
+#include "station-spec-fixture.hpp"
 #include "industry_cmd.h"
 #include "town_cmd.h"
 #include <set>
@@ -569,8 +570,8 @@ static RoadResolverFixture &RoadResolverSpecs(bool waypoint)
 }
 static void RoadResolverState(const char *label, BaseStation *st)
 {
-	fmt::print(stderr, "STCMD resolver-state {} {} {} {} {} {} rng {} {}\n", label, st->index.base(), st->roadstop_speclist.size(), FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).base(), FIXTURE_FIELD(st, cached_roadstop_cargo_triggers), FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), _random.state[0], _random.state[1]);
-	for (size_t i = 0; i < st->roadstop_speclist.size(); i++) { const auto &slot = st->roadstop_speclist[i]; fmt::print(stderr, "STCMD resolver-slot {} {} {} {} {}\n", label, i, slot.spec != nullptr, slot.grfid, slot.localidx); }
+	fmt::print(stderr, "STCMD resolver-state {} {} {} {} {} {} rng {} {}\n", label, st->index.base(), FixtureSpecList<RoadStopSpec>(st).size(), FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).base(), FIXTURE_FIELD(st, cached_roadstop_cargo_triggers), FIXTURE_GET(st, WaitingRandomTriggers, waiting_random_triggers).base(), _random.state[0], _random.state[1]);
+	for (size_t i = 0; i < FixtureSpecList<RoadStopSpec>(st).size(); i++) { const auto &slot = FixtureSpecRow<RoadStopSpec>(st, i); fmt::print(stderr, "STCMD resolver-slot {} {} {} {} {}\n", label, i, slot.spec != nullptr, slot.grfid, slot.localidx); }
 	for (const auto &data : FIXTURE_FIELD(st, custom_roadstop_tile_data)) {
 		TileIndex tile{data.tile};
 		fmt::print(stderr, "STCMD resolver-tile {} {} {} {} {}\n", label, tile.base(), GetCustomRoadStopSpecIndex(tile), st->GetRoadStopRandomBits(tile), st->GetRoadStopAnimationFrame(tile));
@@ -660,27 +661,27 @@ static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags te
 	StationNeed(build(test, f.indices[0], 2, NEW_STATION).Succeeded() && !IsAnyRoadStopTile(tile), __LINE__);
 	StationNeed(build(exec, f.indices[0], 2, NEW_STATION).Succeeded(), __LINE__);
 	BaseStation *st = BaseStation::GetByTile(tile); StationID id = st->index; st->name = waypoint ? "Owner410 waypoint" : "Owner410 stop";
-	StationNeed(st->roadstop_speclist.size() == 2 && GetCustomRoadStopSpecIndex(tile) == 1 && GetCustomRoadStopSpecIndex(tile + step) == 1, __LINE__);
+	StationNeed(FixtureSpecList<RoadStopSpec>(st).size() == 2 && GetCustomRoadStopSpecIndex(tile) == 1 && GetCustomRoadStopSpecIndex(tile + step) == 1, __LINE__);
 	AssignSpecToRoadStop(nullptr, st, 0); DeallocateSpecFromRoadStop(st, 0);
 	SetCustomRoadStopSpecIndex(tile, 63); StationNeed(GetRoadStopSpec(tile) == nullptr, __LINE__); SetCustomRoadStopSpecIndex(tile, 1);
 	RoadResolverState("assigned", st); RoadResolverQueries(st, tile, waypoint); RoadResolverRandom(st, tile, waypoint);
-	StationNeed(remove(tile).Succeeded() && st->roadstop_speclist[1].spec == &f.specs[0], __LINE__);
-	StationNeed(build(test, f.indices[1], 1, id).Succeeded() && st->roadstop_speclist.size() == 2, __LINE__);
+	StationNeed(remove(tile).Succeeded() && FixtureSpecRow<RoadStopSpec>(st, 1).spec == &f.specs[0], __LINE__);
+	StationNeed(build(test, f.indices[1], 1, id).Succeeded() && FixtureSpecList<RoadStopSpec>(st).size() == 2, __LINE__);
 	StationNeed(build(exec, f.indices[1], 1, id).Succeeded() && GetCustomRoadStopSpecIndex(tile) == 2, __LINE__);
-	StationNeed(remove(tile).Succeeded() && st->roadstop_speclist.size() == 2, __LINE__);
+	StationNeed(remove(tile).Succeeded() && FixtureSpecList<RoadStopSpec>(st).size() == 2, __LINE__);
 	/* Missing-GRF slots remain occupied, while a genuine hole can be reused. */
-	st->roadstop_speclist.resize(4); st->roadstop_speclist[3].grfid = 0xDEAD410;
+	FixtureSpecResize<RoadStopSpec>(st, 4); FixtureSpecRow<RoadStopSpec>(st, 3).grfid = 0xDEAD410;
 	StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 2, __LINE__); AssignSpecToRoadStop(&f.specs[2], st, 2);
 	StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 2 && AllocateSpecToRoadStop(&f.specs[3], st) == 4, __LINE__);
-	DeallocateSpecFromRoadStop(st, 2); StationNeed(st->roadstop_speclist.size() == 4 && AllocateSpecToRoadStop(&f.specs[3], st) == 2, __LINE__);
+	DeallocateSpecFromRoadStop(st, 2); StationNeed(FixtureSpecList<RoadStopSpec>(st).size() == 4 && AllocateSpecToRoadStop(&f.specs[3], st) == 2, __LINE__);
 	AssignSpecToRoadStop(&f.specs[2], st, 4); StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 4, __LINE__);
 	AssignSpecToRoadStop(&f.specs[2], st, 2); StationNeed(AllocateSpecToRoadStop(&f.specs[2], st) == 2, __LINE__);
-	DeallocateSpecFromRoadStop(st, 2); DeallocateSpecFromRoadStop(st, 4); StationNeed(st->roadstop_speclist.size() == 4, __LINE__);
-	for (uint8_t index = 2; index < 63; index++) { st->roadstop_speclist.resize(index + 1); st->roadstop_speclist[index].grfid = 0xDEAD410; }
+	DeallocateSpecFromRoadStop(st, 2); DeallocateSpecFromRoadStop(st, 4); StationNeed(FixtureSpecList<RoadStopSpec>(st).size() == 4, __LINE__);
+	for (uint8_t index = 2; index < 63; index++) { FixtureSpecResize<RoadStopSpec>(st, index + 1); FixtureSpecRow<RoadStopSpec>(st, index).grfid = 0xDEAD410; }
 	StationNeed(!AllocateSpecToRoadStop(&f.specs[3], st).has_value() && build(test, f.indices[3], 1, id).Failed() && !IsAnyRoadStopTile(tile), __LINE__);
 	for (uint8_t index = 62; index > 1; index--) DeallocateSpecFromRoadStop(st, index);
-	StationNeed(st->roadstop_speclist.size() == 2 && AllocateSpecToRoadStop(nullptr, st) == 0 && AllocateSpecToRoadStop(&f.specs[0], nullptr) == 1, __LINE__);
-	StationNeed(remove(tile + step).Succeeded() && st->roadstop_speclist.empty() && FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
+	StationNeed(FixtureSpecList<RoadStopSpec>(st).size() == 2 && AllocateSpecToRoadStop(nullptr, st) == 0 && AllocateSpecToRoadStop(&f.specs[0], nullptr) == 1, __LINE__);
+	StationNeed(remove(tile + step).Succeeded() && FixtureSpecList<RoadStopSpec>(st).empty() && FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
 	StationNeed(build(exec, f.indices[0], 2, id).Succeeded(), __LINE__);
 	RoadResolverState("lifecycle", st);
 	fmt::print(stderr, "STCMD resolver-lifecycle {} test execute reuse full partial clear shrink\n", waypoint);
@@ -689,8 +690,8 @@ static void StationRoadResolverReload(bool waypoint)
 {
 	BaseStation *st = nullptr;
 	for (BaseStation *candidate : BaseStation::Iterate()) if (candidate->name == (waypoint ? "Owner410 waypoint" : "Owner410 stop")) st = candidate;
-	StationNeed(st != nullptr && st->roadstop_speclist.size() == 2, __LINE__);
-	StationNeed(st->roadstop_speclist[1].spec == nullptr && st->roadstop_speclist[1].grfid == (waypoint ? 0x41000002U : 0x41000001U), __LINE__);
+	StationNeed(st != nullptr && FixtureSpecList<RoadStopSpec>(st).size() == 2, __LINE__);
+	StationNeed(FixtureSpecRow<RoadStopSpec>(st, 1).spec == nullptr && FixtureSpecRow<RoadStopSpec>(st, 1).grfid == (waypoint ? 0x41000002U : 0x41000001U), __LINE__);
 	StationNeed(FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
 	RoadResolverState("missing-reload", st);
 	auto &f = RoadResolverSpecs(waypoint); AssignSpecToRoadStop(&f.specs[0], st, 1); RoadStopUpdateCachedTriggers(st);

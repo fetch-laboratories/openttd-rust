@@ -386,7 +386,7 @@ impl Ctx<'_> {
         } else if !(self.s.waypoint_available)() {
             return cost.error(self.s.strings.too_many_stations);
         }
-        let specindex = crate::station_association::allocate(self.s.rail_association, spec, wp);
+        let specindex = crate::station_association::allocate(spec, wp);
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
@@ -582,13 +582,7 @@ impl Ctx<'_> {
         } else if !(self.s.waypoint_available)() {
             return cost.error(self.s.strings.too_many_stations);
         }
-        let index = unsafe {
-            crate::newgrf_roadstop::openttd_rust_roadstop_allocate(
-                spec,
-                wp,
-                self.s.roadstop_resolver,
-            )
-        };
+        let index = unsafe { crate::newgrf_roadstop::openttd_rust_roadstop_allocate(spec, wp) };
         let specindex = super::SpecIndex {
             value: index as u8,
             valid: index >= 0,
