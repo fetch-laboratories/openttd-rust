@@ -37,6 +37,7 @@ class PullFacts:
     head: str
     base: str
     base_ref: str
+    base_tip: str
     mergeable: bool | None
     mergeable_state: str
     stable_snapshot: bool
@@ -89,6 +90,9 @@ def review_reports(
 def collect_pull(repository: str, number: int, *, latency: bool = False) -> PullFacts:
     pull = ci.api(repository, f"pulls/{number}")
     head = pull["head"]["sha"]
+    # The PR's base sha is its last sync point, not the base branch's current tip.
+    branch = f"branches/{pull['base']['ref']}"
+    base_tip = ci.api(repository, branch)["commit"]["sha"]
     comments = pages(repository, f"issues/{number}/comments?per_page=100")
     reviews = pages(repository, f"pulls/{number}/reviews?per_page=100")
     statuses = pages(repository, f"commits/{head}/statuses?per_page=100")
@@ -136,6 +140,7 @@ def collect_pull(repository: str, number: int, *, latency: bool = False) -> Pull
         f["filename"] for f in pages(repository, f"pulls/{number}/files?per_page=100")
     ]
     current = ci.api(repository, f"pulls/{number}")
+    current_tip = ci.api(repository, branch)["commit"]["sha"]
     return PullFacts(
         number,
         pull["html_url"],
@@ -143,10 +148,12 @@ def collect_pull(repository: str, number: int, *, latency: bool = False) -> Pull
         head,
         pull["base"]["sha"],
         pull["base"]["ref"],
+        base_tip,
         pull.get("mergeable"),
         pull.get("mergeable_state", "unknown"),
         head == current["head"]["sha"]
-        and pull["base"]["sha"] == current["base"]["sha"],
+        and pull["base"]["sha"] == current["base"]["sha"]
+        and base_tip == current_tip,
         full_fact,
         passing_full_url,
         review_reports(comments, reviews, head),

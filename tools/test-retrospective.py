@@ -19,6 +19,7 @@ class RetrospectiveTests(unittest.TestCase):
             "a" * 40,
             "b" * 40,
             "rust-migration",
+            "b" * 40,
             None,
             "unknown",
             True,
@@ -39,6 +40,7 @@ class RetrospectiveTests(unittest.TestCase):
             "mergeable": None,
             "created_at": "2026-11-06T00:00:00Z",
         }
+        tip = {"commit": {"sha": "e" * 40}}
         status = {
             "context": "Full validation",
             "state": "success",
@@ -65,7 +67,7 @@ class RetrospectiveTests(unittest.TestCase):
             "pulls/1/files?per_page=100": [{"filename": "tools/shared.py"}],
         }
         with (
-            mock.patch.object(facts.ci, "api", side_effect=[pull, pull]),
+            mock.patch.object(facts.ci, "api", side_effect=[pull, tip, pull, tip]),
             mock.patch.object(
                 facts, "pages", side_effect=lambda repo, path: arrays[path]
             ),
@@ -75,6 +77,7 @@ class RetrospectiveTests(unittest.TestCase):
         ):
             result = facts.collect_pull("owner/repo", 1, latency=True)
         self.assertEqual(result.head, "a" * 40)
+        self.assertEqual((result.base, result.base_tip), ("b" * 40, "e" * 40))
         self.assertIsNone(result.mergeable)
         self.assertTrue(result.stable_snapshot)
         self.assertEqual(
@@ -99,15 +102,20 @@ class RetrospectiveTests(unittest.TestCase):
                 current["head"] = {"sha": "d" * 40}
             return arrays[path]
 
-        with (
-            mock.patch.object(facts.ci, "api", side_effect=[pull, current]),
-            mock.patch.object(facts, "pages", side_effect=changed_files),
-            mock.patch.object(
-                facts.ci, "passed_run", return_value=status["target_url"]
-            ),
+        moved = {"commit": {"sha": "f" * 40}}
+        for responses, listing in (
+            ([pull, tip, current, tip], changed_files),
+            ([pull, tip, pull, moved], lambda _repo, path: arrays[path]),
         ):
-            changed = facts.collect_pull("owner/repo", 1)
-        self.assertFalse(changed.stable_snapshot)
+            with (
+                mock.patch.object(facts.ci, "api", side_effect=responses),
+                mock.patch.object(facts, "pages", side_effect=listing),
+                mock.patch.object(
+                    facts.ci, "passed_run", return_value=status["target_url"]
+                ),
+            ):
+                changed = facts.collect_pull("owner/repo", 1)
+            self.assertFalse(changed.stable_snapshot)
 
     def test_overlap_is_elapsed_union_and_unknown_milestones_stay_absent(self) -> None:
         first = self.pull()

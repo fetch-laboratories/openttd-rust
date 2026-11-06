@@ -176,11 +176,11 @@ JSON records the metric version, implementation hash, head, baseline and scope. 
 
 | Command | Output |
 | --- | --- |
-| `python3 tools/retrospective.py readiness 705 704 --json` | Observed head/base, mergeability, report SHAs/links, Full status including carry description, and changed-file intersections between the supplied PRs. |
+| `python3 tools/retrospective.py readiness 705 704 --json` | Observed head, PR base (its last sync point), current base-branch tip, mergeability, report SHAs/links, Full status including carry description, and changed-file intersections between the supplied PRs. |
 | `python3 tools/retrospective.py latency 705 704 --json` | Available PR/review/Full-run milestones and completed created-to-merge intervals, with both summed per-PR seconds and their elapsed union. |
 | `python3 tools/retrospective.py stocktake START END` | Same-version whole-fork endpoint delta table; `--json` retains both full metric endpoints and scope metadata. |
 
-These commands read through the existing CI/`gh` helpers and metric. A matching report SHA is a text fact, not an inferred independent approval under shared credentials. Readiness is an observation, not merge authorization; `stable_snapshot` flags a head/base change during collection. Absent milestones remain absent and causes remain unknown. Full workflow `updated_at` is labeled as its last update, not a precise completion timestamp; a dispatch run's Git head belongs to the workflow branch, so it is never substituted for the PR head. Edited report text uses the latest edit time. Issue placement remains `python3 docs/skills/steer/issues.py`.
+These commands read through the existing CI/`gh` helpers and metric. A matching report SHA is a text fact, not an inferred independent approval under shared credentials. Readiness is an observation, not merge authorization; `stable_snapshot` flags a head, PR-base or base-tip change during collection. Absent milestones remain absent and causes remain unknown. Full workflow `updated_at` is labeled as its last update, not a precise completion timestamp; a dispatch run's Git head belongs to the workflow branch, so it is never substituted for the PR head. Edited report text uses the latest edit time. Issue placement remains `python3 docs/skills/steer/issues.py`.
 
 ## Rust-only source sweep
 
