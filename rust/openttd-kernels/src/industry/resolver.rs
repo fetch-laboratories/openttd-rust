@@ -574,9 +574,7 @@ fn tile_variable(
         ),
         0x61 => {
             let tile = unsafe { (s.nearby)(parameter as u8, c.tile, true) };
-            if s.is_industry(tile)
-                && unsafe { (s.tile().industry)(tile).shell.cast::<c_void>() } == c.industry
-            {
+            if s.is_industry(tile) && super::by_tile(s.shared(), tile).industry == c.industry {
                 u32::from(unsafe { (s.tile().frame)(tile) })
             } else {
                 u32::MAX

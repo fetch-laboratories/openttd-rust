@@ -2058,10 +2058,6 @@ crate::abi::layouts! {
         accepts_callback,
         amount_callback,
     };
-    "OpenTTDIndustryTileOwner" ["industry"] => crate::industry::TileIndustry {
-        shell,
-        owner,
-    };
     "OpenTTDIndustryTileServices" ["industry"] => crate::industry::TileServices {
         shared,
         gfx,
@@ -2075,7 +2071,6 @@ crate::abi::layouts! {
         completed,
         set_completed,
         reset_construction,
-        industry,
         industry_index,
         toffee_offset,
         on_water,

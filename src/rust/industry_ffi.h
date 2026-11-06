@@ -275,11 +275,6 @@ struct OpenTTDIndustryDeliveryServices {
 };
 typedef void (*OpenTTDIndustryResolve)(void *context, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out);
 void openttd_rust_industry_production_callback(void *industry, OpenTTDIndustry *owner, void *context, uint32_t behaviour, uint8_t reason, OpenTTDIndustryResolve resolve, const OpenTTDIndustryServices *services);
-/** Minimal live tile lookup; no persistent shell observation. */
-typedef struct OpenTTDIndustryTileOwner {
-	OpenTTDIndustryShell *shell;
-	OpenTTDIndustry *owner;
-} OpenTTDIndustryTileOwner;
 /** Consumed immutable tile acceptance properties, not a live industry view. */
 typedef struct OpenTTDIndustryTileAcceptance {
 	uint8_t cargo[16];
@@ -301,7 +296,6 @@ typedef struct OpenTTDIndustryTileServices {
 	bool (*completed)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(completed);
 	void (*set_completed)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_completed);
 	void (*reset_construction)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(reset_construction);
-	OpenTTDIndustryTileOwner (*industry)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(industry);
 	uint16_t (*industry_index)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(industry_index);
 	uint8_t (*toffee_offset)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(toffee_offset);
 	bool (*on_water)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(on_water);

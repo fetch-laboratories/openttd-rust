@@ -10,7 +10,7 @@
 // Retain the original tick masks for source comparison.
 #![allow(clippy::verbose_bit_mask)]
 use super::{
-    ConstructionServices, GenerationServices, Industry, IndustryCost, IndustryCostServices,
+    ConstructionServices, GenerationServices, IndustryCost, IndustryCostServices,
     LifecycleServices, Services, SpecHandle,
 };
 use crate::economy_type::PR_BUILD_FOUNDATION;
@@ -19,15 +19,10 @@ use crate::industrytype;
 const ACCEPTS_ALL_CARGO: u8 = 1 << 1;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
-use std::{ffi::c_void, ptr};
+use std::ptr;
 
 /// The native `Industry` pool shell.
 pub use crate::industry_type::Industry as ShellHandle;
-#[repr(C)]
-pub struct TileIndustry {
-    pub shell: *mut ShellHandle,
-    pub owner: *mut Industry,
-}
 pub use crate::industrytype::IndustryTileSpec as TileSpec;
 #[repr(C)]
 pub struct TileAcceptance {
@@ -52,7 +47,6 @@ pub struct TileServices {
     pub completed: unsafe extern "C" fn(u32) -> bool,
     pub set_completed: unsafe extern "C" fn(u32),
     pub reset_construction: unsafe extern "C" fn(u32),
-    pub industry: unsafe extern "C" fn(u32) -> TileIndustry,
     pub industry_index: unsafe extern "C" fn(u32) -> u16,
     pub toffee_offset: unsafe extern "C" fn(u8) -> u8,
     pub on_water: unsafe extern "C" fn(u32) -> bool,
@@ -344,12 +338,12 @@ pub(crate) unsafe fn tile_loop(
     if (s.shared().tile_type)(tile) != 8 {
         return;
     }
-    let industry = unsafe { (t.industry)(tile) };
+    let industry = super::by_tile(unsafe { &*t.shared }, tile);
     unsafe {
         super::openttd_rust_industry_randomise_tile(
             tile,
             0,
-            industry.shell.cast::<c_void>(),
+            industry.industry,
             industry.owner,
             s,
             l,
@@ -363,7 +357,7 @@ pub(crate) unsafe fn tile_loop(
         return;
     }
     if unsafe { (t.transport)(tile) } {
-        let industry = unsafe { (t.industry)(tile) };
+        let industry = super::by_tile(unsafe { &*t.shared }, tile);
         if !unsafe {
             super::openttd_rust_industry_animate_abi(
                 industry.owner,
@@ -456,7 +450,7 @@ pub(crate) unsafe fn tile_loop(
             );
         }
         143 => {
-            let industry = unsafe { (t.industry)(tile) };
+            let industry = super::by_tile(unsafe { &*t.shared }, tile);
             let delivered =
                 unsafe { ptr::read(ptr::addr_of!((*industry.owner).record.was_cargo_delivered)) };
             if delivered != 0 {
@@ -490,7 +484,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     let t = unsafe { &*services };
     let gfx = unsafe { (t.gfx)(tile) };
     let spec = industrytype::tile(gfx);
-    let industry = unsafe { (t.industry)(tile) };
+    let industry = super::by_tile(unsafe { &*t.shared }, tile);
     let mut info = unsafe {
         TileAcceptance {
             cargo: (*spec).accepts_cargo,
@@ -584,7 +578,7 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
     generation: *const GenerationServices,
 ) {
     let (t, p, c, g) = unsafe { (&*tiles, &*policy, &*costs, &*generation) };
-    let industry = unsafe { (t.industry)(tile) };
+    let industry = super::by_tile(unsafe { &*t.shared }, tile);
     let kind = unsafe { (*industry.owner).record.r#type };
     let spec = industrytype::industry(u16::from(kind));
     if (unsafe { (p.current_company)() } != 17
@@ -604,9 +598,9 @@ pub(crate) unsafe fn openttd_rust_industry_tile_clear(
     }
     if flags & 1 != 0 {
         unsafe {
-            (p.close_ai)(industry.shell);
-            (p.close_game)(industry.shell);
-            (p.destroy)(industry.shell);
+            (p.close_ai)(industry.industry.cast());
+            (p.close_game)(industry.industry.cast());
+            (p.destroy)(industry.industry.cast());
         }
     }
     let removal = unsafe { super::removal_cost((*spec).removal_cost_multiplier) };

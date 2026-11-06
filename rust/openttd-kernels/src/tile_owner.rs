@@ -66,7 +66,7 @@ pub unsafe extern "C" fn openttd_rust_tile_change_owner(
             6 => water_cmd::openttd_rust_water_change_owner(s.water, context.cost, tile, old, new),
             7 => (s.void)(tile, old, new),
             8 => {
-                let owner = ((*s.industry).industry)(tile).owner;
+                let owner = crate::industry::by_tile(&*s.shared, tile).owner;
                 industry::openttd_rust_industry_change_owner(owner, old, new);
             }
             9 => {

@@ -975,7 +975,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.completed = [](uint32_t tile) noexcept -> bool { return IsIndustryCompleted(TileIndex(tile)); },
 		.set_completed = [](uint32_t tile) noexcept { SetIndustryCompleted(TileIndex(tile)); },
 		.reset_construction = RustResetIndustryConstruction,
-		.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { Industry *i = RustIndustryByTile(tile); return {i, RustIndustryCanonicalOwner(i)}; },
 		.industry_index = RustIndustryTileIndex,
 		.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; },
 		.on_water = RustOnWater,
