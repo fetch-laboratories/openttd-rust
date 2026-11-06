@@ -40,10 +40,6 @@ pub struct Services {
     pub new_rear: extern "C" fn(*mut ()) -> *mut (),
     pub link_multihead: extern "C" fn(*mut (), *mut ()),
     pub invalidate_grf: extern "C" fn(*mut ()),
-    pub train_limit: extern "C" fn() -> u16,
-    pub unit: extern "C" fn(*mut ()) -> u16,
-    pub use_unit: extern "C" fn(*mut (), u16),
-    pub release_unit: extern "C" fn(*mut ()),
     pub head_windows: extern "C" fn(*mut ()),
     pub front_windows: extern "C" fn(*mut ()),
     pub company_dirty: extern "C" fn(),
@@ -508,7 +504,11 @@ fn check_new_train(x: Ctx, original_dst: R, dst: R, original_src: R, src: R) -> 
     if engine(src) + engine(dst) - engine(original_src) - engine(original_dst) <= 0 {
         return None;
     }
-    if (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN) <= (x.s.train_limit)() {
+    if unsafe { crate::unit_numbers::free_vehicle_number(x.g, crate::vehicle::VehicleType::TRAIN) }
+        <= unsafe { &*x.g.shared }
+            .settings()
+            .vehicle_limit(crate::vehicle::VehicleType::TRAIN)
+    {
         return None;
     }
     Some(x.b.too_many)
@@ -673,13 +673,16 @@ fn normalise_train_head(x: Ctx, head: R) {
         return;
     }
     (x.s.head_windows)(Ctx::sh(head));
-    if (x.s.unit)(Ctx::sh(head)) != 0 {
+    if Ctx::vref(head).unit_number() != 0 {
         return;
     }
-    (x.s.use_unit)(
-        Ctx::sh(head),
-        (x.b.free_unit)(crate::vehicle::VehicleType::TRAIN),
-    );
+    let unit = unsafe {
+        crate::unit_numbers::free_vehicle_number(x.g, crate::vehicle::VehicleType::TRAIN)
+    };
+    let unit = unsafe {
+        crate::unit_numbers::use_vehicle(x.c.vehicles.companies(), Ctx::vref(head), unit)
+    };
+    Ctx::vref(head).write_unit_number(unit);
 }
 /// `new_head->orders = old->orders`.
 fn take_orders(x: Ctx, new_head: R, old: R) {
@@ -841,7 +844,7 @@ pub(crate) unsafe fn move_vehicle(
             unsafe { (x.w.copy_configuration)(Ctx::sh(src), Ctx::sh(src_head)) };
         }
         delete_orders(x, src);
-        (s.release_unit)(Ctx::sh(src));
+        unsafe { crate::unit_numbers::release_vehicle(x.c.vehicles.companies(), Ctx::vref(src)) };
         (x.t.clear_name)(Ctx::sh(src));
     }
     if original_src_head != src && dst_head == src {
@@ -983,7 +986,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
         cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
-        invalidate_grf, train_limit, unit, use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
+        invalidate_grf, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };
 }

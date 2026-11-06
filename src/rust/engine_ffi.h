@@ -57,10 +57,6 @@ struct OpenTTDEngineServices {
 	int32_t (*base_intro)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(base_intro);
 	OpenTTDEngineYear (*aging_year)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aging_year);
 	OpenTTDEngineStartSettings (*start_settings)() noexcept OPENTTD_SERVICE_DEFAULT(start_settings);
-	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
-	uint16_t (*road_limit)() noexcept OPENTTD_SERVICE_DEFAULT(road_limit);
-	uint16_t (*ship_limit)() noexcept OPENTTD_SERVICE_DEFAULT(ship_limit);
-	uint16_t (*aircraft_limit)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft_limit);
 	bool (*ai_train_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_train_disabled);
 	bool (*ai_road_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_road_disabled);
 	bool (*ai_ship_disabled)() noexcept OPENTTD_SERVICE_DEFAULT(ai_ship_disabled);

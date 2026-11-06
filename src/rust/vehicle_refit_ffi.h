@@ -118,10 +118,6 @@ struct OpenTTDRailConstructionServices {
 	void *(*new_rear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_rear);
 	void (*link_multihead)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(link_multihead);
 	void (*invalidate_grf)(void *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
-	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
-	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
-	void (*use_unit)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
-	void (*release_unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(release_unit);
 	void (*head_windows)(void *) noexcept OPENTTD_SERVICE_DEFAULT(head_windows);
 	void (*front_windows)(void *) noexcept OPENTTD_SERVICE_DEFAULT(front_windows);
 	void (*company_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_dirty);
@@ -135,7 +131,6 @@ struct OpenTTDVehicleBuildServices {
 	VehicleType (*depot_kind)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_kind);
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
-	uint16_t (*free_unit)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(free_unit);
 	const OpenTTDVehicleConstructServices *construct;
 	const OpenTTDRailConstructionServices *rail;
 	uint32_t (*ship_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_tile);
@@ -143,7 +138,6 @@ struct OpenTTDVehicleBuildServices {
 	void (*set_purchase)(void *, uint16_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_purchase);
 	bool (*is_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(is_engine);
 	void (*presentation)(void *, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(presentation);
-	void (*use_unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
 	uint32_t too_many, unavailable;
 };
 struct OpenTTDVehicleCloneServices {

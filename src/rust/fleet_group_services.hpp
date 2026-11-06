@@ -33,8 +33,6 @@ static void * FleetGroup_next_renew(uint32_t from) noexcept { for (EngineRenew *
 static bool FleetGroup_buildable_type(uint8_t type) noexcept { return IsCompanyBuildableVehicleType(static_cast<VehicleType>(type)); }
 static bool FleetGroup_can_allocate() noexcept { return Group::CanAllocateItem(); }
 static uint16_t FleetGroup_allocate(uint8_t owner, uint8_t type) noexcept { return (new Group(CompanyID(owner), static_cast<VehicleType>(type)))->index.base(); }
-static uint16_t FleetGroup_use_number(uint8_t owner) noexcept { auto *c = Company::Get(CompanyID(owner)); return c->freegroups.UseID(c->freegroups.NextID()); }
-static void FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept { Company::Get(CompanyID(owner))->freegroups.ReleaseID(number); }
 static bool FleetGroup_keep_length(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.renew_keep_length; }
 static void FleetGroup_delete_group(uint16_t id) noexcept { delete Group::Get(GroupID(id)); }
 static void FleetGroup_clear_backup(uint16_t id) noexcept { OrderBackup::ClearGroup(GroupID(id)); }
@@ -86,8 +84,6 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.buildable_type = FleetGroup_buildable_type,
 		.can_allocate = FleetGroup_can_allocate,
 		.allocate = FleetGroup_allocate,
-		.use_number = FleetGroup_use_number,
-		.release_number = FleetGroup_release_number,
 		.company_livery = Identity_default_livery,
 		.keep_length = FleetGroup_keep_length,
 		.delete_group = FleetGroup_delete_group,

@@ -59,10 +59,6 @@ inline uint16_t RustNetworkMaxJoinTime() noexcept { return _settings_client.netw
 inline uint16_t RustNetworkMaxLagTime() noexcept { return _settings_client.network.max_lag_time; }
 inline uint16_t RustNetworkMaxPasswordTime() noexcept { return _settings_client.network.max_password_time; }
 inline uint16_t RustNetworkSyncFreq() noexcept { return _settings_client.network.sync_freq; }
-inline uint16_t RustTrainLimit() noexcept { return _settings_game.vehicle.max_trains; }
-inline uint16_t RustRoadVehicleLimit() noexcept { return _settings_game.vehicle.max_roadveh; }
-inline uint16_t RustShipLimit() noexcept { return _settings_game.vehicle.max_ships; }
-inline uint16_t RustAircraftLimit() noexcept { return _settings_game.vehicle.max_aircraft; }
 inline bool RustAITrainDisabled() noexcept { return _settings_game.ai.ai_disable_veh_train; }
 inline bool RustAIRoadDisabled() noexcept { return _settings_game.ai.ai_disable_veh_roadveh; }
 inline bool RustAIShipDisabled() noexcept { return _settings_game.ai.ai_disable_veh_ship; }

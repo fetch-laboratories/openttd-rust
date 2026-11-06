@@ -102,7 +102,6 @@ inline void RustVehicleSetServiceIntervalIsPercent(Vehicle *v, bool percent) noe
 inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->Record().subtype = subtype; }
 inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->Record().unitnumber; }
-inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }
 inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->GetTile().base(); }

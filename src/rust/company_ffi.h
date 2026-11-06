@@ -103,7 +103,6 @@ struct OpenTTDCompanyServices {
 	uint8_t (OPENTTD_RUST_CALL *local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	bool (OPENTTD_RUST_CALL *network_server)() noexcept OPENTTD_SERVICE_DEFAULT(network_server);
 	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *company_vehicle_counts)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_vehicle_counts);
-	OpenTTDCompanyVehicleCounts (OPENTTD_RUST_CALL *vehicle_limits)() noexcept OPENTTD_SERVICE_DEFAULT(vehicle_limits);
 	void (OPENTTD_RUST_CALL *company_in_trouble)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_in_trouble);
 	uint32_t (OPENTTD_RUST_CALL *hq_location)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(hq_location);
 	const OpenTTDObjectServices *(OPENTTD_RUST_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
@@ -168,11 +167,9 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *count_group_vehicle)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_vehicle);
 	void (OPENTTD_RUST_CALL *reset_service_interval)(uint32_t, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(reset_service_interval);
 	void (OPENTTD_RUST_CALL *set_vehicle_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_vehicle_owner);
-	void (OPENTTD_RUST_CALL *assign_unit_number)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_unit_number);
 	void (OPENTTD_RUST_CALL *remove_engine_replacements)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_engine_replacements);
 	uint32_t (OPENTTD_RUST_CALL *group_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(group_next_owned);
 	void (OPENTTD_RUST_CALL *delete_group)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_group);
-	void (OPENTTD_RUST_CALL *transfer_group)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(transfer_group);
 	void (OPENTTD_RUST_CALL *copy_service_interval_defaults)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_service_interval_defaults);
 	void (OPENTTD_RUST_CALL *update_autoreplace)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_autoreplace);
 	uint32_t (OPENTTD_RUST_CALL *map_size)() noexcept OPENTTD_SERVICE_DEFAULT(map_size);

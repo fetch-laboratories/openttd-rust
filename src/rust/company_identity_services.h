@@ -10,6 +10,8 @@
 #include "services_cargo.h"
 inline Company * OPENTTD_RUST_CALL Identity_company(uint8_t id) noexcept { return Company::Get(CompanyID{id}); }
 inline uint8_t OPENTTD_RUST_CALL Identity_company_id(const Company *c) noexcept { return c->index.base(); }
+inline OpenTTDUnitNumberState *OPENTTD_RUST_CALL Identity_vehicle_numbers(Company *c, VehicleType type) noexcept { return &c->freeunits[type].Record(); }
+inline OpenTTDUnitNumberState *OPENTTD_RUST_CALL Identity_group_numbers(Company *c) noexcept { return &c->freegroups.Record(); }
 inline uint32_t OPENTTD_RUST_CALL Identity_name_id(const Company *c) noexcept { return c->name_1; }
 inline void OPENTTD_RUST_CALL Identity_set_name_id(Company *c, uint32_t value) noexcept { c->name_1 = value; }
 inline uint32_t OPENTTD_RUST_CALL Identity_name_parts(const Company *c) noexcept { return c->name_2; }

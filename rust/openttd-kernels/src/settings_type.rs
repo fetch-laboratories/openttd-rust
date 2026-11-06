@@ -36,9 +36,13 @@ crate::abi::shared_records! {
         pub land_generator: *const u8,
         pub map_x: *const u8,
         pub map_y: *const u8,
+        pub max_aircraft: *const u16,
         pub max_bridge_length: *const u16,
         pub max_companies: *const u8,
         pub max_competitors: *const u8,
+        pub max_roadveh: *const u16,
+        pub max_ships: *const u16,
+        pub max_trains: *const u16,
         pub never_expire_airports: *const bool,
         pub never_expire_vehicles: *const bool,
         pub no_servicing_if_no_breakdowns: *const bool,
@@ -72,9 +76,13 @@ impl SettingAddresses {
         land_generator: std::ptr::null(),
         map_x: std::ptr::null(),
         map_y: std::ptr::null(),
+        max_aircraft: std::ptr::null(),
         max_bridge_length: std::ptr::null(),
         max_companies: std::ptr::null(),
         max_competitors: std::ptr::null(),
+        max_roadveh: std::ptr::null(),
+        max_ships: std::ptr::null(),
+        max_trains: std::ptr::null(),
         never_expire_airports: std::ptr::null(),
         never_expire_vehicles: std::ptr::null(),
         no_servicing_if_no_breakdowns: std::ptr::null(),
@@ -86,4 +94,21 @@ impl SettingAddresses {
         used_liveries: std::ptr::null(),
         vehicle_breakdowns: std::ptr::null(),
     };
+}
+
+impl SettingAddresses {
+    /// Canonical `VehicleSettings::max_*` limit at the source observation point.
+    pub(crate) fn vehicle_limit(&self, kind: crate::vehicle_type::VehicleType) -> u16 {
+        use crate::vehicle_type::VehicleType;
+        // SAFETY: production catalogs borrow process-lifetime canonical settings.
+        unsafe {
+            match kind {
+                VehicleType::TRAIN => self.max_trains.read(),
+                VehicleType::ROAD => self.max_roadveh.read(),
+                VehicleType::SHIP => self.max_ships.read(),
+                VehicleType::AIRCRAFT => self.max_aircraft.read(),
+                _ => unreachable!("company-buildable vehicle type"),
+            }
+        }
+    }
 }

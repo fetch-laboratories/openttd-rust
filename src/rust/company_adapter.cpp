@@ -135,10 +135,6 @@ static OpenTTDCompanyVehicleCounts Co_company_vehicle_counts(uint8_t id) noexcep
 	if (c == nullptr) return {};
 	return {c->group_all[VEH_TRAIN].num_vehicle, RustCompanyRoadVehicleCount(c), c->group_all[VEH_SHIP].num_vehicle, c->group_all[VEH_AIRCRAFT].num_vehicle};
 }
-static OpenTTDCompanyVehicleCounts Co_vehicle_limits() noexcept
-{
-	return {RustTrainLimit(), RustRoadVehicleLimit(), RustShipLimit(), RustAircraftLimit()};
-}
 static void Co_company_in_trouble(uint8_t id) noexcept
 {
 	CompanyID cid(id);
@@ -332,13 +328,6 @@ static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
 static void Co_remove_engine_replacements(uint8_t id) noexcept { RemoveAllEngineReplacementForCompany(Company::Get(id)); }
 static uint32_t Co_group_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Group>(owner, from, [](const Group *g) { return g->owner; }); }
 static void Co_delete_group(uint32_t id) noexcept { delete Group::Get(id); }
-static void Co_transfer_group(uint32_t id, uint8_t owner) noexcept
-{
-	Group *g = Group::Get(id);
-	Company *c = Company::Get(owner);
-	g->owner = c->index;
-	g->number = c->freegroups.UseID(c->freegroups.NextID());
-}
 static void Co_copy_service_interval_defaults(uint8_t old_owner, uint8_t new_owner) noexcept
 {
 	Company *old_company = Company::Get(old_owner);
@@ -418,7 +407,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.competitor_fired = Co_competitor_fired,
 		.can_allocate_company = Co_can_allocate_company,
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
-		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
+		.company_vehicle_counts = Co_company_vehicle_counts,
 		.company_in_trouble = Co_company_in_trouble,
 		.hq_location = RustCompanyHQ,
 		.object_services = []() noexcept { return &GetRustObjectServices(); },
@@ -454,9 +443,9 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.vehicle_group_flags = Co_vehicle_group_flags, .vehicle_service_interval_is_custom = Co_vehicle_service_interval_is_custom,
 		.delete_vehicle = Co_delete_vehicle, .count_group_engine = Co_count_group_engine,
 		.count_group_vehicle = Co_count_group_vehicle, .reset_service_interval = Co_reset_service_interval,
-		.set_vehicle_owner = Co_set_vehicle_owner, .assign_unit_number = RustCompanyAssignVehicleUnit,
+		.set_vehicle_owner = Co_set_vehicle_owner,
 		.remove_engine_replacements = Co_remove_engine_replacements, .group_next_owned = Co_group_next_owned,
-		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
+		.delete_group = Co_delete_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
 		.map_size = Co_map_size,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,

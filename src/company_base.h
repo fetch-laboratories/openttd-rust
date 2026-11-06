@@ -59,7 +59,14 @@ public:
 	FreeUnitIDGenerator(const FreeUnitIDGenerator &other) { openttd_rust_unit_numbers_copy(&this->state, &other.state); }
 	FreeUnitIDGenerator &operator=(const FreeUnitIDGenerator &other) { openttd_rust_unit_numbers_copy(&this->state, &other.state); return *this; }
 	FreeUnitIDGenerator(FreeUnitIDGenerator &&other) noexcept : state(std::exchange(other.state, {})) {}
-	FreeUnitIDGenerator &operator=(FreeUnitIDGenerator &&other) noexcept { if (this != &other) { openttd_rust_unit_numbers_drop(&this->state); this->state = std::exchange(other.state, {}); } return *this; }
+	FreeUnitIDGenerator &operator=(FreeUnitIDGenerator &&other) noexcept
+	{
+		OpenTTDUnitNumberState previous{};
+		std::swap(previous, this->state);
+		std::swap(this->state, other.state);
+		openttd_rust_unit_numbers_drop(&previous);
+		return *this;
+	}
 	~FreeUnitIDGenerator() { openttd_rust_unit_numbers_drop(&this->state); }
 	UnitID NextID() const { return openttd_rust_unit_numbers_next(&this->state); }
 	UnitID UseID(UnitID index) { return openttd_rust_unit_numbers_use(&this->state, index); }

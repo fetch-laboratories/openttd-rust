@@ -199,8 +199,6 @@ void CheckVehicleBreakdown(Vehicle *v);
 void EconomyAgeVehicle(Vehicle *v);
 void AgeVehicle(Vehicle *v);
 
-UnitID GetFreeUnitNumber(VehicleType type);
-
 void VehicleEnterDepot(Vehicle *v);
 
 bool CanBuildVehicleInfrastructure(VehicleType type, uint8_t subtype = 0);

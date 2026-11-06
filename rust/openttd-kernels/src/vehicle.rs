@@ -196,6 +196,11 @@ impl VehicleServices {
     pub(crate) unsafe fn pool_descriptor(&self) -> *const crate::pool::PoolDescriptor {
         unsafe { self.pool.read() }
     }
+    /// Canonical company services already shared by vehicle maintenance.
+    pub(crate) fn companies(&self) -> &'static crate::company_identity::Services {
+        // SAFETY: production entries use immutable process-lifetime service tables.
+        unsafe { &*(*self.maintenance).company }
+    }
     /// `Vehicle::SetNext` for legacy native shell contexts.
     ///
     /// # Safety

@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file vehicle_build_services.hpp Native pools, specification helpers and presentation leaves. */
 static VehicleType VehicleBuildDepotKind(uint32_t tile) noexcept { return GetDepotVehicleType(TileIndex(tile)); }
-static uint16_t VehicleBuildFreeUnit(VehicleType type) noexcept { return GetFreeUnitNumber(type); }
 /* Road vehicle and aircraft construction leaves: shell allocation and field stores. */
 static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 {
@@ -152,11 +151,11 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 	static const OpenTTDVehicleBuildServices services{
 		.refit = &GetRustVehicleRefitServices(), .mass = &GetVehicleMassServices(), .random = &GetRustRandomServices(),
 		.depot_kind = VehicleBuildDepotKind, .default_cargo = RustEngineDefaultCargo,
-		.pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
+		.pool_available = RustVehicleCanAllocate,
 		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
 
-		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation, .use_unit = RustVehicleUseCurrentUnit,
+		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation,
 		.too_many = STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, .unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
 	};
 	return services;

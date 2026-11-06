@@ -197,10 +197,6 @@ pub struct Services {
     pub base_intro: unsafe extern "C" fn(*const OpenTTDEngine) -> i32,
     pub aging_year: unsafe extern "C" fn(*const OpenTTDEngine) -> AgingYear,
     pub start_settings: unsafe extern "C" fn() -> StartSettings,
-    pub train_limit: unsafe extern "C" fn() -> u16,
-    pub road_limit: unsafe extern "C" fn() -> u16,
-    pub ship_limit: unsafe extern "C" fn() -> u16,
-    pub aircraft_limit: unsafe extern "C" fn() -> u16,
     pub ai_train_disabled: unsafe extern "C" fn() -> bool,
     pub ai_road_disabled: unsafe extern "C" fn() -> bool,
     pub ai_ship_disabled: unsafe extern "C" fn() -> bool,
@@ -545,16 +541,20 @@ unsafe fn wagon(s: &Services, e: EngineRef) -> bool {
 unsafe fn disabled(s: &Services, kind: VehicleType, ai: bool) -> bool {
     match kind {
         VehicleType::TRAIN => unsafe {
-            call!(s, train_limit) == 0 || (ai && call!(s, ai_train_disabled))
+            (&*s.shared).settings().vehicle_limit(VehicleType::TRAIN) == 0
+                || (ai && call!(s, ai_train_disabled))
         },
         VehicleType::ROAD => unsafe {
-            call!(s, road_limit) == 0 || (ai && call!(s, ai_road_disabled))
+            (&*s.shared).settings().vehicle_limit(VehicleType::ROAD) == 0
+                || (ai && call!(s, ai_road_disabled))
         },
         VehicleType::SHIP => unsafe {
-            call!(s, ship_limit) == 0 || (ai && call!(s, ai_ship_disabled))
+            (&*s.shared).settings().vehicle_limit(VehicleType::SHIP) == 0
+                || (ai && call!(s, ai_ship_disabled))
         },
         VehicleType::AIRCRAFT => unsafe {
-            call!(s, aircraft_limit) == 0 || (ai && call!(s, ai_aircraft_disabled))
+            (&*s.shared).settings().vehicle_limit(VehicleType::AIRCRAFT) == 0
+                || (ai && call!(s, ai_aircraft_disabled))
         },
         _ => unreachable!(),
     }
@@ -1272,10 +1272,6 @@ crate::abi::layouts! {
         base_intro,
         aging_year,
         start_settings,
-        train_limit,
-        road_limit,
-        ship_limit,
-        aircraft_limit,
         ai_train_disabled,
         ai_road_disabled,
         ai_ship_disabled,

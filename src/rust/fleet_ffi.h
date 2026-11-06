@@ -50,8 +50,6 @@ struct OpenTTDFleetGroupServices {
 	bool (*buildable_type)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(buildable_type);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	uint16_t (*allocate)(uint8_t owner, uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
-	uint16_t (*use_number)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(use_number);
-	void (*release_number)(uint8_t owner, uint16_t number) noexcept OPENTTD_SERVICE_DEFAULT(release_number);
 	const Livery * (*company_livery)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(company_livery);
 	bool (*keep_length)(uint8_t owner) noexcept OPENTTD_SERVICE_DEFAULT(keep_length);
 	void (*delete_group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(delete_group);

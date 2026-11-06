@@ -60,6 +60,92 @@ impl UnitNumbers {
     }
 }
 
+// Canonical Company lookups finish before any bitmap borrow. The original
+// operations have no mutating callback between acquiring a bitmap and using it.
+unsafe fn vehicle_numbers(
+    s: &crate::company_identity::Services,
+    owner: u8,
+    kind: u8,
+) -> *mut UnitNumbers {
+    let company = (s.company)(crate::company_type::CompanyID(owner));
+    (s.vehicle_numbers)(company, crate::vehicle_type::VehicleType(kind))
+}
+unsafe fn group_numbers(s: &crate::company_identity::Services, owner: u8) -> *mut UnitNumbers {
+    let company = (s.company)(crate::company_type::CompanyID(owner));
+    (s.group_numbers)(company)
+}
+
+/// `GetFreeUnitNumber`: limit test precedes non-claiming bitmap selection.
+/// Tables and Company-owned records are live under the game-state mutex.
+pub(crate) unsafe fn free_vehicle_number(
+    groups: &crate::fleet::GroupServices,
+    kind: crate::vehicle_type::VehicleType,
+) -> u16 {
+    let settings = unsafe { &*groups.shared }.settings();
+    let maximum = settings.vehicle_limit(kind);
+    let owner = unsafe { (groups.current_company)() };
+    let stats = unsafe { (groups.stats)(owner, crate::fleet::ALL_GROUP, kind.0) };
+    let count = crate::raw_field::read_field!(stats.cast::<crate::fleet::StatsFields>(), vehicles);
+    if count >= maximum {
+        return u16::MAX;
+    }
+    let numbers = unsafe { vehicle_numbers(groups.vehicles.companies(), owner, kind.0) };
+    unsafe { (*numbers).next() }
+}
+
+/// Reserve the supplied vehicle's number without changing its record.
+pub(crate) unsafe fn use_vehicle(
+    s: &crate::company_identity::Services,
+    v: crate::vehicle::VehicleRef,
+    unit: u16,
+) -> u16 {
+    let numbers = unsafe { vehicle_numbers(s, v.owner(), v.vehicle_type()) };
+    unsafe { (*numbers).use_id(unit) }
+}
+
+/// Company takeover assigns a fresh number after changing ownership/statistics.
+pub(crate) unsafe fn assign_next_vehicle(
+    s: &crate::company_identity::Services,
+    v: crate::vehicle::VehicleRef,
+    owner: u8,
+) {
+    let numbers = unsafe { vehicle_numbers(s, owner, v.vehicle_type()) };
+    let next = unsafe { (*numbers).next() };
+    let unit = unsafe { (*numbers).use_id(next) };
+    v.write_unit_number(unit);
+}
+
+/// `Vehicle::ReleaseUnitNumber`, including its subsequent zero store.
+pub(crate) unsafe fn release_vehicle(
+    s: &crate::company_identity::Services,
+    v: crate::vehicle::VehicleRef,
+) {
+    let numbers = unsafe { vehicle_numbers(s, v.owner(), v.vehicle_type()) };
+    unsafe {
+        (*numbers).release(v.unit_number(), |condition| {
+            ((*s.shared.movement).native_assert)(condition);
+        });
+    }
+    v.write_unit_number(0);
+}
+
+/// `freegroups.UseID(freegroups.NextID())`.
+pub(crate) unsafe fn next_group(s: &crate::company_identity::Services, owner: u8) -> u16 {
+    let numbers = unsafe { group_numbers(s, owner) };
+    let next = unsafe { (*numbers).next() };
+    unsafe { (*numbers).use_id(next) }
+}
+
+/// Release a group number through the shared native assertion leaf.
+pub(crate) unsafe fn release_group(s: &crate::company_identity::Services, owner: u8, unit: u16) {
+    let numbers = unsafe { group_numbers(s, owner) };
+    unsafe {
+        (*numbers).release(unit, |condition| {
+            ((*s.shared.movement).native_assert)(condition);
+        });
+    }
+}
+
 /// Copy the bitmap into an initialized destination, preserving self-assignment.
 ///
 /// # Safety

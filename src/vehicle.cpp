@@ -1127,30 +1127,6 @@ VehicleEnterTileStates VehicleEnterTile(Vehicle *v, TileIndex tile, int x, int y
 }
 
 /**
- * Get an unused unit number for a vehicle (if allowed).
- * @param type Type of vehicle
- * @return A unused unit number for the given type of vehicle if it is allowed to build one, else \c UINT16_MAX.
- */
-UnitID GetFreeUnitNumber(VehicleType type)
-{
-	/* Check whether it is allowed to build another vehicle. */
-	uint max_veh;
-	switch (type) {
-		case VEH_TRAIN:    max_veh = _settings_game.vehicle.max_trains;   break;
-		case VEH_ROAD:     max_veh = _settings_game.vehicle.max_roadveh;  break;
-		case VEH_SHIP:     max_veh = _settings_game.vehicle.max_ships;    break;
-		case VEH_AIRCRAFT: max_veh = _settings_game.vehicle.max_aircraft; break;
-		default: NOT_REACHED();
-	}
-
-	const Company *c = Company::Get(_current_company);
-	if (c->group_all[type].num_vehicle >= max_veh) return UINT16_MAX; // Currently already at the limit, no room to make a new one.
-
-	return c->freeunits[type].NextID();
-}
-
-
-/**
  * Check whether we can build infrastructure for the given
  * vehicle type. This to disable building stations etc. when
  * you are not allowed/able to have the vehicle type yet.

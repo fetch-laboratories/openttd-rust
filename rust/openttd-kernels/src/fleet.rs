@@ -286,8 +286,6 @@ pub struct GroupServices {
     pub(crate) buildable_type: unsafe extern "C" fn(u8) -> bool,
     pub(crate) can_allocate: unsafe extern "C" fn() -> bool,
     pub(crate) allocate: unsafe extern "C" fn(u8, u8) -> u16,
-    pub(crate) use_number: unsafe extern "C" fn(u8) -> u16,
-    pub(crate) release_number: unsafe extern "C" fn(u8, u16),
     pub(crate) company_livery: unsafe extern "C" fn(u8) -> *const Livery,
     pub(crate) keep_length: unsafe extern "C" fn(u8) -> bool,
     pub(crate) delete_group: unsafe extern "C" fn(u16),
@@ -322,6 +320,19 @@ pub(crate) const ALL_GROUP: u16 = 65533;
 const NEW_GROUP: u16 = 65532;
 const OK: u32 = u32::MAX;
 const ERROR: u32 = 65535;
+
+/// Original Company ownership transfer: group lookup, strict Company lookup,
+/// owner publication, then number acquisition. Both owners remain live.
+pub(crate) unsafe fn transfer_group(w: &GroupServices, id: u16, owner: u8) {
+    let g = unsafe { group(w, id) };
+    let companies = w.vehicles.companies();
+    let company = (companies.company)(crate::company_type::CompanyID(owner));
+    write_field!(g, owner, (companies.company_id)(company).0);
+    let numbers = (companies.group_numbers)(company);
+    let next = unsafe { (*numbers).next() };
+    let number = unsafe { (*numbers).use_id(next) };
+    write_field!(g, number, number);
+}
 
 /// Canonical record of a live native shell.
 pub(crate) fn record(w: &GroupServices, v: *mut ()) -> VehicleRef {
@@ -647,7 +658,7 @@ unsafe fn create_group(w: &GroupServices, flags: u32, kind: u8, parent: u16, out
     if flags & 1 != 0 {
         let id = unsafe { (w.allocate)(owner, kind) };
         let g = unsafe { group(w, id) };
-        let number = unsafe { (w.use_number)(owner) };
+        let number = unsafe { crate::unit_numbers::next_group(w.vehicles.companies(), owner) };
         write_field!(g, number, number);
         if pg.is_null() {
             let parent = unsafe { (w.company_livery)(owner) };
@@ -700,7 +711,7 @@ unsafe fn delete_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
                 }
             }
             let number = read_field!(g, number);
-            unsafe { (w.release_number)(owner, number) };
+            unsafe { crate::unit_numbers::release_group(w.vehicles.companies(), owner, number) };
         }
         let parent = read_field!(g, parent);
         if parent != INVALID_GROUP {
@@ -1718,8 +1729,6 @@ crate::abi::layouts! {
         buildable_type,
         can_allocate,
         allocate,
-        use_number,
-        release_number,
         company_livery,
         keep_length,
         delete_group,

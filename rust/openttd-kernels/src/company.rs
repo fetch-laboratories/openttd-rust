@@ -242,7 +242,6 @@ pub struct Services {
     pub local_company: extern "C" fn() -> u8,
     pub network_server: extern "C" fn() -> bool,
     pub company_vehicle_counts: extern "C" fn(u8) -> VehicleCounts,
-    pub vehicle_limits: extern "C" fn() -> VehicleCounts,
     pub company_in_trouble: extern "C" fn(u8),
     pub hq_location: extern "C" fn(u8) -> u32,
     pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
@@ -307,11 +306,9 @@ pub struct Services {
     pub count_group_vehicle: extern "C" fn(u32, i32),
     pub reset_service_interval: extern "C" fn(u32, i32, bool),
     pub set_vehicle_owner: extern "C" fn(u32, u8),
-    pub assign_unit_number: extern "C" fn(u32, u8),
     pub remove_engine_replacements: extern "C" fn(u8),
     pub group_next_owned: extern "C" fn(u8, u32) -> u32,
     pub delete_group: extern "C" fn(u32),
-    pub transfer_group: extern "C" fn(u32, u8),
     pub copy_service_interval_defaults: extern "C" fn(u8, u8),
     pub update_autoreplace: extern "C" fn(u8),
     pub map_size: extern "C" fn() -> u32,
@@ -863,7 +860,13 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
 fn takeover_limit(s: &Services, big: u8, small: u8) -> bool {
     let a = (s.company_vehicle_counts)(big);
     let b = (s.company_vehicle_counts)(small);
-    let l = (s.vehicle_limits)();
+    let limits = s.shared.settings();
+    let l = VehicleCounts {
+        trains: limits.vehicle_limit(crate::vehicle_type::VehicleType::TRAIN),
+        road: limits.vehicle_limit(crate::vehicle_type::VehicleType::ROAD),
+        ships: limits.vehicle_limit(crate::vehicle_type::VehicleType::SHIP),
+        aircraft: limits.vehicle_limit(crate::vehicle_type::VehicleType::AIRCRAFT),
+    };
     let within = |x: u16, y: u16, max: u16| u32::from(x) + u32::from(y) <= u32::from(max);
     within(a.trains, b.trains, l.trains)
         && within(a.road, b.road, l.road)
@@ -1281,7 +1284,9 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             if new == INVALID_OWNER {
                 (s.delete_group)(id);
             } else {
-                (s.transfer_group)(id, new);
+                unsafe {
+                    crate::fleet::transfer_group((s.settings)().transactions.groups, id as u16, new)
+                };
             }
         },
     );
@@ -1318,7 +1323,16 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
         }
         if g.primary {
             (s.count_group_vehicle)(v, 1);
-            (s.assign_unit_number)(v, new);
+            let vehicles = (s.settings)().transactions.groups.vehicles;
+            // SAFETY: this ownership-transfer iteration retains the live primary vehicle.
+            let pool = unsafe {
+                crate::vehicle_base::VehiclePool::from_descriptor(vehicles.pool_descriptor())
+            };
+            let record = crate::vehicle::VehicleRef(
+                std::ptr::NonNull::new(unsafe { pool.record(crate::vehicle_type::VehicleID(v)) })
+                    .expect("live transferred vehicle"),
+            );
+            unsafe { crate::unit_numbers::assign_next_vehicle(s.identity, record, new) };
         }
     }
     if new != INVALID_OWNER {
@@ -2212,7 +2226,6 @@ crate::abi::layouts! {
         local_company,
         network_server,
         company_vehicle_counts,
-        vehicle_limits,
         company_in_trouble,
         hq_location,
         object_services,
@@ -2277,11 +2290,9 @@ crate::abi::layouts! {
         count_group_vehicle,
         reset_service_interval,
         set_vehicle_owner,
-        assign_unit_number,
         remove_engine_replacements,
         group_next_owned,
         delete_group,
-        transfer_group,
         copy_service_interval_defaults,
         update_autoreplace,
         map_size,

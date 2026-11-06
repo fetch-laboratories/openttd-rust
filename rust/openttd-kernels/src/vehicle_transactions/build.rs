@@ -3,7 +3,7 @@
 use super::{ERROR, construct, mass, rail, refit};
 use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, Cost, RandomServices};
-use crate::vehicle::{OpenTTDEngine, RailVehicleTypes, VehicleType};
+use crate::vehicle::{OpenTTDEngine, RailVehicleTypes, VehicleRef, VehicleType};
 use std::ptr;
 #[repr(C)]
 pub struct Result {
@@ -26,7 +26,6 @@ pub struct Services {
     pub depot_kind: extern "C" fn(u32) -> VehicleType,
     pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub pool_available: extern "C" fn(usize) -> bool,
-    pub free_unit: extern "C" fn(VehicleType) -> u16,
     pub construct: &'static construct::Services,
     pub rail: &'static rail::Services,
     pub ship_tile: extern "C" fn(u32) -> u32,
@@ -34,7 +33,6 @@ pub struct Services {
     pub set_purchase: extern "C" fn(*mut (), u16, i64),
     pub is_engine: extern "C" fn(*mut ()) -> bool,
     pub presentation: extern "C" fn(*mut (), VehicleType),
-    pub use_unit: extern "C" fn(*mut ()),
     pub too_many: u32,
     pub unavailable: u32,
 }
@@ -124,7 +122,7 @@ pub(crate) unsafe fn build(
     {
         0
     } else {
-        (s.free_unit)(kind)
+        unsafe { crate::unit_numbers::free_vehicle_number(b.groups, kind) }
     };
     if unit == u16::MAX {
         value.error(s.too_many);
@@ -239,7 +237,14 @@ pub(crate) unsafe fn build(
                     };
                 }
             }
-            (s.use_unit)(v);
+            let record = unsafe { VehicleRef::from_shell(v.cast(), c.vehicles) };
+            unsafe {
+                crate::unit_numbers::use_vehicle(
+                    c.vehicles.companies(),
+                    record,
+                    record.unit_number(),
+                )
+            };
         }
         if flags != subflags {
             let id = unsafe { (b.groups.vehicle_id)(v) };
@@ -306,7 +311,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleBuildResult" ["probe"] => Result { id, capacity, };
     "OpenTTDVehicleBuildServices" ["probe"] => Services {
         refit, mass, random, depot_kind, default_cargo, pool_available,
-        free_unit, construct, rail, ship_tile, new_ship, set_purchase,
-        is_engine, presentation, use_unit, too_many, unavailable,
+        construct, rail, ship_tile, new_ship, set_purchase,
+        is_engine, presentation, too_many, unavailable,
     };
 }

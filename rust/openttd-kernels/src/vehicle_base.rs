@@ -587,6 +587,9 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn cargo_subtype(self) -> u8 {
         crate::raw_field::read_field!(self.0.as_ptr(), cargo_subtype)
     }
+    pub(crate) fn write_unit_number(self, value: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), unitnumber, value);
+    }
     pub(crate) fn unit_number(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), unitnumber)
     }
