@@ -12,7 +12,7 @@ use std::ffi::c_void;
 crate::abi::shared_records! {
     fn abi_record;
     "OpenTTDNetworkGameSocket" ["probe"] => pub struct GameSocket {
-        pub base: *mut NetworkSocketHandler => class,
+        pub base: *mut NetworkSocketHandler,
         pub game: *mut c_void,
         pub incoming: *mut CommandQueue,
         pub last_packet_ns: i64,

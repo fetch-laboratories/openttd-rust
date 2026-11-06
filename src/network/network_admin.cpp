@@ -852,8 +852,8 @@ NetworkRecvStatus ServerNetworkAdminSocketHandler::Receive_ADMIN_AUTH_RESPONSE(P
 
 			this->SendEnableEncryption();
 
-			this->receive_encryption_handler = this->authentication_handler->CreateClientToServerEncryptionHandler();
-			this->send_encryption_handler = this->authentication_handler->CreateServerToClientEncryptionHandler();
+			this->SetReceiveEncryption(this->authentication_handler->CreateClientToServerEncryptionHandler());
+			this->SetSendEncryption(this->authentication_handler->CreateServerToClientEncryptionHandler());
 			this->authentication_handler = nullptr;
 			return this->SendProtocol();
 

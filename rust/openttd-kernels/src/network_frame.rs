@@ -134,8 +134,8 @@ pub struct Services {
     pub text_reset: extern "C" fn(*mut c_void),
 }
 
-pub(crate) fn socket_has_quit(s: &Services, game: *mut socket::GameSocket) -> bool {
-    unsafe { (s.packet.has_quit)(socket::base(game)) }
+pub(crate) fn socket_has_quit(_s: &Services, game: *mut socket::GameSocket) -> bool {
+    unsafe { (*socket::base(game)).has_quit }
 }
 pub(crate) fn packet_check(s: &Services) -> extern "C" fn(bool) {
     crate::movement::table(s.command.company.shared).native_assert

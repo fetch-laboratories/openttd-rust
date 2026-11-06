@@ -33,7 +33,7 @@
  */
 Packet::Packet(NetworkSocketHandler *cs, size_t limit, size_t initial_read_size)
 {
-	openttd_rust_packet_init_receive(&this->state, RustAssertCondition, cs, limit, initial_read_size);
+	openttd_rust_packet_init_receive(&this->state, RustAssertCondition, cs == nullptr ? nullptr : cs->BaseRecord(), limit, initial_read_size);
 }
 
 /**
@@ -47,10 +47,10 @@ Packet::Packet(NetworkSocketHandler *cs, size_t limit, size_t initial_read_size)
  */
 Packet::Packet(NetworkSocketHandler *cs, PacketType type, size_t limit)
 {
-	if (cs == nullptr || cs->send_encryption_handler == nullptr || cs->send_encryption_handler->GetRustStream() != nullptr) {
-		openttd_rust_packet_init_outgoing(&this->state, cs, &Services(), RustAssertCondition, type, limit);
+	if (cs == nullptr || cs->BaseRecord()->send_handler == nullptr || cs->BaseRecord()->send_handler->GetRustStream() != nullptr) {
+		openttd_rust_packet_init_outgoing(&this->state, cs == nullptr ? nullptr : cs->BaseRecord(), &Services(), RustAssertCondition, type, limit);
 	} else {
-		openttd_rust_packet_init_send(&this->state, RustAssertCondition, cs, type, limit, cs->send_encryption_handler->MACSize());
+		openttd_rust_packet_init_send(&this->state, RustAssertCondition, cs == nullptr ? nullptr : cs->BaseRecord(), type, limit, cs->BaseRecord()->send_handler->MACSize());
 	}
 }
 
@@ -60,16 +60,16 @@ Packet::Packet(NetworkSocketHandler *cs, PacketType type, size_t limit)
 void Packet::PrepareToSend()
 {
 	auto *cs = this->state.socket;
-	if (cs == nullptr || cs->send_encryption_handler == nullptr || cs->send_encryption_handler->GetRustStream() != nullptr) {
+	if (cs == nullptr || cs->send_handler == nullptr || cs->send_handler->GetRustStream() != nullptr) {
 		openttd_rust_packet_prepare_to_send(&this->state, &Services(), RustAssertCondition);
 		return;
 	}
 	/* Native virtual implementations can throw; their frame stays in C++. */
 	openttd_rust_packet_begin_send(&this->state, RustAssertCondition);
-	size_t mac = cs->send_encryption_handler->MACSize();
+	size_t mac = cs->send_handler->MACSize();
 	OpenTTDPacketFrame frame;
 	openttd_rust_packet_frame(2, this->Size(), mac, &frame);
-	cs->send_encryption_handler->Encrypt({this->state.data + 2, mac}, {this->state.data + frame.message, frame.payload});
+	cs->send_handler->Encrypt({this->state.data + 2, mac}, {this->state.data + frame.message, frame.payload});
 	openttd_rust_packet_finish_send(&this->state);
 }
 
@@ -229,12 +229,12 @@ bool Packet::ParsePacketSize()
 bool Packet::PrepareToRead()
 {
 	auto *cs = this->state.socket;
-	if (cs == nullptr || cs->receive_encryption_handler == nullptr || cs->receive_encryption_handler->GetRustStream() != nullptr) return openttd_rust_packet_prepare_to_read(&this->state, &Services());
+	if (cs == nullptr || cs->receive_handler == nullptr || cs->receive_handler->GetRustStream() != nullptr) return openttd_rust_packet_prepare_to_read(&this->state, &Services());
 	openttd_rust_packet_begin_read(&this->state);
-	size_t mac = cs->receive_encryption_handler->MACSize();
+	size_t mac = cs->receive_handler->MACSize();
 	OpenTTDPacketFrame frame;
 	if (!openttd_rust_packet_frame(this->Position(), this->Size(), mac, &frame)) return false;
-	bool valid = cs->receive_encryption_handler->Decrypt({this->state.data + this->Position(), mac}, {this->state.data + frame.message, frame.payload});
+	bool valid = cs->receive_handler->Decrypt({this->state.data + this->Position(), mac}, {this->state.data + frame.message, frame.payload});
 	openttd_rust_packet_finish_read(&this->state, mac);
 	return valid;
 }
@@ -247,8 +247,8 @@ PacketType Packet::GetPacketType() const
 {
 	auto *cs = this->state.socket;
 	assert(this->Size() >= EncodedLengthOfPacketSize() + EncodedLengthOfPacketType());
-	if (cs == nullptr || cs->send_encryption_handler == nullptr || cs->send_encryption_handler->GetRustStream() != nullptr) return openttd_rust_packet_get_type(&this->state, &Services(), RustAssertCondition);
-	size_t mac = cs != nullptr && cs->send_encryption_handler != nullptr ? cs->send_encryption_handler->MACSize() : 0;
+	if (cs == nullptr || cs->send_handler == nullptr || cs->send_handler->GetRustStream() != nullptr) return openttd_rust_packet_get_type(&this->state, &Services(), RustAssertCondition);
+	size_t mac = cs != nullptr && cs->send_handler != nullptr ? cs->send_handler->MACSize() : 0;
 	return openttd_rust_packet_packet_type(&this->state, mac);
 }
 
@@ -348,11 +348,7 @@ size_t Packet::RemainingBytesToTransfer() const
 const OpenTTDPacketServices &Packet::Services()
 {
 	static const OpenTTDPacketServices services{
-		.has_quit = [](const NetworkSocketHandler *socket) noexcept { return socket->HasClientQuit(); },
 		.mac_size = [](const NetworkEncryptionHandler *handler) noexcept { return handler->MACSize(); },
-		.mark_closed = [](NetworkSocketHandler *socket) noexcept { socket->NetworkSocketHandler::MarkClosed(); },
-		.receive_handler = [](const NetworkSocketHandler *socket) noexcept { return socket->receive_encryption_handler.get(); },
-		.send_handler = [](const NetworkSocketHandler *socket) noexcept { return socket->send_encryption_handler.get(); },
 		.stream = [](const NetworkEncryptionHandler *handler) noexcept { return handler->GetRustStream(); },
 	};
 	return services;

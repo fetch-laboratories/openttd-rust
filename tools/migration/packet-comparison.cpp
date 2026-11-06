@@ -18,8 +18,22 @@
 void DebugPrint(std::string_view, int, std::string &&) { std::abort(); }
 
 struct Socket : NetworkSocketHandler {
-	using NetworkSocketHandler::receive_encryption_handler;
-	using NetworkSocketHandler::send_encryption_handler;
+	void InstallReceive(std::unique_ptr<NetworkEncryptionHandler> handler)
+	{
+#ifdef WITH_RUST
+		this->SetReceiveEncryption(std::move(handler));
+#else
+		this->receive_encryption_handler = std::move(handler);
+#endif
+	}
+	void InstallSend(std::unique_ptr<NetworkEncryptionHandler> handler)
+	{
+#ifdef WITH_RUST
+		this->SetSendEncryption(std::move(handler));
+#else
+		this->send_encryption_handler = std::move(handler);
+#endif
+	}
 	unsigned derived_closed = 0;
 	void MarkClosed() { ++derived_closed; }
 };
@@ -70,6 +84,13 @@ struct Encryption : NetworkEncryptionHandler {
 		if (mode == 1 || mode == 3) throw std::runtime_error("Decrypt");
 		return mode != 0;
 	}
+};
+
+struct LifetimeEncryption : Encryption {
+	Socket *socket;
+	unsigned id;
+	LifetimeEncryption(Socket *socket, unsigned id) : socket(socket), id(id) {}
+	~LifetimeEncryption() override { std::printf("handler-destroy %u %d\n", this->id, this->socket->HasClientQuit()); }
 };
 int main()
 {
@@ -159,14 +180,14 @@ int main()
 	}
 	for (unsigned mode=0;mode<6;++mode) for (bool sending : {false,true}) {
 		Socket socket; auto handler=std::make_unique<Encryption>(); auto *observed=handler.get();
-		if (sending) socket.send_encryption_handler=std::move(handler); else socket.receive_encryption_handler=std::move(handler);
+		if (sending) socket.InstallSend(std::move(handler)); else socket.InstallReceive(std::move(handler));
 		Packet packet(&socket, PacketType{7}, 100); packet.Send_uint8(9); packet.Send_uint8(10); packet.Send_uint8(11);
 		observed->packet=&packet; observed->mode=mode; bool threw=false,valid=false;
 		try { if(sending) packet.PrepareToSend(); else valid=packet.PrepareToRead(); } catch(const std::runtime_error &) { threw=true; }
 		std::printf("crypto-result %u %d %d %d\n",mode,sending,valid,threw); State("crypto-state",packet,socket);
 	}
 	for (size_t mac : {size_t{0},size_t{3},size_t{4}}) {
-		Socket socket; auto handler=std::make_unique<Encryption>(); handler->mac_size=mac; socket.receive_encryption_handler=std::move(handler);
+		Socket socket; auto handler=std::make_unique<Encryption>(); handler->mac_size=mac; socket.InstallReceive(std::move(handler));
 		Packet packet(&socket, PacketType{1},100); packet.Send_uint8(2); packet.Send_uint8(3);
 		std::printf("strict-mac %zu %d\n",mac,packet.PrepareToRead()); State("strict-mac-state",packet,socket);
 	}
@@ -187,7 +208,7 @@ int main()
 		Socket socket; std::array<uint8_t, 6> bytes{6,0,0xAA,0xBB,0xCC,0xDD}; auto packet = Read(socket, bytes);
 		auto send = std::make_unique<Encryption>(); send->mac_size = 1; send->packet = &packet; auto *observed = send.get();
 		auto receive = std::make_unique<Encryption>(); receive->mac_size = 2;
-		socket.send_encryption_handler = std::move(send); socket.receive_encryption_handler = std::move(receive);
+		socket.InstallSend(std::move(send)); socket.InstallReceive(std::move(receive));
 		std::printf("type-send-handler %u\n", packet.GetPacketType());
 		observed->mode = 4; bool threw = false; try { packet.GetPacketType(); } catch (const std::runtime_error &) { threw = true; }
 		std::printf("type-throw %d\n", threw);
@@ -224,5 +245,13 @@ int main()
 	}
 #endif
 
+	{
+		Socket socket;
+		socket.InstallSend(std::make_unique<LifetimeEncryption>(&socket, 1));
+		socket.InstallReceive(std::make_unique<LifetimeEncryption>(&socket, 2));
+		socket.InstallSend(std::make_unique<LifetimeEncryption>(&socket, 3));
+		socket.InstallReceive(std::make_unique<LifetimeEncryption>(&socket, 4));
+		socket.NetworkSocketHandler::MarkClosed();
+	}
 	std::printf("packet companion passed\n");
 }

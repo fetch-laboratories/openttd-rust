@@ -590,8 +590,8 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 		.emergency_save = []() noexcept { ClientNetworkEmergencySave(); },
 		.enable_encryption = [](void *game, OpenTTDAuthStream *receive, OpenTTDAuthStream *send) noexcept {
 			auto *cs = ClientFromGame(game);
-			cs->receive_encryption_handler = MakeNetworkEncryptionHandler(receive);
-			cs->send_encryption_handler = MakeNetworkEncryptionHandler(send);
+			cs->SetReceiveEncryption(MakeNetworkEncryptionHandler(receive));
+			cs->SetSendEncryption(MakeNetworkEncryptionHandler(send));
 			cs->authentication_handler = nullptr;
 		},
 		.enter_multiplayer = []() noexcept { SocialIntegration::EventEnterMultiplayer(Map::SizeX(), Map::SizeY()); },

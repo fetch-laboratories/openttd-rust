@@ -133,7 +133,7 @@ static_assert(alignof(NetworkError) <= alignof(OpenTTDTcpErrorStorage));
 const OpenTTDNetworkTcpServices &GetRustNetworkTcpServices() noexcept
 {
 	static const OpenTTDNetworkTcpServices services{
-		.base_socket = [](NetworkTCPSocketHandler *s) noexcept -> NetworkSocketHandler * { return s; },
+		.base_socket = [](NetworkTCPSocketHandler *s) noexcept -> OpenTTDNetworkSocket * { return s->BaseRecord(); },
 		.can_send_receive = [](NetworkTCPSocketHandler *s) noexcept { return s->CanSendReceive(); },
 		.error_begin = [](OpenTTDTcpErrorStorage *p) noexcept { return new (p) NetworkError(NetworkError::GetLast()); },
 		.error_end = [](NetworkError *error) noexcept { error->~NetworkError(); },

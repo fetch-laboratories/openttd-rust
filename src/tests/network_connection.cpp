@@ -18,7 +18,7 @@
 
 /* Tests supply transport bytes, while production framing, dispatch and cleanup run. */
 static std::span<const uint8_t> fixture_receive_wire;
-static NetworkSocketHandler *fixture_receive_base;
+static OpenTTDNetworkSocket *fixture_receive_base;
 static Packet *fixture_receive_pending;
 static uint fixture_receive_position;
 static uint8_t ReceiveFixturePacket(const OpenTTDSessionServices &session, OpenTTDNetworkFrameServices network, OpenTTDNetworkGameSocket &game, OpenTTDSessionFrame &frame, Packet &source)
@@ -74,7 +74,7 @@ TEST_CASE("Network map load - recorded exception stops cleanup and reaches nativ
 	OpenTTDSessionFrame frame;
 	network.client = &client;
 	NetworkSocketHandler socket;
-	game.base = &socket;
+	game.base = socket.BaseRecord();
 	Packet source(&socket, PACKET_SERVER_MAP_DONE);
 	CHECK(ReceiveFixturePacket(session, network, game, frame, source) == 0);
 	CHECK(_game_mode == GM_NORMAL);
@@ -94,7 +94,7 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 	OpenTTDNetworkGameSocket game{};
 	game.status = 8; // Server STATUS_PRE_ACTIVE.
 	game.role = 1;
-	game.base = &socket;
+	game.base = socket.BaseRecord();
 	OpenTTDNetworkSocketSync sync{};
 	game.sync = &sync;
 	sync.receive_limit = COMPAT_MTU;
@@ -112,6 +112,7 @@ TEST_CASE("Network ack - console exception stops before token consumption")
 
 struct MapClient {
 	OpenTTDNetworkGameSocket record{};
+	OpenTTDNetworkSocket base{};
 	OpenTTDCommandQueue incoming{};
 	OpenTTDCommandQueue outgoing{};
 	OpenTTDNetworkSocketSync sync{};
@@ -129,6 +130,7 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	for (auto &client : map_clients) {
 		client.writer = openttd_rust_network_map_writer_new(&client, nullptr);
 		client.record.map_writer = client.writer;
+		client.record.base = &client.base;
 		client.record.game = &client;
 		client.record.tcp = reinterpret_cast<NetworkTCPSocketHandler *>(&client);
 		client.record.server = &client;
@@ -170,7 +172,6 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	network.tcp = &tcp;
 	network.socket_delete = [](void *socket) noexcept { MapEvent(10, socket); };
 	auto packet_services = Packet::Services();
-	packet_services.has_quit = [](const NetworkSocketHandler *) noexcept { return false; };
 	network.packet = &packet_services;
 	openttd_rust_network_map_finish(map_clients[1].writer, &packet_services, RustAssertCondition);
 	/* SendWait is observed at its enqueue; no other step records an event in between. */
@@ -251,13 +252,13 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		CAPTURE(test.type, test.status, test.quit, test.throws);
 		class SendingSocket : public NetworkSocketHandler {
 		public:
-			void Send(std::unique_ptr<NetworkEncryptionHandler> handler) { this->send_encryption_handler = std::move(handler); }
+			void Send(std::unique_ptr<NetworkEncryptionHandler> handler) { this->SetSendEncryption(std::move(handler)); }
 		} sender;
 		class ReceivingSocket : public NetworkGameSocketHandler {
 		public:
 			ReceivingSocket() : NetworkGameSocketHandler(INVALID_SOCKET, 0) {}
 			NetworkRecvStatus CloseConnection(NetworkRecvStatus result) override { return result; }
-			void Receive(std::unique_ptr<NetworkEncryptionHandler> handler) { this->receive_encryption_handler = std::move(handler); }
+			void Receive(std::unique_ptr<NetworkEncryptionHandler> handler) { this->SetReceiveEncryption(std::move(handler)); }
 		} receiver;
 		sender.Send(server_auth.CreateServerToClientEncryptionHandler());
 		receiver.Receive(client_auth.CreateServerToClientEncryptionHandler());
@@ -286,7 +287,7 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		struct PendingPacket { ~PendingPacket() { delete std::exchange(tcp_receive_packet, nullptr); } } pending;
 		auto tcp = GetRustNetworkTcpServices();
 		tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
-		tcp.base_socket = [](NetworkTCPSocketHandler *) noexcept { return dispatch_base; };
+		tcp.base_socket = [](NetworkTCPSocketHandler *) noexcept { return dispatch_base->BaseRecord(); };
 		tcp.receive_packet = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return tcp_receive_packet ? tcp_receive_packet->Record() : nullptr; };
 		tcp.receive_create = [](NetworkTCPSocketHandler *, OpenTTDPacketState *record) noexcept {
 			if (++dispatch_creates == 2) dispatch_previous_live = dispatch_deletes == 0;

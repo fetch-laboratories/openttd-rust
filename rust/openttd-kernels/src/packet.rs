@@ -16,10 +16,6 @@
 use std::mem::ManuallyDrop;
 use std::ptr;
 
-/// Native socket identity; Rust accesses it only through the shared services.
-pub struct NetworkSocketHandler {
-    _private: [u8; 0],
-}
 /// Native encryption-handler identity.
 pub struct NetworkEncryptionHandler {
     _private: [u8; 0],
@@ -31,6 +27,15 @@ pub struct OpenTTDAuthStream {
 
 crate::abi::shared_records! {
     fn abi_record;
+    /// Common socket state. Native virtual shells own the encryption resources in these slots.
+    "OpenTTDNetworkSocket" ["packet"] => pub struct NetworkSocketHandler {
+        /// Logical close state; independent of the native OS handle.
+        pub has_quit: bool,
+        /// Receive encryption resource, released after the send resource.
+        pub receive_handler: *mut NetworkEncryptionHandler => class,
+        /// Send encryption resource, released first during native base destruction.
+        pub send_handler: *mut NetworkEncryptionHandler => class,
+    }
     /// Packet-specific framing offsets, with native unsigned arithmetic.
     "OpenTTDPacketFrame" ["packet"] => pub struct Frame {
         /// Offset after the MAC.
@@ -50,26 +55,16 @@ crate::abi::shared_records! {
         pub limit: usize,
         /// Persistently narrowed read/transfer cursor.
         pub position: u16,
-        /// Associated native socket; sending permits null.
-        pub socket: *mut NetworkSocketHandler => class,
+        /// Associated common socket record; sending permits null.
+        pub socket: *mut NetworkSocketHandler,
     }
 }
 
 /// Shared native operations for records and virtual implementations still stored in C++.
 #[repr(C)]
 pub struct Services {
-    /// Query connection state before checking packet bounds.
-    pub has_quit: unsafe extern "C" fn(*const NetworkSocketHandler) -> bool,
     /// Query the original virtual MAC size.
     pub mac_size: unsafe extern "C" fn(*const NetworkEncryptionHandler) -> usize,
-    /// Call the base socket close operation.
-    pub mark_closed: unsafe extern "C" fn(*mut NetworkSocketHandler),
-    /// Resolve the current receive handler without invoking its codec.
-    pub receive_handler:
-        unsafe extern "C" fn(*const NetworkSocketHandler) -> *mut NetworkEncryptionHandler,
-    /// Resolve the current send handler without invoking its codec.
-    pub send_handler:
-        unsafe extern "C" fn(*const NetworkSocketHandler) -> *mut NetworkEncryptionHandler,
     /// Resolve the Rust stream owner, null for a native virtual implementation.
     pub stream: unsafe extern "C" fn(*const NetworkEncryptionHandler) -> *mut OpenTTDAuthStream,
 }
@@ -353,14 +348,19 @@ pub fn frame(position: u16, size: usize, mac: usize) -> Frame {
 /// Check quit state first, then fresh packet bounds; optionally call the base close operation.
 /// # Safety
 /// State and socket are live. Services are valid and nonthrowing; no borrowed state spans them.
-pub unsafe fn can_read(state: *mut State, services: &Services, amount: usize, close: bool) -> bool {
+pub unsafe fn can_read(
+    state: *mut State,
+    _services: &Services,
+    amount: usize,
+    close: bool,
+) -> bool {
     unsafe {
-        if (services.has_quit)((*state).socket) {
+        if (*(*state).socket).has_quit {
             return false;
         }
         if usize::from((*state).position).wrapping_add(amount) > (*state).size {
             if close {
-                (services.mark_closed)((*state).socket);
+                mark_closed((*state).socket);
             }
             return false;
         }
@@ -496,7 +496,7 @@ pub unsafe fn new_outgoing(
     let handler = if socket.is_null() {
         ptr::null_mut()
     } else {
-        unsafe { (services.send_handler)(socket) }
+        unsafe { (*socket).send_handler }
     };
     let mac = if handler.is_null() {
         0
@@ -556,7 +556,7 @@ pub unsafe fn get_type(state: *const State, services: &Services, check: extern "
         let handler = if socket.is_null() {
             ptr::null_mut()
         } else {
-            (services.send_handler)(socket)
+            (*socket).send_handler
         };
         let mac = if handler.is_null() {
             0
@@ -578,7 +578,7 @@ pub unsafe fn prepare_to_send(state: *mut State, services: &Services, check: ext
         let handler = if socket.is_null() {
             ptr::null_mut()
         } else {
-            (services.send_handler)(socket)
+            (*socket).send_handler
         };
         if !handler.is_null() {
             let mac = (services.mac_size)(handler);
@@ -598,7 +598,7 @@ pub unsafe fn prepare_to_read(state: *mut State, services: &Services) -> bool {
         let handler = if socket.is_null() {
             ptr::null_mut()
         } else {
-            (services.receive_handler)(socket)
+            (*socket).receive_handler
         };
         if handler.is_null() {
             return true;
@@ -1097,35 +1097,51 @@ pub unsafe extern "C" fn openttd_rust_packet_recv_uint64(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDPacketServices" ["packet"] => Services {
-        has_quit,
         mac_size,
-        mark_closed,
-        receive_handler,
-        send_handler,
         stream,
     };
 }
 
 #[cfg(test)]
 pub(crate) fn test_services() -> &'static Services {
-    unsafe extern "C" fn has_quit(_: *const NetworkSocketHandler) -> bool {
-        false
-    }
-    unsafe extern "C" fn no_handler(
-        _: *const NetworkSocketHandler,
-    ) -> *mut NetworkEncryptionHandler {
-        std::ptr::null_mut()
-    }
     unsafe extern "C" fn unused<A, R>(_: A) -> R {
         panic!("unexpected packet operation")
     }
     static SERVICES: Services = Services {
-        has_quit,
         mac_size: unused,
-        mark_closed: unused,
-        receive_handler: no_handler,
-        send_handler: no_handler,
         stream: unused,
     };
     &SERVICES
+}
+
+impl NetworkSocketHandler {
+    /// `NetworkSocketHandler` constructor defaults, independent of any pool identity.
+    pub(crate) const fn new() -> Self {
+        Self {
+            has_quit: false,
+            receive_handler: ptr::null_mut(),
+            send_handler: ptr::null_mut(),
+        }
+    }
+}
+
+/// Allocate common state before native derived construction.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_network_socket_new() -> *mut NetworkSocketHandler {
+    Box::into_raw(Box::new(NetworkSocketHandler::new()))
+}
+
+/// # Safety
+/// Native base destruction has released send then receive encryption resources; the
+/// uniquely owned record remains live until this final release.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_network_socket_drop(socket: *mut NetworkSocketHandler) {
+    unsafe { drop(Box::from_raw(socket)) };
+}
+
+/// `NetworkSocketHandler::MarkClosed`, with no OS-handle closure.
+/// # Safety
+/// The common record is live and exclusively accessible under the network/mutex contract.
+pub(crate) unsafe fn mark_closed(socket: *mut NetworkSocketHandler) {
+    unsafe { (*socket).has_quit = true };
 }

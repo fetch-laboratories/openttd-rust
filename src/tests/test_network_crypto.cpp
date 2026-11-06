@@ -26,8 +26,8 @@ class MockNetworkSocketHandler : public NetworkSocketHandler {
 public:
 	MockNetworkSocketHandler(std::unique_ptr<NetworkEncryptionHandler> &&receive = {}, std::unique_ptr<NetworkEncryptionHandler> &&send = {})
 	{
-		this->receive_encryption_handler = std::move(receive);
-		this->send_encryption_handler = std::move(send);
+		this->SetReceiveEncryption(std::move(receive));
+		this->SetSendEncryption(std::move(send));
 	}
 };
 

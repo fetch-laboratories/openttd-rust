@@ -577,7 +577,7 @@ pub(crate) fn client_error(
         return;
     }
     if result == NETWORK_RECV_STATUS_CLOSE_QUERY {
-        unsafe { (f.packet.mark_closed)(socket::base(game)) };
+        unsafe { packet::mark_closed(socket::base(game)) };
         close(s, f, game, result);
         (f.lifecycle.set_networking)(false);
         (f.command.company.close_network_status)();
@@ -689,7 +689,8 @@ mod tests {
                 _ => panic!("unexpected NewGRF"),
             }
         }
-        let mut p = PacketState::new(100, std::ptr::null_mut());
+        let mut base = packet::NetworkSocketHandler::new();
+        let mut p = PacketState::new(100, &raw mut base);
         p.send_bytes(&7_u32.to_le_bytes());
         p.send_bytes(&[42; 16]);
         p.send_bytes(&8_u32.to_le_bytes());

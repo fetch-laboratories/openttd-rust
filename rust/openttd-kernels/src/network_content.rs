@@ -248,7 +248,7 @@ fn close_connection(s: &Services) {
 
 fn handle_packet(s: &Services, p: *mut PacketState) -> bool {
     let kind = unsafe { packet::recv_uint8(p, s.tcp.packet) };
-    let quit = unsafe { (s.tcp.packet.has_quit)(socket(s)) };
+    let quit = unsafe { (*socket(s)).has_quit };
     match if quit { ct::PACKET_CONTENT_END } else { kind } {
         ct::PACKET_CONTENT_SERVER_INFO => receive_server_info(s, p),
         ct::PACKET_CONTENT_SERVER_CONTENT => receive_server_content(s, p),

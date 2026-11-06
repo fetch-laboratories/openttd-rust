@@ -16,21 +16,19 @@
 class NetworkEncryptionHandler;
 struct OpenTTDAuthStream;
 struct OpenTTDPacketServices {
-	bool (*has_quit)(const NetworkSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(has_quit);
 	size_t (*mac_size)(const NetworkEncryptionHandler *) noexcept OPENTTD_SERVICE_DEFAULT(mac_size);
-	void (*mark_closed)(NetworkSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(mark_closed);
-	NetworkEncryptionHandler *(*receive_handler)(const NetworkSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(receive_handler);
-	NetworkEncryptionHandler *(*send_handler)(const NetworkSocketHandler *) noexcept OPENTTD_SERVICE_DEFAULT(send_handler);
 	OpenTTDAuthStream *(*stream)(const NetworkEncryptionHandler *) noexcept OPENTTD_SERVICE_DEFAULT(stream);
 };
 /* Rust owns the allocation. State/byte spans must expire before growth or a callback.
  * Socket and encryption services are synchronous and nonthrowing. Native-only throwing virtual
  * handlers stay on the caller's C++ frame. Receive bytes retains #41's short-source precondition. */
 extern "C" {
+OpenTTDNetworkSocket *openttd_rust_network_socket_new();
+void openttd_rust_network_socket_drop(OpenTTDNetworkSocket *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_packet_get_type(const OpenTTDPacketState *, const OpenTTDPacketServices *, void (*)(bool) noexcept);
-void OPENTTD_RUST_CALL openttd_rust_packet_init_outgoing(OpenTTDPacketState *, NetworkSocketHandler *, const OpenTTDPacketServices *, void (*)(bool) noexcept, uint8_t, size_t);
-void OPENTTD_RUST_CALL openttd_rust_packet_init_receive(OpenTTDPacketState *, void (*)(bool) noexcept, NetworkSocketHandler *, size_t, size_t);
-void OPENTTD_RUST_CALL openttd_rust_packet_init_send(OpenTTDPacketState *, void (*)(bool) noexcept, NetworkSocketHandler *, uint8_t, size_t, size_t);
+void OPENTTD_RUST_CALL openttd_rust_packet_init_outgoing(OpenTTDPacketState *, OpenTTDNetworkSocket *, const OpenTTDPacketServices *, void (*)(bool) noexcept, uint8_t, size_t);
+void OPENTTD_RUST_CALL openttd_rust_packet_init_receive(OpenTTDPacketState *, void (*)(bool) noexcept, OpenTTDNetworkSocket *, size_t, size_t);
+void OPENTTD_RUST_CALL openttd_rust_packet_init_send(OpenTTDPacketState *, void (*)(bool) noexcept, OpenTTDNetworkSocket *, uint8_t, size_t, size_t);
 void OPENTTD_RUST_CALL openttd_rust_packet_clone(OpenTTDPacketState *, const OpenTTDPacketState *);
 void OPENTTD_RUST_CALL openttd_rust_packet_assign(OpenTTDPacketState *, const OpenTTDPacketState *);
 void OPENTTD_RUST_CALL openttd_rust_packet_destroy(OpenTTDPacketState *);

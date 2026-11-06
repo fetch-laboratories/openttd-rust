@@ -400,13 +400,10 @@ static void PacketAssert(bool condition) noexcept { CHECK(condition); }
 static void PacketState()
 {
 	static_assert(sizeof(intptr_t) == sizeof(size_t));
-	bool quit = false;
-	OpenTTDPacketServices services{
-		.has_quit = [](const NetworkSocketHandler *socket) noexcept { return *reinterpret_cast<const bool *>(socket); },
-		.mark_closed = [](NetworkSocketHandler *socket) noexcept { *reinterpret_cast<bool *>(socket) = true; },
-	};
+	OpenTTDNetworkSocket socket{};
+	OpenTTDPacketServices services{};
 	OpenTTDPacketState state;
-	openttd_rust_packet_init_send(&state, PacketAssert, reinterpret_cast<NetworkSocketHandler *>(&quit), 1, SIZE_MAX, 0);
+	openttd_rust_packet_init_send(&state, PacketAssert, &socket, 1, SIZE_MAX, 0);
 	openttd_rust_packet_send_uint16(&state, PacketAssert, 0x0201);
 	openttd_rust_packet_send_uint32(&state, PacketAssert, 0x06050403);
 	openttd_rust_packet_begin_send(&state, PacketAssert);
@@ -424,7 +421,7 @@ static void PacketState()
 	OpenTTDPacketFrame frame;
 	CHECK(openttd_rust_packet_frame(2, 8, 2, &frame) && frame.message == 4 && frame.payload == 4);
 	CHECK(!openttd_rust_packet_frame(2, 4, 2, &frame));
-	CHECK(!openttd_rust_packet_can_read(&state, &services, 3, true) && quit);
+	CHECK(!openttd_rust_packet_can_read(&state, &services, 3, true) && socket.has_quit);
 	openttd_rust_packet_finish_send(&state);
 	CHECK(state.position == 0);
 	openttd_rust_packet_destroy(&state);

@@ -6,7 +6,7 @@
 #include "rust_vector.h"
 #include "abi-record-network_map.h"
 extern "C" {
-OpenTTDNetworkMapWriter *openttd_rust_network_map_writer_new(void *, NetworkSocketHandler *);
+OpenTTDNetworkMapWriter *openttd_rust_network_map_writer_new(void *, OpenTTDNetworkSocket *);
 void openttd_rust_network_map_writer_drop(OpenTTDNetworkMapWriter *);
 void openttd_rust_network_map_write(OpenTTDNetworkMapWriter *, const OpenTTDPacketServices *, void (*)(bool) noexcept, const uint8_t *, size_t);
 void openttd_rust_network_map_finish(OpenTTDNetworkMapWriter *, const OpenTTDPacketServices *, void (*)(bool) noexcept);

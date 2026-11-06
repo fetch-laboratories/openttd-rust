@@ -15,7 +15,7 @@ crate::abi::shared_records! {
     fn abi_record;
     "OpenTTDNetworkMapWriter" ["network_map"] => pub struct MapWriter {
         pub resource: *mut c_void,
-        pub client: *mut NetworkSocketHandler => class,
+        pub client: *mut NetworkSocketHandler,
         pub current: *mut State,
         pub total_size: usize,
         pub next_packet: usize,

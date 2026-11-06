@@ -15,6 +15,8 @@
 #include "../../newgrf_config.h"
 #include "../network_crypto.h"
 #include "config.h"
+#include "../../rust/packet_ffi.h"
+#include <utility>
 
 bool NetworkCoreInitialize();
 void NetworkCoreShutdown();
@@ -42,19 +44,26 @@ struct Packet;
  */
 class NetworkSocketHandler {
 private:
-	bool has_quit = false; ///< Whether the current client has quit/send a bad packet
+	OpenTTDNetworkSocket *const record;
 
 protected:
-	friend struct Packet;
-	std::unique_ptr<class NetworkEncryptionHandler> receive_encryption_handler = nullptr; ///< The handler for decrypting received packets.
-	std::unique_ptr<class NetworkEncryptionHandler> send_encryption_handler = nullptr; ///< The handler for encrypting sent packets.
+	void SetReceiveEncryption(std::unique_ptr<NetworkEncryptionHandler> handler) { delete std::exchange(this->record->receive_handler, handler.release()); }
+	void SetSendEncryption(std::unique_ptr<NetworkEncryptionHandler> handler) { delete std::exchange(this->record->send_handler, handler.release()); }
 
 public:
 	/** Create a new unbound socket */
-	NetworkSocketHandler() = default;
+	NetworkSocketHandler() : record(openttd_rust_network_socket_new()) {}
+	NetworkSocketHandler(const NetworkSocketHandler &) = delete;
+	NetworkSocketHandler &operator=(const NetworkSocketHandler &) = delete;
+	OpenTTDNetworkSocket *BaseRecord() const { return this->record; }
 
 	/** Close the socket when destructing the socket handler */
-	virtual ~NetworkSocketHandler() = default;
+	virtual ~NetworkSocketHandler()
+	{
+		delete this->record->send_handler;
+		delete this->record->receive_handler;
+		openttd_rust_network_socket_drop(this->record);
+	}
 
 	/**
 	 * Mark the connection as closed.
@@ -63,7 +72,7 @@ public:
 	 * act like it is. This is useful for UDP, which doesn't normally close
 	 * a socket, but its handler might need to pretend it does.
 	 */
-	void MarkClosed() { this->has_quit = true; }
+	void MarkClosed() { this->record->has_quit = true; }
 
 	/**
 	 * Whether the current client connected to the socket has quit.
@@ -71,12 +80,12 @@ public:
 	 * data), the socket in not closed; only the packet is dropped.
 	 * @return true when the current client has quit, false otherwise
 	 */
-	bool HasClientQuit() const { return this->has_quit; }
+	bool HasClientQuit() const { return this->record->has_quit; }
 
 	/**
 	 * Reopen the socket so we can send/receive stuff again.
 	 */
-	void Reopen() { this->has_quit = false; }
+	void Reopen() { this->record->has_quit = false; }
 };
 
 #endif /* NETWORK_CORE_CORE_H */

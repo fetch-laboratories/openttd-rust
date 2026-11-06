@@ -41,7 +41,7 @@ static struct DeferredNetworkSockets {
  */
 NetworkGameSocketHandler::NetworkGameSocketHandler(SOCKET s, uint8_t role) : NetworkTCPSocketHandler(s),
 		OpenTTDNetworkSocketSync{.receive_limit = 0, .last_frame = _frame_counter, .last_frame_server = _frame_counter, .last_token_frame = 0, .lag_test = 0, .last_token = 0, .token = 0},
-		OpenTTDNetworkGameSocket{.base = this, .game = this, .incoming = &this->incoming_queue, .last_packet_ns = std::chrono::steady_clock::now().time_since_epoch().count(), .outgoing = nullptr, .pending = false, .role = role, .server = nullptr, .status = 0, .sync = this, .tcp = this} {}
+		OpenTTDNetworkGameSocket{.base = this->BaseRecord(), .game = this, .incoming = &this->incoming_queue, .last_packet_ns = std::chrono::steady_clock::now().time_since_epoch().count(), .outgoing = nullptr, .pending = false, .role = role, .server = nullptr, .status = 0, .sync = this, .tcp = this} {}
 static_assert(std::is_same_v<std::chrono::steady_clock::duration, std::chrono::nanoseconds>);
 
 /**

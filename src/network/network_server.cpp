@@ -76,7 +76,7 @@ struct PacketWriter : SaveFilter {
 	 * Create the packet writer.
 	 * @param cs The socket handler we're making the packets for.
 	 */
-	PacketWriter(ServerNetworkGameSocketHandler *cs) : SaveFilter(nullptr), state(openttd_rust_network_map_writer_new(this, cs))
+	PacketWriter(ServerNetworkGameSocketHandler *cs) : SaveFilter(nullptr), state(openttd_rust_network_map_writer_new(this, cs->BaseRecord()))
 	{
 	}
 
@@ -1142,8 +1142,8 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 		.enable_encryption = [](void *socket, const uint8_t *peer, OpenTTDAuthStream *receive, OpenTTDAuthStream *send) noexcept {
 			auto *cs = static_cast<NetworkClientSocket *>(socket);
 			cs->peer_public_key = FormatNetworkPublicKey(peer);
-			cs->receive_encryption_handler = MakeNetworkEncryptionHandler(receive);
-			cs->send_encryption_handler = MakeNetworkEncryptionHandler(send);
+			cs->SetReceiveEncryption(MakeNetworkEncryptionHandler(receive));
+			cs->SetSendEncryption(MakeNetworkEncryptionHandler(send));
 			cs->authentication_handler = nullptr;
 		},
 		.error_announcement = [](void *socket, uint32_t strid, OpenTTDByteSpan reason, bool kicked, bool authorized) noexcept {
