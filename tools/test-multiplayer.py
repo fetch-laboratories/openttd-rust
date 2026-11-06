@@ -173,19 +173,22 @@ class MultiplayerTests(unittest.TestCase):
     def test_revision_fixture_changes_only_exact_identity_constants(self) -> None:
         candidate = (
             'const std::string _openttd_revision = "fork";\n'
+            'const std::string_view _openttd_revision_hash = "candidate";\n'
+            "const uint8_t _openttd_revision_modified = 2;\n"
             "const uint8_t _openttd_revision_tagged = 0;\n"
             "const uint32_t _openttd_newgrf_version = 10;\n"
-            'const std::string_view _openttd_revision_hash = "candidate";\n'
+            'const std::string_view _openttd_revision_year = "2026";\n'
         )
         reference = (
             'const std::string _openttd_revision = "original";\n'
+            'const std::string_view _openttd_revision_hash = "reference";\n'
+            "const uint8_t _openttd_revision_modified = 0;\n"
             "const uint8_t _openttd_revision_tagged = 1;\n"
             "const uint32_t _openttd_newgrf_version = 20;\n"
         )
         self.assertEqual(
             multiplayer.fixture_revision(candidate, reference),
-            reference
-            + 'const std::string_view _openttd_revision_hash = "candidate";\n',
+            reference + 'const std::string_view _openttd_revision_year = "2026";\n',
         )
         for invalid in (
             reference.replace("_openttd_revision_tagged", "absent"),

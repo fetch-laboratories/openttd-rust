@@ -81,6 +81,8 @@ public:
 		return *this;
 	}
 	~Packet() { openttd_rust_packet_destroy(&this->state); }
+	/** Rust has ended the record lifetime; release only its native shell allocation. */
+	static void DeleteShell(Packet *packet) noexcept { ::operator delete(packet); }
 
 	/** Shared services for direct Rust packet operations. */
 	static const OpenTTDPacketServices &Services();
@@ -99,7 +101,7 @@ public:
 	void   Send_uint32(uint32_t data);
 	void   Send_uint64(uint64_t data);
 	void   Send_string(std::string_view data);
-	void   Send_buffer(const std::vector<uint8_t> &data);
+	void   Send_buffer(std::span<const uint8_t> data);
 	std::span<const uint8_t> Send_bytes(const std::span<const uint8_t> span);
 
 	/* Reading/receiving of packets */

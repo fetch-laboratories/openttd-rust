@@ -39,6 +39,7 @@ include = [
     "tools/simulation/newgrf_sets.py",
     "tools/simulation/community_newgrf.py",
     "tools/simulation/multiplayer.py",
+    "tools/simulation/network_protocol.py",
     "tools/simulation/platform_subset.py",
     "tools/simulation/sanitizers.py",
     "tools/simulation/threaded.py",

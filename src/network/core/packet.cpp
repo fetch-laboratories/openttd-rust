@@ -15,6 +15,8 @@
 #include "../../rust/services_assert.h"
 #include "abi-visit-OpenTTDPacketServices.hpp"
 
+#include "../../rust/string_services.h"
+
 #include "../../safeguards.h"
 
 /**
@@ -152,7 +154,7 @@ void Packet::Send_string(std::string_view data)
  * Copy a sized byte buffer into the packet.
  * @param data The data to send.
  */
-void Packet::Send_buffer(const std::vector<uint8_t> &data)
+void Packet::Send_buffer(std::span<const uint8_t> data)
 {
 	openttd_rust_packet_send_buffer(&this->state, RustAssertCondition, data.data(), data.size());
 }
@@ -330,9 +332,7 @@ size_t Packet::Recv_bytes(std::span<uint8_t> destination)
 std::string Packet::Recv_string(size_t length, StringValidationSettings settings)
 {
 	std::string result;
-	openttd_rust_packet_recv_string(&this->state, &Services(), RustAssertCondition, length, settings.base(), &result, [](void *output, const uint8_t *data, size_t size) noexcept {
-		static_cast<std::string *>(output)->append(reinterpret_cast<const char *>(data), size);
-	});
+	openttd_rust_packet_recv_string(&this->state, &Services(), RustAssertCondition, length, settings.base(), &result, RustStringAppend);
 	return result;
 }
 

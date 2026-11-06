@@ -3,6 +3,7 @@
 #ifndef RUST_SESSION_NATIVE_HPP
 #define RUST_SESSION_NATIVE_HPP
 #include "session_ffi.h"
+#include "network_frame_ffi.h"
 #include "landscape_generation_frame.hpp"
 #include "company_adapter.h"
 #include "company_services.h"
@@ -10,6 +11,8 @@
 #include "presentation_services.h"
 #include "settings_services.h"
 #include "newgrf_storage_ffi.h"
+#include "../network/core/os_abstraction.h"
+#include "../network/core/address.h"
 #include <exception>
 static_assert(GM_MENU == 0 && GM_NORMAL == 1 && GM_EDITOR == 2 && GM_BOOTSTRAP == 3);
 static_assert(SM_NONE == 0 && SM_NEWGAME == 1 && SM_RESTARTGAME == 2 && SM_RELOADGAME == 3 && SM_EDITOR == 4 && SM_LOAD_GAME == 5 && SM_MENU == 6 && SM_SAVE_GAME == 7 && SM_SAVE_HEIGHTMAP == 8 && SM_GENRANDLAND == 9 && SM_LOAD_SCENARIO == 10 && SM_START_HEIGHTMAP == 11 && SM_LOAD_HEIGHTMAP == 12 && SM_RESTART_HEIGHTMAP == 13 && SM_JOIN_GAME == 14);
@@ -17,7 +20,27 @@ static_assert(PauseMode::Normal == PauseMode(0) && PauseMode::SaveLoad == PauseM
 static_assert(FT_SAVEGAME == 1 && FT_SCENARIO == 2 && FT_HEIGHTMAP == 3 && SL_OK == 0 && SL_REINIT == 2 && COLOUR_END == 16);
 struct OpenTTDWorldSetupFrame { std::exception_ptr cancellation; };
 struct RustSessionVehicleCosts { CommandCost replacement, refit, temporary; };
+struct OpenTTDSessionLoad {
+	const std::string &filename;
+	SaveLoadOperation operation;
+	DetailedFileType type;
+	Subdirectory subdir;
+	std::shared_ptr<LoadFilter> filter;
+};
+struct RustNetworkPacketLoad {
+	const std::string filename;
+	OpenTTDSessionLoad args{filename, SLO_LOAD, DFT_GAME_FILE, NO_DIRECTORY, {}};
+};
 struct OpenTTDSessionFrame {
+	OpenTTDNetworkActionsStorage network_actions;
+	OpenTTDSessionFrame() { openttd_rust_network_actions_init(&this->network_actions); }
+	~OpenTTDSessionFrame() { this->packet_load.reset(); this->packet_text.reset(); openttd_rust_network_actions_drop(&this->network_actions); }
+	std::optional<std::pair<fd_set, fd_set>> socket_poll;
+	std::optional<std::pair<SOCKET, NetworkAddress>> socket_accept;
+	size_t socket_listener = 0;
+	std::optional<RustNetworkPacketLoad> packet_load;
+	std::optional<std::string> packet_text;
+	std::optional<std::pair<std::string, std::string>> reconnect;
 	std::exception_ptr exception;
 	std::optional<PerformanceMeasurer> framerate;
 	std::optional<Backup<CompanyID>> company;
@@ -28,17 +51,11 @@ struct OpenTTDSessionFrame {
 	std::optional<RustRoadCommandContext> road;
 	std::optional<PerformanceAccumulator> landscape;
 	std::optional<PerformanceMeasurer> schedule;
-	void Rethrow() const { if (this->exception) std::rethrow_exception(this->exception); }
+	void Rethrow() { RustNetworkCompleteActions(this); if (this->exception) std::rethrow_exception(this->exception); }
 };
 static_assert(sizeof(OpenTTDSessionFrame) <= sizeof(OpenTTDSessionFrameStorage));
 static_assert(alignof(OpenTTDSessionFrame) <= alignof(OpenTTDSessionFrameStorage));
-struct OpenTTDSessionLoad {
-	const std::string &filename;
-	SaveLoadOperation operation;
-	DetailedFileType type;
-	Subdirectory subdir;
-	std::shared_ptr<LoadFilter> filter;
-};
+
 /* Script VMs, scheduled console commands, load/generation and networking can
  * unwind in ordinary play. Each named service records that exception here. */
 template <typename F>

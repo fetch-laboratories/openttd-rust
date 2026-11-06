@@ -28,8 +28,11 @@ AUTH_SECRET = "0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a"
 AUTH_PUBLIC = "54558C3F5FABC16BE191BFE5D2A9F97227952A99F6F2E7286D02E6A3FE5F932B"
 SOURCE = core.ROOT / "migration/saves/opus-55-167-002.sav"
 STOP = (727960, 0, 84677)  # Calendar callback precedes economy/tick advancement.
+# Untagged builds suffix the network revision with the modified flag and hash.
 REVISION_FIELDS = (
     "_openttd_revision",
+    "_openttd_revision_hash",
+    "_openttd_revision_modified",
     "_openttd_revision_tagged",
     "_openttd_newgrf_version",
 )
@@ -41,7 +44,7 @@ def digest(path: Path) -> str:
 
 
 def fixture_revision(candidate: str, reference: str) -> str:
-    """Replace only the three handshake identity constants, never gameplay bodies."""
+    """Replace only the handshake identity constants, never gameplay bodies."""
     for name in REVISION_FIELDS:
         pattern = rf"^const .* {name} = .*;$"
         old, new = (

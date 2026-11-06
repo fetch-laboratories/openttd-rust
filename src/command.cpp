@@ -62,6 +62,11 @@
 #include "table/strings.h"
 
 #include "rust/command_services_ffi.h"
+#include "rust/command_post_ffi.h"
+#include "rust/company_adapter.h"
+#include "rust/tile_owner_services.h"
+#include "rust/session_ffi.h"
+#include "network/core/tcp_game.h"
 
 #include "safeguards.h"
 
@@ -135,6 +140,12 @@ std::string_view GetCommandName(Commands cmd)
 	return _command_proc_table[cmd].name;
 }
 
+uint8_t GetCommandType(Commands cmd) noexcept
+{
+	assert(IsValidCommand(cmd));
+	return to_underlying(_command_proc_table[cmd].type);
+}
+
 /**
  * Returns whether the command is allowed while the game is paused.
  * @param cmd The command to check.
@@ -143,11 +154,11 @@ std::string_view GetCommandName(Commands cmd)
 bool IsCommandAllowedWhilePaused(Commands cmd)
 {
 	assert(IsValidCommand(cmd));
-	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), to_underlying(_command_proc_table[cmd].type)) != 0;
+	return openttd_rust_command_allowed_while_paused(&GetRustCommandServices(), GetCommandType(cmd)) != 0;
 }
 
 /** Helper to make a desync log for a command. */
-void CommandHelperBase::LogCommandExecution(Commands cmd, StringID err_message, const CommandDataBuffer &args, bool failed)
+void CommandHelperBase::LogCommandExecution(Commands cmd, StringID err_message, std::span<const uint8_t> args, bool failed)
 {
 	Debug(desync, 1, "{}: {:08x}; {:02x}; {:02x}; {:08x}; {:08x}; {} ({})", failed ? "cmdf" : "cmd", (uint32_t)TimerGameEconomy::date.base(), TimerGameEconomy::date_fract, _current_company, cmd, err_message, FormatArrayAsHex(args), GetCommandName(cmd));
 }
@@ -196,3 +207,43 @@ CommandCost CommandCostWithParam(StringID str, uint64_t value)
 	}
 	return error;
 }
+
+static OpenTTDCommandData TakeCommandArguments(CommandData &&data) noexcept
+{
+	return std::exchange(static_cast<OpenTTDCommandData &>(data), {});
+}
+
+static_assert(sizeof(RustTileOwnerContext) <= sizeof(OpenTTDCommandControlStorage));
+static_assert(alignof(RustTileOwnerContext) <= alignof(OpenTTDCommandControlStorage));
+static_assert(CMD_PAUSE == 71 && CMD_SET_COMPANY_COLOUR == 54 && CMD_COMPANY_CTRL == 90);
+static_assert(CCA_NEW == 0 && CCA_DELETE == 2 && CRR_NONE == 0 && CRR_BANKRUPT == 2);
+const OpenTTDCommandPostServices &GetRustCommandPostServices() noexcept
+{
+	static const OpenTTDCommandPostServices services{
+		.assign_company_cost = [](OpenTTDCommandCost *out, const OpenTTDCompanyCost *value) noexcept { *reinterpret_cast<CommandCost *>(out) = RustCompanyCost(*value); },
+		.command = GetRustCommandServices,
+		.control_begin = [](OpenTTDCommandControlStorage *storage) noexcept -> const OpenTTDTileOwnerContext * { return &(new (storage) RustTileOwnerContext())->view; },
+		.control_end = [](OpenTTDCommandControlStorage *storage) noexcept { reinterpret_cast<RustTileOwnerContext *>(storage)->~RustTileOwnerContext(); },
+		.desync_logging = []() noexcept { return CommandHelperBase::DesyncLogging(); },
+		.log = [](uint8_t cmd, OpenTTDByteSpan args, bool failed) noexcept { CommandHelperBase::LogCommandExecution(static_cast<Commands>(cmd), 0, std::span(args.data, args.size), failed); },
+		.network = GetRustNetworkCommandServices,
+		.pack_colour = [](bool primary, uint8_t colour) noexcept {
+			CommandTraits<CMD_SET_COMPANY_COLOUR>::Args args{LS_DEFAULT, primary, static_cast<Colours>(colour)};
+			return TakeCommandArguments(EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args));
+		},
+		.pack_control = [](uint8_t action, uint8_t target, uint8_t reason, uint32_t client) noexcept {
+			CommandTraits<CMD_COMPANY_CTRL>::Args args{static_cast<CompanyCtrlAction>(action), CompanyID(target), static_cast<CompanyRemoveReason>(reason), static_cast<ClientID>(client)};
+			return TakeCommandArguments(EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args));
+		},
+		.pack_pause = [](PauseMode mode, bool pause) noexcept {
+			CommandTraits<CMD_PAUSE>::Args args{mode, pause};
+			return TakeCommandArguments(EndianBufferWriter<CommandData>::FromValue<decltype(args), CommandData>(args));
+		},
+		.session = GetRustSessionServices,
+	};
+	return services;
+}
+
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDCommandPostServices.hpp"
+bool CheckAbi_command_post() { return AbiServicesComplete(GetRustCommandPostServices()); }

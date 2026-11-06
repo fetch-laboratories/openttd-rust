@@ -11,7 +11,9 @@
 #include "vehicle_visits_ffi.h"
 struct NewGRFScanCallback;
 struct OpenTTDSessionFrame;
+struct OpenTTDNetworkActionsStorage;
 struct OpenTTDSessionLoad;
+struct OpenTTDNetworkFrameServices;
 /* Native objects are placement-constructed here; Rust never interprets the bytes. */
 struct alignas(16) OpenTTDSessionFrameStorage { std::byte storage[4096]; };
 struct alignas(16) OpenTTDWorldFrameStorage { std::byte storage[8192]; };
@@ -20,18 +22,14 @@ struct alignas(16) OpenTTDWorldFrameStorage { std::byte storage[8192]; };
 struct OpenTTDSessionServices {
 	const OpenTTDClockServices *clock;
 	const OpenTTDCompanyServices *company;
+	const OpenTTDNetworkFrameServices *network;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDScheduleServices *schedule;
 	const OpenTTDWorldServices *(*world)() noexcept OPENTTD_SERVICE_DEFAULT(world);
 	bool (*server_requested)() noexcept OPENTTD_SERVICE_DEFAULT(server_requested);
 	void (*clear_server_requested)() noexcept OPENTTD_SERVICE_DEFAULT(clear_server_requested);
 	bool (*network_available)() noexcept OPENTTD_SERVICE_DEFAULT(network_available);
-	void (*network_reboot)() noexcept OPENTTD_SERVICE_DEFAULT(network_reboot);
-	void (*network_disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(network_disconnect);
-	bool (*network_server_start)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_server_start);
 	void (*network_background)() noexcept OPENTTD_SERVICE_DEFAULT(network_background);
-	void (*network_start_game)() noexcept OPENTTD_SERVICE_DEFAULT(network_start_game);
-	void (*network_join)() noexcept OPENTTD_SERVICE_DEFAULT(network_join);
 	void (*kill_ai)() noexcept OPENTTD_SERVICE_DEFAULT(kill_ai);
 	void (*load_config)() noexcept OPENTTD_SERVICE_DEFAULT(load_config);
 	void (*reset_session_stats)() noexcept OPENTTD_SERVICE_DEFAULT(reset_session_stats);
@@ -68,7 +66,6 @@ struct OpenTTDSessionServices {
 	Colours (*starting_colour)() noexcept OPENTTD_SERVICE_DEFAULT(starting_colour);
 	void (*settings_elrail)(bool) noexcept OPENTTD_SERVICE_DEFAULT(settings_elrail);
 	void (*company_settings)() noexcept OPENTTD_SERVICE_DEFAULT(company_settings);
-	void (*company_colour)(bool, Colours) noexcept OPENTTD_SERVICE_DEFAULT(company_colour);
 	void (*reset_ai_config)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_ai_config);
 	void (*reset_game_config)() noexcept OPENTTD_SERVICE_DEFAULT(reset_game_config);
 	void (*publish_settings)() noexcept OPENTTD_SERVICE_DEFAULT(publish_settings);
@@ -83,13 +80,10 @@ struct OpenTTDSessionServices {
 	void (*pause_change)(uint8_t, PauseMode) noexcept OPENTTD_SERVICE_DEFAULT(pause_change);
 	void (*pause_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(pause_dirty);
 	bool (*full_animation)() noexcept OPENTTD_SERVICE_DEFAULT(full_animation);
-	bool (*reconnect_due)() noexcept OPENTTD_SERVICE_DEFAULT(reconnect_due);
 	bool (*console_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(console_script);
 	bool (*game_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(game_script);
 	bool (*ai_script)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(ai_script);
 	bool (*startup_company)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(startup_company);
-	bool (*network_loop)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_loop);
-	bool (*network_reconnect)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_reconnect);
 	OpenTTDSessionFrame *(*state_frame_begin)(OpenTTDSessionFrameStorage *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_begin);
 	bool (*state_frame_end)(OpenTTDSessionFrame *, OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_frame_end);
 	bool (*real_time)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(real_time);
@@ -103,6 +97,7 @@ struct OpenTTDSessionServices {
 	SaveOrLoadResult (*load)(OpenTTDSessionFrame *, OpenTTDSessionLoad *) noexcept OPENTTD_SERVICE_DEFAULT(load);
 	SaveOrLoadResult (*intro_load)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(intro_load);
 	SaveOrLoadResult (*save)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(save);
+	OpenTTDNetworkActionsStorage *(*network_actions)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(network_actions);
 	bool (*failed)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(failed);
 	OpenTTDConsoleException * (*console_exception)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(console_exception);
 	void (*state_begin)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(state_begin);

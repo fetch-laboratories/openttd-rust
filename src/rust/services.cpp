@@ -7,6 +7,7 @@
 
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
+#include "command_post_ffi.h"
 #include "../source_type.h"
 #include "../effectvehicle_func.h"
 #include "../airport.h"
@@ -63,6 +64,7 @@
 #include "../linkgraph/linkgraphjob.h"
 #include "services_linkgraph.h"
 #include "../company_base.h"
+#include "../network/network_base.h"
 #include "../company_func.h"
 #include "../command_type.h"
 #include "../command_func.h"
@@ -188,6 +190,9 @@ static void CommandEstimate(int64_t cost, int32_t x, int32_t y) noexcept { ShowE
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
+		.command_flags = [](uint8_t cmd) noexcept { return GetCommandFlags(static_cast<Commands>(cmd)).base(); },
+		.command_type = [](uint8_t cmd) noexcept { return GetCommandType(static_cast<Commands>(cmd)); },
+		.command_valid = [](uint8_t cmd) noexcept { return IsValidCommand(static_cast<Commands>(cmd)); },
 		.finance = &GetRustCompanyFinanceServices(),
 		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
@@ -428,6 +433,7 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
@@ -441,6 +447,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.docking = OpenTTDIsDockingTile,
 		.generating_world = OpenTTDGeneratingWorld,
 	},
+	.company_human = OpenTTDCompanyIsValidHuman,
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
 	.cost_animation = RustCostOrIncomeAnimation,
@@ -554,7 +561,13 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 	.nearby_tile = RustSignedNearbyTile,
 	.nearby_tile_information = RustNearbyTileInformation,
+	.network_client_info = [](uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)); },
 	.screen_dirty = RustScreenDirty,
+	.string_data = [](const void *ptr, size_t *length) noexcept {
+		const std::string &str = *static_cast<const std::string *>(ptr);
+		*length = str.size();
+		return reinterpret_cast<const uint8_t *>(str.data());
+	},
 	.terrain_type = RustTerrainType,
 	.grf_file_version = RustGRFFileVersion,
 	.grf_cargo_map = RustGRFCargoMap,

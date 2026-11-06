@@ -82,7 +82,7 @@ bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t, bool) noexcept;
 void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
 void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
 void RustCompanyNetworkSpectate(uint32_t) noexcept;
-void RustCompanyNetworkNew(uint8_t, uint32_t, bool) noexcept;
+void RustCompanyAdminNew(uint8_t) noexcept;
 Company *RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
 void RustCompanyNetworkOwnSettings(Company *) noexcept;
 
@@ -148,7 +148,6 @@ static void Co_company_in_trouble(uint8_t id) noexcept
 	AI::BroadcastNewEvent(new ScriptEventCompanyInTrouble(cid));
 	Game::NewEvent(new ScriptEventCompanyInTrouble(cid));
 }
-static void Co_post_company_delete(uint8_t id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_DELETE, CompanyID(id), CRR_BANKRUPT, INVALID_CLIENT_ID); }
 static void Co_performance_detail_dirty() noexcept { SetWindowDirty(WC_PERFORMANCE_DETAIL, 0); }
 static void Co_company_graphs_dirty() noexcept
 {
@@ -432,7 +431,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_in_trouble = Co_company_in_trouble,
-		.post_company_delete = Co_post_company_delete, .hq_location = RustCompanyHQ,
+		.hq_location = RustCompanyHQ,
 		.object_services = []() noexcept { return &GetRustObjectServices(); },
 		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
 		.company_infrastructure = Co_company_infrastructure,
@@ -451,7 +450,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.prepare_new_company = RustCompanyPrepare, .company_defaults = RustCompanyDefaults, .startup_windows = RustCompanyStartupWindows, .new_company_events = Co_new_company_events,
 		.company_league_dirty = Co_company_league_dirty, .company_ctrl_windows = Co_company_ctrl_windows,
 		.close_network_status = Co_close_network_status, .network_spectate = RustCompanyNetworkSpectate,
-		.network_company_new = RustCompanyNetworkNew, .network_own_company = RustCompanyNetworkOwn,
+		.admin_company_new = RustCompanyAdminNew, .network_own_company = RustCompanyNetworkOwn,
 		.network_own_company_settings = RustCompanyNetworkOwnSettings,
 		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,

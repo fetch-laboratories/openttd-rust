@@ -22,6 +22,7 @@ struct Queues {
 }
 #[repr(C)]
 pub(crate) struct Services {
+    shared: &'static crate::services::Services,
     graph_owner: extern "C" fn(*mut Graph) -> *mut live::Graph,
     assert_graph: extern "C" fn(*const Graph),
     can_allocate: extern "C" fn() -> bool,
@@ -38,12 +39,11 @@ pub(crate) struct Services {
     next_graph: extern "C" fn(*mut u32) -> *mut Graph,
     next_job: extern "C" fn(*mut u32) -> *mut Job,
     shift_job: extern "C" fn(*mut Job, i32),
-    pub(crate) post_pause: extern "C" fn(crate::openttd::PauseMode, bool),
     begin_measurement: extern "C" fn(*mut c_void, bool),
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, post_pause, begin_measurement };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { shared, graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, begin_measurement };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -179,6 +179,19 @@ pub(crate) fn tick(
         join_next(s);
     }
 }
+/// Observer installed by `linkgraph-schedule-reference.cpp`; null posts as before.
+#[cfg(feature = "native-test-support")]
+pub(crate) static PAUSE_OBSERVER: GameState<Option<extern "C" fn(bool)>> = GameState::new(None);
+/// `Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused)`, the scheduler's only pause post.
+fn post_pause(s: &Services, paused: bool) {
+    // The game-free scheduler fixture records this post in place of the command chain it lacks.
+    #[cfg(feature = "native-test-support")]
+    if let Some(observer) = unsafe { *PAUSE_OBSERVER.get() } {
+        observer(paused);
+        return;
+    }
+    crate::command_post::pause(s.shared, crate::openttd::PauseMode::LINK_GRAPH, paused);
+}
 pub(crate) fn pause(
     s: &Services,
     shared: &crate::services::Services,
@@ -187,7 +200,7 @@ pub(crate) fn pause(
 ) {
     if paused {
         if !unfinished(s) {
-            (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, false);
+            post_pause(s, false);
         }
     } else if unpaused {
         if crate::timer_game_common::economy_fraction() != SPAWN_JOIN_TICK - 2 {
@@ -196,7 +209,7 @@ pub(crate) fn pause(
         let interval =
             i32::from(unsafe { shared.settings().recalc_interval.read() }) / SECONDS_PER_DAY;
         if crate::timer_game_common::economy_date().0 % interval == interval / 2 && unfinished(s) {
-            (s.post_pause)(crate::openttd::PauseMode::LINK_GRAPH, true);
+            post_pause(s, true);
             witness::hit(witness::SCHEDULE_PAUSE);
         }
     }
