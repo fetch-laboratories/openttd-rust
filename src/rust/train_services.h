@@ -37,8 +37,6 @@ static Result TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept
 	return (GetRustSharedServices().*Member)(tile);
 }
 
-static void TrainWriteColourmap(OpenTTDTrainHandle id, uint64_t value) noexcept
-{Train *v=static_cast<Train *>(VehicleFromRecord(id.record)); v->Record().colourmap = static_cast<PaletteID>(value);}
 static uint64_t TrainAccModel(OpenTTDTrainHandle) noexcept
 {
 	return _settings_game.vehicle.train_acceleration_model;

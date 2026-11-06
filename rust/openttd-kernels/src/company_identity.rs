@@ -89,7 +89,6 @@ pub struct Services {
     pub engine_class: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub engine_misc: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub aircraft_subtype: extern "C" fn(*const OpenTTDEngine) -> u8,
-    pub vehicle_cargo: extern "C" fn(*mut OpenTTDVehicle) -> u8,
     pub wagon_override: extern "C" fn(*mut OpenTTDVehicle) -> bool,
     pub cargo_freight: extern "C" fn(u8) -> bool,
     pub cargo_classes: extern "C" fn(u8) -> u16,
@@ -527,7 +526,7 @@ pub(crate) fn engine_livery(
     let mut cargo = if v.is_null() {
         INVALID_CARGO
     } else {
-        (s.vehicle_cargo)(v)
+        crate::vehicle::VehicleRef::of(v).cargo_type()
     };
     let mut e = (s.engine)(engine);
     match (s.engine_type)(e).0 {
@@ -606,7 +605,7 @@ pub(crate) fn engine_livery(
             if !v.is_null() && parent != EngineID::INVALID {
                 engine = parent;
                 e = (s.engine)(engine);
-                cargo = (s.vehicle_cargo)(crate::vehicle::VehicleRef::of(v).first().0.as_ptr());
+                cargo = crate::vehicle::VehicleRef::of(v).first().cargo_type();
             }
             if !is_valid_cargo_type(cargo) {
                 cargo = (s.engine_cargo)(e);
@@ -675,5 +674,5 @@ crate::abi::layouts! {
     fn abi_layout;
  "OpenTTDCompanyNameStorage" ["company_economy"] => NameStorage { bytes, };
  "OpenTTDCompanyIdentityStrings" ["company_economy"] => Strings { unnamed, president, company, president_generated, andco, town_begin, town_end, company_begin, };
- "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, vehicle_cargo, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, };
+ "OpenTTDCompanyIdentityServices" ["company_economy"] => Services { shared, randomizer, faces, groups, strings, company, next_company, company_id, renew_reserve, name_id, set_name_id, name_parts, set_name_parts, president_id, set_president_id, president_parts, set_president_parts, colour, set_colour, last_build, is_ai, name, set_name, president, set_president, livery, face, name_frame_init, name_frame_drop, render, render_other, company_renamed, president_renamed, launch_news, admin_update, rename_transport, president_windows, colour_windows, object_colours, reset_colourmap, engine, engine_type, engine_cargo, engine_kind, engine_class, engine_misc, aircraft_subtype, wagon_override, cargo_freight, cargo_classes, vehicle_id, invalidate_vehicle, };
 }

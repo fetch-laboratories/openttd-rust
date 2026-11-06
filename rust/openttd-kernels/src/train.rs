@@ -233,8 +233,6 @@ use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE
 pub struct Leaves {
     pub physics: &'static crate::ground_vehicle::Services,
 
-    pub write_colourmap: extern "C" fn(Handle, u64),
-
     pub acc_model: extern "C" fn(Handle) -> u64,
     pub advance_distance: extern "C" fn(Handle) -> u64,
     pub all_powered: extern "C" fn(Handle, u64) -> u64,
@@ -543,7 +541,7 @@ impl Game<'_> {
             } as i16);
             // SAFETY: live serialized shell; evaluation retains no owner reference.
             unsafe { crate::newgrf_vehicle::cache_override(self.vs(), u.vehicle()) };
-            (self.leaves.write_colourmap)(u, 0);
+            write_field!(u.record, colourmap, 0);
             crate::vehicle_effect::openttd_rust_visual_update(u.vehicle(), true);
             let powered = (self.leaves.pow_wag_power)(id) != 0
                 && (self.leaves.railveh_wagon)(u) != 0
@@ -844,7 +842,7 @@ impl Game<'_> {
     fn mark_dirty(&self, id: Handle) {
         let mut u = id;
         loop {
-            (self.leaves.write_colourmap)(u, 0);
+            write_field!(u.record, colourmap, 0);
             (self.leaves.viewport)(u, 1, 0);
             u = (u).next();
             if u == Handle::NONE {
@@ -2926,7 +2924,6 @@ crate::abi::layouts! {
         owner,
     };
     "OpenTTDTrainServices" ["probe"] => Leaves {
-        write_colourmap,
         acc_model,
         advance_distance,
         all_powered,

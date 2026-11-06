@@ -53,9 +53,7 @@ struct OpenTTDVehicleResolverServices {
 	const SpriteGroup *(*cached_override)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_override);
 	void (*write_override)(OpenTTDVehicle *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(write_override);
 	const SpriteGroup *(*spritegroup)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spritegroup);
-	uint16_t (*random_bits)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	uint8_t (*waiting)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);
-	void (*write_random)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_random);
 	void (*write_waiting)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_waiting);
 	uint16_t (*resolve_callback)(OpenTTDVehicleResolverState *, uint16_t, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
 	OpenTTDVehicleRandomResult (*resolve_random)(OpenTTDVehicleResolverState *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_random);
@@ -77,14 +75,9 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*old_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(old_order);
 	uint8_t (*num_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(num_orders);
 	uint8_t (*real_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(real_order);
-	uint16_t (*load_ticks)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_ticks);
 	uint16_t (*service_interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
-	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
-	uint8_t (*cargo_subtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_subtype);
 	int32_t (*age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);
 	int32_t (*max_age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_age);
-	uint16_t (*unit)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
-	uint8_t (*sprite)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
 	uint8_t (*breakdowns)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdowns);
 	uint8_t (*breakdown_delay)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay);
 	uint8_t (*breakdown_chance)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_chance);

@@ -44,7 +44,6 @@ pub struct Leaves {
     pub vehicles: *const crate::vehicle::VehicleServices,
     pub sprite_sequence: extern "C" fn(*mut c_void, u32),
     pub sprite: extern "C" fn(*mut c_void, u32),
-    pub spritenum: extern "C" fn(*mut c_void, u8),
     pub viewport: extern "C" fn(*mut c_void),
     pub sound: extern "C" fn(*mut c_void, u8),
 }
@@ -250,7 +249,7 @@ impl Controller<'_> {
     }
     fn set_spritenum(&mut self, value: u8) {
         self.v.spritenum = value;
-        (self.leaves.spritenum)(self.context, value);
+        self.record.write_sprite_number(value);
     }
     fn increment(&mut self) -> bool {
         if self.v.sprite == LAST[usize::from(self.v.subtype)] {
@@ -509,7 +508,7 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
         z: record.z(),
         sprite: (vehicles.first_sprite)(record),
         progress: record.progress(),
-        spritenum: unsafe { ((*((vehicles.newgrf)())).sprite)(record.0.as_ptr()) },
+        spritenum: record.sprite_number(),
         subtype: record.subtype(),
         ambient: u8::from(unsafe { (*services).settings().ambient.read() }),
     };
@@ -553,7 +552,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEffectLeaves" ["probe"] => Leaves {
         vehicles,
-        sprite_sequence, sprite, spritenum,
+        sprite_sequence, sprite,
         viewport,
         sound,
 

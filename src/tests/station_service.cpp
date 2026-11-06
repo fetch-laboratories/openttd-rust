@@ -241,7 +241,6 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	loading.total_count = [](OpenTTDVehicle *) noexcept -> uint32_t { return 1; };
 	loading.set_cargo_unloading = [](OpenTTDVehicle *, bool) noexcept {};
 	loading.set_loading_finished = [](OpenTTDVehicle *, bool) noexcept {};
-	loading.set_load_ticks = [](OpenTTDVehicle *, uint16_t) noexcept {};
 	loading.with_next_stations = [](OpenTTDVehicle *, void *context, OpenTTDStationScope body) noexcept {
 		int destination = 42;
 		_station_loading_probe->frame_live = true;

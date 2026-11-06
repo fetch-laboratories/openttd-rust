@@ -943,7 +943,6 @@ pub struct Links {
     pub(crate) next_shared: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub(crate) stopped_in_depot: extern "C" fn(VehicleRef) -> bool,
     pub(crate) last_service: extern "C" fn(VehicleRef) -> i32,
-    pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) goods_entry:
         extern "C" fn(*mut BaseStation, u8) -> *const crate::station_base::GoodsEntry,
     pub(crate) station_resolver: *const crate::newgrf_station::Services,
@@ -979,7 +978,7 @@ unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &
         let mut current =
             NonNull::new(unsafe { openttd_rust_station_queue_value(node) }).map(VehicleRef);
         while let Some(vehicle) = current {
-            if u32::from((l.cargo_type)(vehicle)) == u32::from(cargo) {
+            if u32::from(vehicle.cargo_type()) == u32::from(cargo) {
                 unsafe {
                     crate::cargo_storage::reroute_vehicle(
                         l.vehicle_cargo(vehicle),
@@ -1230,7 +1229,6 @@ pub struct Loading {
     pub(crate) engine_load_callback: extern "C" fn(EngineRef) -> bool,
     pub(crate) engine_no_multiplier: extern "C" fn(EngineRef) -> bool,
     pub(crate) cargo_capacity: extern "C" fn(VehicleRef) -> CargoCapacity,
-    pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) stored_count: extern "C" fn(VehicleRef) -> u32,
     pub(crate) unload_count: extern "C" fn(VehicleRef) -> u32,
     pub(crate) deliver_count: extern "C" fn(VehicleRef) -> u32,
@@ -1238,7 +1236,6 @@ pub struct Loading {
     pub(crate) load_count: extern "C" fn(VehicleRef) -> u32,
     pub(crate) unload_type: extern "C" fn(VehicleRef) -> u8,
     pub(crate) has_orders: extern "C" fn(VehicleRef) -> bool,
-    pub(crate) load_unload_ticks: extern "C" fn(VehicleRef) -> u16,
     pub(crate) cargo_multiplier: extern "C" fn(VehicleRef) -> u16,
     pub(crate) full_load_order: extern "C" fn(VehicleRef) -> bool,
     pub(crate) passenger_cargo: extern "C" fn(VehicleRef) -> bool,
@@ -1250,7 +1247,6 @@ pub struct Loading {
     pub(crate) set_cargo_unloading: extern "C" fn(VehicleRef, bool),
     pub(crate) set_loading_finished: extern "C" fn(VehicleRef, bool),
     pub(crate) set_stop: extern "C" fn(VehicleRef, bool),
-    pub(crate) set_load_ticks: extern "C" fn(VehicleRef, u16),
     pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
     pub(crate) unknown_load_result: extern "C" fn(VehicleRef, u16),
     pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
@@ -1331,7 +1327,7 @@ fn reserve_consist(
             let kind = v.vehicle_type();
             (kind != 0 || !crate::ground_vehicle::is_rear_dualheaded(v.subtype()))
                 && (kind != 3 || crate::aircraft::is_normal_aircraft(v.subtype()))
-                && (must_reserve || control.refit_cargo == (l.cargo_type)(v))
+                && (must_reserve || control.refit_cargo == v.cargo_type())
         };
         if reserve_part {
             parts(v, |part| {
@@ -1476,7 +1472,7 @@ fn refit_vehicle(
     });
     let auto = new_cargo == 253;
     if auto {
-        new_cargo = (l.cargo_type)(start);
+        new_cargo = start.cargo_type();
         for cargo in 0..64_u8 {
             if mask & (1_u64 << cargo) == 0 || !(l.has_cargo_for)(st.native, cargo, next) {
                 continue;
@@ -1491,7 +1487,7 @@ fn refit_vehicle(
             }
         }
     }
-    if new_cargo < 64 && u32::from(new_cargo) != u32::from((l.cargo_type)(start)) {
+    if new_cargo < 64 && u32::from(new_cargo) != u32::from(start.cargo_type()) {
         parts(start, |part| {
             (l.return_cargo)(st.native, part, u32::MAX);
             true
@@ -1526,7 +1522,7 @@ pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
         openttd_rust_station_queue_push(st.state, front.0.as_ptr());
     }
     (l.set_loading_finished)(front, false);
-    (l.set_load_ticks)(front, 1);
+    front.write_load_unload_ticks(1);
     let payment = (l.create_payment)(front);
     let mut body = |next| {
         if !(l.has_orders)(front) || (l.unload_type)(front) != 4 {
@@ -1568,7 +1564,7 @@ fn update_ticks(
             ticks = ticks.wrapping_add(overhang.wrapping_mul(ticks) / 8);
         }
     }
-    (l.set_load_ticks)(front, ticks.max(1) as u16);
+    front.write_load_unload_ticks(ticks.max(1) as u16);
 }
 // Preserve complete loading control at the source observation points.
 #[allow(clippy::too_many_lines)]
@@ -1619,7 +1615,7 @@ unsafe fn load_vehicle(
                 || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
         } {
             (l.set_loading_finished)(front, true);
-            (l.set_load_ticks)(front, 1);
+            front.write_load_unload_ticks(1);
             return;
         }
         let state = st.state;
@@ -1715,7 +1711,7 @@ unsafe fn load_vehicle(
                 refit_vehicle(v, &mut capleft, st, next, control.refit_cargo, w, l, refit);
             }
             if refitted {
-                cargo = (l.cargo_type)(v);
+                cargo = v.cargo_type();
                 ge = unsafe { cp(state, cargo) };
             }
             v.write_refit_cap(v.cargo_cap());
@@ -1920,8 +1916,8 @@ unsafe fn load_station_queue(
         let v =
             VehicleRef(unsafe { NonNull::new_unchecked(openttd_rust_station_queue_value(node)) });
         if v.status() & (VS_STOPPED | VS_CRASHED) == 0 {
-            let ticks = (l.load_unload_ticks)(v).wrapping_sub(1);
-            (l.set_load_ticks)(v, ticks);
+            let ticks = v.load_unload_ticks().wrapping_sub(1);
+            v.write_load_unload_ticks(ticks);
             if ticks == 0 {
                 last = Some(v);
             }
@@ -2094,7 +2090,6 @@ crate::abi::layouts! {
         next_shared,
         stopped_in_depot,
         last_service,
-        cargo_type,
         goods_entry, station_resolver, vehicle_resolver,
     };
     "OpenTTDStationLoading" ["probe"] => Loading {
@@ -2106,7 +2101,6 @@ crate::abi::layouts! {
         engine_load_callback,
         engine_no_multiplier,
         cargo_capacity,
-        cargo_type,
         stored_count,
         unload_count,
         deliver_count,
@@ -2114,7 +2108,6 @@ crate::abi::layouts! {
         load_count,
         unload_type,
         has_orders,
-        load_unload_ticks,
         cargo_multiplier,
         full_load_order,
         passenger_cargo,
@@ -2126,7 +2119,6 @@ crate::abi::layouts! {
         set_cargo_unloading,
         set_loading_finished,
         set_stop,
-        set_load_ticks,
         subtract_profit,
         unknown_load_result,
         vehicle_dirty,

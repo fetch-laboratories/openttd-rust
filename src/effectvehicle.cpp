@@ -39,7 +39,6 @@ static const OpenTTDEffectLeaves &EffectServices()
 		.vehicles = &GetRustVehicleServices(),
 		.sprite_sequence = RustOpaqueVehicleInvoke<RustWriteVehicleSpriteSequence, uint32_t>,
 		.sprite = RustOpaqueVehicleInvoke<RustWriteVehicleFirstSprite, uint32_t>,
-		.spritenum = RustOpaqueVehicleInvoke<RustWriteVehicleSprite, uint8_t>,
 		.viewport = EffectViewport,
 		.sound = EffectSound,
 	};

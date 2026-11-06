@@ -959,7 +959,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 {
 	static const OpenTTDTrainServices services{
 		.physics = &GetRustGroundPhysicsServices(),
-		.write_colourmap = TrainWriteColourmap,
 		.acc_model = TrainAccModel,
 		.advance_distance = TrainAdvanceDistance,
 		.all_powered = TrainAllPowered,

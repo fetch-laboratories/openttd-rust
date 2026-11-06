@@ -61,7 +61,6 @@ struct OpenTTDCompanyIdentityServices {
 	EngineClass (OPENTTD_RUST_CALL *engine_class)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_class);
 	uint8_t (OPENTTD_RUST_CALL *engine_misc)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_misc);
 	uint8_t (OPENTTD_RUST_CALL *aircraft_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_subtype);
-	uint8_t (OPENTTD_RUST_CALL *vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	bool (OPENTTD_RUST_CALL *wagon_override)(OpenTTDVehicle *v) noexcept OPENTTD_SERVICE_DEFAULT(wagon_override);
 	bool (OPENTTD_RUST_CALL *cargo_freight)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_freight);
 	uint16_t (OPENTTD_RUST_CALL *cargo_classes)(uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(cargo_classes);

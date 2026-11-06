@@ -147,7 +147,6 @@ struct OpenTTDStationLinks {
 	OpenTTDVehicle * (*next_shared)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_shared);
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
-	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	const GoodsEntry *(*goods_entry)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(goods_entry);
 	const OpenTTDStationResolverServices *station_resolver;
 	const OpenTTDVehicleResolverServices *vehicle_resolver;
@@ -162,7 +161,6 @@ struct OpenTTDStationLoading {
 	bool (*engine_load_callback)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_load_callback);
 	bool (*engine_no_multiplier)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_no_multiplier);
 	OpenTTDCargoCapacity (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
-	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	uint32_t (*stored_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stored_count);
 	uint32_t (*unload_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unload_count);
 	uint32_t (*deliver_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(deliver_count);
@@ -170,7 +168,6 @@ struct OpenTTDStationLoading {
 	uint32_t (*load_count)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_count);
 	uint8_t (*unload_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(unload_type);
 	bool (*has_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_orders);
-	uint16_t (*load_unload_ticks)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_unload_ticks);
 	uint16_t (*cargo_multiplier)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_multiplier);
 	bool (*full_load_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(full_load_order);
 	bool (*passenger_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(passenger_cargo);
@@ -182,7 +179,6 @@ struct OpenTTDStationLoading {
 	void (*set_cargo_unloading)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_unloading);
 	void (*set_loading_finished)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_finished);
 	void (*set_stop)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_stop);
-	void (*set_load_ticks)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_load_ticks);
 	void (*subtract_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_profit);
 	void (*unknown_load_result)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_load_result);
 	void (*vehicle_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);

@@ -117,7 +117,6 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.engine_class = GetRustEngineCapabilitiesServices().train_class,
 	.engine_misc = RustEngineMiscFlags,
 	.aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype,
-	.vehicle_cargo = GetRustEngineCapabilitiesServices().vehicle_cargo,
 	.wagon_override = RustVehicleRead<bool, RustVehicleUsesWagonOverride>,
 	.cargo_freight = Identity_cargo_freight,
 	.cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes,

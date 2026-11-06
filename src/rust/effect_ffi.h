@@ -22,7 +22,6 @@ typedef struct OpenTTDEffectLeaves {
 	const OpenTTDVehicleServices *vehicles;
 	void (OPENTTD_RUST_CALL *sprite_sequence)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_sequence);
 	void (OPENTTD_RUST_CALL *sprite)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite);
-	void (OPENTTD_RUST_CALL *spritenum)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spritenum);
 	void (OPENTTD_RUST_CALL *viewport)(void *) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (OPENTTD_RUST_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 

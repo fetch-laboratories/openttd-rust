@@ -364,7 +364,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *v = VehicleOf(handle);
 		return {RustVehicleCargoOwner(v), v->Record().cargo_type};
 	},
-	.cargo_type = RustVehicleCargoType,
 	.stored_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
 		Vehicle *v = VehicleOf(handle); return v->cargo.StoredCount();
 	},
@@ -387,7 +386,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.has_orders = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->orders != nullptr;
 	},
-	.load_unload_ticks = RustVehicleLoadUnloadTicks,
 	.cargo_multiplier = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
 		Vehicle *v = VehicleOf(handle);
 		return CargoSpec::Get(v->Record().cargo_type)->multiplier;
@@ -422,10 +420,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.set_stop = [](OpenTTDVehicle *handle, bool value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		front->vehicle_flags.Set(VehicleFlag::StopLoading, value);
-	},
-	.set_load_ticks = [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void {
-		Vehicle *front = VehicleOf(handle);
-		front->Record().load_unload_ticks = value;
 	},
 	.subtract_profit = [](OpenTTDVehicle *handle, int64_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);

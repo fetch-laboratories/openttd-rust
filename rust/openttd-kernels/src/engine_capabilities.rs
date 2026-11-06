@@ -69,7 +69,6 @@ pub struct Services {
     new_temporary: extern "C" fn() -> V,
     destroy_temporary: extern "C" fn(V),
     vehicle_engine_object: extern "C" fn(V) -> E,
-    vehicle_cargo: extern "C" fn(V) -> u8,
     vehicle_subtype: extern "C" fn(V) -> u8,
     pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
@@ -160,7 +159,7 @@ pub unsafe extern "C" fn openttd_rust_engine_capacity(
         let cargo = if v.is_null() {
             default_cargo
         } else {
-            (s.vehicle_cargo)(v)
+            crate::vehicle::VehicleRef::of(v).cargo_type()
         };
         if !mail.is_null()
             && carrying.kind == VehicleType::AIRCRAFT
@@ -546,15 +545,15 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
         let mut cargoes = 0;
         let mut first = INVALID_CARGO;
         loop {
-            let cargo = (s.vehicle_cargo)(v);
+            let cargo = crate::vehicle::VehicleRef::of(v).cargo_type();
             if is_valid_cargo_type(cargo)
                 && (openttd_rust_engine_can_carry_abi(s, (s.vehicle_engine_object)(v)) != 0)
             {
                 set_bit64(&mut cargoes, cargo);
                 if !is_valid_cargo_type(first) {
-                    first = (s.vehicle_cargo)(v);
+                    first = crate::vehicle::VehicleRef::of(v).cargo_type();
                 }
-                if first != (s.vehicle_cargo)(v) && !cargo_out.is_null() {
+                if first != crate::vehicle::VehicleRef::of(v).cargo_type() && !cargo_out.is_null() {
                     cargo_out.write(INVALID_CARGO);
                     cargo_out = null_mut();
                 }
@@ -581,7 +580,7 @@ crate::abi::layouts! {
         ship_capacity, passenger_capacity, mail_capacity, train_class, aircraft_subtype, road_sound, rail_kind,
         grf, loading, cargo_classes, multiplier, pool_available,
         new_temporary, destroy_temporary,
-        vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
+        vehicle_engine_object, vehicle_subtype, shared, assertions, aircraft_cost, aircraft_range, aircraft_running, life_extension, life_years, price_shift, road_cost, road_price, road_running, ship_cost, ship_running, train_cost, train_price, train_running, valid_string,
     };
 }
 

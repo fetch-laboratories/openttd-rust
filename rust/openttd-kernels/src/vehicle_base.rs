@@ -422,6 +422,33 @@ impl crate::vehicle::VehicleRef {
             self.status() & !VS_HIDDEN
         });
     }
+    pub(crate) fn cargo_type(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), cargo_type)
+    }
+    pub(crate) fn cargo_subtype(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), cargo_subtype)
+    }
+    pub(crate) fn unit_number(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), unitnumber)
+    }
+    pub(crate) fn sprite_number(self) -> u8 {
+        crate::raw_field::read_field!(self.0.as_ptr(), spritenum)
+    }
+    pub(crate) fn write_sprite_number(self, value: u8) {
+        crate::raw_field::write_field!(self.0.as_ptr(), spritenum, value);
+    }
+    pub(crate) fn random_bits(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), random_bits)
+    }
+    pub(crate) fn write_random_bits(self, value: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), random_bits, value);
+    }
+    pub(crate) fn load_unload_ticks(self) -> u16 {
+        crate::raw_field::read_field!(self.0.as_ptr(), load_unload_ticks)
+    }
+    pub(crate) fn write_load_unload_ticks(self, ticks: u16) {
+        crate::raw_field::write_field!(self.0.as_ptr(), load_unload_ticks, ticks);
+    }
     pub(crate) fn cargo_cap(self) -> u16 {
         crate::raw_field::read_field!(self.0.as_ptr(), cargo_cap)
     }

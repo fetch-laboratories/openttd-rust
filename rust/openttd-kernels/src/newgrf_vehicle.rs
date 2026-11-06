@@ -113,9 +113,7 @@ pub struct Services {
     cached_override: unsafe extern "C" fn(V) -> Group,
     write_override: unsafe extern "C" fn(V, Group),
     spritegroup: unsafe extern "C" fn(u16, u8) -> Group,
-    random_bits: unsafe extern "C" fn(V) -> u16,
     waiting: unsafe extern "C" fn(V) -> u8,
-    write_random: unsafe extern "C" fn(V, u16),
     write_waiting: unsafe extern "C" fn(V, u8),
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
@@ -137,14 +135,9 @@ pub struct Services {
     old_order: unsafe extern "C" fn(V) -> u16,
     num_orders: unsafe extern "C" fn(V) -> u8,
     real_order: unsafe extern "C" fn(V) -> u8,
-    load_ticks: unsafe extern "C" fn(V) -> u16,
     service_interval: unsafe extern "C" fn(V) -> u16,
-    pub(crate) cargo_type: unsafe extern "C" fn(V) -> u8,
-    cargo_subtype: unsafe extern "C" fn(V) -> u8,
     age: unsafe extern "C" fn(V) -> i32,
     max_age: unsafe extern "C" fn(V) -> i32,
-    unit: unsafe extern "C" fn(V) -> u16,
-    pub(crate) sprite: unsafe extern "C" fn(V) -> u8,
     breakdowns: unsafe extern "C" fn(V) -> u8,
     breakdown_delay: unsafe extern "C" fn(V) -> u8,
     breakdown_chance: unsafe extern "C" fn(V) -> u8,
@@ -283,7 +276,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                             (s.vehicle.engine)(handle(u)).0.as_ptr(),
                         ) != 0
                         {
-                            let cargo_type = (s.cargo_type)(u);
+                            let cargo_type = handle(u).cargo_type();
                             classes |= (s.cargo_classes)(cargo_type) as u8;
                             cargoes[cargo_type as usize] =
                                 cargoes[cargo_type as usize].wrapping_add(1);
@@ -294,14 +287,14 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut subtypes = [0u8; 256];
                     u = v;
                     while !u.is_null() {
-                        let cargo_type = (s.cargo_type)(u);
+                        let cargo_type = handle(u).cargo_type();
                         if cargo_type == cargo
                             && (crate::engine_capabilities::openttd_rust_engine_can_carry_abi(
                                 s.capabilities,
                                 (s.vehicle.engine)(handle(u)).0.as_ptr(),
                             ) != 0)
                         {
-                            let subtype = usize::from((s.cargo_subtype)(u));
+                            let subtype = usize::from(handle(u).cargo_subtype());
                             subtypes[subtype] = subtypes[subtype].wrapping_add(1);
                         }
                         u = next(u);
@@ -462,14 +455,14 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
                 state.root = if wagon == 2 && handle(v).vehicle_type() == 0 {
                     (s.cached_override)(v)
                 } else {
-                    wagon_override(s, engine(v), (s.cargo_type)(v), first_engine(v))
+                    wagon_override(s, engine(v), handle(v).cargo_type(), first_engine(v))
                 };
             }
             if state.root.is_null() {
                 let cargo = if v.is_null() {
                     crate::newgrf_commons::SG_PURCHASE
                 } else {
-                    (s.cargo_type)(v)
+                    handle(v).cargo_type()
                 };
                 state.root = crate::newgrf_commons::first_sprite_group_of(
                     [cargo, crate::newgrf_commons::SG_DEFAULT],
@@ -513,7 +506,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_random(
         if triggers {
             u32::from((s.waiting)(v))
         } else {
-            u32::from((s.random_bits)(v))
+            u32::from(handle(v).random_bits())
         }
     }
 }
@@ -683,9 +676,8 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
         let result = (s.resolve_random)(&raw mut state, engine(v), waiting);
         (s.write_waiting)(v, (s.waiting)(v) & !(result.used as u8));
         let random = s.shared.random() as u16; // Draw even if reseed is zero.
-        let bits = (s.random_bits)(v);
-        (s.write_random)(
-            v,
+        let bits = handle(v).random_bits();
+        handle(v).write_random_bits(
             (bits & !(result.reseed as u16))
                 | ((if first { random } else { base }) & result.reseed as u16),
         );
@@ -1094,7 +1086,7 @@ unsafe fn variable(
                 return encode(t) << 16 | encode(b) << 8 | encode(f);
             }
             0x46 => return crate::vehicle::VehicleRef::of(v).motion_counter(),
-            0x47 => return cargo_info(s, (s.cargo_type)(v), grf),
+            0x47 => return cargo_info(s, handle(v).cargo_type(), grf),
             0x48 => return u32::from((s.engine_flags)((s.vehicle.engine)(h).0.as_ptr())),
             0x49 => return (s.build_year)(v) as u32,
             0x4a => {
@@ -1171,7 +1163,7 @@ unsafe fn variable(
                         return 0;
                     }
                     if parameter == 0x5f {
-                        return u32::from((s.random_bits)(u)) << 8 | u32::from((s.waiting)(u));
+                        return u32::from(handle(u).random_bits()) << 8 | u32::from((s.waiting)(u));
                     }
                     return self::variable(
                         s,
@@ -1351,7 +1343,7 @@ unsafe fn variable(
             0x8d => return u32::from((s.real_order)(v)),
             0x90 | 0x91 => {
                 let ticks = if (s.vehicle.order_type)(h) == crate::vehicle::OT_LOADING {
-                    u32::from((s.load_ticks)(v))
+                    u32::from(handle(v).load_unload_ticks())
                 } else {
                     match kind() {
                         0 => (s.vehicle.train_handle)(v).get_wait_counter() as u32,
@@ -1389,7 +1381,7 @@ unsafe fn variable(
             }
             0xb6 => return u32::from((h).subspeed()),
             0xb7 => return u32::from(crate::vehicle::VehicleRef::of(v).acceleration()),
-            0xb9 => return u32::from((s.cargo_type)(v)),
+            0xb9 => return u32::from(handle(v).cargo_type()),
             0xba | 0xbb => return high(u32::from(crate::vehicle::VehicleRef::of(v).cargo_cap())),
             0xbc | 0xbd => {
                 return high(
@@ -1410,14 +1402,14 @@ unsafe fn variable(
             0xc0 | 0xc1 => return high((s.age)(v).clamp(0, i32::from(u16::MAX)) as u32),
             0xc2 | 0xc3 => return high((s.max_age)(v).clamp(0, i32::from(u16::MAX)) as u32),
             0xc4 => return old_year((s.build_year)(v)),
-            0xc5 => return u32::from((s.unit)(v)),
+            0xc5 => return u32::from(handle(v).unit_number()),
             0xc6 | 0xc7 => {
                 return high(u32::from((s.shared.engine_local_id)(
                     (s.vehicle.engine)(h).0.as_ptr(),
                 )));
             }
             0xc8 => {
-                let sprite = (s.sprite)(v);
+                let sprite = handle(v).sprite_number();
                 if kind() != 0 || sprite != crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM {
                     return u32::from(sprite);
                 }
@@ -1458,8 +1450,8 @@ unsafe fn variable(
                     (s.id)(n)
                 };
             }
-            0xf2 => return u32::from((s.cargo_subtype)(v)),
-            0xfa => return u32::from((s.random_bits)(v)),
+            0xf2 => return u32::from(handle(v).cargo_subtype()),
+            0xfa => return u32::from(handle(v).random_bits()),
             0xfb => return u32::from((s.waiting)(v)),
             _ => {}
         }
@@ -1611,7 +1603,12 @@ pub(crate) unsafe fn cache_override(vs: &VehicleServices, v: VehicleRef) {
     unsafe {
         let s = &*(vs.newgrf)();
         let shell = v.0.as_ptr();
-        let group = wagon_override(s, v.engine_id(), (s.cargo_type)(shell), first_engine(shell));
+        let group = wagon_override(
+            s,
+            v.engine_id(),
+            handle(shell).cargo_type(),
+            first_engine(shell),
+        );
         (s.write_override)(shell, group);
     }
 }
@@ -1685,10 +1682,10 @@ crate::abi::layouts! {
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
         vehicle, shared, cache, capabilities,
         cargo_classes, cargo_bitnum, valid_company, livery, company_info,
-        overrides, override_at, override_engine, cached_override, write_override, spritegroup, random_bits, waiting,
-        write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
+        overrides, override_at, override_engine, cached_override, write_override, spritegroup, waiting,
+        write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, service_interval, age, max_age, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

@@ -40,13 +40,11 @@ static inline void OPENTTD_RUST_CALL EffectTestWrite(void *context, uint8_t fiel
 		case 1: w.view.y = static_cast<int32_t>(value); break;
 		case 2: w.view.z = static_cast<int32_t>(value); break;
 		case 3: case 4: w.view.sprite = value; break;
-		case 6: w.view.spritenum = static_cast<uint8_t>(value); break;
 	}
 }
 static inline OpenTTDEffectLeaves EffectTestLeaves()
 {
 	static OpenTTDVehicleResolverServices resolver{};
-	resolver.sprite = [](OpenTTDVehicle *record) noexcept { return reinterpret_cast<EffectTestWorld *>(record->shell)->view.spritenum; };
 	static OpenTTDVehicleServices vehicles{};
 	vehicles.first_sprite = [](OpenTTDVehicle *record) noexcept { return reinterpret_cast<EffectTestWorld *>(record->shell)->view.sprite; };
 	vehicles.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
@@ -54,7 +52,6 @@ static inline OpenTTDEffectLeaves EffectTestLeaves()
 		.vehicles = &vehicles,
 		.sprite_sequence = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 3, v); },
 		.sprite = [](void *c, uint32_t v) noexcept { EffectTestWrite(c, 4, v); },
-		.spritenum = [](void *c, uint8_t v) noexcept { EffectTestWrite(c, 6, v); },
 		.viewport = [](void *c) noexcept { static_cast<EffectTestWorld *>(c)->viewports++; },
 		.sound = [](void *c, uint8_t v) noexcept { static_cast<EffectTestWorld *>(c)->sound = 1 + v; },
 	};
@@ -114,12 +111,12 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	auto run = [&](uint8_t init = 0) -> uint8_t {
 		w.writes = w.viewports = w.animated = w.sound = 0;
 		w.record.x_pos = w.view.x; w.record.y_pos = w.view.y; w.record.z_pos = w.view.z;
-		w.record.progress = w.view.progress; w.record.subtype = w.view.subtype;
+		w.record.progress = w.view.progress; w.record.subtype = w.view.subtype; w.record.spritenum = w.view.spritenum;
 		uint8_t alive = 1;
 		if (init != 0) check(openttd_rust_effect_create(w.view.x, w.view.y, w.view.z, w.view.subtype) == reinterpret_cast<OpenTTDEffectVehicle *>(&w));
 		else alive = openttd_rust_effect_run(owner.get(), &w.record, &leaves, &services);
 		w.view.x = w.record.x_pos; w.view.y = w.record.y_pos; w.view.z = w.record.z_pos;
-		w.view.progress = w.record.progress;
+		w.view.progress = w.record.progress; w.view.spritenum = w.record.spritenum;
 		return alive;
 	};
 	for (uint8_t subtype = 0; subtype < 12; subtype++) {

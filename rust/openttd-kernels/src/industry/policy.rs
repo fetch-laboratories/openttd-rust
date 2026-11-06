@@ -60,25 +60,13 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
             VEH_TRAIN if crate::vehicle_base::is_front_engine(true, v.subtype()) => {
                 let mut part = Some(v);
                 while let Some(u) = part {
-                    cargo_service(
-                        unsafe { (grf.cargo_type)(u.0.as_ptr()) },
-                        shell,
-                        owner,
-                        s,
-                        &mut accepts,
-                        &mut produces,
-                    );
+                    cargo_service(u.cargo_type(), shell, owner, s, &mut accepts, &mut produces);
                     part = (u).next();
                 }
             }
-            VEH_ROAD | VEH_SHIP | VEH_AIRCRAFT => cargo_service(
-                unsafe { (grf.cargo_type)(v.0.as_ptr()) },
-                shell,
-                owner,
-                s,
-                &mut accepts,
-                &mut produces,
-            ),
+            VEH_ROAD | VEH_SHIP | VEH_AIRCRAFT => {
+                cargo_service(v.cargo_type(), shell, owner, s, &mut accepts, &mut produces);
+            }
             _ => continue,
         }
         if !accepts && !produces {
