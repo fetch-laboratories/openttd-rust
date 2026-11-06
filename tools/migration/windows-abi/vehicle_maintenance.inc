@@ -83,7 +83,8 @@ static void VehicleMaintenanceBoundary()
 	capabilities.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	capabilities.engine = [](uint16_t) noexcept -> const OpenTTDEngine * { return engine_record; };
 	capabilities.id = [](const OpenTTDEngine *) noexcept -> uint16_t { return 123; };
-	capabilities.price_shift = [](const GRFFile *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
+	capabilities.shared = &tables.shared;
+	tables.shared.grf_price_shift = [](const GRFFile *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
 	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities; transactions.commands = &commands;
 	maintenance.transaction = &transactions;
 

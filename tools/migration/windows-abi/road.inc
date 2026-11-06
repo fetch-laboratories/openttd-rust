@@ -134,6 +134,7 @@ static void RoadBoundary()
 	static OpenTTDVehicleResolverServices resolver{};
 	static OpenTTDEngineLoadingServices loading{};
 	resolver.capabilities = &capabilities;
+	capabilities.shared = &t.shared;
 	loading.shared = &t.shared;
 	t.shared.grf_file_id = [](const GRFFile *file) noexcept -> uint32_t { CHECK(file == reinterpret_cast<const GRFFile *>(&road_abi_grf)); return 0; };
 	static NewGRFCache grf_cache{};
@@ -193,7 +194,7 @@ static void RoadBoundary()
 	road_abi_engine->vehicle_info.road.running_cost_class = static_cast<Price>(1);
 	road_abi_engine->vehicle_info.road.running_cost = 3;
 	road_abi_engine->bindings.grf_prop.grffile = reinterpret_cast<const GRFFile *>(&road_abi_grf);
-	capabilities.price_shift = [](const GRFFile *file, uint32_t price) noexcept -> int32_t {
+	t.shared.grf_price_shift = [](const GRFFile *file, uint32_t price) noexcept -> int32_t {
 		CHECK(road_abi_probe->engine_replaced && file == reinterpret_cast<const GRFFile *>(&road_abi_grf) && price == 1);
 		return -2;
 	};

@@ -177,7 +177,7 @@ pub(super) unsafe fn get_cost(
     let amount = get_price(
         price,
         factor.unsigned_abs(),
-        (s.capabilities.price_shift)(crate::vehicle::EngineRef::of(e).grf(), price),
+        (s.capabilities.shared.grf_price_shift)(crate::vehicle::EngineRef::of(e).grf(), price),
         -10,
     );
     (s.common.base.cost.expense_money)(
