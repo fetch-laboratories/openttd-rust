@@ -1065,7 +1065,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.station = TrainSharedMap<uint64_t, &OpenTTDSharedServices::station_index>,
 		.station_axis = OpenTTDLegacyMapQuery<uint64_t, RustRailStationAxis, OpenTTDTrainHandle, uint32_t>,
 		.station_compatible = RustStationLegacyCompatible<OpenTTDTrainHandle>,
-		.station_dest = TrainStationDest,
 		.stopped_in_depot = TrainStoppedInDepot,
 		.stop_location = TrainStopLocation,
 		.stuck_news = TrainStuckNews,

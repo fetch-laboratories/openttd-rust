@@ -376,11 +376,6 @@ static void TrainStartStopDirty(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
 }
-static uint64_t TrainStationDest(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustStationTrainTile(Station::Get(v->current_order.GetDestination().ToStationID()));
-}
 static uint64_t TrainStoppedInDepot(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));

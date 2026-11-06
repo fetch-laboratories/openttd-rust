@@ -339,7 +339,6 @@ pub struct Leaves {
     pub station: extern "C" fn(Handle, u32) -> u64,
     pub station_axis: extern "C" fn(Handle, u32) -> u64,
     pub station_compatible: extern "C" fn(Handle, u32, u32) -> u64,
-    pub station_dest: extern "C" fn(Handle) -> u64,
     pub stopped_in_depot: extern "C" fn(Handle) -> u64,
     pub stop_location: extern "C" fn(Handle) -> u64,
     pub stuck_news: extern "C" fn(Handle),
@@ -2494,7 +2493,12 @@ impl Game<'_> {
             self.needs_service(id);
             (self.leaves.check_orders)(id);
             if (id).vehicle().current_order().kind() == OT_GOTO_STATION {
-                let tile = (self.leaves.station_dest)(id) as u32;
+                let station = crate::station_record::get_record(
+                    self.services,
+                    crate::station_type::StationID(id.vehicle().current_order().destination),
+                );
+                // SAFETY: Station::Get's original live destination precondition; no callback overlaps.
+                let tile = unsafe { (*station).train_station.tile.0 };
                 if tile != INVALID_TILE {
                     (id).vehicle().write_dest((u64::from(tile)) as u32);
                 }
@@ -3022,7 +3026,6 @@ crate::abi::layouts! {
         station,
         station_axis,
         station_compatible,
-        station_dest,
         stopped_in_depot,
         stop_location,
         stuck_news,

@@ -135,7 +135,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*station)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint64_t (*station_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_axis);
 	uint64_t (*station_compatible)(OpenTTDTrainHandle, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_compatible);
-	uint64_t (*station_dest)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(station_dest);
 	uint64_t (*stopped_in_depot)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	uint64_t (*stop_location)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stop_location);
 	void (*stuck_news)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stuck_news);
