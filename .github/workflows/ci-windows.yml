@@ -88,19 +88,37 @@ jobs:
     - name: Identify runner image
       id: runner-image
       shell: bash
-      run: echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+      env:
+        NAMESPACE: ${{ (github.event_name == 'push' || inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration') && 'protected' || 'candidate' }}
+      run: |
+        echo "version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+        echo "vcpkg-namespace=$NAMESPACE" >> "$GITHUB_OUTPUT"
 
     # vcpkg names each cached binary by its ABI hash (port version, triplet,
-    # compiler), so a stale entry is never reused; it simply misses. A new
-    # runner image (new compiler) gets a new key so its rebuilt binaries persist.
+    # compiler, vcpkg scripts), so a stale entry is never reused; it simply
+    # misses. Keys are unique per commit and restore the newest prefix match,
+    # so a run that builds packages can always save a fresher set (#699).
+    # Requested runs build candidate code, so they save under their own
+    # namespace, which protected pushes and cadence runs never restore.
     - name: Restore vcpkg binary cache
       id: vcpkg-binary-cache
       uses: actions/cache/restore@v4
       with:
         path: ${{ runner.temp }}/vcpkg-binary-cache
-        key: vcpkg-bin-${{ inputs.arch }}-${{ hashFiles('vcpkg.json') }}-${{ steps.runner-image.outputs.version }}
+        key: vcpkg-bin-v2-${{ steps.runner-image.outputs.vcpkg-namespace }}-${{ inputs.arch }}-${{ hashFiles('vcpkg.json') }}-${{ steps.runner-image.outputs.version }}-${{ inputs.checkout-ref || github.sha }}
         restore-keys: |
-          vcpkg-bin-${{ inputs.arch }}-${{ hashFiles('vcpkg.json') }}-
+          vcpkg-bin-v2-${{ steps.runner-image.outputs.vcpkg-namespace }}-${{ inputs.arch }}-${{ hashFiles('vcpkg.json') }}-${{ steps.runner-image.outputs.version }}-
+          vcpkg-bin-v2-${{ steps.runner-image.outputs.vcpkg-namespace }}-${{ inputs.arch }}-
+          vcpkg-bin-v2-protected-${{ inputs.arch }}-${{ hashFiles('vcpkg.json') }}-${{ steps.runner-image.outputs.version }}-
+          vcpkg-bin-v2-protected-${{ inputs.arch }}-
+
+    - name: List restored vcpkg binaries
+      shell: bash
+      run: |
+        temp=$(cygpath -u "$RUNNER_TEMP")
+        mkdir -p "$temp/vcpkg-binary-cache"
+        find "$temp/vcpkg-binary-cache" -name '*.zip' | sort > "$temp/vcpkg-restored.txt"
+        echo "Restored $(wc -l < "$temp/vcpkg-restored.txt") vcpkg binary archive(s)"
 
     # MSVC caching needs embedded /Z7 debug info and no PCH; ccache hashes the
     # compiler binary, arguments, INCLUDE environment and every included header.
@@ -131,6 +149,7 @@ jobs:
         git fetch --no-tags --depth=1 origin "$baseline"
 
     - name: Build
+      id: build
       shell: bash
       env:
         NINJA_STATUS: "[%f/%t -- %e] " # [finished_edges/total_edges -- elapsed_time], default value is "[%f/%t] "
@@ -161,8 +180,45 @@ jobs:
         { "$CCACHE_EXE" --show-config; "$CCACHE_EXE" -sv; } | tee .local/windows-evidence/ccache-stats.txt
         echo "::endgroup::"
 
+    # Save only when vcpkg built packages the restored set lacked. After a
+    # successful build, keep just the archives this build's ABIs name, so the
+    # entry does not grow with every dependency or compiler change.
+    - name: Prepare vcpkg binary cache
+      id: vcpkg-binary-prepare
+      if: ${{ !cancelled() && steps.vcpkg-binary-cache.outcome == 'success' }}
+      shell: bash
+      run: |
+        temp=$(cygpath -u "$RUNNER_TEMP")
+        cache="$temp/vcpkg-binary-cache"
+        find "$cache" -name '*.zip' | sort > "$temp/vcpkg-final.txt"
+        added=$(comm -13 "$temp/vcpkg-restored.txt" "$temp/vcpkg-final.txt" | wc -l)
+        echo "vcpkg stored $added new binary archive(s)"
+        if [ "$added" -eq 0 ]; then
+          echo "save=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ "${{ steps.build.outcome }}" = success ]; then
+          # vcpkg's package ABI is the SHA-256 of the installed vcpkg_abi_info.txt.
+          missing=0
+          if ! sha256sum build/vcpkg_installed/*/share/*/vcpkg_abi_info.txt | cut -d' ' -f1 | sort -u > "$temp/vcpkg-abis.txt"; then
+            missing=1
+          fi
+          while read -r abi; do
+            [ -f "$cache/${abi:0:2}/$abi.zip" ] || { echo "No archive for ABI $abi"; missing=1; }
+          done < "$temp/vcpkg-abis.txt"
+          if [ "$missing" -eq 0 ] && [ -s "$temp/vcpkg-abis.txt" ]; then
+            while read -r zip; do
+              grep -qxF "$(basename "$zip" .zip)" "$temp/vcpkg-abis.txt" || { rm -f "$zip"; echo "Pruned $zip"; }
+            done < "$temp/vcpkg-final.txt"
+          else
+            echo "::warning::Could not match every installed vcpkg ABI to an archive; saving without pruning"
+          fi
+        fi
+        echo "Saving $(find "$cache" -name '*.zip' | wc -l) vcpkg binary archive(s)"
+        echo "save=true" >> "$GITHUB_OUTPUT"
+
     - name: Save vcpkg binary cache
-      if: github.event_name == 'push' && steps.vcpkg-binary-cache.outputs.cache-hit != 'true'
+      if: ${{ !cancelled() && steps.vcpkg-binary-prepare.outputs.save == 'true' }}
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.temp }}/vcpkg-binary-cache
