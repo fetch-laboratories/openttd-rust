@@ -1,6 +1,5 @@
 """Industry production/history and builder evidence on existing reference inputs."""
 
-import shutil
 import struct
 from collections.abc import Mapping
 from pathlib import Path
@@ -65,12 +64,13 @@ def install(scenario: Scenario, run_dir: Path) -> None:
             for path in Path(source).glob("*.grf"):
                 (target / path.name).write_bytes(path.read_bytes())
     if uses_ai(scenario):
-        folder = run_dir / "ai/industry-scenarios"
-        shutil.copytree(scenario["scenario_ai"], folder)
-        (folder / "parameters.nut").write_text(
+        core.install_ai(
+            scenario,
+            run_dir,
+            "industry-scenarios",
             f'INDUSTRY_MODE <- "{scenario["industry"]}";\n'
             f"INDUSTRY_TARGET <- {scenario.get('industry_target', 0)};\n"
-            f'INDUSTRY_WATER <- "{scenario.get("industry_water", "none")}";\n'
+            f'INDUSTRY_WATER <- "{scenario.get("industry_water", "none")}";\n',
         )
 
 
@@ -780,17 +780,14 @@ def industry_fields(chunks: core.Chunks, industry: int) -> set[int]:
 
 def production_gap() -> None:
     """Absent NewGRFs: unchanged version, repetition and native arithmetic policy."""
-    import importlib.util
     import subprocess
+
+    import probe
+
+    import migration
 
     from .core import ROOT
 
-    spec = importlib.util.spec_from_file_location(
-        "migration", ROOT / "tools/migration.py"
-    )
-    assert spec is not None and spec.loader is not None
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
     out = ROOT / ".local/industry-production-gap"
     out.mkdir(parents=True, exist_ok=True)
     source = subprocess.check_output(
@@ -801,46 +798,38 @@ def production_gap() -> None:
     end = source.index("/**\n * Check whether an industry temporarily", start)
     (out / "industry-production-reference.inc").write_text(source[start:end])
     binary = out / "probe"
-    subprocess.run(
+    probe.compile(
         [
-            "c++",
+            probe.compiler(ROOT / "build-rust"),
             "-std=c++20",
             "-O2",
             "-fno-strict-overflow",
-            "-DPOINTER_IS_64BIT",
+            *probe.target_flags(ROOT / "build-rust"),
             "-I" + str(ROOT / "src"),
             "-I" + str(ROOT / "build-rust/generated-abi"),
             "-I" + str(out),
             str(ROOT / "tools/migration/industry-production-gap.cpp"),
-            str(migration.rust_archive(ROOT / "build-rust")),
-            "-ldl",
-            "-lpthread",
-            "-lm",
+            *probe.rust(ROOT / "build-rust", define=False),
             "-o",
             str(binary),
         ],
+        out / "compile.log",
         cwd=ROOT,
         env=migration.environment(),
-        check=True,
     )
-    subprocess.run([str(binary)], cwd=ROOT, check=True)
+    print(probe.execute([binary], binary, cwd=ROOT).decode(), end="")
 
 
 def lifecycle_gap() -> None:
     """Absent custom industry GRFs: unchanged tile/parent RNG and animation."""
-    import importlib.util
     import subprocess
 
     import probe
 
+    import migration
+
     from .core import ROOT
 
-    spec = importlib.util.spec_from_file_location(
-        "migration", ROOT / "tools/migration.py"
-    )
-    assert spec is not None and spec.loader is not None
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
     out = ROOT / ".local/industry-lifecycle-gap"
     out.mkdir(parents=True, exist_ok=True)
     source = subprocess.check_output(
@@ -901,29 +890,26 @@ def lifecycle_gap() -> None:
     end = graphics.index("};", start) + 2
     (out / "industry-graphics-reference.inc").write_text(graphics[start:end])
     binary = out / "probe"
-    subprocess.run(
+    probe.compile(
         [
-            "c++",
+            probe.compiler(ROOT / "build-rust"),
             "-std=c++20",
             "-O2",
             "-fno-strict-overflow",
-            "-DPOINTER_IS_64BIT",
+            *probe.target_flags(ROOT / "build-rust"),
             "-I" + str(ROOT / "src"),
             "-I" + str(ROOT / "build-rust/generated-abi"),
             "-I" + str(out),
             str(ROOT / "tools/migration/industry-lifecycle-gap.cpp"),
-            str(migration.rust_archive(ROOT / "build-rust")),
-            "-ldl",
-            "-lpthread",
-            "-lm",
+            *probe.rust(ROOT / "build-rust", define=False),
             "-o",
             str(binary),
         ],
+        out / "compile.log",
         cwd=ROOT,
         env=migration.environment(),
-        check=True,
     )
-    subprocess.run([str(binary)], cwd=ROOT, check=True)
+    print(probe.execute([binary], binary, cwd=ROOT).decode(), end="")
 
 
 if __name__ == "__main__":

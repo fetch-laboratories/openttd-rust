@@ -6,7 +6,6 @@ import json
 import re
 import shutil
 import struct
-import subprocess
 import threading
 from collections.abc import Mapping
 from pathlib import Path
@@ -270,11 +269,11 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
     archive = archive or migration.rust_archive(
         build, target_dir=build / "cargo-native-test-support"
     )
-    compiler = probe.compiler(build)
     fixture = Path(__file__).with_name("town-reference-gaps.cpp")
     binary = out / "town-reference-gaps"
     command = [
-        compiler,
+        probe.compiler(build),
+        *probe.target_flags(build),
         "-std=c++20",
         "-O2",
         "-I",
@@ -289,21 +288,20 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
         str(binary),
     ]
     env = migration.environment()
-    with (out / "compile.log").open("wb") as log:
-        subprocess.run(
-            command, env=env, stdout=log, stderr=subprocess.STDOUT, check=True
-        )
-    run = subprocess.run([str(binary)], env=env, capture_output=True)
-    (out / "transcript.txt").write_bytes(run.stdout)
-    (out / "stderr.txt").write_bytes(run.stderr)
-    if run.returncode != 0:
-        raise RuntimeError(f"town tunnel reference gap failed: {run.stderr.decode()}")
+    probe.compile(command, out / "compile.log", env=env)
+    output = probe.execute([binary], binary, env=env, stderr="allowed")
+    (out / "transcript.txt").write_bytes(output)
+    (out / "stderr.txt").write_bytes(
+        binary.with_suffix(".err").read_bytes()
+        if binary.with_suffix(".err").exists()
+        else b""
+    )
     counts: dict[str, int] = {}
     for kind in ("tunnel", "history", "rating", "radius", "authority", "percent"):
         found = re.search(
             rb"\nPASS (\d+) unchanged-reference %s cases\n" % kind.encode()
             + (b"$" if kind == "tunnel" else b""),
-            run.stdout,
+            output,
         )
         if not found or int(found[1]) == 0:
             raise RuntimeError(
@@ -314,8 +312,8 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
     report = {
         "passed": True,
         **counts,
-        "successful_tunnel_cases": len(re.findall(rb" result=1 ", run.stdout)),
-        "execute_effect_cases": len(re.findall(rb" effects=1 ", run.stdout)),
+        "successful_tunnel_cases": len(re.findall(rb" result=1 ", output)),
+        "execute_effect_cases": len(re.findall(rb" effects=1 ", output)),
     }
     report_path.write_text(json.dumps(report, indent=2) + "\n")
     return report

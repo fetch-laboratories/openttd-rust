@@ -107,11 +107,13 @@ def execute(
     input: bytes | None = None,
     env: Mapping[str, str] | None = None,
     stderr: str = "empty",
+    cwd: Path | None = None,
 ) -> bytes:
     """Run a fixture and return stdout; stderr is "empty", "merged" or "allowed"."""
     result = subprocess.run(
         list(map(str, argv)),
         input=input,
+        cwd=cwd,
         env=env or ENV,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if stderr == "merged" else subprocess.PIPE,

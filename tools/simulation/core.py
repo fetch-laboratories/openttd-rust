@@ -744,6 +744,14 @@ def benchmark_run(
         return subprocess.CompletedProcess(command, code)
 
 
+def install_ai(scenario: Scenario, run_dir: Path, name: str, parameters: str) -> Path:
+    """Copy the frozen scenario AI and write its per-run parameters verbatim."""
+    folder = run_dir / "ai" / name
+    shutil.copytree(scenario["scenario_ai"], folder)
+    (folder / "parameters.nut").write_text(parameters)
+    return folder
+
+
 def prepare_run_dir(scenario: Scenario, build: Path, run_dir: Path) -> None:
     """Write a game's configuration, module files and console script."""
     shutil.rmtree(run_dir, ignore_errors=True)

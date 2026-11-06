@@ -12,5 +12,7 @@ def git(*arguments: str, cwd: Path = ROOT, errors: str = "strict") -> str:
     )
 
 
-def gh(*arguments: str, cwd: Path = ROOT) -> str:
-    return subprocess.check_output(["gh", *arguments], cwd=cwd, text=True)
+def gh(*arguments: str, cwd: Path | None = None) -> str:
+    return subprocess.run(
+        ["gh", *arguments], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout

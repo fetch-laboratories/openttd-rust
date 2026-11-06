@@ -1,7 +1,6 @@
 """Ground/flood scenario witnesses and unreachable scheduler comparisons."""
 
 import struct
-import subprocess
 import zlib
 from collections.abc import Mapping
 from pathlib import Path
@@ -559,6 +558,8 @@ def check(
 
 def scheduler_gap() -> None:
     """Compare unreachable map phases and commit-after-batch with unchanged C++."""
+    import probe
+
     import migration
 
     root = migration.ROOT
@@ -634,27 +635,25 @@ def scheduler_gap() -> None:
         + function(source, "GetSlopePixelZOutsideMap")
     )
     binary = out / "landscape-loop-gap"
-    subprocess.run(
+    probe.compile(
         [
-            "c++",
+            probe.compiler(root / "build-rust"),
             "-std=c++20",
+            *probe.target_flags(root / "build-rust"),
             "-O2",
             "-I" + str(root / "src"),
             "-I" + str(root / "build-rust/generated-abi"),
             "-I" + str(out),
             str(root / "tools/simulation/landscape-loop-reference.cpp"),
-            str(migration.rust_archive(root / "build-rust")),
-            "-ldl",
-            "-lpthread",
-            "-lm",
+            *probe.rust(root / "build-rust", define=False),
             "-o",
             str(binary),
         ],
+        out / "compile.log",
         cwd=root,
         env=migration.environment(),
-        check=True,
     )
-    subprocess.run([str(binary)], cwd=root, check=True)
+    print(probe.execute([binary], binary, cwd=root).decode(), end="")
 
 
 def png_chunk(kind: bytes, data: bytes) -> bytes:

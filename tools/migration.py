@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import vcs
 from validation_execution import file_lock, run_logged
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -352,7 +353,7 @@ def compiler_cache_compatibility(
 
 
 def git(*args: str, cwd: Path = ROOT) -> str:
-    return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
+    return vcs.git(*args, cwd=cwd).strip()
 
 
 @contextmanager

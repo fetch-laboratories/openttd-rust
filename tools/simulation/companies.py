@@ -3,7 +3,6 @@
 import datetime
 import hashlib
 import lzma
-import shutil
 import struct
 import subprocess
 from pathlib import Path
@@ -28,16 +27,10 @@ AI_FOLDER = "company-scenario-ai"
 
 def command_gap() -> None:
     """Unchanged native financial commands for deity/network/Money boundaries."""
-    import importlib.util
-
     import probe
 
-    spec = importlib.util.spec_from_file_location(
-        "migration", ROOT / "tools/migration.py"
-    )
-    assert spec is not None and spec.loader is not None
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
+    import migration
+
     out = ROOT / ".local/company-command-gap"
     out.mkdir(parents=True, exist_ok=True)
     sources = {
@@ -67,27 +60,24 @@ def command_gap() -> None:
     ]
     bodies.append(probe.body(sources["company_cmd.cpp"], "CommandCost CmdGiveMoney("))
     (out / "company-command-reference.inc").write_text("\n".join(bodies))
-    subprocess.run(
+    probe.compile(
         [
-            "c++",
+            probe.compiler(ROOT / "build-rust"),
             "-std=c++20",
             "-O2",
-            "-DPOINTER_IS_64BIT",
+            *probe.target_flags(ROOT / "build-rust"),
             "-I" + str(ROOT / "src"),
             "-I" + str(out),
             str(ROOT / "tools/simulation/company-command-reference.cpp"),
-            str(migration.rust_archive(ROOT / "build-rust")),
-            "-ldl",
-            "-lpthread",
-            "-lm",
+            *probe.rust(ROOT / "build-rust", define=False),
             "-o",
             str(out / "probe"),
         ],
+        out / "compile.log",
         cwd=ROOT,
         env=migration.environment(),
-        check=True,
     )
-    subprocess.run([str(out / "probe")], cwd=ROOT, check=True)
+    print(probe.execute([out / "probe"], out / "probe", cwd=ROOT).decode(), end="")
 
 
 class Scenario(core.Scenario):
@@ -135,11 +125,12 @@ def uses_ai(scenario: Scenario) -> bool:
 def install(scenario: Scenario, run_dir: Path) -> None:
     if not uses_ai(scenario):
         return
-    folder = run_dir / "ai/companies"
-    shutil.copytree(scenario["scenario_ai"], folder)
-    (folder / "parameters.nut").write_text(
+    core.install_ai(
+        scenario,
+        run_dir,
+        "companies",
         f"COMPANY_SETUP <- {str(scenario.get('company_setup', False)).lower()};\n"
-        f'COMPANY_ACTION <- "{scenario["companies"]}";\n'
+        f'COMPANY_ACTION <- "{scenario["companies"]}";\n',
     )
 
 

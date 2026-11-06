@@ -12,6 +12,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+import vcs
+
 PROFILES = ("rust", "native", "platform", "full")
 WORKFLOW = "ci-request.yml"
 PROTECTED_REF = "rust-migration"
@@ -21,9 +23,7 @@ WAIT_TIMEOUT = 540
 
 
 def gh(*args: str) -> str:
-    return subprocess.run(
-        ["gh", *args], check=True, capture_output=True, text=True
-    ).stdout.strip()
+    return vcs.gh(*args).strip()
 
 
 def api(repository: str, path: str) -> dict:
