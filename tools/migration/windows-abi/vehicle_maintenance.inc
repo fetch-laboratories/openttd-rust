@@ -20,7 +20,7 @@ static void VehicleMaintenanceBoundary()
 	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceBreakdownProbe { return {.counter = 0, .status = 0}; };
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept { dirty++; };
 	maintenance.reset = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .reliability = 0x9876, .chance = 12, .breakdowns = 2};
+		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .chance = 12, .breakdowns = 2};
 	};
 	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t chance) noexcept { CHECK(chance == 3); resets++; };
 	maintenance.value = [](OpenTTDVehicle *) noexcept { return int64_t{-257}; };
@@ -30,7 +30,15 @@ static void VehicleMaintenanceBoundary()
 	};
 	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
 	RoadTestTables tables(&shared);
+	static OpenTTDEngine *engine_record;
+	engine_record = openttd_rust_engine_new();
+	const OpenTTDEngineDefaults engine_defaults{};
+	openttd_rust_engine_construct(engine_record, &engine_defaults, VEH_ROAD, UINT16_MAX);
+	engine_record->vehicle_info.road.cost_factor = 53;
+	engine_record->reliability = 0x9876;
+	engine_record->company_avail = CompanyMask{1};
 	auto &base = tables.vehicle;
+	base.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine_record; };
 	base.maintenance = &maintenance;
 	base.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
 	base.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
@@ -51,11 +59,6 @@ static void VehicleMaintenanceBoundary()
 	static uint16_t factor;
 	static int64_t available;
 	static int company_shell;
-	static OpenTTDEngine *engine_record;
-	engine_record = openttd_rust_engine_new();
-	const OpenTTDEngineDefaults engine_defaults{};
-	openttd_rust_engine_construct(engine_record, &engine_defaults, VEH_ROAD, UINT16_MAX);
-	engine_record->vehicle_info.road.cost_factor = 53;
 	static CompanyFinances *active_finances, *after_finances;
 	static bool infinite, after_infinite;
 	static uint8_t supplied_id;
@@ -88,7 +91,6 @@ static void VehicleMaintenanceBoundary()
 		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .reliability = 0, .percent = false, .wallclock = false, .no_service = true, .breakdowns = 0};
 	};
 	maintenance.replacement = [](OpenTTDVehicle *, const Company *) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
-	maintenance.replacement_available = [](OpenTTDVehicle *, uint16_t) noexcept { return true; };
 	const int64_t original_price = openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD];
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = 25600;
 	for (uint16_t value : {uint16_t{CALLBACK_FAILED}, uint16_t{17}}) {
@@ -118,6 +120,7 @@ static void VehicleMaintenanceBoundary()
 	}
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = original_price;
 	maintenance.company = nullptr; maintenance.transaction = nullptr;
+	base.engine = nullptr;
 	auto *retired = std::exchange(engine_record, nullptr);
 	openttd_rust_engine_destroy(retired);
 }

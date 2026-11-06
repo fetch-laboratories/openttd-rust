@@ -284,7 +284,6 @@ pub struct GroupServices {
     pub(crate) renew_state: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) next_renew: unsafe extern "C" fn(u32) -> *mut (),
     pub(crate) renew_id: unsafe extern "C" fn(*mut ()) -> u32,
-    pub(crate) engine_type: unsafe extern "C" fn(u16) -> u8,
     pub(crate) current_company: unsafe extern "C" fn() -> u8,
     pub(crate) buildable_type: unsafe extern "C" fn(u8) -> bool,
     pub(crate) can_allocate: unsafe extern "C" fn() -> bool,
@@ -317,6 +316,14 @@ pub struct GroupServices {
     pub(crate) renew_can_allocate: unsafe extern "C" fn() -> bool,
     pub(crate) renew_delete: unsafe extern "C" fn(*mut ()),
     pub(crate) recursion_error: u32,
+}
+
+impl GroupServices {
+    pub(crate) fn engine(&self, id: u16) -> crate::vehicle::EngineRef {
+        // SAFETY: this serialized entry retains the immutable resolver table and live engine.
+        let capabilities = unsafe { (&*(self.vehicles.newgrf)()).capabilities };
+        crate::vehicle::EngineRef::of((capabilities.engine)(id))
+    }
 }
 
 const INVALID_GROUP: u16 = 65535;
@@ -452,7 +459,7 @@ unsafe fn sum_engines(w: &GroupServices, company: u8, id: u16, engine: u16) -> u
             from = u32::from(child) + 1;
         }
     }
-    let kind = unsafe { (w.engine_type)(engine) };
+    let kind = w.engine(engine).kind().0;
     let s = unsafe { (w.stats)(company, id, kind) };
     count.wrapping_add(u32::from(unsafe {
         openttd_rust_fleet_engine_count(s, engine)
@@ -525,7 +532,7 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
         let engine = read_field!(p, from);
         let id = read_field!(p, group_id);
         let next = read_field!(p, next);
-        let kind = unsafe { (w.engine_type)(engine) };
+        let kind = w.engine(engine).kind().0;
         let s = unsafe { (w.stats)(company, id, kind).cast::<Stats>() };
         unsafe {
             if !(*s).fields.defined {
@@ -1710,7 +1717,6 @@ crate::abi::layouts! {
         renew_state,
         next_renew,
         renew_id,
-        engine_type,
         current_company,
         buildable_type,
         can_allocate,

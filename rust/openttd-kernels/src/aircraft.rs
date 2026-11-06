@@ -496,7 +496,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         engine_speed(self; v: Vehicle) => (self.vs.engine)(v.base()).aircraft_speed();
         engine_subtype(self; v: Vehicle) => (self.vs.engine)(v.base()).aircraft_subtype();
         engine_sound(self; v: Vehicle) => (self.vs.engine)(v.base()).aircraft_sound();
-        engine_reliability(self; v: Vehicle) => (self.maintenance().engine_reliability)(v.base());
+        engine_reliability(self; v: Vehicle) => (self.vs.engine)(v.base()).reliability();
         slope(self; x: i64, y: i64) => self.movement.get().pixel_z_at(x as i32,y as i32,false);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
         tile_height(self; tile: i64) => crate::tile_map::tile_height_in(&crate::map_func::World::new(self.ss), tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;

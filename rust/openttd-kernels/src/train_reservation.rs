@@ -1310,7 +1310,6 @@ pub(crate) mod tests {
             road_kind: unused(),
             road_vehicle: unused(),
             resolve: unused(),
-            train_engine_class: unused(),
             depot_invalidate: unused(),
             native_assert: unused(),
             add_by_diag_dir: unused(),

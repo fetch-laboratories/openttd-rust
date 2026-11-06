@@ -55,9 +55,6 @@ pub struct Services {
     pub(crate) engine_valid: unsafe extern "C" fn(u16) -> bool,
     pub(crate) company_valid: unsafe extern "C" fn(u8) -> bool,
     pub(crate) engine_buildable: unsafe extern "C" fn(u16, u8, u8) -> bool,
-    pub(crate) wagon: unsafe extern "C" fn(u16) -> bool,
-    pub(crate) tram: unsafe extern "C" fn(u16) -> bool,
-    pub(crate) plane: unsafe extern "C" fn(u16) -> u8,
     pub(crate) orders: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) order_count: unsafe extern "C" fn(*mut ()) -> usize,
     pub(crate) order_count_id: unsafe extern "C" fn(*mut ()) -> u8,
@@ -345,7 +342,7 @@ macro_rules! check {
 }
 
 unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u8) -> bool {
-    let kind = unsafe { (gw.engine_type)(from) };
+    let kind = gw.engine(from).kind().0;
     if !unsafe { (w.engine_buildable)(to, kind, company) } {
         return false;
     }
@@ -360,7 +357,9 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
             {
                 return false;
             }
-            if unsafe { (w.wagon)(from) != (w.wagon)(to) } {
+            if crate::vehicle::EngineRef::of((w.capabilities.engine)(from)).wagon()
+                != crate::vehicle::EngineRef::of((w.capabilities.engine)(to)).wagon()
+            {
                 return false;
             }
         }
@@ -374,11 +373,17 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
             {
                 return false;
             }
-            if unsafe { (w.tram)(from) != (w.tram)(to) } {
+            if crate::vehicle::EngineRef::of((w.capabilities.engine)(from)).tram()
+                != crate::vehicle::EngineRef::of((w.capabilities.engine)(to)).tram()
+            {
                 return false;
             }
         }
-        3 if unsafe { (w.plane)(from) != (w.plane)(to) } => {
+        3 if (crate::vehicle::EngineRef::of((w.capabilities.engine)(from)).aircraft_subtype()
+            & 1)
+            != (crate::vehicle::EngineRef::of((w.capabilities.engine)(to)).aircraft_subtype()
+                & 1) =>
+        {
             return false;
         }
         _ => (),
@@ -795,7 +800,7 @@ unsafe fn replace_chain(
                 for item in replacements.iter().rev() {
                     let append = item.vehicle();
                     let engine = crate::fleet::record(gw, append).engine_id();
-                    if unsafe { (w.wagon)(engine) } {
+                    if crate::vehicle::EngineRef::of((w.capabilities.engine)(engine)).wagon() {
                         continue;
                     }
                     if !item.new.is_null() {
@@ -845,7 +850,7 @@ unsafe fn replace_chain(
                     check!(w, !last_engine.is_null());
                     let append = item.vehicle();
                     let engine = crate::fleet::record(gw, append).engine_id();
-                    if unsafe { (w.wagon)(engine) } {
+                    if crate::vehicle::EngineRef::of((w.capabilities.engine)(engine)).wagon() {
                         unsafe {
                             move_vehicle(
                                 w,
@@ -905,9 +910,13 @@ unsafe fn replace_chain(
                     if crate::fleet::transactions::first(w, wagon) == new_head {
                         break;
                     }
-                    check!(w, unsafe {
-                        (w.wagon)(crate::fleet::record(gw, wagon).engine_id())
-                    });
+                    check!(
+                        w,
+                        crate::vehicle::EngineRef::of((w.capabilities.engine)(
+                            crate::fleet::record(gw, wagon).engine_id()
+                        ))
+                        .wagon()
+                    );
                     unsafe {
                         direct_sell(w, costs.temporary, wagon, u32::from(DoCommandFlag::EXECUTE));
                     };
@@ -1198,7 +1207,7 @@ unsafe fn set_rule(
     if !unsafe { (w.engine_valid)(from) } {
         return ERROR;
     }
-    let kind = unsafe { (gw.engine_type)(from) };
+    let kind = gw.engine(from).kind().0;
     if !g.is_null() && read_field!(g, vehicle_type) != kind {
         return ERROR;
     }
@@ -1291,9 +1300,6 @@ crate::abi::layouts! {
         engine_valid,
         company_valid,
         engine_buildable,
-        wagon,
-        tram,
-        plane,
         orders,
         order_count,
         order_count_id,

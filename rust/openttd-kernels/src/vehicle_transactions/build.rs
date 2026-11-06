@@ -107,7 +107,7 @@ pub(crate) unsafe fn build(
         }
         VehicleType::SHIP => 1,
         VehicleType::AIRCRAFT => {
-            if unsafe { (c.transactions.plane)(engine) } != 0 {
+            if crate::vehicle::EngineRef::of(e).plane() {
                 2
             } else {
                 3

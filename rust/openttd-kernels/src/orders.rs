@@ -2955,10 +2955,8 @@ impl Game {
             )),
             1 => ((self.reliability(v) * 101) >> 16) as i32,
             7 => {
-                (i32::from((self.maintenance().engine_reliability)(native_vehicle(
-                    v,
-                    self.0.base,
-                ))) * 101)
+                (i32::from((self.0.base.engine)(native_vehicle(v, self.0.base)).reliability())
+                    * 101)
                     >> 16
             }
             2 => (self.display_speed(v) as i32).wrapping_mul(10) / 16,

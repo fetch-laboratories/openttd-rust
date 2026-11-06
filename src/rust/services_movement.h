@@ -35,6 +35,5 @@ inline OpenTTDMovementVehicle RustMovementResolve(OpenTTDVehicle *handle) noexce
 		.ship = v->GetType() == VEH_SHIP ? RustVehicleShipOwner(v) : nullptr, .kind = v->GetType()};
 }
 inline RoadTramType RustMovementRoadKind(OpenTTDVehicle *handle) noexcept { return RustRoadTramType(RustRoadVehicleType(RoadVehicle::From(VehicleOf(handle)))); }
-inline uint8_t RustMovementTrainEngineClass(OpenTTDVehicle *handle) noexcept { return RustRailEngineClass(RailVehInfo(VehicleOf(handle)->GetEngineType())); }
 inline void RustMovementDepotInvalidate(OpenTTDVehicle *handle) noexcept { RustVehicleInvalidateDepot(VehicleOf(handle)); }
 #endif

@@ -35,7 +35,6 @@ pub struct Renewal {
 pub struct Reset {
     pub economy_date: EconomyDate,
     pub calendar_date: CalendarDate,
-    pub reliability: u16,
     pub chance: u8,
     pub breakdowns: u8,
 }
@@ -137,9 +136,7 @@ pub struct Services {
     pub reset: extern "C" fn(VehicleRef) -> Reset,
     pub has_engine: extern "C" fn(VehicleRef) -> bool,
     pub interval: extern "C" fn(VehicleRef) -> Interval,
-    pub engine_reliability: extern "C" fn(VehicleRef) -> u16,
     pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Replacement,
-    pub replacement_available: extern "C" fn(VehicleRef, u16) -> bool,
     pub automatic: extern "C" fn(VehicleRef) -> Automatic,
     pub depot_service: extern "C" fn(VehicleRef) -> bool,
     pub check_breakdown: extern "C" fn(VehicleRef) -> CheckBreakdown,
@@ -153,7 +150,6 @@ pub struct Services {
     pub breakdown_active: extern "C" fn(VehicleRef) -> BreakdownActive,
     pub breakdown_countdown: extern "C" fn(VehicleRef) -> BreakdownCountdown,
     pub breakdown_delay_write: extern "C" fn(VehicleRef, u8),
-    pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
     pub smoke_delay: extern "C" fn(VehicleRef) -> u8,
     pub aircraft_broken: extern "C" fn(VehicleRef),
     pub mark_dirty: extern "C" fn(VehicleRef),
@@ -164,7 +160,6 @@ pub struct Services {
     pub decay_write: extern "C" fn(VehicleRef, u16),
     pub warning: extern "C" fn(VehicleRef) -> Warning,
     pub warning_company: extern "C" fn(VehicleRef) -> WarningCompany,
-    pub engine_available_any: extern "C" fn(VehicleRef) -> bool,
     pub replacement_active: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> bool,
     pub old_news: extern "C" fn(VehicleRef, u32),
     pub economy_age: extern "C" fn(VehicleRef) -> EconomyDate,
@@ -229,7 +224,7 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
         svc!(C, base.write_economy_service, v, r.economy_date.0);
         svc!(C, base.write_calendar_service, v, r.calendar_date.0);
         svc!(C, base.write_breakdowns, v, 0);
-        svc!(C, base.write_reliability, v, r.reliability);
+        svc!(C, base.write_reliability, v, (base.engine)(v).reliability());
         svc!(C, s.chance_write, v, chance);
         branch!(C, VEHICLE_MAINT_RESET);
         let Some(next) = v.next() else {
@@ -259,7 +254,7 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     branch!(C, VEHICLE_MAINT_SERVICE);
     if r.percent {
         branch!(C, VEHICLE_MAINT_PERCENT);
-        let reliability = svc!(C, s.engine_reliability, v);
+        let reliability = (base.engine)(v).reliability();
         if i32::from(r.reliability)
             >= i32::from(reliability).wrapping_mul(100 - i32::from(r.interval)) / 100
         {
@@ -312,7 +307,12 @@ unsafe fn replacement_needed<const C: bool>(
     // SAFETY: needs_service retains the live native owner through this decision.
     let replacement = unsafe { svc!(C, s.replacement, v, company) };
     if replacement.engine == crate::engine_type::INVALID_ENGINE
-        || !svc!(C, s.replacement_available, v, replacement.engine)
+        || crate::vehicle::EngineRef::of((unsafe { &*s.transaction }.capabilities.engine)(
+            replacement.engine,
+        ))
+        .company_availability()
+            & (1 << v.owner())
+            == 0
     {
         return false;
     }
@@ -483,7 +483,9 @@ unsafe fn breakdown_state<const C: bool>(
                     };
                     svc!(C, base.play_sound, v, sound);
                 }
-                if (v).status() & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v) {
+                if (v).status() & VS_HIDDEN == 0
+                    && (base.engine)(v).misc() & crate::engine_type::NO_BREAKDOWN_SMOKE == 0
+                {
                     let smoke = crate::effect::openttd_rust_effect_create_rel(
                         v.0.as_ptr(),
                         4,
@@ -610,7 +612,7 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
         return;
     }
     let company = svc!(C, s.warning_company, v);
-    if company.renewal && svc!(C, s.engine_available_any, v) {
+    if company.renewal && (base.engine)(v).company_availability() != 0 {
         return;
     }
     // SAFETY: warning_company supplies the live owner; availability only reads.
@@ -781,7 +783,6 @@ crate::abi::layouts! {
     "OpenTTDVehicleMaintenanceReset" ["maintenance"] => Reset {
         economy_date,
         calendar_date,
-        reliability,
         chance,
         breakdowns,
     };
@@ -865,9 +866,7 @@ crate::abi::layouts! {
         reset,
         has_engine,
         interval,
-        engine_reliability,
         replacement,
-        replacement_available,
         automatic,
         depot_service,
         check_breakdown,
@@ -881,7 +880,6 @@ crate::abi::layouts! {
         breakdown_active,
         breakdown_countdown,
         breakdown_delay_write,
-        smoke_disabled,
         smoke_delay,
         aircraft_broken,
         mark_dirty,
@@ -892,7 +890,6 @@ crate::abi::layouts! {
         decay_write,
         warning,
         warning_company,
-        engine_available_any,
         replacement_active,
         old_news,
         economy_age,

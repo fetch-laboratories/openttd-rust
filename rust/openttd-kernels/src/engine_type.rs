@@ -88,3 +88,6 @@ pub const AUTO_REFIT: u8 = 1 << 4;
 
 /// `EngineMiscFlag::RailTilts`.
 pub const RAIL_TILTS: u8 = 1;
+
+/// `EngineMiscFlag::NoBreakdownSmoke`.
+pub const NO_BREAKDOWN_SMOKE: u8 = 1 << 6;

@@ -571,7 +571,7 @@ fn check_train_attachment(x: Ctx, mut t: R) -> Option<u32> {
                 let grf_text = |n: u32| {
                     x.c.grf_text(Ctx::sh(head), strings.grf_text.0.wrapping_add(n))
                 };
-                if (x.c.grf_version)(Ctx::sh(head)) < 8 {
+                if x.c.engine_grf_version(Ctx::vref(head)) < 8 {
                     if callback == 0xFD {
                         error = strings.incompatible_rail;
                     }

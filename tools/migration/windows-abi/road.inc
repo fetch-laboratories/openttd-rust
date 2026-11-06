@@ -444,6 +444,11 @@ static void RoadServiceBoundary()
 	effect_test_world = &world;
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
 	RoadTestTables t(&services);
+	static OpenTTDEngine *service_engine;
+	service_engine = openttd_rust_engine_new();
+	const OpenTTDEngineDefaults engine_defaults{};
+	openttd_rust_engine_construct(service_engine, &engine_defaults, VEH_ROAD, UINT16_MAX);
+	t.vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return service_engine; };
 	t.leaves.max_depot_penalty = []() noexcept -> uint32_t { return 300; };
 	static VehicleDefaultSettings defaults{}; defaults.servint_roadveh = 1;
 	static OpenTTDSettingServices settings{};
@@ -523,6 +528,8 @@ static void RoadServiceBoundary()
 	CHECK(probe.searches == 1);
 	openttd_rust_road_destroy(probe.head);
 	openttd_rust_road_destroy(probe.tail);
+	t.vehicle.engine = nullptr;
+	openttd_rust_engine_destroy(std::exchange(service_engine, nullptr));
 	std::printf("road_service_moving_partial_parked_and_search_branches passed\n");
 }
 ABI_PROBE(RoadBoundary);

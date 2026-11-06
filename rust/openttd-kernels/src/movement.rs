@@ -167,7 +167,6 @@ pub struct MovementServices {
     pub road_kind: extern "C" fn(VehicleRef) -> crate::services::RoadTramType,
     pub road_vehicle: *const crate::road::Leaves,
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
-    pub train_engine_class: extern "C" fn(crate::vehicle::VehicleRef) -> u8,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
     pub add_by_diag_dir: extern "C" fn(u32, u8) -> u32,
@@ -1211,7 +1210,7 @@ impl MovementServices {
                     {
                         w::hit(w::MOVE_TRAIN_TUNNEL_SOUND);
                         if !(self.vehicle().play_vehicle_sound)(v, crate::newgrf_sound::VSE_TUNNEL)
-                            && (self.train_engine_class)(v) == 0
+                            && (self.vehicle().engine)(v).train_class() == 0
                         {
                             (self.vehicle().play_sound)(
                                 v,
@@ -1537,7 +1536,6 @@ crate::abi::layouts! {
         road_kind,
         road_vehicle,
         resolve,
-        train_engine_class,
         depot_invalidate,
         native_assert,
         add_by_diag_dir,
