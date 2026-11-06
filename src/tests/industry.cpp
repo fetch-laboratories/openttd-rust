@@ -99,6 +99,8 @@ TEST_CASE("Industry - canonical native layouts")
 #	pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #endif
 #include "abi-layout-industry.inc"
+#include "abi-layout-industry_build_fields.inc"
+#include "abi-layout-industry_builder_fields.inc"
 #include "abi-layout-industry_spec.inc"
 #if defined(__GNUC__)
 #	pragma GCC diagnostic pop
@@ -321,17 +323,18 @@ TEST_CASE("Industry - construction owner and ascending type registry")
 	RustIndustryBuilderOwner builder{openttd_rust_industry_builder_new(), openttd_rust_industry_builder_destroy};
 	for (uint16_t id : {9, 1, 9, 5}) openttd_rust_industry_registry_insert(builder.get(), 3, id);
 	const uint16_t expected[] = {1, 5, 9};
-	auto view = openttd_rust_industry_registry_view(builder.get(), 3);
-	CHECK(view.size == 3);
-	CHECK(std::equal(std::begin(expected), std::end(expected), static_cast<uint16_t *>(view.data)));
+	auto &fields = *reinterpret_cast<OpenTTDIndustryBuilderFields *>(builder.get());
+	const auto &view = fields.registry[3];
+	CHECK(view.size() == 3);
+	CHECK(std::equal(std::begin(expected), std::end(expected), view.items));
 	openttd_rust_industry_registry_erase(builder.get(), 3, 5);
 	openttd_rust_industry_registry_erase(builder.get(), 3, 99);
-	CHECK(openttd_rust_industry_registry_view(builder.get(), 3).size == 2);
-	CHECK(openttd_rust_industry_registry_view(builder.get(), 4).size == 0);
+	CHECK(fields.registry[3].size() == 2);
+	CHECK(fields.registry[4].size() == 0);
 	openttd_rust_industry_registry_insert(builder.get(), 3, 5);
-	CHECK(openttd_rust_industry_registry_view(builder.get(), 3).size == 3);
+	CHECK(fields.registry[3].size() == 3);
 	openttd_rust_industry_registry_clear(builder.get(), 3);
-	CHECK(openttd_rust_industry_registry_view(builder.get(), 3).size == 0);
+	CHECK(fields.registry[3].size() == 0);
 }
 
 TEST_CASE("Industry - native generation handoff retains named cancellation")
@@ -423,7 +426,7 @@ TEST_CASE("Industry - generation cancellation restores company before return")
 		F::cancel_set = cancel_set;
 		F::cancel_increase = cancel_increase;
 		auto *builder = openttd_rust_industry_builder_new();
-		auto *fields = openttd_rust_industry_builder_fields(builder);
+		auto *fields = reinterpret_cast<OpenTTDIndustryBuilderFields *>(builder);
 		fields->wanted_inds = 123;
 		const bool complete = openttd_rust_industry_generate(builder, nullptr, &world, &generation);
 		CHECK(complete == (cancel_set == -1 && cancel_increase == -1));

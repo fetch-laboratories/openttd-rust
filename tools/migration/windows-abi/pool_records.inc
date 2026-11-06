@@ -13,6 +13,8 @@ static void PoolRecordLayouts()
 #endif
 #include "abi-layout-town_record.inc"
 #include "abi-layout-industry_record.inc"
+#include "abi-layout-industry_build_fields.inc"
+#include "abi-layout-industry_builder_fields.inc"
 #include "abi-layout-subsidy_record.inc"
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop

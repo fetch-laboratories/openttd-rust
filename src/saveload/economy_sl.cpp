@@ -54,7 +54,7 @@ static const SaveLoad _economy_desc[] = {
 	    SLE_VAR(Economy, interest_rate,                 SLE_UINT8),
 	    SLE_VAR(Economy, infl_amount,                   SLE_UINT8),
 	    SLE_VAR(Economy, infl_amount_pr,                SLE_UINT8),
-	SLEG_CONDVAR("industry_daily_change_counter", _industry_builder.daily_counter, SLE_UINT32, SLV_102, SL_MAX_VERSION),
+	SLEG_CONDVAR("industry_daily_change_counter", _industry_builder.Fields().daily_counter, SLE_UINT32, SLV_102, SL_MAX_VERSION),
 };
 
 /** Economy variables */

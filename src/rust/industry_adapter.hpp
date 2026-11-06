@@ -74,16 +74,16 @@ OpenTTDIndustryBuilder *RustIndustryBuilderState() noexcept;
 /** Nonowning facade for the canonical ascending IndustryID registry. */
 struct RustIndustryRegistry {
 	uint8_t type = 0;
-	OpenTTDIndustrySlots View() const { return openttd_rust_industry_registry_view(RustIndustryBuilderState(), this->type); }
+	const RustVector<uint16_t> &View() const;
 	struct Iterator {
 		const uint16_t *pointer;
 		IndustryID operator*() const { return IndustryID(*this->pointer); }
 		Iterator &operator++() { ++this->pointer; return *this; }
 		bool operator==(const Iterator &) const = default;
 	};
-	Iterator begin() const { return {static_cast<const uint16_t *>(this->View().data)}; }
-	Iterator end() const { auto view = this->View(); return {static_cast<const uint16_t *>(view.data) + view.size}; }
-	size_t size() const { return this->View().size; }
+	Iterator begin() const { return {this->View().items}; }
+	Iterator end() const { const auto &view = this->View(); return {view.items + view.size()}; }
+	size_t size() const { return this->View().size(); }
 	void insert(IndustryID id) { openttd_rust_industry_registry_insert(RustIndustryBuilderState(), this->type, id.base()); }
 	void erase(IndustryID id) { openttd_rust_industry_registry_erase(RustIndustryBuilderState(), this->type, id.base()); }
 	void clear() { openttd_rust_industry_registry_clear(RustIndustryBuilderState(), this->type); }

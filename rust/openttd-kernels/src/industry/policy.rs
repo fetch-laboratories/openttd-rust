@@ -137,9 +137,13 @@ pub(crate) fn random_entry(s: &Services) -> super::Entry {
 }
 pub(super) fn total(builder: *const Builder) -> u32 {
     unsafe {
-        (*builder).registry.iter().fold(0u32, |total, kinds| {
-            total.wrapping_add(u32::from(kinds.len() as u16))
-        })
+        (*builder)
+            .fields
+            .registry
+            .iter()
+            .fold(0u32, |total, kinds| {
+                total.wrapping_add(u32::from(kinds.len() as u16))
+            })
     }
 }
 pub(crate) fn forest(tile: u32, s: &Services) -> bool {

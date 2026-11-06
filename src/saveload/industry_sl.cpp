@@ -321,7 +321,7 @@ struct TIDSChunkHandler : NewGRFMappingChunkHandler {
 
 /** Description of the data to save and load in #IndustryBuildData. */
 static const SaveLoad _industry_builder_desc[] = {
-	SLEG_VAR("wanted_inds", _industry_builder.wanted_inds, SLE_UINT32),
+	SLEG_VAR("wanted_inds", _industry_builder.Fields().wanted_inds, SLE_UINT32),
 };
 
 /** Industry builder. */
@@ -365,7 +365,7 @@ struct ITBLChunkHandler : ChunkHandler {
 
 		for (int i = 0; i < NUM_INDUSTRYTYPES; i++) {
 			SlSetArrayIndex(i);
-			SlObject(_industry_builder.builddata + i, _industrytype_builder_desc);
+			SlObject(_industry_builder.Fields().builddata + i, _industrytype_builder_desc);
 		}
 	}
 
@@ -374,12 +374,12 @@ struct ITBLChunkHandler : ChunkHandler {
 		const std::vector<SaveLoad> slt = SlCompatTableHeader(_industrytype_builder_desc, _industrytype_builder_sl_compat);
 
 		for (IndustryType it = 0; it < NUM_INDUSTRYTYPES; it++) {
-			_industry_builder.builddata[it].Reset();
+			_industry_builder.Fields().builddata[it].Reset();
 		}
 		int index;
 		while ((index = SlIterateArray()) != -1) {
 			if ((uint)index >= NUM_INDUSTRYTYPES) SlErrorCorrupt("Too many industry builder datas");
-			SlObject(_industry_builder.builddata + index, slt);
+			SlObject(_industry_builder.Fields().builddata + index, slt);
 		}
 	}
 };

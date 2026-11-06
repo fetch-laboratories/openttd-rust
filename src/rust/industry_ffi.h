@@ -28,21 +28,10 @@ typedef struct IndustryTileSpec OpenTTDIndustryTileSpec;
 struct IndustrySpec;
 typedef struct OpenTTDIndustry OpenTTDIndustry;
 typedef struct OpenTTDIndustryBuilder OpenTTDIndustryBuilder;
-typedef struct OpenTTDIndustryBuildFields {
-	uint32_t probability;
-	uint8_t min_number;
-	uint16_t target_count, max_wait, wait_count;
-} OpenTTDIndustryBuildFields;
-typedef struct OpenTTDIndustryBuilderFields {
-	OpenTTDIndustryBuildFields builddata[240];
-	uint32_t wanted_inds, daily_counter, daily_increment, sound_tile;
-	uint8_t sound_ctr;
-} OpenTTDIndustryBuilderFields;
-typedef struct OpenTTDIndustrySlots { void *data; size_t size; } OpenTTDIndustrySlots;
+struct OpenTTDIndustryBuildFields;
 /* Borrowed until text mutation or owner destruction; consume before any callback. */
 OpenTTDByteSpan openttd_rust_industry_text(const OpenTTDIndustry *owner);
 void openttd_rust_industry_set_text(OpenTTDIndustry *owner, const uint8_t *text, size_t length);
-OpenTTDIndustrySlots openttd_rust_industry_registry_view(OpenTTDIndustryBuilder *owner, uint8_t type);
 void openttd_rust_industry_registry_insert(OpenTTDIndustryBuilder *owner, uint8_t type, uint16_t id);
 void openttd_rust_industry_registry_erase(OpenTTDIndustryBuilder *owner, uint8_t type, uint16_t id);
 void openttd_rust_industry_registry_clear(OpenTTDIndustryBuilder *owner, uint8_t type);
@@ -61,7 +50,6 @@ void openttd_rust_industry_accepted_shrink_to_fit(void *vector);
 void *openttd_rust_industry_history(void *accepted);
 OpenTTDIndustryBuilder *openttd_rust_industry_builder_new(void);
 void openttd_rust_industry_builder_destroy(OpenTTDIndustryBuilder *owner);
-OpenTTDIndustryBuilderFields *openttd_rust_industry_builder_fields(OpenTTDIndustryBuilder *owner);
 
 /** Map facts constant for one entry; landscape is the original enum value. */
 typedef struct OpenTTDIndustryMap {

@@ -136,6 +136,23 @@ crate::abi::shared_records! {
         pub produced: NativeVec<Produced> => "Industry::ProducedCargoes",
         pub accepted: NativeVec<Accepted> => "Industry::AcceptedCargoes",
     }
+    #[derive(Default, Clone, Copy)]
+    "OpenTTDIndustryBuildFields" ["industry_build_fields"] => pub struct BuildFields {
+        pub probability: u32,
+        pub min_number: u8,
+        pub target_count: u16,
+        pub max_wait: u16,
+        pub wait_count: u16,
+    }
+    "OpenTTDIndustryBuilderFields" ["industry_builder_fields"] => pub struct BuilderFields {
+        pub builddata: [BuildFields; TYPES] => "IndustryTypeBuildData[NUM_INDUSTRYTYPES]",
+        pub wanted_inds: u32,
+        pub daily_counter: u32,
+        pub daily_increment: u32,
+        pub sound_tile: u32 => "TileIndex",
+        pub sound_ctr: u8,
+        pub registry: [NativeVec<u16>; TYPES] => "RustVector<uint16_t>[NUM_INDUSTRYTYPES]",
+    }
 }
 impl Default for IndustryRecord {
     fn default() -> Self {
@@ -210,32 +227,11 @@ pub(crate) fn for_each_produced_cargo(owner: *mut Industry, mut visit: impl FnMu
         visit(unsafe { (*produced(owner, slot)).cargo });
     }
 }
+
+/// Canonical builder fields are the first member, at the owner's address.
 #[repr(C)]
-#[derive(Default, Clone, Copy)]
-pub struct BuildFields {
-    pub probability: u32,
-    pub min_number: u8,
-    pub target_count: u16,
-    pub max_wait: u16,
-    pub wait_count: u16,
-}
-#[repr(C)]
-pub struct BuilderFields {
-    pub builddata: [BuildFields; TYPES],
-    pub wanted_inds: u32,
-    pub daily_counter: u32,
-    pub daily_increment: u32,
-    pub sound_tile: u32,
-    pub sound_ctr: u8,
-}
 pub struct Builder {
     fields: BuilderFields,
-    registry: [Vec<u16>; TYPES],
-}
-#[repr(C)]
-pub struct Slots {
-    pub data: *mut c_void,
-    pub size: usize,
 }
 /// Allocate a canonical owner. Allocation failure aborts.
 #[unsafe(no_mangle)]
@@ -252,12 +248,6 @@ pub extern "C" fn openttd_rust_industry_new(
 pub unsafe extern "C" fn openttd_rust_industry_destroy(owner: *mut Industry) {
     unsafe {
         drop(Box::from_raw(owner));
-    }
-}
-fn view<T>(v: &mut Vec<T>) -> Slots {
-    Slots {
-        data: v.as_mut_ptr().cast(),
-        size: v.len(),
     }
 }
 /// `std::vector::reserve`: grow capacity to at least `count`; never shrinks.
@@ -369,8 +359,8 @@ pub unsafe extern "C" fn openttd_rust_industry_history(accepted: *mut Accepted) 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_industry_builder_new() -> *mut Builder {
     Box::into_raw(Box::new(Builder {
-        registry: std::array::from_fn(|_| Vec::new()),
         fields: BuilderFields {
+            registry: std::array::from_fn(|_| NativeVec::new()),
             builddata: [BuildFields::default(); TYPES],
             wanted_inds: 0,
             daily_counter: 0,
@@ -388,15 +378,6 @@ pub unsafe extern "C" fn openttd_rust_industry_builder_destroy(owner: *mut Build
         drop(Box::from_raw(owner));
     }
 }
-/// # Safety
-/// Live builder shell, serial access only. No allocation or callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_builder_fields(
-    owner: *mut Builder,
-) -> *mut BuilderFields {
-    unsafe { ptr::addr_of_mut!((*owner).fields) }
-}
-
 /// Spec facts of one industry's type, read together as the original did.
 #[derive(Clone, Copy)]
 pub struct Observation {
@@ -1910,15 +1891,6 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text(
     }
 }
 /// # Safety
-/// Live builder and valid original type. View ends before registry mutation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_registry_view(
-    owner: *mut Builder,
-    kind: u8,
-) -> Slots {
-    unsafe { view(&mut (*owner).registry[usize::from(kind)]) }
-}
-/// # Safety
 /// Live builder and valid original type. No registry view survives this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_registry_insert(
@@ -1926,9 +1898,9 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_insert(
     kind: u8,
     id: u16,
 ) {
-    let registry = unsafe { &mut (*owner).registry[usize::from(kind)] };
+    let registry = unsafe { &mut (*owner).fields.registry[usize::from(kind)] };
     if let Err(index) = registry.binary_search(&id) {
-        registry.insert(index, id);
+        registry.with_vec(|values| values.insert(index, id));
     }
 }
 /// # Safety
@@ -1939,16 +1911,16 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_erase(
     kind: u8,
     id: u16,
 ) {
-    let registry = unsafe { &mut (*owner).registry[usize::from(kind)] };
+    let registry = unsafe { &mut (*owner).fields.registry[usize::from(kind)] };
     if let Ok(index) = registry.binary_search(&id) {
-        registry.remove(index);
+        registry.with_vec(|values| values.remove(index));
     }
 }
 /// # Safety
 /// Live builder and valid original type. No registry view survives this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_registry_clear(owner: *mut Builder, kind: u8) {
-    unsafe { (*owner).registry[usize::from(kind)].clear() };
+    unsafe { (*owner).fields.registry[usize::from(kind)].clear() };
 }
 
 /// Subsidy search reads only the original industry location.
@@ -2195,25 +2167,6 @@ crate::abi::layouts! {
         set_random_bits,
         animation_spec,
 
-    };
-    "OpenTTDIndustryBuildFields" ["industry"] => BuildFields {
-        probability,
-        min_number,
-        target_count,
-        max_wait,
-        wait_count,
-    };
-    "OpenTTDIndustryBuilderFields" ["industry"] => BuilderFields {
-        builddata,
-        wanted_inds,
-        daily_counter,
-        daily_increment,
-        sound_tile,
-        sound_ctr,
-    };
-    "OpenTTDIndustrySlots" ["industry"] => Slots {
-        data,
-        size,
     };
     "Industry::ProducedCargo" ["industry"] => Produced {
         cargo,

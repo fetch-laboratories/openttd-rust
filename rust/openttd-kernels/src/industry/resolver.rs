@@ -138,10 +138,10 @@ pub(crate) fn relative_position(tile: u32, north: u32, map: crate::map_func::Map
     (u32::from(y & 15) << 20) | (u32::from(x & 15) << 16) | (u32::from(y) << 8) | u32::from(x)
 }
 unsafe fn registry_count(builder: *const Builder, kind: u8) -> usize {
-    unsafe { (&(*builder).registry)[usize::from(kind)].len() }
+    unsafe { (&(*builder).fields.registry)[usize::from(kind)].len() }
 }
 unsafe fn registry_id(builder: *const Builder, kind: u8, n: usize) -> u16 {
-    unsafe { (&(*builder).registry)[usize::from(kind)][n] }
+    unsafe { (&(*builder).fields.registry)[usize::from(kind)][n] }
 }
 fn closest(
     tile: u32,

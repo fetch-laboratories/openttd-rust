@@ -104,7 +104,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 	_settings_game.economy.type = ET_ORIGINAL;
 	for (uint n = 0; n < 16; ++n) {
 #ifdef WITH_RUST
-		_industry_builder.daily_counter = 2 << 16;
+		_industry_builder.Fields().daily_counter = 2 << 16;
 		const OpenTTDClockIndustry clock{_industry_builder.owner.get(), &GetIndustryRustServices()};
 		openttd_rust_clock_industry_daily(&clock, nullptr);
 #else

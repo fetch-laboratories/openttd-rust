@@ -110,8 +110,8 @@ void ShowIndustryViewWindow(IndustryID industry);
 void BuildOilRig(TileIndex tile);
 extern bool _ignore_industry_restrictions;
 
-#	define _industry_sound_ctr _industry_builder.sound_ctr
-#	define _industry_sound_tile reinterpret_cast<TileIndex &>(_industry_builder.sound_tile)
+#	define _industry_sound_ctr _industry_builder.Fields().sound_ctr
+#	define _industry_sound_tile _industry_builder.Fields().sound_tile
 
 std::array<RustIndustryRegistry, NUM_INDUSTRYTYPES> Industry::industries = [] {
 	std::array<RustIndustryRegistry, NUM_INDUSTRYTYPES> result{};

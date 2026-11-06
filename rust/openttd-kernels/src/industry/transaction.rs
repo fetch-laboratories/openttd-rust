@@ -213,10 +213,10 @@ impl Engine<'_> {
         }
         self.success()
     }
-    fn registry(&self, kind: u8) -> *const Vec<u16> {
+    fn registry(&self, kind: u8) -> *const crate::industrytype::NativeVec<u16> {
         unsafe {
-            ptr::addr_of!((*self.context.builder).registry)
-                .cast::<Vec<u16>>()
+            ptr::addr_of!((*self.context.builder).fields.registry)
+                .cast::<crate::industrytype::NativeVec<u16>>()
                 .add(usize::from(kind))
         }
     }

@@ -302,30 +302,21 @@ void ReleaseDisastersTargetingIndustry(IndustryID);
 bool IsTileForestIndustry(TileIndex tile);
 
 /** Data for managing the number of industries of a single industry type. */
-struct IndustryTypeBuildData {
-	uint32_t probability;  ///< Relative probability of building this industry.
-	uint8_t   min_number;   ///< Smallest number of industries that should exist (either \c 0 or \c 1).
-	uint16_t target_count; ///< Desired number of industries of this type.
-	uint16_t max_wait;     ///< Starting number of turns to wait (copied to #wait_count).
-	uint16_t wait_count;   ///< Number of turns to wait before trying to build again.
-
+#include "abi-record-industry_build_fields.h"
+struct IndustryTypeBuildData : OpenTTDIndustryBuildFields {
 	void Reset();
 
 	bool GetIndustryTypeData(IndustryType it);
 };
+
+#include "abi-record-industry_builder_fields.h"
 
 /**
  * Data for managing the number and type of industries in the game.
  */
 struct IndustryBuildData {
 	RustIndustryBuilderOwner owner{openttd_rust_industry_builder_new(), openttd_rust_industry_builder_destroy};
-	OpenTTDIndustryBuilderFields &Fields() const { return *openttd_rust_industry_builder_fields(this->owner.get()); }
-	IndustryTypeBuildData *builddata = reinterpret_cast<IndustryTypeBuildData *>(this->Fields().builddata);
-	uint32_t &wanted_inds = this->Fields().wanted_inds;
-	uint32_t &daily_counter = this->Fields().daily_counter;
-	uint32_t &daily_increment = this->Fields().daily_increment;
-	uint32_t &sound_tile = this->Fields().sound_tile;
-	uint8_t &sound_ctr = this->Fields().sound_ctr;
+	OpenTTDIndustryBuilderFields &Fields() const { return *reinterpret_cast<OpenTTDIndustryBuilderFields *>(this->owner.get()); }
 
 	void Reset();
 
@@ -336,6 +327,7 @@ struct IndustryBuildData {
 };
 
 extern IndustryBuildData _industry_builder;
+inline const RustVector<uint16_t> &RustIndustryRegistry::View() const { return _industry_builder.Fields().registry[this->type]; }
 
 
 /** Special values for the industry list window for the data parameter of #InvalidateWindowData. */
