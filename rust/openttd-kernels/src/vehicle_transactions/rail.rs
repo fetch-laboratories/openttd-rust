@@ -32,8 +32,6 @@ pub struct Services {
     pub cargo_capacity: &'static crate::cargo_storage::CapacityServices,
     pub strings: Strings,
     pub train_if_valid: extern "C" fn(u32) -> *mut (),
-    pub compatible: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
-    pub powered: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     pub new_wagon: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub new_engine: extern "C" fn(u32, *const OpenTTDEngine) -> *mut (),
     pub engine_dates: extern "C" fn(*mut (), *const OpenTTDEngine),
@@ -264,7 +262,9 @@ unsafe fn build_wagon(
     tile: u32,
     e: *const OpenTTDEngine,
 ) -> R {
-    if !(x.s.compatible)(e, tile) {
+    let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
+    let tiletype = (x.b.refit.train.physics.rail_type)(tile);
+    if (x.t.shared.all_compatible_railtypes)(railtypes) & (1 << tiletype.0) == 0 {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
     }
@@ -350,7 +350,9 @@ pub(crate) unsafe fn build(
     if kind == RailVehicleTypes::WAGON {
         return Ctx::sh(unsafe { build_wagon(x, out, flags, tile, e) });
     }
-    if !(s.powered)(e, tile) {
+    let railtypes = crate::vehicle::EngineRef::of(e).railtypes();
+    let tiletype = (b.refit.train.physics.rail_type)(tile);
+    if !(b.refit.train.physics.powered)(railtypes, tiletype) {
         (x.t.cost.error)(out, ERROR);
         return ptr::null_mut();
     }
@@ -367,7 +369,7 @@ pub(crate) unsafe fn build(
         (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
         (k.service_flags)(
             Ctx::sh(v),
-            (k.exclusive_preview)(e),
+            crate::vehicle::EngineRef::of(e).exclusive_preview(),
             (x.t.interval_percent)(company),
         );
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
@@ -982,7 +984,7 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRailConstructionServices" ["probe"] => Services {
-        cargo_capacity, strings, train_if_valid, compatible, powered, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
+        cargo_capacity, strings, train_if_valid, new_wagon, new_engine, engine_dates, new_rear, link_multihead,
         invalidate_grf, train_limit, unit, use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };

@@ -216,13 +216,6 @@ static void Ship_build_dates(uint32_t id) noexcept
 	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
 }
 
-static void Ship_build_acceleration(uint32_t id, uint32_t engine) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	const auto &svi = Engine::Get(EngineID(engine))->VehInfo<ShipVehicleInfo>();
-	v->Record().acceleration = svi.acceleration;
-}
-
 static void Ship_build_prototype(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->vehicle_flags.Set(VehicleFlag::BuiltAsPrototype); }
 
 static void Ship_build_interval_percent(uint32_t id) noexcept
@@ -301,7 +294,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.yapf_reverse = Ship_yapf_reverse, .yapf_choose = Ship_yapf_choose,
 		.update_delta = Ship_update_delta, .build_owner = Ship_build_owner,
 		.build_z = Ship_build_z, .build_properties = Ship_build_properties,
-		.build_dates = Ship_build_dates, .build_acceleration = Ship_build_acceleration,
+		.build_dates = Ship_build_dates,
 		.build_prototype = Ship_build_prototype, .build_interval_percent = Ship_build_interval_percent,
 
 

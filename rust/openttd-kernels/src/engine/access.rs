@@ -211,6 +211,32 @@ impl EngineRef {
     pub(crate) fn plane(self) -> bool {
         self.aircraft_subtype() & crate::engine_type::AIR_CTOL != 0
     }
+    pub(crate) fn ground_image(self, kind: VehicleType) -> u8 {
+        if kind == VehicleType::TRAIN {
+            read_field!(Lifecycle::rail(self.0.as_ptr()), image_index)
+        } else {
+            read_field!(Lifecycle::road(self.0.as_ptr()), image_index)
+        }
+    }
+    pub(crate) fn ground_capacity(self, kind: VehicleType) -> u8 {
+        if kind == VehicleType::TRAIN {
+            read_field!(Lifecycle::rail(self.0.as_ptr()), capacity)
+        } else {
+            read_field!(Lifecycle::road(self.0.as_ptr()), capacity)
+        }
+    }
+    pub(crate) fn aircraft_image(self) -> u8 {
+        read_field!(Lifecycle::aircraft(self.0.as_ptr()), image_index)
+    }
+    pub(crate) fn aircraft_acceleration(self) -> u8 {
+        read_field!(Lifecycle::aircraft(self.0.as_ptr()), acceleration)
+    }
+    pub(crate) fn ship_acceleration(self) -> u8 {
+        read_field!(Lifecycle::ship(self.0.as_ptr()), acceleration)
+    }
+    pub(crate) fn reliability_decay(self) -> u16 {
+        read_field!(self.0.as_ptr(), reliability_spd_dec)
+    }
     pub(crate) fn ground(self) -> bool {
         matches!(self.kind(), VehicleType::TRAIN | VehicleType::ROAD)
     }

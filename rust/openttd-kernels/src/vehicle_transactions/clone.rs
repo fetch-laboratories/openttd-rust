@@ -316,7 +316,7 @@ unsafe fn clone(
                     crate::engine_capabilities::openttd_rust_engine_can_carry_abi(r.capabilities, e)
                         != 0
                 } {
-                    (s.build.default_cargo)(e)
+                    crate::vehicle::EngineRef::of(e).default_cargo()
                 } else {
                     c.strings.invalid_cargo
                 };

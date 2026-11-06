@@ -225,7 +225,6 @@ pub struct Leaves {
     pub build_z: extern "C" fn(u32),
     pub build_properties: extern "C" fn(u32, u32),
     pub build_dates: extern "C" fn(u32),
-    pub build_acceleration: extern "C" fn(u32, u32),
     pub build_prototype: extern "C" fn(u32),
     pub build_interval_percent: extern "C" fn(u32),
     pub order_destination: extern "C" fn(u32) -> u32,
@@ -1114,7 +1113,11 @@ pub(crate) unsafe fn ship_build(
     game.set_state(DEPOT);
     (game.leaves.build_dates)(id);
     (game.leaves.build_random)(id, game.services.random() as u16);
-    (game.leaves.build_acceleration)(id, engine);
+    crate::raw_field::write_field!(
+        v.0.as_ptr(),
+        acceleration,
+        crate::vehicle::EngineRef::of((cap.engine)(engine as u16)).ship_acceleration()
+    );
     game.cache(v);
     if crate::vehicle::EngineRef::of((cap.engine)(engine as u16)).exclusive_preview() {
         (game.leaves.build_prototype)(id);
@@ -1216,7 +1219,6 @@ crate::abi::layouts! {
         build_z,
         build_properties,
         build_dates,
-        build_acceleration,
         build_prototype,
         build_interval_percent,
         order_destination,
