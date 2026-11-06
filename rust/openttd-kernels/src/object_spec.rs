@@ -113,7 +113,7 @@ pub fn count() -> usize {
 pub unsafe fn get(id: u16) -> *const Spec {
     assert!(id < 64000);
     unsafe {
-        (*SPECS.get())
+        (&*SPECS.get())
             .get(usize::from(id))
             .map_or(EMPTY.get(), ptr::from_ref)
     }
@@ -203,20 +203,22 @@ pub unsafe fn reset(s: &crate::objects::ObjectServices) {
                 v.push(spec);
             }
         });
-        (*SPECS.get())[1].class_index =
+        let lighthouse =
             crate::newgrf_class::object::allocate(u32::from_be_bytes(*b"LTHS"), u16::MAX, 0);
-        (*SPECS.get())[0].class_index =
+        (&mut *SPECS.get())[1].class_index = lighthouse;
+        let transmitter =
             crate::newgrf_class::object::allocate(u32::from_be_bytes(*b"TRNS"), u16::MAX, 0);
+        (&mut *SPECS.get())[0].class_index = transmitter;
     }
 }
-/// Same NativeVec representation; null slots are the native unique-owner nulls.
+/// Same `NativeVec` representation; null slots are the native unique-owner nulls.
 pub type FileSpecs = NativeVec<Option<Box<Spec>>>;
 pub unsafe fn file_spec(file: *mut FileSpecs, id: u16) -> *mut Spec {
     if usize::from(id) >= unsafe { (*file).len() } {
         return ptr::null_mut();
     }
     unsafe {
-        (*file)
+        (&mut *file)
             .get_mut(usize::from(id))
             .and_then(Option::as_deref_mut)
             .map_or(ptr::null_mut(), ptr::from_mut)
@@ -292,7 +294,7 @@ unsafe fn properties(
                     new.views = 1;
                     new.size = 0x11;
                     spec = &raw mut *new;
-                    unsafe { (*file)[id as usize] = Some(new) };
+                    unsafe { (&mut *file)[id as usize] = Some(new) };
                 }
                 let class = r.dword()?.swap_bytes();
                 let index = unsafe { crate::newgrf_class::object::allocate(class, u16::MAX, 0) };
@@ -424,7 +426,7 @@ unsafe fn set_entity(spec: *mut Spec) {
         let badges = std::mem::take(&mut (*spec).badges);
         let mut moved = (*spec).clone();
         moved.badges = badges;
-        (*SPECS.get())[usize::from(id)] = moved;
+        (&mut *SPECS.get())[usize::from(id)] = moved;
     }
 }
 pub unsafe fn bind() {
