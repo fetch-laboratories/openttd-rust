@@ -8,8 +8,8 @@
 #include "rust/engine_capabilities_ffi.h"
 #include "rust/fleet_ffi.h"
 
-/* Explicit trivial Date and actual VehicleType carriers and aggregate return/write call ABI. Opaque
- * shells are never dereferenced; the game target checks real member stores. */
+/* Explicit Date/VehicleType carriers and aggregate call ABI. Engine bindings use a live Rust
+ * record; opaque company shells are never dereferenced. The game target checks member stores. */
 static void VehicleMaintenanceBoundary()
 {
 	static size_t dirty;
@@ -50,7 +50,11 @@ static void VehicleMaintenanceBoundary()
 	static uint32_t stage;
 	static uint16_t factor;
 	static int64_t available;
-	static int engine_shell, company_shell;
+	static int company_shell;
+	static OpenTTDEngine *engine_record;
+	engine_record = openttd_rust_engine_new();
+	const OpenTTDEngineDefaults engine_defaults{};
+	openttd_rust_engine_construct(engine_record, &engine_defaults, VEH_ROAD, UINT16_MAX);
 	static CompanyFinances *active_finances, *after_finances;
 	static bool infinite, after_infinite;
 	static uint8_t supplied_id;
@@ -64,7 +68,7 @@ static void VehicleMaintenanceBoundary()
 	OpenTTDCommandServices commands{}; commands.finance = &finance;
 	commands.infinite_money = []() noexcept { CHECK(stage == 3 || stage == 8); ++stage; return infinite; };
 	maintenance.company = &company;
-	resolver.spritegroup = [](uint16_t, uint8_t) noexcept -> const SpriteGroup * { return nullptr; };
+	resolver.engine_by_id = [](uint16_t id) noexcept -> const OpenTTDEngine * { CHECK(id == 123); return engine_record; };
 	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t id, uint16_t callback, uint32_t property, uint32_t, int32_t *, size_t) noexcept -> uint16_t {
 		CHECK(stage++ == 4 && id == 123 && callback == CBID_VEHICLE_MODIFY_PROPERTY && property == 0x11);
 		active_finances = after_finances;
@@ -73,7 +77,7 @@ static void VehicleMaintenanceBoundary()
 		return factor;
 	};
 	capabilities.resolver = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	capabilities.engine = [](uint16_t) noexcept { return reinterpret_cast<const OpenTTDEngine *>(&engine_shell); };
+	capabilities.engine = [](uint16_t) noexcept { return engine_record; };
 	capabilities.kind = [](const OpenTTDEngine *) noexcept { return VEH_ROAD; };
 	capabilities.id = [](const OpenTTDEngine *) noexcept -> uint16_t { return 123; };
 	capabilities.ground = [](const OpenTTDEngine *) noexcept { return false; };
@@ -117,6 +121,8 @@ static void VehicleMaintenanceBoundary()
 	}
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = original_price;
 	maintenance.company = nullptr; maintenance.transaction = nullptr;
+	auto *retired = std::exchange(engine_record, nullptr);
+	openttd_rust_engine_destroy(retired);
 }
 
 /* Actual native storage type is checked by the game-side shell probe; this

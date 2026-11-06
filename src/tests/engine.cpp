@@ -243,7 +243,8 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 	static OpenTTDVehicleResolverServices resolver;
 	static uint16_t result, observed_engine;
 	static uint32_t observed_property, calls;
-	resolver.spritegroup = [](uint16_t, uint8_t) noexcept -> const SpriteGroup * { return nullptr; };
+	static const OpenTTDEngine *runtime_engine;
+	resolver.engine_by_id = [](uint16_t id) noexcept -> const OpenTTDEngine * { CHECK(id == 123); return runtime_engine; };
 	resolver.resolve_callback = [](OpenTTDVehicleResolverState *, uint16_t engine, uint16_t cb, uint32_t property, uint32_t p2, int32_t *, size_t count) noexcept -> uint16_t {
 		CHECK(cb == CBID_VEHICLE_MODIFY_PROPERTY);
 		CHECK(p2 == 0);
@@ -263,6 +264,7 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 		Case{VEH_AIRCRAFT, PR_BUILD_VEHICLE_AIRCRAFT, PR_RUNNING_AIRCRAFT, PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_RUNNING_COST_FACTOR},
 	}) {
 		Engine e(c.type, 0); e.index = EngineID{123};
+		Backup<const OpenTTDEngine *> live_engine(runtime_engine, RustEngine(&e));
 		GRFFile file; file.grfid = 0x613A0003;
 		e.Record().bindings.grf_prop.grfid = 0xBAD;
 		e.Record().bindings.grf_prop.grffile = &file;
@@ -306,6 +308,8 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 			result = 32767; CHECK(openttd_rust_engine_range(&services, RustEngine(&e)) == 32767);
 			CHECK(observed_property == PROP_AIRCRAFT_RANGE);
 		}
+		live_engine.Restore();
+		e.Record().bindings.grf_prop.grffile = nullptr;
 	}
 }
 
