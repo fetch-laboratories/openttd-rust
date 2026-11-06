@@ -5,21 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file script_railtypelist.cpp Implementation of ScriptRailTypeList and friends. */
+//! Shared `script_vehicle.hpp` values.
 
-#include "../../stdafx.h"
-#include "script_railtypelist.hpp"
-#include "script_error.hpp"
-#include "../../rail.h"
-
-#include "../../safeguards.h"
-
-ScriptRailTypeList::ScriptRailTypeList()
-{
-	EnforceDeityOrCompanyModeValid_Void();
-	bool is_deity = ScriptCompanyMode::IsDeity();
-	::CompanyID owner = ScriptObject::GetCompany();
-	for (RailType rt = RAILTYPE_BEGIN; rt != RAILTYPE_END; rt++) {
-		if (is_deity || ::HasRailTypeAvail(owner, rt)) this->AddItem(rt);
-	}
-}
+/// `ScriptVehicle::VT_RAIL`.
+pub(crate) const VT_RAIL: u32 = 0;
+/// `ScriptVehicle::VT_ROAD`.
+pub(crate) const VT_ROAD: u32 = 1;
+/// `ScriptVehicle::VT_WATER`.
+pub(crate) const VT_WATER: u32 = 2;

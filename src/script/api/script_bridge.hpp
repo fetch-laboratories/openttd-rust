@@ -12,6 +12,7 @@
 
 #include "script_vehicle.hpp"
 #include "../../bridge.h"
+#include "../../rust/script_tunnelbridge_ffi.h"
 
 /**
  * Class that handles all bridge related functions.
@@ -46,7 +47,7 @@ public:
 	 * @param bridge_type The bridge to check.
 	 * @return True if and only if the bridge type is valid.
 	 */
-	static bool IsValidBridge(BridgeType bridge_type);
+	static bool IsValidBridge(BridgeType bridge_type) { return openttd_rust_script_bridge_is_valid(&GetRustTunnelBridgeServices(), bridge_type); }
 
 	/**
 	 * Checks whether the given tile is actually a bridge start or end tile.
@@ -54,7 +55,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile is the beginning or end of a bridge.
 	 */
-	static bool IsBridgeTile(TileIndex tile);
+	static bool IsBridgeTile(TileIndex tile) { return openttd_rust_script_bridge_is_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Get the BridgeType of a bridge at a given tile.
@@ -62,7 +63,7 @@ public:
 	 * @pre IsBridgeTile(tile).
 	 * @return The BridgeType from the bridge at tile 'tile'.
 	 */
-	static BridgeType GetBridgeType(TileIndex tile);
+	static BridgeType GetBridgeType(TileIndex tile) { return openttd_rust_script_bridge_type(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Get the name of a bridge.
@@ -83,7 +84,7 @@ public:
 	 *       This is mph / 1.6, which is roughly km/h.
 	 *       To get km/h multiply this number by 1.00584.
 	 */
-	static SQInteger GetMaxSpeed(BridgeType bridge_type);
+	static SQInteger GetMaxSpeed(BridgeType bridge_type) { return openttd_rust_script_bridge_max_speed(&GetRustTunnelBridgeServices(), bridge_type); }
 
 	/**
 	 * Get the new cost of a bridge, excluding the road and/or rail.
@@ -93,7 +94,7 @@ public:
 	 * @pre IsValidBridge(bridge_type).
 	 * @return The new cost the bridge has.
 	 */
-	static Money GetPrice(BridgeType bridge_type, SQInteger length);
+	static Money GetPrice(BridgeType bridge_type, SQInteger length) { return openttd_rust_script_bridge_price(&GetRustTunnelBridgeServices(), bridge_type, length); }
 
 	/**
 	 * Get the maximum length of a bridge.
@@ -101,7 +102,7 @@ public:
 	 * @pre IsValidBridge(bridge_type).
 	 * @returns The maximum length the bridge has.
 	 */
-	static SQInteger GetMaxLength(BridgeType bridge_type);
+	static SQInteger GetMaxLength(BridgeType bridge_type) { return openttd_rust_script_bridge_max_length(&GetRustScriptHostServices(), &GetRustTunnelBridgeServices(), bridge_type); }
 
 	/**
 	 * Get the minimum length of a bridge.
@@ -109,7 +110,7 @@ public:
 	 * @pre IsValidBridge(bridge_type).
 	 * @returns The minimum length the bridge has.
 	 */
-	static SQInteger GetMinLength(BridgeType bridge_type);
+	static SQInteger GetMinLength(BridgeType bridge_type) { return openttd_rust_script_bridge_min_length(&GetRustTunnelBridgeServices(), bridge_type); }
 
 	/**
 	 * Internal function to help BuildBridge in case of road.
@@ -172,7 +173,7 @@ public:
 	 * @pre IsBridgeTile(tile).
 	 * @return The TileIndex that is the other end of the bridge.
 	 */
-	static TileIndex GetOtherBridgeEnd(TileIndex tile);
+	static TileIndex GetOtherBridgeEnd(TileIndex tile) { return TileIndex(openttd_rust_script_bridge_other_end(&GetRustScriptHostServices(), &GetRustTunnelBridgeServices(), tile.base())); }
 };
 
 #endif /* SCRIPT_BRIDGE_HPP */

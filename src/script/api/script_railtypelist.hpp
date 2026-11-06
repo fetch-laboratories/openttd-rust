@@ -11,6 +11,7 @@
 #define SCRIPT_RAILTYPELIST_HPP
 
 #include "script_list.hpp"
+#include "../../rust/script_rail_ffi.h"
 
 /**
  * Creates a list of all available railtypes.
@@ -19,7 +20,7 @@
  */
 class ScriptRailTypeList : public ScriptList {
 public:
-	ScriptRailTypeList();
+	ScriptRailTypeList() { openttd_rust_script_rail_type_list(&GetRustScriptHostServices(), this->GetRustListOwner()); }
 };
 
 #endif /* SCRIPT_RAILTYPELIST_HPP */
