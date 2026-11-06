@@ -255,37 +255,63 @@ class MultiplayerTests(unittest.TestCase):
             return network_protocol.Peer(process, folder, 60)
 
         error = "client[1] SendError(): error=8"
-        for name, lines, count, failure, allowed, message in (
-            ("rejected", [error], 1, network_protocol.JOIN_FAILURE, 0, error),
+        expected = "client[4] SendError(): error=7"
+        allowed = network_protocol.INVALID_ADMISSION
+        for name, lines, failure, exemption, message in (
+            ("rejected", [error], network_protocol.JOIN_FAILURE, None, error),
             (
                 "dropped",
                 ["Client #1 closed connection"],
-                1,
                 network_protocol.JOIN_FAILURE,
-                0,
+                None,
                 "closed connection",
             ),
             (
                 "invalid",
-                [error, "status = ACTIVE"],
-                1,
+                [expected, "status = ACTIVE"],
                 network_protocol.SEND_ERROR,
-                1,
+                allowed,
                 None,
             ),
-            ("second", [error, error], 1, network_protocol.SEND_ERROR, 1, error),
+            (
+                "logged-invalid",
+                [f"[2026-11-06 04:00:00] dbg: [net:9] {expected}", "status = ACTIVE"],
+                network_protocol.SEND_ERROR,
+                allowed,
+                None,
+            ),
+            *(
+                (
+                    name,
+                    [*lines, "status = ACTIVE"],
+                    network_protocol.SEND_ERROR,
+                    allowed,
+                    lines[-1],
+                )
+                for name, lines in (
+                    ("wrong-reason", [error]),
+                    ("server-error", ["client[4] Receive_SERVER_ERROR(): error=7"]),
+                    ("client-error", ["client[4] Receive_CLIENT_ERROR(): error=7"]),
+                    ("client-method", ["Client::SendError(): error=7"]),
+                    ("trailing-text", [expected + " extra"]),
+                    ("second", [expected, expected]),
+                    ("second-client", [expected, "client[5] SendError(): error=7"]),
+                )
+            ),
         ):
             with self.subTest(name=name):
                 server = peer(name, lines)
                 started = time.monotonic()
                 if message is None:
-                    server.wait("status = ACTIVE", count, failure, allowed)
+                    server.wait("status = ACTIVE", failure=failure, allowed=exemption)
                 else:
                     with self.assertRaisesRegex(
                         RuntimeError,
                         f"{name}: .*{re.escape(message)}.* before status = ACTIVE of 1",
                     ):
-                        server.wait("status = ACTIVE", count, failure, allowed)
+                        server.wait(
+                            "status = ACTIVE", failure=failure, allowed=exemption
+                        )
                 self.assertLess(time.monotonic() - started, 20)
                 server.process.kill()
                 server.reader.join()

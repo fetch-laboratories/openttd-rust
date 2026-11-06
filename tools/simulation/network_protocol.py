@@ -25,6 +25,10 @@ JOIN_FAILURE = re.compile(
 SEND_ERROR = re.compile(
     r"SendError\(\)|Receive_SERVER_ERROR\(\)|Receive_CLIENT_ERROR\(\)"
 )
+INVALID_ADMISSION = re.compile(
+    r"(?:\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] dbg: \[net:9\] )?"
+    r"client\[\d+\] SendError\(\): error=7"
+)
 CALLBACK = "_Z30CcPlaySound_CONSTRUCTION_OTHER8CommandsRK11CommandCostN10StrongType7TypedefIj12TileIndexTagJNS3_7CompareENS3_7IntegerENS3_10CompatibleIiEENS8_IlEEEEE"
 
 
@@ -126,14 +130,23 @@ class Peer:
         marker: str,
         count: int = 1,
         failure: re.Pattern[str] | None = None,
-        allowed: int = 0,
+        allowed: re.Pattern[str] | None = None,
     ) -> None:
-        """Wait for `count` markers; fail at once on more than `allowed` failures."""
+        """Wait for `count` markers, allowing one full match of `allowed`."""
 
         def failed() -> list[str]:
             if failure is None:
                 return []
-            return [line for line in self.lines if failure.search(line)][allowed:]
+            failures = []
+            used = False
+            for line in self.lines:
+                if not failure.search(line):
+                    continue
+                if not used and allowed is not None and allowed.fullmatch(line):
+                    used = True
+                else:
+                    failures.append(line)
+            return failures
 
         with self.condition:
             reached = self.condition.wait_for(
@@ -431,7 +444,7 @@ def session(
                     rejected = header + response.read(size - 2)
             issuer.trigger("reconnect 1")
             issuer.wait("NET574 ready issuer", 2, SEND_ERROR)
-            server.wait("status = ACTIVE", 3, SEND_ERROR, allowed=1)
+            server.wait("status = ACTIVE", 3, SEND_ERROR, allowed=INVALID_ADMISSION)
             assert server.process.stdin is not None
             server.process.stdin.write("unpause\n")
             server.process.stdin.flush()
