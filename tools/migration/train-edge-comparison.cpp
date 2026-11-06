@@ -14,6 +14,7 @@
 #include "abi-record-ground.h"
 #include "rust/movement_ffi.h"
 #include "rust/vehicle_ffi.h"
+#include "tests/fixture_map.hpp"
 #include <cstdio>
 #include <vector>
 
@@ -100,6 +101,10 @@ static void RustReverse(int left, int right)
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
 	movement.shared = &shared;
 	shared.movement = &movement;
+	// Plain rail on every tile of the 256 by 256 map: depot entry reads the map in place.
+	static OpenTTDFixtureMap map{8, 256 * 256};
+	for (uint32_t t = 0; t < map.size; ++t) map.base[t].type = 1 << 4; // MP_RAILWAY
+	shared.map = &map.statics;
 	// The copied world has no depot/tunnel tiles. Observe the real owner's
 	// admission call through typed map/vehicle services, retaining event order.
 	shared.tile_type = [](uint32_t tile) noexcept { entered_tile = tile; return uint8_t{1}; };
