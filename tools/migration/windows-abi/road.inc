@@ -134,6 +134,8 @@ static void RoadBoundary()
 	static OpenTTDVehicleResolverServices resolver{};
 	static OpenTTDEngineLoadingServices loading{};
 	resolver.capabilities = &capabilities;
+	loading.shared = &t.shared;
+	t.shared.grf_file_id = [](const GRFFile *file) noexcept -> uint32_t { CHECK(file == reinterpret_cast<const GRFFile *>(&road_abi_grf)); return 0; };
 	static NewGRFCache grf_cache{};
 	resolver.cache = [](OpenTTDVehicle *) noexcept { return &grf_cache; };
 	capabilities.loading = []() noexcept -> const OpenTTDEngineLoadingServices * { return &loading; };
