@@ -262,10 +262,6 @@ struct RustStationTruncation {
 };
 static const OpenTTDStationServices _rust_station_services = {
 	.graphs = &GetRustLiveGraphServices(),
-	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
-		Station *st = RustStationGet<Station *>(id);
-		return {.native = st, .base = st, .state = RustStationServiceOwner(st)};
-	},
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
 		const Town *town = OpenTTDBaseStationTown(static_cast<BaseStation *>(handle));
 		return {
@@ -278,16 +274,7 @@ static const OpenTTDStationServices _rust_station_services = {
 			ge.AvailableCount(), ge.HasData() ? static_cast<uint32_t>(ge.GetData().cargo.MapSize()) : 0
 		};
 	},
-	.get = [](uint16_t id) noexcept -> OpenTTDBaseStation * {
-		return BaseStation::GetIfValid(StationID(id));
-	},
-	.pool_size = []() noexcept -> size_t {
-		return BaseStation::GetPoolSize();
-	},
 	.environment = GetRustEnvironmentServices(),
-	.in_use = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return static_cast<BaseStation *>(handle)->IsInUse();
-	},
 	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->GetOwner() == _local_company;
 	},
