@@ -286,24 +286,6 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
  * transition, traversal and decision policy lives in vehicle/maintenance.rs. */
 static OpenTTDCalendarDate MaintenanceDate(TimerGameCalendar::Date date) noexcept { return {date.base()}; }
 static OpenTTDEconomyDate MaintenanceDate(TimerGameEconomy::Date date) noexcept { return {date.base()}; }
-static OpenTTDVehicleMaintenanceRenewal OPENTTD_RUST_CALL MaintenanceRenewal(OpenTTDVehicle *handle, const Company *company) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	assert(company == Company::Get(v->GetOwner()));
-	return {.age = MaintenanceDate(RustVehicleAge(v)), .max_age = MaintenanceDate(RustVehicleMaxAge(v)), .months = company->settings.engine_renew_months, .enabled = company->settings.engine_renew, .kind = RustVehicleVehicleType(v), .subtype = RustVehicleSubtype(v)};
-}
-static OpenTTDVehicleMaintenanceReset OPENTTD_RUST_CALL MaintenanceReset(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.economy_date = MaintenanceDate(TimerGameEconomy::date), .calendar_date = MaintenanceDate(TimerGameCalendar::date), .reliability = RustEngineReliability(v->GetEngine()), .chance = RustVehicleBreakdownChance(v), .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
-}
-static OpenTTDVehicleMaintenanceInterval OPENTTD_RUST_CALL MaintenanceInterval(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	const Company *company = Company::Get(v->GetOwner());
-	return {.company = company, .last_service = MaintenanceDate(RustVehicleLastService(v)), .now = MaintenanceDate(TimerGameEconomy::date), .interval = RustVehicleServiceInterval(v), .reliability = RustVehicleReliability(v), .percent = v->ServiceIntervalIsPercent(), .wallclock = TimerGameEconomy::UsingWallclockUnits(), .no_service = _settings_game.order.no_servicing_if_no_breakdowns, .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
-}
-static uint16_t OPENTTD_RUST_CALL MaintenanceEngineReliability(OpenTTDVehicle *handle) noexcept { return RustEngineReliability(VehicleOf(handle)->GetEngine()); }
 static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplacement(OpenTTDVehicle *handle, const Company *company) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -312,25 +294,9 @@ static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplace
 	return {.engine = engine.base(), .when_old = when_old};
 }
 static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(VehicleOf(handle)->GetOwner()); }
-static OpenTTDVehicleMaintenanceAutomatic OPENTTD_RUST_CALL MaintenanceAutomatic(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.has_depot_order = v->HasDepotOrder(), .order_type = RustVehicleOrderType(v)};
-}
-static bool OPENTTD_RUST_CALL MaintenanceDepotService(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->current_order.GetDepotOrderType().Test(OrderDepotTypeFlag::Service); }
 static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
-static OpenTTDVehicleMaintenanceWarning OPENTTD_RUST_CALL MaintenanceWarning(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.enabled = _settings_client.gui.old_vehicle_warn, .has_previous = RustVehiclePrevious(v) != nullptr, .local = RustVehicleOwner(v) == RustLocalCompanyID(), .status = RustVehicleStatus(v)};
-}
-static OpenTTDVehicleMaintenanceWarningCompany OPENTTD_RUST_CALL MaintenanceWarningCompany(OpenTTDVehicle *handle) noexcept
-{
-	const Company *company = Company::Get(VehicleOf(handle)->GetOwner());
-	return {.company = company, .renewal = company->settings.engine_renew};
-}
 static bool OPENTTD_RUST_CALL MaintenanceEngineAvailableAny(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->GetEngine()->company_avail.Any(); }
 static bool OPENTTD_RUST_CALL MaintenanceReplacementActive(OpenTTDVehicle *handle, const Company *company) noexcept
 {
@@ -351,20 +317,12 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.transaction = &FleetTransactionServices(),
 	.group = &FleetGroupServices(),
 	.company = &GetRustCompanyIdentityServices(),
-	.renewal = MaintenanceRenewal,
-	.reset = MaintenanceReset,
-	.interval = MaintenanceInterval,
-	.engine_reliability = MaintenanceEngineReliability,
 	.replacement = MaintenanceReplacement,
 	.replacement_available = MaintenanceReplacementAvailable,
-	.automatic = MaintenanceAutomatic,
-	.depot_service = MaintenanceDepotService,
 	.smoke_disabled = MaintenanceSmokeDisabled,
 	.mark_dirty = MaintenanceMarkDirty,
 	.view_dirty = MaintenanceViewDirty,
 	.details_dirty = RustVehicleDetailsDirty,
-	.warning = MaintenanceWarning,
-	.warning_company = MaintenanceWarningCompany,
 	.engine_available_any = MaintenanceEngineAvailableAny,
 	.replacement_active = MaintenanceReplacementActive,
 	.old_news = MaintenanceOldNews,

@@ -12,10 +12,9 @@
     clippy::struct_excessive_bools,
     clippy::struct_field_names
 )]
-use super::{
-    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VehicleRef, VehicleServices, VehicleType,
-};
+use super::{Breakdown, OT_GOTO_DEPOT, OT_LOADING, VehicleRef, VehicleServices, VehicleType};
 use crate::newgrf_sound::VSE_BREAKDOWN;
+use crate::raw_field::read_field;
 use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
 use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{company::OpenTTDCompany, fleet, services};
@@ -23,56 +22,9 @@ use crate::{company::OpenTTDCompany, fleet, services};
 use crate::services::{CalendarDate, EconomyDate};
 
 #[repr(C)]
-pub struct Renewal {
-    pub age: CalendarDate,
-    pub max_age: CalendarDate,
-    pub months: i16,
-    pub enabled: bool,
-    pub kind: VehicleType,
-    pub subtype: u8,
-}
-#[repr(C)]
-pub struct Reset {
-    pub economy_date: EconomyDate,
-    pub calendar_date: CalendarDate,
-    pub reliability: u16,
-    pub chance: u8,
-    pub breakdowns: u8,
-}
-#[repr(C)]
-pub struct Interval {
-    pub company: *const OpenTTDCompany,
-    pub last_service: EconomyDate,
-    pub now: EconomyDate,
-    pub interval: u16,
-    pub reliability: u16,
-    pub percent: bool,
-    pub wallclock: bool,
-    pub no_service: bool,
-    pub breakdowns: u8,
-}
-#[repr(C)]
 pub struct Replacement {
     pub engine: u16,
     pub when_old: bool,
-}
-
-#[repr(C)]
-pub struct Automatic {
-    pub has_depot_order: bool,
-    pub order_type: OrderType,
-}
-#[repr(C)]
-pub struct Warning {
-    pub enabled: bool,
-    pub has_previous: bool,
-    pub local: bool,
-    pub status: u8,
-}
-#[repr(C)]
-pub struct WarningCompany {
-    pub company: *const OpenTTDCompany,
-    pub renewal: bool,
 }
 
 /// Each callback is a named shared service, observation or consecutive scalar
@@ -83,21 +35,12 @@ pub struct Services {
     pub transaction: *const fleet::transactions::Services,
     pub group: *const fleet::GroupServices,
     pub company: *const crate::company_identity::Services,
-    /// Company pointers must name the live owner for the synchronous call.
-    pub renewal: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Renewal,
-    pub reset: extern "C" fn(VehicleRef) -> Reset,
-    pub interval: extern "C" fn(VehicleRef) -> Interval,
-    pub engine_reliability: extern "C" fn(VehicleRef) -> u16,
     pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Replacement,
     pub replacement_available: extern "C" fn(VehicleRef, u16) -> bool,
-    pub automatic: extern "C" fn(VehicleRef) -> Automatic,
-    pub depot_service: extern "C" fn(VehicleRef) -> bool,
     pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
     pub mark_dirty: extern "C" fn(VehicleRef),
     pub view_dirty: extern "C" fn(VehicleRef),
     pub details_dirty: extern "C" fn(VehicleRef),
-    pub warning: extern "C" fn(VehicleRef) -> Warning,
-    pub warning_company: extern "C" fn(VehicleRef) -> WarningCompany,
     pub engine_available_any: extern "C" fn(VehicleRef) -> bool,
     pub replacement_active: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> bool,
     pub old_news: extern "C" fn(VehicleRef, u32),
@@ -110,6 +53,16 @@ pub struct Services {
     pub news_getting_old: u32,
     pub news_very_old: u32,
     pub news_very_old_and: u32,
+}
+
+impl Services {
+    /// Reuse the command/Company registry's existing settings table route at
+    /// game entry, avoiding a second binding or a static-initialization cycle.
+    fn settings(&self) -> &'static crate::settings_table::Services {
+        let commands = unsafe { &*(*self.transaction).commands };
+        let company = unsafe { &*(commands.company)() };
+        (company.settings)()
+    }
 }
 
 macro_rules! svc {
@@ -127,6 +80,11 @@ macro_rules! branch {
     };
 }
 
+fn engine_reliability(s: &Services, v: VehicleRef) -> u16 {
+    let engine = (s.settings().engines.resolve)(v.engine_id());
+    read_field!(engine.state, reliability)
+}
+
 unsafe fn renew<const C: bool>(
     v: VehicleRef,
     base: &VehicleServices,
@@ -134,32 +92,46 @@ unsafe fn renew<const C: bool>(
     use_setting: bool,
 ) -> bool {
     let s = unsafe { &*base.maintenance };
-    // SAFETY: the native entry supplies the live vehicle owner.
-    let r = unsafe { svc!(C, s.renewal, v, company) };
+    let companies = unsafe { &*s.company };
+    if base.assertions {
+        let expected = (companies.company)(crate::company_type::CompanyID(v.owner()));
+        crate::movement::native_assert(unsafe { &*s.shared }, expected.cast_const() == company);
+    }
+    let age = v.age();
+    let max_age = v.max_age();
+    let settings = (companies.settings)(company);
+    let months = read_field!(settings, engine_renew_months);
+    let enabled = read_field!(settings, engine_renew);
+    let kind = VehicleType(v.vehicle_type());
+    let subtype = v.subtype();
     branch!(C, VEHICLE_MAINT_RENEW);
-    if use_setting && !r.enabled {
+    if use_setting && !enabled {
         return false;
     }
-    if r.age.0.wrapping_sub(r.max_age.0) < i32::from(r.months) * 30 {
+    if age.0.wrapping_sub(max_age.0) < i32::from(months) * 30 {
         return false;
     }
-    r.kind != VehicleType::TRAIN || r.subtype & 8 != 0
+    kind != VehicleType::TRAIN || subtype & 8 != 0
 }
 unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
     svc!(C, s.details_dirty, v);
     loop {
-        let r = svc!(C, s.reset, v);
-        let chance = if r.breakdowns == 1 {
+        let economy_date = crate::timer_game_common::economy_date();
+        let calendar_date = crate::timer_game_common::calendar_date();
+        let reliability = engine_reliability(s, v);
+        let old_chance = v.breakdown_chance();
+        let breakdowns = unsafe { (*s.shared).settings().vehicle_breakdowns.read() };
+        let chance = if breakdowns == 1 {
             branch!(C, VEHICLE_MAINT_RESET_REDUCED);
             0
         } else {
-            r.chance / 4
+            old_chance / 4
         };
-        v.write_date_of_last_service(r.economy_date);
-        v.write_date_of_last_service_newgrf(r.calendar_date);
+        v.write_date_of_last_service(economy_date);
+        v.write_date_of_last_service_newgrf(calendar_date);
         v.write_breakdowns_since_last_service(0);
-        v.write_reliability(r.reliability);
+        v.write_reliability(reliability);
         v.write_breakdown_chance(chance);
         branch!(C, VEHICLE_MAINT_RESET);
         let Some(next) = v.next() else {
@@ -185,42 +157,54 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     if (v).status() & (VS_STOPPED | VS_CRASHED) != 0 {
         return false;
     }
-    let r = svc!(C, s.interval, v);
+    let companies = unsafe { &*s.company };
+    let company = (companies.company)(crate::company_type::CompanyID(v.owner()));
+    let last_service = read_field!(v.0.as_ptr(), date_of_last_service);
+    let now = crate::timer_game_common::economy_date();
+    let interval = v.service_interval();
+    let reliability = v.reliability();
+    let percent = v.vehicle_flags() & (1 << 9) != 0;
+    let wallclock = (s.settings().clock.using_wallclock_units)(false);
+    let settings = unsafe { (*s.shared).settings() };
+    let no_service = unsafe { settings.no_servicing_if_no_breakdowns.read() };
+    let breakdowns = unsafe { settings.vehicle_breakdowns.read() };
     branch!(C, VEHICLE_MAINT_SERVICE);
-    if r.percent {
+    if percent {
         branch!(C, VEHICLE_MAINT_PERCENT);
-        let reliability = svc!(C, s.engine_reliability, v);
-        if i32::from(r.reliability)
-            >= i32::from(reliability).wrapping_mul(100 - i32::from(r.interval)) / 100
+        let engine_reliability = engine_reliability(s, v);
+        if i32::from(reliability)
+            >= i32::from(engine_reliability).wrapping_mul(100 - i32::from(interval)) / 100
         {
             return false;
         }
     } else {
-        let interval = i32::from(r.interval)
-            * if r.wallclock {
+        let interval = i32::from(interval)
+            * if wallclock {
                 branch!(C, VEHICLE_MAINT_MINUTES);
                 30
             } else {
                 branch!(C, VEHICLE_MAINT_DAYS);
                 1
             };
-        if r.last_service.0.wrapping_add(interval) >= r.now.0 {
+        if last_service.0.wrapping_add(interval) >= now.0 {
             return false;
         }
     }
-    if !r.no_service || r.breakdowns != 0 {
+    if !no_service || breakdowns != 0 {
         return true;
     }
-    // SAFETY: interval resolved the live owner; no callback can destroy it here.
-    let companies = unsafe { &*s.company };
-    let mut needed = i64::from((companies.renew_reserve)(r.company));
-    if needed > unsafe { available_money(s, r.company) } {
+    // The same live Company member remains valid through these bounded queries.
+    let mut needed = i64::from(read_field!(
+        (companies.settings)(company),
+        engine_renew_money
+    ));
+    if needed > unsafe { available_money(s, company) } {
         return false;
     }
     let mut pending = false;
     let mut current = Some(v);
     while let Some(unit) = current {
-        if unsafe { replacement_needed::<C>(unit, base, r.company, &mut needed, &mut pending) } {
+        if unsafe { replacement_needed::<C>(unit, base, company, &mut needed, &mut pending) } {
             return false;
         }
         current = if unit.vehicle_type() == VehicleType::TRAIN.0 {
@@ -307,11 +291,15 @@ unsafe fn replacement_needed<const C: bool>(
     *needed > available
 }
 unsafe fn automatic<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
-    let s = unsafe { &*base.maintenance };
-    let r = svc!(C, s.automatic, v);
-    if r.has_depot_order
-        || r.order_type.0 == OT_LOADING
-        || (r.order_type.0 == OT_GOTO_DEPOT && !svc!(C, s.depot_service, v))
+    let orders = crate::orders::VisitOrders::new(base.orders());
+    let list = orders.list(v);
+    let has_depot_order = !list.is_null()
+        && (0..orders.stored_count(list))
+            .any(|i| orders.stored_order(list, i).kind() == OT_GOTO_DEPOT);
+    let current = v.current_order();
+    if has_depot_order
+        || current.kind() == OT_LOADING
+        || (current.kind() == OT_GOTO_DEPOT && current.depot_type() & 1 == 0)
     {
         return false;
     }
@@ -521,20 +509,21 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     }
     svc!(C, s.details_dirty, v);
     branch!(C, VEHICLE_MAINT_AGE);
-    let warning = svc!(C, s.warning, v);
-    if !warning.enabled
-        || warning.has_previous
-        || !warning.local
-        || warning.status & (VS_CRASHED | VS_STOPPED) != 0
-    {
+    let enabled = unsafe { (*s.shared).settings().old_vehicle_warn.read() };
+    let has_previous = v.previous().is_some();
+    let local = v.owner() == (s.settings().company.local_company)();
+    let status = v.status();
+    if !enabled || has_previous || !local || status & (VS_CRASHED | VS_STOPPED) != 0 {
         return;
     }
-    let company = svc!(C, s.warning_company, v);
-    if company.renewal && svc!(C, s.engine_available_any, v) {
+    let companies = unsafe { &*s.company };
+    let company = (companies.company)(crate::company_type::CompanyID(v.owner()));
+    let renewal = read_field!((companies.settings)(company), engine_renew);
+    if renewal && svc!(C, s.engine_available_any, v) {
         return;
     }
-    // SAFETY: warning_company supplies the live owner; availability only reads.
-    if unsafe { svc!(C, s.replacement_active, v, company.company) } {
+    // Engine availability only reads; the Company is still the original live owner.
+    if unsafe { svc!(C, s.replacement_active, v, company) } {
         return;
     }
     let news = if difference == s.before_zero.0 {
@@ -690,70 +679,22 @@ pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown_abi(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVehicleMaintenanceRenewal" ["maintenance"] => Renewal {
-        age,
-        max_age,
-        months,
-        enabled,
-        kind,
-        subtype,
-    };
-    "OpenTTDVehicleMaintenanceReset" ["maintenance"] => Reset {
-        economy_date,
-        calendar_date,
-        reliability,
-        chance,
-        breakdowns,
-    };
-    "OpenTTDVehicleMaintenanceInterval" ["maintenance"] => Interval {
-        company,
-        last_service,
-        now,
-        interval,
-        reliability,
-        percent,
-        wallclock,
-        no_service,
-        breakdowns,
-    };
     "OpenTTDVehicleMaintenanceReplacement" ["maintenance"] => Replacement {
         engine,
         when_old,
     };
 
-    "OpenTTDVehicleMaintenanceAutomatic" ["maintenance"] => Automatic {
-        has_depot_order,
-        order_type,
-    };
-    "OpenTTDVehicleMaintenanceWarning" ["maintenance"] => Warning {
-        enabled,
-        has_previous,
-        local,
-        status,
-    };
-    "OpenTTDVehicleMaintenanceWarningCompany" ["maintenance"] => WarningCompany {
-        company,
-        renewal,
-    };
     "OpenTTDVehicleMaintenanceServices" ["maintenance"] => Services {
         shared,
         transaction,
         group,
         company,
-        renewal,
-        reset,
-        interval,
-        engine_reliability,
         replacement,
         replacement_available,
-        automatic,
-        depot_service,
         smoke_disabled,
         mark_dirty,
         view_dirty,
         details_dirty,
-        warning,
-        warning_company,
         engine_available_any,
         replacement_active,
         old_news,

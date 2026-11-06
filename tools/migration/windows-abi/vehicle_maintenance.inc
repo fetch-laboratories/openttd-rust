@@ -7,6 +7,9 @@
 #include "rust/company_identity_ffi.h"
 #include "rust/engine_capabilities_ffi.h"
 #include "rust/fleet_ffi.h"
+#include "rust/engine_loading_ffi.h"
+#include "rust/settings_table_ffi.h"
+#include "rust/clock_ffi.h"
 
 /* Explicit trivial Date and actual VehicleType carriers and aggregate return/write call ABI. Opaque
  * shells are never dereferenced; the game target checks real member stores. */
@@ -29,28 +32,54 @@ static void VehicleMaintenanceBoundary()
 	dirty = 0;
 	auto &maintenance = _vehicle_maintenance_probe;
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept { dirty++; };
-	maintenance.reset = [](OpenTTDVehicle *) noexcept {
-		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .reliability = 0x9876, .chance = 12, .breakdowns = 2};
-	};
-	maintenance.renewal = [](OpenTTDVehicle *, const Company *) noexcept {
-		return OpenTTDVehicleMaintenanceRenewal{.age = OpenTTDCalendarDate{100}, .max_age = OpenTTDCalendarDate{100}, .months = -4, .enabled = false, .kind = static_cast<VehicleType>(254), .subtype = 0};
-	};
-	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
+	/* Feed the original expected values through actual canonical input records. */
+	const auto saved_clock = GetRustClockState();
+	GetRustClockState().economy_date = TimerGameEconomy::Date{0x1020304};
+	GetRustClockState().calendar_date = TimerGameCalendar::Date{-0x12345};
+	static CompanySettings defaults{};
+	defaults.engine_renew = false; defaults.engine_renew_months = -4;
+	static OpenTTDCompanyIdentityServices identity{};
+	identity.settings = [](const Company *) noexcept { return &defaults; };
+	maintenance.company = &identity;
+	static OpenTTDEngineLifecycle engine_state{}; engine_state.reliability = 0x9876;
+	static OpenTTDEngineLoadingServices engines{};
+	engines.resolve = [](uint16_t) noexcept { return OpenTTDEngineRef{.state = &engine_state}; };
+	static OpenTTDClockServices clocks{};
+	clocks.using_wallclock_units = [](bool newgame) noexcept { CHECK(!newgame); return false; };
+	static OpenTTDSettingServices settings{}; settings.engines = &engines; settings.clock = &clocks;
+	static OpenTTDCompanyServices settings_company{};
+	settings_company.settings = []() noexcept -> const OpenTTDSettingServices & { return settings; };
+	OpenTTDCommandServices commands{};
+	commands.company = []() noexcept -> const OpenTTDCompanyServices * { return &settings_company; };
+	OpenTTDFleetTransactionServices transactions{}; transactions.commands = &commands;
+	maintenance.transaction = &transactions;
+	static uint8_t breakdowns = 2;
+	static bool no_service = true;
+	OpenTTDSettingAddresses addresses{};
+	addresses.vehicle_breakdowns = &breakdowns; addresses.no_servicing_if_no_breakdowns = &no_service;
+	auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
+	shared.settings = &addresses;
 	RoadTestTables tables(&shared);
+	maintenance.shared = &tables.shared;
 	auto &base = tables.vehicle;
 	base.maintenance = &maintenance;
+	base.assertions = false;
 	OpenTTDVehicle record{};
 	record.type = VEH_ROAD;
 	record.value = -257;
+	record.age = 100; record.max_age = 100; record.breakdown_chance = 12;
+	OpenTTDConsistState consist{}; record.consist = &consist;
 	auto *shell = &record;
 	openttd_rust_vehicle_service_depot(shell, &base);
 	CHECK(record.date_of_last_service == 0x1020304 && record.date_of_last_service_newgrf == -0x12345);
 	CHECK(record.breakdowns_since_last_service == 0 && record.reliability == 0x9876 && record.breakdown_chance == 3);
 	openttd_rust_vehicle_decrease_value(shell, &base);
 	CHECK(record.value == -255);
+	record.type = static_cast<VehicleType>(254);
 	CHECK(openttd_rust_vehicle_needs_renew(shell, &base, nullptr, false));
 	CHECK(!openttd_rust_vehicle_needs_renew(shell, &base, nullptr, true));
 	CHECK(dirty == 2);
+	record.type = VEH_ROAD;
 	/* Replacement budgets use the Rust engine price before observing available money. */
 	static OpenTTDEngineCapabilitiesServices capabilities{};
 	static OpenTTDVehicleResolverServices resolver{};
@@ -64,11 +93,13 @@ static void VehicleMaintenanceBoundary()
 	CompanyFinanceOwner initial, changed;
 	after_finances = changed.state;
 	OpenTTDCompanyIdentityServices company{};
-	company.renew_reserve = [](const Company *c) noexcept -> uint32_t { CHECK(c == reinterpret_cast<const Company *>(&company_shell) && stage++ == 0); return 100; };
+	company.company = [](uint8_t) noexcept { return reinterpret_cast<Company *>(&company_shell); };
+	company.settings = [](const Company *c) noexcept -> const CompanySettings * { CHECK(c == reinterpret_cast<const Company *>(&company_shell) && stage++ == 0); return &defaults; };
+	defaults.engine_renew_money = 100;
 	company.company_id = [](const Company *c) noexcept -> uint8_t { CHECK(c == reinterpret_cast<const Company *>(&company_shell) && (stage == 1 || stage == 6)); ++stage; return supplied_id; };
 	OpenTTDCompanyFinanceServices finance{};
 	finance.company_finances = [](uint8_t id) noexcept -> CompanyFinances * { CHECK(id == supplied_id && (stage == 2 || stage == 7)); ++stage; return id == COMPANY_SPECTATOR.base() ? nullptr : active_finances; };
-	OpenTTDCommandServices commands{}; commands.finance = &finance;
+	commands.finance = &finance;
 	commands.infinite_money = []() noexcept { CHECK(stage == 3 || stage == 8); ++stage; return infinite; };
 	maintenance.company = &company;
 	resolver.spritegroup = [](uint16_t, uint8_t) noexcept -> const SpriteGroup * { return nullptr; };
@@ -87,12 +118,12 @@ static void VehicleMaintenanceBoundary()
 	capabilities.carrying = [](const OpenTTDEngine *) noexcept -> OpenTTDEngineCarrying { return {.kind = VEH_ROAD, .ground_capacity = 0, .default_cargo = INVALID_CARGO}; };
 	capabilities.road_cost = [](const OpenTTDEngine *) noexcept -> uint8_t { return 53; };
 	capabilities.price_shift = [](const OpenTTDEngine *, uint32_t index) noexcept -> int32_t { CHECK(stage++ == 5 && index == PR_BUILD_VEHICLE_ROAD); return 0; };
-	OpenTTDFleetTransactionServices transactions{}; transactions.capabilities = &capabilities; transactions.commands = &commands;
+	transactions.capabilities = &capabilities;
 	maintenance.transaction = &transactions;
 
-	maintenance.interval = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceInterval {
-		return {.company = reinterpret_cast<const Company *>(&company_shell), .last_service = {0}, .now = {100}, .interval = 1, .reliability = 0, .percent = false, .wallclock = false, .no_service = true, .breakdowns = 0};
-	};
+	GetRustClockState().economy_date = TimerGameEconomy::Date{100};
+	breakdowns = 0;
+	record.date_of_last_service = 0; consist.service_interval = 1; record.reliability = 0;
 	maintenance.replacement = [](OpenTTDVehicle *, const Company *) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
 	maintenance.replacement_available = [](OpenTTDVehicle *, uint16_t) noexcept { return true; };
 	const int64_t original_price = openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD];
@@ -124,6 +155,8 @@ static void VehicleMaintenanceBoundary()
 	}
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = original_price;
 	maintenance.company = nullptr; maintenance.transaction = nullptr;
+	maintenance.shared = nullptr;
+	GetRustClockState() = saved_clock;
 }
 
 /* Actual native storage type is checked by the game-side shell probe; this

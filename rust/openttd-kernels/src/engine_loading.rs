@@ -237,7 +237,7 @@ pub struct Services {
     pub(crate) shared: *const Shared,
     pub(crate) resolver: *const crate::newgrf_vehicle::Services,
     next: extern "C" fn(u32) -> EngineRef,
-    resolve: extern "C" fn(u16) -> EngineRef,
+    pub(crate) resolve: extern "C" fn(u16) -> EngineRef,
     pub(crate) dynamic: extern "C" fn() -> bool,
     pub(crate) find_file: extern "C" fn(u32) -> *mut c_void,
     engine_file: extern "C" fn(E) -> File,

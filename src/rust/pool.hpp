@@ -49,16 +49,6 @@ struct RustPool : PoolBase {
 	{
 		if (index < this->GetPoolSize() && this->Get(index) == shell && this->descriptor->slots[index].record == record) openttd_rust_pool_retire_record(this->owner, index);
 	}
-	/** A base constructor can unwind before its record's shell field was initialized. */
-	void RetireUnboundRecord(const void *record)
-	{
-		for (size_t index = 0; index < this->GetPoolSize(); ++index) {
-			if (this->descriptor->slots[index].record == record) {
-				openttd_rust_pool_retire_record(this->owner, index);
-				return;
-			}
-		}
-	}
 
 	void *GetNew(size_t size)
 	{

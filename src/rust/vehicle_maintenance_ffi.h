@@ -18,70 +18,22 @@ struct OpenTTDSharedServices;
 struct OpenTTDFleetTransactionServices;
 struct OpenTTDFleetGroupServices;
 struct OpenTTDCompanyIdentityServices;
-struct OpenTTDVehicleMaintenanceRenewal {
-	OpenTTDCalendarDate age;
-	OpenTTDCalendarDate max_age;
-	int16_t months;
-	bool enabled;
-	VehicleType kind;
-	uint8_t subtype;
-};
-struct OpenTTDVehicleMaintenanceReset {
-	OpenTTDEconomyDate economy_date;
-	OpenTTDCalendarDate calendar_date;
-	uint16_t reliability;
-	uint8_t chance;
-	uint8_t breakdowns;
-};
-struct OpenTTDVehicleMaintenanceInterval {
-	const Company *company;
-	OpenTTDEconomyDate last_service;
-	OpenTTDEconomyDate now;
-	uint16_t interval;
-	uint16_t reliability;
-	bool percent;
-	bool wallclock;
-	bool no_service;
-	uint8_t breakdowns;
-};
 struct OpenTTDVehicleMaintenanceReplacement {
 	uint16_t engine;
 	bool when_old;
 };
 
-struct OpenTTDVehicleMaintenanceAutomatic {
-	bool has_depot_order;
-	OrderType order_type;
-};
-struct OpenTTDVehicleMaintenanceWarning {
-	bool enabled;
-	bool has_previous;
-	bool local;
-	uint8_t status;
-};
-struct OpenTTDVehicleMaintenanceWarningCompany {
-	const Company *company;
-	bool renewal;
-};
 struct OpenTTDVehicleMaintenanceServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDFleetTransactionServices *transaction;
 	const OpenTTDFleetGroupServices *group;
 	const OpenTTDCompanyIdentityServices *company;
-	OpenTTDVehicleMaintenanceRenewal (OPENTTD_RUST_CALL *renewal)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(renewal);
-	OpenTTDVehicleMaintenanceReset (OPENTTD_RUST_CALL *reset)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reset);
-	OpenTTDVehicleMaintenanceInterval (OPENTTD_RUST_CALL *interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(interval);
-	uint16_t (OPENTTD_RUST_CALL *engine_reliability)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_reliability);
 	OpenTTDVehicleMaintenanceReplacement (OPENTTD_RUST_CALL *replacement)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(replacement);
 	bool (OPENTTD_RUST_CALL *replacement_available)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(replacement_available);
-	OpenTTDVehicleMaintenanceAutomatic (OPENTTD_RUST_CALL *automatic)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(automatic);
-	bool (OPENTTD_RUST_CALL *depot_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_service);
 	bool (OPENTTD_RUST_CALL *smoke_disabled)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_disabled);
 	void (OPENTTD_RUST_CALL *mark_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty);
 	void (OPENTTD_RUST_CALL *view_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(view_dirty);
 	void (OPENTTD_RUST_CALL *details_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(details_dirty);
-	OpenTTDVehicleMaintenanceWarning (OPENTTD_RUST_CALL *warning)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(warning);
-	OpenTTDVehicleMaintenanceWarningCompany (OPENTTD_RUST_CALL *warning_company)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(warning_company);
 	bool (OPENTTD_RUST_CALL *engine_available_any)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_available_any);
 	bool (OPENTTD_RUST_CALL *replacement_active)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(replacement_active);
 	void (OPENTTD_RUST_CALL *old_news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(old_news);

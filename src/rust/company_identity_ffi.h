@@ -9,6 +9,7 @@
 #include "unit_numbers_ffi.h"
 #include "../livery.h"
 struct Company;
+struct CompanySettings;
 struct Town;
 struct alignas(16) OpenTTDCompanyNameStorage { std::byte bytes[128]; };
 struct OpenTTDCompanyIdentityStrings {
@@ -25,7 +26,7 @@ struct OpenTTDCompanyIdentityServices {
 	uint8_t (OPENTTD_RUST_CALL *company_id)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(company_id);
 	OpenTTDUnitNumberState *(OPENTTD_RUST_CALL *vehicle_numbers)(Company *, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_numbers);
 	OpenTTDUnitNumberState *(OPENTTD_RUST_CALL *group_numbers)(Company *) noexcept OPENTTD_SERVICE_DEFAULT(group_numbers);
-	uint32_t (*renew_reserve)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(renew_reserve);
+	const CompanySettings *(OPENTTD_RUST_CALL *settings)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(settings);
 	uint32_t (OPENTTD_RUST_CALL *name_id)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_id);
 	void (OPENTTD_RUST_CALL *set_name_id)(Company *c, uint32_t value) noexcept OPENTTD_SERVICE_DEFAULT(set_name_id);
 	uint32_t (OPENTTD_RUST_CALL *name_parts)(const Company *c) noexcept OPENTTD_SERVICE_DEFAULT(name_parts);

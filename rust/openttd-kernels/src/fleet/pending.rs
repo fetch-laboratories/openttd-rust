@@ -85,9 +85,11 @@ pub(crate) unsafe fn drain(
         let y = v.y();
         let z = v.z();
         let company = unsafe { &*w.company };
-        let reserve = i64::from((company.renew_reserve)((company.company)(
-            crate::company_type::CompanyID(owner),
-        )));
+        let owner = (company.company)(crate::company_type::CompanyID(owner));
+        let reserve = i64::from(crate::raw_field::read_field!(
+            (company.settings)(owner),
+            engine_renew_money
+        ));
         unsafe {
             (w.subtract)(reserve);
             (w.command)(cost, id);

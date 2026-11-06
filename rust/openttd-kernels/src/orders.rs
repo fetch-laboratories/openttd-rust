@@ -4524,7 +4524,7 @@ impl VisitOrders {
     }
     /// `v->orders`, the native `OrderList` shell or null.
     pub(crate) fn list(self, v: VehicleRef) -> *mut c_void {
-        self.0.orders(Self::shell(v))
+        read_field!(read_field!(v.0.as_ptr(), orders), orders)
     }
     /// `OrderList::GetNumOrders()`.
     pub(crate) fn count(self, list: *mut c_void) -> u8 {

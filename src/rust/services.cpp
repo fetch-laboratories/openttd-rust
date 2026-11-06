@@ -261,6 +261,7 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.never_expire_airports = &_settings_game.station.never_expire_airports,
 	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
 	.no_servicing_if_no_breakdowns = &_settings_game.order.no_servicing_if_no_breakdowns,
+	.old_vehicle_warn = &_settings_client.gui.old_vehicle_warn,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
 	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),

@@ -80,7 +80,7 @@ const OpenTTDCompanyIdentityServices &GetRustCompanyIdentityServices() noexcept
 	.company_id = Identity_company_id,
 	.vehicle_numbers = Identity_vehicle_numbers,
 	.group_numbers = Identity_group_numbers,
-	.renew_reserve = RustCompanyRenewReserve,
+	.settings = [](const Company *company) noexcept { return &company->settings; },
 	.name_id = Identity_name_id,
 	.set_name_id = Identity_set_name_id,
 	.name_parts = Identity_name_parts,

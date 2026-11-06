@@ -8,6 +8,8 @@
 #include "rust/company_ffi.h"
 #include "rust/fleet_ffi.h"
 #include "rust/settings_table_ffi.h"
+#include "rust/company_identity_ffi.h"
+#include "rust/clock_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/road_yapf_ffi.h"
 #include "tests/effect_protocol.hpp"
@@ -448,22 +450,29 @@ static void RoadServiceBoundary()
 	auto &maintenance = _vehicle_maintenance_probe;
 	maintenance.max_economy_date = OpenTTDEconomyDate{0};
 	const auto *previous_shared = maintenance.shared;
-	static const bool no_service = true;
+	static const bool no_service = false;
 	static const uint8_t breakdowns = 0;
 	OpenTTDSettingAddresses maintenance_settings{};
 	maintenance_settings.no_servicing_if_no_breakdowns = &no_service;
 	maintenance_settings.vehicle_breakdowns = &breakdowns;
 	t.shared.settings = &maintenance_settings;
 	maintenance.shared = &t.shared;
-	maintenance.automatic = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceAutomatic{}; };
-	maintenance.interval = [](OpenTTDVehicle *) noexcept {
-		OpenTTDVehicleMaintenanceInterval r{};
-		r.now = OpenTTDEconomyDate{1};
-		return r;
-	};
+	static OpenTTDCompanyIdentityServices identity{};
+	identity.company = [](uint8_t) noexcept -> Company * { return nullptr; };
+	maintenance.company = &identity;
+	static OpenTTDClockServices clocks{};
+	clocks.using_wallclock_units = [](bool newgame) noexcept { CHECK(!newgame); return false; };
+	static OpenTTDEngineLifecycle engine_state{};
+	static OpenTTDEngineLoadingServices engines{};
+	/* The old reset carrier counted this same service observation. */
+	engines.resolve = [](uint16_t) noexcept { ++road_service_probe->services; return OpenTTDEngineRef{.state = &engine_state}; };
+	settings.clock = &clocks; settings.engines = &engines;
 	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
-	/* The tail record is linked; its part has no engine type, so only the head is serviced. */
-	maintenance.reset = [](OpenTTDVehicle *) noexcept { ++road_service_probe->services; return OpenTTDVehicleMaintenanceReset{}; };
+	const auto saved_clock = GetRustClockState();
+	GetRustClockState().economy_date = TimerGameEconomy::Date{1};
+	OpenTTDConsistState consist{};
+	static const OpenTTDOrdersLeaves orders{};
+	t.vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &orders; };
 
 
 	t.leaves.is_road_depot_tile = [](uint32_t tile) noexcept { CHECK(tile == road_service_probe->tile); return road_service_probe->depot_tile; };
@@ -485,7 +494,8 @@ static void RoadServiceBoundary()
 	};
 	t.vehicle.check_orders_only = [](OpenTTDVehicle *) noexcept {};
 	auto day = [&]() {
-		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->type = i == 0 ? VEH_ROAD : VEH_EFFECT; record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
+		++GetRustClockState().economy_date;
+		for (int i : {0, 1}) { auto *record = RoadServiceHandle(i); record->consist = &consist; record->ground = &road_service_ground[i]; record->orders = &road_service_orders[i]; record->type = i == 0 ? VEH_ROAD : VEH_EFFECT; record->tile = probe.tile; record->cur_speed = probe.speed; record->road = i == 0 ? probe.head : probe.tail; record->next = i == 0 ? RoadServiceHandle(1) : nullptr; }
 		openttd_rust_road_economy_day(RoadServiceHandle(0), probe.head, true, &t.leaves); };
 	for (bool moving : {true, false}) {
 		probe.speed = moving ? 5 : 0;
@@ -506,6 +516,8 @@ static void RoadServiceBoundary()
 	openttd_rust_road_destroy(probe.head);
 	openttd_rust_road_destroy(probe.tail);
 	maintenance.shared = previous_shared;
+	maintenance.company = nullptr;
+	GetRustClockState() = saved_clock;
 	std::printf("road_service_moving_partial_parked_and_search_branches passed\n");
 }
 ABI_PROBE(RoadBoundary);

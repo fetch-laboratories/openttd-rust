@@ -6,6 +6,24 @@
 /// `SettingsProfile::SP_CUSTOM`.
 pub const SP_CUSTOM: u32 = 3;
 
+/// A view of the actual native Company member. The Company retains ownership;
+/// consumers read individual fields and end aliases before owner destruction.
+#[repr(C)]
+pub struct CompanySettings {
+    pub engine_renew: bool,
+    pub engine_renew_months: i16,
+    pub engine_renew_money: u32,
+    pub renew_keep_length: bool,
+    pub vehicle: crate::settings_table::VehicleDefaults,
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "CompanySettings" ["settings"] => CompanySettings {
+        engine_renew, engine_renew_months, engine_renew_money, renew_keep_length, vehicle,
+    } width engine_renew_money: u32;
+}
+
 crate::abi::shared_records! {
     fn abi_record;
     /// Canonical construction-rate settings, embedded in `ConstructionSettings`.
@@ -46,6 +64,7 @@ crate::abi::shared_records! {
         pub never_expire_airports: *const bool,
         pub never_expire_vehicles: *const bool,
         pub no_servicing_if_no_breakdowns: *const bool,
+        pub old_vehicle_warn: *const bool,
         pub recalc_interval: *const u16,
         pub se_flat_world_height: *const u8,
         pub secondary_colour: *const u8,
@@ -86,6 +105,7 @@ impl SettingAddresses {
         never_expire_airports: std::ptr::null(),
         never_expire_vehicles: std::ptr::null(),
         no_servicing_if_no_breakdowns: std::ptr::null(),
+        old_vehicle_warn: std::ptr::null(),
         recalc_interval: std::ptr::null(),
         se_flat_world_height: std::ptr::null(),
         secondary_colour: std::ptr::null(),
