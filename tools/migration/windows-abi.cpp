@@ -149,6 +149,15 @@ static void Calls()
 		shared.town_count = []() noexcept -> size_t { return 1; };
 		shared.town_next_id = [](uint32_t from) noexcept -> uint32_t { return from == 0 ? UINT16_MAX - 1 : UINT32_MAX; };
 		shared.town_owner_by_id = [](uint32_t id) noexcept { CHECK(id == UINT16_MAX - 1); return owner; };
+		/* Preserve the sparse boundary ID while coordinates read canonical slots.
+		 * The borrowed descriptor points at the same isolated owner as the callbacks. */
+		std::vector<RustPoolSlot> town_slots(UINT16_MAX);
+		town_slots[UINT16_MAX - 1].record = owner;
+		const RustPoolDescriptor town_descriptor{
+			.slots = {town_slots.data(), town_slots.size(), 0}, .first_unused = UINT16_MAX, .items = 1,
+		};
+		const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
+		shared.town_pool = &town_descriptor_ptr;
 		openttd_rust_town_rebuild_index(&shared);
 		founding.resolve = [](uint16_t id) noexcept -> OpenTTDTownRef { CHECK(id == UINT16_MAX); return {nullptr, nullptr, id}; };
 		uint32_t error = 0; auto *cost = reinterpret_cast<OpenTTDCommandCost *>(&error); OpenTTDTownFoundingFrame frame; const uint8_t text = 'x';
