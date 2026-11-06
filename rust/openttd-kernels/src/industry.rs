@@ -1978,7 +1978,6 @@ crate::abi::layouts! {
     "OpenTTDIndustryTransactionServices" ["industry"] => crate::industry::TransactionServices {
         raw_setting,
         multiple_per_town,
-        town,
         industry,
 
         edge_distance,

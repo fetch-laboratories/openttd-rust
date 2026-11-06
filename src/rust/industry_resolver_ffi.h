@@ -22,14 +22,12 @@ struct OpenTTDIndustryResolverContext {
 	uint16_t id;
 	uint8_t type;
 };
-/** Strict pool lookup consumes only canonical owner and native town association. */
-struct OpenTTDIndustryResolverRef { OpenTTDIndustry *owner; Town *town; };
 struct OpenTTDIndustryFounderInfo { uint8_t colours; bool is_ai; };
 struct OpenTTDIndustryResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDIndustryLifecycleServices *lifecycle;
 	const OpenTTDIndustryTileServices *tile;
-	OpenTTDIndustryResolverRef (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
+	OpenTTDIndustry *(*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
 	uint16_t (*clean_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clean_gfx);
 	uint32_t (*nearby)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
 	uint32_t (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);

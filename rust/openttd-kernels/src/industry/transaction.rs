@@ -49,7 +49,6 @@ pub struct LocationResult {
 pub struct TransactionServices {
     pub raw_setting: unsafe extern "C" fn() -> u8,
     pub multiple_per_town: unsafe extern "C" fn() -> bool,
-    pub town: unsafe extern "C" fn(*mut ShellHandle) -> *const TownHandle,
     pub industry: unsafe extern "C" fn(u16) -> *mut ShellHandle,
     pub edge_distance: unsafe extern "C" fn(u32, u8) -> u32,
     pub refinery_limit: unsafe extern "C" fn() -> u8,
@@ -253,7 +252,8 @@ impl Engine<'_> {
         if !unsafe { (self.x.multiple_per_town)() } {
             for n in 0..self.registry_count(kind) {
                 let shell = unsafe { (self.x.industry)(self.registry_id(kind, n)) };
-                if unsafe { (self.x.town)(shell) } == town {
+                let owner = unsafe { (self.m.owner)(shell) };
+                if unsafe { (*owner).record.town.cast_const() } == town {
                     self.fail(self.e.one_per_town);
                     return None;
                 }

@@ -61,9 +61,7 @@ pub struct CommandServices {
     pub bribe_error: extern "C" fn(),
     pub next_waypoint: extern "C" fn(u32) -> Relation,
     pub next_depot: extern "C" fn(u32) -> Relation,
-    pub next_industry: extern "C" fn(u32) -> Relation,
     pub set_object_town: extern "C" fn(*mut Object, *mut TownHandle),
-    pub industry_town_by_tile: extern "C" fn(u32) -> *mut TownHandle,
     pub remove_town_sign: extern "C" fn(*mut TownHandle),
     pub delete_town: extern "C" fn(*mut TownHandle),
     pub cleaning_pool: extern "C" fn() -> bool,
@@ -105,6 +103,18 @@ impl<'a> Commands<'a> {
     fn object_query(&self) -> &QueryServices {
         // SAFETY: The canonical query table has the same lifetime.
         unsafe { &*self.objects().query }
+    }
+    fn industry(&self) -> &crate::industry::Services {
+        // SAFETY: The shared subsidy table holds the canonical industry services.
+        unsafe { &*(*self.s.subsidies).industry }
+    }
+    fn industry_town(&self, tile: u32) -> *mut TownHandle {
+        let world = self
+            .world
+            .get_or_init(|| crate::map_func::World::new(self.shared));
+        let id = crate::industry_map::get_industry_index(&world.types, tile).unwrap();
+        let owner = unsafe { ((*self.industry().resolver).get)(id.0) };
+        unsafe { (*owner).record.town }
     }
     fn resolve(&self, id: u16) -> TownRef {
         (self.f.resolve)(TownId(id))
@@ -438,7 +448,7 @@ impl<'a> Commands<'a> {
             let clear = match (self.shared.tile_type)(tile) {
                 MP_ROAD => self.town_owned_road(tile) && (self.shared.town_index)(tile) == t.id.0,
                 MP_HOUSE => (self.shared.town_index)(tile) == t.id.0,
-                MP_INDUSTRY => (self.s.industry_town_by_tile)(tile) == t.shell,
+                MP_INDUSTRY => self.industry_town(tile) == t.shell,
                 MP_OBJECT => {
                     if (self.shared.town_count)() == 1 {
                         true
@@ -762,12 +772,12 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
     if s.assertions {
         let mut from = 0;
         loop {
-            let i = (s.next_industry)(from);
-            if i.next == u32::MAX {
+            let i = unsafe { (c.industry().next_tick)(from) };
+            if i.industry.is_null() {
                 break;
             }
-            from = i.next;
-            assert!(i.town != t.shell);
+            from = u32::from(i.id) + 1;
+            assert!(unsafe { (*i.owner).record.town } != t.shell);
         }
         from = 0;
         loop {
@@ -880,9 +890,7 @@ crate::abi::layouts! {
         bribe_error,
         next_waypoint,
         next_depot,
-        next_industry,
         set_object_town,
-        industry_town_by_tile,
         remove_town_sign,
         delete_town,
         cleaning_pool,

@@ -353,7 +353,6 @@ void openttd_industry_shape_error(OpenTTDIndustryCost *, const OpenTTDIndustryLo
 typedef struct OpenTTDIndustryTransactionServices {
 	uint8_t (*raw_setting)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(raw_setting);
 	bool (*multiple_per_town)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(multiple_per_town);
-	const OpenTTDTownHandle * (*town)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(town);
 	OpenTTDIndustryShell * (*industry)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(industry);
 	uint32_t (*edge_distance)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(edge_distance);
 	uint8_t (*refinery_limit)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(refinery_limit);

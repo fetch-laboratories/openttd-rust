@@ -1030,7 +1030,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 	static const OpenTTDIndustryTransactionServices services = {
 		.raw_setting = []() noexcept -> uint8_t { return _settings_game.construction.raw_industry_construction; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
-		.town = OpenTTDIndustryTownHandle,
 		.industry = RustIndustryByID<uint16_t>,
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },
 		.refinery_limit = []() noexcept -> uint8_t { return _settings_game.game_creation.oil_refinery_limit; },

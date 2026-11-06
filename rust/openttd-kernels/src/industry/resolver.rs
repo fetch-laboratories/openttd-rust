@@ -32,11 +32,6 @@ pub struct ResolverContext {
     pub kind: u8,
 }
 #[repr(C)]
-pub struct ResolverRef {
-    pub owner: *mut Industry,
-    pub town: *mut TownHandle,
-}
-#[repr(C)]
 pub struct FounderInfo {
     pub colours: u8,
     pub is_ai: bool,
@@ -46,7 +41,7 @@ pub struct ResolverServices {
     pub shared: *const crate::services::Services,
     pub lifecycle: *const LifecycleServices,
     pub tile: *const TileServices,
-    pub get: unsafe extern "C" fn(u16) -> ResolverRef,
+    pub get: unsafe extern "C" fn(u16) -> *mut Industry,
     pub clean_gfx: unsafe extern "C" fn(u32) -> u16,
     pub nearby: unsafe extern "C" fn(u8, u32, bool) -> u32,
     pub water_distance: unsafe extern "C" fn(u32, bool) -> u32,
@@ -164,7 +159,7 @@ fn closest(
             continue;
         }
         let other = unsafe { (s.get)(id) };
-        let other_tile = unsafe { (*other.owner).record.location.tile };
+        let other_tile = unsafe { (*other).record.location.tile };
         best = best.min(map.distance_manhattan(tile, other_tile));
     }
     best
@@ -210,12 +205,11 @@ fn count_and_distance(
                 continue;
             }
             let other = unsafe { (s.get)(id) };
-            if (layout == 0 || unsafe { (*other.owner).record.selected_layout } == layout)
-                && (!town || other.town == current.town)
+            if (layout == 0 || unsafe { (*other).record.selected_layout } == layout)
+                && (!town || unsafe { (*other).record.town } == current.town)
             {
-                distance = distance.min(
-                    map.distance_manhattan(tile, unsafe { (*other.owner).record.location.tile }),
-                );
+                distance = distance
+                    .min(map.distance_manhattan(tile, unsafe { (*other).record.location.tile }));
                 count = count.wrapping_add(1);
             }
         }
@@ -859,7 +853,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDIndustryFounderInfo" ["industry"] => FounderInfo { colours, is_ai, };
     "OpenTTDIndustryResolverContext" ["industry"] => ResolverContext { owner, industry, town, tile, random_bits, id, kind => type, };
-    "OpenTTDIndustryResolverRef" ["industry"] => ResolverRef { owner, town, };
     "OpenTTDIndustryResolverServices" ["industry"] => ResolverServices {
         shared,
         lifecycle,
