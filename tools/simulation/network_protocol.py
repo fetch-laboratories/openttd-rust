@@ -346,7 +346,7 @@ def observe(peers: list[Peer], rejected: bytes, source: Path) -> Summary:
     if len(packets(server, 40)) < 3 or rejected != bytes((4, 0, 3, 7)):
         raise RuntimeError("quit or invalid-admission reason differs")
     saves = [peer.folder / "save/stop.sav" for peer in peers]
-    stats: core.Stats = {"chunks": 0, "elements": 0, "masked": {}}
+    stats: core.Stats = core.empty_stats()
     for save in saves[1:]:
         if core.compare_saves(saves[0], save, NAME, 10, stats):
             raise RuntimeError("controlled-tick client/server semantic worlds differ")
@@ -500,7 +500,7 @@ def prepare(
         saves["candidate"],
         NAME,
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     ):
         raise RuntimeError("mixed server-role semantic worlds differ")
     result["network_protocol"] = summaries

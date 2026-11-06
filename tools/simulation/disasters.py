@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import shutil
 import struct
 import threading
 from collections.abc import Mapping
@@ -62,10 +61,11 @@ def uses_ai(scenario: Scenario) -> bool:
 
 def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
-        ai = run_dir / "ai/disasters"
-        shutil.copytree(scenario["scenario_ai"], ai)
-        (ai / "parameters.nut").write_text(
-            f'DISASTER_SETUP <- {str(scenario.get("setup", False)).lower()};\nDISASTER_ACTION <- "{scenario.get("action", "none")}";\nDISASTER_TARGET <- {scenario.get("target", 0)};\n'
+        core.install_ai(
+            scenario,
+            run_dir,
+            "disasters",
+            f'DISASTER_SETUP <- {str(scenario.get("setup", False)).lower()};\nDISASTER_ACTION <- "{scenario.get("action", "none")}";\nDISASTER_TARGET <- {scenario.get("target", 0)};\n',
         )
 
 
@@ -102,7 +102,7 @@ def negative_probes(source: Path, folder: Path, main: int) -> list[str]:
             changed,
             "disaster-negative",
             2,
-            {"chunks": 0, "elements": 0, "masked": {}},
+            core.empty_stats(),
         )
         if (
             len(differences) != 1

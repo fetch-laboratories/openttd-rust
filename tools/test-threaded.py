@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import cast
 from unittest.mock import patch
 
-from simulation import core, sanitizers, thread_sanitizer, threaded
+from simulation import core, game, sanitizers, thread_sanitizer, threaded
 
 import migration
 
@@ -313,7 +313,7 @@ class ThreadedTests(unittest.TestCase):
             scenario = cast(threaded.Scenario, {"name": "aborted"})
             with (
                 patch.object(migration, "TSAN", True),
-                patch.object(core, "GAME_LOCK", root / "game.lock"),
+                patch.object(game, "GAME_LOCK", root / "game.lock"),
                 patch.object(threaded, "prepare", prepare),
                 self.assertRaisesRegex(RuntimeError, f"TSan aborted the run: {fatal}"),
             ):

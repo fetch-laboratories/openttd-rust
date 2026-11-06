@@ -182,9 +182,7 @@ impl<'a> World<'a> {
         get_tunnel_bridge_length(self.map, start, end)
     }
     fn slope_z(&self, tile: u32) -> (u8, i32) {
-        // SAFETY: immutable water table; no world borrow crosses the call.
-        let value = (self.s.tile_slope_z)(tile);
-        (value.slope.0, value.z)
+        crate::map_func::World::new(self.s).tile_slope_z(tile)
     }
     fn editor(&self) -> bool {
         (self.town.environment.editor)()
@@ -314,7 +312,7 @@ impl<'a> World<'a> {
     }
     fn clear_cost(&self, tile: u32, base: usize) -> i64 {
         let mut result = price(base);
-        match (self.s.tunnel_transport)(tile) {
+        match crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) {
             ROAD => {
                 let road = (self.s.road_type)(tile);
                 let tram = (self.s.tram_type)(tile).0;
@@ -330,8 +328,10 @@ impl<'a> World<'a> {
                 }
             }
             RAIL => {
-                result =
-                    result.saturating_add((self.r.rail_clear_cost)((self.rail.rail_type)(tile).0));
+                result = result.saturating_add((self.r.rail_clear_cost)(
+                    crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile))
+                        .0,
+                ));
             }
             WATER => result = price(PR_CLEAR_AQUEDUCT),
             _ => (),
@@ -470,7 +470,7 @@ impl<'a> World<'a> {
         if (self.s.is_bridge)(start)
             && (self.s.is_bridge)(end)
             && (self.a.other_bridge_end)(start) == end
-            && (self.s.tunnel_transport)(start) == transport
+            && crate::map_func::World::new(self.s).tunnel_bridge_transport(start) == transport
         {
             w::hit(w::TB_REPLACE_BRIDGE);
             match transport {
@@ -481,7 +481,10 @@ impl<'a> World<'a> {
                 }
                 _ => (),
             }
-            if transport == RAIL && (self.rail.rail_type)(start).0 != railtype {
+            if transport == RAIL
+                && crate::services::RailType(crate::map_func::World::new(self.s).rail_type(start)).0
+                    != railtype
+            {
                 return cost.error(self.a.strings.demolish_bridge);
             }
             if transport == ROAD {
@@ -566,7 +569,7 @@ impl<'a> World<'a> {
             }
             cost.add_money(south.money());
             for tile in [start, end] {
-                if !(self.s.bridge_above)(tile) {
+                if !crate::map_func::World::new(self.s).bridge_above(tile) {
                     continue;
                 }
                 if axis == (self.s.bridge_axis)(tile) {
@@ -588,7 +591,7 @@ impl<'a> World<'a> {
                 {
                     return cost.error(self.a.strings.too_high);
                 }
-                if (self.s.bridge_above)(tile) {
+                if crate::map_func::World::new(self.s).bridge_above(tile) {
                     return cost.error(self.a.strings.demolish_bridge);
                 }
                 self.build_above_tile(ret, tile, flags, axis, start_z.wrapping_add(1));
@@ -646,10 +649,16 @@ impl<'a> World<'a> {
                 }
                 ROAD => {
                     if new_owner {
-                        if hasroad && (self.s.road_owner)(start) == OWNER_NONE {
+                        if hasroad
+                            && crate::map_func::World::new(self.s).road_owner(start, false)
+                                == OWNER_NONE
+                        {
                             hasroad = false;
                         }
-                        if hastram && (self.s.tram_owner)(start) == OWNER_NONE {
+                        if hastram
+                            && crate::map_func::World::new(self.s).road_owner(start, true)
+                                == OWNER_NONE
+                        {
                             hastram = false;
                         }
                     }
@@ -662,12 +671,12 @@ impl<'a> World<'a> {
                         }
                     }
                     let owner_road = if hasroad {
-                        (self.s.road_owner)(start)
+                        crate::map_func::World::new(self.s).road_owner(start, false)
                     } else {
                         company
                     };
                     let owner_tram = if hastram {
-                        (self.s.tram_owner)(start)
+                        crate::map_func::World::new(self.s).road_owner(start, true)
                     } else {
                         company
                     };
@@ -978,17 +987,17 @@ impl<'a> World<'a> {
         if company == OWNER_WATER || self.editor() {
             return;
         }
-        match (self.s.tunnel_transport)(tile) {
+        match crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) {
             ROAD => {
                 let road = (self.s.road_type)(tile);
                 let tram = (self.s.tram_type)(tile).0;
                 let mut road_owner = company;
                 let mut tram_owner = company;
                 if road != INVALID_ROADTYPE {
-                    road_owner = (self.s.road_owner)(tile);
+                    road_owner = crate::map_func::World::new(self.s).road_owner(tile, false);
                 }
                 if tram != INVALID_ROADTYPE {
-                    tram_owner = (self.s.tram_owner)(tile);
+                    tram_owner = crate::map_func::World::new(self.s).road_owner(tile, true);
                 }
                 if road_owner == OWNER_TOWN
                     && company != OWNER_TOWN
@@ -1073,7 +1082,7 @@ impl<'a> World<'a> {
         let base = self.clear_cost(tile, PR_CLEAR_TUNNEL);
         let length = self.length(tile, end).wrapping_add(2);
         if flags & DoCommandFlag::EXECUTE != 0 {
-            if (self.s.tunnel_transport)(tile) == RAIL {
+            if crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == RAIL {
                 let dir = (self.s.tunnel_bridge_direction)(tile);
                 let track = diag_dir_to_diag_track(dir, |ok| {
                     crate::movement::native_assert(self.s, ok);
@@ -1083,7 +1092,10 @@ impl<'a> World<'a> {
                 if (self.s.company_valid)(owner) {
                     (self.r.rail_infrastructure)(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.s).rail_type(tile),
+                        )
+                        .0,
                         length
                             .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
                             .wrapping_neg(),
@@ -1108,7 +1120,7 @@ impl<'a> World<'a> {
             } else {
                 self.update_road_infrastructure(
                     (self.s.road_type)(tile),
-                    (self.s.road_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, false),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1116,7 +1128,7 @@ impl<'a> World<'a> {
                 );
                 self.update_road_infrastructure(
                     (self.s.tram_type)(tile).0,
-                    (self.s.tram_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, true),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1164,7 +1176,7 @@ impl<'a> World<'a> {
         let base = self.clear_cost(tile, PR_CLEAR_BRIDGE);
         let length = self.length(tile, end).wrapping_add(2);
         if flags & DoCommandFlag::EXECUTE != 0 {
-            let rail = (self.s.tunnel_transport)(tile) == RAIL;
+            let rail = crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == RAIL;
             let owner = (self.s.tile_owner)(tile);
             let height = self.bridge_height(tile);
             let train = if rail {
@@ -1181,16 +1193,19 @@ impl<'a> World<'a> {
                 if (self.s.company_valid)(owner) {
                     (self.r.rail_infrastructure)(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.s).rail_type(tile),
+                        )
+                        .0,
                         length
                             .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
                             .wrapping_neg(),
                     );
                 }
-            } else if (self.s.tunnel_transport)(tile) == ROAD {
+            } else if crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == ROAD {
                 self.update_road_infrastructure(
                     (self.s.road_type)(tile),
-                    (self.s.road_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, false),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1198,7 +1213,7 @@ impl<'a> World<'a> {
                 );
                 self.update_road_infrastructure(
                     (self.s.tram_type)(tile).0,
-                    (self.s.tram_owner)(tile),
+                    crate::map_func::World::new(self.s).road_owner(tile, true),
                     length
                         .wrapping_mul(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
@@ -1219,7 +1234,7 @@ impl<'a> World<'a> {
             // SAFETY: immutable table; only original scalar observations cross.
             let road_ground = unsafe { &*self.a.road_ground };
             while middle != end {
-                if (self.s.is_normal_road_tile)(middle)
+                if crate::map_func::World::new(self.s).is_normal_road_tile(middle)
                     && (road_ground.roadside)(middle).0 == ROADSIDE_TREES.0
                 {
                     let min_z = (self.s.tile_max_z)(middle).wrapping_add(3);
@@ -1230,7 +1245,10 @@ impl<'a> World<'a> {
                 (self.a.clear_middle)(middle);
                 (self.a.mark_dirty_height)(
                     middle,
-                    (height as u32).wrapping_sub((self.s.tile_height)(middle)) as i32,
+                    (height as u32).wrapping_sub(crate::tile_map::tile_height_in(
+                        &crate::map_func::World::new(self.s),
+                        middle,
+                    )) as i32,
                 );
                 middle = middle.wrapping_add(delta);
             }
@@ -1283,13 +1301,13 @@ impl<'a> World<'a> {
         } else {
             0
         };
-        let transport = (self.s.tunnel_transport)(tile);
+        let transport = crate::map_func::World::new(self.s).tunnel_bridge_transport(tile);
         if transport == ROAD {
             for rtt in [0, 1] {
                 let owner = if rtt == 0 {
-                    (self.s.road_owner)(tile)
+                    crate::map_func::World::new(self.s).road_owner(tile, false)
                 } else {
-                    (self.s.tram_owner)(tile)
+                    crate::map_func::World::new(self.s).road_owner(tile, true)
                 };
                 if owner == old {
                     let kind = if rtt == 0 {
@@ -1323,9 +1341,18 @@ impl<'a> World<'a> {
             return;
         }
         if transport == RAIL {
-            (self.r.rail_infrastructure)(old, (self.rail.rail_type)(tile).0, pieces.wrapping_neg());
+            (self.r.rail_infrastructure)(
+                old,
+                crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile)).0,
+                pieces.wrapping_neg(),
+            );
             if new != INVALID_OWNER {
-                (self.r.rail_infrastructure)(new, (self.rail.rail_type)(tile).0, pieces);
+                (self.r.rail_infrastructure)(
+                    new,
+                    crate::services::RailType(crate::map_func::World::new(self.s).rail_type(tile))
+                        .0,
+                    pieces,
+                );
             }
         } else if transport == WATER {
             (self.stations.water_infrastructure)(old, pieces.wrapping_neg());
@@ -1358,7 +1385,7 @@ impl<'a> World<'a> {
         if (self.s.build_on_slopes)()
             && (self.s.autoslope)()
             && (self.s.is_bridge)(tile)
-            && (self.s.tunnel_transport)(tile) != WATER
+            && crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) != WATER
         {
             let direction = (self.s.tunnel_bridge_direction)(tile);
             let axis = diag_dir_to_axis(direction, |ok| {

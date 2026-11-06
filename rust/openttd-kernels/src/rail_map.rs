@@ -61,9 +61,35 @@ impl crate::map_func::World<'_> {
     pub(crate) fn has_signals(&self, t: u32) -> bool {
         self.rail_tile_type(t) == RAIL_TILE_SIGNALS
     }
+    /// `IsRailDepot`, with `GetRailTileType`'s tile-type assertion.
+    pub(crate) fn is_rail_depot(&self, t: u32) -> bool {
+        self.rail_tile_type(t) == RAIL_TILE_DEPOT
+    }
+    /// `IsPlainRail`, with `GetRailTileType`'s tile-type assertion.
+    pub(crate) fn is_plain_rail(&self, t: u32) -> bool {
+        self.rail_tile_type(t) <= RAIL_TILE_SIGNALS
+    }
+    /// `GetRailGroundType`.
+    pub(crate) fn rail_ground(&self, t: u32) -> u8 {
+        self.asserted(|m| get_rail_ground_type(m, t))
+    }
     /// `GetPresentSignals`.
-    fn present_signals(&self, t: u32) -> u8 {
+    pub(crate) fn present_signals(&self, t: u32) -> u8 {
         (Self::byte(self.types.m3(t)) >> 4) & 0xF
+    }
+    /// `GetSignalStates`.
+    pub(crate) fn signal_states(&self, t: u32) -> u8 {
+        (Self::byte(self.types.m4(t)) >> 4) & 0xF
+    }
+    /// `GetSignalStateByTrackdir`: 1 is `SIGNAL_STATE_GREEN`.
+    pub(crate) fn signal_state_by_trackdir(&self, t: u32, trackdir: u8) -> u8 {
+        self.check(crate::track_func::is_valid_trackdir(trackdir));
+        self.check(self.has_signal_on_track(t, crate::track_func::trackdir_to_track(trackdir)));
+        u8::from(self.signal_states(t) & crate::signal_func::signal_along_trackdir(trackdir) != 0)
+    }
+    /// `IsOnewaySignal`.
+    pub(crate) fn oneway_signal(&self, t: u32, track: u8) -> bool {
+        self.signal_type(t, track) != crate::signal_type::SIGTYPE_PBS
     }
     /// `HasSignalOnTrack`.
     pub(crate) fn has_signal_on_track(&self, t: u32, track: u8) -> bool {

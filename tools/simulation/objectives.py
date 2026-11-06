@@ -105,7 +105,7 @@ def prepare(
         saves["candidate"],
         scenario["name"],
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     )
     if traces["reference"] != traces["candidate"] or differences:
         raise RuntimeError("objectives production results, events or save state differ")

@@ -14,11 +14,12 @@ import dataclasses
 import json
 import os
 import re
-import subprocess
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TypedDict
+
+import vcs
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = "migration/harness-inventory.json"
@@ -176,7 +177,7 @@ def write(inventory: Inventory) -> None:
 
 
 def git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
+    return vcs.git(*args, cwd=ROOT)
 
 
 def main() -> int:

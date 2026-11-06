@@ -1008,7 +1008,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.has_signal_td = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignalTrackdir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.hide_fill = TrainHideFill,
 		.is_bridge = TrainIsBridge,
-		.is_crossing = TrainSharedMap<uint64_t, &OpenTTDSharedServices::is_level_crossing>,
+		.is_crossing = OpenTTDLegacyMapQuery<uint64_t, MapSvcIsLevelCrossing, OpenTTDTrainHandle, uint32_t>,
 		.is_depot = OpenTTDLegacyMapQuery<uint64_t, RustRailDepotTile, OpenTTDTrainHandle, uint32_t>,
 		.is_plain_rail = OpenTTDLegacyMapQuery<uint64_t, RustPlainRailTile, OpenTTDTrainHandle, uint32_t>,
 		.is_station = OpenTTDLegacyMapQuery<uint64_t, RustIsRailStation, OpenTTDTrainHandle, uint32_t>,

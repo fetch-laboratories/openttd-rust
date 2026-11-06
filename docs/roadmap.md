@@ -4,49 +4,53 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-06, retrospective repairs through integration 91)
+## Where the fork stands (2026-11-06, integration 92)
 
 Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 
-- Code is `561ec04c42` (integration 91). #711 repaired #709 at 89; #705 completed
-  typing, TSan startup checks and precise network-join diagnostics at 90. Both
-  passed Opus 5.5 review and exact-head Full. #712 at 91 completes accounting,
-  housekeeping, identity and read-only fact tools under the same review and CI.
-  The retrospective repairs are complete. The user authorized a new root thread
-  to invoke `start-development`, using Sol ultra with Fast off.
-- A metric-version-2 stocktake recounts integration 88 and the integrated tip
-  with the same implementation and scope. Original/glue inventory, exports and
-  callback counts are unchanged. The full fork C++ source census is 281,145;
-  the conservative candidate upper bound is 281,032, including 2,435 unresolved
-  evidence lines. Inventory corrections receive no deletion credit.
-- The steering recount matches navigation: 61,415 of 284,355 original code lines
-  retired (21.60%), +5,239 since steering 29. The measured original-plus-glue
-  inventory is 258,221, down 4,289 on the consistent recount. Its scope and the
-  separately counted evidence C++ remain in Phases; #707's correction is integrated.
-- Rust is 138,245 lines (+9 since 88); tooling 60,018 (+1,349); glue 35,281;
-  exports 1,542; callback
-  slots 3,636. Current rebound/shared-accessor/orphan baseline rows are
-  **371 / 119 / 43**. Simulation-source retirement is 41,139 of 61,148 (67.28%),
-  not whole-game completion. No coverage or deep run was performed.
-- Four branches remain, at their paused heads: #700, #704, #698 and #706. The
-  six-component
-  bound is unchanged. #705 checks every Python file under tools with Ruff ANN
-  and ty. #712's focused tests, historical recount, Opus review and exact-head
-  Full passed. Root inspected and applied ordinary cleanup: two completed
-  checkouts and a consumed log removed (133.9 MB); retained evidence and dirty,
-  locked and open-PR worktrees were preserved.
-- #636's shared-record/data-boundary work removed 1,952 C++ lines. Direct Rust
-  Tick dispatch remains in #656 with routing, lifecycle and pool completion;
-  the historical integration title does not establish that checkpoint.
-- **Speed:** all seven merged-tip candidate/reference state and log comparisons
-  are equal with matched Callgrind 3.26, including drawing. #275's narrow
-  identity correction is integrated; all six benchmark projections are accepted
-  and below their bands. Anchors are unchanged; no wall pass was triggered.
-- Exact #698 at `79bc4eaa94` remeasures TGP at 2,791,048,267 Ir, with an accepted
-  **1.174690x** projection. The diagnostic same-tool delta from 88 is −0.8754%;
-  it is historical PR evidence; the accepted merged-tip projections are below.
-  Counts, attribution and limits
-  are on [#275](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6677008877).
+- Code is `f5f16377ce` (integration 92): reviewed map-leaf reads #698 and
+  bounded harness consolidation #713 integrated through #715. Exact-head Full
+  passed at `f31186a239`; the merged Git tree is identical. #673 is complete.
+  The retrospective repairs through 91 remain integrated. No rollback was eligible.
+- The metric-version-2 census is **280,898 total fork C++ lines**, down 247
+  from integration 91: the historical original-plus-glue series is **258,043**
+  (down 178), and separate evidence C++ is **22,855** (down 69). The conservative
+  candidate upper bound is 280,785, including 2,433 unresolved evidence lines.
+  These source inventories do not claim that every line is compiled into one executable.
+- Original retirement is unchanged at **61,415 of 284,355 (21.60%)**. By the
+  roadmap's source-area accounting buckets: phase 1 logic 38,215; phase 2 storage
+  2,924; phase 3 readers 12,274; phase 4 support/graphics/data 5,326; phase 5
+  GUI/platform 345; phase 6 vendored 2,317; upstream tests 14 separately. These
+  are accounting buckets, not completed ownership. Simulation-source retirement
+  remains 41,139 of 61,148 (67.28%). No coverage or deep run was performed.
+- Since the final integration-91 stocktake `fc20326bea` (08:28 UTC), compiled
+  original-plus-glue C++ fell 178 in 0.06454 calendar days: about **2,758 lines/day**;
+  original retirement was zero. This short interval is not a forecast. The final
+  178-line reduction replaces #698's 198-line historical checkpoint after review
+  restored independent native observations and removed orphan bindings.
+- Rust is **138,634** code lines (+389); tooling **60,293** (+275); glue **35,103**
+  (-178). Exports remain **1,542**; callback slots are **3,579** (-57).
+  Rebound/shared-accessor/orphan baseline rows are **351 / 119 / 43** (-20 / 0 / 0).
+  Added-line PR accounting includes moves: Rust added 1,241; tooling added 2,379;
+  original retired zero; glue added 46 and removed 224. #713's separately measured
+  physical Python growth is 360 lines, with its explicit configuration and
+  compatibility cost accepted. Inventory, digests, comparisons and the corrected
+  negative control are preserved; Full passed the unchanged timeout check.
+- Four component branches remain: **#700, #704, #706 and #714**. Root selected
+  shared pool policy #716 and link-graph/job ownership #717 for the two free
+  slots. All pool owners confirmed that no competing generic pool primitive was
+  started. Root supplies it once; records, attachments and controllers continue
+  independently. Shared-record checkpoints do not complete pool allocation.
+- Housekeeping removed four clean completed checkouts (11.4 GB) after a live-job check. Active, dirty, locked and retained evidence work remains protected.
+- #636's shared-record/data-boundary work removed 1,952 C++ lines. Its direct
+  Tick dispatch, routing, lifecycle and pool completion remain in combined
+  #656/#598/#599, now #714. No duplicate retirement is claimed.
+- **Speed:** integration 91 remains the latest completed merged-tip profile:
+  all seven state/log comparisons equal and all six projections accepted below
+  their bands with matched Callgrind 3.26. Integration 92's due profile is next;
+  its result will replace the table below. Anchors remain unchanged and no quiet
+  wall pass is selected without the existing policy trigger. Coverage limits,
+  threaded/GUI contention and arbitrary GRFs remain on #156.
 
 | Scenario | Original Ir | Candidate Ir (91) | Accepted projection (91) |
 | --- | ---: | ---: | ---: |
@@ -58,8 +62,9 @@ Agent: /root | Model: gpt-6.1-sol | Reasoning effort: ultra
 | P2016 | 11,343,424,651 | 13,595,497,498 | 1.382593x |
 | Drawing | 2,149,015,961 | 2,154,260,413 | 1.004635x |
 
-The current [profile and policy decision](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6680607521)
-retain the distinction between projections and quiet wall measurements.
+The retained [integration-91 profile decision](https://github.com/fetch-laboratories/openttd-rust/issues/275#issuecomment-6680607521)
+remains historical evidence while integration 92 is profiled. Projections and
+quiet wall measurements stay distinct.
 
 ## Phases
 
@@ -174,8 +179,8 @@ next-phase-only rule; their exit outcomes describe the fixed destination.
 | 6. Vendored and final retirement | 52,831 vendored C++; remaining shells, declarations, fixtures and adapters in the other rows retire with their last consumers | Retire all remaining original and fork C++, including generated glue and evidence adapters, and remove candidate native targets. Preserve the pinned original separately. Replace or port libraries by observed behavior; the user's Squirrel decision is taken when this phase reaches it | Outcome fixed; implementation plan deferred until adjacent. |
 
 Root's first actions on development resume:
-1. Follow the current resume checkpoint for the four paused branches.
-   Retrospective repairs through integration 91 are integrated.
+1. Follow the current resume checkpoint for the active owners.
+   Repairs through integration 91 and development integration 92 are integrated.
    Keep readiness-ordered reviews and the six-component WIP bound while using
    the host's available agent slots. No new speed or metric gate.
 2. Finish #634/#635 as complete pool owners, not just record declarations.
@@ -401,6 +406,7 @@ are actual compiled-C++ reductions where stated, not sums of rewritten lines.
 | 89 | Native fatal reporting #709, repair #711 | `6426473252` | Production-path fatal probe and unrepaired-binary negative control; original/glue C++ unchanged. |
 | 90 | Typing, TSan startup and network diagnostics #705 | `8fc7620ce5` | All-tools typing and precise one-use network allowances; platform workflow passed; C++ unchanged. |
 | 91 | Accounting, housekeeping, identity and fact tools #712 | `561ec04c42` | Versioned census, ordinary cleanup and compatible profile guard; no ownership-retirement credit. |
+| 92 | Map leaves #698 and harness consolidation #713, combined #715 | `f5f16377ce` | Historical C++ -178; total fork C++ -247; callback slots -57; original retirement unchanged. |
 
 ## Work order
 
@@ -416,34 +422,26 @@ scenarios, an unrepaired-binary negative control, Opus 5.5 review and exact-head
 Full. #705 integrated as **90**, `8fc7620ce5`, after its scoped Opus review and
 exact-head Full. The skills are installed and Opus-reviewed in
 `39aa4dc2db`. #712 integrated as **91**, `561ec04c42`, after Opus review and
-exact-head Full. #710 retains the external host-completion investigation; its
-repository helpers are complete. A user-requested Opus 5.5 xhigh investigation
-is running through T3, with CLI `t3 triage` available. Do not claim the suspected
-timing bug proven or fixed, add a polling supervisor, or modify host databases.
+exact-head Full. #710 records the completed separate Opus 5.5 xhigh host investigation and its
+supported-repair prerequisites. The user reported early completion delivery and
+auto-settle detachment mechanisms; no host repair or setting change was made.
+Continue verified-job recovery, without duplicating the investigation, adding
+a polling supervisor or modifying host state.
 
 One ranked list. Each free slot takes the highest unblocked item that fits the
 six-branch limit and the disjoint-service rule; finishing review and integration
 of an open branch comes first. A lower rank can run while a higher one waits.
 Scopes live in issues; per-PR changes live in each PR's steering comment.
 
-0. **Retrospective repository work is complete**, including real cleanup, a same-version stocktake and seven equal merged-tip profile comparisons. Resume development through the user-requested new root thread; do not duplicate this session's host investigation.
-1. **Finish the open branches in readiness order.** The [resume checkpoint](#resume-checkpoint-2026-11-06-retrospective-repairs-through-integration-91) holds current heads and concrete next actions for #700, #704, #698 and #706. #692 and #628 integrated together as 88, clearing their dependency events. Children check `.local/deep.lock.holders` before a native build, link or game, and pass `--jobs 3`. Rebuild an open PR's worktree only when its work resumes, after pulling it to the PR head. Use focused local checks and diagnostic CI subsets for concrete failures; no universal native profile precedes review and Full ([checks](workflow.md#checks)). #698 does not wait for PR speed evidence.
-2. **Type checking is complete** (user's first priority, #501 via #705 at 90).
-   The ANN ignore list is empty and `ty.toml` covers all of `tools/`.
-   - **#673's consolidation PR** follows typing and the #707/#708/#275 tools batch. Inventory, scenario digests and comparison results must stay identical. It is the only harness refactor; no broader rewrite.
+0. **Development is active through integration 92.** Retrospective repairs and the separate host investigation are complete; supported host repairs still require user direction. The integration-92 stocktake is recorded above and its merged-tip profile is due now.
+1. **Finish the open branches in readiness order.** The [resume checkpoint](#resume-checkpoint-2026-11-06-development-through-integration-92) holds current heads and next actions for #700, #704, #706 and #714. Root's **#716 shared Rust pool primitive** supplies the single allocation/bookkeeping definition for #634/#635/#656 and later selected pools; it is coupled support, not another phase-1 owner or a completed pool. Owners continue their disjoint work without duplicate primitives. Children inspect `.local/deep.lock.holders` before native work and use `--jobs 3`. Focused checks and diagnostic subsets address concrete failures; no universal native profile precedes review and Full.
+2. **Typing and bounded harness consolidation are complete.** #705 completed #501, and #713 completed #673 in integration 92. The ANN ignore list is empty, `ty.toml` covers `tools/`, and the inventory/digest/comparison observations are preserved. No broader harness rewrite is selected.
 3. **Maintenance and measurement.**
-   - **#707, #708, #275's identity correction and #710's helpers** integrated as #712 at 91. Cleanup, stocktake and merged-tip profiling are complete. Host completion delivery remains separately investigated. No new metric or ownership gate.
+   - **#707, #708, #275's identity correction and #710's helpers** integrated as #712 at 91. Cleanup, stocktake and merged-tip profiling are complete. The separate host investigation is complete and documented on #710; no host change or new metric/ownership gate is selected.
    - **#156**: repair script sweep high-bit observations in the next evidence batch; establish the nonempty network execution-queue seam before choosing its observation. Threaded cancellation remains with the socket/resource owner or user-requested threaded work.
    - **#686 (the user's request):** measured and its capacity decision resolved on 2026-11-06: the repository's lower subagent caps are lifted and Codex has 12 slots. The next steering review checks review/resume turnaround under that limit. #699's cache repair integrated as #701 and its issue is closed.
    - **TGP Ir attribution**: done on #275. The `tile_loop::run` gate repair went into #698. The vehicle record↔shell hops (0.44% to 0.51%) went to #656.
-   - **#565 item 2** (#698, work order item 1) with #168's unfinished world-generation leaves:
-     - remove map fallbacks;
-     - remove the remaining rail, crossing, depot, stop, water and tunnel leaves;
-     - remove `tile_slope_z` and the per-tile world-generation services;
-     - delete the duplicated `bridge_above` and `rail_tile_type`;
-     - retire the map-leaf callbacks in #691's overlap table (recorded on #565) by reusing #691's helpers.
-
-     Estimated compiled C++ removed: 300 to 600. It completes the phase-2 boundary and creates no phase-1 owner.
+   - **#565 map-leaf checkpoint #698 integrated in 92.** Its fallbacks, generation leaves, duplicated bridge/rail helpers and named #691 overlaps are retired within the reviewed scope. The final historical C++ reduction is 178 against the 300 to 600 estimate; required independent fixture observations explain the accepted cost. The retained town synthetic-slope fixture and seven services stay on #565 with #635; train/ship/reservation consumers belong to combined #656, and the remaining map bodies/allocation stay with the final map owner. This creates no phase-1 owner and does not claim the whole map boundary complete.
    - #500 typing adoption and the #168/#199 residual boundary cleanup attach to the owner touching those records. Completed-job publication stays with link graph and jobs.
    - **#678** (TSan startup aborts counted as clean runs) is complete through #705. **#693** (the mixed multiplayer diagnostic's late sync under host load) remains unproved; investigate it in a future selected tools batch without changing the original's frame/sync behavior or weakening an evidence check.
 4. **Ranked phase-2 queue (#570 integrated as 82).** Placement is decided: later records sit **beside** their shells ([world-state design](design/world-state.md#later-pool-record-placement-634-635-decided-2026-11-05-after-integration-82)). Briefs state its two conditions: no out-of-line record↔shell call, and no stored references. Cargo-packet co-allocation is decided at #634's pool-completion checkpoint.
@@ -451,9 +449,9 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
    | Rank | Owner | Estimated compiled C++ removed | Selection event / coupled scope |
    | ---: | --- | ---: | --- |
    | 1 | #634 station/road-stop/cargo attachments | 800 to 1,400 | #570 and placement decision; include CargoPacket/CargoPayment pool management, station vectors/names/caches, stored references, 110 to 160 field slots, `SharedForEachStation` and spatial callbacks. Coordinate flow publication with link graph. |
-   | 2 | Combined #656 + #598 + #599 vehicle owner | 750 to 1,250 | #570 integrated and remainder remeasured, including checkpoint 3/`SetDestTile`; residual records, names/sprite caches, maintenance, routing, lifecycle and pool allocation in one ownership PR. No duplicate #570 credit. |
+   | 2 | Active combined #656 + #598 + #599 vehicle owner (#714) | 750 to 1,250 | #570 integrated and remainder remeasured, including checkpoint 3/`SetDestTile`; residual records, names/sprite caches, maintenance, routing, lifecycle and pool allocation in one ownership PR. No duplicate #570 credit. |
    | 3 | #635 town/industry/subsidy | 500 to 1,000 | #570 and placement decision; 40 to 70 slots, mirrors/references, town coordinates, `psa_list` and remaining Rust-used caches. Disjoint from #634. |
-   | 4 | Link graph/jobs | 450 to 800 | #570 and integrated #628 schedule changes; graph/job storage, station flow publication and #168/#199/#500 completed-job publication. |
+   | 4 | Selected #717 link graph/jobs | 450 to 800 | #570 and integrated #628 schedule changes; graph/job storage, station flow publication and #168/#199/#500 completed-job publication. |
    | 5 | #637 engine/renewal with #497 | 400 to 750 | #570; adopt integrated #655 before deleting engine publication/name leaves; include GRF/override and vehicle-specific spec payloads. |
    | 6 | Orders/order lists/backups | 350 to 650 | Combined vehicle owner's BaseConsist changes integrated; current fields, native pool management and field-service round trips into Rust order owners. |
    | 7 | Companies/groups | 300 to 600 | Vehicle unit-number ownership settled; adopt integrated network/company changes; include settings, finance/statistics aliases, names/identity and remaining Rust-used state. |
@@ -473,7 +471,7 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect merely to fill a slot. Deep execution remains user-only.
 
 Recurring:
-- After every second integration, take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Integration 90's obligation was completed at 91; next after 92. Profile the merged tip in the background ([speed](speed.md#instruction-projections)).
+- After every second integration, take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Integration 92's stocktake is recorded above; its profile is due now. Next stocktake after 94. Profile the merged tip in the background ([speed](speed.md#instruction-projections)).
 - Run the platform cadence after every fifth integration; integration 90 passed and next is after 95. Integration 85's failure was repaired by #702 and its rerun passed. A new failure stops integrations. After two hosted-capacity macOS cancellations, use `CI_MACOS_HEAVY` as documented, and delete it afterwards.
 - This host's first quiet pass integrated with #676 (77). Further passes follow the [speed policy](speed.md#policy) triggers.
 - Deep checks run only on the user's request (user, 2026-10-31).
@@ -484,42 +482,38 @@ Excluded, with return conditions reconsidered on 2026-11-06; neither trigger is 
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
-## Resume checkpoint (2026-11-06, retrospective repairs through integration 91)
+## Resume checkpoint (2026-11-06, development through integration 92)
 
-**Retrospective repository repairs and final checks are complete.** The user
-authorized a new Sol ultra root thread, Fast off, invoking `start-development`.
-The rows below preserve the four paused owners' next actions for that root;
-their heads were not changed during this repair session.
+Root is Codex (`gpt-6.1-sol`, ultra, Fast off), with fresh Sol high independent
+reviews under the current team policy. Code is `f5f16377ce`: #698 and #713 merged
+through #715 after exact-head Full. #673 is closed. The integration-91 repairs
+remain integrated, no rollback is eligible, and no new schedule or cadence exists.
+`CI_ON_DEMAND` remains true; the next platform cadence is after integration 95.
 
-Root is now in Codex (`gpt-6.1-sol`, ultra), with Opus 5.5 independent reviews.
-Code is `561ec04c42`, exact-head Full passed. `CI_ON_DEMAND` is `true` and
-`CI_MACOS_HEAVY` is unset. No rollback was eligible.
+The due integration-92 census/stocktake is above. Its merged-tip instruction
+profile is next; integration 91's accepted projections remain explicitly historical.
+Root supplies #716 once and has selected #717 for the next storage slot.
 
-Integration 90's existing platform workflow passed, including the bounded
-cross-platform comparison subset. The fresh integrated-tip profile passed all
-seven comparisons and all six benchmark identity/budget checks. The same-version
-accounting snapshot is recorded above. Real housekeeping removed two completed
-checkouts and a consumed log (133.9 MB), preserving active and retained work.
-No new cadence or schedule was established.
+**Subagent limit (user, 2026-11-06):** Codex has 12 subagent slots. The main
+checkout's uncommitted `.codex/config.toml` belongs to the user; do not commit or
+revert it. Worktrees may retain their checked-in lower limit.
 
-**Subagent limit (user, 2026-11-06):** the user raised Codex's per-session subagent limit to 12, in `~/.codex/config.toml` and in the main checkout's `.codex/config.toml`. Codex rejects values below 1, so the limit cannot be removed. The main checkout's change is uncommitted on purpose: leave it, and neither revert nor commit it. Worktrees still check out a limit of 8 until a PR changes the file.
+The old root docs checkout `.local/worktrees/root-docs-72` is stale and locked;
+never push its checkpoint over current guidance. The separate #710 investigation
+is complete with supported-repair prerequisites recorded. Do not duplicate it or
+modify host settings/databases without user direction.
 
-The main checkout includes navigation `2d233f628b` and preserves the config edit. The previous root's docs checkout is `.local/worktrees/root-docs-72`; do not push its stale checkpoint over current guidance.
-
-All repository repair, review and measurement jobs are finished. The separately
-commissioned Opus host investigation remains with this retrospective thread;
-the development root must not duplicate it. The paused owners' work remains
-pushed and unchanged. The completed #705/#711/#712 transient checkouts were removed.
-
-| Issue / PR | Head | State at pause | Next action on resume | Checkout |
+| Issue / PR | Pushed head | Current state | Next action | Active checkout |
 | --- | --- | --- | --- | --- |
-| #634 / #700 station records | `6e0ec19dc6` (WIP) | Batch 4 does not compile: aircraft leaves in `src/rust/services_station.h` still call the deleted `RustStationAirportRotation` and `RustStationAirportType`. Last good is `500463d213`: CTest 236/236 and the scenarios equal. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/700#issuecomment-6675897921). | 1. Fix batch 4's build.<br>2. Finish checkpoint 2: the aircraft leaf slots, with record-backed fake stations in `aircraft-range.cpp` and the Windows ABI aircraft probe; the ship and company slots keyed by station ID; the area services and three facade owner pointers; the k-d tree read; the new lifetime, mid-visit delete-and-allocate and #566 drawing evidence.<br>3. Focused validation, the checkpoint 2 report and port-metrics; diagnostic native CI only for a named failure.<br>4. Independent review, current-base update and exact-head Full. | `t3-98010525` |
-| #635 / #704 town records | `e5097dd424` (WIP) | Not rebuilt since its last fix, which removed three needless `unsafe` blocks. Native CI 42154615345 at `fae36124db` failed on the same three unnecessary `unsafe` blocks removed by this head; the fix is not yet validated. Push checks at `e5097dd424` are green, including CI - Build and Quick validation. -24 compiled so far. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/704#issuecomment-6675927407). | Validate the current head with local `verify` and focused scenarios; finish checkpoint 1 and its cost report. Use diagnostic native CI only for a concrete remaining failure, then review and Full. | `t3-19613657` |
-| #565 item 2 / #698 map leaves | `79bc4eaa94` (draft) | Contains base `5168023c13`. Native CI 42152096539 green; local verify passed. TGP 2,791,869,839 Ir. Net glue -198, against the -300 to -600 plan. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/698#issuecomment-6675915139). | Mark ready for independent source review; explain the estimate shortfall. Speed comparison proceeds separately. Update base and request exact-head Full when preparing integration. | `t3-c3bf9002` |
-| #667 / #706 content protocol | `c013663ed7` (WIP draft) | The native build, Clippy, fmt, three unit tests, ruff and ty passed. Quick validation rejects three C-ABI `bool` returns in `network_content.rs` and `tcp_content_type.rs`; fix them before review. Not yet run: the `content-protocol` scenario, preflight, CTest, native CI and port-metrics. | Continue to the first checkpoint:<br>1. the inventory and the boundary, against the 500 to 700 estimate;<br>2. the metadata and dependency comparison with the original;<br>3. the scenario, run locally;<br>4. the bool-return guard, preflight and focused checks; diagnostic CI only if needed;<br>5. port-metrics.<br>Add its two #156 notes: libstdc++ multimap order, and the null-parent abort. | `t3-9803b4f2` |
+| #634 / #700 station records | `fde83fb857` | Aircraft, ship/company, area/spatial and attachment-facade changes pushed; Clippy passes. Checkpoint 2 and full pool ownership remain incomplete. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/700#issuecomment-6680736375). | Recover verification/focused scenarios; finish lifetime/mid-visit/drawing evidence, record/container routes and actual cost. Adopt the single storage table from #704 and pool primitive #716 at reconciliation; fresh review and exact-head Full follow readiness. | `t3-085f01f5` |
+| #635 / #704 town records | `3b4ac4a49b` | Attachments at `b0f8ec3ac8` passed exact verify (97 reference / 240 candidate CTests); 10 industry/subsidy cases equal. Three missed town fixture readers are fixed and the concrete map-baseline conflict prompted a conflict-free base update; five town cases rebuilding/running. Historical cost at the attachment checkpoint is C++ -33, exports -3, slots -9; no pool-completion credit. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/704#issuecomment-6675927407). | Recover focused results; finish Rust-used cached-name and field routes, preserve native formatting reference identity, then adopt #716 and complete allocation/lifetime. Review and Full remain pending. | `t3-8cd4fc03` |
+| #667 / #706 content protocol | `164077bf75` | Local verify passed with 97 reference / 240 candidate CTests. Canonical-byte, direct TCP and generator-link repairs are pushed; protocol scenario running. Historical C++ -450 and total fork C++ -238 at native checkpoint `af7a052b84`. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/706#issuecomment-6680727312). | Recover protocol evidence and fixes, then independent source/evidence review, current-base update and exact-head Full. Keep the corrected evidence-scope arithmetic and #156 limits. | `t3-e897547d` |
+| #656/#598/#599 / #714 vehicle owner | `8f312271bb` | Canonical tile links, record-backed loading queue/save staging, nine field moves and named #691 overlaps pushed. Earlier verify passed at `2522678911`; exact new-head metrics/verify/nine focused cases running. [Status](https://github.com/fetch-laboratories/openttd-rust/pull/714#issuecomment-6680888070). | Recover the exact-head checks; continue maintenance, residual fields/containers, lifecycle and direct Tick checkpoint. Adopt #716 for actual pool policy. No generic pool was introduced here. | `t3-a4c94f5a` |
+| #716 shared pool policy | — | Selected root-owned coupled support; all three existing pool owners confirmed no competing primitive. Source-derived design is in the issue and world-state notes. | Implement one reusable Rust policy/generated descriptor with independent original-derived tests; preserve native operation/lifetime boundaries. Core scaffolding alone claims no production pool completion. | Assigned at task start |
+| #717 link graph/jobs | — | Selected next ready phase-2 ownership item, 450 to 800 estimated net C++ removal. | Trace graph/job snapshots, worker/cleanup/publication lifetime, produce the owner brief, then implement with canonical Rust owners and #716. Coordinate station flow publication without duplicate services. | Assigned at task start |
 
 Preserve the following:
-- the open PR checkouts above, each only while its PR is open;
+- the active open-PR checkouts above, each while its PR is open; old paused copies remain subject to ordinary clean/pushed-head housekeeping;
 - `t3-96affac3`, the steering speed audit checkout and its `.local/steering30-speed/` and `.local/simulation/` evidence, until #275 records a replacement;
 - `t3-3b491ddb`, with five dirty files;
 - `t3-431c84b4`, locked, with #565's earlier 58 dirty files;

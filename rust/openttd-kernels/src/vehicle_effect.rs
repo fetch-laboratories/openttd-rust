@@ -409,9 +409,9 @@ pub extern "C" fn openttd_rust_visual_show(front: VehicleRef, max_speed: u32) {
             let bridge = if (s.shared.is_bridge)(p.tile) {
                 let map = s.shared.map();
                 map.tile_virt_xy(v.x() as u32, v.y() as u32) == p.tile
-                    && (s.shared.bridge_above)(p.tile)
+                    && crate::map_func::World::new(s.shared).bridge_above(p.tile)
             } else {
-                (s.shared.bridge_above)(p.tile)
+                crate::map_func::World::new(s.shared).bridge_above(p.tile)
             };
             if bridge || (s.depot)(p.tile) || (s.tunnel)(p.tile) {
                 break 'part;

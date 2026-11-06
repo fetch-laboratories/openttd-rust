@@ -37,7 +37,10 @@ impl Ctx<'_> {
             return (self.s.rail_axis)(tile).0;
         }
         if (self.shared.tile_type)(tile) != MP_RAILWAY
-            || (self.rail_map().rail_tile_type)(tile).0 != RAIL_TILE_NORMAL
+            || crate::services::RailTileType(
+                crate::map_func::World::new(self.shared).rail_tile_type(tile),
+            )
+            .0 != RAIL_TILE_NORMAL
         {
             return INVALID_AXIS;
         }
@@ -51,9 +54,9 @@ impl Ctx<'_> {
     fn waypoint_road_axis(&self, tile: u32) -> u8 {
         w::hit(w::WAYPOINT_AXIS_ROAD);
         if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
-            return (self.shared.drive_through_axis)(tile);
+            return crate::map_func::World::new(self.shared).drive_through_axis(tile);
         }
-        if !(self.shared.is_normal_road_tile)(tile) {
+        if !crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
             return INVALID_AXIS;
         }
         let ground = unsafe { &*self.s.road_ground };
@@ -245,7 +248,7 @@ impl Ctx<'_> {
         if !out.ok() {
             return;
         }
-        let slope = (self.shared.tile_slope)(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
         if slope != SLOPE_FLAT
             && (!(self.shared.build_on_slopes)()
                 || is_steep_slope(slope)
@@ -444,7 +447,7 @@ impl Ctx<'_> {
                 id,
                 axis,
                 gfx,
-                (self.rail_map().rail_type)(tile),
+                crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile)),
             );
             (self.s.set_custom_rail_index)(tile, specindex.value);
             self.set_rail_flags(tile, spec);
@@ -657,16 +660,20 @@ impl Ctx<'_> {
                     count,
                 );
             };
-            if (self.shared.is_normal_road_tile)(tile) {
+            if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
                 update(
                     road,
                     road_owner,
-                    -((self.shared.normal_road_bits)(tile, 0).0.count_ones() as i32),
+                    -(crate::map_func::World::new(self.shared)
+                        .road_bits(tile, false)
+                        .count_ones() as i32),
                 );
                 update(
                     tram,
                     tram_owner,
-                    -((self.shared.normal_road_bits)(tile, 1).0.count_ones() as i32),
+                    -(crate::map_func::World::new(self.shared)
+                        .road_bits(tile, true)
+                        .count_ones() as i32),
                 );
             }
             update(road, road_owner, ROAD_STOP_TRACKBIT_FACTOR as i32);
@@ -739,11 +746,10 @@ impl Ctx<'_> {
         if (self.s.station_town)(wp).is_null() {
             (self.s.waypoint_default_name)(wp);
         }
-        let clear = unsafe { &*self.s.clear };
         (self.s.make_buoy)(
             tile,
             (self.links().graphs.station_id)(wp),
-            (clear.water_class)(tile),
+            crate::services::WaterClass(crate::map_func::World::new(self.shared).water_class(tile)),
         );
         self.check_docking(tile);
         (self.shared.mark_dirty)(tile);

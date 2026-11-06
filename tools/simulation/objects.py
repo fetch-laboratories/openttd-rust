@@ -133,7 +133,7 @@ def prepare(
         saves["candidate"],
         scenario["name"],
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     )
     if differences:
         raise RuntimeError(f"object reload capture differs: {differences}")

@@ -139,14 +139,15 @@ def uses_ai(scenario: Scenario) -> bool:
 
 def install(scenario: Scenario, run_dir: Path) -> None:
     if scenario.get("aircraft_controller_setup") or scenario.get("aircraft_action"):
-        scripts = run_dir / "ai/aircraft-controller"
-        shutil.copytree(scenario["scenario_ai"], scripts)
-        (scripts / "parameters.nut").write_text(
+        core.install_ai(
+            scenario,
+            run_dir,
+            "aircraft-controller",
             f'AIRCRAFT_ACTION <- "{scenario.get("aircraft_action", "none")}";\n'
             f"AIRCRAFT_TARGET <- {scenario.get('aircraft_action_target', 0)};\n"
             f"AIRCRAFT_COUNT <- {scenario.get('aircraft_count', 8)};\n"
             f"AIRCRAFT_AIRPORTS <- {json.dumps(scenario.get('aircraft_action_airports', []))};\n"
-            f"AIRCRAFT_OILRIG <- {str(scenario.get('aircraft_oilrig', False)).lower()};\n"
+            f"AIRCRAFT_OILRIG <- {str(scenario.get('aircraft_oilrig', False)).lower()};\n",
         )
 
 

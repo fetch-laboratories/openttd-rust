@@ -82,9 +82,11 @@ pub struct Services {
 
 // The measured scheduler budget requires dispatch inside the LFSR loop; an
 // uninlined closure cost 47 instructions per visit versus the native 18.
+// `AMBIENT` is the batch's `AmbientSoundEffect` feature gate, so a disabled gate costs
+// nothing per clear, tree or water tile.
 #[allow(clippy::inline_always, clippy::cast_possible_truncation)]
 #[inline(always)]
-unsafe fn dispatch(
+unsafe fn dispatch<const AMBIENT: bool>(
     tile: u32,
     log_x: c_uint,
     size_y: c_uint,
@@ -102,7 +104,7 @@ unsafe fn dispatch(
                 tile,
                 g.climate,
                 g.editor,
-                settings.ambient_callback,
+                AMBIENT,
                 settings.size_x,
                 g.clear,
                 s.shared,
@@ -138,6 +140,10 @@ unsafe fn dispatch(
         },
         3 => unsafe { town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile) },
         4 => unsafe {
+            let settings = trees::LoopSettings {
+                ambient_callback: AMBIENT,
+                ..settings
+            };
             trees::tile_loop(tile, settings, g.call, s.trees, s.shared, types);
         },
         5 => unsafe {
@@ -155,7 +161,7 @@ unsafe fn dispatch(
             water::water_tile_loop(
                 tile,
                 tile_type,
-                settings.ambient_callback,
+                AMBIENT,
                 settings.size_x,
                 size_y,
                 g.call,
@@ -198,6 +204,27 @@ pub(crate) unsafe fn run(
     settings: trees::LoopSettings,
     services: *const Services,
 ) {
+    // SAFETY: Same contract; the gate was read once for the batch.
+    unsafe {
+        if settings.ambient_callback {
+            run_batch::<true>(log_x, log_y, settings, services);
+        } else {
+            run_batch::<false>(log_x, log_y, settings, services);
+        }
+    }
+}
+
+/// `run` with the batch's ambient feature gate as a constant.
+/// # Safety
+/// As `run`.
+#[allow(clippy::inline_always)]
+#[inline(always)]
+unsafe fn run_batch<const AMBIENT: bool>(
+    log_x: c_uint,
+    log_y: c_uint,
+    settings: trees::LoopSettings,
+    services: *const Services,
+) {
     // SAFETY: The caller supplies a live immutable table; no state borrow spans
     // dispatch. A nested call therefore preserves original commit-after-batch.
     // Copy only immutable pointer/function/settings metadata into an unescaped
@@ -215,11 +242,11 @@ pub(crate) unsafe fn run(
     let mut count: c_uint = 1 << (log_sum - 8);
     let size_y: c_uint = 1 << log_y;
     if settings.tick_counter.is_multiple_of(256) {
-        unsafe { dispatch(0, log_x, size_y, settings, s, &types) };
+        unsafe { dispatch::<AMBIENT>(0, log_x, size_y, settings, s, &types) };
         count -= 1;
     }
     while count != 0 {
-        unsafe { dispatch(tile, log_x, size_y, settings, s, &types) };
+        unsafe { dispatch::<AMBIENT>(tile, log_x, size_y, settings, s, &types) };
         tile = (tile >> 1) ^ (0_u32.wrapping_sub(tile & 1) & feedback);
         count -= 1;
     }

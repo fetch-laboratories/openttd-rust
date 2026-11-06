@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from simulation import core, multiplayer, network_protocol
+from simulation import core, game, multiplayer, network_protocol
 
 SERVER = """MIXED_READY
 client[2] Receive_CLIENT_ACK(): frame=24
@@ -250,7 +250,7 @@ class MultiplayerTests(unittest.TestCase):
             started = time.monotonic()
             with (
                 self.subTest(name=name),
-                patch.object(core, "GAME_LOCK", self.root / "game.lock"),
+                patch.object(game, "GAME_LOCK", self.root / "game.lock"),
             ):
                 if failure:
                     error = close if name == "close-before-quit" else lines[-1]

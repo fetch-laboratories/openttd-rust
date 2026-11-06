@@ -24,16 +24,9 @@ pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool)
     ));
     if tram && bits == 0 {
         let map = crate::map_func::World::new(movement.shared());
-        let m = &map.types;
-        let normal = if m.read(tile) == crate::tile_type::MP_ROAD {
-            crate::road_map::is_normal_road(m, tile)
-        } else {
-            Some(false)
-        };
-        if normal.unwrap_or_else(|| (movement.shared().is_normal_road_tile)(tile)) {
-            let road = crate::road_map::get_road_bits(m, tile, crate::road_type::RTT_TRAM)
-                .unwrap_or_else(|| (movement.shared().normal_road_bits)(tile, 1));
-            bits = match road.0 {
+        if map.is_normal_road_tile(tile) {
+            let road = map.road_bits(tile, true);
+            bits = match road {
                 crate::road_type::ROAD_NE | crate::road_type::ROAD_SW => {
                     TRACKDIR_BIT_X_NE | TRACKDIR_BIT_X_SW
                 }
