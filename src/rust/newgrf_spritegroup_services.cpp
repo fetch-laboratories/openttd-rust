@@ -128,7 +128,11 @@ static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcep
 	out->data.station = nullptr;
 	if (auto *v = dynamic_cast<VehicleScopeResolver *>(scope)) { out->kind = 1; out->data.vehicle = &v->state; }
 	else if (auto *st = dynamic_cast<StationScopeResolver *>(scope)) { out->kind = 2; out->data.station = &st->state; }
-	else if (auto *i = dynamic_cast<IndustriesScopeResolver *>(scope)) { out->kind = 3; out->data.industry = &i->context; }
+	else if (auto *i = dynamic_cast<IndustriesScopeResolver *>(scope)) {
+		/* Industry identity is fixed during Action2; construction scopes can change it between entries. */
+		if (i->context.industry != nullptr) i->context.id = i->context.industry->index.base();
+		out->kind = 3; out->data.industry = &i->context;
+	}
 	else if (auto *it = dynamic_cast<IndustryTileScopeResolver *>(scope)) { out->kind = 4; out->data.industry = &it->context; }
 	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = &o->context; }
 	else if (auto *t = dynamic_cast<TownScopeResolver *>(scope)) { out->kind = 6; out->data.town = &t->context; }

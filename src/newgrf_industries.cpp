@@ -61,6 +61,7 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
 
 /* virtual */ void IndustriesScopeResolver::StorePSA(uint pos, int32_t value)
 {
+	this->context.id = this->context.industry->index.base();
 	openttd_rust_storage_industry(&GetRustStorageServices(), &this->context, pos, value);
 }
 
