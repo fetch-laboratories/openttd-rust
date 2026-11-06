@@ -117,7 +117,7 @@ def collect_pull(repository: str, number: int, *, latency: bool = False) -> Pull
         milestones.extend(
             {
                 "event": item["event"],
-                "at": item.get("created_at"),
+                "at": item.get("submitted_at") or item.get("created_at"),
                 "url": item.get("html_url"),
                 "cause": None,
             }

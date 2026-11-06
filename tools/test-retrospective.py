@@ -53,6 +53,13 @@ class RetrospectiveTests(unittest.TestCase):
                 }
             ],
             "pulls/1/reviews?per_page=100": [],
+            "issues/1/timeline?per_page=100": [
+                {
+                    "event": "reviewed",
+                    "submitted_at": "2026-11-06T01:10:00Z",
+                    "html_url": "https://example.invalid/review",
+                }
+            ],
             f"commits/{'a' * 40}/statuses?per_page=100": [status],
             "pulls/1/files?per_page=100": [{"filename": "tools/shared.py"}],
         }
@@ -65,10 +72,14 @@ class RetrospectiveTests(unittest.TestCase):
                 facts.ci, "passed_run", return_value=status["target_url"]
             ),
         ):
-            result = facts.collect_pull("owner/repo", 1)
+            result = facts.collect_pull("owner/repo", 1, latency=True)
         self.assertEqual(result.head, "a" * 40)
         self.assertIsNone(result.mergeable)
         self.assertTrue(result.stable_snapshot)
+        self.assertEqual(
+            next(m["at"] for m in result.milestones if m["event"] == "reviewed"),
+            "2026-11-06T01:10:00Z",
+        )
         self.assertEqual(result.passing_full_url, status["target_url"])
         assert result.full is not None
         self.assertEqual(result.full["description"], status["description"])
