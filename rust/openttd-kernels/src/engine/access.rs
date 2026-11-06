@@ -237,6 +237,9 @@ impl EngineRef {
     pub(crate) fn reliability_decay(self) -> u16 {
         read_field!(self.0.as_ptr(), reliability_spd_dec)
     }
+    pub(crate) fn load_amount(self) -> u8 {
+        read_field!(self.0.as_ptr(), info.load_amount)
+    }
     pub(crate) fn ground(self) -> bool {
         matches!(self.kind(), VehicleType::TRAIN | VehicleType::ROAD)
     }

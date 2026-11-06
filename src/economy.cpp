@@ -318,6 +318,7 @@ Money CargoPayment::PayTransfer(CargoType cargo, const CargoPacket *cp, uint cou
 	return openttd_rust_cargo_payment_transfer(this->rust_state, &_cargo_services, cargo, cp->RustOwner(), count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit());
 }
 
+static_assert(to_underlying(VehicleCallbackMask::LoadAmount) == 2);
 static const OpenTTDStationLoading _rust_station_loading = {
 	.control = [](OpenTTDVehicle *handle) noexcept -> OpenTTDLoadingControl {
 		Vehicle *v = VehicleOf(handle);
@@ -346,19 +347,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		return {
 			v->lateness_counter, v->current_order.GetTimetabledWait()
 		};
-	},
-	.load_engine = [](OpenTTDVehicle *handle) noexcept -> OpenTTDLoadEngine {
-		const Engine *engine = VehicleOf(handle)->GetEngine();
-		return {RustEngine(engine), engine->Record().info.load_amount};
-	},
-	.grf_version = [](const OpenTTDEngine *handle) noexcept -> uint8_t {
-		return RustEngineGRFVersion(EngineOf(handle));
-	},
-	.engine_load_callback = [](const OpenTTDEngine *handle) noexcept -> bool {
-		return EngineOf(handle)->Record().info.callback_mask.Test(VehicleCallbackMask::LoadAmount);
-	},
-	.engine_no_multiplier = [](const OpenTTDEngine *handle) noexcept -> bool {
-		return EngineOf(handle)->Record().info.misc_flags.Test(EngineMiscFlag::NoDefaultCargoMultiplier);
 	},
 	.cargo_capacity = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoCapacity {
 		Vehicle *v = VehicleOf(handle);
@@ -406,10 +394,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.vehicle = &GetRustVehicleServices(),
 	.total_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
 		Vehicle *v = VehicleOf(handle); return v->cargo.TotalCount();
-	},
-	.refit_mask = [](OpenTTDVehicle *handle) noexcept -> uint64_t {
-		Vehicle *v = VehicleOf(handle);
-		return static_cast<uint64_t>(EngInfo(v->GetEngineType())->refit_mask);
 	},
 	.set_cargo_unloading = [](OpenTTDVehicle *handle, bool value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);

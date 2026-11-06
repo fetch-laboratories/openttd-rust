@@ -178,7 +178,6 @@ inline void RustVehicleSetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { Veh
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->GetEngineType().base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return e == nullptr ? nullptr : &e->Record(); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return e == nullptr ? nullptr : e->shell; }
-inline const GRFFile *RustEngineGRF(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetGRF(); }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
 /** Shared engine observation for a live base shell, resolved once. */
 template <typename Result, auto Read>
@@ -266,14 +265,6 @@ inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->ca
 inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->cargo_type; }
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
 
-inline const GRFFile *RustEngineGRF(const Engine *engine) noexcept { return RustEngineGRF(RustEngine(engine)); }
-
-/** GRF version of a live engine; the original default-engine value is zero. */
-inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
-{
-	const GRFFile *grf = RustEngineGRF(engine);
-	return grf == nullptr ? uint8_t(0) : RustGRFFileVersion(grf);
-}
 
 template <class T>
 inline void OPENTTD_RUST_CALL GroundSvcUpdateViewport(OpenTTDVehicle *part) noexcept
