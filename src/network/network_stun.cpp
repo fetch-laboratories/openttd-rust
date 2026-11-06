@@ -54,8 +54,8 @@ public:
 
 		this->stun_handler->connecter = nullptr;
 
-		assert(this->stun_handler->sock == INVALID_SOCKET);
-		this->stun_handler->sock = s;
+		assert(this->stun_handler->Socket() == INVALID_SOCKET);
+		this->stun_handler->SetSocket(s);
 
 		/* Store the local address; later connects will reuse it again.
 		 * This is what makes STUN work for most NATs. */
@@ -130,7 +130,7 @@ ClientNetworkStunSocketHandler::~ClientNetworkStunSocketHandler()
  */
 void ClientNetworkStunSocketHandler::SendReceive()
 {
-	if (this->sock == INVALID_SOCKET) return;
+	if (this->Socket() == INVALID_SOCKET) return;
 
 	/* We never attempt to receive anything on a STUN socket. After
 	 * connecting a STUN connection, the local address will be reused to

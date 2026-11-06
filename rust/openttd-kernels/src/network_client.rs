@@ -542,7 +542,9 @@ fn close(s: &Services, f: &FrameServices, game: *mut socket::GameSocket, result:
     if socket::pending(game) {
         return result;
     }
-    crate::movement::native_assert(f.command.company.shared, (f.tcp.valid)(socket::tcp(game)));
+    crate::movement::native_assert(f.command.company.shared, unsafe {
+        crate::network_tcp::is_connected(socket::tcp(game))
+    });
     if !crate::network_frame::socket_has_quit(f, game) {
         debug!(
             net,

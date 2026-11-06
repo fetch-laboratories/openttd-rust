@@ -20,7 +20,7 @@ std::vector<std::unique_ptr<QueryNetworkGameSocketHandler>> QueryNetworkGameSock
 NetworkRecvStatus QueryNetworkGameSocketHandler::CloseConnection(NetworkRecvStatus status)
 {
 	assert(status != NETWORK_RECV_STATUS_OKAY);
-	assert(this->sock != INVALID_SOCKET);
+	assert(this->Socket() != INVALID_SOCKET);
 
 	/* Connection is closed, but we never received a packet. Must be offline. */
 	NetworkGame *item = NetworkGameListAddItem(this->connection_string);

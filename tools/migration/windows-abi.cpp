@@ -27,6 +27,7 @@
 #include "rust/history_ffi.h"
 #include "rust/generic_ffi.h"
 #include "rust/math_ffi.h"
+#include "rust/network_tcp_ffi.h"
 #include "rust/orders_ffi.h"
 #include "rust/packet_ffi.h"
 #include "rust/rail_command_ffi.h"

@@ -991,11 +991,9 @@ const OpenTTDNetworkFrameServices &GetRustNetworkFrameServices() noexcept
 			if (!SessionException(f, [&] { auto &sets = f->socket_poll.emplace(); f->socket_listener = 0; ready = NetworkClientSocket::SelectReceive(sets.first, sets.second); })) return OpenTTDNetworkPoll::Exception;
 			return ready ? OpenTTDNetworkPoll::Ready : OpenTTDNetworkPoll::Error;
 		},
-		.server_poll_client = [](OpenTTDSessionFrame *f, OpenTTDNetworkGameSocket *game) noexcept {
-			auto *socket = static_cast<NetworkGameSocketHandler *>(game->game);
+		.server_poll_client = [](OpenTTDSessionFrame *f, OpenTTDNetworkGameSocket *game) noexcept -> uint8_t {
 			auto &sets = *f->socket_poll;
-			socket->writable = !!FD_ISSET(socket->sock, &sets.second);
-			return FD_ISSET(socket->sock, &sets.first) != 0;
+			return (FD_ISSET(game->tcp->socket, &sets.first) != 0 ? 1 : 0) | (FD_ISSET(game->tcp->socket, &sets.second) != 0 ? 2 : 0);
 		},
 		.server_poll_end = [](OpenTTDSessionFrame *f) noexcept { f->socket_accept.reset(); f->socket_poll.reset(); },
 		.show_lost_connection = []() noexcept { ShowErrorMessage(GetEncodedString(STR_NETWORK_ERROR_LOSTCONNECTION), {}, WL_CRITICAL); },

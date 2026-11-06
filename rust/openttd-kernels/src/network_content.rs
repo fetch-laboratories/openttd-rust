@@ -168,7 +168,7 @@ fn info_mut<'a>(ci: *mut ContentInfo) -> &'a mut ContentInfo {
 }
 
 fn socket(s: &Services) -> *mut packet::NetworkSocketHandler {
-    (s.tcp.base_socket)(s.client)
+    unsafe { (*s.client).base }
 }
 
 fn get_content(cid: u32) -> *mut ContentInfo {
@@ -217,7 +217,9 @@ fn new_packet(s: &Services, kind: u8, limit: usize) -> PacketState {
 }
 fn send_packet(s: &Services, mut p: PacketState) {
     unsafe { packet::prepare_to_send(&raw mut p, s.tcp.packet, check) };
-    (s.tcp.packet_enqueue)(s.client, &raw mut p);
+    unsafe {
+        tcp::enqueue_prepared(s.tcp, s.client, &raw mut p);
+    }
 }
 
 fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usize, settings: u8) {
@@ -229,7 +231,7 @@ fn recv_string(s: &Services, p: *mut PacketState, text: *mut c_void, length: usi
 }
 
 fn connect(s: &Services) {
-    if (s.tcp.valid)(s.client) || with(|c| c.is_connecting) {
+    if unsafe { crate::network_tcp::is_connected(s.client) } || with(|c| c.is_connecting) {
         return;
     }
     CANCELLED.store(false, Ordering::Relaxed);
@@ -239,7 +241,7 @@ fn connect(s: &Services) {
 
 fn close_connection(s: &Services) {
     (s.tcp_close)();
-    if !(s.tcp.valid)(s.client) {
+    if !unsafe { crate::network_tcp::is_connected(s.client) } {
         return;
     }
     (s.close_socket)();
@@ -289,7 +291,7 @@ fn receive_packets(s: &Services) -> bool {
         if p.is_null() {
             break;
         }
-        let cont = handle_packet(s, (s.tcp.packet_record)(p));
+        let cont = handle_packet(s, crate::network_tcp::record(p));
         tcp::destroy_packet(s.tcp, p);
         if !cont {
             return true;
@@ -1105,7 +1107,7 @@ pub extern "C" fn openttd_rust_content_cancel(s: &Services) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
-    if !(s.tcp.valid)(s.client) || with(|c| c.is_connecting) {
+    if !unsafe { crate::network_tcp::is_connected(s.client) } || with(|c| c.is_connecting) {
         return;
     }
 
@@ -1116,7 +1118,7 @@ pub extern "C" fn openttd_rust_content_send_receive(s: &Services) {
     }
 
     // Activity counts once a packet arrives, not on every attempt.
-    if (s.tcp.can_send_receive)(s.client) && receive_packets(s) {
+    if unsafe { tcp::can_receive(s.tcp, s.client, check) } && receive_packets(s) {
         let now = (s.tcp.now)();
         with(|c| c.last_activity = now);
     }

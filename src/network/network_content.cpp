@@ -247,8 +247,8 @@ public:
 
 	void OnConnect(SOCKET s) override
 	{
-		assert(_network_content_client.sock == INVALID_SOCKET);
-		_network_content_client.sock = s;
+		assert(_network_content_client.Socket() == INVALID_SOCKET);
+		_network_content_client.SetSocket(s);
 		_network_content_client.Reopen();
 		openttd_rust_content_connected(&S(), true);
 	}
@@ -295,7 +295,7 @@ const OpenTTDContentServices &GetRustContentServices() noexcept
 		.callback_disconnect = [](ContentCallback *cb) noexcept { cb->OnDisconnect(); },
 		.callback_progress = [](ContentCallback *cb, const OpenTTDContentInfo *ci, int bytes) noexcept { cb->OnDownloadProgress(static_cast<const ContentInfo &>(*ci), bytes); },
 		.callback_receive = [](ContentCallback *cb, const OpenTTDContentInfo *ci) noexcept { cb->OnReceiveContentInfo(static_cast<const ContentInfo &>(*ci)); },
-		.client = &_network_content_client,
+		.client = _network_content_client.TcpRecord(),
 		.close_socket = []() noexcept { c.CloseSocket(); },
 		.connect = []() noexcept { TCPConnecter::Create<NetworkContentConnecter>(NetworkContentServerConnectionString()); },
 		.content_version = []() noexcept { return OpenTTDByteSpan{reinterpret_cast<const uint8_t *>(_openttd_content_version.data()), _openttd_content_version.size()}; },

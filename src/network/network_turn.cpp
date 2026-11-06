@@ -42,7 +42,7 @@ public:
 
 		this->handler->connecter = nullptr;
 
-		this->handler->sock = s;
+		this->handler->SetSocket(s);
 	}
 };
 
@@ -62,8 +62,8 @@ bool ClientNetworkTurnSocketHandler::Receive_TURN_CONNECTED(Packet &p)
 
 	/* Act like we no longer have a socket, as we are handing it over to the
 	 * game handler. */
-	SOCKET game_sock = this->sock;
-	this->sock = INVALID_SOCKET;
+	SOCKET game_sock = this->Socket();
+	this->SetSocket(INVALID_SOCKET);
 
 	NetworkAddress address = NetworkAddress(hostname, NETWORK_DEFAULT_PORT);
 	_network_coordinator_client.ConnectSuccess(this->token, game_sock, address);
@@ -138,7 +138,7 @@ ClientNetworkTurnSocketHandler::~ClientNetworkTurnSocketHandler()
  */
 void ClientNetworkTurnSocketHandler::SendReceive()
 {
-	if (this->sock == INVALID_SOCKET) return;
+	if (this->Socket() == INVALID_SOCKET) return;
 
 	if (this->CanSendReceive()) {
 		this->ReceivePackets();

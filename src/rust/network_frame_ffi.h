@@ -52,7 +52,7 @@ struct OpenTTDNetworkFrameServices {
 	bool (*server_accept)(OpenTTDSessionFrame *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(server_accept);
 	OpenTTDNetworkPoll (*server_accept_next)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_accept_next);
 	OpenTTDNetworkPoll (*server_poll)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll);
-	bool (*server_poll_client)(OpenTTDSessionFrame *, OpenTTDNetworkGameSocket *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll_client);
+	uint8_t (*server_poll_client)(OpenTTDSessionFrame *, OpenTTDNetworkGameSocket *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll_client);
 	void (*server_poll_end)(OpenTTDSessionFrame *) noexcept OPENTTD_SERVICE_DEFAULT(server_poll_end);
 	void (*show_lost_connection)() noexcept OPENTTD_SERVICE_DEFAULT(show_lost_connection);
 	void (*socket_delete)(void *) noexcept OPENTTD_SERVICE_DEFAULT(socket_delete);

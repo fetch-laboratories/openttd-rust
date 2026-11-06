@@ -373,13 +373,16 @@ fn transfer_to_network_queue(
         if unsafe { (*writer).next_packet == (*writer).packets.len() } {
             break;
         }
-        let record = unsafe { (*writer).packets.as_mut_ptr().add((*writer).next_packet) };
+        let packet = unsafe { *(*writer).packets.as_mut_ptr().add((*writer).next_packet) };
+        let record = crate::network_tcp::record(packet);
         last = unsafe { packet::get_type(record, f.packet, packet_check(f)) }
             == crate::tcp_game::PACKET_SERVER_MAP_DONE;
         unsafe {
             packet::prepare_to_send(record, f.packet, packet_check(f));
         }
-        (f.tcp.packet_enqueue)(socket::tcp(socket), record);
+        unsafe {
+            crate::network_tcp::openttd_rust_tcp_enqueue(socket::tcp(socket), packet);
+        }
         unsafe {
             (*writer).next_packet += 1;
         }
@@ -946,7 +949,8 @@ fn close_connection(
     work: Actions,
 ) -> u8 {
     crate::movement::native_assert(f.command.company.shared, result != NETWORK_RECV_STATUS_OKAY);
-    if socket::pending(socket) || !(f.tcp.valid)(socket::tcp(socket)) {
+    if socket::pending(socket) || !unsafe { crate::network_tcp::is_connected(socket::tcp(socket)) }
+    {
         return result;
     }
     if result != NETWORK_RECV_STATUS_CLIENT_QUIT

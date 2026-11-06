@@ -1,14 +1,17 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Common TCP transfer loops. Native leaves retain socket I/O, error objects and queue
-//! allocation. A requested virtual close or native decryption runs after the entry returns.
-//! Packet pointers are live until removal; field/byte borrows end before every leaf.
+//! Canonical TCP queue/receive ownership and transfer loops. Native leaves retain socket
+//! I/O, error objects and native compatibility-shell allocation. A requested virtual close or native decryption runs after the entry returns.
+//! Packet pointers are live until removal; field/byte borrows end before every leaf. Raw
+//! entries require live unique records under the game-state mutex; panics abort. Native
+//! virtual close/decryption frames cannot unwind through Rust.
 #![allow(unsafe_code, missing_docs)]
+#![allow(clippy::missing_safety_doc)] // Raw lifecycle entries share the module contract.
 use crate::debug::{Bytes, debug};
+use crate::industrytype::NativeVec;
+use crate::os_abstraction::{INVALID_SOCKET, SocketHandle};
 use crate::packet::{self, State};
+use std::ptr::null_mut;
 
-pub struct NetworkTCPSocketHandler {
-    _private: [u8; 0],
-}
 pub struct Packet {
     _private: [u8; 0],
 }
@@ -17,15 +20,20 @@ pub struct NetworkError {
 }
 crate::abi::shared_records! {
     fn abi_record;
+    "OpenTTDNetworkTcpSocket" ["network_tcp"] => pub struct NetworkTCPSocketHandler {
+        pub base: *mut packet::NetworkSocketHandler,
+        pub socket: SocketHandle => "SOCKET",
+        pub writable: bool,
+        pub packets: NativeVec<*mut Packet> => "RustVector<Packet *>",
+        pub send_index: usize,
+        pub receive: *mut Packet => "Packet *",
+    }
     "OpenTTDTcpErrorStorage" ["probe"] => pub struct TcpErrorStorage {
         pub words: [u64; 8] => "std::array<uint64_t, 8>",
     }
 }
 #[repr(C)]
 pub struct Services {
-    pub base_socket:
-        extern "C" fn(*mut NetworkTCPSocketHandler) -> *mut packet::NetworkSocketHandler,
-    pub can_send_receive: extern "C" fn(*mut NetworkTCPSocketHandler) -> bool,
     pub error_begin: extern "C" fn(*mut TcpErrorStorage) -> *mut NetworkError,
     pub error_end: extern "C" fn(*mut NetworkError),
     pub error_reset: extern "C" fn(*const NetworkError) -> bool,
@@ -35,18 +43,12 @@ pub struct Services {
     pub now: extern "C" fn() -> i64,
     pub packet: &'static packet::Services,
     pub packet_delete_shell: extern "C" fn(*mut Packet),
-    /// Allocate the native packet shell and append it to this socket's send queue.
-    pub packet_enqueue: extern "C" fn(*mut NetworkTCPSocketHandler, *mut State),
-    pub packet_record: extern "C" fn(*mut Packet) -> *mut State,
+    /// Native allocation/adoption only; Rust retains queue and packet lifetime policy.
+    pub packet_new_shell: extern "C" fn(*mut State) -> *mut Packet,
+    /// Select result: negative on error, otherwise read bit 0 and write bit 1.
+    pub poll: extern "C" fn(*mut NetworkTCPSocketHandler) -> i32,
     pub receive_bytes: extern "C" fn(*mut NetworkTCPSocketHandler, *mut u8, usize) -> isize,
-    pub receive_create: extern "C" fn(*mut NetworkTCPSocketHandler, *mut State) -> *mut State,
-    pub receive_packet: extern "C" fn(*mut NetworkTCPSocketHandler) -> *mut State,
-    pub receive_take: extern "C" fn(*mut NetworkTCPSocketHandler) -> *mut Packet,
     pub send_bytes: extern "C" fn(*mut NetworkTCPSocketHandler, *const u8, usize) -> isize,
-    pub send_front: extern "C" fn(*mut NetworkTCPSocketHandler) -> *mut State,
-    pub send_pop: extern "C" fn(*mut NetworkTCPSocketHandler),
-    pub valid: extern "C" fn(*const NetworkTCPSocketHandler) -> bool,
-    pub writable: extern "C" fn(*const NetworkTCPSocketHandler) -> bool,
 }
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -75,14 +77,20 @@ pub unsafe extern "C" fn openttd_rust_tcp_send(
     closing: bool,
     check: extern "C" fn(bool),
 ) -> Send {
-    if !(s.writable)(socket) {
+    if !unsafe { (*socket).writable } {
         return Send::None;
     }
-    if !(s.valid)(socket) {
+    if unsafe { (*socket).socket } == INVALID_SOCKET {
         return Send::Closed;
     }
     loop {
-        let p = (s.send_front)(socket);
+        let p = unsafe {
+            if (*socket).send_index == (*socket).packets.len() {
+                null_mut()
+            } else {
+                record(*(*socket).packets.as_mut_ptr().add((*socket).send_index))
+            }
+        };
         if p.is_null() {
             return Send::All;
         }
@@ -124,10 +132,21 @@ pub unsafe extern "C" fn openttd_rust_tcp_send(
             return if closing { Send::Closed } else { Send::Close };
         }
         if unsafe { (*p).remaining() } == 0 {
+            let shell = unsafe { *(*socket).packets.as_mut_ptr().add((*socket).send_index) };
+            destroy_packet(s, shell);
             unsafe {
-                std::ptr::drop_in_place(p);
+                (*socket).send_index += 1;
+                if (*socket).send_index == (*socket).packets.len() {
+                    (*socket).packets.edit(Vec::clear);
+                    (*socket).send_index = 0;
+                } else if (*socket).send_index >= (*socket).packets.len() / 2 {
+                    let consumed = (*socket).send_index;
+                    (*socket).packets.edit(|packets| {
+                        packets.drain(..consumed);
+                    });
+                    (*socket).send_index = 0;
+                }
             }
-            (s.send_pop)(socket);
         } else {
             return Send::Partly;
         }
@@ -184,18 +203,22 @@ pub unsafe extern "C" fn openttd_rust_tcp_receive(
     socket: *mut NetworkTCPSocketHandler,
     check: extern "C" fn(bool),
 ) -> Receive {
-    if !(s.valid)(socket) {
+    if unsafe { (*socket).socket } == INVALID_SOCKET {
         return Receive::None;
     }
-    let mut p = (s.receive_packet)(socket);
+    let mut p = record(unsafe { (*socket).receive });
     if p.is_null() {
         let mut value = State::new_receive(
             crate::network_config::TCP_MTU,
             2,
-            (s.base_socket)(socket),
+            unsafe { (*socket).base },
             check,
         );
-        p = (s.receive_create)(socket, &raw mut value);
+        let shell = (s.packet_new_shell)(&raw mut value);
+        unsafe {
+            (*socket).receive = shell;
+        }
+        p = record(shell);
     }
     if unsafe { (*p).position } < 2 {
         let result = unsafe { read_bytes(s, socket, p, check) };
@@ -235,7 +258,7 @@ pub(crate) unsafe fn receive_packet(
 ) -> *mut Packet {
     let mut result = unsafe { openttd_rust_tcp_receive(s, socket, check) };
     if result == Receive::Ready {
-        let p = (s.receive_packet)(socket);
+        let p = record(unsafe { (*socket).receive });
         result = openttd_rust_tcp_receive_prepared(unsafe { packet::prepare_to_read(p, s.packet) });
     }
     match result {
@@ -244,7 +267,7 @@ pub(crate) unsafe fn receive_packet(
             close();
             std::ptr::null_mut()
         }
-        Receive::Ready => (s.receive_take)(socket),
+        Receive::Ready => unsafe { std::mem::replace(&mut (*socket).receive, null_mut()) },
     }
 }
 
@@ -269,7 +292,7 @@ pub(crate) unsafe fn send_packets(
 
 /// Consume a native shell after dropping its canonical Rust packet allocation.
 pub(crate) fn destroy_packet(s: &Services, packet: *mut Packet) {
-    let record = (s.packet_record)(packet);
+    let record = record(packet);
     unsafe {
         std::ptr::drop_in_place(record);
     }
@@ -279,10 +302,184 @@ pub(crate) fn destroy_packet(s: &Services, packet: *mut Packet) {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkTcpServices" ["probe"] => Services {
-        base_socket, can_send_receive, error_begin, error_end, error_reset, error_text, error_would_block, now, packet, packet_delete_shell, packet_enqueue, packet_record,
-        receive_bytes, receive_create, receive_packet, receive_take, send_bytes, send_front,
-        send_pop, valid, writable,
+        error_begin, error_end, error_reset, error_text, error_would_block, now, packet, packet_delete_shell, packet_new_shell, poll, receive_bytes, send_bytes,
     };
+}
+
+/// Packet is a standard-layout facade with the generated State as its sole data member.
+/// Native static assertions establish equal size/alignment and the zero-offset first member.
+pub(crate) fn record(packet: *mut Packet) -> *mut State {
+    packet.cast()
+}
+
+/// `CanSendReceive`: failed select leaves writable unchanged.
+pub(crate) unsafe fn can_receive(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+    check: extern "C" fn(bool),
+) -> bool {
+    check(unsafe { is_connected(socket) });
+    let flags = (s.poll)(socket);
+    if flags < 0 {
+        return false;
+    }
+    unsafe {
+        (*socket).writable = flags & 2 != 0;
+    }
+    flags & 1 != 0
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tcp_can_receive(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+    check: extern "C" fn(bool),
+) -> u8 {
+    u8::from(unsafe { can_receive(s, socket, check) })
+}
+
+pub(crate) unsafe fn is_connected(socket: *const NetworkTCPSocketHandler) -> bool {
+    unsafe { (*socket).socket != INVALID_SOCKET }
+}
+
+impl NetworkTCPSocketHandler {
+    fn new(base: *mut packet::NetworkSocketHandler, socket: SocketHandle) -> Self {
+        Self {
+            base,
+            socket,
+            writable: false,
+            packets: NativeVec::new(),
+            send_index: 0,
+            receive: null_mut(),
+        }
+    }
+}
+
+/// Append an already prepared native packet shell, without reframing.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tcp_enqueue(
+    socket: *mut NetworkTCPSocketHandler,
+    packet: *mut Packet,
+) {
+    unsafe {
+        (*socket).packets.push(packet);
+    }
+}
+
+/// Native Packet construction for nonthrowing Rust stream consumers.
+pub(crate) unsafe fn new_outgoing_shell(
+    s: &Services,
+    socket: *mut packet::NetworkSocketHandler,
+    kind: u8,
+    limit: usize,
+    check: extern "C" fn(bool),
+) -> *mut Packet {
+    let mut state = unsafe { packet::new_outgoing(socket, s.packet, check, kind, limit) };
+    (s.packet_new_shell)(&raw mut state)
+}
+
+/// Adopt the prepared bytes into a native compatibility shell and publish queue ownership.
+pub(crate) unsafe fn enqueue_prepared(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+    state: *mut State,
+) {
+    let packet = (s.packet_new_shell)(state);
+    unsafe {
+        openttd_rust_tcp_enqueue(socket, packet);
+    }
+}
+
+unsafe fn clear_send(s: &Services, socket: *mut NetworkTCPSocketHandler) {
+    let end = unsafe { (*socket).packets.len() };
+    for i in unsafe { (*socket).send_index }..end {
+        let packet = unsafe { *(*socket).packets.as_mut_ptr().add(i) };
+        destroy_packet(s, packet);
+    }
+    unsafe {
+        (*socket).packets.edit(Vec::clear);
+        (*socket).send_index = 0;
+    }
+}
+
+/// Logical close: mark quit, clear writable, discard send packets, then partial receive.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tcp_close(
+    s: &Services,
+    socket: *mut NetworkTCPSocketHandler,
+) {
+    unsafe {
+        packet::mark_closed((*socket).base);
+        (*socket).writable = false;
+        clear_send(s, socket);
+        let receive = std::mem::replace(&mut (*socket).receive, null_mut());
+        if !receive.is_null() {
+            destroy_packet(s, receive);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_tcp_new(
+    base: *mut packet::NetworkSocketHandler,
+    socket: SocketHandle,
+) -> *mut NetworkTCPSocketHandler {
+    Box::into_raw(Box::new(NetworkTCPSocketHandler::new(base, socket)))
+}
+
+/// Native TCP destruction has closed the OS handle; member destruction releases receive
+/// before send packets, then buffers. The common socket/encryption record still lives.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_tcp_drop(s: &Services, socket: *mut NetworkTCPSocketHandler) {
+    unsafe {
+        let receive = std::mem::replace(&mut (*socket).receive, null_mut());
+        if !receive.is_null() {
+            destroy_packet(s, receive);
+        }
+        clear_send(s, socket);
+        drop(Box::from_raw(socket));
+    }
+}
+
+/// Packet allocation leaves for payload unit tests that perform no transport I/O.
+#[cfg(test)]
+pub(crate) fn packet_only_services() -> Services {
+    extern "C" fn unused0<R>() -> R {
+        panic!("unexpected transport operation")
+    }
+    extern "C" fn unused1<A, R>(_: A) -> R {
+        panic!("unexpected transport operation")
+    }
+    extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
+        panic!("unexpected transport operation")
+    }
+    extern "C" fn new_shell(state: *mut State) -> *mut Packet {
+        Box::into_raw(Box::new(unsafe {
+            std::ptr::replace(state, State::new(0, null_mut()))
+        }))
+        .cast()
+    }
+    extern "C" fn delete_shell(packet: *mut Packet) {
+        unsafe {
+            drop(Box::from_raw(
+                packet.cast::<std::mem::ManuallyDrop<State>>(),
+            ));
+        }
+    }
+    Services {
+        error_begin: unused1,
+        error_end: unused1,
+        error_reset: unused1,
+        error_text: unused1,
+        error_would_block: unused1,
+        now: unused0,
+        packet: packet::test_services(),
+        packet_delete_shell: delete_shell,
+        packet_new_shell: new_shell,
+        poll: unused1,
+        receive_bytes: unused3,
+        send_bytes: unused3,
+    }
 }
 
 #[cfg(test)]
@@ -293,22 +490,18 @@ mod tests {
 
     #[derive(Default)]
     struct Fixture {
-        packet: Option<Box<State>>,
         result: isize,
-        valid: bool,
-        writable: bool,
         blocked: bool,
         calls: usize,
         logs: usize,
         pops: usize,
+        drop_order: Vec<usize>,
         output: Vec<u8>,
         input: Vec<u8>,
         read_position: usize,
         read_limit: usize,
         read_end: isize,
     }
-    // SAFETY: The packet owns its allocation; socket identities are never dereferenced.
-    unsafe impl std::marker::Send for Fixture {}
     // Error callbacks have no socket argument; serialize the two fixture entries.
     static ENTRY: Mutex<()> = Mutex::new(());
     static FIXTURE: Mutex<Option<Fixture>> = Mutex::new(None);
@@ -317,24 +510,6 @@ mod tests {
     }
     extern "C" fn check(value: bool) {
         assert!(value);
-    }
-    extern "C" fn unused1<A, R>(_: A) -> R {
-        panic!("unexpected TCP operation")
-    }
-    extern "C" fn unused0<R>() -> R {
-        panic!("unexpected TCP operation")
-    }
-    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
-        panic!("unexpected TCP operation")
-    }
-    extern "C" fn packet(_: *mut NetworkTCPSocketHandler) -> *mut State {
-        with(|f| f.packet.as_deref_mut().map_or(null_mut(), |p| &raw mut *p))
-    }
-    extern "C" fn valid(_: *const NetworkTCPSocketHandler) -> bool {
-        with(|f| f.valid)
-    }
-    extern "C" fn writable(_: *const NetworkTCPSocketHandler) -> bool {
-        with(|f| f.writable)
     }
     extern "C" fn blocked(_: *const NetworkError) -> bool {
         with(|f| f.blocked)
@@ -371,26 +546,13 @@ mod tests {
             result
         })
     }
-    extern "C" fn send_pop(_: *mut NetworkTCPSocketHandler) {
+    extern "C" fn delete_shell(packet: *mut Packet) {
+        let limit = unsafe { (*record(packet)).limit };
+        (packet_only_services().packet_delete_shell)(packet);
         with(|f| {
-            let mut p = f.packet.take().unwrap();
-            // The send owner already dropped the record before removing its shell.
-            unsafe {
-                std::ptr::write(&raw mut *p, State::new(0, null_mut()));
-            }
             f.pops += 1;
+            f.drop_order.push(limit);
         });
-    }
-    extern "C" fn base(socket: *mut NetworkTCPSocketHandler) -> *mut packet::NetworkSocketHandler {
-        socket.cast()
-    }
-    extern "C" fn create(_: *mut NetworkTCPSocketHandler, record: *mut State) -> *mut State {
-        with(|f| {
-            f.packet = Some(Box::new(unsafe {
-                replace(record, State::new(0, null_mut()))
-            }));
-            &raw mut **f.packet.as_mut().unwrap()
-        })
     }
     extern "C" fn receive_bytes(
         _: *mut NetworkTCPSocketHandler,
@@ -410,29 +572,15 @@ mod tests {
         })
     }
     fn services() -> Services {
-        Services {
-            base_socket: base,
-            can_send_receive: unused1,
-            error_begin,
-            error_end,
-            error_reset: unused1,
-            error_text,
-            error_would_block: blocked,
-            now: unused0,
-            packet: packet::test_services(),
-            packet_delete_shell: unused1,
-            packet_enqueue: unused2,
-            packet_record: unused1,
-            receive_bytes,
-            receive_create: create,
-            receive_packet: packet,
-            receive_take: unused1,
-            send_bytes,
-            send_front: packet,
-            send_pop,
-            valid,
-            writable,
-        }
+        let mut s = packet_only_services();
+        s.error_begin = error_begin;
+        s.error_end = error_end;
+        s.error_text = error_text;
+        s.error_would_block = blocked;
+        s.packet_delete_shell = delete_shell;
+        s.receive_bytes = receive_bytes;
+        s.send_bytes = send_bytes;
+        s
     }
 
     #[test]
@@ -455,22 +603,31 @@ mod tests {
             let mut p = State::new(100, null_mut());
             p.send_bytes(&[7, 0, 9, 1, 2, 3, 4]);
             *FIXTURE.lock().unwrap() = Some(Fixture {
-                packet: Some(Box::new(p)),
                 result,
                 blocked,
-                valid,
-                writable,
                 ..Fixture::default()
             });
-            let sent = unsafe { openttd_rust_tcp_send(&services(), null_mut(), closing, check) };
+            let mut base = packet::NetworkSocketHandler::new();
+            let mut socket =
+                NetworkTCPSocketHandler::new(&raw mut base, if valid { 0 } else { INVALID_SOCKET });
+            socket.writable = writable;
+            socket.packets.push(Box::into_raw(Box::new(p)).cast());
+            let sent =
+                unsafe { openttd_rust_tcp_send(&services(), &raw mut socket, closing, check) };
             assert_eq!(sent as u8, expected as u8);
             with(|f| {
                 assert_eq!((f.calls, f.logs, f.pops), (calls, logs, pops));
-                if let Some(p) = &f.packet {
-                    assert_eq!(p.position, cursor);
+                if !socket.packets.is_empty() {
+                    assert_eq!(
+                        unsafe { (*record(socket.packets[socket.send_index])).position },
+                        cursor
+                    );
                 }
                 assert_eq!(f.output, [7, 0, 9, 1, 2, 3, 4][..f.output.len()]);
             });
+            unsafe {
+                clear_send(&services(), &raw mut socket);
+            }
         }
         *FIXTURE.lock().unwrap() = None;
     }
@@ -478,29 +635,29 @@ mod tests {
     fn fragmented_headers_resume_and_invalid_sizes_request_close() {
         let _entry = ENTRY.lock().unwrap();
         *FIXTURE.lock().unwrap() = Some(Fixture {
-            valid: true,
             blocked: true,
             input: vec![7, 0, 9, 1, 2, 3, 4],
             read_limit: 1,
             read_end: -1,
             ..Fixture::default()
         });
-        let socket = std::ptr::dangling_mut::<NetworkTCPSocketHandler>();
+        let mut base = packet::NetworkSocketHandler::new();
+        let mut socket = NetworkTCPSocketHandler::new(&raw mut base, 0);
         let s = services();
         assert_eq!(
-            unsafe { openttd_rust_tcp_receive(&s, socket, check) } as u8,
+            unsafe { openttd_rust_tcp_receive(&s, &raw mut socket, check) } as u8,
             Receive::None as u8
         );
         with(|f| {
-            assert_eq!(f.packet.as_ref().unwrap().position, 1);
+            assert_eq!(unsafe { (*record(socket.receive)).position }, 1);
             f.read_limit = f.input.len();
         });
         assert_eq!(
-            unsafe { openttd_rust_tcp_receive(&s, socket, check) } as u8,
+            unsafe { openttd_rust_tcp_receive(&s, &raw mut socket, check) } as u8,
             Receive::Ready as u8
         );
         with(|f| {
-            let p = f.packet.as_ref().unwrap();
+            let p = unsafe { &*record(socket.receive) };
             assert_eq!(p.position, 7);
             assert_eq!(
                 unsafe { std::slice::from_raw_parts(p.data, p.size) },
@@ -508,16 +665,55 @@ mod tests {
             );
         });
         for input in [vec![1, 0], vec![0, 128], vec![7, 0]] {
+            destroy_packet(&s, replace(&mut socket.receive, null_mut()));
             *FIXTURE.lock().unwrap() = Some(Fixture {
-                valid: true,
                 input: input.clone(),
                 read_limit: input.len(),
                 ..Fixture::default()
             });
             assert_eq!(
-                unsafe { openttd_rust_tcp_receive(&s, socket, check) } as u8,
+                unsafe { openttd_rust_tcp_receive(&s, &raw mut socket, check) } as u8,
                 Receive::Close as u8
             );
+        }
+        destroy_packet(&s, socket.receive);
+        *FIXTURE.lock().unwrap() = None;
+    }
+
+    #[test]
+    fn logical_close_and_native_member_destruction_keep_distinct_packet_order() {
+        let _entry = ENTRY.lock().unwrap();
+        let s = services();
+        for close in [true, false] {
+            *FIXTURE.lock().unwrap() = Some(Fixture::default());
+            let mut base = packet::NetworkSocketHandler::new();
+            let socket = openttd_rust_tcp_new(&raw mut base, INVALID_SOCKET);
+            unsafe {
+                (*socket).writable = true;
+                for limit in [41, 42] {
+                    let mut p = State::new_send(limit, 9, 0, &raw mut base, check);
+                    packet::prepare_to_send(&raw mut p, s.packet, check);
+                    enqueue_prepared(&s, socket, &raw mut p);
+                }
+                let mut receive = State::new_receive(43, 2, &raw mut base, check);
+                (*socket).receive = (s.packet_new_shell)(&raw mut receive);
+                if close {
+                    openttd_rust_tcp_close(&s, socket);
+                    assert!(base.has_quit);
+                    assert!(!(*socket).writable);
+                    assert!((*socket).packets.is_empty());
+                    assert!((*socket).receive.is_null());
+                }
+                openttd_rust_tcp_drop(&s, socket);
+            }
+            assert_eq!(base.has_quit, close);
+            with(|f| {
+                assert_eq!(f.pops, 3);
+                assert_eq!(
+                    f.drop_order,
+                    if close { [41, 42, 43] } else { [43, 41, 42] }
+                );
+            });
         }
         *FIXTURE.lock().unwrap() = None;
     }

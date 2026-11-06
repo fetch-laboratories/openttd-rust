@@ -69,7 +69,7 @@ fn handle(
     frame: *mut Frame,
     work: Actions,
 ) -> u8 {
-    let p = (s.tcp.packet_record)(shell);
+    let p = crate::network_tcp::record(shell);
     let kind = unsafe { packet::recv_uint8(p, s.packet) };
     if crate::network_frame::socket_has_quit(s, game) {
         debug!(
@@ -316,7 +316,7 @@ fn receive_one(s: &Network, game: *mut GameSocket, work: Actions) -> *mut Packet
     if shell.is_null() {
         return shell;
     }
-    let p = (s.tcp.packet_record)(shell);
+    let p = crate::network_tcp::record(shell);
     if server {
         let sync = socket::sync(game);
         write_field!(

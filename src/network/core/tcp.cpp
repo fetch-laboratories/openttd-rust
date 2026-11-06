@@ -20,6 +20,7 @@
 NetworkTCPSocketHandler::~NetworkTCPSocketHandler()
 {
 	this->CloseSocket();
+	openttd_rust_tcp_drop(&GetRustNetworkTcpServices(), this->record);
 }
 
 /**
@@ -29,8 +30,8 @@ NetworkTCPSocketHandler::~NetworkTCPSocketHandler()
  */
 void NetworkTCPSocketHandler::CloseSocket()
 {
-	if (this->sock != INVALID_SOCKET) closesocket(this->sock);
-	this->sock = INVALID_SOCKET;
+	if (this->record->socket != INVALID_SOCKET) closesocket(this->record->socket);
+	this->record->socket = INVALID_SOCKET;
 }
 
 /**
@@ -41,11 +42,7 @@ void NetworkTCPSocketHandler::CloseSocket()
  */
 NetworkRecvStatus NetworkTCPSocketHandler::CloseConnection([[maybe_unused]] bool error)
 {
-	this->MarkClosed();
-	this->writable = false;
-
-	this->packet_queue.clear();
-	this->packet_recv = nullptr;
+	openttd_rust_tcp_close(&GetRustNetworkTcpServices(), this->record);
 
 	return NETWORK_RECV_STATUS_OKAY;
 }
@@ -61,7 +58,7 @@ void NetworkTCPSocketHandler::SendPacket(std::unique_ptr<Packet> &&packet)
 	assert(packet != nullptr);
 
 	packet->PrepareToSend();
-	this->packet_queue.push_back(std::move(packet));
+	openttd_rust_tcp_enqueue(this->record, packet.release());
 }
 
 /**
@@ -76,7 +73,7 @@ void NetworkTCPSocketHandler::SendPacket(std::unique_ptr<Packet> &&packet)
  */
 SendPacketsState NetworkTCPSocketHandler::SendPackets(bool closing_down)
 {
-	auto result = openttd_rust_tcp_send(&GetRustNetworkTcpServices(), this, closing_down, RustAssertCondition);
+	auto result = openttd_rust_tcp_send(&GetRustNetworkTcpServices(), this->record, closing_down, RustAssertCondition);
 	if (result == OpenTTDTcpSend::Close) {
 		this->CloseConnection();
 		return SPS_CLOSED;
@@ -90,17 +87,17 @@ SendPacketsState NetworkTCPSocketHandler::SendPackets(bool closing_down)
  */
 std::unique_ptr<Packet> NetworkTCPSocketHandler::ReceivePacket()
 {
-	auto result = openttd_rust_tcp_receive(&GetRustNetworkTcpServices(), this, RustAssertCondition);
+	auto result = openttd_rust_tcp_receive(&GetRustNetworkTcpServices(), this->record, RustAssertCondition);
 	if (result == OpenTTDTcpReceive::Close) {
 		this->CloseConnection();
 		return nullptr;
 	}
 	if (result == OpenTTDTcpReceive::None) return nullptr;
-	if (openttd_rust_tcp_receive_prepared(this->packet_recv->PrepareToRead()) == OpenTTDTcpReceive::Close) {
+	if (openttd_rust_tcp_receive_prepared(this->record->receive->PrepareToRead()) == OpenTTDTcpReceive::Close) {
 		this->CloseConnection();
 		return nullptr;
 	}
-	return std::move(this->packet_recv);
+	return std::unique_ptr<Packet>(std::exchange(this->record->receive, nullptr));
 }
 
 /**
@@ -110,22 +107,7 @@ std::unique_ptr<Packet> NetworkTCPSocketHandler::ReceivePacket()
  */
 bool NetworkTCPSocketHandler::CanSendReceive()
 {
-	assert(this->sock != INVALID_SOCKET);
-
-	fd_set read_fd, write_fd;
-	struct timeval tv;
-
-	FD_ZERO(&read_fd);
-	FD_ZERO(&write_fd);
-
-	FD_SET(this->sock, &read_fd);
-	FD_SET(this->sock, &write_fd);
-
-	tv.tv_sec = tv.tv_usec = 0; // don't block at all.
-	if (select(FD_SETSIZE, &read_fd, &write_fd, nullptr, &tv) < 0) return false;
-
-	this->writable = !!FD_ISSET(this->sock, &write_fd);
-	return FD_ISSET(this->sock, &read_fd) != 0;
+	return openttd_rust_tcp_can_receive(&GetRustNetworkTcpServices(), this->record, RustAssertCondition) != 0;
 }
 
 static_assert(sizeof(NetworkError) <= sizeof(OpenTTDTcpErrorStorage));
@@ -133,8 +115,6 @@ static_assert(alignof(NetworkError) <= alignof(OpenTTDTcpErrorStorage));
 const OpenTTDNetworkTcpServices &GetRustNetworkTcpServices() noexcept
 {
 	static const OpenTTDNetworkTcpServices services{
-		.base_socket = [](NetworkTCPSocketHandler *s) noexcept -> OpenTTDNetworkSocket * { return s->BaseRecord(); },
-		.can_send_receive = [](NetworkTCPSocketHandler *s) noexcept { return s->CanSendReceive(); },
 		.error_begin = [](OpenTTDTcpErrorStorage *p) noexcept { return new (p) NetworkError(NetworkError::GetLast()); },
 		.error_end = [](NetworkError *error) noexcept { error->~NetworkError(); },
 		.error_reset = [](const NetworkError *error) noexcept { return error->IsConnectionReset(); },
@@ -143,17 +123,19 @@ const OpenTTDNetworkTcpServices &GetRustNetworkTcpServices() noexcept
 		.now = []() noexcept -> int64_t { return std::chrono::steady_clock::now().time_since_epoch().count(); },
 		.packet = &Packet::Services(),
 		.packet_delete_shell = Packet::DeleteShell,
-		.packet_enqueue = [](NetworkTCPSocketHandler *s, OpenTTDPacketState *p) noexcept { s->SendPreparedPacket(*p); },
-		.packet_record = [](Packet *p) noexcept { return p->Record(); },
-		.receive_bytes = [](NetworkTCPSocketHandler *s, uint8_t *data, size_t size) noexcept -> intptr_t { return SocketReceiver{s->sock}(std::span(data, size)); },
-		.receive_create = [](NetworkTCPSocketHandler *s, OpenTTDPacketState *state) noexcept { s->packet_recv = std::make_unique<Packet>(*state); return s->packet_recv->Record(); },
-		.receive_packet = [](NetworkTCPSocketHandler *s) noexcept -> OpenTTDPacketState * { return s->packet_recv == nullptr ? nullptr : s->packet_recv->Record(); },
-		.receive_take = [](NetworkTCPSocketHandler *s) noexcept { return s->packet_recv.release(); },
-		.send_bytes = [](NetworkTCPSocketHandler *s, const uint8_t *data, size_t size) noexcept -> intptr_t { return SocketSender{s->sock}(std::span(data, size)); },
-		.send_front = [](NetworkTCPSocketHandler *s) noexcept -> OpenTTDPacketState * { return s->packet_queue.empty() ? nullptr : s->packet_queue.front()->Record(); },
-		.send_pop = [](NetworkTCPSocketHandler *s) noexcept { Packet::DeleteShell(s->packet_queue.front().release()); s->packet_queue.pop_front(); },
-		.valid = [](const NetworkTCPSocketHandler *s) noexcept { return s->IsConnected(); },
-		.writable = [](const NetworkTCPSocketHandler *s) noexcept { return s->writable; },
+		.packet_new_shell = [](OpenTTDPacketState *state) noexcept { return new Packet(*state); },
+		.poll = [](OpenTTDNetworkTcpSocket *s) noexcept -> int32_t {
+			fd_set read_fd, write_fd;
+			FD_ZERO(&read_fd);
+			FD_ZERO(&write_fd);
+			FD_SET(s->socket, &read_fd);
+			FD_SET(s->socket, &write_fd);
+			struct timeval tv{};
+			if (select(FD_SETSIZE, &read_fd, &write_fd, nullptr, &tv) < 0) return -1;
+			return (FD_ISSET(s->socket, &read_fd) != 0 ? 1 : 0) | (FD_ISSET(s->socket, &write_fd) != 0 ? 2 : 0);
+		},
+		.receive_bytes = [](OpenTTDNetworkTcpSocket *s, uint8_t *data, size_t size) noexcept -> intptr_t { return SocketReceiver{s->socket}(std::span(data, size)); },
+		.send_bytes = [](OpenTTDNetworkTcpSocket *s, const uint8_t *data, size_t size) noexcept -> intptr_t { return SocketSender{s->socket}(std::span(data, size)); },
 	};
 	return services;
 }

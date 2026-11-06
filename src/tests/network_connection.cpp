@@ -18,32 +18,25 @@
 
 /* Tests supply transport bytes, while production framing, dispatch and cleanup run. */
 static std::span<const uint8_t> fixture_receive_wire;
-static OpenTTDNetworkSocket *fixture_receive_base;
-static Packet *fixture_receive_pending;
 static uint fixture_receive_position;
 static uint8_t ReceiveFixturePacket(const OpenTTDSessionServices &session, OpenTTDNetworkFrameServices network, OpenTTDNetworkGameSocket &game, OpenTTDSessionFrame &frame, Packet &source)
 {
 	source.PrepareToSend();
 	fixture_receive_wire = {source.Record()->data, source.Size()};
-	fixture_receive_base = game.base;
-	fixture_receive_pending = nullptr;
 	fixture_receive_position = 0;
-	struct Pending { ~Pending() { delete std::exchange(fixture_receive_pending, nullptr); } } pending;
 	auto tcp = GetRustNetworkTcpServices();
-	tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
-	tcp.base_socket = [](NetworkTCPSocketHandler *) noexcept { return fixture_receive_base; };
-	tcp.receive_packet = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return fixture_receive_pending ? fixture_receive_pending->Record() : nullptr; };
-	tcp.receive_create = [](NetworkTCPSocketHandler *, OpenTTDPacketState *record) noexcept { fixture_receive_pending = new Packet(*record); return fixture_receive_pending->Record(); };
-	tcp.receive_bytes = [](NetworkTCPSocketHandler *, uint8_t *data, size_t size) noexcept -> intptr_t {
+	auto *transport = openttd_rust_tcp_new(game.base, 0);
+	auto *previous = std::exchange(game.tcp, transport);
+	struct Transport { OpenTTDNetworkTcpServices &services; OpenTTDNetworkGameSocket &game; OpenTTDNetworkTcpSocket *record, *previous; ~Transport() { game.tcp = previous; openttd_rust_tcp_drop(&services, record); } } owner{tcp, game, transport, previous};
+	tcp.receive_bytes = [](OpenTTDNetworkTcpSocket *, uint8_t *data, size_t size) noexcept -> intptr_t {
 		if (fixture_receive_wire.empty()) return -1;
 		size_t count = std::min(size, fixture_receive_wire.size());
 		std::copy_n(fixture_receive_wire.data(), count, data);
 		fixture_receive_wire = fixture_receive_wire.subspan(count);
 		return count;
 	};
-	tcp.receive_take = [](NetworkTCPSocketHandler *) noexcept { return std::exchange(fixture_receive_pending, nullptr); };
 	tcp.error_would_block = [](const NetworkError *) noexcept { return true; };
-	tcp.packet_record = [](Packet *packet) noexcept { fixture_receive_position = packet->Record()->position; return packet->Record(); };
+	tcp.packet_delete_shell = [](Packet *packet) noexcept { fixture_receive_position = packet->Record()->position; Packet::DeleteShell(packet); };
 	network.tcp = &tcp;
 	network.packet = &Packet::Services();
 	if (network.command == nullptr) network.command = &GetRustNetworkCommandServices();
@@ -117,6 +110,7 @@ struct MapClient {
 	OpenTTDCommandQueue outgoing{};
 	OpenTTDNetworkSocketSync sync{};
 	OpenTTDNetworkMapWriter *writer = nullptr;
+	OpenTTDNetworkTcpSocket *tcp = nullptr;
 };
 static std::array<MapClient, 4> map_clients;
 static std::vector<std::pair<int, int>> map_events;
@@ -126,13 +120,15 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 {
 	map_clients = {};
 	map_events.clear();
-	struct Writers { ~Writers() { for (auto &client : map_clients) openttd_rust_network_map_writer_drop(client.writer); } } writers;
+	struct Writers { ~Writers() { for (auto &client : map_clients) { client.writer->client = nullptr; openttd_rust_network_map_writer_drop(&GetRustNetworkTcpServices(), client.writer); openttd_rust_tcp_drop(&GetRustNetworkTcpServices(), client.tcp); } } } writers;
 	for (auto &client : map_clients) {
-		client.writer = openttd_rust_network_map_writer_new(&client, nullptr);
+		client.writer = openttd_rust_network_map_writer_new(&client, &client.base);
 		client.record.map_writer = client.writer;
 		client.record.base = &client.base;
 		client.record.game = &client;
-		client.record.tcp = reinterpret_cast<NetworkTCPSocketHandler *>(&client);
+		client.tcp = openttd_rust_tcp_new(&client.base, 0);
+		client.tcp->writable = true;
+		client.record.tcp = client.tcp;
 		client.record.server = &client;
 		client.record.incoming = &client.incoming;
 		client.record.outgoing = &client.outgoing;
@@ -164,18 +160,28 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	auto dispatch = GetRustNetworkDispatchServices();
 	dispatch.client_id = [](OpenTTDNetworkGameSocket *socket) noexcept { return static_cast<uint32_t>(MapIndex(socket->game)); };
 	network.dispatch = &dispatch;
-	OpenTTDNetworkTcpServices tcp{};
-	tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
-	tcp.writable = [](const NetworkTCPSocketHandler *socket) noexcept { MapEvent(9, const_cast<void *>(static_cast<const void *>(socket))); return true; };
-	tcp.packet_record = [](Packet *packet) noexcept { return packet->Record(); };
-	tcp.send_front = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return nullptr; };
+	auto tcp = GetRustNetworkTcpServices();
+	tcp.send_bytes = [](OpenTTDNetworkTcpSocket *socket, const uint8_t *data, size_t size) noexcept -> intptr_t {
+		for (auto &client : map_clients) if (client.tcp == socket) MapEvent(9, &client);
+		CHECK(std::vector<uint8_t>(data, data + size) == std::vector<uint8_t>{3, 0, PACKET_SERVER_SHUTDOWN});
+		return size;
+	};
 	network.tcp = &tcp;
 	network.socket_delete = [](void *socket) noexcept { MapEvent(10, socket); };
 	auto packet_services = Packet::Services();
 	network.packet = &packet_services;
-	openttd_rust_network_map_finish(map_clients[1].writer, &packet_services, RustAssertCondition);
-	/* SendWait is observed at its enqueue; no other step records an event in between. */
-	tcp.packet_enqueue = [](NetworkTCPSocketHandler *socket, OpenTTDPacketState *state) noexcept { Packet packet(*state); if (packet.GetPacketType() == PACKET_SERVER_WAIT) MapEvent(7, socket); };
+	openttd_rust_network_map_finish(map_clients[1].writer, &tcp, RustAssertCondition);
+	/* Shell adoption immediately precedes Rust queue publication. */
+	tcp.packet_new_shell = [](OpenTTDPacketState *state) noexcept {
+		auto *packet = new Packet(*state);
+		if (packet->GetPacketType() == PACKET_SERVER_WAIT) {
+			for (auto &client : map_clients) if (packet->Record()->socket == &client.base) MapEvent(7, &client);
+		}
+		return packet;
+	};
+	auto closing = std::make_unique<Packet>(nullptr, PACKET_SERVER_SHUTDOWN);
+	closing->PrepareToSend();
+	openttd_rust_tcp_enqueue(map_clients[0].tcp, closing.release());
 	OpenTTDSessionFrame frame;
 	CHECK(openttd_rust_network_server_close(&connection, &network, &map_clients[0].record, NETWORK_RECV_STATUS_CLIENT_QUIT, &frame.network_actions) == NETWORK_RECV_STATUS_CLIENT_QUIT);
 	CHECK(on == 4);
@@ -203,11 +209,9 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	CHECK(map_events == expected);
 }
 
-static Packet *tcp_receive_packet;
 static std::vector<uint8_t> tcp_input;
 static size_t tcp_read_position;
 
-static NetworkSocketHandler *dispatch_base;
 static uint dispatch_creates, dispatch_deletes, dispatch_closes, dispatch_position;
 static bool dispatch_ended, dispatch_cleanup_order, dispatch_previous_live;
 TEST_CASE("Network game receive - encrypted dispatch preserves consumption and native unwind")
@@ -263,7 +267,6 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		sender.Send(server_auth.CreateServerToClientEncryptionHandler());
 		receiver.Receive(client_auth.CreateServerToClientEncryptionHandler());
 		if (test.quit) receiver.MarkClosed();
-		dispatch_base = &receiver;
 		Packet source(&sender, test.type);
 		if (test.type == PACKET_SERVER_COMMAND) {
 			source.Send_uint8(255);
@@ -280,31 +283,25 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		source.PrepareToSend();
 		tcp_input.assign(source.Record()->data, source.Record()->data + source.Size());
 		tcp_read_position = 0;
-		tcp_receive_packet = nullptr;
 		dispatch_creates = dispatch_deletes = dispatch_closes = dispatch_position = 0;
 		dispatch_ended = dispatch_previous_live = false;
 		dispatch_cleanup_order = true;
-		struct PendingPacket { ~PendingPacket() { delete std::exchange(tcp_receive_packet, nullptr); } } pending;
 		auto tcp = GetRustNetworkTcpServices();
-		tcp.valid = [](const NetworkTCPSocketHandler *) noexcept { return true; };
-		tcp.base_socket = [](NetworkTCPSocketHandler *) noexcept { return dispatch_base->BaseRecord(); };
-		tcp.receive_packet = [](NetworkTCPSocketHandler *) noexcept -> OpenTTDPacketState * { return tcp_receive_packet ? tcp_receive_packet->Record() : nullptr; };
-		tcp.receive_create = [](NetworkTCPSocketHandler *, OpenTTDPacketState *record) noexcept {
+		auto *transport = openttd_rust_tcp_new(receiver.BaseRecord(), 0);
+		struct Transport { OpenTTDNetworkTcpServices &services; OpenTTDNetworkTcpSocket *record; ~Transport() { openttd_rust_tcp_drop(&services, record); } } owner{tcp, transport};
+		tcp.packet_new_shell = [](OpenTTDPacketState *record) noexcept {
 			if (++dispatch_creates == 2) dispatch_previous_live = dispatch_deletes == 0;
-			tcp_receive_packet = new Packet(*record);
-			return tcp_receive_packet->Record();
+			return new Packet(*record);
 		};
-		tcp.receive_bytes = [](NetworkTCPSocketHandler *, uint8_t *data, size_t size) noexcept -> intptr_t {
+		tcp.receive_bytes = [](OpenTTDNetworkTcpSocket *, uint8_t *data, size_t size) noexcept -> intptr_t {
 			if (tcp_read_position == tcp_input.size()) return -1;
 			size_t count = std::min(size, tcp_input.size() - tcp_read_position);
 			std::copy_n(tcp_input.data() + tcp_read_position, count, data);
 			tcp_read_position += count;
 			return count;
 		};
-		tcp.receive_take = [](NetworkTCPSocketHandler *) noexcept { return std::exchange(tcp_receive_packet, nullptr); };
 		tcp.error_would_block = [](const NetworkError *) noexcept { return true; };
-		tcp.packet_record = [](Packet *packet) noexcept { dispatch_position = packet->Record()->position; return packet->Record(); };
-		tcp.packet_delete_shell = [](Packet *packet) noexcept { dispatch_deletes++; dispatch_cleanup_order &= dispatch_ended; Packet::DeleteShell(packet); };
+		tcp.packet_delete_shell = [](Packet *packet) noexcept { dispatch_position = packet->Record()->position; dispatch_deletes++; dispatch_cleanup_order &= dispatch_ended; Packet::DeleteShell(packet); };
 		auto dispatch = GetRustNetworkDispatchServices();
 		dispatch.server_rcon = [](OpenTTDNetworkGameSocket *, Packet *, OpenTTDSessionFrame *frame) noexcept -> uint8_t { SessionException(frame, [] { throw 574; }); return NETWORK_RECV_STATUS_OKAY; };
 		dispatch.packet_end = [](OpenTTDSessionFrame *frame) noexcept { frame->packet_load.reset(); frame->packet_text.reset(); dispatch_ended = true; };
@@ -328,6 +325,7 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		tcp.now = []() noexcept -> int64_t { return 321; };
 		network.query_close = [](void *, uint8_t result) noexcept { dispatch_closes++; return result; };
 		auto &game = static_cast<OpenTTDNetworkGameSocket &>(receiver);
+		game.tcp = transport;
 		game.status = test.status;
 		game.role = test.role;
 		game.last_packet_ns = 77;

@@ -89,7 +89,7 @@ struct PacketWriter : SaveFilter {
 
 		/* This must all wait until the Destroy function is called. */
 
-		openttd_rust_network_map_writer_drop(this->state);
+		openttd_rust_network_map_writer_drop(&GetRustNetworkTcpServices(), this->state);
 	}
 
 	/**
@@ -124,7 +124,7 @@ struct PacketWriter : SaveFilter {
 		/* We want to abort the saving when the socket is closed. */
 		if (this->state->client == nullptr) SlError(STR_NETWORK_ERROR_LOSTCONNECTION);
 
-		openttd_rust_network_map_write(this->state, &Packet::Services(), RustAssertCondition, buf, size);
+		openttd_rust_network_map_write(this->state, &GetRustNetworkTcpServices(), RustAssertCondition, buf, size);
 	}
 
 	void Finish() override
@@ -134,7 +134,7 @@ struct PacketWriter : SaveFilter {
 		/* We want to abort the saving when the socket is closed. */
 		if (this->state->client == nullptr) SlError(STR_NETWORK_ERROR_LOSTCONNECTION);
 
-		openttd_rust_network_map_finish(this->state, &Packet::Services(), RustAssertCondition);
+		openttd_rust_network_map_finish(this->state, &GetRustNetworkTcpServices(), RustAssertCondition);
 	}
 };
 

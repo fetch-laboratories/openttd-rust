@@ -125,8 +125,8 @@ public:
 
 
 		for (Tsocket *cs : Tsocket::Iterate()) {
-			FD_SET(cs->sock, &read_fd);
-			FD_SET(cs->sock, &write_fd);
+			FD_SET(cs->Socket(), &read_fd);
+			FD_SET(cs->Socket(), &write_fd);
 		}
 
 		/* take care of listener port */
@@ -160,8 +160,8 @@ public:
 
 		/* read stuff from clients */
 		for (Tsocket *cs : Tsocket::Iterate()) {
-			cs->writable = !!FD_ISSET(cs->sock, &write_fd);
-			if (FD_ISSET(cs->sock, &read_fd)) {
+			cs->TcpRecord()->writable = !!FD_ISSET(cs->Socket(), &write_fd);
+			if (FD_ISSET(cs->Socket(), &read_fd)) {
 				cs->ReceivePackets();
 			}
 		}

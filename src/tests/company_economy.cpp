@@ -6,6 +6,7 @@
  */
 /** @file company_economy.cpp Native company layouts, network gaps and startup continuations. */
 #include "../stdafx.h"
+#include "../network/core/tcp.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../3rdparty/fmt/format.h"
 #include "../../tools/simulation/session-fixture.hpp"
@@ -177,6 +178,7 @@ static OpenTTDNetworkCommandServices fixture_network_command;
 static OpenTTDNetworkFrameServices fixture_network_frame;
 static OpenTTDNetworkTcpServices fixture_network_tcp;
 static OpenTTDNetworkGameSocket fixture_network_socket;
+static NetworkTCPSocketHandler fixture_network_transport;
 static OpenTTDCompanyServices fixture_network_company, fixture_post_company;
 static OpenTTDCompanyIdentityServices fixture_identity;
 static OpenTTDSharedServices fixture_identity_shared;
@@ -244,7 +246,10 @@ static void FixtureReset(bool networking, bool server)
 	fixture_network_frame.command = &fixture_network_command;
 	fixture_network_frame.client_game = []() noexcept { return &fixture_network_socket; };
 	fixture_network_tcp = GetRustNetworkTcpServices();
-	fixture_network_tcp.packet_enqueue = [](NetworkTCPSocketHandler *, OpenTTDPacketState *) noexcept {};
+	fixture_network_transport.CloseConnection();
+	fixture_network_transport.Reopen();
+	fixture_network_socket.base = fixture_network_transport.BaseRecord();
+	fixture_network_socket.tcp = fixture_network_transport.TcpRecord();
 	fixture_network_frame.tcp = &fixture_network_tcp;
 	fixture_network_command.network = []() noexcept -> const OpenTTDNetworkFrameServices & { return fixture_network_frame; };
 	fixture_post.network = []() noexcept -> const OpenTTDNetworkCommandServices & { return fixture_network_command; };

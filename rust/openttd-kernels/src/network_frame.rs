@@ -122,7 +122,7 @@ pub struct Services {
     pub server_accept: extern "C" fn(*mut Frame, u32) -> bool,
     pub server_accept_next: extern "C" fn(*mut Frame) -> socket::Poll,
     pub server_poll: extern "C" fn(*mut Frame) -> socket::Poll,
-    pub server_poll_client: extern "C" fn(*mut Frame, *mut socket::GameSocket) -> bool,
+    pub server_poll_client: extern "C" fn(*mut Frame, *mut socket::GameSocket) -> u8,
     pub server_poll_end: extern "C" fn(*mut Frame),
     pub show_lost_connection: extern "C" fn(),
     pub socket_delete: extern "C" fn(*mut c_void),
@@ -155,7 +155,9 @@ pub(crate) fn packet_send(s: &Services, game: *mut socket::GameSocket, p: &mut P
     unsafe {
         packet::prepare_to_send(p, s.packet, packet_check(s));
     }
-    (s.tcp.packet_enqueue)(socket::tcp(game), p);
+    unsafe {
+        crate::network_tcp::enqueue_prepared(s.tcp, socket::tcp(game), p);
+    }
 }
 pub(crate) fn packet_send_string(
     s: &Services,

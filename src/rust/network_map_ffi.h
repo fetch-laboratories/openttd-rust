@@ -2,14 +2,14 @@
 /** @file network_map_ffi.h Map payload ownership inside native save/load resource frames. */
 #ifndef RUST_NETWORK_MAP_FFI_H
 #define RUST_NETWORK_MAP_FFI_H
-#include "packet_ffi.h"
+#include "network_tcp_ffi.h"
 #include "rust_vector.h"
 #include "abi-record-network_map.h"
 extern "C" {
 OpenTTDNetworkMapWriter *openttd_rust_network_map_writer_new(void *, OpenTTDNetworkSocket *);
-void openttd_rust_network_map_writer_drop(OpenTTDNetworkMapWriter *);
-void openttd_rust_network_map_write(OpenTTDNetworkMapWriter *, const OpenTTDPacketServices *, void (*)(bool) noexcept, const uint8_t *, size_t);
-void openttd_rust_network_map_finish(OpenTTDNetworkMapWriter *, const OpenTTDPacketServices *, void (*)(bool) noexcept);
+void openttd_rust_network_map_writer_drop(const OpenTTDNetworkTcpServices *, OpenTTDNetworkMapWriter *);
+void openttd_rust_network_map_write(OpenTTDNetworkMapWriter *, const OpenTTDNetworkTcpServices *, void (*)(bool) noexcept, const uint8_t *, size_t);
+void openttd_rust_network_map_finish(OpenTTDNetworkMapWriter *, const OpenTTDNetworkTcpServices *, void (*)(bool) noexcept);
 OpenTTDNetworkMapReader *openttd_rust_network_map_reader_new();
 void openttd_rust_network_map_reader_drop(OpenTTDNetworkMapReader *);
 void openttd_rust_network_map_reset(OpenTTDNetworkMapReader *);

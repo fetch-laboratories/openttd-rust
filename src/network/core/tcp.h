@@ -30,29 +30,22 @@ enum SendPacketsState : uint8_t {
 
 /** Base socket handler for all TCP sockets */
 class NetworkTCPSocketHandler : public NetworkSocketHandler {
-	friend const OpenTTDNetworkTcpServices &GetRustNetworkTcpServices() noexcept;
-private:
-	std::deque<std::unique_ptr<Packet>> packet_queue{}; ///< Packets that are awaiting delivery. Cannot be std::queue as that does not have a clear() function.
-	std::unique_ptr<Packet> packet_recv = nullptr; ///< Partially received packet
-
-	void EmptyPacketQueue();
+	OpenTTDNetworkTcpSocket *const record;
 public:
-	SOCKET sock = INVALID_SOCKET; ///< The socket currently connected to
-	bool writable = false; ///< Can we write to this socket?
+	OpenTTDNetworkTcpSocket *TcpRecord() const { return this->record; }
+	SOCKET Socket() const { return this->record->socket; }
+	void SetSocket(SOCKET socket) { this->record->socket = socket; }
 
 	/**
 	 * Whether this socket is currently bound to a socket.
 	 * @return true when the socket is bound, false otherwise
 	 */
-	bool IsConnected() const { return this->sock != INVALID_SOCKET; }
+	bool IsConnected() const { return this->record->socket != INVALID_SOCKET; }
 
 	virtual NetworkRecvStatus CloseConnection(bool error = true);
 	void CloseSocket();
 
 	virtual void SendPacket(std::unique_ptr<Packet> &&packet);
-	/** Enqueue a packet already framed by the direct Rust packet owner. */
-	void SendPreparedPacket(OpenTTDPacketState &packet) { this->packet_queue.push_back(std::make_unique<Packet>(packet)); }
-	void EnqueuePreparedPacket(std::unique_ptr<Packet> &&packet) { this->packet_queue.push_back(std::move(packet)); }
 	SendPacketsState SendPackets(bool closing_down = false);
 
 	virtual std::unique_ptr<Packet> ReceivePacket();
@@ -63,13 +56,13 @@ public:
 	 * Whether there is something pending in the send queue.
 	 * @return true when something is pending in the send queue.
 	 */
-	bool HasSendQueue() { return !this->packet_queue.empty(); }
+	bool HasSendQueue() { return this->record->send_index != this->record->packets.size(); }
 
 	/**
 	 * Construct a socket handler for a TCP connection.
 	 * @param s The just opened TCP connection.
 	 */
-	NetworkTCPSocketHandler(SOCKET s = INVALID_SOCKET) : sock(s) {}
+	NetworkTCPSocketHandler(SOCKET s = INVALID_SOCKET) : record(openttd_rust_tcp_new(this->BaseRecord(), s)) {}
 	~NetworkTCPSocketHandler();
 };
 

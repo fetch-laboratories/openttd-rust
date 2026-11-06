@@ -24,7 +24,7 @@ struct OpenTTDContentServices {
 	void (*callback_disconnect)(ContentCallback *) noexcept OPENTTD_SERVICE_DEFAULT(callback_disconnect);
 	void (*callback_progress)(ContentCallback *, const OpenTTDContentInfo *, int) noexcept OPENTTD_SERVICE_DEFAULT(callback_progress);
 	void (*callback_receive)(ContentCallback *, const OpenTTDContentInfo *) noexcept OPENTTD_SERVICE_DEFAULT(callback_receive);
-	NetworkTCPSocketHandler *client;
+	OpenTTDNetworkTcpSocket *client;
 	void (*close_socket)() noexcept OPENTTD_SERVICE_DEFAULT(close_socket);
 	void (*connect)() noexcept OPENTTD_SERVICE_DEFAULT(connect);
 	OpenTTDByteSpan (*content_version)() noexcept OPENTTD_SERVICE_DEFAULT(content_version);

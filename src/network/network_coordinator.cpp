@@ -116,9 +116,9 @@ public:
 
 	void OnConnect(SOCKET s) override
 	{
-		assert(_network_coordinator_client.sock == INVALID_SOCKET);
+		assert(_network_coordinator_client.Socket() == INVALID_SOCKET);
 
-		_network_coordinator_client.sock = s;
+		_network_coordinator_client.SetSocket(s);
 		_network_coordinator_client.last_activity = std::chrono::steady_clock::now();
 		_network_coordinator_client.connecting = false;
 	}
@@ -427,7 +427,7 @@ void ClientNetworkCoordinatorSocketHandler::StartTurnConnection(std::string_view
 void ClientNetworkCoordinatorSocketHandler::Connect()
 {
 	/* We are either already connected or are trying to connect. */
-	if (this->sock != INVALID_SOCKET || this->connecting) return;
+	if (this->Socket() != INVALID_SOCKET || this->connecting) return;
 
 	this->Reopen();
 
@@ -733,7 +733,7 @@ void ClientNetworkCoordinatorSocketHandler::SendReceive()
 {
 	/* Private games are not listed via the Game Coordinator. */
 	if (_network_server && _settings_client.network.server_game_type == SERVER_GAME_TYPE_LOCAL) {
-		if (this->sock != INVALID_SOCKET) {
+		if (this->Socket() != INVALID_SOCKET) {
 			this->CloseConnection();
 		}
 		return;
@@ -742,7 +742,7 @@ void ClientNetworkCoordinatorSocketHandler::SendReceive()
 	static int last_attempt_backoff = 1;
 	static bool first_reconnect = true;
 
-	if (this->sock == INVALID_SOCKET) {
+	if (this->Socket() == INVALID_SOCKET) {
 		static std::chrono::steady_clock::time_point last_attempt = {};
 
 		/* Don't auto-reconnect when we are not a server. */

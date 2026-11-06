@@ -6,7 +6,8 @@
 #![allow(unsafe_code, missing_docs)]
 use crate::industrytype::NativeVec;
 use crate::network_config::TCP_MTU;
-use crate::packet::{self, NetworkSocketHandler, State};
+use crate::network_tcp::{self as tcp, Packet, Services};
+use crate::packet::NetworkSocketHandler;
 use crate::tcp_game::{PACKET_SERVER_MAP_DATA, PACKET_SERVER_MAP_DONE, PACKET_SERVER_MAP_SIZE};
 use std::ffi::c_void;
 use std::ptr::null_mut;
@@ -16,10 +17,10 @@ crate::abi::shared_records! {
     "OpenTTDNetworkMapWriter" ["network_map"] => pub struct MapWriter {
         pub resource: *mut c_void,
         pub client: *mut NetworkSocketHandler,
-        pub current: *mut State,
+        pub current: *mut Packet => "Packet *",
         pub total_size: usize,
         pub next_packet: usize,
-        pub packets: NativeVec<State> => "RustVector<OpenTTDPacketState>",
+        pub packets: NativeVec<*mut Packet> => "RustVector<Packet *>",
     }
     "OpenTTDNetworkMapReader" ["network_map"] => pub struct MapReader {
         pub buffer: NativeVec<u8> => "RustVector<uint8_t>",
@@ -40,16 +41,6 @@ impl MapWriter {
     }
 }
 
-impl Drop for MapWriter {
-    fn drop(&mut self) {
-        // PacketWriter destroys queued payloads before the partially filled packet.
-        drop(std::mem::take(&mut self.packets));
-        if !self.current.is_null() {
-            unsafe { drop(Box::from_raw(self.current)) };
-        }
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_network_map_writer_new(
     resource: *mut c_void,
@@ -61,8 +52,19 @@ pub extern "C" fn openttd_rust_network_map_writer_new(
 /// # Safety
 /// The native filter has observed a null client under its mutex; `writer` is uniquely owned.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_network_map_writer_drop(writer: *mut MapWriter) {
-    unsafe { drop(Box::from_raw(writer)) };
+pub unsafe extern "C" fn openttd_rust_network_map_writer_drop(
+    services: &Services,
+    writer: *mut MapWriter,
+) {
+    unsafe {
+        for i in (*writer).next_packet..(*writer).packets.len() {
+            tcp::destroy_packet(services, *(*writer).packets.as_mut_ptr().add(i));
+        }
+        if !(*writer).current.is_null() {
+            tcp::destroy_packet(services, (*writer).current);
+        }
+        drop(Box::from_raw(writer));
+    }
 }
 
 /// # Safety
@@ -71,20 +73,20 @@ pub unsafe extern "C" fn openttd_rust_network_map_writer_drop(writer: *mut MapWr
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_map_write(
     writer: *mut MapWriter,
-    services: &packet::Services,
+    services: &Services,
     check: extern "C" fn(bool),
     data: *const u8,
     size: usize,
 ) {
     unsafe {
         if (*writer).current.is_null() {
-            (*writer).current = Box::into_raw(Box::new(packet::new_outgoing(
-                (*writer).client,
+            (*writer).current = tcp::new_outgoing_shell(
                 services,
-                check,
+                (*writer).client,
                 PACKET_SERVER_MAP_DATA,
                 TCP_MTU,
-            )));
+                check,
+            );
         }
         let mut remaining = if size == 0 {
             &[]
@@ -92,18 +94,19 @@ pub unsafe extern "C" fn openttd_rust_network_map_write(
             std::slice::from_raw_parts(data, size)
         };
         while !remaining.is_empty() {
-            remaining = (&mut *(*writer).current).send_bytes(remaining);
-            if !(*(*writer).current).can_write(1) {
+            let current = tcp::record((*writer).current);
+            remaining = (&mut *current).send_bytes(remaining);
+            if !(*current).can_write(1) {
                 let current = std::mem::replace(&mut (*writer).current, null_mut());
-                (*writer).packets.push(*Box::from_raw(current));
+                (*writer).packets.push(current);
                 if !remaining.is_empty() {
-                    (*writer).current = Box::into_raw(Box::new(packet::new_outgoing(
-                        (*writer).client,
+                    (*writer).current = tcp::new_outgoing_shell(
                         services,
-                        check,
+                        (*writer).client,
                         PACKET_SERVER_MAP_DATA,
                         TCP_MTU,
-                    )));
+                        check,
+                    );
                 }
             }
         }
@@ -116,33 +119,33 @@ pub unsafe extern "C" fn openttd_rust_network_map_write(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_map_finish(
     writer: *mut MapWriter,
-    services: &packet::Services,
+    services: &Services,
     check: extern "C" fn(bool),
 ) {
     unsafe {
         if !(*writer).current.is_null() {
             let current = std::mem::replace(&mut (*writer).current, null_mut());
-            (*writer).packets.push(*Box::from_raw(current));
+            (*writer).packets.push(current);
         }
         let client = (*writer).client;
-        let done = packet::new_outgoing(
-            client,
+        let done = tcp::new_outgoing_shell(
             services,
-            check,
+            client,
             PACKET_SERVER_MAP_DONE,
             crate::network_config::COMPAT_MTU,
+            check,
         );
         (*writer).packets.push(done);
-        let mut size = packet::new_outgoing(
-            client,
+        let size = tcp::new_outgoing_shell(
             services,
-            check,
+            client,
             PACKET_SERVER_MAP_SIZE,
             crate::network_config::COMPAT_MTU,
+            check,
         );
         #[allow(clippy::cast_possible_truncation)] // PacketWriter narrows its native-size total.
         let total = (*writer).total_size as u32;
-        size.send_bytes(&total.to_le_bytes());
+        (*tcp::record(size)).send_bytes(&total.to_le_bytes());
         (*writer).packets.insert(0, size);
     }
 }
@@ -225,13 +228,15 @@ mod tests {
         ] {
             let total: usize = chunks.iter().sum();
             let bytes: Vec<u8> = (0..=u8::MAX).cycle().take(total).collect();
-            let mut writer = MapWriter::new(null_mut(), null_mut());
+            let services = tcp::packet_only_services();
+            let mut base = NetworkSocketHandler::new();
+            let mut writer = Box::new(MapWriter::new(null_mut(), &raw mut base));
             let mut offset = 0;
             for &size in &chunks {
                 unsafe {
                     openttd_rust_network_map_write(
-                        &raw mut writer,
-                        packet::test_services(),
+                        &raw mut *writer,
+                        &services,
                         check,
                         bytes.as_ptr().add(offset),
                         size,
@@ -240,10 +245,13 @@ mod tests {
                 offset += size;
             }
             unsafe {
-                openttd_rust_network_map_finish(&raw mut writer, packet::test_services(), check);
+                openttd_rust_network_map_finish(&raw mut *writer, &services, check);
             };
             let packets = writer.packets.as_slice();
-            let wire = |p: &State| unsafe { std::slice::from_raw_parts(p.data, p.size) };
+            let wire = |p: &*mut Packet| unsafe {
+                let p = tcp::record(*p);
+                std::slice::from_raw_parts((*p).data, (*p).size)
+            };
             let mut size_packet = vec![0, 0, PACKET_SERVER_MAP_SIZE];
             size_packet.extend_from_slice(&u32::try_from(total).unwrap().to_le_bytes());
             assert_eq!(wire(&packets[0]), size_packet);
@@ -253,7 +261,7 @@ mod tests {
             );
             let mut data = Vec::new();
             for p in &packets[1..packets.len() - 1] {
-                assert!(p.size <= 32767);
+                assert!(unsafe { (*tcp::record(*p)).size } <= 32767);
                 assert_eq!(&wire(p)[..3], [0, 0, PACKET_SERVER_MAP_DATA]);
                 data.extend_from_slice(&wire(p)[3..]);
             }
@@ -268,6 +276,10 @@ mod tests {
             );
             assert_eq!(writer.total_size, total);
             assert!(writer.current.is_null());
+            writer.client = null_mut();
+            unsafe {
+                openttd_rust_network_map_writer_drop(&services, Box::into_raw(writer));
+            }
         }
     }
 

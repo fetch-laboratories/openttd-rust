@@ -24,7 +24,7 @@ crate::abi::shared_records! {
         pub server: *mut c_void,
         pub status: u8,
         pub sync: *mut SocketSync,
-        pub tcp: *mut NetworkTCPSocketHandler => class,
+        pub tcp: *mut NetworkTCPSocketHandler,
     }
 }
 pub(crate) fn shell(socket: *mut GameSocket) -> *mut c_void {
@@ -207,7 +207,7 @@ pub(crate) fn send_all(
 /// `ServerNetworkGameSocketHandler::Send`, with pool iteration resumed after map saves.
 pub(crate) fn send_clients(s: &Services, mut cursor: usize, work: Actions) {
     while let Some(client) = crate::network_command::next_client(s.command, &mut cursor) {
-        if !(s.tcp.writable)(tcp(client.socket)) {
+        if !unsafe { (*tcp(client.socket)).writable } {
             continue;
         }
         let sent = send(s, client.socket, work);
@@ -268,7 +268,9 @@ pub(crate) fn receive_all(
         receive_clients(session, s, frame, 0, work)
     } else {
         let game = (s.client_game)();
-        if (s.tcp.can_send_receive)(tcp(game)) {
+        if unsafe {
+            crate::network_tcp::can_receive(s.tcp, tcp(game), crate::network_frame::packet_check(s))
+        } {
             let result = crate::network_dispatch::receive_packets(session, s, game, frame, work);
             if work.pending() {
                 work.push(crate::network_action::Resume::ClientReceived);
@@ -291,7 +293,9 @@ pub(crate) fn receive_clients(
     work: Actions,
 ) -> Result<bool, ()> {
     while let Some(client) = crate::network_command::next_client(s.command, &mut cursor) {
-        if !(s.server_poll_client)(frame, client.socket) {
+        let ready = (s.server_poll_client)(frame, client.socket);
+        write_field!(tcp(client.socket), writable, ready & 2 != 0);
+        if ready & 1 == 0 {
             continue;
         }
         let result =

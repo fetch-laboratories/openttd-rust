@@ -102,7 +102,7 @@ ServerNetworkAdminSocketHandler::~ServerNetworkAdminSocketHandler()
 			as->CloseConnection(true);
 			continue;
 		}
-		if (as->writable) {
+		if (as->TcpRecord()->writable) {
 			as->SendPackets();
 		}
 	}
