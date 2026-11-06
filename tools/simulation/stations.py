@@ -770,9 +770,9 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 /* #378: real graph mutations plus arithmetic outside ordinary play's range. */
 #ifdef WITH_RUST
 extern "C" int32_t OPENTTD_RUST_CALL openttd_test_linkgraph_last_update(const OpenTTDLiveEdge *) noexcept;
-extern "C" void OPENTTD_RUST_CALL openttd_rust_live_edge_update(OpenTTDLiveEdge *, uint32_t, uint32_t, uint32_t, uint8_t) noexcept;
-extern "C" void OPENTTD_RUST_CALL openttd_rust_live_edge_restrict(OpenTTDLiveEdge *) noexcept;
-extern "C" void OPENTTD_RUST_CALL openttd_rust_live_edge_release(OpenTTDLiveEdge *) noexcept;
+extern "C" void OPENTTD_RUST_CALL openttd_test_linkgraph_edge_update(OpenTTDLiveEdge *, uint32_t, uint32_t, uint32_t, uint8_t) noexcept;
+extern "C" void OPENTTD_RUST_CALL openttd_test_linkgraph_edge_restrict(OpenTTDLiveEdge *) noexcept;
+extern "C" void OPENTTD_RUST_CALL openttd_test_linkgraph_edge_release(OpenTTDLiveEdge *) noexcept;
 #endif
 static void StationGraphs()
 {
@@ -858,10 +858,10 @@ static void StationGraphs()
 	for (uint64_t sum : {uint64_t{0}, UINT64_MAX - 1}) {
 		LinkGraph::BaseEdge edge(0); edge.capacity = UINT32_MAX - 2; edge.usage = UINT32_MAX - 3; edge.travel_time_sum = sum;
 #ifdef WITH_RUST
-		openttd_rust_live_edge_update(&edge, 7, 6, 100, (EdgeUpdateModes{EdgeUpdateMode::Increase, EdgeUpdateMode::Refresh, EdgeUpdateMode::Restricted}).base());
-		openttd_rust_live_edge_update(&edge, 11, 3, 0, (EdgeUpdateModes{EdgeUpdateMode::Refresh, EdgeUpdateMode::Unrestricted}).base());
-		openttd_rust_live_edge_update(&edge, 5, 1, 0, (EdgeUpdateModes{EdgeUpdateMode::Increase}).base());
-		openttd_rust_live_edge_restrict(&edge); openttd_rust_live_edge_release(&edge);
+		openttd_test_linkgraph_edge_update(&edge, 7, 6, 100, (EdgeUpdateModes{EdgeUpdateMode::Increase, EdgeUpdateMode::Refresh, EdgeUpdateMode::Restricted}).base());
+		openttd_test_linkgraph_edge_update(&edge, 11, 3, 0, (EdgeUpdateModes{EdgeUpdateMode::Refresh, EdgeUpdateMode::Unrestricted}).base());
+		openttd_test_linkgraph_edge_update(&edge, 5, 1, 0, (EdgeUpdateModes{EdgeUpdateMode::Increase}).base());
+		openttd_test_linkgraph_edge_restrict(&edge); openttd_test_linkgraph_edge_release(&edge);
 #else
 		edge.Update(7, 6, 100, {EdgeUpdateMode::Increase, EdgeUpdateMode::Refresh, EdgeUpdateMode::Restricted});
 		edge.Update(11, 3, 0, {EdgeUpdateMode::Refresh, EdgeUpdateMode::Unrestricted});

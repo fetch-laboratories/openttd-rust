@@ -84,7 +84,14 @@ impl Edge {
         witness::hit(witness::LINKGRAPH_RELEASE);
         self.last_restricted_update = INVALID_DATE;
     }
-    fn update(&mut self, capacity: u32, usage: u32, time: u32, modes: EdgeUpdateModes, date: i32) {
+    pub(crate) fn update(
+        &mut self,
+        capacity: u32,
+        usage: u32,
+        time: u32,
+        modes: EdgeUpdateModes,
+        date: i32,
+    ) {
         if modes.test(EdgeUpdateModes::INCREASE) {
             if self.travel_time_sum == 0 {
                 self.travel_time_sum =
@@ -400,28 +407,6 @@ pub unsafe extern "C" fn openttd_rust_live_edge_init(edge: *mut Edge, dest: u16)
     unsafe {
         edge.write(Edge::new(dest));
     }
-}
-#[unsafe(no_mangle)]
-#[cfg(feature = "native-test-support")]
-pub unsafe extern "C" fn openttd_rust_live_edge_update(
-    edge: *mut Edge,
-    capacity: u32,
-    usage: u32,
-    time: u32,
-    modes: EdgeUpdateModes,
-) {
-    let date = crate::timer_game_common::economy_date().0;
-    unsafe { &mut *edge }.update(capacity, usage, time, modes, date);
-}
-#[unsafe(no_mangle)]
-#[cfg(feature = "native-test-support")]
-pub unsafe extern "C" fn openttd_rust_live_edge_restrict(edge: *mut Edge) {
-    unsafe { &mut *edge }.restrict();
-}
-#[unsafe(no_mangle)]
-#[cfg(feature = "native-test-support")]
-pub unsafe extern "C" fn openttd_rust_live_edge_release(edge: *mut Edge) {
-    unsafe { &mut *edge }.release();
 }
 
 #[repr(C)]
