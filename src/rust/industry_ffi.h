@@ -49,17 +49,15 @@ void openttd_rust_industry_registry_clear(OpenTTDIndustryBuilder *owner, uint8_t
 /* The owner's first member is its shared OpenTTDIndustryRecord, at the same address. */
 OpenTTDIndustry *openttd_rust_industry_new(Industry *shell);
 void openttd_rust_industry_destroy(OpenTTDIndustry *owner);
-/* One entry per vector operation; any mutation invalidates outstanding views. */
-OpenTTDIndustrySlots openttd_rust_industry_produced_view(OpenTTDIndustry *owner);
-OpenTTDIndustrySlots openttd_rust_industry_accepted_view(OpenTTDIndustry *owner);
-void openttd_rust_industry_produced_reserve(OpenTTDIndustry *owner, size_t count);
-void openttd_rust_industry_accepted_reserve(OpenTTDIndustry *owner, size_t count);
-void openttd_rust_industry_produced_resize(OpenTTDIndustry *owner, size_t count);
-void openttd_rust_industry_accepted_resize(OpenTTDIndustry *owner, size_t count);
-OpenTTDIndustrySlots openttd_rust_industry_produced_emplace_back(OpenTTDIndustry *owner);
-OpenTTDIndustrySlots openttd_rust_industry_accepted_emplace_back(OpenTTDIndustry *owner);
-void openttd_rust_industry_produced_shrink_to_fit(OpenTTDIndustry *owner);
-void openttd_rust_industry_accepted_shrink_to_fit(OpenTTDIndustry *owner);
+/* Allocating mutations of the canonical descriptor invalidate outstanding views. */
+void openttd_rust_industry_produced_reserve(void *vector, size_t count);
+void openttd_rust_industry_accepted_reserve(void *vector, size_t count);
+void openttd_rust_industry_produced_resize(void *vector, size_t count);
+void openttd_rust_industry_accepted_resize(void *vector, size_t count);
+void *openttd_rust_industry_produced_emplace_back(void *vector);
+void *openttd_rust_industry_accepted_emplace_back(void *vector);
+void openttd_rust_industry_produced_shrink_to_fit(void *vector);
+void openttd_rust_industry_accepted_shrink_to_fit(void *vector);
 void *openttd_rust_industry_history(void *accepted);
 OpenTTDIndustryBuilder *openttd_rust_industry_builder_new(void);
 void openttd_rust_industry_builder_destroy(OpenTTDIndustryBuilder *owner);

@@ -23,6 +23,7 @@
 )]
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::IndustryID;
+use crate::industrytype::NativeVec;
 use crate::random_func::chance16_i;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
 use crate::tilearea::TileArea;
@@ -132,6 +133,8 @@ crate::abi::shared_records! {
         /// NOSAVE `Industry::part_of_subsidy`.
         pub part_of_subsidy: u8 => "PartsOfSubsidy",
         pub psa: *mut crate::newgrf_storage::PersistentStorage => "PersistentStorage *",
+        pub produced: NativeVec<Produced> => "Industry::ProducedCargoes",
+        pub accepted: NativeVec<Accepted> => "Industry::AcceptedCargoes",
     }
 }
 impl Default for IndustryRecord {
@@ -163,6 +166,8 @@ impl Default for IndustryRecord {
             ctlflags: 0,
             part_of_subsidy: 0,
             psa: ptr::null_mut(),
+            produced: NativeVec::new(),
+            accepted: NativeVec::new(),
         }
     }
 }
@@ -173,8 +178,6 @@ impl Default for IndustryRecord {
 pub struct Industry {
     pub(crate) record: IndustryRecord,
     text: Vec<u8>,
-    produced: Vec<Produced>,
-    accepted: Vec<Accepted>,
     stations_near: crate::station::StationList,
 }
 /// The industry's nearby station set, for immediate borrows only.
@@ -263,81 +266,93 @@ fn reserve<T>(v: &mut Vec<T>, count: usize) {
         v.reserve(count - v.len());
     }
 }
-fn emplace_back<T: Default>(v: &mut Vec<T>) -> Slots {
-    v.push(T::default());
-    view(v)
-}
-// One typed entry per vector operation. Each borrows only the addressed vector
-// for its own duration; no callback runs. Mutations invalidate outstanding views.
+// Only allocating/mutating vector operations cross the native boundary.
+// Read-only data/size access uses the generated record in place.
 /// # Safety
-/// Live handle; the returned view is valid until the next mutation of this vector.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_produced_view(owner: *mut Industry) -> Slots {
-    unsafe { view(&mut (*owner).produced) }
-}
-/// # Safety
-/// Live handle; the returned view is valid until the next mutation of this vector.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_accepted_view(owner: *mut Industry) -> Slots {
-    unsafe { view(&mut (*owner).accepted) }
-}
-/// # Safety
-/// Live handle with no outstanding C++ view of this vector.
+/// Live uniquely borrowed Rust-owned descriptor; no view spans mutation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_produced_reserve(
-    owner: *mut Industry,
+    vector: *mut NativeVec<Produced>,
     count: usize,
 ) {
-    unsafe { reserve(&mut (*owner).produced, count) }
+    unsafe {
+        (*vector).with_vec(|vec| reserve(vec, count));
+    }
 }
 /// # Safety
-/// Live handle with no outstanding C++ view of this vector.
+/// Live uniquely borrowed Rust-owned descriptor; no view spans mutation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_accepted_reserve(
-    owner: *mut Industry,
+    vector: *mut NativeVec<Accepted>,
     count: usize,
 ) {
-    unsafe { reserve(&mut (*owner).accepted, count) }
+    unsafe {
+        (*vector).with_vec(|vec| reserve(vec, count));
+    }
 }
 /// # Safety
-/// Live handle with no outstanding C++ view of this vector.
+/// Live uniquely borrowed descriptor; removed slots end their lifetimes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_produced_resize(owner: *mut Industry, count: usize) {
-    unsafe { (*owner).produced.resize_with(count, Produced::default) }
+pub unsafe extern "C" fn openttd_rust_industry_produced_resize(
+    vector: *mut NativeVec<Produced>,
+    count: usize,
+) {
+    unsafe {
+        (*vector).with_vec(|vec| vec.resize_with(count, Produced::default));
+    }
 }
 /// # Safety
-/// Live handle with no outstanding C++ view of this vector; removed slots free history.
+/// Live uniquely borrowed descriptor; removed slots free their optional histories.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_accepted_resize(owner: *mut Industry, count: usize) {
-    unsafe { (*owner).accepted.resize_with(count, Accepted::default) }
+pub unsafe extern "C" fn openttd_rust_industry_accepted_resize(
+    vector: *mut NativeVec<Accepted>,
+    count: usize,
+) {
+    unsafe {
+        (*vector).with_vec(|vec| vec.resize_with(count, Accepted::default));
+    }
 }
 /// # Safety
-/// Live handle with no outstanding C++ view of this vector. Returns the new view.
+/// Live uniquely borrowed descriptor; the new slot lasts until vector mutation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_produced_emplace_back(
-    owner: *mut Industry,
-) -> Slots {
-    unsafe { emplace_back(&mut (*owner).produced) }
+    vector: *mut NativeVec<Produced>,
+) -> *mut c_void {
+    unsafe {
+        (*vector).push(Produced::default());
+        (*vector).as_mut_ptr().add((*vector).len() - 1).cast()
+    }
 }
 /// # Safety
-/// Live handle with no outstanding C++ view of this vector. Returns the new view.
+/// Live uniquely borrowed descriptor; the new slot lasts until vector mutation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_accepted_emplace_back(
-    owner: *mut Industry,
-) -> Slots {
-    unsafe { emplace_back(&mut (*owner).accepted) }
+    vector: *mut NativeVec<Accepted>,
+) -> *mut c_void {
+    unsafe {
+        (*vector).push(Accepted::default());
+        (*vector).as_mut_ptr().add((*vector).len() - 1).cast()
+    }
 }
 /// # Safety
-/// Live handle with no outstanding C++ view of this vector.
+/// Live uniquely borrowed descriptor; no view spans allocation movement.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_produced_shrink_to_fit(owner: *mut Industry) {
-    unsafe { (*owner).produced.shrink_to_fit() }
+pub unsafe extern "C" fn openttd_rust_industry_produced_shrink_to_fit(
+    vector: *mut NativeVec<Produced>,
+) {
+    unsafe {
+        (*vector).with_vec(Vec::shrink_to_fit);
+    }
 }
 /// # Safety
-/// Live handle with no outstanding C++ view of this vector.
+/// Live uniquely borrowed descriptor; no view spans allocation movement.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_accepted_shrink_to_fit(owner: *mut Industry) {
-    unsafe { (*owner).accepted.shrink_to_fit() }
+pub unsafe extern "C" fn openttd_rust_industry_accepted_shrink_to_fit(
+    vector: *mut NativeVec<Accepted>,
+) {
+    unsafe {
+        (*vector).with_vec(Vec::shrink_to_fit);
+    }
 }
 /// # Safety
 /// Live accepted slot with canonical layout. Existing history remains stable.
@@ -536,16 +551,16 @@ fn fields(owner: *mut Industry) -> *mut IndustryRecord {
     unsafe { ptr::addr_of_mut!((*owner).record) }
 }
 fn produced(owner: *mut Industry, slot: usize) -> *mut Produced {
-    unsafe { (*owner).produced.as_mut_ptr().add(slot) }
+    unsafe { (*owner).record.produced.as_mut_ptr().add(slot) }
 }
 fn accepted(owner: *mut Industry, slot: usize) -> *mut Accepted {
-    unsafe { (*owner).accepted.as_mut_ptr().add(slot) }
+    unsafe { (*owner).record.accepted.as_mut_ptr().add(slot) }
 }
 fn produced_count(owner: *mut Industry) -> usize {
-    unsafe { (*owner).produced.len() }
+    unsafe { (*owner).record.produced.len() }
 }
 fn accepted_count(owner: *mut Industry) -> usize {
-    unsafe { (*owner).accepted.len() }
+    unsafe { (*owner).record.accepted.len() }
 }
 fn valid(cargo: u8) -> bool {
     crate::cargo_type::is_valid_cargo_type(cargo)
@@ -561,7 +576,7 @@ unsafe fn get_produced(owner: *const Industry, slot: usize) -> *const Produced {
             second: 0,
         }; RECORDS],
     };
-    let produced = unsafe { &(*owner).produced };
+    let produced = unsafe { &(*owner).record.produced };
     produced.get(slot).map_or(&raw const EMPTY, ptr::from_ref)
 }
 /// `Industry::GetAccepted`. The shared empty slot is immutable, as in the header.
@@ -576,7 +591,7 @@ unsafe fn get_accepted(owner: *const Industry, slot: usize) -> *const Accepted {
         last_accepted: 0,
         history: ptr::null_mut(),
     });
-    let accepted = unsafe { &(*owner).accepted };
+    let accepted = unsafe { &(*owner).record.accepted };
     accepted.get(slot).map_or(&raw const EMPTY.0, ptr::from_ref)
 }
 
@@ -585,7 +600,7 @@ unsafe fn get_cargo_produced(owner: *const Industry, cargo: u8) -> Option<usize>
     if !valid(cargo) {
         return None;
     }
-    unsafe { &(*owner).produced }
+    unsafe { &(*owner).record.produced }
         .iter()
         .position(|p| p.cargo == cargo)
 }
@@ -594,7 +609,7 @@ pub(crate) unsafe fn get_cargo_accepted(owner: *const Industry, cargo: u8) -> Op
     if !valid(cargo) {
         return None;
     }
-    unsafe { &(*owner).accepted }
+    unsafe { &(*owner).record.accepted }
         .iter()
         .position(|a| a.cargo == cargo)
 }
@@ -1419,14 +1434,18 @@ pub(crate) unsafe fn openttd_rust_industry_monthly(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_trim(i: *mut Industry) {
     unsafe {
-        let a = &mut (*i).accepted;
+        let a = &mut (*i).record.accepted;
         let n = a.iter().rposition(|a| valid(a.cargo)).map_or(0, |n| n + 1);
-        a.truncate(n);
-        a.shrink_to_fit();
-        let p = &mut (*i).produced;
+        a.with_vec(|v| {
+            v.truncate(n);
+            v.shrink_to_fit();
+        });
+        let p = &mut (*i).record.produced;
         let n = p.iter().rposition(|p| valid(p.cargo)).map_or(0, |n| n + 1);
-        p.truncate(n);
-        p.shrink_to_fit();
+        p.with_vec(|v| {
+            v.truncate(n);
+            v.shrink_to_fit();
+        });
     }
 }
 
@@ -1939,14 +1958,14 @@ pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> u32 {
 }
 /// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
 pub(crate) unsafe fn subsidy_produced_count(owner: *const Industry) -> u32 {
-    unsafe { &(*owner).produced }
+    unsafe { &(*owner).record.produced }
         .iter()
         .filter(|p| crate::cargo_type::is_valid_cargo_type(p.cargo))
         .count() as u32
 }
 /// SAFETY: Original random cargo ordinal is less than the valid cargo count.
 pub(crate) unsafe fn subsidy_produced(owner: *const Industry, number: u32) -> (u8, u16, u8) {
-    let p = unsafe { &(*owner).produced }
+    let p = unsafe { &(*owner).record.produced }
         .iter()
         .filter(|p| crate::cargo_type::is_valid_cargo_type(p.cargo))
         .nth(number as usize)
@@ -1957,7 +1976,7 @@ pub(crate) unsafe fn subsidy_produced(owner: *const Industry, number: u32) -> (u
 }
 /// SAFETY: Live serialized owner; same accepted-slot predicate as `IsCargoAccepted`.
 pub(crate) unsafe fn subsidy_accepts(owner: *const Industry, cargo: u8) -> bool {
-    unsafe { &(*owner).accepted }
+    unsafe { &(*owner).record.accepted }
         .iter()
         .any(|a| a.cargo == cargo)
 }
@@ -2289,25 +2308,23 @@ mod delivery_tests {
 
     #[test]
     fn delivery_uses_first_valid_slot_and_preserves_history() {
-        let mut industry = Industry {
-            accepted: vec![
-                Accepted {
-                    cargo: 7,
-                    waiting: 65530,
-                    ..Accepted::default()
-                },
-                Accepted {
-                    cargo: 7,
-                    waiting: 42,
-                    ..Accepted::default()
-                },
-                Accepted {
-                    cargo: 255,
-                    ..Accepted::default()
-                },
-            ],
-            ..Industry::default()
-        };
+        let mut industry = Industry::default();
+        industry.record.accepted = NativeVec::from_vec(vec![
+            Accepted {
+                cargo: 7,
+                waiting: 65530,
+                ..Accepted::default()
+            },
+            Accepted {
+                cargo: 7,
+                waiting: 42,
+                ..Accepted::default()
+            },
+            Accepted {
+                cargo: 255,
+                ..Accepted::default()
+            },
+        ]);
         let owner = &raw mut industry;
         unsafe {
             assert_eq!(get_cargo_accepted(owner, 7), Some(0));
@@ -2316,20 +2333,20 @@ mod delivery_tests {
             // Saturated stockpiles still create history and update last_accepted.
             for (pieces, amount, waiting, date) in [(20, 5, 65535, -12), (20, 0, 65535, 73)] {
                 assert_eq!(accept_delivery(owner, 0, pieces, || date), amount);
-                assert_eq!(industry.accepted[0].waiting, waiting);
-                assert_eq!(industry.accepted[0].last_accepted, date);
+                assert_eq!(industry.record.accepted[0].waiting, waiting);
+                assert_eq!(industry.record.accepted[0].last_accepted, date);
                 assert_eq!(
-                    (*industry.accepted[0].history)[usize::from(THIS_MONTH)].first,
+                    (*industry.record.accepted[0].history)[usize::from(THIS_MONTH)].first,
                     5
                 );
-                assert_eq!(industry.accepted[1].waiting, 42);
-                assert!(industry.accepted[1].history.is_null());
+                assert_eq!(industry.record.accepted[1].waiting, 42);
+                assert!(industry.record.accepted[1].history.is_null());
             }
-            industry.accepted[0].waiting = 0;
-            (*industry.accepted[0].history)[usize::from(THIS_MONTH)].first = 65530;
-            let history = industry.accepted[0].history;
+            industry.record.accepted[0].waiting = 0;
+            (*industry.record.accepted[0].history)[usize::from(THIS_MONTH)].first = 65530;
+            let history = industry.record.accepted[0].history;
             assert_eq!(accept_delivery(owner, 0, 10, || 99), 10);
-            assert_eq!(industry.accepted[0].history, history);
+            assert_eq!(industry.record.accepted[0].history, history);
             assert_eq!((*history)[usize::from(THIS_MONTH)].first, 4);
             assert_eq!((*history)[usize::from(LAST_MONTH)].first, 0);
         }

@@ -151,9 +151,9 @@ fn cargo_callbacks(
     };
     unsafe {
         if output {
-            (*owner).produced.clear();
+            (*owner).record.produced.clear();
         } else {
-            (*owner).accepted.clear();
+            (*owner).record.accepted.clear();
         }
     }
     let unlimited = unsafe { (*spec).behaviour } & (1 << 18) != 0;
@@ -181,12 +181,12 @@ fn cargo_callbacks(
         if !valid(cargo) && !unlimited {
             unsafe {
                 if output {
-                    (*owner).produced.push(Produced {
+                    (*owner).record.produced.push(Produced {
                         cargo: u8::MAX,
                         ..Produced::default()
                     });
                 } else {
-                    (*owner).accepted.push(Accepted {
+                    (*owner).record.accepted.push(Accepted {
                         cargo: u8::MAX,
                         ..Accepted::default()
                     });
@@ -216,12 +216,12 @@ fn cargo_callbacks(
         }
         unsafe {
             if output {
-                (*owner).produced.push(Produced {
+                (*owner).record.produced.push(Produced {
                     cargo,
                     ..Produced::default()
                 });
             } else {
-                (*owner).accepted.push(Accepted {
+                (*owner).record.accepted.push(Accepted {
                     cargo,
                     ..Accepted::default()
                 });
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     }
     for n in 0..count {
         unsafe {
-            (*owner).produced.push(Produced {
+            (*owner).record.produced.push(Produced {
                 cargo: lists.produced[n],
                 ..Produced::default()
             });
@@ -289,7 +289,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     }
     for n in 0..count {
         unsafe {
-            (*owner).accepted.push(Accepted {
+            (*owner).record.accepted.push(Accepted {
                 cargo: lists.accepted[n],
                 ..Accepted::default()
             });

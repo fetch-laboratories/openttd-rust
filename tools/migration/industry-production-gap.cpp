@@ -12,6 +12,8 @@
 #include "rust/industry_ffi.h"
 #include "rust/abi_ffi.h"
 #include <variant>
+#include "industry.h"
+namespace IndustryReference {
 using CargoType = uint8_t;
 static constexpr uint16_t CALLBACK_FAILED = 0xFFFF;
 static constexpr int STR_NEWGRF_BUGGY = 0, STR_NEWGRF_BUGGY_ENDLESS_PRODUCTION_CALLBACK = 1, STR_NEWGRF_BUGGY_INVALID_CARGO_PRODUCTION_CALLBACK = 2, WL_WARNING = 0, WC_INDUSTRY_VIEW = 0;
@@ -58,8 +60,7 @@ template <typename... T> static int GetEncodedString(int, T &&...) { return 0; }
 static void ShowErrorMessage(int, int, int) { errors++; }
 static void SetWindowDirty(int, uint16_t) { dirty++; }
 #include "industry-production-reference.inc"
-struct Produced { uint8_t cargo; uint16_t waiting; uint8_t rate; uint16_t history[122]; };
-struct Accepted { uint8_t cargo; uint16_t waiting; uint32_t accumulated; int32_t date; void *history; };
+
 static void Resolve(void *, uint32_t random, uint32_t parameter, OpenTTDIndustryProductionResult *out)
 {
 	IndustriesResolverObject object(0, nullptr, 0);
@@ -81,7 +82,7 @@ static void Resolve(void *, uint32_t random, uint32_t parameter, OpenTTDIndustry
 	}
 	out->again = deref(g->again);
 }
-int main()
+int Run()
 {
 	std::remove_pointer_t<decltype(spec.grf_prop.grffile)> file{};
 	spec.grf_prop.grffile = &file;
@@ -107,24 +108,28 @@ int main()
 				IndustryProductionCallback(&reference, reason);
 				auto expected = parameters; auto expected_rng = rng; auto expected_errors = errors; auto expected_dirty = dirty;
 				Industry candidate{openttd_rust_industry_new(nullptr), {}, {}, level};
-				/* The owner starts with its record; prod_level is record field 17, at layout item 2 + 2 * 17. */
-				reinterpret_cast<uint8_t *>(candidate.owner)[openttd_rust_abi_layout_named("OpenTTDIndustryRecord", 36)] = level;
-				openttd_rust_industry_accepted_resize(candidate.owner, 3);
-				openttd_rust_industry_produced_resize(candidate.owner, 3);
-				auto a = openttd_rust_industry_accepted_view(candidate.owner);
-				auto p = openttd_rust_industry_produced_view(candidate.owner);
+				auto &record = *reinterpret_cast<OpenTTDIndustryRecord *>(candidate.owner);
+				record.prod_level = level;
+				auto &a = record.accepted;
+				auto &p = record.produced;
+				a.resize(3);
+				p.resize(3);
 				for (size_t n = 0; n < 3; n++) {
-					auto *slot_a = static_cast<Accepted *>(a.data) + n; slot_a->cargo = n == 0 ? cargo : n == 1 ? 255 : 3; slot_a->waiting = n == 0 ? 65535 : n == 1 ? 15 : 1;
-					auto *slot_p = static_cast<Produced *>(p.data) + n; slot_p->cargo = n == 0 ? cargo : n == 1 ? 255 : 8; slot_p->waiting = n == 0 ? 65535 : n == 1 ? 15 : 1;
+					auto *slot_a = a.data() + n; slot_a->cargo = n == 0 ? cargo : n == 1 ? 255 : 3; slot_a->waiting = n == 0 ? 65535 : n == 1 ? 15 : 1;
+					auto *slot_p = p.data() + n; slot_p->cargo = n == 0 ? cargo : n == 1 ? 255 : 8; slot_p->waiting = n == 0 ? 65535 : n == 1 ? 15 : 1;
 				}
 				rng = 0x12345678; errors = dirty = 0; parameters.clear();
 				openttd_rust_industry_production_callback(&candidate, candidate.owner, nullptr, behaviour, reason, Resolve, &services);
 				if (parameters != expected || rng != expected_rng || errors != expected_errors || dirty != expected_dirty) return 1;
-				for (size_t n = 0; n < 3; n++) if (reference.accepted[n].waiting != static_cast<Accepted *>(a.data)[n].waiting || reference.produced[n].waiting != static_cast<Produced *>(p.data)[n].waiting) return 2;
+				for (size_t n = 0; n < 3; n++) if (reference.accepted[n].waiting != a.data()[n].waiting || reference.produced[n].waiting != p.data()[n].waiting) return 2;
 				openttd_rust_industry_destroy(candidate.owner);
 				cases++;
 			}
 		}
 	}
 	std::printf("industry NewGRF gap: %u unchanged-body version/repeat/arithmetic cases passed\n", cases);
+	return 0;
 }
+
+} // namespace IndustryReference
+int main() { return IndustryReference::Run(); }

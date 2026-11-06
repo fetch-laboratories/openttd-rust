@@ -1715,10 +1715,10 @@ struct IndustryProductionGraphWindow : BaseCargoGraphWindow {
 	{
 		CargoTypes cargo_types{};
 		const Industry *i = Industry::Get(window_number);
-		for (const auto &a : i->accepted) {
+		for (const auto &a : i->Accepted()) {
 			if (IsValidCargoType(a.cargo)) SetBit(cargo_types, a.cargo);
 		}
-		for (const auto &p : i->produced) {
+		for (const auto &p : i->Produced()) {
 			if (IsValidCargoType(p.cargo)) SetBit(cargo_types, p.cargo);
 		}
 		return cargo_types;
@@ -1757,7 +1757,7 @@ struct IndustryProductionGraphWindow : BaseCargoGraphWindow {
 		const Industry *i = Industry::Get(this->window_number);
 
 		this->data.clear();
-		for (const auto &p : i->produced) {
+		for (const auto &p : i->Produced()) {
 			if (!IsValidCargoType(p.cargo)) continue;
 			const CargoSpec *cs = CargoSpec::Get(p.cargo);
 
@@ -1779,7 +1779,7 @@ struct IndustryProductionGraphWindow : BaseCargoGraphWindow {
 				Filler{{transported}, &Industry::ProducedHistory::transported});
 		}
 
-		for (const auto &a : i->accepted) {
+		for (const auto &a : i->Accepted()) {
 			if (!IsValidCargoType(a.cargo)) continue;
 			const CargoSpec *cs = CargoSpec::Get(a.cargo);
 

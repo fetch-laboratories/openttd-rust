@@ -59,8 +59,7 @@ enum class IndustryControlFlag : uint8_t {
 };
 using IndustryControlFlags = EnumBitSet<IndustryControlFlag, uint8_t, IndustryControlFlag::End>;
 
-/* The shared industry record, generated from Rust; its field types are declared above. */
-#include "abi-record-industry_record.h"
+struct OpenTTDIndustryRecord;
 
 /**
  * Defines the internal data of a functional industry.
@@ -116,11 +115,13 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 		return owner;
 	}(), RustIndustryDeleteOwned};
 	/** The shared record: the canonical owner's first member, at its address. */
-	inline OpenTTDIndustryRecord &Record() { return *reinterpret_cast<OpenTTDIndustryRecord *>(this->production_owner.get()); }
-	inline const OpenTTDIndustryRecord &Record() const { return *reinterpret_cast<const OpenTTDIndustryRecord *>(this->production_owner.get()); }
+	inline OpenTTDIndustryRecord &Record();
+	inline const OpenTTDIndustryRecord &Record() const;
 
-	ProducedCargoes produced{this->production_owner.get()};
-	AcceptedCargoes accepted{this->production_owner.get()};
+	ProducedCargoes &Produced();
+	const ProducedCargoes &Produced() const;
+	AcceptedCargoes &Accepted();
+	const AcceptedCargoes &Accepted() const;
 
 	RustStationList<Station> stations_near{openttd_rust_industry_stations_near(production_owner.get())};
 	mutable std::string cached_name{}; ///< NOSAVE: Cache of the resolved name of the industry
@@ -135,10 +136,10 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	void SetText(const EncodedString &value) { auto text = TextView(value); openttd_rust_industry_set_text(this->production_owner.get(), text.data, text.size); }
 
 
-	Industry(TileIndex tile = INVALID_TILE) { this->Record().location = TileArea(tile, 0, 0); }
+	Industry(TileIndex tile = INVALID_TILE);
 	/** Synchronous resolver shell; its Rust stack owner outlives this shell.
 	 * It neither publishes nor retires that borrowed caller-owned record. */
-	explicit Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { this->Record().location = TileArea(INVALID_TILE, 0, 0); }
+	explicit Industry(OpenTTDIndustry *borrowed);
 	~Industry();
 
 	void RecomputeProductionMultipliers();
@@ -161,7 +162,7 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	inline const ProducedCargo &GetProduced(size_t slot) const
 	{
 		static const ProducedCargo empty{INVALID_CARGO, 0, 0, {}};
-		return slot < this->produced.size() ? this->produced[slot] : empty;
+		return slot < this->Produced().size() ? this->Produced()[slot] : empty;
 	}
 
 	/**
@@ -172,7 +173,7 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	inline const AcceptedCargo &GetAccepted(size_t slot) const
 	{
 		static const AcceptedCargo empty{INVALID_CARGO, 0, 0, {}, {}};
-		return slot < this->accepted.size() ? this->accepted[slot] : empty;
+		return slot < this->Accepted().size() ? this->Accepted()[slot] : empty;
 	}
 
 	/**
@@ -182,8 +183,8 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	 */
 	inline ProducedCargoes::iterator GetCargoProduced(CargoType cargo)
 	{
-		if (!IsValidCargoType(cargo)) return std::end(this->produced);
-		return std::ranges::find(this->produced, cargo, &ProducedCargo::cargo);
+		if (!IsValidCargoType(cargo)) return std::end(this->Produced());
+		return std::ranges::find(this->Produced(), cargo, &ProducedCargo::cargo);
 	}
 
 	/**
@@ -193,8 +194,8 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	 */
 	inline ProducedCargoes::const_iterator GetCargoProduced(CargoType cargo) const
 	{
-		if (!IsValidCargoType(cargo)) return std::end(this->produced);
-		return std::ranges::find(this->produced, cargo, &ProducedCargo::cargo);
+		if (!IsValidCargoType(cargo)) return std::end(this->Produced());
+		return std::ranges::find(this->Produced(), cargo, &ProducedCargo::cargo);
 	}
 
 	/**
@@ -204,8 +205,8 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	 */
 	inline AcceptedCargoes::iterator GetCargoAccepted(CargoType cargo)
 	{
-		if (!IsValidCargoType(cargo)) return std::end(this->accepted);
-		return std::ranges::find(this->accepted, cargo, &AcceptedCargo::cargo);
+		if (!IsValidCargoType(cargo)) return std::end(this->Accepted());
+		return std::ranges::find(this->Accepted(), cargo, &AcceptedCargo::cargo);
 	}
 
 	/**
@@ -215,35 +216,35 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	 */
 	inline AcceptedCargoes::const_iterator GetCargoAccepted(CargoType cargo) const
 	{
-		if (!IsValidCargoType(cargo)) return std::end(this->accepted);
-		return std::ranges::find(this->accepted, cargo, &AcceptedCargo::cargo);
+		if (!IsValidCargoType(cargo)) return std::end(this->Accepted());
+		return std::ranges::find(this->Accepted(), cargo, &AcceptedCargo::cargo);
 	}
 
 	/**
 	 * Test if this industry accepts any cargo.
 	 * @return true iff the industry accepts any cargo.
 	 */
-	bool IsCargoAccepted() const { return std::any_of(std::begin(this->accepted), std::end(this->accepted), [](const auto &a) { return IsValidCargoType(a.cargo); }); }
+	bool IsCargoAccepted() const { return std::any_of(std::begin(this->Accepted()), std::end(this->Accepted()), [](const auto &a) { return IsValidCargoType(a.cargo); }); }
 
 	/**
 	 * Test if this industry produces any cargo.
 	 * @return true iff the industry produces any cargo.
 	 */
-	bool IsCargoProduced() const { return std::any_of(std::begin(this->produced), std::end(this->produced), [](const auto &p) { return IsValidCargoType(p.cargo); }); }
+	bool IsCargoProduced() const { return std::any_of(std::begin(this->Produced()), std::end(this->Produced()), [](const auto &p) { return IsValidCargoType(p.cargo); }); }
 
 	/**
 	 * Test if this industry accepts a specific cargo.
 	 * @param cargo Cargo type to test.
 	 * @return true iff the industry accepts the given cargo type.
 	 */
-	bool IsCargoAccepted(CargoType cargo) const { return std::any_of(std::begin(this->accepted), std::end(this->accepted), [&cargo](const auto &a) { return a.cargo == cargo; }); }
+	bool IsCargoAccepted(CargoType cargo) const { return std::any_of(std::begin(this->Accepted()), std::end(this->Accepted()), [&cargo](const auto &a) { return a.cargo == cargo; }); }
 
 	/**
 	 * Test if this industry produces a specific cargo.
 	 * @param cargo Cargo type to test.
 	 * @return true iff the industry produces the given cargo types.
 	 */
-	bool IsCargoProduced(CargoType cargo) const { return std::any_of(std::begin(this->produced), std::end(this->produced), [&cargo](const auto &p) { return p.cargo == cargo; }); }
+	bool IsCargoProduced(CargoType cargo) const { return std::any_of(std::begin(this->Produced()), std::end(this->Produced()), [&cargo](const auto &p) { return p.cargo == cargo; }); }
 
 	/**
 	 * Get the industry of the given tile
@@ -280,6 +281,17 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 private:
 	void FillCachedName() const;
 };
+
+/* Generated after Industry's nested cargo types are complete. */
+#include "abi-record-industry_record.h"
+inline OpenTTDIndustryRecord &Industry::Record() { return *reinterpret_cast<OpenTTDIndustryRecord *>(this->production_owner.get()); }
+inline const OpenTTDIndustryRecord &Industry::Record() const { return *reinterpret_cast<const OpenTTDIndustryRecord *>(this->production_owner.get()); }
+inline Industry::ProducedCargoes &Industry::Produced() { return this->Record().produced; }
+inline const Industry::ProducedCargoes &Industry::Produced() const { return this->Record().produced; }
+inline Industry::AcceptedCargoes &Industry::Accepted() { return this->Record().accepted; }
+inline const Industry::AcceptedCargoes &Industry::Accepted() const { return this->Record().accepted; }
+inline Industry::Industry(TileIndex tile) { this->Record().location = TileArea(tile, 0, 0); }
+inline Industry::Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { this->Record().location = TileArea(INVALID_TILE, 0, 0); }
 
 void ClearAllIndustryCachedNames();
 

@@ -88,7 +88,7 @@
 	const Industry *i = ::Industry::Get(industry_id);
 
 	auto it = i->GetCargoAccepted(cargo_type);
-	if (it == std::end(i->accepted)) return -1;
+	if (it == std::end(i->Accepted())) return -1;
 
 	return it->waiting;
 }
@@ -101,7 +101,7 @@
 	const Industry *i = ::Industry::Get(industry_id);
 
 	auto it = i->GetCargoProduced(cargo_type);
-	if (it == std::end(i->produced)) return -1;
+	if (it == std::end(i->Produced())) return -1;
 
 	return it->history[LAST_MONTH].production;
 }
@@ -114,7 +114,7 @@
 	const Industry *i = ::Industry::Get(industry_id);
 
 	auto it = i->GetCargoProduced(cargo_type);
-	if (it == std::end(i->produced)) return -1;
+	if (it == std::end(i->Produced())) return -1;
 
 	return it->history[LAST_MONTH].transported;
 }
@@ -127,7 +127,7 @@
 	const Industry *i = ::Industry::Get(industry_id);
 
 	auto it = i->GetCargoProduced(cargo_type);
-	if (it == std::end(i->produced)) return -1;
+	if (it == std::end(i->Produced())) return -1;
 
 	return ::ToPercent8(it->history[LAST_MONTH].PctTransported());
 }
@@ -232,11 +232,11 @@
 	if (i == nullptr) return ScriptDate::DATE_INVALID;
 
 	if (!::IsValidCargoType(cargo_type)) {
-		auto it = std::max_element(std::begin(i->accepted), std::end(i->accepted), [](const auto &a, const auto &b) { return a.last_accepted < b.last_accepted; });
+		auto it = std::max_element(std::begin(i->Accepted()), std::end(i->Accepted()), [](const auto &a, const auto &b) { return a.last_accepted < b.last_accepted; });
 		return (ScriptDate::Date)it->last_accepted.base();
 	} else {
 		auto it = i->GetCargoAccepted(cargo_type);
-		if (it == std::end(i->accepted)) return ScriptDate::DATE_INVALID;
+		if (it == std::end(i->Accepted())) return ScriptDate::DATE_INVALID;
 		return (ScriptDate::Date)it->last_accepted.base();
 	}
 }

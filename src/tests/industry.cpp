@@ -249,8 +249,8 @@ TEST_CASE("Industry - canonical allocation and history lifetime")
 	const auto *descriptor = _industry_pool.descriptor;
 	CHECK(descriptor->slots[17].shell == shell);
 	CHECK(descriptor->slots[17].record == owner.get());
-	RustIndustryVector<Industry::AcceptedCargo, false> accepted(owner.get());
-	RustIndustryVector<Industry::ProducedCargo, true> produced(owner.get());
+	auto &accepted = shell->Accepted();
+	auto &produced = shell->Produced();
 	accepted.emplace_back().waiting = 65535;
 	auto &history = accepted[0].GetOrCreateHistory();
 	history[THIS_MONTH].accepted = 65535;
@@ -284,7 +284,7 @@ TEST_CASE("Industry - canonical allocation and history lifetime")
 	shell = new Industry();
 	CHECK(shell->index == IndustryID{0});
 	CHECK(shell->Record().random == 0);
-	CHECK(shell->accepted.empty());
+	CHECK(shell->Accepted().empty());
 	CHECK(descriptor->slots[0].record == shell->production_owner.get());
 	_industry_pool.CleanPool();
 	CHECK(descriptor->slots.empty());
@@ -480,8 +480,8 @@ static OpenTTDIndustryLocationResult Observe(Industry *shell)
 	CHECK(shell->Record().random == 0xABCD);
 	CHECK(shell->Record().founder == Owner(2));
 	CHECK(shell->Record().town == nullptr);
-	CHECK(shell->accepted.empty());
-	CHECK(shell->produced.empty());
+	CHECK(shell->Accepted().empty());
+	CHECK(shell->Produced().empty());
 	trace.push_back(3);
 	OpenTTDIndustryLocationResult output{};
 	output.callback = result;

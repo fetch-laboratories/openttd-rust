@@ -46,13 +46,19 @@ impl<T> NativeVec<T> {
     pub(crate) const fn as_mut_ptr(&self) -> *mut T {
         self.items
     }
+    /// Temporarily recover the sole Vec allocation for a local mutation.
+    /// The closure must not call native code or expose a borrow of this descriptor.
+    pub(crate) fn with_vec<R>(&mut self, mutate: impl FnOnce(&mut Vec<T>) -> R) -> R {
+        let mut vec = std::mem::take(self).into_vec();
+        let result = mutate(&mut vec);
+        *self = Self::from_vec(vec);
+        result
+    }
     pub(crate) fn resize(&mut self, count: usize, value: T)
     where
         T: Clone,
     {
-        let mut vec = std::mem::take(self).into_vec();
-        vec.resize(count, value);
-        *self = Self::from_vec(vec);
+        self.with_vec(|vec| vec.resize(count, value));
     }
     pub fn as_slice(&self) -> &[T] {
         if self.count == 0 {
@@ -80,14 +86,27 @@ impl<T> NativeVec<T> {
         vec
     }
     pub fn clear(&mut self) {
-        let mut vec = std::mem::take(self).into_vec();
-        vec.clear();
-        *self = Self::from_vec(vec);
+        self.with_vec(Vec::clear);
     }
     pub fn push(&mut self, value: T) {
-        let mut vec = std::mem::take(self).into_vec();
-        vec.push(value);
-        *self = Self::from_vec(vec);
+        self.with_vec(|vec| vec.push(value));
+    }
+}
+impl<T> std::ops::Deref for NativeVec<T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        self.as_slice()
+    }
+}
+impl<T> std::ops::DerefMut for NativeVec<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        // SAFETY: The mutable descriptor is exclusively borrowed; the slice
+        // cannot outlive or resize its owner. Empty borrowed views need no data.
+        if self.count == 0 {
+            &mut []
+        } else {
+            unsafe { std::slice::from_raw_parts_mut(self.items, self.count) }
+        }
     }
 }
 impl NativeVec<u32> {

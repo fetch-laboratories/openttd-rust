@@ -157,7 +157,7 @@ static bool CallbackCases(Industry *i, IndustrySpec *spec, GRFFile &file)
 		equal &= probability == expected;
 		if (result <= 1 || result == CALLBACK_FAILED) {
 			spec->callback_mask.Set(IndustryCallbackMask::RefuseCargo);
-			bool refused = IndustryTemporarilyRefusesCargo(i, i->accepted[0].cargo);
+			bool refused = IndustryTemporarilyRefusesCargo(i, FIXTURE_POOL_RECORD(i).accepted[0].cargo);
 			equal &= refused == (result == 0);
 			fmt::print(stderr, "INDUSTRY-RESOLVER refusal-result {} {} {}\n", version, result, refused);
 		}
@@ -165,10 +165,10 @@ static bool CallbackCases(Industry *i, IndustrySpec *spec, GRFFile &file)
 		delete answer;
 	}
 	file.grf_version = 8;
-	if (i->produced.empty() || !IsValidCargoType(i->produced[0].cargo)) return false;
-	Backup<uint16_t> input(i->accepted[0].waiting), output(i->produced[0].waiting);
+	if (FIXTURE_POOL_RECORD(i).produced.empty() || !IsValidCargoType(FIXTURE_POOL_RECORD(i).produced[0].cargo)) return false;
+	Backup<uint16_t> input(FIXTURE_POOL_RECORD(i).accepted[0].waiting), output(FIXTURE_POOL_RECORD(i).produced[0].waiting);
 	Backup<uint8_t> level(FIXTURE_POOL_RECORD(i).prod_level);
-	i->accepted[0].waiting = 48; i->produced[0].waiting = 7; FIXTURE_POOL_RECORD(i).prod_level = 16;
+	FIXTURE_POOL_RECORD(i).accepted[0].waiting = 48; FIXTURE_POOL_RECORD(i).produced[0].waiting = 7; FIXTURE_POOL_RECORD(i).prod_level = 16;
 	spec->callback_mask.Set(IndustryCallbackMask::ProductionCargoArrival);
 	SpriteGroup::CanAllocateItem(); auto *production = new IndustryProductionSpriteGroup();
 	production->version = 1; production->num_input = production->num_output = 1; production->subtract_input[0] = 0x102; production->add_output[0] = 0x103; production->again = 4;
@@ -184,8 +184,8 @@ static bool CallbackCases(Industry *i, IndustrySpec *spec, GRFFile &file)
 	bool parameters = static_cast<uint32_t>(registers.GetRegister(0x105)) == expected_random && std::ranges::equal(_random.state, expected_rng.state);
 	equal &= parameters;
 	fmt::print(stderr, "INDUSTRY-RESOLVER production-params {}\n", parameters);
-	equal &= i->accepted[0].waiting == 0 && i->produced[0].waiting == 12;
-	fmt::print(stderr, "INDUSTRY-RESOLVER production {} {}\n", i->accepted[0].waiting, i->produced[0].waiting);
+	equal &= FIXTURE_POOL_RECORD(i).accepted[0].waiting == 0 && FIXTURE_POOL_RECORD(i).produced[0].waiting == 12;
+	fmt::print(stderr, "INDUSTRY-RESOLVER production {} {}\n", FIXTURE_POOL_RECORD(i).accepted[0].waiting, FIXTURE_POOL_RECORD(i).produced[0].waiting);
 	delete program; delete production;
 	fmt::print(stderr, "INDUSTRY-RESOLVER callbacks {}\n", equal);
 	return equal;
@@ -220,7 +220,7 @@ static bool RandomCases(Industry *i, IndustryTileSpec *spec, IndustryGfx gfx, Ti
 static bool IndustriesScenario(std::span<std::string_view>)
 {
 	Industry *i = nullptr;
-	for (Industry *candidate : Industry::Iterate()) if (!candidate->accepted.empty() && IsValidCargoType(candidate->accepted[0].cargo) && !candidate->produced.empty() && IsValidCargoType(candidate->produced[0].cargo)) { i = candidate; break; }
+	for (Industry *candidate : Industry::Iterate()) if (!FIXTURE_POOL_RECORD(candidate).accepted.empty() && IsValidCargoType(FIXTURE_POOL_RECORD(candidate).accepted[0].cargo) && !FIXTURE_POOL_RECORD(candidate).produced.empty() && IsValidCargoType(FIXTURE_POOL_RECORD(candidate).produced[0].cargo)) { i = candidate; break; }
 	if (i == nullptr) std::abort();
 	TileIndex tile = INVALID_TILE;
 	for (TileIndex t : FIXTURE_POOL_RECORD(i).location) if (i->TileBelongsToIndustry(t)) { tile = t; break; }
@@ -263,7 +263,7 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	result = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, FIXTURE_POOL_RECORD(i).type, tile, regs);
 	fmt::print(stderr, "INDUSTRY-RESOLVER var68 {} {}\n", result, regs[2]);
 	spec->callback_mask.Set(IndustryCallbackMask::RefuseCargo);
-	equal &= IndustryTemporarilyRefusesCargo(i, i->accepted[0].cargo);
+	equal &= IndustryTemporarilyRefusesCargo(i, FIXTURE_POOL_RECORD(i).accepted[0].cargo);
 	fmt::print(stderr, "INDUSTRY-RESOLVER refusal true\n");
 #ifdef WITH_RUST
 	/* Match the actual synchronous construction path: the caller owns Rust state,

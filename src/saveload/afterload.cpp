@@ -1782,11 +1782,11 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_78)) {
 		for (Industry *i : Industry::Iterate()) {
 			const IndustrySpec *indsp = GetIndustrySpec(i->Record().type);
-			for (uint j = 0; j < std::size(i->produced); j++) {
-				i->produced[j].cargo = indsp->produced_cargo[j];
+			for (uint j = 0; j < std::size(i->Produced()); j++) {
+				i->Produced()[j].cargo = indsp->produced_cargo[j];
 			}
-			for (uint j = 0; j < std::size(i->accepted); j++) {
-				i->accepted[j].cargo = indsp->accepts_cargo[j];
+			for (uint j = 0; j < std::size(i->Accepted()); j++) {
+				i->Accepted()[j].cargo = indsp->accepts_cargo[j];
 			}
 		}
 	}
@@ -3112,7 +3112,7 @@ bool AfterLoadGame()
 		for (Industry *i : Industry::Iterate()) {
 			/* Make sure last_cargo_accepted_at is copied to elements for every valid input cargo.
 			 * The loading routine should put the original singular value into the first array element. */
-			for (auto &a : i->accepted) {
+			for (auto &a : i->Accepted()) {
 				if (IsValidCargoType(a.cargo)) {
 					a.last_accepted = i->GetAccepted(0).last_accepted;
 				} else {

@@ -14,7 +14,7 @@
 #include "rust/cargo_registry_ffi.h"
 #include "rust/movement_ffi.h"
 #include "rust/spec_services_ffi.h"
-#include "industrytype.h"
+#include "industry.h"
 #include "rust/industry_ffi.h"
 namespace IndustryReference {
 #include "industry-graphics-reference.inc"
@@ -111,7 +111,6 @@ constexpr uint8_t INVALID_CARGO = 255;
 constexpr uint16_t CALLBACK_FAILED = 0xFFFF, CBID_INDTILE_ACCEPT_CARGO = 0x2C, CBID_INDTILE_CARGO_ACCEPTANCE = 0x2B;
 constexpr uint INDUSTRY_ORIGINAL_NUM_INPUTS = 3;
 static bool IsValidCargoType(CargoType cargo) { return cargo != INVALID_CARGO; }
-struct AcceptedSlot { uint8_t cargo; uint16_t waiting; uint32_t accumulated; int32_t date; void *history; };
 static OpenTTDIndustry *acceptance_owner;
 static uint16_t accept_result, amount_result;
 static bool mutate_accepted;
@@ -125,7 +124,7 @@ static uint16_t GetIndustryTileCallback(uint16_t callback, uint32_t, uint32_t, I
 	trace.push_back({14, tile, callback, 0});
 	if (callback == CBID_INDTILE_CARGO_ACCEPTANCE && mutate_accepted) {
 		active->accepted[0].cargo = 63;
-		if (acceptance_owner != nullptr) static_cast<AcceptedSlot *>(openttd_rust_industry_accepted_view(acceptance_owner).data)[0].cargo = 63;
+		if (acceptance_owner != nullptr) reinterpret_cast<OpenTTDIndustryRecord *>(acceptance_owner)->accepted[0].cargo = 63;
 	}
 	return callback == CBID_INDTILE_ACCEPT_CARGO ? accept_result : amount_result;
 }
@@ -142,7 +141,7 @@ static void CheckAcceptance()
 	service.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t p1, uint32_t p2) noexcept -> uint16_t { return GetIndustryTileCallback(callback, p1, p2, gfx, Industry::GetByTile(tile), tile); };
 	service.shared = &shared;
 	Industry industry{}; active = &industry;
-	OpenTTDIndustry *owner = openttd_rust_industry_new();
+	OpenTTDIndustry *owner = openttd_rust_industry_new(nullptr);
 	uint cases = 0;
 	for (uint8_t flags = 0; flags < 8; flags++) for (uint8_t pattern = 0; pattern < 4; pattern++) {
 		for (uint16_t accepted : {0U, 0x7FFFU, 0x0401U, 0xFFFFU}) for (uint16_t amounts : {0U, 0x0FFFU, 0x0312U, 0xFFFFU}) {
@@ -151,8 +150,9 @@ static void CheckAcceptance()
 					trace.clear(); acceptance_owner = candidate ? owner : nullptr;
 					accept_result = accepted; amount_result = amounts; mutate_accepted = mutation;
 					industry.accepted = {{2}, {5}, {255}, {2}};
-					openttd_rust_industry_accepted_resize(owner, industry.accepted.size());
-					auto *slots = static_cast<AcceptedSlot *>(openttd_rust_industry_accepted_view(owner).data);
+					auto &accepted = reinterpret_cast<OpenTTDIndustryRecord *>(owner)->accepted;
+					accepted.resize(industry.accepted.size());
+					auto *slots = accepted.data();
 					for (size_t n = 0; n < industry.accepted.size(); n++) slots[n].cargo = industry.accepted[n].cargo;
 					auto &spec = specs[2]; spec.special_flags.value = (flags & 1) << 1; spec.callback_mask.value = ((flags & 2) << 2) | (flags & 4);
 					for (uint n = 0; n < 16; n++) {
@@ -287,12 +287,12 @@ static void Run()
 				}
 			};
 			Industry industry{}; active = &industry;
-			OpenTTDIndustry *owner = openttd_rust_industry_new();
-			auto *metadata = openttd_rust_industry_metadata(owner);
-			metadata->tile = 0; metadata->width = 3; metadata->height = 2;
+			OpenTTDIndustry *owner = openttd_rust_industry_new(nullptr);
+			auto &record = *reinterpret_cast<OpenTTDIndustryRecord *>(owner);
+			record.location.tile = ::TileIndex{0}; record.location.w = 3; record.location.h = 2;
 			for (uint8_t operation = 0; operation < 4; operation++) {
 				if (operation != 2 && trigger >= 3) continue;
-				setup(); industry.random = static_cast<uint16_t>(seed); metadata->random = industry.random;
+				setup(); industry.random = static_cast<uint16_t>(seed); record.random = industry.random;
 				bool reference_result = true;
 				if (operation == 0) TriggerIndustryRandomisation(&industry, static_cast<IndustryRandomTrigger>(trigger));
 				if (operation == 1) TriggerIndustryTileRandomisation(2, static_cast<IndustryRandomTrigger>(trigger));
@@ -302,14 +302,14 @@ static void Run()
 				const auto reference_tiles = tiles;
 				const auto reference_rng = rng;
 				const auto reference_random = industry.random;
-				setup(); metadata->random = static_cast<uint16_t>(seed);
+				setup(); record.random = static_cast<uint16_t>(seed);
 				bool candidate_result = true;
 				if (operation == 0) openttd_rust_industry_randomise(&industry, owner, 0, trigger, 3, &services, &lifecycle);
 				if (operation == 1) openttd_rust_industry_randomise_tile(2, trigger, &industry, owner, &services, &lifecycle);
 				if (operation == 3) candidate_result = openttd_rust_industry_animate_tile(2, trigger, trigger == 0 && (variant & 1) ? 0x100 : 0, &services, &lifecycle);
 				if (operation == 2) candidate_result = openttd_rust_industry_animate(owner, 0, trigger, 3, &services, &lifecycle);
-				if (trace != reference_trace || rng != reference_rng || metadata->random != reference_random || candidate_result != reference_result) {
-					std::fprintf(stderr, "seed %u mask %u variant %u trigger %u operation %u: RNG %u/%u, random %u/%u, result %d/%d, traces %zu/%zu\n", seed, mask, variant, trigger, operation, rng, reference_rng, metadata->random, reference_random, candidate_result, reference_result, trace.size(), reference_trace.size());
+				if (trace != reference_trace || rng != reference_rng || record.random != reference_random || candidate_result != reference_result) {
+					std::fprintf(stderr, "seed %u mask %u variant %u trigger %u operation %u: RNG %u/%u, random %u/%u, result %d/%d, traces %zu/%zu\n", seed, mask, variant, trigger, operation, rng, reference_rng, record.random, reference_random, candidate_result, reference_result, trace.size(), reference_trace.size());
 					std::abort();
 				}
 				for (uint tile = 0; tile < tiles.size(); tile++) Require(tiles[tile].triggers == reference_tiles[tile].triggers && tiles[tile].bits == reference_tiles[tile].bits);

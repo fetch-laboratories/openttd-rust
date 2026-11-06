@@ -66,7 +66,7 @@ public:
 	};
 	static inline const SaveLoadCompatTable compat_description = _industry_accepts_sl_compat;
 
-	Industry::AcceptedCargoes &GetVector(Industry *i) const override { return i->accepted; }
+	Industry::AcceptedCargoes &GetVector(Industry *i) const override { return i->Accepted(); }
 
 	/* Old array structure used by INDYChunkHandler for savegames before SLV_INDUSTRY_CARGO_REORGANISE. */
 	static inline std::array<CargoType, INDUSTRY_NUM_INPUTS> old_cargo;
@@ -125,7 +125,7 @@ public:
 	};
 	static inline const SaveLoadCompatTable compat_description = _industry_produced_sl_compat;
 
-	Industry::ProducedCargoes &GetVector(Industry *i) const override { return i->produced; }
+	Industry::ProducedCargoes &GetVector(Industry *i) const override { return i->Produced(); }
 
 	/* Old array structure used by INDYChunkHandler for savegames before SLV_INDUSTRY_CARGO_REORGANISE. */
 	static inline std::array<CargoType, INDUSTRY_NUM_OUTPUTS> old_cargo;
@@ -232,17 +232,17 @@ struct INDYChunkHandler : ChunkHandler {
 
 	void LoadMoveAcceptsProduced(Industry *i, uint inputs, uint outputs) const
 	{
-		i->accepted.reserve(inputs);
+		i->Accepted().reserve(inputs);
 		for (uint j = 0; j != inputs; ++j) {
-			auto &a = i->accepted.emplace_back();
+			auto &a = i->Accepted().emplace_back();
 			a.cargo = SlIndustryAccepted::old_cargo[j];
 			a.waiting = SlIndustryAccepted::old_waiting[j];
 			a.last_accepted = SlIndustryAccepted::old_last_accepted[j];
 		}
 
-		i->produced.reserve(outputs);
+		i->Produced().reserve(outputs);
 		for (uint j = 0; j != outputs; ++j) {
-			auto &p = i->produced.emplace_back();
+			auto &p = i->Produced().emplace_back();
 			p.cargo = SlIndustryProduced::old_cargo[j];
 			p.waiting = SlIndustryProduced::old_waiting[j];
 			p.rate = SlIndustryProduced::old_rate[j];
@@ -287,7 +287,7 @@ struct INDYChunkHandler : ChunkHandler {
 				size_t oldest_valid = LAST_MONTH;
 				if (!IsSavegameVersionBefore(SLV_PRODUCTION_HISTORY)) {
 					/* History was extended but we did not keep track of valid history, so assume it from the oldest non-zero value. */
-					for (const auto &p : i->produced) {
+					for (const auto &p : i->Produced()) {
 						if (!IsValidCargoType(p.cargo)) continue;
 						for (size_t n = LAST_MONTH; n < std::size(p.history); ++n) {
 							if (p.history[n].production == 0 && p.history[n].transported == 0) continue;

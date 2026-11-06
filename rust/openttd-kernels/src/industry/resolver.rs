@@ -524,7 +524,7 @@ fn variable(
             .clamp(0, 65535) as u32,
         0xb3 => u32::from(unsafe { (*i).record.construction_type }),
         0xb4 => {
-            let accepted = unsafe { &(*i).accepted };
+            let accepted = unsafe { &(*i).record.accepted };
             accepted.iter().map(|a| a.last_accepted).max()
         }
         .map_or(0, |date| {
