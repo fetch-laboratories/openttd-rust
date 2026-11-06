@@ -415,10 +415,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *front = VehicleOf(handle);
 		front->profit_this_year -= value;
 	},
-	.unknown_load_result = [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void {
-		Vehicle *front = VehicleOf(handle);
-		ErrorUnknownCallbackResult(front->GetEngine()->GetGRFID(), CBID_VEHICLE_LOAD_AMOUNT, value);
-	},
 	.vehicle_dirty = [](OpenTTDVehicle *handle) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		SetWindowDirty(GetWindowClassForVehicleType(front->GetType()), front->GetOwner());

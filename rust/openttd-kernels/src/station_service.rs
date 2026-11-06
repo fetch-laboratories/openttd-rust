@@ -1242,7 +1242,6 @@ pub struct Loading {
     pub(crate) set_stop: extern "C" fn(VehicleRef, bool),
     pub(crate) set_load_ticks: extern "C" fn(VehicleRef, u16),
     pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
-    pub(crate) unknown_load_result: extern "C" fn(VehicleRef, u16),
     pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
     pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
     pub(crate) show_indicator: extern "C" fn(VehicleRef, u8, u32),
@@ -1381,7 +1380,11 @@ fn load_amount(
                 cb &= 255;
             }
             if cb >= 256 {
-                (l.unknown_load_result)(v, cb);
+                vehicle.unknown_callback_result(
+                    engine,
+                    crate::newgrf_callbacks::CBID_VEHICLE_LOAD_AMOUNT,
+                    cb,
+                );
             } else if cb != 0 {
                 amount = u32::from(cb);
             }
@@ -2113,7 +2116,6 @@ crate::abi::layouts! {
         set_stop,
         set_load_ticks,
         subtract_profit,
-        unknown_load_result,
         vehicle_dirty,
         indicator,
         show_indicator,
