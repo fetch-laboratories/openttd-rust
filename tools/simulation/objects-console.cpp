@@ -295,9 +295,11 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 }
 
 #include "animation-console.hpp"
+#include "object-definitions-console.hpp"
 static bool ObjectsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("definitions")) return ObjectDefinitionsScenario(args);
 	if (args[1].starts_with("anit-")) AnimationLoadProbe(args[1].substr(5));
 	Company *c = *Company::Iterate().begin();
 	Backup<CompanyID> company(_current_company, c->index);

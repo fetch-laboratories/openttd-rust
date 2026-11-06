@@ -586,7 +586,11 @@ def check(scenario: Scenario, run: Run, mode: str, role: str, result: Result) ->
 def install(scenario: Scenario, run_dir: Path) -> None:
     if "loading_fixture_dir" not in scenario:
         return
-    source = Path(scenario["loading_fixture_dir"])
+    install_grfs(Path(scenario["loading_fixture_dir"]), run_dir)
+
+
+def install_grfs(source: Path, run_dir: Path) -> None:
+    """Install owned synthetic loading inputs for the runtime file scanner."""
     for personal in (
         run_dir / ".openttd",
         run_dir / ".openttd-rust",
