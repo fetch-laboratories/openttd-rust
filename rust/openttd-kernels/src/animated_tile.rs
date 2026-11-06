@@ -45,7 +45,6 @@ pub struct Services {
     pub shared: *const Shared,
     pub station_base: extern "C" fn(u16) -> *mut BaseStation,
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
-    pub location: extern "C" fn(*const BaseStation) -> u32,
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub town: *const Leaves,
     pub industries: *const Industries,
@@ -515,7 +514,6 @@ crate::abi::layouts! {
         shared,
         station_base,
         as_station,
-        location,
         roadstop_resolver,
         town,
         industries,
@@ -592,7 +590,7 @@ pub(crate) fn cargo_event(
     random_trigger: u8,
 ) {
     let a = services();
-    let tile = (a.location)(st);
+    let tile = crate::station_record::xy(st.cast());
     crate::newgrf_station::openttd_rust_station_randomisation(st, tile, random_trigger, cargo);
     openttd_rust_trigger_station(st, tile, trigger, cargo);
     openttd_rust_trigger_airport_abi((a.as_station)(st), airport_trigger, cargo);
@@ -609,7 +607,7 @@ pub(crate) fn cargo_event(
 }
 pub(crate) fn acceptance(st: *mut BaseStation) {
     let a = services();
-    let tile = (a.location)(st);
+    let tile = crate::station_record::xy(st.cast());
     openttd_rust_trigger_station(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     openttd_rust_trigger_roadstop(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     if crate::station_record::is_station(st.cast()) {

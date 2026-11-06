@@ -403,7 +403,7 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
             if st.is_null() || !crate::station_record::in_use(st.cast()) {
                 continue;
             }
-            let xy = (catchment.location)(st);
+            let xy = crate::station_record::xy(st.cast());
             if map.tile_x(xy) == 0 || map.tile_y(xy) == 0 {
                 hit(witness::SETTINGS_EDGES_OCCUPIED);
                 return refuse(s, s.edges_not_empty);

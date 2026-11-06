@@ -215,6 +215,12 @@ pub(crate) fn read<T>(shell: *const BaseStation, f: impl FnOnce(&StationRecord) 
     f(unsafe { &*record_of(shell) })
 }
 
+/// `BaseStation::xy` of a live shell.
+#[inline]
+pub(crate) fn xy(shell: *const BaseStation) -> u32 {
+    read(shell, |r| r.xy.0)
+}
+
 /// `BaseStation::owner` of a live shell, as its company byte.
 /// `shell` is a live native station shell of the serialized game state.
 #[inline]

@@ -45,8 +45,6 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	auto &commands = AircraftTestAirportCommands(); commands = OpenTTDStationCommandServices{};
 	auto &world = AircraftTestAirportWorld(); world = OpenTTDStationServices{};
 	commands.station = &world;
-	commands.airport_tile = [](const BaseStation *) noexcept { return uint32_t{7}; };
-	commands.airport_type = [](const BaseStation *) noexcept { return uint8_t{0}; };
 	shared.station_commands = []() noexcept -> const OpenTTDStationCommandServices * { return &AircraftTestAirportCommands(); };
 
 	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{7}; };

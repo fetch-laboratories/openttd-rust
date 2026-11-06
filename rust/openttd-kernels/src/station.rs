@@ -379,8 +379,6 @@ pub struct CatchmentServices {
     pub station_if_valid: extern "C" fn(StationID) -> *mut BaseStation,
     pub next_station: extern "C" fn(u32) -> *mut BaseStation,
     pub id: extern "C" fn(*mut BaseStation) -> StationID,
-    pub location: extern "C" fn(*const BaseStation) -> u32,
-    pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut ShellHandle,
     pub radius_facilities: extern "C" fn(*mut BaseStation) -> RadiusFacilities,
     pub modified_catchment: extern "C" fn() -> bool,
     pub spread: extern "C" fn() -> u8,
@@ -521,7 +519,9 @@ pub(crate) fn add_industry_to_deliver(
     tile: u32,
     c: &Ctx<'_>,
 ) {
-    let distance = c.map.distance_max((c.c.location)(st), tile);
+    let distance = c
+        .map
+        .distance_max(crate::station_record::xy(st.cast()), tile);
     // SAFETY: Live owner; the list borrow ends before the industry services.
     unsafe {
         let list = &mut (*catchment(state)).industries_near;
@@ -640,7 +640,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         unsafe { (*catchment(state)).tiles.reset() };
         return;
     }
-    let industry = (c.c.associated_industry)(st);
+    let industry = crate::station_record::read(st.cast(), |r| r.industry.cast::<ShellHandle>());
     if !(c.s.station_serve_neutral)() && !industry.is_null() {
         // The station is associated with an industry, so it only delivers there.
         let location = crate::industry::location((c.c.industry_owner)(industry));
@@ -792,7 +792,10 @@ pub(crate) fn for_all_stations_around_tiles(
         if st.is_null() {
             continue; // Waypoint.
         }
-        if !(c.s.station_serve_neutral)() && !(c.c.associated_industry)(st).is_null() {
+        if !(c.s.station_serve_neutral)()
+            && !crate::station_record::read(st.cast(), |r| r.industry.cast::<ShellHandle>())
+                .is_null()
+        {
             continue;
         }
         let state = crate::station_record::service_of(st.cast());
@@ -1170,8 +1173,6 @@ crate::abi::layouts! {
         station_if_valid,
         next_station,
         id,
-        location,
-        associated_industry,
         radius_facilities,
         modified_catchment,
         spread,

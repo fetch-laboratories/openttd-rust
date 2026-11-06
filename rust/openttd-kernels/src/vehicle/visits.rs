@@ -90,8 +90,6 @@ pub struct Services {
     pub prediction: extern "C" fn(VehicleRef) -> Prediction,
     /// Virtual `GetDisplayMaxSpeed()`.
     pub display_speed: extern "C" fn(VehicleRef) -> i32,
-    /// `BaseStation::xy`.
-    pub location: extern "C" fn(*const BaseStation) -> u32,
     pub percent: PercentStrings,
     /// `v->last_loading_station = station`.
     pub set_last_loading: extern "C" fn(VehicleRef, u16),
@@ -454,6 +452,8 @@ impl Refresher {
     }
 
     /// `LinkRefresher::RefreshStats`.
+    // Keep the source link-refresh order in one body.
+    #[allow(clippy::too_many_lines)]
     fn refresh_stats(&self, cur: u8, next: u8, s: &Services) {
         s.check(|| !s.orders().list(self.vehicle).is_null());
         let o = s.orders();
@@ -500,7 +500,11 @@ impl Refresher {
                 EdgeUpdateModes::RESTRICTED
             };
             // Travel time at half the consist's maximum speed, in tiles/tick.
-            let distance = map.distance_manhattan((s.location)(st), (s.location)(st_to));
+            let (from, to) = (
+                crate::station_record::xy(st.cast()),
+                crate::station_record::xy(st_to.cast()),
+            );
+            let distance = map.distance_manhattan(from, to);
             let time_estimate = distance.wrapping_mul(4096) / (s.display_speed)(v).cast_unsigned();
 
             // While full loading, add an estimate of what would have been
@@ -1178,7 +1182,6 @@ crate::abi::layouts! {
         capacity,
         prediction,
         display_speed,
-        location,
         percent,
         set_last_loading,
         set_loading_tick,
@@ -1186,7 +1189,6 @@ crate::abi::layouts! {
         station_cargo,
         hide_filling,
         set_occupancy,
-
         leave_sound,
         depot_windows,
         ship_depot_viewport,

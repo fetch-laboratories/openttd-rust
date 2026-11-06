@@ -770,8 +770,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = RustBaseStationID(st) + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
 		.station_town = RustStationStationTown,
 		.station_airport = RustStationHasAirport,
-		.airport_type = RustStationAirportType,
-		.airport_tile = RustStationAirportTile,
 		.local_company = RustIsLocalCompany,
 		.bribe_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_BRIBE_FAILED), {}, WL_INFO); },
 		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = RustBaseStationID(wp) + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },

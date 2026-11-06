@@ -119,7 +119,6 @@ impl Ctx<'_> {
             return INVALID_STATION;
         }
         let mut search = SignSearch {
-            c: self,
             station: st,
             tile,
             other: false,
@@ -200,13 +199,13 @@ impl Ctx<'_> {
             let wp = self.waypoint(id as u16);
             if wp.is_null()
                 || crate::station_record::in_use(wp.cast())
-                || (self.s.string_id)(wp) != string
+                || crate::station_record::read(wp.cast(), |r| r.string_id) != string
                 || crate::station_record::owner_company(wp.cast()) != owner
-                || (self.s.road_waypoint)(wp) != road
+                || crate::station_record::read(wp.cast(), |r| r.waypoint_flags & 1 != 0) != road
             {
                 continue;
             }
-            let xy = (self.s.location)(wp);
+            let xy = crate::station_record::xy(wp.cast());
             let distance = self.map().distance_manhattan(tile, xy);
             if distance == threshold && !best.is_null() {
                 w::hit(w::WAYPOINT_TIE);
@@ -563,7 +562,7 @@ impl Ctx<'_> {
             );
         }
         if !wp.is_null() {
-            if !(self.s.road_waypoint)(wp) {
+            if !crate::station_record::read(wp.cast(), |r| r.waypoint_flags & 1 != 0) {
                 return cost.error(INVALID_STRING_ID);
             }
             if crate::station_record::owner_company(wp.cast()) != (self.shared.current_company)() {

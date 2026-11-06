@@ -52,8 +52,6 @@ pub struct CommandServices {
     pub next_station: extern "C" fn(u32) -> StationCursor,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const TownHandle,
     pub station_airport: extern "C" fn(*const Station) -> bool,
-    pub airport_type: extern "C" fn(*const BaseStation) -> u8,
-    pub airport_tile: extern "C" fn(*const BaseStation) -> u32,
     pub local_company: extern "C" fn() -> bool,
     pub bribe_error: extern "C" fn(),
     pub next_waypoint: extern "C" fn(u32) -> Relation,
@@ -402,13 +400,18 @@ impl<'a> Commands<'a> {
             from = st.next;
             if (self.s.station_town)(st.shell) == t.shell {
                 if !(self.s.station_airport)(st.shell.cast())
-                    || (self.s.airport_type)(st.shell) != crate::airport::AT_OILRIG
+                    || crate::station_record::read(st.shell.cast(), |r| r.airport.r#type)
+                        != crate::airport::AT_OILRIG
                 {
                     self.error(out);
                     return;
                 }
                 w::hit(w::TOWN_COMMAND_DELETE_OILRIG);
-                if !self.clear(out, (self.s.airport_tile)(st.shell), flags) {
+                if !self.clear(
+                    out,
+                    crate::station_record::read(st.shell.cast(), |r| r.airport.area.tile.0),
+                    flags,
+                ) {
                     return;
                 }
             }
@@ -868,8 +871,6 @@ crate::abi::layouts! {
         next_station,
         station_town,
         station_airport,
-        airport_type,
-        airport_tile,
         local_company,
         bribe_error,
         next_waypoint,

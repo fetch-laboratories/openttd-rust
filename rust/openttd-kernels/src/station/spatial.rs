@@ -10,7 +10,7 @@ fn table(s: &Services) -> &CatchmentServices {
     unsafe { &*(s.station_catchment)() }
 }
 fn coordinate(c: &CatchmentServices, map: crate::map_func::Map, id: StationID, dim: usize) -> u16 {
-    let tile = (c.location)((c.station_if_valid)(id));
+    let tile = crate::station_record::read((c.station_if_valid)(id).cast(), |r| r.xy.0);
     if dim == 0 {
         map.tile_x(tile) as u16
     } else {
@@ -91,7 +91,7 @@ pub(crate) fn move_sign(s: &Services, st: *mut BaseStation, tile: u32) {
         (commands.waypoint_move_sign)(st, tile);
         return;
     }
-    if (c.location)(st) == tile {
+    if crate::station_record::xy(st.cast()) == tile {
         return;
     }
     remove(s, (c.id)(st));
@@ -99,11 +99,10 @@ pub(crate) fn move_sign(s: &Services, st: *mut BaseStation, tile: u32) {
     insert(s, st);
 }
 pub(crate) fn modify_rating_around(s: &Services, tile: u32, owner: u8, amount: i32, distance: u32) {
-    let c = table(s);
     let map = s.map();
     radius(s, tile, distance, |st| {
         if crate::station_record::owner_company(st.cast()) == owner
-            && map.distance_manhattan(tile, (c.location)(st)) <= distance
+            && map.distance_manhattan(tile, crate::station_record::xy(st.cast())) <= distance
         {
             unsafe {
                 crate::station_service::modify_rating(

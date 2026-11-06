@@ -179,7 +179,6 @@ pub struct CommandServicesTable {
     pub tile_area: extern "C" fn(*const BaseStation, u8) -> TileArea,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub links: *const crate::station_service::Links,
-    pub location: extern "C" fn(*const BaseStation) -> u32,
     pub base_move_sign: extern "C" fn(*mut BaseStation, u32),
     pub waypoint_move_sign: extern "C" fn(*mut BaseStation, u32),
     pub virtual_coord: extern "C" fn(*mut BaseStation),
@@ -191,7 +190,6 @@ pub struct CommandServicesTable {
     pub set_town: extern "C" fn(*mut BaseStation, *const crate::services::TownHandle),
     pub lifecycle: *const crate::station_lifecycle::Services,
     pub have_rating: extern "C" fn(*mut BaseStation, u8),
-    pub road_waypoint: extern "C" fn(*mut BaseStation) -> bool,
     pub name_equals: extern "C" fn(*mut BaseStation, *const u8, usize) -> bool,
     pub set_name: extern "C" fn(*mut BaseStation, *const u8, usize),
     pub flip_airport_closed: extern "C" fn(*mut BaseStation),
@@ -262,10 +260,6 @@ pub struct CommandServicesTable {
     pub airport_noise: extern "C" fn(*const AirportSpec) -> u8,
     pub town_max_noise: extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const crate::services::TownHandle,
-    pub airport_tile: extern "C" fn(*const BaseStation) -> u32,
-    pub airport_type: extern "C" fn(*const BaseStation) -> u8,
-    /// `Station::airport.rotation`.
-    pub airport_rotation: extern "C" fn(*const BaseStation) -> u8,
     pub airport_airplanes: extern "C" fn(*const std::ffi::c_void) -> bool,
     pub set_airport_details: extern "C" fn(*mut BaseStation, u8, u8, u8),
     pub make_airport: extern "C" fn(u32, u8, u16, u8, u8),
@@ -303,7 +297,6 @@ pub struct CommandServicesTable {
     pub set_airport_kind_rotation: extern "C" fn(*mut BaseStation, u8, u8),
     pub set_facilities: extern "C" fn(*mut BaseStation, u8),
     pub set_build_date: extern "C" fn(*mut BaseStation, i32),
-    pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut Industry,
     pub industry_neutral: extern "C" fn(*mut Industry) -> *mut BaseStation,
     pub clear_industry_neutral: extern "C" fn(*mut Industry),
     pub industry_area: extern "C" fn(*mut Industry) -> TileArea,
@@ -324,7 +317,6 @@ pub struct CommandServicesTable {
     pub set_rail_station_reservation: extern "C" fn(u32, bool),
     pub set_road_waypoint: extern "C" fn(*mut BaseStation),
     pub set_string_id: extern "C" fn(*mut BaseStation, u32),
-    pub string_id: extern "C" fn(*mut BaseStation) -> u32,
     pub tile_flat: extern "C" fn(u32) -> bool,
     pub waypoint_available: extern "C" fn() -> bool,
     pub waypoint_default_name: extern "C" fn(*mut BaseStation),
@@ -697,7 +689,7 @@ impl Ctx<'_> {
             return;
         }
         let b = unsafe { *crate::station::rect(owner) };
-        let xy = (self.s.location)(st);
+        let xy = crate::station_record::xy(st.cast());
         let x = (self.map().tile_x(xy) as i32).clamp(b.left, b.right) as u32;
         let y = (self.map().tile_y(xy) as i32).clamp(b.top, b.bottom) as u32;
         crate::station::spatial::move_sign(self.shared, st, (y << self.map().log_x) + x);
@@ -714,7 +706,7 @@ impl Ctx<'_> {
                 crate::linkgraph::live::openttd_rust_live_node_location(
                     crate::linkgraph::live::resolve(graph, self.links().graphs),
                     node,
-                    (self.s.location)(st),
+                    crate::station_record::xy(st.cast()),
                 );
             }
         }
@@ -771,7 +763,10 @@ impl Ctx<'_> {
                 self.full_station(id)
             }
         };
-        let filter = |p| !waypoint || (self.s.road_waypoint)(p) == road;
+        let filter = |p: *mut BaseStation| {
+            !waypoint
+                || crate::station_record::read(p.cast(), |r| r.waypoint_flags & 1 != 0) == road
+        };
         if existing != 0xffff {
             if adjacent && existing != target {
                 out.error(overbuild_error);
@@ -837,7 +832,7 @@ unsafe extern "C" fn deleted_visit(context: *mut std::ffi::c_void, st: *mut Base
     {
         return;
     }
-    let xy = (c.s.location)(st);
+    let xy = crate::station_record::xy(st.cast());
     let distance = c.map().tile_x(xy).abs_diff(c.map().tile_x(search.tile))
         + c.map().tile_y(xy).abs_diff(c.map().tile_y(search.tile));
     if distance < search.threshold {
@@ -983,7 +978,6 @@ impl Ctx<'_> {
             return 0xffff;
         }
         let mut search = SignSearch {
-            c: self,
             station: st,
             tile,
             other: false,
@@ -1060,15 +1054,14 @@ impl Ctx<'_> {
         }
     }
 }
-struct SignSearch<'a> {
-    c: &'a Ctx<'a>,
+struct SignSearch {
     station: *mut BaseStation,
     tile: u32,
     other: bool,
 }
 unsafe extern "C" fn sign_visit(context: *mut std::ffi::c_void, st: *mut BaseStation) {
-    let s = unsafe { &mut *context.cast::<SignSearch<'_>>() };
-    if !st.is_null() && st != s.station && (s.c.s.location)(st) == s.tile {
+    let s = unsafe { &mut *context.cast::<SignSearch>() };
+    if !st.is_null() && st != s.station && crate::station_record::xy(st.cast()) == s.tile {
         s.other = true;
     }
 }
@@ -2987,7 +2980,7 @@ impl Ctx<'_> {
         st: *mut BaseStation,
     ) -> (*const crate::services::TownHandle, u32) {
         let area = Self::area((self.s.airport_area)(st));
-        let rotation = (self.s.airport_rotation)(st);
+        let rotation = crate::station_record::read(st.cast(), |r| r.airport.rotation);
         let id = (self.links().graphs.station_id)(st);
         self.nearest_town(
             crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
@@ -3103,7 +3096,7 @@ impl Ctx<'_> {
                 }
                 if (self.s.station_town)(st) == town
                     && crate::station_record::facilities(st.cast()) & 8 != 0
-                    && (self.s.airport_type)(st) != 9
+                    && crate::station_record::read(st.cast(), |r| r.airport.r#type) != 9
                 {
                     count += 1;
                 }
@@ -3144,7 +3137,9 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        if !st.is_null() && (self.s.airport_tile)(st) != u32::MAX {
+        if !st.is_null()
+            && crate::station_record::read(st.cast(), |r| r.airport.area.tile.0) != u32::MAX
+        {
             return cost.error(self.s.strings.close_airport);
         }
         for _ in self.airport_tiles(spec, layout, tile) {
@@ -3324,7 +3319,9 @@ pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const Com
         if st.is_null() {
             continue;
         }
-        if (c.s.airport_tile)(st) != u32::MAX && (c.s.airport_type)(st) != 9 {
+        if crate::station_record::read(st.cast(), |r| r.airport.area.tile.0) != u32::MAX
+            && crate::station_record::read(st.cast(), |r| r.airport.r#type) != 9
+        {
             let (nearest, distance) = c.nearest_existing_airport(st);
             let spec = crate::newgrf_airport::station_spec(st, unsafe { &*c.s.airport_runtime });
             let noise = c.noise(spec, distance);
@@ -3408,7 +3405,7 @@ impl Ctx<'_> {
     }
     fn update_docking(&self, st: *mut BaseStation) {
         (self.s.docking_clear)(st);
-        let industry = (self.s.associated_industry)(st);
+        let industry = crate::station_record::read(st.cast(), |r| r.industry.cast::<Industry>());
         let area = if industry.is_null() {
             Self::area((self.s.ship_station_area)(st))
         } else {
@@ -3751,7 +3748,7 @@ impl Ctx<'_> {
         // so the industry's set is moved out first.
         if (self.shared.station_serve_neutral)() {
             let c = self.catchment();
-            let industry = (c.c.associated_industry)(st);
+            let industry = crate::station_record::read(st.cast(), |r| r.industry.cast());
             let list = crate::industry::stations_near((c.c.industry_owner)(industry));
             // SAFETY: Live industry owner; the set is moved into a local before the visits.
             let nearby = unsafe { std::mem::take(&mut *list) };
@@ -3785,9 +3782,10 @@ impl Ctx<'_> {
             );
         }
         assert!(
-            crate::station_record::facilities(st.cast()) == 24 && (self.s.airport_type)(st) == 9
+            crate::station_record::facilities(st.cast()) == 24
+                && crate::station_record::read(st.cast(), |r| r.airport.r#type) == 9
         );
-        let industry = (self.s.associated_industry)(st);
+        let industry = crate::station_record::read(st.cast(), |r| r.industry.cast::<Industry>());
         if !industry.is_null() && (self.s.industry_neutral)(industry) == st {
             (self.s.clear_industry_neutral)(industry);
         }
@@ -4256,7 +4254,6 @@ crate::abi::layouts! {
         tile_area,
         rail_spec,
         links,
-        location,
         base_move_sign,
         waypoint_move_sign,
         virtual_coord,
@@ -4268,7 +4265,6 @@ crate::abi::layouts! {
         set_town,
         lifecycle,
         have_rating,
-        road_waypoint,
         name_equals,
         set_name,
         flip_airport_closed,
@@ -4292,7 +4288,6 @@ crate::abi::layouts! {
         set_custom_rail_index,
         set_random_bits,
         set_gfx,
-
         tile_flag_count,
         tile_flags,
         set_tile_flags,
@@ -4320,7 +4315,6 @@ crate::abi::layouts! {
         delete_stop,
         set_custom_road_index,
         custom_road_index,
-
         remove_stop_tile_data,
         close_stop_inspect,
         set_road_waypoint_area,
@@ -4337,15 +4331,11 @@ crate::abi::layouts! {
         airport_noise,
         town_max_noise,
         station_town,
-        airport_tile,
-        airport_type,
-        airport_rotation,
         airport_airplanes,
         set_airport_details,
         make_airport,
         airport_area,
         airport_animated,
-
         airport_infrastructure,
         station_view_invalidate,
         town_view_dirty,
@@ -4374,7 +4364,6 @@ crate::abi::layouts! {
         set_airport_kind_rotation,
         set_facilities,
         set_build_date,
-        associated_industry,
         industry_neutral,
         clear_industry_neutral,
         industry_area,
@@ -4393,7 +4382,6 @@ crate::abi::layouts! {
         set_rail_station_reservation,
         set_road_waypoint,
         set_string_id,
-        string_id,
         tile_flat,
         waypoint_available,
         waypoint_default_name,

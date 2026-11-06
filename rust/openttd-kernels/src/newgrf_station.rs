@@ -564,7 +564,9 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
             });
         }
         0xf1 => {
-            return if (native.commands().airport_tile)(st) != crate::tile_type::INVALID_TILE {
+            return if crate::station_record::read(st.cast(), |r| r.airport.area.tile.0)
+                != crate::tile_type::INVALID_TILE
+            {
                 u32::from(
                     (native.airport_ttd_type)(crate::newgrf_airport::station_spec(st, unsafe {
                         &*native.commands().airport_runtime
@@ -775,7 +777,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x7a => (native.shared().specs().station().badges)(resolver, spec, parameter),
         0x82 => 50,
-        0x84 => (native.commands().string_id)(st),
+        0x84 => crate::station_record::read(st.cast(), |r| r.string_id),
         0x86 => 0,
         0xf0 => u32::from(crate::station_record::facilities(st.cast())),
         0xfa => build_date(crate::station_record::read(st.cast(), |r| r.build_date)),

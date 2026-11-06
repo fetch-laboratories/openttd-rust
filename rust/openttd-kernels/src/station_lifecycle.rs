@@ -192,7 +192,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             }
             continue;
         }
-        let name = (s.commands().string_id)(other);
+        let name = crate::station_record::read(other.cast(), |r| r.string_id);
         if name >= n.base && name < n.fallback {
             info.set_used(if name == n.forest { n.woods } else { name }, s);
         }

@@ -206,8 +206,6 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.station_if_valid = RustStationIfValid<BaseStation *>,
 		.next_station = RustNextStation<BaseStation *>,
 		.id = RustBaseStationID<BaseStation>,
-		.location = RustStationLocation,
-		.associated_industry = RustStationAssociatedIndustry,
 		.radius_facilities = [](BaseStation *handle) noexcept -> OpenTTDStationRadiusFacilities {
 			const Station *st = Station::From(handle);
 			return {st->GetBusStops() != nullptr, st->GetTruckStops() != nullptr, RustStationTrainTile(st), RustStationShipTile(st), RustStationAirportTile(st)};

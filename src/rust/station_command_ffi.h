@@ -80,7 +80,6 @@ struct OpenTTDStationCommandServices {
 	OpenTTDStationArea (*tile_area)(const BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_area);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
 	const OpenTTDStationLinks *links;
-	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	void (*base_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_move_sign);
 	void (*waypoint_move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_move_sign);
 	void (*virtual_coord)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(virtual_coord);
@@ -92,7 +91,6 @@ struct OpenTTDStationCommandServices {
 	void (*set_town)(BaseStation *, const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
 	const OpenTTDStationLifecycleServices *lifecycle;
 	void (*have_rating)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(have_rating);
-	bool (*road_waypoint)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(road_waypoint);
 	bool (*name_equals)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(name_equals);
 	void (*set_name)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
 	void (*flip_airport_closed)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(flip_airport_closed);
@@ -161,9 +159,6 @@ struct OpenTTDStationCommandServices {
 	uint8_t (*airport_noise)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_noise);
 	uint16_t (*town_max_noise)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_max_noise);
 	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
-	uint32_t (*airport_tile)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
-	uint8_t (*airport_type)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
-	Direction (*airport_rotation)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_rotation);
 	bool (*airport_airplanes)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_airplanes);
 	void (*set_airport_details)(BaseStation *, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_airport_details);
 	void (*make_airport)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_airport);
@@ -198,7 +193,6 @@ struct OpenTTDStationCommandServices {
 	void (*set_airport_kind_rotation)(BaseStation *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_airport_kind_rotation);
 	void (*set_facilities)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_facilities);
 	void (*set_build_date)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_build_date);
-	Industry *(*associated_industry)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(associated_industry);
 	BaseStation *(*industry_neutral)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_neutral);
 	void (*clear_industry_neutral)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(clear_industry_neutral);
 	OpenTTDStationArea (*industry_area)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_area);
@@ -217,7 +211,6 @@ struct OpenTTDStationCommandServices {
 	void (*set_rail_station_reservation)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_station_reservation);
 	void (*set_road_waypoint)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(set_road_waypoint);
 	void (*set_string_id)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_string_id);
-	uint32_t (*string_id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(string_id);
 	bool (*tile_flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_flat);
 	bool (*waypoint_available)() noexcept OPENTTD_SERVICE_DEFAULT(waypoint_available);
 	void (*waypoint_default_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_default_name);

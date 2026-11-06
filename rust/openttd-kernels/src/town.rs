@@ -931,10 +931,9 @@ impl Engine<'_> {
     fn count_stations(&self, _town: u32) -> u32 {
         let center = self.position();
         let radius = self.radius()[0];
-        let c = unsafe { &*(self.services.station_catchment)() };
         let mut count = 0_u32;
         crate::station::spatial::radius(self.services, center, radius / 2, |st| {
-            if self.distance((c.location)(st), center) <= radius {
+            if self.distance(crate::station_record::xy(st.cast()), center) <= radius {
                 let activity = unsafe {
                     crate::station_service::activity(crate::station_record::service_of(st.cast()))
                 };
@@ -2281,9 +2280,8 @@ impl Engine<'_> {
         }
         let center = self.position();
         let radius = self.radius()[0];
-        let c = unsafe { &*(self.services.station_catchment)() };
         crate::station::spatial::radius(self.services, center, radius / 2, |st| {
-            if self.distance((c.location)(st), center) > radius {
+            if self.distance(crate::station_record::xy(st.cast()), center) > radius {
                 return;
             }
             let activity = unsafe {

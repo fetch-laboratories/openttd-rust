@@ -134,11 +134,15 @@ pub(crate) fn station_by_id(id: u16, s: &Services) -> *mut BaseStation {
     (s.get_station)(id)
 }
 pub(crate) fn station_spec(st: *mut BaseStation, s: &Services) -> *const AirportSpec {
-    let tile = (s.commands().airport_tile)(st);
+    let tile = crate::station_record::read(st.cast(), |r| r.airport.area.tile.0);
     if tile == INVALID_TILE {
         s.dummy_spec
     } else {
-        crate::station_base::airport_get_spec(tile, (s.commands().airport_type)(st), s)
+        crate::station_base::airport_get_spec(
+            tile,
+            crate::station_record::read(st.cast(), |r| r.airport.r#type),
+            s,
+        )
     }
 }
 pub(crate) fn station_fta(st: *mut BaseStation, s: &Services) -> *const c_void {
@@ -260,7 +264,10 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_init(
     let (spec, layout) = if tile.station.is_null() {
         (ptr::null(), 0)
     } else {
-        let spec = get((s.commands().airport_type)(tile.station), s);
+        let spec = get(
+            crate::station_record::read(tile.station.cast(), |r| r.airport.r#type),
+            s,
+        );
         (
             spec,
             crate::station_record::read(tile.station.cast(), |r| r.airport.layout),
@@ -448,7 +455,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
         }
         0x43 => crate::industry::resolver::relative_position(
             c.tile,
-            (s.commands().airport_tile)(c.station),
+            crate::station_record::read(c.station.cast(), |r| r.airport.area.tile.0),
             s.map(),
         ),
         0x44 => u32::from((s.frame)(c.tile)),
