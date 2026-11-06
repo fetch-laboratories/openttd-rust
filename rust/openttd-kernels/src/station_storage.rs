@@ -133,7 +133,7 @@ pub unsafe extern "C" fn openttd_rust_station_roadstop_data_reserve(
     count: usize,
 ) {
     edit(record, |data| {
-        data.reserve(count.saturating_sub(data.len()))
+        data.reserve(count.saturating_sub(data.len()));
     });
 }
 
