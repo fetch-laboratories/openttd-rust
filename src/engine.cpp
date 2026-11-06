@@ -80,7 +80,7 @@ Engine::Engine(VehicleType type, uint16_t local_id)
 	this->type = type;
 	this->grf_prop.local_id = local_id;
 	this->list_position = local_id;
-	this->preview_company = CompanyID::Invalid();
+	this->Record().preview_company = CompanyID::Invalid();
 	this->display_last_variant = EngineID::Invalid();
 
 	/* Check if this base engine is within the original engine data range */

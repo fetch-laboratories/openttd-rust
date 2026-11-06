@@ -128,8 +128,8 @@ static bool EngineNumberSorter(const GUIEngineListItem &a, const GUIEngineListIt
  */
 static bool EngineIntroDateSorter(const GUIEngineListItem &a, const GUIEngineListItem &b)
 {
-	const auto va = Engine::Get(a.engine_id)->intro_date;
-	const auto vb = Engine::Get(b.engine_id)->intro_date;
+	const auto va = Engine::Get(a.engine_id)->Record().intro_date;
+	const auto vb = Engine::Get(b.engine_id)->Record().intro_date;
 	const auto r = va - vb;
 
 	/* Use EngineID to sort instead since we want consistent sorting */
@@ -175,8 +175,8 @@ static bool EngineNameSorter(const GUIEngineListItem &a, const GUIEngineListItem
  */
 static bool EngineReliabilitySorter(const GUIEngineListItem &a, const GUIEngineListItem &b)
 {
-	const int va = Engine::Get(a.engine_id)->reliability;
-	const int vb = Engine::Get(b.engine_id)->reliability;
+	const int va = Engine::Get(a.engine_id)->Record().reliability;
+	const int vb = Engine::Get(b.engine_id)->Record().reliability;
 	const int r = va - vb;
 
 	/* Use EngineID to sort instead since we want consistent sorting */
@@ -878,7 +878,7 @@ void TestedEngineDetails::FillDefaultCapacities(const Engine *e)
 int DrawVehiclePurchaseInfo(int left, int right, int y, EngineID engine_number, TestedEngineDetails &te)
 {
 	const Engine *e = Engine::Get(engine_number);
-	TimerGameCalendar::YearMonthDay ymd = TimerGameCalendar::ConvertDateToYMD(e->intro_date);
+	TimerGameCalendar::YearMonthDay ymd = TimerGameCalendar::ConvertDateToYMD(e->Record().intro_date);
 	bool refittable = IsArticulatedVehicleRefittable(engine_number);
 	bool articulated_cargo = false;
 
@@ -926,7 +926,7 @@ int DrawVehiclePurchaseInfo(int left, int right, int y, EngineID engine_number, 
 		y += GetCharacterHeight(FS_NORMAL);
 
 		/* Reliability */
-		DrawString(left, right, y, GetString(STR_PURCHASE_INFO_RELIABILITY, ToPercent16(e->reliability)));
+		DrawString(left, right, y, GetString(STR_PURCHASE_INFO_RELIABILITY, ToPercent16(e->Record().reliability)));
 		y += GetCharacterHeight(FS_NORMAL);
 	}
 
@@ -1077,7 +1077,7 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 			tr = tr.Indent(badge_column_widths[2], !rtl);
 		}
 
-		bool hidden = e->company_hidden.Test(_local_company);
+		bool hidden = e->Record().company_hidden.Test(_local_company);
 		StringID str = hidden ? STR_HIDDEN_ENGINE_NAME : STR_ENGINE_NAME;
 		TextColour tc = (item.engine_id == selected_id) ? TC_WHITE : ((hidden | shaded) ? (TC_GREY | TC_FORCED | TC_NO_SHADE) : TC_BLACK);
 

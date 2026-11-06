@@ -31,23 +31,19 @@ extern EngineRenewPool _enginerenew_pool;
  * it.
  */
 #include "rust/fleet_owner.hpp"
-struct FleetRenewFields {
-	EngineID from = EngineID::Invalid();
-	EngineID to = EngineID::Invalid();
-	EngineRenew *next = nullptr;
-	GroupID group_id = GroupID::Invalid();
-	bool replace_when_old = false;
-};
+#include "abi-record-fleet.h"
 struct EngineRenew : EngineRenewPool::PoolItem<&_enginerenew_pool> {
-	FleetOwner<FleetRenewFields, openttd_rust_fleet_renew_create, openttd_rust_fleet_renew_destroy> state{};
-	EngineID &from = state.state->from;
-	EngineID &to = state.state->to;
-	EngineRenew *&next = state.state->next;
-	GroupID &group_id = state.state->group_id;
-	bool &replace_when_old = state.state->replace_when_old;
+	struct Owner {
+		FleetRenewFields *state = static_cast<FleetRenewFields *>(openttd_rust_fleet_renew_create());
+		Owner() = default;
+		Owner(const Owner &) = delete;
+		~Owner() { openttd_rust_fleet_renew_destroy(this->state); }
+	} state;
+	FleetRenewFields &Record() { return *this->state.state; }
+	const FleetRenewFields &Record() const { return *this->state.state; }
 	EngineRenew() {}
 	EngineRenew(EngineID from, EngineID to, GroupID group, bool when_old, EngineRenew *next) {
-		this->from = from; this->to = to; this->group_id = group; this->replace_when_old = when_old; this->next = next;
+		this->Record().from = from; this->Record().to = to; this->Record().group_id = group; this->Record().replace_when_old = when_old; this->Record().next = next;
 	}
 };
 

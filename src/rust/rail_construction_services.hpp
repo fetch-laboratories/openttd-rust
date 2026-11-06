@@ -77,8 +77,8 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
-	v->reliability = e->reliability;
-	v->reliability_spd_dec = e->reliability_spd_dec;
+	v->reliability = e->Record().reliability;
+	v->reliability_spd_dec = e->Record().reliability_spd_dec;
 	return v;
 }
 static void RailEngineDates(void *shell, const OpenTTDEngine *engine) noexcept

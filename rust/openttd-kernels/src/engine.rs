@@ -6,8 +6,8 @@
  */
 
 //! Engine lifecycle state. Native shells own this allocation through ordinary and indexed
-//! construction, temporary staging and vector relocation; native scalar aliases carry their
-//! real widths.
+//! construction, temporary staging and vector relocation. Both languages read the generated
+//! record in place, and views end before mutation or callbacks.
 #![allow(
     unsafe_code,
     clippy::cast_ptr_alignment,
@@ -18,61 +18,66 @@
     clippy::struct_excessive_bools,
     clippy::fn_params_excessive_bools
 )]
+use crate::industrytype::NativeVec;
 use crate::raw_field::{read_field, write_field};
 use crate::services::ByteSpan;
 use crate::timer_game_common::{DAYS_IN_LEAP_YEAR, DAYS_IN_YEAR};
-#[repr(C)]
-#[derive(Default, Clone, Copy)]
-pub struct Lifecycle {
-    pub company_avail: u16,
-    pub company_hidden: u16,
-    pub preview_asked: u16,
-    pub intro_date: i32,
-    pub age: i32,
-    pub reliability: u16,
-    pub reliability_spd_dec: u16,
-    pub reliability_start: u16,
-    pub reliability_max: u16,
-    pub reliability_final: u16,
-    pub duration_phase_1: u16,
-    pub duration_phase_2: u16,
-    pub duration_phase_3: u16,
-    pub flags: u8,
-    pub preview_company: u8,
-    pub preview_wait: u8,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Canonical lifecycle and name, stable through temporary shell relocation.
+    "OpenTTDEngineLifecycle" ["engine"] => pub struct Lifecycle {
+        pub company_avail: u16 => "CompanyMask",
+        pub company_hidden: u16 => "CompanyMask",
+        pub preview_asked: u16 => "CompanyMask",
+        pub intro_date: i32 => "TimerGameCalendar::Date",
+        pub age: i32,
+        pub reliability: u16,
+        pub reliability_spd_dec: u16,
+        pub reliability_start: u16,
+        pub reliability_max: u16,
+        pub reliability_final: u16,
+        pub duration_phase_1: u16,
+        pub duration_phase_2: u16,
+        pub duration_phase_3: u16,
+        pub flags: u8 => "EngineFlags",
+        pub preview_company: u8 => "CompanyID",
+        pub preview_wait: u8,
+        pub name: NativeVec<u8> => "RustVector<uint8_t>",
+    }
 }
-#[repr(C)]
-struct State {
-    lifecycle: Lifecycle,
-    name: Vec<u8>,
+impl Default for Lifecycle {
+    fn default() -> Self {
+        Self {
+            company_avail: 0,
+            company_hidden: 0,
+            preview_asked: 0,
+            intro_date: 0,
+            age: 0,
+            reliability: 0,
+            reliability_spd_dec: 0,
+            reliability_start: 0,
+            reliability_max: 0,
+            reliability_final: 0,
+            duration_phase_1: 0,
+            duration_phase_2: 0,
+            duration_phase_3: 0,
+            flags: 0,
+            preview_company: 255,
+            preview_wait: 0,
+            name: NativeVec::new(),
+        }
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_engine_new() -> *mut Lifecycle {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    Box::into_raw(Box::new(State {
-        lifecycle: Lifecycle {
-            preview_company: 255,
-            ..Lifecycle::default()
-        },
-        name: Vec::new(),
-    }))
-    .cast()
+    Box::into_raw(Box::new(Lifecycle::default()))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_destroy(state: *mut Lifecycle) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
     // SAFETY: The shell transfers its sole live allocation at destruction.
-    drop(unsafe { Box::from_raw(state.cast::<State>()) });
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_name(state: *const Lifecycle) -> ByteSpan {
-    crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    // SAFETY: Caller keeps the live owner stable until the borrowed bytes expire.
-    let name = unsafe { &(*state.cast::<State>()).name };
-    ByteSpan {
-        data: name.as_ptr(),
-        size: name.len(),
-    }
+    drop(unsafe { Box::from_raw(state) });
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_set_name(state: *mut Lifecycle, text: ByteSpan) {
@@ -85,7 +90,7 @@ pub unsafe extern "C" fn openttd_rust_engine_set_name(state: *mut Lifecycle, tex
         unsafe { std::slice::from_raw_parts(text.data, text.size) }.to_vec()
     };
     unsafe {
-        (*state.cast::<State>()).name = name;
+        (*state).name = NativeVec::from_vec(name);
     }
 }
 
@@ -1118,8 +1123,8 @@ pub unsafe extern "C" fn openttd_rust_engine_rename(
                 break;
             }
             from = u32::from(other.id) + 1;
-            let old = unsafe { openttd_rust_engine_name(other.state) };
-            if old.size != 0 && unsafe { std::slice::from_raw_parts(old.data, old.size) } == bytes {
+            let old = unsafe { &(*other.state).name };
+            if !old.is_empty() && old.as_slice() == bytes {
                 return 2;
             }
         }
@@ -1161,24 +1166,6 @@ pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDEngineLifecycle" ["engine"] => Lifecycle {
-        company_avail,
-        company_hidden,
-        preview_asked,
-        intro_date,
-        age,
-        reliability,
-        reliability_spd_dec,
-        reliability_start,
-        reliability_max,
-        reliability_final,
-        duration_phase_1,
-        duration_phase_2,
-        duration_phase_3,
-        flags,
-        preview_company,
-        preview_wait,
-    };
     "OpenTTDEngineRef" ["engine"] => EngineRef {
         shell,
         state,

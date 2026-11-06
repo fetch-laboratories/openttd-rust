@@ -42,26 +42,26 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 {
 	std::vector<Engine> staged;
 	staged.emplace_back();
-	staged[0].age = -123;
-	staged[0].preview_company = CompanyID{3};
-	staged[0].name = std::string_view("name\0bytes", 10);
+	staged[0].Record().age = -123;
+	staged[0].Record().preview_company = CompanyID{3};
+	staged[0].SetName(std::string_view("name\0bytes", 10));
 	auto *allocation = staged[0].rust_lifecycle.state;
-	auto *age = &staged[0].age;
+	auto *age = &staged[0].Record().age;
 	for (size_t i = 1; i < 1024; ++i) staged.emplace_back();
 	REQUIRE(staged[0].rust_lifecycle.state == allocation);
-	REQUIRE(&staged[0].age == age);
-	REQUIRE(staged[0].age == -123);
-	REQUIRE(staged[0].preview_company == CompanyID{3});
-	REQUIRE(staged[0].name.View() == std::string_view("name\0bytes", 10));
+	REQUIRE(&staged[0].Record().age == age);
+	REQUIRE(staged[0].Record().age == -123);
+	REQUIRE(staged[0].Record().preview_company == CompanyID{3});
+	REQUIRE(staged[0].Name() == std::string_view("name\0bytes", 10));
 	/* Placement replacement is used by FixTTOEngines after native staging. */
 	staged[0].~Engine();
 	::new (&staged[0]) Engine();
-	REQUIRE(staged[0].age == 0);
-	REQUIRE(staged[0].preview_company == CompanyID::Invalid());
-	REQUIRE(staged[0].name.empty());
-	/* Canonical aliases immediately see partial decoded writes. */
+	REQUIRE(staged[0].Record().age == 0);
+	REQUIRE(staged[0].Record().preview_company == CompanyID::Invalid());
+	REQUIRE(staged[0].Name().empty());
+	/* Decoded writes address the canonical record. */
 	staged[0].rust_lifecycle.state->age = INT32_MIN;
-	REQUIRE(staged[0].age == INT32_MIN);
+	REQUIRE(staged[0].Record().age == INT32_MIN);
 	staged.clear();
 }
 

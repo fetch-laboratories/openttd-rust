@@ -1245,7 +1245,7 @@ bool CanBuildVehicleInfrastructure(VehicleType type, uint8_t subtype)
 		/* Can we actually build the vehicle type? */
 		for (const Engine *e : Engine::IterateType(type)) {
 			if (type == VEH_ROAD && GetRoadTramType(e->VehInfo<RoadVehicleInfo>().roadtype) != (RoadTramType)subtype) continue;
-			if (e->company_avail.Test(_local_company)) return true;
+			if (e->Record().company_avail.Test(_local_company)) return true;
 		}
 		return false;
 	}

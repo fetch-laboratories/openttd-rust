@@ -1576,9 +1576,9 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 					const Engine *e = Engine::GetIfValid(static_cast<EngineID>(arg));
 					if (e == nullptr) break;
 
-					if (!e->name.empty() && e->IsEnabled()) {
+					if (!e->Name().empty() && e->IsEnabled()) {
 						auto tmp_params = MakeParameters(
-							e->name.View()
+							e->Name()
 						);
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 						break;

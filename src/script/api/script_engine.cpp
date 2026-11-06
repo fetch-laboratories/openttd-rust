@@ -108,7 +108,7 @@
 	if (!IsValidEngine(engine_id)) return -1;
 	if (GetVehicleType(engine_id) == ScriptVehicle::VT_RAIL && IsWagon(engine_id)) return -1;
 
-	return ::ToPercent16(::Engine::Get(engine_id)->reliability);
+	return ::ToPercent16(::Engine::Get(engine_id)->Record().reliability);
 }
 
 /* static */ SQInteger ScriptEngine::GetMaxSpeed(EngineID engine_id)
@@ -173,7 +173,7 @@
 {
 	if (!IsValidEngine(engine_id)) return ScriptDate::DATE_INVALID;
 
-	return (ScriptDate::Date)::Engine::Get(engine_id)->intro_date.base();
+	return (ScriptDate::Date)::Engine::Get(engine_id)->Record().intro_date.base();
 }
 
 /* static */ ScriptVehicle::VehicleType ScriptEngine::GetVehicleType(EngineID engine_id)

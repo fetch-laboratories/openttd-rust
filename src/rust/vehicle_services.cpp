@@ -337,7 +337,7 @@ static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplace
 	EngineID engine = EngineReplacementForCompany(company, v->GetEngineType(), v->group_id, &when_old);
 	return {.engine = engine.base(), .when_old = when_old};
 }
-static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(VehicleOf(handle)->GetOwner()); }
+static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->Record().company_avail.Test(VehicleOf(handle)->GetOwner()); }
 static OpenTTDVehicleMaintenanceAutomatic OPENTTD_RUST_CALL MaintenanceAutomatic(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -414,7 +414,7 @@ static OpenTTDVehicleMaintenanceWarningCompany OPENTTD_RUST_CALL MaintenanceWarn
 	const Company *company = Company::Get(VehicleOf(handle)->GetOwner());
 	return {.company = company, .renewal = company->settings.engine_renew};
 }
-static bool OPENTTD_RUST_CALL MaintenanceEngineAvailableAny(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->GetEngine()->company_avail.Any(); }
+static bool OPENTTD_RUST_CALL MaintenanceEngineAvailableAny(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->GetEngine()->Record().company_avail.Any(); }
 static bool OPENTTD_RUST_CALL MaintenanceReplacementActive(OpenTTDVehicle *handle, const Company *company) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);

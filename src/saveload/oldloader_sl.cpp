@@ -417,39 +417,39 @@ static bool FixTTOEngines()
 			TimerGameCalendar::date += CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 			StartupOneEngine(e, aging_ymd, 0);
 			CalcEngineReliability(e, false);
-			e->intro_date -= CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
+			e->Record().intro_date -= CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 			TimerGameCalendar::date -= CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR;
 
 			/* Make sure for example monorail and maglev are available when they should be */
-			if (TimerGameCalendar::date >= e->intro_date && e->info.climates.Test(LandscapeType::Temperate)) {
-				e->flags.Set(EngineFlag::Available);
-				e->company_avail.Set();
-				e->age = TimerGameCalendar::date > e->intro_date ? (TimerGameCalendar::date - e->intro_date).base() / 30 : 0;
+			if (TimerGameCalendar::date >= e->Record().intro_date && e->info.climates.Test(LandscapeType::Temperate)) {
+				e->Record().flags.Set(EngineFlag::Available);
+				e->Record().company_avail.Set();
+				e->Record().age = TimerGameCalendar::date > e->Record().intro_date ? (TimerGameCalendar::date - e->Record().intro_date).base() / 30 : 0;
 			}
 		} else {
 			/* Using data from TTO savegame */
 			Engine *oe = &_old_engines[oi];
 
-			e->intro_date          = oe->intro_date;
-			e->age                 = oe->age;
-			e->reliability         = oe->reliability;
-			e->reliability_spd_dec = oe->reliability_spd_dec;
-			e->reliability_start   = oe->reliability_start;
-			e->reliability_max     = oe->reliability_max;
-			e->reliability_final   = oe->reliability_final;
-			e->duration_phase_1    = oe->duration_phase_1;
-			e->duration_phase_2    = oe->duration_phase_2;
-			e->duration_phase_3    = oe->duration_phase_3;
-			e->flags               = oe->flags;
+			e->Record().intro_date          = oe->Record().intro_date;
+			e->Record().age                 = oe->Record().age;
+			e->Record().reliability         = oe->Record().reliability;
+			e->Record().reliability_spd_dec = oe->Record().reliability_spd_dec;
+			e->Record().reliability_start   = oe->Record().reliability_start;
+			e->Record().reliability_max     = oe->Record().reliability_max;
+			e->Record().reliability_final   = oe->Record().reliability_final;
+			e->Record().duration_phase_1    = oe->Record().duration_phase_1;
+			e->Record().duration_phase_2    = oe->Record().duration_phase_2;
+			e->Record().duration_phase_3    = oe->Record().duration_phase_3;
+			e->Record().flags               = oe->Record().flags;
 
-			e->company_avail = CompanyMask{};
+			e->Record().company_avail = CompanyMask{};
 
 			/* One or more engines were remapped to this one. Make this engine available
 			 * if at least one of them was available. */
 			for (uint j = 0; j < lengthof(tto_to_ttd); j++) {
-				if (tto_to_ttd[j] == i && _old_engines[j].company_avail.Any()) {
-					e->company_avail.Set();
-					e->flags.Set(EngineFlag::Available);
+				if (tto_to_ttd[j] == i && _old_engines[j].Record().company_avail.Any()) {
+					e->Record().company_avail.Set();
+					e->Record().flags.Set(EngineFlag::Available);
 					break;
 				}
 			}
@@ -457,10 +457,10 @@ static bool FixTTOEngines()
 			e->info.climates = LandscapeType::Temperate;
 		}
 
-		e->preview_company = CompanyID::Invalid();
-		e->preview_asked.Set();
-		e->preview_wait = 0;
-		e->name = std::string{};
+		e->Record().preview_company = CompanyID::Invalid();
+		e->Record().preview_asked.Set();
+		e->Record().preview_wait = 0;
+		e->SetName({});
 	}
 
 	return true;
@@ -1508,7 +1508,7 @@ static bool LoadOldEngine(LoadgameState &ls, int num)
 static bool LoadOldEngineName(LoadgameState &ls, int num)
 {
 	Engine *e = GetTempDataEngine(static_cast<EngineID>(num));
-	e->name = CopyFromOldName(RemapOldStringID(ReadUint16(ls)));
+	e->SetName(CopyFromOldName(RemapOldStringID(ReadUint16(ls))));
 	return true;
 }
 

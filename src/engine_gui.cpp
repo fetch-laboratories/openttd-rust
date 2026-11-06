@@ -137,7 +137,7 @@ struct EnginePreviewWindow : Window {
 		if (!gui_scope) return;
 
 		EngineID engine = static_cast<EngineID>(this->window_number);
-		if (Engine::Get(engine)->preview_company != _local_company) this->Close();
+		if (Engine::Get(engine)->Record().preview_company != _local_company) this->Close();
 	}
 };
 

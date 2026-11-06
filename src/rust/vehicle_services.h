@@ -161,7 +161,7 @@ inline TimerGameEconomy::Date RustVehicleLastService(const Vehicle *v) noexcept 
 inline int32_t RustVehicleLastServiceOf(OpenTTDVehicle *v) noexcept { return RustVehicleLastService(VehicleOf(v)).base(); }
 inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v->Record().breakdown_ctr; }
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->value.base(); }
-inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }
+inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->Record().reliability; }
 template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept
 {
 	if constexpr (std::is_same_v<std::remove_cv_t<std::remove_pointer_t<Handle>>, OpenTTDVehicle>) return VehicleOf(v)->index.base();

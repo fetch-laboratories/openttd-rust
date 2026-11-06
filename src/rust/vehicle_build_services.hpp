@@ -97,7 +97,7 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
-	v->reliability_spd_dec = e->reliability_spd_dec;
+	v->reliability_spd_dec = e->Record().reliability_spd_dec;
 }
 static void VehicleConstructServiceDates(void *shell, uint16_t interval) noexcept
 {

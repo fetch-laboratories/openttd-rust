@@ -58,14 +58,17 @@ struct Stats {
     fields: StatsFields,
     engines: BTreeMap<u16, u16>,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Renew {
-    pub from: u16,
-    pub to: u16,
-    pub next: *mut (),
-    pub group: u16,
-    pub when_old: bool,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Canonical replacement node; the company owns the list head independently.
+    #[derive(Clone, Copy)]
+    "FleetRenewFields" ["fleet"] => pub struct Renew {
+        pub from: u16 => "EngineID",
+        pub to: u16 => "EngineID",
+        pub next: *mut () => "EngineRenew *",
+        pub group_id: u16 => "GroupID",
+        pub replace_when_old: bool,
+    }
 }
 /// Create the canonical group allocation; C++ starts scalar prefix lifetimes.
 #[unsafe(no_mangle)]
@@ -114,8 +117,8 @@ pub extern "C" fn openttd_rust_fleet_renew_create() -> *mut () {
         from: 65535,
         to: 65535,
         next: std::ptr::null_mut(),
-        group: 65535,
-        when_old: false,
+        group_id: 65535,
+        replace_when_old: false,
     }))
     .cast()
 }
@@ -520,7 +523,7 @@ unsafe fn update_autoreplace(w: &GroupServices, company: u8) {
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
         let engine = read_field!(p, from);
-        let id = read_field!(p, group);
+        let id = read_field!(p, group_id);
         let next = read_field!(p, next);
         let kind = unsafe { (w.engine_type)(engine) };
         let s = unsafe { (w.stats)(company, id, kind).cast::<Stats>() };
@@ -694,7 +697,7 @@ unsafe fn delete_group(w: &GroupServices, flags: u32, id: u16) -> u32 {
                 }
                 from = unsafe { (w.renew_id)(er) } + 1;
                 let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-                if read_field!(p, group) == id {
+                if read_field!(p, group_id) == id {
                     let engine = read_field!(p, from);
                     unsafe { (w.remove_rule)(owner, engine, id, flags) };
                 }
@@ -1176,7 +1179,7 @@ unsafe fn remove_company_groups(w: &GroupServices, company: u8) {
 unsafe fn get_replacement(w: &GroupServices, mut er: *mut (), engine: u16, id: u16) -> *mut Renew {
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
-        let target = read_field!(p, group);
+        let target = read_field!(p, group_id);
         if read_field!(p, from) == engine && unsafe { contains(w, id, target) } {
             return p;
         }
@@ -1199,7 +1202,8 @@ unsafe fn replacement(
         }
     }
     if !when_old.is_null() {
-        let old = !p.is_null() && (read_field!(p, to) == engine || read_field!(p, when_old));
+        let old =
+            !p.is_null() && (read_field!(p, to) == engine || read_field!(p, replace_when_old));
         unsafe { when_old.write(old) };
     }
     if p.is_null() {
@@ -1221,7 +1225,7 @@ unsafe fn add_replacement(
     if !p.is_null() {
         if flags & 1 != 0 {
             write_field!(p, to, to);
-            write_field!(p, when_old, old);
+            write_field!(p, replace_when_old, old);
         }
         return OK;
     }
@@ -1233,8 +1237,8 @@ unsafe fn add_replacement(
         let p = unsafe { (w.renew_state)(shell).cast::<Renew>() };
         write_field!(p, from, from);
         write_field!(p, to, to);
-        write_field!(p, group, id);
-        write_field!(p, when_old, old);
+        write_field!(p, group_id, id);
+        write_field!(p, replace_when_old, old);
         write_field!(p, next, unsafe { head.read() });
         unsafe { head.write(shell) };
     }
@@ -1252,7 +1256,7 @@ unsafe fn remove_replacement(
     while !er.is_null() {
         let p = unsafe { (w.renew_state)(er).cast::<Renew>() };
         let next = read_field!(p, next);
-        if read_field!(p, from) == engine && read_field!(p, group) == id {
+        if read_field!(p, from) == engine && read_field!(p, group_id) == id {
             if flags & 1 != 0 {
                 if prev.is_null() {
                     unsafe { head.write(next) };
@@ -1682,13 +1686,6 @@ crate::abi::layouts! {
         vehicles_min_age => num_vehicle_min_age,
         defined => autoreplace_defined,
         finished => autoreplace_finished,
-    };
-    "FleetRenewFields" ["fleet"] => Renew {
-        from,
-        to,
-        next,
-        group => group_id,
-        when_old => replace_when_old,
     };
     "OpenTTDFleetGroupServices" ["fleet"] => GroupServices {
         group,

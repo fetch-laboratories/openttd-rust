@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** Native transient registry inputs; shared by both actual game implementations. */
+#include "engine-record-fixture.hpp"
 #include "rail.h"
 #include "rail_cmd.h"
 #include "road.h"
@@ -121,23 +122,23 @@ static void TypeEngineInputs(Company *c)
 {
 	struct Saved { Engine *e; LandscapeTypes climates; CompanyMask avail; TimerGameCalendar::Date intro; EngineFlags flags; };
 	std::vector<Saved> saved;
-	for (Engine *e : Engine::Iterate()) { saved.push_back({e, e->info.climates, e->company_avail, e->intro_date, e->flags}); e->info.climates = {}; e->flags = {}; }
+	for (Engine *e : Engine::Iterate()) { saved.push_back({e, e->info.climates, EngineFields(e).company_avail, EngineFields(e).intro_date, EngineFields(e).flags}); e->info.climates = {}; EngineFields(e).flags = {}; }
 	Engine *e = nullptr;
 	for (auto &s : saved) if (s.e->type == VEH_TRAIN && s.e->VehInfo<RailVehicleInfo>().railveh_type != RAILVEH_WAGON) { e = s.e; break; }
 	Engine *r = nullptr; for (auto &s : saved) if (s.e->type == VEH_ROAD) { r = s.e; break; }
 	if (e == nullptr || r == nullptr) FixtureAbort(__LINE__);
-	auto railinfo = e->VehInfo<RailVehicleInfo>(); auto roadinfo = r->VehInfo<RoadVehicleInfo>(); auto flags = e->flags;
+	auto railinfo = e->VehInfo<RailVehicleInfo>(); auto roadinfo = r->VehInfo<RoadVehicleInfo>(); auto flags = EngineFields(e).flags;
 	e->info.climates = _settings_game.game_creation.landscape; r->info.climates = _settings_game.game_creation.landscape;
 	e->VehInfo<RailVehicleInfo>().railtypes = RailTypes{static_cast<RailType>(59), static_cast<RailType>(63)};
 	r->VehInfo<RoadVehicleInfo>().roadtype = static_cast<RoadType>(62);
-	e->company_avail = {}; r->company_avail = {}; e->intro_date = r->intro_date = TimerGameCalendar::date - 364;
+	EngineFields(e).company_avail = {}; EngineFields(r).company_avail = {}; EngineFields(e).intro_date = EngineFields(r).intro_date = TimerGameCalendar::date - 364;
 	TypeRequire(GetCompanyRailTypes(c->index, false).None() && GetCompanyRoadTypes(c->index, false).None(), "before-release");
 	bool special = true; for (uint8_t id : {16, 17, 32, 33, 48, 49, 63}) special &= GetCompanyRailTypes(CompanyID{id}, false).None() && GetCompanyRoadTypes(CompanyID{id}, false).None();
 	TypeRequire(special, "company-bits");
 	TypeRequire(GetRailTypes(false) == e->VehInfo<RailVehicleInfo>().railtypes && GetRoadTypes(false) == RoadTypes{static_cast<RoadType>(62)}, "all-multirail");
-	e->company_avail.Set(c->index); r->company_avail.Set(c->index);
+	EngineFields(e).company_avail.Set(c->index); EngineFields(r).company_avail.Set(c->index);
 	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false) && GetCompanyRailTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None() && GetCompanyRoadTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None(), "preview-owner");
-	e->company_avail = {}; r->company_avail = {}; e->intro_date = r->intro_date = TimerGameCalendar::date - CalendarTime::DAYS_IN_YEAR;
+	EngineFields(e).company_avail = {}; EngineFields(r).company_avail = {}; EngineFields(e).intro_date = EngineFields(r).intro_date = TimerGameCalendar::date - CalendarTime::DAYS_IN_YEAR;
 	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false), "one-year");
 	e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_WAGON;
 	TypeRequire(GetRailTypes(false).None() && GetCompanyRailTypes(c->index, false).None(), "wagon-only");
@@ -145,7 +146,7 @@ static void TypeEngineInputs(Company *c)
 	e->info.climates = {}; r->info.climates = {};
 	TypeRequire(GetRailTypes(false).None() && GetRoadTypes(false).None(), "climate");
 	e->info.climates = _settings_game.game_creation.landscape; r->info.climates = _settings_game.game_creation.landscape;
-	e->intro_date = r->intro_date = TimerGameCalendar::date + 365;
+	EngineFields(e).intro_date = EngineFields(r).intro_date = TimerGameCalendar::date + 365;
 	Backup<CompanyID> actor(_current_company, OWNER_DEITY);
 	auto on = Command<CMD_ENGINE_CTRL>::Do(DoCommandFlag::Execute, e->index, c->index, true);
 	auto roadon = Command<CMD_ENGINE_CTRL>::Do(DoCommandFlag::Execute, r->index, c->index, true);
@@ -156,13 +157,13 @@ static void TypeEngineInputs(Company *c)
 	actor.Restore();
 	/* Actual general-release path introduces each engine's native types before
 	 * applying the fixed points; empty masks rule out a date-only seed. */
-	e->intro_date = r->intro_date = TimerGameCalendar::date - CalendarTime::DAYS_IN_YEAR;
+	EngineFields(e).intro_date = EngineFields(r).intro_date = TimerGameCalendar::date - CalendarTime::DAYS_IN_YEAR;
 	c->avail_railtypes = {}; c->avail_roadtypes = {};
 	CalendarEnginesMonthlyLoop();
-	TypeRequire(e->company_avail.base() == UINT16_MAX && r->company_avail.base() == UINT16_MAX && c->avail_railtypes.Test(static_cast<RailType>(60)) && c->avail_roadtypes.Test(static_cast<RoadType>(60)), "monthly-publication");
+	TypeRequire(EngineFields(e).company_avail.base() == UINT16_MAX && EngineFields(r).company_avail.base() == UINT16_MAX && c->avail_railtypes.Test(static_cast<RailType>(60)) && c->avail_roadtypes.Test(static_cast<RoadType>(60)), "monthly-publication");
 	fmt::print(stderr, "ENGINE types-masks monthly {:016x} {:016x}\n", c->avail_railtypes.base(), c->avail_roadtypes.base());
-	e->VehInfo<RailVehicleInfo>() = railinfo; r->VehInfo<RoadVehicleInfo>() = roadinfo; e->flags = flags;
-	for (auto &s : saved) { s.e->info.climates = s.climates; s.e->company_avail = s.avail; s.e->intro_date = s.intro; s.e->flags = s.flags; }
+	e->VehInfo<RailVehicleInfo>() = railinfo; r->VehInfo<RoadVehicleInfo>() = roadinfo; EngineFields(e).flags = flags;
+	for (auto &s : saved) { s.e->info.climates = s.climates; EngineFields(s.e).company_avail = s.avail; EngineFields(s.e).intro_date = s.intro; EngineFields(s.e).flags = s.flags; }
 }
 
 #include "newgrf_config.h"

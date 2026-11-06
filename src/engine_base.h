@@ -39,23 +39,10 @@ extern EnginePool _engine_pool;
 class Engine : public EnginePool::PoolItem<&_engine_pool> {
 public:
 	EngineLifecycleOwner rust_lifecycle;
-	CompanyMask &company_avail = this->rust_lifecycle.state->company_avail;
-	CompanyMask &company_hidden = this->rust_lifecycle.state->company_hidden;
-	CompanyMask &preview_asked = this->rust_lifecycle.state->preview_asked;
-	TimerGameCalendar::Date &intro_date = this->rust_lifecycle.state->intro_date;
-	int32_t &age = this->rust_lifecycle.state->age;
-	uint16_t &reliability = this->rust_lifecycle.state->reliability;
-	uint16_t &reliability_spd_dec = this->rust_lifecycle.state->reliability_spd_dec;
-	uint16_t &reliability_start = this->rust_lifecycle.state->reliability_start;
-	uint16_t &reliability_max = this->rust_lifecycle.state->reliability_max;
-	uint16_t &reliability_final = this->rust_lifecycle.state->reliability_final;
-	uint16_t &duration_phase_1 = this->rust_lifecycle.state->duration_phase_1;
-	uint16_t &duration_phase_2 = this->rust_lifecycle.state->duration_phase_2;
-	uint16_t &duration_phase_3 = this->rust_lifecycle.state->duration_phase_3;
-	EngineFlags &flags = this->rust_lifecycle.state->flags;
-	CompanyID &preview_company = this->rust_lifecycle.state->preview_company;
-	uint8_t &preview_wait = this->rust_lifecycle.state->preview_wait;
-	EngineName name{this->rust_lifecycle.state};
+	OpenTTDEngineLifecycle &Record() { return *this->rust_lifecycle.state; }
+	const OpenTTDEngineLifecycle &Record() const { return *this->rust_lifecycle.state; }
+	std::string_view Name() const { return {reinterpret_cast<const char *>(this->Record().name.items), this->Record().name.count}; }
+	void SetName(std::string_view text) { openttd_rust_engine_set_name(&this->Record(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}); }
 	uint8_t original_image_index = 0; ///< Original vehicle image index, thus the image index of the overridden vehicle
 	VehicleType type = VEH_INVALID; ///< %Vehicle type, ie #VEH_ROAD, #VEH_TRAIN, etc.
 
@@ -135,7 +122,7 @@ public:
 	 */
 	inline bool IsHidden(CompanyID c) const
 	{
-		return c < MAX_COMPANIES && this->company_hidden.Test(c);
+		return c < MAX_COMPANIES && this->Record().company_hidden.Test(c);
 	}
 
 	/**
