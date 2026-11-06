@@ -206,6 +206,10 @@ pub struct RoadPiece {
     pub bits: u8,
 }
 
+crate::abi::layouts! {
+    "OpenTTDScriptRoadPiece" ["script"] => RoadPiece { tile, bits };
+}
+
 /// The road piece on the start side (`first`) or the end side of a bridge or
 /// tunnel from `end` to `start`.
 #[unsafe(no_mangle)]
