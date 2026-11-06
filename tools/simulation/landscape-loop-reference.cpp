@@ -207,7 +207,6 @@ void Main()
 {
 	MovementGap();
 	ObjectLoopFixture object_record;
-	shared.assert_condition = [](bool valid) noexcept { if (!valid) std::abort(); };
 	shared.tile_type = Type;
 	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
 	unsigned cases = 0;

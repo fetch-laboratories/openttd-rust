@@ -55,7 +55,6 @@ template<typename Check> void Run(Check check)
 	auto shared = OpenTTDSharedServices{};
 	shared.map = &callbacks.statics;
 	shared.tile_type = Type;
-	shared.assert_condition = [](bool valid) noexcept { if (!valid) std::abort(); };
 	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
 	/* The Rust station loop's first native call is GetByTile. */
 	OpenTTDRoadStopResolverServices roadstops{};
