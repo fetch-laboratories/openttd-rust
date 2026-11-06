@@ -101,8 +101,9 @@ fn engine_types(s: &Services, company: Option<u8>, introduces: bool) -> u64 {
         if e.kind != VehicleType::ROAD {
             continue;
         }
-        let info = unsafe { (s.road_availability)(e.shell) };
-        if !info.climate {
+        let engine = crate::vehicle::EngineRef::of(e.shell);
+        let climate = unsafe { (&*s.shared).settings().climate.read() };
+        if !engine.climate(climate) {
             continue;
         }
         if let Some(company) = company {
@@ -110,7 +111,7 @@ fn engine_types(s: &Services, company: Option<u8>, introduces: bool) -> u64 {
                 continue;
             }
         }
-        let rt = info.roadtype;
+        let rt = engine.roadtype();
         if s.assertions {
             assert!(rt < ROADTYPE_END);
         }

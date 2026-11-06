@@ -164,7 +164,7 @@ fn misc(s: &Properties, e: E, value: u8) {
     (s.uses_2cc)(value & crate::engine_type::USES_2CC != 0);
 }
 unsafe fn default_cargo(
-    s: &Properties,
+    _s: &Properties,
     e: E,
     id: u16,
     file: File,
@@ -189,7 +189,7 @@ unsafe fn default_cargo(
         }
         cargo
     };
-    (unsafe { &*s.loading }.set_cargo)(e, cargo);
+    write_field!(e.cast_mut(), info.cargo_type, cargo);
     write_field!(
         e.cast_mut(),
         info.cargo_label,
@@ -200,11 +200,15 @@ unsafe fn default_cargo(
     );
     Ok(())
 }
-unsafe fn refit(s: &Properties, e: E, id: u16, file: File, value: u32) {
+unsafe fn refit(_s: &Properties, e: E, id: u16, file: File, value: u32) {
     unsafe {
         openttd_rust_engine_temp_refittability(&raw mut (*temp(id)).fields, value != 0);
     }
-    (unsafe { &*s.loading }.set_refit)(e, openttd_rust_engine_translate_refit(value, file));
+    write_field!(
+        e.cast_mut(),
+        info.refit_mask,
+        openttd_rust_engine_translate_refit(value, file)
+    );
     unsafe {
         (*temp(id)).fields.defaultcargo_grf = file;
     }
@@ -453,7 +457,11 @@ unsafe fn train(
         p if p == i32::from(PROP_TRAIN_CURVE_SPEED_MOD) => {
             write_field!(OpenTTDEngine::rail(e), curve_speed_mod, r.word()? as i16);
         }
-        0x2f => (unsafe { &*s.loading }.set_variant)(e, r.word()?),
+        0x2f => write_field!(
+            e.cast_mut(),
+            info.variant_id,
+            crate::engine_type::EngineID(r.word()?)
+        ),
         0x30 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
         0x31 => callbacks(s, e, r, true)?,
         0x32 => unsafe {
@@ -501,7 +509,7 @@ unsafe fn road(
         0x05 => unsafe {
             (*temp(id)).fields.roadtramtype = r.byte()?.wrapping_add(1);
         },
-        0x08 => (unsafe { &*s.loading }.set_road_speed)(e, u16::from(r.byte()?)),
+        0x08 => write_field!(OpenTTDEngine::road(e), max_speed, u16::from(r.byte()?)),
         p if p == i32::from(PROP_ROADVEH_RUNNING_COST_FACTOR) => {
             write_field!(OpenTTDEngine::road(e), running_cost, r.byte()?);
         }
@@ -565,7 +573,11 @@ unsafe fn road(
         0x24 | 0x25 => unsafe {
             cargo_list(id, file, prop == 0x24, r)?;
         },
-        0x26 => (unsafe { &*s.loading }.set_variant)(e, r.word()?),
+        0x26 => write_field!(
+            e.cast_mut(),
+            info.variant_id,
+            crate::engine_type::EngineID(r.word()?)
+        ),
         0x27 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
         0x28 => callbacks(s, e, r, true)?,
         0x29 => unsafe {
@@ -593,7 +605,7 @@ unsafe fn ship(
             image_index,
             image(s, VEH_SHIP, r.byte()?)
         ),
-        0x09 => (unsafe { &*s.loading }.set_old_refittable)(e, r.byte()? != 0),
+        0x09 => write_field!(OpenTTDEngine::ship(e), old_refittable, r.byte()? != 0),
         p if p == i32::from(PROP_SHIP_COST_FACTOR) => {
             write_field!(OpenTTDEngine::ship(e), cost_factor, r.byte()?);
         }
@@ -640,7 +652,11 @@ unsafe fn ship(
         0x1e | 0x1f => unsafe {
             cargo_list(id, file, prop == 0x1e, r)?;
         },
-        0x20 => (unsafe { &*s.loading }.set_variant)(e, r.word()?),
+        0x20 => write_field!(
+            e.cast_mut(),
+            info.variant_id,
+            crate::engine_type::EngineID(r.word()?)
+        ),
         0x21 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
         0x22 => callbacks(s, e, r, true)?,
         0x23 => write_field!(OpenTTDEngine::ship(e), max_speed, r.word()?),
@@ -738,7 +754,11 @@ unsafe fn aircraft(
         p if p == i32::from(PROP_AIRCRAFT_RANGE) => {
             write_field!(OpenTTDEngine::aircraft(e), max_range, r.word()?);
         }
-        0x20 => (unsafe { &*s.loading }.set_variant)(e, r.word()?),
+        0x20 => write_field!(
+            e.cast_mut(),
+            info.variant_id,
+            crate::engine_type::EngineID(r.word()?)
+        ),
         0x21 => write_field!(e.cast_mut(), info.extra_flags, (r.dword()?) as u8),
         0x22 => callbacks(s, e, r, true)?,
         0x23 => unsafe {

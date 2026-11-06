@@ -48,7 +48,7 @@ pub struct Services {
     engine_if_valid: extern "C" fn(u16) -> E,
     pub(crate) id: extern "C" fn(E) -> u16,
     pub(crate) loading: extern "C" fn() -> *const crate::engine_loading::Services,
-    cargo_classes: extern "C" fn(u8) -> u16,
+    pub(crate) cargo_classes: extern "C" fn(u8) -> u16,
     multiplier: extern "C" fn(u8) -> u16,
     pool_available: extern "C" fn(usize) -> bool,
     new_temporary: extern "C" fn() -> V,

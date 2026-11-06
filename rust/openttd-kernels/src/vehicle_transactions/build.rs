@@ -86,7 +86,7 @@ pub(crate) unsafe fn build(
     let refitting = (c.valid_cargo)(cargo) && cargo != default_cargo;
     let count = match kind {
         VehicleType::TRAIN => {
-            u32::from((r.rail_kind)(e) == RailVehicleTypes::MULTIHEAD)
+            u32::from(crate::vehicle::EngineRef::of(e).rail_kind() == RailVehicleTypes::MULTIHEAD)
                 + 1
                 + unsafe {
                     crate::engine_capabilities::openttd_rust_articulated_count(
@@ -120,7 +120,8 @@ pub(crate) unsafe fn build(
         return Result::default();
     }
     let unit = if flags & (DoCommandFlag::QUERY_COST | DoCommandFlag::AUTO_REPLACE) != 0
-        || (kind == VehicleType::TRAIN && (r.rail_kind)(e) == RailVehicleTypes::WAGON)
+        || (kind == VehicleType::TRAIN
+            && crate::vehicle::EngineRef::of(e).rail_kind() == RailVehicleTypes::WAGON)
     {
         0
     } else {

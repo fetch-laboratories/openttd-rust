@@ -32,8 +32,6 @@ rebound | Engine_next | src/rust/engine_adapter.hpp | next | 2
 rebound | Engine_next | src/rust/engine_loading_services.hpp | next
 rebound | Engine_powered_roadtypes | src/rust/engine_adapter.hpp | powered_roadtypes
 rebound | Engine_powered_roadtypes | src/rust/vehicle_build_services.hpp | powered_roadtypes
-rebound | Engine_rail_kind | src/rust/engine_loading_services.hpp | rail_kind
-rebound | Engine_rail_kind | src/rust/vehicle_refit_services.hpp | rail_kind
 rebound | GetRustAircraftVehicle | src/rust/station_command_services.hpp | aircraft_vehicle
 rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraft_handle
 rebound | GetRustSignalContext | src/train_cmd.cpp | signal_context
@@ -134,13 +132,10 @@ rebound | RustEngineByIDIfValid | src/newgrf_airport.cpp | engine_if_valid
 rebound | RustEngineByIDIfValid | src/rust/engine_capabilities_services.hpp | engine_if_valid
 rebound | RustEngineDefaultCargo | src/rust/vehicle_articulated_services.hpp | default_cargo
 rebound | RustEngineDefaultCargo | src/rust/vehicle_build_services.hpp | default_cargo
-rebound | RustEngineDefaultCargo | src/rust/vehicle_services_newgrf.h | default_cargo
 rebound | RustEngineID | src/newgrf_airport.cpp | engine_id
 rebound | RustEngineID | src/rust/engine_adapter.hpp | engine_id
 rebound | RustEngineID | src/rust/engine_capabilities_services.hpp | id
 rebound | RustEngineID | src/rust/vehicle_properties_services.hpp | id
-rebound | RustEngineRailTypes | src/rust/engine_adapter.hpp | engine_railtypes
-rebound | RustEngineRailTypes | src/rust/engine_loading_services.hpp | railtypes
 rebound | RustHouseSpec | src/animated_tile.cpp | house_spec
 rebound | RustHouseSpec | src/rust/house_definition_services.hpp | get
 rebound | RustIndustryBuilderState | src/genworld.cpp | industry_builder

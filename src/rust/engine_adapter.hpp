@@ -18,11 +18,8 @@ static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGI
 const OpenTTDTypeAvailabilityServices &GetRustTypeAvailabilityServices() noexcept
 {
 	static const OpenTTDTypeAvailabilityServices services{
+		.shared = &GetRustSharedServices(),
 		.next = Engine_next,
-		.rail_availability = RustEngineRailAvailability,
-		.road_availability = RustEngineRoadAvailability,
-		.engine_railtypes = RustEngineRailTypes,
-		.engine_roadtype = RustEngineRoadType,
 		.rail_introduction = RustRailTypeIntroduction,
 		.road_introduction = RustRoadTypeIntroduction,
 		.rail_introduces = [](RailType rt) noexcept { return RustRailTypeIntroduces(GetRailTypeInfo(rt)); },

@@ -28,31 +28,13 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.construct_at = [](VehicleType type, uint16_t local, uint16_t id) noexcept { new (EngineID{id}) Engine(type, local); },
 		.close_previews = []() noexcept { CloseWindowByClass(WC_ENGINE_PREVIEW); },
 		.clean_pool = []() noexcept { _engine_pool.CleanPool(); },
-		.railtypes = RustEngineRailTypes,
-		.refit_inputs = [](const OpenTTDEngine *shell) noexcept { const auto &ei = EngineOf(shell)->Record().info; return OpenTTDEngineRefitInputs{.mask = RustEngineCargoRefitMask(shell), .cargo = ei.cargo_type, .custom = VehicleCallbackMasks{RustEngineCallbackMask(shell)}.Test(VehicleCallbackMask::CustomRefit)}; },
-		.cargo_label = RustEngineCargoLabel,
-		.train_cargo = [](const OpenTTDEngine *shell) noexcept { return OpenTTDEngineTrainCargo{.capacity = RustEngineRailCapacity(shell), .kind = Engine_rail_kind(shell)}; },
-		.set_cargo = RustSetEngineCargo,
-		.set_refit = RustSetEngineRefitMask,
-		.disable = RustDisableEngine,
-		.old_refittable = RustEngineOldRefittable,
-		.set_old_refittable = RustSetEngineOldRefittable,
 		.cargo_next = [](uint32_t from) noexcept { for (const CargoSpec *cs : CargoSpec::Iterate(from)) return OpenTTDEngineCargoClass{.classes = RustCargoSpecClasses(cs), .cargo = cs->Index()}; return OpenTTDEngineCargoClass{.classes = 0, .cargo = INVALID_CARGO}; },
 		.cargo_list_size = [](const GRFFile *file) noexcept { return file->cargo_list.size(); },
 		.unknown_refit = RustUnknownCallbackResult,
 		.climate = OpenTTDLandscapeValue,
 
-		.variant = RustEngineVariant,
-		.set_variant = RustSetEngineVariant,
-		.invalid_string = RustSetEngineInvalidString,
-		.engine_climate = static_cast<bool (*)(const OpenTTDEngine *) noexcept>(RustEngineClimate),
-		.rail_kind = Engine_rail_kind,
 		.use_livery = [](LiveryScheme scheme) noexcept { SetBit(_loaded_newgrf_features.used_liveries, scheme); },
 		.variant_flags = [](const OpenTTDEngine *shell) noexcept { const_cast<Engine *>(EngineOf(shell))->display_flags.Set({EngineDisplayFlag::HasVariants, EngineDisplayFlag::IsFolded}); },
-		.is_tram = RustEngineIsTram,
-		.set_road_speed = RustSetEngineRoadSpeed,
-		.set_roadtype = RustSetEngineRoadType,
-		.set_railtypes = [](const OpenTTDEngine *shell, uint64_t types) noexcept { auto &rvi = const_cast<Engine *>(EngineOf(shell))->VehInfo<RailVehicleInfo>(); rvi.railtypes = RailTypes{types}; rvi.intended_railtypes = RailTypes{types}; },
 		.override_log = [](uint32_t source, uint32_t target) noexcept {
 			if (target == 0) GrfMsg(5, "SetNewGRFOverride: Removed override of 0x{:X}", std::byteswap(source));
 			else GrfMsg(5, "SetNewGRFOverride: Added override of 0x{:X} to 0x{:X}", std::byteswap(source), std::byteswap(target));
@@ -61,10 +43,10 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.vehicle_next = [](uint32_t from) noexcept { const Vehicle *v = VehicleOf(RustNextVehicle(from)); return v == nullptr ? OpenTTDEngineLoadingVehicle{UINT32_MAX, VEH_INVALID} : OpenTTDEngineLoadingVehicle{RustVehicleIndexOpaque(v), RustVehicleVehicleType(v)}; },
 		.reload = []() noexcept { ReloadNewGRFData(); },
 		.default_counts = []() noexcept { return _engine_counts; },
-		.set_position = RustSetEngineListPosition,
-		.order_source = [](const OpenTTDEngine *shell, uint16_t target) noexcept { const Engine *e = EngineOf(shell); OpenTTDEngineOrderSource source{.local = e->Record().bindings.grf_prop.local_id, .type = VEH_INVALID, .grfid = 0}; if (source.local != target) { source.type = RustEngineType(shell); source.grfid = e->Record().bindings.grf_prop.grfid; } return source; },
 		.order_sort = RustVehicleOrderSort,
 		.order_count = []() noexcept -> size_t { return Engine::GetNumItems(); },
 	};
 	return services;
 }
+
+static_assert(to_underlying(VehicleCallbackMask::CustomRefit) == 9);

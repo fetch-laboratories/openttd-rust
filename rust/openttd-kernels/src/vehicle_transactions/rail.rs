@@ -346,7 +346,7 @@ pub(crate) unsafe fn build(
 ) -> *mut () {
     let x = Ctx::new(b);
     let s = x.s;
-    let kind = (x.r.rail_kind)(e);
+    let kind = crate::vehicle::EngineRef::of(e).rail_kind();
     if kind == RailVehicleTypes::WAGON {
         return Ctx::sh(unsafe { build_wagon(x, out, flags, tile, e) });
     }

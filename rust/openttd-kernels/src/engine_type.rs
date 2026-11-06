@@ -82,3 +82,6 @@ pub const RAIL_IS_MU: u8 = 1 << 2;
 pub const ROAD_IS_TRAM: u8 = 1;
 /// `AIR_FAST`.
 pub const AIR_FAST: u8 = 2;
+
+/// `EngineMiscFlag::AutoRefit`.
+pub const AUTO_REFIT: u8 = 1 << 4;

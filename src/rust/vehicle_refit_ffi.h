@@ -19,8 +19,6 @@ struct OpenTTDEngineCapabilitiesServices;
 struct OpenTTDVehicleRefitCapacity { uint32_t total; uint16_t mail; uint32_t cargo[64]; };
 struct OpenTTDRefitCargoKind { uint8_t cargo, subtype; };
 struct OpenTTDRefitCommit { uint8_t cargo; uint16_t capacity; };
-struct OpenTTDRefitEngine { uint64_t mask; bool automatic; };
-struct OpenTTDRefitCargo { uint16_t classes; uint8_t local; };
 struct OpenTTDRefitPrices {
 	uint32_t train, wagon, road, ship, aircraft;
 	uint8_t train_run, road_run, ship_run, aircraft_run, auto_refit, refit;
@@ -38,13 +36,7 @@ struct OpenTTDVehicleRefitServices {
 	OpenTTDRefitPrices prices;
 	const OpenTTDEngine *(*engine)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	const OpenTTDEngine *(*vehicle_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_engine);
-	bool (*has_grf)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_grf);
-	uint8_t (*refit_cost)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_cost);
-	OpenTTDRefitCargo (*refit_cargo)(const OpenTTDEngine *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(refit_cargo);
-	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
-	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	const OpenTTDEngineCapabilitiesServices *capabilities;
-	OpenTTDRefitEngine (*refit_engine)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_engine);
 	OpenTTDRefitCargoKind (*cargo_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_kind);
 	void (*set_cargo_kind)(OpenTTDVehicle *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_kind);
 	ExpensesType (*expense)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(expense);

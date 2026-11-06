@@ -10,6 +10,9 @@ impl EngineRef {
     pub(crate) fn of(record: *const Lifecycle) -> Self {
         Self(NonNull::new(record.cast_mut()).expect("live engine"))
     }
+    pub(crate) fn flags(self) -> u8 {
+        read_field!(self.0.as_ptr(), flags)
+    }
     pub(crate) fn kind(self) -> VehicleType {
         read_field!(self.0.as_ptr(), r#type)
     }
@@ -84,6 +87,18 @@ impl EngineRef {
     }
     pub(crate) fn train_running(self) -> u8 {
         read_field!(Lifecycle::rail(self.0.as_ptr()), running_cost)
+    }
+    pub(crate) fn climate(self, climate: u8) -> bool {
+        read_field!(self.0.as_ptr(), info.climates) & (1 << climate) != 0
+    }
+    pub(crate) fn railtypes(self) -> u64 {
+        read_field!(Lifecycle::rail(self.0.as_ptr()), railtypes)
+    }
+    pub(crate) fn roadtype(self) -> u8 {
+        read_field!(Lifecycle::road(self.0.as_ptr()), roadtype)
+    }
+    pub(crate) fn refit_cost(self) -> u8 {
+        read_field!(self.0.as_ptr(), info.refit_cost)
     }
     pub(crate) fn ground(self) -> bool {
         matches!(self.kind(), VehicleType::TRAIN | VehicleType::ROAD)

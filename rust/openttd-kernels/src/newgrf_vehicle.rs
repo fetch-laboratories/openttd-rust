@@ -109,8 +109,6 @@ pub struct Services {
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
     real_at: unsafe extern "C" fn(Group, bool, u32) -> Group,
     engine_by_id: unsafe extern "C" fn(u16) -> *const OpenTTDEngine,
-    default_cargo: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
-    engine_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
     cargo_info: unsafe extern "C" fn(u8) -> CargoInfo,
     pub(crate) build_year: unsafe extern "C" fn(V) -> i32,
     last_service: unsafe extern "C" fn(V) -> i32,
@@ -1073,7 +1071,9 @@ unsafe fn variable(
             }
             0x46 => return crate::vehicle::VehicleRef::of(v).motion_counter(),
             0x47 => return cargo_info(s, (s.cargo_type)(v), grf),
-            0x48 => return u32::from((s.engine_flags)((s.vehicle.engine)(h).0.as_ptr())),
+            0x48 => {
+                return u32::from((s.vehicle.engine)(h).flags());
+            }
             0x49 => return (s.build_year)(v) as u32,
             0x4a => {
                 let tile = (h).tile();
@@ -1558,14 +1558,17 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
             ),
             0x46 | 0xf2 => 0,
             0x47 => {
-                let cargo = (s.default_cargo)((s.engine_by_id)((*scope).self_type));
+                let cargo = crate::vehicle::EngineRef::of((s.engine_by_id)((*scope).self_type))
+                    .default_cargo();
                 if crate::cargo_type::is_valid_cargo_type(cargo) {
                     cargo_info(s, cargo, grf)
                 } else {
                     0xff
                 }
             }
-            0x48 => u32::from((s.engine_flags)((s.engine_by_id)((*scope).self_type))),
+            0x48 => u32::from(
+                crate::vehicle::EngineRef::of((s.engine_by_id)((*scope).self_type)).flags(),
+            ),
             0x49 => crate::timer_game_common::calendar_year().0 as u32,
             0x4b => crate::timer_game_common::calendar_date().0 as u32,
             0x7a => crate::engine::bindings::badges((s.engine_by_id)((*scope).self_type))
@@ -1685,7 +1688,7 @@ crate::abi::layouts! {
         cached_override, write_override, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, cargo_info, build_year, last_service, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, load_ticks, service_interval, cargo_type, cargo_subtype, age, max_age, unit, sprite, breakdowns, breakdown_delay, breakdown_chance, reliability, reliability_decay, value, profit_this, profit_last, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

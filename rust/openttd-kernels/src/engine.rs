@@ -198,17 +198,6 @@ pub struct VehicleCargo {
     pub cargo: u8,
 }
 #[repr(C)]
-pub struct RailAvailability {
-    pub climate: bool,
-    pub kind: RailVehicleTypes,
-    pub railtypes: u64,
-}
-#[repr(C)]
-pub struct RoadAvailability {
-    pub climate: bool,
-    pub roadtype: u8,
-}
-#[repr(C)]
 pub struct Services {
     pub shared: *const SharedServices,
     pub rng: *const RandomServices,
@@ -819,7 +808,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
     }
     if e.kind == VehicleType::TRAIN {
         let types = unsafe { &*s.types };
-        let rails = unsafe { (types.engine_railtypes)(e.shell) };
+        let rails = crate::vehicle::EngineRef::of(e.shell).railtypes();
         if types.assertions {
             assert_ne!(rails, 0);
         }
@@ -841,7 +830,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
         }
     } else if e.kind == VehicleType::ROAD {
         let types = unsafe { &*s.types };
-        let rt = unsafe { (types.engine_roadtype)(e.shell) };
+        let rt = crate::vehicle::EngineRef::of(e.shell).roadtype();
         if types.assertions {
             assert!(rt < crate::road_type::ROADTYPE_END);
         }
@@ -1204,15 +1193,6 @@ crate::abi::layouts! {
     "OpenTTDEngineVehicleCargo" ["engine"] => VehicleCargo {
         engine,
         cargo,
-    };
-    "OpenTTDEngineRailAvailability" ["engine"] => RailAvailability {
-        climate,
-        kind,
-        railtypes,
-    };
-    "OpenTTDEngineRoadAvailability" ["engine"] => RoadAvailability {
-        climate,
-        roadtype,
     };
     "OpenTTDEngineServices" ["engine"] => Services {
         shared,
