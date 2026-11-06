@@ -120,12 +120,6 @@ pub struct VehicleProfit {
     pub profit_last_year: i64,
     pub economy_age: i32,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct StationTimes {
-    pub since_load: u8,
-    pub since_unload: u8,
-}
 /// Town fields read for the old owner; `rating` is `ratings[old]`.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -332,12 +326,6 @@ pub struct Services {
     pub add_track_to_signal_buffer: extern "C" fn(u32, u8, u8),
     pub update_signals_in_buffer: extern "C" fn(),
     pub add_airport_infrastructure: extern "C" fn(u8, u8),
-    pub station_next_owned: extern "C" fn(u8, u32) -> u32,
-    pub station_facility_count: extern "C" fn(u32) -> u32,
-    pub station_times: extern "C" fn(u32) -> StationTimes,
-    pub set_station_owner: extern "C" fn(u32, u8),
-    pub waypoint_next_owned: extern "C" fn(u8, u32) -> u32,
-    pub set_waypoint_owner: extern "C" fn(u32, u8),
     pub sign_next_owned: extern "C" fn(u8, u32) -> u32,
     pub set_sign_owner: extern "C" fn(u32, u8),
     pub goal_next_owned: extern "C" fn(u8, u32) -> u32,
@@ -737,12 +725,29 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
         subtract(f, p, id, cost, expense);
     }
 }
+/// The original station/waypoint ownership filters, preserving the separate
+/// station and waypoint traversals used during company acquisition.
+fn for_each_owned_station(
+    s: &Services,
+    owner: u8,
+    waypoint: bool,
+    mut visit: impl FnMut(*mut crate::station_record::StationRecord),
+) {
+    crate::station_record::for_each_base_station(s.shared, |record, _| {
+        if (read_field!(record, facilities) & crate::station_record::FACILITY_WAYPOINT != 0)
+            == waypoint
+            && read_field!(record, owner).0 == owner
+        {
+            visit(record);
+        }
+    });
+}
+
 fn assets(s: &Services, id: u8) -> i64 {
     let mut num = 0_u32;
-    each(
-        |from| (s.station_next_owned)(id, from),
-        |st| num = num.wrapping_add((s.station_facility_count)(st)),
-    );
+    for_each_owned_station(s, id, false, |record| {
+        num = num.wrapping_add(read_field!(record, facilities).count_ones());
+    });
     let price = unsafe { (&raw const PRICES).cast::<i64>().read() };
     let mut value = price.saturating_mul(i64::from(num)).saturating_mul(25);
     let mut kind = 0_u8;
@@ -809,15 +814,13 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
     part[0] = i64::from(count);
     part[2] = (min_profit >> 8).max(0);
     let mut count = 0_u32;
-    each(
-        |from| (s.station_next_owned)(id, from),
-        |st| {
-            let t = (s.station_times)(st);
-            if t.since_load <= 20 || t.since_unload <= 20 {
-                count = count.wrapping_add((s.station_facility_count)(st));
-            }
-        },
-    );
+    for_each_owned_station(s, id, false, |record| {
+        if read_field!(record, time_since_load) <= 20
+            || read_field!(record, time_since_unload) <= 20
+        {
+            count = count.wrapping_add(read_field!(record, facilities).count_ones());
+        }
+    });
     part[1] = i64::from(count);
     let entries = usize::from(read_field!(p, valid)).min(12);
     if entries != 0 {
@@ -1378,14 +1381,12 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     } else {
         new
     };
-    each(
-        |from| (s.station_next_owned)(old, from),
-        |id| (s.set_station_owner)(id, owner),
-    );
-    each(
-        |from| (s.waypoint_next_owned)(old, from),
-        |id| (s.set_waypoint_owner)(id, owner),
-    );
+    for_each_owned_station(s, old, false, |record| {
+        write_field!(record, owner, crate::company_type::CompanyID(owner));
+    });
+    for_each_owned_station(s, old, true, |record| {
+        write_field!(record, owner, crate::company_type::CompanyID(owner));
+    });
     each(
         |from| (s.sign_next_owned)(old, from),
         |id| (s.set_sign_owner)(id, owner),
@@ -2292,12 +2293,6 @@ crate::abi::layouts! {
         add_track_to_signal_buffer,
         update_signals_in_buffer,
         add_airport_infrastructure,
-        station_next_owned,
-        station_facility_count,
-        station_times,
-        set_station_owner,
-        waypoint_next_owned,
-        set_waypoint_owner,
         sign_next_owned,
         set_sign_owner,
         goal_next_owned,
@@ -2334,10 +2329,6 @@ crate::abi::layouts! {
     "OpenTTDCompanyVehicleProfit" ["company_economy"] => VehicleProfit {
         profit_last_year,
         economy_age,
-    };
-    "OpenTTDCompanyStationTimes" ["company_economy"] => StationTimes {
-        since_load,
-        since_unload,
     };
     "OpenTTDCompanyTownRights" ["company_economy"] => TownRights {
         rating,

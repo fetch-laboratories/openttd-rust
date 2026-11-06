@@ -50,9 +50,7 @@ src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehi
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
 src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a0e1036f160164 | 1
 src/rust/company_adapter.cpp | Co_map_size() noexcept | b49ebe1aff917479 | 1
-src/rust/company_adapter.cpp | Co_station_facility_count(uint32_t id) noexcept | 921332810b5ff304 | 1
 src/rust/company_adapter.cpp | Co_vehicle_service_interval_is_custom(uint32_t id) noexcept | df7f6be000c1cef1 | 1
-src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t owner) noexcept | 2a81c63893ed9224 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_head(uint8_t company) noexcept | f3fae9779eabda33 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_keep_length(uint8_t owner) noexcept | ad49c9eeaeecb3c1 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept | e0e39efee41a55f6 | 1
@@ -66,9 +64,6 @@ src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) 
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void *shell) noexcept | 7eb686328ee6a83e | 1
 src/rust/road_services.h | RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept | 0e64e34569c25c86 | 1
 src/rust/ship_control_services.h | Ship_max_distance() noexcept | c2ad3baba34d9449 | 1
-src/rust/ship_control_services.h | Ship_station_dock(uint32_t station) noexcept | 489877863abe3c08 | 1
-src/rust/ship_control_services.h | Ship_station_visits(uint32_t station) noexcept | 21882d147461024e | 1
-src/rust/ship_control_services.h | Ship_station_xy(uint32_t station) noexcept | d1c57365722298b4 | 1
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
 src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 814d2e3c64d9257f | 1
 src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 37c1dff2d9f24802 | 1

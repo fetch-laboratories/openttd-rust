@@ -365,16 +365,6 @@ static OpenTTDCompanySignalTile Co_signal_tile(uint32_t t) noexcept
 }
 static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
 static void Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept { Company::Get(new_owner)->infrastructure.airport += Company::Get(old_owner)->infrastructure.airport; }
-static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->GetOwner(); }); }
-static uint32_t Co_station_facility_count(uint32_t id) noexcept { return Station::Get(id)->GetFacilities().Count(); }
-static OpenTTDCompanyStationTimes Co_station_times(uint32_t id) noexcept
-{
-	const Station *st = Station::Get(id);
-	return {st->Record().time_since_load, st->Record().time_since_unload};
-}
-static void Co_set_station_owner(uint32_t id, uint8_t owner) noexcept { Station::Get(id)->SetOwner(CompanyID(owner)); }
-static uint32_t Co_waypoint_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Waypoint>(owner, from, [](const Waypoint *wp) { return wp->GetOwner(); }); }
-static void Co_set_waypoint_owner(uint32_t id, uint8_t owner) noexcept { Waypoint::Get(id)->SetOwner(CompanyID(owner)); }
 static uint32_t Co_sign_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Sign>(owner, from, [](const Sign *si) { return si->owner; }); }
 static void Co_set_sign_owner(uint32_t id, uint8_t owner) noexcept { Sign::Get(id)->owner = CompanyID(owner); }
 static uint32_t Co_goal_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Goal>(owner, from, [](const Goal *g) { return g->company; }); }
@@ -474,9 +464,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.signal_tile = Co_signal_tile, .has_signal_on_track = RustRailHasSignalTrack,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
 		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,
-		.station_next_owned = Co_station_next_owned, .station_facility_count = Co_station_facility_count,
-		.station_times = Co_station_times, .set_station_owner = Co_set_station_owner,
-		.waypoint_next_owned = Co_waypoint_next_owned, .set_waypoint_owner = Co_set_waypoint_owner,
 		.sign_next_owned = Co_sign_next_owned, .set_sign_owner = Co_set_sign_owner,
 		.goal_next_owned = Co_goal_next_owned, .delete_goal = Co_delete_goal,
 		.story_page_next_owned = Co_story_page_next_owned, .delete_story_page = Co_delete_story_page,

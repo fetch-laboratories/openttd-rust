@@ -255,6 +255,17 @@ pub(crate) fn station_get_if_valid(s: &crate::services::Services, id: u16) -> *m
     }
 }
 
+/// Resolve a typed station ID to its canonical record under `BaseStation::Get`'s
+/// live-index precondition. No record borrow survives a callback.
+#[inline]
+pub(crate) fn get_record(
+    s: &crate::services::Services,
+    id: crate::station_type::StationID,
+) -> *mut StationRecord {
+    // SAFETY: The caller supplies a live ID, as the original Get required.
+    unsafe { record_of(station_get(s, id.0)) }
+}
+
 /// `BaseStation::GetPoolSize()`: the pool's live extent.
 pub(crate) fn pool_size(s: &crate::services::Services) -> usize {
     // SAFETY: The live extent is a scalar of the canonical pool.
@@ -292,16 +303,15 @@ pub struct StationPool {
 }
 
 /// `StationFacility::Waypoint`.
-const FACILITY_WAYPOINT: u8 = 1 << 7;
+pub(crate) const FACILITY_WAYPOINT: u8 = 1 << 7;
 
-/// The next live `Station` (not waypoint) slot at or after `*from`, as the native
-/// filtered pool iterator finds it: reread the live extent and slot, skip holes and
-/// waypoints, then advance past it. The shell's record is reached in one load.
+/// The next live station or waypoint slot at or after `*from`: reread the live
+/// extent and slot, skip holes, then advance. Reach the shell's record in one load.
 ///
 /// # Safety
 /// Serialized game state; `pool` came from the shared services in this entry; no
 /// pool reset or load runs while the cursor lives.
-pub(crate) unsafe fn next_station(
+unsafe fn next_base_station(
     s: &crate::services::Services,
     pool: &mut StationPool,
     from: &mut usize,
@@ -323,10 +333,39 @@ pub(crate) unsafe fn next_station(
         }
         // SAFETY: A non-null slot holds a live shell.
         let record = unsafe { record_of(shell) };
-        // SAFETY: Immediate scalar read of the live record.
-        if unsafe { (*record).facilities } & FACILITY_WAYPOINT == 0 {
+        return Some((shell, record));
+    }
+}
+
+/// `Station::Iterate` filters waypoints from the live base-station slots.
+/// # Safety
+/// The cursor obeys `next_base_station`'s serialized, no-reset lifetime contract.
+pub(crate) unsafe fn next_station(
+    s: &crate::services::Services,
+    pool: &mut StationPool,
+    from: &mut usize,
+) -> Option<(*mut BaseStation, *mut StationRecord)> {
+    // SAFETY: The caller supplies the original traversal lifetime contract.
+    while let Some((shell, record)) = unsafe { next_base_station(s, pool, from) } {
+        if crate::raw_field::read_field!(record, facilities) & FACILITY_WAYPOINT == 0 {
             return Some((shell, record));
         }
+    }
+    None
+}
+
+/// Visit canonical records in `BaseStation::Iterate` order. A visit may mutate
+/// the pool; reacquire slots and the live extent before observing the next slot.
+pub(crate) fn for_each_base_station(
+    s: &crate::services::Services,
+    mut visit: impl FnMut(*mut StationRecord, crate::station_type::StationID),
+) {
+    let mut pool = (s.station_pool)();
+    let mut from = 0;
+    // SAFETY: Serialized entry; no record borrow spans a visit or pool mutation.
+    while let Some((_, record)) = unsafe { next_base_station(s, &mut pool, &mut from) } {
+        #[allow(clippy::cast_possible_truncation)]
+        visit(record, crate::station_type::StationID((from - 1) as u16));
     }
 }
 

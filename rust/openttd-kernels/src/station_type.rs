@@ -51,6 +51,9 @@ pub const SRT_VEHICLE_LOADS: u8 = 4;
 /// `StationRandomTrigger::PathReservation`.
 pub const SRT_PATH_RESERVATION: u8 = 5;
 
+/// `StationHadVehicleOfType::HVOT_SHIP`.
+pub const HVOT_SHIP: u8 = 1 << 5;
+
 /// `StationHadVehicleOfType::HVOT_WAYPOINT`.
 pub const HVOT_WAYPOINT: u8 = 1 << 6;
 

@@ -181,10 +181,6 @@ pub struct Leaves {
     pub station: extern "C" fn(u32) -> u32,
     pub industry_station: extern "C" fn(u32) -> u32,
     pub oilrig: extern "C" fn(u32) -> bool,
-    pub station_xy: extern "C" fn(u32) -> u32,
-    pub station_dock: extern "C" fn(u32) -> bool,
-    pub station_visits: extern "C" fn(u32) -> u32,
-    pub visit_set: extern "C" fn(u32, u32),
     pub arrival: extern "C" fn(u32, u32),
     pub leave_unbunch: extern "C" fn(u32),
     pub path_result: extern "C" fn(u32, bool),
@@ -628,9 +624,17 @@ impl Game<'_> {
         false
     }
     fn arrives(&self, id: u32, station: u32) {
-        let visits = (self.leaves.station_visits)(station);
-        if visits & 32 == 0 {
-            (self.leaves.visit_set)(station, 32);
+        let record = crate::station_record::get_record(
+            self.services,
+            crate::station_type::StationID(station as u16),
+        );
+        let visits = crate::raw_field::read_field!(record, had_vehicle_of_type);
+        if visits & crate::station_type::HVOT_SHIP == 0 {
+            crate::raw_field::write_field!(
+                record,
+                had_vehicle_of_type,
+                visits | crate::station_type::HVOT_SHIP
+            );
             (self.leaves.arrival)(id, station);
         }
     }
@@ -758,7 +762,15 @@ impl Game<'_> {
                                 }) && self.destination_station(new_tile, station)
                                 {
                                     self.vehicle().write_last_station(station as u16);
-                                    if (self.leaves.station_dock)(station) {
+                                    if crate::raw_field::read_field!(
+                                        crate::station_record::get_record(
+                                            self.services,
+                                            crate::station_type::StationID(station as u16)
+                                        ),
+                                        facilities
+                                    ) & crate::station_type::FACILITY_DOCK
+                                        != 0
+                                    {
                                         crate::witness::hit(crate::witness::SHIP_LOADING);
                                         self.arrives(id, station);
                                         crate::vehicle::visits::begin_loading(
@@ -1056,7 +1068,14 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
                 crate::newgrf_airport::runtime(),
             )
         } {
-            (game.leaves.station_xy)(station)
+            crate::raw_field::read_field!(
+                crate::station_record::get_record(
+                    game.services,
+                    crate::station_type::StationID(station as u16)
+                ),
+                xy
+            )
+            .0
         } else {
             (game.leaves.order_increment)(id);
             0
@@ -1176,10 +1195,6 @@ crate::abi::layouts! {
         station,
         industry_station,
         oilrig,
-        station_xy,
-        station_dock,
-        station_visits,
-        visit_set,
         arrival,
         leave_unbunch,
         path_result,

@@ -42,7 +42,6 @@ struct OpenTTDCompanyInfrastructure {
 };
 struct OpenTTDCompanyVehicleGroupFlags { bool engine_countable, primary; };
 struct OpenTTDCompanyVehicleProfit { int64_t profit_last_year; int32_t economy_age; };
-struct OpenTTDCompanyStationTimes { uint8_t since_load, since_unload; };
 struct OpenTTDCompanyTownRights { int16_t rating; uint16_t have_ratings; uint8_t exclusive_counter, exclusivity; };
 struct OpenTTDCompanySignalTile { bool railway, crossing; uint8_t owner; bool has_signals; uint8_t tracks; };
 struct OpenTTDCompanyPriceBase { int64_t start_price; uint8_t category; };
@@ -183,12 +182,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *add_track_to_signal_buffer)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_track_to_signal_buffer);
 	void (OPENTTD_RUST_CALL *update_signals_in_buffer)() noexcept OPENTTD_SERVICE_DEFAULT(update_signals_in_buffer);
 	void (OPENTTD_RUST_CALL *add_airport_infrastructure)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_airport_infrastructure);
-	uint32_t (OPENTTD_RUST_CALL *station_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_next_owned);
-	uint32_t (OPENTTD_RUST_CALL *station_facility_count)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_facility_count);
-	OpenTTDCompanyStationTimes (OPENTTD_RUST_CALL *station_times)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_times);
-	void (OPENTTD_RUST_CALL *set_station_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_station_owner);
-	uint32_t (OPENTTD_RUST_CALL *waypoint_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_next_owned);
-	void (OPENTTD_RUST_CALL *set_waypoint_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_waypoint_owner);
 	uint32_t (OPENTTD_RUST_CALL *sign_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sign_next_owned);
 	void (OPENTTD_RUST_CALL *set_sign_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_sign_owner);
 	uint32_t (OPENTTD_RUST_CALL *goal_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(goal_next_owned);
