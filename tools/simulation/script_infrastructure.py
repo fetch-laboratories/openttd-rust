@@ -11,7 +11,7 @@ compares the logs, snapshots and exit saves.
 
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired
 
 from . import core
 
@@ -33,6 +33,7 @@ DONE = tuple(f"{who} done" for who in WHO)
 
 class Scenario(core.Scenario):
     script_infrastructure: bool
+    script_road_fatal: NotRequired[bool]
 
 
 def scenarios(soak: bool) -> list[Scenario]:
@@ -71,11 +72,54 @@ def install(scenario: dict[str, Any], run_dir: Path) -> None:
     if not uses_ai(scenario):
         return
     source = Path(scenario["scenario_ai"])
-    for kind in ("ai", "game"):
+    for kind in ("ai",) if scenario.get("script_road_fatal") else ("ai", "game"):
         for folder in (source / kind).iterdir():
             target = run_dir / kind / folder.name
             shutil.copytree(folder, target)
             shutil.copy(source / PROBE, target / PROBE)
+            if scenario.get("script_road_fatal"):
+                shutil.copy(source / "fatal.nut", target / "main.nut")
+
+
+def prepare(
+    scenario: Scenario,
+    executables: dict[str, Path],
+    builds: dict[str, Path],
+    folder: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
+    if scenario["name"] != "script-infrastructure-tile":
+        return scenario
+    probe: Scenario = {
+        **scenario,
+        "script_road_fatal": True,
+        "ticks": 1000,
+        "settings": {
+            key: value
+            for key, value in scenario["settings"].items()
+            if key != "game_scripts"
+        },
+    }
+    runs = core.capture_pair(
+        probe, executables, builds, folder, timeout, env, name="road-slope-fatal"
+    )
+    for role, run in runs.items():
+        output = run["stdout"] + "\n".join(run["log"]).encode()
+        if (
+            not isinstance(run["exit"], int)
+            or run["exit"] == 0
+            or "road-slope fatal" not in observations(run["log"])
+            or "road-slope returned" in observations(run["log"])
+            or b"NOT_REACHED triggered at line " not in run["stdout"]
+            or b"panicked at" in output
+        ):
+            raise RuntimeError(f"{role} script road slope native fatal path missing")
+    core.findings(result)["script_road_slope_fatal"] = {
+        role: run["exit"] for role, run in runs.items()
+    }
+    return scenario
 
 
 def game_args(scenario: dict[str, Any]) -> list[str]:
