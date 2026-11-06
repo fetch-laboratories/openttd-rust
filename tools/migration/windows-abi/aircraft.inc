@@ -224,7 +224,7 @@ static void AircraftPhaseBoundary()
 static void AircraftOwnership()
 {
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
-	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> station{openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete};
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> station{openttd_rust_station_record_new(nullptr, UINT32_MAX, 0), openttd_rust_station_record_delete};
 	CHECK(state->targetairport == 65535 && state->last_direction == 255 && state->cached_max_range_sqr == 0 && station->airport.blocks == 0);
 	uint8_t &position = state->pos; uint16_t &counter = state->crashed_counter; uint64_t &blocks = station->airport.blocks;
 	position = 255; counter = 65535; blocks = UINT64_MAX; state->cached_max_range = 65535; state->cached_max_range_sqr = UINT32_MAX;

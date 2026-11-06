@@ -219,7 +219,7 @@ static StationLoadingProbe *_station_loading_probe;
 
 TEST_CASE("Station service - direct prepare preserves native frames and same-owner reentry")
 {
-	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX, 0), openttd_rust_station_record_delete);
 	/* An empty station does not cross back into any native service. */
 	openttd_rust_station_load(owner.get(), nullptr, nullptr, nullptr, nullptr, nullptr);
 	CHECK(openttd_rust_station_queue_size(owner.get()) == 0);
@@ -273,7 +273,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 
 TEST_CASE("Station service - record defaults, stable fields, ordered queue and replacement")
 {
-	auto *owner = openttd_rust_station_record_new(nullptr, 0x1234);
+	auto *owner = openttd_rust_station_record_new(nullptr, 0x1234, 0);
 	auto *fields = owner;
 	auto *cargo = &owner->goods[63];
 	CHECK(owner->shell == nullptr);
@@ -315,14 +315,14 @@ TEST_CASE("Station service - record defaults, stable fields, ordered queue and r
 	openttd_rust_station_queue_clear(owner);
 	CHECK(openttd_rust_station_queue_size(owner) == 0);
 	openttd_rust_station_record_delete(owner);
-	owner = openttd_rust_station_record_new(nullptr, 0);
+	owner = openttd_rust_station_record_new(nullptr, 0, 0);
 	CHECK(owner->goods[63].rating == 175);
 	CHECK(owner->delete_ctr == 0);
 	openttd_rust_station_record_delete(owner);
 }
 TEST_CASE("Station service - loading facade keeps list node identity")
 {
-	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX, 0), openttd_rust_station_record_delete);
 	RustStationLoadingQueue queue(owner.get());
 	int first, second, third;
 	auto *a = reinterpret_cast<Vehicle *>(&first);
@@ -353,8 +353,8 @@ TEST_CASE("Station service - loading facade keeps list node identity")
 
 TEST_CASE("Station service - loading save staging retains partial and nested effects")
 {
-	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
-	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> nested_owner(openttd_rust_station_record_new(nullptr, UINT32_MAX), openttd_rust_station_record_delete);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX, 0), openttd_rust_station_record_delete);
+	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> nested_owner(openttd_rust_station_record_new(nullptr, UINT32_MAX, 0), openttd_rust_station_record_delete);
 	RustStationLoadingQueue queue(owner.get()), nested(nested_owner.get());
 	int first, second;
 	auto *a = reinterpret_cast<Vehicle *>(&first);

@@ -107,7 +107,9 @@ pub(crate) unsafe fn activity(state: *const Service) -> StationActivity {
 pub extern "C" fn openttd_rust_station_record_new(
     shell: *mut crate::station_type::BaseStation,
     xy: crate::tile_type::TileIndex,
+    record_offset: usize,
 ) -> *mut crate::station_record::StationRecord {
+    crate::station_record::publish_offset_for(shell, record_offset);
     Box::into_raw(Box::new(Service {
         record: crate::station_record::StationRecord::new(shell, xy),
         queue: Vec::new(),

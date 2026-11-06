@@ -157,6 +157,147 @@ crate::abi::shared_records! {
     }
 }
 
+/// Byte offset of the record pointer inside every `BaseStation` shell, published
+/// by the native record owner at the first construction. It is fixed by the
+/// shell's ABI layout, so a shell reaches its record in one load.
+static SHELL_RECORD_OFFSET: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(usize::MAX);
+
+/// Publish a real shell's record-pointer offset; fixtures without a shell pass null.
+pub(crate) fn publish_offset_for(shell: *mut BaseStation, offset: usize) {
+    if !shell.is_null() {
+        publish_offset(offset);
+    }
+}
+
+/// Publish the shell's record-pointer offset; every shell reports the same one.
+fn publish_offset(offset: usize) {
+    use std::sync::atomic::Ordering::Relaxed;
+    let previous = SHELL_RECORD_OFFSET.swap(offset, Relaxed);
+    assert!(
+        previous == usize::MAX || previous == offset,
+        "inconsistent station record offset"
+    );
+}
+
+/// The record of a live `BaseStation`, `Station` or `Waypoint` shell.
+///
+/// # Safety
+/// `shell` is a live native station shell; at least one shell has been constructed.
+#[inline]
+pub(crate) unsafe fn record_of(shell: *const BaseStation) -> *mut StationRecord {
+    let offset = SHELL_RECORD_OFFSET.load(std::sync::atomic::Ordering::Relaxed);
+    // SAFETY: Live shells hold their owning, pointer-aligned record pointer at the
+    // published offset of the native record owner member.
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        shell
+            .cast::<u8>()
+            .add(offset)
+            .cast::<*mut StationRecord>()
+            .read()
+    }
+}
+
+/// The canonical Rust owner of a live station shell: its record's enclosing owner.
+/// `shell` is a live native station shell of the serialized game state.
+#[inline]
+pub(crate) fn service_of(shell: *const BaseStation) -> *mut crate::station_service::Service {
+    // SAFETY: Callers pass live shells, as every former owner callback required.
+    unsafe { record_of(shell).cast() }
+}
+
+/// `BaseStation::owner` of a live shell, as its company byte.
+/// `shell` is a live native station shell of the serialized game state.
+#[inline]
+pub(crate) fn owner_company(shell: *const BaseStation) -> u8 {
+    // SAFETY: Immediate scalar read of the live record.
+    unsafe { (*record_of(shell)).owner.0 }
+}
+
+/// `BaseStation::Get(id)`: the live shell at a valid station index.
+/// `id` is a valid index of the canonical pool, as `Get` asserts natively.
+pub(crate) fn station_get(s: &crate::services::Services, id: u16) -> *mut BaseStation {
+    let pool = (s.station_pool)();
+    let index = usize::from(id);
+    // SAFETY: The live extent and slot array come from the canonical pool.
+    unsafe {
+        assert!(index < pool.first_unused.read());
+        pool.slots.add(index).read()
+    }
+}
+
+/// Call-scoped view of the native station pool's slot array. Growth relocates
+/// `slots`, but never lowers `first_unused`; refresh before reading past `slots_len`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StationPool {
+    pub slots: *const *mut BaseStation,
+    pub slots_len: usize,
+    pub first_unused: *const usize,
+}
+
+/// `StationFacility::Waypoint`.
+const FACILITY_WAYPOINT: u8 = 1 << 7;
+
+/// The next live `Station` (not waypoint) slot at or after `*from`, as the native
+/// filtered pool iterator finds it: reread the live extent and slot, skip holes and
+/// waypoints, then advance past it. The shell's record is reached in one load.
+///
+/// # Safety
+/// Serialized game state; `pool` came from the shared services in this entry; no
+/// pool reset or load runs while the cursor lives.
+pub(crate) unsafe fn next_station(
+    s: &crate::services::Services,
+    pool: &mut StationPool,
+    from: &mut usize,
+) -> Option<(*mut BaseStation, *mut StationRecord)> {
+    loop {
+        // SAFETY: The live extent is a scalar of the canonical pool.
+        let live = unsafe { pool.first_unused.read() };
+        if *from >= live {
+            return None;
+        }
+        if live > pool.slots_len {
+            *pool = (s.station_pool)();
+        }
+        // SAFETY: `*from` is below the live extent, inside the refreshed slot array.
+        let shell = unsafe { pool.slots.add(*from).read() };
+        *from += 1;
+        if shell.is_null() {
+            continue;
+        }
+        // SAFETY: A non-null slot holds a live shell.
+        let record = unsafe { record_of(shell) };
+        // SAFETY: Immediate scalar read of the live record.
+        if unsafe { (*record).facilities } & FACILITY_WAYPOINT == 0 {
+            return Some((shell, record));
+        }
+    }
+}
+
+/// `for (Station *st : Station::Iterate())`, visiting each station shell with its
+/// record owner and index. A visit may reenter, delete or allocate stations: the
+/// cursor holds only the next index and rereads the pool after each visit.
+pub(crate) fn for_each_station(
+    s: &crate::services::Services,
+    mut visit: impl FnMut(*const crate::station::Station, *mut crate::station_service::Service, u16),
+) {
+    let mut pool = (s.station_pool)();
+    let mut from = 0;
+    // SAFETY: Serialized entry; no record reference spans a visit.
+    while let Some((shell, record)) = unsafe { next_station(s, &mut pool, &mut from) } {
+        // Station IDs are 16-bit; the pool never exceeds their range.
+        #[allow(clippy::cast_possible_truncation)]
+        visit(shell.cast_const().cast(), record.cast(), (from - 1) as u16);
+    }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDStationPool" ["station"] => crate::station_record::StationPool { slots, slots_len, first_unused, };
+}
+
 /// `INVALID_TILE`.
 const INVALID_TILE: TileIndex = TileIndex(u32::MAX);
 /// An empty `TileArea` at `INVALID_TILE`.

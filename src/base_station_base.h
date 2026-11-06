@@ -56,10 +56,14 @@ struct StationRect {
 struct StationRecordOwner {
 	OpenTTDStationRecord *const record; ///< Shared record of the moved fields.
 
-	StationRecordOwner(BaseStation *shell, TileIndex xy) : record(openttd_rust_station_record_new(shell, xy.base())) {}
+	/* Rust reaches the record from a shell by this member's fixed offset in the shell. */
+	StationRecordOwner(BaseStation *shell, TileIndex xy) : record(openttd_rust_station_record_new(shell, xy.base(), this->OffsetIn(shell))) {}
 	StationRecordOwner(const StationRecordOwner &) = delete;
 	StationRecordOwner &operator=(const StationRecordOwner &) = delete;
 	~StationRecordOwner() { openttd_rust_station_record_delete(this->record); }
+
+private:
+	size_t OffsetIn(const BaseStation *shell) const { return reinterpret_cast<const char *>(&this->record) - reinterpret_cast<const char *>(shell); }
 };
 
 /** Native TileArea of a record area. */
