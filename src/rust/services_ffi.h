@@ -12,6 +12,7 @@
 #include "byte_span_ffi.h"
 #include "../tile_storage_type.h"
 #include "../newgrf_badge_type.h"
+#include "abi-record-probe.h"
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
@@ -25,7 +26,6 @@ enum GrfSpecFeature : uint8_t;
 enum class StationType : uint8_t;
 struct OpenTTDStationService;
 struct OpenTTDNewGRFSpecs;
-struct OpenTTDBadgeSpan;
 struct ResolverObject;
 struct NetworkClientInfo;
 enum class RoadStopType : uint8_t;
