@@ -422,7 +422,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.subtract_profit = [](OpenTTDVehicle *handle, int64_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
-		front->SetProfitThisYear(front->GetProfitThisYear() - value);
+		front->SetProfitThisYear(front->GetProfitThisYear() - Money{value});
 	},
 	.unknown_load_result = [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
