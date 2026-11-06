@@ -60,6 +60,17 @@ TEST_CASE("Town growth - indexed construction, descriptor aliases and pool reuse
 	REQUIRE(Town::GetNumItems() == 0);
 	auto *a = new (TownID(17)) Town();
 	auto *b = new (TownID(19)) Town();
+	const auto *descriptor = _town_pool.descriptor;
+	CHECK(descriptor->first_unused == 20);
+	CHECK(descriptor->first_free == 0);
+	CHECK(descriptor->items == 2);
+	CHECK(descriptor->slots[17].shell == a);
+	CHECK(descriptor->slots[17].record == a->growth_owner.get());
+	CHECK(descriptor->slots[19].record == b->growth_owner.get());
+	REQUIRE(Town::CanAllocateItem());
+	auto *c = new Town();
+	CHECK(c->index == TownID(0));
+	CHECK(descriptor->slots[0].record == c->growth_owner.get());
 	CHECK(static_cast<uint16_t>(a->Record().grow_counter) == 0);
 	CHECK(static_cast<uint16_t>(a->Record().growth_rate) == 0);
 	CHECK(a->Record().flags.base() == 0);
@@ -80,7 +91,15 @@ TEST_CASE("Town growth - indexed construction, descriptor aliases and pool reuse
 	CHECK(static_cast<uint16_t>(a->Record().growth_rate) == 419);
 	CHECK(static_cast<uint16_t>(a->Record().grow_counter) == 4356);
 	_town_pool.CleanPool(); // Town::~Town's early return must still destroy its owner member.
+	CHECK(descriptor->slots.empty());
+	CHECK(descriptor->used_bitmap.empty());
+	CHECK(descriptor->first_unused == 0);
+	CHECK(descriptor->first_free == 0);
+	CHECK(descriptor->items == 0);
+	CHECK(descriptor->checked == 0);
+	CHECK_FALSE(descriptor->cleaning);
 	a = new (TownID(17)) Town();
+	CHECK(descriptor->slots[17].record == a->growth_owner.get());
 	CHECK(static_cast<uint16_t>(a->Record().grow_counter) == 0);
 	CHECK(static_cast<uint16_t>(a->Record().growth_rate) == 0);
 	CHECK(static_cast<uint8_t>(a->Record().fund_buildings_months) == 0);

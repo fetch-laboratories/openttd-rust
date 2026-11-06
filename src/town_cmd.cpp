@@ -92,6 +92,16 @@
 
 /* Initialize the town-pool */
 TownPool _town_pool("Town");
+void RustTownDelete::operator()(OpenTTDTownState *state) const
+{
+	const auto *record = reinterpret_cast<const OpenTTDTownRecord *>(state);
+	if (Town *shell = record->shell; shell != nullptr) {
+		_town_pool.RetireRecord(shell->index.base(), shell, state);
+	} else {
+		_town_pool.RetireUnboundRecord(state);
+	}
+	openttd_rust_town_destroy(state);
+}
 INSTANTIATE_POOL_METHODS(Town)
 
 void RebuildTownKdtree()

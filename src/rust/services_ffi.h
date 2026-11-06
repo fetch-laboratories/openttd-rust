@@ -13,6 +13,7 @@
 #include "../tile_storage_type.h"
 #include "../newgrf_badge_type.h"
 #include "service_defaults.hpp"
+struct RustPoolDescriptor;
 #include <cstdint>
 #include <cstddef>
 #include <memory>
@@ -167,6 +168,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*town_next_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_next_id);
 	OpenTTDTownHandle *(*town_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_by_id);
 	OpenTTDTownState *(*town_owner_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owner_by_id);
+	const RustPoolDescriptor *const *town_pool;
 	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 	OpenTTDVehicle *(*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	bool (*water_middle_lock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_middle_lock);

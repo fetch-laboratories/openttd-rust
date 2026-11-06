@@ -1,13 +1,13 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Simulation town index. The game-state mutex serializes every access, including
-//! load rebuilds. Coordinate services read live records and cannot reenter this index.
+//! load rebuilds. Coordinates load live records directly from canonical town slots.
 use super::TownRef;
 use crate::{game_state::GameState, kdtree::Kdtree, services::Services, town_type::TownId};
 use std::ptr;
 static TREE: GameState<Kdtree<TownId>> = GameState::new(Kdtree::new());
 
 fn coordinate(s: &Services, map: crate::map_func::Map, id: TownId, dim: usize) -> u16 {
-    let owner = (s.town_owner_by_id)(u32::from(id.0));
+    let owner = unsafe { super::pool(s).record(id) };
     let tile = unsafe { super::position(owner) };
     if dim == 0 {
         map.tile_x(tile) as u16

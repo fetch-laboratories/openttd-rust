@@ -502,6 +502,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.town_next_id = OpenTTDNextTownID,
 	.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(OpenTTDTownShellByID(id)); },
 	.town_owner_by_id = OpenTTDTownOwnerByID,
+	.town_pool = &_town_pool.descriptor,
 	.utf8_length = RustUtf8Length,
 	.vehicle_next = RustNextVehicle,
 	.water_middle_lock = OpenTTDIsMiddleLock,

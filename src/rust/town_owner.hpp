@@ -27,7 +27,7 @@ struct RustTownName {
 };
 
 struct RustTownDelete {
-	void operator()(OpenTTDTownState *state) const { openttd_rust_town_destroy(state); }
+	void operator()(OpenTTDTownState *state) const;
 };
 using RustTownOwner = std::unique_ptr<OpenTTDTownState, RustTownDelete>;
 

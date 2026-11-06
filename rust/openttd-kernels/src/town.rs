@@ -180,6 +180,13 @@ pub struct State {
 pub(crate) fn record(state: *mut State) -> *mut TownRecord {
     state.cast()
 }
+/// The registered town pool's canonical slots; owner/descriptor survive game reset.
+pub(crate) fn pool(
+    s: &Services,
+) -> crate::pool::TypedPool<TownId, State, crate::town_type::TownHandle> {
+    // SAFETY: Startup initializes the native facade before serialized game entries.
+    unsafe { crate::pool::TypedPool::from_descriptor(*s.town_pool) }
+}
 /// SAFETY: Live serialized town owner and original cargo acceptance effect.
 pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
     unsafe {

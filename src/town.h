@@ -18,6 +18,7 @@
 #include "newgrf_storage.h"
 #include "cargotype.h"
 #include "rust/town_owner.hpp"
+#include "rust/pool.hpp"
 #include "rust/station_catchment_ffi.h"
 
 template <typename T>
@@ -36,7 +37,7 @@ static const uint TOWN_GROWTH_DESERT = 0xFFFFFFFF; ///< The town needs the cargo
 static const uint16_t TOWN_GROWTH_RATE_NONE = 0xFFFF; ///< Special value for Town::growth_rate to disable town growth.
 static const uint16_t MAX_TOWN_GROWTH_TICKS = 930; ///< Max amount of original town ticks that still fit into uint16_t, about equal to UINT16_MAX / TOWN_GROWTH_TICKS but slightly less to simplify calculations
 
-typedef Pool<Town, TownID, 64> TownPool;
+using TownPool = RustPool<Town, TownID, 64>;
 extern TownPool _town_pool;
 
 /** Flags controlling various town behaviours. */
@@ -81,7 +82,11 @@ struct RustTownCache {
 
 /** Town data structure. */
 struct Town : TownPool::PoolItem<&_town_pool> {
-	RustTownOwner growth_owner{openttd_rust_town_new(this)};
+	RustTownOwner growth_owner{[this] {
+		auto *state = openttd_rust_town_new(this);
+		_town_pool.BindRecord(this->index.base(), this, state);
+		return state;
+	}()};
 	/** The shared record: the canonical owner's first member, at its address. */
 	inline OpenTTDTownRecord &Record() { return *reinterpret_cast<OpenTTDTownRecord *>(this->growth_owner.get()); }
 	inline const OpenTTDTownRecord &Record() const { return *reinterpret_cast<const OpenTTDTownRecord *>(this->growth_owner.get()); }

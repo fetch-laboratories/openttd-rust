@@ -28,6 +28,12 @@ pub const RATING_BRIBE_DOWN_TO: i32 = -50;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TownId(pub u16);
 
+impl crate::pool::PoolId for TownId {
+    fn index(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
 /// Opaque native `Town`; valid only while its native pool shell lives.
 #[repr(C)]
 pub struct TownHandle {
