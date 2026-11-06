@@ -34,13 +34,7 @@ public:
 	~LinkGraphJob();
 	OpenTTDLinkGraphJobRecord &Record() { return *this->record; }
 	const OpenTTDLinkGraphJobRecord &Record() const { return *this->record; }
-	bool IsJobCompleted() const { return this->Record().completed.load(std::memory_order_acquire); }
 	bool IsJobAborted() const { return this->Record().aborted.load(std::memory_order_acquire); }
-	void AbortJob() { this->Record().aborted.store(true, std::memory_order_release); }
-	bool IsScheduledToBeJoined() const { return this->JoinDate() <= TimerGameEconomy::date; }
-	TimerGameEconomy::Date JoinDate() const { return TimerGameEconomy::Date{this->Record().join_date}; }
-	void ShiftJoinDate(TimerGameEconomy::Date interval) { this->Record().join_date += interval.base(); }
-	NodeID Size() const { return static_cast<NodeID>(this->Record().graph->nodes.size()); }
 	CargoType Cargo() const { return this->Record().graph->cargo; }
 	LinkGraphID LinkGraphIndex() const { return LinkGraphID(this->Record().graph_index); }
 	OpenTTDLiveGraph *Graph() const { return this->Record().graph; }

@@ -409,9 +409,7 @@ pub struct ClockServices {
     pub using_wallclock_units: extern "C" fn(bool) -> bool,
     pub vehicle_id: extern "C" fn(*const c_void) -> u32,
     pub vehicle_shift_dates: extern "C" fn(crate::vehicle::VehicleRef, i32),
-    pub next_graph: extern "C" fn(*mut u32) -> *mut crate::linkgraph::NativeGraph,
-    pub graph_owner:
-        extern "C" fn(*mut crate::linkgraph::NativeGraph) -> *mut crate::linkgraph::live::Graph,
+    pub next_graph: extern "C" fn(*mut u32) -> *mut crate::linkgraph::live::Graph,
 }
 #[repr(C)]
 pub struct ClockIndustry {
@@ -522,5 +520,5 @@ crate::abi::layouts! {
     "OpenTTDEconomyClockPeriod" ["clocks"] => Period { trigger, priority };
     "RustClockCallback" ["clocks"] => Callback { invoke, context };
     "RustClockBinding" ["clocks"] => Binding { callback, fired };
-    "OpenTTDClockServices" ["clocks"] => ClockServices { shared, minutes_per_calendar_year, using_wallclock_units, vehicle_id, vehicle_shift_dates, next_graph, graph_owner };
+    "OpenTTDClockServices" ["clocks"] => ClockServices { shared, minutes_per_calendar_year, using_wallclock_units, vehicle_id, vehicle_shift_dates, next_graph };
 }

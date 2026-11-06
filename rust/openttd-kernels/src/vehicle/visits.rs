@@ -211,10 +211,7 @@ pub(crate) fn increase_stats(
         graph = (l.graphs.get)(first_id);
         if first_id != second_id {
             let second = (l.graphs.get)(second_id);
-            if unsafe {
-                (&*live::resolve(graph, l.graphs)).size()
-                    < (&*live::resolve(second, l.graphs)).size()
-            } {
+            if unsafe { (&*graph).size() < (&*second).size() } {
                 witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
                 unsafe {
                     linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
@@ -235,7 +232,7 @@ pub(crate) fn increase_stats(
         let from = (l.graphs.node)(st, cargo);
         let to = (l.graphs.node)(st2, cargo);
         unsafe {
-            (&mut *live::resolve(graph, l.graphs)).nodes[usize::from(from)].update_edge(
+            (&mut *graph).nodes[usize::from(from)].update_edge(
                 to,
                 capacity,
                 usage,

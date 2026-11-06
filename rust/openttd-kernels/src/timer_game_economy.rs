@@ -125,10 +125,7 @@ pub(crate) unsafe fn elapsed(
                 break;
             }
             unsafe {
-                crate::linkgraph::live::openttd_rust_live_graph_shift(
-                    (services.graph_owner)(graph),
-                    -days,
-                );
+                crate::linkgraph::live::openttd_rust_live_graph_shift(graph, -days);
             }
         }
     }

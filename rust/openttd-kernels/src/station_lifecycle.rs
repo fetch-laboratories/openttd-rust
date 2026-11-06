@@ -466,7 +466,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         if graph.is_null() {
             continue;
         }
-        let owner = (graphs.owner)(graph);
+        let owner = graph;
         let mut node = 0;
         while node < unsafe { &*owner }.size() {
             let other_id = unsafe { &*owner }.nodes[usize::from(node)].station;

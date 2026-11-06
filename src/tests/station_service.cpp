@@ -446,5 +446,5 @@ TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime"
 	}
 	CHECK(graph[0].Supply() == 0xFEDCBA99);
 	CHECK(graph[0].Station() == StationID(42));
-	CHECK(GetRustLiveGraphServices().access(&graph).owner == graph.RustState());
+	CHECK(GetRustLiveGraphServices().index(graph.RustState()) == graph.index.base());
 }

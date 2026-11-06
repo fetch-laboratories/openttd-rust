@@ -29,7 +29,7 @@ const OpenTTDClockServices &GetRustClockServices() noexcept
 		.shared = &shared,
 		.minutes_per_calendar_year = []() noexcept { return _settings_game.economy.minutes_per_calendar_year; },
 		.using_wallclock_units = [](bool newgame) noexcept { return (newgame ? _settings_newgame : _settings_game).economy.timekeeping_units == TKU_WALLCLOCK; },
-		.next_graph = [](uint32_t *) noexcept -> LinkGraph * { return nullptr; },
+		.next_graph = [](uint32_t *) noexcept -> OpenTTDLiveGraph * { return nullptr; },
 	};
 	return services;
 }

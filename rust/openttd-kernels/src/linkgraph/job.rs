@@ -11,6 +11,12 @@ use crate::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// Opaque native job shell, retaining the platform thread handle.
+#[repr(C)]
+pub struct NativeJob {
+    _private: [u8; 0],
+}
+
 crate::abi::shared_records! {
     fn abi_record;
     #[derive(Clone, Copy)]
@@ -30,6 +36,8 @@ crate::abi::shared_records! {
         pub flows: *mut FlowMap => "OpenTTDCargoFlowMap *",
     }
     "OpenTTDLinkGraphJobRecord" ["station_service"] => pub struct JobRecord {
+        /// Stable native thread-shell identity through join and publication.
+        pub shell: *mut NativeJob => "LinkGraphJob *",
         pub graph: *mut Graph,
         pub settings: SnapshotSettings,
         pub graph_index: LinkGraphID,
@@ -93,6 +101,7 @@ pub unsafe extern "C" fn openttd_rust_linkgraph_job_new(
         )
     };
     Box::into_raw(Box::new(JobRecord {
+        shell: std::ptr::null_mut(),
         graph,
         settings,
         graph_index,

@@ -30,40 +30,33 @@
 /* static */ LinkGraphSchedule LinkGraphSchedule::instance;
 
 static_assert(LinkGraphSchedule::SPAWN_JOIN_TICK == 21 && EconomyTime::SECONDS_PER_DAY == 2);
-using ScheduleDate = TimerGameEconomy::Date;
 constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 	.shared = &_rust_shared_services,
-	.graph_owner = LiveGraphOwner,
-	.assert_graph = +[]([[maybe_unused]] const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
+	.assert_graph = +[]([[maybe_unused]] const OpenTTDLiveGraph *g) noexcept { assert(g->shell == LinkGraph::Get(g->shell->index)); },
 	.can_allocate = +[]() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.allocation_failure = +[]() noexcept { NOT_REACHED(); },
-	.new_job = +[](const LinkGraph *g) noexcept { return new LinkGraphJob(*g); },
-	.spawn = +[](LinkGraphJob *j) noexcept { j->SpawnThread(); },
-	.due = +[](const LinkGraphJob *j) noexcept { return j->IsScheduledToBeJoined(); },
-	.completed = +[](const LinkGraphJob *j) noexcept { return j->IsJobCompleted(); },
-	.graph_index = RustLinkGraphJobGraphIndex,
-	.destroy_job = +[](LinkGraphJob *j) noexcept { delete j; },
+	.new_job = +[](const OpenTTDLiveGraph *g) noexcept { return &(new LinkGraphJob(*g->shell))->Record(); },
+	.spawn = +[](OpenTTDLinkGraphJobRecord *j) noexcept { j->shell->SpawnThread(); },
+	.destroy_job = +[](OpenTTDLinkGraphJobRecord *j) noexcept { delete j->shell; },
 	.graph_valid = RustLinkGraphValid,
 	.graph_get = RustLinkGraphGet,
-	.abort_job = +[](LinkGraphJob *j) noexcept { j->AbortJob(); },
 	.next_graph = RustLinkGraphNext,
-	.next_job = +[](uint32_t *from) noexcept -> LinkGraphJob * {
-		for (LinkGraphJob *j : LinkGraphJob::Iterate(*from)) { *from = j->index.base() + 1U; return j; }
+	.next_job = +[](uint32_t *from) noexcept -> OpenTTDLinkGraphJobRecord * {
+		for (LinkGraphJob *j : LinkGraphJob::Iterate(*from)) { *from = j->index.base() + 1U; return &j->Record(); }
 		return nullptr;
 	},
-	.shift_job = +[](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(ScheduleDate(interval)); },
 	.begin_measurement = +[](void *storage, bool client) noexcept {
 		if (client) static_cast<std::optional<PerformanceMeasurer> *>(storage)->emplace(PFE_GL_LINKGRAPH);
 		else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);
 	},
 };
-void LinkGraphSchedule::Queue(LinkGraph *g) { openttd_rust_schedule_queue(&services, g); }
-void LinkGraphSchedule::Dequeue(LinkGraph *g) { openttd_rust_schedule_dequeue(g); }
+void LinkGraphSchedule::Queue(LinkGraph *g) { openttd_rust_schedule_queue(&services, g->RustState()); }
+void LinkGraphSchedule::Dequeue(LinkGraph *g) { openttd_rust_schedule_dequeue(g->RustState()); }
 void LinkGraphSchedule::SpawnAll() { openttd_rust_schedule_spawn_all(&services); }
-void LinkGraphSchedule::Clear() { openttd_rust_schedule_clear(&services); }
+void LinkGraphSchedule::Clear() { openttd_rust_schedule_clear(); }
 void LinkGraphSchedule::ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_schedule_shift(&services, interval.base()); }
 
-void AfterLoad_LinkGraphPauseControl() { openttd_rust_schedule_after_load(&LinkGraphSchedule::services); }
+void AfterLoad_LinkGraphPauseControl() { openttd_rust_schedule_after_load(); }
 
 LinkGraphSchedule::LinkGraphSchedule() = default;
 LinkGraphSchedule::~LinkGraphSchedule() { this->Clear(); }

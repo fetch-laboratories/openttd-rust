@@ -35,7 +35,6 @@ const OpenTTDClockServices &GetRustClockServices() noexcept
 		.vehicle_id = RustVehicleIndexOpaque,
 		.vehicle_shift_dates = RustVehicleShiftDates,
 		.next_graph = RustLinkGraphNext,
-		.graph_owner = LiveGraphOwner,
 	};
 	return services;
 }

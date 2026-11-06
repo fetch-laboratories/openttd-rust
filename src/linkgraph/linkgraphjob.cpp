@@ -22,8 +22,8 @@
 LinkGraphJobPool _link_graph_job_pool("LinkGraphJob");
 INSTANTIATE_POOL_METHODS(LinkGraphJob)
 
-LinkGraphJob::LinkGraphJob() : record(openttd_rust_linkgraph_job_new(nullptr, LinkGraphID::Invalid().base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) {}
-LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgraph_job_new(orig.RustState(), orig.index.base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) {}
+LinkGraphJob::LinkGraphJob() : record(openttd_rust_linkgraph_job_new(nullptr, LinkGraphID::Invalid().base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; }
+LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgraph_job_new(orig.RustState(), orig.index.base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; }
 
 /**
  * Spawn a thread if possible and run the link graph job in the thread. If
@@ -96,10 +96,10 @@ static void CargoFlowFinish(void *context, uint16_t node, uint8_t clear) noexcep
 static OpenTTDCargoFlowServices CargoFlowServices(CargoFlowContext *context)
 {
 	LinkGraphJob *job = context->job;
-	LinkGraph *live = job == nullptr ? nullptr : GetRustLiveGraphServices().get_if_valid(job->LinkGraphIndex().base());
+	OpenTTDLiveGraph *live = job == nullptr ? nullptr : GetRustLiveGraphServices().get_if_valid(job->LinkGraphIndex().base());
 	return {
 		.job = job == nullptr ? nullptr : &job->Record(),
-		.live_graph = live == nullptr ? nullptr : live->RustState(),
+		.live_graph = live,
 		.context = context,
 		.read = ReadCargoFlowJob,
 		.live_flows = CargoLiveFlows,
