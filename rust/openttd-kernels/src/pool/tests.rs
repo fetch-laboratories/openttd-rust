@@ -19,6 +19,7 @@ struct Context {
     replace: bool,
     grow_on_destroy: bool,
 }
+#[allow(clippy::cast_ptr_alignment)] // Layout explicitly requests Shell alignment.
 unsafe extern "C" fn allocate(context: *mut c_void, size: usize) -> *mut c_void {
     unsafe {
         let c = context.cast::<Context>();
@@ -195,9 +196,11 @@ fn indexed_growth_holes_and_live_typed_lookup() {
         assert_eq!(((*v).slots.len(), (*v).first_free, (*v).checked), (8, 2, 1));
         destroy((&raw mut *f.context).cast(), typed.shell(Id(1)).cast());
         assert_eq!(((*v).first_unused, (*v).first_free), (7, 1));
-        assert_eq!(typed.next_index(1, 10), 6);
+        let cursor = typed.next_index(1, 10);
+        assert_eq!(cursor, 6);
         PoolCore::allocate(p, SIZE).unwrap();
         assert_eq!(typed.next_index(1, 10), 1);
+        assert_eq!(typed.next_index(cursor + 1, 10), 10);
         let stable_record = typed.record(Id(6));
         PoolCore::allocate_at(p, SIZE, 9).unwrap();
         assert_eq!(((*v).slots.len(), (*v).first_unused), (10, 10));
@@ -222,7 +225,7 @@ fn maximum_tail_growth_capacity_and_credit() {
                 assert_eq!((*shell.cast::<Shell>()).index, expected);
                 let len = (*v).slots.len();
                 assert_eq!(len, ((expected + 4) & !3).min(maximum));
-                if len % usize::BITS as usize != 0 {
+                if !len.is_multiple_of(usize::BITS as usize) {
                     assert_eq!(
                         (*v).used_bitmap.as_slice().last().unwrap() >> (len % usize::BITS as usize),
                         usize::MAX >> (len % usize::BITS as usize)
@@ -269,6 +272,7 @@ fn destructor_publication_post_reentrant_reuse() {
                 ('A', 1, SIZE),
                 ('I', 0, 1),
                 ('D', 0, 0),
+                ('R', 0, 7),
                 ('X', 1, 0),
                 ('P', 0, 0),
                 ('A', 2, SIZE),

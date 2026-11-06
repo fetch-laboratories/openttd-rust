@@ -44,7 +44,7 @@ crate::abi::shared_records! {
         pub first_unused: usize,
         /// Number of occupied shell slots.
         pub items: usize,
-        /// WITH_ASSERT allocation credit; untouched when assertions are disabled.
+        /// `WITH_ASSERT` allocation credit; untouched when assertions are disabled.
         pub checked: usize,
         /// Suppresses bitmap clearing and post hooks during cleanup.
         pub cleaning: bool,
@@ -106,7 +106,7 @@ pub struct PoolCore {
 }
 
 impl PoolCore {
-    /// Allocate a stable descriptor. PoolBase registration remains native.
+    /// Allocate a stable descriptor. `PoolBase` registration remains native.
     #[must_use]
     pub fn new(config: PoolConfig, ops: NativeOps) -> Box<Self> {
         Box::new(Self {
@@ -168,10 +168,10 @@ impl PoolCore {
             let bits = usize::BITS as usize;
             (*pool).view.used_bitmap.resize(new_size.div_ceil(bits), 0);
             let bitmap = (*pool).view.used_bitmap.as_mut_ptr();
-            if old_size % bits != 0 {
+            if !old_size.is_multiple_of(bits) {
                 *bitmap.add(old_size / bits) &= !(usize::MAX << (old_size % bits));
             }
-            if new_size % bits != 0 {
+            if !new_size.is_multiple_of(bits) {
                 *bitmap.add(new_size / bits) |= usize::MAX << (new_size % bits);
             }
         }
@@ -197,6 +197,9 @@ impl PoolCore {
     }
 
     /// Ordinary new: search/grow precedes assertion-credit consumption and exhaustion.
+    ///
+    /// # Errors
+    /// Returns `Exhausted` after consuming ordinary assertion credit.
     pub unsafe fn allocate(pool: *mut Self, size: usize) -> Result<*mut c_void, AllocationError> {
         unsafe {
             let index = Self::find_first_free(pool);
@@ -213,6 +216,9 @@ impl PoolCore {
     }
 
     /// Indexed load allocation leaves ordinary cursor and assertion credit unchanged.
+    ///
+    /// # Errors
+    /// Returns `OutOfRange` before growth, or `AlreadyUsed` after growth if occupied.
     pub unsafe fn allocate_at(
         pool: *mut Self,
         size: usize,
@@ -387,6 +393,7 @@ impl<I: PoolId, R, S> TypedPool<I, R, S> {
         }
     }
     /// `PoolIterator::ValidateIndex`: reread live extent/slots, using the native end sentinel.
+    #[must_use]
     pub unsafe fn next_index(&self, mut index: usize, max_size: usize) -> usize {
         unsafe {
             while index < (*self.view).first_unused {
