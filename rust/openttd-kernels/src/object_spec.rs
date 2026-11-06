@@ -203,11 +203,9 @@ pub unsafe fn reset(s: &crate::objects::ObjectServices) {
                 v.push(spec);
             }
         });
-        let lighthouse =
-            crate::newgrf_class::object::allocate(u32::from_be_bytes(*b"LTHS"), u16::MAX, 0);
+        let lighthouse = crate::newgrf_class::allocate_object(u32::from_be_bytes(*b"LTHS"));
         (&mut *SPECS.get())[1].class_index = lighthouse;
-        let transmitter =
-            crate::newgrf_class::object::allocate(u32::from_be_bytes(*b"TRNS"), u16::MAX, 0);
+        let transmitter = crate::newgrf_class::allocate_object(u32::from_be_bytes(*b"TRNS"));
         (&mut *SPECS.get())[0].class_index = transmitter;
     }
 }
@@ -297,7 +295,7 @@ unsafe fn properties(
                     unsafe { (&mut *file)[id as usize] = Some(new) };
                 }
                 let class = r.dword()?.swap_bytes();
-                let index = unsafe { crate::newgrf_class::object::allocate(class, u16::MAX, 0) };
+                let index = unsafe { crate::newgrf_class::allocate_object(class) };
                 unsafe { (*spec).class_index = index };
             }
             0x09 | 0x0a => {

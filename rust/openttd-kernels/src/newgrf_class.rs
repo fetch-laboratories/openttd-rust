@@ -341,6 +341,12 @@ pub(crate) unsafe fn station_identity(spec: *const crate::station_cmd::RailSpec)
     unsafe { (station::SERVICES.table().identity)(spec) }
 }
 
+/// Allocate through the existing Object class metadata, including `STR_EMPTY`.
+pub(crate) unsafe fn allocate_object(global_id: u32) -> u16 {
+    let s = unsafe { object::SERVICES.table() };
+    unsafe { object::allocate(global_id, s.maximum, s.empty) }
+}
+
 pub(crate) fn station_label(class: u16) -> u32 {
     unsafe { (*station::classes().add(usize::from(class))).global_id }
 }
