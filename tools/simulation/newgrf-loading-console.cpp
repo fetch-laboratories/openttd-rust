@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file newgrf-loading-console.cpp Production loading from deterministic on-disk GRFs. */
 #include "stdafx.h"
+#include "pool-record-fixture.hpp"
 #include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "newgrf/newgrf_act2.cpp"
@@ -248,7 +249,7 @@ static void GrfTownNameTowns()
 		}
 		Require(generated && id != TownID::Invalid(), "townname-found");
 		const Town *t = Town::Get(id);
-		fmt::print(stderr, "LOADING townname town {} {} {:08X} {} {:08X} {}\n", gen, id.base(), t->townnamegrfid, t->townnametype, t->townnameparts, Hex(GetTownName(t)));
+		fmt::print(stderr, "LOADING townname town {} {} {:08X} {} {:08X} {}\n", gen, id.base(), FIXTURE_POOL_RECORD(t).townnamegrfid, FIXTURE_POOL_RECORD(t).townnametype, FIXTURE_POOL_RECORD(t).townnameparts, Hex(GetTownName(t)));
 	}
 }
 static void ResetAction2Callbacks(bool final)
@@ -365,7 +366,7 @@ static void Inspect(bool reload)
 	Require(Engine::Get(id)->DetermineCapacity(nullptr) == 55, "action2-file-capacity");
 	IndustryGfx gfx = _industile_mngr.GetID(0, file->grfid);
 	Industry *context = *Industry::Iterate().begin();
-	IndustryTileResolverObject tile_resolver(gfx, context->location.tile, context);
+	IndustryTileResolverObject tile_resolver(gfx, FIXTURE_POOL_RECORD(context).location.tile, context);
 	const auto *layout = tile_resolver.Resolve<TileLayoutSpriteGroup>();
 	Require(layout != nullptr && layout->dts.seq.size() == 1 && layout->dts.registers.size() == 2, "action2-layout-parsed");
 	uint8_t stage = 3;
@@ -378,7 +379,7 @@ static void Inspect(bool reload)
 		Require(production != nullptr && production->version == variant && (variant != 0 || (production->subtract_input[0] == -2 && production->add_output[0] == 7)), "action2-production-parsed");
 		if (reload) {
 			bool found = false;
-			for (const Industry *industry : Industry::Iterate()) found |= industry->type == _industry_mngr.GetID(variant, file->grfid) && industry->produced[0].waiting >= 7;
+			for (const Industry *industry : Industry::Iterate()) found |= FIXTURE_POOL_RECORD(industry).type == _industry_mngr.GetID(variant, file->grfid) && industry->produced[0].waiting >= 7;
 			Require(found, "action2-industry-reload");
 		}
 	}
@@ -412,11 +413,11 @@ static void Action2Consumers()
 			auto cost = Command<CMD_BUILD_INDUSTRY>::Do(DoCommandFlag::Execute, tile, type, 0, true, 485 + variant);
 			if (!cost.Succeeded()) continue;
 			for (Industry *industry : Industry::Iterate()) {
-				if (industry->type != type) continue;
+				if (FIXTURE_POOL_RECORD(industry).type != type) continue;
 				auto before = industry->produced[0].waiting;
 				IndustryProductionCallback(industry, 1);
 				Require(industry->produced[0].waiting == before + 7, fmt::format("action2-production-v{}", variant).c_str());
-				fmt::print(stderr, "LOADING production {} {} {} {}\n", variant, type, industry->produced[0].waiting, industry->random);
+				fmt::print(stderr, "LOADING production {} {} {} {}\n", variant, type, industry->produced[0].waiting, FIXTURE_POOL_RECORD(industry).random);
 				built = true;
 				break;
 			}
