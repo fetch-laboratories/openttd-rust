@@ -9,6 +9,7 @@ class MigrationInfra extends AIController {
 		if (AIRoad.CanBuildConnectedRoadParts(AITile.SLOPE_STEEP, [], 5, end) != -1) throw "start orientation";
 		if (AIRoad.CanBuildConnectedRoadParts(AITile.SLOPE_STEEP, [], start, 5) != -1) throw "end orientation";
 		AILog.Info("INFRA road-slope fatal");
+		this.Sleep(1); // Let the queued script diagnostic reach stderr before abort.
 		AIRoad.CanBuildConnectedRoadParts(AITile.SLOPE_STEEP, [], start, end);
 		AILog.Info("INFRA road-slope returned");
 		while (true) this.Sleep(100);

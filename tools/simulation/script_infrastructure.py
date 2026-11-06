@@ -112,7 +112,7 @@ def prepare(
             or run["exit"] == 0
             or "road-slope fatal" not in observations(run["log"])
             or "road-slope returned" in observations(run["log"])
-            or b"NOT_REACHED triggered at line " not in run["stdout"]
+            or b"Reason: NOT_REACHED triggered at line " not in run["stdout"]
             or b"panicked at" in output
         ):
             raise RuntimeError(f"{role} script road slope native fatal path missing")
