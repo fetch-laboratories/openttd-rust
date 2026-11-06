@@ -13,13 +13,8 @@
 #include <ranges>
 #include "core/tcp_content.h"
 #include "core/http.h"
-#include <unordered_map>
 #include "../core/container_func.hpp"
-
-/** Vector with content info */
-using ContentVector = std::vector<std::unique_ptr<ContentInfo>>;
-/** Vector with constant content info */
-using ConstContentVector = std::vector<const ContentInfo *>;
+#include "../rust/network_content_ffi.h"
 
 /** Callbacks for notifying others about incoming data */
 struct ContentCallback {
@@ -58,51 +53,21 @@ struct ContentCallback {
 };
 
 /**
- * Socket handler for the content server connection
+ * Socket handler for the content server connection; Rust owns its metadata, dependency and download state.
  */
-class ClientNetworkContentSocketHandler : public NetworkContentSocketHandler, ContentCallback, HTTPCallback {
+class ClientNetworkContentSocketHandler : public NetworkContentSocketHandler, HTTPCallback {
 protected:
-	using ContentIDList = std::vector<ContentID>; ///< List of content IDs to (possibly) select.
-	std::vector<ContentCallback *> callbacks; ///< Callbacks to notify "the world"
-	ContentIDList requested; ///< ContentIDs we already requested (so we don't do it again)
-	ContentIDList queued; ///< ContentID queue to be requested.
-	ContentVector infos; ///< All content info we received
-	std::unordered_multimap<ContentID, ContentID> reverse_dependency_map; ///< Content reverse dependency map
-	std::vector<char> http_response; ///< The HTTP response to the requests we've been doing
-	int http_response_index = -2; ///< Where we are, in the response, with handling it
-
 	std::optional<FileHandle> cur_file; ///< Currently downloaded file
-	std::unique_ptr<ContentInfo> cur_info; ///< Information about the currently downloaded file
-	bool is_connecting = false; ///< Whether we're connecting
-	bool is_cancelled = false; ///< Whether the download has been cancelled
-	std::chrono::steady_clock::time_point last_activity = std::chrono::steady_clock::now(); ///< The last time there was network activity
 
 	friend class NetworkContentConnecter;
-
-	bool Receive_SERVER_INFO(Packet &p) override;
-	bool Receive_SERVER_CONTENT(Packet &p) override;
-
-	ContentInfo *GetContent(ContentID cid) const;
-	void DownloadContentInfo(ContentID cid);
-
-	void OnConnect(bool success) override;
-	void OnDisconnect() override;
-	void OnReceiveContentInfo(const ContentInfo &ci) override;
-	void OnDownloadProgress(const ContentInfo &ci, int bytes) override;
-	void OnDownloadComplete(ContentID cid) override;
+	friend const OpenTTDContentServices &GetRustContentServices() noexcept;
 
 	void OnFailure() override;
 	void OnReceiveData(std::unique_ptr<char[]> data, size_t length) override;
 	bool IsCancelled() const override;
 
-	bool BeforeDownload();
-	void AfterDownload();
-
-	void DownloadSelectedContentHTTP(const ContentIDList &content);
-	void DownloadSelectedContentFallback(const ContentIDList &content);
 public:
-	/** The idle timeout; when to close the connection because it's idle. */
-	static constexpr std::chrono::seconds IDLE_TIMEOUT = std::chrono::seconds(60);
+	ClientNetworkContentSocketHandler();
 
 	void Connect();
 	void SendReceive();
@@ -123,22 +88,25 @@ public:
 	void UnselectAll();
 	void ToggleSelectedState(const ContentInfo &ci);
 
-	void ReverseLookupDependency(ConstContentVector &parents, const ContentInfo &child) const;
 	void ReverseLookupTreeDependency(ConstContentVector &tree, const ContentInfo *child) const;
-	void CheckDependencyState(const ContentInfo &ci);
 
 	/**
 	 * Get a read-only view of content info for iterating externally.
 	 * @return Read-only view of content info.
 	 */
-	auto Info() const { return this->infos | std::views::transform([](const auto &ci) -> const ContentInfo & { return *ci; }); }
+	auto Info() const
+	{
+		size_t count;
+		OpenTTDContentInfo *const *infos = openttd_rust_content_infos(&count);
+		return std::span(infos, count) | std::views::transform([](const OpenTTDContentInfo *ci) -> const ContentInfo & { return static_cast<const ContentInfo &>(*ci); });
+	}
 
 	void Clear();
 
 	/** Add a callback to this class */
-	void AddCallback(ContentCallback *cb) { include(this->callbacks, cb); }
+	void AddCallback(ContentCallback *cb) { openttd_rust_content_add_callback(cb); }
 	/** Remove a callback */
-	void RemoveCallback(ContentCallback *cb) { this->callbacks.erase(std::ranges::find(this->callbacks, cb)); }
+	void RemoveCallback(ContentCallback *cb) { openttd_rust_content_remove_callback(cb); }
 };
 
 extern ClientNetworkContentSocketHandler _network_content_client;

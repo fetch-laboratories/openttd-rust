@@ -52,35 +52,39 @@ using ContentID = uint32_t;
 
 static constexpr ContentID INVALID_CONTENT_ID = UINT32_MAX; ///< Sentinel for invalid content.
 
-/** Container for all important information about a piece of content. */
-struct ContentInfo {
-	/** The state the content can be in. */
-	enum class State : uint8_t {
-		Unselected, ///< The content has not been selected
-		Selected, ///< The content has been manually selected
-		Autoselected, ///< The content has been selected as dependency
-		AlreadyHere, ///< The content is already at the client side
-		DoesNotExist, ///< The content does not exist in the content system
-		Invalid, ///< The content's invalid
-	};
+/** The state the content can be in. */
+enum class ContentInfoState : uint8_t {
+	Unselected, ///< The content has not been selected
+	Selected, ///< The content has been manually selected
+	Autoselected, ///< The content has been selected as dependency
+	AlreadyHere, ///< The content is already at the client side
+	DoesNotExist, ///< The content does not exist in the content system
+	Invalid, ///< The content's invalid
+};
 
-	ContentType type = INVALID_CONTENT_TYPE; ///< Type of content
-	ContentID id = INVALID_CONTENT_ID;       ///< Unique (server side) ID for the content
-	uint32_t filesize = 0;                     ///< Size of the file
+#include "abi-record-content.h"
+
+extern "C" {
+bool openttd_rust_content_is_selected(const OpenTTDContentInfo *info) noexcept;
+bool openttd_rust_content_is_valid(const OpenTTDContentInfo *info) noexcept;
+}
+
+/** Container for all important information about a piece of content; Rust owns the scalars in its base record. */
+struct ContentInfo : OpenTTDContentInfo {
+	using State = ContentInfoState;
+
 	std::string filename;                    ///< Filename (for the .tar.gz; only valid on download)
 	std::string name;                        ///< Name of the content
 	std::string version;                     ///< Version of the content
 	std::string url;                         ///< URL related to the content
 	std::string description;                 ///< Description of the content
-	uint32_t unique_id = 0;                    ///< Unique ID; either GRF ID or shortname
-	MD5Hash md5sum;                          ///< The MD5 checksum
 	std::vector<ContentID> dependencies;     ///< The dependencies (unique server side ids)
 	StringList tags;                         ///< Tags associated with the content
-	State state = State::Unselected;         ///< Whether the content info is selected (for download)
-	bool upgrade = false;                    ///< This item is an upgrade
 
-	bool IsSelected() const;
-	bool IsValid() const;
+	ContentInfo() : OpenTTDContentInfo{.type = INVALID_CONTENT_TYPE, .id = INVALID_CONTENT_ID, .filesize = 0, .unique_id = 0, .md5sum = {}, .state = State::Unselected, .upgrade = false} {}
+
+	bool IsSelected() const { return openttd_rust_content_is_selected(this); }
+	bool IsValid() const { return openttd_rust_content_is_valid(this); }
 	std::optional<std::string> GetTextfile(TextfileType type) const;
 };
 
