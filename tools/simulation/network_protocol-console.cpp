@@ -41,6 +41,7 @@ static void ObservePayload(NetworkGameSocketHandler *game, std::span<const uint8
 
 #ifdef WITH_RUST
 #include "rust/network_tcp_ffi.h"
+#include "rust/network_frame_ffi.h"
 extern "C" const OpenTTDNetworkTcpServices &__real__Z25GetRustNetworkTcpServicesv();
 extern "C" const OpenTTDNetworkTcpServices &__wrap__Z25GetRustNetworkTcpServicesv()
 {
@@ -68,7 +69,7 @@ extern "C" const OpenTTDNetworkTcpServices &__wrap__Z25GetRustNetworkTcpServices
 			if (completed != nullptr && receiving->receive == nullptr) {
 				auto *packet = std::exchange(completed, nullptr);
 				NetworkGameSocketHandler *game = nullptr;
-				if (auto *client = ClientNetworkGameSocketHandler::my_client; client != nullptr && client->TcpRecord() == receiving) game = client;
+				if (auto *client = GetRustNetworkFrameServices().client_game(); client != nullptr && client->tcp == receiving) game = static_cast<NetworkGameSocketHandler *>(client->game);
 				for (auto *client : NetworkClientSocket::Iterate()) {
 					if (client->TcpRecord() == receiving) game = client;
 				}
