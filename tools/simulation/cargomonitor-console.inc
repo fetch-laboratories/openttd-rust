@@ -22,7 +22,7 @@ static MonitorSite FindMonitorSite(CargoType pax)
 			if (site.st != nullptr) break;
 			Industry *ind = entry.industry;
 			if (FIXTURE_POOL_RECORD(ind).exclusive_supplier != INVALID_OWNER) continue;
-			for (const auto &a : ind->accepted) {
+			for (const auto &a : FIXTURE_POOL_RECORD(ind).accepted) {
 				if (!IsValidCargoType(a.cargo) || HasBit(st->always_accepted, a.cargo) || a.waiting != 0) continue;
 				site.st = st; site.near = ind; site.accepted = a.cargo; break;
 			}

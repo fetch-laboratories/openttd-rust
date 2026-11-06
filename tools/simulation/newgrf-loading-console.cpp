@@ -379,7 +379,7 @@ static void Inspect(bool reload)
 		Require(production != nullptr && production->version == variant && (variant != 0 || (production->subtract_input[0] == -2 && production->add_output[0] == 7)), "action2-production-parsed");
 		if (reload) {
 			bool found = false;
-			for (const Industry *industry : Industry::Iterate()) found |= FIXTURE_POOL_RECORD(industry).type == _industry_mngr.GetID(variant, file->grfid) && industry->produced[0].waiting >= 7;
+			for (const Industry *industry : Industry::Iterate()) found |= FIXTURE_POOL_RECORD(industry).type == _industry_mngr.GetID(variant, file->grfid) && FIXTURE_POOL_RECORD(industry).produced[0].waiting >= 7;
 			Require(found, "action2-industry-reload");
 		}
 	}
@@ -414,10 +414,10 @@ static void Action2Consumers()
 			if (!cost.Succeeded()) continue;
 			for (Industry *industry : Industry::Iterate()) {
 				if (FIXTURE_POOL_RECORD(industry).type != type) continue;
-				auto before = industry->produced[0].waiting;
+				auto before = FIXTURE_POOL_RECORD(industry).produced[0].waiting;
 				IndustryProductionCallback(industry, 1);
-				Require(industry->produced[0].waiting == before + 7, fmt::format("action2-production-v{}", variant).c_str());
-				fmt::print(stderr, "LOADING production {} {} {} {}\n", variant, type, industry->produced[0].waiting, FIXTURE_POOL_RECORD(industry).random);
+				Require(FIXTURE_POOL_RECORD(industry).produced[0].waiting == before + 7, fmt::format("action2-production-v{}", variant).c_str());
+				fmt::print(stderr, "LOADING production {} {} {} {}\n", variant, type, FIXTURE_POOL_RECORD(industry).produced[0].waiting, FIXTURE_POOL_RECORD(industry).random);
 				built = true;
 				break;
 			}

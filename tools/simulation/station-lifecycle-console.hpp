@@ -59,7 +59,7 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	woods_name.Restore(); _settings_game.game_creation.landscape = LandscapeType::Temperate;
 	StationNeed(Industry::CanAllocateItem(), __LINE__);
 	Industry *ind = new Industry(); FIXTURE_POOL_RECORD(ind).location = TileArea(at(12, 12), 2, 1); FIXTURE_POOL_RECORD(ind).town = ClosestTownFromTile(at(12, 12), UINT_MAX); FIXTURE_POOL_RECORD(ind).type = 0;
-	ind->produced.resize(1); ind->produced[0].cargo = GetCargoTypeByLabel(CT_COAL);
+	FIXTURE_POOL_RECORD(ind).produced.resize(1); FIXTURE_POOL_RECORD(ind).produced[0].cargo = GetCargoTypeByLabel(CT_COAL);
 	MakeIndustry(at(12, 12), ind->index, 0, 0, WaterClass::Invalid); MakeIndustry(at(13, 12), ind->index, 0, 0, WaterClass::Invalid);
 	auto *spec = const_cast<IndustrySpec *>(GetIndustrySpec(0));
 	Backup<StringID> station_name(spec->station_name, STR_UNDEFINED);

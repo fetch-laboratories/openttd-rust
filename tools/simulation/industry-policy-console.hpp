@@ -29,7 +29,7 @@ static void IndustryPolicyObserve()
 			if (IsTileForestIndustry(tile)) ++forests; else ++others;
 		}
 		fmt::print(stderr, "INDUSTRY-POLICY industry {} {} {}", ind->index.base(), FIXTURE_POOL_RECORD(ind).prod_level, FIXTURE_POOL_RECORD(ind).valid_history);
-		for (const auto &p : ind->produced) fmt::print(stderr, " {}:{}:{}:{}", p.cargo, p.rate, p.history[LAST_MONTH].production, p.history[LAST_MONTH].transported);
+		for (const auto &p : FIXTURE_POOL_RECORD(ind).produced) fmt::print(stderr, " {}:{}:{}:{}", p.cargo, p.rate, p.history[LAST_MONTH].production, p.history[LAST_MONTH].transported);
 		fmt::print(stderr, "\n");
 	}
 	IndustryPolicyRequire(!IsTileForestIndustry(TileIndex{0}) && forests != 0 && others != 0);
@@ -54,7 +54,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		Industry *ind = nullptr;
 		for (Industry *candidate : Industry::Iterate()) {
 			const auto *spec = GetIndustrySpec(FIXTURE_POOL_RECORD(candidate).type);
-			if (candidate->produced.empty() || !IsValidCargoType(candidate->produced[0].cargo) || candidate->produced[0].cargo == GetCargoTypeByLabel(CT_PASSENGERS) ||
+			if (FIXTURE_POOL_RECORD(candidate).produced.empty() || !IsValidCargoType(FIXTURE_POOL_RECORD(candidate).produced[0].cargo) || FIXTURE_POOL_RECORD(candidate).produced[0].cargo == GetCargoTypeByLabel(CT_PASSENGERS) ||
 #ifdef WITH_RUST
 				!IsRawIndustry(spec) || UsesOriginalEconomy(spec)
 #else
@@ -65,7 +65,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		}
 		IndustryPolicyRequire(ind != nullptr);
 		FIXTURE_POOL_RECORD(ind).ctlflags.Set(IndustryControlFlag::NoClosure);
-		vehicle->cargo_type = ind->produced[0].cargo;
+		vehicle->cargo_type = FIXTURE_POOL_RECORD(ind).produced[0].cargo;
 		if (outcome != 0) vehicle->GetOrder(0)->MakeGoToStation((*ind->stations_near.begin())->index);
 		std::vector<std::pair<Vehicle *, OrderList *>> original_orders;
 		OrderList *wide = nullptr;
@@ -83,7 +83,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		DeleteIndustryNews(ind->index);
 		bool found = false;
 		for (uint attempt = 0; attempt < 512 && !found; ++attempt) {
-			ind->produced[0].rate = 8;
+			FIXTURE_POOL_RECORD(ind).produced[0].rate = 8;
 #ifdef WITH_RUST
 			const OpenTTDClockIndustry clock{_industry_builder.owner.get(), &GetIndustryRustServices()};
 			openttd_rust_clock_industry_monthly(&clock, nullptr);
