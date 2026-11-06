@@ -74,18 +74,5 @@ LinkGraphSchedule::~LinkGraphSchedule() { this->Clear(); }
  */
 /* static */ void LinkGraphSchedule::Run(LinkGraphJob *job)
 {
-	if (job->IsJobAborted()) return;
 	job->RunRust();
-	if (job->IsJobAborted()) return;
-	/*
-	 * Readers of this variable in another thread may see an out of date value.
-	 * However this is OK as this will only happen just as a job is completing,
-	 * and the real synchronisation is provided by the thread join operation.
-	 * In the worst case the main thread will be paused for longer than
-	 * strictly necessary before joining.
-	 * This is just a hint variable to avoid performing the join excessively
-	 * early and blocking the main thread.
-	 */
-
-	job->job_completed.store(true, std::memory_order_release);
 }

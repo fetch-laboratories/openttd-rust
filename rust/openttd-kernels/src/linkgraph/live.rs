@@ -18,21 +18,37 @@ use crate::{
     timer_game_common::INVALID_DATE,
     witness,
 };
-use std::ptr::addr_of_mut;
 
 pub(crate) const MIN_TIMEOUT_DISTANCE: u32 = 32;
 pub(crate) const STALE_LINK_DEPOT_TIMEOUT: i32 = 1024;
 pub(crate) const COMPRESSION_INTERVAL: i32 = 256;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Edge {
-    pub capacity: u32,
-    pub usage: u32,
-    pub travel_time_sum: u64,
-    pub last_unrestricted_update: i32,
-    pub last_restricted_update: i32,
-    pub dest_node: u16,
+use crate::industrytype::NativeVec;
+crate::abi::shared_records! {
+    fn abi_record;
+    #[derive(Clone, Copy)]
+    "OpenTTDLiveEdge" ["station_service"] => pub struct Edge {
+        pub capacity: u32,
+        pub usage: u32,
+        pub travel_time_sum: u64,
+        pub last_unrestricted_update: i32 => "TimerGameEconomy::Date",
+        pub last_restricted_update: i32 => "TimerGameEconomy::Date",
+        pub dest_node: u16,
+    }
+    "OpenTTDLiveNode" ["station_service"] => pub struct Node {
+        pub supply: u32,
+        pub demand: u32,
+        pub station: u16,
+        pub xy: u32,
+        pub last_update: i32,
+        pub edges: NativeVec<Edge> => "RustVector<OpenTTDLiveEdge>",
+    }
+    #[derive(Clone)]
+    "OpenTTDLiveGraph" ["station_service"] => pub struct Graph {
+        pub cargo: u8,
+        pub last_compression: i32,
+        pub nodes: NativeVec<Node> => "RustVector<OpenTTDLiveNode>",
+    }
 }
 impl Edge {
     // The two heterogeneous BaseEdge comparison operators from linkgraph.h.
@@ -104,14 +120,6 @@ impl Edge {
     }
 }
 
-pub(crate) struct Node {
-    pub supply: u32,
-    pub demand: u32,
-    pub station: u16,
-    pub xy: u32,
-    pub last_update: i32,
-    pub edges: Vec<Edge>,
-}
 impl Clone for Node {
     fn clone(&self) -> Self {
         Self {
@@ -140,7 +148,7 @@ impl Node {
             station,
             xy,
             last_update: INVALID_DATE,
-            edges: Vec::new(),
+            edges: NativeVec::new(),
         }
     }
     fn update_supply(&mut self, supply: u32, date: i32) {
@@ -199,18 +207,10 @@ impl Node {
         }
     }
     pub(crate) fn remove_edge(&mut self, to: u16) {
-        let first = self.edges.partition_point(|e| e.before(to));
-        let last = self.edges.partition_point(|e| !e.after(to));
-        self.edges.drain(first..last);
+        self.edges.retain(|edge| edge.dest_node != to);
     }
 }
 
-#[derive(Clone)]
-pub struct Graph {
-    pub(crate) cargo: u8,
-    pub(crate) last_compression: i32,
-    pub(crate) nodes: Vec<Node>,
-}
 impl Graph {
     pub(crate) fn size(&self) -> u16 {
         self.nodes.len() as u16
@@ -283,7 +283,7 @@ fn new_graph(cargo: u8, date: i32) -> *mut Graph {
     Box::into_raw(Box::new(Graph {
         cargo,
         last_compression: date,
-        nodes: Vec::new(),
+        nodes: NativeVec::new(),
     }))
 }
 #[unsafe(no_mangle)]
@@ -301,18 +301,6 @@ pub unsafe extern "C" fn openttd_rust_live_graph_copy(graph: *const Graph) -> *m
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_delete(graph: *mut Graph) {
     drop(unsafe { Box::from_raw(graph) });
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_size(graph: *const Graph) -> u16 {
-    unsafe { &*graph }.size()
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_cargo(graph: *mut Graph) -> *mut u8 {
-    unsafe { addr_of_mut!((*graph).cargo) }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_date(graph: *mut Graph) -> *mut i32 {
-    unsafe { addr_of_mut!((*graph).last_compression) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_init(graph: *mut Graph, size: u32) {
@@ -357,42 +345,6 @@ pub unsafe extern "C" fn openttd_rust_live_graph_monthly(graph: *const Graph, va
             .wrapping_add(1) as u32
 }
 
-/// Save-only address carrier pointing at the live fields.
-#[repr(C)]
-pub struct NodeFields {
-    pub supply: *mut u32,
-    pub demand: *mut u32,
-    pub station: *mut u16,
-    pub xy: *mut u32,
-    pub last_update: *mut i32,
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_fields(graph: *mut Graph, id: u16) -> NodeFields {
-    let n = unsafe { (*graph).nodes.as_ptr().add(usize::from(id)).cast_mut() };
-    NodeFields {
-        supply: unsafe { addr_of_mut!((*n).supply) },
-        demand: unsafe { addr_of_mut!((*n).demand) },
-        station: unsafe { addr_of_mut!((*n).station) },
-        xy: unsafe { addr_of_mut!((*n).xy) },
-        last_update: unsafe { addr_of_mut!((*n).last_update) },
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_supply(graph: *const Graph, id: u16) -> u32 {
-    unsafe { &*graph }.nodes[usize::from(id)].supply
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_station(graph: *const Graph, id: u16) -> u16 {
-    unsafe { &*graph }.nodes[usize::from(id)].station
-}
-/// Immutable job annotations borrow only this canonical scalar until join/drop.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_station_address(
-    graph: *const Graph,
-    id: u16,
-) -> *const u16 {
-    std::ptr::addr_of!(unsafe { &*graph }.nodes[usize::from(id)].station)
-}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_location(graph: *mut Graph, id: u16, xy: u32) {
     unsafe { &mut *graph }.nodes[usize::from(id)].xy = xy;
@@ -406,28 +358,6 @@ pub unsafe extern "C" fn openttd_rust_live_node_update_supply(
     let date = crate::timer_game_common::economy_date().0;
     let n = &mut unsafe { &mut *graph }.nodes[usize::from(id)];
     n.update_supply(supply, date);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_edges(
-    graph: *const Graph,
-    id: u16,
-    len: *mut usize,
-) -> *const Edge {
-    let edges = &unsafe { &*graph }.nodes[usize::from(id)].edges;
-    unsafe {
-        *len = edges.len();
-    }
-    edges.as_ptr()
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_edge(
-    graph: *const Graph,
-    id: u16,
-    to: u16,
-) -> *const Edge {
-    unsafe { &*graph }.nodes[usize::from(id)]
-        .edge(to)
-        .map_or(std::ptr::null(), std::ptr::from_ref)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_update_edge(
@@ -597,15 +527,13 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
 /// Run the existing computation from its distinct immutable snapshot. This
 /// replaces native packing of the same two temporary input arrays, not the job
 /// algorithm or its publication/join policy.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_graph_run(
+pub(crate) unsafe fn run(
     graph: *const Graph,
-    settings: *const super::Settings,
-    context: *const std::ffi::c_void,
-    aborted: unsafe extern "C" fn(*const std::ffi::c_void) -> u8,
-) -> *mut super::Result {
+    settings: &super::Settings,
+    aborted: impl Fn() -> bool,
+) -> super::Result {
     let g = unsafe { &*graph };
-    let s = unsafe { &*settings };
+    let s = settings;
     let map = crate::map_func::Map::from_log_x((s.map_max_x + 1).ilog2());
     let mut nodes = Vec::with_capacity(usize::from(g.size()));
     let mut edges = Vec::new();
@@ -627,17 +555,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_run(
             });
         }
     }
-    unsafe {
-        super::openttd_rust_linkgraph_run(
-            nodes.as_ptr(),
-            nodes.len(),
-            edges.as_ptr(),
-            edges.len(),
-            settings,
-            context,
-            aborted,
-        )
-    }
+    super::run(&nodes, &edges, *settings, aborted)
 }
 
 /// Station membership remains native; all callers share these typed leaves.
@@ -706,12 +624,6 @@ pub(crate) unsafe fn station_supply(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "LinkGraph::BaseEdge" ["station_service"] => Edge {
-        capacity, usage, travel_time_sum, last_unrestricted_update, last_restricted_update, dest_node,
-    };
-    "OpenTTDLiveNodeFields" ["station_service"] => NodeFields {
-        supply, demand, station, xy, last_update,
-    };
     "OpenTTDLiveGraphAccess" ["station_service"] => Access { owner, index, };
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
@@ -730,12 +642,4 @@ pub unsafe extern "C" fn openttd_rust_live_node_add_edge(
 ) {
     let date = crate::timer_game_common::economy_date().0;
     unsafe { &mut *graph }.nodes[usize::from(id)].add_edge(to, capacity, usage, time, modes, date);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_edge_travel_time(edge: *const Edge) -> u32 {
-    unsafe { &*edge }.travel_time()
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_edge_last_update(edge: *const Edge) -> i32 {
-    unsafe { &*edge }.last_update()
 }

@@ -787,7 +787,7 @@ static void StationGraphs()
 	stations[2]->goods[cargo].status.Reset(GoodsEntry::State::Acceptance);
 	first->Merge(second);
 #ifdef WITH_RUST
-	StationNeed(*openttd_rust_live_node_fields(first->RustState(), 2).demand == 0, __LINE__);
+	StationNeed(first->Record().nodes[2].demand == 0, __LINE__);
 #else
 	StationNeed((*first)[2].demand == 0, __LINE__);
 #endif

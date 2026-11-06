@@ -27,12 +27,12 @@ typedef struct {
 	uint8_t found;
 } OpenTTDCargoOrigin;
 struct OpenTTDLiveGraph;
+struct OpenTTDLinkGraphJobRecord;
 typedef struct OpenTTDCargoFlowServices {
-	const OpenTTDLiveGraph *snapshot;
+	OpenTTDLinkGraphJobRecord *job;
 	const OpenTTDLiveGraph *live_graph;
 	void *context;
 	uint32_t (*read)(void *, uint8_t, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(read);
-	OpenTTDCargoFlowMap *(*job_flows)(void *, uint16_t) OPENTTD_SERVICE_DEFAULT(job_flows);
 	OpenTTDCargoFlowMap *(*live_flows)(void *, uint16_t) OPENTTD_SERVICE_DEFAULT(live_flows);
 	void (*reroute)(void *, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(reroute);
 	void (*finish)(void *, uint16_t, uint8_t) OPENTTD_SERVICE_DEFAULT(finish);
@@ -40,8 +40,8 @@ typedef struct OpenTTDCargoFlowServices {
 /* Each facade holds one opaque owner or a nonowning borrow of a map entry, valid until that entry is
  * erased. Maps own raw-allocated flow nodes that insertion and unrelated erasure leave in place; job
  * maps are private to their worker until join, and rerouting cannot delete graph shells.
- * Read selectors: 0 graph valid, 3 live station valid, 4 edge count, 5 edge flow, 6 destination node,
- * 8 manual distribution, 9 live data empty, 10 live graph ID, 11 live node ID, 12 job graph ID.
+ * Station read selectors: 3 valid, 8 manual distribution, 9 live data empty,
+ * 10 live graph ID, 11 live node ID. Job snapshots/results are read directly.
  * finish clears data when requested, then invalidates the station window, after the thread join.
  * Calls are serial; clone and insertion copy into independent owners, destroyed once. Graph owners
  * stay live under the game-state mutex during application, and callbacks retain no owner references. */

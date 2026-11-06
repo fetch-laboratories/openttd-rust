@@ -224,7 +224,7 @@ void LinkGraphOverlay::AddLinks(const Station *from, const Station *to)
 			ConstEdge &edge = lg[ge.node][to->goods[cargo].node];
 			this->AddStats(cargo, lg.Monthly(edge.capacity), lg.Monthly(edge.usage),
 					ge.HasData() ? ge.GetData().flows.GetFlowVia(to->index) : 0,
-					edge.TravelTime() / Ticks::DAY_TICKS,
+					LinkGraph::EdgeTravelTime(edge) / Ticks::DAY_TICKS,
 					from->owner == OWNER_NONE || to->owner == OWNER_NONE,
 					this->cached_links[from->index][to->index]);
 		}

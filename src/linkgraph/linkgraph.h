@@ -42,48 +42,15 @@ public:
 	/**
 	 * An edge in the link graph. Corresponds to a link between two stations.
 	 */
-	struct BaseEdge {
-		uint capacity = 0; ///< Capacity of the link.
-		uint usage = 0; ///< Usage of the link.
-		uint64_t travel_time_sum = 0; ///< Sum of the travel times of the link, in ticks.
-		TimerGameEconomy::Date last_unrestricted_update{}; ///< When the unrestricted part of the link was last updated.
-		TimerGameEconomy::Date last_restricted_update{}; ///< When the restricted part of the link was last updated.
-		NodeID dest_node = INVALID_NODE; ///< Destination of the edge.
-
-		BaseEdge(NodeID dest_node = INVALID_NODE) { openttd_rust_live_edge_init(reinterpret_cast<OpenTTDLiveEdge *>(this), dest_node); }
-
-		/**
-		 * Get edge's average travel time.
-		 * @return Travel time, in ticks.
-		 */
-		uint32_t TravelTime() const { return openttd_rust_live_edge_travel_time(reinterpret_cast<const OpenTTDLiveEdge *>(this)); }
-
-		/**
-		 * Get the date of the last update to any part of the edge's capacity.
-		 * @return Last update.
-		 */
-		TimerGameEconomy::Date LastUpdate() const { return TimerGameEconomy::Date{openttd_rust_live_edge_last_update(reinterpret_cast<const OpenTTDLiveEdge *>(this))}; }
-
-		void Update(uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(this->capacity > 0); assert(capacity >= usage); openttd_rust_live_edge_update(reinterpret_cast<OpenTTDLiveEdge *>(this), capacity, usage, time, modes.base()); }
-		void Restrict() { openttd_rust_live_edge_restrict(reinterpret_cast<OpenTTDLiveEdge *>(this)); }
-		void Release() { openttd_rust_live_edge_release(reinterpret_cast<OpenTTDLiveEdge *>(this)); }
-
-		/** Comparison operator based on \c dest_node. */
-		bool operator <(const BaseEdge &rhs) const
-		{
-			return this->dest_node < rhs.dest_node;
-		}
-
-		bool operator <(NodeID rhs) const
-		{
-			return this->dest_node < rhs;
-		}
-
-		friend inline bool operator <(NodeID lhs, const LinkGraph::BaseEdge &rhs)
-		{
-			return lhs < rhs.dest_node;
-		}
+	struct BaseEdge : OpenTTDLiveEdge {
+		BaseEdge(NodeID dest_node = INVALID_NODE) { openttd_rust_live_edge_init(this, dest_node); }
+		uint32_t TravelTime() const { return LinkGraph::EdgeTravelTime(*this); }
+		TimerGameEconomy::Date LastUpdate() const { return std::max(this->last_unrestricted_update, this->last_restricted_update); }
+		void Update(uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(this->capacity > 0); assert(capacity >= usage); openttd_rust_live_edge_update(this, capacity, usage, time, modes.base()); }
+		void Restrict() { openttd_rust_live_edge_restrict(this); }
+		void Release() { openttd_rust_live_edge_release(this); }
 	};
+	static uint32_t EdgeTravelTime(const OpenTTDLiveEdge &edge) { return static_cast<uint32_t>(edge.travel_time_sum / edge.capacity); }
 
 	/**
 	 * Node of the link graph. contains all relevant information from the associated
@@ -94,17 +61,17 @@ public:
 	struct BaseNode {
 		OpenTTDLiveGraph *owner;
 		NodeID id;
-		uint Supply() const { return openttd_rust_live_node_supply(this->owner, this->id); }
-		StationID Station() const { return StationID(openttd_rust_live_node_station(this->owner, this->id)); }
-		const uint16_t *StationAddress() const { return openttd_rust_live_node_station_address(this->owner, this->id); }
+		const OpenTTDLiveNode &Record() const { return this->owner->nodes[this->id]; }
+		uint Supply() const { return this->Record().supply; }
+		StationID Station() const { return StationID(this->Record().station); }
 		void UpdateSupply(uint supply) { openttd_rust_live_node_update_supply(this->owner, this->id, supply); }
 		void UpdateLocation(TileIndex xy) { openttd_rust_live_node_location(this->owner, this->id, xy.base()); }
 		void UpdateEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(capacity > 0); assert(usage <= capacity); openttd_rust_live_node_update_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), GetRustLiveGraphServices().assertions); }
 		void AddEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(!this->HasEdgeTo(to)); openttd_rust_live_node_add_edge(this->owner, this->id, to, capacity, usage, time, modes.base()); }
-		bool HasEdgeTo(NodeID to) const { return openttd_rust_live_node_edge(this->owner, this->id, to) != nullptr; }
-		const BaseEdge &operator[](NodeID to) const { auto *edge = openttd_rust_live_node_edge(this->owner, this->id, to); assert(edge != nullptr); return *reinterpret_cast<const BaseEdge *>(edge); }
-		std::span<const BaseEdge> Edges() const { size_t size; auto *edges = openttd_rust_live_node_edges(this->owner, this->id, &size); return {reinterpret_cast<const BaseEdge *>(edges), size}; }
-		BaseEdge &AppendEdge() { return *reinterpret_cast<BaseEdge *>(openttd_rust_live_node_append_edge(this->owner, this->id)); }
+		bool HasEdgeTo(NodeID to) const { const auto &edges = this->Record().edges; auto it = std::ranges::lower_bound(edges, to, {}, &OpenTTDLiveEdge::dest_node); return it != edges.end() && it->dest_node == to; }
+		const OpenTTDLiveEdge &operator[](NodeID to) const { const auto &edges = this->Record().edges; auto it = std::ranges::lower_bound(edges, to, {}, &OpenTTDLiveEdge::dest_node); assert(it != edges.end() && it->dest_node == to); return *it; }
+		std::span<const OpenTTDLiveEdge> Edges() const { return this->Record().edges; }
+		OpenTTDLiveEdge &AppendEdge() { return *openttd_rust_live_node_append_edge(this->owner, this->id); }
 	};
 
 	typedef std::vector<BaseNode> NodeVector;
@@ -141,8 +108,10 @@ public:
 	void Compress() { openttd_rust_live_graph_compress(this->owner); }
 	void Merge(LinkGraph *other) { openttd_rust_live_graph_merge(this, other, &GetRustLiveGraphServices()); }
 	OpenTTDLiveGraph *RustState() const { return this->owner; }
-	int32_t &SaveCompression() { return *openttd_rust_live_graph_date(this->owner); }
-	uint8_t &SaveCargo() { return *openttd_rust_live_graph_cargo(this->owner); }
+	OpenTTDLiveGraph &Record() { return *this->owner; }
+	const OpenTTDLiveGraph &Record() const { return *this->owner; }
+	int32_t &SaveCompression() { return this->Record().last_compression; }
+	uint8_t &SaveCargo() { return this->Record().cargo; }
 
 	/* Splitting link graphs is intentionally not implemented.
 	 * The overhead in determining connectedness would probably outweigh the
@@ -163,19 +132,19 @@ public:
 	 * Get the current size of the component.
 	 * @return Size.
 	 */
-	inline NodeID Size() const { return openttd_rust_live_graph_size(this->owner); }
+	inline NodeID Size() const { return static_cast<NodeID>(this->Record().nodes.size()); }
 
 	/**
 	 * Get date of last compression.
 	 * @return Date of last compression.
 	 */
-	inline TimerGameEconomy::Date LastCompression() const { return TimerGameEconomy::Date{*openttd_rust_live_graph_date(this->owner)}; }
+	inline TimerGameEconomy::Date LastCompression() const { return TimerGameEconomy::Date{this->Record().last_compression}; }
 
 	/**
 	 * Get the cargo type this component's link graph refers to.
 	 * @return Cargo type.
 	 */
-	inline CargoType Cargo() const { return *openttd_rust_live_graph_cargo(this->owner); }
+	inline CargoType Cargo() const { return this->Record().cargo; }
 
 	/**
 	 * Scale a value to its monthly equivalent, based on last compression.

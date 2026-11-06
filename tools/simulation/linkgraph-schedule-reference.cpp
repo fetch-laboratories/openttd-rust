@@ -39,7 +39,7 @@ class LinkGraph {
 public:
 	uint16_t index, size, tag; int32_t date = 100, node_date = 90;
 	OpenTTDLiveGraph *owner = nullptr;
-	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0); *openttd_rust_live_graph_date(this->owner) = this->date; openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) *openttd_rust_live_node_fields(this->owner, i).last_update = this->node_date; } }
+	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0); this->owner->last_compression = this->date; openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) this->owner->nodes[i].last_update = this->node_date; } }
 	~LinkGraph() { if (this->owner) openttd_rust_live_graph_delete(this->owner); }
 	uint16_t Size() const { return this->size; }
 	static LinkGraph *Get(uint16_t id) { return graphs[id]; }
@@ -177,7 +177,7 @@ static auto Run(bool rust)
 	auto *listed = new LinkGraphJob(small); auto *unlisted = new LinkGraphJob(unqueued); Import({&small}, {listed});
 	if (candidate) { openttd_rust_schedule_spawn_all(&services); openttd_rust_schedule_shift(&services, -17); openttd_rust_schedule_clear(&services); }
 	else { ref.SpawnAll(); ref.ShiftDates(Date{-17}); ref.Clear(); }
-	for (auto *g : LinkGraph::Iterate()) { trace.push_back({30, g->tag, candidate ? *openttd_rust_live_graph_date(g->owner) : g->date}); trace.push_back({31, g->tag, candidate ? *openttd_rust_live_node_fields(g->owner, 0).last_update : g->node_date}); }
+	for (auto *g : LinkGraph::Iterate()) { trace.push_back({30, g->tag, candidate ? g->owner->last_compression : g->date}); trace.push_back({31, g->tag, candidate ? g->owner->nodes[0].last_update : g->node_date}); }
 	Capture(); assert(jobs[listed->index] == listed && jobs[unlisted->index] == unlisted); // Clear must not delete.
 	auto result = trace; for (auto *j : jobs) delete j; Import({}, {});
 	if (rust) openttd_test_schedule_pause_observer(nullptr);

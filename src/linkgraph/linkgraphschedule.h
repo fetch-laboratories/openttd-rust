@@ -15,25 +15,6 @@
 class LinkGraphJob;
 struct OpenTTDScheduleServices;
 
-/**
- * A handler doing "something" on a link graph component. It must not keep any
- * state as it is called concurrently from different threads.
- */
-class ComponentHandler {
-public:
-	/**
-	 * Destroy the handler. Must be given due to virtual Run.
-	 */
-	virtual ~ComponentHandler() = default;
-
-	/**
-	 * Run the handler. A link graph handler must not read or write any data
-	 * outside the given component as that would create a potential desync.
-	 * @param job Link graph component to run the handler on.
-	 */
-	virtual void Run(LinkGraphJob &job) const = 0;
-};
-
 class LinkGraphSchedule {
 private:
 	LinkGraphSchedule();

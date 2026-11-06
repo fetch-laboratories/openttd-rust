@@ -68,10 +68,54 @@ impl<T> NativeVec<T> {
         self.count = 0;
         vec
     }
+    pub(crate) fn edit<R>(&mut self, edit: impl FnOnce(&mut Vec<T>) -> R) -> R {
+        let mut vec = std::mem::take(self).into_vec();
+        let result = edit(&mut vec);
+        *self = Self::from_vec(vec);
+        result
+    }
+    pub(crate) fn pop(&mut self) -> Option<T> {
+        self.edit(Vec::pop)
+    }
+    pub(crate) fn insert(&mut self, index: usize, value: T) {
+        self.edit(|vec| vec.insert(index, value));
+    }
+    pub(crate) fn resize_with(&mut self, size: usize, make: impl FnMut() -> T) {
+        self.edit(|vec| vec.resize_with(size, make));
+    }
+    pub(crate) fn retain(&mut self, keep: impl FnMut(&T) -> bool) {
+        self.edit(|vec| vec.retain(keep));
+    }
     pub fn push(&mut self, value: T) {
         let mut vec = std::mem::take(self).into_vec();
         vec.push(value);
         *self = Self::from_vec(vec);
+    }
+}
+impl<T> std::ops::Deref for NativeVec<T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        self.as_slice()
+    }
+}
+impl<T> std::ops::DerefMut for NativeVec<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        // SAFETY: mutable access is only used for Rust-owned vectors.
+        unsafe { std::slice::from_raw_parts_mut(self.items, self.count) }
+    }
+}
+impl<'a, T> IntoIterator for &'a NativeVec<T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+impl<'a, T> IntoIterator for &'a mut NativeVec<T> {
+    type Item = &'a mut T;
+    type IntoIter = std::slice::IterMut<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
     }
 }
 impl NativeVec<u32> {
@@ -98,6 +142,14 @@ impl<T> Drop for NativeVec<T> {
 impl<T: Clone> Clone for NativeVec<T> {
     fn clone(&self) -> Self {
         Self::from_vec(self.as_slice().to_vec())
+    }
+    fn clone_from(&mut self, source: &Self) {
+        self.edit(|vec| {
+            vec.truncate(source.len());
+            let existing = vec.len();
+            vec.clone_from_slice(&source.as_slice()[..existing]);
+            vec.extend_from_slice(&source.as_slice()[existing..]);
+        });
     }
 }
 
