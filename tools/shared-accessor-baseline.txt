@@ -2,9 +2,7 @@ src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
 src/economy.cpp | [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t | f29886bee36a938f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * | 6c04ed067ab54477 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c1ccb7a99eba675e | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | cb5a17d7b102cbc0 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 02b8967881717dcf | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 0adea4dfb4e628dd | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2476726e8336e3a3 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2f3fe8935519b746 | 1
@@ -95,7 +93,6 @@ src/town_cmd.cpp | RustTown_allow_crossings() noexcept | 1f8c8aa2e0af5a02 | 1
 src/town_cmd.cpp | RustTown_growth_rate() noexcept | 6c32e2c93ccbb6f1 | 1
 binding | IndustryCommandDeity | 2
 write | src/economy.cpp | [](OpenTTDVehicle *handle, int64_t value) noexcept -> void | e49661d6b53b5cb0 | 1
-write | src/economy.cpp | [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void | cebe9268db3802a2 | 1
 write | src/rust/company_adapter.cpp | Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept | d8f0ad7c93f2f046 | 1
 write | src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t owner) noexcept | b1bc0135df3a7a84 | 1
 write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shell, uint16_t id) noexcept | 1b6edd36dbec0c7a | 1

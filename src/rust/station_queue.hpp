@@ -66,9 +66,9 @@ public:
 	bool empty() const { return this->size() == 0; }
 	Vehicle *front() const { return *this->begin(); }
 	void PushRecord(OpenTTDVehicle *record) { openttd_rust_station_queue_push(this->state, record); }
-	void push_back(Vehicle *vehicle) { this->PushRecord(vehicle == nullptr ? nullptr : vehicle->record); }
+	void push_back(Vehicle *vehicle) { this->PushRecord(vehicle == nullptr ? nullptr : &vehicle->Record()); }
 	iterator erase(iterator position) { return {this->state, openttd_rust_station_queue_erase_node(this->state, position.node)}; }
-	void remove(Vehicle *vehicle) { openttd_rust_station_queue_remove(this->state, vehicle == nullptr ? nullptr : vehicle->record); }
+	void remove(Vehicle *vehicle) { openttd_rust_station_queue_remove(this->state, vehicle == nullptr ? nullptr : &vehicle->Record()); }
 	void clear() { openttd_rust_station_queue_clear(this->state); }
 };
 
