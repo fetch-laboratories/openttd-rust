@@ -131,6 +131,10 @@ def collect_pull(repository: str, number: int, *, latency: bool = False) -> Pull
                 "merged",
             }
         )
+    passing_full_url = ci.passed_run(repository, head)
+    files = [
+        f["filename"] for f in pages(repository, f"pulls/{number}/files?per_page=100")
+    ]
     current = ci.api(repository, f"pulls/{number}")
     return PullFacts(
         number,
@@ -144,12 +148,9 @@ def collect_pull(repository: str, number: int, *, latency: bool = False) -> Pull
         head == current["head"]["sha"]
         and pull["base"]["sha"] == current["base"]["sha"],
         full_fact,
-        ci.passed_run(repository, head),
+        passing_full_url,
         review_reports(comments, reviews, head),
-        [
-            f["filename"]
-            for f in pages(repository, f"pulls/{number}/files?per_page=100")
-        ],
+        files,
         milestones,
     )
 

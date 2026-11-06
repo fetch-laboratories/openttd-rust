@@ -4,6 +4,7 @@
 import json
 import unittest
 from dataclasses import replace
+from typing import Any
 from unittest import mock
 
 import retrospective as facts
@@ -90,6 +91,23 @@ class RetrospectiveTests(unittest.TestCase):
             facts.overlaps([result, other]),
             [{"prs": [1, 2], "files": ["tools/shared.py"]}],
         )
+
+        current = dict(pull)
+
+        def changed_files(_repo: str, path: str) -> list[dict[str, Any]]:
+            if path == "pulls/1/files?per_page=100":
+                current["head"] = {"sha": "d" * 40}
+            return arrays[path]
+
+        with (
+            mock.patch.object(facts.ci, "api", side_effect=[pull, current]),
+            mock.patch.object(facts, "pages", side_effect=changed_files),
+            mock.patch.object(
+                facts.ci, "passed_run", return_value=status["target_url"]
+            ),
+        ):
+            changed = facts.collect_pull("owner/repo", 1)
+        self.assertFalse(changed.stable_snapshot)
 
     def test_overlap_is_elapsed_union_and_unknown_milestones_stay_absent(self) -> None:
         first = self.pull()
