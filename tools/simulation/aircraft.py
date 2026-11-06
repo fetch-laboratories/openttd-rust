@@ -5,7 +5,10 @@ import json
 import shutil
 import subprocess
 import threading
+from collections.abc import Mapping
 from pathlib import Path
+from types import ModuleType
+from typing import Any, NotRequired, cast
 
 from . import core
 from .core import (
@@ -24,6 +27,27 @@ from .effects import effect_rows
 from .play_saves import DISTRIBUTIONS
 
 AI_FOLDER = "aircraft-controller-ai"
+
+
+class Scenario(core.Scenario):
+    aircraft_fixture: NotRequired[bool]
+    aircraft_control: NotRequired[str]
+    aircraft_setup: NotRequired[bool]
+    aircraft_controller_setup: NotRequired[bool]
+    aircraft_count: NotRequired[int]
+    aircraft_oilrig: NotRequired[bool]
+    aircraft_action: NotRequired[str]
+    aircraft_action_target: NotRequired[int]
+    aircraft_action_airports: NotRequired[list[int]]
+    aircraft_heads: NotRequired[list[int]]
+    aircraft_selected: NotRequired[int]
+    aircraft_airports: NotRequired[list[int]]
+    aircraft_target: NotRequired[int]
+    # Disaster scenarios' keys, read by the shared check hook.
+    disasters: NotRequired[str]
+    family: NotRequired[str]
+
+
 LOCK = threading.Lock()
 LANDING_SEEDS = {
     "equal": (2443390976, 1012692424),
@@ -46,8 +70,8 @@ BREAKDOWN_RNG = {
 }
 
 
-def scenarios(soak):
-    cases = [
+def scenarios(soak: bool) -> list[Scenario]:
+    cases: list[Scenario] = [
         {
             "name": f"aircraft-route-{distribution}",
             "kind": "save",
@@ -109,11 +133,11 @@ def scenarios(soak):
     return cases
 
 
-def uses_ai(scenario):
+def uses_ai(scenario: Scenario) -> bool:
     return "aircraft_control" in scenario
 
 
-def install(scenario, run_dir):
+def install(scenario: Scenario, run_dir: Path) -> None:
     if scenario.get("aircraft_controller_setup") or scenario.get("aircraft_action"):
         scripts = run_dir / "ai/aircraft-controller"
         shutil.copytree(scenario["scenario_ai"], scripts)
@@ -126,7 +150,7 @@ def install(scenario, run_dir):
         )
 
 
-def game_args(scenario):
+def game_args(scenario: Scenario) -> list[str]:
     return (
         ["-d", "script=2"]
         if scenario.get("aircraft_setup") or scenario.get("aircraft_controller_setup")
@@ -134,7 +158,7 @@ def game_args(scenario):
     )
 
 
-def prepare_aircraft_save(migration, out, timeout):
+def prepare_aircraft_save(migration: ModuleType, out: Path, timeout: int) -> None:
     """Construct with the pinned reference; comparison never installs the setup AI."""
     runtime = out / "reference-runtime"
     with migration.reference_lock(shared=True):
@@ -144,7 +168,7 @@ def prepare_aircraft_save(migration, out, timeout):
     scripts = ROOT / "tools/aircraft-scenario-ai"
     frozen = runtime / "ai/aircraft-setup"
     shutil.copytree(scripts, frozen)
-    setup = {
+    setup: dict[str, Any] = {
         "kind": "generate",
         "aircraft_setup": True,
         "seed": 86,
@@ -167,8 +191,9 @@ def prepare_aircraft_save(migration, out, timeout):
             "economy": {"initial_city_size": 4},
         },
     }
+    # A preparation game outside the scenario list: it has no name.
     run = run_game(
-        setup,
+        cast(Scenario, setup),
         binary,
         runtime,
         out / "built",
@@ -221,7 +246,7 @@ CROSSING_CAPS = {
 }
 
 
-def counted_scenario(scenario):
+def counted_scenario(scenario: Scenario) -> str | bool:
     return (
         scenario.get("aircraft_control")
         or scenario.get("aircraft_fixture")
@@ -230,7 +255,7 @@ def counted_scenario(scenario):
     )
 
 
-def game_environment(scenario):
+def game_environment(scenario: Scenario) -> Mapping[str, str]:
     return (
         {"OPENTTD_WITNESS": "1"}
         if counted_scenario(scenario) and scenario.get("witnesses")
@@ -238,7 +263,13 @@ def game_environment(scenario):
     )
 
 
-def check(scenario, run, mode, role, result):
+def check(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if counted_scenario(scenario):
         counts = core.branch_witnesses(
             scenario,
@@ -267,7 +298,7 @@ def check(scenario, run, mode, role, result):
             ),
         )
         if counts is not None:
-            result[f"{mode}_{role}_aircraft_boundary"] = dict(
+            core.findings(result)[f"{mode}_{role}_aircraft_boundary"] = dict(
                 counts,
                 services_per_tick=counts["services"] / counts["ticks"]
                 if counts["ticks"]
@@ -310,7 +341,10 @@ def check(scenario, run, mode, role, result):
     for path in paths:
         chunk = read_save(path)["VEHS"]
         observations.append(
-            {index: decode_element(chunk, body) for index, body in chunk["elements"]}
+            {
+                index: cast(core.Row, decode_element(chunk, body))
+                for index, body in chunk["elements"]
+            }
         )
     witnesses = {}
     for name, head in record["aircraft"].items():
@@ -364,10 +398,12 @@ def check(scenario, run, mode, role, result):
             "cargo_counts": cargo_counts,
             "positive_profit_deltas": paid,
         }
-    result[f"{mode}_{role}_aircraft"] = witnesses
+    core.findings(result)[f"{mode}_{role}_aircraft"] = witnesses
 
 
-def finite_range_probe(folder, candidate_build, env):
+def finite_range_probe(
+    folder: Path, candidate_build: Path, env: dict[str, str]
+) -> dict[str, Any]:
     """No supplied NewGRF gives finite aircraft range: check unchanged bodies."""
     import migration
 
@@ -412,7 +448,15 @@ def finite_range_probe(folder, candidate_build, env):
     }
 
 
-def prepare(scenario, binaries, builds, out, timeout, env, result):
+def prepare(
+    scenario: Scenario,
+    binaries: dict[str, Path],
+    builds: dict[str, Path],
+    out: Path,
+    timeout: int,
+    env: dict[str, str],
+    result: core.Result,
+) -> Scenario:
     """Reference-built airport layouts and explicitly declared branch inputs."""
     if not scenario.get("aircraft_control"):
         return scenario
@@ -425,7 +469,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
         source = folder / "save/autosave/exit.sav"
         if not source.exists():
-            setup = {
+            setup: dict[str, Any] = {
                 "kind": "generate",
                 "aircraft_controller_setup": True,
                 "aircraft_count": count,
@@ -456,8 +500,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             if kind == "ownerless":
                 setup["settings"]["difficulty"]["quantity_sea_lakes"] = 2
                 setup["settings"]["construction"] = {"raw_industry_construction": 1}
+            # A preparation game outside the scenario list: it has no name.
             trial = run_game(
-                setup,
+                cast(Scenario, setup),
                 binaries["reference"],
                 builds["reference"],
                 folder,
@@ -488,12 +533,15 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 if landing is not None:
                     break
                 trial = run_game(
-                    {
-                        "kind": "save",
-                        "save": str(source),
-                        "ticks": 64,
-                        "console": ["unpause"],
-                    },
+                    cast(
+                        Scenario,
+                        {
+                            "kind": "save",
+                            "save": str(source),
+                            "ticks": 64,
+                            "console": ["unpause"],
+                        },
+                    ),
                     binaries["reference"],
                     builds["reference"],
                     folder / f"landing-{attempt}",
@@ -520,12 +568,15 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 ):
                     break
                 trial = run_game(
-                    {
-                        "kind": "save",
-                        "save": str(source),
-                        "ticks": 128,
-                        "console": ["unpause"],
-                    },
+                    cast(
+                        Scenario,
+                        {
+                            "kind": "save",
+                            "save": str(source),
+                            "ticks": 128,
+                            "console": ["unpause"],
+                        },
+                    ),
                     binaries["reference"],
                     builds["reference"],
                     folder / f"airborne-{attempt}",
@@ -558,7 +609,15 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                         shutil.copyfile(source, cached)
                     break
                 trial = run_game(
-                    dict(kind="save", save=str(source), ticks=8, console=["unpause"]),
+                    cast(
+                        Scenario,
+                        {
+                            "kind": "save",
+                            "save": str(source),
+                            "ticks": 8,
+                            "console": ["unpause"],
+                        },
+                    ),
                     binaries["reference"],
                     builds["reference"],
                     folder / f"breakdown-loading-{attempt}",
@@ -589,7 +648,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             raise RuntimeError(
                 "controller reference input lacks all aircraft/airport layouts"
             )
-        edits = {}
+        edits: dict[str, dict[int, dict[str, Any]]] = {}
         flight = next(
             (
                 index
@@ -610,7 +669,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if loading is not None:
             flight = loading
         target = allrows[flight]["aircraft[0]/targetairport"]
-        action = {}
+        action: dict[str, Any] = {}
         if kind.startswith("breakdown-"):
             speed, tick, _, _ = BREAKDOWNS[kind.removeprefix("breakdown-")]
             common = "aircraft[0]/common[0]/"
@@ -658,12 +717,15 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             # changing candidate fields or expectations together.
             resumed = folder / "reload"
             trial = run_game(
-                {
-                    "kind": "save",
-                    "save": str(source),
-                    "ticks": 411,
-                    "console": ["unpause"],
-                },
+                cast(
+                    Scenario,
+                    {
+                        "kind": "save",
+                        "save": str(source),
+                        "ticks": 411,
+                        "console": ["unpause"],
+                    },
+                ),
                 binaries["reference"],
                 builds["reference"],
                 resumed,
@@ -704,25 +766,32 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         ):
             import migration
 
-            result["aircraft_range_gap"] = finite_range_probe(
+            core.findings(result)["aircraft_range_gap"] = finite_range_probe(
                 folder, migration.ROOT / "build-rust", env
             )
-        result["aircraft_input"] = record
-        result["aircraft_input"]["heads"] = heads
-        result["aircraft_input"]["airports"] = sorted(airports)
-        result["aircraft_input"]["selected"] = flight
-        return dict(
-            scenario,
-            save=str(destination),
-            aircraft_heads=heads,
-            aircraft_selected=flight,
-            aircraft_airports=sorted(airports),
-            aircraft_target=target,
+        findings = core.findings(result)
+        findings["aircraft_input"] = record
+        findings["aircraft_input"]["heads"] = heads
+        findings["aircraft_input"]["airports"] = sorted(airports)
+        findings["aircraft_input"]["selected"] = flight
+        return {
+            **scenario,
+            "save": str(destination),
+            "aircraft_heads": heads,
+            "aircraft_selected": flight,
+            "aircraft_airports": sorted(airports),
+            "aircraft_target": target,
             **action,
-        )
+        }
 
 
-def check_breakdown(scenario, run, mode, role, result):
+def check_breakdown(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     """Declared boundary inputs enter ordinary HandleBreakdown in both passes."""
     kind = scenario["aircraft_control"].removeprefix("breakdown-")
     speed, tick, final_speed, smoke_count = BREAKDOWNS[kind]
@@ -805,7 +874,7 @@ def check_breakdown(scenario, run, mode, role, result):
     rng = [rows(final, "DATE")[0][f"random_state[{i}]"] for i in (0, 1)]
     if rng != BREAKDOWN_RNG["loading" if landed else "airborne"]:
         raise RuntimeError("breakdown shared RNG differs from frozen reference")
-    result[f"{mode}_{role}_breakdown"] = {
+    core.findings(result)[f"{mode}_{role}_breakdown"] = {
         "selected": selected,
         "input_speed": speed,
         "final_speed": b[common + "cur_speed"],
@@ -817,7 +886,13 @@ def check_breakdown(scenario, run, mode, role, result):
     }
 
 
-def check_landing(scenario, run, mode, role, result):
+def check_landing(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     """Ordinary valid-station MaybeCrash: threshold, mask, draw and side effects."""
     kind = scenario["aircraft_control"].removeprefix("landing-")
     source, final = Path(scenario["save"]), run["snapshots"][-1]
@@ -901,7 +976,7 @@ def check_landing(scenario, run, mode, role, result):
         raise RuntimeError(
             "landing crash event/site/reason/victims missing or repeated"
         )
-    result[f"{mode}_{role}_landing"] = {
+    core.findings(result)[f"{mode}_{role}_landing"] = {
         "crashed": crash,
         "counter": b[plane + "crashed_counter"],
         "status": b[common + "vehstatus"],
@@ -911,7 +986,13 @@ def check_landing(scenario, run, mode, role, result):
     }
 
 
-def check_control(scenario, run, mode, role, result):
+def check_control(
+    scenario: Scenario,
+    run: core.Run,
+    mode: core.Mode,
+    role: core.Role,
+    result: core.Result,
+) -> None:
     if scenario["aircraft_control"].startswith("breakdown-"):
         check_breakdown(scenario, run, mode, role, result)
         return
@@ -1088,7 +1169,7 @@ def check_control(scenario, run, mode, role, result):
         raise RuntimeError("helicopter did not land at the real ownerless oilrig")
     if kind == "zeppelin" and not any(mask & (1 << 62) for mask in masks):
         raise RuntimeError("zeppelin reservation bit disappeared")
-    result[f"{mode}_{role}_controller"] = {
+    core.findings(result)[f"{mode}_{role}_controller"] = {
         "states": sorted(states),
         "terminal_groups": sorted(groups),
         "pads": sorted(pads),
