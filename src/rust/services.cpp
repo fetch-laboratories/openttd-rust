@@ -11,7 +11,7 @@
 #include "../source_type.h"
 #include "../effectvehicle_func.h"
 #include "../airport.h"
-#include "town_services.h"
+#include "environment_services.h"
 #include "services_ffi.h"
 #include "pbs_ffi.h"
 #include "movement_ffi.h"
@@ -106,7 +106,6 @@ static_assert(CBID_VEHICLE_VISUAL_EFFECT == 16);
 static_assert(VSE_VISUAL_EFFECT == 6);
 
 #include "settings_services.h"
-#include "environment_services.h"
 #include "type_availability_ffi.h"
 #include "services_station.h"
 #include "services_landscape.h"

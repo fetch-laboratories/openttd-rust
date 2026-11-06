@@ -526,7 +526,7 @@ impl<'a> Invocation<'a> {
             match scope.binding.kind {
                 0..=2 | 4 | 5 | 9 | 10 | 11 | 12 => {}
                 3 => {
-                    let industry = (*scope.binding.data.industry).industry;
+                    let industry = &*scope.binding.data.industry;
                     crate::newgrf_storage::openttd_rust_storage_industry(
                         &*self.s.storage,
                         industry,

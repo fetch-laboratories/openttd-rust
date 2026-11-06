@@ -34,7 +34,6 @@ pub struct AnimationSpec {
 }
 #[repr(C)]
 pub struct LifecycleServices {
-    pub neutral_station: unsafe extern "C" fn(*mut c_void) -> *mut super::StationHandle,
     pub cleanup_tile: unsafe extern "C" fn(u32) -> CleanupTile,
     pub delete_tile_inspect: unsafe extern "C" fn(u32),
     pub restoration: *const crate::water::RestorationServices,
@@ -43,7 +42,7 @@ pub struct LifecycleServices {
     pub industry_field: unsafe extern "C" fn(u32, u16) -> bool,
     pub disassociate_field: unsafe extern "C" fn(u32),
     pub release_disasters: unsafe extern "C" fn(u16),
-    pub delete_storage: unsafe extern "C" fn(*mut c_void),
+    pub storage: *const crate::newgrf_storage::Services,
     pub delete_news: unsafe extern "C" fn(u16),
     pub close_view: unsafe extern "C" fn(u16),
     pub close_production: unsafe extern "C" fn(u16),
@@ -102,7 +101,7 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     if width == 0 {
         return;
     }
-    let has_neutral_station = !unsafe { (w.neutral_station)(industry) }.is_null();
+    let has_neutral_station = !unsafe { (*owner).record.neutral_station }.is_null();
     let area = unsafe {
         TileArea {
             tile: ptr::read(ptr::addr_of!((*owner).record.location.tile)),
@@ -155,7 +154,7 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     }
     unsafe {
         (w.release_disasters)(id);
-        (w.delete_storage)(industry);
+        ((&*w.storage).destroy)((*owner).record.psa);
         let kind = ptr::read(ptr::addr_of!((*owner).record.r#type));
         super::openttd_rust_industry_registry_erase(builder, kind, id);
         (w.delete_news)(id);

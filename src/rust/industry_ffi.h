@@ -26,7 +26,6 @@ extern "C" {
 typedef struct Industry OpenTTDIndustryShell;
 typedef struct IndustryTileSpec OpenTTDIndustryTileSpec;
 struct IndustrySpec;
-typedef struct OpenTTDIndustryStationHandle OpenTTDIndustryStationHandle;
 typedef struct OpenTTDIndustry OpenTTDIndustry;
 typedef struct OpenTTDIndustryBuilder OpenTTDIndustryBuilder;
 typedef struct OpenTTDIndustryBuildFields {
@@ -164,8 +163,8 @@ typedef struct OpenTTDIndustryReseed { uint32_t self, parent; uint8_t used; } Op
 typedef struct OpenTTDIndustryRandomisationSpec { uint16_t gfx; bool enabled; } OpenTTDIndustryRandomisationSpec;
 typedef struct OpenTTDIndustryAnimationSpec { const void *spec; uint8_t triggers; } OpenTTDIndustryAnimationSpec;
 struct OpenTTDWaterRestorationServices;
+struct OpenTTDStorageServices;
 typedef struct OpenTTDIndustryLifecycleServices {
-	OpenTTDIndustryStationHandle *(*neutral_station)(void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(neutral_station);
 	OpenTTDIndustryCleanupTile (*cleanup_tile)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(cleanup_tile);
 	void (*delete_tile_inspect)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_tile_inspect);
 	const OpenTTDWaterRestorationServices *restoration;
@@ -174,7 +173,7 @@ typedef struct OpenTTDIndustryLifecycleServices {
 	bool (*industry_field)(uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(industry_field);
 	void (*disassociate_field)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(disassociate_field);
 	void (*release_disasters)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(release_disasters);
-	void (*delete_storage)(void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_storage);
+	const OpenTTDStorageServices *storage;
 	void (*delete_news)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_news);
 	void (*close_view)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_view);
 	void (*close_production)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_production);

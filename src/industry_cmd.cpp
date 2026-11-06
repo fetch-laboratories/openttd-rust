@@ -887,7 +887,6 @@ const OpenTTDIndustryServices &GetIndustryRustServices() { return _industry_serv
 /** Native shells, packed map, resolver and shared station/cargo services only.
  * Destruction may reenter; Rust holds no owner or registry borrow across a slot. */
 static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
-	.neutral_station = [](void *shell) noexcept -> OpenTTDIndustryStationHandle * { return reinterpret_cast<OpenTTDIndustryStationHandle *>(RustIndustryNeutralStation(RustIndustry(shell))); },
 	.cleanup_tile = [](uint32_t index) noexcept -> OpenTTDIndustryCleanupTile {
 		TileIndex tile(index);
 		auto type = SharedTileType(index);
@@ -900,7 +899,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.industry_field = RustFieldOfIndustryValue,
 	.disassociate_field = [](uint32_t tile) noexcept { SetIndustryIndexOfField(TileIndex(tile), IndustryID::Invalid()); },
 	.release_disasters = [](uint16_t industry) noexcept { ReleaseDisastersTargetingIndustry(IndustryID(industry)); },
-	.delete_storage = [](void *shell) noexcept { delete static_cast<Industry *>(shell)->psa; },
+	.storage = &GetRustStorageServices(),
 	.delete_news = [](uint16_t industry) noexcept { DeleteIndustryNews(IndustryID(industry)); },
 	.close_view = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_VIEW, industry); },
 	.close_production = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_PRODUCTION, industry); },

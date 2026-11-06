@@ -274,9 +274,9 @@ static void InitializeWindowsAndCaches()
 
 	/* Identify owners of persistent storage arrays */
 	for (Industry *i : Industry::Iterate()) {
-		if (i->psa != nullptr) {
-			i->psa->feature = GSF_INDUSTRIES;
-			i->psa->tile = i->Record().location.tile;
+		if (i->Record().psa != nullptr) {
+			i->Record().psa->feature = GSF_INDUSTRIES;
+			i->Record().psa->tile = i->Record().location.tile;
 		}
 	}
 	for (Station *s : Station::Iterate()) {
@@ -286,7 +286,7 @@ static void InitializeWindowsAndCaches()
 		}
 	}
 	for (Town *t : Town::Iterate()) {
-		for (auto &it : t->psa_list) {
+		for (auto &it : t->Record().psa_list) {
 			it->feature = GSF_FAKE_TOWNS;
 			it->tile = t->Record().xy;
 		}
@@ -2827,22 +2827,22 @@ bool AfterLoadGame()
 
 		if (!IsSavegameVersionBefore(SLV_76)) {
 			for (Industry *ind : Industry::Iterate()) {
-				assert(ind->psa != nullptr);
+				assert(ind->Record().psa != nullptr);
 
 				/* Check if the old storage was empty. */
 				bool is_empty = true;
-				for (uint i = 0; i < sizeof(ind->psa->storage); i++) {
-					if (ind->psa->GetValue(i) != 0) {
+				for (uint i = 0; i < sizeof(ind->Record().psa->storage); i++) {
+					if (ind->Record().psa->GetValue(i) != 0) {
 						is_empty = false;
 						break;
 					}
 				}
 
 				if (!is_empty) {
-					ind->psa->grfid = _industry_mngr.GetGRFID(ind->Record().type);
+					ind->Record().psa->grfid = _industry_mngr.GetGRFID(ind->Record().type);
 				} else {
-					delete ind->psa;
-					ind->psa = nullptr;
+					delete ind->Record().psa;
+					ind->Record().psa = nullptr;
 				}
 			}
 		}

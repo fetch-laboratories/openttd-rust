@@ -989,11 +989,9 @@ static void GetTileDesc_Road(TileIndex tile, TileDesc &td)
 
 #include "rust/road_command_ffi.h"
 #include "rust/road_command_services.h"
-#include "rust/town_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/company_services.h"
 #include "rust/vehicle_services.h"
-#include "rust/environment_services.h"
 #include "rust/settings_services.h"
 #include "rust/services_road.h"
 #include "window_func.h"

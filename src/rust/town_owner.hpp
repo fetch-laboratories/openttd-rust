@@ -9,6 +9,7 @@
 #ifndef RUST_TOWN_OWNER_HPP
 #define RUST_TOWN_OWNER_HPP
 #include "town_ffi.h"
+#include "rust_vector.h"
 #include <memory>
 
 /** Native facade over canonical arbitrary name bytes. The view lasts until its

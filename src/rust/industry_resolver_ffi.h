@@ -37,7 +37,7 @@ struct OpenTTDIndustryResolverServices {
 	uint16_t (*town_id)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_id);
 	OpenTTDIndustryFounderInfo (*founder_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(founder_info);
 	uint16_t (*callback_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(callback_id);
-	OpenTTDStorage256 *(*storage_owner)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(storage_owner);
+	const OpenTTDStorageServices *storage;
 	void (*unhandled)(uint8_t, bool, bool, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	TownScopeResolver *(*existing_town)(ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(existing_town);

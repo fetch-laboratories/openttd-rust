@@ -54,8 +54,7 @@ pub struct ResolverServices {
     pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub founder_info: unsafe extern "C" fn(u8) -> FounderInfo,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
-    pub storage_owner:
-        unsafe extern "C" fn(*mut c_void) -> *mut crate::newgrf_storage::Payload<256>,
+    pub storage: *const crate::newgrf_storage::Services,
     pub unhandled: unsafe extern "C" fn(u8, bool, bool, u16),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub existing_town: unsafe extern "C" fn(*mut c_void) -> *mut c_void,
@@ -456,10 +455,8 @@ fn variable(
             badges.resolve(s.shared(), ro, parameter)
         }
         0x7c => {
-            // Resolve the native shell association once, then read the canonical
-            // Rust payload directly. Temporary invalid-ID scopes can read PSA;
-            // the invalid-ID gate belongs only to the storage write operation.
-            let owner = unsafe { (s.storage_owner)(c.industry) };
+            // Invalid-ID resolver shells may read PSA; only writes have the ID gate.
+            let owner = unsafe { (&*s.storage).owner((*i).record.psa) };
             if owner.is_null() {
                 0
             } else {
@@ -875,7 +872,7 @@ crate::abi::layouts! {
         town_id,
         founder_info,
         callback_id,
-        storage_owner,
+        storage,
         unhandled,
         base_scope,
         existing_town,

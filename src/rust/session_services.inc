@@ -4,7 +4,7 @@
 #include "command_services.h"
 #include "services_station.h"
 #include "services_industry.h"
-#include "town_services.h"
+#include "environment_services.h"
 #include "network_frame_ffi.h"
 #include "abi-visit-OpenTTDSessionServices.hpp"
 static void RustSessionRealtime()

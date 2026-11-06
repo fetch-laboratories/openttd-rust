@@ -68,6 +68,11 @@ impl<T> NativeVec<T> {
         self.count = 0;
         vec
     }
+    pub fn clear(&mut self) {
+        let mut vec = std::mem::take(self).into_vec();
+        vec.clear();
+        *self = Self::from_vec(vec);
+    }
     pub fn push(&mut self, value: T) {
         let mut vec = std::mem::take(self).into_vec();
         vec.push(value);

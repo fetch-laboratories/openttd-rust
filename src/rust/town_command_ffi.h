@@ -7,6 +7,7 @@
 #include "../object_type.h"
 struct OpenTTDObjectServices;
 struct OpenTTDSubsidyServices;
+struct OpenTTDStorageServices;
 struct OpenTTDRailMapServices;
 struct BaseStation;
 struct Object;
@@ -52,9 +53,7 @@ struct OpenTTDTownCommandServices {
 	bool (*cleaning_pool)() noexcept OPENTTD_SERVICE_DEFAULT(cleaning_pool);
 	void (*close_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_view);
 	void (*close_graph)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_graph);
-	size_t (*storage_count)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(storage_count);
-	void (*delete_storage)(Town *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_storage);
-	void (*clear_storage)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(clear_storage);
+	const OpenTTDStorageServices *storage;
 	void (*delete_inspect)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
 	bool assertions;
 	uint32_t too_many_objects, no_statue_place;

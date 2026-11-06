@@ -602,7 +602,14 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (TileIndex at{}; at < Map::Size(); ++at) if (IsTileType(at, MP_CLEAR) && GetTileSlope(at) == SLOPE_FLAT && !IsBridgeAbove(at)) { BuildObject(OBJECT_TRANSMITTER, at, OWNER_NONE, target); detached = Object::GetByTile(at); break; }
 	if (detached == nullptr) std::abort();
 	if (!PersistentStorage::CanAllocateItem() || !CargoPacket::CanAllocateItem() || !Subsidy::CanAllocateItem()) std::abort();
-	auto *storage = new PersistentStorage(0x12345678, GSF_FAKE_TOWNS, FIXTURE_POOL_RECORD(target).xy); auto storage_id = storage->index; target->psa_list.push_back(storage);
+	auto *storage = new PersistentStorage(0x12345678, GSF_FAKE_TOWNS, FIXTURE_POOL_RECORD(target).xy); auto storage_id = storage->index;
+#ifdef WITH_RUST
+	const auto &attachments = target->Record().psa_list;
+	std::vector<PersistentStorage *> list(attachments.begin(), attachments.end()); list.push_back(storage);
+	openttd_rust_town_storage_replace(target->growth_owner.get(), list.data(), list.size());
+#else
+	target->psa_list.push_back(storage);
+#endif
 	auto *packet = new CargoPacket(StationID::Invalid(), 7, {removed, SourceType::Town});
 	auto *subsidy = new Subsidy(CargoType{0}, {removed, SourceType::Town}, {id, SourceType::Town}, 12); auto subsidy_id = subsidy->index;
 	TownSpatial("before-delete", true);

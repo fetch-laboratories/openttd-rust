@@ -190,6 +190,23 @@ struct TownNameSaveScope {
 	~TownNameSaveScope() { if (this->loading) this->town->name = current; current = std::move(this->previous); }
 };
 
+/** Native reference codec staging ends before Rust follows the attachments. */
+struct TownStorageSaveScope {
+	static inline std::vector<PersistentStorage *> current;
+	std::vector<PersistentStorage *> previous;
+	Town *town;
+	TownStorageSaveScope(Town *town) : previous(std::move(current)), town(town)
+	{
+		const auto &list = town->Record().psa_list;
+		current.assign(list.begin(), list.end());
+	}
+	~TownStorageSaveScope()
+	{
+		openttd_rust_town_storage_replace(this->town->growth_owner.get(), current.data(), current.size());
+		current = std::move(this->previous);
+	}
+};
+
 static const SaveLoad _town_desc[] = {
 	SLE_CONDVARNAME(Town, Record().xy, "xy",                    SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6),
 	SLE_CONDVARNAME(Town, Record().xy, "xy",                    SLE_UINT32,                 SLV_6, SL_MAX_VERSION),
@@ -255,7 +272,7 @@ static const SaveLoad _town_desc[] = {
 	SLE_CONDVARNAME(Town, Record().layout, "layout",                SLE_UINT8,                SLV_113, SL_MAX_VERSION),
 	SLE_CONDVARNAME(Town, Record().valid_history, "valid_history", SLE_UINT64, SLV_TOWN_SUPPLY_HISTORY, SL_MAX_VERSION),
 
-	SLE_CONDREFVECTOR(Town, psa_list,        REF_STORAGE,              SLV_161, SL_MAX_VERSION),
+	SLEG_GENERAL("psa_list", SL_REFVECTOR, TownStorageSaveScope::current, REF_STORAGE, 0, SLV_161, SL_MAX_VERSION, 0),
 
 	SLEG_CONDSTRUCTLIST("supplied", SlTownOldSupplied,                 SLV_165, SLV_TOWN_SUPPLY_HISTORY),
 	SLEG_CONDSTRUCTLIST("supplied", SlTownSupplied,                    SLV_TOWN_SUPPLY_HISTORY, SL_MAX_VERSION),
@@ -278,6 +295,7 @@ struct CITYChunkHandler : ChunkHandler {
 			SlSetArrayIndex(t->index);
 			TownNameSaveScope name_scope(t, false);
 			TownTextSaveScope text_scope(t, false);
+			TownStorageSaveScope storage_scope(t);
 			SlObject(t, _town_desc);
 		}
 	}
@@ -293,6 +311,7 @@ struct CITYChunkHandler : ChunkHandler {
 			{
 				TownNameSaveScope name_scope(t, true);
 				TownTextSaveScope text_scope(t, true);
+				TownStorageSaveScope storage_scope(t);
 				SlObject(t, slt);
 			}
 
@@ -323,6 +342,7 @@ struct CITYChunkHandler : ChunkHandler {
 		for (Town *t : Town::Iterate()) {
 			TownNameSaveScope name_scope(t, false);
 			TownTextSaveScope text_scope(t, false);
+			TownStorageSaveScope storage_scope(t);
 			SlObject(t, _town_desc);
 		}
 	}

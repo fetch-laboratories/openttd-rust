@@ -9,6 +9,7 @@
 #ifndef TOWN_PROTOCOL_HPP
 #define TOWN_PROTOCOL_HPP
 #include "../rust/town_ffi.h"
+#include "../rust/rust_vector.h"
 #include "fixture_map.hpp"
 #include "../rust/type_registry_ffi.h"
 #include "../core/backup_type.hpp"
@@ -34,6 +35,7 @@ struct TownProtocolRecord {
 	bool larger_town;
 	uint8_t layout, fund_buildings_months, road_build_months, flags, part_of_subsidy;
 	uint32_t townnamegrfid, townnameparts;
+	RustVector<PersistentStorage *> psa_list;
 };
 
 /** The record of a fixture town owner: the owner's first member. */
@@ -49,7 +51,7 @@ inline TownProtocolRecord *TownProtocolRecordOf(OpenTTDTownState *owner)
 			offsetof(TownProtocolRecord, townnametype), offsetof(TownProtocolRecord, unwanted), offsetof(TownProtocolRecord, exclusivity),
 			offsetof(TownProtocolRecord, exclusive_counter), offsetof(TownProtocolRecord, larger_town), offsetof(TownProtocolRecord, layout),
 			offsetof(TownProtocolRecord, fund_buildings_months), offsetof(TownProtocolRecord, road_build_months), offsetof(TownProtocolRecord, flags),
-			offsetof(TownProtocolRecord, part_of_subsidy), offsetof(TownProtocolRecord, townnamegrfid), offsetof(TownProtocolRecord, townnameparts),
+			offsetof(TownProtocolRecord, part_of_subsidy), offsetof(TownProtocolRecord, townnamegrfid), offsetof(TownProtocolRecord, townnameparts), offsetof(TownProtocolRecord, psa_list),
 		};
 		bool same = openttd_rust_abi_layout_named("OpenTTDTownRecord", 0) == sizeof(TownProtocolRecord);
 		for (size_t i = 0; i < std::size(offsets); i++) same &= openttd_rust_abi_layout_named("OpenTTDTownRecord", 2 + 2 * i) == offsets[i];

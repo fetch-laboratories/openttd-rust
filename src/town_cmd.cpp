@@ -57,7 +57,6 @@
 #include "rust/generation_services.hpp"
 #include "rust/house_ffi.h"
 #include "rust/town_command_ffi.h"
-#include "rust/town_services.h"
 #include "rust/services_object.h"
 #include "rust/services_industry.h"
 #include "rust/presentation_services.h"
@@ -784,9 +783,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.cleaning_pool = []() noexcept { return Town::CleaningPool(); },
 		.close_view = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_VIEW, TownID(town)); },
 		.close_graph = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_CARGO_GRAPH, TownID(town)); },
-		.storage_count = RustTownStorageCount<Town>,
-		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
-		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
+		.storage = &GetRustStorageServices(),
 		.delete_inspect = OpenTTDDeleteTownInspect,
 #ifdef WITH_ASSERT
 		.assertions = true,

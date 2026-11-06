@@ -266,25 +266,29 @@ pub struct StorageReference {
     owner: *mut Payload<256>,
     grfid: u32,
 }
+/// Opaque #638 pool shell. Only the shared storage operations inspect it.
 #[repr(C)]
-pub struct IndustryStorage {
-    owner: *mut Payload<256>,
-    valid: bool,
+pub struct PersistentStorage {
+    _private: [u8; 0],
 }
 #[repr(C)]
 pub struct Services {
     shared: *const crate::services::Services,
     check: Check,
-    industry: extern "C" fn(*mut c_void) -> IndustryStorage,
-    create_industry: extern "C" fn(*mut c_void) -> *mut Payload<256>,
+    create: extern "C" fn(u32, u8, u32) -> *mut PersistentStorage,
+    pub(crate) destroy: extern "C" fn(*mut PersistentStorage),
+    reference: extern "C" fn(*const PersistentStorage) -> StorageReference,
     pub(crate) airport: extern "C" fn(*mut c_void) -> *mut Payload<256>,
     create_airport: extern "C" fn(*mut c_void, u32) -> *mut Payload<256>,
-    town_count: extern "C" fn(*const c_void) -> usize,
-    town_storage: extern "C" fn(*const c_void, usize) -> StorageReference,
-    create_town: extern "C" fn(*mut c_void, u32) -> *mut Payload<256>,
-    append_town: extern "C" fn(*mut c_void, *mut c_void),
 }
 impl Services {
+    pub(crate) fn owner(&self, storage: *const PersistentStorage) -> *mut Payload<256> {
+        if storage.is_null() {
+            std::ptr::null_mut()
+        } else {
+            (self.reference)(storage).owner
+        }
+    }
     fn shared(&self) -> &crate::services::Services {
         // SAFETY: `GetRustStorageServices` points at the process-lifetime shared table.
         unsafe { &*self.shared }
@@ -293,25 +297,36 @@ impl Services {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_industry(
     s: &Services,
-    industry: *mut c_void,
+    context: &crate::industry::resolver::ResolverContext,
     pos: u32,
     value: i32,
 ) {
-    let input = (s.industry)(industry);
-    if !input.valid {
+    if context.id == crate::industry_type::IndustryID::INVALID.0 {
         return;
     }
-    let mut owner = input.owner;
+    let industry = context.owner;
+    let mut owner = s.owner(unsafe { (*industry).record.psa });
     if owner.is_null() {
         if value == 0 {
             return;
         }
-        owner = (s.create_industry)(industry);
+        let (kind, tile) = unsafe { ((*industry).record.r#type, (*industry).record.location.tile) };
+        let grfid = unsafe {
+            (*crate::industrytype::industry(u16::from(kind)))
+                .grf_prop
+                .grfid
+        };
+        let storage = (s.create)(grfid, crate::newgrf::GSF_INDUSTRIES, tile);
+        unsafe {
+            (*industry).record.psa = storage;
+        }
+        owner = s.owner(storage);
     }
     unsafe {
         store(owner, pos, value, s.check);
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_airport(
     s: &Services,
@@ -339,9 +354,12 @@ pub unsafe extern "C" fn openttd_rust_storage_airport(
         store(owner, pos, value, s.check);
     }
 }
-fn town_find(s: &Services, town: *const c_void, grfid: u32) -> *mut Payload<256> {
-    for index in 0..(s.town_count)(town) {
-        let entry = (s.town_storage)(town, index);
+fn town_find(s: &Services, town: *const crate::town::State, grfid: u32) -> *mut Payload<256> {
+    // SAFETY: The resolved owner is live; storage metadata queries cannot mutate its list.
+    let count = unsafe { (*town).record.psa_list.len() };
+    for index in 0..count {
+        let storage = unsafe { (*town).record.psa_list.as_slice()[index] };
+        let entry = (s.reference)(storage);
         if entry.grfid == grfid {
             return entry.owner;
         }
@@ -350,7 +368,7 @@ fn town_find(s: &Services, town: *const c_void, grfid: u32) -> *mut Payload<256>
 }
 pub unsafe extern "C" fn openttd_rust_storage_town(
     s: &Services,
-    town: *mut c_void,
+    town: *mut crate::town::State,
     readonly: bool,
     grf: *const c_void,
     pos: u32,
@@ -377,15 +395,19 @@ pub unsafe extern "C" fn openttd_rust_storage_town(
         }
         return;
     }
-    let owner = (s.create_town)(town, grfid);
+    let tile = unsafe { (*town).record.xy };
+    let storage = (s.create)(grfid, crate::newgrf::GSF_FAKE_TOWNS, tile);
+    let owner = s.owner(storage);
     unsafe {
         store(owner, pos, value, s.check);
     }
-    (s.append_town)(town, unsafe { (*owner).shell });
+    unsafe {
+        (*town).record.psa_list.push(storage);
+    }
 }
 pub unsafe extern "C" fn openttd_rust_storage_town_get(
     s: &Services,
-    town: *const c_void,
+    town: *const crate::town::State,
     grf: *const c_void,
     pos: u32,
 ) -> u32 {
@@ -406,9 +428,7 @@ pub unsafe extern "C" fn openttd_rust_storage_town_get(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStorageServices" ["storage"] => Services {
-        shared, check, industry, create_industry, airport, create_airport,
-        town_count, town_storage, create_town, append_town,
+        shared, check, create, destroy, reference, airport, create_airport,
     };
     "OpenTTDStorageReference" ["storage"] => StorageReference { owner, grfid };
-    "OpenTTDIndustryStorage" ["storage"] => IndustryStorage { owner, valid };
 }

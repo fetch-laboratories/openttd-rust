@@ -130,6 +130,7 @@ crate::abi::shared_records! {
         pub ctlflags: u8 => "IndustryControlFlags",
         /// NOSAVE `Industry::part_of_subsidy`.
         pub part_of_subsidy: u8 => "PartsOfSubsidy",
+        pub psa: *mut crate::newgrf_storage::PersistentStorage => "PersistentStorage *",
     }
 }
 impl Default for IndustryRecord {
@@ -160,6 +161,7 @@ impl Default for IndustryRecord {
             was_cargo_delivered: 0,
             ctlflags: 0,
             part_of_subsidy: 0,
+            psa: ptr::null_mut(),
         }
     }
 }
@@ -2139,7 +2141,6 @@ crate::abi::layouts! {
         triggers,
     };
     "OpenTTDIndustryLifecycleServices" ["industry"] => crate::industry::LifecycleServices {
-        neutral_station,
         cleanup_tile,
         delete_tile_inspect,
         restoration,
@@ -2148,7 +2149,7 @@ crate::abi::layouts! {
         industry_field,
         disassociate_field,
         release_disasters,
-        delete_storage,
+        storage,
         delete_news,
         close_view,
         close_production,

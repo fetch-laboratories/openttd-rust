@@ -21,7 +21,7 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	auto Require = [](bool good, const std::source_location line = std::source_location::current()) { if (!good) { fmt::print(stderr, "STORAGE assertion {}\n", line.line()); std::abort(); } };
 	Require(SpriteGroup::CanAllocateItem(32));
 	std::array<int32_t, 256> saved;
-	for (uint i = 0; i < saved.size(); ++i) saved[i] = industry->psa->GetValue(i);
+	for (uint i = 0; i < saved.size(); ++i) saved[i] = FIXTURE_POOL_RECORD(industry).psa->GetValue(i);
 	std::vector<std::unique_ptr<SpriteGroup>> nodes;
 	auto Keep = [&]<typename T>(T *g) { nodes.emplace_back(g); return g; };
 	auto Adjust = [](uint8_t variable, DeterministicSpriteGroupAdjustOperation operation = DSGA_OP_RST, uint32_t mask = UINT32_MAX, uint8_t parameter = 0) {
@@ -43,7 +43,7 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	std::array<int32_t, 1> regs{-7};
 	outer->nfo_line = 417;
 	_newgrf_profilers.emplace_back(&grf); _newgrf_profilers.back().Start();
-	Require(ro.ResolveCallback(regs) == 10 && regs[0] == 0x1000A && ro.last_value == 0x1000A && ro.GetRegister(14) == 0x8005 && industry->psa->GetValue(15) == 0x8005);
+	Require(ro.ResolveCallback(regs) == 10 && regs[0] == 0x1000A && ro.last_value == 0x1000A && ro.GetRegister(14) == 0x8005 && FIXTURE_POOL_RECORD(industry).psa->GetValue(15) == 0x8005);
 	const auto &profile = _newgrf_profilers.back();
 	Require(profile.calls.size() == 1 && profile.calls[0].root_sprite == 417 && profile.calls[0].result == 10 && profile.calls[0].subs == 1);
 	_newgrf_profilers.back().Abort(); _newgrf_profilers.pop_back();
@@ -184,7 +184,7 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	uint32_t version; Require(GetGlobalVariable(0x21, &version, &grf) && version == _openttd_newgrf_version);
 	arithmetic->adjusts = {Adjust(0x21)}; Require(base.ResolveCallback({}) == (version & 0x7FFF) && base.last_value == version);
 	uint32_t unknown = 417; Require(!GetGlobalVariable(0xFF, &unknown, &grf) && unknown == 417);
-	for (uint i = 0; i < saved.size(); ++i) industry->psa->StoreValue(i, saved[i]);
+	for (uint i = 0; i < saved.size(); ++i) FIXTURE_POOL_RECORD(industry).psa->StoreValue(i, saved[i]);
 	ro.SetRegister(0x100, saved_register100);
 	maglev_cost.Restore(); mono_cost.Restore(); electric_cost.Restore(); normal_cost.Restore(); random_bits.Restore();
 	fmt::print(stderr, "STORAGE action2 nested ranges arithmetic terminals reseed globals {}\n", digest);
@@ -230,15 +230,15 @@ static bool StorageScenario(std::span<std::string_view> args)
 	bool available = true;
 	if (args[1] == "storage-inspect") {
 		ro.SetRegister(0x100, -1);
-		Require(town->psa_list.size() == 2 && writable.GetVariable(0x7C, 0, available) == 0x80000000 && writable.GetVariable(0x7C, 255, available) == INT32_MAX);
-		Require(industry->psa != nullptr && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa != nullptr && station->airport.psa->GetValue(255) == 393);
-		Require(industry->psa->feature == GSF_INDUSTRIES && industry->psa->tile == FIXTURE_POOL_RECORD(industry).location.tile && station->airport.psa->feature == GSF_AIRPORTS && station->airport.psa->tile == station->airport.tile);
-		for (auto *psa : town->psa_list) Require(psa->feature == GSF_FAKE_TOWNS && psa->tile == FIXTURE_POOL_RECORD(town).xy);
+		Require(FIXTURE_POOL_RECORD(town).psa_list.size() == 2 && writable.GetVariable(0x7C, 0, available) == 0x80000000 && writable.GetVariable(0x7C, 255, available) == INT32_MAX);
+		Require(FIXTURE_POOL_RECORD(industry).psa != nullptr && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa != nullptr && station->airport.psa->GetValue(255) == 393);
+		Require(FIXTURE_POOL_RECORD(industry).psa->feature == GSF_INDUSTRIES && FIXTURE_POOL_RECORD(industry).psa->tile == FIXTURE_POOL_RECORD(industry).location.tile && station->airport.psa->feature == GSF_AIRPORTS && station->airport.psa->tile == station->airport.tile);
+		for (auto *psa : FIXTURE_POOL_RECORD(town).psa_list) Require(psa->feature == GSF_FAKE_TOWNS && psa->tile == FIXTURE_POOL_RECORD(town).xy);
 		CommonAction2(industry, grf);
 		fmt::print(stderr, "STORAGE reloaded true\n");
 		return true;
 	}
-	Require(town->psa_list.empty() && industry->psa == nullptr && station->airport.psa == nullptr);
+	Require(FIXTURE_POOL_RECORD(town).psa_list.empty() && FIXTURE_POOL_RECORD(industry).psa == nullptr && station->airport.psa == nullptr);
 	Require(ind.GetVariable(0x7C, 15, available) == 0);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_GAMELOOP, true);
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
@@ -246,7 +246,7 @@ static bool StorageScenario(std::span<std::string_view> args)
 	ro.SetRegister(0x100, 123); writable.StorePSA(0, 7);
 	ind.StorePSA(0, 0); airport.StorePSA(0, 0);
 	{ Backup<IndustryID> invalid(industry->index, IndustryID::Invalid()); ind.StorePSA(0, 7); }
-	Require(town->psa_list.empty() && industry->psa == nullptr && station->airport.psa == nullptr);
+	Require(FIXTURE_POOL_RECORD(town).psa_list.empty() && FIXTURE_POOL_RECORD(industry).psa == nullptr && station->airport.psa == nullptr);
 	/* Airports without a GRF create the default-GRF array. */
 	AirportScopeResolver default_airport(anonymous, station->airport.tile, station, nullptr, 0);
 	default_airport.StorePSA(256, 7);
@@ -254,8 +254,8 @@ static bool StorageScenario(std::span<std::string_view> args)
 	delete station->airport.psa; station->airport.psa = nullptr;
 	/* Nonzero out-of-range writes allocate industry/airport, town even for zero. */
 	ro.SetRegister(0x100, -1); writable.StorePSA(256, 0); ind.StorePSA(256, 7); airport.StorePSA(256, 7);
-	Require(town->psa_list.size() == 1 && industry->psa != nullptr && station->airport.psa != nullptr);
-	Require(industry->psa->grfid == GetIndustrySpec(FIXTURE_POOL_RECORD(industry).type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
+	Require(FIXTURE_POOL_RECORD(town).psa_list.size() == 1 && FIXTURE_POOL_RECORD(industry).psa != nullptr && station->airport.psa != nullptr);
+	Require(FIXTURE_POOL_RECORD(industry).psa->grfid == GetIndustrySpec(FIXTURE_POOL_RECORD(industry).type)->grf_prop.grfid && station->airport.psa->grfid == grf.grfid);
 	writable.StorePSA(0, INT32_MIN); writable.StorePSA(255, INT32_MAX); ind.StorePSA(15, -393); airport.StorePSA(255, 393);
 	Require(ind.GetVariable(0x7C, 0, available) == 0 && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393));
 	Require(ind.GetVariable(0x7C, 256, available) == 0 && ind.GetVariable(0x7C, UINT32_MAX, available) == 0);

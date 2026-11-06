@@ -98,6 +98,7 @@ crate::abi::shared_records! {
         pub part_of_subsidy: u8 => "PartsOfSubsidy",
         pub townnamegrfid: u32,
         pub townnameparts: u32,
+        pub psa_list: crate::industrytype::NativeVec<*mut crate::newgrf_storage::PersistentStorage> => "RustVector<PersistentStorage *>",
     }
 }
 impl Default for TownRecord {
@@ -130,6 +131,7 @@ impl Default for TownRecord {
             part_of_subsidy: 0,
             townnamegrfid: 0,
             townnameparts: 0,
+            psa_list: crate::industrytype::NativeVec::new(),
         }
     }
 }
@@ -373,6 +375,22 @@ pub unsafe extern "C" fn openttd_rust_town_destroy(state: *mut State) {
     // SAFETY: The shell owns this allocation, destroying it exactly once.
     unsafe {
         drop(Box::from_raw(state));
+    }
+}
+/// Commit the native save adapter's partially loaded or fixed-up references.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_storage_replace(
+    state: *mut State,
+    data: *const *mut crate::newgrf_storage::PersistentStorage,
+    size: usize,
+) {
+    let entries = if size == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(data, size).to_vec() }
+    };
+    unsafe {
+        (*state).record.psa_list = crate::industrytype::NativeVec::from_vec(entries);
     }
 }
 #[unsafe(no_mangle)]

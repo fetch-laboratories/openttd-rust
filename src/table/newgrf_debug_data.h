@@ -375,8 +375,8 @@ class NIHIndustry : public NIHelper {
 	const std::span<int32_t> GetPSA(uint index, uint32_t) const override
 	{
 		const Industry *i = (const Industry *)this->GetInstance(index);
-		if (i->psa == nullptr) return {};
-		return i->psa->storage;
+		if (i->Record().psa == nullptr) return {};
+		return i->Record().psa->storage;
 	}
 };
 
@@ -598,7 +598,7 @@ class NIHTown : public NIHelper {
 	{
 		Town *t = Town::Get(index);
 
-		for (const auto &it : t->psa_list) {
+		for (const auto &it : t->Record().psa_list) {
 			if (it->grfid == grfid) return it->storage;
 		}
 

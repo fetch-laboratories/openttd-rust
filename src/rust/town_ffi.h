@@ -18,6 +18,7 @@
 struct OpenTTDTownState;
 struct OpenTTDRoadCommandContext;
 struct Town;
+struct PersistentStorage;
 /** Pool IDs cross as their uint16_t wire value; native PoolID classes stay native. */
 struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
 
@@ -115,6 +116,7 @@ int32_t openttd_rust_town_rating(const OpenTTDTownState *, uintptr_t, uint8_t);
 void openttd_rust_town_change_rating(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDTownState *, uint32_t, uintptr_t, uint8_t, int32_t, int32_t, bool, bool);
 /* The owner's first member is its shared OpenTTDTownRecord, at the same address. */
 OpenTTDTownState *openttd_rust_town_new(Town *shell);
+void openttd_rust_town_storage_replace(OpenTTDTownState *, PersistentStorage *const *, size_t);
 void openttd_rust_town_destroy(OpenTTDTownState *);
 void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);

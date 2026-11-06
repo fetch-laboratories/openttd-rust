@@ -128,7 +128,6 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
 	void SetText(const EncodedString &value) { auto text = TextView(value); openttd_rust_industry_set_text(this->production_owner.get(), text.data, text.size); }
 
-	PersistentStorage *psa = nullptr; ///< Persistent storage for NewGRF industries.
 
 	Industry(TileIndex tile = INVALID_TILE) { this->Record().location = TileArea(tile, 0, 0); }
 	/** Synchronous resolver shell; its Rust stack owner outlives this shell. */

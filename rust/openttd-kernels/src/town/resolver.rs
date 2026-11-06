@@ -189,12 +189,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
     if variable == 0x7C {
         let file = (s.shared().resolver_grf_file)(ro);
         return unsafe {
-            newgrf_storage::openttd_rust_storage_town_get(
-                &*s.storage,
-                scope.town.cast(),
-                file,
-                parameter,
-            )
+            newgrf_storage::openttd_rust_storage_town_get(&*s.storage, scope.owner, file, parameter)
         };
     }
     if variable == 0x40 {
@@ -305,7 +300,7 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
     unsafe {
         newgrf_storage::openttd_rust_storage_town(
             &*s.storage,
-            scope.town.cast(),
+            scope.owner,
             scope.readonly,
             file,
             pos,

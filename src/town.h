@@ -158,7 +158,6 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 
 	bool show_zone = false; ///< NOSAVE: mark town to show the local authority zone in the viewports
 
-	std::vector<PersistentStorage *> psa_list{};
 
 	/**
 	 * Creates a new town.

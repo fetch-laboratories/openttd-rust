@@ -69,9 +69,7 @@ pub struct CommandServices {
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(u16),
     pub close_graph: extern "C" fn(u16),
-    pub storage_count: extern "C" fn(*mut TownHandle) -> usize,
-    pub delete_storage: extern "C" fn(*mut TownHandle, usize),
-    pub clear_storage: extern "C" fn(*mut TownHandle),
+    pub storage: *const crate::newgrf_storage::Services,
     pub delete_inspect: extern "C" fn(u16),
     pub assertions: bool,
     pub too_many_objects: u32,
@@ -792,10 +790,16 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
             }
         }
     }
-    for index in 0..(s.storage_count)(t.shell) {
-        (s.delete_storage)(t.shell, index);
+    let count = unsafe { (*t.state).record.psa_list.len() };
+    for index in 0..count {
+        let storage = unsafe { (*t.state).record.psa_list.as_slice()[index] };
+        unsafe {
+            ((&*s.storage).destroy)(storage);
+        }
     }
-    (s.clear_storage)(t.shell);
+    unsafe {
+        (*t.state).record.psa_list.clear();
+    }
     // SAFETY: The canonical subsidy owner table outlives the synchronous call.
     unsafe { &*s.subsidies }.delete_with(crate::source_type::Source::town(t.id.0));
     (s.delete_inspect)(t.id.0);
@@ -884,9 +888,7 @@ crate::abi::layouts! {
         cleaning_pool,
         close_view,
         close_graph,
-        storage_count,
-        delete_storage,
-        clear_storage,
+        storage,
         delete_inspect,
         assertions,
         too_many_objects,

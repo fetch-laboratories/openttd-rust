@@ -28,7 +28,6 @@ pub(crate) fn layout_tile(layout: *const LayoutHandle, n: usize) -> LayoutTile {
         gfx: tile.gfx,
     }
 }
-pub use crate::station_type::Station as StationHandle;
 #[repr(C)]
 pub struct CargoLists {
     pub produced: [u8; 16],

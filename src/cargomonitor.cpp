@@ -16,7 +16,7 @@
 #include "rust/cargomonitor_ffi.h"
 #include "rust/services_station.h"
 #include "rust/services_assert.h"
-#include "rust/town_services.h"
+#include "rust/environment_services.h"
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
 {
 	static const OpenTTDCargoMonitorServices services = {

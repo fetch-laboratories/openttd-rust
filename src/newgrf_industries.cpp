@@ -31,7 +31,6 @@
 #include "rust/services_map.h"
 #include "rust/industry_shell_services.h"
 #include "rust/industry_generation_adapter.hpp"
-#include "rust/town_services.h"
 #include "rust/environment_services.h"
 #include "rust/tile_animation_services.h"
 #include "newgrf_industrytiles.h"
@@ -62,7 +61,7 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
 
 /* virtual */ void IndustriesScopeResolver::StorePSA(uint pos, int32_t value)
 {
-	openttd_rust_storage_industry(&GetRustStorageServices(), this->context.industry, pos, value);
+	openttd_rust_storage_industry(&GetRustStorageServices(), &this->context, pos, value);
 }
 
 /**
@@ -143,7 +142,7 @@ uint16_t GetIndustryCallback(CallbackID callback, uint32_t param1, uint32_t para
  */
 extern "C" OpenTTDIndustryLocationResult openttd_industry_resolve_location(Industry *industry, uint32_t tile, uint8_t type, uint32_t seed, uint8_t creation) noexcept
 {
-	industry->psa = nullptr;
+	industry->Record().psa = nullptr;
 	IndustriesResolverObject object(TileIndex(tile), industry, type, seed, CBID_INDUSTRY_LOCATION, 0, creation);
 	OpenTTDIndustryLocationResult result{};
 	result.callback = object.ResolveCallback(result.registers);
@@ -258,7 +257,7 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 			return {company == nullptr ? uint8_t{0} : RustCompanyRecolour(company, true), company != nullptr && company->is_ai};
 		},
 		.callback_id = RustResolverCallback,
-		.storage_owner = RustIndustryStorageOwner,
+		.storage = &GetRustStorageServices(),
 		.unhandled = [](uint8_t variable, bool tile, bool missing, uint16_t callback) noexcept {
 			if (missing) Debug(grf, 1, "Unhandled variable 0x{:X} (no available industry) in callback 0x{:x}", variable, callback);
 			else if (tile) Debug(grf, 1, "Unhandled industry tile variable 0x{:X}", variable);
