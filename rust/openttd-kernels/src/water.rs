@@ -33,13 +33,6 @@ use crate::{
 };
 
 #[repr(C)]
-pub struct AirportGround {
-    pub station: *const crate::station::Station,
-    pub tile: u32,
-    pub width: u16,
-    pub height: u16,
-}
-#[repr(C)]
 pub struct WaterServices {
     pub rail: *const RailServices,
     pub clear: *const ClearServices,
@@ -54,7 +47,6 @@ pub struct WaterServices {
     pub region_context: extern "C" fn() -> crate::water_regions::Context,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub airport_tile: extern "C" fn(u32) -> bool,
-    pub airport: extern "C" fn(u32) -> AirportGround,
     pub airport_member: unsafe extern "C" fn(*const crate::station::Station, u32) -> bool,
     pub airport_z: extern "C" fn(*const std::ffi::c_void) -> i32,
     pub crash: extern "C" fn(VehicleRef) -> u32,
@@ -444,12 +436,13 @@ impl<'a> World<'a> {
     }
     fn flood_vehicles(&self, tile: u32) {
         if (self.w.airport_tile)(tile) {
-            let airport = (self.w.airport)(tile);
-            for y in 0..u32::from(airport.height) {
-                for x in 0..u32::from(airport.width) {
-                    let target = airport.tile.wrapping_add(y * self.size_x).wrapping_add(x);
+            let st = crate::station_map::station_by_tile(tile, crate::newgrf_airport::runtime());
+            let area = crate::station_record::read(st, |r| r.airport.area);
+            for y in 0..u32::from(area.h) {
+                for x in 0..u32::from(area.w) {
+                    let target = area.tile.0.wrapping_add(y * self.size_x).wrapping_add(x);
                     // SAFETY: Flood/crash callbacks cannot delete this live station or reset pools.
-                    if unsafe { (self.w.airport_member)(airport.station, target) } {
+                    if unsafe { (self.w.airport_member)(st.cast(), target) } {
                         crate::ground::hit(crate::ground::Witness::AirportMember);
                         self.vehicles_on_tile(target, 0);
                     }
@@ -771,12 +764,6 @@ pub(crate) unsafe fn tree_industry_water_loop(tile: u32, call: *mut Call, s: &Se
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDAirportGround" ["landscape"] => AirportGround {
-        station,
-        tile,
-        width,
-        height,
-    };
     "OpenTTDWaterGroundServices" ["landscape"] => WaterServices {
         rail,
         clear,
@@ -791,7 +778,6 @@ crate::abi::layouts! {
         region_context,
         remove_rail,
         airport_tile,
-        airport,
         airport_member,
         airport_z,
         crash,
@@ -835,7 +821,6 @@ pub(crate) fn fixture() -> WaterServices {
         region_context: unused_region_context,
         remove_rail: unused3,
         airport_tile: unused1,
-        airport: unused1,
         airport_member: unused2,
         airport_z: unused1,
         crash: unused1,

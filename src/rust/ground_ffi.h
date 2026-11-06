@@ -110,7 +110,6 @@ const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcep
 struct OpenTTDWaterGroundServices;
 struct OpenTTDVehicle;
 struct OpenTTDVehicleServices;
-struct OpenTTDAirportGround { const OpenTTDStation *station; uint32_t tile; uint16_t width; uint16_t height; };
 struct OpenTTDCompanyServices;
 struct OpenTTDWaterGroundServices {
 	const OpenTTDRailServices *rail;
@@ -126,7 +125,6 @@ struct OpenTTDWaterGroundServices {
 	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
-	OpenTTDAirportGround (*airport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*airport_member)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_member);
 	int32_t (*airport_z)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_z);
 	uint32_t (*crash)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(crash);
@@ -153,7 +151,6 @@ struct OpenTTDGroundABICalls {
 	OpenTTDFoundationSlope (*foundation)() noexcept OPENTTD_SERVICE_DEFAULT(foundation);
 	OpenTTDRoadSnowGround (*road_snow)() noexcept OPENTTD_SERVICE_DEFAULT(road_snow);
 	OpenTTDTunnelGround (*tunnel)() noexcept OPENTTD_SERVICE_DEFAULT(tunnel);
-	OpenTTDAirportGround (*airport)() noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*enums)(ClearGround, RailGroundType, Slope, TrackBits, Track, Foundation, Roadside, RoadBits, RoadType, TreeGround, WaterClass, FloodingBehaviour, DiagDirection, LandscapeType, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(enums);
 };
 extern "C" uint8_t openttd_test_ground_abi_calls(const OpenTTDGroundABICalls *);

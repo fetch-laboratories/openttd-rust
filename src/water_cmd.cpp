@@ -543,7 +543,6 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.airport_tile = RustAirportTile,
-		.airport = [](uint32_t t) noexcept { const Station *st = RustStationByTile(t); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },
 		.airport_member = RustStationAirportMember,
 		.airport_z = [](const AirportFTAClass *fta) noexcept { return int32_t{RustAirportDeltaZ(fta)} + 1; },
 		.crash = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Crash(true); },

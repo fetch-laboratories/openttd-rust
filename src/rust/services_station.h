@@ -73,7 +73,6 @@ inline void RustRoadStopCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFIn
 inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTTILES, tile); }
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
-inline Station *RustStationByTile(uint32_t tile) noexcept { return Station::GetByTile(TileIndex{tile}); }
 inline bool RustWaypointSingleTile(uint16_t id) noexcept { return Waypoint::Get(StationID{id})->IsSingleTile(); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
@@ -115,8 +114,6 @@ template <class Handle> inline uint64_t RustStationLegacyCompatible(Handle, uint
 inline void RustStationClosedWidget(BaseStation *st) noexcept { SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT); }
 inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTS, RustBaseStationID(st)); }
 
-inline uint16_t RustStationAirportWidth(const Station *station) noexcept { return station->GetAirport().Record().area.w; }
-inline uint16_t RustStationAirportHeight(const Station *station) noexcept { return station->GetAirport().Record().area.h; }
 inline uint8_t RustAirportDeltaZ(const AirportFTAClass *airport) noexcept { return airport->delta_z; }
 
 /* The existing aircraft table retains its opaque pointers and return widths. */

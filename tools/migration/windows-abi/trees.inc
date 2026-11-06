@@ -66,7 +66,6 @@ static void Trees()
 		.region_context = TreeUnused<OpenTTDWaterRegionContext>,
 		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
 		.airport_tile = TreeUnused<bool, uint32_t>,
-		.airport = TreeUnused<OpenTTDAirportGround, uint32_t>,
 		.airport_member = TreeUnused<bool, const OpenTTDStation *, uint32_t>,
 		.airport_z = TreeUnused<int32_t, const AirportFTAClass *>,
 		.crash = TreeUnused<uint32_t, OpenTTDVehicle *>,

@@ -820,7 +820,6 @@ pub struct ABICalls {
     pub foundation: extern "C" fn() -> FoundationSlope,
     pub road_snow: extern "C" fn() -> RoadSnowGround,
     pub tunnel: extern "C" fn() -> TunnelGround,
-    pub airport: extern "C" fn() -> crate::water::AirportGround,
     pub enums: extern "C" fn(
         ClearGroundType,
         RailGroundType,
@@ -854,7 +853,6 @@ pub(crate) unsafe fn abi_calls(calls: *const ABICalls) -> u8 {
     let foundation = (c.foundation)();
     let road = (c.road_snow)();
     let tunnel = (c.tunnel)();
-    let airport = (c.airport)();
     u8::from(
         fences.ne == 0xfedc_ba98
             && fences.se == 0x89ab_cdef
@@ -878,10 +876,6 @@ pub(crate) unsafe fn abi_calls(calls: *const ABICalls) -> u8 {
             && road.snow
             && tunnel.z == 789
             && !tunnel.snow
-            && airport.station.is_null()
-            && airport.tile == 0x1234_5678
-            && airport.width == 0xabcd
-            && airport.height == 0xdcba
             && (c.enums)(
                 ClearGroundType(240),
                 RailGroundType(239),
@@ -993,7 +987,6 @@ crate::abi::layouts! {
         foundation,
         road_snow,
         tunnel,
-        airport,
         enums,
     };
 }
