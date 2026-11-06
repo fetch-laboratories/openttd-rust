@@ -159,7 +159,7 @@ unsafe fn needs_service<const C: bool>(v: VehicleRef, base: &VehicleServices) ->
     }
     let companies = unsafe { &*s.company };
     let company = (companies.company)(crate::company_type::CompanyID(v.owner()));
-    let last_service = read_field!(v.0.as_ptr(), date_of_last_service);
+    let last_service = v.date_of_last_service();
     let now = crate::timer_game_common::economy_date();
     let interval = v.service_interval();
     let reliability = v.reliability();

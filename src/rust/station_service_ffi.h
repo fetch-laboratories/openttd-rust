@@ -146,7 +146,6 @@ struct OpenTTDStationLinks {
 	OpenTTDVehicle * (*order_vehicle)(OpenTTDOrderList *) noexcept OPENTTD_SERVICE_DEFAULT(order_vehicle);
 	OpenTTDVehicle * (*next_shared)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_shared);
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
-	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	const GoodsEntry *(*goods_entry)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(goods_entry);
 	const OpenTTDStationResolverServices *station_resolver;
 	const OpenTTDVehicleResolverServices *vehicle_resolver;

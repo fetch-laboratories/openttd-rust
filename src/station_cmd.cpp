@@ -399,7 +399,6 @@ static const OpenTTDStationLinks _rust_station_links = {
 	.stopped_in_depot = [](OpenTTDVehicle *handle) noexcept -> bool {
 		return VehicleOf(handle)->IsStoppedInDepot();
 	},
-	.last_service = RustVehicleLastServiceOf,
 	.goods_entry = RustStationGoodsEntry,
 	.station_resolver = &GetStationResolverServices(),
 	.vehicle_resolver = &GetRustVehicleResolverServices(),

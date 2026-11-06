@@ -942,7 +942,6 @@ pub struct Links {
     pub(crate) order_vehicle: extern "C" fn(*mut NativeOrderList) -> Option<VehicleRef>,
     pub(crate) next_shared: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub(crate) stopped_in_depot: extern "C" fn(VehicleRef) -> bool,
-    pub(crate) last_service: extern "C" fn(VehicleRef) -> i32,
     pub(crate) goods_entry:
         extern "C" fn(*mut BaseStation, u8) -> *const crate::station_base::GoodsEntry,
     pub(crate) station_resolver: *const crate::newgrf_station::Services,
@@ -1072,7 +1071,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                     while iterator < vehicles.len() {
                         let vehicle = vehicles[iterator];
                         if !(l.stopped_in_depot)(vehicle)
-                            || date.wrapping_sub((l.last_service)(vehicle))
+                            || date.wrapping_sub(vehicle.date_of_last_service().0)
                                 <= live::STALE_LINK_DEPOT_TIMEOUT
                         {
                             refresh_links(vehicle, false, false, visits);
@@ -2088,7 +2087,6 @@ crate::abi::layouts! {
         order_vehicle,
         next_shared,
         stopped_in_depot,
-        last_service,
         goods_entry, station_resolver, vehicle_resolver,
     };
     "OpenTTDStationLoading" ["probe"] => Loading {

@@ -967,8 +967,6 @@ mod tests {
             order_vehicle: unused!((*mut crate::orders::NativeOrderList) -> Option<crate::vehicle::VehicleRef>),
             next_shared: unused!((crate::vehicle::VehicleRef) -> Option<crate::vehicle::VehicleRef>),
             stopped_in_depot: unused!((crate::vehicle::VehicleRef) -> bool),
-            last_service: unused!((crate::vehicle::VehicleRef) -> i32),
-            cargo_type: unused!((crate::vehicle::VehicleRef) -> u8),
             goods_entry: unused!((*mut crate::station::BaseStation, u8) -> *const crate::station_base::GoodsEntry),
             station_resolver: std::ptr::null(),
             vehicle_resolver: std::ptr::null(),

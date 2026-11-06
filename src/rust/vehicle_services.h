@@ -147,8 +147,6 @@ inline uint16_t RustVehicleReliabilityDecay(const Vehicle *v) noexcept { return 
 inline TimerGameCalendar::Date RustVehicleAge(const Vehicle *v) noexcept { return v->GetAge(); }
 inline TimerGameCalendar::Date RustVehicleMaxAge(const Vehicle *v) noexcept { return v->GetMaxAge(); }
 inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept { return v->GetEconomyAge(); }
-inline TimerGameEconomy::Date RustVehicleLastService(const Vehicle *v) noexcept { return v->GetLastServiceDate(); }
-inline int32_t RustVehicleLastServiceOf(OpenTTDVehicle *v) noexcept { return RustVehicleLastService(VehicleOf(v)).base(); }
 inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v->Record().breakdown_ctr; }
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->GetValue().base(); }
 inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }

@@ -542,6 +542,9 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn write_max_age(self, value: CalendarDate) {
         crate::raw_field::write_field!(self.0.as_ptr(), max_age, value);
     }
+    pub(crate) fn date_of_last_service(self) -> EconomyDate {
+        crate::raw_field::read_field!(self.0.as_ptr(), date_of_last_service)
+    }
     pub(crate) fn write_date_of_last_service(self, value: EconomyDate) {
         crate::raw_field::write_field!(self.0.as_ptr(), date_of_last_service, value);
     }
