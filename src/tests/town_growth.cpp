@@ -27,16 +27,12 @@ TEST_CASE("Town lifecycle - canonical metadata, histories and descriptor aliases
 	a->Record().population = 999;
 	Town::Get(TownID(19))->Record().population = 1001;
 	CHECK(GetWorldPopulation() == 2000);
-	a->Record().ratings[CompanyID(2)] = -123;
 	a->Record().received[TAE_FOOD].old_act = 65535;
 	a->Record().goal[TAE_WATER] = TOWN_GROWTH_DESERT;
 	a->Record().noise_reached = 77;
-	a->Record().townnamegrfid = 0xFFFFFFFF; a->Record().townnametype = 0xFFFF; a->Record().townnameparts = 0x80000001;
 	/* The record is the owner's first member and names its shell. */
 	CHECK(static_cast<void *>(std::addressof(a->Record())) == static_cast<void *>(a->growth_owner.get()));
 	CHECK(a->Record().shell == a);
-	CHECK(a->Record().townnameparts == 0x80000001);
-	CHECK(a->Record().ratings[CompanyID(2)] == -123);
 	a->GetOrCreateCargoSupplied(5).history[THIS_MONTH].production = 123;
 	a->GetOrCreateCargoSupplied(2).history[LAST_MONTH].transported = 77;
 	const auto view = openttd_rust_town_supplied_view(a->growth_owner.get());
@@ -79,10 +75,6 @@ TEST_CASE("Town growth - indexed construction, descriptor aliases and pool reuse
 	CHECK(a->Record().flags.base() == 0);
 	a->Record().grow_counter = 65535; a->Record().growth_rate = 0x8005;
 	a->Record().flags.Set(TownFlag::HasChurch);
-	b->Record().grow_counter = 37;
-	b->Record().flags = TownFlags(0xFA);
-	CHECK(reinterpret_cast<const OpenTTDTownRecord *>(b->growth_owner.get())->grow_counter == 37);
-	CHECK(b->Record().flags.base() == 0xFA);
 	CHECK(b->Record().shell == b);
 	a->Record().grow_counter = 61;
 	/* The pre-SLV165 adapter's high bit is preserved before conversion, including

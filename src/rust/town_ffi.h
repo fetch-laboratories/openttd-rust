@@ -23,7 +23,6 @@ struct PersistentStorage;
 struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
 
 struct OpenTTDHouseServices;
-struct OpenTTDTownReceived { uint16_t old_max, new_max, old_act, new_act; };
 struct OpenTTDTownSuppliedHistory { uint32_t production, transported; };
 struct OpenTTDTownSupplied { uint8_t cargo; OpenTTDTownSuppliedHistory history[61]; };
 struct OpenTTDTownSuppliedEntry { OpenTTDTownSupplied *entry; bool created; };

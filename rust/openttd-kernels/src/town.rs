@@ -2504,7 +2504,7 @@ crate::abi::layouts! {
         state,
         id,
     };
-    "OpenTTDTownReceived" ["probe"] => Received {
+    "TransportedCargoStat<uint16_t>" ["probe"] => Received {
         old_max,
         new_max,
         old_act,
