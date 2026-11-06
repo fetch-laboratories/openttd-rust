@@ -711,7 +711,6 @@ bool CheckAbi_services()
 		GetRustSharedServices().newgrf_specs == &_rust_newgrf_specs && NewGRFSpecsComplete();
 }
 
-static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept { return {LiveGraphOwner(graph), graph->index.base()}; }
 static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
 {
 	Station *st = Station::Get(StationID(station));
@@ -724,10 +723,9 @@ static void LiveGraphAttach(uint16_t station, uint8_t cargo, uint16_t graph, uin
 	ge.node = node;
 }
 static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->goods[cargo].node = node; }
-static void LiveGraphDelete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
+static void LiveGraphDelete(OpenTTDLiveGraph *graph) noexcept { delete graph->shell; }
 
 static uint16_t LiveGraphStationNode(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->goods[cargo].node; }
-static OpenTTDLinkGraph *LiveGraphGetIfValid(uint16_t id) noexcept { return LinkGraph::GetIfValid(LinkGraphID(id)); }
 const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 {
 	static const OpenTTDLiveGraphServices services{
@@ -736,11 +734,9 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 #else
 		.assertions = false,
 #endif
-		.get = RustLinkGraphGet,
-		.get_if_valid = LiveGraphGetIfValid,
+		.pool = &_link_graph_pool.descriptor,
 		.station_id = RustBaseStationID<const BaseStation>,
-		.owner = LiveGraphOwner,
-		.access = LiveGraphAccess,
+		.index = RustLinkGraphIndex,
 		.station = LiveGraphStation,
 		.attach = LiveGraphAttach,
 		.set_node = LiveGraphSetNode,

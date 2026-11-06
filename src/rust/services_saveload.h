@@ -19,6 +19,10 @@ inline uint32_t RustSaveReferenceIndex(const void *obj) noexcept
 		return RustBaseStationID(static_cast<const Station *>(obj));
 	} else if constexpr (std::is_same_v<T, Town>) {
 		return RustTownAuthorityIndex(static_cast<const OpenTTDTownHandle *>(obj));
+	} else if constexpr (std::is_same_v<T, LinkGraph>) {
+		return RustLinkGraphIndex(static_cast<const OpenTTDLiveGraph *>(obj));
+	} else if constexpr (std::is_same_v<T, LinkGraphJob>) {
+		return static_cast<const OpenTTDLinkGraphJobRecord *>(obj)->shell->index.base();
 	} else if constexpr (std::is_same_v<T, EngineRenew>) {
 		return RustEngineRenewIndex(obj);
 	} else {
@@ -38,6 +42,8 @@ inline void *RustSaveReferenceGet(size_t index) noexcept
 		return OpenTTDTownShellByID(static_cast<uint32_t>(index));
 	} else if constexpr (std::is_same_v<T, LinkGraph>) {
 		return RustLinkGraphGet(static_cast<uint16_t>(index));
+	} else if constexpr (std::is_same_v<T, LinkGraphJob>) {
+		return &T::Get(index)->Record();
 	} else {
 		return T::Get(index);
 	}

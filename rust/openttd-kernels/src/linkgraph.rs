@@ -12,6 +12,7 @@
     clippy::cast_sign_loss
 )]
 
+pub(crate) mod job;
 pub(crate) mod live;
 
 use crate::timer_game_tick::DAY_TICKS;
@@ -22,7 +23,6 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 pub struct NativeGraph {
     _private: [u8; 0],
 }
-use std::ffi::c_void;
 
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -883,38 +883,15 @@ impl Job {
     }
 }
 
-/// Copy an input snapshot and compute all demands, paths and final flows.
-///
-/// # Safety
-/// Input arrays are readable, aligned, disjoint and live for this call, with edge ranges and
-/// destinations satisfying the original graph invariants; empty arrays permit null. Destroy
-/// the returned owner once. Arrays and readable, aligned settings follow `linkgraph_ffi.h`;
-/// the abort callback is nonthrowing, atomic-only and cannot reenter Rust.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_linkgraph_run(
-    nodes: *const InputNode,
-    node_count: usize,
-    edges: *const InputEdge,
-    edge_count: usize,
-    settings: *const Settings,
-    context: *const c_void,
-    aborted: unsafe extern "C" fn(*const c_void) -> u8,
-) -> *mut Result {
-    // SAFETY: the caller supplies the documented live input arrays and settings.
-    let nodes = if node_count == 0 {
-        &[]
-    } else {
-        unsafe { std::slice::from_raw_parts(nodes, node_count) }
-    };
-    // SAFETY: same array contract; null is accepted only for empty arrays.
-    let edges = if edge_count == 0 {
-        &[]
-    } else {
-        unsafe { std::slice::from_raw_parts(edges, edge_count) }
-    };
-    // SAFETY: settings is live and aligned for the complete call.
-    let settings = unsafe { *settings };
+/// Compute over the worker's private input arrays and atomic cancellation observation.
+fn run(
+    nodes: &[InputNode],
+    edges: &[InputEdge],
+    settings: Settings,
+    aborted: impl Fn() -> bool,
+) -> Result {
+    let node_count = nodes.len();
+    let edge_count = edges.len();
     let mut job = Job {
         nodes: nodes
             .iter()
@@ -932,8 +909,7 @@ pub unsafe extern "C" fn openttd_rust_linkgraph_run(
         free_paths: Vec::new(),
         settings,
     };
-    // SAFETY: caller promises a synchronous nonthrowing atomic-only callback.
-    job.run(|| unsafe { aborted(context) } != 0);
+    job.run(aborted);
     let mut shares = Vec::new();
     for (node_id, node) in job.nodes.iter().enumerate() {
         for (&origin, fs) in &node.flows {
@@ -959,90 +935,10 @@ pub unsafe extern "C" fn openttd_rust_linkgraph_run(
             }
         }
     }
-    Box::into_raw(Box::new(Result {
+    Result {
         shares,
         edge_flows: job.edge_flows,
-    }))
-}
-
-/// Read the final shares, ordered by node, origin and cumulative share.
-/// # Safety
-/// `owner` is a live result from run. Output count is aligned writable storage.
-/// Returned storage stays readable until owner destruction; no mutation allowed.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_linkgraph_shares(
-    owner: *const Result,
-    count: *mut usize,
-) -> *const OutputShare {
-    // SAFETY: the caller owns the live immutable result and writable count.
-    let result = unsafe { &*owner };
-    // SAFETY: count is exclusive and live during this call.
-    unsafe {
-        *count = result.shares.len();
     }
-    result.shares.as_ptr()
-}
-
-/// Read edge flows in the input edge order, borrowing the live result.
-/// # Safety
-/// `owner` must be a live result; returned storage outlives all reads and must
-/// never be written. The input edge count determines its extent.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_linkgraph_edges(owner: *const Result) -> *const u32 {
-    // SAFETY: the caller guarantees the live result borrow.
-    unsafe { &*owner }.edge_flows.as_ptr()
-}
-
-/// Destroy the opaque result, including all Rust allocations.
-/// # Safety
-/// `owner` must be the live result returned by run, used exactly once; all
-/// output borrows must have ended. No C++ allocator or exception enters Rust.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_linkgraph_destroy(owner: *mut Result) {
-    // SAFETY: caller transfers sole ownership of the result back to Rust.
-    unsafe {
-        drop(Box::from_raw(owner));
-    }
-}
-
-crate::abi::layouts! {
-    fn abi_layout;
-    "OpenTTDLinkGraphNode" ["probe"] => InputNode {
-        supply,
-        demand,
-        station,
-        x,
-        y,
-        edge_begin,
-        edge_count,
-    };
-    "OpenTTDLinkGraphEdge" ["probe"] => InputEdge {
-        capacity,
-        travel_time,
-        dest,
-    };
-    "OpenTTDLinkGraphSettings" ["probe"] => Settings {
-        accuracy,
-        demand_distance,
-        demand_size,
-        saturation,
-        distribution,
-        express,
-        map_max_x,
-        map_max_y,
-        runtime,
-    };
-    "OpenTTDLinkGraphShare" ["probe"] => OutputShare {
-        node,
-        origin,
-        via,
-        cumulative,
-        unrestricted,
-        has_share,
-    };
 }
 
 #[cfg(test)]

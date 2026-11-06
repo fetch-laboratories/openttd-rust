@@ -1,18 +1,17 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Whole `LinkGraphSchedule` owner. Workers only touch native job snapshots.
-#![allow(unsafe_code)]
+//! Whole `LinkGraphSchedule` owner. Workers only touch Rust job-private snapshots.
+#![allow(unsafe_code, clippy::cast_possible_truncation)]
 use crate::game_state::GameState;
 use crate::{
-    linkgraph::{NativeGraph as Graph, live},
+    linkgraph::{
+        job::JobRecord as Job,
+        live::{self, Graph},
+    },
     timer_game_common::SECONDS_PER_DAY,
     witness,
 };
-use std::{collections::VecDeque, ffi::c_void};
+use std::{collections::VecDeque, ffi::c_void, sync::atomic::Ordering};
 
-#[repr(C)]
-struct Job {
-    _opaque: [u8; 0],
-}
 #[repr(C)]
 struct Queues {
     schedule: *const *mut Graph,
@@ -22,28 +21,21 @@ struct Queues {
 }
 #[repr(C)]
 pub(crate) struct Services {
-    shared: &'static crate::services::Services,
-    graph_owner: extern "C" fn(*mut Graph) -> *mut live::Graph,
-    assert_graph: extern "C" fn(*const Graph),
-    can_allocate: extern "C" fn() -> bool,
     allocation_failure: extern "C" fn(),
-    new_job: extern "C" fn(*const Graph) -> *mut Job,
-    spawn: extern "C" fn(*mut Job),
-    due: extern "C" fn(*const Job) -> bool,
-    completed: extern "C" fn(*const Job) -> bool,
-    graph_index: extern "C" fn(*const Job) -> u16,
-    destroy_job: extern "C" fn(*mut Job),
-    graph_valid: extern "C" fn(u16) -> bool,
-    pub(crate) graph_get: extern "C" fn(u16) -> *mut Graph,
-    abort_job: extern "C" fn(*mut Job),
-    next_graph: extern "C" fn(*mut u32) -> *mut Graph,
-    next_job: extern "C" fn(*mut u32) -> *mut Job,
-    shift_job: extern "C" fn(*mut Job, i32),
+    assert_graph: extern "C" fn(*const Graph),
     begin_measurement: extern "C" fn(*mut c_void, bool),
+    can_allocate: extern "C" fn() -> bool,
+    destroy_job: extern "C" fn(*mut Job),
+    graph_pool: *const *const crate::pool::PoolDescriptor,
+    job_pool: *const *const crate::pool::PoolDescriptor,
+    new_job: extern "C" fn(*const Graph) -> *mut Job,
+    shared: &'static crate::services::Services,
+    start_thread: extern "C" fn(*mut Job) -> bool,
+    vehicle: *const crate::vehicle::VehicleServices,
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { shared, graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, begin_measurement };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { allocation_failure, assert_graph, begin_measurement, can_allocate, destroy_job, graph_pool, job_pool, new_job, shared, start_thread, vehicle };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
@@ -73,12 +65,34 @@ pub(crate) extern "C" fn openttd_rust_schedule_queue(s: &Services, graph: *mut G
 pub(crate) extern "C" fn openttd_rust_schedule_dequeue(graph: *mut Graph) {
     access(|q| q.schedule.retain(|&g| g != graph));
 }
+fn spawn_job(s: &Services, job: *mut Job) {
+    if (s.start_thread)(job) {
+        return;
+    }
+    openttd_rust_schedule_run(s, job);
+}
+/// Worker entry shared by the native thread and synchronous start-failure path.
+/// It reads only immutable service definitions and the job-private snapshot; it
+/// never acquires scheduler queues or borrows live graph/station records.
+#[unsafe(no_mangle)]
+extern "C" fn openttd_rust_schedule_run(s: &Services, job: *mut Job) {
+    if unsafe { (*job).aborted.load(Ordering::Acquire) } {
+        return;
+    }
+    // The source observes cargo classes and map dimensions at worker entry.
+    let cargo = unsafe { (*(*job).graph).cargo };
+    let resolver = unsafe { ((*s.vehicle).newgrf)() };
+    let classes = unsafe { ((*resolver).cargo_classes)(cargo) };
+    unsafe {
+        crate::linkgraph::job::run(job, classes, (s.shared.map_max_x)(), (s.shared.map_max_y)());
+    }
+}
 fn spawn_next(s: &Services) {
     let Some(mut next) = access(|q| q.schedule.front().copied()) else {
         return;
     };
     let first = next;
-    while unsafe { (&*(s.graph_owner)(next)).size() } < 2 {
+    while unsafe { (&*next).size() } < 2 {
         next = access(|q| {
             q.schedule.rotate_left(1);
             q.schedule[0]
@@ -92,28 +106,31 @@ fn spawn_next(s: &Services) {
     access(|q| q.schedule.pop_front());
     if (s.can_allocate)() {
         let job = (s.new_job)(next);
-        (s.spawn)(job); // may synchronously compute; no owner borrow survives.
+        spawn_job(s, job); // may synchronously compute; no owner borrow survives.
         access(|q| q.running.push_back(job));
         witness::hit(witness::SCHEDULE_SPAWN);
     } else {
         (s.allocation_failure)();
     }
 }
-fn unfinished(s: &Services) -> bool {
-    access(|q| q.running.front().copied()).is_some_and(|next| (s.due)(next) && !(s.completed)(next))
+fn unfinished() -> bool {
+    access(|q| q.running.front().copied()).is_some_and(|next| unsafe {
+        (*next).join_date <= crate::timer_game_common::economy_date().0
+            && !(*next).completed.load(Ordering::Acquire)
+    })
 }
 fn join_next(s: &Services) {
     let Some(next) = access(|q| q.running.front().copied()) else {
         return;
     };
-    if !(s.due)(next) {
+    if unsafe { (*next).join_date } > crate::timer_game_common::economy_date().0 {
         return;
     }
     access(|q| q.running.pop_front());
-    let id = (s.graph_index)(next);
+    let id = unsafe { (*next).graph_index };
     (s.destroy_job)(next); // joins and applies results; may reenter this owner.
-    if (s.graph_valid)(id) {
-        let graph = (s.graph_get)(id);
+    let graph = unsafe { live::Pool::from_descriptor(*s.graph_pool).record(id) };
+    if !graph.is_null() {
         openttd_rust_schedule_dequeue(graph);
         openttd_rust_schedule_queue(s, graph);
         witness::hit(witness::SCHEDULE_REQUEUE);
@@ -124,16 +141,18 @@ fn join_next(s: &Services) {
 extern "C" fn openttd_rust_schedule_spawn_all(s: &Services) {
     let mut i = 0;
     while let Some(job) = access(|q| q.running.get(i).copied()) {
-        (s.spawn)(job);
+        spawn_job(s, job);
         witness::hit(witness::SCHEDULE_RELOAD_JOB);
         i += 1;
     }
 }
 #[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_clear(s: &Services) {
+extern "C" fn openttd_rust_schedule_clear() {
     let mut i = 0;
     while let Some(job) = access(|q| q.running.get(i).copied()) {
-        (s.abort_job)(job);
+        unsafe {
+            (*job).aborted.store(true, Ordering::Release);
+        }
         i += 1;
     }
     access(|q| {
@@ -143,22 +162,30 @@ extern "C" fn openttd_rust_schedule_clear(s: &Services) {
 }
 #[unsafe(no_mangle)]
 pub(crate) extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32) {
+    let graphs = unsafe { live::Pool::from_descriptor(*s.graph_pool) };
+    let jobs = unsafe { crate::linkgraph::job::Pool::from_descriptor(*s.job_pool) };
     let mut from = 0;
     loop {
-        let graph = (s.next_graph)(&raw mut from);
-        if graph.is_null() {
+        let index = unsafe { graphs.next_index(from, usize::from(u16::MAX)) };
+        if index == usize::from(u16::MAX) {
             break;
         }
-        // SAFETY: pool iteration yields a live shell; no borrow crosses a callback.
-        unsafe { live::openttd_rust_live_graph_shift((s.graph_owner)(graph), interval) };
+        from = index + 1;
+        let graph = unsafe { graphs.record(crate::linkgraph_type::LinkGraphID(index as u16)) };
+        // Pure record mutation: no callback can grow/reset the pool in this interval.
+        unsafe { live::openttd_rust_live_graph_shift(graph, interval) };
     }
     from = 0;
     loop {
-        let job = (s.next_job)(&raw mut from);
-        if job.is_null() {
+        let index = unsafe { jobs.next_index(from, usize::from(u16::MAX)) };
+        if index == usize::from(u16::MAX) {
             break;
         }
-        (s.shift_job)(job, interval);
+        from = index + 1;
+        let job = unsafe { jobs.record(crate::linkgraph_type::LinkGraphJobID(index as u16)) };
+        unsafe {
+            (*job).join_date = (*job).join_date.wrapping_add(interval);
+        }
     }
 }
 pub(crate) fn tick(
@@ -199,7 +226,7 @@ pub(crate) fn pause(
     unpaused: bool,
 ) {
     if paused {
-        if !unfinished(s) {
+        if !unfinished() {
             post_pause(s, false);
         }
     } else if unpaused {
@@ -208,15 +235,15 @@ pub(crate) fn pause(
         }
         let interval =
             i32::from(unsafe { shared.settings().recalc_interval.read() }) / SECONDS_PER_DAY;
-        if crate::timer_game_common::economy_date().0 % interval == interval / 2 && unfinished(s) {
+        if crate::timer_game_common::economy_date().0 % interval == interval / 2 && unfinished() {
             post_pause(s, true);
             witness::hit(witness::SCHEDULE_PAUSE);
         }
     }
 }
 #[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_after_load(s: &Services) {
-    if unfinished(s) {
+extern "C" fn openttd_rust_schedule_after_load() {
+    if unfinished() {
         crate::session::set_pause(
             crate::session::pause() | crate::openttd::PauseMode::LINK_GRAPH.bit(),
         );
