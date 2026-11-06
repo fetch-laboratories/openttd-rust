@@ -42,11 +42,8 @@ pub(crate) fn airport_has_hangar(
     (s.has_hangar)(st, crate::newgrf_airport::station_spec(st.cast_mut(), s))
 }
 
-/// Native `GoodsEntry`; storage remains in the station shell.
-#[repr(C)]
-pub struct GoodsEntry {
-    _private: [u8; 0],
-}
+/// Canonical goods record; native presentation facades borrow this same storage.
+pub type GoodsEntry = crate::station_record::GoodsRecord;
 /// `GoodsEntry::GetVia(source, excluded, excluded2)` over its resolved flow map.
 /// # Safety
 /// The map is live and serialized; the random callback changes only the RNG.

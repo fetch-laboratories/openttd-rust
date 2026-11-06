@@ -128,7 +128,5 @@ inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustA
 inline uint8_t RustStationTileRandomBits(uint32_t tile) noexcept { return GetStationTileRandomBits(TileIndex{tile}); }
 inline bool RustStationSignValid(BaseStation *st) noexcept { return st->sign.kdtree_valid; }
 inline void RustStationListClassesInvalidate() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); }
-inline void RustStationSetIndustryType(BaseStation *st, uint8_t type) noexcept { Station::From(st)->Record().indtype = type; }
 inline uint16_t RustAirportSpecMaintenance(const AirportSpec *spec) noexcept { return spec->maintenance_cost; }
-inline const OpenTTDGoodsEntry *RustStationGoodsEntry(BaseStation *st, uint8_t cargo) noexcept { return &Station::From(st)->Record().goods[cargo]; }
 #endif /* RUST_SERVICES_STATION_H */

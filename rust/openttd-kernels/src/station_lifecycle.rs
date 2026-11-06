@@ -56,7 +56,6 @@ pub struct Services {
     pub shared: &'static Shared,
     pub catchment: &'static crate::station::CatchmentServices,
     names: Names,
-    pub set_industry_type: extern "C" fn(*mut BaseStation, u8),
     pub roadstop: *const crate::newgrf_roadstop::Services,
     pub cleaning_pool: extern "C" fn() -> bool,
     pub close_view: extern "C" fn(StationID),
@@ -213,7 +212,9 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
             continue;
         }
         if unsafe { (*spec).station_name } != n.null {
-            (s.set_industry_type)(st, kind);
+            unsafe {
+                (*crate::station_record::record_of(st)).indtype = kind;
+            }
             return n.fallback;
         }
         break;
@@ -470,7 +471,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         while node < unsafe { &*owner }.size() {
             let other_id = unsafe { &*owner }.nodes[usize::from(node)].station;
             let other = w.get(other_id);
-            let goods = (links.goods_entry)(other, cargo);
+            let goods = crate::station_record::goods(other, cargo);
             let flows = (storage.flow_map)(goods.cast());
             if !flows.is_null() {
                 unsafe {
@@ -586,5 +587,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, set_industry_type, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }

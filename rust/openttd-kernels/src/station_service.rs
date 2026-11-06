@@ -937,8 +937,6 @@ pub struct Links {
     pub(crate) stopped_in_depot: extern "C" fn(VehicleRef) -> bool,
     pub(crate) last_service: extern "C" fn(VehicleRef) -> i32,
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
-    pub(crate) goods_entry:
-        extern "C" fn(*mut BaseStation, u8) -> *const crate::station_base::GoodsEntry,
     pub(crate) station_resolver: *const crate::newgrf_station::Services,
     pub(crate) vehicle_resolver: *const crate::newgrf_vehicle::Services,
 }
@@ -958,7 +956,7 @@ impl Links {
 }
 unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, l: &Links) {
     let storage = l.storage();
-    let goods = (l.goods_entry)(st, cargo);
+    let goods = crate::station_record::goods(st, cargo);
     let list = Links::station_cargo(st, cargo);
     if !list.is_null() {
         unsafe {
@@ -2067,7 +2065,7 @@ crate::abi::layouts! {
         stopped_in_depot,
         last_service,
         cargo_type,
-        goods_entry, station_resolver, vehicle_resolver,
+        station_resolver, vehicle_resolver,
     };
     "OpenTTDStationLoading" ["probe"] => Loading {
         control,

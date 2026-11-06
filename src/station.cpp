@@ -229,7 +229,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 			.upper = STR_SV_STNAME_UPPER, .lower = STR_SV_STNAME_LOWER, .fallback = STR_SV_STNAME_FALLBACK,
 			.undefined = STR_UNDEFINED, .null = STR_NULL,
 		},
-		.set_industry_type = RustStationSetIndustryType,
 		.roadstop = &GetRoadStopResolverServices(),
 		.cleaning_pool = []() noexcept { return Station::CleaningPool(); },
 		.close_view = [](uint16_t id) noexcept { CloseWindowById(WC_STATION_VIEW, StationID{id}); },

@@ -598,6 +598,12 @@ pub(crate) fn get_station_record_if_valid(
     }
 }
 
+/// The goods slot of the live Station, with no borrow across effects.
+#[inline]
+pub(crate) fn goods(shell: *const BaseStation, cargo: u8) -> *const GoodsRecord {
+    unsafe { &raw const (*record_of(shell)).goods[usize::from(cargo)] }
+}
+
 /// `BaseStation::GetPoolSize()`: the pool's live extent.
 pub(crate) fn pool_size(s: &crate::services::Services) -> usize {
     // SAFETY: The live extent is a scalar of the canonical pool.

@@ -384,7 +384,6 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
-	.goods_entry = RustStationGoodsEntry,
 	.station_resolver = &GetStationResolverServices(),
 	.vehicle_resolver = &GetRustVehicleResolverServices(),
 };
