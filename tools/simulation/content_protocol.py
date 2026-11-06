@@ -6,8 +6,10 @@ errors. Inputs are synthesized here, so no third-party content is fetched or sto
 """
 
 import gzip
+import hashlib
 import http.server
 import io
+import json
 import socket
 import struct
 import tarfile
@@ -395,9 +397,9 @@ REQUIRED = (
     "CONTENT event complete 125",
     "CONTENT event complete 126",
     "CONTENT event progress-failed 123",
-    "[tcp/content] Received illegal packet",
-    "[tcp/content] Received illegal packet type 0",
-    "[tcp/content] Received invalid packet type 4",
+    "dbg: [net:0] [tcp/content] Received illegal packet",
+    "dbg: [net:0] [tcp/content] Received illegal packet type 0",
+    "dbg: [net:0] [tcp/content] Received invalid packet type 0",
 )
 
 
@@ -453,6 +455,9 @@ def prepare(
             httpd.server_close()
             server.close()
         traces[role] = observe(run, server, mirror)
+        (folder / role / "protocol-trace.json").write_text(
+            json.dumps(traces[role], indent=2) + "\n"
+        )
         missing = [marker for marker in REQUIRED if marker not in traces[role]]
         if (
             run["exit"]
@@ -464,4 +469,7 @@ def prepare(
         first = core.first_difference(traces["reference"], traces["candidate"])
         raise RuntimeError(f"content protocol traces differ at {first}")
     core.findings(result)["content_protocol"] = len(traces["reference"])
+    core.findings(result)["content_protocol_sha256"] = hashlib.sha256(
+        json.dumps(traces["reference"]).encode()
+    ).hexdigest()
     return {**scenario, "executables": executables}
