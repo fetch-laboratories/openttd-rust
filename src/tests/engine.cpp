@@ -55,6 +55,8 @@ TEST_CASE("Engine temporary owners survive relocation and replacement", "[rust][
 	auto *age = &staged[0].Record().age;
 	for (size_t i = 1; i < 1024; ++i) staged.emplace_back();
 	REQUIRE(staged[0].rust_lifecycle.state == allocation);
+	REQUIRE(EngineOf(allocation) == &staged[0]);
+	REQUIRE(RustEngine(&staged[0]) == allocation);
 	REQUIRE(&staged[0].Record().age == age);
 	REQUIRE(staged[0].Record().age == -123);
 	REQUIRE(staged[0].Record().preview_company == CompanyID{3});
@@ -311,7 +313,8 @@ TEST_CASE("Engine runtime enablement short circuits and lifetime retains widths"
 {
 	Engine e(VEH_ROAD, 0);
 	auto engine = EngineServices();
-	engine.climate = [](const OpenTTDEngine *) noexcept -> bool { FAIL("Invalid strings must short circuit climate"); return false; };
+	/* Invalid strings must return before dereferencing shared climate settings. */
+	engine.shared = nullptr;
 	e.Record().info.string_id = STR_NEWGRF_INVALID_ENGINE;
 	CHECK_FALSE(openttd_rust_engine_enabled(&engine, RustEngine(&e)));
 	e.Record().info.string_id = STR_EMPTY;

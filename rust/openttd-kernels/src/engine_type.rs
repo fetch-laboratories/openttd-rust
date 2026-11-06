@@ -58,9 +58,12 @@ pub const EC_MAGLEV: u8 = 4;
 /// `EngineMiscFlag::Uses2CC`.
 pub const USES_2CC: u8 = 1 << 1;
 
-/// Opaque native `Engine`; valid only while its native pool shell lives.
+/// Canonical engine record; native shell identity is kept only for remaining native consumers.
+pub use crate::engine::Lifecycle as OpenTTDEngine;
+
+/// Native identity and formatting shell, released with its last native consumer.
 #[repr(C)]
-pub struct OpenTTDEngine {
+pub struct NativeEngine {
     _private: [u8; 0],
 }
 

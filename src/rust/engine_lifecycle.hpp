@@ -14,6 +14,7 @@
 #include <utility>
 #include "rust_vector.h"
 #include "abi-record-engine.h"
+using OpenTTDEngineLifecycle = OpenTTDEngine;
 extern "C" {
 OpenTTDEngineLifecycle *openttd_rust_engine_new();
 void openttd_rust_engine_construct(OpenTTDEngineLifecycle *, const OpenTTDEngineDefaults *, VehicleType, uint16_t);
@@ -23,7 +24,7 @@ void openttd_rust_engine_set_name(OpenTTDEngineLifecycle *, OpenTTDByteSpan);
 /** Game-state mutex serializes access. Moves transfer ownership; no view survives mutation/drop. */
 struct EngineLifecycleOwner {
 	OpenTTDEngineLifecycle *state;
-	EngineLifecycleOwner() : state(openttd_rust_engine_new()) {}
+	explicit EngineLifecycleOwner(const Engine *shell) : state(openttd_rust_engine_new()) { this->state->shell = shell; }
 	EngineLifecycleOwner(EngineLifecycleOwner &&other) noexcept : state(std::exchange(other.state, nullptr)) {}
 	EngineLifecycleOwner(const EngineLifecycleOwner &) = delete;
 	EngineLifecycleOwner &operator=(const EngineLifecycleOwner &) = delete;

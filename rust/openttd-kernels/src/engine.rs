@@ -26,7 +26,8 @@ use crate::timer_game_common::{DAYS_IN_LEAP_YEAR, DAYS_IN_YEAR};
 crate::abi::shared_records! {
     fn abi_record;
     /// Canonical lifecycle and name, stable through temporary shell relocation.
-    "OpenTTDEngineLifecycle" ["engine"] => pub struct Lifecycle {
+    "OpenTTDEngine" ["engine"] => pub struct Lifecycle {
+        pub shell: *const crate::engine_type::NativeEngine => "const Engine *",
         pub company_avail: u16 => "CompanyMask",
         pub company_hidden: u16 => "CompanyMask",
         pub preview_asked: u16 => "CompanyMask",
@@ -52,9 +53,44 @@ crate::abi::shared_records! {
         pub list_position: u16,
     }
 }
+impl Lifecycle {
+    /// Active payload pointer for a live serialized record; never retained across mutation/drop.
+    pub(crate) unsafe fn rail(record: *const Self) -> *mut records::RailVehicleInfo {
+        assert_eq!(
+            read_field!(record, vehicle_info_type).0,
+            VehicleType::TRAIN.0
+        );
+        unsafe { std::ptr::addr_of_mut!((*record.cast_mut()).vehicle_info.rail) }
+    }
+    /// Active payload pointer for a live serialized record; never retained across mutation/drop.
+    pub(crate) unsafe fn road(record: *const Self) -> *mut records::RoadVehicleInfo {
+        assert_eq!(
+            read_field!(record, vehicle_info_type).0,
+            VehicleType::ROAD.0
+        );
+        unsafe { std::ptr::addr_of_mut!((*record.cast_mut()).vehicle_info.road) }
+    }
+    /// Active payload pointer for a live serialized record; never retained across mutation/drop.
+    pub(crate) unsafe fn ship(record: *const Self) -> *mut records::ShipVehicleInfo {
+        assert_eq!(
+            read_field!(record, vehicle_info_type).0,
+            VehicleType::SHIP.0
+        );
+        unsafe { std::ptr::addr_of_mut!((*record.cast_mut()).vehicle_info.ship) }
+    }
+    /// Active payload pointer for a live serialized record; never retained across mutation/drop.
+    pub(crate) unsafe fn aircraft(record: *const Self) -> *mut records::AircraftVehicleInfo {
+        assert_eq!(
+            read_field!(record, vehicle_info_type).0,
+            VehicleType::AIRCRAFT.0
+        );
+        unsafe { std::ptr::addr_of_mut!((*record.cast_mut()).vehicle_info.aircraft) }
+    }
+}
 impl Default for Lifecycle {
     fn default() -> Self {
         Self {
+            shell: std::ptr::null(),
             company_avail: 0,
             company_hidden: 0,
             preview_asked: 0,
@@ -119,45 +155,6 @@ pub struct EngineRef {
     pub id: u16,
     pub kind: VehicleType,
 }
-#[repr(C)]
-pub struct SyncVariant {
-    pub parent: u16,
-    pub sync: bool,
-}
-#[repr(C)]
-pub struct DisplayVariant {
-    pub parent: u16,
-    pub display: u16,
-}
-#[repr(C)]
-pub struct PreviewVariant {
-    pub parent: u16,
-    pub join: bool,
-}
-#[repr(C)]
-pub struct Reliability {
-    pub base_life: i32,
-    pub retire_early: i8,
-}
-#[repr(C)]
-pub struct Startup {
-    pub base_intro: i32,
-    pub base_life: i32,
-    pub decay_speed: u8,
-    pub climate: bool,
-}
-#[repr(C)]
-pub struct SeedConfig {
-    pub base_intro: i32,
-    pub lifelength: i32,
-    pub decay_speed: u8,
-    pub retire_early: i8,
-}
-#[repr(C)]
-pub struct AgingYear {
-    pub base_intro: i32,
-    pub lifelength: i32,
-}
 pub use crate::services::CalendarYmd as Ymd;
 #[repr(C)]
 pub struct StartSettings {
@@ -204,16 +201,8 @@ pub struct Services {
     pub types: *const crate::type_availability::Services,
     pub next: unsafe extern "C" fn(u32) -> EngineRef,
     pub resolve: unsafe extern "C" fn(u16) -> EngineRef,
-    pub sync_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> SyncVariant,
-    pub display_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> DisplayVariant,
-    pub preview_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> PreviewVariant,
-    pub extra_flags: unsafe extern "C" fn(*const OpenTTDEngine) -> u8,
+    pub display_variant: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
     pub engine_id: unsafe extern "C" fn(*const OpenTTDEngine) -> u16,
-    pub reliability: unsafe extern "C" fn(*const OpenTTDEngine) -> Reliability,
-    pub startup: unsafe extern "C" fn(*const OpenTTDEngine) -> Startup,
-    pub seed_config: unsafe extern "C" fn(*const OpenTTDEngine) -> SeedConfig,
-    pub base_intro: unsafe extern "C" fn(*const OpenTTDEngine) -> i32,
-    pub aging_year: unsafe extern "C" fn(*const OpenTTDEngine) -> AgingYear,
     pub start_settings: unsafe extern "C" fn() -> StartSettings,
     pub train_limit: unsafe extern "C" fn() -> u16,
     pub road_limit: unsafe extern "C" fn() -> u16,
@@ -223,8 +212,6 @@ pub struct Services {
     pub ai_road_disabled: unsafe extern "C" fn() -> bool,
     pub ai_ship_disabled: unsafe extern "C" fn() -> bool,
     pub ai_aircraft_disabled: unsafe extern "C" fn() -> bool,
-    pub climate: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
-    pub rail_kind: unsafe extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
     pub clear_last_variant: unsafe extern "C" fn(*const OpenTTDEngine),
     pub refresh_type: unsafe extern "C" fn(VehicleType),
     pub refresh_lists: unsafe extern "C" fn(bool),
@@ -266,12 +253,13 @@ macro_rules! call {
 }
 unsafe fn parent(s: &Services, mut e: EngineRef) -> EngineRef {
     loop {
-        let v = unsafe { call!(s, sync_variant, e.shell) };
-        if v.parent == INVALID || !v.sync {
+        let parent = read_field!(e.state, info.variant_id).0;
+        let sync = read_field!(e.state, info.extra_flags) & (1 << 3) != 0;
+        if parent == INVALID || !sync {
             return e;
         }
         crate::witness::hit(crate::witness::ENGINE_SYNC);
-        e = unsafe { call!(s, resolve, v.parent) };
+        e = unsafe { call!(s, resolve, parent) };
     }
 }
 unsafe fn clear_last_variant(s: &Services, e: EngineRef) {
@@ -295,7 +283,7 @@ unsafe fn reliability(s: &Services, e: EngineRef, month: bool) {
     {
         age = age.wrapping_add(1);
     }
-    let cfg = unsafe { call!(s, reliability, e.shell) };
+    let cfg = read_field!(e.state, info);
     let phase1 = u32::from(read_field!(e.state, duration_phase_1));
     let phase2 = u32::from(read_field!(e.state, duration_phase_2));
     let phase3 = u32::from(read_field!(e.state, duration_phase_3));
@@ -363,8 +351,10 @@ pub unsafe extern "C" fn openttd_rust_engine_reliability(
         reliability(&*s, e, month);
     }
 }
+#[allow(clippy::too_many_lines)]
 unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
-    let cfg = unsafe { call!(s, startup, e.shell) };
+    let cfg = read_field!(e.state, info);
+    let climate = unsafe { climate(s, e.shell) };
     let settings = unsafe { call!(s, start_settings) };
     write_field!(e.state, age, 0);
     write_field!(e.state, flags, 0);
@@ -412,7 +402,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
         write_field!(e.state, flags, read_field!(e.state, flags) | AVAILABLE);
     }
     let re = unsafe { parent(s, e) };
-    let re_cfg = unsafe { call!(s, seed_config, re.shell) };
+    let re_cfg = read_field!(re.state, info);
     unsafe {
         call!(
             rng,
@@ -460,7 +450,7 @@ unsafe fn start_one(s: &Services, e: EngineRef, aging: Ymd, seed: u32) {
         reliability_spd_dec,
         u16::from(cfg.decay_speed) << 2
     );
-    if !cfg.climate {
+    if !climate {
         write_field!(e.state, flags, read_field!(e.state, flags) | AVAILABLE);
         write_field!(e.state, company_avail, 0);
     }
@@ -489,10 +479,10 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if !unsafe { call!(s, climate, e.shell) } || unsafe { wagon(s, e) } {
+        if !unsafe { climate(s, e.shell) } || unsafe { wagon(e) } {
             continue;
         }
-        let cfg = unsafe { call!(s, aging_year, e.shell) };
+        let cfg = read_field!(e.state, info);
         let date = cfg
             .base_intro
             .wrapping_add(cfg.lifelength.wrapping_mul(DAYS_IN_LEAP_YEAR) / 2);
@@ -556,9 +546,9 @@ pub unsafe extern "C" fn openttd_rust_engine_start_all(s: *const Services) {
         call!(s, refresh_lists, true);
     }
 }
-unsafe fn wagon(s: &Services, e: EngineRef) -> bool {
+unsafe fn wagon(e: EngineRef) -> bool {
     e.kind == VehicleType::TRAIN
-        && unsafe { call!(s, rail_kind, e.shell) } == RailVehicleTypes::WAGON
+        && read_field!(Lifecycle::rail(e.shell), railveh_type) == RailVehicleTypes::WAGON.0
 }
 unsafe fn disabled(s: &Services, kind: VehicleType, ai: bool) -> bool {
     match kind {
@@ -654,8 +644,9 @@ unsafe fn accept(s: &Services, e: EngineRef, company: u8, depth: i32) {
         if ve.kind != e.kind {
             continue;
         }
-        let v = unsafe { call!(s, preview_variant, ve.shell) };
-        if ve.id != e.id && v.parent == e.id && v.join {
+        let parent = read_field!(ve.state, info.variant_id).0;
+        let join = read_field!(ve.state, info.extra_flags) & (1 << 2) != 0;
+        if ve.id != e.id && parent == e.id && join {
             unsafe {
                 accept(s, ve, company, depth + 1);
             }
@@ -821,7 +812,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
         call!(s, refresh_type, e.kind);
     }
     write_field!(e.state, company_avail, u16::MAX);
-    if unsafe { wagon(s, e) } {
+    if unsafe { wagon(e) } {
         return;
     }
     if e.kind == VehicleType::TRAIN {
@@ -874,8 +865,7 @@ unsafe fn available(s: &Services, e: EngineRef, date: i32) {
             call!(s, available_event, e.id);
         }
     }
-    if !unsafe { disabled(s, e.kind, false) } && unsafe { call!(s, extra_flags, e.shell) } & 1 == 0
-    {
+    if !unsafe { disabled(s, e.kind, false) } && read_field!(e.state, info.extra_flags) & 1 == 0 {
         unsafe {
             call!(s, available_news, e.id);
         }
@@ -922,8 +912,8 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
             && date >= read_field!(e.state, intro_date)
         {
             if unsafe { disabled(s, e.kind, false) }
-                || unsafe { wagon(s, e) }
-                || unsafe { call!(s, extra_flags, e.shell) } & 2 != 0
+                || unsafe { wagon(e) }
+                || read_field!(e.state, info.extra_flags) & 2 != 0
             {
                 continue;
             }
@@ -1016,17 +1006,18 @@ pub unsafe extern "C" fn openttd_rust_engine_variant_hidden_abi(
     let s = unsafe { &*s };
     let mut re = e;
     loop {
-        let variant = unsafe { call!(s, display_variant, re.shell) };
-        let ve = if variant.display == re.id || variant.display == INVALID {
+        let parent = read_field!(re.state, info.variant_id).0;
+        let display = unsafe { call!(s, display_variant, re.shell) };
+        let ve = if display == re.id || display == INVALID {
             re
         } else {
-            unsafe { call!(s, resolve, variant.display) }
+            unsafe { call!(s, resolve, display) }
         };
         let hidden = read_field!(ve.state, company_hidden) & (1 << company) != 0;
-        if hidden || variant.parent == INVALID {
+        if hidden || parent == INVALID {
             return u8::from(hidden);
         }
-        re = unsafe { call!(s, resolve, variant.parent) };
+        re = unsafe { call!(s, resolve, parent) };
     }
 }
 #[unsafe(no_mangle)]
@@ -1163,14 +1154,14 @@ pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if !unsafe { openttd_rust_engine_enabled_abi(s, e.shell) != 0 } || unsafe { wagon(s, e) } {
+        if !unsafe { openttd_rust_engine_enabled_abi(s, e.shell) != 0 } || unsafe { wagon(e) } {
             continue;
         }
         if read_field!(e.state, flags) & AVAILABLE != 0 && read_field!(e.state, company_avail) != 0
         {
             return;
         }
-        min = min.min(unsafe { call!(s, base_intro, e.shell) });
+        min = min.min(read_field!(e.state, info.base_intro));
     }
     unsafe {
         call!(s, no_engines, min);
@@ -1184,38 +1175,6 @@ crate::abi::layouts! {
         state,
         id,
         kind => type,
-    };
-    "OpenTTDEngineSyncVariant" ["engine"] => SyncVariant {
-        parent,
-        sync,
-    };
-    "OpenTTDEngineDisplayVariant" ["engine"] => DisplayVariant {
-        parent,
-        display,
-    };
-    "OpenTTDEnginePreviewVariant" ["engine"] => PreviewVariant {
-        parent,
-        join,
-    };
-    "OpenTTDEngineReliability" ["engine"] => Reliability {
-        base_life,
-        retire_early,
-    };
-    "OpenTTDEngineStartup" ["engine"] => Startup {
-        base_intro,
-        decay_speed,
-        base_life,
-        climate,
-    };
-    "OpenTTDEngineSeed" ["engine"] => SeedConfig {
-        base_intro,
-        lifelength,
-        decay_speed,
-        retire_early,
-    };
-    "OpenTTDEngineYear" ["engine"] => AgingYear {
-        base_intro,
-        lifelength,
     };
     "OpenTTDEngineYMD" ["engine"] => Ymd {
         year,
@@ -1261,16 +1220,8 @@ crate::abi::layouts! {
         types,
         next,
         resolve,
-        sync_variant,
         display_variant,
-        preview_variant,
-        extra_flags,
         engine_id,
-        reliability,
-        startup,
-        seed_config,
-        base_intro,
-        aging_year,
         start_settings,
         train_limit,
         road_limit,
@@ -1280,8 +1231,6 @@ crate::abi::layouts! {
         ai_road_disabled,
         ai_ship_disabled,
         ai_aircraft_disabled,
-        climate,
-        rail_kind,
         clear_last_variant,
         refresh_type,
         refresh_lists,
@@ -1328,11 +1277,16 @@ pub(crate) struct CapacityConfig {
     pub misc: u8,
 }
 
+unsafe fn climate(s: &Services, e: *const OpenTTDEngine) -> bool {
+    let climate = unsafe { (*s.shared).settings().climate.read() };
+    read_field!(e, info.climates) & (1 << climate) != 0
+}
+
 /// Original invalid-string short circuit precedes the climate observation.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_engine_enabled_abi(
     s: &Services,
     e: *const OpenTTDEngine,
 ) -> u8 {
-    u8::from(unsafe { (s.capabilities.valid_string)(e) && (s.climate)(e) })
+    u8::from(unsafe { (s.capabilities.valid_string)(e) && climate(s, e) })
 }

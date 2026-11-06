@@ -177,8 +177,8 @@ inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
 inline void RustVehicleSetEngine(OpenTTDVehicle *v, uint16_t engine) noexcept { VehicleOf(v)->SetEngineType(EngineID(engine)); }
 inline void RustVehicleSetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { VehicleOf(v)->SetOwner(Owner(owner)); }
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->GetEngineType().base(); }
-inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
-inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
+inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return e == nullptr ? nullptr : &e->Record(); }
+inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return e == nullptr ? nullptr : e->shell; }
 inline const GRFFile *RustEngineGRF(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetGRF(); }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
 /** Shared engine observation for a live base shell, resolved once. */

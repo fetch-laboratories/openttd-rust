@@ -38,7 +38,7 @@ extern EnginePool _engine_pool;
 
 class Engine : public EnginePool::PoolItem<&_engine_pool> {
 public:
-	EngineLifecycleOwner rust_lifecycle;
+	EngineLifecycleOwner rust_lifecycle{this};
 	OpenTTDEngineLifecycle &Record() { return *this->rust_lifecycle.state; }
 	const OpenTTDEngineLifecycle &Record() const { return *this->rust_lifecycle.state; }
 	std::string_view Name() const { return {reinterpret_cast<const char *>(this->Record().name.items), this->Record().name.count}; }
@@ -53,7 +53,12 @@ public:
 	std::vector<BadgeID> badges{};
 
 	Engine() {}
-	Engine(Engine &&) noexcept = default;
+	Engine(Engine &&other) noexcept
+		: rust_lifecycle(std::move(other.rust_lifecycle)), display_flags(other.display_flags), display_last_variant(other.display_last_variant),
+		  grf_prop(std::move(other.grf_prop)), overrides(std::move(other.overrides)), badges(std::move(other.badges))
+	{
+		this->Record().shell = this;
+	}
 	Engine(const Engine &) = delete;
 	Engine &operator=(const Engine &) = delete;
 	Engine(VehicleType type, uint16_t local_id);

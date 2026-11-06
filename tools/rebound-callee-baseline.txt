@@ -30,8 +30,6 @@ forwarded | src/rust/services.cpp | infrastructure_dirty = GetRustCommandService
 forwarded | src/rust/ship_control_services.h | docking = GetRustSharedServices().docking_tile
 forwarded | src/rust/ship_control_services.h | lock_middle = GetRustSharedServices().water_middle_lock
 forwarded | src/rust/station_command_services.hpp | water_infrastructure = GetRustWaterRestorationServices().infrastructure
-forwarded | src/rust/vehicle_properties_services.hpp | aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
-forwarded | src/rust/vehicle_properties_services.hpp | train_class = GetRustEngineCapabilitiesServices().train_class
 forwarded | src/town_cmd.cpp | generating_world = GetRustSharedServices().clear_square_services.generating_world
 forwarded | src/town_cmd.cpp | next_town = GetRustSharedServices().town_next_id
 forwarded | src/townname.cpp | utf8_length = GetRustSharedServices().utf8_length
@@ -40,10 +38,8 @@ rebound | Engine_next | src/rust/engine_adapter.hpp | next | 2
 rebound | Engine_next | src/rust/engine_loading_services.hpp | next
 rebound | Engine_powered_roadtypes | src/rust/engine_adapter.hpp | powered_roadtypes
 rebound | Engine_powered_roadtypes | src/rust/vehicle_build_services.hpp | powered_roadtypes
-rebound | Engine_rail_kind | src/rust/engine_adapter.hpp | rail_kind
 rebound | Engine_rail_kind | src/rust/engine_capabilities_services.hpp | rail_kind
 rebound | Engine_rail_kind | src/rust/engine_loading_services.hpp | rail_kind
-rebound | Engine_rail_kind | src/rust/vehicle_properties_services.hpp | train_kind
 rebound | Engine_rail_kind | src/rust/vehicle_refit_services.hpp | rail_kind
 rebound | GetRustAircraftVehicle | src/rust/station_command_services.hpp | aircraft_vehicle
 rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraft_handle
@@ -143,8 +139,6 @@ rebound | RustEngineByID | src/rust/vehicle_refit_services.hpp | engine
 rebound | RustEngineByID | src/rust/vehicle_services_newgrf.h | engine_by_id
 rebound | RustEngineByIDIfValid | src/newgrf_airport.cpp | engine_if_valid
 rebound | RustEngineByIDIfValid | src/rust/engine_capabilities_services.hpp | engine_if_valid
-rebound | RustEngineCallbackMask | src/rust/engine_capabilities_services.hpp | callbacks
-rebound | RustEngineCallbackMask | src/rust/vehicle_properties_services.hpp | callbacks
 rebound | RustEngineDefaultCargo | src/rust/engine_capabilities_services.hpp | default_cargo
 rebound | RustEngineDefaultCargo | src/rust/vehicle_articulated_services.hpp | default_cargo
 rebound | RustEngineDefaultCargo | src/rust/vehicle_build_services.hpp | default_cargo
