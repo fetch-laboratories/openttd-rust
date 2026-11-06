@@ -83,8 +83,8 @@ struct SubsidyListWindow : Window {
 		/* determine src coordinate for subsidy and try to scroll to it */
 		TileIndex xy;
 		switch (s->Record().src.type) {
-			case SourceType::Industry: xy = Industry::Get(s->Record().src.ToIndustryID())->location.tile; break;
-			case SourceType::Town:     xy =     Town::Get(s->Record().src.ToTownID())->xy; break;
+			case SourceType::Industry: xy = Industry::Get(s->Record().src.ToIndustryID())->Record().location.tile; break;
+			case SourceType::Town:     xy =     Town::Get(s->Record().src.ToTownID())->Record().xy; break;
 			default: NOT_REACHED();
 		}
 
@@ -93,8 +93,8 @@ struct SubsidyListWindow : Window {
 
 			/* otherwise determine dst coordinate for subsidy and scroll to it */
 			switch (s->Record().dst.type) {
-				case SourceType::Industry: xy = Industry::Get(s->Record().dst.ToIndustryID())->location.tile; break;
-				case SourceType::Town:     xy =     Town::Get(s->Record().dst.ToTownID())->xy; break;
+				case SourceType::Industry: xy = Industry::Get(s->Record().dst.ToIndustryID())->Record().location.tile; break;
+				case SourceType::Town:     xy =     Town::Get(s->Record().dst.ToTownID())->Record().xy; break;
 				default: NOT_REACHED();
 			}
 

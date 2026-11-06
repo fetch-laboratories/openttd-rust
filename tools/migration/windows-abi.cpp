@@ -59,6 +59,10 @@
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
+/* The shared town, industry and subsidy records use these headers' field types. */
+#include "town.h"
+#include "industry.h"
+#include "subsidy_base.h"
 #include "abi-includes.inc"
 #include "rust/tile_type_access.hpp"
 #include "tests/abi_layout.hpp"
@@ -140,7 +144,7 @@ static void Calls()
 		const OpenTTDFixtureMap map{6};
 		shared.map = &map.statics;
 		shared.map_max_y = []() noexcept -> uint32_t { return 63; };
-		openttd_rust_town_simulation(owner)->xy = 2080;
+		reinterpret_cast<OpenTTDTownRecord *>(owner)->xy = TileIndex{2080};
 		shared.town_count = []() noexcept -> size_t { return 1; };
 		shared.town_next_id = [](uint32_t from) noexcept -> uint32_t { return from == 0 ? UINT16_MAX - 1 : UINT32_MAX; };
 		shared.town_owner_by_id = [](uint32_t id) noexcept { CHECK(id == UINT16_MAX - 1); return owner; };

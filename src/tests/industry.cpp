@@ -217,17 +217,19 @@ TEST_CASE("Industry - canonical allocation and history lifetime")
 TEST_CASE("Industry - construction owner and ascending type registry")
 {
 	RustIndustryOwner owner{openttd_rust_industry_new(nullptr), openttd_rust_industry_destroy};
-	auto *metadata = openttd_rust_industry_metadata(owner.get());
-	CHECK(metadata->tile == INVALID_TILE.base());
-	CHECK(metadata->width == 0);
-	CHECK(metadata->owner == INVALID_OWNER);
-	CHECK(metadata->founder == INVALID_OWNER);
-	CHECK(metadata->exclusive_supplier == INVALID_OWNER);
-	CHECK(metadata->exclusive_consumer == INVALID_OWNER);
-	std::construct_at(reinterpret_cast<TileArea *>(&metadata->tile), TileIndex(456), 7, 9);
-	CHECK(metadata->tile == 456);
-	CHECK(metadata->width == 7);
-	CHECK(metadata->height == 9);
+	/* The record is the owner's first member, with the original member defaults. */
+	auto *record = reinterpret_cast<OpenTTDIndustryRecord *>(owner.get());
+	CHECK(record->location.tile == INVALID_TILE);
+	CHECK(record->location.w == 0);
+	CHECK(record->owner == INVALID_OWNER);
+	CHECK(record->founder == INVALID_OWNER);
+	CHECK(record->exclusive_supplier == INVALID_OWNER);
+	CHECK(record->exclusive_consumer == INVALID_OWNER);
+	CHECK((record->shell == nullptr && record->town == nullptr && record->neutral_station == nullptr));
+	record->location = TileArea(TileIndex(456), 7, 9);
+	CHECK(record->location.tile == 456);
+	CHECK(record->location.w == 7);
+	CHECK(record->location.h == 9);
 	const uint8_t text[] = {0, 0xFF, 0x1E, 'a'};
 	openttd_rust_industry_set_text(owner.get(), text, sizeof(text));
 	auto text_view = openttd_rust_industry_text(owner.get());
@@ -428,7 +430,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	shared.map = &map.statics;
 	static const OpenTTDMovementServices movement{};
 	shared.movement = &movement;
-	shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 123); CHECK(openttd_rust_industry_metadata(active_owner)->random == 0); trace.push_back(2); return MP_CLEAR; };
+	shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 123); CHECK(reinterpret_cast<OpenTTDIndustryRecord *>(active_owner)->random == 0); trace.push_back(2); return MP_CLEAR; };
 	shared.town_count = []() noexcept -> size_t { return 0; };
 	transaction.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept {
 		active_owner = owner;
@@ -436,7 +438,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		{ Industry shell(owner); shell.index = IndustryID::Invalid(); visit(context, &shell); }
 		trace.push_back(5);
 		/* The owner still lives after the actual native destructor returns. */
-		CHECK(openttd_rust_industry_metadata(owner)->width == 0);
+		CHECK(reinterpret_cast<OpenTTDIndustryRecord *>(owner)->location.w == 0);
 		active_owner = nullptr;
 	};
 	transaction.resolve_location = [](Industry *shell, uint32_t tile, uint8_t kind, uint32_t seed, uint8_t creation) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 123); CHECK(kind == 7); CHECK(seed == 0x12345678); CHECK(creation == 2); CHECK(shell->Record().selected_layout == 2); return Observe(shell); };

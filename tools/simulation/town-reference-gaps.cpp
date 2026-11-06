@@ -176,7 +176,7 @@ static bool Candidate()
 {
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1950});
 	AutoRestoreBackup<uint64_t> road_mask(*openttd_rust_road_mask(), 1);
-	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
+	TownProtocolRecordOf(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
 	leaves.resolve_owner = ResolveOwner;
@@ -288,7 +288,7 @@ static void CompareRatings()
 	uint32_t checked = 0;
 	auto reset = [&](int16_t initial) {
 		town.ratings.fill(initial); town.have_ratings.bits = 0;
-		auto *state = openttd_rust_town_simulation(owner.get());
+		auto *state = TownProtocolRecordOf(owner.get());
 		std::fill_n(state->ratings, 15, initial); state->have_ratings = 0;
 	};
 	auto mode = [&](bool enabled) { SetTownRatingTestMode(enabled); openttd_rust_town_rating_test(enabled); };
@@ -300,7 +300,7 @@ static void CompareRatings()
 		rating_valid_calls = rating_dirty_calls = 0;
 		openttd_rust_town_change_rating(&leaves, &services, null_town ? nullptr : owner.get(), town.index,
 			reinterpret_cast<uintptr_t>(&town), company, add, maximum, no_modify, bulldozer);
-		const auto *state = openttd_rust_town_simulation(owner.get());
+		const auto *state = TownProtocolRecordOf(owner.get());
 		bool equal = expected_valid == rating_valid_calls && expected_dirty == rating_dirty_calls && state->have_ratings == town.have_ratings.bits && std::equal(town.ratings.begin(), town.ratings.end(), state->ratings);
 		if (company == 0 || company == 4) equal &= GetRating(&town) == openttd_rust_town_rating(owner.get(), reinterpret_cast<uintptr_t>(&town), company);
 		if (!equal) {
@@ -335,7 +335,7 @@ static void CompareRadii()
 	for (uint32_t houses : {1000U, 10000U, 0x1000000U, 0x7FFFFFFFU, 0x80000000U, UINT32_MAX}) counts.push_back(houses);
 	for (uint32_t houses : counts) {
 		town.cache.num_houses = houses; UpdateTownRadius(&town);
-		auto *state = openttd_rust_town_simulation(owner.get()); state->num_houses = houses;
+		auto *state = TownProtocolRecordOf(owner.get()); state->num_houses = houses;
 		openttd_rust_town_update_radius(owner.get());
 		if (!std::equal(town.cache.squared_town_zone_radius.begin(), town.cache.squared_town_zone_radius.end(), state->radius)) {
 			std::fprintf(stderr, "radius mismatch houses=%u\n", houses); std::exit(1);
@@ -393,7 +393,7 @@ static void CompareAuthority()
 			for (int16_t rating : {-32768, -1001, -1000, -999, -201, -200, -199, 15, 16, 17, 63, 64, 65, 111, 112, 113, 143, 144, 145, 207, 208, 209, 399, 400, 401, 32767}) for (bool testing : {false, true}) {
 				_current_company = company; _settings_game.difficulty.town_council_tolerance = council;
 				_cheats.magic_bulldozer.value = cheat; authority_town = absent ? nullptr : &town;
-				town.ratings.fill(rating); auto *state = openttd_rust_town_simulation(owner.get()); std::fill_n(state->ratings, 15, rating);
+				town.ratings.fill(rating); auto *state = TownProtocolRecordOf(owner.get()); std::fill_n(state->ratings, 15, rating);
 				Flags flags; if (no_test) flags.Set(DoCommandFlag::NoTestTownRating);
 				if (testing) {
 					SetTownRatingTestMode(true); openttd_rust_town_rating_test(true);
