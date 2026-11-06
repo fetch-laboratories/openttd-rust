@@ -10,6 +10,8 @@
 #include "../rust/network_client_ffi.h"
 #include "../rust/network_dispatch_ffi.h"
 #include "../rust/network_tcp_ffi.h"
+#include "../rust/network_map_ffi.h"
+#include "../rust/services_assert.h"
 #include "../rust/network_connection_ffi.h"
 #include "../rust/company_services.h"
 #include "../rust/session_native.hpp"
@@ -112,19 +114,19 @@ struct MapClient {
 	OpenTTDCommandQueue incoming{};
 	OpenTTDCommandQueue outgoing{};
 	OpenTTDNetworkSocketSync sync{};
+	OpenTTDNetworkMapWriter *writer = nullptr;
 };
 static std::array<MapClient, 4> map_clients;
 static std::vector<std::pair<int, int>> map_events;
-static Packet *map_done;
 static int MapIndex(void *socket) { return static_cast<MapClient *>(socket) - map_clients.data(); }
 static void MapEvent(int event, void *socket) { map_events.emplace_back(event, MapIndex(socket)); }
 TEST_CASE("Network map save - native actions preserve nested waits and close tail order")
 {
 	map_clients = {};
 	map_events.clear();
-	Packet done(nullptr, static_cast<PacketType>(23)); // SERVER_MAP_DONE.
-	map_done = &done;
+	struct Writers { ~Writers() { for (auto &client : map_clients) openttd_rust_network_map_writer_drop(client.writer); } } writers;
 	for (auto &client : map_clients) {
+		client.writer = openttd_rust_network_map_writer_new(&client, nullptr);
 		client.record.game = &client;
 		client.record.tcp = reinterpret_cast<NetworkTCPSocketHandler *>(&client);
 		client.record.server = &client;
@@ -146,10 +148,8 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	connection.join_date = [](void *) noexcept { return 0; };
 	connection.map_create = [](void *socket) noexcept { MapEvent(2, socket); };
 	connection.map_destroy = [](void *socket) noexcept { MapEvent(1, socket); };
-	connection.map_begin = [](void *socket) noexcept { MapEvent(4, socket); return reinterpret_cast<PacketWriter *>(socket); };
-	connection.map_end = [](PacketWriter *) noexcept {};
-	connection.map_enqueue = [](PacketWriter *) noexcept {};
-	connection.map_front = [](PacketWriter *writer) noexcept -> Packet * { return MapIndex(writer) == 1 ? map_done : nullptr; };
+	connection.map_begin = [](void *socket) noexcept { MapEvent(4, socket); return static_cast<MapClient *>(socket)->writer; };
+	connection.map_end = [](OpenTTDNetworkMapWriter *) noexcept {};
 	connection.admin_error = [](void *socket, uint8_t) noexcept { MapEvent(8, socket); };
 	uint8_t on = 4, connected = 4;
 	connection.clients_on = &on;
@@ -170,6 +170,7 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	auto packet_services = Packet::Services();
 	packet_services.has_quit = [](const NetworkSocketHandler *) noexcept { return false; };
 	network.packet = &packet_services;
+	openttd_rust_network_map_finish(map_clients[1].writer, &packet_services, RustAssertCondition);
 	/* SendWait is observed at its enqueue; no other step records an event in between. */
 	tcp.packet_enqueue = [](NetworkTCPSocketHandler *socket, OpenTTDPacketState *state) noexcept { Packet packet(*state); if (packet.GetPacketType() == PACKET_SERVER_WAIT) MapEvent(7, socket); };
 	OpenTTDSessionFrame frame;

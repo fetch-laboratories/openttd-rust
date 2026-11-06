@@ -33,9 +33,7 @@ use crate::tcp_game::{
 };
 use std::ffi::c_void;
 
-pub struct PacketWriter {
-    _private: [u8; 0],
-}
+use crate::network_map::MapWriter;
 
 #[repr(C)]
 pub struct Services {
@@ -60,12 +58,10 @@ pub struct Services {
     pub join_date: extern "C" fn(*mut c_void) -> i32,
     pub joined: extern "C" fn(*mut c_void),
     pub lost_connection_announcement: extern "C" fn(*mut c_void),
-    pub map_begin: extern "C" fn(*mut c_void) -> *mut PacketWriter,
+    pub map_begin: extern "C" fn(*mut c_void) -> *mut MapWriter,
     pub map_create: extern "C" fn(*mut c_void),
     pub map_destroy: extern "C" fn(*mut c_void),
-    pub map_end: extern "C" fn(*mut PacketWriter),
-    pub map_enqueue: extern "C" fn(*mut PacketWriter),
-    pub map_front: extern "C" fn(*mut PacketWriter) -> *mut crate::network_tcp::Packet,
+    pub map_end: extern "C" fn(*mut MapWriter),
     pub max_clients: extern "C" fn() -> u8,
     pub max_companies: extern "C" fn() -> u8,
     pub min_active_clients: extern "C" fn() -> u8,
@@ -106,8 +102,6 @@ crate::abi::layouts! {
         map_create,
         map_destroy,
         map_end,
-        map_enqueue,
-        map_front,
         max_clients,
         max_companies,
         min_active_clients,
@@ -374,19 +368,27 @@ fn transfer_to_network_queue(
     }
     let mut last = false;
     loop {
-        let packet = (s.map_front)(writer);
-        if packet.is_null() {
+        if unsafe { (*writer).next_packet == (*writer).packets.len() } {
             break;
         }
-        let record = (f.tcp.packet_record)(packet);
+        let record = unsafe { (*writer).packets.as_mut_ptr().add((*writer).next_packet) };
         last = unsafe { packet::get_type(record, f.packet, packet_check(f)) }
             == crate::tcp_game::PACKET_SERVER_MAP_DONE;
         unsafe {
             packet::prepare_to_send(record, f.packet, packet_check(f));
         }
-        (s.map_enqueue)(writer);
+        (f.tcp.packet_enqueue)(socket::tcp(socket), record);
+        unsafe {
+            (*writer).next_packet += 1;
+        }
         if last {
             break;
+        }
+    }
+    unsafe {
+        if (*writer).next_packet == (*writer).packets.len() {
+            (*writer).packets.edit(Vec::clear);
+            (*writer).next_packet = 0;
         }
     }
     (s.map_end)(writer);

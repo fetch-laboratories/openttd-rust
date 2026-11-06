@@ -48,7 +48,6 @@ pub struct Services {
     pub join_waiting: *mut u8,
     pub leave: extern "C" fn(*mut c_void),
     pub leave_error: extern "C" fn(*mut c_void, u8),
-    pub map_append_data: extern "C" fn(*mut c_void, crate::services::ByteSpan) -> u32,
     pub map_create: extern "C" fn(*mut c_void),
     pub map_exists: extern "C" fn(*mut c_void) -> bool,
     pub map_load_prepare: extern "C" fn(*mut c_void, *mut crate::session::Load),
@@ -88,7 +87,6 @@ crate::abi::layouts! {
         join_waiting,
         leave,
         leave_error,
-        map_append_data,
         map_create,
         map_exists,
         map_load_prepare,
@@ -348,7 +346,7 @@ pub(crate) fn receive_map_size(
 
 pub(crate) fn receive_map_data(
     s: &Services,
-    _f: &FrameServices,
+    f: &FrameServices,
     game: *mut socket::GameSocket,
     p: *mut PacketState,
 ) -> u8 {
@@ -357,10 +355,9 @@ pub(crate) fn receive_map_data(
     }
     let size = unsafe { (*p).remaining() };
     let data = unsafe { (*p).data.add(usize::from((*p).position)) };
-    let total = (s.map_append_data)(
-        socket::shell(game),
-        crate::services::ByteSpan { data, size },
-    );
+    let reader = unsafe { (*game).map_reader };
+    let total =
+        unsafe { (&mut *reader).append(std::slice::from_raw_parts(data, size), packet_check(f)) };
     #[allow(clippy::cast_possible_wrap)]
     unsafe {
         (*p).transfer_commit(size as isize);

@@ -16,6 +16,7 @@ crate::abi::shared_records! {
         pub game: *mut c_void,
         pub incoming: *mut CommandQueue,
         pub last_packet_ns: i64,
+        pub map_reader: *mut crate::network_map::MapReader,
         pub outgoing: *mut CommandQueue,
         pub pending: bool,
         pub role: u8,

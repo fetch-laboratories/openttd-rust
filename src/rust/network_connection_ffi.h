@@ -7,7 +7,7 @@
 class NetworkAuthenticationHandler;
 struct OpenTTDGrfLoadingServices;
 struct Packet;
-struct PacketWriter;
+struct OpenTTDNetworkMapWriter;
 struct OpenTTDNetworkConnectionServices {
 	void (*admin_error)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(admin_error);
 	void (*admin_joined)(void *) noexcept OPENTTD_SERVICE_DEFAULT(admin_joined);
@@ -28,12 +28,10 @@ struct OpenTTDNetworkConnectionServices {
 	int32_t (*join_date)(void *) noexcept OPENTTD_SERVICE_DEFAULT(join_date);
 	void (*joined)(void *) noexcept OPENTTD_SERVICE_DEFAULT(joined);
 	void (*lost_connection_announcement)(void *) noexcept OPENTTD_SERVICE_DEFAULT(lost_connection_announcement);
-	PacketWriter *(*map_begin)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_begin);
+	OpenTTDNetworkMapWriter *(*map_begin)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_begin);
 	void (*map_create)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_create);
 	void (*map_destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(map_destroy);
-	void (*map_end)(PacketWriter *) noexcept OPENTTD_SERVICE_DEFAULT(map_end);
-	void (*map_enqueue)(PacketWriter *) noexcept OPENTTD_SERVICE_DEFAULT(map_enqueue);
-	Packet *(*map_front)(PacketWriter *) noexcept OPENTTD_SERVICE_DEFAULT(map_front);
+	void (*map_end)(OpenTTDNetworkMapWriter *) noexcept OPENTTD_SERVICE_DEFAULT(map_end);
 	uint8_t (*max_clients)() noexcept OPENTTD_SERVICE_DEFAULT(max_clients);
 	uint8_t (*max_companies)() noexcept OPENTTD_SERVICE_DEFAULT(max_companies);
 	uint8_t (*min_active_clients)() noexcept OPENTTD_SERVICE_DEFAULT(min_active_clients);

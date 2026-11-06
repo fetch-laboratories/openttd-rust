@@ -38,6 +38,7 @@
 #include "../rust/network_client_ffi.h"
 #include "../rust/network_auth_ffi.h"
 #include "../rust/session_native.hpp"
+#include "../rust/network_map_ffi.h"
 #include "../rust/settings_services.h"
 
 #include "../safeguards.h"
@@ -46,34 +47,12 @@
 
 /** Read some packets, and when do use that data as initial load filter. */
 struct PacketReader : LoadFilter {
-	using Buffer = std::deque<uint8_t>; ///< The underlying buffer type that's being use.
+	OpenTTDNetworkMapReader *state;
 
-	Buffer buffer; ///< Buffer with the raw save game data.
-	Buffer::const_iterator iterator; ///< Buffer we're going to write to/read from.
-	size_t read_bytes = 0; ///< The total number of read bytes.
-
-	/** Initialise everything. */
-	PacketReader() : LoadFilter(nullptr)
-	{
-	}
-
-	size_t Read(uint8_t *rbuf, size_t size) override
-	{
-		/* Limit the amount to read to whatever we still have. */
-		size_t read_size = std::min(this->buffer.size() - this->read_bytes, size);
-
-		std::copy_n(this->iterator, read_size, rbuf);
-		std::advance(this->iterator, read_size);
-		this->read_bytes += read_size;
-
-		return read_size;
-	}
-
-	void Reset() override
-	{
-		this->read_bytes = 0;
-		this->iterator = this->buffer.cbegin();
-	}
+	PacketReader() : LoadFilter(nullptr), state(openttd_rust_network_map_reader_new()) {}
+	~PacketReader() { openttd_rust_network_map_reader_drop(this->state); }
+	size_t Read(uint8_t *rbuf, size_t size) override { return openttd_rust_network_map_read(this->state, rbuf, size); }
+	void Reset() override { this->state->read_bytes = 0; }
 };
 
 /**
@@ -624,8 +603,7 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 		.join_waiting = &_network_join_waiting,
 		.leave = [](void *info) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", STR_NETWORK_MESSAGE_CLIENT_LEAVING); },
 		.leave_error = [](void *info, uint8_t error) noexcept { NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, static_cast<NetworkClientInfo *>(info)->client_name, "", GetNetworkErrorMsg(static_cast<NetworkErrorCode>(error))); },
-		.map_append_data = [](void *game, OpenTTDByteSpan data) noexcept -> uint32_t { auto *cs = ClientFromGame(game); assert(cs->savegame->read_bytes == 0); std::ranges::copy(std::span(data.data, data.size), std::back_inserter(cs->savegame->buffer)); return static_cast<uint32_t>(cs->savegame->buffer.size()); },
-		.map_create = [](void *game) noexcept { ClientFromGame(game)->savegame = std::make_shared<PacketReader>(); },
+		.map_create = [](void *game) noexcept { auto *cs = ClientFromGame(game); cs->savegame = std::make_shared<PacketReader>(); cs->map_reader = cs->savegame->state; },
 		.map_exists = [](void *game) noexcept -> bool { return ClientFromGame(game)->savegame != nullptr; },
 		.map_load_prepare = [](void *game, OpenTTDSessionLoad *load) noexcept {
 			auto *cs = ClientFromGame(game);
@@ -634,7 +612,7 @@ const OpenTTDNetworkClientServices &GetRustNetworkClientServices() noexcept
 			_file_to_saveload.SetMode(FIOS_TYPE_FILE, SLO_LOAD);
 			load->filter = cs->savegame;
 		},
-		.map_release = [](void *game) noexcept { ClientFromGame(game)->savegame = nullptr; },
+		.map_release = [](void *game) noexcept { auto *cs = ClientFromGame(game); cs->savegame = nullptr; cs->map_reader = nullptr; },
 		.own_client_id = reinterpret_cast<uint32_t *>(&_network_own_client_id),
 		.reconnect = &_network_reconnect,
 		.revision = []() noexcept -> OpenTTDByteSpan { auto value = GetNetworkRevisionString(); return {reinterpret_cast<const uint8_t *>(value.data()), value.size()}; },

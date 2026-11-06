@@ -44,6 +44,8 @@
 #include "../rust/presentation_services.h"
 #include "../rust/settings_services.h"
 #include "../rust/network_auth_ffi.h"
+#include "../rust/network_map_ffi.h"
+#include "../rust/services_assert.h"
 #include "../rust/session_native.hpp"
 
 #include "../safeguards.h"
@@ -66,10 +68,7 @@ static NetworkAuthenticationDefaultAuthorizedKeyHandler _rcon_authorized_key_han
 
 /** Writing a savegame directly to a number of packets. */
 struct PacketWriter : SaveFilter {
-	ServerNetworkGameSocketHandler *cs; ///< Socket we are associated with.
-	std::unique_ptr<Packet> current; ///< The packet we're currently writing to.
-	size_t total_size;                  ///< Total size of the compressed savegame.
-	std::deque<std::unique_ptr<Packet>> packets; ///< Packet queue of the savegame; send these "slowly" to the client. Cannot be a std::queue as we want to push the map size packet in front of the data packets.
+	OpenTTDNetworkMapWriter *state; ///< Canonical payload, protected by mutex.
 	std::mutex mutex;                   ///< Mutex for making threaded saving safe.
 	std::condition_variable exit_sig;   ///< Signal for threaded destruction of this packet writer.
 
@@ -77,7 +76,7 @@ struct PacketWriter : SaveFilter {
 	 * Create the packet writer.
 	 * @param cs The socket handler we're making the packets for.
 	 */
-	PacketWriter(ServerNetworkGameSocketHandler *cs) : SaveFilter(nullptr), cs(cs), total_size(0)
+	PacketWriter(ServerNetworkGameSocketHandler *cs) : SaveFilter(nullptr), state(openttd_rust_network_map_writer_new(this, cs))
 	{
 	}
 
@@ -86,12 +85,11 @@ struct PacketWriter : SaveFilter {
 	{
 		std::unique_lock<std::mutex> lock(this->mutex);
 
-		while (this->cs != nullptr) this->exit_sig.wait(lock);
+		while (this->state->client != nullptr) this->exit_sig.wait(lock);
 
 		/* This must all wait until the Destroy function is called. */
 
-		this->packets.clear();
-		this->current = nullptr;
+		openttd_rust_network_map_writer_drop(this->state);
 	}
 
 	/**
@@ -108,7 +106,7 @@ struct PacketWriter : SaveFilter {
 	{
 		std::unique_lock<std::mutex> lock(this->mutex);
 
-		this->cs = nullptr;
+		this->state->client = nullptr;
 
 		this->exit_sig.notify_all();
 		lock.unlock();
@@ -124,21 +122,9 @@ struct PacketWriter : SaveFilter {
 		std::lock_guard<std::mutex> lock(this->mutex);
 
 		/* We want to abort the saving when the socket is closed. */
-		if (this->cs == nullptr) SlError(STR_NETWORK_ERROR_LOSTCONNECTION);
+		if (this->state->client == nullptr) SlError(STR_NETWORK_ERROR_LOSTCONNECTION);
 
-		if (this->current == nullptr) this->current = std::make_unique<Packet>(this->cs, PACKET_SERVER_MAP_DATA, TCP_MTU);
-
-		std::span<const uint8_t> to_write(buf, size);
-		while (!to_write.empty()) {
-			to_write = this->current->Send_bytes(to_write);
-
-			if (!this->current->CanWriteToPacket(1)) {
-				this->packets.push_back(std::move(this->current));
-				if (!to_write.empty()) this->current = std::make_unique<Packet>(this->cs, PACKET_SERVER_MAP_DATA, TCP_MTU);
-			}
-		}
-
-		this->total_size += size;
+		openttd_rust_network_map_write(this->state, &Packet::Services(), RustAssertCondition, buf, size);
 	}
 
 	void Finish() override
@@ -146,18 +132,9 @@ struct PacketWriter : SaveFilter {
 		std::lock_guard<std::mutex> lock(this->mutex);
 
 		/* We want to abort the saving when the socket is closed. */
-		if (this->cs == nullptr) SlError(STR_NETWORK_ERROR_LOSTCONNECTION);
+		if (this->state->client == nullptr) SlError(STR_NETWORK_ERROR_LOSTCONNECTION);
 
-		/* Make sure the last packet is flushed. */
-		if (this->current != nullptr) this->packets.push_back(std::move(this->current));
-
-		/* Add a packet stating that this is the end to the queue. */
-		this->packets.push_back(std::make_unique<Packet>(this->cs, PACKET_SERVER_MAP_DONE));
-
-		/* Fast-track the size to the client. */
-		auto p = std::make_unique<Packet>(this->cs, PACKET_SERVER_MAP_SIZE);
-		p->Send_uint32((uint32_t)this->total_size);
-		this->packets.push_front(std::move(p));
+		openttd_rust_network_map_finish(this->state, &Packet::Services(), RustAssertCondition);
 	}
 };
 
@@ -1190,18 +1167,16 @@ const OpenTTDNetworkConnectionServices &GetRustNetworkConnectionServices() noexc
 			Debug(net, 3, "[{}] Client #{} ({}) joined as {}", ServerNetworkGameSocketHandler::GetName(), cs->client_id, cs->GetClientIP(), client_name);
 		},
 		.lost_connection_announcement = [](void *socket) noexcept { std::string client_name = static_cast<NetworkClientSocket *>(socket)->GetClientName(); NetworkTextMessage(NETWORK_ACTION_LEAVE, CC_DEFAULT, false, client_name, "", STR_NETWORK_ERROR_CLIENT_CONNECTION_LOST); },
-		.map_begin = [](void *socket) noexcept -> PacketWriter * {
+		.map_begin = [](void *socket) noexcept -> OpenTTDNetworkMapWriter * {
 			auto *writer = static_cast<NetworkClientSocket *>(socket)->savegame.get();
 			/* TransferToNetworkQueue checks emptiness before locking. */
-			if (writer->packets.empty()) return nullptr;
+			if (writer->state->next_packet == writer->state->packets.size()) return nullptr;
 			writer->mutex.lock();
-			return writer;
+			return writer->state;
 		},
 		.map_create = [](void *socket) noexcept { WaitTillSaved(); static_cast<NetworkClientSocket *>(socket)->savegame = std::make_shared<PacketWriter>(static_cast<NetworkClientSocket *>(socket)); },
 		.map_destroy = [](void *socket) noexcept { auto *cs = static_cast<NetworkClientSocket *>(socket); cs->savegame->Destroy(); cs->savegame = nullptr; },
-		.map_end = [](PacketWriter *writer) noexcept { writer->mutex.unlock(); },
-		.map_enqueue = [](PacketWriter *writer) noexcept { writer->cs->EnqueuePreparedPacket(std::move(writer->packets.front())); writer->packets.pop_front(); },
-		.map_front = [](PacketWriter *writer) noexcept -> Packet * { return writer->packets.empty() ? nullptr : writer->packets.front().get(); },
+		.map_end = [](OpenTTDNetworkMapWriter *writer) noexcept { static_cast<PacketWriter *>(writer->resource)->mutex.unlock(); },
 		.max_clients = RustNetworkMaxClients,
 		.max_companies = RustNetworkMaxCompanies,
 		.min_active_clients = RustNetworkMinActiveClients,
