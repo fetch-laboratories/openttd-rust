@@ -109,14 +109,20 @@ def execute(
     stderr: str = "empty",
     cwd: Path | None = None,
 ) -> bytes:
-    """Run a fixture and return stdout; stderr is "empty", "merged" or "allowed"."""
+    """Return stdout; stderr is "empty", "merged", "allowed" or "inherited"."""
     result = subprocess.run(
         list(map(str, argv)),
         input=input,
         cwd=cwd,
         env=env or ENV,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT if stderr == "merged" else subprocess.PIPE,
+        stderr=(
+            None
+            if stderr == "inherited"
+            else subprocess.STDOUT
+            if stderr == "merged"
+            else subprocess.PIPE
+        ),
     )
     Path(log).with_suffix(".out").write_bytes(result.stdout)
     if result.stderr:

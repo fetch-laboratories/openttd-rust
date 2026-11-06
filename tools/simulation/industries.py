@@ -817,7 +817,9 @@ def production_gap() -> None:
         cwd=ROOT,
         env=migration.environment(),
     )
-    print(probe.execute([binary], binary, cwd=ROOT).decode(), end="")
+    print(
+        probe.execute([binary], binary, cwd=ROOT, stderr="inherited").decode(), end=""
+    )
 
 
 def lifecycle_gap() -> None:
@@ -909,7 +911,9 @@ def lifecycle_gap() -> None:
         cwd=ROOT,
         env=migration.environment(),
     )
-    print(probe.execute([binary], binary, cwd=ROOT).decode(), end="")
+    print(
+        probe.execute([binary], binary, cwd=ROOT, stderr="inherited").decode(), end=""
+    )
 
 
 if __name__ == "__main__":
@@ -1125,7 +1129,7 @@ def prepare_definitions(
         saves["candidate"],
         scenario["name"],
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     )
     if differences or captures["reference"]["log"] != captures["candidate"]["log"]:
         result["differences"].extend(differences)

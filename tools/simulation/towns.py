@@ -289,6 +289,7 @@ def tunnel_reference_gap(out: Path, archive: Path | None = None) -> dict[str, An
     ]
     env = migration.environment()
     probe.compile(command, out / "compile.log", env=env)
+    binary.with_suffix(".err").unlink(missing_ok=True)
     output = probe.execute([binary], binary, env=env, stderr="allowed")
     (out / "transcript.txt").write_bytes(output)
     (out / "stderr.txt").write_bytes(
@@ -823,7 +824,7 @@ def prepare_house_definitions(
         saves["candidate"],
         scenario["name"],
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     )
     traces = {
         role: [line for line in run["log"] if line.startswith("TOWN definition")]
@@ -979,7 +980,7 @@ def prepare_founding(
                 saves["candidate"],
                 scenario["name"],
                 10,
-                {"chunks": 0, "elements": 0, "masked": {}},
+                core.empty_stats(),
             )
         ):
             raise RuntimeError(
@@ -1744,7 +1745,7 @@ def check_bribes(
         }
         if not all(path.is_file() for path in saves.values()):
             raise RuntimeError("town bribe immediate semantic save missing")
-        stats: core.Stats = {"chunks": 0, "elements": 0, "masked": {}}
+        stats: core.Stats = core.empty_stats()
         if differences := core.compare_saves(
             saves["before"], saves["test"], scenario["name"], 10, stats
         ):

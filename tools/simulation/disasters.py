@@ -102,7 +102,7 @@ def negative_probes(source: Path, folder: Path, main: int) -> list[str]:
             changed,
             "disaster-negative",
             2,
-            {"chunks": 0, "elements": 0, "masked": {}},
+            core.empty_stats(),
         )
         if (
             len(differences) != 1

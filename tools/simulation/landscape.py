@@ -230,7 +230,7 @@ def prepare(
             saves["candidate"],
             scenario["name"],
             10,
-            {"chunks": 0, "elements": 0, "masked": {}},
+            core.empty_stats(),
         ):
             raise RuntimeError("landscape reload setup differs")
         return {
@@ -653,7 +653,9 @@ def scheduler_gap() -> None:
         cwd=root,
         env=migration.environment(),
     )
-    print(probe.execute([binary], binary, cwd=root).decode(), end="")
+    print(
+        probe.execute([binary], binary, cwd=root, stderr="inherited").decode(), end=""
+    )
 
 
 def png_chunk(kind: bytes, data: bytes) -> bytes:

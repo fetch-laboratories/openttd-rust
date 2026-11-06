@@ -114,7 +114,7 @@ def scheduler_reference(out: Path) -> str:
         str(binary),
     ]
     probe.compile(command, out / "compile.log", env=migration.environment())
-    output = probe.execute([binary], binary).decode()
+    output = probe.execute([binary], binary, stderr="allowed").decode()
     if (
         not output.startswith("PASS ")
         or not output.endswith(" unchanged-reference scheduler observations\n")

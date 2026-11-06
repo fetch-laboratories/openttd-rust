@@ -433,7 +433,12 @@ def income_gap() -> None:
         str(out / "probe"),
     ]
     probe.compile(command, out / "compile.log", cwd=ROOT, env=migration.environment())
-    print(probe.execute([out / "probe"], out / "probe", cwd=ROOT).decode(), end="")
+    print(
+        probe.execute(
+            [out / "probe"], out / "probe", cwd=ROOT, stderr="inherited"
+        ).decode(),
+        end="",
+    )
 
 
 if __name__ == "__main__":

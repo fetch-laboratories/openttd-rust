@@ -173,7 +173,9 @@ def scaling_probe() -> None:
     ]
     env = migration.environment()
     probe.compile(command, out / "compile.log", env=env)
-    output = probe.execute([out / "probe"], out / "probe", env=env).decode()
+    output = probe.execute(
+        [out / "probe"], out / "probe", env=env, stderr="inherited"
+    ).decode()
     report = {
         "gap": "large cargo queues absent from the committed play corpus",
         "candidate_commit": migration.git("rev-parse", "HEAD"),

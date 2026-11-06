@@ -23,7 +23,7 @@ WAIT_TIMEOUT = 540
 
 
 def gh(*args: str) -> str:
-    return vcs.gh(*args).strip()
+    return vcs.gh(*args, capture_stderr=True).strip()
 
 
 def api(repository: str, path: str) -> dict:

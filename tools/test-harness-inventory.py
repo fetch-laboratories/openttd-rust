@@ -85,6 +85,7 @@ class InventoryTests(unittest.TestCase):
             for name in (
                 "run-comparisons.py",
                 "harness_inventory.py",
+                "vcs.py",
                 "validation_execution.py",
             ):
                 shutil.copyfile(ROOT / "tools" / name, tools / name)

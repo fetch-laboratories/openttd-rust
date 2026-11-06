@@ -971,7 +971,6 @@ if __name__ == "__main__":
         raise SystemExit(f"retain or remove previous preparation first: {out}")
     out.mkdir(parents=True)
     migration.COMMON_LOCAL.mkdir(parents=True, exist_ok=True)
-    core.GAME_LOCK = migration.COMMON_LOCAL / "simulation-game.lock"
     prepare_crossing(migration, out, operation)
 
 

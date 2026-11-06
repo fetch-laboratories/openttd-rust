@@ -77,7 +77,12 @@ def command_gap() -> None:
         cwd=ROOT,
         env=migration.environment(),
     )
-    print(probe.execute([out / "probe"], out / "probe", cwd=ROOT).decode(), end="")
+    print(
+        probe.execute(
+            [out / "probe"], out / "probe", cwd=ROOT, stderr="inherited"
+        ).decode(),
+        end="",
+    )
 
 
 class Scenario(core.Scenario):

@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import migration  # noqa: E402
 from simulation import core  # noqa: E402
 from simulation.console_adapter import console_adapter  # noqa: E402
+from simulation.models import empty_stats  # noqa: E402
 
 NAME = "mixed-multiplayer-opus"
 AUTH_MODES = ("plain", "password", "authorized-key")
@@ -461,7 +462,7 @@ def compare(result: Result) -> None:
         raise RuntimeError("both role orders are required")
     for side in ("server", "client"):
         saves = [Path(s.directory) / side / "save/stop.sav" for s in result.sessions]
-        stats: Stats = {"chunks": 0, "elements": 0, "masked": {}}
+        stats: Stats = empty_stats()
         # Network clients omit AI configuration; equivalent roles compare AIPL too.
         result.differences.extend(core.compare_saves(*saves, NAME, 20, stats))
         result.comparisons[side] = stats

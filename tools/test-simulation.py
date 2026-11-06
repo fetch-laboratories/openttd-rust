@@ -18,21 +18,32 @@ import unittest.mock
 from collections.abc import Sequence
 from functools import partial
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 from unittest.mock import patch
 
 from code_lines import without_comments
 from simulation import (
+    cli as simulation_cli,
+)
+from simulation import (
     community_ai,
     community_newgrf,
+    configuration,
     engines,
     newgrf_loading,
     newgrf_sets,
     platform_subset,
+    registry,
     runtime,
+    savegame,
+    scenario_runner,
     stations,
 )
 from simulation import core as simulate
+from simulation import (
+    game as game_module,
+)
 from simulation import instructions as ir
 from simulation.instructions import SPEED_BUDGETS, speed_budget
 
@@ -267,9 +278,9 @@ class SimulationDeterminismTests(unittest.TestCase):
                 with (
                     self.subTest(scenario=scenario),
                     patch.object(
-                        simulate, "game_slot", return_value=contextlib.nullcontext()
+                        game_module, "game_slot", return_value=contextlib.nullcontext()
                     ),
-                    patch.object(simulate.subprocess, "run") as launch,
+                    patch.object(game_module.subprocess, "run") as launch,
                 ):
                     launch.return_value.returncode = 0
                     run = simulate.run_game(
@@ -354,7 +365,9 @@ class SimulationDeterminismTests(unittest.TestCase):
     def test_each_requested_selector_must_match_before_any_run(self) -> None:
         stderr = io.StringIO()
         with (
-            patch.object(simulate, "scenario_list", return_value=[{"name": "valid"}]),
+            patch.object(
+                simulation_cli, "scenario_list", return_value=[{"name": "valid"}]
+            ),
             patch.object(sys, "argv", ["simulate.py", "valid", "misspelled", "--list"]),
             contextlib.redirect_stderr(stderr),
         ):
@@ -367,7 +380,7 @@ class SimulationDeterminismTests(unittest.TestCase):
         output = io.StringIO()
         with (
             patch.object(
-                simulate,
+                simulation_cli,
                 "scenario_list",
                 return_value=[
                     {"name": "valid"},
@@ -409,15 +422,15 @@ class SimulationDeterminismTests(unittest.TestCase):
             }
 
         with (
-            patch.object(simulate, "scenario_modules", return_value=[]),
-            patch.object(simulate, "run_game", side_effect=run),
+            patch.object(registry, "scenario_modules", return_value=[]),
+            patch.object(scenario_runner, "run_game", side_effect=run),
             patch.object(
-                simulate,
+                scenario_runner,
                 "save_moment",
                 side_effect=lambda p: (1, 0, 2 if "candidate" in p.parts else 1),
             ),
             patch.object(
-                simulate,
+                scenario_runner,
                 "compare_saves",
                 side_effect=lambda a, b, *args: compared.append(a) or [],
             ),
@@ -516,6 +529,7 @@ class SimulationRuntimeTests(unittest.TestCase):
                 "from pathlib import Path\n"
                 "ROOT = Path(__file__).resolve().parents[1]\n"
                 "LOCAL = COMMON_LOCAL = ROOT / '.local'\n"
+                "REFERENCE = ROOT / 'reference-source'\n"
                 "REFERENCE_BUILD = ROOT / 'reference'\n"
                 "CANDIDATE_BUILD = ROOT / 'build-rust'\n"
                 "SANITIZE = False\n"
@@ -524,6 +538,9 @@ class SimulationRuntimeTests(unittest.TestCase):
                 "def git(*args):\n"
                 "    return (ROOT / ('head' if args[0] == 'rev-parse' else 'status')).read_text()\n"
             )
+            driver = ModuleType("fixture_driver")
+            driver.__file__ = str(root / "tools/migration.py")
+            exec((root / "tools/migration.py").read_text(), vars(driver))
             ai_initial: dict[str, str] = {}
             for folder in ("town-name-observer", "tree-scenario-ai"):
                 ai = root / "tools" / folder
@@ -617,28 +634,29 @@ class SimulationRuntimeTests(unittest.TestCase):
             elif custom:
                 argv += ["--candidate", str(originals["candidate"])]
             with (
-                patch.object(simulate, "ROOT", root),
+                patch.object(simulation_cli, "ROOT", root),
                 patch.object(
-                    simulate,
+                    simulation_cli,
                     "scenario_list",
                     return_value=[
                         {"name": "a", "town_style": 0},
                         {"name": "b", "trees": "commands"},
                     ],
                 ),
-                patch.object(simulate, "run_scenario", side_effect=run),
+                patch.object(simulation_cli, "run_scenario", side_effect=run),
                 patch.object(sys, "argv", argv),
+                patch.object(configuration, "_current", configuration.configuration()),
                 contextlib.redirect_stdout(io.StringIO()),
             ):
                 if crash:
                     with self.assertRaisesRegex(RuntimeError, "scenario failed"):
-                        simulate.main()
+                        simulate.main(driver)
                     run = cast(Any, next((root / ".local/simulation").iterdir()))
                     self.assertFalse((run / "reference-runtime").exists())
                     self.assertFalse((run / "candidate-runtime").exists())
                     self.assertFalse((run / "report.json").exists())
                     return
-                self.assertEqual(simulate.main(), 0 if passed else 1)
+                self.assertEqual(simulate.main(driver), 0 if passed else 1)
             report_path = next((root / ".local/simulation").glob("*/report.json"))
             report = json.loads(report_path.read_text())
             self.assertEqual(report["passed"], passed)
@@ -682,7 +700,12 @@ class SimulationRuntimeTests(unittest.TestCase):
                             "from pathlib import Path\n"
                             "LOCAL = COMMON_LOCAL = Path(__file__).resolve().parents[1] / '.local'\n"
                             "SANITIZE = False\n"
+                            "REFERENCE = REFERENCE_BUILD = CANDIDATE_BUILD = LOCAL\n"
                         )
+
+                        driver = ModuleType("fixture_driver")
+                        driver.__file__ = str(root / "tools/migration.py")
+                        exec((root / "tools/migration.py").read_text(), vars(driver))
 
                         def prepare(*args: object, crash: bool = crash) -> None:
                             out = cast(Path, args[-2])
@@ -692,9 +715,11 @@ class SimulationRuntimeTests(unittest.TestCase):
                                 raise RuntimeError("fixture preparation failed")
 
                         with (
-                            patch.object(simulate, "ROOT", root),
+                            patch.object(simulation_cli, "ROOT", root),
                             patch.object(
-                                simulate, "scenario_list", return_value=[{"name": "a"}]
+                                simulation_cli,
+                                "scenario_list",
+                                return_value=[{"name": "a"}],
                             ),
                             patch.object(module, name, side_effect=prepare),
                             patch.object(sys, "argv", ["simulate.py", *arguments]),
@@ -703,9 +728,9 @@ class SimulationRuntimeTests(unittest.TestCase):
                                 with self.assertRaisesRegex(
                                     RuntimeError, "preparation failed"
                                 ):
-                                    simulate.main()
+                                    simulate.main(driver)
                             else:
-                                self.assertEqual(simulate.main(), 0)
+                                self.assertEqual(simulate.main(driver), 0)
                         run = next((root / ".local/simulation").iterdir())
                         self.assertFalse((run / "reference-runtime").exists())
                         self.assertEqual(
@@ -881,10 +906,10 @@ class SimulationSpeedTests(unittest.TestCase):
                     )
                 self.assertEqual(command, ["reference"])  # Actual reference cache hit.
             with (
-                patch.object(simulate, "scenario_modules", return_value=()),
-                patch.object(simulate, "run_game", side_effect=runs * 3) as game,
+                patch.object(registry, "scenario_modules", return_value=()),
+                patch.object(scenario_runner, "run_game", side_effect=runs * 3) as game,
                 patch.object(
-                    simulate,
+                    scenario_runner,
                     "save_moment",
                     side_effect=[(1, 0, 74), (1, 0, 75)] * 3
                     if failure.get("moment")
@@ -892,7 +917,7 @@ class SimulationSpeedTests(unittest.TestCase):
                     return_value=(1, 0, 74),
                 ),
                 patch.object(
-                    simulate,
+                    scenario_runner,
                     "compare_saves",
                     return_value=[{"field": "world"}]
                     if failure.get("difference")
@@ -1076,8 +1101,8 @@ class InstructionSpeedTests(unittest.TestCase):
 
             cli = ["sim", "--instructions", f"--frozen-runtimes={root / 'bundle'}"]
             with (
-                patch.object(simulate, "scenario_list", return_value=[scenario]),
-                patch.object(simulate, "run_scenario", side_effect=collect),
+                patch.object(simulation_cli, "scenario_list", return_value=[scenario]),
+                patch.object(simulation_cli, "run_scenario", side_effect=collect),
                 patch.object(sys, "argv", cli),
                 self.assertRaisesRegex(RuntimeError, "collected frozen profiles"),
             ):
@@ -1559,12 +1584,12 @@ class SpeedPassTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(speed, "Hold", Hold),
-            patch.object(simulate, "scenario_modules", return_value=[]),
+            patch.object(registry, "scenario_modules", return_value=[]),
             patch.object(simulate, "prepare_game", side_effect=prepare),
             patch.object(simulate, "execute_game", side_effect=execute),
             patch.object(simulate, "read_game", side_effect=read),
-            patch.object(simulate, "save_moment", return_value=(1, 0, 74)),
-            patch.object(simulate, "compare_saves", side_effect=compare),
+            patch.object(scenario_runner, "save_moment", return_value=(1, 0, 74)),
+            patch.object(scenario_runner, "compare_saves", side_effect=compare),
         ):
             out = Path(directory)
             roles = cast(dict[str, Path], {role: role for role in speed.ROLES})
@@ -1730,7 +1755,7 @@ class SpeedPassTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(speed, "speed_scenarios", return_value=[scenario]),
-            patch.object(simulate, "scenario_modules", return_value=[]),
+            patch.object(registry, "scenario_modules", return_value=[]),
             patch.object(simulate, "prepare_scenario", return_value=scenario),
             patch.object(simulate, "prepare_run_dir"),
             patch.object(speed.instructions, "prepare", side_effect=prepare),
@@ -2253,6 +2278,7 @@ class CommunityInputTests(unittest.TestCase):
             with (
                 self.subTest(replaced=replaced),
                 patch.object(simulate, "read_save", return_value=chunks),
+                patch.object(savegame, "read_save", return_value=chunks),
             ):
                 if replaced:
                     with self.assertRaisesRegex(RuntimeError, "AI 0 was replaced"):
