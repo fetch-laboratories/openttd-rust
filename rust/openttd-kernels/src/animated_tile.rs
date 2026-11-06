@@ -23,7 +23,6 @@ use crate::station_cmd::{RailSpec, RoadSpec};
 use crate::station_type::{
     AAT_ACCEPTANCE_TICK, AAT_BUILT, SAT_ACCEPTANCE_TICK, SAT_CARGO_TAKEN, SAT_NEW_CARGO,
 };
-use crate::tilearea::TileArea;
 use crate::{
     industry::{ConstructionServices, Services as Industries, TileServices},
     objects::{Object, Spec as ObjectSpec},

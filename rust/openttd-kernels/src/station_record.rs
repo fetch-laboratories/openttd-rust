@@ -311,7 +311,7 @@ pub(crate) fn set_area(area: *mut crate::tilearea::TileArea, value: crate::tilea
     // SAFETY: A record-area accessor supplies the live, writable destination.
     unsafe { area.write(value) };
 }
-/// OrthogonalTileArea::Clear on the selected live record field.
+/// `OrthogonalTileArea::Clear` on the selected live record field.
 #[inline]
 pub(crate) fn clear_area(area: *mut crate::tilearea::TileArea) {
     // SAFETY: A record-area accessor supplies the live, writable destination.
