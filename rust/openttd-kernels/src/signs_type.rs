@@ -67,3 +67,7 @@ pub unsafe extern "C" fn openttd_rust_sign_record_delete(record: *mut SignRecord
 pub(crate) unsafe fn can_allocate() -> bool {
     unsafe { PoolCore::can_allocate(*POOL.get(), 1) }
 }
+
+pub(crate) unsafe fn cleaning() -> bool {
+    unsafe { (*PoolCore::descriptor(*POOL.get())).cleaning }
+}

@@ -8,16 +8,24 @@
 struct OpenTTDSharedServices;
 struct OpenTTDCommandServices;
 struct OpenTTDRailCommandServices;
-struct Depot;
+struct OpenTTDDepotRecord;
+struct OpenTTDOrdersLeaves;
+struct OpenTTDObjectivesServices;
+struct OpenTTDStationCommandServices;
 /** Native window refresh follows canonical Rust name mutation. */
 struct OpenTTDDepotServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandServices *command;
 	const OpenTTDCommandCostServices *costs;
-	void (*renamed)(Depot *) noexcept OPENTTD_SERVICE_DEFAULT(renamed);
+	const OpenTTDOrdersLeaves *orders;
+	const OpenTTDObjectivesServices *objectives;
+	const OpenTTDStationCommandServices *station;
+	void (*window_dirty)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(window_dirty);
 	uint32_t name_unique;
 };
+const OpenTTDDepotServices &GetRustDepotServices() noexcept;
 extern "C" {
+void openttd_rust_depot_destroy(const OpenTTDDepotServices *, const OpenTTDDepotRecord *);
 void openttd_rust_depot_default_name(const OpenTTDSharedServices *, uint16_t);
 void openttd_rust_depot_rename(const OpenTTDDepotServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 }

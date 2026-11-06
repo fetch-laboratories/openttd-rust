@@ -16,10 +16,12 @@ struct OpenTTDSignServices {
 	void (*position)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(position);
 	void (*list_changed)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(list_changed);
 	void (*remove)(Sign *) noexcept OPENTTD_SERVICE_DEFAULT(remove);
+	void (*close_rename)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(close_rename);
 	uint32_t too_many_signs;
 };
 const OpenTTDSignServices &GetRustSignServices() noexcept;
 extern "C" {
+void openttd_rust_sign_destroy(const OpenTTDSignServices *, const OpenTTDSignRecord *);
 uint16_t openttd_rust_sign_place(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint32_t, OpenTTDByteSpan);
 void openttd_rust_sign_rename(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, OpenTTDByteSpan);
 void openttd_rust_sign_move(const OpenTTDSignServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint32_t);

@@ -16,3 +16,9 @@ pub const WC_SIGN_LIST: u16 = 36;
 pub const WC_COMPANY_COLOUR: u16 = 28;
 pub const WC_SEND_NETWORK_MSG: u16 = 72;
 pub const WC_CLIENT_LIST: u16 = 68;
+
+pub const WC_TRAINS_LIST: u16 = 41;
+pub const WC_ROADVEH_LIST: u16 = 42;
+pub const WC_SHIPS_LIST: u16 = 43;
+pub const WC_AIRCRAFT_LIST: u16 = 44;
+pub const WC_VEHICLE_DEPOT: u16 = 48;

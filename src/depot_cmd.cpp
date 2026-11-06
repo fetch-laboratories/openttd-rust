@@ -23,6 +23,7 @@
 #include "rust/rail_command_ffi.h"
 #include "rust/services_ffi.h"
 #include "rust/station_command_ffi.h"
+#include "rust/services_objectives.h"
 #include "rust/vehicle_refit_ffi.h"
 
 #include "table/strings.h"
@@ -30,25 +31,18 @@
 #include "safeguards.h"
 
 static_assert(MAX_LENGTH_DEPOT_NAME_CHARS == 32);
+static_assert(WC_TRAINS_LIST == 41 && WC_ROADVEH_LIST == 42 && WC_SHIPS_LIST == 43 && WC_AIRCRAFT_LIST == 44 && WC_VEHICLE_DEPOT == 48);
 
-static void RustDepotRenamed(Depot *d) noexcept
-{
-	/* Update the orders and depot */
-	GetRustStationCommandServices().orders_dirty();
-	SetWindowDirty(WC_VEHICLE_DEPOT, d->Record().xy);
-
-	/* Update the depot list */
-	VehicleType vt = GetRustVehicleBuildServices().depot_kind(d->Record().xy.base());
-	SetWindowDirty(GetWindowClassForVehicleType(vt), VehicleListIdentifier(VL_DEPOT_LIST, vt, CompanyID(GetRustSharedServices().tile_owner(d->Record().xy.base())), d->index).ToWindowNumber());
-}
-
-static const OpenTTDDepotServices &GetRustDepotServices() noexcept
+const OpenTTDDepotServices &GetRustDepotServices() noexcept
 {
 	static const OpenTTDDepotServices services{
 		.shared = &GetRustSharedServices(),
 		.command = &GetRustCommandServices(),
 		.costs = &GetRustCommandCostServices(),
-		.renamed = RustDepotRenamed,
+		.orders = &GetRustOrdersLeaves(),
+		.objectives = &GetRustObjectivesServices(),
+		.station = &GetRustStationCommandServices(),
+		.window_dirty = [](uint16_t cls, uint32_t number) noexcept { SetWindowDirty(WindowClass(cls), number); },
 		.name_unique = STR_ERROR_NAME_MUST_BE_UNIQUE,
 	};
 	return services;

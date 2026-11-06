@@ -29,9 +29,7 @@ SignPool _sign_pool("Sign");
 /** Destroy the sign */
 Sign::~Sign()
 {
-	if (CleaningPool()) return;
-
-	DeleteRenameSignWindow(this->index);
+	openttd_rust_sign_destroy(&GetRustSignServices(), &this->Record());
 }
 
 /**

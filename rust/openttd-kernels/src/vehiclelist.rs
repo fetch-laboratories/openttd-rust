@@ -17,3 +17,23 @@ pub const VL_STATION_LIST: u8 = 2;
 pub const VL_DEPOT_LIST: u8 = 3;
 /// `VL_GROUP_LIST`.
 pub const VL_GROUP_LIST: u8 = 4;
+
+/// `VehicleListIdentifier::ToWindowNumber`.
+pub(crate) fn window_number(
+    shared: &crate::services::Services,
+    kind: u8,
+    vehicle: u8,
+    company: u8,
+    index: u32,
+) -> u32 {
+    let company = if company == crate::company_type::OWNER_NONE {
+        0xf
+    } else {
+        company
+    };
+    crate::movement::native_assert(shared, company < 1 << 4);
+    crate::movement::native_assert(shared, vehicle < 1 << 2);
+    crate::movement::native_assert(shared, index < 1 << 20);
+    crate::movement::native_assert(shared, kind < VL_GROUP_LIST + 1);
+    u32::from(company) << 28 | u32::from(kind) << 23 | u32::from(vehicle) << 26 | index
+}

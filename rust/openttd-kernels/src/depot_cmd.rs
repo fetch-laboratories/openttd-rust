@@ -8,7 +8,7 @@
     clippy::cast_possible_truncation
 )]
 use crate::command_type::DoCommandFlag;
-use crate::depot_type::{Depot, DepotID, MAX_LENGTH_DEPOT_NAME_CHARS};
+use crate::depot_type::{DepotID, DepotRecord, MAX_LENGTH_DEPOT_NAME_CHARS};
 use crate::services::{
     ByteSpan, CommandCost, CommandCostServices, CommandServices, Cost, Services as Shared,
 };
@@ -20,13 +20,16 @@ pub struct Services {
     pub command: &'static CommandServices,
     pub costs: &'static CommandCostServices,
     /// Refresh order, depot and depot-list windows after a rename.
-    pub renamed: unsafe extern "C" fn(*mut Depot),
+    pub orders: &'static crate::orders::Leaves,
+    pub objectives: &'static crate::objectives::Services,
+    pub station: &'static crate::station_cmd::CommandServicesTable,
+    pub window_dirty: extern "C" fn(u16, u32),
     pub name_unique: u32,
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDDepotServices" ["probe"] => Services { shared, command, costs, renamed, name_unique };
+    "OpenTTDDepotServices" ["probe"] => Services { shared, command, costs, orders, objectives, station, window_dirty, name_unique };
 }
 
 /// `IsUniqueDepotName`, in `Depot::Iterate` order.
@@ -67,7 +70,18 @@ fn rename(s: &Services, out: Cost<'_>, flags: u16, id: DepotID, text: ByteSpan) 
         if reset {
             unsafe { default_name(s.shared, id) };
         }
-        unsafe { (s.renamed)((*d).shell) };
+        (s.station.orders_dirty)();
+        (s.window_dirty)(crate::window_type::WC_VEHICLE_DEPOT, unsafe { (*d).xy.0 });
+        let kind = crate::depot_map::vehicle_type(s.shared, unsafe { (*d).xy.0 });
+        let window = crate::vehicle_gui::list_window(kind, s.shared);
+        let number = crate::vehiclelist::window_number(
+            s.shared,
+            crate::vehiclelist::VL_DEPOT_LIST,
+            kind,
+            crate::map_func::World::new(s.shared).owner(unsafe { (*d).xy.0 }),
+            u32::from(id.0),
+        );
+        (s.window_dirty)(window, number);
     }
     out.zero();
 }
@@ -141,4 +155,37 @@ pub(crate) unsafe fn default_name(shared: &Shared, id: DepotID) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_depot_default_name(shared: &Shared, id: DepotID) {
     unsafe { default_name(shared, id) };
+}
+
+/// Native destruction keeps the shell and record live throughout these hooks.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_depot_destroy(s: &Services, d: *const DepotRecord) {
+    unsafe {
+        if (*crate::depot_type::descriptor()).cleaning {
+            return;
+        }
+        if !crate::depot_map::is_depot(s.shared, (*d).xy.0)
+            || (s.shared.depot_index)((*d).xy.0) != (*d).index.0
+        {
+            return;
+        }
+        crate::orders::openttd_rust_backup_tile_clear((*d).xy.0, 0, s.orders);
+        crate::orders::openttd_rust_remove_destination(
+            crate::order_type::OT_GOTO_DEPOT,
+            (*d).index.0,
+            0,
+            s.orders,
+        );
+        (s.objectives.window_close)(crate::window_type::WC_VEHICLE_DEPOT, (*d).xy.0);
+        let kind = crate::depot_map::vehicle_type(s.shared, (*d).xy.0);
+        let window = crate::vehicle_gui::list_window(kind, s.shared);
+        let number = crate::vehiclelist::window_number(
+            s.shared,
+            crate::vehiclelist::VL_DEPOT_LIST,
+            kind,
+            crate::map_func::World::new(s.shared).owner((*d).xy.0),
+            u32::from((*d).index.0),
+        );
+        (s.objectives.window_close)(window, number);
+    }
 }

@@ -35,7 +35,6 @@ static void RustSignRemove(Sign *si) noexcept
 	if (si->sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeSign(si->index));
 	delete si;
 
-	GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, 0);
 }
 
 const OpenTTDSignServices &GetRustSignServices() noexcept
@@ -47,6 +46,7 @@ const OpenTTDSignServices &GetRustSignServices() noexcept
 		.position = [](Sign *si) noexcept { si->UpdateVirtCoord(); },
 		.list_changed = [](int32_t data) noexcept { GetRustObjectivesServices().window_data(WC_SIGN_LIST, 0, data); },
 		.remove = RustSignRemove,
+		.close_rename = [](uint16_t id) noexcept { DeleteRenameSignWindow(SignID{id}); },
 		.too_many_signs = STR_ERROR_TOO_MANY_SIGNS,
 	};
 	return services;

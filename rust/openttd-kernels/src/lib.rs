@@ -1259,3 +1259,5 @@ mod tcp_content_type;
 mod tcp_game;
 
 mod owned_bytes;
+
+mod vehicle_gui;

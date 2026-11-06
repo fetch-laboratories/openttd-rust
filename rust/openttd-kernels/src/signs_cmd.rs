@@ -20,12 +20,13 @@ pub struct Services {
     pub list_changed: extern "C" fn(i32),
     /// Unmark, remove from the viewport index, delete and refresh the list.
     pub remove: unsafe extern "C" fn(*mut Sign),
+    pub close_rename: extern "C" fn(SignID),
     pub too_many_signs: u32,
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDSignServices" ["probe"] => Services { shared, costs, create, position, list_changed, remove, too_many_signs };
+    "OpenTTDSignServices" ["probe"] => Services { shared, costs, create, position, list_changed, remove, close_rename, too_many_signs };
 }
 
 fn editor() -> bool {
@@ -107,6 +108,7 @@ fn rename(s: &Services, out: Cost<'_>, flags: u16, id: SignID, text: ByteSpan) {
         }
     } else if flags & DoCommandFlag::EXECUTE != 0 {
         unsafe { (s.remove)((*si).shell) };
+        (s.list_changed)(0);
     }
 }
 fn relocate(s: &Services, out: Cost<'_>, flags: u16, id: SignID, tile: u32) {
@@ -171,4 +173,12 @@ pub unsafe extern "C" fn openttd_rust_company_can_edit_sign_abi(
     si: *const SignRecord,
 ) -> u8 {
     u8::from(can_edit(s, si))
+}
+
+/// The shell retains its record until this synchronous destructor hook returns.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_sign_destroy(s: &Services, si: *const SignRecord) {
+    if !unsafe { crate::signs_type::cleaning() } {
+        (s.close_rename)(unsafe { (*si).index });
+    }
 }
