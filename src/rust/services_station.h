@@ -78,8 +78,6 @@ inline BaseStation *RustBaseStationByTile(uint32_t tile) noexcept { return BaseS
 /* Bind directly: another service table may still be dynamically initializing. */
 template <typename TStation>
 inline uint16_t RustBaseStationID(TStation *st) noexcept { return st->index.base(); }
-/** Read existing cargo data only; a missing GoodsEntryData stays unallocated. */
-inline const OpenTTDCargoList *RustStationExistingCargoOwner(BaseStation *st, uint8_t cargo) noexcept { const auto &goods = Station::From(st)->GetGoods(cargo); return goods.HasData() ? goods.GetData().cargo.RustOwner() : nullptr; }
 
 inline uint16_t RustAirportMovingFlags(const AirportMovingData *moving) noexcept { return moving->flags.base(); }
 
@@ -89,8 +87,6 @@ inline bool RustStationAirportMember(const Station *st, uint32_t tile) noexcept 
 inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }
 inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); }
 inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
-/** `&st->GetGoods(cargo).GetOrCreateData().cargo`'s Rust owner. */
-inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->GetGoods(cargo).GetOrCreateData().cargo.RustOwner(); }
 inline uint8_t RustAirportLayoutHeading(const AirportFTAClass *airport, uint32_t index) noexcept { return airport->layout[index].heading; }
 inline uint8_t OpenTTDAirportLayoutHeading(const void *airport, uint8_t index) noexcept { return RustAirportLayoutHeading(static_cast<const AirportFTAClass *>(airport), index); }
 inline uint8_t RustAirportFlags(const AirportFTAClass *airport) noexcept { return airport->flags.base(); }

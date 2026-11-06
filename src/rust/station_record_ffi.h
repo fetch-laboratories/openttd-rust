@@ -18,5 +18,10 @@ extern "C" {
  * shell also publishes the offset of its record pointer; fixtures pass null. */
 OpenTTDStationRecord *OPENTTD_RUST_CALL openttd_rust_station_record_new(BaseStation *shell, uint32_t xy, size_t record_offset);
 void OPENTTD_RUST_CALL openttd_rust_station_record_delete(OpenTTDStationRecord *);
+/* Optional attachment publication and destruction are Rust-owned. Clear nulls
+ * the goods link before callbacks; borrowed native views end before clear. */
+OpenTTDStationGoodsData *openttd_rust_station_goods_data_ensure(OpenTTDGoodsEntry *);
+uint8_t openttd_rust_station_goods_data_is_empty(const OpenTTDStationGoodsData *);
+void openttd_rust_station_goods_data_clear(OpenTTDGoodsEntry *, const struct OpenTTDCargoStorageServices *);
 }
 #endif /* RUST_STATION_RECORD_FFI_H */

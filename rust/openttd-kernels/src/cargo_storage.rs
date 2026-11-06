@@ -1702,6 +1702,7 @@ mod tests {
     use super::*;
     use std::cell::{Cell, RefCell};
     thread_local! {
+        static CLEAR_REENTRY: Cell<*mut crate::station_record::GoodsRecord> = const { Cell::new(std::ptr::null_mut()) };
         static CAPACITY_CALLS: RefCell<Vec<(&'static str, u8)>> = const { RefCell::new(Vec::new()) };
         static ALLOCATE: Cell<bool> = const { Cell::new(true) };
         static POOL: RefCell<Vec<*mut c_void>> = const { RefCell::new(Vec::new()) };
@@ -1807,6 +1808,55 @@ mod tests {
             in_vehicle: 1,
         };
         create(&raw const fields)
+    }
+
+    #[test]
+    fn station_attachment_reserved_flow_and_clear_reentry() {
+        use crate::station_record::{
+            StationRecord, goods_data_clear, goods_data_ensure, goods_data_is_empty,
+        };
+        extern "C" fn reenter(packet: *mut c_void) {
+            CLEAR_REENTRY.with(|slot| unsafe {
+                let goods = slot.get();
+                assert!(!goods.is_null());
+                assert!((*goods).data.is_null());
+                let replacement = goods_data_ensure(goods);
+                openttd_rust_cargo_list_set_reserved((*replacement).cargo, 7);
+            });
+            destroy(packet);
+        }
+        let mut record = StationRecord::new(std::ptr::null_mut(), crate::tile_type::TileIndex(0));
+        let goods = &raw mut record.goods[0];
+        let mut service = services();
+        unsafe {
+            let data = goods_data_ensure(goods);
+            assert_eq!(goods_data_ensure(goods), data);
+            assert!(goods_data_is_empty(data));
+            openttd_rust_cargo_list_set_reserved((*data).cargo, 1);
+            assert!(!goods_data_is_empty(data));
+            openttd_rust_cargo_list_set_reserved((*data).cargo, 0);
+            let flow = crate::cargo_flow::openttd_rust_flow_new(2, 3, 0);
+            crate::cargo_flow::openttd_rust_flow_map_insert((*data).flows, 1, flow);
+            crate::cargo_flow::openttd_rust_flow_destroy(flow);
+            assert!(!goods_data_is_empty(data));
+            append((*data).cargo, service, cargo(1, 1, 0), 2);
+            // Source TotalCount wraps available + reserved rather than testing
+            // each independently, including a malformed loaded count.
+            openttd_rust_cargo_list_set_reserved((*data).cargo, u32::MAX);
+            assert_eq!(openttd_rust_cargo_list_station_total((*data).cargo), 0);
+            CLEAR_REENTRY.with(|slot| slot.set(goods));
+            service.destroy = reenter;
+            goods_data_clear(goods, &raw const service);
+            let replacement = (*goods).data;
+            assert!(!replacement.is_null());
+            assert_eq!(openttd_rust_cargo_list_reserved((*replacement).cargo), 7);
+            assert!((*(*replacement).flows).is_empty());
+            service.destroy = destroy;
+            goods_data_clear(goods, &raw const service);
+            assert!((*goods).data.is_null());
+            goods_data_clear(goods, &raw const service);
+            CLEAR_REENTRY.with(|slot| slot.set(std::ptr::null_mut()));
+        }
     }
     fn list(vehicle: bool) -> *mut List {
         openttd_rust_cargo_list_new(u8::from(vehicle))

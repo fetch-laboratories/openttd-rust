@@ -83,6 +83,8 @@ template <class Tinst, class Tcont>
 class CargoList {
 protected:
 	OpenTTDCargoList *state;
+	bool owned = true;
+	explicit CargoList(OpenTTDCargoList *state) : state(state), owned(false) {}
 public:
 	typedef typename Tcont::iterator Iterator;
 	typedef typename Tcont::reverse_iterator ReverseIterator;
@@ -126,7 +128,11 @@ public:
 };
 
 class StationCargoList : public CargoList<StationCargoList, StationCargoPacketMap> {
+	explicit StationCargoList(OpenTTDCargoList *state) : CargoList(state) {}
 public:
+	StationCargoList() = default;
+	/** A call-scoped view, invalidated when its station goods attachment clears. */
+	static StationCargoList Borrow(OpenTTDCargoList *state) { return StationCargoList(state); }
 	static void InvalidateAllFrom(Source src);
 	void Append(CargoPacket *cp, StationID next);
 	bool HasCargoFor(std::span<const StationID> next) const;

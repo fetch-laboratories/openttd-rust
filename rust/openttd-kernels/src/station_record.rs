@@ -29,11 +29,6 @@ pub struct Town {
 pub struct PersistentStorage {
     _private: [u8; 0],
 }
-/// Opaque native `GoodsEntryData`: the cargo list and flow facades, owned by C++.
-#[repr(C)]
-pub struct GoodsEntryData {
-    _private: [u8; 0],
-}
 /// Opaque native `RoadStop` shell.
 #[repr(C)]
 pub struct RoadStop {
@@ -60,11 +55,17 @@ crate::abi::shared_records! {
         pub right: i32,
         pub bottom: i32,
     }
+    /// Optional station cargo and flow owners. Native views borrow these pointers
+    /// only until clear/destruction; no facade owns either allocation.
+    "OpenTTDStationGoodsData" ["station"] => pub struct StationGoodsData {
+        pub cargo: *mut crate::cargo_storage::List => struct OpenTTDCargoList,
+        pub flows: *mut crate::cargo_flow::FlowMap => struct OpenTTDCargoFlowMap,
+    }
     /// One `GoodsEntry` cargo slot.
     #[derive(Clone, Copy)]
     "OpenTTDGoodsEntry" ["station"] => pub struct GoodsRecord {
-        /// `GoodsEntry::data`, owned by the native station shell.
-        pub data: *mut GoodsEntryData,
+        /// Optional Rust-owned cargo/flow attachment, cleared before destruction.
+        pub data: *mut StationGoodsData,
         pub max_waiting_cargo: u32,
         /// `NodeID`.
         pub node: u16,
@@ -264,6 +265,123 @@ pub(crate) fn get_record(
 ) -> *mut StationRecord {
     // SAFETY: The caller supplies a live ID, as the original Get required.
     unsafe { record_of(station_get(s, id.0)) }
+}
+
+/// `BaseStation::GetIfValid`: preserve index/hole validity without adding a
+/// specialized station/waypoint type filter. A reused ID may name a new owner.
+#[inline]
+pub(crate) fn get_record_if_valid(
+    s: &crate::services::Services,
+    id: crate::station_type::StationID,
+) -> *mut StationRecord {
+    let shell = station_get_if_valid(s, id.0);
+    if shell.is_null() {
+        std::ptr::null_mut()
+    } else {
+        // SAFETY: The slot currently holds a live shell with its canonical record.
+        unsafe { record_of(shell) }
+    }
+}
+
+/// Create cargo first and flows second, then publish the complete attachment.
+/// The caller supplies a live goods slot under the game-state mutex.
+pub(crate) unsafe fn goods_data_ensure(goods: *mut GoodsRecord) -> *mut StationGoodsData {
+    let existing = unsafe { (*goods).data };
+    if !existing.is_null() {
+        return existing;
+    }
+    let cargo = crate::cargo_storage::openttd_rust_cargo_list_new(0);
+    let flows = crate::cargo_flow::openttd_rust_flow_map_new();
+    let data = Box::into_raw(Box::new(StationGoodsData { cargo, flows }));
+    unsafe { (*goods).data = data };
+    data
+}
+
+/// Existing data only; NewGRF observations must not allocate an empty list.
+#[inline]
+pub(crate) fn existing_cargo(
+    shell: *const BaseStation,
+    cargo: u8,
+) -> *mut crate::cargo_storage::List {
+    // SAFETY: Native callers required a live Station and a valid cargo slot.
+    unsafe {
+        let data = (*record_of(shell)).goods[usize::from(cargo)].data;
+        if data.is_null() {
+            std::ptr::null_mut()
+        } else {
+            (*data).cargo
+        }
+    }
+}
+
+/// Resolve the live goods slot and create its canonical cargo/flow attachment.
+#[inline]
+pub(crate) fn ensure_cargo(
+    shell: *const BaseStation,
+    cargo: u8,
+) -> *mut crate::cargo_storage::List {
+    // SAFETY: Same serialized live shell/valid cargo contract as GetOrCreateData.
+    unsafe {
+        let goods = &raw mut (*record_of(shell)).goods[usize::from(cargo)];
+        (*goods_data_ensure(goods)).cargo
+    }
+}
+
+/// Source `GoodsEntryData::IsEmpty`: available plus reserved cargo (u32), then
+/// flow emptiness. No reference survives this immediate observation.
+pub(crate) unsafe fn goods_data_is_empty(data: *const StationGoodsData) -> bool {
+    unsafe {
+        crate::cargo_storage::openttd_rust_cargo_list_station_total((*data).cargo) == 0
+            && (*(*data).flows).is_empty()
+    }
+}
+
+/// Detach before destruction. Cargo packet callbacks may reenter the goods slot
+/// and create a new attachment; never overwrite that new link after callbacks.
+pub(crate) unsafe fn goods_data_clear(
+    goods: *mut GoodsRecord,
+    storage: *const crate::cargo_storage::Services,
+) {
+    let data = unsafe { std::ptr::replace(&raw mut (*goods).data, std::ptr::null_mut()) };
+    if data.is_null() {
+        return;
+    }
+    let (flows, cargo) = unsafe { ((*data).flows, (*data).cargo) };
+    unsafe {
+        crate::cargo_flow::openttd_rust_flow_map_destroy(flows);
+        crate::cargo_storage::openttd_rust_cargo_list_destroy(cargo, storage);
+        drop(Box::from_raw(data));
+    }
+}
+
+/// Native borrowed presentation; lifetime is that of the live goods slot.
+/// # Safety
+/// `goods` is live and accessed under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_goods_data_ensure(
+    goods: *mut GoodsRecord,
+) -> *mut StationGoodsData {
+    unsafe { goods_data_ensure(goods) }
+}
+
+/// # Safety
+/// `data` is a live attachment, with no concurrent mutation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_goods_data_is_empty(
+    data: *const StationGoodsData,
+) -> u8 {
+    u8::from(unsafe { goods_data_is_empty(data) })
+}
+
+/// # Safety
+/// `goods` is live and `storage` is the canonical cargo operation table. Neither
+/// this function nor its caller retains attachment aliases through destruction.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_goods_data_clear(
+    goods: *mut GoodsRecord,
+    storage: *const crate::cargo_storage::Services,
+) {
+    unsafe { goods_data_clear(goods, storage) };
 }
 
 // The two area types have the generated OpenTTDTileArea layout; TileIndex is

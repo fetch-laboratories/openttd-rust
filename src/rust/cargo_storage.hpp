@@ -86,7 +86,7 @@ void CargoPacket::InvalidateAllFrom(StationID station) { openttd_rust_cargo_inva
 template <class Tinst, class Tcont>
 CargoList<Tinst, Tcont>::CargoList() : state(openttd_rust_cargo_list_new(std::is_same_v<Tinst, VehicleCargoList>)) {}
 template <class Tinst, class Tcont>
-CargoList<Tinst, Tcont>::~CargoList() { openttd_rust_cargo_list_destroy(this->state, &_cargo_storage_services); }
+CargoList<Tinst, Tcont>::~CargoList() { if (this->owned) openttd_rust_cargo_list_destroy(this->state, &_cargo_storage_services); }
 template <class Tinst, class Tcont>
 void CargoList<Tinst, Tcont>::OnCleanPool() { openttd_rust_cargo_list_clear(this->state); }
 template <class Tinst, class Tcont>

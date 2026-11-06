@@ -306,6 +306,9 @@ impl Clone for FlowMap {
     }
 }
 impl FlowMap {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
     fn erase(&mut self, key: u16) {
         if let Some(ptr) = self.entries.remove(&key) {
             unsafe {

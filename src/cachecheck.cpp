@@ -182,7 +182,8 @@ void CheckCaches()
 		for (GoodsEntry ge : st->Goods()) {
 			if (!ge.HasData()) continue;
 
-			StationCargoList &cargo_list = ge.GetData().cargo;
+			auto data = ge.GetData();
+			StationCargoList &cargo_list = data.cargo;
 			[[maybe_unused]] const auto a = cargo_list.PeriodsInTransit();
 			[[maybe_unused]] const auto b = cargo_list.TotalCount();
 			cargo_list.InvalidateCache();

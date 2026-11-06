@@ -949,7 +949,7 @@ impl Links {
         st: *mut BaseStation,
         cargo: u8,
     ) -> *const crate::cargo_storage::List {
-        unsafe { ((*self.station_resolver).cargo_owner)(st, cargo) }
+        crate::station_record::existing_cargo(st, cargo)
     }
     pub(crate) fn vehicle_cargo(&self, v: VehicleRef) -> *mut crate::cargo_storage::List {
         unsafe { ((*self.vehicle_resolver).cargo_owner)(v.0.as_ptr()) }.cast_mut()

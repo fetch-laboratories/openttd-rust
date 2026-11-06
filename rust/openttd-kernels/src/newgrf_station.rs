@@ -107,8 +107,6 @@ pub struct SlopeResult {
 pub struct Services {
     shared: *const Shared,
     pub(crate) cargo: *const crate::cargo_storage::Services,
-    pub(crate) cargo_owner:
-        extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
     group_count: extern "C" fn(*const RailSpec) -> usize,
     group_cargo: extern "C" fn(*const RailSpec, usize) -> u8,
     group: extern "C" fn(*const RailSpec, u8) -> *const c_void,
@@ -167,7 +165,7 @@ impl Services {
         self.shared().map()
     }
     fn count(&self, st: *mut BaseStation, cargo: u8) -> u32 {
-        let list = (self.cargo_owner)(st, cargo);
+        let list = crate::station_record::existing_cargo(st, cargo);
         if list.is_null() {
             0
         } else {
@@ -501,7 +499,7 @@ fn cargo_variable(
             if legacy { count } else { count.min(4095) }
         }
         0x63 | 0x68 => {
-            let list = (native.cargo_owner)(st, c);
+            let list = crate::station_record::existing_cargo(st, c);
             if list.is_null() {
                 return if var == 0x68 {
                     u32::from(crate::station_type::INVALID_STATION)
@@ -1024,7 +1022,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverSpec" ["station_service"] => Spec { threshold, divide };
  "OpenTTDStationSlopeResult" ["station_service"] => SlopeResult { callback, registers };
  "OpenTTDStationResolverServices" ["station_service"] => Services {
- shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count, loading, loaded, axis, tile_add, tile_random, spec_cargo, resolve_random, resolve_callback, company, nearby_station, airport_ttd_type, identity, town_scope, default_scope, slope_error
+ shared, cargo, group_count, group_cargo, group, spec, loading_count, loaded_count, loading, loaded, axis, tile_add, tile_random, spec_cargo, resolve_random, resolve_callback, company, nearby_station, airport_ttd_type, identity, town_scope, default_scope, slope_error
  };
 }
 

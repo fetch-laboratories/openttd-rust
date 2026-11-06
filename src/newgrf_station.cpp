@@ -58,7 +58,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 	static const OpenTTDStationResolverServices services{
 		.shared = &GetRustSharedServices(),
 		.cargo = CargoStorageServices(),
-		.cargo_owner = RustStationExistingCargoOwner,
 		.group_count = [](const StationSpec *s) noexcept { return s->grf_prop.spritegroups.size(); },
 		.group_cargo = [](const StationSpec *s, size_t i) noexcept { return s->grf_prop.spritegroups[i].first; },
 		.group = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.GetSpriteGroup(c); },

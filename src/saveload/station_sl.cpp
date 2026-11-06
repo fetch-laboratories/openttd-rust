@@ -254,7 +254,7 @@ public:
 		size_t num_dests = IsSavegameVersionBefore(SLV_SAVELOAD_LIST_LENGTH) ? _old_num_dests : SlGetStructListLength(UINT32_MAX);
 		if (num_dests == 0) return;
 
-		GoodsEntry::GoodsEntryData &data = ge->GetOrCreateData();
+		auto data = ge->GetOrCreateData();
 		auto packets = std::make_unique<StationCargoPacketMap>(*data.cargo.Packets());
 		StationCargoPair pair;
 		for (uint j = 0; j < num_dests; ++j) {
@@ -327,7 +327,7 @@ public:
 		size_t num_flows = IsSavegameVersionBefore(SLV_SAVELOAD_LIST_LENGTH) ? _old_num_flows : SlGetStructListLength(UINT32_MAX);
 		if (num_flows == 0) return;
 
-		GoodsEntry::GoodsEntryData &data = ge->GetOrCreateData();
+		auto data = ge->GetOrCreateData();
 		FlowSaveLoad flow{};
 		FlowStat *fs = nullptr;
 		FlowStatMap::iterator current_flow;

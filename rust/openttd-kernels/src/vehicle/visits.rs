@@ -18,7 +18,6 @@ use crate::debug::debug;
 use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{
     base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
-    cargo_storage::List,
     cargo_type::{CARGO_AUTO_REFIT, INVALID_CARGO, NUM_CARGO},
     cargopacket::MTA_LOAD,
     linkgraph::live,
@@ -97,8 +96,6 @@ pub struct Services {
     pub set_loading_tick: extern "C" fn(VehicleRef, u64),
     /// Arrival window invalidation and `Station::MarkTilesDirty(true)`.
     pub arrival_dirty: extern "C" fn(VehicleRef),
-    /// `&st->goods[cargo].GetOrCreateData().cargo`.
-    pub station_cargo: extern "C" fn(*mut Station, u8) -> *mut List,
     /// `HideFillingPercent(&v->fill_percent_te_id)`.
     pub hide_filling: extern "C" fn(VehicleRef),
     /// `v->trip_occupancy = value`.
@@ -726,7 +723,7 @@ pub(crate) fn cancel_reservation(front: VehicleRef, next: u16, st: *mut Station,
         {
             witness::hit(witness::VISITS_RESERVATION);
             debug!(misc, 1, "cancelling cargo reservation");
-            let destination = (s.station_cargo)(st, c.cargo);
+            let destination = crate::station_record::ensure_cargo(st.cast(), c.cargo);
             // `VehicleCargoList::Return(UINT_MAX, dest, next, v->tile)`.
             unsafe {
                 crate::cargo_storage::openttd_rust_cargo_list_move(
@@ -1189,7 +1186,6 @@ crate::abi::layouts! {
         set_last_loading,
         set_loading_tick,
         arrival_dirty,
-        station_cargo,
         hide_filling,
         set_occupancy,
         leave_sound,

@@ -158,7 +158,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.set_last_loading = RustVehicleSetLastLoadingStation,
 		.set_loading_tick = RustVehicleSetLastLoadingTick,
 		.arrival_dirty = VehicleVisitArrivalDirty,
-		.station_cargo = RustStationCargoOwner,
 		.hide_filling = RustVehicleHideFilling,
 		.set_occupancy = RustVehicleSetTripOccupancy,
 		.leave_sound = RustVehiclePlayLeaveSound,

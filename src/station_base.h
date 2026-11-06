@@ -26,14 +26,16 @@ static const uint8_t MAX_STATION_RATING = 255;
 
 #include "rust/cargo_flow.hpp"
 
-/** Optional cargo packet and flow data of one goods slot; the station shell owns it. */
+/** Call-scoped presentation of the canonical Rust attachment; never owns it. */
 struct GoodsEntryData {
-	StationCargoList cargo{}; ///< The cargo packets of cargo waiting in this station
-	FlowStatMap flows{}; ///< Planned flows through this station.
+	OpenTTDStationGoodsData *record;
+	StationCargoList cargo; ///< Borrowed cargo waiting in this station.
+	FlowStatMap flows; ///< Borrowed planned flows through this station.
+	explicit GoodsEntryData(OpenTTDStationGoodsData *record) : record(record), cargo(StationCargoList::Borrow(record->cargo)), flows(FlowStatMap::Borrow(record->flows)) {}
 
 	bool IsEmpty() const
 	{
-		return this->cargo.TotalCount() == 0 && this->flows.empty();
+		return openttd_rust_station_goods_data_is_empty(this->record) != 0;
 	}
 };
 
@@ -153,9 +155,7 @@ struct GoodsEntry {
 	 */
 	void ClearData()
 	{
-		GoodsEntryData *data = this->record->data;
-		this->record->data = nullptr;
-		delete data;
+		openttd_rust_station_goods_data_clear(this->record, CargoStorageServices());
 	}
 
 	/**
@@ -163,20 +163,19 @@ struct GoodsEntry {
 	 * @pre HasData()
 	 * @returns cargo packet/flow data.
 	 */
-	[[debug_inline]] inline GoodsEntryData &GetData() const
+	[[debug_inline]] inline GoodsEntryData GetData() const
 	{
 		assert(this->HasData());
-		return *this->record->data;
+		return GoodsEntryData(this->record->data);
 	}
 
 	/**
 	 * Get optional cargo packet/flow data. The data is create if it is not already present.
 	 * @returns cargo packet/flow data.
 	 */
-	inline GoodsEntryData &GetOrCreateData()
+	inline GoodsEntryData GetOrCreateData()
 	{
-		if (!this->HasData()) this->record->data = new GoodsEntryData();
-		return *this->record->data;
+		return GoodsEntryData(openttd_rust_station_goods_data_ensure(this->record));
 	}
 
 	uint8_t ConvertState() const;

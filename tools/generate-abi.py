@@ -96,13 +96,15 @@ def shared_records(
     }
     pointer_names.update(names)
 
-    def native(rust: str) -> str:
+    def native(rust: str, pointee: str | None = None) -> str:
         rust = rust.strip()
         pointer = re.fullmatch(r"\*(mut|const)\s+(.+)", rust)
         if pointer:
             path = pointer[2].strip()
             target = path.split("::")[-1]
-            if path in pointer_names:
+            if pointee is not None:
+                target = pointee
+            elif path in pointer_names:
                 # A layout declaration named by its full Rust path.
                 target = pointer_names[path]
             elif target in pointer_names:
@@ -127,7 +129,7 @@ def shared_records(
         fields = []
         for field in filter(str.strip, body.split(",")):
             match = re.fullmatch(
-                r"\s*pub\s+(?:r#)?(\w+)\s*:\s*(.+?)\s*(?:=>\s*(\w+))?\s*",
+                r"\s*pub\s+(?:r#)?(\w+)\s*:\s*(.+?)\s*(?:=>\s*(\w+)(?:\s+(\w+))?)?\s*",
                 field,
                 re.S,
             )
@@ -137,18 +139,19 @@ def shared_records(
                 r"\[\s*(.+?)\s*;\s*(\d+)\s*\]", match[2].strip(), re.S
             )
             extent = int(element[2]) if element else None
-            cpp_type = native(element[1] if element else match[2])
+            cpp_type = native(element[1] if element else match[2], match[4])
             if extent is not None and cpp_type.endswith(" *"):
                 raise ValueError(f"unsupported pointer array: {cpp}.{match[1]}")
             target = cpp_type.removeprefix("const ").removesuffix(" *")
             tag = match[3]
             if tag is not None and (
-                not cpp_type.endswith(" *") or target not in opaque
+                not cpp_type.endswith(" *")
+                or (target not in opaque and match[4] is None)
             ):
                 raise ValueError(
                     f"pointee tag requires an opaque pointer: {cpp}.{match[1]}"
                 )
-            if cpp_type.endswith(" *") and target in opaque:
+            if cpp_type.endswith(" *") and (target in opaque or match[4] is not None):
                 tag = tag or "struct"
                 if tag not in ("class", "struct"):
                     raise ValueError(f"unsupported pointee tag: {tag}")

@@ -468,13 +468,15 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
 		GoodsEntry ge = st->GetGoods(v->cargo_type);
-		v->cargo.Return(amount, &ge.GetOrCreateData().cargo, StationID::Invalid(), v->GetCargoTile());
+		auto data = ge.GetOrCreateData();
+		v->cargo.Return(amount, &data.cargo, StationID::Invalid(), v->GetCargoTile());
 	},
 	.unload_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, OpenTTDNativeCargoPayment *payment) noexcept -> uint32_t {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
 		GoodsEntry ge = st->GetGoods(v->cargo_type);
-		return v->cargo.Unload(amount, &ge.GetOrCreateData().cargo, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
+		auto data = ge.GetOrCreateData();
+		return v->cargo.Unload(amount, &data.cargo, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
 	},
 	.load_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, void *next_stations) noexcept -> uint32_t {
 		Station *st = static_cast<Station *>(station);

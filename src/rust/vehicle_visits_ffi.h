@@ -53,7 +53,6 @@ struct OpenTTDVehicleVisits {
 	void (*set_last_loading)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_last_loading);
 	void (*set_loading_tick)(OpenTTDVehicle *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_tick);
 	void (*arrival_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(arrival_dirty);
-	OpenTTDCargoList *(*station_cargo)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo);
 	void (*hide_filling)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(hide_filling);
 	void (*set_occupancy)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_occupancy);
 

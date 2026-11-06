@@ -18,7 +18,6 @@ struct OpenTTDStationSlopeResult { uint16_t callback; int32_t registers[16]; };
 struct OpenTTDStationResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCargoStorageServices *cargo;
-	const OpenTTDCargoList *(*cargo_owner)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
 	size_t (*group_count)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(group_count);
 	uint8_t (*group_cargo)(const StationSpec *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(group_cargo);
 	const SpriteGroup *(*group)(const StationSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(group);

@@ -151,6 +151,7 @@ class GeneratedAbiTests(unittest.TestCase):
                 + "pub class_pointer: *mut NativeClass => class,\n"
                 + "pub const_class: *const NativeClass => class,\n"
                 + "pub struct_pointer: *mut NativeStruct => struct,\n"
+                + "pub rust_owner: *mut crate::container::Owner => struct NativeOwner,\n"
                 + "pub default_struct: *const NativeStruct,\n    }\n}\n"
             )
             fragments = GENERATOR["generate"](root)
@@ -171,7 +172,8 @@ class GeneratedAbiTests(unittest.TestCase):
                     input=(
                         f'#include "{header}"\n'
                         "class NativeClass {};\nstruct NativeStruct {};\n"
-                        "static_assert(sizeof(Probe) == 4 * sizeof(void *));\n"
+                        "struct NativeOwner {};\n"
+                        "static_assert(sizeof(Probe) == 5 * sizeof(void *));\n"
                     ),
                     text=True,
                     check=True,

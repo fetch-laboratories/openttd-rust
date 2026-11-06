@@ -78,7 +78,14 @@ pub(crate) fn radius(
             [x[0], y[0]],
             [x[1], y[1]],
             &|id, dim| coordinate(s, map, id, dim),
-            |id| visit(crate::station_record::station_get_if_valid(s, id.0)),
+            |id| {
+                let record = crate::station_record::get_record_if_valid(s, id);
+                visit(if record.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    (*record).shell
+                });
+            },
         );
     }
 }

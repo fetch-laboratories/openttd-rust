@@ -106,6 +106,8 @@ public:
 /** Rust owns origin ordering, entries and their stable flow allocations. */
 class FlowStatMap {
 	OpenTTDCargoFlowMap *state;
+	bool owned = true;
+	explicit FlowStatMap(OpenTTDCargoFlowMap *state) : state(state), owned(false) {}
 public:
 	class iterator {
 		friend class FlowStatMap;
@@ -136,12 +138,14 @@ public:
 		bool operator==(const iterator &other) const { return this->state == other.state && this->key == other.key; }
 	};
 	using const_iterator = iterator;
+	/** A call-scoped view, invalidated by its station goods attachment's clear. */
+	static FlowStatMap Borrow(OpenTTDCargoFlowMap *state) { return FlowStatMap(state); }
 	FlowStatMap() : state(openttd_rust_flow_map_new()) {}
 	FlowStatMap(const FlowStatMap &other) : state(openttd_rust_flow_map_clone(other.state)) {}
-	FlowStatMap(FlowStatMap &&other) noexcept : state(other.state) { other.state = nullptr; }
-	FlowStatMap &operator=(const FlowStatMap &other) { if (this != &other) { FlowStatMap copy(other); std::swap(this->state, copy.state); } return *this; }
-	FlowStatMap &operator=(FlowStatMap &&other) noexcept { std::swap(this->state, other.state); return *this; }
-	~FlowStatMap() { if (this->state != nullptr) openttd_rust_flow_map_destroy(this->state); }
+	FlowStatMap(FlowStatMap &&other) noexcept : state(other.state), owned(other.owned) { other.state = nullptr; other.owned = false; }
+	FlowStatMap &operator=(const FlowStatMap &other) { if (this != &other) { FlowStatMap copy(other); std::swap(this->state, copy.state); std::swap(this->owned, copy.owned); } return *this; }
+	FlowStatMap &operator=(FlowStatMap &&other) noexcept { std::swap(this->state, other.state); std::swap(this->owned, other.owned); return *this; }
+	~FlowStatMap() { if (this->owned && this->state != nullptr) openttd_rust_flow_map_destroy(this->state); }
 	OpenTTDCargoFlowMap *RustState() const { return this->state; }
 	iterator begin() const { return {this->state, openttd_rust_flow_map_at(this->state, 0, 0)}; }
 	iterator end() const { return {this->state, {nullptr, 0, 0}}; }

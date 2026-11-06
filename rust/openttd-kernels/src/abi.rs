@@ -35,10 +35,12 @@ pub(crate) use layouts;
 /// field's offset and size. Field types are primitives, transparent newtypes of
 /// primitives, same-group shared records, or raw pointers. Opaque pointer fields use `=> class` to match a
 /// native class; `=> struct` and untagged opaque pointers declare native structs.
+/// An optional name after the tag names an opaque native handle for a concrete
+/// Rust owner, for example `*mut crate::cargo_storage::List => struct OpenTTDCargoList`.
 #[allow(unused_macros)] // Test-only users are feature-gated.
 macro_rules! shared_records {
     (fn $function:ident; $( $(#[$meta:meta])* $cpp:literal [$group:literal] => pub struct $name:ident {
-        $($(#[$field_meta:meta])* pub $field:ident : $type:ty $(=> $pointee_tag:ident)?),* $(,)?
+        $($(#[$field_meta:meta])* pub $field:ident : $type:ty $(=> $pointee_tag:ident $($pointee_name:ident)?)?),* $(,)?
     } )*) => {
         $(
             $(#[$meta])*
