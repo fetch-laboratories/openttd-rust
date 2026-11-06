@@ -25,6 +25,7 @@ using OpenTTDLinkGraph = LinkGraph;
 #include <atomic>
 struct OpenTTDCargoFlowMap;
 struct RustPoolDescriptor;
+struct OpenTTDSharedServices;
 #include "abi-record-station_service.h"
 #ifdef __cplusplus
 extern "C" {
@@ -51,16 +52,13 @@ void openttd_rust_live_node_update_edge(OpenTTDLiveGraph *, uint16_t, uint16_t, 
 OpenTTDLiveEdge *openttd_rust_live_node_append_edge(OpenTTDLiveGraph *, uint16_t);
 void openttd_rust_live_node_add_edge(OpenTTDLiveGraph *, uint16_t, uint16_t, uint32_t, uint32_t, uint32_t, uint8_t);
 void openttd_rust_live_edge_init(OpenTTDLiveEdge *, uint16_t);
-struct OpenTTDLiveStationInput { uint32_t xy, demand; };
 struct OpenTTDLiveGraphServices {
 	bool assertions;
 	/* Canonical member address: load at game entry, after construction and before teardown. */
 	const RustPoolDescriptor *const *pool;
+	const OpenTTDSharedServices *shared;
 	uint16_t (*station_id)(const OpenTTDBaseStation *) noexcept;
 	uint16_t (*index)(const OpenTTDLiveGraph *) noexcept;
-	OpenTTDLiveStationInput (*station)(uint16_t, uint8_t) noexcept;
-	void (*attach)(uint16_t, uint8_t, uint16_t, uint16_t) noexcept;
-	void (*set_node)(uint16_t, uint8_t, uint16_t) noexcept;
 	void (*delete_graph)(OpenTTDLiveGraph *) noexcept;
 	bool (*available)() noexcept;
 	OpenTTDLiveGraph *(*allocate)(uint8_t) noexcept;

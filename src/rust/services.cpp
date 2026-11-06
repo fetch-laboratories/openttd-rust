@@ -697,18 +697,6 @@ bool CheckAbi_services()
 		GetRustSharedServices().newgrf_specs == &_rust_newgrf_specs && NewGRFSpecsComplete();
 }
 
-static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
-{
-	Station *st = Station::Get(StationID(station));
-	return {RustStationLocation(st), st->GetGoods(cargo).GetStatus().Test(GoodsEntry::State::Acceptance)};
-}
-static void LiveGraphAttach(uint16_t station, uint8_t cargo, uint16_t graph, uint16_t node) noexcept
-{
-	GoodsEntry ge = Station::Get(StationID(station))->GetGoods(cargo);
-	ge.SetLinkGraph(LinkGraphID(graph));
-	ge.Record().node = node;
-}
-static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->GetGoods(cargo).Record().node = node; }
 static void LiveGraphDelete(OpenTTDLiveGraph *graph) noexcept { delete graph->shell; }
 
 const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
@@ -720,11 +708,9 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 		.assertions = false,
 #endif
 		.pool = &_link_graph_pool.descriptor,
+		.shared = &_rust_shared_services,
 		.station_id = RustBaseStationID<const BaseStation>,
 		.index = RustLinkGraphIndex,
-		.station = LiveGraphStation,
-		.attach = LiveGraphAttach,
-		.set_node = LiveGraphSetNode,
 		.delete_graph = LiveGraphDelete,
 		.available = RustLinkGraphAvailable,
 		.allocate = RustLinkGraphAllocate,

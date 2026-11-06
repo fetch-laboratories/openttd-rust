@@ -922,11 +922,9 @@ mod tests {
         let graphs = Box::leak(Box::new(crate::linkgraph::live::Services {
             assertions: true,
             pool: std::ptr::null(),
+            shared: std::ptr::null(),
             station_id: unused!((*const crate::station::BaseStation) -> u16),
             index: unused!((*const crate::linkgraph::live::Graph) -> crate::linkgraph_type::LinkGraphID),
-            station: unused!((u16, u8) -> crate::linkgraph::live::StationInput),
-            attach: unused!((u16, u8, u16, u16)),
-            set_node: unused!((u16, u8, u16)),
             delete_graph: unused!((*mut crate::linkgraph::live::Graph)),
             available: unused!(() -> bool),
             allocate: unused!((u8) -> *mut crate::linkgraph::live::Graph),

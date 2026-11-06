@@ -409,21 +409,14 @@ pub unsafe extern "C" fn openttd_rust_live_edge_init(edge: *mut Edge, dest: u16)
     }
 }
 
-#[repr(C)]
-pub struct StationInput {
-    pub xy: u32,
-    pub demand: u32,
-}
 /// Typed native shell/station leaves; no opcode dispatch or registered globals.
 #[repr(C)]
 pub struct Services {
     pub assertions: bool,
     pub pool: *const *const crate::pool::PoolDescriptor,
+    pub shared: *const crate::services::Services,
     pub station_id: extern "C" fn(*const crate::station::BaseStation) -> u16,
     pub index: extern "C" fn(*const Graph) -> LinkGraphID,
-    pub station: extern "C" fn(u16, u8) -> StationInput,
-    pub attach: extern "C" fn(u16, u8, u16, u16),
-    pub set_node: extern "C" fn(u16, u8, u16),
     pub delete_graph: extern "C" fn(*mut Graph),
     pub available: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8) -> *mut Graph,
@@ -431,6 +424,39 @@ pub struct Services {
 /// Typed view of the single shared pool; private snapshots are never in its slots.
 pub(crate) type Pool = crate::pool::TypedPool<LinkGraphID, Graph, super::NativeGraph>;
 impl Services {
+    fn station_record(&self, id: u16) -> *mut crate::station_record::StationRecord {
+        crate::station_record::get_record(
+            unsafe { &*self.shared },
+            crate::station_type::StationID(id),
+        )
+    }
+    fn station(&self, id: u16, cargo: u8) -> (u32, u32) {
+        let record = self.station_record(id);
+        unsafe {
+            (
+                (*record).xy.0,
+                u32::from(
+                    (*record).goods[usize::from(cargo)].status
+                        & (1 << crate::station_base::GE_ACCEPTANCE)
+                        != 0,
+                ),
+            )
+        }
+    }
+    fn attach(&self, id: u16, cargo: u8, graph: u16, node: u16) {
+        let record = self.station_record(id);
+        unsafe {
+            let goods = &raw mut (*record).goods[usize::from(cargo)];
+            (*goods).link_graph = graph;
+            (*goods).node = node;
+        }
+    }
+    fn set_node(&self, id: u16, cargo: u8, node: u16) {
+        let record = self.station_record(id);
+        unsafe {
+            (*record).goods[usize::from(cargo)].node = node;
+        }
+    }
     pub(crate) fn get(&self, id: LinkGraphID) -> *mut Graph {
         // The binding points at the actual stable native descriptor member, not a copy.
         unsafe { Pool::from_descriptor(*self.pool).record(id) }
@@ -445,8 +471,8 @@ pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
     let services = unsafe { &*services };
     let owner = graph;
     let cargo = unsafe { (*owner).cargo };
-    let input = (services.station)(station, cargo);
-    unsafe { &mut *owner }.add_node(input.xy, station, input.demand)
+    let input = services.station(station, cargo);
+    unsafe { &mut *owner }.add_node(input.0, station, input.1)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_remove(
@@ -463,7 +489,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_remove(
             g.cargo,
         )
     };
-    (services.set_node)(station, cargo, id);
+    services.set_node(station, cargo, id);
     unsafe { &mut *owner }.remove_node(id);
 }
 #[unsafe(no_mangle)]
@@ -490,12 +516,12 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     };
     for id in 0..size {
         let station = unsafe { &*source }.nodes[usize::from(id)].station;
-        let input = (services.station)(station, cargo);
-        let new = unsafe { &mut *graph }.add_node(input.xy, station, input.demand);
+        let input = services.station(station, cargo);
+        let new = unsafe { &mut *graph }.add_node(input.0, station, input.1);
         let supply = unsafe { &*source }.nodes[usize::from(id)].supply;
         unsafe { &mut *graph }.nodes[usize::from(new)].supply = scale(supply, age, other_age);
         // No graph borrow crosses station mutation or deletion/reentry.
-        (services.attach)(station, cargo, index.0, new);
+        services.attach(station, cargo, index.0, new);
         let from = &unsafe { &*source }.nodes[usize::from(id)];
         let to = &mut unsafe { &mut *graph }.nodes[usize::from(new)];
         for edge in &from.edges {
@@ -544,7 +570,7 @@ pub(crate) unsafe fn run(
     super::run(&nodes, &edges, *settings, aborted)
 }
 
-/// Station membership remains native; all callers share these typed leaves.
+/// Station graph membership lives in the canonical goods record.
 pub(crate) fn station_graph(
     station: *mut crate::station::BaseStation,
     cargo: u8,
@@ -558,9 +584,9 @@ pub(crate) fn station_graph(
 pub(crate) unsafe fn join(graph: *mut Graph, station: u16, services: &Services) {
     let index = (services.index)(graph);
     let cargo = unsafe { (*graph).cargo };
-    let input = (services.station)(station, cargo);
-    let node = unsafe { &mut *graph }.add_node(input.xy, station, input.demand);
-    (services.attach)(station, cargo, index.0, node);
+    let input = services.station(station, cargo);
+    let node = unsafe { &mut *graph }.add_node(input.0, station, input.1);
+    services.attach(station, cargo, index.0, node);
 }
 pub(crate) unsafe fn station_demand(
     station: *mut crate::station::BaseStation,
@@ -612,9 +638,8 @@ pub(crate) unsafe fn station_supply(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, pool, station_id, index, station, attach, set_node, delete_graph, available, allocate, };
+        assertions, pool, shared, station_id, index, delete_graph, available, allocate, };
 }
 
 #[unsafe(no_mangle)]
