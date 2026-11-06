@@ -523,6 +523,8 @@ pub struct Services {
     ) -> usize,
     /// `GRFFile::grf_version` of a non-null file.
     pub grf_file_version: extern "C" fn(*const c_void) -> u8,
+    /// `RustGRFPriceShift`: the live file multiplier, including its null-file default.
+    pub grf_price_shift: extern "C" fn(*const c_void, u32) -> i32,
     /// `GRFFile::cargo_map` entry of a non-null file.
     pub grf_cargo_map: extern "C" fn(*const c_void, u8) -> u8,
     /// `ConvertBooleanCallback` for a non-null file.
@@ -876,6 +878,7 @@ crate::abi::layouts! {
         terrain_type,
         copyable_badges,
         grf_file_version,
+        grf_price_shift,
         grf_cargo_map,
         grf_boolean_callback,
         grf_file_at_or_null,
@@ -1005,6 +1008,9 @@ pub fn fixture(
     extern "C" fn unexpected_version(_: *const c_void) -> u8 {
         std::process::abort()
     }
+    extern "C" fn unexpected_price_shift(_: *const c_void, _: u32) -> i32 {
+        std::process::abort()
+    }
     extern "C" fn unexpected_cargo_map(_: *const c_void, _: u8) -> u8 {
         std::process::abort()
     }
@@ -1048,6 +1054,7 @@ pub fn fixture(
         all_compatible_railtypes: unexpected_compatible,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
+        grf_price_shift: unexpected_price_shift,
         grf_cargo_map: unexpected_cargo_map,
         grf_boolean_callback: unexpected_boolean,
         grf_file_at_or_null: unexpected_file_at,

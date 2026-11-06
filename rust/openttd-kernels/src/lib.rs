@@ -1146,6 +1146,7 @@ mod industry;
 mod ship_yapf;
 
 mod orders;
+mod owned_bytes;
 mod train;
 mod train_state;
 

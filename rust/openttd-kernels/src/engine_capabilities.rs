@@ -35,7 +35,6 @@ use crate::newgrf_properties::{
     PROP_TRAIN_RUNNING_COST_FACTOR,
 };
 use crate::vehicle::{EngineRef, OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
-use std::ffi::c_void;
 use std::ptr::null_mut;
 type E = *const OpenTTDEngine;
 type V = *mut OpenTTDVehicle;
@@ -59,7 +58,6 @@ pub struct Services {
     pub(crate) shared: &'static crate::services::Services,
     assertions: bool,
     pub(crate) life_extension: extern "C" fn() -> i32,
-    pub(crate) price_shift: extern "C" fn(*const c_void, u32) -> i32,
     pub(crate) invalid_string_id: u32,
 }
 unsafe fn callback(s: &Services, cb: u16, p1: u32, engine: u16, v: V) -> u16 {
@@ -550,7 +548,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        resolver, engine, engine_if_valid, id, loading, cargo_classes, multiplier, pool_available, new_temporary, destroy_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, price_shift, invalid_string_id,
+        resolver, engine, engine_if_valid, id, loading, cargo_classes, multiplier, pool_available, new_temporary, destroy_temporary, vehicle_engine_object, vehicle_cargo, vehicle_subtype, shared, assertions, life_extension, invalid_string_id,
     };
 }
 
@@ -620,7 +618,7 @@ pub(crate) fn price(s: &Services, e: E, index: u32, factor: u32, shift: i32) -> 
     crate::economy_func::get_price(
         index,
         factor,
-        (s.price_shift)(EngineRef::of(e).grf(), index),
+        (s.shared.grf_price_shift)(EngineRef::of(e).grf(), index),
         shift,
     )
 }

@@ -23,7 +23,6 @@ struct OpenTTDEngineCapabilitiesServices {
 	const OpenTTDSharedServices *shared;
 	bool assertions;
 	int32_t (*life_extension)() noexcept OPENTTD_SERVICE_DEFAULT(life_extension);
-	int32_t (*price_shift)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_shift);
 	StringID invalid_string_id;
 };
 const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noexcept;

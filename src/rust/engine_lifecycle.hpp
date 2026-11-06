@@ -23,7 +23,6 @@ extern "C" {
 OpenTTDEngineLifecycle *openttd_rust_engine_new();
 void openttd_rust_engine_construct(OpenTTDEngineLifecycle *, const OpenTTDEngineDefaults *, VehicleType, uint16_t);
 void openttd_rust_engine_destroy(OpenTTDEngineLifecycle *);
-void openttd_rust_engine_set_name(OpenTTDEngineLifecycle *, OpenTTDByteSpan);
 }
 /** Game-state mutex serializes access. Moves transfer ownership; no view survives mutation/drop. */
 struct EngineLifecycleOwner {
