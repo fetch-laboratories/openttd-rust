@@ -39,7 +39,7 @@ pub(crate) fn airport_has_hangar(
     st: *const crate::station::BaseStation,
     s: &crate::newgrf_airport::Services,
 ) -> bool {
-    (s.has_hangar)(st, crate::newgrf_airport::station_spec(st.cast_mut(), s))
+    crate::newgrf_airport::has_hangar(crate::newgrf_airport::station_spec(st.cast_mut(), s), s)
 }
 
 /// Canonical goods record; native presentation facades borrow this same storage.

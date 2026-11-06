@@ -88,8 +88,6 @@ struct OpenTTDVehicleConstructServices {
 	uint64_t (*powered_roadtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(powered_roadtypes);
 	void *(*new_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_road);
 	void (*road_front)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_front);
-	const OpenTTDStation *(*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
-	uint32_t (*hangar_tile)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
 	void *(*new_aircraft)() noexcept OPENTTD_SERVICE_DEFAULT(new_aircraft);
 	void (*aircraft_place)(void *, void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_place);
 	OpenTTDAircraftInfo (*aircraft_info)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_info);

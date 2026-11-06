@@ -160,8 +160,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.station_view_invalidate = RustStationStationViewInvalidate,
 		.town_view_dirty = [](const OpenTTDTownHandle *town) noexcept { SetWindowDirty(WC_TOWN_VIEW, reinterpret_cast<const Town *>(town)->index); },
 		.aircraft_vehicle = GetRustAircraftVehicle,
-		.hangar_count = [](BaseStation *st, const AirportSpec *spec) noexcept { return Station::From(st)->GetAirport().GetNumHangars(spec); },
-		.hangar_tile = RustSelectedHangarTile,
 		.close_hangar = [](uint32_t tile) noexcept { OrderBackup::Reset(TileIndex{tile}, false); CloseWindowById(WC_VEHICLE_DEPOT, tile); },
 		.close_airport_tile_inspect = RustAirportTileCloseInspect,
 		.delete_airport_storage = RustStationDeleteAirportStorage,

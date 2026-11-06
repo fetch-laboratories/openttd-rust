@@ -92,13 +92,6 @@ enum TTDPAirportType : uint8_t {
 	ATP_TTDP_OILRIG,   ///< Same as AT_OILRIG
 };
 
-/** A list of all hangar tiles in an airport */
-struct HangarTileTable {
-	TileIndexDiffC ti; ///< Tile offset from the top-most airport tile.
-	Direction dir;     ///< Direction of the exit.
-	uint8_t hangar_num;   ///< The hangar to which this tile belongs.
-};
-
 struct AirportTileLayout {
 	std::vector<AirportTileTable> tiles; ///< List of all tiles in this layout.
 	Direction rotation; ///< The rotation of this layout.

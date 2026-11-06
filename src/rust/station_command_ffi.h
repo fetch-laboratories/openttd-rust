@@ -153,8 +153,6 @@ struct OpenTTDStationCommandServices {
 	void (*station_view_invalidate)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_view_invalidate);
 	void (*town_view_dirty)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_view_dirty);
 	OpenTTDAircraftVehicle (*aircraft_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_vehicle);
-	uint32_t (*hangar_count)(BaseStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_count);
-	uint32_t (*hangar_tile)(const BaseStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
 	void (*close_hangar)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_hangar);
 	void (*close_airport_tile_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_airport_tile_inspect);
 	void (*delete_airport_storage)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_airport_storage);

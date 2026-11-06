@@ -57,9 +57,7 @@ struct OpenTTDAircraftLeaves {
 	uint16_t (OPENTTD_RUST_CALL *engine_sound)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_sound);
 	uint8_t (OPENTTD_RUST_CALL *airport_entry)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_entry);
 	uint8_t (OPENTTD_RUST_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
-	int32_t (OPENTTD_RUST_CALL *hangar_height)(const OpenTTDStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
 	uint8_t (OPENTTD_RUST_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
-	uint8_t (OPENTTD_RUST_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
 	uint16_t (OPENTTD_RUST_CALL *service_interval)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
 	bool (OPENTTD_RUST_CALL *chain_in_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(chain_in_depot);
 	bool (OPENTTD_RUST_CALL *nearest_depot_order)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(nearest_depot_order);

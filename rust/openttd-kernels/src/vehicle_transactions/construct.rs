@@ -9,7 +9,6 @@ use crate::airport::HANGAR;
 use crate::command_type::DoCommandFlag;
 use crate::engine_type::AIR_CTOL;
 use crate::services::CommandCost;
-use crate::station::Station;
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleType};
 use std::ptr;
 
@@ -28,9 +27,6 @@ pub struct Services {
     pub powered_roadtypes: extern "C" fn(*const OpenTTDEngine) -> u64,
     pub new_road: extern "C" fn(u32) -> *mut (),
     pub road_front: extern "C" fn(*mut (), *const OpenTTDEngine),
-    pub station: extern "C" fn(u32) -> *const Station,
-    pub hangar_tile:
-        extern "C" fn(*const Station, u32, *const crate::station_cmd::AirportSpec) -> u32,
     pub new_aircraft: extern "C" fn() -> *mut (),
     pub aircraft_place: extern "C" fn(*mut (), *mut (), u32),
     pub aircraft_info: extern "C" fn(*const OpenTTDEngine) -> AircraftInfo,
@@ -147,7 +143,8 @@ pub(crate) unsafe fn aircraft(
     let r = s.refit;
     let c = r.common;
     let b = c.base;
-    let st = (k.station)(tile);
+    let st =
+        crate::station_map::station_by_tile(tile, crate::newgrf_airport::runtime()).cast_const();
     if !crate::vehicle_func::can_engine_use_station(
         (crate::newgrf_airport::runtime().engine_id)(e),
         st.cast(),
@@ -158,7 +155,19 @@ pub(crate) unsafe fn aircraft(
     }
     let spec =
         crate::newgrf_airport::station_spec(st.cast_mut().cast(), crate::newgrf_airport::runtime());
-    let tile = (k.hangar_tile)(st, tile, spec);
+    let runtime = crate::newgrf_airport::runtime();
+    let hangar = crate::newgrf_airport::hangar_num(
+        crate::station_record::airport_record(st.cast()),
+        tile,
+        spec,
+        runtime,
+    );
+    let tile = crate::newgrf_airport::hangar_tile(
+        crate::station_record::airport_record(st.cast()),
+        hangar,
+        spec,
+        runtime,
+    );
     (b.cost.zero)(out);
     if flags & DoCommandFlag::EXECUTE == 0 {
         return ptr::null_mut();
@@ -292,8 +301,8 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAircraftInfo" ["probe"] => AircraftInfo { image, passengers, mail, subtype, };
     "OpenTTDVehicleConstructServices" ["probe"] => Services {
-        articulated, powered_roadtypes, new_road, road_front, station,
-        hangar_tile, new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
+        articulated, powered_roadtypes, new_road, road_front,
+        new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
         rotor, mail_capacity_address, road_capacity, set_cargo_type, engine_common, service_dates,
         build_stamp, exclusive_preview, service_flags, wrong_depot,
     };

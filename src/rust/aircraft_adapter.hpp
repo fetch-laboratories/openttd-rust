@@ -90,19 +90,9 @@ static uint8_t OPENTTD_RUST_CALL Aircraft_airport_entry(const void * ap, uint8_t
 	return static_cast<const AirportFTAClass *>(ap)->entry_points[direction];
 }
 
-static int32_t OPENTTD_RUST_CALL Aircraft_hangar_height(const OpenTTDStation *station, const AirportSpec *spec) noexcept
-{
-	return GetTileMaxPixelZ(RustStationHangarTile(StationOf(station), 0, spec));
-}
-
 static uint8_t OPENTTD_RUST_CALL Aircraft_terminal_count(const void * ap, uint32_t index) noexcept
 {
 	return static_cast<const AirportFTAClass *>(ap)->terminals[index];
-}
-
-static uint8_t OPENTTD_RUST_CALL Aircraft_hangar_exit(const OpenTTDStation *station, uint32_t tile, const AirportSpec *spec) noexcept
-{
-	return StationOf(station)->GetAirport().GetHangarExitDirection(TileIndex{tile}, spec);
 }
 
 static uint16_t OPENTTD_RUST_CALL Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept
@@ -323,9 +313,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.engine_sound = Aircraft_engine_sound,
 	.airport_entry = Aircraft_airport_entry,
 	.direction_towards = RustVehicleHandleInvoke<RustVehicleDirectionTowards, OpenTTDAircraftVehicle, int32_t, int32_t>,
-	.hangar_height = Aircraft_hangar_height,
 	.terminal_count = Aircraft_terminal_count,
-	.hangar_exit = Aircraft_hangar_exit,
 	.service_interval = Aircraft_service_interval,
 	.chain_in_depot = Aircraft_chain_in_depot,
 	.nearest_depot_order = Aircraft_nearest_depot_order,

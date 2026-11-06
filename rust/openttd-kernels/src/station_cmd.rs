@@ -253,8 +253,6 @@ pub struct CommandServicesTable {
     pub station_view_invalidate: extern "C" fn(*mut BaseStation, i32),
     pub town_view_dirty: extern "C" fn(*const crate::services::TownHandle),
     pub aircraft_vehicle: extern "C" fn(crate::vehicle::VehicleRef) -> crate::aircraft::Vehicle,
-    pub hangar_count: extern "C" fn(*mut BaseStation, *const AirportSpec) -> u32,
-    pub hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
     pub close_hangar: extern "C" fn(u32),
     pub close_airport_tile_inspect: extern "C" fn(u32),
     pub delete_airport_storage: extern "C" fn(*mut BaseStation),
@@ -3205,15 +3203,19 @@ impl Ctx<'_> {
             }
         }
         if flags & 1 != 0 {
-            for index in 0..(self.s.hangar_count)(
-                st,
-                crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
+            let runtime = unsafe { &*self.s.airport_runtime };
+            for index in 0..crate::newgrf_airport::num_hangars(
+                crate::newgrf_airport::station_spec(st, runtime),
+                runtime,
             ) {
-                (self.s.close_hangar)((self.s.hangar_tile)(
-                    st,
+                let spec = crate::newgrf_airport::station_spec(st, runtime);
+                let tile = crate::newgrf_airport::hangar_tile(
+                    crate::station_record::airport_record(st),
                     index,
-                    crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
-                ));
+                    spec,
+                    runtime,
+                );
+                (self.s.close_hangar)(tile);
             }
             let (nearest, distance) = self.nearest_existing_airport(st);
             let noise = self.noise(
@@ -4326,8 +4328,6 @@ crate::abi::layouts! {
         station_view_invalidate,
         town_view_dirty,
         aircraft_vehicle,
-        hangar_count,
-        hangar_tile,
         close_hangar,
         close_airport_tile_inspect,
         delete_airport_storage,

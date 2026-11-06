@@ -173,11 +173,7 @@ pub struct Leaves {
     pub engine_sound: unsafe extern "C" fn(Vehicle) -> u16,
     pub airport_entry: unsafe extern "C" fn(*const c_void, u8) -> u8,
     pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
-    pub hangar_height:
-        unsafe extern "C" fn(*const Station, *const crate::station_cmd::AirportSpec) -> i32,
     pub terminal_count: unsafe extern "C" fn(*const c_void, u32) -> u8,
-    pub hangar_exit:
-        unsafe extern "C" fn(*const Station, u32, *const crate::station_cmd::AirportSpec) -> u8,
     pub service_interval: unsafe extern "C" fn(Vehicle) -> u16,
     pub chain_in_depot: unsafe extern "C" fn(Vehicle) -> bool,
     pub nearest_depot_order: unsafe extern "C" fn(Vehicle) -> bool,
@@ -340,10 +336,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         witness::hit(witness::AIRCRAFT_SERVICES);
         witness::add(witness::AIRCRAFT_BYTES, bytes as u64);
-        if matches!(
-            name,
-            "station" | "hangar_height" | "hangar_exit" | "landing_rating" | "first_arrival"
-        ) {
+        if matches!(name, "station" | "landing_rating" | "first_arrival") {
             witness::hit(witness::AIRCRAFT_STATIONS);
         }
     }
@@ -687,9 +680,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         crate::airport::get_airport(crate::airport::AT_DUMMY, crate::newgrf_airport::runtime())
     }
     fn has_hangar(&self, st: *const Station) -> i64 {
-        i64::from((crate::newgrf_airport::runtime().has_hangar)(
-            st.cast(),
+        i64::from(crate::newgrf_airport::has_hangar(
             self.airport_spec(st),
+            crate::newgrf_airport::runtime(),
         ))
     }
     fn hangar_candidate(&self, st: *const Station, vehicle_owner: u8) -> HangarCandidate {
@@ -704,19 +697,28 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
     }
     fn hangar_height(&self, station: i64) -> i64 {
-        let st =
+        let st: *const Station =
             crate::newgrf_airport::station_by_id(station as u16, crate::newgrf_airport::runtime())
                 .cast();
-        let result = unsafe { (self.leaves.hangar_height)(st, self.airport_spec(st)) };
-        Self::service_witness("hangar_height", std::mem::size_of_val(&result));
-        i64::from(result)
+        let tile = crate::newgrf_airport::hangar_tile(
+            crate::station_record::airport_record(st.cast()),
+            0,
+            self.airport_spec(st),
+            crate::newgrf_airport::runtime(),
+        );
+        i64::from(crate::map_func::World::new(self.ss).tile_max_pixel_z(tile))
     }
     fn hangar_exit(&self, v: Vehicle) -> i64 {
         let tile = (v.base()).tile();
-        let st = self.station(u32::from((self.ss.station_index)(tile)));
-        let result = unsafe { (self.leaves.hangar_exit)(st, tile, self.airport_spec(st)) };
-        Self::service_witness("hangar_exit", std::mem::size_of_val(&result));
-        i64::from(result)
+        let st = self.station(u32::from(
+            crate::map_func::World::new(self.ss).station_index(tile).0,
+        ));
+        i64::from(crate::newgrf_airport::hangar_exit(
+            crate::station_record::airport_record(st.cast()),
+            tile,
+            self.airport_spec(st),
+            crate::newgrf_airport::runtime(),
+        ))
     }
     fn valid_airport(&self, id: Vehicle) -> bool {
         let s = self.target_station(id);
@@ -2476,9 +2478,7 @@ crate::abi::layouts! {
         engine_sound,
         airport_entry,
         direction_towards,
-        hangar_height,
         terminal_count,
-        hangar_exit,
         service_interval,
         chain_in_depot,
         nearest_depot_order,

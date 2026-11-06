@@ -27,12 +27,6 @@ static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexc
 	v->compatible_roadtypes = RoadTypes(RustEnginePoweredRoadTypes(EngineOf(e)));
 	v->gcache.cached_veh_length = VEHICLE_LENGTH;
 }
-static uint32_t VehicleConstructHangar(const OpenTTDStation *station, uint32_t tile, const AirportSpec *spec) noexcept
-{
-	const Station *st = StationOf(station);
-	uint hangar = st->GetAirport().GetHangarNum(TileIndex(tile), spec);
-	return RustStationHangarTile(st, hangar, spec).base();
-}
 static void *VehicleConstructNewAircraft() noexcept { return new Aircraft(); }
 static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t tile) noexcept
 {
@@ -124,7 +118,6 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.articulated = &GetRustVehicleArticulatedServices(),
 		.powered_roadtypes = Engine_powered_roadtypes,
 		.new_road = VehicleConstructNewRoad, .road_front = VehicleConstructRoadFront,
-		.station = OpenTTDStationByTile, .hangar_tile = VehicleConstructHangar,
 		.new_aircraft = VehicleConstructNewAircraft,
 		.aircraft_place = VehicleConstructAircraftPlace, .aircraft_info = VehicleConstructAircraftInfo,
 		.aircraft_properties = VehicleConstructAircraftProperties, .rotor = VehicleConstructRotor,

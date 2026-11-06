@@ -292,18 +292,7 @@ struct Airport {
 
 	inline TileIndex GetRotatedTileFromOffset(TileIndexDiffC tidc, const AirportSpec *as) const
 	{
-		const TileIndex tile = this->GetTile();
-		switch (this->GetRotation()) {
-			case DIR_N: return tile + ToTileIndexDiff(tidc);
-
-			case DIR_E: return tile + TileDiffXY(tidc.y, as->size_x - 1 - tidc.x);
-
-			case DIR_S: return tile + TileDiffXY(as->size_x - 1 - tidc.x, as->size_y - 1 - tidc.y);
-
-			case DIR_W: return tile + TileDiffXY(as->size_y - 1 - tidc.y, tidc.x);
-
-			default: NOT_REACHED();
-		}
+		return TileIndex{openttd_rust_airport_rotated_tile(this->record, tidc, as, &GetAirportResolverServices())};
 	}
 
 	/**
@@ -319,12 +308,7 @@ struct Airport {
 
 	inline TileIndex GetHangarTile(uint hangar_num, const AirportSpec *as) const
 	{
-		for (const auto &depot : as->depots) {
-			if (depot.hangar_num == hangar_num) {
-				return this->GetRotatedTileFromOffset(depot.ti, as);
-			}
-		}
-		NOT_REACHED();
+		return TileIndex{openttd_rust_airport_hangar_tile(this->record, hangar_num, as, &GetAirportResolverServices())};
 	}
 
 	/**
@@ -340,8 +324,7 @@ struct Airport {
 
 	inline Direction GetHangarExitDirection(TileIndex tile, const AirportSpec *as) const
 	{
-		const HangarTileTable *htt = GetHangarDataByTile(tile, as);
-		return ChangeDir(htt->dir, DirDifference(this->GetRotation(), as->layouts[0].rotation));
+		return static_cast<Direction>(openttd_rust_airport_hangar_exit(this->record, tile.base(), as, &GetAirportResolverServices()));
 	}
 
 	/**
@@ -357,8 +340,7 @@ struct Airport {
 
 	inline uint GetHangarNum(TileIndex tile, const AirportSpec *as) const
 	{
-		const HangarTileTable *htt = GetHangarDataByTile(tile, as);
-		return htt->hangar_num;
+		return openttd_rust_airport_hangar_num(this->record, tile.base(), as, &GetAirportResolverServices());
 	}
 
 	/** Get the number of hangars on this airport. */
@@ -369,34 +351,10 @@ struct Airport {
 
 	inline uint GetNumHangars(const AirportSpec *as) const
 	{
-		uint num = 0;
-		uint counted = 0;
-		for (const auto &depot : as->depots) {
-			if (!HasBit(counted, depot.hangar_num)) {
-				num++;
-				SetBit(counted, depot.hangar_num);
-			}
-		}
-		return num;
+		return openttd_rust_airport_num_hangars(as, &GetAirportResolverServices());
 	}
 
 private:
-	/**
-	 * Retrieve hangar information of a hangar at a given tile.
-	 * @param tile %Tile containing the hangar.
-	 * @return The requested hangar information.
-	 * @pre The \a tile must be at a hangar tile at an airport.
-	 */
-	inline const HangarTileTable *GetHangarDataByTile(TileIndex tile, const AirportSpec *as) const
-	{
-		for (const auto &depot : as->depots) {
-			if (this->GetRotatedTileFromOffset(depot.ti, as) == tile) {
-				return &depot;
-			}
-		}
-		NOT_REACHED();
-	}
-
 	OpenTTDAirport *record; ///< The airport of the station record.
 };
 

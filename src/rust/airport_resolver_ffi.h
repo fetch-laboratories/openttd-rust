@@ -5,7 +5,11 @@
 #include "station_ffi.h"
 #include "newgrf_storage_ffi.h"
 #include "../map_type.h"
+#include "../direction_type.h"
+#include "rust_vector.h"
+#include "abi-record-airport_runtime.h"
 struct OpenTTDSharedServices;
+struct OpenTTDAirport;
 struct AirportSpec; struct AirportTileSpec;
 enum VehicleType : uint8_t;
 struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup; struct AirportFTAClass; struct OpenTTDVehicleServices; struct OpenTTDEngine; struct RoadStop;
@@ -17,20 +21,14 @@ struct OpenTTDAirportResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStorageServices *storage;
 	const OpenTTDVehicleServices *vehicles;
-	Station *(*by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(by_tile);
 	uint16_t (*station_id)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_id);
-	Station *(*get_station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get_station);
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 	const OpenTTDEngine *(*engine_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_if_valid);
 	uint16_t (*engine_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
 	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
 	uint8_t (*engine_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_subtype);
 	uint8_t (*fta_flags)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(fta_flags);
-	bool (*has_hangar)(const BaseStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(has_hangar);
-	uint32_t (*hangar_tile)(const BaseStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
-	size_t (*depot_count)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(depot_count);
-	TileIndexDiffC (*depot_offset)(const AirportSpec *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_offset);
-	uint32_t (*rotated_offset)(const BaseStation *, TileIndexDiffC, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rotated_offset);
+	RustVector<HangarTileTable> (*depots)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(depots);
 	uint8_t (*fta_heading)(const AirportFTAClass *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fta_heading);
 	uint8_t (*fta_position)(const AirportFTAClass *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fta_position);
 	const AirportSpec *dummy_spec;
@@ -51,6 +49,12 @@ struct OpenTTDAirportResolverServices {
 const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept;
 extern "C" {
 const OpenTTDAirportResolverServices *openttd_rust_airport_exchange(const OpenTTDAirportResolverServices *);
+/* Whole geometry operations over a live record; spec rows remain borrowed until return. */
+uint32_t openttd_rust_airport_rotated_tile(const OpenTTDAirport *, TileIndexDiffC, const AirportSpec *, const OpenTTDAirportResolverServices *);
+uint32_t openttd_rust_airport_hangar_tile(const OpenTTDAirport *, uint32_t number, const AirportSpec *, const OpenTTDAirportResolverServices *);
+uint32_t openttd_rust_airport_hangar_num(const OpenTTDAirport *, uint32_t tile, const AirportSpec *, const OpenTTDAirportResolverServices *);
+uint8_t openttd_rust_airport_hangar_exit(const OpenTTDAirport *, uint32_t tile, const AirportSpec *, const OpenTTDAirportResolverServices *);
+uint32_t openttd_rust_airport_num_hangars(const AirportSpec *, const OpenTTDAirportResolverServices *);
 uint8_t openttd_rust_can_engine_use_station_abi(uint16_t, const Station *, const OpenTTDAirportResolverServices *);
 extern "C++" inline bool openttd_rust_can_engine_use_station(uint16_t a0, const Station *a1, const OpenTTDAirportResolverServices *a2) { return openttd_rust_can_engine_use_station_abi(a0, a1, a2) != 0; }
 uint8_t openttd_rust_can_vehicle_use_station_abi(const OpenTTDVehicle *, const Station *, const OpenTTDAirportResolverServices *);

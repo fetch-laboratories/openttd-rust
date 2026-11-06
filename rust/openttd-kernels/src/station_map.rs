@@ -116,7 +116,11 @@ pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
 ) -> *mut crate::station::BaseStation {
-    (s.by_tile)(tile).cast()
+    let record = crate::station_record::get_station_record_if_valid(
+        s.shared(),
+        crate::map_func::World::new(s.shared()).station_index(tile),
+    );
+    crate::station_record::shell(record)
 }
 /// Original `IsHangar`, retaining its assertion and airport gate before lookup.
 #[allow(clippy::inline_always)]
@@ -128,9 +132,16 @@ pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool 
     }
     let st = station_by_tile(tile, s);
     let spec = crate::newgrf_airport::station_spec(st, s);
-    for i in 0..(s.depot_count)(spec) {
-        let offset = (s.depot_offset)(spec, i);
-        if (s.rotated_offset)(st, offset, spec) == tile {
+    let rows = (s.depots)(spec);
+    for index in 0..rows.len() {
+        let row = rows.as_slice()[index];
+        if crate::newgrf_airport::rotated_tile(
+            crate::station_record::airport_record(st),
+            row.ti,
+            spec,
+            s,
+        ) == tile
+        {
             return true;
         }
     }

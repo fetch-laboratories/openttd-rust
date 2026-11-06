@@ -256,10 +256,9 @@ pub(crate) fn owner_company(shell: *const BaseStation) -> u8 {
     unsafe { (*record_of(shell)).owner.0 }
 }
 
-/// `BaseStation::Get(id)`: the live shell at a valid station index.
-/// `id` is a valid index of the canonical pool, as `Get` asserts natively.
-pub(crate) fn station_get(s: &crate::services::Services, id: u16) -> *mut BaseStation {
-    let record = get_record(s, crate::station_type::StationID(id));
+/// Native shell identity of a resolved live record, retaining a null lookup.
+#[inline]
+pub(crate) fn shell(record: *const StationRecord) -> *mut BaseStation {
     if record.is_null() {
         std::ptr::null_mut()
     } else {
@@ -267,14 +266,17 @@ pub(crate) fn station_get(s: &crate::services::Services, id: u16) -> *mut BaseSt
     }
 }
 
+/// `BaseStation::Get(id)`: the live shell at a valid station index.
+/// `id` is a valid index of the canonical pool, as `Get` asserts natively.
+pub(crate) fn station_get(s: &crate::services::Services, id: u16) -> *mut BaseStation {
+    let record = get_record(s, crate::station_type::StationID(id));
+    shell(record)
+}
+
 /// `BaseStation::GetIfValid`: keep index/hole validity without a type filter.
 pub(crate) fn station_get_if_valid(s: &crate::services::Services, id: u16) -> *mut BaseStation {
     let record = get_record_if_valid(s, crate::station_type::StationID(id));
-    if record.is_null() {
-        std::ptr::null_mut()
-    } else {
-        unsafe { (*record).shell }
-    }
+    shell(record)
 }
 
 /// Resolve a typed station ID to its canonical record under `BaseStation::Get`'s
@@ -602,6 +604,12 @@ pub(crate) fn get_station_record_if_valid(
 #[inline]
 pub(crate) fn goods(shell: *const BaseStation, cargo: u8) -> *const GoodsRecord {
     unsafe { &raw const (*record_of(shell)).goods[usize::from(cargo)] }
+}
+
+/// The embedded airport record of a live station facade.
+#[inline]
+pub(crate) fn airport_record(shell: *const BaseStation) -> *const AirportRecord {
+    unsafe { &raw const (*record_of(shell)).airport }
 }
 
 /// `BaseStation::GetPoolSize()`: the pool's live extent.

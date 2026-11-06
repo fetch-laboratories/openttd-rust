@@ -66,15 +66,16 @@ pub(crate) fn get_airport(
         (s.fta)(crate::newgrf_airport::get(kind, s))
     }
 }
-/// Original `GetVehiclePosOnBuild`; the named hangar operation consumes the
-/// selected spec directly, keeping its native scan/rotation implementation.
+/// Original `GetVehiclePosOnBuild`, preserving numbered-hangar scan and FTA checks.
 pub(crate) fn get_vehicle_pos_on_build(tile: u32, s: &crate::newgrf_airport::Services) -> u8 {
     let st = crate::station_map::station_by_tile(tile, s);
     let spec = crate::newgrf_airport::station_spec(st, s);
     let fta = (s.fta)(spec);
     let mut i = 0_u32;
     loop {
-        if (s.hangar_tile)(st, i, spec) == tile {
+        if crate::newgrf_airport::hangar_tile(crate::station_record::airport_record(st), i, spec, s)
+            == tile
+        {
             (s.check)((s.fta_heading)(fta, i) == HANGAR);
             return (s.fta_position)(fta, i);
         }

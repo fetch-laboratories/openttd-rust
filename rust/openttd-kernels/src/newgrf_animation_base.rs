@@ -144,7 +144,8 @@ impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for Ai
         tile: u32,
     ) -> Entry<crate::animated_tile::AirportSpec, crate::station::Station> {
         let spec = crate::newgrf_airport::tile_spec_by_tile(tile, unsafe { &*a.airport_runtime });
-        let station = (unsafe { &*a.airport_runtime }.by_tile)(tile);
+        let station =
+            crate::station_map::station_by_tile(tile, unsafe { &*a.airport_runtime }).cast();
         Entry {
             spec,
             object: station,

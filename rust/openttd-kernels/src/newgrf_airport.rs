@@ -11,6 +11,17 @@
 /// `TTDPatch` large airport classification.
 pub const ATP_TTDP_LARGE: u8 = 1;
 
+crate::abi::shared_records! {
+    fn abi_record;
+    /// A native airport specification's borrowed hangar row.
+    #[derive(Clone, Copy)]
+    "HangarTileTable" ["airport_runtime"] => pub struct HangarTileTable {
+        pub ti: crate::map_type::TileIndexDiffC => "TileIndexDiffC",
+        pub dir: u8 => "Direction",
+        pub hangar_num: u8,
+    }
+}
+
 /// Native airport classification, returned without widening its enum ABI.
 #[repr(transparent)]
 pub struct TtdpAirportType(pub u8);
@@ -45,9 +56,7 @@ pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
-    pub(crate) by_tile: extern "C" fn(u32) -> *mut crate::station::Station,
     station_id: extern "C" fn(*const BaseStation) -> u16,
-    pub(crate) get_station: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
     pub(crate) engine_id: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u16,
@@ -55,16 +64,9 @@ pub struct Services {
         extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> crate::vehicle::VehicleType,
     pub(crate) engine_subtype: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u8,
     pub(crate) fta_flags: extern "C" fn(*const c_void) -> u8,
-    pub(crate) has_hangar: extern "C" fn(*const BaseStation, *const AirportSpec) -> bool,
-    pub(crate) hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
-    pub(crate) depot_count: extern "C" fn(*const AirportSpec) -> usize,
-    pub(crate) depot_offset:
-        extern "C" fn(*const AirportSpec, usize) -> crate::map_type::TileIndexDiffC,
-    pub(crate) rotated_offset: extern "C" fn(
-        *const BaseStation,
-        crate::map_type::TileIndexDiffC,
-        *const AirportSpec,
-    ) -> u32,
+    /// Immutable native spec rows; the returned view borrows with zero capacity.
+    pub(crate) depots:
+        extern "C" fn(*const AirportSpec) -> crate::industrytype::NativeVec<HangarTileTable>,
     pub(crate) fta_heading: extern "C" fn(*const c_void, u32) -> u8,
     pub(crate) fta_position: extern "C" fn(*const c_void, u32) -> u8,
     pub(crate) dummy_spec: *const AirportSpec,
@@ -131,7 +133,7 @@ pub unsafe extern "C" fn openttd_rust_airport_fta(kind: u8, s: *const Services) 
 }
 /// Observe only the station airport association at its original query point.
 pub(crate) fn station_by_id(id: u16, s: &Services) -> *mut BaseStation {
-    (s.get_station)(id)
+    crate::station_record::station_get(s.shared(), id)
 }
 pub(crate) fn station_spec(st: *mut BaseStation, s: &Services) -> *const AirportSpec {
     let tile = crate::station_record::read(st.cast(), |r| r.airport.area.tile.0);
@@ -147,6 +149,167 @@ pub(crate) fn station_spec(st: *mut BaseStation, s: &Services) -> *const Airport
 }
 pub(crate) fn station_fta(st: *mut BaseStation, s: &Services) -> *const c_void {
     (s.fta)(station_spec(st, s))
+}
+
+/// `Airport::HasHangar`, after the caller's spec selection.
+pub(crate) fn has_hangar(spec: *const AirportSpec, s: &Services) -> bool {
+    !(s.depots)(spec).is_empty()
+}
+
+/// `Airport::GetRotatedTileFromOffset`: actual station rotation selects the source branch.
+pub(crate) fn rotated_tile(
+    airport: *const crate::station_record::AirportRecord,
+    offset: crate::map_type::TileIndexDiffC,
+    spec: *const AirportSpec,
+    s: &Services,
+) -> u32 {
+    use crate::direction_type::{DIR_E, DIR_N, DIR_S, DIR_W};
+    let tile = unsafe { (*airport).area.tile.0 };
+    let rotation = unsafe { (*airport).rotation };
+    let (x, y) = (i32::from(offset.x), i32::from(offset.y));
+    let (x, y) = match rotation {
+        DIR_N => (x, y),
+        DIR_E => {
+            let size = (s.commands().airport_size)(spec);
+            (y, i32::from(size.w) - 1 - x)
+        }
+        DIR_S => {
+            let size = (s.commands().airport_size)(spec);
+            (i32::from(size.w) - 1 - x, i32::from(size.h) - 1 - y)
+        }
+        DIR_W => {
+            let size = (s.commands().airport_size)(spec);
+            (i32::from(size.h) - 1 - y, x)
+        }
+        _ => unreachable!("original Airport::GetRotatedTileFromOffset NOT_REACHED"),
+    };
+    tile.wrapping_add(
+        (y as u32)
+            .wrapping_mul(s.map().size_x())
+            .wrapping_add(x as u32),
+    )
+}
+
+/// `Airport::GetHangarTile`: select the first row with this hangar number.
+pub(crate) fn hangar_tile(
+    airport: *const crate::station_record::AirportRecord,
+    number: u32,
+    spec: *const AirportSpec,
+    s: &Services,
+) -> u32 {
+    let rows = (s.depots)(spec);
+    for index in 0..rows.len() {
+        let row = rows.as_slice()[index];
+        if u32::from(row.hangar_num) == number {
+            return rotated_tile(airport, row.ti, spec, s);
+        }
+    }
+    unreachable!("original Airport::GetHangarTile NOT_REACHED")
+}
+
+/// `Airport::GetHangarDataByTile`: row copies end slice borrows before native reads.
+fn hangar_at(
+    airport: *const crate::station_record::AirportRecord,
+    tile: u32,
+    spec: *const AirportSpec,
+    s: &Services,
+) -> HangarTileTable {
+    let rows = (s.depots)(spec);
+    for index in 0..rows.len() {
+        let row = rows.as_slice()[index];
+        if rotated_tile(airport, row.ti, spec, s) == tile {
+            return row;
+        }
+    }
+    unreachable!("original Airport::GetHangarDataByTile NOT_REACHED")
+}
+
+/// `Airport::GetHangarNum`, retaining first tile-match order.
+pub(crate) fn hangar_num(
+    airport: *const crate::station_record::AirportRecord,
+    tile: u32,
+    spec: *const AirportSpec,
+    s: &Services,
+) -> u32 {
+    u32::from(hangar_at(airport, tile, spec, s).hangar_num)
+}
+
+/// `Airport::GetNumHangars`: count distinct numbers, rather than rows or maximum index.
+pub(crate) fn num_hangars(spec: *const AirportSpec, s: &Services) -> u32 {
+    let mut counted = 0_u32;
+    let mut count = 0;
+    for row in (s.depots)(spec).as_slice() {
+        let bit = 1_u32.wrapping_shl(u32::from(row.hangar_num));
+        if counted & bit == 0 {
+            count += 1;
+            counted |= bit;
+        }
+    }
+    count
+}
+
+/// `Airport::GetHangarExitDirection`: layout zero's rotation affects only exit direction.
+pub(crate) fn hangar_exit(
+    airport: *const crate::station_record::AirportRecord,
+    tile: u32,
+    spec: *const AirportSpec,
+    s: &Services,
+) -> u8 {
+    let row = hangar_at(airport, tile, spec, s);
+    let rotation = unsafe { (*airport).rotation };
+    let original = (s.commands().airport_layout)(spec, 0).rotation;
+    let check = |ok| (s.check)(ok);
+    crate::direction_func::change_dir(
+        row.dir,
+        crate::direction_func::dir_difference(rotation, original, check),
+        check,
+    )
+}
+
+// Native reader facades borrow the same live airport record and immutable spec.
+// Entry borrows end before every leaf; no ordinary exception crosses this ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_rotated_tile(
+    airport: *const crate::station_record::AirportRecord,
+    offset: crate::map_type::TileIndexDiffC,
+    spec: *const AirportSpec,
+    s: *const Services,
+) -> u32 {
+    rotated_tile(airport, offset, spec, unsafe { &*s })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_hangar_tile(
+    airport: *const crate::station_record::AirportRecord,
+    number: u32,
+    spec: *const AirportSpec,
+    s: *const Services,
+) -> u32 {
+    hangar_tile(airport, number, spec, unsafe { &*s })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_hangar_num(
+    airport: *const crate::station_record::AirportRecord,
+    tile: u32,
+    spec: *const AirportSpec,
+    s: *const Services,
+) -> u32 {
+    hangar_num(airport, tile, spec, unsafe { &*s })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_hangar_exit(
+    airport: *const crate::station_record::AirportRecord,
+    tile: u32,
+    spec: *const AirportSpec,
+    s: *const Services,
+) -> u8 {
+    hangar_exit(airport, tile, spec, unsafe { &*s })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_num_hangars(
+    spec: *const AirportSpec,
+    s: *const Services,
+) -> u32 {
+    num_hangars(spec, unsafe { &*s })
 }
 
 /// Source `AirportSpec::Get`: disabled custom substitution precedes overrides.
@@ -572,7 +735,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, station_id, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, depots, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]

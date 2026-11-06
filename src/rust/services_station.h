@@ -66,9 +66,6 @@ inline uint8_t RustAirportLayoutHeading(const AirportFTAClass *airport, uint32_t
 inline uint8_t OpenTTDAirportLayoutHeading(const void *airport, uint8_t index) noexcept { return RustAirportLayoutHeading(static_cast<const AirportFTAClass *>(airport), index); }
 inline uint8_t RustAirportFlags(const AirportFTAClass *airport) noexcept { return airport->flags.base(); }
 inline uint8_t OpenTTDAirportFlags(const void *airport) noexcept { return RustAirportFlags(static_cast<const AirportFTAClass *>(airport)); }
-inline bool RustSelectedAirportHasHangar(const BaseStation *st, const AirportSpec *spec) noexcept { return Station::From(st)->GetAirport().HasHangar(spec); }
-inline TileIndex RustStationHangarTile(const BaseStation *st, uint32_t index, const AirportSpec *spec) noexcept { return Station::From(st)->GetAirport().GetHangarTile(index, spec); }
-inline uint32_t RustSelectedHangarTile(const BaseStation *st, uint32_t index, const AirportSpec *spec) noexcept { return RustStationHangarTile(st, index, spec).base(); }
 inline bool RustStationConvert8bitBoolean(const StationSpec *spec, uint16_t id, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(RustSpecGRFFile(spec), static_cast<CallbackID>(id), value); }
 inline bool RustRoadStopConvert8bitBoolean(const RoadStopSpec *spec, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(RustSpecGRFFile(spec), CBID_STATION_AVAILABILITY, value); }
 inline void RustStationCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_STATIONS, tile); }
@@ -78,7 +75,6 @@ inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { St
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline Station *RustStationByTile(uint32_t tile) noexcept { return Station::GetByTile(TileIndex{tile}); }
 inline bool RustWaypointSingleTile(uint16_t id) noexcept { return Waypoint::Get(StationID{id})->IsSingleTile(); }
-inline const OpenTTDStation *OpenTTDStationByTile(uint32_t tile) noexcept { return RustStation(RustStationByTile(tile)); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
  * gates remain with their callers; all handles are borrowed synchronously. */
