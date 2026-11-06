@@ -42,6 +42,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     trees: *const crate::trees::TreeServices,
     tile: u32,
     mutate: extern "C" fn(u32),
+    observe: extern "C" fn(u32, *mut crate::movement::native_test_support::MapLeafOracle),
 ) -> u8 {
     let (s, c, trees) = unsafe { (&*shared, &*clear, &*trees) };
     let allocation = unsafe { (*statics).load().0 };
@@ -107,15 +108,6 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                 return u8::from(false);
             }
         }
-        6 => {
-            let water = unsafe { &*(s.water_services)() };
-            if crate::water_map::is_coast(&map, tile) != Some((water.coast)(tile))
-                || crate::water_map::is_non_flooding_water_tile(&map, tile)
-                    != Some((water.non_flooding)(tile))
-            {
-                return u8::from(false);
-            }
-        }
         _ => {}
     }
     let kind = map.read(tile);
@@ -130,7 +122,9 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
                 || kind == 6
                 || crate::water_map::is_coast(&map, tile).is_none())
             && (allocation.assertions || crate::clear_map::is_snow_tile(&map, tile).is_some())
-            && crate::movement::native_test_support::map_read_probe(allocation, s, tile, mutate),
+            && crate::movement::native_test_support::map_read_probe(
+                allocation, s, tile, mutate, observe,
+            ),
     )
 }
 

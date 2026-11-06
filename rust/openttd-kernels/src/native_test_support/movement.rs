@@ -9,6 +9,24 @@
 use crate::services::Services;
 use crate::tile_type::{MP_ROAD, MP_STATION, TileIndex};
 
+/// Unchanged native header observations for the existing map-read fixture.
+#[repr(C)]
+#[derive(Default)]
+pub(crate) struct MapLeafOracle {
+    pub slope: u32,
+    pub z: i32,
+    pub water_class: u32,
+    pub coast: u32,
+    pub non_flooding: u32,
+    pub normal_road: u32,
+    pub directions: u32,
+    pub works: u32,
+    pub road_bits: u32,
+    pub tram_bits: u32,
+    pub has_road: u32,
+    pub has_tram: u32,
+}
+
 /// Native map probe uses the production context against unchanged native helpers.
 /// The mutation callback preserves allocation/dimensions and serialization.
 pub(crate) fn map_read_probe(
@@ -16,6 +34,7 @@ pub(crate) fn map_read_probe(
     shared: &Services,
     tile: u32,
     mutate: extern "C" fn(u32),
+    observe: extern "C" fn(u32, *mut MapLeafOracle),
 ) -> bool {
     // SAFETY: The native probe supplies the same no-reset interval as its entry.
     let world = crate::map_func::World {
@@ -24,7 +43,44 @@ pub(crate) fn map_read_probe(
         dimensions: shared.map(),
     };
     for pass in 0..2 {
+        let mut expected = MapLeafOracle::default();
+        observe(tile, &raw mut expected);
+        let (slope, z) = world.tile_slope_z(tile);
+        if u32::from(slope) != expected.slope || z != expected.z {
+            return false;
+        }
         let kind = (shared.tile_type)(tile);
+        if kind == crate::tile_type::MP_WATER
+            && (u32::from(world.water_class(tile)) != expected.water_class
+                || u32::from(world.asserted(|m| crate::water_map::is_coast(m, tile)))
+                    != expected.coast
+                || u32::from(
+                    world.asserted(|m| crate::water_map::is_non_flooding_water_tile(m, tile)),
+                ) != expected.non_flooding)
+        {
+            return false;
+        }
+        if u32::from(world.is_normal_road_tile(tile)) != expected.normal_road {
+            return false;
+        }
+        if expected.normal_road != 0
+            && (u32::from(world.disallowed_road_directions(tile)) != expected.directions
+                || u32::from(world.has_road_works(tile)) != expected.works
+                || u32::from(world.road_bits(tile, false)) != expected.road_bits
+                || u32::from(world.road_bits(tile, true)) != expected.tram_bits)
+        {
+            return false;
+        }
+        if (shared.may_have_road)(tile)
+            && (u32::from(world.asserted(|m| {
+                crate::road_map::has_tile_road_type(m, tile, crate::road_type::RTT_ROAD)
+            })) != expected.has_road
+                || u32::from(world.asserted(|m| {
+                    crate::road_map::has_tile_road_type(m, tile, crate::road_type::RTT_TRAM)
+                })) != expected.has_tram)
+        {
+            return false;
+        }
         if world.kind(tile) != kind {
             return false;
         }

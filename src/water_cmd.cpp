@@ -536,9 +536,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 	static const OpenTTDWaterGroundServices services{
 		.rail = &GetRustRailGroundServices(), .clear = &GetRustClearServices(), .vehicles = &GetRustVehicleServices(), .costs = &GetRustGroundCostServices(), .company = &GetRustCompanyServices(),
 		.signal_context = GetRustSignalContext,
-		.non_flooding = [](uint32_t t) noexcept { return IsNonFloodingWaterTile(TileIndex{t}); },
 		.set_non_flooding = [](uint32_t t, bool value) noexcept { SetNonFloodingWaterTile(TileIndex{t}, value); },
-		.coast = RustIsCoast,
 		.set_tree_ground = RustSetTreeGroundDensity,
 		.make_sea = [](uint32_t t) noexcept { MakeSea(TileIndex{t}); },
 		.buoy_or_dock = [](uint32_t t) noexcept { return IsBuoy(TileIndex{t}) || IsDock(TileIndex{t}); },

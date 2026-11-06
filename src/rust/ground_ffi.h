@@ -119,9 +119,7 @@ struct OpenTTDWaterGroundServices {
 	const OpenTTDGroundCostServices *costs;
 	const OpenTTDCompanyServices *company; ///< Current-company exchange.
 	OpenTTDSignalContext (*signal_context)() noexcept OPENTTD_SERVICE_DEFAULT(signal_context);
-	bool (*non_flooding)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(non_flooding);
 	void (*set_non_flooding)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_non_flooding);
-	bool (*coast)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(coast);
 	void (*set_tree_ground)(uint32_t, TreeGround, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tree_ground);
 	void (*make_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_sea);
 	bool (*buoy_or_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(buoy_or_dock);
