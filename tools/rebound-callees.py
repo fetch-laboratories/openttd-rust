@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Reject a C++ callee bound into more than one Rust service table (#582)."""
 
-import argparse
 import re
-import subprocess
 from collections import Counter, defaultdict
 from collections.abc import Iterator
 from pathlib import Path
 
+import baseline_ratchet
 from code_lines import without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,38 +75,17 @@ def violations(files: dict[str, str]) -> set[str]:
     return hits
 
 
-def git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-ref", default="origin/rust-migration")
-    args = parser.parse_args()
-    files = {
-        str(p.relative_to(ROOT)): p.read_text()
-        for p in (ROOT / "src").rglob("*")
-        if p.is_file() and p.suffix in {".cpp", ".h", ".hpp", ".inc"}
-    }
-    hits = violations(files)
-    baseline = set((ROOT / BASELINE).read_text().splitlines())
-    tracked = git("ls-tree", "--name-only", args.base_ref, BASELINE).strip()
-    previous = (
-        set(git("show", f"{args.base_ref}:{BASELINE}").splitlines())
-        if tracked
-        else baseline
+    return baseline_ratchet.main(
+        __doc__,
+        ROOT,
+        BASELINE,
+        ("src",),
+        {".cpp", ".h", ".hpp", ".inc"},
+        violations,
+        new_label="new rebinding",
+        summary="Rebound callees: {count} baselined bindings",
     )
-    errors = [
-        ("new rebinding", hits - baseline),
-        ("remove retired", baseline - hits),
-        ("baseline cannot grow", baseline - previous),
-    ]
-    for label, names in errors:
-        for name in sorted(names):
-            print(f"{label}: {name}")
-    count = sum(len(names) for _, names in errors)
-    print(f"Rebound callees: {len(hits)} baselined bindings; {count} errors")
-    return int(count > 0)
 
 
 if __name__ == "__main__":
