@@ -51,7 +51,7 @@ Done when each finished change is integrated and cleaned up, or has its next act
 
 Plan when the queue or issue placement needs attention.
 
-- Trigger planning at a phase exit, when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or integration), the next phase has no ready owner, or `issues.py` shows unplaced issues. At exit, account for every remaining body and candidate C++ dependency and plan the newly adjacent phase. A completed phase gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
+- During the cleanup stage, plan when its stream issues run out of ready batches. Otherwise trigger planning at a phase exit, when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or integration), the next phase has no ready owner, or `issues.py` shows unplaced issues. At exit, account for every remaining body and candidate C++ dependency and plan the newly adjacent phase. A completed phase gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
 - Spawn a fresh high-effort planning agent (Astra in Codex). Name no preferred candidate.
 - Have it size remaining code and rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection). Point it at the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md).
 - Never fall back to `deferred-improvement` issues. Have it reread `issues.py` and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral).
@@ -63,10 +63,10 @@ Done when the planner has ranked the work and placed or reconsidered issues.
 Apply new direction before stocktakes and planning.
 
 - Before each, `git fetch`. If AGENTS.md, guidance reached through its routing table, the roadmap's "Phases" or latest steering section changed on `origin/rust-migration`, update your checkout, reread the changed guidance and apply its actions first.
-- After every second integration, update "Where the fork stands": retired code lines per phase, compiled original and glue C++ with its change per day since the previous stocktake, exports and callback slots, rebound-callee, shared-accessor and orphan-export baseline sizes, tooling cost, play-save speed ratio, coverage gaps and unintegrated branch count.
+- After every sixth integration (user, 2026-11-06), update "Where the fork stands": retired code lines per phase, fork C++ (original, glue, generated, and C++ under `tools/` and `src/tests`) with its change per day since the previous stocktake, exports and callback slots, rebound-callee, shared-accessor and orphan-export baseline sizes, tooling cost, play-save speed ratio, coverage gaps and unintegrated branch count.
 - Rerun `issues.py`. Place new issues and close those whose remaining scope is done.
 - Profile the merged branch in the background. Run a speed pass under [speed policy](../../speed.md#policy).
-- If compiled C++ stops falling, a scenario nears its speed ceiling, or an item stalls across review rounds, change course.
+- Change course when fork C++ stops falling (during the cleanup stage: when stream batches stop integrating or lint baselines stop shrinking), a scenario nears its speed ceiling, or an item stalls across review rounds.
 
 Done when the current direction and stocktake are reflected in the work order.
 

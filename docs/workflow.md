@@ -57,12 +57,12 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 
 - Each ownership port has one open PR at a time, targeting `rust-migration` directly.
 - Integrate an owner's checkpoint once it meets all of the following:
-  - It removes at least 100 compiled C++ lines net. This threshold is provisional; integrations 93 to 96 took 14 to 70 minutes from review pass to merge.
+  - It removes at least 100 fork C++ lines net, counting C++ under `tools/` and `src/tests`. This threshold is provisional; integrations 93 to 96 took 14 to 70 minutes from review pass to merge. Cleanup-stage PRs instead pass their stream's proof in the roadmap, grow neither fork C++ nor the boundary, and integrate on review and exact-head Full.
   - No moved field remains behind a service.
   - It has no boundary design fault.
   - It passes review and exact-head Full.
 
-  The owner continues in a fresh PR on the same issue, and the PR claims only what it delivered. A checkpoint that increases compiled C++ does not integrate; take the [cost decision](planning.md#cost-decisions) first.
+  The owner continues in a fresh PR on the same issue, and the PR claims only what it delivered. A checkpoint that increases fork C++ does not integrate; take the [cost decision](planning.md#cost-decisions) first.
 - Batch ready small maintenance items in one PR. These include cleanups, coverage, speed, tooling and fidelity fixes. List them on the tracking issue's checklist (#156, #275, #449-#452). Use one reviewer and one Full run. Move an item that fails review or CI to the next batch. A fix needed by a draft or live crash may go alone.
 - Keep at most six unintegrated component branches, including drafts and WIP (#157). Integrate reviewed work before starting a component. Start from integrated `rust-migration` unless the roadmap names a dependency.
 - A shared accessor or service is never such a dependency. The first integrating PR adds it to the shared layer in final typed form; other drafts adopt it when they update from base. Root builds a shared service or shared-path fix needed by multiple drafts once in its own small PR from `rust-migration`. Drafts do not build parallel copies.

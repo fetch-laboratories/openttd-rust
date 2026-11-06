@@ -1,0 +1,33 @@
+# Review checklist
+
+Readers: reviewers. Reviewers enforce the standards implementers no longer read in full. Commit fixes to the PR branch and report under [review](workflow.md#review), starting with `Reviewed commit: <sha>` in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md) skeleton.
+
+## Fidelity first
+
+- Compare every replaced original body callee by callee: guards, fatal paths, assertions, widths, wrapping and truncation, return values.
+- Random draws: the same calls in the same order. State reads and writes at the original observation points.
+- Judge the whole reachable input domain, beyond the paths scenarios exercise. C++ globals stay process-wide, never thread-local.
+- Lifetimes: allocation and ID reuse, publication and destruction order. Borrows end before callbacks, mutation, growth, throws and deletion.
+
+## Code standards
+
+- The original's types and named constants come from their header module; a literal standing for a named value is a finding. Code reaches a wrapper's raw integer only at ABI, save and bitfield boundaries.
+- The original's explanatory comments sit at the matching branch. Comments carry no review defence, history or dates.
+- Commands take their argument struct; helpers take context structs. A new Clippy `allow` needs a stated reason.
+- Each helper has one port. Grep the callee of every new binding across `src/`, including macros and compound callbacks such as `CheckOwnership` and `GetRoadOwner`; each existing wrapper or binding is a finding.
+- Boundary design faults, fixed before integration with no exceptions: a carrier for one call site, opcode dispatch, whole-record copies, per-call allocation the original lacks, Rust-to-C++-to-Rust bounces, a moved field behind a service, a service routed through `Record()`.
+- Every replaced body, export, declaration and service field is deleted. Each orphan is a finding.
+
+## Evidence
+
+- Each claim traces to production code and an expectation taken from the original.
+- Each new scenario, test or checker names behaviour existing checks cannot distinguish; one that names none is deleted.
+- Changed fixtures and expectations are explained. Growth or lint exceptions name the original behaviour that requires them and what retires them.
+
+## Cleanup PRs
+
+- Type, name and comment changes prove they change no behaviour: identical compiled Rust code, or identical semantic outputs with unchanged instruction counts on the profile scenarios. Every code difference is explained.
+
+## Report
+
+List each finding, its fixing commit and the check that found it, then the disposition. Send scope or policy questions to root unfixed. Record branches no scenario reaches on #156.

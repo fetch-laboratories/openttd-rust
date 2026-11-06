@@ -26,7 +26,9 @@ This file holds what every agent needs. The routing table points to the rest (us
 | --- | --- |
 | Selecting, ranking or planning work, or placing issues | [Roadmap](docs/roadmap.md), [planning](docs/planning.md) |
 | Building, testing, running the harness or CI | [Migration tools](docs/rust-migration.md) |
-| Writing or reviewing port code, tests or Python tools | [Porting](docs/porting.md) |
+| Implementing a work order | [Implementer brief](docs/implementer-brief.md) |
+| Reviewing a PR | [Review checklist](docs/review-checklist.md), [review](docs/workflow.md#review) |
+| Writing port standards, or when a check or work order cites them | [Porting](docs/porting.md) |
 | Touching an already-ported component | [Components](docs/components/README.md) |
 | Designing a storage port or map access | [World state](docs/design/world-state.md), [storage ports](docs/porting.md#storage-ports) |
 | Opening issues or PRs, committing, reviewing, integrating or cleaning up | [Workflow](docs/workflow.md) |

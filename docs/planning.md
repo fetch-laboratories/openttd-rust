@@ -12,7 +12,9 @@ Readers: Root and agents selecting or planning work.
   4. Port support code: core, strings, settings, viewport and graphics.
   5. Port the GUI, simulation drawing and platform backends.
   6. Replace or port vendored libraries in `src/3rdparty`.
-- Plan no phase beyond the next; decide nothing about later phases unless it affects the current or next phase (user, 2026-10-28).
+- Execution order (user, 2026-11-06): the cleanup stage, then phase 3, then phase 2, then phases 4, 5 and 6. Phase 1 has exited. Phase 3 readers move first because each one they move is a C++ consumer later storage moves need not rewrite. A pool's save/load chunks move with that pool in phase 2, because their descriptors address its record fields directly.
+- The cleanup stage pays down the existing code before porting resumes: the original's types, names and comments in Rust, argument structs for long parameter lists, test evidence moved off C++, boundary debt, and CI enforcement of the standards. The roadmap holds its work order; it exits when that work order is done.
+- Plan no phase beyond the next in the execution order; decide nothing about later phases unless it affects the current or next phase (user, 2026-10-28).
 - A phase exits when its ownership is complete and every remaining body, shell, facade and generated declaration has a named later owner or consumer phase that removes it. Phase 2 includes pool allocation and lifetime machinery and map allocation, as well as records ([storage ports](porting.md#storage-ports)). Recount and place the remainder at each phase exit; an estimate or a forwarding facade is not completed ownership. Plan the newly adjacent phase then, before the ready queue runs dry.
 - The final exit has no later owner: retire remaining fork C++ sources, generated declarations and native glue, and remove C++ compilation/link targets from the candidate game, tools and tests. Port needed evidence to Rust or the harness while preserving its observations; calling a fork-authored adapter reference-only does not exempt it. Keep the pinned original unchanged as the separate oracle.
 - The first issue of each of phases 3 to 6 names the evidence for what the harness cannot see, such as network packets or script API results.
@@ -21,10 +23,10 @@ Readers: Root and agents selecting or planning work.
 
 ## Selection
 
-- Fill a free slot with the highest-ranked ready item of the earliest phase with ready work. Later phases fill slots earlier phases leave free (user, 2026-10-28).
+- Fill a free slot with the highest-ranked ready item of the earliest stage in the execution order with ready work. Later stages fill slots earlier stages leave free (user, 2026-10-28; order 2026-11-06).
 - In phases 1 and 2, port support code only when a selected game component needs it. A port keeping data in C++ behind one setter per field is support code.
-- Rank by phase, then by what each item removes, protects or saves: compiled C++ removed (original plus glue) and state still owned by C++, the speed profile's largest net costs, fidelity risk the harness cannot see, recurring costs such as CI time, and integrated design faults. Ease of scoping does not affect rank.
-- Estimate and decide every owner's cost by compiled C++ removed, not original lines retired. A consumer line rewritten to reach moved data counts as one original line retired and one glue line added, so it moves neither. Phase 2 owners also count crossings removed and services deleted.
+- Rank by stage, then by what each item removes, protects or saves: fork C++ removed (original, glue, and C++ under `tools/` and `src/tests`) and state still owned by C++, the speed profile's largest net costs, fidelity risk the harness cannot see, recurring costs such as CI time, and integrated design faults. Ease of scoping does not affect rank.
+- Estimate and decide every owner's cost by net fork C++ removed, counting C++ under `tools/` and `src/tests` (user, 2026-11-06), not original lines retired. A consumer line rewritten to reach moved data counts as one original line retired and one glue line added, so it moves neither. The boundary (Rust exports plus callback slots) falls or holds; growth needs a reason the reviewer accepts. Phase 2 owners also count crossings removed and services deleted.
 - Size each owner to repay its fixed issue, review and exact-head Full cost. Fold an item too small for that into an owner of the same phase that shares its files or data, rather than queueing it alone.
 - Keep one roadmap work order for ports, maintenance, testing and housekeeping. Upstream unit-test coverage alone does not select a component; never fall back to utility kernels or `deferred-improvement` issues.
 - Select concurrent owners with disjoint state changes. A genuine data or lifetime dependency waits for its owning port. Shared accessors follow [integration](workflow.md#integration): the first integrating PR supplies the definition, or root extracts a shared service needed by multiple drafts into its own PR. Other consumers adopt that integrated definition without parallel copies; an accessor alone does not park a whole owner behind an unrelated draft.
@@ -39,7 +41,7 @@ Readers: Root and agents selecting or planning work.
 
 ## Cost decisions
 
-- Decide an ownership port's cost at its first concrete boundary or evidence checkpoint using its compiled-C++ change and tooling: make a bounded repair or explain the necessary cost specifically. Run the whole-fork metric twice per PR, at that boundary and at the integrating head; briefs request no other recounts.
+- Decide an ownership port's cost at its first concrete boundary or evidence checkpoint using its fork-C++ change (including `tools/` and `src/tests`) and tooling: make a bounded repair or explain the necessary cost specifically. Run the whole-fork metric twice per PR, at that boundary and at the integrating head; briefs request no other recounts.
 - The roadmap shows each owner's issue estimate beside its measured change. A revised bound cites its source evidence and is listed next to the estimate, never in place of it. Do not create separate implementation, native-test and tooling approval gates or replan solely to force a line ratio; fix source and boundary defects.
 - A new evidence requirement names the observable behavior existing checks cannot distinguish. Tracing pure helpers solely to reproduce the source call sequence is unnecessary.
 - Infrastructure (CI, caches and evidence plumbing, excluding scenario or test support within an ownership port) states expected tooling size in its issue and prefers platform defaults and settings such as LRU eviction and concurrency groups to custom controllers.

@@ -5,7 +5,7 @@ Readers: Root and user-invoked skills that spawn agents.
 ## Roles and models
 
 - Root (`gpt-6.1-sol`, xhigh) orchestrates and delegates heavily, selects components, integrates and spot-checks delegated diffs.
-- Use the host's available subagent slots; the repository imposes no lower subagent cap (user, 2026-11-06). Codex's per-session limit is 12 subagents plus root and cannot be removed. Existing sessions and worktrees may retain a lower configuration; respect the actual host limit. The main checkout's uncommitted `.codex/config.toml` change belongs to the user and remains untouched. Agent slots and the six unintegrated component branches in [integration](workflow.md#integration) are different limits: reviews, planning and measurements need no new component branch.
+- Run at most four implementation agents at once (user, 2026-11-06): builds on this 8-core host are CPU-bound, so more implementers lengthen every build and test loop without adding throughput. Reviews, planning and research use the remaining slots and do not count; a running profile counts as one implementer. Codex's per-session limit is 12 subagents plus root and cannot be removed. Existing sessions and worktrees may retain a lower configuration; respect the actual host limit. The main checkout's uncommitted `.codex/config.toml` change belongs to the user and remains untouched. Agent slots and the six unintegrated component branches in [integration](workflow.md#integration) are different limits: reviews, planning and measurements need no new component branch.
 - Specify model and effort on every spawn. Each subagent uses less effort than root's xhigh.
 - Use `gpt-6.1-sol` for most implementation and analysis and all independent review. Use high effort unless a clearly bounded task justifies lower.
 - Use `gpt-6-luna` at low or medium effort for bounded mechanical work.
@@ -13,6 +13,7 @@ Readers: Root and user-invoked skills that spawn agents.
 
 ## Spawning
 
+- Point implementation briefs at the [implementer brief](implementer-brief.md) and the work order, and reviewer briefs at the [review checklist](review-checklist.md); those agents read further docs only where these point.
 - Spawn a fresh agent named for each task; its name is its attribution. Do not reassign a finished agent to unrelated work. Close it when its task ends.
 - Each review round, including re-review, gets a fresh reviewer who reads the PR's earlier attributed review reports.
 - Follow the host's orchestration rules: use native agents for compatible shared-checkout work completed in the same turn; use T3 delegation for background work, another provider or an isolated checkout. T3 creates and binds isolated checkouts. Follow its completion notifications and returned next action; do not poll a running delegate.
@@ -23,7 +24,7 @@ Readers: Root and user-invoked skills that spawn agents.
 
 ## Claude Code root
 
-- Claude Code uses its actual host limit under [roles and models](#roles-and-models); the former five-subagent repository cap is lifted.
+- Claude Code applies the same four-implementer cap under [roles and models](#roles-and-models).
 - A user-directed session outside Codex names its exact model and host-reported effort. When it runs root, retain the same structure with its host's models: subagents at lower effort than root and a fresh reviewer per round.
 - Claude Code root uses its host's models for implementation and planning, and `gpt-6.1-sol` high through T3 `delegate_task` for independent review, so reviewer and implementer differ in model family.
 - Opus handles implementation, fixes and code-touching follow-ups; Sonnet handles only non-code work such as runs, measurements and tracker edits (user, 2026-10-27). Opus writes code at medium effort; use high for judgment such as planning, speed attribution and hard fidelity analysis (user, 2026-10-30).
