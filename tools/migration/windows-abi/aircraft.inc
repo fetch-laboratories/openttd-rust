@@ -34,6 +34,7 @@ static void AircraftDirectBoundary()
 	AircraftTestStation station;
 	p.station = &station;
 	station.record->airport.area = {7, 8, 8};
+	station.record->airport.rotation = 0;
 	station.record->airport.blocks = UINT64_MAX;
 	p.record.consist = &p.consist;
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
@@ -153,6 +154,7 @@ static void AircraftPhaseBoundary()
 	AircraftTestStation station;
 	p.station = &station;
 	station.record->airport.area = {7, 8, 8};
+	station.record->airport.rotation = 0;
 	station.record->airport.blocks = UINT64_MAX;
 	p.record.consist = &p.consist;
 	p.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.record);
