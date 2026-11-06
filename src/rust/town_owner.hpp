@@ -16,8 +16,8 @@
  * owner is renamed or destroyed; the game-state mutex serializes every access. */
 struct RustTownName {
 	OpenTTDTownState *owner;
-	std::string &presentation;
-	RustTownName(OpenTTDTownState *owner, std::string &presentation) : owner(owner), presentation(presentation) {}
+	std::string presentation{};
+	explicit RustTownName(OpenTTDTownState *owner) : owner(owner) {}
 	std::string_view View() const { auto b = openttd_rust_town_name(this->owner); return {reinterpret_cast<const char *>(b.data), b.size}; }
 	bool empty() const { return this->View().empty(); }
 	void clear() { openttd_rust_town_set_name(this->owner, {nullptr, 0}); this->presentation.clear(); }

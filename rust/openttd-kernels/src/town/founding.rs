@@ -62,7 +62,6 @@ pub struct FoundingServices {
     pub custom_number: extern "C" fn() -> u16,
     pub larger_towns: extern "C" fn() -> u8,
     pub name_style: extern "C" fn() -> u8,
-    pub prepare_rename: extern "C" fn(*mut TownHandle),
     pub name_changed: extern "C" fn(*mut TownHandle, ByteSpan),
     pub update_virt: extern "C" fn(*mut TownHandle),
     pub directory_rebuild: extern "C" fn(),
@@ -81,7 +80,6 @@ pub struct FoundingServices {
     pub clear_station_names: extern "C" fn(),
     pub clear_industry_names: extern "C" fn(),
     pub update_station_coords: extern "C" fn(),
-    pub cached_name: extern "C" fn(*const TownHandle) -> ByteSpan,
     pub set_progress: extern "C" fn(*mut Frame, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame) -> bool,
     pub no_town_error: extern "C" fn(),
@@ -633,7 +631,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
     while !town.shell.is_null() {
         let custom = unsafe { names::openttd_rust_town_name(town.state) };
         let name = if custom.size == 0 {
-            observed!((f.s.cached_name)(town.shell))
+            unsafe { names::openttd_rust_town_cached_name(town.state, f.names, name_frame) }
         } else {
             custom
         };
@@ -724,7 +722,9 @@ pub unsafe extern "C" fn openttd_rust_town_rename(
         }
     }
     if execute {
-        observed!((f.s.prepare_rename)(town.shell));
+        unsafe {
+            names::openttd_rust_town_clear_cached_name(town.state);
+        }
         unsafe {
             names::openttd_rust_town_set_name(town.state, text);
         }
@@ -761,7 +761,6 @@ crate::abi::layouts! {
         custom_number,
         larger_towns,
         name_style,
-        prepare_rename,
         name_changed,
         update_virt,
         directory_rebuild,
@@ -780,7 +779,6 @@ crate::abi::layouts! {
         clear_station_names,
         clear_industry_names,
         update_station_coords,
-        cached_name,
         set_progress,
         increase_progress,
         no_town_error,

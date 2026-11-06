@@ -123,7 +123,9 @@ void Town::PostDestructor(size_t) { openttd_rust_town_post_destruct(&GetRustTown
 
 void Town::FillCachedName() const
 {
-	this->cached_name = GetTownName(this);
+	OpenTTDTownNameFrame frame;
+	const auto name = openttd_rust_town_cached_name(this->growth_owner.get(), &GetRustTownNameServices(), &frame);
+	this->cached_name_presentation.assign(reinterpret_cast<const char *>(name.data), name.size);
 }
 
 
@@ -220,7 +222,7 @@ void UpdateAllTownVirtCoords()
 void ClearAllTownCachedNames()
 {
 	for (Town *t : Town::Iterate()) {
-		t->cached_name.clear();
+		t->ClearCachedName();
 	}
 }
 
@@ -607,8 +609,7 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.custom_number = OpenTTDCustomTownNumber,
 		.larger_towns = OpenTTDLargerTowns,
 		.name_style = OpenTTDTownNameStyle,
-		.prepare_rename = [](Town *town) noexcept { town->cached_name.clear(); },
-		.name_changed = [](Town *town, OpenTTDByteSpan name) noexcept { town->custom_name_cache.assign(reinterpret_cast<const char *>(name.data), name.size); },
+		.name_changed = [](Town *town, OpenTTDByteSpan name) noexcept { town->cached_name_presentation.clear(); town->name.presentation.assign(reinterpret_cast<const char *>(name.data), name.size); },
 		.update_virt = [](Town *town) noexcept { town->UpdateVirtCoord(); },
 		.directory_rebuild = []() noexcept { InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_FORCE_REBUILD); },
 		.directory_resort = []() noexcept { InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_FORCE_RESORT); },
@@ -634,7 +635,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.clear_station_names = []() noexcept { ClearAllStationCachedNames(); },
 		.clear_industry_names = []() noexcept { ClearAllIndustryCachedNames(); },
 		.update_station_coords = []() noexcept { UpdateAllStationVirtCoords(); },
-		.cached_name = [](const Town *town) noexcept -> OpenTTDByteSpan { const auto &name = town->GetCachedName(); return {reinterpret_cast<const uint8_t *>(name.data()), name.size()}; },
 		.set_progress = [](OpenTTDTownFoundingFrame *frame, uint total) noexcept { return RunGenerationProgress(frame, [total] { RustSetGeneratingWorldProgress(GWP_TOWN, total); }); },
 		.increase_progress = [](OpenTTDTownFoundingFrame *frame) noexcept { return RunGenerationProgress(frame, [] { RustIncreaseGeneratingWorldProgress(GWP_TOWN); }); },
 		.no_town_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_COULD_NOT_CREATE_TOWN), {}, WL_CRITICAL); },

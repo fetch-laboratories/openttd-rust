@@ -36,6 +36,7 @@ struct TownProtocolRecord {
 	uint8_t layout, fund_buildings_months, road_build_months, flags, part_of_subsidy;
 	uint32_t townnamegrfid, townnameparts;
 	RustVector<PersistentStorage *> psa_list;
+	RustVector<uint8_t> cached_name;
 };
 
 /** The record of a fixture town owner: the owner's first member. */
@@ -51,7 +52,7 @@ inline TownProtocolRecord *TownProtocolRecordOf(OpenTTDTownState *owner)
 			offsetof(TownProtocolRecord, townnametype), offsetof(TownProtocolRecord, unwanted), offsetof(TownProtocolRecord, exclusivity),
 			offsetof(TownProtocolRecord, exclusive_counter), offsetof(TownProtocolRecord, larger_town), offsetof(TownProtocolRecord, layout),
 			offsetof(TownProtocolRecord, fund_buildings_months), offsetof(TownProtocolRecord, road_build_months), offsetof(TownProtocolRecord, flags),
-			offsetof(TownProtocolRecord, part_of_subsidy), offsetof(TownProtocolRecord, townnamegrfid), offsetof(TownProtocolRecord, townnameparts), offsetof(TownProtocolRecord, psa_list),
+			offsetof(TownProtocolRecord, part_of_subsidy), offsetof(TownProtocolRecord, townnamegrfid), offsetof(TownProtocolRecord, townnameparts), offsetof(TownProtocolRecord, psa_list), offsetof(TownProtocolRecord, cached_name),
 		};
 		bool same = openttd_rust_abi_layout_named("OpenTTDTownRecord", 0) == sizeof(TownProtocolRecord);
 		for (size_t i = 0; i < std::size(offsets); i++) same &= openttd_rust_abi_layout_named("OpenTTDTownRecord", 2 + 2 * i) == offsets[i];

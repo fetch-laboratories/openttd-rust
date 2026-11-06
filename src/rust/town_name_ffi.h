@@ -34,6 +34,7 @@ uint8_t openttd_rust_town_verify_name_abi(const OpenTTDTownNameServices *, OpenT
 extern "C++" inline bool openttd_rust_town_verify_name(const OpenTTDTownNameServices *a0, OpenTTDTownNameFrame *a1, uint32_t a2, const TownNameParams *a3, OpenTTDTownNames *a4) { return openttd_rust_town_verify_name_abi(a0, a1, a2, a3, a4) != 0; }
 uint8_t openttd_rust_town_generate_name_abi(const OpenTTDTownNameServices *, OpenTTDTownNameFrame *, Randomizer *, uint32_t *, const TownNameParams *, OpenTTDTownNames *);
 extern "C++" inline bool openttd_rust_town_generate_name(const OpenTTDTownNameServices *a0, OpenTTDTownNameFrame *a1, Randomizer *a2, uint32_t *a3, const TownNameParams *a4, OpenTTDTownNames *a5) { return openttd_rust_town_generate_name_abi(a0, a1, a2, a3, a4, a5) != 0; }
+OpenTTDByteSpan openttd_rust_town_cached_name(OpenTTDTownState *, const OpenTTDTownNameServices *, OpenTTDTownNameFrame *);
 OpenTTDTownNames *openttd_rust_town_names_new();
 void openttd_rust_town_names_destroy(OpenTTDTownNames *);
 void openttd_rust_town_names_insert(OpenTTDTownNames *, OpenTTDByteSpan);

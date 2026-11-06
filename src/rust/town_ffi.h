@@ -118,6 +118,7 @@ void openttd_rust_town_change_rating(const OpenTTDTownLeaves *, const OpenTTDSha
 OpenTTDTownState *openttd_rust_town_new(Town *shell);
 void openttd_rust_town_storage_replace(OpenTTDTownState *, PersistentStorage *const *, size_t);
 void openttd_rust_town_destroy(OpenTTDTownState *);
+void openttd_rust_town_clear_cached_name(OpenTTDTownState *);
 void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 uint8_t openttd_test_town_tunnel(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t tile, uint32_t dir);

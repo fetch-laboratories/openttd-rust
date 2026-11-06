@@ -49,7 +49,6 @@ struct OpenTTDTownFoundingServices {
 	uint16_t (*custom_number)() noexcept OPENTTD_SERVICE_DEFAULT(custom_number);
 	uint8_t (*larger_towns)() noexcept OPENTTD_SERVICE_DEFAULT(larger_towns);
 	uint8_t (*name_style)() noexcept OPENTTD_SERVICE_DEFAULT(name_style);
-	void (*prepare_rename)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_rename);
 	void (*name_changed)(Town *, OpenTTDByteSpan) noexcept OPENTTD_SERVICE_DEFAULT(name_changed);
 	void (*update_virt)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(update_virt);
 	void (*directory_rebuild)() noexcept OPENTTD_SERVICE_DEFAULT(directory_rebuild);
@@ -68,7 +67,6 @@ struct OpenTTDTownFoundingServices {
 	void (*clear_station_names)() noexcept OPENTTD_SERVICE_DEFAULT(clear_station_names);
 	void (*clear_industry_names)() noexcept OPENTTD_SERVICE_DEFAULT(clear_industry_names);
 	void (*update_station_coords)() noexcept OPENTTD_SERVICE_DEFAULT(update_station_coords);
-	OpenTTDByteSpan (*cached_name)(const Town *) noexcept OPENTTD_SERVICE_DEFAULT(cached_name);
 	bool (*set_progress)(OpenTTDTownFoundingFrame *, uint) noexcept OPENTTD_SERVICE_DEFAULT(set_progress);
 	bool (*increase_progress)(OpenTTDTownFoundingFrame *) noexcept OPENTTD_SERVICE_DEFAULT(increase_progress);
 	void (*no_town_error)() noexcept OPENTTD_SERVICE_DEFAULT(no_town_error);

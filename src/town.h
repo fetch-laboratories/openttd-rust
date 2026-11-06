@@ -88,9 +88,8 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	RustTownCache cache{growth_owner.get()};
 
 	/* Town name */
-	mutable std::string custom_name_cache{}; ///< Presentation only: preserves custom-name reference identity.
-	RustTownName name{growth_owner.get(), custom_name_cache};
-	mutable std::string cached_name{}; ///< NOSAVE: Cache of the resolved name of the town, if not using a custom town name
+	RustTownName name{growth_owner.get()};
+	mutable std::string cached_name_presentation{}; ///< Native string reference for formatting and GUI callers.
 
 	struct SuppliedHistory {
 		uint32_t production = 0; ///< Total produced
@@ -195,10 +194,16 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	{
 		const auto custom_name = this->name.View();
 		if (!custom_name.empty()) {
-			return this->custom_name_cache;
+			return this->name.presentation;
 		}
-		if (this->cached_name.empty()) this->FillCachedName();
-		return this->cached_name;
+		if (this->cached_name_presentation.empty()) this->FillCachedName();
+		return this->cached_name_presentation;
+	}
+
+	void ClearCachedName() const
+	{
+		openttd_rust_town_clear_cached_name(this->growth_owner.get());
+		this->cached_name_presentation.clear();
 	}
 
 	static inline Town *GetByTile(TileIndex tile)

@@ -132,6 +132,40 @@ unsafe fn render(
     }
 }
 
+/// Fill the canonical resolved-name cache using the original name renderer.
+/// # Safety
+/// The live town and call-local render frame are serialized; no view survives cache mutation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_cached_name(
+    state: *mut State,
+    services: &NameServices,
+    frame: *mut NameFrame,
+) -> ByteSpan {
+    if unsafe { (*state).record.cached_name.is_empty() } {
+        let params = unsafe { crate::townname_type::from_town(&*state) };
+        let seed = unsafe { (*state).record.townnameparts };
+        let mut text = Vec::new();
+        let value = unsafe { render(services, frame, &params, seed, true, &mut text) };
+        let name = unsafe { bytes(value) }.to_vec();
+        unsafe {
+            (*state).record.cached_name = crate::industrytype::NativeVec::from_vec(name);
+        }
+    }
+    let value = unsafe { (*state).record.cached_name.as_slice() };
+    ByteSpan {
+        data: value.as_ptr(),
+        size: value.len(),
+    }
+}
+/// # Safety
+/// The live town is serialized and all resolved-name views have ended.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_town_clear_cached_name(state: *mut State) {
+    unsafe {
+        (*state).record.cached_name.clear();
+    }
+}
+
 pub(super) unsafe fn verify(
     s: &NameServices,
     frame: *mut NameFrame,
@@ -239,6 +273,98 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    struct CacheFrame {
+        renders: usize,
+    }
+    extern "C" fn cache_render(
+        frame: *mut NameFrame,
+        _: *const NameParams,
+        seed: u32,
+        _: bool,
+    ) -> ByteSpan {
+        unsafe {
+            (*frame.cast::<CacheFrame>()).renders += 1;
+        }
+        let bytes: &[u8] = match seed {
+            1 => b"First",
+            2 => b"Second",
+            _ => b"",
+        };
+        ByteSpan {
+            data: bytes.as_ptr(),
+            size: bytes.len(),
+        }
+    }
+    extern "C" fn no_next(_: u32) -> TownRef {
+        TownRef {
+            shell: std::ptr::null_mut(),
+            state: std::ptr::null_mut(),
+            id: crate::town_type::TownId::INVALID,
+        }
+    }
+    extern "C" fn no_utf8(_: *const u8, _: usize) -> usize {
+        0
+    }
+    extern "C" fn no_random(_: *mut Randomizer) -> u32 {
+        0
+    }
+    #[test]
+    fn resolved_name_changes_only_after_cache_clear_and_empty_names_are_retried() {
+        let mut owner = State::default();
+        let services = NameServices {
+            next: no_next,
+            render: cache_render,
+            shared: std::ptr::null(),
+            utf8_length: no_utf8,
+            random_next: no_random,
+        };
+        let mut frame = CacheFrame { renders: 0 };
+        let frame_pointer = (&raw mut frame).cast();
+        owner.record.townnameparts = 1;
+        unsafe {
+            assert_eq!(
+                bytes(openttd_rust_town_cached_name(
+                    &raw mut owner,
+                    &services,
+                    frame_pointer
+                )),
+                b"First"
+            );
+            owner.record.townnameparts = 2;
+            assert_eq!(
+                bytes(openttd_rust_town_cached_name(
+                    &raw mut owner,
+                    &services,
+                    frame_pointer
+                )),
+                b"First"
+            );
+            assert_eq!(frame.renders, 1);
+            openttd_rust_town_clear_cached_name(&raw mut owner);
+            assert_eq!(
+                bytes(openttd_rust_town_cached_name(
+                    &raw mut owner,
+                    &services,
+                    frame_pointer
+                )),
+                b"Second"
+            );
+            assert_eq!(frame.renders, 2);
+            openttd_rust_town_clear_cached_name(&raw mut owner);
+            owner.record.townnameparts = 3;
+            for _ in 0..2 {
+                assert_eq!(
+                    bytes(openttd_rust_town_cached_name(
+                        &raw mut owner,
+                        &services,
+                        frame_pointer
+                    )),
+                    b""
+                );
+            }
+            assert_eq!(frame.renders, 4);
+        }
+    }
     #[test]
     fn canonical_name_retains_all_bytes_and_self_assignment() {
         let mut owner = State::default();

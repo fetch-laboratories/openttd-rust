@@ -99,6 +99,7 @@ crate::abi::shared_records! {
         pub townnamegrfid: u32,
         pub townnameparts: u32,
         pub psa_list: crate::industrytype::NativeVec<*mut crate::newgrf_storage::PersistentStorage> => "RustVector<PersistentStorage *>",
+        pub cached_name: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
     }
 }
 impl Default for TownRecord {
@@ -132,6 +133,7 @@ impl Default for TownRecord {
             townnamegrfid: 0,
             townnameparts: 0,
             psa_list: crate::industrytype::NativeVec::new(),
+            cached_name: crate::industrytype::NativeVec::new(),
         }
     }
 }
