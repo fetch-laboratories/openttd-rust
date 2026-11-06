@@ -32,6 +32,7 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 ## Checks
 
 - Iterate locally with the build, Cargo checks and simulation scenarios touched by the change. Do not run the full default local `simulate` suite (38 minutes locally); exact-head Full runs it in about 12. Add no second full local suite or pre-merge local build gate.
+- A boundary change does not require a separate native/full simulation run before review. Use focused local checks; request a diagnostic CI subset only for a named failure or uncovered fixture. Final exact-head Full supplies the complete simulation tier.
 - Ordinary PR pushes run cheap checks; do not use `[skip ci]` on code pushes. Use `python3 tools/ci.py request PR --profile rust|native|platform` for diagnostic subsets; request `platform` only for a suspected platform failure or once before Full for a change to `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` or `cmake/` (#642's new crate dependency turned the cadence red after integration). Docs pushes to base cost no Full: the PR's update from base carries its status ([carried validation](rust-migration.md#continuous-integration)).
 - Before requesting Full for a PR removing a name, grep `tools/simulation/` and `src/tests/` for it: fixtures for scenarios not run locally compile only in Full.
 - See [continuous integration](rust-migration.md#continuous-integration) for Full jobs, platform cadence and `CI_MACOS_HEAVY`.
@@ -79,7 +80,7 @@ For final validation and merge, root follows these steps:
 
 ### Housekeeping
 
-- At session start and after integrations, root runs `python3 tools/housekeeping.py` and reads the dry run. It lists sizes and reasons. After a final live-output check, root uses `--apply` for eligible `remove` entries.
+- At session start and after integrations, root runs `python3 tools/housekeeping.py` and reads the dry run. It lists sizes and reasons. After a final live-output check, root uses `--apply` for eligible `remove` entries. Until #708 integrates, compare the dry run with explicitly retained profiles and exclude those runs; the tool does not yet honor their roadmap references. Verified completed trees may be removed through the ordinary clean/pushed/live checks without waiting for its 12-hour fallback.
 - The tool removes linked worktrees whose branch merged into `origin/rust-migration` or whose PR merged or closed. It also removes a clean worktree with no PR of its own whose HEAD, beyond base, is on an `origin/` branch, such as a review or update checkout. It uses `git worktree remove` without `--force`. It then deletes local branches if merged or held at the same head on origin. It keeps other no-PR branches.
 - A lock is stale when every issue or PR its note names (`#123` or a URL) is closed or merged. The tool reports it, `--apply` unlocks it, and the ordinary rules then apply. It keeps any other lock and reports its note and age.
 - The tool reports worktree records whose folder is missing; `--apply` prunes them.

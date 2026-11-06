@@ -31,9 +31,9 @@ Done when the current course is applied and work can resume.
 Integrate finished work first, then start ready work.
 
 - Follow [selection](../../planning.md#selection), [integration](../../workflow.md#integration) and [team](../../team.md#spawning).
-- In Claude Code use T3 `delegate_task` with `isolation: "worktree"` for code-touching agents; see [Claude Code root](../../team.md#claude-code-root).
+- Use [team's host orchestration rules](../../team.md#spawning) for native or T3 agents and isolated checkouts.
 - Run long jobs in the background and end the turn ([AGENTS.md](../../../AGENTS.md#every-agent)).
-- At each wake, resume any child whose named job ended without waking it ([team](../../team.md#spawning)).
+- At each independent wake, handle completed child results and recover missed resumes of children already known to be idle on named jobs ([team](../../team.md#spawning)). If other agents are held for a quiet measurement, resolve that job and release the hold before waiting for its report. A peripheral host-action failure does not end the assignment.
 
 Done when finished work is handled and free slots have ready work.
 
@@ -51,7 +51,7 @@ Done when each finished change is integrated and cleaned up, or has its next act
 
 Plan when the queue or issue placement needs attention.
 
-- Trigger planning when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or integration), the next phase has no ready owner, or `issues.py` shows unplaced issues. A phase at its exit gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
+- Trigger planning at a phase exit, when the current and next phases together hold fewer than three ready unstarted ownership items (not waiting on a draft or integration), the next phase has no ready owner, or `issues.py` shows unplaced issues. At exit, account for every remaining body and candidate C++ dependency and plan the newly adjacent phase. A completed phase gets no new owners ([goal and phases](../../planning.md#goal-and-phases)).
 - Spawn a fresh high-effort planning agent (Astra in Codex). Name no preferred candidate.
 - Have it size remaining code and rank owners of the current and next phase and open maintenance, testing and housekeeping issues under [selection](../../planning.md#selection). Point it at the roadmap's "Phases" and, for storage owners, the [world-state design](../../design/world-state.md).
 - Never fall back to `deferred-improvement` issues. Have it reread `issues.py` and apply [issue placement and deferral](../../planning.md#issue-placement-and-deferral).
