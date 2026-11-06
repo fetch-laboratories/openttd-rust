@@ -147,7 +147,6 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 		.waiting_news = VehicleTransactionWaitingNews,
 		.flip_stopped = RustOpaqueVehicleInvoke<RustVehicleFlipStopped>,
 		.startstop_ui = VehicleTransactionStartstopUI,
-		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
 		.valid_cargo = OpenTTDIsValidCargo,
 	};
 	return services;

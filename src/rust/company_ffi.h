@@ -41,7 +41,6 @@ struct OpenTTDCompanyInfrastructure {
 	uint64_t road_is_road; ///< Bit rt set when RoadTypeIsRoad(rt).
 };
 struct OpenTTDCompanyVehicleGroupFlags { bool engine_countable, primary; };
-struct OpenTTDCompanyVehicleProfit { int64_t profit_last_year; int32_t economy_age; };
 struct OpenTTDCompanyStationTimes { uint8_t since_load, since_unload; };
 struct OpenTTDCompanyTownRights { int16_t rating; uint16_t have_ratings; uint8_t exclusive_counter, exclusivity; };
 struct OpenTTDCompanyPriceBase { int64_t start_price; uint8_t category; };
@@ -156,12 +155,9 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *set_town_exclusivity)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town_exclusivity);
 	uint32_t (OPENTTD_RUST_CALL *vehicle_next_owned)(uint8_t, uint32_t, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next_owned);
 	bool (OPENTTD_RUST_CALL *aircraft_is_normal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_is_normal);
-	int64_t (OPENTTD_RUST_CALL *vehicle_value)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_value);
 	bool (OPENTTD_RUST_CALL *vehicle_is_primary)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_is_primary);
-	OpenTTDCompanyVehicleProfit (OPENTTD_RUST_CALL *vehicle_profit)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_profit);
 	uint32_t (OPENTTD_RUST_CALL *vehicle_previous)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_previous);
 	OpenTTDCompanyVehicleGroupFlags (OPENTTD_RUST_CALL *vehicle_group_flags)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_group_flags);
-	bool (OPENTTD_RUST_CALL *vehicle_service_interval_is_custom)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_service_interval_is_custom);
 	void (OPENTTD_RUST_CALL *delete_vehicle)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_vehicle);
 	void (OPENTTD_RUST_CALL *count_group_engine)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_engine);
 	void (OPENTTD_RUST_CALL *count_group_vehicle)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_vehicle);

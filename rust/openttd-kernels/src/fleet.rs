@@ -267,8 +267,6 @@ pub struct GroupServices {
     pub(crate) vehicles: &'static crate::vehicle::VehicleServices,
     pub(crate) vehicle_id: unsafe extern "C" fn(*mut ()) -> u32,
     pub(crate) vehicle_group: unsafe extern "C" fn(*mut ()) -> u16,
-    pub(crate) profit: unsafe extern "C" fn(*mut ()) -> i64,
-    pub(crate) old_enough: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) primary: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) countable: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) first_shared: unsafe extern "C" fn(*mut ()) -> *mut (),
@@ -389,10 +387,15 @@ unsafe fn vehicle_stats(w: &GroupServices, v: VehicleRef, all: bool) -> *mut Sta
     let kind = v.vehicle_type();
     unsafe { (w.stats)(owner, id, kind).cast() }
 }
+fn old_enough(w: &GroupServices, v: VehicleRef) -> bool {
+    // The existing native table retains the source VEHICLE_PROFIT_MIN_AGE constant.
+    let limit = unsafe { (*w.vehicles.maintenance).profit_min_age };
+    v.economy_age().0 > limit.0
+}
 unsafe fn count_vehicle(w: &GroupServices, v: *mut (), delta: i32) {
-    let old = unsafe { (w.old_enough)(v) };
-    let profit = unsafe { (w.profit)(v) }.saturating_mul(i64::from(delta));
     let v = record(w, v);
+    let old = old_enough(w, v);
+    let profit = (v.profit_last_year() >> 8).saturating_mul(i64::from(delta));
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     for p in [all, stats] {
@@ -419,8 +422,8 @@ unsafe fn count_engine(w: &GroupServices, v: *mut (), delta: i32) {
     }
 }
 unsafe fn add_profit(w: &GroupServices, v: *mut ()) {
-    let profit = unsafe { (w.profit)(v) };
     let v = record(w, v);
+    let profit = v.profit_last_year() >> 8;
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     for p in [all, stats] {
@@ -428,8 +431,8 @@ unsafe fn add_profit(w: &GroupServices, v: *mut ()) {
     }
 }
 unsafe fn min_age(w: &GroupServices, v: *mut ()) {
-    let profit = unsafe { (w.profit)(v) };
     let v = record(w, v);
+    let profit = v.profit_last_year() >> 8;
     let all = unsafe { vehicle_stats(w, v, true) };
     let stats = unsafe { vehicle_stats(w, v, false) };
     for p in [all, stats] {
@@ -939,7 +942,7 @@ unsafe fn update_profits(w: &GroupServices) {
         from = unsafe { (w.vehicle_id)(v) } + 1;
         if unsafe { (w.primary)(v) } {
             unsafe { add_profit(w, v) };
-            if unsafe { (w.old_enough)(v) } {
+            if old_enough(w, record(w, v)) {
                 unsafe { min_age(w, v) };
             }
         }
@@ -1710,8 +1713,6 @@ crate::abi::layouts! {
         vehicles,
         vehicle_id,
         vehicle_group,
-        profit,
-        old_enough,
         primary,
         countable,
         first_shared,

@@ -119,8 +119,6 @@ inline void RustWriteVehicleFirstSprite(Vehicle *v, SpriteID sprite) noexcept { 
 inline void RustWriteVehicleSpriteSequence(Vehicle *v, SpriteID sprite) noexcept { v->sprite_cache.sprite_seq.Set(sprite); }
 inline uint8_t RustVehicleNumOrders(const Vehicle *v) noexcept { return v->GetNumOrders(); }
 inline uint8_t RustVehicleRealOrderIndex(const Vehicle *v) noexcept { return v->cur_real_order_index; }
-inline uint16_t RustVehicleServiceInterval(const Vehicle *v) noexcept { return v->GetServiceInterval(); }
-inline int64_t RustVehicleDisplayProfitLastYear(const Vehicle *v) noexcept { return v->GetDisplayProfitLastYear().base(); }
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(v)); }
@@ -140,15 +138,7 @@ inline const uint8_t *RustVehicleStatusAddress(const Vehicle *v) noexcept { retu
 inline uint8_t RustVehicleStatus(const Vehicle *v) noexcept { return *RustVehicleStatusAddress(v); }
 inline void RustWriteVehicleStatus(Vehicle *v, VehStates status) noexcept { v->SetVehStatus(status); }
 inline void RustWriteVehicleTile(Vehicle *v, TileIndex tile) noexcept { v->SetTile(tile); }
-inline uint8_t RustVehicleBreakdownChance(const Vehicle *v) noexcept { return v->Record().breakdown_chance; }
-inline uint8_t RustVehicleBreakdownsSinceService(const Vehicle *v) noexcept { return v->Record().breakdowns_since_last_service; }
-inline uint16_t RustVehicleReliability(const Vehicle *v) noexcept { return v->Record().reliability; }
-inline uint16_t RustVehicleReliabilityDecay(const Vehicle *v) noexcept { return v->Record().reliability_spd_dec; }
-inline TimerGameCalendar::Date RustVehicleAge(const Vehicle *v) noexcept { return v->GetAge(); }
-inline TimerGameCalendar::Date RustVehicleMaxAge(const Vehicle *v) noexcept { return v->GetMaxAge(); }
-inline TimerGameEconomy::Date RustVehicleEconomyAge(const Vehicle *v) noexcept { return v->GetEconomyAge(); }
 inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v->Record().breakdown_ctr; }
-inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->GetValue().base(); }
 inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }
 template <typename Handle> inline uint32_t RustVehicleIndex(Handle v) noexcept
 {
@@ -231,7 +221,6 @@ static auto RustOpaqueVehicleInvoke(void *shell, Args... args) noexcept { return
 /** Legacy orders width/handle adapter for a shared map read at a vehicle's tile. */
 template <typename Result, auto Read>
 static Result RustOpaqueVehicleTileRead(void *shell) noexcept { return Read(RustVehicleTile(static_cast<const Vehicle *>(shell))); }
-inline bool RustVehicleOldEnough(const Vehicle *v) noexcept { return RustVehicleEconomyAge(v) > VEHICLE_PROFIT_MIN_AGE; }
 
 /** Legacy indexed callback adapter; canonical read stays shared, owner resolves once. */
 template <typename Result, auto Read>

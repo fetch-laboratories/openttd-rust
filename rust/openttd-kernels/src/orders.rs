@@ -521,11 +521,8 @@ pub struct Leaves {
     pub suppress_implicit: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub shared_window: unsafe extern "C" fn(ctx: *mut c_void, first: *mut c_void) -> u64,
     pub vehicle_id: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub reliability: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub display_speed: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub age_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub needs_service: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub remaining_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub airport_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub base_station_tile: unsafe extern "C" fn(destination: u16) -> u64,
     pub station_tile: unsafe extern "C" fn(destination: u16) -> u64,
@@ -639,11 +636,8 @@ leaves! {
     fn suppress_implicit(ctx: *mut c_void) -> u64;
     fn shared_window(ctx: *mut c_void, first: *mut c_void) -> u64;
     fn vehicle_id(ctx: *mut c_void) -> u64;
-    fn reliability(ctx: *mut c_void) -> u64;
     fn display_speed(ctx: *mut c_void) -> u64;
-    fn age_years(ctx: *mut c_void) -> u64;
     fn needs_service(ctx: *mut c_void) -> u64;
-    fn remaining_years(ctx: *mut c_void) -> u64;
     fn airport_tile(destination: u16) -> u64;
     fn base_station_tile(destination: u16) -> u64;
     fn station_tile(destination: u16) -> u64;
@@ -2958,7 +2952,7 @@ impl Game {
                 None,
                 self.0.base.visits(),
             )),
-            1 => ((self.reliability(v) * 101) >> 16) as i32,
+            1 => (i32::from(native_vehicle(v, self.0.base).reliability()) * 101) >> 16,
             7 => {
                 (i32::from(
                     self.maintenance()
@@ -2967,10 +2961,22 @@ impl Game {
                     >> 16
             }
             2 => (self.display_speed(v) as i32).wrapping_mul(10) / 16,
-            3 => self.age_years(v) as i32,
+            // TimerGame::DateToYear deliberately divides by 366.
+            3 => {
+                native_vehicle(v, self.0.base).age().0 / crate::timer_game_common::DAYS_IN_LEAP_YEAR
+            }
             4 => self.needs_service(v) as i32,
             5 => return order.flags,
-            6 => self.remaining_years(v) as i32,
+            6 => {
+                let vehicle = native_vehicle(v, self.0.base);
+                let max_age = vehicle.max_age().0;
+                let age = vehicle.age().0;
+                (max_age
+                    .wrapping_sub(age)
+                    .wrapping_add(crate::timer_game_common::DAYS_IN_LEAP_YEAR - 1)
+                    / crate::timer_game_common::DAYS_IN_LEAP_YEAR)
+                    .max(0)
+            }
             _ => unreachable!(),
         };
         let value = i32::from(order.value());
@@ -4680,11 +4686,8 @@ crate::abi::layouts! {
         suppress_implicit,
         shared_window,
         vehicle_id,
-        reliability,
         display_speed,
-        age_years,
         needs_service,
-        remaining_years,
         airport_tile,
         base_station_tile,
         station_tile,

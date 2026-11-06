@@ -65,8 +65,6 @@ const OpenTTDFleetGroupServices &FleetGroupServices()
 		.vehicles = &GetRustVehicleServices(),
 		.vehicle_id = OpenTTDMapQuery<uint32_t, RustVehicleIndexOpaque, void *>,
 		.vehicle_group = FleetGroup_vehicle_group,
-		.profit = RustOpaqueVehicleRead<int64_t, RustVehicleDisplayProfitLastYear>,
-		.old_enough = RustOpaqueVehicleRead<bool, RustVehicleOldEnough>,
 		.primary = RustOpaqueVehicleRead<bool, RustVehiclePrimary>,
 		.countable = FleetGroup_countable,
 		.first_shared = FleetGroup_first_shared,

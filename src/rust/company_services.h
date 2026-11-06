@@ -25,6 +25,7 @@ inline bool OpenTTDCompanyIsValidHuman(uint8_t company) noexcept { return Compan
 inline CompanyID OpenTTDCurrentCompany() noexcept { return _current_company; }
 inline void OpenTTDSetCurrentCompany(CompanyID company) noexcept { _current_company = company; }
 inline bool RustCompanyServiceIntervalPercent(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.vehicle.servint_ispercent; }
+inline const CompanySettings *RustCompanySettingsOwner(const Company *company) noexcept { return &company->settings; }
 inline CompanySettings *RustCompanySettings(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings; }
 inline VehicleDefaultSettings *RustCompanyVehicleDefaults(uint8_t owner) noexcept { return &Company::Get(CompanyID(owner))->settings.vehicle; }
 inline uint16_t RustCompanyAircraftServiceInterval(CompanyID owner) noexcept { return Company::Get(owner)->settings.vehicle.servint_aircraft; }

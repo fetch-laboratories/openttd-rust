@@ -469,7 +469,6 @@ pub struct CommonServices {
     pub waiting_news: extern "C" fn(u32),
     pub flip_stopped: extern "C" fn(*mut ()),
     pub startstop_ui: extern "C" fn(*mut ()),
-    pub value: extern "C" fn(*mut ()) -> i64,
     pub valid_cargo: extern "C" fn(u8) -> bool,
 }
 /// # Safety
@@ -524,7 +523,9 @@ pub(crate) unsafe fn sell(
     (b.cost.expense_money)(
         cost,
         s.strings.new_vehicle_expense,
-        (s.value)(front).saturating_neg(),
+        crate::fleet::record(b.groups, front)
+            .value()
+            .saturating_neg(),
     );
     if flags & DoCommandFlag::EXECUTE != 0 {
         if unsafe { (b.groups.primary)(front) } && backup {
@@ -669,7 +670,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleCommonServices" ["probe"] => CommonServices {
         base, transactions, vehicles, orders, strings, train_power, aircraft_start,
         grf_version, grf_string, waiting_news, flip_stopped,
-        startstop_ui, value, valid_cargo,
+        startstop_ui, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {
         groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,

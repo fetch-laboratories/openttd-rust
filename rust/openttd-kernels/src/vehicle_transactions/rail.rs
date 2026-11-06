@@ -941,7 +941,7 @@ pub(crate) unsafe fn sell(
     (cost.expense_money)(out, x.c.strings.new_vehicle_expense, 0);
     let mut part = sell_head;
     while !part.is_null() {
-        (cost.amount)(out, (x.c.value)(Ctx::sh(part)).saturating_neg());
+        (cost.amount)(out, Ctx::vref(part).value().saturating_neg());
         part = x.next(part);
     }
     if flags & DoCommandFlag::EXECUTE == 0 {

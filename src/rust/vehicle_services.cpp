@@ -337,19 +337,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.news_very_old_and = STR_NEWS_VEHICLE_IS_GETTING_VERY_OLD_AND,
 };
 
-/* Existing order ABI adapters share the canonical typed observations here. */
-extern "C" uint64_t openttd_orders_age_years(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return TimerGameCalendar::DateToYear(RustVehicleAge(v)).base();
-}
-
-extern "C" uint64_t openttd_orders_remaining_years(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return std::max(TimerGameCalendar::DateToYear(RustVehicleMaxAge(v) - RustVehicleAge(v) + CalendarTime::DAYS_IN_LEAP_YEAR - 1), TimerGameCalendar::Year(0)).base();
-}
-
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleServices.hpp"
 #include "abi-visit-OpenTTDVehicleSchedulerServices.hpp"

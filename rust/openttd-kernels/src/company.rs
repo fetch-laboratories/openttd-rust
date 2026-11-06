@@ -116,12 +116,6 @@ pub struct VehicleGroupFlags {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct VehicleProfit {
-    pub profit_last_year: i64,
-    pub economy_age: i32,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct StationTimes {
     pub since_load: u8,
     pub since_unload: u8,
@@ -295,12 +289,9 @@ pub struct Services {
     pub set_town_exclusivity: extern "C" fn(u32, u8, u8),
     pub vehicle_next_owned: extern "C" fn(u8, u32, *mut u8) -> u32,
     pub aircraft_is_normal: extern "C" fn(u32) -> bool,
-    pub vehicle_value: extern "C" fn(u32) -> i64,
     pub vehicle_is_primary: extern "C" fn(u32) -> bool,
-    pub vehicle_profit: extern "C" fn(u32) -> VehicleProfit,
     pub vehicle_previous: extern "C" fn(u32) -> u32,
     pub vehicle_group_flags: extern "C" fn(u32) -> VehicleGroupFlags,
-    pub vehicle_service_interval_is_custom: extern "C" fn(u32) -> bool,
     pub delete_vehicle: extern "C" fn(u32),
     pub count_group_engine: extern "C" fn(u32, i32),
     pub count_group_vehicle: extern "C" fn(u32, i32),
@@ -720,6 +711,18 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
         subtract(f, p, id, cost, expense);
     }
 }
+/// A strict live ID supplied by the Company's original vehicle iteration.
+/// The typed pool reloads its slot buffer; no record borrow spans a callback.
+fn vehicle_record(s: &Services, id: u32) -> crate::vehicle::VehicleRef {
+    let vehicles = (s.settings)().transactions.groups.vehicles;
+    let pool =
+        unsafe { crate::vehicle_base::VehiclePool::from_descriptor(vehicles.pool_descriptor()) };
+    crate::vehicle::VehicleRef(
+        std::ptr::NonNull::new(unsafe { pool.record(crate::vehicle_type::VehicleID(id)) })
+            .expect("live Company vehicle"),
+    )
+}
+
 fn assets(s: &Services, id: u8) -> i64 {
     let mut num = 0_u32;
     each(
@@ -737,7 +740,7 @@ fn assets(s: &Services, id: u8) -> i64 {
         }
         from = v.wrapping_add(1);
         if kind == 0 || kind == 1 || (kind == 3 && (s.aircraft_is_normal)(v)) || kind == 2 {
-            value = value.saturating_add((s.vehicle_value)(v).saturating_mul(3) >> 1);
+            value = value.saturating_add(vehicle_record(s, v).value().saturating_mul(3) >> 1);
         }
     }
     value
@@ -779,12 +782,14 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
         }
         from = v.wrapping_add(1);
         if kind < 4 && (s.vehicle_is_primary)(v) {
-            let x = (s.vehicle_profit)(v);
-            if x.profit_last_year > 0 {
+            let vehicle = vehicle_record(s, v);
+            let profit_last_year = vehicle.profit_last_year();
+            let economy_age = vehicle.economy_age().0;
+            if profit_last_year > 0 {
                 count = count.wrapping_add(1);
             }
-            if x.economy_age > PROFIT_MIN_AGE && (first || min_profit > x.profit_last_year) {
-                min_profit = x.profit_last_year;
+            if economy_age > PROFIT_MIN_AGE && (first || min_profit > profit_last_year) {
+                min_profit = profit_last_year;
                 first = false;
             }
         }
@@ -1307,7 +1312,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
         if kind >= 4 {
             continue;
         }
-        if !(s.vehicle_service_interval_is_custom)(v) {
+        if !vehicle_record(s, v).service_interval_is_custom() {
             let settings = (s.settings)();
             let vehicle = unsafe { (settings.transactions.groups.vehicle)(v) };
             let defaults = (settings.company_vehicle_defaults)(crate::company_type::CompanyID(new));
@@ -1327,15 +1332,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
         }
         if g.primary {
             (s.count_group_vehicle)(v, 1);
-            let vehicles = (s.settings)().transactions.groups.vehicles;
-            // SAFETY: this ownership-transfer iteration retains the live primary vehicle.
-            let pool = unsafe {
-                crate::vehicle_base::VehiclePool::from_descriptor(vehicles.pool_descriptor())
-            };
-            let record = crate::vehicle::VehicleRef(
-                std::ptr::NonNull::new(unsafe { pool.record(crate::vehicle_type::VehicleID(v)) })
-                    .expect("live transferred vehicle"),
-            );
+            let record = vehicle_record(s, v);
             unsafe { crate::unit_numbers::assign_next_vehicle(s.identity, record, new) };
         }
     }
@@ -2283,12 +2280,9 @@ crate::abi::layouts! {
         set_town_exclusivity,
         vehicle_next_owned,
         aircraft_is_normal,
-        vehicle_value,
         vehicle_is_primary,
-        vehicle_profit,
         vehicle_previous,
         vehicle_group_flags,
-        vehicle_service_interval_is_custom,
         delete_vehicle,
         count_group_engine,
         count_group_vehicle,
@@ -2341,10 +2335,6 @@ crate::abi::layouts! {
     "OpenTTDCompanyVehicleGroupFlags" ["company_economy"] => VehicleGroupFlags {
         engine_countable,
         primary,
-    };
-    "OpenTTDCompanyVehicleProfit" ["company_economy"] => VehicleProfit {
-        profit_last_year,
-        economy_age,
     };
     "OpenTTDCompanyStationTimes" ["company_economy"] => StationTimes {
         since_load,

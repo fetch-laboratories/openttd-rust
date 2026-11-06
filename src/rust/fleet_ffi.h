@@ -31,8 +31,6 @@ struct OpenTTDFleetGroupServices {
 	const OpenTTDVehicleServices *vehicles;
 	uint32_t (*vehicle_id)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
 	uint16_t (*vehicle_group)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_group);
-	int64_t (*profit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(profit);
-	bool (*old_enough)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(old_enough);
 	bool (*primary)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(primary);
 	bool (*countable)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(countable);
 	void * (*first_shared)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(first_shared);
