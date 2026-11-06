@@ -81,7 +81,7 @@ fn handle(
         socket::close(s, game, work);
         return NETWORK_RECV_STATUS_MALFORMED_PACKET;
     }
-    socket::set_last_packet(game, (s.now)());
+    socket::set_last_packet(game, (s.tcp.now)());
     match kind {
         PACKET_CLIENT_ACK => match read_field!(game, role) {
             1 => unsafe { crate::network_frame::receive_ack(s, game, p, frame, work) },
