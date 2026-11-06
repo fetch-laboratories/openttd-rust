@@ -58,6 +58,54 @@ class GeneratedAbiTests(unittest.TestCase):
                 ["c++", "-std=c++20", "-fsyntax-only", str(source)], check=True
             )
 
+    def test_callback_record_uses_rust_signature_and_native_calling_convention(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            rust.mkdir(parents=True)
+            (rust / "record.rs").write_text(
+                'layouts! { "Legacy" ["ops"] => Legacy {}; }\n'
+                "shared_records! {\n fn abi_record;\n"
+                '"Ops" ["ops"] => pub struct Ops {\n'
+                "pub context: *mut c_void,\n"
+                'pub allocate: unsafe extern "C" fn(*mut c_void, usize) -> *mut c_void,\n'
+                'pub destroy: unsafe extern "C" fn(*mut c_void, *mut c_void),\n'
+                "    }\n}\n"
+            )
+            (root / "ops.h").write_text(
+                "\n".join(
+                    GENERATOR["record_header"]("ops", GENERATOR["shared_records"](root))
+                )
+            )
+            source = root / "ops.cpp"
+            body = (
+                '#include "ops.h"\n#include <type_traits>\n'
+                "using Allocate = void *(OPENTTD_RUST_CALL *)(void *, std::size_t) noexcept;\n"
+                "using Destroy = void (OPENTTD_RUST_CALL *)(void *, void *) noexcept;\n"
+                "static_assert(std::is_same_v<decltype(Ops::allocate), Allocate>);\n"
+                "static_assert(std::is_same_v<decltype(Ops::destroy), Destroy>);\n"
+            )
+            # Production and standalone fixtures use different source include roots.
+            for include_root, header in [
+                ("src/rust", "call_ffi.h"),
+                ("src", "rust/call_ffi.h"),
+            ]:
+                with self.subTest(include_root=include_root):
+                    source.write_text(f'#include "{header}"\n' + body)
+                    subprocess.run(
+                        [
+                            "c++",
+                            "-std=c++20",
+                            "-fsyntax-only",
+                            "-I",
+                            str(ROOT / include_root),
+                            str(source),
+                        ],
+                        check=True,
+                    )
+
     def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self) -> None:
         fragments = GENERATOR["generate"]()
         generated = layouts(fragments)

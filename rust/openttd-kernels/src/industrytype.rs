@@ -43,6 +43,17 @@ impl<T> NativeVec<T> {
             capacity: vec.capacity(),
         }
     }
+    pub(crate) const fn as_mut_ptr(&self) -> *mut T {
+        self.items
+    }
+    pub(crate) fn resize(&mut self, count: usize, value: T)
+    where
+        T: Clone,
+    {
+        let mut vec = std::mem::take(self).into_vec();
+        vec.resize(count, value);
+        *self = Self::from_vec(vec);
+    }
     pub fn as_slice(&self) -> &[T] {
         if self.count == 0 {
             &[]
@@ -57,7 +68,7 @@ impl<T> NativeVec<T> {
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
-    fn into_vec(mut self) -> Vec<T> {
+    pub(crate) fn into_vec(mut self) -> Vec<T> {
         let vec = if self.capacity == 0 {
             Vec::new()
         } else {

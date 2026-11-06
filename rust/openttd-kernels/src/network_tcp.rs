@@ -31,8 +31,12 @@ pub struct Services {
     pub error_reset: extern "C" fn(*const NetworkError) -> bool,
     pub error_text: extern "C" fn(*const NetworkError) -> crate::services::ByteSpan,
     pub error_would_block: extern "C" fn(*const NetworkError) -> bool,
+    /// Native steady-clock count, shared by transport and protocol timeouts.
+    pub now: extern "C" fn() -> i64,
     pub packet: &'static packet::Services,
     pub packet_delete_shell: extern "C" fn(*mut Packet),
+    /// Allocate the native packet shell and append it to this socket's send queue.
+    pub packet_enqueue: extern "C" fn(*mut NetworkTCPSocketHandler, *mut State),
     pub packet_record: extern "C" fn(*mut Packet) -> *mut State,
     pub receive_bytes: extern "C" fn(*mut NetworkTCPSocketHandler, *mut u8, usize) -> isize,
     pub receive_create: extern "C" fn(*mut NetworkTCPSocketHandler, *mut State) -> *mut State,
@@ -217,7 +221,7 @@ pub(crate) fn destroy_packet(s: &Services, packet: *mut Packet) {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDNetworkTcpServices" ["probe"] => Services {
-        base_socket, can_send_receive, error_begin, error_end, error_reset, error_text, error_would_block, packet, packet_delete_shell, packet_record,
+        base_socket, can_send_receive, error_begin, error_end, error_reset, error_text, error_would_block, now, packet, packet_delete_shell, packet_enqueue, packet_record,
         receive_bytes, receive_create, receive_packet, receive_take, send_bytes, send_front,
         send_pop, valid, writable,
     };
@@ -257,6 +261,12 @@ mod tests {
         assert!(value);
     }
     extern "C" fn unused1<A, R>(_: A) -> R {
+        panic!("unexpected TCP operation")
+    }
+    extern "C" fn unused0<R>() -> R {
+        panic!("unexpected TCP operation")
+    }
+    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
         panic!("unexpected TCP operation")
     }
     extern "C" fn packet(_: *mut NetworkTCPSocketHandler) -> *mut State {
@@ -350,8 +360,10 @@ mod tests {
             error_reset: unused1,
             error_text,
             error_would_block: blocked,
+            now: unused0,
             packet: packet::test_services(),
             packet_delete_shell: unused1,
+            packet_enqueue: unused2,
             packet_record: unused1,
             receive_bytes,
             receive_create: create,
