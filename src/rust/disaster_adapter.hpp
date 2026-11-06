@@ -83,17 +83,6 @@ static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32
 	return st == nullptr ? OpenTTDDisasterStationTarget{.next = UINT32_MAX, .tile = INVALID_TILE.base(), .airport_type = 0} :
 		OpenTTDDisasterStationTarget{.next = uint32_t{RustBaseStationID(st)} + 1, .tile = RustStationAirportTile(st), .airport_type = st->airport.type};
 }
-static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
-{
-	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i), .kind = i == nullptr ? IT_INVALID : i->Record().type};
-}
-static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterNextIndustry(uint32_t from) noexcept { return DisasterIndustryHandle(OpenTTDNextIndustry(from)); }
-static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint32_t id) noexcept { return DisasterIndustryHandle(RustIndustryByID(id)); }
-static OpenTTDDisasterIndustryLocation OPENTTD_RUST_CALL DisasterIndustryLocation(void *shell) noexcept
-{
-	Industry *i = static_cast<Industry *>(shell);
-	return {.tile = RustIndustryTile(shell), .town = RustTownAuthorityIndex(OpenTTDIndustryTownHandle(i))};
-}
 static void OPENTTD_RUST_CALL DisasterAirportBlocks(uint16_t id, bool blocked) noexcept
 {
 	Station *st = Station::Get(id);
@@ -158,12 +147,7 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.road_count = DisasterRoadCount,
 		.human = RustCompanyIsHuman,
 		.next_station = DisasterNextStation,
-		.next_industry = DisasterNextIndustry,
-		.industry = DisasterIndustry,
-		.industry_location = DisasterIndustryLocation,
-		.industry_tile = RustIndustryTile,
 		.industry_index = RustIndustryTileIndex,
-		.industry_belongs = RustIndustryTileBelongs,
 		.reset_industry_tile = RustResetIndustryConstruction,
 		.airport_tile = RustAirportTile,
 		.airport_blocks = DisasterAirportBlocks,

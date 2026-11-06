@@ -204,7 +204,7 @@ impl Services {
             id = crate::town::next_id(self.shared(), id + 1);
         }
         let mut from = 0;
-        while let Some(entry) = industry::next(self.industry(), from) {
+        while let Some(entry) = industry::next(self.shared(), from) {
             unsafe { *self.source_flags(Source::industry(entry.id.0)) = 0 };
             from = u32::from(entry.id.0) + 1;
         }

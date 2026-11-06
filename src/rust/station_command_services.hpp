@@ -100,7 +100,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.new_station = [](uint32_t tile) noexcept -> BaseStation * { return new Station(TileIndex{tile}); },
 		.set_town = RustStationSetTown,
 		.lifecycle = &GetRustStationLifecycleServices(),
-		.have_rating = RustStationHaveRating,
 		.road_waypoint = RustStationRoadWaypoint,
 		.name_equals = [](BaseStation *st, const uint8_t *text, size_t length) noexcept { return !st->name.empty() && st->name == std::string_view(reinterpret_cast<const char *>(text), length); },
 		.set_name = RustStationSetName,

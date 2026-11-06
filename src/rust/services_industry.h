@@ -11,11 +11,7 @@ inline void RustIndustryTileRandomCheck([[maybe_unused]] const OpenTTDIndustryRe
 	assert(context->industry != nullptr && IsValidTile(TileIndex(context->tile)));
 	assert(context->id == IndustryID::Invalid().base() || IsTileType(TileIndex(context->tile), MP_INDUSTRY));
 }
-template <typename ID> inline Industry *RustIndustryByID(ID id) noexcept { return Industry::Get(id); }
 inline Industry *RustIndustryByTile(uint32_t tile) noexcept { return Industry::GetByTile(TileIndex{tile}); }
-inline Industry *OpenTTDNextIndustry(uint32_t from) noexcept { auto range = Industry::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
-inline Town *OpenTTDIndustryTown(const Industry *industry) noexcept { return industry->Record().town; }
-inline const OpenTTDTownHandle *OpenTTDIndustryTownHandle(Industry *industry) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDIndustryTown(industry)); }
 inline uint16_t OpenTTDIndustryTileCallback(uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t parameter1, uint32_t parameter2) noexcept
 {
 	return GetIndustryTileCallback(static_cast<CallbackID>(callback), parameter1, parameter2, gfx, RustIndustryByTile(tile), TileIndex(tile));

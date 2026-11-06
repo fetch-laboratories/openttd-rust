@@ -76,12 +76,24 @@ static void Disasters()
 	const OpenTTDOccupancyCommands commands{.vehicles = &vehicles, .max_pixel_z = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_cost_calls.push_back(2); return 0; }, .costs = &costs, .vehicle_error = 0x87654321};
 	services.occupancy = &commands;
 	services.disasters_enabled = []() noexcept { return true; };
-	services.next_industry = [](uint32_t from) noexcept -> OpenTTDDisasterIndustryTarget {
-		return from <= 7 ? OpenTTDDisasterIndustryTarget{.industry = _disaster_probe, .id = 7, .kind = 0} : OpenTTDDisasterIndustryTarget{.industry = nullptr, .id = 0xFFFF, .kind = IT_INVALID};
+	using IndustryOwner = std::unique_ptr<OpenTTDIndustry, decltype(&openttd_rust_industry_destroy)>;
+	IndustryOwner industry(openttd_rust_industry_new(nullptr), openttd_rust_industry_destroy);
+	auto &fields = *reinterpret_cast<OpenTTDIndustryRecord *>(industry.get());
+	fields.type = 0;
+	fields.location.tile = TileIndex{0};
+	fields.town = reinterpret_cast<Town *>(&probe);
+	std::array<RustPoolSlot, 8> industry_slots{};
+	industry_slots[7] = {.shell = &probe, .record = industry.get()};
+	const RustPoolDescriptor industry_descriptor{
+		.slots = {industry_slots.data(), industry_slots.size(), 0}, .used_bitmap = {},
+		.first_free = 0, .first_unused = industry_slots.size(), .items = 1, .checked = 0,
+		.cleaning = false, .alloc_cache = nullptr,
 	};
+	const RustPoolDescriptor *industry_descriptor_ptr = &industry_descriptor;
+	shared.industry_pool = &industry_descriptor_ptr;
+	shared.town_id = [](const OpenTTDTownHandle *town) noexcept -> uint16_t { CHECK(town == reinterpret_cast<const OpenTTDTownHandle *>(_disaster_probe)); return 3; };
 	/* The target's type 0 can cause subsidence; Rust reads the spec record. */
 	openttd_rust_industry_specs()[0].behaviour = IndustryBehaviours{IndustryBehaviour::CanSubsidence};
-	services.industry_location = [](void *) noexcept { return OpenTTDDisasterIndustryLocation{.tile = 0, .town = 3}; };
 	services.coal_news = [](uint32_t tile, uint16_t town) noexcept { CHECK(tile == 65 && town == 3); _disaster_probe->news++; };
 	services.human = [](uint8_t company) noexcept { CHECK(company == 1); return true; };
 	services.update_signals = []() noexcept { _disaster_probe->signals++; };

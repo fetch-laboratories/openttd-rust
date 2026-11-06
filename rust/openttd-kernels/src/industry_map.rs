@@ -12,6 +12,14 @@ pub(crate) fn get_industry_index(
     m.require_type(tile, crate::tile_type::MP_INDUSTRY)?;
     Some(crate::industry_type::IndustryID(m.m2(tile)?))
 }
+/// `Industry::TileBelongsToIndustry`, with its short-circuited map type check.
+pub(crate) fn tile_belongs_to_industry(
+    m: &crate::map_func::TileTypeAccess,
+    tile: u32,
+    id: crate::industry_type::IndustryID,
+) -> bool {
+    m.read(tile) == crate::tile_type::MP_INDUSTRY && get_industry_index(m, tile) == Some(id)
+}
 /// `Industry::GetByTile` (`industry.h`).
 pub(crate) fn get_industry_by_tile(
     m: &crate::map_func::TileTypeAccess,

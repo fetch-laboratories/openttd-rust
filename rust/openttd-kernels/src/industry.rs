@@ -502,18 +502,13 @@ pub(crate) fn num_items(s: &crate::services::Services) -> usize {
     unsafe { (**s.industry_pool).items }
 }
 /// Reread extent and occupancy after every effectful visit, as `PoolIterator` did.
-pub(crate) fn next(s: &Services, from: u32) -> Option<Entry> {
-    let slots = pool(s.shared());
+pub(crate) fn next(s: &crate::services::Services, from: u32) -> Option<Entry> {
+    let slots = pool(s);
     let index = unsafe { slots.next_index(from as usize, u32::MAX as usize) };
     if index == u32::MAX as usize {
         return None;
     }
-    let id = IndustryID(index as u16);
-    Some(Entry {
-        industry: unsafe { slots.shell(id).cast() },
-        owner: unsafe { slots.record(id) },
-        id,
-    })
+    Some(reference(s, IndustryID(index as u16)))
 }
 impl Map {
     fn coordinates(self) -> crate::services::Map {
@@ -775,7 +770,7 @@ pub(crate) unsafe fn tick(builder: *mut Builder, services: *const Services) {
         return;
     }
     let mut from = 0;
-    while let Some(e) = next(s, from) {
+    while let Some(e) = next(s.shared(), from) {
         from = u32::from(e.id.0) + 1;
         produce(e, s, builder);
         if (s.shared().tick_counter)().wrapping_add(u64::from(e.id.0)) % DAY_TICKS as u64 == 0 {
@@ -1418,7 +1413,7 @@ pub(crate) unsafe fn openttd_rust_industry_monthly(
     let company = unsafe { (s.company_none)() };
     build_monthly(builder, s);
     let mut from = 0;
-    while let Some(e) = next(s, from) {
+    while let Some(e) = next(s.shared(), from) {
         from = u32::from(e.id.0) + 1;
         statistics(e.owner, s);
         if unsafe { (*fields(e.owner)).prod_level == 0 } {

@@ -765,7 +765,7 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
     (s.close_graph)(t.id.0);
     if s.assertions {
         let mut from = 0;
-        while let Some(i) = crate::industry::next(c.industry(), from) {
+        while let Some(i) = crate::industry::next(c.shared, from) {
             from = u32::from(i.id.0) + 1;
             assert!(unsafe { (*i.owner).record.town } != t.shell);
         }

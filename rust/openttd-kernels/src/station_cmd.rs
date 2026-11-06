@@ -191,7 +191,6 @@ pub struct CommandServicesTable {
     pub new_station: extern "C" fn(u32) -> *mut BaseStation,
     pub set_town: extern "C" fn(*mut BaseStation, *const crate::services::TownHandle),
     pub lifecycle: *const crate::station_lifecycle::Services,
-    pub have_rating: extern "C" fn(*mut BaseStation, u8),
     pub road_waypoint: extern "C" fn(*mut BaseStation) -> bool,
     pub name_equals: extern "C" fn(*mut BaseStation, *const u8, usize) -> bool,
     pub set_name: extern "C" fn(*mut BaseStation, *const u8, usize),
@@ -899,7 +898,10 @@ impl Ctx<'_> {
                 );
                 let current = (self.shared.current_company)();
                 if (self.shared.company_valid)(current) {
-                    (self.s.have_rating)(st, current);
+                    let town = (self.s.station_town)(st);
+                    let id = crate::town::TownId((self.shared.town_id)(town));
+                    let owner = unsafe { crate::town::pool(self.shared).record(id) };
+                    unsafe { (*owner).record.have_ratings |= 1 << current };
                 }
             }
         }
@@ -4296,7 +4298,6 @@ crate::abi::layouts! {
         new_station,
         set_town,
         lifecycle,
-        have_rating,
         road_waypoint,
         name_equals,
         set_name,

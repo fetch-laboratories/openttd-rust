@@ -28,15 +28,6 @@ struct OpenTTDDisasterRoadTarget {
 	OpenTTDRoadState * state;
 	uint32_t id;
 };
-struct OpenTTDDisasterIndustryTarget {
-	void * industry;
-	uint16_t id;
-	uint8_t kind;
-};
-struct OpenTTDDisasterIndustryLocation {
-	uint32_t tile;
-	uint16_t town;
-};
 struct OpenTTDDisasterStationTarget {
 	uint32_t next;
 	uint32_t tile;
@@ -68,12 +59,7 @@ struct OpenTTDDisasterServices {
 	uint16_t (OPENTTD_RUST_CALL *road_count)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
 	bool (OPENTTD_RUST_CALL *human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(human);
 	OpenTTDDisasterStationTarget (OPENTTD_RUST_CALL *next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
-	OpenTTDDisasterIndustryTarget (OPENTTD_RUST_CALL *next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
-	OpenTTDDisasterIndustryTarget (OPENTTD_RUST_CALL *industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry);
-	OpenTTDDisasterIndustryLocation (OPENTTD_RUST_CALL *industry_location)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_location);
-	uint32_t (OPENTTD_RUST_CALL *industry_tile)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_tile);
 	uint16_t (OPENTTD_RUST_CALL *industry_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_index);
-	bool (OPENTTD_RUST_CALL *industry_belongs)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_belongs);
 	void (OPENTTD_RUST_CALL *reset_industry_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_industry_tile);
 	bool (OPENTTD_RUST_CALL *airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	void (OPENTTD_RUST_CALL *airport_blocks)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(airport_blocks);

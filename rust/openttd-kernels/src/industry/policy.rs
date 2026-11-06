@@ -127,7 +127,7 @@ pub(crate) fn random_entry(s: &Services) -> super::Entry {
     let mut num = s.shared().random_range(u32::from(count as u16));
     let mut from = 0;
     loop {
-        let entry = super::next(s, from).unwrap();
+        let entry = super::next(s.shared(), from).unwrap();
         if num == 0 {
             return entry;
         }

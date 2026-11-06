@@ -632,9 +632,8 @@ impl<'a> Session<'a> {
     }
     fn start_scenario(&self) {
         (self.s.reset_engine_overrides)();
-        let services = unsafe { &*self.world().industry };
         let mut from = 0;
-        while let Some(entry) = crate::industry::next(services, from) {
+        while let Some(entry) = crate::industry::next(unsafe { &*self.s.shared }, from) {
             from = u32::from(entry.id.0) + 1;
             unsafe {
                 (*entry.owner.cast::<crate::industry::IndustryRecord>()).last_prod_year =

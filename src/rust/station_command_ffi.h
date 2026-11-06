@@ -91,7 +91,6 @@ struct OpenTTDStationCommandServices {
 	BaseStation *(*new_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_station);
 	void (*set_town)(BaseStation *, const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
 	const OpenTTDStationLifecycleServices *lifecycle;
-	void (*have_rating)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(have_rating);
 	bool (*road_waypoint)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(road_waypoint);
 	bool (*name_equals)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(name_equals);
 	void (*set_name)(BaseStation *, const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(set_name);
