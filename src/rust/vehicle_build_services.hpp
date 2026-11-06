@@ -98,25 +98,6 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	v->Record().reliability = RustEngineReliability(e);
 	v->Record().reliability_spd_dec = e->reliability_spd_dec;
 }
-static void VehicleConstructServiceDates(void *shell, uint16_t interval) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(shell);
-	RustVehicleSetServiceInterval(v, interval);
-	v->SetLastServiceDate(TimerGameEconomy::date);
-	v->SetCalendarServiceDate(TimerGameCalendar::date);
-}
-static void VehicleConstructStamp(void *shell) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(shell);
-	v->SetBuildYear(TimerGameCalendar::year);
-	RustWriteVehicleSpriteSequence(v, SPR_IMG_QUERY);
-}
-static void VehicleConstructServiceFlags(void *shell, bool prototype, bool percent) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(shell);
-	if (prototype) v->vehicle_flags.Set(VehicleFlag::BuiltAsPrototype);
-	RustVehicleSetServiceIntervalIsPercent(v, percent);
-}
 static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noexcept
 {
 	static const OpenTTDVehicleConstructServices services{
@@ -129,8 +110,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.aircraft_properties = VehicleConstructAircraftProperties, .rotor = VehicleConstructRotor,
 		.road_capacity = VehicleConstructRoadCapacity,
 		.engine_common = VehicleConstructEngineCommon,
-		.service_dates = VehicleConstructServiceDates, .build_stamp = VehicleConstructStamp,
-		.exclusive_preview = RustEngineExclusivePreview, .service_flags = VehicleConstructServiceFlags,
+		.exclusive_preview = RustEngineExclusivePreview,
 		.wrong_depot = STR_ERROR_DEPOT_WRONG_DEPOT_TYPE,
 	};
 	return services;

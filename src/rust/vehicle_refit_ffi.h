@@ -67,7 +67,7 @@ struct OpenTTDVehicleArticulatedServices {
 	void (*mark_train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(mark_train);
 	void (*mark_road)(void *) noexcept OPENTTD_SERVICE_DEFAULT(mark_road);
 	void (*copy_common)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_common);
-	void (*random_bits)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
+	void (*sprite_sequence)(void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sprite_sequence);
 	void (*flip_image)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_image);
 	void (*warning)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(warning);
 	bool (*has_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
@@ -90,10 +90,7 @@ struct OpenTTDVehicleConstructServices {
 	void (*rotor)(void *, void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(rotor);
 	void (*road_capacity)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_capacity);
 	void (*engine_common)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_common);
-	void (*service_dates)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_dates);
-	void (*build_stamp)(void *) noexcept OPENTTD_SERVICE_DEFAULT(build_stamp);
 	bool (*exclusive_preview)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(exclusive_preview);
-	void (*service_flags)(void *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(service_flags);
 	uint32_t wrong_depot;
 };
 struct OpenTTDRailConstructionStrings { uint32_t rear_follow, depot_only, no_orders; };

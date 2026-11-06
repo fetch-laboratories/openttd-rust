@@ -268,7 +268,7 @@ unsafe fn build_wagon(
     if flags & DoCommandFlag::EXECUTE != 0 {
         let a = x.b.construct.articulated;
         v = x.rec((x.s.new_wagon)(tile, e));
-        (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
+        unsafe { a.randomize(Ctx::sh(v)) };
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.reverse_on_build(v);
         unsafe { super::articulated::add(a, Ctx::sh(v)) };
@@ -318,7 +318,7 @@ pub(crate) unsafe fn normalize(b: &'static build::Services, out: *mut CommandCos
 fn add_rear_engine(x: Ctx, v: R) {
     let a = x.b.construct.articulated;
     let u = x.rec((x.s.new_rear)(Ctx::sh(v)));
-    (a.random_bits)(Ctx::sh(u), x.t.shared.random() as u16);
+    unsafe { a.randomize(Ctx::sh(u)) };
     x.set_subtype(v, gv::set_multiheaded);
     x.set_subtype(u, gv::set_multiheaded);
     x.set_next(v, u);
@@ -360,12 +360,8 @@ pub(crate) unsafe fn build(
             crate::engine_capabilities::openttd_rust_engine_life_days(x.r.capabilities, e)
         }));
         (s.engine_dates)(Ctx::sh(v), e);
-        (a.random_bits)(Ctx::sh(v), x.t.shared.random() as u16);
-        (k.service_flags)(
-            Ctx::sh(v),
-            (k.exclusive_preview)(e),
-            (x.t.interval_percent)(company),
-        );
+        unsafe { a.randomize(Ctx::sh(v)) };
+        unsafe { construct::service_flags(k, Ctx::sh(v), e, company) };
         unsafe { (x.g.set_membership)(Ctx::sh(v), DEFAULT_GROUP) };
         x.set_subtype(v, gv::set_front_engine);
         x.set_subtype(v, gv::set_engine);

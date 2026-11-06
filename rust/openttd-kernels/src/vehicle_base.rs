@@ -536,6 +536,9 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn build_year(self) -> i32 {
         crate::raw_field::read_field!(self.0.as_ptr(), build_year)
     }
+    pub(crate) fn write_build_year(self, value: i32) {
+        crate::raw_field::write_field!(self.0.as_ptr(), build_year, value);
+    }
     pub(crate) fn age(self) -> CalendarDate {
         crate::raw_field::read_field!(self.0.as_ptr(), age)
     }

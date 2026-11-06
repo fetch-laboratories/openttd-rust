@@ -38,12 +38,32 @@ pub struct Services {
     pub rotor: extern "C" fn(*mut (), *mut (), *mut ()),
     pub road_capacity: extern "C" fn(*mut (), *mut (), u16),
     pub engine_common: extern "C" fn(*mut (), *const OpenTTDEngine),
-    pub service_dates: extern "C" fn(*mut (), u16),
-    pub build_stamp: extern "C" fn(*mut ()),
     pub exclusive_preview: extern "C" fn(*const OpenTTDEngine) -> bool,
-    pub service_flags: extern "C" fn(*mut (), bool, bool),
     pub wrong_depot: u32,
 }
+/// Original construction service interval and consecutive date stores.
+pub(super) fn service_dates(v: crate::vehicle::VehicleRef, interval: u16) {
+    v.write_service_interval(interval);
+    v.write_date_of_last_service(crate::timer_game_common::economy_date());
+    v.write_date_of_last_service_newgrf(crate::timer_game_common::calendar_date());
+}
+
+/// Preserve prototype publication before looking up the interval-percent setting.
+pub(super) unsafe fn service_flags(
+    k: &Services,
+    shell: *mut (),
+    engine: *const OpenTTDEngine,
+    company: u8,
+) {
+    let common = k.articulated.refit.common;
+    if (k.exclusive_preview)(engine) {
+        let v = unsafe { vehicle_ref(shell, common.vehicles) };
+        v.write_vehicle_flags(v.vehicle_flags() | crate::base_consist::VF_BUILT_AS_PROTOTYPE);
+    }
+    let percent = (common.base.interval_percent)(company);
+    unsafe { vehicle_ref(shell, common.vehicles) }.set_service_interval_percent(percent);
+}
+
 /// Original `CmdBuildRoadVehicle`.
 /// # Safety
 /// Live native cost and engine; new shells stay live, and no owner access spans a callback.
@@ -84,11 +104,16 @@ pub(crate) unsafe fn road(
     (unsafe { vehicle_ref(v, r.common.vehicles) }).write_max_age(crate::services::CalendarDate(
         unsafe { crate::engine_capabilities::openttd_rust_engine_life_days(r.capabilities, e) },
     ));
-    (k.service_dates)(v, b.interval_default(company, VehicleType::ROAD.0) as u16);
-    (k.build_stamp)(v);
-    (a.random_bits)(v, b.shared.random() as u16);
+    service_dates(
+        unsafe { vehicle_ref(v, r.common.vehicles) },
+        b.interval_default(company, VehicleType::ROAD.0) as u16,
+    );
+    unsafe { vehicle_ref(v, r.common.vehicles) }
+        .write_build_year(crate::timer_game_common::calendar_year().0);
+    (a.sprite_sequence)(v, crate::sprites::SPR_IMG_QUERY);
+    unsafe { a.randomize(v) };
     (k.road_front)(v, e);
-    (k.service_flags)(v, (k.exclusive_preview)(e), (b.interval_percent)(company));
+    unsafe { service_flags(k, v, e, company) };
     unsafe { articulated::add(a, v) };
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
@@ -219,15 +244,18 @@ pub(crate) unsafe fn aircraft(
         (*hv.state).previous_pos = pos;
         (*hv.state).targetairport = target;
     }
-    (k.service_dates)(
-        v,
+    service_dates(
+        unsafe { vehicle_ref(v, c.vehicles) },
         b.interval_default(company, VehicleType::AIRCRAFT.0) as u16,
     );
-    (k.build_stamp)(v);
-    (k.build_stamp)(u);
-    (a.random_bits)(v, b.shared.random() as u16);
-    (a.random_bits)(u, b.shared.random() as u16);
-    (k.service_flags)(v, (k.exclusive_preview)(e), (b.interval_percent)(company));
+    let year = crate::timer_game_common::calendar_year().0;
+    unsafe { vehicle_ref(u, c.vehicles) }.write_build_year(year);
+    unsafe { vehicle_ref(v, c.vehicles) }.write_build_year(year);
+    (a.sprite_sequence)(v, crate::sprites::SPR_IMG_QUERY);
+    (a.sprite_sequence)(u, crate::sprites::SPR_IMG_QUERY);
+    unsafe { a.randomize(v) };
+    unsafe { a.randomize(u) };
+    unsafe { service_flags(k, v, e, company) };
     (r.invalidate_chain)(
         unsafe { super::vehicle_ref(v, r.common.vehicles) }
             .0
@@ -263,7 +291,7 @@ pub(crate) unsafe fn aircraft(
         let w = (k.new_aircraft)();
         (k.rotor)(w, v, u);
         unsafe { c.vehicles.set_next_shell(u.cast(), w.cast()) };
-        (a.random_bits)(w, b.shared.random() as u16);
+        unsafe { a.randomize(w) };
         let hw = (r.aircraft_handle)(
             unsafe { super::vehicle_ref(w, r.common.vehicles) }
                 .0
@@ -287,7 +315,6 @@ crate::abi::layouts! {
     "OpenTTDVehicleConstructServices" ["probe"] => Services {
         articulated, powered_roadtypes, new_road, road_front, station,
         hangar_tile, new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
-        rotor, road_capacity, engine_common, service_dates,
-        build_stamp, exclusive_preview, service_flags, wrong_depot,
+        rotor, road_capacity, engine_common, exclusive_preview, wrong_depot,
     };
 }

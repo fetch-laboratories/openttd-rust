@@ -25,13 +25,18 @@ pub struct Services {
     pub mark_train: extern "C" fn(*mut ()),
     pub mark_road: extern "C" fn(*mut ()),
     pub copy_common: extern "C" fn(*mut (), *mut (), u16),
-    pub random_bits: extern "C" fn(*mut (), u16),
+    pub sprite_sequence: extern "C" fn(*mut (), u32),
     pub flip_image: extern "C" fn(*mut ()),
     pub warning: extern "C" fn(*const OpenTTDEngine),
     pub has_articulated: extern "C" fn(*mut ()) -> bool,
     pub next_articulated: extern "C" fn(*mut ()) -> *mut (),
 }
 impl Services {
+    /// Draw before resolving and writing the live record, as native `Random()` does.
+    pub(crate) unsafe fn randomize(&self, shell: *mut ()) {
+        let bits = self.refit.common.base.shared.random() as u16;
+        unsafe { super::vehicle_ref(shell, self.refit.common.vehicles) }.write_random_bits(bits);
+    }
     /// Caller retains the live native shell through this synchronous update.
     pub(crate) unsafe fn position(&self, v: *mut ()) {
         unsafe {
@@ -148,7 +153,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
             (s.mark_road)(v);
         }
         (s.copy_common)(v, first, engine);
-        (s.random_bits)(v, c.base.shared.random() as u16);
+        unsafe { s.randomize(v) };
         if unsafe { flip.assume_init() } {
             (s.flip_image)(v);
         }
@@ -267,7 +272,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
         refit, default_cargo, pool_available, prepare_previous,
         new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
-        mark_road, copy_common, random_bits, flip_image, warning,
+        mark_road, copy_common, sprite_sequence, flip_image, warning,
         has_articulated, next_articulated,
     };
 }
