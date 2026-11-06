@@ -87,8 +87,7 @@ pub(crate) fn radius(
 pub(crate) fn move_sign(s: &Services, st: *mut BaseStation, tile: u32) {
     let commands = unsafe { &*(s.station_commands)() };
     let c = table(s);
-    let station = unsafe { &*commands.station };
-    if !(station.is_station)(st) {
+    if !crate::station_record::is_station(st.cast()) {
         (commands.waypoint_move_sign)(st, tile);
         return;
     }

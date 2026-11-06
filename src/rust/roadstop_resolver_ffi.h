@@ -34,13 +34,11 @@ struct OpenTTDRoadStopResolverServices {
 	void (*clear)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	uint32_t (*company)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company);
 	bool (*custom)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(custom);
-	uint8_t (*facilities)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(facilities);
 	uint8_t (*frame)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(frame);
 	const SpriteGroup * (*group)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(group);
 	uint8_t (*group_cargo)(const RoadStopSpec *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(group_cargo);
 	size_t (*group_count)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(group_count);
 	uint32_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
-	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
 	TownScopeResolver * (*make_town)(ResolverObject *, Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(make_town);
 	uint16_t (*random_bits)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*resize)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resize);

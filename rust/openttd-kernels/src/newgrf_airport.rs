@@ -47,7 +47,6 @@ pub struct Services {
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
     pub(crate) by_tile: extern "C" fn(u32) -> *mut crate::station::Station,
     station_id: extern "C" fn(*const BaseStation) -> u16,
-    facilities: extern "C" fn(*const BaseStation) -> u8,
     pub(crate) get_station: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
@@ -376,7 +375,7 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
                     as u32
             }
         }
-        0xf0 => u32::from((s.facilities)(c.station)),
+        0xf0 => u32::from(crate::station_record::facilities(c.station.cast())),
         0xfa => (s.build_date)(c.station)
             .wrapping_sub(crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR)
             .clamp(0, 65535) as u32,
@@ -554,7 +553,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]

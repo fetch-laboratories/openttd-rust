@@ -46,7 +46,6 @@ pub struct Services {
     pub station_base: extern "C" fn(u16) -> *mut BaseStation,
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
     pub location: extern "C" fn(*const BaseStation) -> u32,
-    pub is_station: extern "C" fn(*mut BaseStation) -> bool,
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub town: *const Leaves,
     pub industries: *const Industries,
@@ -514,7 +513,10 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAnimationServices" ["probe"] => Services {
         shared,
-        station_base, as_station, location, is_station, roadstop_resolver,
+        station_base,
+        as_station,
+        location,
+        roadstop_resolver,
         town,
         industries,
         construction,
@@ -534,7 +536,8 @@ crate::abi::layouts! {
         rail_belongs,
         station_triggers,
         road_triggers,
-        rail_spec, industry_object,
+        rail_spec,
+        industry_object,
         rail_spec_triggers,
         road_spec_triggers,
         airport_spec_triggers,
@@ -611,7 +614,7 @@ pub(crate) fn acceptance(st: *mut BaseStation) {
     let tile = (a.location)(st);
     openttd_rust_trigger_station(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     openttd_rust_trigger_roadstop(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
-    if (a.is_station)(st) {
+    if crate::station_record::is_station(st.cast()) {
         openttd_rust_trigger_airport_abi((a.as_station)(st), AAT_ACCEPTANCE_TICK, INVALID_CARGO);
     }
 }

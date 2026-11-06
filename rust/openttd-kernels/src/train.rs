@@ -736,7 +736,7 @@ impl Game<'_> {
         let world = crate::map_func::World::new(self.services);
         // SAFETY: The process-lifetime tables resolve the original Station::Get once.
         let stations = unsafe { &*(*((self.services.station_catchment)())).station };
-        let st = (stations.station)(station);
+        let st = stations.station(station);
         let dir = crate::direction_func::dir_to_diag_dir((id).vehicle().direction(), |ok| {
             world.check(ok);
         });

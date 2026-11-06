@@ -83,7 +83,7 @@ impl Ctx<'_> {
             if (self.shared.utf8_length)(text, length) >= MAX_LENGTH_STATION_NAME_CHARS {
                 return out.error(INVALID_STRING_ID);
             }
-            for index in 0..(self.world().pool_size)() {
+            for index in 0..self.world().pool_size() {
                 let candidate = self.waypoint(index as u16);
                 if !candidate.is_null() && (self.s.name_equals)(candidate, text, length) {
                     return out.error(self.s.strings.name_unique);
@@ -196,10 +196,10 @@ impl Ctx<'_> {
         let mut threshold = 8;
         // Pool ID order is Waypoint::Iterate order. Equal distances never replace
         // the earlier candidate, including deleted waypoints outside the kdtree.
-        for id in 0..(self.world().pool_size)() {
+        for id in 0..self.world().pool_size() {
             let wp = self.waypoint(id as u16);
             if wp.is_null()
-                || (self.world().in_use)(wp)
+                || crate::station_record::in_use(wp.cast())
                 || (self.s.string_id)(wp) != string
                 || crate::station_record::owner_company(wp.cast()) != owner
                 || (self.s.road_waypoint)(wp) != road
@@ -391,7 +391,7 @@ impl Ctx<'_> {
         }
         if wp.is_null() {
             wp = (self.s.new_waypoint)(start);
-        } else if !(self.world().in_use)(wp) {
+        } else if !crate::station_record::in_use(wp.cast()) {
             (self.s.set_location)(wp, start);
         }
         let owner = (self.shared.tile_owner)(start);
@@ -596,7 +596,7 @@ impl Ctx<'_> {
         if wp.is_null() {
             wp = (self.s.new_waypoint)(start);
             (self.s.set_road_waypoint)(wp);
-        } else if !(self.world().in_use)(wp) {
+        } else if !crate::station_record::in_use(wp.cast()) {
             (self.s.set_location)(wp, start);
         }
         let owner = (self.shared.current_company)();
@@ -765,7 +765,7 @@ impl Ctx<'_> {
         {
             return cost.error(INVALID_STRING_ID);
         }
-        let wp = (self.world().get)((self.shared.station_index)(tile));
+        let wp = self.world().get((self.shared.station_index)(tile));
         if self.in_orders(
             (self.links().graphs.station_id)(wp),
             false,

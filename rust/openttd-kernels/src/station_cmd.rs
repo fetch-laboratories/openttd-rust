@@ -33,8 +33,7 @@ use waypoint::WaypointLayout;
 
 impl CommandServicesTable {
     pub(crate) fn rail_area(&self, st: *const BaseStation) -> TileArea {
-        let station = unsafe { &*self.station };
-        let kind = if (station.is_station)(st.cast_mut()) {
+        let kind = if crate::station_record::is_station(st) {
             crate::station_type::STATION_RAIL
         } else {
             crate::station_type::RAIL_WAYPOINT
@@ -676,16 +675,16 @@ impl Ctx<'_> {
         unsafe { &*self.s.links }
     }
     fn full_station(&self, id: u16) -> *mut BaseStation {
-        let st = (self.world().get)(id);
-        if st.is_null() || !(self.world().is_station)(st) {
+        let st = self.world().get(id);
+        if st.is_null() || !crate::station_record::is_station(st.cast()) {
             std::ptr::null_mut()
         } else {
             st
         }
     }
     fn waypoint(&self, id: u16) -> *mut BaseStation {
-        let st = (self.world().get)(id);
-        if st.is_null() || (self.world().is_station)(st) {
+        let st = self.world().get(id);
+        if st.is_null() || crate::station_record::is_station(st.cast()) {
             std::ptr::null_mut()
         } else {
             st
@@ -702,7 +701,7 @@ impl Ctx<'_> {
         let x = (self.map().tile_x(xy) as i32).clamp(b.left, b.right) as u32;
         let y = (self.map().tile_y(xy) as i32).clamp(b.top, b.bottom) as u32;
         crate::station::spatial::move_sign(self.shared, st, (y << self.map().log_x) + x);
-        if !(self.world().is_station)(st) {
+        if !crate::station_record::is_station(st.cast()) {
             return;
         }
         for cargo in 0..64 {
@@ -722,7 +721,7 @@ impl Ctx<'_> {
     }
     fn delete_if_empty(&self, st: *mut BaseStation) {
         let owner = crate::station_record::service_of(st.cast());
-        if !(self.world().in_use)(st) {
+        if !crate::station_record::in_use(st.cast()) {
             // SAFETY: canonical owner, serialized scalar write ends before UI reentry.
             unsafe { (&raw mut (*owner).record.delete_ctr).write(0) };
             (self.world().station_list_invalidation)(st, 0);
@@ -833,7 +832,7 @@ unsafe extern "C" fn deleted_visit(context: *mut std::ffi::c_void, st: *mut Base
     // SAFETY: radius invokes this visitor synchronously with this stack context.
     let search = unsafe { &mut *context.cast::<DeletedSearch<'_>>() };
     let c = search.c;
-    if (c.world().in_use)(st)
+    if crate::station_record::in_use(st.cast())
         || crate::station_record::owner_company(st.cast()) != (c.shared.current_company)()
     {
         return;
@@ -944,7 +943,7 @@ impl Ctx<'_> {
             {
                 return out.error(0xffff);
             }
-            for index in 0..(self.world().pool_size)() {
+            for index in 0..self.world().pool_size() {
                 let candidate = self.full_station(index as u16);
                 if !candidate.is_null() && (self.s.name_equals)(candidate, text, length) {
                     return out.error(self.s.strings.name_unique);
@@ -1005,7 +1004,7 @@ impl Ctx<'_> {
     }
     fn shrink(&self, st: *mut BaseStation, mut area: TileArea, kind: u8) -> TileArea {
         let id = (self.links().graphs.station_id)(st);
-        let kind = if kind == 0 && !(self.world().is_station)(st) {
+        let kind = if kind == 0 && !crate::station_record::is_station(st.cast()) {
             7
         } else {
             kind
@@ -1116,7 +1115,7 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
         return out.error(0xffff);
     }
     let owner = crate::station_record::owner_company(st.cast());
-    if (c.world().facilities)(st) & 8 == 0 || owner == 0x10 {
+    if crate::station_record::facilities(st.cast()) & 8 == 0 || owner == 0x10 {
         return out.error(0xffff);
     }
     unsafe {
@@ -3097,13 +3096,13 @@ impl Ctx<'_> {
         } else if (authority.council_tolerance)() != 3 {
             let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
             let mut count = 0_u32;
-            for id in 0..(self.world().pool_size)() {
+            for id in 0..self.world().pool_size() {
                 let st = self.full_station(id as u16);
                 if st.is_null() {
                     continue;
                 }
                 if (self.s.station_town)(st) == town
-                    && (self.world().facilities)(st) & 8 != 0
+                    && crate::station_record::facilities(st.cast()) & 8 != 0
                     && (self.s.airport_type)(st) != 9
                 {
                     count += 1;
@@ -3320,7 +3319,7 @@ pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const Com
             (&raw mut (*fields).noise_reached).write(0);
         }
     }
-    for id in 0..(c.world().pool_size)() {
+    for id in 0..c.world().pool_size() {
         let st = c.full_station(id as u16);
         if st.is_null() {
             continue;
@@ -3686,7 +3685,9 @@ impl Ctx<'_> {
                         crate::vehicle::visits::leave_station(v, self.vehicle().visits());
                     }
                 }
-                if (self.vehicle().order_type)(v) == 1 && (self.world().facilities)(st) & 16 == 0 {
+                if (self.vehicle().order_type)(v) == 1
+                    && crate::station_record::facilities(st.cast()) & 16 == 0
+                {
                     let dest = unsafe {
                         crate::ship_control::openttd_rust_ship_station_destination(
                             identity.id,
@@ -3783,7 +3784,9 @@ impl Ctx<'_> {
                 &*self.s.restoration,
             );
         }
-        assert!((self.world().facilities)(st) == 24 && (self.s.airport_type)(st) == 9);
+        assert!(
+            crate::station_record::facilities(st.cast()) == 24 && (self.s.airport_type)(st) == 9
+        );
         let industry = (self.s.associated_industry)(st);
         if !industry.is_null() && (self.s.industry_neutral)(industry) == st {
             (self.s.clear_industry_neutral)(industry);

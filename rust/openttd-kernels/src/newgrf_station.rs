@@ -166,9 +166,6 @@ impl Services {
     fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
         unsafe { &*(self.shared().station_commands)() }
     }
-    fn world(&self) -> &crate::station_service::World {
-        unsafe { &*self.commands().station }
-    }
     fn rail(&self) -> &crate::services::RailMapServices {
         unsafe { &*(*self.commands().rail).rail }
     }
@@ -216,7 +213,7 @@ pub unsafe extern "C" fn openttd_rust_station_resolver_init(
     let mut cargo = SG_DEFAULT_NA;
     if st.is_null() {
         cargo = SG_PURCHASE;
-    } else if (native.world().is_station)(st) {
+    } else if crate::station_record::is_station(st.cast()) {
         for i in 0..(native.group_count)(spec) {
             let c = (native.group_cargo)(spec, i);
             if c < NUM_CARGO && native.count(st, c) > 0 {
@@ -543,7 +540,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
     available: *mut bool,
 ) -> u32 {
     let native = services();
-    if !(native.world().is_station)(st) {
+    if !crate::station_record::is_station(st.cast()) {
         return match variable {
             0x48 | 0xf1..=0xf3 | 0xf6 | 0xf7 | 0x60..=0x65 => 0,
             0x8a => u32::from(crate::station_type::HVOT_WAYPOINT),
@@ -784,7 +781,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x82 => 50,
         0x84 => (native.commands().string_id)(st),
         0x86 => 0,
-        0xf0 => u32::from((native.world().facilities)(st)),
+        0xf0 => u32::from(crate::station_record::facilities(st.cast())),
         0xfa => build_date((native.build_date)(st)),
         _ => unsafe {
             openttd_rust_station_base_variable(st, file, variable, parameter as u8, available)
@@ -799,7 +796,7 @@ pub unsafe extern "C" fn openttd_rust_station_resolve_real(
     let native = services();
     let st = unsafe { (*state).station };
     let loading = (native.loading_count)(group);
-    if st.is_null() || !(native.world().is_station)(st) {
+    if st.is_null() || !crate::station_record::is_station(st.cast()) {
         return if loading > 0 {
             (native.loading)(group, 0)
         } else {

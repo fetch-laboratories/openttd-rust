@@ -79,12 +79,8 @@ inline OpenTTDRoadStopSpecTriggers RustRoadStopSpecTriggers(const RoadStopSpec *
  * Const and mutable table receivers share each scalar's actual field read. */
 inline BaseStation *RustBaseStationByTile(uint32_t tile) noexcept { return BaseStation::GetByTile(TileIndex(tile)); }
 /* Bind directly: another service table may still be dynamically initializing. */
-template <class Handle>
-inline bool RustStationIsExpected(Handle handle) noexcept { return Station::IsExpected(static_cast<const BaseStation *>(handle)); }
 template <typename TStation>
 inline uint16_t RustBaseStationID(TStation *st) noexcept { return st->index.base(); }
-inline uint8_t RustStationFacilities(const BaseStation *st) noexcept { return st->GetFacilities().base(); }
-template <class Handle> inline uint8_t RustStationFacilitiesHandle(Handle handle) noexcept { return RustStationFacilities(static_cast<const BaseStation *>(handle)); }
 /** Read existing cargo data only; a missing GoodsEntryData stays unallocated. */
 inline const OpenTTDCargoList *RustStationExistingCargoOwner(BaseStation *st, uint8_t cargo) noexcept { const auto &goods = Station::From(st)->GetGoods(cargo); return goods.HasData() ? goods.GetData().cargo.RustOwner() : nullptr; }
 

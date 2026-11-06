@@ -44,7 +44,6 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.vehicles = &GetRustVehicleServices(),
 		.by_tile = RustStationByTile,
 		.station_id = RustBaseStationID<const BaseStation>,
-		.facilities = RustStationFacilities,
 		.get_station = RustStationGet<Station *>,
 		.check = RustAssertCondition,
 		.engine_if_valid = RustEngineByIDIfValid,

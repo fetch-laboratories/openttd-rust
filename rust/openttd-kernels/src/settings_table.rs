@@ -396,11 +396,11 @@ fn check_freeform_edges(s: &Services, new_value: i32) -> bool {
         let catchment = unsafe { &*(s.shared.station_catchment)() };
         // SAFETY: As above, for its station services.
         let stations = unsafe { &*catchment.station };
-        for id in 0..(stations.pool_size)() {
+        for id in 0..stations.pool_size() {
             // BaseStation pool IDs are bounded by their u16 representation.
             #[allow(clippy::cast_possible_truncation)]
-            let st = (stations.get)(id as u16);
-            if st.is_null() || !(stations.in_use)(st) {
+            let st = stations.get(id as u16);
+            if st.is_null() || !crate::station_record::in_use(st.cast()) {
                 continue;
             }
             let xy = (catchment.location)(st);

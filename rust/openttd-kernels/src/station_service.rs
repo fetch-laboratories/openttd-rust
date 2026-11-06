@@ -310,15 +310,9 @@ pub struct TruncatedSource {
 #[repr(C)]
 pub struct World {
     pub(crate) graphs: &'static live::Services,
-    pub(crate) station: extern "C" fn(u16) -> LoadingStation,
     pub(crate) station_exclusivity: extern "C" fn(*mut BaseStation) -> StationExclusivity,
     pub(crate) rating_counts: extern "C" fn(*mut BaseStation, u8) -> RatingCounts,
-    pub(crate) get: extern "C" fn(u16) -> *mut BaseStation,
-    pub(crate) pool_size: extern "C" fn() -> usize,
     pub(crate) environment: crate::services::EnvironmentServices,
-    pub(crate) facilities: extern "C" fn(*mut BaseStation) -> u8,
-    pub(crate) in_use: extern "C" fn(*mut BaseStation) -> bool,
-    pub(crate) is_station: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) local_owner: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) town_statue: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) select_goods: extern "C" fn() -> bool,
@@ -344,6 +338,28 @@ pub struct World {
     pub(crate) shared: *const crate::services::Services,
 }
 impl World {
+    /// The shared table, immutable for the process.
+    fn shared(&self) -> &crate::services::Services {
+        // SAFETY: the immutable shared table outlives every entry.
+        unsafe { &*self.shared }
+    }
+    /// `BaseStation::GetIfValid(id)` over the canonical pool.
+    pub(crate) fn get(&self, id: u16) -> *mut BaseStation {
+        crate::station_record::station_get_if_valid(self.shared(), id)
+    }
+    /// `BaseStation::GetPoolSize()`.
+    pub(crate) fn pool_size(&self) -> usize {
+        crate::station_record::pool_size(self.shared())
+    }
+    /// `Station::Get(id)` with its record owner, resolved together.
+    pub(crate) fn station(&self, id: u16) -> LoadingStation {
+        let shell = crate::station_record::station_get(self.shared(), id);
+        LoadingStation {
+            native: shell.cast(),
+            base: shell,
+            state: crate::station_record::service_of(shell),
+        }
+    }
     fn random(&self) -> u32 {
         // SAFETY: the immutable shared table outlives this synchronous entry.
         let shared = unsafe { &*self.shared };
@@ -457,7 +473,7 @@ unsafe fn truncate(st: *mut BaseStation, cargo: u8, amount: u32, w: &World) {
             if !observed.present {
                 break;
             }
-            let source_st = (w.get)(observed.source);
+            let source_st = w.get(observed.source);
             if source_st.is_null() {
                 continue;
             }
@@ -487,7 +503,7 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
         let always = unsafe { &raw mut (*state).record.always_accepted };
         acceptance = unsafe { crate::station::acceptance_around_station(state, always, &c) };
     }
-    let facilities = u32::from((w.facilities)(st));
+    let facilities = u32::from(crate::station_record::facilities(st.cast()));
     for cargo in 0..64 {
         let mut amt = acceptance[usize::from(cargo)];
         let passenger = u32::from((w.passenger_cargo)(cargo)) != 0;
@@ -506,7 +522,10 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
     if old == new {
         return;
     }
-    if show != 0 && u32::from((w.local_owner)(st)) != 0 && u32::from((w.in_use)(st)) != 0 {
+    if show != 0
+        && u32::from((w.local_owner)(st)) != 0
+        && u32::from(crate::station_record::in_use(st.cast())) != 0
+    {
         let accepts = new & !old;
         let rejects = !new & old;
         if accepts != 0 {
@@ -718,9 +737,9 @@ pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world
 }
 pub(crate) unsafe fn openttd_rust_station_monthly(world: *const World) {
     let w = unsafe { &*world };
-    for id in 0..(w.pool_size)() {
-        let st = (w.get)(id as u16);
-        if st.is_null() || u32::from((w.is_station)(st)) == 0 {
+    for id in 0..w.pool_size() {
+        let st = w.get(id as u16);
+        if st.is_null() || u32::from(crate::station_record::is_station(st.cast())) == 0 {
             continue;
         }
         let state = crate::station_record::service_of(st.cast());
@@ -817,7 +836,9 @@ pub(crate) unsafe fn distribute(
                 return;
             }
             let passenger = u32::from((w.passenger_cargo)(cargo)) != 0;
-            if u32::from((w.facilities)(st)) == if passenger { 2 } else { 4 } {
+            if u32::from(crate::station_record::facilities(st.cast()))
+                == if passenger { 2 } else { 4 }
+            {
                 return;
             }
             let observed = (st, owner as usize, u32::from(rating), 0_u32);
@@ -1118,11 +1139,13 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
         return;
     }
     let mut id = 0_usize;
-    while id < (w.pool_size)() {
-        let st = (w.get)(id as u16);
+    while id < w.pool_size() {
+        let st = w.get(id as u16);
         if !st.is_null() {
             let state = crate::station_record::service_of(st.cast());
-            if u32::from((w.facilities)(st)) & 128 == 0 && u32::from((w.in_use)(st)) != 0 {
+            if u32::from(crate::station_record::facilities(st.cast())) & 128 == 0
+                && u32::from(crate::station_record::in_use(st.cast())) != 0
+            {
                 let mut b = unsafe { (*state).record.delete_ctr }.wrapping_add(1);
                 if b >= 185 {
                     b = 0;
@@ -1139,13 +1162,13 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
             // SAFETY: the immutable shared table outlives this synchronous entry.
             let tick = (unsafe { &*w.shared }.tick_counter)();
             let phase = tick.wrapping_add(id as u64);
-            if u32::from((w.is_station)(st)) != 0 && phase % 504 == 0 {
+            if u32::from(crate::station_record::is_station(st.cast())) != 0 && phase % 504 == 0 {
                 unsafe {
                     stale(st, l, visits);
                 }
             }
             if phase % 250 == 0 {
-                if u32::from((w.in_use)(st)) == 0 {
+                if u32::from(crate::station_record::in_use(st.cast())) == 0 {
                     let b = unsafe { (*state).record.delete_ctr }.wrapping_add(1);
                     unsafe {
                         (&raw mut (*state).record.delete_ctr).write(b);
@@ -1156,7 +1179,7 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
                     id += 1;
                     continue;
                 }
-                if u32::from((w.is_station)(st)) != 0 {
+                if u32::from(crate::station_record::is_station(st.cast())) != 0 {
                     unsafe {
                         openttd_rust_station_watched(st, world);
                     }
@@ -1166,7 +1189,7 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
                         }
                     }
                 }
-                if u32::from((w.facilities)(st)) & 128 == 0 {
+                if u32::from(crate::station_record::facilities(st.cast())) & 128 == 0 {
                     unsafe {
                         openttd_rust_station_acceptance(st, world, 1);
                     }
@@ -1481,7 +1504,7 @@ fn refit_vehicle(
 }
 /// `PrepareUnload`.
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
-    let st = (w.station)(front.last_station());
+    let st = w.station(front.last_station());
     unsafe {
         openttd_rust_station_queue_push(st.state, front.shell().cast());
     }
@@ -1541,7 +1564,7 @@ unsafe fn load_vehicle(
 ) {
     // SAFETY: The immutable shared vehicle table outlives this entry.
     let vehicle = unsafe { &*l.vehicle };
-    let st = (w.station)(front.last_station());
+    let st = w.station(front.last_station());
     let mut body = |next| {
         let control = (l.control)(front);
         let auto = control.refit && control.refit_cargo == 253;
@@ -1986,15 +2009,9 @@ crate::abi::layouts! {
     };
     "OpenTTDStationServices" ["probe"] => World {
         graphs,
-        station,
         station_exclusivity,
         rating_counts,
-        get,
-        pool_size,
         environment,
-        facilities,
-        in_use,
-        is_station,
         local_owner,
         town_statue,
         select_goods,

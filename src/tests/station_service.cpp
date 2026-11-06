@@ -212,6 +212,7 @@ TEST_CASE("Station service - goods state conversion reads canonical status")
 
 struct StationLoadingProbe {
 	OpenTTDStationRecord *owner;
+	Station *shell;
 	int vehicle, payment;
 	bool frame_live = false, staged = false;
 };
@@ -219,11 +220,16 @@ static StationLoadingProbe *_station_loading_probe;
 
 TEST_CASE("Station service - direct prepare preserves native frames and same-owner reentry")
 {
-	std::unique_ptr<OpenTTDStationRecord, decltype(&openttd_rust_station_record_delete)> owner(openttd_rust_station_record_new(nullptr, UINT32_MAX, 0), openttd_rust_station_record_delete);
+	MockEnvironment::Instance();
+	struct Restore { ~Restore() { _station_pool.CleanPool(); openttd_rust_station_rebuild_index(&GetRustSharedServices()); } } restore;
+	_station_pool.CleanPool();
+	/* Station::Get resolves the vehicle's last station through the canonical pool. */
+	Station *shell = new (StationID(0)) Station(TileIndex(1));
+	OpenTTDStationRecord *owner = &shell->Record();
 	/* An empty station does not cross back into any native service. */
-	openttd_rust_station_load(owner.get(), nullptr, nullptr, nullptr, nullptr, nullptr);
-	CHECK(openttd_rust_station_queue_size(owner.get()) == 0);
-	StationLoadingProbe probe{owner.get(), 0, 0};
+	openttd_rust_station_load(owner, nullptr, nullptr, nullptr, nullptr, nullptr);
+	CHECK(openttd_rust_station_queue_size(owner) == 0);
+	StationLoadingProbe probe{owner, shell, 0, 0};
 	_station_loading_probe = &probe;
 	auto *cargo = &owner->goods[0];
 	cargo->status = 2;
@@ -231,7 +237,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	/* Only the services this vehicle reaches are set; the semantic harness
 	 * covers their order, this covers the caller frame and owner reentry. */
 	OpenTTDStationServices services{};
-	services.station = [](uint16_t) noexcept -> OpenTTDLoadingStation { return {reinterpret_cast<OpenTTDStation *>(_station_loading_probe), reinterpret_cast<OpenTTDBaseStation *>(_station_loading_probe), _station_loading_probe->owner}; };
+	services.shared = &GetRustSharedServices();
 	OpenTTDVehicleServices vehicle{};
 	OpenTTDStationLoading loading{};
 	loading.vehicle = &vehicle;
@@ -249,7 +255,7 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 		_station_loading_probe->frame_live = false;
 	};
 	loading.stage = [](OpenTTDStation *st, OpenTTDVehicle *, uint8_t, void *next, OpenTTDNativeCargoPayment *payment) noexcept {
-		CHECK(static_cast<void *>(st) == _station_loading_probe);
+		CHECK(static_cast<void *>(st) == _station_loading_probe->shell);
 		CHECK(_station_loading_probe->frame_live);
 		CHECK(*static_cast<int *>(next) == 42);
 		CHECK(static_cast<void *>(payment) == &_station_loading_probe->payment);
@@ -266,7 +272,8 @@ TEST_CASE("Station service - direct prepare preserves native frames and same-own
 	CHECK(probe.staged);
 	CHECK_FALSE(probe.frame_live);
 	CHECK(cargo->rating == 6);
-	CHECK(openttd_rust_station_queue_value(openttd_rust_station_queue_first(owner.get())) == &probe.vehicle);
+	CHECK(openttd_rust_station_queue_value(openttd_rust_station_queue_first(owner)) == &probe.vehicle);
+	openttd_rust_station_queue_clear(owner);
 	_station_loading_probe = nullptr;
 }
 

@@ -16,25 +16,35 @@ pub(crate) fn can_engine_use_station(
     let e = (s.engine_if_valid)(engine);
     (s.check)(!e.is_null());
     let kind = (s.engine_kind)(e).0;
-    let world = unsafe { &*s.commands().station };
     match kind {
-        0 => (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_TRAIN != 0,
+        0 => {
+            crate::station_record::facilities(st.cast_mut().cast())
+                & crate::station_type::FACILITY_TRAIN
+                != 0
+        }
         1 => {
-            (world.facilities)(st.cast_mut())
+            crate::station_record::facilities(st.cast_mut().cast())
                 & (crate::station_type::FACILITY_BUS | crate::station_type::FACILITY_TRUCK)
                 != 0
         }
-        2 => (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_DOCK != 0,
+        2 => {
+            crate::station_record::facilities(st.cast_mut().cast())
+                & crate::station_type::FACILITY_DOCK
+                != 0
+        }
         3 => {
-            (world.facilities)(st.cast_mut()) & crate::station_type::FACILITY_AIRPORT != 0 && {
-                let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
-                let flag = if (s.engine_subtype)(e) & crate::engine_type::AIR_CTOL != 0 {
-                    crate::airport::FTA_AIRPLANES
-                } else {
-                    crate::airport::FTA_HELICOPTERS
-                };
-                (s.fta_flags)(fta) & flag != 0
-            }
+            crate::station_record::facilities(st.cast_mut().cast())
+                & crate::station_type::FACILITY_AIRPORT
+                != 0
+                && {
+                    let fta = crate::newgrf_airport::station_fta(st.cast_mut(), s);
+                    let flag = if (s.engine_subtype)(e) & crate::engine_type::AIR_CTOL != 0 {
+                        crate::airport::FTA_AIRPLANES
+                    } else {
+                        crate::airport::FTA_HELICOPTERS
+                    };
+                    (s.fta_flags)(fta) & flag != 0
+                }
         }
         _ => false,
     }

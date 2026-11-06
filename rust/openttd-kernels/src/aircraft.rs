@@ -683,10 +683,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     fn hangar_candidate(&self, st: *const Station, vehicle_owner: u8) -> HangarCandidate {
         let owner = self.station_owner(st) as u8;
-        let runtime = crate::newgrf_airport::runtime();
         let airport = owner == vehicle_owner
-            && unsafe { ((*runtime.commands().station).facilities)(st.cast_mut().cast()) }
-                & crate::station_type::FACILITY_AIRPORT
+            && crate::station_record::facilities(st.cast()) & crate::station_type::FACILITY_AIRPORT
                 != 0;
         HangarCandidate {
             owner,

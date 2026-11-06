@@ -309,8 +309,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
 /// `Station::AddFacility`; callers pass the original enum position.
 pub(crate) fn add_facility(st: *mut BaseStation, facility: u8, tile: u32, s: &Services) {
     let c = s.commands();
-    let world = unsafe { &*c.station };
-    if (world.facilities)(st) == 0 {
+    if crate::station_record::facilities(st.cast()) == 0 {
         crate::station::spatial::move_sign(s.shared, st, tile);
         unsafe {
             ((*s.roadstop).set_random_bits)(st, (s.shared.random)(std::ptr::null_mut()) as u16);
@@ -479,7 +478,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         let mut node = 0;
         while node < unsafe { &*owner }.size() {
             let other_id = unsafe { &*owner }.nodes[usize::from(node)].station;
-            let other = (w.get)(other_id);
+            let other = w.get(other_id);
             let goods = (links.goods_entry)(other, cargo);
             let flows = (storage.flow_map)(goods.cast());
             if !flows.is_null() {
@@ -571,8 +570,6 @@ pub unsafe extern "C" fn openttd_rust_station_airport_maintenance(s: &Services, 
     airport_maintenance(s, owner)
 }
 pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
-    let c = s.commands();
-    let w = unsafe { &*c.station };
     let mut total: i64 = 0;
     let mut from = 0;
     loop {
@@ -582,7 +579,7 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
         }
         from = u32::from((s.catchment.id)(st).0) + 1;
         if crate::station_record::owner_company(st.cast()) == owner
-            && (w.facilities)(st) & FACILITY_AIRPORT != 0
+            && crate::station_record::facilities(st.cast()) & FACILITY_AIRPORT != 0
         {
             let spec = crate::newgrf_airport::station_spec(st, crate::newgrf_airport::runtime());
             total = total.saturating_add(

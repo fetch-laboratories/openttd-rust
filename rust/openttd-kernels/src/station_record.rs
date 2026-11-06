@@ -227,6 +227,46 @@ pub(crate) fn station_get(s: &crate::services::Services, id: u16) -> *mut BaseSt
     }
 }
 
+/// `BaseStation::GetIfValid(id)`: the live shell, or null for a hole or an index
+/// at or beyond the pool's live extent.
+pub(crate) fn station_get_if_valid(s: &crate::services::Services, id: u16) -> *mut BaseStation {
+    let pool = (s.station_pool)();
+    let index = usize::from(id);
+    // SAFETY: The live extent and slot array come from the canonical pool.
+    unsafe {
+        if index >= pool.first_unused.read() {
+            return std::ptr::null_mut();
+        }
+        pool.slots.add(index).read()
+    }
+}
+
+/// `BaseStation::GetPoolSize()`: the pool's live extent.
+pub(crate) fn pool_size(s: &crate::services::Services) -> usize {
+    // SAFETY: The live extent is a scalar of the canonical pool.
+    unsafe { (s.station_pool)().first_unused.read() }
+}
+
+/// `StationFacilities` of a live shell.
+/// `shell` is a live native station shell of the serialized game state.
+#[inline]
+pub(crate) fn facilities(shell: *const BaseStation) -> u8 {
+    // SAFETY: Immediate scalar read of the live record.
+    unsafe { (*record_of(shell)).facilities }
+}
+
+/// `BaseStation::IsInUse`: any of the train, truck, bus, airport or dock facilities.
+#[inline]
+pub(crate) fn in_use(shell: *const BaseStation) -> bool {
+    facilities(shell) & 0x1F != 0
+}
+
+/// `Station::IsExpected`: the shell is a station, not a waypoint.
+#[inline]
+pub(crate) fn is_station(shell: *const BaseStation) -> bool {
+    facilities(shell) & FACILITY_WAYPOINT == 0
+}
+
 /// Call-scoped view of the native station pool's slot array. Growth relocates
 /// `slots`, but never lowers `first_unused`; refresh before reading past `slots_len`.
 #[repr(C)]

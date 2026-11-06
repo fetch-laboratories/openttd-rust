@@ -750,7 +750,7 @@ impl Game<'_> {
                                 // live station whose docking area is read in place.
                                 let docking = unsafe {
                                     let table = &*(self.services.station_commands)();
-                                    let st = ((*table.station).get)(station as u16);
+                                    let st = (*table.station).get(station as u16);
                                     *(table.docking_area)(st)
                                 };
                                 if docking.contains(new_tile, self.services.map(), |ok| {

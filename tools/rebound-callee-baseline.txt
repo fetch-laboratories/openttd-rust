@@ -275,14 +275,9 @@ rebound | RustStationAssociatedIndustry | src/station.cpp | associated_industry
 rebound | RustStationBuildDate | src/newgrf_airport.cpp | build_date
 rebound | RustStationBuildDate | src/newgrf_roadstop.cpp | build_date
 rebound | RustStationBuildDate | src/newgrf_station.cpp | build_date
-rebound | RustStationFacilities | src/newgrf_airport.cpp | facilities
-rebound | RustStationFacilities | src/newgrf_roadstop.cpp | facilities
 rebound | RustStationGet | src/animated_tile.cpp | station_base
 rebound | RustStationGet | src/newgrf_airport.cpp | get_station
 rebound | RustStationGet | src/subsidy.cpp | station
-rebound | RustStationIsExpected | src/animated_tile.cpp | is_station
-rebound | RustStationIsExpected | src/newgrf_roadstop.cpp | is_station
-rebound | RustStationIsExpected | src/station_cmd.cpp | is_station
 rebound | RustStationLocation | src/animated_tile.cpp | location
 rebound | RustStationLocation | src/rust/station_command_services.hpp | location
 rebound | RustStationLocation | src/station.cpp | location

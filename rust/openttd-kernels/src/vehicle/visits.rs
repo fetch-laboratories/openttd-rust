@@ -153,8 +153,8 @@ impl Services {
     }
     /// `Station::GetIfValid`.
     fn station_if_valid(&self, id: u16) -> *mut BaseStation {
-        let st = (self.station.get)(id);
-        if st.is_null() || !(self.station.is_station)(st) {
+        let st = self.station.get(id);
+        if st.is_null() || !crate::station_record::is_station(st.cast()) {
             std::ptr::null_mut()
         } else {
             st
@@ -176,7 +176,7 @@ pub(crate) fn increase_stats(
 ) {
     let l = s.links;
     // `Station::Get(next_station_id)`.
-    let st2 = (s.station.station)(next).base;
+    let st2 = s.station.station(next).base;
     let first_id = (l.graphs.graph_id)(st, cargo);
     let second_id = (l.graphs.graph_id)(st2, cargo);
     let mut graph = std::ptr::null_mut();
@@ -465,7 +465,7 @@ impl Refresher {
         {
             return;
         }
-        let st_to = (s.station.station)(next_station).base;
+        let st_to = s.station.station(next_station).base;
         let v = self.vehicle;
         let map = s.shared.map();
         for cargo in 0..NUM_CARGO {
@@ -838,7 +838,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
     {
         // `IncreaseStats(Station::Get(...), this, ..., travel_time)` narrows to uint32.
         increase_vehicle_stats(
-            (s.station.station)(front.last_loading).base,
+            s.station.station(front.last_loading).base,
             v,
             front.last_station,
             travel_time as u32,
@@ -888,7 +888,7 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     }
 
     o.make_leave_station(v);
-    let st = (s.station.station)((v).last_station());
+    let st = s.station.station((v).last_station());
     cancel_reservation(v, INVALID_STATION, st.native, s);
     // SAFETY: the live station's queue owner; the vehicle shell is its key.
     unsafe {

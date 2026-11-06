@@ -423,10 +423,7 @@ pub(crate) fn platform_length(w: &World<'_>, tile: u32, dir: u8) -> u32 {
     // Preserve BaseStation::GetByTile and virtual station/waypoint dispatch.
     // Native pool identity is resolved once, using the existing shared leaves.
     let station = (Pbs::acquire(w.shared).0.station)(tile);
-    // SAFETY: These immutable process-lifetime tables contain only operations.
-    let catchment = unsafe { &*(w.shared.station_catchment)() };
-    let stations = unsafe { &*catchment.station };
-    if !(stations.is_station)(station) {
+    if !crate::station_record::is_station(station.cast()) {
         return 1;
     }
     platform_length_station(w, tile, dir)
