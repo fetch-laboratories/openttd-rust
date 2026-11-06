@@ -1,8 +1,20 @@
 #pragma once
-#include "rust/linkgraph_ffi.h"
+#include "rust/linkgraph_schedule_ffi.h"
+#include "rust/newgrf_vehicle_ffi.h"
 
 static void LinkGraphJob()
 {
+	static const OpenTTDVehicleResolverServices resolver{
+		.cargo_classes = [](uint8_t cargo) noexcept -> uint16_t { CHECK(cargo == 0); return 1; },
+	};
+	static const OpenTTDVehicleServices vehicle{
+		.newgrf = []() noexcept { return &resolver; },
+	};
+	static const OpenTTDSharedServices shared{
+		.map_max_x = []() noexcept -> uint32_t { return 127; },
+		.map_max_y = []() noexcept -> uint32_t { return 127; },
+	};
+	static const OpenTTDScheduleServices services{.shared = &shared, .vehicle = &vehicle};
 	auto *graph = openttd_rust_live_graph_new(0);
 	graph->last_compression = 0;
 	openttd_rust_live_graph_init(graph, 2);
@@ -13,7 +25,7 @@ static void LinkGraphJob()
 	OpenTTDLinkGraphJobSettings settings{60, 4, 1, 1, 1, 1, 2, 100, 100, 80};
 	auto *job = openttd_rust_linkgraph_job_new(graph, 42, &settings);
 	job->join_date = 59;
-	openttd_rust_linkgraph_job_run(job, 1, 127, 127);
+	openttd_rust_schedule_run(&services, job);
 	CHECK(job->completed.load(std::memory_order_acquire) && job->nodes.size() == 2);
 	for (const auto &node : job->nodes) {
 		auto origin = openttd_rust_flow_map_at(node.flows, 12, 1);
@@ -26,7 +38,7 @@ static void LinkGraphJob()
 	openttd_rust_linkgraph_job_delete(job);
 	job = openttd_rust_linkgraph_job_new(graph, 42, &settings);
 	job->aborted.store(true, std::memory_order_release);
-	openttd_rust_linkgraph_job_run(job, 1, 127, 127);
+	openttd_rust_schedule_run(&services, job);
 	CHECK(!job->completed.load(std::memory_order_acquire) && job->nodes.empty());
 	openttd_rust_linkgraph_job_delete(job);
 	openttd_rust_live_graph_delete(graph);

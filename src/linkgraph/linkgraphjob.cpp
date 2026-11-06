@@ -14,6 +14,7 @@
 #include "../rust/services_linkgraph.h"
 #include "linkgraphschedule.h"
 #include "../rust/linkgraph_ffi.h"
+#include "../rust/linkgraph_schedule_ffi.h"
 #include "../timer/timer_game_tick.h"
 
 #include "../safeguards.h"
@@ -28,7 +29,7 @@ LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgrap
 /** Start the native worker; Rust executes the synchronous failure fallback. */
 bool LinkGraphJob::StartThread()
 {
-	return StartNewThread(&this->thread, "ottd:linkgraph", &(LinkGraphSchedule::Run), this);
+	return StartNewThread(&this->thread, "ottd:linkgraph", &openttd_rust_schedule_run, &LinkGraphSchedule::services, this->record);
 }
 
 /**
@@ -116,12 +117,6 @@ LinkGraphJob::~LinkGraphJob()
 static_assert(DT_MANUAL == 0 && DT_ASYMMETRIC == 1 && DT_SYMMETRIC == 2);
 static_assert(StationID::Invalid().base() == UINT16_MAX);
 static_assert(Ticks::DAY_TICKS == 74);
-
-void LinkGraphJob::RunRust()
-{
-	if (this->IsJobAborted()) return;
-	openttd_rust_linkgraph_job_run(this->record, CargoSpec::Get(this->Cargo())->classes.base(), Map::MaxX(), Map::MaxY());
-}
 
 #include "../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoFlowServices.hpp"

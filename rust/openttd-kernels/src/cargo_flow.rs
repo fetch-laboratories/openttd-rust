@@ -689,6 +689,10 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
                     // Remove the live entry before routing, as in erase(it++).
                     let removed = unsafe { (*live).entries.remove(&current.origin).unwrap() };
                     let shares = unsafe { Box::from_raw(removed) };
+                    // The audited reroute changes station/loading-vehicle cargo only:
+                    // it cannot replace data/flows, delete the station or reset/yield.
+                    // Like the source iterator, raw live/next handles remain valid;
+                    // no borrowed station/map/entry reference crosses the callback.
                     for &via in shares.shares.values() {
                         (s.reroute)(s.context, node, via);
                     }
@@ -708,6 +712,7 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
             }
         }
         let empty = read(9, node, 0) as u8;
+        // finish may clear station data: no live map or entry is accessed afterward.
         (s.finish)(s.context, node, empty);
     }
 }

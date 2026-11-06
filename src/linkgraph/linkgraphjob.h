@@ -38,7 +38,6 @@ public:
 	CargoType Cargo() const { return this->Record().graph->cargo; }
 	LinkGraphID LinkGraphIndex() const { return LinkGraphID(this->Record().graph_index); }
 	OpenTTDLiveGraph *Graph() const { return this->Record().graph; }
-	void RunRust();
 private:
 	OpenTTDLinkGraphJobRecord *record;
 	std::thread thread{};

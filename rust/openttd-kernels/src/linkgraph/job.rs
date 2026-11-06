@@ -117,13 +117,7 @@ pub unsafe extern "C" fn openttd_rust_linkgraph_job_delete(job: *mut JobRecord) 
     drop(unsafe { Box::from_raw(job) });
 }
 /// Called at the source worker entry, including the synchronous start-failure fallback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_linkgraph_job_run(
-    job: *mut JobRecord,
-    cargo_classes: u16,
-    map_max_x: u32,
-    map_max_y: u32,
-) {
+pub(crate) unsafe fn run(job: *mut JobRecord, cargo_classes: u16, map_max_x: u32, map_max_y: u32) {
     if unsafe { (*job).aborted.load(Ordering::Acquire) } {
         return;
     }
@@ -239,7 +233,7 @@ mod tests {
             settings.distribution_pax = 0;
             let address = job as usize;
             std::thread::spawn(move || unsafe {
-                openttd_rust_linkgraph_job_run(address as *mut JobRecord, PASSENGERS, 127, 127);
+                run(address as *mut JobRecord, PASSENGERS, 127, 127);
             })
             .join()
             .unwrap();

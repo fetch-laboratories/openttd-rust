@@ -28,7 +28,6 @@ public:
 	static const uint SPAWN_JOIN_TICK = 21; ///< Tick when jobs are spawned or joined every day.
 	static LinkGraphSchedule instance;
 
-	static void Run(LinkGraphJob *job);
 	static void Clear();
 
 

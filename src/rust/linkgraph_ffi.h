@@ -30,7 +30,6 @@ extern "C" {
 #endif
 OpenTTDLinkGraphJobRecord *openttd_rust_linkgraph_job_new(const OpenTTDLiveGraph *, uint16_t, const OpenTTDLinkGraphJobSettings *);
 void openttd_rust_linkgraph_job_delete(OpenTTDLinkGraphJobRecord *);
-void openttd_rust_linkgraph_job_run(OpenTTDLinkGraphJobRecord *, uint16_t, uint32_t, uint32_t);
 /* Contents owner. Canonical edge scalars have the BaseEdge layout; a borrowed
  * pointer expires on edge/vector mutation. Node handles never copy records.
  * Save addresses expire on graph resize/destruction. SlObject and all error

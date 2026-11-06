@@ -11,7 +11,8 @@ struct OpenTTDScheduleQueues {
 	OpenTTDLinkGraphJobRecord *const *running; size_t running_len;
 };
 
-/* Game-state mutex serializes every entry; workers never access this owner.
+/* Game-state mutex serializes queue entries; workers never access the queues.
+ * The worker entry uses only its private job and immutable services.
  * Queue record pointers retain the native index + 1 encoding during load fixup.
  * No queue borrow spans a callback. Leaves are noexcept; panics abort.
  * Exported spans live only until the next owner mutation; copy in native code
@@ -34,6 +35,7 @@ struct OpenTTDScheduleServices {
 	const OpenTTDVehicleServices *vehicle;
 };
 extern "C" {
+void openttd_rust_schedule_run(const OpenTTDScheduleServices *, OpenTTDLinkGraphJobRecord *);
 void openttd_rust_schedule_queue(const OpenTTDScheduleServices *, OpenTTDLiveGraph *);
 void openttd_rust_schedule_dequeue(OpenTTDLiveGraph *);
 void openttd_rust_schedule_spawn_all(const OpenTTDScheduleServices *);

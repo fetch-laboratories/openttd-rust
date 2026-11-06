@@ -40,6 +40,11 @@ typedef struct OpenTTDCargoFlowServices {
 /* Each facade holds one opaque owner or a nonowning borrow of a map entry, valid until that entry is
  * erased. Maps own raw-allocated flow nodes that insertion and unrelated erasure leave in place; job
  * maps are private to their worker until join, and rerouting cannot delete graph shells.
+ * RerouteCargo only changes this station's cargo list and staged loading-vehicle cargo.
+ * It cannot clear/replace station data or flows, delete/reuse the station, reset pools or
+ * yield the game-state mutex. Live raw map/entry pointers therefore remain valid across
+ * this audited leaf, as in the pinned native iterator loop; no Rust owner borrow crosses it.
+ * All station/data/flow handles end before finish, which may clear the attachment.
  * Station read selectors: 3 valid, 8 manual distribution, 9 live data empty,
  * 10 live graph ID, 11 live node ID. Job snapshots/results are read directly.
  * finish clears data when requested, then invalidates the station window, after the thread join.

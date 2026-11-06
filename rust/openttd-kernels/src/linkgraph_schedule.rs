@@ -71,20 +71,22 @@ fn spawn_job(s: &Services, job: *mut Job) {
     if (s.start_thread)(job) {
         return;
     }
+    openttd_rust_schedule_run(s, job);
+}
+/// Worker entry shared by the native thread and synchronous start-failure path.
+/// It reads only immutable service definitions and the job-private snapshot; it
+/// never acquires scheduler queues or borrows live graph/station records.
+#[unsafe(no_mangle)]
+extern "C" fn openttd_rust_schedule_run(s: &Services, job: *mut Job) {
     if unsafe { (*job).aborted.load(Ordering::Acquire) } {
         return;
     }
-    // The source fallback observes cargo classes and map dimensions at worker entry.
+    // The source observes cargo classes and map dimensions at worker entry.
     let cargo = unsafe { (*(*job).graph).cargo };
     let resolver = unsafe { ((*s.vehicle).newgrf)() };
     let classes = unsafe { ((*resolver).cargo_classes)(cargo) };
     unsafe {
-        crate::linkgraph::job::openttd_rust_linkgraph_job_run(
-            job,
-            classes,
-            (s.shared.map_max_x)(),
-            (s.shared.map_max_y)(),
-        );
+        crate::linkgraph::job::run(job, classes, (s.shared.map_max_x)(), (s.shared.map_max_y)());
     }
 }
 fn spawn_next(s: &Services) {

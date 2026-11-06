@@ -61,12 +61,3 @@ void AfterLoad_LinkGraphPauseControl() { openttd_rust_schedule_after_load(); }
 
 LinkGraphSchedule::LinkGraphSchedule() = default;
 LinkGraphSchedule::~LinkGraphSchedule() { this->Clear(); }
-
-/**
- * Run all handlers for the given Job.
- * @param job Pointer to a link graph job.
- */
-/* static */ void LinkGraphSchedule::Run(LinkGraphJob *job)
-{
-	job->RunRust();
-}
