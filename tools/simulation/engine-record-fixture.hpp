@@ -56,6 +56,7 @@ template <typename T> struct FixtureEngineBackup {
 	FixtureEngineBackup(const FixtureEngineBackup &) = delete;
 	~FixtureEngineBackup() { if (this->valid) this->Restore(); openttd_test_engine_bindings_drop(this->snapshot); }
 	const T &GetOriginalValue() const { assert(this->valid); return Value(this->snapshot); }
+	bool Verify() const { assert(this->valid); return Value(this->snapshot) == this->original; }
 	void Revert() { assert(this->valid); auto *copy = openttd_test_engine_bindings_clone(this->snapshot); std::swap(this->original, Value(copy)); openttd_test_engine_bindings_drop(copy); }
 	void Trash() { assert(this->valid); this->valid = false; }
 	void Restore() { this->Revert(); this->Trash(); }
@@ -74,4 +75,14 @@ inline void FixtureSetEngineSprite(Engine *e, CargoType cargo, const SpriteGroup
 inline void FixtureSetEngineBadges(Engine *e, std::span<const BadgeID> badges) { e->badges.assign(badges.begin(), badges.end()); }
 inline void FixtureWagonOverride(EngineID engine, CargoType cargo, const SpriteGroup *group, std::span<EngineID> engines) { SetWagonOverrideSprites(engine, cargo, group, engines); }
 #endif
+inline const SpriteGroup *FixtureEngineSprite(const Engine *engine, CargoType cargo)
+{
+#ifdef WITH_RUST
+	const auto &groups = EngineBindings(engine).grf_prop.spritegroups;
+	const auto it = std::ranges::lower_bound(groups, cargo, {}, &OpenTTDEngineCargoBinding::cargo);
+	return it != groups.end() && it->cargo == cargo ? it->group : nullptr;
+#else
+	return engine->grf_prop.GetSpriteGroup(cargo);
+#endif
+}
 #endif
