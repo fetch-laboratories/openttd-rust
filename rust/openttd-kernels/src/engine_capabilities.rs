@@ -35,7 +35,6 @@ use crate::newgrf_properties::{
     PROP_TRAIN_RUNNING_COST_FACTOR,
 };
 use crate::vehicle::{EngineRef, OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
-use std::ffi::c_void;
 use std::ptr::null_mut;
 type E = *const OpenTTDEngine;
 type V = *mut OpenTTDVehicle;
