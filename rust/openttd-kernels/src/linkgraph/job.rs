@@ -72,12 +72,13 @@ pub unsafe extern "C" fn openttd_rust_linkgraph_job_new(
     settings: *const SnapshotSettings,
 ) -> *mut JobRecord {
     let settings = unsafe { *settings };
-    let graph = if graph.is_null() {
+    let loading = graph.is_null();
+    let graph = if loading {
         super::live::openttd_rust_live_graph_new_empty()
     } else {
         Box::into_raw(Box::new(unsafe { &*graph }.clone()))
     };
-    let join_date = if graph_index == crate::linkgraph_type::INVALID_LINK_GRAPH {
+    let join_date = if loading {
         INVALID_DATE
     } else {
         crate::timer_game_common::economy_date().0.wrapping_add(
