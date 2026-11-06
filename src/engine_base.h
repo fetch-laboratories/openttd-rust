@@ -17,6 +17,7 @@
 #include "newgrf_commons.h"
 #include "timer/timer_game_calendar.h"
 #include "rust/engine_lifecycle.hpp"
+#include "rust/owned_bytes.h"
 
 /** Flags used client-side in the purchase/autorenew engine list. */
 enum class EngineDisplayFlag : uint8_t {
@@ -35,8 +36,8 @@ public:
 	EngineLifecycleOwner rust_lifecycle{this};
 	OpenTTDEngineLifecycle &Record() { return *this->rust_lifecycle.state; }
 	const OpenTTDEngineLifecycle &Record() const { return *this->rust_lifecycle.state; }
-	std::string_view Name() const { return {reinterpret_cast<const char *>(this->Record().name.items), this->Record().name.count}; }
-	void SetName(std::string_view text) { openttd_rust_engine_set_name(&this->Record(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}); }
+	std::string_view Name() const { return RustBytesView(this->Record().name); }
+	void SetName(std::string_view text) { RustBytesAssign(this->Record().name, text); }
 
 	EngineDisplayFlags display_flags{}; ///< NOSAVE client-side-only display flags for build engine list.
 	EngineID display_last_variant = EngineID::Invalid(); ///< NOSAVE client-side-only last variant selected.

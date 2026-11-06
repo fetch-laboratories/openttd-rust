@@ -138,22 +138,15 @@ pub unsafe extern "C" fn openttd_rust_engine_destroy(state: *mut Lifecycle) {
     // SAFETY: The shell transfers its sole live allocation at destruction.
     drop(unsafe { Box::from_raw(state) });
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_engine_set_name(state: *mut Lifecycle, text: ByteSpan) {
-    unsafe { set_name(state, text) };
-}
-
 unsafe fn set_name(state: *mut Lifecycle, text: ByteSpan) {
     crate::witness::hit(crate::witness::ENGINE_ENTRIES);
-    // SAFETY: Owner is live and serialized; source may alias this owner's name,
-    // so copy before replacing. Empty spans may have a null pointer.
-    let name = if text.size == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(text.data, text.size) }.to_vec()
-    };
+    // SAFETY: The live owner's byte vector is Rust-owned and serialized. The
+    // shared assignment copies aliased input before replacing that allocation.
     unsafe {
-        (*state).name = NativeVec::from_vec(name);
+        crate::owned_bytes::openttd_rust_owned_bytes_assign(
+            std::ptr::addr_of_mut!((*state).name),
+            text,
+        );
     }
 }
 
