@@ -218,7 +218,7 @@ pub(crate) fn continuation(s: &Services, rs: u32, next: u32) -> bool {
 pub(crate) fn get_by_tile(s: &Services, tile: u32, kind: RoadStopType) -> (*mut Stop, *mut State) {
     let station = crate::station_record::get_station_record_if_valid(
         s,
-        crate::station_type::StationID((s.station_index)(tile)),
+        crate::map_func::World::new(s).station_index(tile),
     );
     let mut state = unsafe {
         if kind.0 == 0 {
