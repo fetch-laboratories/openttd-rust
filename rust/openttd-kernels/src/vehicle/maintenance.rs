@@ -292,7 +292,7 @@ unsafe fn replacement_needed<const C: bool>(
 }
 unsafe fn automatic<const C: bool>(v: VehicleRef, base: &VehicleServices) -> bool {
     let orders = crate::orders::VisitOrders::new(base.orders());
-    let list = orders.list(v);
+    let list = crate::orders::VisitOrders::list(v);
     let has_depot_order = !list.is_null()
         && (0..orders.stored_count(list))
             .any(|i| orders.stored_order(list, i).kind() == OT_GOTO_DEPOT);

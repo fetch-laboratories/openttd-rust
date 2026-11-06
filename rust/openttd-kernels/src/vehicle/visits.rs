@@ -420,9 +420,9 @@ impl Refresher {
         seen: &mut HopSet,
         s: &Services,
     ) -> u8 {
-        s.check(|| !s.orders().list(self.vehicle).is_null());
+        s.check(|| !VisitOrders::list(self.vehicle).is_null());
         let o = s.orders();
-        let list = o.list(self.vehicle);
+        let list = VisitOrders::list(self.vehicle);
         while next < o.count(list)
             && (flags & USE_NEXT == 0 || o.order(list, next).kind() == OT_CONDITIONAL)
         {
@@ -449,9 +449,9 @@ impl Refresher {
 
     /// `LinkRefresher::RefreshStats`.
     fn refresh_stats(&self, cur: u8, next: u8, s: &Services) {
-        s.check(|| !s.orders().list(self.vehicle).is_null());
+        s.check(|| !VisitOrders::list(self.vehicle).is_null());
         let o = s.orders();
-        let list = o.list(self.vehicle);
+        let list = VisitOrders::list(self.vehicle);
         let next_station = o.order(list, next).destination;
         let cur_order = o.order(list, cur);
         let st = s.station_if_valid(cur_order.destination);
@@ -565,9 +565,9 @@ impl Refresher {
         seen: &mut HopSet,
         s: &Services,
     ) {
-        s.check(|| !s.orders().list(self.vehicle).is_null());
+        s.check(|| !VisitOrders::list(self.vehicle).is_null());
         let o = s.orders();
-        let list = o.list(self.vehicle);
+        let list = VisitOrders::list(self.vehicle);
         while next < o.count(list) {
             let next_order = o.order(list, next);
 
@@ -643,7 +643,7 @@ impl Refresher {
 /// `LinkRefresher::Run`.
 pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: bool, s: &Services) {
     let o = s.orders();
-    let list = o.list(v);
+    let list = VisitOrders::list(v);
     // If there are no orders we can't predict anything.
     if list.is_null() {
         return;

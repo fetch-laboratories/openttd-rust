@@ -4523,7 +4523,7 @@ impl VisitOrders {
         v.shell().cast()
     }
     /// `v->orders`, the native `OrderList` shell or null.
-    pub(crate) fn list(self, v: VehicleRef) -> *mut c_void {
+    pub(crate) fn list(v: VehicleRef) -> *mut c_void {
         let owner = read_field!(v.0.as_ptr(), orders);
         read_field!(owner, orders)
     }

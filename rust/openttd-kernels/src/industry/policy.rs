@@ -72,7 +72,7 @@ pub(super) fn servicing(shell: *mut c_void, owner: *mut Industry, s: &Services) 
         if !accepts && !produces {
             continue;
         }
-        let list = orders.list(v);
+        let list = crate::orders::VisitOrders::list(v);
         if list.is_null() {
             continue;
         }
