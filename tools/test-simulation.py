@@ -1263,6 +1263,84 @@ class InstructionSpeedTests(unittest.TestCase):
                 settings = json.loads((build / "instruction-build.json").read_text())
             self.assertTrue(settings["settings"].startswith(anchored + "ct"))
 
+    def test_pkg_config_scratch_keeps_real_build_inputs_distinct(self) -> None:
+        settings = (
+            "CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/c++\n"
+            "CMAKE_CXX_FLAGS:STRING=-O2\n"
+            "CURL_LIBRARY_RELEASE:FILEPATH=/usr/lib/libcurl.so\n"
+            "CURL_PREFIX:INTERNAL=/usr\n"
+            "FIND_PACKAGE_MESSAGE_DETAILS_CURL:INTERNAL=[libcurl][8.5]\n"
+            "prefix_result:INTERNAL=AsynchDNS;GSS-API;HSTS;HTTP2;HTTPS-proxy;IDN;"
+            "IPv6;Kerberos;Largefile;NTLM;PSL;SPNEGO;SSL;TLS-SRP;UnixSockets;alt-svc;"
+            "brotli;libz;threadsafe;zstd\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            build, run, tools = (root / name for name in ("build", "run", "tools"))
+            for folder in (build, run, tools):
+                folder.mkdir()
+            binary = build / "openttd-rust"
+            binary.write_bytes(b"game")
+            valgrind = tools / "valgrind"
+            valgrind.write_bytes(b"dispatcher")
+            for name in ("callgrind-test", "vgpreload_core-test.so"):
+                (tools / name).write_bytes(b"tool")
+            metadata = build / "instruction-build.json"
+            library = root / "libcurl.so"
+            library.write_bytes(b"runtime library")
+            env = {"VALGRIND_LIB": str(tools)}
+            scenario = cast(simulate.Scenario, dict(kind="generate", ticks=1))
+
+            def measured(text: str, reference: bool = False) -> dict[str, Any]:
+                metadata.write_text(
+                    json.dumps(dict(settings=text, executable=ir.digest(b"game")))
+                )
+                return ir.identity(
+                    scenario, binary, build, run, env, valgrind, reference
+                )
+
+            def output(command: list[str], **kwargs: object) -> str:
+                return f"{library} (0x123)" if command[0] == "ldd" else "tool-v1"
+
+            with patch.object(ir.subprocess, "check_output", side_effect=output):
+                anchored = measured(settings)
+                self.assertEqual(
+                    measured(settings, True)["compatible"], anchored["compatible"]
+                )
+                drifted = settings.replace(ir.ANCHORED_PREFIX_RESULT, "/usr")
+                self.assertEqual(measured(drifted), anchored)
+                self.assertNotEqual(measured(drifted, True), measured(settings, True))
+                for before, after in (
+                    ("/usr/bin/c++", "/usr/bin/clang++"),
+                    ("-O2", "-O3"),
+                    ("/usr/lib/libcurl.so", "/other/libcurl.so"),
+                    ("CURL_PREFIX:INTERNAL=/usr", "CURL_PREFIX:INTERNAL=/other"),
+                    ("[8.5]", "[8.6]"),
+                    ("prefix_result:INTERNAL", "prefix_result:STRING"),
+                ):
+                    with self.subTest(input=before):
+                        self.assertNotEqual(
+                            measured(drifted.replace(before, after)), anchored
+                        )
+                for name in ("callgrind-test", "vgpreload_core-test.so"):
+                    path = tools / name
+                    path.write_bytes(b"different tool")
+                    self.assertNotEqual(measured(drifted), anchored)
+                    path.write_bytes(b"tool")
+                library.write_bytes(b"changed runtime library")
+                self.assertNotEqual(measured(drifted), anchored)
+                library.write_bytes(b"runtime library")
+                (run / "script").write_text("changed input")
+                self.assertNotEqual(measured(drifted), anchored)
+                (run / "script").unlink()
+                with patch.object(
+                    ir.subprocess, "check_output", return_value="tool-v2"
+                ):
+                    self.assertNotEqual(measured(drifted), anchored)
+                binary.write_bytes(b"changed executable")
+                with self.assertRaisesRegex(ValueError, "stale instruction build"):
+                    measured(drifted)
+
     def test_effective_compiled_debug_rejects_overrides_and_stripping(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1322,6 +1400,45 @@ class InstructionSpeedTests(unittest.TestCase):
 
 
 class SpeedPassTests(unittest.TestCase):
+    def test_preparation_diagnoses_anchor_before_games(self) -> None:
+        from simulation import speed
+
+        name = "play-test"
+        identities = {name: {"candidate": {"compatible": "current"}}}
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+
+            def copy_runtime(
+                build: Path, binary: Path, target: Path, **kwargs: object
+            ) -> None:
+                target.mkdir()
+                (target / "instruction-build.json").write_text("{}")
+
+            with (
+                patch.object(migration, "git", side_effect=["head", ""]),
+                patch.object(
+                    migration, "reference_lock", return_value=contextlib.nullcontext()
+                ),
+                patch.object(speed.core, "copy_runtime", side_effect=copy_runtime),
+                patch.object(speed.core, "adapter_modules", return_value=[]),
+                patch.object(speed, "prepare_inputs", return_value=([], identities)),
+                patch.object(
+                    ir,
+                    "SPEED_ANCHORS",
+                    {name: {"anchor": {"identity": {"compatible": "anchor"}}}},
+                ),
+                patch.object(speed.core, "run_game") as game,
+                contextlib.redirect_stdout(io.StringIO()) as printed,
+            ):
+                self.assertEqual(speed.prepare(out, None, migration), 0)
+            game.assert_not_called()
+            self.assertIn("current current, anchor anchor", printed.getvalue())
+            self.assertIn("before profiling", printed.getvalue())
+            self.assertEqual(
+                json.loads((out / "manifest.json").read_text())["runtime_identities"],
+                identities,
+            )
+
     def test_collection_prepares_before_hold_and_compares_after_release(self) -> None:
         from simulation import speed
 

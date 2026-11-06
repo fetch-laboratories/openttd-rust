@@ -157,9 +157,24 @@ TEST_GIT_ENTRIES = (
     r"//Details about finding Git\nFIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[^\n]*\n",
     r"//ADVANCED property for variable: GIT_EXECUTABLE\nGIT_EXECUTABLE-ADVANCED:INTERNAL=1\n",
 )
+# FindPkgConfig's pkg_get_variable overwrites this scratch cache entry on every
+# query (features, prefix, etc.). Actual package paths/flags stay in their own
+# entries and linked library bytes are hashed separately. Retain the quiet
+# anchor's spelling rather than changing existing anchor or reference hashes.
+ANCHORED_PREFIX_RESULT = (
+    "AsynchDNS;GSS-API;HSTS;HTTP2;HTTPS-proxy;IDN;IPv6;Kerberos;Largefile;"
+    "NTLM;PSL;SPNEGO;SSL;TLS-SRP;UnixSockets;alt-svc;brotli;libz;threadsafe;zstd"
+)
 
 
 def anchored_cache(text: str) -> str:
+    """Restore only proven non-game discovery bookkeeping to anchor spelling."""
+    text = re.sub(
+        r"^prefix_result:INTERNAL=[^\n]*$",
+        "prefix_result:INTERNAL=" + ANCHORED_PREFIX_RESULT,
+        text,
+        flags=re.M,
+    )
     for entry in TEST_GIT_ENTRIES:
         text = re.sub(entry, "", text)
     if "\nOPTION_RUST:" not in text:
@@ -271,6 +286,9 @@ def identity(
             "stale instruction build; rebuild with simulate --instructions"
         )
     settings = metadata["settings"]
+    if not reference:
+        # Retained, executable-bound captures predate this normalization too.
+        settings = anchored_cache(settings)
     version = subprocess.check_output(
         [str(valgrind), "--command-line-only=yes", "--version"], env=env, text=True
     ).strip()

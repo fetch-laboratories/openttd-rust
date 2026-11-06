@@ -115,6 +115,19 @@ def prepare(out: Path, profile: Path | None, migration: ModuleType) -> int:
         for name, identity in identities.items()
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    for name, identity in identities.items():
+        record = instructions.SPEED_ANCHORS.get(name)
+        actual = identity["candidate"]["compatible"]
+        expected = record["anchor"]["identity"]["compatible"] if record else None
+        if actual != expected:
+            print(
+                f"{name}: instruction anchor identity mismatch "
+                f"(current {actual}, anchor {expected or 'missing'}). "
+                f"Inspect {out / 'manifest.json'} and frozen/*/instruction-build.json: "
+                "compare compiler/configuration, linked libraries, selected "
+                "Callgrind tool/core and scenario inputs before profiling. "
+                "A real input change requires a quiet speed pass."
+            )
     proved = "matching the profile" if profile else "without a profile"
     print(f"Prepared {len(identities)} scenarios {proved}, no games: {out}")
     return 0
