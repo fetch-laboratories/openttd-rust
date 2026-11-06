@@ -248,7 +248,7 @@ def prepare(
             if not all(path.is_file() for path in paths):
                 raise RuntimeError(f"{mode}: missing {state} session save")
             differences = core.compare_saves(
-                *paths, scenario["name"], 10, {"chunks": 0, "elements": 0, "masked": {}}
+                *paths, scenario["name"], 10, core.empty_stats()
             )
             if differences:
                 raise RuntimeError(

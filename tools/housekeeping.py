@@ -23,6 +23,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+import vcs
+
 PROC_ROOT = Path("/proc")
 BASE = "origin/rust-migration"
 # Per-run output folders; every other `.local` entry is kept unless listed below.
@@ -57,6 +59,7 @@ class Item:
     branch: str | None = None  # local branch deleted after its worktree
     unlock: bool = False  # stale lock released by --apply before removal
     prune: bool = False  # missing folder; --apply prunes its record
+    completed: bool = False  # pushed completion bypasses only the activity fallback
     identity: tuple[int, int] | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
@@ -84,21 +87,21 @@ NAMED = re.compile(r"(?:#|/(?:issues|pull)/)(\d+)\b")
 
 
 def git(repo: Path, *arguments: str) -> str:
-    return subprocess.check_output(["git", "-C", str(repo), *arguments], text=True)
+    return vcs.git(*arguments, cwd=repo)
 
 
 def gh_pr_state(repo: Path, branch: str) -> str | None:
     """OPEN, MERGED or CLOSED across every PR from BRANCH, in that precedence."""
     command = ["gh", "pr", "list", "--state", "all", "--head", branch]
     command += ["--json", "state", "--jq", ".[].state"]
-    states = subprocess.check_output(command, cwd=repo, text=True).split()
+    states = vcs.gh(*command[1:], cwd=repo).split()
     return next((s for s in ("OPEN", "MERGED", "CLOSED") if s in states), None)
 
 
 def gh_issue_state(repo: Path, number: int) -> str:
     """OPEN or CLOSED for an issue or PR; a merged PR is closed."""
     command = ["gh", "api", f"repos/{{owner}}/{{repo}}/issues/{number}"]
-    return subprocess.check_output([*command, "--jq", ".state"], cwd=repo, text=True)
+    return vcs.gh(*command[1:], "--jq", ".state", cwd=repo)
 
 
 def stale_lock(main: Path, note: str, issue_state: IssueState) -> str | None:
@@ -223,10 +226,21 @@ def plan_worktrees(
             dirty = f"{reason}, but dirty"
             items.append(Item(tree.path, False, dirty, True, None, unlock))
         else:
-            refusal = worktree_refusal(main, tree.path, references)
+            completed = merged or (
+                state in ("MERGED", "CLOSED") and on_origin(main, tree.head)
+            )
+            refusal = worktree_refusal(main, tree.path, references, completed)
             remove = not refusal
             items.append(
-                Item(tree.path, remove, refusal or reason, True, branch, unlock)
+                Item(
+                    tree.path,
+                    remove,
+                    refusal or reason,
+                    True,
+                    branch,
+                    unlock,
+                    completed=completed,
+                )
             )
     return protect_outputs(items)
 
@@ -269,7 +283,9 @@ def recently_active(tree: Path) -> bool:
         return False
 
 
-def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
+def worktree_refusal(
+    main: Path, path: Path, references: str, completed: bool = False
+) -> str | None:
     if path.name in references or str(path) in references:
         return "referenced by roadmap or open issue/PR"
     local = main / ".local"
@@ -312,7 +328,7 @@ def worktree_refusal(main: Path, path: Path, references: str) -> str | None:
                 return f"cannot inspect process cwd: {error}"
     except OSError as error:
         return f"cannot inspect process cwd: {error}"
-    if ".t3/worktrees/" in path.as_posix() and recently_active(path):
+    if not completed and ".t3/worktrees/" in path.as_posix() and recently_active(path):
         return f"T3 task active within {RUNNING_SECONDS // 3600} hours"
     return None
 
@@ -492,7 +508,7 @@ def finished(main: Path, report: Path) -> tuple[bool, str]:
     return True, f"finished run of integrated {commit[:12]}"
 
 
-def plan_local(local: Path, now: float) -> list[Item]:
+def plan_local(local: Path, now: float, references: str = "") -> list[Item]:
     keep: dict[Path, str] = {}
     deep = max((r.parent for r in local.glob("deep/*/report.json")), default=None)
     if deep is not None:
@@ -511,6 +527,11 @@ def plan_local(local: Path, now: float) -> list[Item]:
         name = entry.name
         if name in OUTPUT and entry.is_dir():
             for run in sorted(entry.iterdir()):
+                # Bare names cover .local, HDD-target, inner-file and listed forms.
+                if re.search(
+                    r"(?<![\w.-])" + re.escape(run.name) + r"(?![\w.-])", references
+                ):
+                    keep.setdefault(run, "referenced by roadmap or open issue/PR")
                 if run in keep:
                     items.append(Item(run, False, keep[run]))
                 elif (run / "report.json").exists():
@@ -551,7 +572,7 @@ def plan(
 ) -> list[Item]:
     main, *linked = list_worktrees(repo)
     trees = plan_worktrees(main.path, linked, pr_state, references, issue_state)
-    return trees + plan_local(main.path / ".local", now)
+    return trees + plan_local(main.path / ".local", now, references)
 
 
 def size(path: Path) -> int:
@@ -591,7 +612,9 @@ def remove(main: Path, item: Item, references: str = "") -> str | None:
         git(main, "worktree", "prune")
         listed = {tree.path for tree in list_worktrees(main)}
         return "record not pruned" if item.path in listed else None
-    if item.worktree and (refusal := worktree_refusal(main, item.path, references)):
+    if item.worktree and (
+        refusal := worktree_refusal(main, item.path, references, item.completed)
+    ):
         return refusal
     handles, error = open_outputs()
     if refusal := output_refusal(item.path, handles, error):

@@ -45,11 +45,12 @@
 
 #include "table/strings.h"
 
+#include "rust/session_native.hpp"
+
 #include "safeguards.h"
 
 
 #include "rust/world_generation_ffi.h"
-#include "rust/session_native.hpp"
 #include "industry.h"
 #include "rust/landscape_generation_frame.hpp"
 #include "rust/industry_generation_adapter.hpp"

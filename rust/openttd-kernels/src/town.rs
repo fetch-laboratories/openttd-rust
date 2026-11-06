@@ -988,8 +988,10 @@ impl Engine<'_> {
             for i in 0..6 {
                 match self.goals()[i] {
                     0xffff_fffe => {
-                        if (self.services.tile_height)(self.position())
-                            >= u32::from(crate::snow_line::get(self.services))
+                        if crate::tile_map::tile_height_in(
+                            &crate::map_func::World::new(self.services),
+                            self.position(),
+                        ) >= u32::from(crate::snow_line::get(self.services))
                             && self.old_received(i) == 0
                             && self.population() > 90
                         {
@@ -1111,7 +1113,7 @@ impl Engine<'_> {
     }
     fn road_allowed(&self, town: u32, tile: u32, dir: u32) -> bool {
         if self.distance_from_edge(tile) == 0
-            || ((self.services.bridge_above)(tile)
+            || (crate::map_func::World::new(self.services).bridge_above(tile)
                 && u32::from((self.services.bridge_axis)(tile)) == (dir & 1))
         {
             return false;
@@ -1273,10 +1275,12 @@ impl Engine<'_> {
             end = self.step(end, dir);
             if !self.valid(end)
                 || !(((self.services.is_water_tile)(end)
-                    && (slope != 0 || !(self.services.is_sea)(end)))
+                    && (slope != 0 || !crate::map_func::World::new(self.services).is_sea(end)))
                     || (self.services.is_plain_rail)(end)
-                    || ((self.services.is_normal_road_tile)(end)
-                        && (self.services.disallowed_road_directions)(end) != 0))
+                    || (crate::map_func::World::new(self.services).is_normal_road_tile(end)
+                        && crate::map_func::World::new(self.services)
+                            .disallowed_road_directions(end)
+                            != 0))
             {
                 break;
             }
@@ -1378,7 +1382,7 @@ impl Engine<'_> {
             let at = self.offset(tile, x, y);
             if !self.valid(at)
                 || !((self.services.tile_type)(at) == MP_ROAD
-                    || (self.services.is_any_road_stop)(at))
+                    || crate::map_func::World::new(self.services).any_road_stop_tile(at))
             {
                 continue;
             }
@@ -1604,7 +1608,7 @@ impl Engine<'_> {
                 && !(self.services.is_road_depot)(tile)
                 && (self.services.has_road_type)(tile)
             {
-                let owner = (self.services.road_owner)(tile);
+                let owner = crate::map_func::World::new(self.services).road_owner(tile, false);
                 if owner == 15 && u32::from((self.services.town_index)(tile)) != town {
                     return false;
                 }
@@ -1701,7 +1705,9 @@ impl Engine<'_> {
         if (noslope && slope != 0) || is_steep_slope(slope) {
             return false;
         }
-        if !self.roads_allow_house(tile) || (self.services.bridge_above)(tile) {
+        if !self.roads_allow_house(tile)
+            || crate::map_func::World::new(self.services).bridge_above(tile)
+        {
             return false;
         }
         self.clear(tile, false)

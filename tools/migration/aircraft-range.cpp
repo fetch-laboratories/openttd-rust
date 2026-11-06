@@ -118,7 +118,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	movement.shared = &shared;
 	shared.movement = &movement;
 	shared.tile_type = [](uint32_t) noexcept { return uint8_t{0}; }; // Flat clear ground.
-	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
 	leaves.airport_entry = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};

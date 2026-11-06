@@ -172,11 +172,6 @@ static const OpenTTDSaveLoadServices _sl_services = {
 	.vehicle_get = &RustSaveReferenceGet<Vehicle>,
 	.vehicle_index = &RustSaveReferenceIndex<Vehicle>,
 	.vehicle_record_get = &RustSaveReferenceVehicleRecord,
-	.string_data = [](const void *ptr, size_t *length) noexcept {
-		const std::string &str = *static_cast<const std::string *>(ptr);
-		*length = str.size();
-		return reinterpret_cast<const uint8_t *>(str.data());
-	},
 	.string_resize = [](void *ptr, size_t length, uint8_t **data) noexcept {
 		return SlNativeFrame([&] {
 			std::string &str = *static_cast<std::string *>(ptr);

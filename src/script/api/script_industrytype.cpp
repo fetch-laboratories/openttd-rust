@@ -30,14 +30,14 @@
 {
 	if (!IsValidIndustryType(industry_type)) return false;
 
-	return ::GetIndustrySpec(industry_type)->IsRawIndustry();
+	return ::IsRawIndustry(::GetIndustrySpec(industry_type));
 }
 
 /* static */ bool ScriptIndustryType::IsProcessingIndustry(IndustryType industry_type)
 {
 	if (!IsValidIndustryType(industry_type)) return false;
 
-	return ::GetIndustrySpec(industry_type)->IsProcessingIndustry();
+	return ::IsProcessingIndustry(::GetIndustrySpec(industry_type));
 }
 
 /* static */ bool ScriptIndustryType::ProductionCanIncrease(IndustryType industry_type)
@@ -51,9 +51,9 @@
 /* static */ Money ScriptIndustryType::GetConstructionCost(IndustryType industry_type)
 {
 	if (!IsValidIndustryType(industry_type)) return -1;
-	if (::GetIndustrySpec(industry_type)->IsRawIndustry() && _settings_game.construction.raw_industry_construction == 0) return -1;
+	if (::IsRawIndustry(::GetIndustrySpec(industry_type)) && _settings_game.construction.raw_industry_construction == 0) return -1;
 
-	return ::GetIndustrySpec(industry_type)->GetConstructionCost();
+	return ::GetConstructionCost(::GetIndustrySpec(industry_type));
 }
 
 /* static */ std::optional<std::string> ScriptIndustryType::GetName(IndustryType industry_type)
@@ -98,7 +98,7 @@
 	const bool deity = ScriptCompanyMode::IsDeity();
 	if (::GetIndustryProbabilityCallback(industry_type, deity ? IACT_RANDOMCREATION : IACT_USERCREATION, 1) == 0) return false;
 	if (deity) return true;
-	if (!::GetIndustrySpec(industry_type)->IsRawIndustry()) return true;
+	if (!::IsRawIndustry(::GetIndustrySpec(industry_type))) return true;
 
 	/* raw_industry_construction == 1 means "Build as other industries" */
 	return _settings_game.construction.raw_industry_construction == 1;
@@ -109,7 +109,7 @@
 	if (!IsValidIndustryType(industry_type)) return false;
 
 	const bool deity = ScriptCompanyMode::IsDeity();
-	if (!deity && !::GetIndustrySpec(industry_type)->IsRawIndustry()) return false;
+	if (!deity && !::IsRawIndustry(::GetIndustrySpec(industry_type))) return false;
 	if (::GetIndustryProbabilityCallback(industry_type, deity ? IACT_RANDOMCREATION : IACT_USERCREATION, 1) == 0) return false;
 
 	/* raw_industry_construction == 2 means "prospect" */

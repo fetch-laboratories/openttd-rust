@@ -133,7 +133,8 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
             (w.clear_docking)(tile);
         });
     }
-    if unsafe { (s.behaviour)(industry) } & 1 != 0 {
+    let kind = unsafe { (*owner).metadata.kind };
+    if unsafe { (*crate::industrytype::industry(u16::from(kind))).behaviour } & 1 != 0 {
         let tile = unsafe { ptr::read(ptr::addr_of!((*owner).metadata.tile)) };
         let x = tile % map.size_x;
         let y = tile / map.size_x;

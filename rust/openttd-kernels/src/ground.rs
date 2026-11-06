@@ -18,8 +18,7 @@
 )]
 use crate::services::{
     Axis, ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType,
-    RailGroundType, RailMapServices, RoadBits, RoadType, Roadside, Services, Slope, Track,
-    TrackBits, WaterClass,
+    RailGroundType, RoadBits, RoadType, Roadside, Services, Slope, Track, TrackBits, WaterClass,
 };
 use crate::slope_func::{is_slope_with_three_corners_raised, is_steep_slope};
 
@@ -32,9 +31,13 @@ pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Servi
 use crate::track_func::axis_to_track;
 
 /// Original `GetCrossingRailAxis`, over the canonical road-axis accessor.
-fn crossing_rail_axis(tile: u32, rail: &RailMapServices, check: impl Fn(bool) + Copy) -> Axis {
+fn crossing_rail_axis(
+    tile: u32,
+    world: &crate::map_func::World<'_>,
+    check: impl Fn(bool) + Copy,
+) -> Axis {
     Axis(crate::direction_func::other_axis(
-        (rail.crossing_road_axis)(tile).0,
+        world.crossing_road_axis(tile),
         check,
     ))
 }
@@ -42,10 +45,10 @@ fn crossing_rail_axis(tile: u32, rail: &RailMapServices, check: impl Fn(bool) + 
 /// Original `GetCrossingRailTrack`, retaining its named helper composition.
 pub(crate) fn crossing_rail_track(
     tile: u32,
-    rail: &RailMapServices,
+    world: &crate::map_func::World<'_>,
     check: impl Fn(bool) + Copy,
 ) -> Track {
-    axis_to_track(crossing_rail_axis(tile, rail, check), check)
+    axis_to_track(crossing_rail_axis(tile, world, check), check)
 }
 
 /// Original `CheckBuildAbove_Clear`: construction above clear tiles always succeeds.
@@ -213,7 +216,6 @@ pub struct ClearServices {
     pub fences: extern "C" fn(u32) -> FieldFences,
     pub field: extern "C" fn(u32) -> FieldGround,
     pub set_field: extern "C" fn(u32, u32),
-    pub water_class: extern "C" fn(u32) -> WaterClass,
 }
 #[repr(C)]
 pub struct RailSnowGround {
@@ -344,16 +346,10 @@ pub(crate) unsafe fn clear_tile_loop(
         {
             let normal = (0..4).any(|direction| {
                 let t = diagonal(tile, direction, size_x);
-                crate::tile_map::is_valid_tile(map, t, map.count())
-                    .unwrap_or_else(|| (s.tile_valid)(t))
-                    && (crate::tile_map::get_tropic_zone(map, t)
-                        .unwrap_or_else(|| (s.tropic_zone)(t))
-                        != 1
-                        || (crate::water_map::has_tile_water_class(map, t)
-                            .unwrap_or_else(|| (s.has_water_class)(t))
-                            && crate::water_map::get_water_class(map, t)
-                                .unwrap_or_else(|| (c.water_class)(t).0)
-                                == 0))
+                map.asserted(s, |m| crate::tile_map::is_valid_tile(m, t, m.count()))
+                    && (map.asserted(s, |m| crate::tile_map::get_tropic_zone(m, t)) != 1
+                        || (map.asserted(s, |m| crate::water_map::has_tile_water_class(m, t))
+                            && map.asserted(s, |m| crate::water_map::get_water_class(m, t)) == 0))
             });
             expected = if normal { 1 } else { 3 };
         }
@@ -699,7 +695,10 @@ pub(crate) unsafe fn road_tile_loop(
             let (months, group, distance) =
                 unsafe { crate::town::road_context(owner, tile, size_x) };
             zone = group;
-            if months != 0 && (distance < 8 || zone != 0) && (s.is_normal_road_tile)(tile) {
+            if months != 0
+                && (distance < 8 || zone != 0)
+                && crate::map_func::World::new(s).is_normal_road_tile(tile)
+            {
                 let bits = (r.all_bits)(tile);
                 if bits.0.count_ones() > 1
                     && crate::movement::foundation_slope(s, tile).slope.0 == 0
@@ -798,7 +797,7 @@ pub(crate) unsafe fn road_tile_loop(
                 }
             }
         }
-        if (s.road_owner)(tile) == 15 {
+        if crate::map_func::World::new(s).road_owner(tile, false) == 15 {
             // SAFETY: The immutable town table is live; road selection borrows no owner.
             let road_type =
                 RoadType(unsafe { crate::town::openttd_rust_town_road_type(r.town, s) } as u8);
@@ -956,7 +955,6 @@ crate::abi::layouts! {
         fences,
         field,
         set_field,
-        water_class,
     };
     "OpenTTDRailSnowGround" ["landscape"] => RailSnowGround {
         z,

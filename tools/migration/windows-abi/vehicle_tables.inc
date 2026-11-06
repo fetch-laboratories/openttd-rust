@@ -65,7 +65,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(shared, tile_owner);
 		VEHICLE_UNUSED(shared, station_index);
 		VEHICLE_UNUSED(shared, depot_index);
-		VEHICLE_UNUSED(shared, is_level_crossing);
 		VEHICLE_UNUSED(shared, tunnel_bridge_direction);
 		VEHICLE_UNUSED(shared, bridge_speed);
 		VEHICLE_UNUSED(leaves, any_road_bits);
@@ -74,7 +73,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, disallowed_directions);
 		VEHICLE_UNUSED(leaves, is_bay_stop);
 		VEHICLE_UNUSED(leaves, bay_direction);
-		VEHICLE_UNUSED(leaves, is_drive_through);
 		VEHICLE_UNUSED(leaves, is_station_road_stop);
 		VEHICLE_UNUSED(leaves, choose_track);
 		VEHICLE_UNUSED(leaves, find_depot);

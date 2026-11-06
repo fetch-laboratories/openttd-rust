@@ -6,6 +6,8 @@
  */
 
 //! Signal type values from `signal_type.h`.
+/// `SIGTYPE_BLOCK`.
+pub const SIGTYPE_BLOCK: u8 = 0;
 /// `SIGTYPE_PBS_ONEWAY`.
 pub const SIGTYPE_PBS_ONEWAY: u8 = 5;
 /// `SIGTYPE_PBS`.

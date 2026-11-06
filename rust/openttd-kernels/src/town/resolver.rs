@@ -66,7 +66,7 @@ pub struct ResolverServices {
     search_spec: extern "C" fn(u16) -> SearchSpec,
     nearby_spec: extern "C" fn(u16) -> NearbySpec,
     file_identity: extern "C" fn(u16) -> FileIdentity,
-    badges: extern "C" fn(*const c_void, u16, u32) -> u32,
+    badges: extern "C" fn(u16) -> crate::newgrf_specs::BadgeSpan,
     root: extern "C" fn(u16, bool) -> *const c_void,
     spec_house: extern "C" fn(*const c_void) -> u16,
     local_id: extern "C" fn(u16) -> u16,
@@ -396,7 +396,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             0x41..=0x44 | 0x46 | 0x47 | 0x60..=0x65 | 0x67 => 0,
             0x45 => u32::from((l.generating_world)()),
             0x66 => u32::MAX,
-            0x7A => (s.badges)(ro, scope.house, parameter),
+            0x7A => (s.badges)(scope.house).resolve(s.shared(), ro, parameter),
             _ => {
                 debug!(grf, 1, "Unhandled house variable 0x{:X}", variable);
                 unsafe { *available = false };
@@ -536,7 +536,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 }
             }
         }
-        0x7A => (s.badges)(ro, scope.house, parameter),
+        0x7A => (s.badges)(scope.house).resolve(s.shared(), ro, parameter),
         _ => {
             debug!(grf, 1, "Unhandled house variable 0x{:X}", variable);
             unsafe { *available = false };

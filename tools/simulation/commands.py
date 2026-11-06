@@ -1,6 +1,5 @@
 """Seeded script commands; the original remains the outcome and state oracle."""
 
-import shutil
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
@@ -89,6 +88,7 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
             "_Z10DebugPrintSt17basic_string_viewIcSt11char_traitsIcEEiONSt7__cxx1112basic_stringIcS1_SaIcEEE",
         ),
         replace_objects=("/src/network/network_command.cpp.o",),
+        native_test_support=True,
     )
 
 
@@ -99,13 +99,14 @@ def uses_ai(scenario: Mapping[str, Any]) -> bool:
 def install(scenario: Scenario, run_dir: Path) -> None:
     if not uses_ai(scenario):
         return
-    folder = run_dir / "ai/commands"
-    shutil.copytree(scenario["scenario_ai"], folder)
-    (folder / "parameters.nut").write_text(
+    core.install_ai(
+        scenario,
+        run_dir,
+        "commands",
         f"COMMAND_SEED <- {scenario['command_seed']};\n"
         f"COMMAND_COUNT <- {scenario.get('command_count', 0)};\n"
         f"COMMAND_MONEY <- {str(scenario.get('command_money', False)).lower()};\n"
-        f"COMMAND_SETUP <- {str(scenario.get('command_setup', False)).lower()};\n"
+        f"COMMAND_SETUP <- {str(scenario.get('command_setup', False)).lower()};\n",
     )
 
 
@@ -157,7 +158,7 @@ def prepare(
             saves["candidate"],
             scenario["name"],
             10,
-            {"chunks": 0, "elements": 0, "masked": {}},
+            core.empty_stats(),
         )
         if differences:
             raise RuntimeError(f"command lifecycle checkpoint differs: {differences}")

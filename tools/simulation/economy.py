@@ -395,14 +395,10 @@ def check(
 
 def income_gap() -> None:
     """Native-width/negative callback and Money bounds absent from road fixtures."""
-    import importlib.util
+    import probe
 
-    spec = importlib.util.spec_from_file_location(
-        "migration", ROOT / "tools/migration.py"
-    )
-    assert spec is not None and spec.loader is not None
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
+    import migration
+
     build = ROOT / "build-rust"
     out = ROOT / ".local/cargo-income-gap"
     out.mkdir(parents=True, exist_ok=True)
@@ -425,22 +421,24 @@ def income_gap() -> None:
         )
     )
     command = [
-        "c++",
+        probe.compiler(build),
         "-std=c++20",
         "-O2",
-        "-DPOINTER_IS_64BIT",
+        *probe.target_flags(build),
         "-I" + str(ROOT / "src"),
         "-I" + str(out),
         str(ROOT / "tools/migration/cargo-income-gap.cpp"),
-        str(migration.rust_archive(build)),
-        "-ldl",
-        "-lpthread",
-        "-lm",
+        *probe.rust(build, define=False),
         "-o",
         str(out / "probe"),
     ]
-    subprocess.run(command, cwd=ROOT, env=migration.environment(), check=True)
-    subprocess.run([str(out / "probe")], cwd=ROOT, check=True)
+    probe.compile(command, out / "compile.log", cwd=ROOT, env=migration.environment())
+    print(
+        probe.execute(
+            [out / "probe"], out / "probe", cwd=ROOT, stderr="inherited"
+        ).decode(),
+        end="",
+    )
 
 
 if __name__ == "__main__":

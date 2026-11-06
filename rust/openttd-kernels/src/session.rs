@@ -10,6 +10,7 @@
 use crate::company_type::{CompanyID, MAX_COMPANIES};
 use crate::debug::debug;
 use crate::game_state::GameState;
+use crate::network_action::{Actions, Resume};
 use crate::openttd::{GameMode, PauseMode, SwitchMode};
 use crate::raw_field::{read_field, write_field};
 #[repr(C)]
@@ -41,18 +42,14 @@ use crate::saveload::{SL_OK, SL_REINIT, SaveOrLoadResult as LoadResult};
 pub struct Services {
     pub clock: *const crate::timer_game_common::ClockServices,
     pub company: *const crate::company::Services,
+    pub network: *const crate::network_frame::Services,
     pub shared: *const crate::services::Services,
     pub schedule: *const crate::linkgraph_schedule::Services,
     pub world: extern "C" fn() -> *const crate::genworld::WorldServices,
     pub server_requested: extern "C" fn() -> bool,
     pub clear_server_requested: extern "C" fn(),
     pub network_available: extern "C" fn() -> bool,
-    pub network_reboot: extern "C" fn(),
-    pub network_disconnect: extern "C" fn(),
-    pub network_server_start: extern "C" fn(*mut Frame) -> bool,
     pub network_background: extern "C" fn(),
-    pub network_start_game: extern "C" fn(),
-    pub network_join: extern "C" fn(),
     pub kill_ai: extern "C" fn(),
     pub load_config: extern "C" fn(),
     pub reset_session_stats: extern "C" fn(),
@@ -89,7 +86,6 @@ pub struct Services {
     pub starting_colour: extern "C" fn() -> u8,
     pub settings_elrail: extern "C" fn(bool),
     pub company_settings: extern "C" fn(),
-    pub company_colour: extern "C" fn(bool, u8),
     pub reset_ai_config: extern "C" fn(CompanyID),
     pub reset_game_config: extern "C" fn(),
     pub publish_settings: extern "C" fn(),
@@ -104,13 +100,10 @@ pub struct Services {
     pub pause_change: extern "C" fn(u8, PauseMode),
     pub pause_dirty: extern "C" fn(),
     pub full_animation: extern "C" fn() -> bool,
-    pub reconnect_due: extern "C" fn() -> bool,
     pub console_script: extern "C" fn(*mut Frame) -> bool,
     pub game_script: extern "C" fn(*mut Frame) -> bool,
     pub ai_script: extern "C" fn(*mut Frame) -> bool,
     pub startup_company: extern "C" fn(*mut Frame) -> bool,
-    pub network_loop: extern "C" fn(*mut Frame) -> bool,
-    pub network_reconnect: extern "C" fn(*mut Frame) -> bool,
     pub state_frame_begin: extern "C" fn(*mut FrameStorage) -> *mut Frame,
     pub state_frame_end: extern "C" fn(*mut Frame, *mut Frame) -> bool,
     pub real_time: extern "C" fn(*mut Frame) -> bool,
@@ -124,6 +117,7 @@ pub struct Services {
     pub load: extern "C" fn(*mut Frame, *mut Load) -> LoadResult,
     pub intro_load: extern "C" fn(*mut Frame) -> LoadResult,
     pub save: extern "C" fn(*mut Frame) -> LoadResult,
+    pub network_actions: extern "C" fn(*mut Frame) -> *mut crate::network_action::Storage,
     pub failed: extern "C" fn(*mut Frame) -> bool,
     pub console_exception:
         extern "C" fn(*mut Frame) -> *mut crate::timer_game_common::ConsoleException,
@@ -274,6 +268,15 @@ impl<'a> Session<'a> {
     fn world(&self) -> &crate::genworld::WorldServices {
         unsafe { &**self.world.get_or_init(|| (self.s.world)()) }
     }
+    fn network(&self) -> &crate::network_frame::Services {
+        // SAFETY: The immutable native service table outlives every session call.
+        unsafe { &*self.s.network }
+    }
+    fn actions(&self) -> Actions {
+        let work = unsafe { Actions::from_storage((self.s.network_actions)(self.frame)) };
+        work.bind(self.network(), self.s, self.frame);
+        work
+    }
 
     fn checked(&self) -> Outcome {
         complete(!(self.s.failed)(self.frame))
@@ -327,7 +330,7 @@ impl<'a> Session<'a> {
                 crate::company::first_playable(unsafe { &*s.company })
             },
         );
-        (s.network_start_game)();
+        crate::network_lifecycle::on_game_start(self.network().lifecycle, self.network(), s);
         complete((s.console_script)(self.frame))
     }
     fn new_game_done(&self) -> Outcome {
@@ -336,7 +339,7 @@ impl<'a> Session<'a> {
         if !(s.has_gui)() {
             self.start_game(true)?;
             if (s.pause_on_newgame)() {
-                (unsafe { &*s.schedule }.post_pause)(PauseMode::NORMAL, true);
+                crate::command_post::pause(unsafe { &*s.shared }, PauseMode::NORMAL, true);
             }
             return Ok(());
         }
@@ -345,20 +348,20 @@ impl<'a> Session<'a> {
         // COLOUR_END selects the original random colour.
         let colour = (s.starting_colour)();
         if colour != COLOUR_END {
-            (s.company_colour)(true, colour);
+            crate::command_post::colour(unsafe { &*s.shared }, true, colour);
         }
         let settings = unsafe { &*s.shared }.settings();
         let secondary = unsafe { settings.secondary_colour.read() };
         if secondary != COLOUR_END
             && unsafe { settings.used_liveries.read() } & (1_u64 << crate::livery::LS_DEFAULT) != 0
         {
-            (s.company_colour)(false, secondary);
+            crate::command_post::colour(unsafe { &*s.shared }, false, secondary);
         }
         self.start_game(false)?;
         (s.rail_gui)();
         (s.road_gui)();
         if (s.pause_on_newgame)() {
-            (unsafe { &*s.schedule }.post_pause)(PauseMode::NORMAL, true);
+            crate::command_post::pause(unsafe { &*s.shared }, PauseMode::NORMAL, true);
         }
         (s.check_engines)();
         (s.check_industries)();
@@ -415,42 +418,85 @@ impl<'a> Session<'a> {
             return Ok(false);
         }
         if (unsafe { &*s.company }.network_server)() {
-            (s.network_disconnect)();
+            let work = self.actions();
+            crate::network_lifecycle::disconnect(
+                self.network().lifecycle,
+                self.network(),
+                true,
+                work,
+            );
+            if work.pending() {
+                work.push(Resume::LoadRestore(old));
+                return Err(());
+            }
         }
+        self.load_restore(old)?;
+        Ok(false)
+    }
+    fn load_restore(&self, old: GameMode) -> Outcome {
         if old == GameMode::EDITOR {
             self.new_editor()?;
         } else {
             self.intro(true)?;
         }
-        Ok(false)
+        Ok(())
     }
     fn switch(&self, new_mode: SwitchMode) -> Outcome {
         let s = self.s;
-        if new_mode != SwitchMode::SAVE_GAME {
-            if (unsafe { &*s.company }.finance.networking)() {
-                if (unsafe { &*s.company }.network_server)()
-                    && matches!(
-                        new_mode,
-                        SwitchMode::LOAD_GAME | SwitchMode::NEWGAME | SwitchMode::RESTARTGAME
-                    )
+        let work = self.actions();
+        if new_mode != SwitchMode::SAVE_GAME && (unsafe { &*s.company }.finance.networking)() {
+            if (unsafe { &*s.company }.network_server)()
+                && matches!(
+                    new_mode,
+                    SwitchMode::LOAD_GAME | SwitchMode::NEWGAME | SwitchMode::RESTARTGAME
+                )
+            {
+                crate::network_lifecycle::reboot(self.network().lifecycle, self.network(), s, work);
+            } else {
+                crate::network_lifecycle::disconnect(
+                    self.network().lifecycle,
+                    self.network(),
+                    true,
+                    work,
+                );
+            }
+            if work.pending() {
+                work.push(Resume::SwitchNetwork(new_mode));
+                return Err(());
+            }
+        }
+        self.switch_network(new_mode, work)
+    }
+    fn switch_network(&self, new_mode: SwitchMode, work: Actions) -> Outcome {
+        let s = self.s;
+        if new_mode != SwitchMode::SAVE_GAME && (s.server_requested)() {
+            if new_mode != SwitchMode::MENU {
+                if (s.reload_config)() {
+                    (s.load_config)();
+                    openttd_rust_session_settings(s);
+                    (s.reset_grf)(false);
+                }
+                if crate::network_lifecycle::server_start(
+                    self.network().lifecycle,
+                    self.network(),
+                    s,
+                    self.frame,
+                    work,
+                )
+                .is_err()
                 {
-                    (s.network_reboot)();
-                } else {
-                    (s.network_disconnect)();
+                    work.push(Resume::SwitchStartup(new_mode));
+                    return Err(());
                 }
+            } else {
+                (s.clear_server_requested)();
             }
-            if (s.server_requested)() {
-                if new_mode != SwitchMode::MENU {
-                    if (s.reload_config)() {
-                        (s.load_config)();
-                        openttd_rust_session_settings(s);
-                        (s.reset_grf)(false);
-                    }
-                    complete((s.network_server_start)(self.frame))?;
-                } else {
-                    (s.clear_server_requested)();
-                }
-            }
+        }
+        self.switch_startup(new_mode)
+    }
+    fn switch_startup(&self, new_mode: SwitchMode) -> Outcome {
+        let s = self.s;
+        if new_mode != SwitchMode::SAVE_GAME {
             (s.kill_ai)();
             (s.autosave_frequency)(true);
         }
@@ -496,12 +542,16 @@ impl<'a> Session<'a> {
             SwitchMode::LOAD_GAME => {
                 (s.reset_grf)(true);
                 (self.world().reset_windows)();
-                if self.safe_load(std::ptr::null_mut(), GameMode::NORMAL)? {
+                let Ok(loaded) = self.safe_load(std::ptr::null_mut(), GameMode::NORMAL) else {
+                    self.actions().push(Resume::SwitchLoad(GameMode::NORMAL));
+                    return Err(());
+                };
+                if loaded {
                     if (s.file_kind)() == FT_SCENARIO {
                         self.start_scenario();
                     }
                     self.start_game((self.world().dedicated)())?;
-                    (unsafe { &*s.schedule }.post_pause)(PauseMode::SAVE_LOAD, false);
+                    crate::command_post::pause(unsafe { &*s.shared }, PauseMode::SAVE_LOAD, false);
                 } else {
                     (s.show_load_error)(true);
                 }
@@ -521,11 +571,15 @@ impl<'a> Session<'a> {
                 (s.social_mode)(GameMode::EDITOR);
             }
             SwitchMode::LOAD_SCENARIO => {
-                if self.safe_load(std::ptr::null_mut(), GameMode::EDITOR)? {
+                let Ok(loaded) = self.safe_load(std::ptr::null_mut(), GameMode::EDITOR) else {
+                    self.actions().push(Resume::SwitchLoad(GameMode::EDITOR));
+                    return Err(());
+                };
+                if loaded {
                     crate::company::set_local_company(unsafe { &*s.company }, CompanyID::NONE);
                     (s.generate_id)();
                     (s.newgame_year)(crate::timer_game_common::calendar_year().0);
-                    (unsafe { &*s.schedule }.post_pause)(PauseMode::SAVE_LOAD, false);
+                    crate::command_post::pause(unsafe { &*s.shared }, PauseMode::SAVE_LOAD, false);
                 } else {
                     (s.show_load_error)(true);
                 }
@@ -533,7 +587,12 @@ impl<'a> Session<'a> {
             }
             SwitchMode::JOIN_GAME => {
                 self.intro(true)?;
-                (s.network_join)();
+                let work = self.actions();
+                crate::network_lifecycle::join_game(self.network().lifecycle, self.network(), work);
+                if work.pending() {
+                    work.push(Resume::JoiningSocial);
+                    return Err(());
+                }
                 (s.joining_social)();
             }
             SwitchMode::MENU => {
@@ -769,33 +828,69 @@ impl<'a> Session<'a> {
             complete((s.real_time)(self.frame))?;
         }
         if pending() != SwitchMode::NONE && !(self.world().modal)() {
-            self.switch(pending())?;
-            set_pending(SwitchMode::NONE);
-            if (self.world().exit_game)() {
-                return Ok(());
+            if self.switch(pending()).is_err() {
+                self.actions().push(Resume::LoopSwitch);
+                return Err(());
             }
+            return self.loop_switch();
         }
+        self.loop_network()
+    }
+    fn loop_switch(&self) -> Outcome {
+        set_pending(SwitchMode::NONE);
+        if (self.world().exit_game)() {
+            return Ok(());
+        }
+        self.loop_network()
+    }
+    fn loop_network(&self) -> Outcome {
+        let s = self.s;
+        let work = self.actions();
         (s.sprite_lru)();
         if (s.network_available)() {
             (s.network_background)();
         }
         (s.remote_messages)();
         if (unsafe { &*s.company }.finance.networking)() && !(self.world().modal)() {
-            complete((s.network_loop)(self.frame))?;
-        } else {
-            if (s.reconnect_due)() {
-                complete((s.network_reconnect)(self.frame))?;
+            // SAFETY: The native table outlives the session.
+            if crate::network_frame::game_loop(s, unsafe { &*s.network }, self.frame, work).is_err()
+            {
+                work.push(Resume::LoopEnd);
+                return Err(());
             }
-            complete(unsafe { openttd_rust_session_state_loop_abi(s, self.frame) != 0 })?;
+        } else {
+            if crate::network_lifecycle::reconnect_due(self.network()) {
+                crate::network_lifecycle::reconnect(
+                    self.network().lifecycle,
+                    self.network(),
+                    s,
+                    self.frame,
+                    work,
+                );
+                if work.pending() {
+                    work.push(Resume::LoopState);
+                    return Err(());
+                }
+            }
+            return self.loop_state();
         }
-        if pause() == 0 && (s.full_animation)() {
-            (s.palette)();
-        }
-        (s.sound)();
-        (s.music)();
-        (s.social_callbacks)();
+        loop_end(s);
         Ok(())
     }
+    fn loop_state(&self) -> Outcome {
+        complete(unsafe { openttd_rust_session_state_loop_abi(self.s, self.frame) != 0 })?;
+        loop_end(self.s);
+        Ok(())
+    }
+}
+
+fn loop_end(s: &Services) {
+    if pause() == 0 && (s.full_animation)() {
+        (s.palette)();
+    }
+    (s.sound)();
+    (s.music)();
+    (s.social_callbacks)();
 }
 
 /// # Safety
@@ -853,6 +948,43 @@ pub unsafe extern "C" fn openttd_rust_session_game_loop_abi(s: &Services, frame:
     u8::from((Session::new(s, frame)).game_loop().is_ok())
 }
 
+pub(crate) fn resume_switch_network(
+    s: &Services,
+    frame: *mut Frame,
+    mode: SwitchMode,
+    work: Actions,
+) -> Outcome {
+    (Session::new(s, frame)).switch_network(mode, work)
+}
+pub(crate) fn resume_switch_startup(s: &Services, frame: *mut Frame, mode: SwitchMode) -> Outcome {
+    (Session::new(s, frame)).switch_startup(mode)
+}
+pub(crate) fn resume_load_restore(s: &Services, frame: *mut Frame, mode: GameMode) -> Outcome {
+    (Session::new(s, frame)).load_restore(mode)
+}
+pub(crate) fn resume_loop_switch(s: &Services, frame: *mut Frame, _work: Actions) -> Outcome {
+    (Session::new(s, frame)).loop_switch()
+}
+pub(crate) fn resume_loop_state(s: &Services, frame: *mut Frame) -> Outcome {
+    (Session::new(s, frame)).loop_state()
+}
+pub(crate) fn resume_loop_end(s: &Services) {
+    loop_end(s);
+}
+pub(crate) fn resume_switch_load(s: &Services, mode: GameMode) {
+    (s.show_load_error)(true);
+    (s.social_mode)(mode);
+}
+
+pub(crate) fn safe_load(
+    s: &Services,
+    frame: *mut Frame,
+    input: *mut Load,
+    new_mode: GameMode,
+) -> Result<bool, ()> {
+    (Session::new(s, frame)).safe_load(input, new_mode)
+}
+
 pub(crate) fn new_game_done(s: &Services, frame: *mut Frame) -> bool {
     (Session::new(s, frame)).new_game_done().is_ok()
 }
@@ -868,18 +1000,14 @@ crate::abi::layouts! {
     "OpenTTDSessionServices" ["session"] => Services{
         clock,
         company,
+        network,
         shared,
         schedule,
         world,
         server_requested,
         clear_server_requested,
         network_available,
-        network_reboot,
-        network_disconnect,
-        network_server_start,
         network_background,
-        network_start_game,
-        network_join,
         kill_ai,
         load_config,
         reset_session_stats,
@@ -916,7 +1044,6 @@ crate::abi::layouts! {
         starting_colour,
         settings_elrail,
         company_settings,
-        company_colour,
         reset_ai_config,
         reset_game_config,
         publish_settings,
@@ -931,13 +1058,10 @@ crate::abi::layouts! {
         pause_change,
         pause_dirty,
         full_animation,
-        reconnect_due,
         console_script,
         game_script,
         ai_script,
         startup_company,
-        network_loop,
-        network_reconnect,
         state_frame_begin,
         state_frame_end,
         real_time,
@@ -951,6 +1075,7 @@ crate::abi::layouts! {
         load,
         intro_load,
         save,
+        network_actions,
         failed,
         console_exception,
         state_begin,

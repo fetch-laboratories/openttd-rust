@@ -189,11 +189,11 @@ pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
         },
         MP_OBJECT => openttd_rust_animate_object(tile),
         MP_STATION => {
-            if (unsafe { &*crate::movement::table(s).rail_map }.has_station_rail)(tile) {
+            if crate::map_func::World::new(s).station_has_rail(tile) {
                 openttd_rust_animate_station(tile);
             } else if crate::station_map::is_airport(tile, s) {
                 openttd_rust_animate_airport(tile);
-            } else if (s.is_any_road_stop)(tile) {
+            } else if crate::map_func::World::new(s).any_road_stop_tile(tile) {
                 openttd_rust_animate_roadstop(tile);
             }
         }

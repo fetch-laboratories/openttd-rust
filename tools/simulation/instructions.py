@@ -91,6 +91,16 @@ class SpeedBudget(TypedDict):
     near_ceiling: bool
 
 
+class IdentityDetails(TypedDict):
+    configuration: str
+    machine: str
+    tool: tuple[str, str, str, list[str]]
+    tool_files: list[str]
+    libraries: str
+    inputs: dict[str, Any]
+    scenario: dict[str, Any]
+
+
 def speed_budget(
     name: str,
     ratio: float | None,
@@ -157,9 +167,24 @@ TEST_GIT_ENTRIES = (
     r"//Details about finding Git\nFIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[^\n]*\n",
     r"//ADVANCED property for variable: GIT_EXECUTABLE\nGIT_EXECUTABLE-ADVANCED:INTERNAL=1\n",
 )
+# FindPkgConfig's pkg_get_variable overwrites this scratch cache entry on every
+# query (features, prefix, etc.). Actual package paths/flags stay in their own
+# entries and linked library bytes are hashed separately. Retain the quiet
+# anchor's spelling rather than changing existing anchor or reference hashes.
+ANCHORED_PREFIX_RESULT = (
+    "AsynchDNS;GSS-API;HSTS;HTTP2;HTTPS-proxy;IDN;IPv6;Kerberos;Largefile;"
+    "NTLM;PSL;SPNEGO;SSL;TLS-SRP;UnixSockets;alt-svc;brotli;libz;threadsafe;zstd"
+)
 
 
 def anchored_cache(text: str) -> str:
+    """Restore only proven non-game discovery bookkeeping to anchor spelling."""
+    text = re.sub(
+        r"^prefix_result:INTERNAL=[^\n]*$",
+        "prefix_result:INTERNAL=" + ANCHORED_PREFIX_RESULT,
+        text,
+        flags=re.M,
+    )
     for entry in TEST_GIT_ENTRIES:
         text = re.sub(entry, "", text)
     if "\nOPTION_RUST:" not in text:
@@ -243,6 +268,7 @@ def identity(
     env: Mapping[str, str],
     valgrind: Path,
     reference: bool = True,
+    details: IdentityDetails | None = None,
 ) -> dict[str, Any]:
     """Compatibility excludes candidate code; full measurement identity retains it."""
     from .core import RUNTIME_DIRECTORIES
@@ -260,9 +286,9 @@ def identity(
     resolved: dict[str, Any] = dict(scenario)
     if "save" in resolved:
         resolved["save"] = digest(Path(resolved["save"]).read_bytes())
-    libraries = subprocess.check_output(["ldd", str(binary)], env=env, text=True)
+    linked = subprocess.check_output(["ldd", str(binary)], env=env, text=True)
     inputs["libraries"] = [
-        digest(Path(p).read_bytes()) for p in re.findall(r"(/\S+) \(", libraries)
+        digest(Path(p).read_bytes()) for p in re.findall(r"(/\S+) \(", linked)
     ]
     metadata = json.loads((build / "instruction-build.json").read_text())
     executable = digest(binary.read_bytes())
@@ -271,6 +297,9 @@ def identity(
             "stale instruction build; rebuild with simulate --instructions"
         )
     settings = metadata["settings"]
+    if not reference:
+        # Retained, executable-bound captures predate this normalization too.
+        settings = anchored_cache(settings)
     version = subprocess.check_output(
         [str(valgrind), "--command-line-only=yes", "--version"], env=env, text=True
     ).strip()
@@ -284,6 +313,18 @@ def identity(
         digest(valgrind.read_bytes()),
         [digest(p.read_bytes()) for group in tools for p in group],
     )
+    if details is not None:
+        # Diagnostics stay outside the opaque identity/cache contract, including
+        # reference identities embedded in historical candidate anchor hashes.
+        details.update(
+            configuration=settings,
+            machine=platform.machine(),
+            tool=tool,
+            tool_files=[str(p) for group in tools for p in group],
+            libraries=linked,
+            inputs=inputs,
+            scenario=resolved,
+        )
     policy = "64x64/serial/witness-off/v1"
     # Entry names differ because Rust owns the candidate bodies. Normalize that
     # spelling in compatibility identity so existing quiet-pass anchors and the
@@ -304,6 +345,7 @@ def prepare(
     folder: Path,
     env: dict[str, str],
     reference: bool,
+    details: IdentityDetails | None = None,
 ) -> tuple[list[str], dict[str, Any]]:
     import migration
 
@@ -323,7 +365,9 @@ def prepare(
             )
         )
     env.pop("OPENTTD_WITNESS", None)
-    measurement = identity(scenario, binary, build, folder, env, valgrind, reference)
+    measurement = identity(
+        scenario, binary, build, folder, env, valgrind, reference, details
+    )
     key = digest(measurement)
     cache = migration.COMMON_LOCAL / "instruction-cache" / f"{key}.json"
     cached = json.loads(cache.read_text()) if reference and cache.exists() else None

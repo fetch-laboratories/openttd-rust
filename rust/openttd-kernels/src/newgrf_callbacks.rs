@@ -16,6 +16,8 @@ pub const CBID_VEHICLE_LENGTH: CallbackID = CallbackID(0x11);
 pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID(0x32);
 
 pub const CBID_INDUSTRY_PROBABILITY: u16 = 0x22;
+pub const CBID_INDUSTRY_SPECIAL_EFFECT: u16 = 0x3b;
+pub const CBID_INDTILE_DRAW_FOUNDATIONS: CallbackID = CallbackID(0x30);
 pub const CBID_INDUSTRY_LOCATION: u16 = 0x28;
 pub const CBID_INDUSTRY_REFUSE_CARGO: u16 = 0x3d;
 pub const CBID_INDTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x25);

@@ -97,6 +97,7 @@ CargoTypes TranslateRefitMask(uint32_t refit_mask);
 void SkipBadgeList(ByteReader &buf);
 
 std::vector<BadgeID> ReadBadgeList(ByteReader &buf, GrfSpecFeature feature);
+std::vector<BadgeID> ReadBadgeList(ByteReader &buf, GrfSpecFeature feature, uint16_t count);
 
 void MapSpriteMappingRecolour(PalSpriteID *grf_sprite);
 

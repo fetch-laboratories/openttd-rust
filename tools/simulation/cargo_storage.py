@@ -2,9 +2,7 @@
 
 import hashlib
 import json
-import runpy
 import struct
-import subprocess
 from pathlib import Path
 from typing import Any, Literal, NotRequired, cast
 
@@ -150,31 +148,38 @@ def check(
 
 def scaling_probe() -> None:
     """Witness the large-list gap: saves currently reach at most six packets."""
-    migration = runpy.run_path(str(ROOT / "tools/migration.py"))
+    import probe
+
+    import migration
+
     out = ROOT / ".local/cargo-list-scaling"
     out.mkdir(parents=True, exist_ok=True)
     fixture = Path(__file__).with_name("cargo-list-scaling.cpp")
+    build = ROOT / "build-rust"
     command = [
-        "g++",
+        probe.compiler(build),
         "-std=c++20",
+        *probe.target_flags(build),
         "-O2",
         "-I",
         str(ROOT / "src"),
         str(fixture),
-        str(migration["rust_archive"](ROOT / "build-rust")),
+        str(migration.rust_archive(ROOT / "build-rust")),
         "-ldl",
         "-lpthread",
         "-lm",
         "-o",
         str(out / "probe"),
     ]
-    env = migration["environment"]()
-    subprocess.run(command, env=env, check=True)
-    output = subprocess.check_output([str(out / "probe")], env=env, text=True)
+    env = migration.environment()
+    probe.compile(command, out / "compile.log", env=env)
+    output = probe.execute(
+        [out / "probe"], out / "probe", env=env, stderr="inherited"
+    ).decode()
     report = {
         "gap": "large cargo queues absent from the committed play corpus",
-        "candidate_commit": migration["git"]("rev-parse", "HEAD"),
-        "candidate_status": migration["git"]("status", "--short"),
+        "candidate_commit": migration.git("rev-parse", "HEAD"),
+        "candidate_status": migration.git("status", "--short"),
         "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
         "commands": [command, [str(out / "probe")]],
         "measurements": output.splitlines(),

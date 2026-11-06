@@ -173,9 +173,9 @@ pub struct Services {
     badge_count: unsafe extern "C" fn(*const c_void) -> usize,
     badge_at: unsafe extern "C" fn(*const c_void, u32) -> u32,
     engine_has_badge: unsafe extern "C" fn(*const OpenTTDEngine, u32) -> bool,
-    engine_badge: unsafe extern "C" fn(*const c_void, *const OpenTTDEngine, u32) -> u32,
-    rail_badge: unsafe extern "C" fn(*const c_void, crate::services::RailType, u32) -> u32,
-    road_badge: unsafe extern "C" fn(*const c_void, crate::services::RoadType, u32) -> u32,
+    engine_badge: unsafe extern "C" fn(*const OpenTTDEngine) -> crate::newgrf_specs::BadgeSpan,
+    rail_badge: unsafe extern "C" fn(crate::services::RailType) -> crate::newgrf_specs::BadgeSpan,
+    road_badge: unsafe extern "C" fn(crate::services::RoadType) -> crate::newgrf_specs::BadgeSpan,
     ship_owner: unsafe extern "C" fn(V) -> *mut crate::ship_control::State,
     aircraft_leaves: unsafe extern "C" fn() -> *const crate::aircraft::Leaves,
     ground: unsafe extern "C" fn() -> *const crate::ground_vehicle::Services,
@@ -1265,7 +1265,8 @@ unsafe fn variable(
             },
             0x64 => {
                 if kind() != 0 {
-                    return (s.engine_badge)(ro, (s.vehicle.engine)(h).0.as_ptr(), parameter);
+                    return (s.engine_badge)((s.vehicle.engine)(h).0.as_ptr())
+                        .resolve(s.shared, ro, parameter);
                 }
                 if u64::from(parameter) >= (s.badge_count)(grf) as u64 {
                     return u32::MAX;
@@ -1283,15 +1284,20 @@ unsafe fn variable(
             }
             0x65 => match kind() {
                 0 => {
-                    return (s.rail_badge)(ro, ((&*(s.ground)()).rail_type)((h).tile()), parameter);
+                    return (s.rail_badge)(((&*(s.ground)()).rail_type)((h).tile()))
+                        .resolve(s.shared, ro, parameter);
                 }
                 1 => {
                     let rtt = crate::road::get_road_tram_type((s.roadtype)(v).0);
-                    return (s.road_badge)(ro, (s.tile_roadtype)((h).tile(), rtt), parameter);
+                    return (s.road_badge)((s.tile_roadtype)((h).tile(), rtt))
+                        .resolve(s.shared, ro, parameter);
                 }
                 _ => return u32::MAX,
             },
-            0x7a => return (s.engine_badge)(ro, (s.vehicle.engine)(h).0.as_ptr(), parameter),
+            0x7a => {
+                return (s.engine_badge)((s.vehicle.engine)(h).0.as_ptr())
+                    .resolve(s.shared, ro, parameter);
+            }
             0xfe | 0xff => {
                 let mut flags = 0u32;
                 if kind() == 0 {
@@ -1569,7 +1575,8 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_variable(
             0x48 => u32::from((s.engine_flags)((s.engine_by_id)((*scope).self_type))),
             0x49 => crate::timer_game_common::calendar_year().0 as u32,
             0x4b => crate::timer_game_common::calendar_date().0 as u32,
-            0x7a => (s.engine_badge)(ro, (s.engine_by_id)((*scope).self_type), parameter),
+            0x7a => (s.engine_badge)((s.engine_by_id)((*scope).self_type))
+                .resolve(s.shared, ro, parameter),
             0x92 => service_date(crate::timer_game_common::calendar_date().0),
             0x93 => service_date(crate::timer_game_common::calendar_date().0) >> 8,
             0xc4 => old_year(crate::timer_game_common::calendar_year().0),

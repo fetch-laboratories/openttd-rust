@@ -376,7 +376,6 @@ pub struct Leaves {
     pub disallowed_directions: extern "C" fn(u32) -> u8,
     pub is_bay_stop: extern "C" fn(u32) -> bool,
     pub bay_direction: extern "C" fn(u32) -> u8,
-    pub is_drive_through: extern "C" fn(u32) -> bool,
     pub is_station_road_stop: extern "C" fn(u32) -> bool,
     pub choose_track: extern "C" fn(VehicleRef, u32, u8, u16) -> TrackChoice,
     pub find_depot: extern "C" fn(VehicleRef, i32) -> DepotResult,
@@ -1035,7 +1034,7 @@ impl Game<'_> {
                     crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                 }),
                 z: next.v.z(),
-                crossing: (self.ss.is_level_crossing)(next.v.tile()),
+                crossing: crate::map_func::World::new(self.ss).level_crossing_tile(next.v.tile()),
             };
         }
     }
@@ -1210,7 +1209,7 @@ impl Game<'_> {
                 || p.articulated
             {
                 trackdirs = 0;
-            } else if service!(self.ss.road_stop_type)(tile).0 != u8::from(!bus)
+            } else if crate::map_func::World::new(self.ss).road_stop_type(tile) != u8::from(!bus)
                 || (!self.queue
                     && !crate::road_stop::has_free_bay(
                         crate::road_stop::get_by_tile(self.ss, tile, RoadStopType(u8::from(!bus)))
@@ -1437,7 +1436,7 @@ impl Game<'_> {
         let bus = crate::road_stop::is_bus(self.ss, v.v);
         service!(self.l.should_stop)(v.v, tile)
             && owner == service!(self.ss.tile_owner)(tile)
-            && service!(self.ss.road_stop_type)(tile).0 == u8::from(!bus)
+            && crate::map_func::World::new(self.ss).road_stop_type(tile) == u8::from(!bus)
     }
     /// `IndividualRoadVehicleController`; `s` is a fresh observation of `v`.
     fn individual(
@@ -1525,14 +1524,17 @@ impl Game<'_> {
                     v.set(OVERTAKING, 0);
                     if s.tram {
                         let needed: u8 = [2, 1, 8, 4][usize::from(((dir >> 2) & 2) | (dir & 1))];
-                        let big =
-                            v.v.previous()
-                                .is_some_and(|previous| previous.tile() == tile)
-                                || (s.front
-                                    && service!(self.ss.is_normal_road_tile)(tile)
-                                    && !service!(self.ss.has_road_works)(tile)
-                                    && self.has_road(v.v, tile)
-                                    && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
+                        let big = v
+                            .v
+                            .previous()
+                            .is_some_and(|previous| previous.tile() == tile)
+                            || (s.front
+                                && crate::map_func::World::new(self.ss).is_normal_road_tile(tile)
+                                && !crate::map_func::World::new(self.ss).has_road_works(tile)
+                                && self.has_road(v.v, tile)
+                                && needed
+                                    & crate::map_func::World::new(self.ss).road_bits(tile, true)
+                                    != 0);
                         if !big {
                             if !s.front
                                 || !self.can_build_tram(v.v, tile, needed)
@@ -1546,7 +1548,7 @@ impl Game<'_> {
                                 return false;
                             }
                         }
-                    } else if service!(self.ss.is_normal_road_tile)(s.tile)
+                    } else if crate::map_func::World::new(self.ss).is_normal_road_tile(s.tile)
                         && service!(self.l.disallowed_directions)(s.tile) != 0
                     {
                         Self::set_speed(v, s, 0);
@@ -1587,7 +1589,7 @@ impl Game<'_> {
                         Self::set_speed(v, s, 0);
                         return false;
                     }
-                    if service!(self.l.is_drive_through)(s.tile)
+                    if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile)
                         && crate::road_stop::continuation(self.ss, s.tile, tile)
                         && s.tile != tile
                     {
@@ -1700,7 +1702,8 @@ impl Game<'_> {
                     let bus = crate::road_stop::is_bus(self.ss, v.v);
                     if owner == service!(self.ss.tile_owner)(s.tile)
                         && service!(self.vs.order_type)(v.v) != OT_LEAVESTATION
-                        && service!(self.ss.road_stop_type)(s.tile).0 == u8::from(!bus)
+                        && crate::map_func::World::new(self.ss).road_stop_type(s.tile)
+                            == u8::from(!bus)
                     {
                         let station = service!(self.ss.station_index)(s.tile);
                         (v.v).write_last_station(station);
@@ -1734,7 +1737,7 @@ impl Game<'_> {
             let rs = crate::road_stop::at(self.ss, s.tile);
             let station = service!(self.ss.station_index)(s.tile);
             if state & 4 == 0 {
-                if service!(self.l.is_drive_through)(s.tile) {
+                if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile) {
                     let next = self.map.add_dir(s.tile, s.direction);
                     if crate::road_stop::continuation(self.ss, s.tile, next)
                         && self.has_road(v.v, next)
@@ -1747,7 +1750,7 @@ impl Game<'_> {
                 crate::road_stop::set_entrance_busy(rs, false);
                 v.set(STATE, u16::from(state | 4));
                 (v.v).write_last_station(station);
-                if service!(self.l.is_drive_through)(s.tile)
+                if crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile)
                     || (service!(self.vs.order_type)(v.v) == OT_GOTO_STATION
                         && service!(self.vs.order_destination)(v.v) == station)
                 {
@@ -1775,7 +1778,9 @@ impl Game<'_> {
             Self::set_speed(v, s, 0);
             return false;
         }
-        if e.order_type == OT_LEAVESTATION && service!(self.l.is_drive_through)(s.tile) {
+        if e.order_type == OT_LEAVESTATION
+            && crate::map_func::World::new(self.ss).drive_through_stop_tile(s.tile)
+        {
             service!(self.vs.order_free)(v.v);
         }
         if e.flags & VETS_ENTERED_WORMHOLE == 0 {
@@ -1879,7 +1884,7 @@ impl Game<'_> {
                         crate::raw_field::read_field!(n.0.as_ptr(), road).cast()
                     }),
                     z: v.v.z(),
-                    crossing: (self.ss.is_level_crossing)(v.v.tile()),
+                    crossing: crate::map_func::World::new(self.ss).level_crossing_tile(v.v.tile()),
                 },
             )
         {
@@ -1954,8 +1959,8 @@ impl Game<'_> {
             }
             adv = advance_distance(s.direction);
             if j >= adv {
-                let crossing =
-                    v.state() != RVSB_WORMHOLE && service!(self.ss.is_level_crossing)(s.tile);
+                let crossing = v.state() != RVSB_WORMHOLE
+                    && crate::map_func::World::new(self.ss).level_crossing_tile(s.tile);
                 let link = Link {
                     next: v.v.next(),
                     next_state: v.v.next().map_or(std::ptr::null_mut(), |n| {
@@ -2185,7 +2190,7 @@ impl Game<'_> {
         {
             return false;
         }
-        if service!(self.ss.is_normal_road_tile)(r.tile)
+        if crate::map_func::World::new(self.ss).is_normal_road_tile(r.tile)
             && service!(self.l.disallowed_directions)(r.tile) != 0
         {
             return false;
@@ -2516,7 +2521,6 @@ crate::abi::layouts! {
         disallowed_directions,
         is_bay_stop,
         bay_direction,
-        is_drive_through,
         is_station_road_stop,
         choose_track,
         find_depot,

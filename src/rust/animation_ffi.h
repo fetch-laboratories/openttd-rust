@@ -13,6 +13,7 @@ struct StationSpec; struct BaseStation;
 struct OpenTTDRoadStopResolverServices; struct AirportTileSpec; struct Station;
 struct ObjectSpec; struct Object; struct RoadStopSpec;
 struct OpenTTDAnimationInfo { uint8_t speed, frames; bool looping, speed_callback, next_callback, random, enabled; };
+extern "C" OpenTTDAnimationInfo openttd_rust_industry_tile_animation_info(const IndustryTileSpec *) noexcept;
 template <typename Spec, typename Obj> struct OpenTTDAnimationEntry { const Spec *spec; Obj *object; };
 #include "animation_types.hpp"
 using OpenTTDHouseAnimation = OpenTTDAnimationBinding<HouseSpec, Town, uint64_t>;

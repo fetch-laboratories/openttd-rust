@@ -231,6 +231,7 @@
   "landscape-victims",
   "movement-road-tunnel",
   "movement-train-bridge",
+  "network-protocol-loopback",
   "newgrf-loading-bindings",
   "newgrf-loading-reload",
   "newgrf-loading-v1",

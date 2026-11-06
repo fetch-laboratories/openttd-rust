@@ -38,7 +38,6 @@
 
 inline OpenTTDFlatTileHeight RustFlatTileHeight(uint32_t tile) noexcept { int height = 0; bool flat = RustIsTileFlat(tile, &height); return {.height = height, .flat = flat}; }
 inline void RustSetTileHeight(uint32_t tile, uint32_t height) noexcept { SetTileHeight(TileIndex{tile}, height); }
-inline bool RustInnerTile(uint32_t tile) noexcept { return IsInnerTile(TileIndex{tile}); }
 inline OpenTTDFoundationSlope RustTileSlopeZ(uint32_t tile) noexcept { auto [slope, z] = GetTileSlopeZ(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline OpenTTDFoundationSlope RustApplyFoundation(Foundation foundation, Slope slope) noexcept { int z = ApplyFoundationToSlope(foundation, slope); return {.z = z, .slope = slope}; }
 inline uint8_t RustTileOwnerValue(uint32_t tile) noexcept { return GetTileOwner(TileIndex{tile}).base(); }
@@ -103,7 +102,6 @@ inline OpenTTDMovementFoundation RustHouseFoundation(uint32_t tile) noexcept
 	const auto *spec = kind >= NEW_HOUSE_OFFSET ? HouseSpec::Get(kind) : nullptr;
 	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(HouseCallbackMask::DrawFoundations)};
 }
-inline bool RustHouseFoundationBoolean(const void *spec, uint16_t result) noexcept { return RustSpecBooleanCallback(static_cast<const HouseSpec *>(spec), CBID_HOUSE_DRAW_FOUNDATIONS, result); }
 inline OpenTTDMovementFoundation RustIndustryFoundation(uint32_t tile) noexcept
 {
 	IndustryGfx kind = GetIndustryGfx(TileIndex{tile});
@@ -111,5 +109,4 @@ inline OpenTTDMovementFoundation RustIndustryFoundation(uint32_t tile) noexcept
 	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(IndustryTileCallbackMask::DrawFoundations)};
 }
 inline uint16_t RustIndustryFoundationCallback(uint32_t tile, uint16_t kind) noexcept { return OpenTTDIndustryTileCallback(tile, kind, CBID_INDTILE_DRAW_FOUNDATIONS, 0, 0); }
-inline bool RustIndustryFoundationBoolean(const void *spec, uint16_t result) noexcept { return RustSpecBooleanCallback(static_cast<const IndustryTileSpec *>(spec), CBID_INDTILE_DRAW_FOUNDATIONS, result); }
 #endif /* RUST_SERVICES_LANDSCAPE_H */

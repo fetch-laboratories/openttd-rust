@@ -251,3 +251,88 @@ Later pool records sit beside their shells, as #570's do. The decision and its m
 **Revisit a family's placement** at its pool-allocation step if either of these happens:
 - its record↔shell hops reach 0.5% of loop Ir (#275's threshold);
 - cache profiling shows misses on record lines.
+
+
+## Shared pool policy (#716)
+
+Root supplies one reusable Rust allocation/bookkeeping primitive for the selected
+station, town/industry/subsidy and vehicle owners. Its generated canonical
+slot/descriptor storage carries shell and record identities, occupancy, cursors,
+counts, native assertion credit, cleaning and cache state. Typed IDs load records
+from slots directly; native consumers read the shared layout inline. Reuse the
+existing shared-layout/vector machinery where applicable, without a second
+metadata authority or stored field references.
+
+Native allocation/deallocation, pool-index access and actual shell destruction
+remain typed operations while C++ shells exist. Preserve publication before
+construction, the live shell slot throughout destruction, record binding and
+retirement at their existing owner-member points, and free-before-post-hook
+ordering. No borrow spans hooks or storage invalidation. Indexed load errors
+return to C++ before `SlErrorCorruptFmt` can throw. Native registration and
+cleanup-mask order remain unchanged; borrowed resolver shells stay nonpooled.
+
+The first checkpoint supplies the reusable core and source-derived tests,
+without orphan exports or production-pool completion credit. Vehicle #714 is the initial typed-adoption target because its records are
+already integrated; the first ready selected owner may adopt the shared facade
+without waiting for another draft. #700/#704 and later pools use the same definition. Root coordinates
+one native compatibility facade when it has a production consumer. The native
+generic template remains until its final instantiation retires; credit that
+deletion once. Records, containers and control-flow completion remain separate
+obligations of each owner.
+
+## Link graph and job storage (#717)
+
+The selected owner moves graph/job records, private graph/settings snapshots,
+annotations, flows, join/abort state and completed-job publication into their
+canonical Rust owners. It uses #716 for shared pool policy and preserves
+allocation IDs, source worker startup/failure fallback, cancellation/join/reset
+order and save references. A native thread handle may remain behind named
+start/join operations until platform threading moves; Rust-used state has no
+field-callback exception.
+
+Station #634 owns its record/container adaptation; #717 owns flow contents and
+completion publication at the original observation points. Both reuse one
+shared definition. Worker-private snapshots cannot borrow live-world storage;
+publication, destruction and reset end affected borrows before reentry. Native
+GUI, save, script and network consumers retain only their named later-owned
+shell operations and inline shared-field reads.
+
+## Engine and renewal storage (#637 with #497)
+
+The selected owner follows integration 93's shared pool core. Define Engine and
+EngineRenew records once through the existing shared-record generator. Placement
+is beside the shell: typed IDs and iteration reach the record directly, native
+consumers use inline Record() access, and no stored reference member remains.
+Adopt #655's integrated loading behavior and the single native pool facade and
+operation schema reserved to #714; do not create a competing definition or make
+independent record work depend on another draft.
+
+| Allocation | Canonical owner and consumers | Lifetime and remaining native owner |
+| --- | --- | --- |
+| Engine record | Consolidate existing Rust lifecycle/name storage with info, vehicle-specific info, original image/type/list position, GRF cargo bindings, ordered wagon overrides and badges. Rust loading, lifecycle, controllers and resolvers use the record; native save, script, strings and drawing callers read its shared layout. | Preserve default/monostate and typed constructor publication order, including original table copies, wagon life and aircraft cargo defaults. Temporary nonpooled prototypes and indexed pooled construction are distinct: never inspect an uninitialized prototype pool index to decide ownership. Borrowed GRF/SpriteGroup pointers expire with reload/reset. |
+| EngineRenew record and company head | Replace the existing fleet-owner aliases and native-node links with canonical record links. Fleet replacement/group operations and ERNW/company save adapters retain list order and reference identity. | Initialize a new node before publishing the head; single removal updates predecessor/head before deletion. Remove-all saves next, deletes each node, then clears the head. The head remains company-owned; each node's record retires at its actual owning-member destruction. |
+| Pool slots | EngineID and EngineRenewID retain u16 coordinates, maximum 64000 and invalid FFFF. Both pools are Normal and uncached; growth is 64 and 16 respectively. Reuse the shared Rust allocation, bitmap, cursor/count/credit, cleanup and live-iteration policy. | Retain native registration order/masks, publication before construction, live shell slots throughout destruction and free-before-post-hook order. Growth invalidates descriptor buffers, not separately allocated shells/records. ID reuse starts a new lifetime. |
+| Native shell | Keep identity/index and inline record access for remaining native callers. Only display_flags and display_last_variant remain field owners for phase 5's build-list GUI. | Name each remaining native consumer, including build/autoreplace/engine GUIs, vehicle drawing, script_engine and save/afterload/old-loader adapters. Networking retains command payloads and synchronized execution. Shell compatibility retires with its final callers. |
+
+Make SetCustomEngineSprites, SetWagonOverrideSprites and SetEngineGRF Rust-internal
+and remove the typed engine-string leaf and displaced property/resolver services.
+Preserve sorted cargo bindings, ordered override matching, incremental Action 3/4
+publication and the integrated last_engines reset behavior. End record/vector/name
+views before mutation, notification, reentry, destruction and GRF reset; the current
+reset order rebuilds engines before freeing files.
+
+ENGN retains lifecycle/name staging before definition setup and copies only saved
+fields afterwards, including gates 31/84/104/179/193 and legacy preview conversion.
+ENGS's 256 legacy names, EIDS ordering and ERNW's widths, next fixups, group gates
+60/71 and when-old gate 175 remain unchanged. The company renewal head keeps
+REF_ENGINE_RENEWS from version 19.
+
+The first checkpoint delivers canonical records, consumer adaptation and displaced
+routes, with an actual cost against the 400 to 750 net compiled-C++ estimate that
+already includes #497. Completion also requires actual pool policy and no Rust
+field read through a native service. Generic pool-template deletion receives credit
+once, at its last instantiation. Reuse engine/fleet ABI and lifetime fixtures,
+engine/renewal/resolver/reload scenarios, newgrf-loading-bindings and properties
+observations, and existing drawing checks; extend only a concrete uncovered
+allocation or lifetime observation. Final independent review and exact-head Full
+remain the existing acceptance path.

@@ -3,6 +3,7 @@ struct OpenTTDEngineCapabilitiesServices;
 /** @file newgrf_vehicle_ffi.h Stack vehicle resolver and canonical query cache boundary. */
 #ifndef RUST_NEWGRF_VEHICLE_FFI_H
 #define RUST_NEWGRF_VEHICLE_FFI_H
+#include "spec_services_ffi.h"
 #include "vehicle_ffi.h"
 #include "station_ffi.h"
 struct Vehicle;
@@ -107,9 +108,9 @@ struct OpenTTDVehicleResolverServices {
 	size_t (*badge_count)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(badge_count);
 	uint32_t (*badge_at)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badge_at);
 	bool (*engine_has_badge)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_has_badge);
-	uint32_t (*engine_badge)(const ResolverObject *, const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_badge);
-	uint32_t (*rail_badge)(const ResolverObject *, RailType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_badge);
-	uint32_t (*road_badge)(const ResolverObject *, RoadType, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_badge);
+	OpenTTDBadgeSpan (*engine_badge)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_badge);
+	OpenTTDBadgeSpan (*rail_badge)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_badge);
+	OpenTTDBadgeSpan (*road_badge)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_badge);
 	OpenTTDShipState * (*ship_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ship_owner);
 	const OpenTTDAircraftLeaves * (*aircraft_leaves)() noexcept OPENTTD_SERVICE_DEFAULT(aircraft_leaves);
 	const OpenTTDGroundPhysicsServices * (*ground)() noexcept OPENTTD_SERVICE_DEFAULT(ground);

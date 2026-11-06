@@ -11,13 +11,16 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
+import vcs
+from simulation.configuration import Configuration, configure
 from validation_execution import file_lock, run_logged
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +62,10 @@ RUST_SANITIZER_FLAGS = "-Zsanitizer=address -Cforce-frame-pointers=yes"
 BASELINE = json.loads((ROOT / "migration/baseline.json").read_text())
 SCENARIO_COVERAGE_PREFIX: ContextVar[str | None] = ContextVar(
     "scenario_coverage_prefix", default=None
+)
+
+configure(
+    Configuration(COMMON_LOCAL, REFERENCE, REFERENCE_BUILD, CANDIDATE_BUILD, SANITIZE)
 )
 
 
@@ -352,7 +359,7 @@ def compiler_cache_compatibility(
 
 
 def git(*args: str, cwd: Path = ROOT) -> str:
-    return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
+    return vcs.git(*args, cwd=cwd).strip()
 
 
 @contextmanager
@@ -422,7 +429,268 @@ def free_cores() -> int:
     return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
 
 
-def main() -> None:
+class RunCommand(Protocol):
+    def __call__(
+        self, name: str, command: Sequence[str | Path], cwd: Path = ROOT
+    ) -> Path: ...
+
+
+@dataclass
+class Execution:
+    args: argparse.Namespace
+    simulate_args: list[str]
+    report: dict[str, Any]
+    evidence: Path
+    builds: dict[str, Path]
+    cache_executable: str | None
+    instruction_mode: bool
+    run: RunCommand
+    select_role: Callable[[str], dict[str, str]]
+
+
+def build_games(execution: Execution) -> None:
+    args, run = execution.args, execution.run
+    builds, report = execution.builds, execution.report
+    cache_executable = execution.cache_executable
+    instruction_mode = execution.instruction_mode
+    select_role = execution.select_role
+    common = [
+        "-G",
+        "Ninja",
+        "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "-DOPTION_USE_ASSERTS=ON",
+        "-DOPTION_DEDICATED=OFF",
+        "-DCMAKE_DISABLE_FIND_PACKAGE_Grfcodec=ON",
+        "-DBUILD_TESTING=ON",
+    ]
+    if args.sanitize or args.tsan:
+        common += [
+            f"-DCMAKE_{kind}_FLAGS={TSAN_FLAGS if args.tsan else SANITIZER_FLAGS}"
+            for kind in ("C", "CXX", "EXE_LINKER")
+        ]
+    if args.action == "tools":
+        builds = {"candidate": LOCAL / "build-tools-rust"}
+        common = [
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+            "-DOPTION_USE_ASSERTS=OFF",
+        ]
+    if args.action == "coverage":
+        common += [
+            "-DCMAKE_C_COMPILER=gcc",
+            "-DCMAKE_CXX_COMPILER=g++",
+            "-DCMAKE_C_FLAGS=--coverage",
+            "-DCMAKE_CXX_FLAGS=--coverage",
+            "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O0 -g -DNDEBUG",
+            "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O0 -g -DNDEBUG",
+            "-DCMAKE_EXE_LINKER_FLAGS=--coverage",
+            "-DBUILD_TESTING=OFF",
+        ]
+    common.extend(compiler_cache_options(cache_executable))
+    for name, build in builds.items():
+        with (
+            reference_lock()
+            if name == "reference" and args.action != "coverage"
+            else candidate_lock(build)
+        ):
+            # Other worktrees rebuild the shared pinned reference concurrently;
+            # its record stays bound to the executable digest instead.
+            if name != "reference":
+                (build / "instruction-build.json").unlink(missing_ok=True)
+            env = select_role(name)
+            source = REFERENCE.resolve() if name == "reference" else ROOT
+            extra = (
+                []
+                if name == "reference"
+                else [
+                    "-DBINARY_NAME=openttd-rust",
+                    *deps_build_options(),
+                ]
+            )
+            if args.action == "tools":
+                extra.append("-DOPTION_TOOLS_ONLY=ON")
+            configure = [
+                "cmake",
+                "-S",
+                str(source),
+                "-B",
+                str(build),
+                *common,
+                *extra,
+            ]
+            # Ninja reruns CMake itself when any CMake input changes, so an
+            # explicit configure is only needed when the cache lacks a requested value.
+            if configured_as(build, source, configure, env):
+                print(
+                    f"{name}-configure: CMakeCache already matches; reusing {build}",
+                    flush=True,
+                )
+            else:
+                run(f"{name}-configure", configure)
+            report[f"{name}_compiler_settings"] = verify_compiler_cache_options(
+                build, cache_executable
+            )
+            if name == "candidate":
+                report["rust_configuration"] = rust_configuration(build)
+            if args.action != "tools":
+                supply_graphics(build)
+            # Sanitized trees build only the game and its runtime data: the test
+            # executables would also run under ASan during test discovery.
+            targets = ["--target", "openttd", "regression_files"]
+            run(
+                f"{name}-build",
+                ["cmake", "--build", str(build), "--parallel", str(args.jobs)]
+                + (
+                    targets
+                    if args.sanitize or args.tsan or args.action == "coverage"
+                    else []
+                ),
+            )
+            if instruction_mode:
+                from simulation.instructions import record_build
+
+                record_build(build, source, name, env)
+
+
+def command_rust_checks(execution: Execution) -> None:
+    run = execution.run
+    for name, command in (
+        ("rust-fmt", ["cargo", "fmt", "--all", "--", "--check"]),
+        (
+            "rust-check",
+            ["cargo", "check", "--workspace", "--all-targets", "--locked"],
+        ),
+        (
+            "rust-clippy",
+            [
+                "cargo",
+                "clippy",
+                "--workspace",
+                "--all-targets",
+                "--locked",
+                "--",
+                "-D",
+                "warnings",
+            ],
+        ),
+        ("rust-tests", ["cargo", "test", "--workspace", "--locked"]),
+    ):
+        run(name, command)
+
+
+def command_build(execution: Execution) -> None:
+    build_games(execution)
+
+
+def command_tools(execution: Execution) -> None:
+    build_games(execution)
+
+
+def command_verify(execution: Execution) -> None:
+    command_rust_checks(execution)
+    build_games(execution)
+    args, run = execution.args, execution.run
+    builds, report, evidence = execution.builds, execution.report, execution.evidence
+    inventories = {}
+    for name, build in builds.items():
+        with reference_lock() if name == "reference" else candidate_lock(build):
+            log = run(
+                f"{name}-test-inventory",
+                ["ctest", "--show-only=json-v1"],
+                cwd=build,
+            )
+            inventories[name] = {
+                test["name"] for test in json.loads(log.read_text())["tests"]
+            }
+            report[f"{name}_test_count"] = len(inventories[name])
+            if not inventories[name]:
+                raise RuntimeError(
+                    f"{name.capitalize()} CTest inventory is empty; refusing untested verification"
+                )
+            run(
+                f"{name}-tests",
+                [
+                    "ctest",
+                    "--output-on-failure",
+                    "--parallel",
+                    str(args.jobs),
+                    "--output-junit",
+                    str(evidence / f"{name}-tests.xml"),
+                ],
+                cwd=build,
+            )
+    missing = inventories["reference"] - inventories["candidate"]
+    if missing:
+        raise RuntimeError(f"Candidate removed reference tests: {sorted(missing)}")
+
+
+def command_simulate(execution: Execution) -> None:
+    build_games(execution)
+    args, run, simulate_args = execution.args, execution.run, execution.simulate_args
+    run(
+        "simulate",
+        [
+            sys.executable,
+            str(
+                ROOT
+                / (
+                    "tools/simulation/threaded.py"
+                    if args.threaded
+                    else "tools/simulation/multiplayer.py"
+                    if args.multiplayer
+                    else "tools/simulate.py"
+                )
+            ),
+            "--jobs",
+            str(max(1, args.jobs // 2)),
+            *simulate_args,
+        ],
+    )
+
+
+def command_coverage(execution: Execution) -> None:
+    build_games(execution)
+    args, run, simulate_args = execution.args, execution.run, execution.simulate_args
+    builds = execution.builds
+    run(
+        "coverage",
+        [
+            sys.executable,
+            str(ROOT / "tools/simulation/coverage.py"),
+            "--build",
+            str(builds["reference"]),
+            "--jobs",
+            str(max(1, args.jobs // 2)),
+            *simulate_args,
+        ],
+    )
+
+
+def command_env() -> None:
+    print(shell_exports(), end="")
+
+
+def command_deep(
+    args: argparse.Namespace, simulate_args: list[str], parser: argparse.ArgumentParser
+) -> None:
+    from deep import run_deep
+
+    try:
+        code = run_deep(
+            ROOT,
+            LOCAL,
+            COMMON_LOCAL,
+            args.jobs,
+            simulate_args,
+            member_names=args.member,
+        )
+    except ValueError as error:
+        parser.error(str(error))
+    sys.exit(code)
+
+
+def arguments() -> tuple[argparse.ArgumentParser, argparse.Namespace, list[str]]:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
@@ -493,8 +761,13 @@ def main() -> None:
         parser.error("--no-ccache conflicts with --ccache/--ccache-bypass")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    return parser, args, simulate_args
+
+
+def main() -> None:
+    parser, args, simulate_args = arguments()
     if args.action == "env":
-        print(shell_exports(), end="")
+        command_env()
         return
     args.sanitize = args.sanitize or SANITIZE
     args.tsan = args.tsan or TSAN
@@ -522,20 +795,7 @@ def main() -> None:
         }
         os.execve(sys.executable, [sys.executable, *sys.argv], exported)
     if args.action == "deep":
-        from deep import run_deep
-
-        try:
-            code = run_deep(
-                ROOT,
-                LOCAL,
-                COMMON_LOCAL,
-                args.jobs,
-                simulate_args,
-                member_names=args.member,
-            )
-        except ValueError as error:
-            parser.error(str(error))
-        sys.exit(code)
+        command_deep(args, simulate_args, parser)
     started = time.monotonic()
     if args.action != "rust-checks":
         with reference_lock():
@@ -623,7 +883,7 @@ def main() -> None:
     original_environment = env.copy()
     cache_before: dict[str, dict[str, int]] = {}
 
-    def select_role(role: str) -> None:
+    def select_role(role: str) -> dict[str, str]:
         nonlocal env
         env = (
             compiler_cache_environment(
@@ -640,201 +900,33 @@ def main() -> None:
                 "settings": settings,
                 "before": cache_before[role],
             }
+        return env
 
     try:
-        if args.action in ("verify", "rust-checks"):
-            for name, command in (
-                ("rust-fmt", ["cargo", "fmt", "--all", "--", "--check"]),
-                (
-                    "rust-check",
-                    ["cargo", "check", "--workspace", "--all-targets", "--locked"],
-                ),
-                (
-                    "rust-clippy",
-                    [
-                        "cargo",
-                        "clippy",
-                        "--workspace",
-                        "--all-targets",
-                        "--locked",
-                        "--",
-                        "-D",
-                        "warnings",
-                    ],
-                ),
-                ("rust-tests", ["cargo", "test", "--workspace", "--locked"]),
-            ):
-                run(name, command)
+        execution = Execution(
+            args,
+            simulate_args,
+            report,
+            evidence,
+            builds,
+            cache_executable,
+            instruction_mode,
+            run,
+            select_role,
+        )
+        commands = {
+            "build": command_build,
+            "verify": command_verify,
+            "tools": command_tools,
+            "simulate": command_simulate,
+            "coverage": command_coverage,
+            "rust-checks": command_rust_checks,
+        }
+        commands[args.action](execution)
         if args.action == "rust-checks":
             report["passed"] = True
             print("rust-checks: passed", flush=True)
             return
-        common = [
-            "-G",
-            "Ninja",
-            "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-            "-DOPTION_USE_ASSERTS=ON",
-            "-DOPTION_DEDICATED=OFF",
-            "-DCMAKE_DISABLE_FIND_PACKAGE_Grfcodec=ON",
-            "-DBUILD_TESTING=ON",
-        ]
-        if args.sanitize or args.tsan:
-            common += [
-                f"-DCMAKE_{kind}_FLAGS={TSAN_FLAGS if args.tsan else SANITIZER_FLAGS}"
-                for kind in ("C", "CXX", "EXE_LINKER")
-            ]
-        if args.action == "tools":
-            builds = {"candidate": LOCAL / "build-tools-rust"}
-            common = [
-                "-G",
-                "Ninja",
-                "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-                "-DOPTION_USE_ASSERTS=OFF",
-            ]
-        if args.action == "coverage":
-            common += [
-                "-DCMAKE_C_COMPILER=gcc",
-                "-DCMAKE_CXX_COMPILER=g++",
-                "-DCMAKE_C_FLAGS=--coverage",
-                "-DCMAKE_CXX_FLAGS=--coverage",
-                "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O0 -g -DNDEBUG",
-                "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O0 -g -DNDEBUG",
-                "-DCMAKE_EXE_LINKER_FLAGS=--coverage",
-                "-DBUILD_TESTING=OFF",
-            ]
-        common.extend(compiler_cache_options(cache_executable))
-        for name, build in builds.items():
-            with (
-                reference_lock()
-                if name == "reference" and args.action != "coverage"
-                else candidate_lock(build)
-            ):
-                # Other worktrees rebuild the shared pinned reference concurrently;
-                # its record stays bound to the executable digest instead.
-                if name != "reference":
-                    (build / "instruction-build.json").unlink(missing_ok=True)
-                select_role(name)
-                source = REFERENCE.resolve() if name == "reference" else ROOT
-                extra = (
-                    []
-                    if name == "reference"
-                    else [
-                        "-DBINARY_NAME=openttd-rust",
-                        *deps_build_options(),
-                    ]
-                )
-                if args.action == "tools":
-                    extra.append("-DOPTION_TOOLS_ONLY=ON")
-                configure = [
-                    "cmake",
-                    "-S",
-                    str(source),
-                    "-B",
-                    str(build),
-                    *common,
-                    *extra,
-                ]
-                # Ninja reruns CMake itself when any CMake input changes, so an
-                # explicit configure is only needed when the cache lacks a requested value.
-                if configured_as(build, source, configure, env):
-                    print(
-                        f"{name}-configure: CMakeCache already matches; reusing {build}",
-                        flush=True,
-                    )
-                else:
-                    run(f"{name}-configure", configure)
-                report[f"{name}_compiler_settings"] = verify_compiler_cache_options(
-                    build, cache_executable
-                )
-                if name == "candidate":
-                    report["rust_configuration"] = rust_configuration(build)
-                if args.action != "tools":
-                    supply_graphics(build)
-                # Sanitized trees build only the game and its runtime data: the test
-                # executables would also run under ASan during test discovery.
-                targets = ["--target", "openttd", "regression_files"]
-                run(
-                    f"{name}-build",
-                    ["cmake", "--build", str(build), "--parallel", str(args.jobs)]
-                    + (
-                        targets
-                        if args.sanitize or args.tsan or args.action == "coverage"
-                        else []
-                    ),
-                )
-                if instruction_mode:
-                    from simulation.instructions import record_build
-
-                    record_build(build, source, name, env)
-
-        if args.action == "verify":
-            inventories = {}
-            for name, build in builds.items():
-                with reference_lock() if name == "reference" else candidate_lock(build):
-                    log = run(
-                        f"{name}-test-inventory",
-                        ["ctest", "--show-only=json-v1"],
-                        cwd=build,
-                    )
-                    inventories[name] = {
-                        test["name"] for test in json.loads(log.read_text())["tests"]
-                    }
-                    report[f"{name}_test_count"] = len(inventories[name])
-                    if not inventories[name]:
-                        raise RuntimeError(
-                            f"{name.capitalize()} CTest inventory is empty; refusing untested verification"
-                        )
-                    run(
-                        f"{name}-tests",
-                        [
-                            "ctest",
-                            "--output-on-failure",
-                            "--parallel",
-                            str(args.jobs),
-                            "--output-junit",
-                            str(evidence / f"{name}-tests.xml"),
-                        ],
-                        cwd=build,
-                    )
-            missing = inventories["reference"] - inventories["candidate"]
-            if missing:
-                raise RuntimeError(
-                    f"Candidate removed reference tests: {sorted(missing)}"
-                )
-        if args.action == "simulate":
-            # --jobs is the driver's; each simulation job runs two game processes.
-            log = run(
-                "simulate",
-                [
-                    sys.executable,
-                    str(
-                        ROOT
-                        / (
-                            "tools/simulation/threaded.py"
-                            if args.threaded
-                            else "tools/simulation/multiplayer.py"
-                            if args.multiplayer
-                            else "tools/simulate.py"
-                        )
-                    ),
-                    "--jobs",
-                    str(max(1, args.jobs // 2)),
-                    *simulate_args,
-                ],
-            )
-        if args.action == "coverage":
-            run(
-                "coverage",
-                [
-                    sys.executable,
-                    str(ROOT / "tools/simulation/coverage.py"),
-                    "--build",
-                    str(builds["reference"]),
-                    "--jobs",
-                    str(max(1, args.jobs // 2)),
-                    *simulate_args,
-                ],
-            )
         ensure_reference()
         report["passed"] = True
     finally:

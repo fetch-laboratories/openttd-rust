@@ -18,6 +18,9 @@ struct OpenTTDRailMapServices;
 struct OpenTTDSharedServices;
 struct OpenTTDSignalServices;
 struct OpenTTDCommandServices {
+	uint16_t (*command_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(command_flags);
+	uint8_t (*command_type)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(command_type);
+	bool (*command_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(command_valid);
 	const OpenTTDCompanyFinanceServices *finance;
 	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
 	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);

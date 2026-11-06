@@ -39,7 +39,7 @@ NetworkRecvStatus QueryNetworkGameSocketHandler::CloseConnection(NetworkRecvStat
  */
 bool QueryNetworkGameSocketHandler::CheckConnection()
 {
-	std::chrono::steady_clock::duration lag = std::chrono::steady_clock::now() - this->last_packet;
+	std::chrono::steady_clock::duration lag = std::chrono::steady_clock::now() - this->LastPacket();
 
 	/* If there was no response in 5 seconds, terminate the query. */
 	if (lag > std::chrono::seconds(5)) {

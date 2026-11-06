@@ -1033,6 +1033,21 @@ static const std::vector<IndustryTileLayout> _tile_table_sugar_mine {
 
 #undef MK
 
+/** Borrowed views of the layout tables, which live as long as the process. */
+static RustVector<RustVector<IndustryTileLayoutTile>> OriginLayouts(const std::vector<IndustryTileLayout> &layouts)
+{
+	static std::list<std::vector<RustVector<IndustryTileLayoutTile>>> views;
+	auto &view = views.emplace_back();
+	for (const auto &layout : layouts) view.push_back({layout.data(), layout.size(), 0});
+	return {view.data(), view.size(), 0};
+}
+
+/** A borrowed view of a sound table, whose array lives as long as the process. */
+static RustVector<uint8_t> OriginSounds(std::initializer_list<uint8_t> sounds)
+{
+	return {std::data(sounds), sounds.size(), 0};
+}
+
 /** Array with saw sound, for sawmill */
 static const std::initializer_list<uint8_t> _sawmill_sounds = { SND_28_SAWMILL };
 
@@ -1129,14 +1144,14 @@ enum IndustryTypes : uint8_t {
 
 #define MI(tbl, snd, d, pc, ai1, ai2, ai3, ai4, ag1, ag2, ag3, ag4, col, \
 			c1, c2, c3, proc, p1, r1, p2, r2, m, a1, im1, a2, im2, a3, im3, pr, clim, bev, in, intx, s1, s2, s3) \
-		{tbl, d, 0, pc, {c1, c2, c3}, proc, \
+		{OriginLayouts(tbl), d, 0, pc, {c1, c2, c3}, proc, \
 		{INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO}, \
 		{r1, r2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, m, \
 		{INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO}, \
 		{{im1, 0}, {im2, 0}, {im3, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}}, \
 		pr, clim, bev, PixelColour{col}, in, intx, s1, s2, s3, STR_UNDEFINED, {ai1, ai2, ai3, ai4}, {ag1, ag2, ag3, ag4}, \
-		IndustryCallbackMasks{}, true, SubstituteGRFFileProps(IT_INVALID), snd, {}, \
-		{{p1, p2}}, {{a1, a2, a3}}}
+		IndustryCallbackMasks{}, true, SubstituteGRFFileProps(IT_INVALID), OriginSounds(snd), {}, \
+		{RustCargoLabel(p1), RustCargoLabel(p2)}, {RustCargoLabel(a1), RustCargoLabel(a2), RustCargoLabel(a3)}}
 	/* Format:
 	   tile table                              count and sounds table
 	   cost multiplier                         appear chances(4ingame, 4random)  map colour
@@ -1535,7 +1550,7 @@ static const IndustrySpec _origin_industry_specs[NEW_INDUSTRYOFFSET] = {
  */
 #define MT(ca1, c1, ca2, c2, ca3, c3, sl, a1, a2, a3) { \
 	{INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO, INVALID_CARGO}, \
-	{ca1, ca2, ca3}, sl, a1, a2, a3, IndustryTileCallbackMasks{}, AnimationInfo<IndustryAnimationTriggers>{}, IndustryTileSpecialFlags{}, true, SubstituteGRFFileProps(INVALID_INDUSTRYTILE), {}, {c1, c2, c3} \
+	{ca1, ca2, ca3}, sl, a1, a2, a3, IndustryTileCallbackMasks{}, AnimationInfo<IndustryAnimationTriggers>{}, IndustryTileSpecialFlags{}, true, SubstituteGRFFileProps(INVALID_INDUSTRYTILE), {}, {RustCargoLabel(c1), RustCargoLabel(c2), RustCargoLabel(c3)} \
 }
 static const IndustryTileSpec _origin_industry_tile_specs[NEW_INDUSTRYTILEOFFSET] = {
 	/* Coal Mine */

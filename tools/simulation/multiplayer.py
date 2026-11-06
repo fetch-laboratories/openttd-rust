@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import migration  # noqa: E402
 from simulation import core  # noqa: E402
 from simulation.console_adapter import console_adapter  # noqa: E402
+from simulation.models import empty_stats  # noqa: E402
 
 NAME = "mixed-multiplayer-opus"
 AUTH_MODES = ("plain", "password", "authorized-key")
@@ -28,8 +29,16 @@ AUTH_SECRET = "0724415e7b98b5d2ef0c294663809dbad7f4112e4b6885a2bfdcf91633506d8a"
 AUTH_PUBLIC = "54558C3F5FABC16BE191BFE5D2A9F97227952A99F6F2E7286D02E6A3FE5F932B"
 SOURCE = core.ROOT / "migration/saves/opus-55-167-002.sav"
 STOP = (727960, 0, 84677)  # Calendar callback precedes economy/tick advancement.
+# Server failures that leave the client waiting at the menu.
+NETWORK_FAILURE = re.compile(
+    r"SendError\(\)|Receive_CLIENT_ERROR\(\)|closed connection|connection lost|has been disconnected",
+    re.I,
+)
+# Untagged builds suffix the network revision with the modified flag and hash.
 REVISION_FIELDS = (
     "_openttd_revision",
+    "_openttd_revision_hash",
+    "_openttd_revision_modified",
     "_openttd_revision_tagged",
     "_openttd_newgrf_version",
 )
@@ -41,7 +50,7 @@ def digest(path: Path) -> str:
 
 
 def fixture_revision(candidate: str, reference: str) -> str:
-    """Replace only the three handshake identity constants, never gameplay bodies."""
+    """Replace only the handshake identity constants, never gameplay bodies."""
     for name in REVISION_FIELDS:
         pattern = rf"^const .* {name} = .*;$"
         old, new = (
@@ -263,6 +272,18 @@ def session(
         }
     ready = threading.Event()
     errors: list[str] = []
+    failures: list[str] = []
+    clients: list[subprocess.Popen[bytes]] = []
+    stopping = threading.Lock()
+
+    def stop_client(child: subprocess.Popen[bytes] | None = None) -> None:
+        with stopping:
+            if child is not None:
+                clients.append(child)
+            if failures:
+                for process in clients:
+                    process.kill()
+
     with (
         core.game_slot(),
         subprocess.Popen(
@@ -282,6 +303,7 @@ def session(
 
         def collect() -> None:
             active = False
+            quitting: set[str] = set()
             try:
                 with (folder / "server/stderr.log").open("w") as log:
                     for line in output:
@@ -289,6 +311,19 @@ def session(
                         log.flush()
                         if line.strip() == "MIXED_READY":
                             ready.set()
+                        if quit_message := re.search(
+                            r"client\[(\d+)\] Receive_CLIENT_QUIT\(\)$", line.rstrip()
+                        ):
+                            quitting.add(quit_message[1])
+                        closed = re.search(
+                            r"\[server\] Client #(\d+) closed connection$",
+                            line.rstrip(),
+                        )
+                        if closed is not None and closed[1] in quitting:
+                            quitting.remove(closed[1])
+                        elif not failures and NETWORK_FAILURE.search(line):
+                            failures.append(line.strip())
+                            stop_client()
                         if "status = ACTIVE" in line and not active:
                             active = True
                             # One line avoids dedicated std::getline/select read-ahead.
@@ -313,8 +348,11 @@ def session(
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     timeout=timeout,
+                    started=stop_client,
                 )
             result.exits["client"] = client.returncode
+            if failures:
+                raise RuntimeError(f"server network failure: {failures[0]}")
             writer.write("exit\n")
             writer.flush()
             result.exits["server"] = server.wait(timeout=30)
@@ -424,7 +462,7 @@ def compare(result: Result) -> None:
         raise RuntimeError("both role orders are required")
     for side in ("server", "client"):
         saves = [Path(s.directory) / side / "save/stop.sav" for s in result.sessions]
-        stats: Stats = {"chunks": 0, "elements": 0, "masked": {}}
+        stats: Stats = empty_stats()
         # Network clients omit AI configuration; equivalent roles compare AIPL too.
         result.differences.extend(core.compare_saves(*saves, NAME, 20, stats))
         result.comparisons[side] = stats

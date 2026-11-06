@@ -82,7 +82,7 @@ bool OPENTTD_RUST_CALL RustCompanyPrepare(uint8_t, bool) noexcept;
 void OPENTTD_RUST_CALL RustCompanyDefaults(uint8_t) noexcept;
 void OPENTTD_RUST_CALL RustCompanyStartupWindows() noexcept;
 void RustCompanyNetworkSpectate(uint32_t) noexcept;
-void RustCompanyNetworkNew(uint8_t, uint32_t, bool) noexcept;
+void RustCompanyAdminNew(uint8_t) noexcept;
 Company *RustCompanyNetworkOwn(uint8_t, uint32_t) noexcept;
 void RustCompanyNetworkOwnSettings(Company *) noexcept;
 
@@ -148,7 +148,6 @@ static void Co_company_in_trouble(uint8_t id) noexcept
 	AI::BroadcastNewEvent(new ScriptEventCompanyInTrouble(cid));
 	Game::NewEvent(new ScriptEventCompanyInTrouble(cid));
 }
-static void Co_post_company_delete(uint8_t id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_DELETE, CompanyID(id), CRR_BANKRUPT, INVALID_CLIENT_ID); }
 static void Co_performance_detail_dirty() noexcept { SetWindowDirty(WC_PERFORMANCE_DETAIL, 0); }
 static void Co_company_graphs_dirty() noexcept
 {
@@ -352,17 +351,6 @@ static void Co_copy_service_interval_defaults(uint8_t old_owner, uint8_t new_own
 }
 static void Co_update_autoreplace(uint8_t id) noexcept { GroupStatistics::UpdateAutoreplace(CompanyID(id)); }
 static uint32_t Co_map_size() noexcept { return Map::Size(); }
-static OpenTTDCompanySignalTile Co_signal_tile(uint32_t t) noexcept
-{
-	TileIndex tile(t);
-	OpenTTDCompanySignalTile r{IsTileType(tile, MP_RAILWAY), false, 0, false, 0};
-	r.crossing = !r.railway && IsLevelCrossingTile(tile);
-	/* House and industry tiles have no owner; only the two tested kinds are read. */
-	if (r.railway || r.crossing) r.owner = RustTileOwnerValue(t);
-	r.has_signals = r.railway && RustRailHasSignals(t);
-	if (r.has_signals) r.tracks = static_cast<uint8_t>(RustRailTracks(t));
-	return r;
-}
 static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
 static void Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept { Company::Get(new_owner)->infrastructure.airport += Company::Get(old_owner)->infrastructure.airport; }
 static uint32_t Co_sign_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Sign>(owner, from, [](const Sign *si) { return si->owner; }); }
@@ -422,7 +410,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.local_company = RustLocalCompanyID, .network_server = RustNetworkServer,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_in_trouble = Co_company_in_trouble,
-		.post_company_delete = Co_post_company_delete, .hq_location = RustCompanyHQ,
+		.hq_location = RustCompanyHQ,
 		.object_services = []() noexcept { return &GetRustObjectServices(); },
 		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
 		.company_infrastructure = Co_company_infrastructure,
@@ -441,7 +429,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.prepare_new_company = RustCompanyPrepare, .company_defaults = RustCompanyDefaults, .startup_windows = RustCompanyStartupWindows, .new_company_events = Co_new_company_events,
 		.company_league_dirty = Co_company_league_dirty, .company_ctrl_windows = Co_company_ctrl_windows,
 		.close_network_status = Co_close_network_status, .network_spectate = RustCompanyNetworkSpectate,
-		.network_company_new = RustCompanyNetworkNew, .network_own_company = RustCompanyNetworkOwn,
+		.admin_company_new = RustCompanyAdminNew, .network_own_company = RustCompanyNetworkOwn,
 		.network_own_company_settings = RustCompanyNetworkOwnSettings,
 		.assert_new_ai_slot = Co_assert_new_ai_slot, .company_bankrupt_news = Co_company_bankrupt_news,
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,
@@ -461,7 +449,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
 		.map_size = Co_map_size,
-		.signal_tile = Co_signal_tile, .has_signal_on_track = RustRailHasSignalTrack,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
 		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,
 		.sign_next_owned = Co_sign_next_owned, .set_sign_owner = Co_set_sign_owner,

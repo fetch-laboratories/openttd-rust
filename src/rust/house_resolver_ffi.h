@@ -4,6 +4,7 @@
  * synchronous Action2 and storage reentry; no entry loads or resets the map or pools, or yields. */
 #ifndef RUST_HOUSE_RESOLVER_FFI_H
 #define RUST_HOUSE_RESOLVER_FFI_H
+#include "spec_services_ffi.h"
 #include "town_ffi.h"
 #include "house_ffi.h"
 #include "newgrf_storage_ffi.h"
@@ -52,7 +53,7 @@ struct OpenTTDHouseResolverServices {
 	OpenTTDHouseSearchSpec (*search_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(search_spec);
 	OpenTTDHouseNearbySpec (*nearby_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_spec);
 	OpenTTDHouseFileIdentity (*file_identity)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(file_identity);
-	uint32_t (*badges)(const ResolverObject *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
+	OpenTTDBadgeSpan (*badges)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	const SpriteGroup *(*root)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);
 	uint16_t (*spec_house)(const HouseSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_house);
 	uint16_t (*local_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(local_id);

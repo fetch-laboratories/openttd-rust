@@ -311,7 +311,10 @@ fn lookup_with_build_on_slopes(
     /* Steep slopes behave the same as slopes with one corner raised. */
     if is_steep_slope(slope) {
         let assert = |ok| crate::movement::native_assert(s.command.shared, ok);
-        slope = slope_with_one_corner_raised(get_highest_slope_corner(slope), assert);
+        slope = slope_with_one_corner_raised(
+            get_highest_slope_corner(slope, || (s.command.shared.not_reached)()),
+            assert,
+        );
     }
     /* The slope is not steep. Rotate the data to the uniform base slopes. */
     let Some(&base_slope) = BASE_SLOPES.get(usize::from(slope)) else {

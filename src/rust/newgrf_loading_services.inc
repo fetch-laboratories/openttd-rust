@@ -44,6 +44,7 @@ const OpenTTDGrfLoadingServices &GetRustGrfLoadingServices() noexcept
 		.bindings = &GetRustGrfBindingServices(),
 		.stations = &GetStationDefinitionServices(),
 		.engine_range = [](GrfSpecFeature feature) noexcept { return OpenTTDGrfEngineRange{_engine_offsets[feature], _engine_counts[feature]}; },
+		.config_md5 = [](const GRFConfig *c) noexcept -> OpenTTDByteSpan { return {c->ident.md5sum.data(), c->ident.md5sum.size()}; },
 		.config_id = [](const GRFConfig *c) noexcept { return c->ident.grfid; },
 		.config_status = [](const GRFConfig *c) noexcept { return c->status; },
 		.config_flags = [](const GRFConfig *c) noexcept { return c->flags.base(); },

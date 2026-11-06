@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from source_fixture import initialize
+
 SPEC = importlib.util.spec_from_file_location(
     "rebound", Path(__file__).with_name("rebound-callees.py")
 )
@@ -97,25 +99,14 @@ class ReboundTests(unittest.TestCase):
             root = Path(directory)
             baseline = "rebound | RustTileOwner | src/a.cpp | owner\n"
             baseline += "rebound | RustTileOwner | src/b.inc | owner\n"
-            for path, text in {
-                "src/services.h": SERVICES,
-                "src/a.cpp": "const A a{.owner = RustTileOwner};\n",
-                "src/b.inc": "const B b{.owner = RustTileOwner};\n",
-                REBOUND.BASELINE: baseline,
-            }.items():
-                target = root / path
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(text)
-            REBOUND.git("init", "-q")
-            REBOUND.git("add", ".")
-            REBOUND.git(
-                "-c",
-                "user.name=test",
-                "-c",
-                "user.email=test@example.invalid",
-                "commit",
-                "-qm",
-                "Add: fixture",
+            initialize(
+                root,
+                {
+                    "src/services.h": SERVICES,
+                    "src/a.cpp": "const A a{.owner = RustTileOwner};\n",
+                    "src/b.inc": "const B b{.owner = RustTileOwner};\n",
+                    REBOUND.BASELINE: baseline,
+                },
             )
 
             def check() -> int:

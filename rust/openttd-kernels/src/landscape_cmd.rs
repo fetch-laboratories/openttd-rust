@@ -323,7 +323,6 @@ impl<'a> World<'a> {
     fn clear(&self, out: Cost<'_>, tile: u32, flags: u16) {
         out.set(0);
         let water = unsafe { &*(self.s.water_services)() };
-        let native = unsafe { &*water.clear };
         let mut do_clear = false;
         if flags & F::FORCE_CLEAR_TILE != 0
             && (self.s.has_water_class)(tile)
@@ -331,14 +330,14 @@ impl<'a> World<'a> {
             && !(self.s.is_water_tile)(tile)
             && !(self.a.coast)(tile)
         {
-            let class = (native.water_class)(tile);
-            if flags & F::AUTO != 0 && class == WATER_CLASS_CANAL {
+            let class = crate::map_func::World::new(self.s).water_class(tile);
+            if flags & F::AUTO != 0 && class == WATER_CLASS_CANAL.0 {
                 out.error(self.a.strings.canal);
                 return;
             }
             if !(self.a.buoy)(tile) || (self.s.tile_owner)(tile) == (self.s.current_company)() {
                 do_clear = true;
-                out.add_money(crate::company::price(if class == WATER_CLASS_CANAL {
+                out.add_money(crate::company::price(if class == WATER_CLASS_CANAL.0 {
                     crate::economy_type::PR_CLEAR_CANAL
                 } else {
                     crate::economy_type::PR_CLEAR_WATER
@@ -499,7 +498,9 @@ impl<'a> World<'a> {
                         &mut ts,
                         ret,
                         t,
-                        (self.s.tile_height)(t) as i32 + direction,
+                        crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), t)
+                            as i32
+                            + direction,
                     );
                     if ret.ok() {
                         out.add_money(ret.money());
@@ -544,7 +545,7 @@ impl<'a> World<'a> {
                     }
                 }
                 if pass == 0 {
-                    if (self.s.bridge_above)(t) {
+                    if crate::map_func::World::new(self.s).bridge_above(t) {
                         let station = unsafe { &*(self.s.station_commands)() };
                         let height = crate::bridge_map::get_bridge_height(
                             (station.southern_bridge_end)(t),
@@ -713,7 +714,7 @@ impl<'a> World<'a> {
             out.error(INVALID_STRING_ID);
             return (0, INVALID_TILE);
         }
-        let old = (self.s.tile_height)(start);
+        let old = crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), start);
         let h = match mode {
             LM_LEVEL => old,
             LM_RAISE => old.wrapping_add(1),
@@ -747,7 +748,8 @@ impl<'a> World<'a> {
         }
         let mut error = INVALID_TILE;
         let extra = self.area(tile, start, diagonal, |t| {
-            let mut current = (self.s.tile_height)(t);
+            let mut current =
+                crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), t);
             while current != h {
                 error = self.terraform_do(ret, t, SLOPE_N, current <= h, flags & !F::EXECUTE);
                 if !ret.ok() {
@@ -798,10 +800,9 @@ struct TerraformerState {
 }
 impl TerraformerState {
     fn height(&self, w: &World<'_>, tile: u32) -> i32 {
-        self.heights
-            .get(&tile)
-            .copied()
-            .unwrap_or_else(|| (w.s.tile_height)(tile) as i32)
+        self.heights.get(&tile).copied().unwrap_or_else(|| {
+            crate::tile_map::tile_height_in(&crate::map_func::World::new(w.s), tile) as i32
+        })
     }
 }
 

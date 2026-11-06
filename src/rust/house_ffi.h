@@ -75,13 +75,11 @@ struct OpenTTDHouseServices {
 
 	void (*delete_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
 	const GRFFile *(*cargo_file)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_file);
-	bool (*convert_boolean)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_boolean);
 	bool (*convert_8bit)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_8bit);
 
 	uint32_t (*scale_cargo)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(scale_cargo);
 	uint8_t (*cargogen_mode)() noexcept OPENTTD_SERVICE_DEFAULT(cargogen_mode);
 	uint8_t (*place_houses)() noexcept OPENTTD_SERVICE_DEFAULT(place_houses);
-	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
 	OpenTTDHouseErrors errors;
 };
 /* Resolver and AnimationBase services live beside their native templates. */

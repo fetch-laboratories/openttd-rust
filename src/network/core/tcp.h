@@ -14,6 +14,7 @@
 
 #include "address.h"
 #include "packet.h"
+#include "../../rust/network_tcp_ffi.h"
 
 #include <atomic>
 #include <chrono>
@@ -29,6 +30,7 @@ enum SendPacketsState : uint8_t {
 
 /** Base socket handler for all TCP sockets */
 class NetworkTCPSocketHandler : public NetworkSocketHandler {
+	friend const OpenTTDNetworkTcpServices &GetRustNetworkTcpServices() noexcept;
 private:
 	std::deque<std::unique_ptr<Packet>> packet_queue{}; ///< Packets that are awaiting delivery. Cannot be std::queue as that does not have a clear() function.
 	std::unique_ptr<Packet> packet_recv = nullptr; ///< Partially received packet
@@ -50,6 +52,7 @@ public:
 	virtual void SendPacket(std::unique_ptr<Packet> &&packet);
 	/** Enqueue a packet already framed by the direct Rust packet owner. */
 	void SendPreparedPacket(OpenTTDPacketState &packet) { this->packet_queue.push_back(std::make_unique<Packet>(packet)); }
+	void EnqueuePreparedPacket(std::unique_ptr<Packet> &&packet) { this->packet_queue.push_back(std::move(packet)); }
 	SendPacketsState SendPackets(bool closing_down = false);
 
 	virtual std::unique_ptr<Packet> ReceivePacket();

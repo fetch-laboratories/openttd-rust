@@ -12,17 +12,15 @@ use crate::services::{Foundation, Services};
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
 #[inline]
 pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
-    let slope_z = (s.tile_slope_z)(tile);
+    let (slope, z) = crate::map_func::World::new(s).tile_slope_z(tile);
     let foundation = crate::bridge::get_bridge_foundation(
-        slope_z.slope.0,
+        slope,
         diag_dir_to_axis((s.tunnel_bridge_direction)(tile), |ok| {
             crate::movement::native_assert(s, ok);
         }),
     );
-    slope_z
-        .z
-        .wrapping_add(1)
-        .wrapping_add((s.apply_foundation)(Foundation(foundation), slope_z.slope).z)
+    z.wrapping_add(1)
+        .wrapping_add((s.apply_foundation)(Foundation(foundation), crate::services::Slope(slope)).z)
 }
 /// `GetBridgePixelHeight`.
 #[inline]
@@ -52,6 +50,14 @@ impl crate::map_func::World<'_> {
     pub(crate) fn bridge_type(&self, t: u32) -> u32 {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE && self.bridge(t));
         crate::bitmath_func::gb(u32::from(Self::byte(self.types.m6(t))), 2, 4)
+    }
+}
+
+impl crate::map_func::World<'_> {
+    /// `IsBridgeAbove`.
+    #[inline]
+    pub(crate) fn bridge_above(&self, t: u32) -> bool {
+        self.asserted(|m| is_bridge_above(m, t))
     }
 }
 

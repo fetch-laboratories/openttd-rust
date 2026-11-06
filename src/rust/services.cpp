@@ -7,6 +7,7 @@
 
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
+#include "command_post_ffi.h"
 #include "../source_type.h"
 #include "../effectvehicle_func.h"
 #include "../airport.h"
@@ -63,6 +64,7 @@
 #include "../linkgraph/linkgraphjob.h"
 #include "services_linkgraph.h"
 #include "../company_base.h"
+#include "../network/network_base.h"
 #include "../company_func.h"
 #include "../command_type.h"
 #include "../command_func.h"
@@ -188,6 +190,9 @@ static void CommandEstimate(int64_t cost, int32_t x, int32_t y) noexcept { ShowE
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
+		.command_flags = [](uint8_t cmd) noexcept { return GetCommandFlags(static_cast<Commands>(cmd)).base(); },
+		.command_type = [](uint8_t cmd) noexcept { return GetCommandType(static_cast<Commands>(cmd)); },
+		.command_valid = [](uint8_t cmd) noexcept { return IsValidCommand(static_cast<Commands>(cmd)); },
 		.finance = &GetRustCompanyFinanceServices(),
 		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
@@ -277,14 +282,12 @@ bool OpenTTDIsTileFlat(uint32_t tile) noexcept { return RustIsTileFlat(tile); }
 ClearGround OpenTTDClearGround(uint32_t tile) noexcept { return RustClearGround(Tile{TileIndex{tile}}); }
 TreeGround OpenTTDTreeGround(uint32_t tile) noexcept { return RustTreeGround(Tile{TileIndex{tile}}); }
 
-static bool SharedBridgeAbove(uint32_t tile) noexcept { return IsBridgeAbove(TileIndex{tile}); }
 static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(TileIndex{tile}); }
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(TileIndex{tile}); }
-static RoadTileType Shared_road_tile_kind(uint32_t tile) noexcept { return GetRoadTileType(TileIndex{tile}); }
 static void Shared_set_road_bits(uint32_t tile, uint8_t bits, uint8_t rtt) noexcept { SetRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadTramType>(rtt)); }
 static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { RustSetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
@@ -376,24 +379,18 @@ static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROU
 static_assert(to_underlying(SourceType::Town) == 1 && to_underlying(SourceType::Headquarters) == 2);
 static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_CONSTRUCTION == 0 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);
 static_assert(RATING_MINIMUM == -1000 && RATING_MAXIMUM == 1000 && RATING_BRIBE_UP_STEP == 200 && RATING_BRIBE_MAXIMUM == 800 && RATING_BRIBE_DOWN_TO == -50);
-static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
 static bool Shared_has_water_ground(uint32_t tile) noexcept { return HasTileWaterGround(TileIndex{tile}); }
-static bool Shared_is_sea(uint32_t tile) noexcept { return IsSea(TileIndex{tile}); }
 static bool Shared_is_bridge(uint32_t tile) noexcept { return IsBridgeTile(TileIndex{tile}); }
 static uint8_t Shared_drive_through_axis(uint32_t tile) noexcept { return GetDriveThroughStopAxis(TileIndex{tile}); }
-static bool Shared_is_any_road_stop(uint32_t tile) noexcept { return IsAnyRoadStopTile(TileIndex{tile}); }
 static uint8_t Shared_road_type(uint32_t tile) noexcept { return GetRoadTypeRoad(TileIndex{tile}); }
 static bool Shared_has_road_type(uint32_t tile) noexcept { return RustHasTileRoadType(tile, RTT_ROAD); }
-static uint8_t Shared_road_owner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_ROAD).base(); }
 static uint16_t Shared_town_index(uint32_t tile) noexcept { return GetTownIndex(TileIndex{tile}).base(); }
 static uint8_t Shared_road_bits(uint32_t tile, uint8_t type, bool straight) noexcept { return GetAnyRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type), straight); }
 static void SharedUpdateLevelCrossing(uint32_t tile, bool sound) noexcept { UpdateLevelCrossing(TileIndex{tile}, sound); }
 static void SharedMarkBridgeDirty(uint32_t tile) noexcept { MarkBridgeDirty(TileIndex{tile}); }
 static Trackdir SharedTrainTrackdir(const Train *v) noexcept { return v->GetVehicleTrackdir(); }
 static RoadType SharedTramType(uint32_t tile) noexcept { return GetRoadTypeTram(TileIndex{tile}); }
-static uint8_t SharedTramOwner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_TRAM).base(); }
-static RoadBits SharedNormalRoadBits(uint32_t tile, uint8_t type) noexcept { return GetRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type)); }
 static RoadBits SharedCrossingRoadBits(uint32_t tile) noexcept { return GetCrossingRoadBits(TileIndex{tile}); }
 static uint32_t SharedMapMaxX() noexcept { return Map::MaxX(); }
 static uint32_t SharedMapMaxY() noexcept { return Map::MaxY(); }
@@ -421,11 +418,11 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
-	.bridge_above = SharedBridgeAbove,
 	.bridge_axis = Shared_bridge_axis,
 	.bridge_speed = MapSvcBridgeSpeed,
 	.build_on_slopes = RustBuildOnSlopes,
@@ -434,30 +431,25 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 		.docking = OpenTTDIsDockingTile,
 		.generating_world = OpenTTDGeneratingWorld,
 	},
+	.company_human = OpenTTDCompanyIsValidHuman,
 	.company_valid = OpenTTDCompanyIsValid,
 	.context = nullptr,
 	.cost_animation = RustCostOrIncomeAnimation,
 	.crossing_road_bits = SharedCrossingRoadBits,
 	.current_company = RustCurrentCompanyID,
 	.depot_index = MapSvcDepotIndex,
-	.disallowed_road_directions = Shared_disallowed_road_directions,
 	.disaster_sound = SharedDisasterSound,
 	.drive_through_axis = Shared_drive_through_axis,
 	.forbid_90_deg = RustForbid90Deg,
 	.free_train_reservation = SharedFreeTrainReservation,
 	.has_road_type = Shared_has_road_type,
-	.has_road_works = SharedHasRoadWorks,
 	.has_water_ground = Shared_has_water_ground,
 	.industry = SharedIndustry,
-	.is_any_road_stop = Shared_is_any_road_stop,
 	.is_bay_stop = Shared_is_bay_stop,
 	.is_bridge = Shared_is_bridge,
 	.is_drive_through_stop = Shared_is_drive_through_stop,
-	.is_level_crossing = MapSvcIsLevelCrossing,
-	.is_normal_road_tile = Shared_is_normal_road_tile,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
-	.is_sea = Shared_is_sea,
 	.is_water_tile = MapSvcIsWaterTile,
 	.map = &_rust_map_statics,
 	.settings = &_rust_setting_addresses,
@@ -467,7 +459,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.mark_dirty = RustMarkTileDirty,
 	.next_company = SharedNextCompany,
 	.no_jetcrash = SharedNoJetcrash,
-	.normal_road_bits = SharedNormalRoadBits,
 	.other_tunnel_end = RustOtherTunnelBridgeEnd,
 	.plane_crashes = SharedPlaneCrashes,
 	.plane_speed = SharedPlaneSpeed,
@@ -475,12 +466,10 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.road_bits = Shared_road_bits,
 	.road_cost_multiplier = RustRoadCostMultiplier,
 	.road_depot_direction = Shared_road_depot_direction,
-	.road_owner = Shared_road_owner,
 	.road_type = Shared_road_type,
 	.crossing_reserved = RustCrossingReserved,
 	.set_crossing_reserved = RustSetCrossingReserved,
 	.may_have_road = Shared_may_have_road,
-	.road_tile_kind = Shared_road_tile_kind,
 	.set_road_bits = Shared_set_road_bits,
 	.set_road_type = Shared_set_road_type,
 	.set_road_owner = RustSetRoadOwner,
@@ -510,18 +499,15 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.utf8_length = RustUtf8Length,
 	.vehicle_next = RustNextVehicle,
 	.water_middle_lock = OpenTTDIsMiddleLock,
-	.tile_height = Shared_tile_height,
 	.tile_max_z = Shared_tile_max_z,
 	.tile_owner = RustTileOwnerValue,
 	.tile_slope = SharedTileSlope,
 	.tile_type = SharedTileType,
 	.tile_valid = Shared_tile_valid,
-	.tile_slope_z = RustTileSlopeZ,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
 	.town_owner = SharedTownOwner,
 	.train_trackdir = SharedTrainTrackdir,
-	.tram_owner = SharedTramOwner,
 	.tram_type = SharedTramType,
 	.tropic_zone = SharedTropicZone,
 	.try_path_reserve = SharedTryPathReserve,
@@ -543,14 +529,20 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
 	.station_pool = SharedStationPool,
-	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 	.nearby_tile = RustSignedNearbyTile,
 	.nearby_tile_information = RustNearbyTileInformation,
+	.network_client_info = [](uint32_t id) noexcept { return NetworkClientInfo::GetByClientID(ClientID(id)); },
 	.screen_dirty = RustScreenDirty,
+	.string_data = [](const void *ptr, size_t *length) noexcept {
+		const std::string &str = *static_cast<const std::string *>(ptr);
+		*length = str.size();
+		return reinterpret_cast<const uint8_t *>(str.data());
+	},
 	.terrain_type = RustTerrainType,
 	.grf_file_version = RustGRFFileVersion,
 	.grf_cargo_map = RustGRFCargoMap,
+	.grf_boolean_callback = OpenTTDConvertBooleanCallback,
 	.grf_file_at_or_null = RustGRFFileAtOrNull,
 	.grf_file_id = RustGRFFileID,
 	.grf_file_name = RustGRFFileName,
@@ -558,6 +550,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.grf_parameter = RustGRFParameter,
 	.newgrf_specs = &_rust_newgrf_specs,
 	.resolver_grf_file = RustResolverGRFFile,
+	.resolver_badges = [](const ResolverObject *resolver, const BadgeID *badges, size_t count, uint32_t parameter) noexcept { return GetBadgeVariableResult(*RustResolverGRFFile(resolver), std::span{badges, count}, parameter); },
 	.resolver_grf_file_id = RustResolverGRFFileID,
 	.resolver_grf_version = RustResolverGRFVersion,
 	.show_error = RustShowErrorMessage,
@@ -591,30 +584,6 @@ static OpenTTDRailTraversal SharedRail_traversal(uint32_t tile) noexcept
 	if (!r.depot) r.tracks = RustRailTracks(tile);
 	return r;
 }
-static OpenTTDRailSignalPresence SharedRail_signal_presence(uint32_t tile, uint8_t masked_tracks, uint8_t td) noexcept
-{
-	Trackdir dir = static_cast<Trackdir>(td);
-	OpenTTDRailSignalPresence r{.signals = RustRailHasSignals(tile), .track = false, .kind = SIGTYPE_BLOCK, .forward = false, .reverse = false};
-	if (r.signals) {
-		Track track = TrackBitsToTrack(static_cast<TrackBits>(masked_tracks));
-		uint present = RustRailPresentSignals(tile);
-		r.track = (present & SignalOnTrack(track)) != 0;
-		if (r.track) {
-			r.kind = RustRailSignalType(tile, track);
-			r.forward = (present & SignalAlongTrackdir(dir)) != 0;
-			r.reverse = (present & SignalAlongTrackdir(ReverseTrackdir(dir))) != 0;
-		}
-	}
-	return r;
-}
-static OpenTTDRailSignalUpdate SharedRail_signal_update(uint32_t tile, uint8_t td) noexcept
-{
-	assert(RustRailHasSignalTrackdir(tile, td));
-	SignalType kind = RustRailSignalType(tile, TrackdirToTrack(static_cast<Trackdir>(td)));
-	OpenTTDRailSignalUpdate r{.kind = kind, .reservations = TRACK_BIT_NONE};
-	if (IsPbsSignal(kind)) r.reservations = RustRailReservation(tile);
-	return r;
-}
 static OpenTTDRailStationAdmission SharedRail_station_admission(uint32_t tile, uint8_t owner, uint8_t dir) noexcept
 {
 	TileIndex t(tile);
@@ -625,15 +594,6 @@ static OpenTTDRailStationAdmission SharedRail_station_admission(uint32_t tile, u
 			r.axis = RustRailStationAxis(tile);
 			if (DiagDirToAxis(static_cast<DiagDirection>(dir)) == r.axis) r.blocked = RustStationBlocked(tile);
 		}
-	}
-	return r;
-}
-static OpenTTDRailCrossingAdmission SharedRail_crossing_admission(uint32_t tile, uint8_t owner) noexcept
-{
-	OpenTTDRailCrossingAdmission r{.crossing = MapSvcRoadIsLevelCrossing(tile), .owner = INVALID_OWNER.base(), .axis = AXIS_X};
-	if (r.crossing) {
-		r.owner = RustTileOwnerValue(tile);
-		if (r.owner == owner) r.axis = RustCrossingRoadAxis(tile);
 	}
 	return r;
 }
@@ -652,29 +612,16 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 	static const OpenTTDRailMapServices services{
 		.ground = &GetRustRailGroundServices(),
 		.traversal = SharedRail_traversal,
-		.signal_presence = SharedRail_signal_presence,
-		.signal_update = SharedRail_signal_update,
 		.station_admission = SharedRail_station_admission,
-		.crossing_admission = SharedRail_crossing_admission,
 		.wormhole_admission = SharedRail_wormhole_admission,
 
-		.is_rail_depot = RustRailIsDepot,
-		.rail_depot_direction = RustRailDepotDirection,
-		.has_signal_trackdir = RustRailHasSignalTrackdir,
-		.signal_state = RustRailSignalState,
 		.set_signal_state = RustRailSetSignalState,
 		.other_tunnel_bridge_end = RustOtherTunnelBridgeEnd,
 
-		.has_signals = RustRailHasSignals,
-		.signal_type = RustRailSignalType,
 		.invalid_rail_type = RustInvalidRailType,
-		.rail_type = RustRailType,
 		.set_rail_type = RustSetRailType,
-		.rail_tile_type = RustRailTileType,
 		.set_track_bits = RustSetTrackBits,
-		.present_signals = RustRailPresentSignals,
 		.set_present_signals = RustSetPresentSignals,
-		.signal_states = RustSignalStates,
 		.set_signal_states = RustSetSignalStates,
 		.set_has_signals = RustSetHasSignals,
 		.set_signal_type = RustSetSignalType,
@@ -688,12 +635,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.set_depot_exit = RustSetDepotExit,
 		.make_rail_normal = RustMakeRailNormal,
 		.make_rail_depot = RustMakeRailDepot,
-		.crossing_rail_bits = RustCrossingRailBits,
-		.crossing_road_axis = RustCrossingRoadAxis,
-		.has_station_rail = RustHasStationRail,
-		.is_rail_station = RustIsRailStation,
-		.station_blocked = RustStationBlocked,
-		.station_track = RustRailStationTrack,
 		.wormhole_reserved = RustWormholeReserved,
 	};
 	return services;
@@ -715,26 +656,19 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDAirportSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecServices.hpp"
 #include "abi-visit-OpenTTDHouseSpecServices.hpp"
-#include "abi-visit-OpenTTDIndustrySpecServices.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecServices.hpp"
 #include "abi-visit-OpenTTDObjectSpecServices.hpp"
 #include "abi-visit-OpenTTDRoadStopSpecServices.hpp"
 #include "abi-visit-OpenTTDStationSpecServices.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecAnimation.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecAnimation.hpp"
 #include "abi-visit-OpenTTDRoadStopSpecAnimation.hpp"
 #include "abi-visit-OpenTTDStationSpecAnimation.hpp"
 #include "abi-visit-OpenTTDAirportSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecStandard.hpp"
 #include "abi-visit-OpenTTDHouseSpecStandard.hpp"
-#include "abi-visit-OpenTTDIndustrySpecStandard.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecStandard.hpp"
 #include "abi-visit-OpenTTDObjectSpecStandard.hpp"
 #include "abi-visit-OpenTTDAirportSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDAirportTileSpecSubstitute.hpp"
 #include "abi-visit-OpenTTDHouseSpecSubstitute.hpp"
-#include "abi-visit-OpenTTDIndustrySpecSubstitute.hpp"
-#include "abi-visit-OpenTTDIndustryTileSpecSubstitute.hpp"
 /* Each capability table Rust reaches is present and complete. */
 static bool NewGRFSpecsComplete()
 {
@@ -743,8 +677,6 @@ static bool NewGRFSpecsComplete()
 	return complete(s.airport) && complete(s.airport->standard) && complete(s.airport->substitute) &&
 		complete(s.airport_tile) && complete(s.airport_tile->animation) && complete(s.airport_tile->standard) && complete(s.airport_tile->substitute) &&
 		complete(s.house) && complete(s.house->standard) && complete(s.house->substitute) &&
-		complete(s.industry) && complete(s.industry->standard) && complete(s.industry->substitute) &&
-		complete(s.industry_tile) && complete(s.industry_tile->animation) && complete(s.industry_tile->standard) && complete(s.industry_tile->substitute) &&
 		complete(s.object) && complete(s.object->standard) &&
 		complete(s.road_stop) && complete(s.road_stop->animation) &&
 		complete(s.station) && complete(s.station->animation);

@@ -122,6 +122,12 @@ impl RoadTarget {
 pub struct IndustryTarget {
     pub industry: *mut c_void,
     pub id: u16,
+    /// `Industry::type`; `IT_INVALID` past the pool's end.
+    pub kind: u8,
+}
+/// `GetIndustrySpec(type)->behaviour`.
+fn industry_behaviour(kind: u8) -> u32 {
+    unsafe { (*crate::industrytype::industry(u16::from(kind))).behaviour }
 }
 #[repr(C)]
 pub struct IndustryLocation {
@@ -143,7 +149,6 @@ pub struct Services {
     pub vehicles: *const VehicleServices,
     pub occupancy: *const crate::vehicle::occupancy::Commands,
     pub environment: *const crate::services::EnvironmentServices,
-    pub rail_map: *const crate::services::RailMapServices,
     pub aircraft: *const crate::aircraft::Leaves,
     pub road: *const crate::road::Leaves,
     pub age: extern "C" fn(VehicleRef) -> i32,
@@ -167,7 +172,6 @@ pub struct Services {
     pub next_station: extern "C" fn(u32) -> StationTarget,
     pub next_industry: extern "C" fn(u32) -> IndustryTarget,
     pub industry: extern "C" fn(u32) -> IndustryTarget,
-    pub industry_behaviour: extern "C" fn(*mut c_void) -> u32,
     pub industry_location: extern "C" fn(*mut c_void) -> IndustryLocation,
     pub industry_tile: extern "C" fn(*mut c_void) -> u32,
     pub industry_index: extern "C" fn(u32) -> u16,
@@ -371,7 +375,7 @@ impl<'a> World<'a> {
         match (self.shared.tile_type)(tile) {
             MP_RAILWAY => {
                 if (self.s.human)((self.shared.tile_owner)(tile))
-                    && !(unsafe { &*self.s.rail_map }.is_rail_depot)(tile)
+                    && !crate::map_func::World::new(self.shared).is_rail_depot(tile)
                 {
                     (self.s.clear)(tile, crate::company_type::OWNER_WATER);
                     (self.s.update_signals)();
@@ -643,7 +647,7 @@ impl<'a> World<'a> {
             let industry = (self.s.industry_index)(tile);
             Self::set_dest(v, u32::from(industry));
             let i = (self.s.industry)(u32::from(industry));
-            if (self.s.industry_behaviour)(i.industry)
+            if industry_behaviour(i.kind)
                 & if leave_top {
                     crate::industry_type::AIRPLANE_ATTACKS
                 } else {
@@ -968,7 +972,7 @@ impl<'a> World<'a> {
                     if i.industry.is_null() {
                         break;
                     }
-                    if ((self.s.industry_behaviour)(i.industry)
+                    if (industry_behaviour(i.kind)
                         & if kind == 2 {
                             crate::industry_type::AIRPLANE_ATTACKS
                         } else {
@@ -1044,10 +1048,7 @@ impl<'a> World<'a> {
                         if i.industry.is_null() {
                             break;
                         }
-                        if (self.s.industry_behaviour)(i.industry)
-                            & crate::industry_type::CAN_SUBSIDENCE
-                            != 0
-                        {
+                        if industry_behaviour(i.kind) & crate::industry_type::CAN_SUBSIDENCE != 0 {
                             index = index.wrapping_sub(1);
                             if index < 0 {
                                 let location = (self.s.industry_location)(i.industry);
@@ -1272,10 +1273,10 @@ crate::abi::layouts! {
     "OpenTTDDisasterState" ["probe"] => State { image_override, target, state, flags, };
     "OpenTTDDisasterVehicle" ["probe"] => Vehicle { handle, state, id, };
     "OpenTTDDisasterRoadTarget" ["probe"] => RoadTarget { handle, state, id, };
-    "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, };
+    "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, kind, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, rail_map, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_behaviour, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
 }
 
 #[cfg(test)]

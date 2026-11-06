@@ -134,7 +134,6 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	houses.delete_inspect = [](uint32_t) noexcept {};
 	houses.cargogen_mode = []() noexcept -> uint8_t { return 0; };
 	houses.place_houses = []() noexcept -> uint8_t { return 2; };
-	houses.company_human = [](uint8_t) noexcept { return true; };
 	return houses;
 }
 static inline const OpenTTDHouseServices town_protocol_houses = TownProtocolHouses();
@@ -215,6 +214,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	auto *fields = openttd_rust_town_simulation(owner.get()); fields->xy = 2080; std::fill_n(fields->radius, 5, 100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
+	services.company_human = [](uint8_t) noexcept { return true; };
 	/* The removed allow_roads fixture leaf returned false; the catalog keeps that setting. */
 	static const bool town_roads = false;
 	static OpenTTDSettingAddresses town_settings{};
@@ -233,7 +233,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 
 	/* This fixture models flat, empty ground without roads, depots or bridges. */
 	services.is_road_depot = [](uint32_t) noexcept { return false; };
-	services.is_any_road_stop = [](uint32_t) noexcept { return false; };
 	services.is_bay_stop = [](uint32_t) noexcept { return false; };
 	services.road_bits = [](uint32_t, uint8_t, bool) noexcept -> uint8_t { return 0; };
 	services.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
@@ -248,7 +247,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
-	services.bridge_above = [](uint32_t) noexcept { return false; };
 	services.has_water_ground = [](uint32_t) noexcept { return false; };
 	services.mark_dirty = [](uint32_t) noexcept {};
 	services.clear_square_services.docking = [](uint32_t) noexcept { return false; };

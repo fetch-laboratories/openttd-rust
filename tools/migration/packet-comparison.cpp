@@ -209,7 +209,9 @@ int main()
 		Packet packet(&socket, PacketType{7}, 1);
 		packet.Send_bool(true); packet.Send_uint8(0xAB); packet.Send_uint16(0x1234);
 		packet.Send_uint32(0x56789ABC); packet.Send_uint64(UINT64_C(0xFEDCBA9876543210));
-		packet.Send_string("release"); packet.Send_buffer({1, 2, 3});
+		packet.Send_string("release");
+		const std::vector<uint8_t> buffer{1, 2, 3};
+		packet.Send_buffer(buffer);
 		packet.PrepareToSend(); packet.PrepareToSend();
 		State("asserts-off-writes", packet, socket);
 	}

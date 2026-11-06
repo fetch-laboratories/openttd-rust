@@ -5,7 +5,7 @@
 #include "services_ffi.h"
 struct GRFFile;
 enum GameMode : uint8_t;
-struct OpenTTDNewGRFCargoLabel { uint32_t value; bool mixed; };
+#include "cargo_label_ffi.h"
 struct OpenTTDGlobalVariableServices {
 	uint8_t (*misc_bits)() noexcept OPENTTD_SERVICE_DEFAULT(misc_bits);
 	uint32_t (*newgrf_version)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf_version);

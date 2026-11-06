@@ -154,8 +154,6 @@ inline uint8_t RustAirportDeltaZ(const AirportFTAClass *airport) noexcept { retu
 
 /* The existing aircraft table retains its opaque pointers and return widths. */
 inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustAirportDeltaZ(static_cast<const AirportFTAClass *>(airport)); }
-inline bool RustMovementRailStation(uint32_t tile) noexcept { return IsRailStation(TileIndex{tile}); }
-inline bool RustStationBuoy(uint32_t tile) noexcept { return IsBuoy(TileIndex{tile}); }
 inline uint8_t RustStationTileRandomBits(uint32_t tile) noexcept { return GetStationTileRandomBits(TileIndex{tile}); }
 inline bool RustStationSignValid(BaseStation *st) noexcept { return st->sign.kdtree_valid; }
 inline void RustStationListClassesInvalidate() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); }

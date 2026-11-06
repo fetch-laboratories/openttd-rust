@@ -129,10 +129,9 @@ static void AircraftDirectBoundary()
 	CHECK(!openttd_test_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(!p.live && p.deleted == 1);
 	/* A disaster has its own flags and no Aircraft state, even with subtype zero. */
-	static OpenTTDFixtureMap disaster_map{6};
+	static OpenTTDFixtureMap disaster_map{6, 4096};
 	shared.map = &disaster_map.statics;
 	shared.map_max_x = shared.map_max_y = []() noexcept { return uint32_t{63}; };
-	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
 
 	p.record.subtype = 0; p.record.type = 4; p.record.direction = 4; p.record.z_pos = 0; p.record.cached_max_speed = 1;
 	uint8_t disaster_flags = 0;

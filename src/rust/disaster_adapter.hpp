@@ -85,7 +85,7 @@ static OpenTTDDisasterStationTarget OPENTTD_RUST_CALL DisasterNextStation(uint32
 }
 static OpenTTDDisasterIndustryTarget DisasterIndustryHandle(Industry *i) noexcept
 {
-	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i)};
+	return {.industry = i, .id = i == nullptr ? IndustryID::Invalid().base() : RustIndustryID(i), .kind = i == nullptr ? IT_INVALID : i->type};
 }
 static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterNextIndustry(uint32_t from) noexcept { return DisasterIndustryHandle(OpenTTDNextIndustry(from)); }
 static OpenTTDDisasterIndustryTarget OPENTTD_RUST_CALL DisasterIndustry(uint32_t id) noexcept { return DisasterIndustryHandle(RustIndustryByID(id)); }
@@ -138,7 +138,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.vehicles = &GetRustVehicleServices(),
 		.occupancy = GetRustOccupancyCommands(),
 		.environment = &GetRustEnvironmentServices(),
-		.rail_map = &GetRustRailMapServices(),
 		.aircraft = &GetRustAircraftLeaves(),
 		.road = &GetRustRoadLeaves(),
 		.age = RustVehicleRead<int32_t, RustVehicleAgeValue>,
@@ -162,7 +161,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.next_station = DisasterNextStation,
 		.next_industry = DisasterNextIndustry,
 		.industry = DisasterIndustry,
-		.industry_behaviour = RustIndustryBehaviour,
 		.industry_location = DisasterIndustryLocation,
 		.industry_tile = RustIndustryTile,
 		.industry_index = RustIndustryTileIndex,

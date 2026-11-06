@@ -94,6 +94,46 @@ class PortMetricsTests(unittest.TestCase):
         removed = self.commit()
         self.assertEqual(counts(METRICS.metrics(added, removed), *keys), (0, 3, -3))
 
+    def test_evidence_inventory_uses_archived_inputs_and_keeps_area_series(
+        self,
+    ) -> None:
+        for name in ("rust/openttd-kernels/src", "src/rust", "tools/migration"):
+            (self.root / name).mkdir(parents=True, exist_ok=True)
+        self.write("rust/openttd-kernels/src/record.rs", "// record input\n")
+        self.write("src/rust/service.hpp", "int first;\n")
+        self.write("tools/migration/shared.cpp", "void openttd_rust_probe();\n")
+        self.write("tools/migration/crypto-vectors.cpp", "int oracle_only;\n")
+        self.write("tools/migration/unknown.inc", "int unknown_dependency;\n")
+        self.write(
+            "tools/generate-abi.py",
+            "def generate(root):\n"
+            "    service = (root / 'src/rust/service.hpp').read_text()\n"
+            "    return {'abi-record-probe.h': 'struct Probe {};\\n',\n"
+            "            'abi-visit-Probe.hpp': service,\n"
+            "            'abi-layout-probe.inc': 'Layout(Probe);\\n'}\n",
+        )
+        first = self.commit()
+        self.write("src/rust/service.hpp", "int second;\nint third;\n")
+        second = self.commit()
+        # Dirty working inputs must never affect either archived endpoint.
+        self.write("src/rust/service.hpp", "broken working input\n" * 10)
+        before = METRICS.metrics(METRICS.BASELINE, first, whole_fork=True)
+        after = METRICS.metrics(METRICS.BASELINE, second, whole_fork=True)
+        evidence = before["evidence_cpp"]
+        self.assertEqual(evidence["tracked"], 3)
+        self.assertEqual(evidence["generated"], 2)
+        self.assertEqual(evidence["candidate_shared"], 3)
+        self.assertEqual(evidence["reference_only"], 1)
+        self.assertEqual(evidence["unresolved"], 1)
+        self.assertEqual(after["evidence_cpp"]["generated"], 3)
+        self.assertEqual(before["original_total"], 4)
+        self.assertEqual(before["compiled_cpp"], 6)  # Four original + header + record.
+        self.assertEqual(sum(r["compiled"] for r in before["areas"].values()), 6)
+        self.assertEqual(before["fork_cpp"], 11)
+        self.assertEqual(before["candidate_cpp_upper_bound"], 10)
+        self.assertEqual(len({r["path"] for r in evidence["files"]}), 5)
+        self.assertFalse(any("abi-record" in r["path"] for r in evidence["files"]))
+
     def test_original_restoration_and_fork_glue_transitions(self) -> None:
         baseline = METRICS.BASELINE
         original, glue = self.root / "src/town_gui.cpp", self.root / "src/rust_glue.cpp"

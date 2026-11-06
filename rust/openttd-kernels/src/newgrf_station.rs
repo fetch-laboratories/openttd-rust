@@ -158,9 +158,6 @@ impl Services {
     fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
         unsafe { &*(self.shared().station_commands)() }
     }
-    fn rail(&self) -> &crate::services::RailMapServices {
-        unsafe { &*(*self.commands().rail).rail }
-    }
     fn map(&self) -> Map {
         self.shared().map()
     }
@@ -279,7 +276,7 @@ fn find_end(
         {
             break;
         }
-        if !(native.rail().has_station_rail)(next) {
+        if !crate::map_func::World::new(native.shared()).station_has_rail(next) {
             break;
         }
         if check_type && (native.commands().custom_rail_index)(next) != kind {
@@ -625,7 +622,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
     unhandled(variable, available)
 }
 fn land_info(native: &Services, file: *const c_void, tile: u32, axis: u8) -> u32 {
-    let slope = (native.shared().tile_slope)(tile);
+    let slope = crate::map_func::World::new(native.shared()).tile_slope(tile);
     let swap = axis == AXIS_Y && (slope & SLOPE_W != 0) != (slope & SLOPE_E != 0);
     (native.shared().nearby_tile_information)(tile, (native.shared().grf_file_version)(file) >= 8)
         ^ if swap { u32::from(SLOPE_EW) } else { 0 }
@@ -666,7 +663,11 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
                 };
                 land_info(native, file, nearby, axis)
             }
-            0x7a => (native.shared().specs().station().badges)(resolver, spec, parameter),
+            0x7a => (native.shared().specs().station().badges)(spec).resolve(
+                native.shared(),
+                resolver,
+                parameter,
+            ),
             0xfa => build_date(crate::timer_game_common::calendar_date().0),
             _ => {
                 unsafe {
@@ -684,7 +685,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x42 => {
             (native.shared().terrain_type)(tile)
                 | (u32::from(crate::type_registry::openttd_rust_rail_reverse(
-                    (native.rail().rail_type)(tile).0,
+                    crate::map_func::World::new(native.shared()).rail_type(tile),
                     (native.shared().specs().station().file)(spec),
                 )) << 8)
         }
@@ -764,7 +765,11 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
             }
             value
         }
-        0x7a => (native.shared().specs().station().badges)(resolver, spec, parameter),
+        0x7a => (native.shared().specs().station().badges)(spec).resolve(
+            native.shared(),
+            resolver,
+            parameter,
+        ),
         0x82 => 50,
         0x84 => crate::station_record::read(st.cast(), |r| r.string_id),
         0x86 => 0,
@@ -974,7 +979,7 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
     let native = services();
     let map = native.map();
     let diff = tile.wrapping_sub(north);
-    let slope = u32::from((native.shared().tile_slope)(tile));
+    let slope = u32::from(crate::map_func::World::new(native.shared()).tile_slope(tile));
     let swap =
         axis == AXIS_Y && (slope & u32::from(SLOPE_W) != 0) != (slope & u32::from(SLOPE_E) != 0);
     let p1 = (slope << 4) | (slope ^ if swap { u32::from(SLOPE_EW) } else { 0 });

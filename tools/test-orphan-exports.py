@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from source_fixture import initialize
+
 SPEC = importlib.util.spec_from_file_location(
     "orphans", Path(__file__).with_name("orphan-exports.py")
 )
@@ -77,24 +79,13 @@ class OrphanTests(unittest.TestCase):
             patch.object(ORPHANS, "ROOT", Path(directory)),
         ):
             root = Path(directory)
-            for path, text in {
-                "rust/lib.rs": export("orphan"),
-                "src/rust/ffi.h": "void openttd_rust_orphan();\n",
-                ORPHANS.BASELINE: "no production user | openttd_rust_orphan\n",
-            }.items():
-                target = root / path
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(text)
-            ORPHANS.git("init", "-q")
-            ORPHANS.git("add", ".")
-            ORPHANS.git(
-                "-c",
-                "user.name=test",
-                "-c",
-                "user.email=test@example.invalid",
-                "commit",
-                "-qm",
-                "Add: fixture",
+            initialize(
+                root,
+                {
+                    "rust/lib.rs": export("orphan"),
+                    "src/rust/ffi.h": "void openttd_rust_orphan();\n",
+                    ORPHANS.BASELINE: "no production user | openttd_rust_orphan\n",
+                },
             )
 
             def check() -> int:
