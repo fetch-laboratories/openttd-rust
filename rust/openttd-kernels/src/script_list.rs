@@ -132,7 +132,7 @@ impl List {
         self.pending = None;
         self.ended = true;
     }
-    fn add(&mut self, item: i64, value: i64) {
+    pub(crate) fn add(&mut self, item: i64, value: i64) {
         self.touch();
         if self.items.contains_key(&item) {
             return;
@@ -140,7 +140,7 @@ impl List {
         self.items.insert(item, value);
         self.values.insert((value, item));
     }
-    fn remove(&mut self, item: i64) {
+    pub(crate) fn remove(&mut self, item: i64) {
         self.touch();
         let Some(value) = self.items.get(&item).copied() else {
             return;

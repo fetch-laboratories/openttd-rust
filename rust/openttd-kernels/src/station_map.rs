@@ -31,6 +31,16 @@ pub(crate) fn get_station_type(
     ))
 }
 
+/// `IsDock`.
+pub(crate) fn is_dock(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    Some(get_station_type(m, tile)?.0 == crate::station_type::STATION_DOCK)
+}
+
+/// `IsBuoy`.
+pub(crate) fn is_buoy(m: &TileTypeAccess, tile: TileIndex) -> Option<bool> {
+    Some(get_station_type(m, tile)?.0 == crate::station_type::BUOY)
+}
+
 /// `IsTruckStop`.
 #[allow(clippy::inline_always)]
 #[inline(always)]

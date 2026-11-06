@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include "call_ffi.h"
 struct OpenTTDScriptHostServices;
+struct OpenTTDScriptList;
 struct OpenTTDRailCommandServices;
 struct OpenTTDGroundPhysicsServices;
 /** `DragPlan`; see `script_rail.rs`. */
@@ -54,5 +55,6 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_script_rail_train_can_run(const OpenTTDSc
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_rail_tiles_connected(const OpenTTDScriptHostServices *, uint32_t, uint32_t, uint32_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_rail_convert(const OpenTTDScriptHostServices *, uint32_t, uint32_t, uint32_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_rail_station(const OpenTTDScriptHostServices *, uint32_t, uint32_t, int64_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_script_rail_type_list(const OpenTTDScriptHostServices *, OpenTTDScriptList *);
 }
 #endif /* OPENTTD_RUST_SCRIPT_RAIL_FFI_H */

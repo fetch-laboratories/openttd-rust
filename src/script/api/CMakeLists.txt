@@ -224,7 +224,6 @@ add_files(
     script_base.cpp
     script_basestation.cpp
     script_bridge.cpp
-    script_bridgelist.cpp
     script_cargo.cpp
     script_cargolist.cpp
     script_cargomonitor.cpp
@@ -263,9 +262,7 @@ add_files(
     script_order.cpp
     script_priorityqueue.cpp
     script_rail.cpp
-    script_railtypelist.cpp
     script_road.cpp
-    script_roadtypelist.cpp
     script_sign.cpp
     script_signlist.cpp
     script_station.cpp

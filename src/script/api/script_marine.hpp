@@ -12,6 +12,7 @@
 
 #include "script_error.hpp"
 #include "../../station_type.h"
+#include "../../rust/script_marine_ffi.h"
 
 /**
  * Class that handles all marine related functions.
@@ -49,7 +50,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a water depot.
 	 */
-	static bool IsWaterDepotTile(TileIndex tile);
+	static bool IsWaterDepotTile(TileIndex tile) { return openttd_rust_script_marine_is_water_depot_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a dock.
@@ -57,7 +58,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a dock.
 	 */
-	static bool IsDockTile(TileIndex tile);
+	static bool IsDockTile(TileIndex tile) { return openttd_rust_script_marine_is_dock_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a buoy.
@@ -65,7 +66,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a buoy.
 	 */
-	static bool IsBuoyTile(TileIndex tile);
+	static bool IsBuoyTile(TileIndex tile) { return openttd_rust_script_marine_is_buoy_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a lock.
@@ -73,7 +74,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a lock.
 	 */
-	static bool IsLockTile(TileIndex tile);
+	static bool IsLockTile(TileIndex tile) { return openttd_rust_script_marine_is_lock_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tile is actually a tile with a canal.
@@ -81,7 +82,7 @@ public:
 	 * @pre ScriptMap::IsValidTile(tile).
 	 * @return True if and only if the tile has a canal.
 	 */
-	static bool IsCanalTile(TileIndex tile);
+	static bool IsCanalTile(TileIndex tile) { return openttd_rust_script_marine_is_canal_tile(&GetRustScriptHostServices(), tile.base()); }
 
 	/**
 	 * Checks whether the given tiles are directly connected, i.e. whether
@@ -94,7 +95,7 @@ public:
 	 * @pre 'tile_from' and 'tile_to' are directly neighbouring tiles.
 	 * @return True if and only if a ship can go from tile_from to tile_to.
 	 */
-	static bool AreWaterTilesConnected(TileIndex tile_from, TileIndex tile_to);
+	static bool AreWaterTilesConnected(TileIndex tile_from, TileIndex tile_to) { return openttd_rust_script_marine_tiles_connected(&GetRustScriptHostServices(), tile_from.base(), tile_to.base()); }
 
 	/**
 	 * Builds a water depot on tile.
@@ -221,7 +222,7 @@ public:
 	 * @param build_type the type of object to build
 	 * @return The baseprice of building the given object.
 	 */
-	static Money GetBuildCost(BuildType build_type);
+	static Money GetBuildCost(BuildType build_type) { return openttd_rust_script_marine_build_cost(static_cast<uint32_t>(build_type)); }
 };
 
 #endif /* SCRIPT_MARINE_HPP */
