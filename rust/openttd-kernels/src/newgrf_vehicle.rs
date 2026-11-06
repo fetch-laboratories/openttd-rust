@@ -1056,9 +1056,9 @@ unsafe fn variable(
                     .wrapping_sub((handle(w)).z())
                     .clamp(0, i32::from(u16::MAX));
                 let st = (s.target_airport)(v);
-                let leaves = &*(s.aircraft_leaves)();
                 let airport = if !st.is_null()
-                    && (leaves.airport_tile)(st) != crate::tile_type::INVALID_TILE
+                    && crate::station_record::read(st.cast(), |r| r.airport.area.tile.0)
+                        != crate::tile_type::INVALID_TILE
                 {
                     (s.airport_ttd_type)(crate::newgrf_airport::station_spec(
                         st.cast_mut().cast(),

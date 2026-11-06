@@ -557,11 +557,9 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
             };
         }
         0x8a => {
-            return u32::from(unsafe {
-                ((*native.commands().aircraft).had_vehicle)(
-                    (crate::animated_tile::services().as_station)(st)
-                )
-            });
+            return u32::from(crate::station_record::read(st.cast(), |r| {
+                r.had_vehicle_of_type
+            }));
         }
         0xf1 => {
             return if crate::station_record::read(st.cast(), |r| r.airport.area.tile.0)
@@ -587,12 +585,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
             };
         }
         0xf6 | 0xf7 => {
-            let bits = unsafe {
-                ((*native.commands().aircraft).airport_blocks)(
-                    (crate::animated_tile::services().as_station)(st)
-                )
-                .read()
-            };
+            let bits = crate::station_record::read(st.cast(), |r| r.airport.blocks);
             return if variable == 0xf6 {
                 bits as u32
             } else {

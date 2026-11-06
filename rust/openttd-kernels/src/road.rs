@@ -1413,9 +1413,8 @@ impl Game<'_> {
     fn arrive_load(&self, v: Part, s: &Step, station: u16) {
         let r = ArrivalRead {
             had_vehicle_of_type: {
-                // SAFETY: The process-wide station command table names the shared aircraft station leaves.
-                let aircraft = unsafe { &*((*((self.ss.station_commands)())).aircraft) };
-                unsafe { (aircraft.had_vehicle)((aircraft.station)(station)) }
+                let st = crate::station_record::station_get_if_valid(self.ss, station);
+                crate::station_record::read(st, |r| r.had_vehicle_of_type)
             },
         };
         let bus = crate::road_stop::is_bus(self.ss, v.v);
