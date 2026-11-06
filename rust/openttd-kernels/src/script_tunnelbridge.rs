@@ -207,6 +207,7 @@ pub struct RoadPiece {
 }
 
 crate::abi::layouts! {
+    fn abi_layout;
     "OpenTTDScriptRoadPiece" ["script"] => RoadPiece { tile, bits };
 }
 
