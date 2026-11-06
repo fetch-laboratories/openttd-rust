@@ -695,7 +695,10 @@ pub(crate) unsafe fn road_tile_loop(
             let (months, group, distance) =
                 unsafe { crate::town::road_context(owner, tile, size_x) };
             zone = group;
-            if months != 0 && (distance < 8 || zone != 0) && (s.is_normal_road_tile)(tile) {
+            if months != 0
+                && (distance < 8 || zone != 0)
+                && crate::map_func::World::new(s).is_normal_road_tile(tile)
+            {
                 let bits = (r.all_bits)(tile);
                 if bits.0.count_ones() > 1
                     && crate::movement::foundation_slope(s, tile).slope.0 == 0

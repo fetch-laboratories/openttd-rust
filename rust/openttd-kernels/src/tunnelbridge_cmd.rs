@@ -312,7 +312,7 @@ impl<'a> World<'a> {
     }
     fn clear_cost(&self, tile: u32, base: usize) -> i64 {
         let mut result = price(base);
-        match (self.s.tunnel_transport)(tile) {
+        match crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) {
             ROAD => {
                 let road = (self.s.road_type)(tile);
                 let tram = (self.s.tram_type)(tile).0;
@@ -470,7 +470,7 @@ impl<'a> World<'a> {
         if (self.s.is_bridge)(start)
             && (self.s.is_bridge)(end)
             && (self.a.other_bridge_end)(start) == end
-            && (self.s.tunnel_transport)(start) == transport
+            && crate::map_func::World::new(self.s).tunnel_bridge_transport(start) == transport
         {
             w::hit(w::TB_REPLACE_BRIDGE);
             match transport {
@@ -987,7 +987,7 @@ impl<'a> World<'a> {
         if company == OWNER_WATER || self.editor() {
             return;
         }
-        match (self.s.tunnel_transport)(tile) {
+        match crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) {
             ROAD => {
                 let road = (self.s.road_type)(tile);
                 let tram = (self.s.tram_type)(tile).0;
@@ -1082,7 +1082,7 @@ impl<'a> World<'a> {
         let base = self.clear_cost(tile, PR_CLEAR_TUNNEL);
         let length = self.length(tile, end).wrapping_add(2);
         if flags & DoCommandFlag::EXECUTE != 0 {
-            if (self.s.tunnel_transport)(tile) == RAIL {
+            if crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == RAIL {
                 let dir = (self.s.tunnel_bridge_direction)(tile);
                 let track = diag_dir_to_diag_track(dir, |ok| {
                     crate::movement::native_assert(self.s, ok);
@@ -1176,7 +1176,7 @@ impl<'a> World<'a> {
         let base = self.clear_cost(tile, PR_CLEAR_BRIDGE);
         let length = self.length(tile, end).wrapping_add(2);
         if flags & DoCommandFlag::EXECUTE != 0 {
-            let rail = (self.s.tunnel_transport)(tile) == RAIL;
+            let rail = crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == RAIL;
             let owner = (self.s.tile_owner)(tile);
             let height = self.bridge_height(tile);
             let train = if rail {
@@ -1202,7 +1202,7 @@ impl<'a> World<'a> {
                             .wrapping_neg(),
                     );
                 }
-            } else if (self.s.tunnel_transport)(tile) == ROAD {
+            } else if crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) == ROAD {
                 self.update_road_infrastructure(
                     (self.s.road_type)(tile),
                     crate::map_func::World::new(self.s).road_owner(tile, false),
@@ -1234,7 +1234,7 @@ impl<'a> World<'a> {
             // SAFETY: immutable table; only original scalar observations cross.
             let road_ground = unsafe { &*self.a.road_ground };
             while middle != end {
-                if (self.s.is_normal_road_tile)(middle)
+                if crate::map_func::World::new(self.s).is_normal_road_tile(middle)
                     && (road_ground.roadside)(middle).0 == ROADSIDE_TREES.0
                 {
                     let min_z = (self.s.tile_max_z)(middle).wrapping_add(3);
@@ -1245,7 +1245,10 @@ impl<'a> World<'a> {
                 (self.a.clear_middle)(middle);
                 (self.a.mark_dirty_height)(
                     middle,
-                    (height as u32).wrapping_sub((self.s.tile_height)(middle)) as i32,
+                    (height as u32).wrapping_sub(crate::tile_map::tile_height_in(
+                        &crate::map_func::World::new(self.s),
+                        middle,
+                    )) as i32,
                 );
                 middle = middle.wrapping_add(delta);
             }
@@ -1298,7 +1301,7 @@ impl<'a> World<'a> {
         } else {
             0
         };
-        let transport = (self.s.tunnel_transport)(tile);
+        let transport = crate::map_func::World::new(self.s).tunnel_bridge_transport(tile);
         if transport == ROAD {
             for rtt in [0, 1] {
                 let owner = if rtt == 0 {
@@ -1382,7 +1385,7 @@ impl<'a> World<'a> {
         if (self.s.build_on_slopes)()
             && (self.s.autoslope)()
             && (self.s.is_bridge)(tile)
-            && (self.s.tunnel_transport)(tile) != WATER
+            && crate::map_func::World::new(self.s).tunnel_bridge_transport(tile) != WATER
         {
             let direction = (self.s.tunnel_bridge_direction)(tile);
             let axis = diag_dir_to_axis(direction, |ok| {

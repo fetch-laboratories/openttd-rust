@@ -8,7 +8,7 @@
 //! Native evidence bridges; linked by `openttd_test` and fixture-only game adapters.
 #![allow(unsafe_code, clippy::too_many_lines)]
 use crate::map_func::{MapStatics, TileTypeAccess};
-use crate::tile_map::{get_tile_slope, get_tile_z, get_tropic_zone};
+use crate::tile_map::{get_tile_z, get_tropic_zone};
 
 /// Compare production industry removal arithmetic with native `Money` operators.
 #[unsafe(no_mangle)]
@@ -48,9 +48,8 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
     let map = unsafe { TileTypeAccess::raw(allocation, s.tile_type) };
     let x = (s.map_max_x)() + 1;
     let y = (s.map_max_y)() + 1;
-    if get_tile_slope(&map, tile, x, y) != Some((s.tile_slope)(tile))
-        || crate::tile_map::is_tile_flat(&map, tile, x, y)
-            != Some((unsafe { &*(s.station_commands)() }.tile_flat)(tile))
+    if crate::tile_map::is_tile_flat(&map, tile, x, y)
+        != Some((unsafe { &*(s.station_commands)() }.tile_flat)(tile))
         || get_tile_z(&map, tile, x, y) != Some((s.tile_z)(tile))
         || get_tropic_zone(&map, tile) != Some((s.tropic_zone)(tile))
     {

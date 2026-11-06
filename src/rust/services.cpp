@@ -379,11 +379,10 @@ static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROU
 static_assert(to_underlying(SourceType::Town) == 1 && to_underlying(SourceType::Headquarters) == 2);
 static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_CONSTRUCTION == 0 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);
 static_assert(RATING_MINIMUM == -1000 && RATING_MAXIMUM == 1000 && RATING_BRIBE_UP_STEP == 200 && RATING_BRIBE_MAXIMUM == 800 && RATING_BRIBE_DOWN_TO == -50);
-static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
 static bool Shared_has_water_ground(uint32_t tile) noexcept { return HasTileWaterGround(TileIndex{tile}); }
 static bool Shared_is_bridge(uint32_t tile) noexcept { return IsBridgeTile(TileIndex{tile}); }
-static bool Shared_is_any_road_stop(uint32_t tile) noexcept { return IsAnyRoadStopTile(TileIndex{tile}); }
+static uint8_t Shared_drive_through_axis(uint32_t tile) noexcept { return GetDriveThroughStopAxis(TileIndex{tile}); }
 static uint8_t Shared_road_type(uint32_t tile) noexcept { return GetRoadTypeRoad(TileIndex{tile}); }
 static bool Shared_has_road_type(uint32_t tile) noexcept { return RustHasTileRoadType(tile, RTT_ROAD); }
 static uint16_t Shared_town_index(uint32_t tile) noexcept { return GetTownIndex(TileIndex{tile}).base(); }
@@ -440,15 +439,15 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.current_company = RustCurrentCompanyID,
 	.depot_index = MapSvcDepotIndex,
 	.disaster_sound = SharedDisasterSound,
+	.drive_through_axis = Shared_drive_through_axis,
 	.forbid_90_deg = RustForbid90Deg,
 	.free_train_reservation = SharedFreeTrainReservation,
 	.has_road_type = Shared_has_road_type,
 	.has_water_ground = Shared_has_water_ground,
 	.industry = SharedIndustry,
-	.is_any_road_stop = Shared_is_any_road_stop,
 	.is_bay_stop = Shared_is_bay_stop,
 	.is_bridge = Shared_is_bridge,
-	.is_normal_road_tile = Shared_is_normal_road_tile,
+	.is_drive_through_stop = Shared_is_drive_through_stop,
 	.is_plain_rail = RustPlainRailTile,
 	.is_road_depot = Shared_is_road_depot,
 	.is_water_tile = MapSvcIsWaterTile,
@@ -500,7 +499,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.utf8_length = RustUtf8Length,
 	.vehicle_next = RustNextVehicle,
 	.water_middle_lock = OpenTTDIsMiddleLock,
-	.tile_height = Shared_tile_height,
 	.tile_max_z = Shared_tile_max_z,
 	.tile_owner = RustTileOwnerValue,
 	.tile_slope = SharedTileSlope,

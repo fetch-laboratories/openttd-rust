@@ -531,7 +531,7 @@ impl<'a> World<'a> {
                     y << 20 | x << 16 | y << 8 | x
                 }
                 0x41 => {
-                    u32::from((self.shared.tile_slope)(tile)) << 8
+                    u32::from(crate::map_func::World::new(self.shared).tile_slope(tile)) << 8
                         | (self.shared.terrain_type)(tile)
                 }
                 0x42 => (q.date)(obj) as u32,
@@ -1071,7 +1071,7 @@ impl<'a> World<'a> {
                         let diff = t.wrapping_sub(tile);
                         result.callback = self.callback(
                             crate::newgrf_callbacks::CBID_OBJECT_LAND_SLOPE_CHECK.0,
-                            u32::from((self.shared.tile_slope)(t)),
+                            u32::from(crate::map_func::World::new(self.shared).tile_slope(t)),
                             self.map.tile_y(diff) << 4 | self.map.tile_x(diff),
                             spec,
                             ptr::null_mut(),
@@ -1326,7 +1326,7 @@ impl World<'_> {
                     return;
                 }
             } else if (self.shared.autoslope)() && kind != TRANSMITTER && kind != LIGHTHOUSE {
-                let old_slope = (self.shared.tile_slope)(tile);
+                let old_slope = crate::map_func::World::new(self.shared).tile_slope(tile);
                 if !is_steep_slope(old_slope)
                     && !is_steep_slope(slope)
                     && (self.shared.tile_max_z)(tile) == z + get_slope_max_z(slope)

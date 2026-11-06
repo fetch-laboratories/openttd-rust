@@ -242,7 +242,7 @@ impl<'a> Commands<'a> {
                 .wrapping_add(spiral.y.wrapping_mul(self.map().size_x()));
             spiral = spiral.advance(self.map().size_x(), self.size_y());
             count += 1;
-            if is_steep_slope((self.shared.tile_slope)(tile)) {
+            if is_steep_slope(crate::map_func::World::new(self.shared).tile_slope(tile)) {
                 continue;
             }
             if crate::map_func::World::new(self.shared).bridge_above(tile) {

@@ -106,15 +106,15 @@ struct OpenTTDSharedServices {
 	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	uint16_t (*depot_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_index);
 	bool (*disaster_sound)() noexcept OPENTTD_SERVICE_DEFAULT(disaster_sound);
+	uint8_t (*drive_through_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(drive_through_axis);
 	bool (*forbid_90_deg)() noexcept OPENTTD_SERVICE_DEFAULT(forbid_90_deg);
 	void (*free_train_reservation)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(free_train_reservation);
 	bool (*has_road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road_type);
 	bool (*has_water_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_ground);
 	uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(industry);
-	bool (*is_any_road_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_any_road_stop);
 	bool (*is_bay_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bay_stop);
 	bool (*is_bridge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
-	bool (*is_normal_road_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_normal_road_tile);
+	bool (*is_drive_through_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through_stop);
 	bool (*is_plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain_rail);
 	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
 	bool (*is_water_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_water_tile);
@@ -165,7 +165,6 @@ struct OpenTTDSharedServices {
 	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
 	OpenTTDVehicle *(*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	bool (*water_middle_lock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_middle_lock);
-	uint32_t (*tile_height)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_height);
 	int32_t (*tile_max_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	uint8_t (*tile_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_owner);
 	uint8_t (*tile_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope);

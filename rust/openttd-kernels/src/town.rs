@@ -987,8 +987,10 @@ impl Engine<'_> {
             for i in 0..6 {
                 match self.goals()[i] {
                     0xffff_fffe => {
-                        if (self.services.tile_height)(self.position())
-                            >= u32::from(crate::snow_line::get(self.services))
+                        if crate::tile_map::tile_height_in(
+                            &crate::map_func::World::new(self.services),
+                            self.position(),
+                        ) >= u32::from(crate::snow_line::get(self.services))
                             && self.old_received(i) == 0
                             && self.population() > 90
                         {
@@ -1231,10 +1233,8 @@ impl Engine<'_> {
                     && u32::from((self.services.tunnel_bridge_direction)(next)) == dir;
             }
             MP_STATION => {
-                if crate::map_func::World::new(self.services).drive_through_stop_tile(next) {
-                    return u32::from(
-                        crate::map_func::World::new(self.services).drive_through_axis(next),
-                    ) == dir & 1;
+                if (self.services.is_drive_through_stop)(next) {
+                    return u32::from((self.services.drive_through_axis)(next)) == dir & 1;
                 }
                 if (self.services.is_bay_stop)(next) {
                     return u32::from((self.services.bay_stop_direction)(next)) == reverse(dir);
@@ -1276,7 +1276,7 @@ impl Engine<'_> {
                 || !(((self.services.is_water_tile)(end)
                     && (slope != 0 || !crate::map_func::World::new(self.services).is_sea(end)))
                     || (self.services.is_plain_rail)(end)
-                    || ((self.services.is_normal_road_tile)(end)
+                    || (crate::map_func::World::new(self.services).is_normal_road_tile(end)
                         && crate::map_func::World::new(self.services)
                             .disallowed_road_directions(end)
                             != 0))
@@ -1381,7 +1381,7 @@ impl Engine<'_> {
             let at = self.offset(tile, x, y);
             if !self.valid(at)
                 || !((self.services.tile_type)(at) == MP_ROAD
-                    || (self.services.is_any_road_stop)(at))
+                    || crate::map_func::World::new(self.services).any_road_stop_tile(at))
             {
                 continue;
             }
@@ -1409,9 +1409,7 @@ impl Engine<'_> {
         if modes & 2 != 0 {
             match (self.services.tile_type)(next) {
                 MP_ROAD => bits != 0,
-                MP_STATION => {
-                    crate::map_func::World::new(self.services).drive_through_stop_tile(next)
-                }
+                MP_STATION => (self.services.is_drive_through_stop)(next),
                 MP_TUNNELBRIDGE => (self.services.tunnel_transport)(next) == 1,
                 MP_HOUSE | MP_INDUSTRY | MP_OBJECT => false,
                 _ => true,

@@ -460,7 +460,7 @@ impl<'a> Ctx<'a> {
         if !out.ok() {
             return;
         }
-        let slope = (self.shared.tile_slope)(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
         let z = (self.shared.tile_z)(tile);
         if (!allow_steep && is_steep_slope(slope))
             || (!(self.shared.build_on_slopes)() && slope != 0)
@@ -2065,8 +2065,10 @@ impl Ctx<'_> {
     fn may_have_road(&self, tile: u32) -> bool {
         match (self.shared.tile_type)(tile) {
             MP_ROAD => true,
-            MP_STATION => (self.shared.is_any_road_stop)(tile),
-            MP_TUNNELBRIDGE => (self.shared.tunnel_transport)(tile) == 1,
+            MP_STATION => crate::map_func::World::new(self.shared).any_road_stop_tile(tile),
+            MP_TUNNELBRIDGE => {
+                crate::map_func::World::new(self.shared).tunnel_bridge_transport(tile) == 1
+            }
             _ => false,
         }
     }
@@ -2133,7 +2135,7 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         if (self.shared.tile_type)(tile) == MP_STATION {
-            if !(self.shared.is_any_road_stop)(tile)
+            if !crate::map_func::World::new(self.shared).any_road_stop_tile(tile)
                 || kind != (self.shared.station_type)(tile).0
                 || drive != crate::map_func::World::new(self.shared).drive_through_stop_tile(tile)
             {
@@ -2152,7 +2154,7 @@ impl Ctx<'_> {
                 cost.error(self.s.strings.adjoins_multiple);
             }
         } else {
-            let normal = (self.shared.is_normal_road_tile)(tile);
+            let normal = crate::map_func::World::new(self.shared).is_normal_road_tile(tile);
             let build_over = drive && normal;
             let rb = if normal {
                 crate::map_func::World::new(self.shared).road_bits(tile, false)
@@ -2297,7 +2299,8 @@ impl Ctx<'_> {
             }
             let tile_cost = cost.money();
             cost.set(total);
-            if (self.shared.tile_type)(tile) != MP_STATION || !(self.shared.is_any_road_stop)(tile)
+            if (self.shared.tile_type)(tile) != MP_STATION
+                || !crate::map_func::World::new(self.shared).any_road_stop_tile(tile)
             {
                 cost.add_money(tile_cost);
                 cost.add_money(unit);
@@ -2513,7 +2516,7 @@ impl Ctx<'_> {
             let owner = (self.world().station_owner)(st);
             let id = (self.links().graphs.station_id)(st);
             if drive {
-                if (self.shared.is_normal_road_tile)(tile) {
+                if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
                     self.road_infrastructure(
                         road,
                         road_owner,
@@ -2778,7 +2781,7 @@ impl Ctx<'_> {
         let mut success = false;
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
-                || !(self.shared.is_any_road_stop)(tile)
+                || !crate::map_func::World::new(self.shared).any_road_stop_tile(tile)
                 || ((self.shared.station_type)(tile).0 == 8) != waypoint
             {
                 continue;
@@ -3501,7 +3504,7 @@ impl Ctx<'_> {
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
             return cost.error(0xffff);
         }
-        let slope = (self.shared.tile_slope)(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
         let dir = get_inclined_slope_direction(slope);
         if dir == INVALID_DIAGDIR {
             return cost.error(self.s.strings.unsuitable);
@@ -3526,7 +3529,9 @@ impl Ctx<'_> {
         }
         cost.add_money(ret.money());
         let flat = self.map().add_diag(tile, dir);
-        if !(self.shared.has_water_ground)(flat) || (self.shared.tile_slope)(flat) != 0 {
+        if !(self.shared.has_water_ground)(flat)
+            || crate::map_func::World::new(self.shared).tile_slope(flat) != 0
+        {
             return cost.error(self.s.strings.unsuitable);
         }
         self.default_bridge_ok(ret, flat, 5, 4 + (dir & 1));
@@ -3543,7 +3548,9 @@ impl Ctx<'_> {
             cost.add_money(ret.money());
         }
         let beyond = self.map().add_diag(flat, dir);
-        if (self.shared.tile_type)(beyond) != MP_WATER || (self.shared.tile_slope)(beyond) != 0 {
+        if (self.shared.tile_type)(beyond) != MP_WATER
+            || crate::map_func::World::new(self.shared).tile_slope(beyond) != 0
+        {
             return cost.error(self.s.strings.unsuitable);
         }
         let (dx, dy) = match dir {
@@ -4062,7 +4069,7 @@ impl Ctx<'_> {
                             tile,
                             z,
                             slope,
-                            (self.shared.bay_stop_direction)(tile),
+                            crate::map_func::World::new(self.shared).bay_dir(tile),
                         )
                     }
                 }
@@ -4085,7 +4092,7 @@ impl Ctx<'_> {
         new: u8,
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_CHANGE_OWNER);
-        if (self.shared.is_any_road_stop)(tile) {
+        if crate::map_func::World::new(self.shared).any_road_stop_tile(tile) {
             for tram in [false, true] {
                 if self.road_owner(tile, tram) == old {
                     let rt = self.road_type(tile, tram);

@@ -41,7 +41,7 @@ pub(crate) fn map_read_probe(
         } else if world.types.assertions() == station.is_some() {
             return false;
         }
-        if !(kind == MP_ROAD && (shared.is_normal_road_tile)(tile))
+        if !(kind == MP_ROAD && world.is_normal_road_tile(tile))
             && world.types.assertions()
             && (crate::road_map::get_road_bits(&world.types, tile, crate::road_type::RTT_ROAD)
                 .is_some()

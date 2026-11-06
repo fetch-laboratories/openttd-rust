@@ -296,7 +296,7 @@ impl Engine<'_> {
             }
             if gfx == crate::industry_map::GFX_WATERTILE_SPECIALCHECK {
                 if !(self.s.shared().is_water_tile)(current)
-                    || (self.s.shared().tile_slope)(current) != 0
+                    || crate::map_func::World::new(self.s.shared()).tile_slope(current) != 0
                 {
                     return self.fail(self.e.site);
                 }
@@ -389,9 +389,10 @@ impl Engine<'_> {
                         return false;
                     }
                 } else {
-                    refused |= slope_refused((self.s.shared().tile_slope)(current), unsafe {
-                        (self.p.slopes_refused)(spec)
-                    });
+                    refused |= slope_refused(
+                        crate::map_func::World::new(self.s.shared()).tile_slope(current),
+                        unsafe { (self.p.slopes_refused)(spec) },
+                    );
                 }
             }
         }
@@ -736,9 +737,10 @@ unsafe extern "C" fn shape_visit(context: *mut c_void, shell: *mut ShellHandle) 
     let parameter = (u32::from(call.creation) << 8) | call.layout_index as u32;
     let result = unsafe { (e.x.resolve_shape)(shell, call.current, call.gfx, parameter) };
     if result.callback == 0xffff {
-        if !slope_refused((e.s.shared().tile_slope)(call.current), unsafe {
-            (e.p.slopes_refused)(call.spec)
-        }) {
+        if !slope_refused(
+            crate::map_func::World::new(e.s.shared()).tile_slope(call.current),
+            unsafe { (e.p.slopes_refused)(call.spec) },
+        ) {
             e.success();
         } else {
             e.fail(e.e.site);

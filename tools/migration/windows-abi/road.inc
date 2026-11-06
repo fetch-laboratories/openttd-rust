@@ -98,9 +98,10 @@ static void RoadBoundary()
 		CHECK(road_abi_probe->ground.state->flags == 0);
 		return 7;
 	};
-	/* Tile 100 is a bus bay stop: station type Bus in m6, bay graphics in m5. */
+	/* Tile 100 is a drive-through bus stop: station type Bus in m6, gfx 4 in m5. */
 	static OpenTTDFixtureMap stop_map{6, 4096};
 	stop_map.base[100].type = 5 << 4; // MP_STATION
+	stop_map.base[100].m5 = 4;
 	stop_map.extended[100].m6 = 3 << 3;
 	t.shared.map = &stop_map.statics;
 	t.shared.road_stops = []() noexcept { return &road_abi_stops; };

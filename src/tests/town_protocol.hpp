@@ -233,7 +233,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 
 	/* This fixture models flat, empty ground without roads, depots or bridges. */
 	services.is_road_depot = [](uint32_t) noexcept { return false; };
-	services.is_any_road_stop = [](uint32_t) noexcept { return false; };
 	services.is_bay_stop = [](uint32_t) noexcept { return false; };
 	services.road_bits = [](uint32_t, uint8_t, bool) noexcept -> uint8_t { return 0; };
 	services.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };

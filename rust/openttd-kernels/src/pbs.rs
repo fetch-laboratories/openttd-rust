@@ -88,7 +88,7 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL {
+                if crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL {
                     return (self.0.wormhole_bits)(tile).0;
                 }
             }
@@ -196,7 +196,7 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL
+                if crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL
                     && (self.0.wormhole_bits)(tile).0 == 0
                 {
                     (self.0.set_wormhole)(tile, true);
@@ -233,7 +233,7 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL {
+                if crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL {
                     (self.0.set_wormhole)(tile, false);
                 }
             }

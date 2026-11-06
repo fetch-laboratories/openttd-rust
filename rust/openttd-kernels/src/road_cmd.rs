@@ -509,7 +509,7 @@ impl<'a> Ctx<'a> {
                 cost.no_vehicle(self.commands, tile);
             }
             MP_TUNNELBRIDGE => {
-                if (self.shared.tunnel_transport)(tile) != 1 {
+                if crate::map_func::World::new(self.shared).tunnel_bridge_transport(tile) != 1 {
                     cost.error(INVALID_STRING_ID);
                     return;
                 }
@@ -588,7 +588,7 @@ impl<'a> Ctx<'a> {
         }
         match self.kind(tile) {
             0 => {
-                let slope = simple_slope((self.shared.tile_slope)(tile));
+                let slope = simple_slope(crate::map_func::World::new(self.shared).tile_slope(tile));
                 let mut present = self.bits(tile, rtt);
                 let other = self.bits(tile, rtt ^ 1);
                 let foundation = crate::movement::road_foundation(slope, present, |ok| {
@@ -846,7 +846,7 @@ impl<'a> Ctx<'a> {
             cost.error(INVALID_STRING_ID);
             return;
         }
-        let slope = (self.shared.tile_slope)(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
         let rtt = u8::from(crate::road::get_road_tram_type(rt).0);
         let mut clear = false;
         match self.tile_type(tile) {
@@ -1061,7 +1061,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (self.shared.tunnel_transport)(tile) != 1
+                if crate::map_func::World::new(self.shared).tunnel_bridge_transport(tile) != 1
                     || mirror(dir_bit((self.shared.tunnel_bridge_direction)(tile))) != pieces
                 {
                     clear = true;
@@ -1103,8 +1103,8 @@ impl<'a> Ctx<'a> {
         if !clear {
             if self.tile_type(tile) == MP_ROAD {
                 pieces &= existing ^ 15;
-                if (self.shared.is_normal_road_tile)(tile) {
-                    let slope = (self.shared.tile_slope)(tile);
+                if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
+                    let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
                     let new = crate::movement::road_foundation(slope, pieces | existing, |ok| {
                         crate::movement::native_assert(self.shared, ok);
                     });
@@ -1124,7 +1124,9 @@ impl<'a> Ctx<'a> {
                 cost.take(ret);
                 return;
             }
-            if self.tile_type(tile) == MP_ROAD && (self.shared.is_normal_road_tile)(tile) {
+            if self.tile_type(tile) == MP_ROAD
+                && crate::map_func::World::new(self.shared).is_normal_road_tile(tile)
+            {
                 let old = self.rt(tile, rtt);
                 if old != INVALID && old != rt {
                     if (self.shared.road_powered)(rt, old) {
@@ -1208,7 +1210,7 @@ impl<'a> Ctx<'a> {
             self.infrastructure(rt, self.owner(tile, rtt), num as i32);
             if rtt == 0
                 && self.tile_type(tile) == MP_ROAD
-                && (self.shared.is_normal_road_tile)(tile)
+                && crate::map_func::World::new(self.shared).is_normal_road_tile(tile)
             {
                 existing |= pieces;
                 (self.shared.set_road_directions)(
@@ -1450,7 +1452,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         cost.set(0);
-        let slope = (self.shared.tile_slope)(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
         if slope != 0 {
             if !(self.shared.build_on_slopes)() || !(self.s.depot_slope)(dir, slope) {
                 cost.error(self.r.strings.flat_land);
@@ -1473,7 +1475,7 @@ impl<'a> Ctx<'a> {
                 cost.take(ret);
                 return;
             }
-            if dir == (self.shared.road_depot_direction)(tile) {
+            if dir == crate::map_func::World::new(self.shared).road_depot_dir(tile) {
                 cost.zero();
                 return;
             }
@@ -1732,15 +1734,19 @@ impl<'a> Ctx<'a> {
                         && (self.shared.tile_max_z)(tile) == z + get_slope_max_z(slope)
                         && CROSSING_SLOPES & (1 << slope) != 0
                 }
-                2 => {
-                    (self.r.entrance_edge)(tile, z, slope, (self.shared.road_depot_direction)(tile))
-                }
+                2 => (self.r.entrance_edge)(
+                    tile,
+                    z,
+                    slope,
+                    crate::map_func::World::new(self.shared).road_depot_dir(tile),
+                ),
                 0 => {
                     let bits = self.bits(tile, 0) | self.bits(tile, 1);
                     let mut copy = bits;
                     self.slope(scratch, slope, &mut copy, 0, 0);
                     if scratch.ok() && bits == copy {
-                        let mut old_slope = (self.shared.tile_slope)(tile);
+                        let mut old_slope =
+                            crate::map_func::World::new(self.shared).tile_slope(tile);
                         let mut old_z = (self.shared.tile_z)(tile);
                         let old = (self.shared.apply_foundation)(
                             Foundation(crate::movement::road_foundation(old_slope, bits, |ok| {
@@ -1876,7 +1882,7 @@ impl<'a> Ctx<'a> {
         let tt = self.tile_type(tile);
         match tt {
             MP_STATION => {
-                if !(self.shared.is_any_road_stop)(tile) {
+                if !crate::map_func::World::new(self.shared).any_road_stop_tile(tile) {
                     return;
                 }
             }
@@ -1889,7 +1895,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (self.shared.tunnel_transport)(tile) != 1 {
+                if crate::map_func::World::new(self.shared).tunnel_bridge_transport(tile) != 1 {
                     return;
                 }
             }
@@ -1928,7 +1934,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             let mut num = self.any_bits(tile, rtt).count_ones();
-            if tt == MP_STATION && (self.shared.is_bay_stop)(tile) {
+            if tt == MP_STATION && crate::map_func::World::new(self.shared).bay_stop(tile) {
                 num = num.wrapping_mul(ROAD_STOP_TRACKBIT_FACTOR);
             } else if tt == MP_ROAD && (self.shared.is_road_depot)(tile) {
                 num = num.wrapping_mul(ROAD_DEPOT_TRACKBIT_FACTOR);

@@ -56,7 +56,7 @@ impl Ctx<'_> {
         if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
             return crate::map_func::World::new(self.shared).drive_through_axis(tile);
         }
-        if !(self.shared.is_normal_road_tile)(tile) {
+        if !crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
             return INVALID_AXIS;
         }
         let ground = unsafe { &*self.s.road_ground };
@@ -248,7 +248,7 @@ impl Ctx<'_> {
         if !out.ok() {
             return;
         }
-        let slope = (self.shared.tile_slope)(tile);
+        let slope = crate::map_func::World::new(self.shared).tile_slope(tile);
         if slope != SLOPE_FLAT
             && (!(self.shared.build_on_slopes)()
                 || is_steep_slope(slope)
@@ -660,7 +660,7 @@ impl Ctx<'_> {
                     count,
                 );
             };
-            if (self.shared.is_normal_road_tile)(tile) {
+            if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
                 update(
                     road,
                     road_owner,

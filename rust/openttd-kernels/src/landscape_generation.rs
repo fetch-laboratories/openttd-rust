@@ -242,7 +242,7 @@ impl World<'_> {
                         continue;
                     }
                     let dest = self.map.add_dir(tile, dir);
-                    let other = (self.s.tile_slope)(dest) & !SLOPE_STEEP;
+                    let other = crate::map_func::World::new(self.s).tile_slope(dest) & !SLOPE_STEEP;
                     if other == SLOPE_FLAT
                         || is_slope_with_one_corner_raised(other)
                         || (self.s.tile_type)(dest) == MP_VOID
@@ -547,12 +547,18 @@ impl World<'_> {
         let mut histogram = [0_i32; MAX_TILE_HEIGHT as usize + 1];
         let mut edges = [0_i32; MAX_TILE_HEIGHT as usize + 1];
         for tile in 0..self.size() {
-            let height = (self.s.tile_height)(tile);
+            let height =
+                crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), tile);
             histogram[height as usize] += 1;
             if edge_multiplier != 0 {
                 for dir in 0..4 {
                     let neighbour = self.map.add_diff_c_wrap(tile, dir, self.size_y);
-                    if self.valid(neighbour) && (self.s.tile_height)(neighbour) < height {
+                    if self.valid(neighbour)
+                        && crate::tile_map::tile_height_in(
+                            &crate::map_func::World::new(self.s),
+                            neighbour,
+                        ) < height
+                    {
                         edges[height as usize] += 1;
                     }
                 }
@@ -590,7 +596,11 @@ impl World<'_> {
             if crate::genland::DESERT_RAINFOREST.iter().all(|&(dx, dy)| {
                 let other = self.map.add_offset_c_wrap(tile, dx, dy, self.size_y);
                 other == INVALID_TILE
-                    || ((self.s.tile_height)(other) < line && (self.s.tile_type)(other) != MP_WATER)
+                    || (crate::tile_map::tile_height_in(
+                        &crate::map_func::World::new(self.s),
+                        other,
+                    ) < line
+                        && (self.s.tile_type)(other) != MP_WATER)
             }) {
                 (self.s.set_tropic_zone)(tile, TROPICZONE_DESERT);
                 w::hit(w::GENERATION_DESERT);
@@ -656,7 +666,7 @@ impl World<'_> {
     }
     fn valid_terminus_tile(&self, tile: u32, height: u32, g: &Settings) -> bool {
         self.valid(tile)
-            && (self.s.tile_height)(tile) == height
+            && crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), tile) == height
             && self.flat(tile)
             && !self.zone_desert(tile, g)
     }
@@ -732,7 +742,8 @@ impl World<'_> {
         if !flat.flat {
             return false;
         }
-        let begin_height = (self.s.tile_height)(begin) as i32;
+        let begin_height =
+            crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), begin) as i32;
         if flat.height != begin_height {
             return false;
         }
@@ -808,7 +819,8 @@ impl World<'_> {
                 (self.s.tile_z)(begin) == 0,
             );
         }
-        let begin_height = (self.s.tile_height)(begin) as i32;
+        let begin_height =
+            crate::tile_map::tile_height_in(&crate::map_func::World::new(self.s), begin) as i32;
         let mut marks = NodeSet::default();
         marks.insert(begin);
         let mut queue = vec![begin];
@@ -834,7 +846,9 @@ impl World<'_> {
                         let mut tile = (self.a.sea_first)(frame);
                         while tile != INVALID_TILE {
                             self.terraform(tile, SLOPE_ELEVATED, false, F::EXECUTE);
-                            let slope = complement_slope((self.s.tile_slope)(tile));
+                            let slope = complement_slope(
+                                crate::map_func::World::new(self.s).tile_slope(tile),
+                            );
                             self.terraform(tile, slope, true, F::EXECUTE);
                             tile = (self.a.sea_next)(frame);
                         }
@@ -1068,8 +1082,8 @@ impl World<'_> {
         if !self.valid(tile) || self.water(tile) || (self.s.tile_max_z)(tile) == 0 {
             return;
         }
-        let mut current = (self.s.tile_slope)(tile);
-        let mut desired = (self.s.tile_slope)(origin);
+        let mut current = crate::map_func::World::new(self.s).tile_slope(tile);
+        let mut desired = crate::map_func::World::new(self.s).tile_slope(origin);
         if (self.s.tile_max_z)(tile) > (self.s.tile_max_z)(origin) {
             return;
         }
@@ -1081,7 +1095,7 @@ impl World<'_> {
             let mut sloped_river = false;
             for dir in 0..4 {
                 let other = self.map.add_diag(tile, dir);
-                let slope = (self.s.tile_slope)(other);
+                let slope = crate::map_func::World::new(self.s).tile_slope(other);
                 if self.water(other) && (self.a.river)(other) {
                     if is_inclined_slope(slope)
                         && (self.s.tile_max_z)(tile) == (self.s.tile_max_z)(other)
@@ -1108,7 +1122,9 @@ impl World<'_> {
             if desired == SLOPE_FLAT && is_slope_with_three_corners_raised(current) {
                 for dir in 0..4 {
                     let other = self.map.add_diag(tile, dir);
-                    if is_inclined_slope((self.s.tile_slope)(other)) && self.water(other) {
+                    if is_inclined_slope(crate::map_func::World::new(self.s).tile_slope(other))
+                        && self.water(other)
+                    {
                         return;
                     }
                 }
@@ -1132,13 +1148,13 @@ impl World<'_> {
                     change &= complement_slope(desired);
                     self.terraform(tile, change, false, F::EXECUTE | F::AUTO);
                 }
-                current = (self.s.tile_slope)(tile);
+                current = crate::map_func::World::new(self.s).tile_slope(tile);
                 if current != desired && is_slope_with_one_corner_raised(current) {
                     change = current ^ desired;
                     self.terraform(tile, change, true, F::EXECUTE | F::AUTO);
                 }
             }
-            current = (self.s.tile_slope)(tile);
+            current = crate::map_func::World::new(self.s).tile_slope(tile);
         }
         if is_inclined_slope(current) {
             w::hit(w::GENERATION_WIDEN_SLOPE);
@@ -1154,16 +1170,18 @@ impl World<'_> {
                 return;
             }
             let ocean = (self.s.tile_z)(downstream) == 0
-                && ((self.s.tile_slope)(downstream) == SLOPE_FLAT
-                    || is_slope_with_one_corner_raised((self.s.tile_slope)(downstream)));
+                && (crate::map_func::World::new(self.s).tile_slope(downstream) == SLOPE_FLAT
+                    || is_slope_with_one_corner_raised(
+                        crate::map_func::World::new(self.s).tile_slope(downstream),
+                    ));
             if !self.water(downstream) && !ocean {
-                if (self.s.tile_slope)(downstream) != SLOPE_FLAT {
+                if crate::map_func::World::new(self.s).tile_slope(downstream) != SLOPE_FLAT {
                     return;
                 }
                 self.river_tile(downstream);
             }
             if !self.water(upstream) {
-                if (self.s.tile_slope)(upstream) != SLOPE_FLAT {
+                if crate::map_func::World::new(self.s).tile_slope(upstream) != SLOPE_FLAT {
                     return;
                 }
                 self.river_tile(upstream);

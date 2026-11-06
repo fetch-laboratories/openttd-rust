@@ -283,7 +283,7 @@ fn ambient_callback(tile: u32) {
         return;
     }
     let v7 = u32::from((shared.tile_type)(tile)) << 28
-        | (shared.tile_height)(tile).min(15) << 24
+        | crate::tile_map::tile_height_in(&crate::map_func::World::new(shared), tile).min(15) << 24
         | ((random >> 16) & 255) << 16
         | (shared.terrain_type)(tile);
     let v8 = u32::from((shared.tile_type)(tile)) << 24

@@ -307,6 +307,8 @@ pub struct Services {
     pub depot_index: extern "C" fn(u32) -> u16,
     /// Shared live disaster sound setting.
     pub disaster_sound: extern "C" fn() -> bool,
+    /// Original native `drive_through_axis` map observation.
+    pub drive_through_axis: extern "C" fn(u32) -> u8,
     /// Original pathfinding setting, observed at the calling branch.
     pub forbid_90_deg: extern "C" fn() -> bool,
     /// `FreeTrainTrackReservation(v)`.
@@ -317,14 +319,12 @@ pub struct Services {
     pub has_water_ground: extern "C" fn(u32) -> bool,
     /// `TileVirtXY` query: 0 not industry, 1 industry, 2 bubble catcher; writes tile.
     pub industry: extern "C" fn(i32, i32, *mut u32) -> u32,
-    /// Original native `is_any_road_stop` map observation.
-    pub is_any_road_stop: extern "C" fn(u32) -> bool,
     /// Original native `is_bay_stop` map observation.
     pub is_bay_stop: extern "C" fn(u32) -> bool,
     /// Original native `is_bridge` map observation.
     pub is_bridge: extern "C" fn(u32) -> bool,
-    /// Original native `IsNormalRoadTile` map observation.
-    pub is_normal_road_tile: extern "C" fn(u32) -> bool,
+    /// Original native `is_drive_through_stop` map observation.
+    pub is_drive_through_stop: extern "C" fn(u32) -> bool,
     /// Original native `is_plain_rail` map observation.
     pub is_plain_rail: extern "C" fn(u32) -> bool,
     /// Original native `is_road_depot` map observation.
@@ -427,8 +427,6 @@ pub struct Services {
     pub vehicle_next: extern "C" fn(u32) -> Option<crate::vehicle::VehicleRef>,
     /// Whether a water tile is the middle of a lock.
     pub water_middle_lock: extern "C" fn(u32) -> bool,
-    /// Original native `tile_height` map observation.
-    pub tile_height: extern "C" fn(u32) -> u32,
     /// Original native `tile_max_z` map observation.
     pub tile_max_z: extern "C" fn(u32) -> i32,
     /// `GetTileOwner`.
@@ -750,15 +748,15 @@ crate::abi::layouts! {
         current_company,
         depot_index,
         disaster_sound,
+        drive_through_axis,
         forbid_90_deg,
         free_train_reservation,
         has_road_type,
         has_water_ground,
         industry,
-        is_any_road_stop,
         is_bay_stop,
         is_bridge,
-        is_normal_road_tile,
+        is_drive_through_stop,
         is_plain_rail,
         is_road_depot,
         is_water_tile,
@@ -809,7 +807,6 @@ crate::abi::layouts! {
         utf8_length,
         vehicle_next,
         water_middle_lock,
-        tile_height,
         tile_max_z,
         tile_owner,
         tile_slope,
@@ -1020,15 +1017,15 @@ pub fn fixture(
         current_company: unused_current_company,
         depot_index: short,
         disaster_sound: flag0,
+        drive_through_axis: byte,
         forbid_90_deg: flag0,
         free_train_reservation: train,
         has_road_type: flag,
         has_water_ground: flag,
         industry,
-        is_any_road_stop: flag,
         is_bay_stop: flag,
         is_bridge: flag,
-        is_normal_road_tile: flag,
+        is_drive_through_stop: flag,
         is_plain_rail: flag,
         is_road_depot: flag,
         is_water_tile: flag,
@@ -1082,7 +1079,6 @@ pub fn fixture(
         utf8_length: unused_utf8_length,
         vehicle_next: unused_vehicle_next,
         water_middle_lock: flag,
-        tile_height: word,
         tile_max_z: height,
         tile_owner: byte,
         tile_slope: byte,

@@ -334,7 +334,7 @@ pub(crate) unsafe fn enter(
     road: *mut RoadState,
 ) -> bool {
     let t = table(s);
-    if (s.is_bay_stop)(xy) {
+    if crate::map_func::World::new(s).bay_stop(xy) {
         // SAFETY: The shared road ground table is static.
         let ground = unsafe { &*t.ground };
         if is_entrance_busy(state) || !has_free_bay(state) || (ground.has_articulated)(v) {
@@ -384,7 +384,7 @@ pub(crate) unsafe fn leave(
     v: VehicleRef,
     road: *mut RoadState,
 ) {
-    if (s.is_bay_stop)(tile) {
+    if crate::map_func::World::new(s).bay_stop(tile) {
         crate::witness::hit(crate::witness::ROAD_STOP_LEAVE_BAY);
         // SAFETY: Caller's live road owner, read before any store.
         let rv_state = unsafe { crate::road::get_state(road) };

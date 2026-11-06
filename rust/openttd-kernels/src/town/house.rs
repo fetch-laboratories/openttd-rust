@@ -1003,7 +1003,7 @@ impl<'a> House<'a> {
         let commands = unsafe { &*self.h.commands };
         for (x, y) in area.clone() {
             let subtile = base.wrapping_add(map.diff(x as i32, y as i32));
-            let slope = (self.s.tile_slope)(subtile);
+            let slope = crate::map_func::World::new(self.s).tile_slope(subtile);
             if is_steep_slope(slope) {
                 (c.error)(result, self.h.errors.sloped);
                 return;

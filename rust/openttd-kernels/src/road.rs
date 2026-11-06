@@ -1530,7 +1530,7 @@ impl Game<'_> {
                             .previous()
                             .is_some_and(|previous| previous.tile() == tile)
                             || (s.front
-                                && service!(self.ss.is_normal_road_tile)(tile)
+                                && crate::map_func::World::new(self.ss).is_normal_road_tile(tile)
                                 && !crate::map_func::World::new(self.ss).has_road_works(tile)
                                 && self.has_road(v.v, tile)
                                 && needed
@@ -1549,7 +1549,7 @@ impl Game<'_> {
                                 return false;
                             }
                         }
-                    } else if service!(self.ss.is_normal_road_tile)(s.tile)
+                    } else if crate::map_func::World::new(self.ss).is_normal_road_tile(s.tile)
                         && service!(self.l.disallowed_directions)(s.tile) != 0
                     {
                         Self::set_speed(v, s, 0);
@@ -2191,7 +2191,7 @@ impl Game<'_> {
         {
             return false;
         }
-        if service!(self.ss.is_normal_road_tile)(r.tile)
+        if crate::map_func::World::new(self.ss).is_normal_road_tile(r.tile)
             && service!(self.l.disallowed_directions)(r.tile) != 0
         {
             return false;
