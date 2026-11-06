@@ -558,7 +558,9 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
     match variable {
         0x48 => {
             return unsafe {
-                crate::station_service::acceptance_mask((native.world().owner)(st)) as u32
+                crate::station_service::acceptance_mask(crate::station_record::service_of(
+                    st.cast(),
+                )) as u32
             };
         }
         0x8a => {
@@ -613,12 +615,12 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
                 _ => 0,
             };
         }
-        let owner = (native.world().owner)(st);
+        let owner = crate::station_record::service_of(st.cast());
         return cargo_variable(native, st, owner, c, variable, false);
     }
     if (0x8c..=0xec).contains(&variable) {
         let c = ((variable - 0x8c) >> 3) & 15;
-        let owner = (native.world().owner)(st);
+        let owner = crate::station_record::service_of(st.cast());
         return match (variable - 0x8c) & 7 {
             0 => cargo_variable(native, st, owner, c, 0x60, true),
             1 => {
@@ -702,7 +704,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
                     (native.shared().specs().station().file)(spec),
                 )) << 8)
         }
-        0x43 => (native.company)((native.world().station_owner)(st), ptr::null()),
+        0x43 => (native.company)(crate::station_record::owner_company(st.cast()), ptr::null()),
         0x44 => {
             if crate::map_func::World::new(native.shared()).station_reserved(tile) {
                 7

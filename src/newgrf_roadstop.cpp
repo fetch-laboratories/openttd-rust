@@ -339,7 +339,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.index = RustCustomRoadStopIndex,
 		.is_station = RustStationIsExpected<BaseStation *>,
 		.make_town = [](ResolverObject *ro, Town *town, bool readonly) noexcept { return &static_cast<RoadStopResolverObject *>(ro)->town_scope.emplace(*ro, town, readonly); },
-		.owner = RustStationOwnerByte<BaseStation>,
 		.random_bits = RustStationRandomBits<const BaseStation>,
 		.resize = RustRoadStopSpecResize,
 		.resolve_callback = [](const OpenTTDRoadStopResolverState *state, uint16_t cb, uint32_t p1, uint32_t p2, int32_t *regs, size_t size) noexcept { RoadStopResolverObject object(*state, static_cast<CallbackID>(cb), p1, p2); return object.ResolveCallback({regs, size}); },

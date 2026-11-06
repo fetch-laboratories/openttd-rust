@@ -137,7 +137,6 @@ inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return St
 inline Direction RustStationAirportRotation(const BaseStation *s) noexcept { return Station::From(s)->GetAirport().GetRotation(); }
 inline uint32_t RustStationLocation(const BaseStation *s) noexcept { return s->GetXY().base(); }
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->GetOwner(); }
-const OpenTTDStationRecord *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->Record().town; }
 inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
@@ -146,7 +145,6 @@ template <class Handle> inline Handle RustStationIfValid(uint16_t id) noexcept {
 inline const OpenTTDStation *Aircraft_station(uint16_t id) noexcept { return RustStation(RustStationIfValid<Station *>(id)); }
 /** The canonical Rust service owner of a station or waypoint. */
 template <class TStation> inline OpenTTDStationRecord *RustStationServiceOwner(TStation *st) noexcept { return const_cast<OpenTTDStationRecord *>(&st->Record()); }
-inline OpenTTDStationRecord *RustStationServiceByID(uint16_t id) noexcept { return RustStationServiceOwner(RustStationGet<BaseStation *>(id)); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->GetFacilities().Test(StationFacility::Airport); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }
 inline void RustSetRailStationReservation(uint32_t tile, bool reserved) noexcept { SetRailStationReservation(TileIndex{tile}, reserved); }
@@ -208,12 +206,6 @@ inline uint8_t Aircraft_airport_type(const OpenTTDStation *s) noexcept
 {
 	const Station *st = StationOf(s);
 	return RustStationAirportType(st);
-}
-
-inline uint8_t Aircraft_station_owner(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationOwnerByte(st);
 }
 
 inline void RustStationClosedWidget(BaseStation *st) noexcept { SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT); }

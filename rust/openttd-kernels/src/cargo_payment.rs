@@ -148,8 +148,7 @@ fn deliver(
     let mut accepted_ind = 0_u32;
     let subsidies = unsafe { &*(s.subsidies)() };
     let native = (subsidies.station)(station.0);
-    let catchment = crate::station::Ctx::from_shared(subsidies.shared());
-    let state = (catchment.c.station_owner)(station);
+    let state = crate::station_record::service_of(native.cast());
     let visit = |near: crate::station::IndustryListEntry| {
         if remaining == 0 {
             return false;

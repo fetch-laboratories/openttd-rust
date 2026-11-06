@@ -378,9 +378,6 @@ pub struct CatchmentServices {
     pub station_count: extern "C" fn() -> usize,
     pub station_if_valid: extern "C" fn(StationID) -> *mut BaseStation,
     pub next_station: extern "C" fn(u32) -> *mut BaseStation,
-    pub owner: extern "C" fn(*mut BaseStation) -> *mut Service,
-    /// `Station::Get(id)`'s owner.
-    pub station_owner: extern "C" fn(StationID) -> *mut Service,
     pub id: extern "C" fn(*mut BaseStation) -> StationID,
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut ShellHandle,
@@ -632,7 +629,7 @@ pub(crate) unsafe fn catchment_covers_town(state: *mut Service, town: u16, c: &C
 }
 /// `Station::RecomputeCatchment`.
 pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: bool, c: &Ctx<'_>) {
-    let state = (c.c.owner)(st);
+    let state = crate::station_record::service_of(st.cast());
     // SAFETY: Live owner; immediate mutation.
     unsafe { (*catchment(state)).industries_near.clear() };
     if !no_clear_nearby_lists {
@@ -665,7 +662,10 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         // SAFETY: Live industry owner; visits mutate only other stations' lists.
         unsafe {
             for_each_station(list, |near| {
-                remove_industry_to_deliver((c.c.owner)(near.station), industry);
+                remove_industry_to_deliver(
+                    crate::station_record::service_of(near.station.cast()),
+                    industry,
+                );
             });
             (*list).clear();
             (*list).insert(st, (c.c.id)(st));
@@ -795,7 +795,7 @@ pub(crate) fn for_all_stations_around_tiles(
         if !(c.s.station_serve_neutral)() && !(c.c.associated_industry)(st).is_null() {
             continue;
         }
-        let state = (c.c.owner)(st);
+        let state = crate::station_record::service_of(st.cast());
         for tile in ta.tiles(c.map) {
             // SAFETY: Live owner; the membership borrow ends before `func`.
             if unsafe { tile_is_in_catchment(state, tile, c) }
@@ -851,7 +851,11 @@ fn add_nearby_stations_by_catchment(
     // SAFETY: Live town owner; the membership reads do not mutate the set.
     unsafe {
         for_each_station(nearby, |st| {
-            if tile_is_in_catchment((c.c.owner)(st.station), tile, c) {
+            if tile_is_in_catchment(
+                crate::station_record::service_of(st.station.cast()),
+                tile,
+                c,
+            ) {
                 stations.insert(st.station, st.id);
             }
         });
@@ -1105,7 +1109,7 @@ pub unsafe extern "C" fn openttd_rust_station_remove_from_nearby_lists(
     c: *const CatchmentServices,
 ) {
     let c = unsafe { Ctx::new(c) };
-    remove_from_all_nearby_lists(st, (c.c.owner)(st), &c);
+    remove_from_all_nearby_lists(st, crate::station_record::service_of(st.cast()), &c);
 }
 /// Native `Station::GetCatchmentRadius`.
 /// # Safety
@@ -1155,10 +1159,27 @@ crate::abi::layouts! {
     "OpenTTDIndustryListEntry" ["station_service"] => IndustryListEntry { distance, industry, id };
     "OpenTTDStationRadiusFacilities" ["station_service"] => RadiusFacilities { bus, truck, train, ship, airport };
     "OpenTTDStationCatchmentServices" ["station_service"] => CatchmentServices {
-        shared, airport, industry_tile, object, town, station, visits, station_count, station_if_valid,
-        next_station, owner, station_owner, id, location, associated_industry, radius_facilities,
-        modified_catchment, spread, industry_by_id, industry_id, industry_owner,
-        industry_neutral, next_industry,
+        shared,
+        airport,
+        industry_tile,
+        object,
+        town,
+        station,
+        visits,
+        station_count,
+        station_if_valid,
+        next_station,
+        id,
+        location,
+        associated_industry,
+        radius_facilities,
+        modified_catchment,
+        spread,
+        industry_by_id,
+        industry_id,
+        industry_owner,
+        industry_neutral,
+        next_industry,
     };
 }
 

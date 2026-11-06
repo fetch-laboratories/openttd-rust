@@ -334,7 +334,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.station_tile = Aircraft_station_tile,
 	.rotation = Aircraft_rotation,
 	.airport_type = Aircraft_airport_type,
-	.station_owner = Aircraft_station_owner,
 	.airport_blocks = Aircraft_airport_blocks,
 	.had_vehicle = Aircraft_had_vehicle,
 	.airport_elements = Aircraft_airport_elements,

@@ -573,7 +573,7 @@ unsafe fn acceptance_history(
     // SAFETY: The call-local finder's set; each visit reads canonical status only.
     unsafe {
         crate::station::for_each_station(list, |near| {
-            let owner = (c.c.owner)(near.station);
+            let owner = crate::station_record::service_of(near.station.cast());
             // Read only canonical status, then use the shared pure conversion.
             result |= u32::from(crate::station_service::openttd_rust_goods_convert_state(
                 (*owner).record.goods[usize::from(cargo)].status,

@@ -771,7 +771,8 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
             let p = (s.loading.part)(v);
             unloading = unloading.wrapping_add(i32::from(p.unloading));
             loading |= !order_no_load
-                && (order_full_load || has_rating((s.station.owner)(st), p.cargo))
+                && (order_full_load
+                    || has_rating(crate::station_record::service_of(st.cast()), p.cargo))
                 && o.flags(front) & VF_LOADING_FINISHED == 0
                 && o.flags(front) & VF_STOP_LOADING == 0;
             cars = cars.wrapping_add(1);

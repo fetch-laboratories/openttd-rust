@@ -311,11 +311,9 @@ pub struct TruncatedSource {
 pub struct World {
     pub(crate) graphs: &'static live::Services,
     pub(crate) station: extern "C" fn(u16) -> LoadingStation,
-    pub(crate) station_owner: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) station_exclusivity: extern "C" fn(*mut BaseStation) -> StationExclusivity,
     pub(crate) rating_counts: extern "C" fn(*mut BaseStation, u8) -> RatingCounts,
     pub(crate) get: extern "C" fn(u16) -> *mut BaseStation,
-    pub(crate) owner: extern "C" fn(*mut BaseStation) -> *mut Service,
     pub(crate) pool_size: extern "C" fn() -> usize,
     pub(crate) environment: crate::services::EnvironmentServices,
     pub(crate) facilities: extern "C" fn(*mut BaseStation) -> u8,
@@ -463,7 +461,7 @@ unsafe fn truncate(st: *mut BaseStation, cargo: u8, amount: u32, w: &World) {
             if source_st.is_null() {
                 continue;
             }
-            let ge = unsafe { cp((w.owner)(source_st), cargo) };
+            let ge = unsafe { cp(crate::station_record::service_of(source_st.cast()), cargo) };
             unsafe {
                 (&raw mut (*ge).max_waiting_cargo)
                     .write((*ge).max_waiting_cargo.max(observed.amount));
@@ -480,7 +478,7 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
     show: u8,
 ) {
     let w = unsafe { &*world };
-    let state = (w.owner)(st);
+    let state = crate::station_record::service_of(st.cast());
     let old = unsafe { acceptance_mask(state) };
     let mut acceptance = [0_u32; 64];
     // SAFETY: Live owner; the tile procs cannot reset this station's catchment.
@@ -523,7 +521,7 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, world: *const World) {
     let w = unsafe { &*world };
-    let state = (w.owner)(st);
+    let state = crate::station_record::service_of(st.cast());
     let mut cargoes = 0_u64;
     for cargo in 0..64 {
         if unsafe { (*cp(state, cargo)).status } & 32 != 0 {
@@ -549,7 +547,7 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
 #[allow(clippy::too_many_lines)]
 pub unsafe extern "C" fn openttd_rust_station_rating(st: *mut BaseStation, world: *const World) {
     let w = unsafe { &*world };
-    let state = (w.owner)(st);
+    let state = crate::station_record::service_of(st.cast());
     let mut waiting_changed = false;
     let activity = unsafe { activity(state) };
     unsafe {
@@ -725,7 +723,7 @@ pub(crate) unsafe fn openttd_rust_station_monthly(world: *const World) {
         if st.is_null() || u32::from((w.is_station)(st)) == 0 {
             continue;
         }
-        let state = (w.owner)(st);
+        let state = crate::station_record::service_of(st.cast());
         for cargo in 0..64 {
             let current = unsafe { (*cp(state, cargo)).status } & 16 != 0;
             unsafe {
@@ -747,7 +745,7 @@ unsafe fn admit(
     if u32::from((w.packet_available)()) == 0 {
         return 0;
     }
-    let state = (w.owner)(st);
+    let state = crate::station_record::service_of(st.cast());
     let ge = unsafe { cp(state, cargo) };
     amount = amount.wrapping_add(u32::from(unsafe { (*ge).amount_fract }));
     unsafe {
@@ -800,7 +798,7 @@ pub(crate) unsafe fn distribute(
     unsafe {
         crate::station::for_each_station(stations, |entry| {
             let st = entry.station;
-            let owner = (w.station_owner)(st);
+            let owner = crate::station_record::owner_company(st.cast());
             if exclusivity != 255 && exclusivity != owner {
                 return;
             }
@@ -810,7 +808,7 @@ pub(crate) unsafe fn distribute(
                     return;
                 }
             }
-            let ge = cp((w.owner)(st), cargo);
+            let ge = cp(crate::station_record::service_of(st.cast()), cargo);
             let rating = (*ge).rating;
             if rating == 0 {
                 return;
@@ -926,7 +924,7 @@ impl Links {
         unsafe { ((*self.vehicle_resolver).cargo_owner)(v.0.as_ptr()) }.cast_mut()
     }
 }
-unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &World, l: &Links) {
+unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, l: &Links) {
     let storage = l.storage();
     let goods = (l.goods_entry)(st, cargo);
     let list = l.station_cargo(st, cargo);
@@ -935,7 +933,7 @@ unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &
             crate::cargo_storage::reroute_station(list.cast_mut(), storage, goods, avoid, avoid2);
         }
     }
-    let state = (w.owner)(st);
+    let state = crate::station_record::service_of(st.cast());
     let mut node = unsafe { openttd_rust_station_queue_first(state) };
     while !node.is_null() {
         let mut current =
@@ -965,18 +963,17 @@ pub unsafe extern "C" fn openttd_rust_station_reroute(
     cargo: u8,
     avoid: u16,
     avoid2: u16,
-    world: *const World,
+    _world: *const World,
     links: *const Links,
 ) {
-    let w = unsafe { &*world };
     let l = unsafe { &*links };
     unsafe {
-        reroute(st, cargo, avoid, avoid2, w, l);
+        reroute(st, cargo, avoid, avoid2, l);
     }
 }
 // Keep the source edge/vehicle iteration and its immediate mutation order together.
 #[allow(clippy::too_many_lines)]
-unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
+unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
     for cargo in 0..64 {
         let auto = (l.automatic_distribution)(cargo);
         let graph = live::station_graph(from, cargo, l.graphs);
@@ -1067,7 +1064,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                     let to_id = (l.graphs.station_id)(edge.destination);
                     (l.delete_flows)(from, cargo, to_id);
                     unsafe {
-                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), w, l);
+                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), l);
                     }
                 }
             } else {
@@ -1079,7 +1076,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                     let to_id = (l.graphs.station_id)(edge.destination);
                     (l.restrict_flows)(from, cargo, to_id);
                     unsafe {
-                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), w, l);
+                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), l);
                     }
                 } else {
                     let restricted = unsafe { &*owner }.nodes[usize::from(node)].edges[index]
@@ -1103,15 +1100,14 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_stale(
     st: *mut BaseStation,
-    world: *const World,
+    _world: *const World,
     links: *const Links,
     visits: *const Visits,
 ) {
-    let w = unsafe { &*world };
     let l = unsafe { &*links };
     let visits = unsafe { &*visits };
     unsafe {
-        stale(st, w, l, visits);
+        stale(st, l, visits);
     }
 }
 pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *const Visits) {
@@ -1125,7 +1121,7 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
     while id < (w.pool_size)() {
         let st = (w.get)(id as u16);
         if !st.is_null() {
-            let state = (w.owner)(st);
+            let state = crate::station_record::service_of(st.cast());
             if u32::from((w.facilities)(st)) & 128 == 0 && u32::from((w.in_use)(st)) != 0 {
                 let mut b = unsafe { (*state).record.delete_ctr }.wrapping_add(1);
                 if b >= 185 {
@@ -1145,7 +1141,7 @@ pub(crate) unsafe fn tick(world: *const World, links: *const Links, visits: *con
             let phase = tick.wrapping_add(id as u64);
             if u32::from((w.is_station)(st)) != 0 && phase % 504 == 0 {
                 unsafe {
-                    stale(st, w, l, visits);
+                    stale(st, l, visits);
                 }
             }
             if phase % 250 == 0 {
@@ -1271,7 +1267,7 @@ pub struct LoadingStation {
     pub(crate) state: *mut Service,
 }
 fn may_load(st: LoadingStation, v: VehicleRef, w: &World) -> bool {
-    if (w.station_owner)(st.base) != 16 {
+    if crate::station_record::owner_company(st.base.cast()) != 16 {
         return true;
     }
     let observed = (w.station_exclusivity)(st.base);
@@ -1991,11 +1987,9 @@ crate::abi::layouts! {
     "OpenTTDStationServices" ["probe"] => World {
         graphs,
         station,
-        station_owner,
         station_exclusivity,
         rating_counts,
         get,
-        owner,
         pool_size,
         environment,
         facilities,
@@ -2014,10 +2008,8 @@ crate::abi::layouts! {
         acceptance_news,
         acceptance_redraw,
         delete_station,
-
         append_packet,
         station_list_invalidation,
-
         waiting_redraw,
         cargo_registry,
         with_truncation,

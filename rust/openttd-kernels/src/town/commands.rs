@@ -51,12 +51,9 @@ pub struct CommandServices {
     pub station_views_dirty: extern "C" fn(),
     pub next_station: extern "C" fn(u32) -> StationCursor,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const TownHandle,
-    pub station_owner: extern "C" fn(*const BaseStation) -> u8,
     pub station_airport: extern "C" fn(*const Station) -> bool,
     pub airport_type: extern "C" fn(*const BaseStation) -> u8,
     pub airport_tile: extern "C" fn(*const BaseStation) -> u32,
-    pub station_activity_owner:
-        extern "C" fn(*const Station) -> *const crate::station_service::Service,
     pub local_company: extern "C" fn() -> bool,
     pub bribe_error: extern "C" fn(),
     pub next_waypoint: extern "C" fn(u32) -> Relation,
@@ -312,12 +309,12 @@ impl<'a> Commands<'a> {
                 }
                 from = st.next;
                 if (self.s.station_town)(st.shell) == t.shell
-                    && (self.s.station_owner)(st.shell) == company
+                    && crate::station_record::owner_company(st.shell.cast()) == company
                 {
-                    let owner = (self.s.station_activity_owner)(st.shell.cast());
+                    let owner = crate::station_record::service_of(st.shell.cast());
                     // SAFETY: Station stays live; its canonical Rust owner owns all 64 cargo slots.
                     unsafe {
-                        crate::station_service::clear_ratings(owner.cast_mut());
+                        crate::station_service::clear_ratings(owner);
                     }
                 }
             }
@@ -870,11 +867,9 @@ crate::abi::layouts! {
         station_views_dirty,
         next_station,
         station_town,
-        station_owner,
         station_airport,
         airport_type,
         airport_tile,
-        station_activity_owner,
         local_company,
         bribe_error,
         next_waypoint,

@@ -266,11 +266,6 @@ extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexc
 }
 
 static uint32_t SharedRandom(void *) noexcept { return Random(); }
-const OpenTTDStationRecord *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept
-{
-	return RustStationServiceOwner(StationOf(station));
-}
-
 Town *OpenTTDTownShellByID(uint32_t id) noexcept
 {
 	return Town::Get(TownID(id));

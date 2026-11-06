@@ -266,7 +266,6 @@ static const OpenTTDStationServices _rust_station_services = {
 		Station *st = RustStationGet<Station *>(id);
 		return {.native = st, .base = st, .state = RustStationServiceOwner(st)};
 	},
-	.station_owner = RustStationOwnerByte<BaseStation>,
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
 		const Town *town = OpenTTDBaseStationTown(static_cast<BaseStation *>(handle));
 		return {
@@ -282,7 +281,6 @@ static const OpenTTDStationServices _rust_station_services = {
 	.get = [](uint16_t id) noexcept -> OpenTTDBaseStation * {
 		return BaseStation::GetIfValid(StationID(id));
 	},
-	.owner = RustStationServiceOwner,
 	.pool_size = []() noexcept -> size_t {
 		return BaseStation::GetPoolSize();
 	},

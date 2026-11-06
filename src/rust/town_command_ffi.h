@@ -35,11 +35,9 @@ struct OpenTTDTownCommandServices {
 	void (*station_views_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(station_views_dirty);
 	OpenTTDTownStationCursor (*next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
 	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
-	uint8_t (*station_owner)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	bool (*station_airport)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_airport);
 	uint8_t (*airport_type)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
 	uint32_t (*airport_tile)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
-	const OpenTTDStationRecord *(*station_activity_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_activity_owner);
 	bool (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*bribe_error)() noexcept OPENTTD_SERVICE_DEFAULT(bribe_error);
 	OpenTTDTownPoolRelation (*next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);

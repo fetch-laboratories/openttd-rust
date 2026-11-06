@@ -74,7 +74,6 @@ pub struct Services {
     pub index: unsafe extern "C" fn(u32) -> u32,
     pub is_station: unsafe extern "C" fn(*mut BaseStation) -> bool,
     pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
-    pub owner: unsafe extern "C" fn(*mut BaseStation) -> u8,
     pub random_bits: unsafe extern "C" fn(*const BaseStation) -> u16,
     pub resize: unsafe extern "C" fn(*mut BaseStation, usize) -> (),
     pub resolve_callback: unsafe extern "C" fn(*const State, u16, u32, u32, *mut i32, usize) -> u16,
@@ -261,7 +260,7 @@ unsafe fn variable(
                     if c.station.is_null() {
                         (shared.current_company)()
                     } else {
-                        (s.owner)(c.station)
+                        crate::station_record::owner_company(c.station)
                     },
                     ptr::null(),
                 )
@@ -759,7 +758,7 @@ crate::abi::layouts! {
     "OpenTTDRoadStopSpecVacancy" ["station_service"] => SpecVacancy { spec, grfid, };
     "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, owner, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_triggers, station_id, tile, tile_count, tile_random, town, town_tile, waiting, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_triggers, station_id, tile, tile_count, tile_random, town, town_tile, waiting, };
 }
 
 /// Class index limit from `newgrf_roadstop.h`.

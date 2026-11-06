@@ -438,7 +438,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let c = s.commands();
     let w = unsafe { &*c.station };
     let links = unsafe { &*c.links };
-    let state = (w.owner)(st);
+    let state = crate::station_record::service_of(st.cast());
     if (s.cleaning_pool)() {
         for cargo in 0..NUM_CARGO {
             let list = links.station_cargo(st, cargo);
@@ -529,7 +529,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         crate::station::openttd_rust_station_remove_from_nearby_lists(st, s.catchment);
     }
     (c.delete_airport_storage)(st);
-    if (w.station_owner)(st) == crate::company_type::OWNER_NONE {
+    if crate::station_record::owner_company(st.cast()) == crate::company_type::OWNER_NONE {
         (c.station_list_classes_invalidate)();
     } else {
         (w.station_list_invalidation)(st, 0);
@@ -581,7 +581,9 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
             break;
         }
         from = u32::from((s.catchment.id)(st).0) + 1;
-        if (w.station_owner)(st) == owner && (w.facilities)(st) & FACILITY_AIRPORT != 0 {
+        if crate::station_record::owner_company(st.cast()) == owner
+            && (w.facilities)(st) & FACILITY_AIRPORT != 0
+        {
             let spec = crate::newgrf_airport::station_spec(st, crate::newgrf_airport::runtime());
             total = total.saturating_add(
                 crate::company::price(s.maintenance_price)

@@ -287,15 +287,9 @@ rebound | RustStationLocation | src/animated_tile.cpp | location
 rebound | RustStationLocation | src/rust/station_command_services.hpp | location
 rebound | RustStationLocation | src/station.cpp | location
 rebound | RustStationLocation | src/vehicle.cpp | location
-rebound | RustStationOwnerByte | src/economy.cpp | station_company
-rebound | RustStationOwnerByte | src/newgrf_roadstop.cpp | owner
-rebound | RustStationOwnerByte | src/station_cmd.cpp | station_owner
-rebound | RustStationOwnerByte | src/town_cmd.cpp | station_owner
 rebound | RustStationRandomBits | src/newgrf_airport.cpp | random
 rebound | RustStationRandomBits | src/newgrf_roadstop.cpp | random_bits
 rebound | RustStationRandomBits | src/newgrf_station.cpp | station_random
-rebound | RustStationServiceOwner | src/station.cpp | owner
-rebound | RustStationServiceOwner | src/station_cmd.cpp | owner
 rebound | RustStationSetRandomBits | src/newgrf_roadstop.cpp | set_random_bits
 rebound | RustStationSetRandomBits | src/newgrf_station.cpp | set_random
 rebound | RustStationSetWaitingTriggers | src/newgrf_roadstop.cpp | set_waiting

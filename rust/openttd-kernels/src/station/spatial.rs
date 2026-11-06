@@ -101,15 +101,16 @@ pub(crate) fn move_sign(s: &Services, st: *mut BaseStation, tile: u32) {
 }
 pub(crate) fn modify_rating_around(s: &Services, tile: u32, owner: u8, amount: i32, distance: u32) {
     let c = table(s);
-    let commands = unsafe { &*(s.station_commands)() };
-    let station = unsafe { &*commands.station };
     let map = s.map();
     radius(s, tile, distance, |st| {
-        if (station.station_owner)(st) == owner
+        if crate::station_record::owner_company(st.cast()) == owner
             && map.distance_manhattan(tile, (c.location)(st)) <= distance
         {
             unsafe {
-                crate::station_service::modify_rating((c.owner)(st), amount);
+                crate::station_service::modify_rating(
+                    crate::station_record::service_of(st.cast()),
+                    amount,
+                );
             }
         }
     });

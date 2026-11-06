@@ -469,7 +469,10 @@ impl Services {
         // town destination. A fixed membership set preserves first-discovery
         // semantics without allocating on the cargo-delivery hot path.
         let catchment = crate::station::Ctx::from_shared(self.shared());
-        let station_state = (catchment.c.station_owner)(crate::station_type::StationID(station));
+        let station_state = crate::station_record::service_of(crate::station_record::station_get(
+            self.shared(),
+            station,
+        ));
         let mut towns = [0_u64; 1024];
         // SAFETY: The live station owner; immediate read.
         if !unsafe { crate::station::rect_is_empty(station_state) } {

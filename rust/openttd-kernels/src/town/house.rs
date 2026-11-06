@@ -362,7 +362,7 @@ impl<'a> House<'a> {
         // membership and traversal resumes after the visited station.
         unsafe {
             crate::station::for_each_station(list, |near| {
-                let state = (c.c.owner)(near.station);
+                let state = crate::station_record::service_of(near.station.cast());
                 let mut covers = crate::station::tile_is_in_catchment(state, tile, &c);
                 if flags & TILES_Y != 0 {
                     covers |= crate::station::tile_is_in_catchment(

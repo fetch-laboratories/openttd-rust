@@ -205,8 +205,6 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.station_count = []() noexcept -> size_t { return Station::GetNumItems(); },
 		.station_if_valid = RustStationIfValid<BaseStation *>,
 		.next_station = RustNextStation<BaseStation *>,
-		.owner = RustStationServiceOwner,
-		.station_owner = RustStationServiceByID,
 		.id = RustBaseStationID<BaseStation>,
 		.location = RustStationLocation,
 		.associated_industry = RustStationAssociatedIndustry,

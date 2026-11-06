@@ -935,7 +935,9 @@ impl Engine<'_> {
         let mut count = 0_u32;
         crate::station::spatial::radius(self.services, center, radius / 2, |st| {
             if self.distance((c.location)(st), center) <= radius {
-                let activity = unsafe { crate::station_service::activity((c.owner)(st)) };
+                let activity = unsafe {
+                    crate::station_service::activity(crate::station_record::service_of(st.cast()))
+                };
                 if activity.time_since_load <= 20 || activity.time_since_unload <= 20 {
                     count = count.wrapping_add(1);
                 }
@@ -2284,11 +2286,11 @@ impl Engine<'_> {
             if self.distance((c.location)(st), center) > radius {
                 return;
             }
-            let activity = unsafe { crate::station_service::activity((c.owner)(st)) };
+            let activity = unsafe {
+                crate::station_service::activity(crate::station_record::service_of(st.cast()))
+            };
             let active = activity.time_since_load <= 20 || activity.time_since_unload <= 20;
-            let commands = unsafe { &*(self.services.station_commands)() };
-            let world = unsafe { &*commands.station };
-            let owner = (world.station_owner)(st);
+            let owner = crate::station_record::owner_company(st.cast());
             if !(self.services.company_valid)(owner) {
                 return;
             }

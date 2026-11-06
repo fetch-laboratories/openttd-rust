@@ -52,7 +52,6 @@ struct OpenTTDAircraftLeaves {
 	uint32_t (OPENTTD_RUST_CALL *station_tile)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_tile);
 	uint8_t (OPENTTD_RUST_CALL *rotation)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(rotation);
 	uint8_t (OPENTTD_RUST_CALL *airport_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
-	uint8_t (OPENTTD_RUST_CALL *station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	uint64_t * (OPENTTD_RUST_CALL *airport_blocks)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_blocks);
 	uint8_t (OPENTTD_RUST_CALL *had_vehicle)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(had_vehicle);
 	uint8_t (OPENTTD_RUST_CALL *airport_elements)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(airport_elements);

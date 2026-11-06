@@ -168,7 +168,6 @@ pub struct Leaves {
     pub station_tile: unsafe extern "C" fn(*const Station) -> u32,
     pub rotation: unsafe extern "C" fn(*const Station) -> u8,
     pub airport_type: unsafe extern "C" fn(*const Station) -> u8,
-    pub station_owner: unsafe extern "C" fn(*const Station) -> u8,
     pub airport_blocks: unsafe extern "C" fn(*const Station) -> *mut u64,
     pub had_vehicle: unsafe extern "C" fn(*const Station) -> u8,
     pub airport_elements: unsafe extern "C" fn(*const c_void) -> u8,
@@ -491,7 +490,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         station_tile(self; s: *const Station) => unsafe { (self.leaves.station_tile)(s) };
         rotation(self; s: *const Station) => unsafe { (self.leaves.rotation)(s) };
         airport_type(self; s: *const Station) => unsafe { (self.leaves.airport_type)(s) };
-        station_owner(self; s: *const Station) => unsafe { (self.leaves.station_owner)(s) };
+        station_owner(self; s: *const Station) => crate::station_record::owner_company(s.cast());
         had_vehicle(self; s: *const Station) => unsafe { (self.leaves.had_vehicle)(s) };
         airport_elements(self; airport: *const c_void) => unsafe { (self.leaves.airport_elements)(airport) };
         helipads(self; airport: *const c_void) => unsafe { (self.leaves.helipads)(airport) };
@@ -2462,7 +2461,6 @@ crate::abi::layouts! {
         station_tile,
         rotation,
         airport_type,
-        station_owner,
         airport_blocks,
         had_vehicle,
         airport_elements,
@@ -2494,7 +2492,6 @@ crate::abi::layouts! {
         dirty_depot,
         first_arrival,
         update_delta,
-
         destination_too_far,
         delete_range_news,
         service_order,

@@ -124,7 +124,6 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == &fixture->record ? 0 : 1]; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
-	leaves.station_owner = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 
 	leaves.helipads = [](const void *) noexcept { return uint8_t{0}; };
 	leaves.airport_flags = [](const void *) noexcept { return uint8_t{1}; };

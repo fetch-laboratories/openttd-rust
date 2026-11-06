@@ -42,7 +42,6 @@ struct OpenTTDRoadStopResolverServices {
 	uint32_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
 	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
 	TownScopeResolver * (*make_town)(ResolverObject *, Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(make_town);
-	uint8_t (*owner)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	uint16_t (*random_bits)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*resize)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resize);
 	uint16_t (*resolve_callback)(const OpenTTDRoadStopResolverState *, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);

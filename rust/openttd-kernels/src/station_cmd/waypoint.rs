@@ -72,7 +72,7 @@ impl Ctx<'_> {
         if st.is_null() {
             return out.error(INVALID_STRING_ID);
         }
-        let owner = (self.world().station_owner)(st);
+        let owner = crate::station_record::owner_company(st.cast());
         if owner != OWNER_NONE {
             unsafe { self.command.ownership(out.0, owner, 0) };
             if !out.ok() {
@@ -107,7 +107,7 @@ impl Ctx<'_> {
             out.error(INVALID_STRING_ID);
             return INVALID_STATION;
         }
-        let owner = (self.world().station_owner)(st);
+        let owner = crate::station_record::owner_company(st.cast());
         if owner != OWNER_NONE {
             unsafe { self.command.ownership(out.0, owner, 0) };
             if !out.ok() {
@@ -201,7 +201,7 @@ impl Ctx<'_> {
             if wp.is_null()
                 || (self.world().in_use)(wp)
                 || (self.s.string_id)(wp) != string
-                || (self.world().station_owner)(wp) != owner
+                || crate::station_record::owner_company(wp.cast()) != owner
                 || (self.s.road_waypoint)(wp) != road
             {
                 continue;
@@ -256,8 +256,8 @@ impl Ctx<'_> {
         }
         out.zero();
     }
-    fn reset_delete_counter(&self, st: *mut BaseStation) {
-        let owner = (self.world().owner)(st);
+    fn reset_delete_counter(st: *mut BaseStation) {
+        let owner = crate::station_record::service_of(st.cast());
         // SAFETY: The station service owner holds the counter; no borrow survives a callback.
         unsafe { (&raw mut (*owner).record.delete_ctr).write(0) };
     }
@@ -357,7 +357,7 @@ impl Ctx<'_> {
             );
         }
         if !wp.is_null() {
-            if (self.world().station_owner)(wp) != (self.shared.current_company)() {
+            if crate::station_record::owner_company(wp.cast()) != (self.shared.current_company)() {
                 return cost.error(self.s.strings.waypoint_close);
             }
             if self.s.rail_area(wp).tile != INVALID_TILE {
@@ -407,7 +407,7 @@ impl Ctx<'_> {
             ADD_TRY,
         );
         crate::station_association::assign(self.s.rail_association, spec, wp, specindex.value);
-        self.reset_delete_counter(wp);
+        Self::reset_delete_counter(wp);
         (self.s.set_facility_bits)(wp, FACILITY_TRAIN);
         (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
@@ -566,7 +566,7 @@ impl Ctx<'_> {
             if !(self.s.road_waypoint)(wp) {
                 return cost.error(INVALID_STRING_ID);
             }
-            if (self.world().station_owner)(wp) != (self.shared.current_company)() {
+            if crate::station_record::owner_company(wp.cast()) != (self.shared.current_company)() {
                 return cost.error(self.s.strings.waypoint_close);
             }
             self.before_add_rect(ret, wp, area, ADD_TEST);
@@ -613,7 +613,7 @@ impl Ctx<'_> {
         if !spec.is_null() {
             (self.s.road_triggers)(wp, spec);
         }
-        self.reset_delete_counter(wp);
+        Self::reset_delete_counter(wp);
         (self.s.set_facility_bits)(wp, FACILITY_BUS | FACILITY_TRUCK);
         (self.s.set_build_date)(wp, crate::timer_game_common::calendar_date().0);
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
@@ -796,7 +796,7 @@ impl Ctx<'_> {
             }
             self.after_remove_tile(wp, tile);
             (self.s.virtual_coord)(wp);
-            self.reset_delete_counter(wp);
+            Self::reset_delete_counter(wp);
         }
         cost.set(crate::company::price(PR_CLEAR_WAYPOINT_BUOY));
     }

@@ -112,7 +112,7 @@ fn populate(
         unsafe {
             (*super::stations_near(owner)).insert(neutral, (cc.c.id)(neutral));
             crate::station::set_neutral_industry(
-                (cc.c.owner)(neutral),
+                crate::station_record::service_of(neutral.cast()),
                 shell,
                 crate::industry_type::IndustryID(id),
             );
@@ -127,7 +127,7 @@ fn populate(
         unsafe { (*super::stations_near(owner)).insert(st.station, st.id) };
         crate::station::add_industry_to_deliver(
             st.station,
-            (cc.c.owner)(st.station),
+            crate::station_record::service_of(st.station.cast()),
             shell,
             tile,
             &cc,

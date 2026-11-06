@@ -358,14 +358,14 @@ impl<'a> Ctx<'a> {
         crate::station::Ctx::from_shared(self.shared)
     }
     /// `st->rect`, for immediate access only.
-    fn rect(&self, st: *mut BaseStation) -> *mut crate::station::StationRect {
+    fn rect(st: *mut BaseStation) -> *mut crate::station::StationRect {
         // SAFETY: Live station owner.
-        unsafe { crate::station::rect((self.world().owner)(st)) }
+        unsafe { crate::station::rect(crate::station_record::service_of(st.cast())) }
     }
     /// `*out = st->rect.BeforeAddRect(area, mode)`.
     fn before_add_rect(&self, out: Cost<'_>, st: *mut BaseStation, area: TileArea, mode: u8) {
         let c = self.catchment();
-        let r = self.rect(st);
+        let r = Self::rect(st);
         // SAFETY: Local copy; no borrow spans the setting reads.
         let mut rect = unsafe { *r };
         let ok = rect.before_add_rect(area.tile, i32::from(area.w), i32::from(area.h), mode, &c);
@@ -379,7 +379,7 @@ impl<'a> Ctx<'a> {
     /// `*out = st->rect.BeforeAddTile(tile, mode)`.
     fn before_add_tile(&self, out: Cost<'_>, st: *mut BaseStation, tile: u32, mode: u8) {
         let c = self.catchment();
-        let r = self.rect(st);
+        let r = Self::rect(st);
         // SAFETY: Local copy; no borrow spans the setting reads.
         let mut rect = unsafe { *r };
         let ok = rect.before_add_tile(tile, mode, &c);
@@ -394,7 +394,7 @@ impl<'a> Ctx<'a> {
     fn after_remove_tile(&self, st: *mut BaseStation, tile: u32) {
         let c = self.catchment();
         let id = (c.c.id)(st);
-        let r = self.rect(st);
+        let r = Self::rect(st);
         // SAFETY: Local copy; no borrow spans the map scans.
         let mut rect = unsafe { *r };
         rect.after_remove_tile(id, tile, &c);
@@ -404,7 +404,7 @@ impl<'a> Ctx<'a> {
     fn after_remove_rect(&self, st: *mut BaseStation, area: TileArea) {
         let c = self.catchment();
         let id = (c.c.id)(st);
-        let r = self.rect(st);
+        let r = Self::rect(st);
         // SAFETY: Local copy; no borrow spans the map scans.
         let mut rect = unsafe { *r };
         rect.after_remove_rect(id, area, &c);
@@ -415,7 +415,7 @@ impl<'a> Ctx<'a> {
     fn rect_contains(&self, st: *mut BaseStation, tile: u32) -> bool {
         let map = self.map();
         // SAFETY: Live owner; immediate copy.
-        let rect = unsafe { *self.rect(st) };
+        let rect = unsafe { *Self::rect(st) };
         rect.pt_in_extended_rect(map.tile_x(tile) as i32, map.tile_y(tile) as i32, 0)
     }
     /// `Station::From(st)->RecomputeCatchment(no_clear)`.
@@ -692,7 +692,7 @@ impl Ctx<'_> {
         }
     }
     fn sign_coord(&self, st: *mut BaseStation) {
-        let owner = (self.world().owner)(st);
+        let owner = crate::station_record::service_of(st.cast());
         // SAFETY: Live owner; immediate reads.
         if unsafe { crate::station::rect_is_empty(owner) } {
             return;
@@ -721,7 +721,7 @@ impl Ctx<'_> {
         }
     }
     fn delete_if_empty(&self, st: *mut BaseStation) {
-        let owner = (self.world().owner)(st);
+        let owner = crate::station_record::service_of(st.cast());
         if !(self.world().in_use)(st) {
             // SAFETY: canonical owner, serialized scalar write ends before UI reentry.
             unsafe { (&raw mut (*owner).record.delete_ctr).write(0) };
@@ -731,7 +731,7 @@ impl Ctx<'_> {
     }
     fn tiles_changed(&self, st: *mut BaseStation, adding: bool, kind: u8) {
         (self.s.virtual_coord)(st);
-        (self.command.infrastructure_dirty)((self.world().station_owner)(st));
+        (self.command.infrastructure_dirty)(crate::station_record::owner_company(st.cast()));
         if adding {
             self.recompute_catchment(st, false);
             (self.s.catchment_dirty)();
@@ -798,7 +798,7 @@ impl Ctx<'_> {
                 let id = (self.shared.station_index)(tile);
                 let candidate = get(id);
                 if candidate.is_null()
-                    || (self.world().station_owner)(candidate) != current
+                    || crate::station_record::owner_company(candidate.cast()) != current
                     || !filter(candidate)
                 {
                     continue;
@@ -833,7 +833,9 @@ unsafe extern "C" fn deleted_visit(context: *mut std::ffi::c_void, st: *mut Base
     // SAFETY: radius invokes this visitor synchronously with this stack context.
     let search = unsafe { &mut *context.cast::<DeletedSearch<'_>>() };
     let c = search.c;
-    if (c.world().in_use)(st) || (c.world().station_owner)(st) != (c.shared.current_company)() {
+    if (c.world().in_use)(st)
+        || crate::station_record::owner_company(st.cast()) != (c.shared.current_company)()
+    {
         return;
     }
     let xy = (c.s.location)(st);
@@ -875,7 +877,7 @@ impl Ctx<'_> {
             }
         }
         if !st.is_null() {
-            if (self.world().station_owner)(st) != (self.shared.current_company)() {
+            if crate::station_record::owner_company(st.cast()) != (self.shared.current_company)() {
                 out.error(0xffff);
                 return st;
             }
@@ -931,7 +933,7 @@ impl Ctx<'_> {
         }
         unsafe {
             self.command
-                .ownership(out.0, (self.world().station_owner)(st), 0);
+                .ownership(out.0, crate::station_record::owner_company(st.cast()), 0);
         }
         if !out.ok() {
             return;
@@ -968,7 +970,7 @@ impl Ctx<'_> {
             out.error(0xffff);
             return 0xffff;
         }
-        let owner = (self.world().station_owner)(st);
+        let owner = crate::station_record::owner_company(st.cast());
         if owner != 0x10 {
             unsafe {
                 self.command.ownership(out.0, owner, 0);
@@ -1113,7 +1115,7 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
     if st.is_null() {
         return out.error(0xffff);
     }
-    let owner = (c.world().station_owner)(st);
+    let owner = crate::station_record::owner_company(st.cast());
     if (c.world().facilities)(st) & 8 == 0 || owner == 0x10 {
         return out.error(0xffff);
     }
@@ -1568,7 +1570,7 @@ impl Ctx<'_> {
         if !spec.is_null() {
             (self.s.rail_triggers)(st, spec);
         }
-        let owner = (self.world().station_owner)(st);
+        let owner = crate::station_record::owner_company(st.cast());
         let id = (self.links().graphs.station_id)(st);
         for i in 0..tracks {
             let track_tile = tile.wrapping_add(u32::from(i).wrapping_mul(track_delta));
@@ -1807,8 +1809,11 @@ impl Ctx<'_> {
             }
             if (self.shared.current_company)() != 0x11 {
                 unsafe {
-                    self.command
-                        .ownership(ret.0, (self.world().station_owner)(st), 0);
+                    self.command.ownership(
+                        ret.0,
+                        crate::station_record::owner_company(st.cast()),
+                        0,
+                    );
                 }
                 error.add(ret);
                 if !error.ok() {
@@ -1937,7 +1942,7 @@ impl Ctx<'_> {
         if (self.shared.current_company)() != 0x11 {
             unsafe {
                 self.command
-                    .ownership(cost.0, (self.world().station_owner)(st), 0);
+                    .ownership(cost.0, crate::station_record::owner_company(st.cast()), 0);
             }
             if !cost.ok() {
                 return;
@@ -2491,7 +2496,7 @@ impl Ctx<'_> {
                 &*self.s.lifecycle
             });
             self.before_add_tile(ret, st, tile, 1);
-            let owner = (self.world().station_owner)(st);
+            let owner = crate::station_record::owner_company(st.cast());
             let id = (self.links().graphs.station_id)(st);
             if drive {
                 if (self.shared.is_normal_road_tile)(tile) {
@@ -2601,7 +2606,7 @@ impl Ctx<'_> {
         if (self.shared.current_company)() != 0x11 {
             unsafe {
                 self.command
-                    .ownership(cost.0, (self.world().station_owner)(st), 0);
+                    .ownership(cost.0, crate::station_record::owner_company(st.cast()), 0);
             }
             if !cost.ok() {
                 return;
@@ -2672,7 +2677,7 @@ impl Ctx<'_> {
                     -2,
                 );
             }
-            let owner = (self.world().station_owner)(st);
+            let owner = crate::station_record::owner_company(st.cast());
             (self.s.station_infrastructure)(owner, u32::MAX);
             (self.command.infrastructure_dirty)(owner);
             let specindex = (self.s.custom_road_index)(tile);
@@ -3155,7 +3160,7 @@ impl Ctx<'_> {
         crate::station_lifecycle::add_facility(st, 3, tile, unsafe { &*self.s.lifecycle });
         (self.s.set_airport_details)(st, airport, layout, rotation);
         self.before_add_rect(ret, st, area, 1);
-        let owner = (self.world().station_owner)(st);
+        let owner = crate::station_record::owner_company(st.cast());
         let id = (self.links().graphs.station_id)(st);
         for t in self.airport_tiles(spec, layout, tile) {
             (self.s.make_airport)(t.tile, owner, id, t.gfx, 3);
@@ -3189,7 +3194,7 @@ impl Ctx<'_> {
         if (self.shared.current_company)() != 0x11 {
             unsafe {
                 self.command
-                    .ownership(cost.0, (self.world().station_owner)(st), 0);
+                    .ownership(cost.0, crate::station_record::owner_company(st.cast()), 0);
             }
             if !cost.ok() {
                 return;
@@ -3261,7 +3266,10 @@ impl Ctx<'_> {
             (self.s.reset_facilities)(st, 8);
             (self.s.orders_dirty)();
             (self.s.station_view_invalidate)(st, -1);
-            (self.s.airport_infrastructure)((self.world().station_owner)(st), u32::MAX);
+            (self.s.airport_infrastructure)(
+                crate::station_record::owner_company(st.cast()),
+                u32::MAX,
+            );
             self.tiles_changed(st, false, 1);
             (self.s.close_airport_inspect)(st);
         }
@@ -3556,7 +3564,7 @@ impl Ctx<'_> {
             self.area_add((self.s.ship_station_area)(st), flat);
             crate::station_lifecycle::add_facility(st, 4, tile, unsafe { &*self.s.lifecycle });
             self.before_add_rect(ret, st, area, 1);
-            let owner = (self.world().station_owner)(st);
+            let owner = crate::station_record::owner_company(st.cast());
             if water == 1
                 && !((self.shared.has_water_class)(flat)
                     && (unsafe { &*self.s.clear }.water_class)(flat).0 == 1
@@ -3595,7 +3603,7 @@ impl Ctx<'_> {
     fn remove_dock(&self, cost: Cost<'_>, ret: Cost<'_>, tile: u32, flags: u16) {
         crate::witness::hit(crate::witness::STATION_CMD_REMOVE_DOCK);
         let st = self.full_station((self.shared.station_index)(tile));
-        let owner = (self.world().station_owner)(st);
+        let owner = crate::station_record::owner_company(st.cast());
         unsafe {
             self.command.ownership(cost.0, owner, 0);
         }

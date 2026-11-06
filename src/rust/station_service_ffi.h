@@ -85,11 +85,9 @@ struct OpenTTDLoadingStation {
 struct OpenTTDStationServices {
 	const OpenTTDLiveGraphServices *graphs;
 	OpenTTDLoadingStation (*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
-	uint8_t (*station_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	OpenTTDStationExclusivity (*station_exclusivity)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_exclusivity);
 	OpenTTDRatingCounts (*rating_counts)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_counts);
 	OpenTTDBaseStation * (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
-	OpenTTDStationRecord * (*owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	size_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
 	OpenTTDEnvironmentServices environment;
 	uint8_t (*facilities)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(facilities);

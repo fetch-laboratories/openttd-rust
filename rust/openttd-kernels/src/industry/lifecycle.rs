@@ -164,11 +164,13 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         (&*(w.subsidies)()).delete_with(crate::subsidy::Source::industry(id));
         (w.invalidate_cargo)(id);
     }
-    let c = crate::station::Ctx::from_shared(s.shared());
     // SAFETY: Live industry owner; the visits mutate only station delivery lists.
     unsafe {
         crate::station::for_each_station(super::stations_near(owner), |near| {
-            crate::station::remove_industry_to_deliver((c.c.owner)(near.station), industry.cast());
+            crate::station::remove_industry_to_deliver(
+                crate::station_record::service_of(near.station.cast()),
+                industry.cast(),
+            );
         });
     }
 }
