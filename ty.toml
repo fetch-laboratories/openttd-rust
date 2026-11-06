@@ -21,6 +21,8 @@ include = [
     "tools/rebound-callees.py",
     "tools/test-rebound-callees.py",
     "tools/ci.py",
+    "tools/retrospective.py",
+    "tools/test-retrospective.py",
     "tools/validation_execution.py",
     "tools/simulation/clocks.py",
     "tools/simulation/objectives.py",
