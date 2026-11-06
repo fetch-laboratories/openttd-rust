@@ -53,7 +53,6 @@ static uint32_t Ship_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ
 
 static uint32_t Ship_offset(uint32_t direction) noexcept { return static_cast<uint32_t>(TileOffsByDiagDir(static_cast<DiagDirection>(direction))); }
 
-static uint32_t Ship_diag_between(uint32_t from, uint32_t to) noexcept { return DiagdirBetweenTiles(TileIndex(from), TileIndex(to)); }
 
 static bool Ship_dock(uint32_t tile) noexcept { return IsDockTile(TileIndex(tile)); }
 
@@ -275,7 +274,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.lock_middle = GetRustSharedServices().water_middle_lock, .lock_dir = Ship_lock_dir,
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
 		.offset = Ship_offset,
-		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
+		.dist_square = OpenTTDDistanceSquare,
 		.dist_manhattan = OpenTTDDistanceManhattan, .docking = GetRustSharedServices().docking_tile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,

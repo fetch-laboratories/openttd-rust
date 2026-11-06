@@ -172,7 +172,6 @@ pub struct Leaves {
     pub tile_min_z: extern "C" fn(u32) -> u32,
     pub tile_max_z: extern "C" fn(u32) -> u32,
     pub offset: extern "C" fn(u32) -> u32,
-    pub diag_between: extern "C" fn(u32, u32) -> u32,
     pub dist_square: extern "C" fn(u32, u32) -> u32,
     pub dist_manhattan: extern "C" fn(u32, u32) -> u32,
     pub docking: extern "C" fn(u32) -> bool,
@@ -778,7 +777,11 @@ impl Game<'_> {
                         self.reverse(id, v, INVALID);
                         return;
                     }
-                    let diag = (self.leaves.diag_between)(old_tile, new_tile);
+                    let diag = u32::from(
+                        self.services
+                            .map()
+                            .diagdir_between_tiles(old_tile, new_tile),
+                    );
                     let tracks = crate::movement::water_tracks(self.services, new_tile, 255)
                         & (self.leaves.tracks_reach)(diag);
                     if tracks == 0 {
@@ -1167,7 +1170,6 @@ crate::abi::layouts! {
         tile_min_z,
         tile_max_z,
         offset,
-        diag_between,
         dist_square,
         dist_manhattan,
         docking,

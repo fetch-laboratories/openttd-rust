@@ -260,7 +260,6 @@ pub struct Leaves {
     pub crash_sound: extern "C" fn(Handle),
     pub crossing_barred: extern "C" fn(Handle, u32) -> u64,
     pub crossing_rail_axis: extern "C" fn(Handle, u32) -> u64,
-    pub crossing_road_axis: extern "C" fn(Handle, u32) -> u64,
     pub crossing_sound: extern "C" fn(Handle, u32),
     pub curve_advantage: extern "C" fn(Handle) -> u64,
     pub curve_mod_default: extern "C" fn(Handle) -> i16,
@@ -272,7 +271,6 @@ pub struct Leaves {
     pub depot_track: extern "C" fn(Handle, u32) -> u64,
     pub depot_window: extern "C" fn(Handle, u32),
     pub diag_axis: extern "C" fn(Handle, u8) -> u64,
-    pub diag_between: extern "C" fn(Handle, u32, u32) -> u64,
     pub diag_reaches_tracks: extern "C" fn(Handle, u8) -> u64,
     pub diag_trackdir: extern "C" fn(Handle, u8) -> u64,
     pub dirty_tile: extern "C" fn(Handle, u32),
@@ -280,11 +278,9 @@ pub struct Leaves {
     pub disconnect: extern "C" fn(Handle),
     pub engine_power: extern "C" fn(Handle) -> u64,
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
-    pub first_track: extern "C" fn(Handle, u8) -> u64,
     pub grf_version: extern "C" fn(Handle) -> u64,
     pub has_depot_res: extern "C" fn(Handle, u32) -> u64,
     pub has_signal: extern "C" fn(Handle, u32, u8) -> u64,
-    pub has_signals: extern "C" fn(Handle, u32) -> u64,
     pub has_signal_td: extern "C" fn(Handle, u32, u8) -> u64,
     pub hide_fill: extern "C" fn(Handle),
     pub is_bridge: extern "C" fn(Handle, u32) -> u64,
@@ -309,7 +305,6 @@ pub struct Leaves {
     pub order_max_speed: extern "C" fn(Handle) -> u64,
     pub other_end: extern "C" fn(Handle, u32) -> u64,
     pub pay_running: extern "C" fn(Handle, i64),
-    pub pbs_signal_type: extern "C" fn(Handle) -> u64,
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
     pub railveh_wagon: extern "C" fn(Handle) -> u64,
     pub rail_tilt: extern "C" fn(Handle) -> u64,
@@ -329,8 +324,6 @@ pub struct Leaves {
     pub show_reservation: extern "C" fn(Handle) -> u64,
     pub signal_context: extern "C" fn() -> crate::signal::Context,
     pub signal_has_pbs: extern "C" fn(Handle, u32, u8) -> u64,
-    pub signal_pbs: extern "C" fn(Handle, u8) -> u64,
-    pub signal_type: extern "C" fn(Handle, u32, u8) -> u64,
     pub sigseg_full: extern "C" fn(Handle) -> u64,
     pub sigseg_pbs: extern "C" fn(Handle) -> u64,
     pub speed_default: extern "C" fn(Handle) -> u64,
@@ -877,7 +870,7 @@ impl Game<'_> {
             return (self.leaves.diag_trackdir)(id, (self.leaves.dir_diag)(id, v_direction) as u8)
                 as u8;
         }
-        (self.leaves.track_direction)(id, (self.leaves.first_track)(id, track) as u8, v_direction)
+        (self.leaves.track_direction)(id, crate::track_func::find_first_track(track), v_direction)
             as u8
     }
     fn running_cost(&self, id: Handle) -> i64 {
@@ -967,7 +960,7 @@ impl Game<'_> {
         let tile = base.wrapping_add((self.leaves.tile_offset_diag)(id, dir) as u32);
         if (self.leaves.is_crossing)(Handle::NONE, tile) == 0
             || (self.leaves.diag_axis)(id, dir)
-                == (self.leaves.crossing_road_axis)(Handle::NONE, tile)
+                == u64::from(crate::map_func::World::new(self.services).crossing_road_axis(tile))
             || !self.compatible(id, tile)
         {
             return INVALID_TILE;
@@ -1024,14 +1017,15 @@ impl Game<'_> {
             return;
         }
         let mut state = force;
-        let axis = (self.leaves.crossing_road_axis)(Handle::NONE, tile);
+        let axis = u64::from(crate::map_func::World::new(self.services).crossing_road_axis(tile));
         let dir = (self.leaves.axis_diag)(Handle::NONE, axis as u8) as u8;
         for d in [dir, dir ^ 2] {
             let mut t = tile;
             while !state
                 && u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                && u64::from(crate::map_func::World::new(self.services).crossing_road_axis(t))
+                    == axis
             {
                 state |= self.check_crossing(t);
                 t = self.tile_diag(t, d);
@@ -1042,7 +1036,8 @@ impl Game<'_> {
             let mut t = self.tile_diag(tile, d);
             while u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                && u64::from(crate::map_func::World::new(self.services).crossing_road_axis(t))
+                    == axis
             {
                 self.update_crossing_tile(t, sound, state);
                 t = self.tile_diag(t, d);
@@ -1055,7 +1050,8 @@ impl Game<'_> {
             let t = self.tile_diag(tile, d);
             if u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                && u64::from(crate::map_func::World::new(self.services).crossing_road_axis(t))
+                    == axis
             {
                 (self.leaves.dirty_tile)(Handle::NONE, t);
             }
@@ -1069,7 +1065,8 @@ impl Game<'_> {
             let mut t = tile.wrapping_add(diff);
             while u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                 && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                && u64::from(crate::map_func::World::new(self.services).crossing_road_axis(t))
+                    == axis
             {
                 occupied |= self.check_crossing(t);
                 t = t.wrapping_add(diff);
@@ -1078,7 +1075,8 @@ impl Game<'_> {
                 t = tile.wrapping_add(diff);
                 if u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                     && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                    && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                    && u64::from(crate::map_func::World::new(self.services).crossing_road_axis(t))
+                        == axis
                 {
                     (self.leaves.dirty_tile)(Handle::NONE, t);
                 }
@@ -1086,7 +1084,8 @@ impl Game<'_> {
                 t = tile.wrapping_add(diff);
                 while u64::from(t) < (self.leaves.map_size)(Handle::NONE)
                     && (self.leaves.is_crossing)(Handle::NONE, t) != 0
-                    && (self.leaves.crossing_road_axis)(Handle::NONE, t) == axis
+                    && u64::from(crate::map_func::World::new(self.services).crossing_road_axis(t))
+                        == axis
                 {
                     if (self.leaves.crossing_barred)(Handle::NONE, t) != 0 {
                         (self.leaves.write_crossing_bar)(Handle::NONE, t, 0);
@@ -1382,10 +1381,10 @@ impl Game<'_> {
             let td = self.trackdir(id);
             let mut okay = !(is_tile_type(self.services, tile, MP_RAILWAY)
                 && (self.leaves.has_signal_td)(id, tile, td) != 0
-                && (self.leaves.signal_pbs)(
-                    id,
-                    (self.leaves.signal_type)(id, tile, id.track().trailing_zeros() as u8) as u8,
-                ) == 0);
+                && !crate::rail_map::is_pbs_signal(
+                    crate::map_func::World::new(self.services)
+                        .signal_type(tile, id.track().trailing_zeros() as u8),
+                ));
             if (self.leaves.is_depot)(Handle::NONE, tile) != 0
                 && (self.leaves.trackdir_exit)(id, td)
                     == (self.leaves.depot_dir)(Handle::NONE, tile)
@@ -1535,7 +1534,7 @@ impl Game<'_> {
     }
     fn moved_signals(&self, id: Handle, tile: u32, dir: u8) -> bool {
         if is_tile_type(self.services, tile, MP_RAILWAY)
-            && (self.leaves.has_signals)(Handle::NONE, tile) != 0
+            && crate::map_func::World::new(self.services).has_signals(tile)
         {
             let tracks = (self.leaves.track_bits)(Handle::NONE, tile) as u16;
             let tds = (tracks | tracks << 8) & (self.leaves.trackdir_reaches)(id, dir) as u16;
@@ -1549,9 +1548,9 @@ impl Game<'_> {
             )) == (self.leaves.sigseg_pbs)(id)
                 && (self.leaves.has_signal_td)(id, tile, td) != 0
             {
-                if (self.leaves.signal_pbs)(id, (self.leaves.signal_type)(id, tile, td & 7) as u8)
-                    == 0
-                {
+                if !crate::rail_map::is_pbs_signal(
+                    crate::map_func::World::new(self.services).signal_type(tile, td & 7),
+                ) {
                     return true;
                 }
             }
@@ -1605,7 +1604,7 @@ impl Game<'_> {
                     }
                 }
             } else {
-                entered = (self.leaves.diag_between)(id, old, new) as u8;
+                entered = self.services.map().diagdir_between_tiles(old, new);
                 let ts = self.movement_tracks(new, entered ^ 2) as u32;
                 let reaches = (self.leaves.trackdir_reaches)(id, entered) as u16;
                 let tds = ts as u16 & reaches;
@@ -1631,13 +1630,14 @@ impl Game<'_> {
                     chosen = 1_u8 << (self.leaves.choose_track)(id, new, entered, bits);
                     if id.get_force_proceed() != 0
                         && (self.leaves.is_plain_rail)(Handle::NONE, new) != 0
-                        && (self.leaves.has_signals)(Handle::NONE, new) != 0
+                        && crate::map_func::World::new(self.services).has_signals(new)
                     {
                         let td = tds.trailing_zeros() as u8;
                         if (self.leaves.has_signal_td)(id, new, td) != 0
                             || ((self.leaves.has_signal_td)(id, new, td ^ 8) != 0
-                                && (self.leaves.signal_type)(id, new, td & 7)
-                                    != (self.leaves.pbs_signal_type)(id))
+                                && crate::map_func::World::new(self.services)
+                                    .signal_type(new, td & 7)
+                                    != crate::signal_type::SIGTYPE_PBS)
                         {
                             crate::witness::hit(crate::witness::TRAIN_FORCE_SIGNAL);
                             id.set_force_proceed(u64::from(id.get_force_proceed() == 2));
@@ -1721,7 +1721,8 @@ impl Game<'_> {
                             prev.track()
                         };
                     } else {
-                        let exit = (self.leaves.diag_between)(id, new, before) as usize;
+                        let exit =
+                            usize::from(self.services.map().diagdir_between_tiles(new, before));
                         let connecting =
                             [[1, 8, 0, 16], [4, 2, 16, 0], [0, 32, 1, 4], [32, 0, 8, 2]];
                         chosen = connecting[usize::from(entered)][exit];
@@ -2541,7 +2542,7 @@ impl Game<'_> {
         let tile = self.tile_diag(v_tile, dir);
         if tile == INVALID_TILE
             || !is_tile_type(self.services, tile, MP_RAILWAY)
-            || (self.leaves.has_signals)(Handle::NONE, tile) == 0
+            || !crate::map_func::World::new(self.services).has_signals(tile)
         {
             return 1;
         }
@@ -2951,7 +2952,6 @@ crate::abi::layouts! {
         crash_sound,
         crossing_barred,
         crossing_rail_axis,
-        crossing_road_axis,
         crossing_sound,
         curve_advantage,
         curve_mod_default,
@@ -2963,7 +2963,6 @@ crate::abi::layouts! {
         depot_track,
         depot_window,
         diag_axis,
-        diag_between,
         diag_reaches_tracks,
         diag_trackdir,
         dirty_tile,
@@ -2971,11 +2970,9 @@ crate::abi::layouts! {
         disconnect,
         engine_power,
         find_depot,
-        first_track,
         grf_version,
         has_depot_res,
         has_signal,
-        has_signals,
         has_signal_td,
         hide_fill,
         is_bridge,
@@ -3000,7 +2997,6 @@ crate::abi::layouts! {
         order_max_speed,
         other_end,
         pay_running,
-        pbs_signal_type,
         pow_wag_power,
         railveh_wagon,
         rail_tilt,
@@ -3020,8 +3016,6 @@ crate::abi::layouts! {
         show_reservation,
         signal_context,
         signal_has_pbs,
-        signal_pbs,
-        signal_type,
         sigseg_full,
         sigseg_pbs,
         speed_default,

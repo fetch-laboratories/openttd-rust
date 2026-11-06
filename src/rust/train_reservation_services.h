@@ -83,16 +83,7 @@ static void TrainReservationIncrementOrder(void *, OpenTTDTrainHandle id) noexce
 	v->IncrementRealOrderIndex();
 }
 
-static uint64_t TrainReservationIsPbs(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	return IsPbsSignal(RustRailSignalType(a, b));
-}
 
-static uint64_t TrainReservationIsWaypoint(void *, OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return IsRailWaypointTile(t);
-}
 static uint64_t TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept
 {
 	return _settings_game.difficulty.line_reverse_mode;

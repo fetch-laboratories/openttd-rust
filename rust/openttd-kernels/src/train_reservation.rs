@@ -94,10 +94,8 @@ pub struct Leaves {
     pub increment_order: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub is_bridge: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_pbs: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub is_plain: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub is_station: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub is_waypoint: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub line_reverse: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub mark_tile: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
     pub oneway: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
@@ -365,7 +363,9 @@ fn free(g: &Game, id: Handle) {
         }
         if is_tile_type(g.shared(), tile, MP_RAILWAY) {
             if ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
-                && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
+                && !crate::rail_map::is_pbs_signal(
+                    crate::map_func::World::new(g.shared()).signal_type(tile, td & 7),
+                )
             {
                 g.unreserve(tile, td);
                 break;
@@ -883,7 +883,7 @@ fn check_next(g: &Game, id: Handle) {
             }
         }
         OT_GOTO_WAYPOINT => {
-            if ((g.leaves.is_waypoint)(g.context, id, v_tile) != 0)
+            if crate::map_func::World::new(g.shared()).rail_waypoint_tile(v_tile)
                 && (g.leaves.station)(g.context, id, v_tile) == u64::from(v_destination)
             {
                 (g.leaves.process_orders)(id);
@@ -901,7 +901,9 @@ fn check_next(g: &Game, id: Handle) {
     let td = g.td(id);
     if (is_tile_type(g.shared(), tile, MP_RAILWAY))
         && ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
-        && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
+        && !crate::rail_map::is_pbs_signal(
+            crate::map_func::World::new(g.shared()).signal_type(tile, td & 7),
+        )
         && ((g.leaves.green)(g.context, id, tile, td) == 0)
     {
         return;
@@ -1125,10 +1127,8 @@ crate::abi::layouts! {
         increment_order,
         is_bridge,
         is_depot,
-        is_pbs,
         is_plain,
         is_station,
-        is_waypoint,
         line_reverse,
         mark_tile,
         oneway,
@@ -1240,10 +1240,8 @@ pub(crate) mod tests {
             increment_order: unused(),
             is_bridge: unused(),
             is_depot: unused(),
-            is_pbs: unused(),
             is_plain: unused(),
             is_station: unused(),
-            is_waypoint: unused(),
             line_reverse: unused(),
             mark_tile: unused(),
             oneway: unused(),

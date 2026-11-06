@@ -17,7 +17,6 @@ TEST_CASE("PBS depot early return does not read or write train_on_res")
 	map.Tile(23, MP_RAILWAY, 3 << 6);
 	map.record.tile = 23;
 	map.record.direction = 1;
-	map.train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
 	map.train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
 	map.pbs.depot_bits = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
 	(map.state.get())->track = TRACK_BIT_X;

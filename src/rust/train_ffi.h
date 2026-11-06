@@ -56,7 +56,6 @@ struct OpenTTDTrainServices {
 	void (*crash_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(crash_sound);
 	uint64_t (*crossing_barred)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_barred);
 	uint64_t (*crossing_rail_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_rail_axis);
-	uint64_t (*crossing_road_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_axis);
 	void (*crossing_sound)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_sound);
 	uint64_t (*curve_advantage)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(curve_advantage);
 	int16_t (*curve_mod_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(curve_mod_default);
@@ -68,7 +67,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*depot_track)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_track);
 	void (*depot_window)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_window);
 	uint64_t (*diag_axis)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(diag_axis);
-	uint64_t (*diag_between)(OpenTTDTrainHandle, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(diag_between);
 	uint64_t (*diag_reaches_tracks)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(diag_reaches_tracks);
 	uint64_t (*diag_trackdir)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(diag_trackdir);
 	void (*dirty_tile)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dirty_tile);
@@ -76,11 +74,9 @@ struct OpenTTDTrainServices {
 	void (*disconnect)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(disconnect);
 	uint64_t (*engine_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(engine_power);
 	OpenTTDTrainDepot (*find_depot)(OpenTTDTrainHandle, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_depot);
-	uint64_t (*first_track)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(first_track);
 	uint64_t (*grf_version)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
 	uint64_t (*has_depot_res)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_depot_res);
 	uint64_t (*has_signal)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal);
-	uint64_t (*has_signals)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
 	uint64_t (*has_signal_td)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal_td);
 	void (*hide_fill)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(hide_fill);
 	uint64_t (*is_bridge)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
@@ -105,7 +101,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*order_max_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(order_max_speed);
 	uint64_t (*other_end)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_end);
 	void (*pay_running)(OpenTTDTrainHandle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
-	uint64_t (*pbs_signal_type)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pbs_signal_type);
 	uint64_t (*pow_wag_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pow_wag_power);
 	uint64_t (*railveh_wagon)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(railveh_wagon);
 	uint64_t (*rail_tilt)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(rail_tilt);
@@ -125,8 +120,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*show_reservation)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(show_reservation);
 	OpenTTDSignalContext (*signal_context)() noexcept OPENTTD_SERVICE_DEFAULT(signal_context);
 	uint64_t (*signal_has_pbs)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_has_pbs);
-	uint64_t (*signal_pbs)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_pbs);
-	uint64_t (*signal_type)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
 	uint64_t (*sigseg_full)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(sigseg_full);
 	uint64_t (*sigseg_pbs)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(sigseg_pbs);
 	uint64_t (*speed_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(speed_default);

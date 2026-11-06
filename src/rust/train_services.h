@@ -173,10 +173,6 @@ static uint64_t TrainDiagAxis(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return DiagDirToAxis(static_cast<DiagDirection>(a));
 }
-static uint64_t TrainDiagBetween(OpenTTDTrainHandle, uint32_t a, uint32_t b) noexcept
-{
-	return DiagdirBetweenTiles(TileIndex(a), TileIndex(b));
-}
 static uint64_t TrainDiagReachesTracks(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return DiagdirReachesTracks(static_cast<DiagDirection>(a));
@@ -202,10 +198,6 @@ static OpenTTDTrainDepot TrainFindDepot(OpenTTDTrainHandle id, int32_t a) noexce
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	auto result = FindClosestTrainDepot(v, static_cast<int>(a)); return {result.tile.base(), result.best_length};
-}
-static uint64_t TrainFirstTrack(OpenTTDTrainHandle, uint8_t a) noexcept
-{
-	return FindFirstTrack(static_cast<TrackBits>(a));
 }
 static uint64_t TrainGrfVersion(OpenTTDTrainHandle id) noexcept
 {
@@ -286,10 +278,6 @@ static void TrainPayRunning(OpenTTDTrainHandle id, int64_t a) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	CommandCost cost(EXPENSES_TRAIN_RUN, Money(static_cast<int64_t>(a))); v->profit_this_year -= cost.GetCost(); SubtractMoneyFromCompanyFract(v->GetOwner(), cost);
 }
-static uint64_t TrainPbsSignalType(OpenTTDTrainHandle) noexcept
-{
-	return SIGTYPE_PBS;
-}
 static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
@@ -348,10 +336,6 @@ static uint64_t TrainServint(OpenTTDTrainHandle id) noexcept
 }
 
 
-static uint64_t TrainSignalPbs(OpenTTDTrainHandle, uint8_t a) noexcept
-{
-	return IsPbsSignal(static_cast<SignalType>(a));
-}
 static uint64_t TrainSigsegFull(OpenTTDTrainHandle) noexcept
 {
 	return SIGSEG_FULL;
