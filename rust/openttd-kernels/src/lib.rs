@@ -89,6 +89,8 @@ mod newgrf_properties;
 mod newgrf_sound;
 mod newgrf_specs;
 mod newgrf_spritegroup;
+/// Shared pool allocation policy and canonical native views.
+pub mod pool;
 mod settings_type;
 
 mod newgrf_station;
