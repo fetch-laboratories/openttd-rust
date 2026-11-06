@@ -24,8 +24,8 @@ TEST_CASE("Link graph schedule - ABI and staging unwind")
 	for (bool recursive_null : {false, true}) {
 		try {
 			ScheduleStaging staging(true);
-			staging.schedule = {reinterpret_cast<LinkGraph *>(uintptr_t{1})};
-			staging.running = {reinterpret_cast<LinkGraphJob *>(uintptr_t{2})};
+			staging.schedule = {reinterpret_cast<OpenTTDLiveGraph *>(uintptr_t{1})};
+			staging.running = {reinterpret_cast<OpenTTDLinkGraphJobRecord *>(uintptr_t{2})};
 			if (recursive_null) {
 				// A real SLA_LOAD SlError invokes SlNullPointers -> LGRS::FixPointers
 				// before LoadWithFilter catches it; the outer staging is still alive.
@@ -37,7 +37,7 @@ TEST_CASE("Link graph schedule - ABI and staging unwind")
 		} catch (const std::exception &) {}
 		OpenTTDScheduleQueues q; openttd_rust_schedule_export(&q);
 		REQUIRE((q.schedule_len == (recursive_null ? 0 : 1) && q.running_len == q.schedule_len));
-		if (!recursive_null) CHECK((q.schedule[0] == reinterpret_cast<LinkGraph *>(uintptr_t{1}) && q.running[0] == reinterpret_cast<LinkGraphJob *>(uintptr_t{2})));
+		if (!recursive_null) CHECK((q.schedule[0] == reinterpret_cast<OpenTTDLiveGraph *>(uintptr_t{1}) && q.running[0] == reinterpret_cast<OpenTTDLinkGraphJobRecord *>(uintptr_t{2})));
 		CHECK(ScheduleStaging::active == nullptr);
 	}
 	OpenTTDScheduleQueues empty{}; openttd_rust_schedule_import(&empty);

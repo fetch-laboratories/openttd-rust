@@ -10,6 +10,47 @@
 use crate::map_func::{MapStatics, TileTypeAccess};
 use crate::tile_map::{get_tile_z, get_tropic_zone};
 
+/// Observe the production edge timestamp calculation in the original graph trace.
+/// # Safety
+/// `edge` is a live canonical edge, read under serialized fixture execution.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_linkgraph_last_update(
+    edge: *const crate::linkgraph::live::Edge,
+) -> i32 {
+    unsafe { &*edge }.last_update()
+}
+
+/// Exercise the production edge update with the original native trace inputs.
+/// # Safety
+/// `edge` is a live canonical edge borrowed exclusively for this fixture call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_linkgraph_edge_update(
+    edge: *mut crate::linkgraph::live::Edge,
+    capacity: u32,
+    usage: u32,
+    time: u32,
+    modes: crate::linkgraph_type::EdgeUpdateModes,
+) {
+    let date = crate::timer_game_common::economy_date().0;
+    unsafe { &mut *edge }.update(capacity, usage, time, modes, date);
+}
+/// # Safety
+/// `edge` is a live canonical edge borrowed exclusively for this fixture call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_linkgraph_edge_restrict(
+    edge: *mut crate::linkgraph::live::Edge,
+) {
+    unsafe { &mut *edge }.restrict();
+}
+/// # Safety
+/// `edge` is a live canonical edge borrowed exclusively for this fixture call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_linkgraph_edge_release(
+    edge: *mut crate::linkgraph::live::Edge,
+) {
+    unsafe { &mut *edge }.release();
+}
+
 /// Compare production industry removal arithmetic with native `Money` operators.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {

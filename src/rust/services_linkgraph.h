@@ -15,19 +15,12 @@
 #include "../linkgraph/linkgraphjob.h"
 #include "station_service_ffi.h"
 
-inline OpenTTDLiveGraph *LiveGraphOwner(OpenTTDLinkGraph *graph) noexcept { return graph->RustState(); }
-inline uint16_t RustLinkGraphJobGraphIndex(const LinkGraphJob *j) noexcept { return j->LinkGraphIndex().base(); }
-inline bool RustLinkGraphValid(uint16_t id) noexcept { return LinkGraph::IsValidID(LinkGraphID(id)); }
-inline LinkGraph *RustLinkGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id)); }
+inline uint16_t RustLinkGraphIndex(const OpenTTDLiveGraph *record) noexcept { return record->shell->index.base(); }
+inline OpenTTDLiveGraph *RustLinkGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id))->RustState(); }
 inline uint16_t RustStationLinkGraphIndex(OpenTTDBaseStation *st, uint8_t cargo) noexcept { return Station::From(st)->goods[cargo].link_graph.base(); }
 inline bool RustLinkGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }
-inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
+inline OpenTTDLiveGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 {
-	return new LinkGraph(cargo);
-}
-inline LinkGraph *RustLinkGraphNext(uint32_t *from) noexcept
-{
-	for (LinkGraph *g : LinkGraph::Iterate(*from)) { *from = g->index.base() + 1U; return g; }
-	return nullptr;
+	return (new LinkGraph(cargo))->RustState();
 }
 #endif /* RUST_SERVICES_LINKGRAPH_H */

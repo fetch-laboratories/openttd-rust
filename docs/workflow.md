@@ -14,7 +14,7 @@ Readers: Every agent changing the repository.
 - These are contents, not line counts: omit what belongs elsewhere, but retain needed facts, limits and steps (user, 2026-10-26).
 - Keep the roadmap forward-looking without a line cap. Update it in place: a completed item becomes one row with issue, PR, commit and metrics; evidence stays in the PR. Replace the resume checkpoint with a short status table, not a log. Put CI run IDs, executable hashes, probe values and per-PR plans in the PR or issue. Do not delete or fold another section to make room; each `/steer` run prunes the roadmap.
 - Evidence is exact-head CI runs and commands recorded in the PR. Do not put receipt bundles, executable hashes or `.local/` paths in comments or docs. Track tooling a rule depends on, such as the speed-pass collector, in `tools/`; do not copy scripts between `.local/` runs.
-- Edit one status comment per task on its PR, or issue before the PR, at start, milestones and stop. Other PR comments are review reports and root's integration note. A tracker issue body is its current list, edited as items open or close; a task with a PR does not also post status on the tracker.
+- Edit one status comment per task on its PR, or issue before the PR, at start, milestones and stop. A milestone is a pushed checkpoint whose checks pass, a blocking failure or a handoff, not each push or job start. Other PR comments are review reports and root's integration note. A tracker issue body is its current list, edited as items open or close; a task with a PR does not also post status on the tracker.
 - Docs use structured text: headings, tables and bullets; bullets may be clauses. Prose in issues, comments and commit messages uses full sentences. Use a space after every colon and between a word and a number, and "X of Y" (user, 2026-10-30).
 - Put rules every agent needs in [AGENTS.md](../AGENTS.md). Put other rules in the doc named by its routing table. Keep each full rule in one place. A one-line reminder of an important rule may repeat where an agent would otherwise miss it; link to the full rule (user, 2026-10-30).
 
@@ -55,7 +55,14 @@ For substantive changes create a fork issue with a clear owner, then use an isol
 
 ## Integration
 
-- Each ownership port gets one PR targeting `rust-migration` directly.
+- Each ownership port has one open PR at a time, targeting `rust-migration` directly.
+- Integrate an owner's checkpoint once it meets all of the following:
+  - It removes at least 100 compiled C++ lines net. This threshold is provisional; integrations 93 to 96 took 14 to 70 minutes from review pass to merge.
+  - No moved field remains behind a service.
+  - It has no boundary design fault.
+  - It passes review and exact-head Full.
+
+  The owner continues in a fresh PR on the same issue, and the PR claims only what it delivered. A checkpoint that increases compiled C++ does not integrate; take the [cost decision](planning.md#cost-decisions) first.
 - Batch ready small maintenance items in one PR. These include cleanups, coverage, speed, tooling and fidelity fixes. List them on the tracking issue's checklist (#156, #275, #449-#452). Use one reviewer and one Full run. Move an item that fails review or CI to the next batch. A fix needed by a draft or live crash may go alone.
 - Keep at most six unintegrated component branches, including drafts and WIP (#157). Integrate reviewed work before starting a component. Start from integrated `rust-migration` unless the roadmap names a dependency.
 - A shared accessor or service is never such a dependency. The first integrating PR adds it to the shared layer in final typed form; other drafts adopt it when they update from base. Root builds a shared service or shared-path fix needed by multiple drafts once in its own small PR from `rust-migration`. Drafts do not build parallel copies.

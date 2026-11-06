@@ -1021,7 +1021,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
         }
         let node = u32::from((l.graphs.node)(from, cargo)) as u16;
         let mut remove = Vec::new();
-        let owner = unsafe { live::resolve(graph, l.graphs) };
+        let owner = graph;
         let count = unsafe { &*owner }.nodes[usize::from(node)].edges.len();
         for index in 0..count {
             let (destination, last_update) = {
