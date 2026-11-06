@@ -279,7 +279,7 @@ static void LoadingBuild(uint16_t local = 300)
 		LoadingRequire(std::get<0>(tested).Succeeded() && TypeSameRng(before, after), "build-test");
 		auto [cost, id, capacity, mail_capacity, cargoes] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, tile, engine->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
 		LoadingRequire(cost.Succeeded() && cost.GetCost() == std::get<0>(tested).GetCost() && capacity == std::get<2>(tested) && mail_capacity == std::get<3>(tested) && FIXTURE_GET(Vehicle::Get(id), EngineType, engine_type) == engine->index, "build-execute");
-		LoadingRequire(type == VEH_TRAIN && engine->VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON ? true : Vehicle::Get(id)->max_age == engine->GetLifeLengthInDays(), "runtime-built-life");
+		LoadingRequire(type == VEH_TRAIN && engine->VehInfo<RailVehicleInfo>().railveh_type == RAILVEH_WAGON ? true : FIXTURE_GET(Vehicle::Get(id), MaxAge, max_age) == engine->GetLifeLengthInDays(), "runtime-built-life");
 		fmt::print(stderr, "ENGINE loading-build {} {} {} {} {} {}\n", type, id, engine->index, cost.GetCost(), capacity, mail_capacity);
 		const CargoType mail = GetCargoTypeByLabel(CT_MAIL), passengers = GetCargoTypeByLabel(CT_PASSENGERS);
 		SaveRandomSeeds(&before);
