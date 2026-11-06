@@ -52,25 +52,6 @@ struct OpenTTDVehicleMaintenanceAutomatic {
 	bool has_depot_order;
 	OrderType order_type;
 };
-struct OpenTTDVehicleMaintenanceCheckBreakdown {
-	uint16_t reliability;
-	uint16_t decay;
-	bool no_service;
-	uint8_t breakdowns;
-};
-struct OpenTTDVehicleMaintenanceBreakdownGuard {
-	uint16_t speed;
-	uint8_t counter;
-	uint8_t status;
-	uint8_t breakdowns;
-	bool menu;
-};
-struct OpenTTDVehicleMaintenanceBreakdownTrigger {
-	uint16_t reliability;
-	uint8_t chance;
-	VehicleType kind;
-	uint8_t breakdowns;
-};
 struct OpenTTDVehicleMaintenanceWarning {
 	bool enabled;
 	bool has_previous;
@@ -94,9 +75,6 @@ struct OpenTTDVehicleMaintenanceServices {
 	bool (OPENTTD_RUST_CALL *replacement_available)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(replacement_available);
 	OpenTTDVehicleMaintenanceAutomatic (OPENTTD_RUST_CALL *automatic)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(automatic);
 	bool (OPENTTD_RUST_CALL *depot_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_service);
-	OpenTTDVehicleMaintenanceCheckBreakdown (OPENTTD_RUST_CALL *check_breakdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_breakdown);
-	OpenTTDVehicleMaintenanceBreakdownGuard (OPENTTD_RUST_CALL *breakdown_guard)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_guard);
-	OpenTTDVehicleMaintenanceBreakdownTrigger (OPENTTD_RUST_CALL *breakdown_trigger)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_trigger);
 	bool (OPENTTD_RUST_CALL *smoke_disabled)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_disabled);
 	void (OPENTTD_RUST_CALL *mark_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty);
 	void (OPENTTD_RUST_CALL *view_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(view_dirty);

@@ -41,12 +41,14 @@ crate::abi::shared_records! {
         pub max_competitors: *const u8,
         pub never_expire_airports: *const bool,
         pub never_expire_vehicles: *const bool,
+        pub no_servicing_if_no_breakdowns: *const bool,
         pub recalc_interval: *const u16,
         pub se_flat_world_height: *const u8,
         pub secondary_colour: *const u8,
         pub station_noise: *const bool,
         pub tree_placer: *const u8,
         pub used_liveries: *const u64,
+        pub vehicle_breakdowns: *const u8,
     }
 
 }
@@ -75,11 +77,13 @@ impl SettingAddresses {
         max_competitors: std::ptr::null(),
         never_expire_airports: std::ptr::null(),
         never_expire_vehicles: std::ptr::null(),
+        no_servicing_if_no_breakdowns: std::ptr::null(),
         recalc_interval: std::ptr::null(),
         se_flat_world_height: std::ptr::null(),
         secondary_colour: std::ptr::null(),
         station_noise: std::ptr::null(),
         tree_placer: std::ptr::null(),
         used_liveries: std::ptr::null(),
+        vehicle_breakdowns: std::ptr::null(),
     };
 }

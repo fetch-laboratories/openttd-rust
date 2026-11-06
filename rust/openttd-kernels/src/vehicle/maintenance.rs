@@ -63,28 +63,6 @@ pub struct Automatic {
     pub order_type: OrderType,
 }
 #[repr(C)]
-pub struct CheckBreakdown {
-    pub reliability: u16,
-    pub decay: u16,
-    pub no_service: bool,
-    pub breakdowns: u8,
-}
-#[repr(C)]
-pub struct BreakdownGuard {
-    pub speed: u16,
-    pub counter: u8,
-    pub status: u8,
-    pub breakdowns: u8,
-    pub menu: bool,
-}
-#[repr(C)]
-pub struct BreakdownTrigger {
-    pub reliability: u16,
-    pub chance: u8,
-    pub kind: VehicleType,
-    pub breakdowns: u8,
-}
-#[repr(C)]
 pub struct Warning {
     pub enabled: bool,
     pub has_previous: bool,
@@ -114,9 +92,6 @@ pub struct Services {
     pub replacement_available: extern "C" fn(VehicleRef, u16) -> bool,
     pub automatic: extern "C" fn(VehicleRef) -> Automatic,
     pub depot_service: extern "C" fn(VehicleRef) -> bool,
-    pub check_breakdown: extern "C" fn(VehicleRef) -> CheckBreakdown,
-    pub breakdown_guard: extern "C" fn(VehicleRef) -> BreakdownGuard,
-    pub breakdown_trigger: extern "C" fn(VehicleRef) -> BreakdownTrigger,
     pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
     pub mark_dirty: extern "C" fn(VehicleRef),
     pub view_dirty: extern "C" fn(VehicleRef),
@@ -350,41 +325,42 @@ const BREAKDOWN_CHANCE: [u8; 64] = [
 ];
 unsafe fn check_breakdown<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
-    let r = svc!(C, s.check_breakdown, v);
+    let shared = unsafe { &*s.shared };
+    let settings = shared.settings();
+    let before = v.reliability();
+    let decay = v.reliability_spd_dec();
+    let no_service = unsafe { settings.no_servicing_if_no_breakdowns.read() };
+    let breakdowns = unsafe { settings.vehicle_breakdowns.read() };
     branch!(C, VEHICLE_MAINT_CHECK);
-    let mut reliability = r.reliability;
-    if !r.no_service || r.breakdowns != 0 {
-        reliability = reliability.saturating_sub(r.decay);
+    if !no_service || breakdowns != 0 {
+        let reliability = before.saturating_sub(decay);
         v.write_reliability(reliability);
-        if r.reliability >> 8 != reliability >> 8 {
+        if before >> 8 != reliability >> 8 {
             svc!(C, s.details_dirty, v);
         }
     }
-    let guard = svc!(C, s.breakdown_guard, v);
-    if guard.counter != 0
-        || guard.status & VS_STOPPED != 0
-        || guard.breakdowns < 1
-        || guard.speed < 5
-        || guard.menu
-    {
+    let speed = v.speed();
+    let counter = v.breakdown_counter();
+    let status = v.status();
+    let breakdowns = unsafe { settings.vehicle_breakdowns.read() };
+    let menu = crate::session::mode() == crate::openttd::GameMode::MENU;
+    if counter != 0 || status & VS_STOPPED != 0 || breakdowns < 1 || speed < 5 || menu {
         return;
     }
-    let shared = unsafe { &*s.shared };
     let random = svc!(C, shared.random, shared.context);
-    let trigger = svc!(C, s.breakdown_trigger, v);
-    let mut chance = u16::from(trigger.chance) + 1;
+    let reliability = v.reliability();
+    let chance = v.breakdown_chance();
+    let kind = VehicleType(v.vehicle_type());
+    let breakdowns = unsafe { settings.vehicle_breakdowns.read() };
+    let mut chance = u16::from(chance) + 1;
     if crate::random_func::chance16_i(1, 25, random) {
         chance += 25;
     }
     let chance = chance.min(255) as u8;
     v.write_breakdown_chance(chance);
-    let reliability = u32::from(trigger.reliability)
-        + if trigger.kind == VehicleType::SHIP {
-            0x6666
-        } else {
-            0
-        }
-        + if trigger.breakdowns == 1 { 0x6666 } else { 0 };
+    let reliability = u32::from(reliability)
+        + if kind == VehicleType::SHIP { 0x6666 } else { 0 }
+        + if breakdowns == 1 { 0x6666 } else { 0 };
     if BREAKDOWN_CHANCE[(reliability.min(65535) >> 10) as usize] <= chance {
         v.write_breakdown_counter(((random >> 16) & 63) as u8 + 0x3f);
         v.write_breakdown_delay(((random >> 24) & 127) as u8 + 0x80);
@@ -749,25 +725,6 @@ crate::abi::layouts! {
         has_depot_order,
         order_type,
     };
-    "OpenTTDVehicleMaintenanceCheckBreakdown" ["maintenance"] => CheckBreakdown {
-        reliability,
-        decay,
-        no_service,
-        breakdowns,
-    };
-    "OpenTTDVehicleMaintenanceBreakdownGuard" ["maintenance"] => BreakdownGuard {
-        speed,
-        counter,
-        status,
-        breakdowns,
-        menu,
-    };
-    "OpenTTDVehicleMaintenanceBreakdownTrigger" ["maintenance"] => BreakdownTrigger {
-        reliability,
-        chance,
-        kind,
-        breakdowns,
-    };
     "OpenTTDVehicleMaintenanceWarning" ["maintenance"] => Warning {
         enabled,
         has_previous,
@@ -791,9 +748,6 @@ crate::abi::layouts! {
         replacement_available,
         automatic,
         depot_service,
-        check_breakdown,
-        breakdown_guard,
-        breakdown_trigger,
         smoke_disabled,
         mark_dirty,
         view_dirty,

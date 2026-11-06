@@ -256,12 +256,14 @@ static const OpenTTDSettingAddresses _rust_setting_addresses{
 	.max_competitors = &_settings_game.difficulty.max_no_competitors,
 	.never_expire_airports = &_settings_game.station.never_expire_airports,
 	.never_expire_vehicles = &_settings_game.vehicle.never_expire_vehicles,
+	.no_servicing_if_no_breakdowns = &_settings_game.order.no_servicing_if_no_breakdowns,
 	.recalc_interval = &_settings_game.linkgraph.recalc_interval,
 	.se_flat_world_height = &_settings_game.game_creation.se_flat_world_height,
 	.secondary_colour = reinterpret_cast<const uint8_t *>(&_settings_client.gui.starting_colour_secondary),
 	.station_noise = &_settings_game.economy.station_noise_level,
 	.tree_placer = &_settings_game.game_creation.tree_placer,
 	.used_liveries = &_loaded_newgrf_features.used_liveries,
+	.vehicle_breakdowns = &_settings_game.difficulty.vehicle_breakdowns,
 };
 constinit const OpenTTDMapStatics _rust_map_statics = OpenTTDNativeTileTypeAccess::Statics();
 

@@ -447,16 +447,14 @@ static void RoadServiceBoundary()
 	/* Direct maintenance: aged out, no reliability decay, no breakdown, service due. */
 	auto &maintenance = _vehicle_maintenance_probe;
 	maintenance.max_economy_date = OpenTTDEconomyDate{0};
-	maintenance.check_breakdown = [](OpenTTDVehicle *) noexcept {
-		OpenTTDVehicleMaintenanceCheckBreakdown r{};
-		r.no_service = true;
-		return r;
-	};
-	maintenance.breakdown_guard = [](OpenTTDVehicle *) noexcept {
-		OpenTTDVehicleMaintenanceBreakdownGuard r{};
-		r.counter = 1;
-		return r;
-	};
+	const auto *previous_shared = maintenance.shared;
+	static const bool no_service = true;
+	static const uint8_t breakdowns = 0;
+	OpenTTDSettingAddresses maintenance_settings{};
+	maintenance_settings.no_servicing_if_no_breakdowns = &no_service;
+	maintenance_settings.vehicle_breakdowns = &breakdowns;
+	t.shared.settings = &maintenance_settings;
+	maintenance.shared = &t.shared;
 	maintenance.automatic = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceAutomatic{}; };
 	maintenance.interval = [](OpenTTDVehicle *) noexcept {
 		OpenTTDVehicleMaintenanceInterval r{};
@@ -507,6 +505,7 @@ static void RoadServiceBoundary()
 	CHECK(probe.searches == 1);
 	openttd_rust_road_destroy(probe.head);
 	openttd_rust_road_destroy(probe.tail);
+	maintenance.shared = previous_shared;
 	std::printf("road_service_moving_partial_parked_and_search_branches passed\n");
 }
 ABI_PROBE(RoadBoundary);

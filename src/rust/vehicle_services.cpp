@@ -328,21 +328,6 @@ static OpenTTDVehicleMaintenanceAutomatic OPENTTD_RUST_CALL MaintenanceAutomatic
 	return {.has_depot_order = v->HasDepotOrder(), .order_type = RustVehicleOrderType(v)};
 }
 static bool OPENTTD_RUST_CALL MaintenanceDepotService(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->current_order.GetDepotOrderType().Test(OrderDepotTypeFlag::Service); }
-static OpenTTDVehicleMaintenanceCheckBreakdown OPENTTD_RUST_CALL MaintenanceCheckBreakdown(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.reliability = RustVehicleReliability(v), .decay = RustVehicleReliabilityDecay(v), .no_service = _settings_game.order.no_servicing_if_no_breakdowns, .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
-}
-static OpenTTDVehicleMaintenanceBreakdownGuard OPENTTD_RUST_CALL MaintenanceBreakdownGuard(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.speed = RustVehicleSpeed(v), .counter = RustVehicleBreakdownCounter(v), .status = RustVehicleStatus(v), .breakdowns = _settings_game.difficulty.vehicle_breakdowns, .menu = _game_mode == GM_MENU};
-}
-static OpenTTDVehicleMaintenanceBreakdownTrigger OPENTTD_RUST_CALL MaintenanceBreakdownTrigger(OpenTTDVehicle *handle) noexcept
-{
-	const Vehicle *v = VehicleOf(handle);
-	return {.reliability = RustVehicleReliability(v), .chance = RustVehicleBreakdownChance(v), .kind = RustVehicleVehicleType(v), .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
-}
 static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
@@ -384,9 +369,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.replacement_available = MaintenanceReplacementAvailable,
 	.automatic = MaintenanceAutomatic,
 	.depot_service = MaintenanceDepotService,
-	.check_breakdown = MaintenanceCheckBreakdown,
-	.breakdown_guard = MaintenanceBreakdownGuard,
-	.breakdown_trigger = MaintenanceBreakdownTrigger,
 	.smoke_disabled = MaintenanceSmokeDisabled,
 	.mark_dirty = MaintenanceMarkDirty,
 	.view_dirty = MaintenanceViewDirty,
