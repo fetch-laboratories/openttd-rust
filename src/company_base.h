@@ -10,6 +10,8 @@
 #ifndef COMPANY_BASE_H
 #define COMPANY_BASE_H
 
+#include <utility>
+
 #include "road_type.h"
 #include "livery.h"
 #include "autoreplace_type.h"
