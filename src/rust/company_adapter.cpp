@@ -351,17 +351,6 @@ static void Co_copy_service_interval_defaults(uint8_t old_owner, uint8_t new_own
 }
 static void Co_update_autoreplace(uint8_t id) noexcept { GroupStatistics::UpdateAutoreplace(CompanyID(id)); }
 static uint32_t Co_map_size() noexcept { return Map::Size(); }
-static OpenTTDCompanySignalTile Co_signal_tile(uint32_t t) noexcept
-{
-	TileIndex tile(t);
-	OpenTTDCompanySignalTile r{IsTileType(tile, MP_RAILWAY), false, 0, false, 0};
-	r.crossing = !r.railway && IsLevelCrossingTile(tile);
-	/* House and industry tiles have no owner; only the two tested kinds are read. */
-	if (r.railway || r.crossing) r.owner = RustTileOwnerValue(t);
-	r.has_signals = r.railway && RustRailHasSignals(t);
-	if (r.has_signals) r.tracks = static_cast<uint8_t>(RustRailTracks(t));
-	return r;
-}
 static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
 static void Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept { Company::Get(new_owner)->infrastructure.airport += Company::Get(old_owner)->infrastructure.airport; }
 static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->owner; }); }
@@ -470,7 +459,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
 		.map_size = Co_map_size,
-		.signal_tile = Co_signal_tile, .has_signal_on_track = RustRailHasSignalTrack,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
 		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,
 		.station_next_owned = Co_station_next_owned, .station_facility_count = Co_station_facility_count,

@@ -57,10 +57,11 @@ def game_environment(scenario: Scenario) -> Mapping[str, str]:
 
 def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
-        ai = run_dir / "ai/water-scenarios"
-        shutil.copytree(scenario["scenario_ai"], ai)
-        (ai / "parameters.nut").write_text(
-            f'WATER_SHIP <- 22;\nWATER_MODE <- "{scenario["water_operation"]}";\n'
+        core.install_ai(
+            scenario,
+            run_dir,
+            "water-scenarios",
+            f'WATER_SHIP <- 22;\nWATER_MODE <- "{scenario["water_operation"]}";\n',
         )
 
 

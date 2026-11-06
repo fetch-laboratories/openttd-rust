@@ -6,10 +6,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from simulation import core, sanitizers
+from simulation import configuration, core, game, sanitizers
 
 import migration
 
@@ -69,8 +70,15 @@ class SanitizedGameTests(unittest.TestCase):
                         )
                     self.assertEqual(launched.returncode, exit_code)
                     with (
-                        patch.object(migration, "SANITIZE", True),
-                        patch.object(migration, "CANDIDATE_BUILD", root),
+                        patch.object(
+                            configuration,
+                            "_current",
+                            replace(
+                                configuration.configuration(),
+                                sanitize=True,
+                                candidate_build=root,
+                            ),
+                        ),
                     ):
                         run = core.read_game({"dir": run_dir})
                     self.assertEqual(run["log"], ["dbg: before", "dbg: after 0"])
@@ -112,17 +120,18 @@ class ReportTests(unittest.TestCase):
                     f"    #0 0x55 in Foo(int) {source}:{5 if role == 'reference' else 9}\n"
                 )
                 with (
-                    patch.object(migration, "SANITIZE", True),
-                    patch.object(migration, "REFERENCE", reference),
+                    patch.object(game, "ROOT", root),
                     patch.object(
-                        migration,
-                        "REFERENCE_BUILD",
-                        root / ".local/build-reference-sanitized",
+                        configuration,
+                        "_current",
+                        configuration.Configuration(
+                            migration.COMMON_LOCAL,
+                            reference,
+                            root / ".local/build-reference-sanitized",
+                            root / "build-rust-sanitized",
+                            True,
+                        ),
                     ),
-                    patch.object(
-                        migration, "CANDIDATE_BUILD", root / "build-rust-sanitized"
-                    ),
-                    patch.object(core, "ROOT", root),
                 ):
                     run = core.read_game({"dir": run_dir})
                 self.assertEqual(run["log"], ["dbg: unchanged"])

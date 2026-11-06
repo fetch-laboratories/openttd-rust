@@ -55,7 +55,6 @@ struct OpenTTDClearServices {
 	OpenTTDFieldFences (*fences)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fences);
 	OpenTTDFieldGround (*field)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(field);
 	void (*set_field)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_field);
-	WaterClass (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
 };
 struct OpenTTDRailSnowGround { int32_t z; Slope slope; TrackBits tracks; bool plain; };
 struct OpenTTDRailFenceGround { TrackBits tracks; uint8_t owner; bool plain; };
@@ -120,13 +119,10 @@ struct OpenTTDWaterGroundServices {
 	const OpenTTDGroundCostServices *costs;
 	const OpenTTDCompanyServices *company; ///< Current-company exchange.
 	OpenTTDSignalContext (*signal_context)() noexcept OPENTTD_SERVICE_DEFAULT(signal_context);
-	bool (*non_flooding)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(non_flooding);
 	void (*set_non_flooding)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_non_flooding);
-	bool (*coast)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(coast);
 	void (*set_tree_ground)(uint32_t, TreeGround, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tree_ground);
 	void (*make_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_sea);
 	bool (*buoy_or_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(buoy_or_dock);
-	bool (*canal_or_river)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_or_river);
 	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);

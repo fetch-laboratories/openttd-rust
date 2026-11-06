@@ -23,6 +23,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+import vcs
+
 PROC_ROOT = Path("/proc")
 BASE = "origin/rust-migration"
 # Per-run output folders; every other `.local` entry is kept unless listed below.
@@ -85,21 +87,21 @@ NAMED = re.compile(r"(?:#|/(?:issues|pull)/)(\d+)\b")
 
 
 def git(repo: Path, *arguments: str) -> str:
-    return subprocess.check_output(["git", "-C", str(repo), *arguments], text=True)
+    return vcs.git(*arguments, cwd=repo)
 
 
 def gh_pr_state(repo: Path, branch: str) -> str | None:
     """OPEN, MERGED or CLOSED across every PR from BRANCH, in that precedence."""
     command = ["gh", "pr", "list", "--state", "all", "--head", branch]
     command += ["--json", "state", "--jq", ".[].state"]
-    states = subprocess.check_output(command, cwd=repo, text=True).split()
+    states = vcs.gh(*command[1:], cwd=repo).split()
     return next((s for s in ("OPEN", "MERGED", "CLOSED") if s in states), None)
 
 
 def gh_issue_state(repo: Path, number: int) -> str:
     """OPEN or CLOSED for an issue or PR; a merged PR is closed."""
     command = ["gh", "api", f"repos/{{owner}}/{{repo}}/issues/{number}"]
-    return subprocess.check_output([*command, "--jq", ".state"], cwd=repo, text=True)
+    return vcs.gh(*command[1:], "--jq", ".state", cwd=repo)
 
 
 def stale_lock(main: Path, note: str, issue_state: IssueState) -> str | None:

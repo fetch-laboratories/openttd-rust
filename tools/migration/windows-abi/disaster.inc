@@ -74,10 +74,7 @@ static void Disasters()
 	costs.error = [](OpenTTDCommandCost *p, uint32_t error) noexcept { CHECK(error == 0x87654321); _disaster_cost_calls.push_back(3); *reinterpret_cast<uint32_t *>(p) = error; };
 	costs.success = [](const OpenTTDCommandCost *p) noexcept { _disaster_cost_calls.push_back(4); return *reinterpret_cast<const uint32_t *>(p) == 0; };
 	const OpenTTDOccupancyCommands commands{.vehicles = &vehicles, .max_pixel_z = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_cost_calls.push_back(2); return 0; }, .costs = &costs, .vehicle_error = 0x87654321};
-	OpenTTDRailMapServices rail_map{};
-	rail_map.is_rail_depot = [](uint32_t tile) noexcept { CHECK(tile == 0); return false; };
 	services.occupancy = &commands;
-	services.rail_map = &rail_map;
 	services.disasters_enabled = []() noexcept { return true; };
 	services.next_industry = [](uint32_t from) noexcept -> OpenTTDDisasterIndustryTarget {
 		return from <= 7 ? OpenTTDDisasterIndustryTarget{.industry = _disaster_probe, .id = 7, .kind = 0} : OpenTTDDisasterIndustryTarget{.industry = nullptr, .id = 0xFFFF, .kind = IT_INVALID};
@@ -99,7 +96,9 @@ static void Disasters()
 		CHECK(tile == 0); p->clears++; p->clear_owner = company;
 		openttd_rust_disaster_release_industry(p->services, 7);
 	};
-	static OpenTTDFixtureMap map{6};
+	/* Tile 0 is plain rail, not a depot, wherever the probe reports a railway. */
+	static OpenTTDFixtureMap map{6, 4096};
+	map.base[0].type = MP_RAILWAY << 4;
 	shared.map = &map.statics;
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_year)> calendar_year_scope(GetRustClockState().calendar_year, decltype(GetRustClockState().calendar_year){1955});
 	shared.tile_valid = [](uint32_t tile) noexcept { return tile == 0; };

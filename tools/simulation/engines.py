@@ -395,7 +395,7 @@ def prepare(
         saves["candidate"],
         scenario["name"],
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     )
     if differences or captures["reference"] != captures["candidate"]:
         result["differences"].extend(differences)
@@ -893,7 +893,7 @@ def prepare_loading(
         saves["candidate"],
         scenario["name"],
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     )
     if differences or captures["reference"] != captures["candidate"]:
         result["differences"].extend(differences)
@@ -1200,7 +1200,7 @@ def definition_reload(
         saves["candidate"],
         scenario["name"],
         10,
-        {"chunks": 0, "elements": 0, "masked": {}},
+        core.empty_stats(),
     )
     if differences:
         result["differences"].extend(differences)

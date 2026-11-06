@@ -18,6 +18,12 @@ pub(crate) fn get_tunnel_bridge_transport_type(
 
 #[allow(clippy::cast_possible_truncation)] // GB returns the original field width.
 impl crate::map_func::World<'_> {
+    /// `GetTunnelBridgeTransportType`.
+    #[inline]
+    pub(crate) fn tunnel_bridge_transport(&self, t: u32) -> u8 {
+        self.asserted(|m| get_tunnel_bridge_transport_type(m, TileIndex(t)))
+            .0
+    }
     #[inline]
     pub(crate) fn tunnel_bridge_dir(&self, t: u32) -> u8 {
         self.check(self.kind(t) == crate::tile_type::MP_TUNNELBRIDGE);

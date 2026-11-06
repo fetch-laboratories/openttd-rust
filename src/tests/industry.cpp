@@ -448,7 +448,6 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	transaction.location_error = [](CommandCost *out, const OpenTTDIndustryLocationResult *callback, const OpenTTDIndustrySpecHandle *spec) noexcept { CHECK(reinterpret_cast<const IndustrySpec *>(spec) == GetIndustrySpec(7)); CHECK(callback->registers[3] == 456); trace.push_back(4); *out = CommandCost(EXPENSES_OTHER, Money(789)); };
 	transaction.shape_error = [](CommandCost *out, const OpenTTDIndustryLocationResult *callback, const IndustryTileSpec *spec) noexcept { CHECK(spec == &tile_spec); CHECK(callback->registers[3] == 456); trace.push_back(4); *out = CommandCost(EXPENSES_OTHER, Money(789)); };
 	shared.grf_file_version = [](const GRFFile *file) noexcept -> uint8_t { CHECK(file == &tile_file); trace.push_back(6); return version; };
-	shared.tile_slope = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 456); trace.push_back(7); return slope; };
 	costs.zero = [](CommandCost *out) noexcept { *out = CommandCost(); };
 	costs.error = [](CommandCost *out, uint32_t message) noexcept { *out = CommandCost(message); };
 	OpenTTDIndustryTransactionContext context{
@@ -465,15 +464,21 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		CHECK(cost.Succeeded());
 		CHECK(cost.GetCost() == (callback == 0xFFFF ? 0 : 789));
 		CHECK(trace == (callback == 0xFFFF ? std::vector<uint8_t>{1, 2, 3, 5} : std::vector<uint8_t>{1, 2, 3, 4, 5}));
+		/* The shape check reads tile 456's slope in place: a north corner two above the
+		 * rest is steep (16), as the refused-slope test distinguishes. */
+		static OpenTTDFixtureMap slope_map{6, 4096};
+		shared.map = &slope_map.statics;
 		for (uint8_t grf_version : {6, 7, 8}) for (uint8_t current_slope : {0, 16}) {
 			version = grf_version; slope = current_slope; tile_spec.slopes_refused = SLOPE_FLAT; trace.clear();
+			slope_map.base[456].height = current_slope == 0 ? 0 : 2;
 			openttd_rust_industry_shape_check(&cost, 123, 456, &tile_spec, 7, 8, 258, 0xABCD, 2, 3, &context);
 			CHECK(cost.Succeeded() == (callback == 0xFFFF ? slope == 0 : version >= 7 || callback != 0));
 			CHECK(cost.GetCost() == (callback != 0xFFFF && version >= 7 ? 789 : 0));
-			if (callback == 0xFFFF) { CHECK(cost.GetErrorMessage() == (slope == 0 ? INVALID_STRING_ID : errors.site)); CHECK(trace == (std::vector<uint8_t>{1, 3, 7, 5})); }
+			if (callback == 0xFFFF) { CHECK(cost.GetErrorMessage() == (slope == 0 ? INVALID_STRING_ID : errors.site)); CHECK(trace == (std::vector<uint8_t>{1, 3, 5})); }
 			else if (version < 7) { CHECK(trace == (std::vector<uint8_t>{1, 3, 6, 5})); }
 			else { CHECK(trace == (std::vector<uint8_t>{1, 3, 6, 4, 5})); }
 		}
+		shared.map = &map.statics;
 	}
 	CHECK(Industry::GetNumItems() == pool_count);
 }

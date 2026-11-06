@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import vcs
 from validation_execution import file_lock
 
 import migration
@@ -16,9 +17,7 @@ HOOKS_URL = "https://github.com/OpenTTD/OpenTTD-git-hooks.git"
 
 
 def git(repo: Path, *arguments: str) -> str:
-    return subprocess.check_output(
-        ["git", "-C", str(repo), *arguments], text=True
-    ).strip()
+    return vcs.git(*arguments, cwd=repo).strip()
 
 
 def hooks_checkout(supplied: Path | None = None) -> Path:

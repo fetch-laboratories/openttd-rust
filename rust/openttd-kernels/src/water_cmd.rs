@@ -139,7 +139,7 @@ impl World<'_> {
         Cost(ret, self.c)
     }
     fn class(&self, t: u32) -> u8 {
-        unsafe { ((*self.water.clear).water_class)(t).0 }
+        crate::map_func::World::new(self.s).water_class(t)
     }
     fn rail(&self) -> &crate::rail_cmd::RailCommandServices {
         // SAFETY: native getter supplies an immutable process-lifetime table.
@@ -163,7 +163,7 @@ impl World<'_> {
         (self.a.water_type)(t).0
     }
     fn flat(&self, t: u32) -> bool {
-        (self.s.tile_slope)(t) == 0
+        crate::map_func::World::new(self.s).tile_slope(t) == 0
     }
     fn canal(&self, t: u32) -> bool {
         self.kind(t) == 0 && self.class(t) == 1
@@ -230,7 +230,9 @@ impl World<'_> {
             self.error(out, self.a.strings.built_on_water);
             return;
         }
-        if (self.s.bridge_above)(tile) || (self.s.bridge_above)(tile2) {
+        if crate::map_func::World::new(self.s).bridge_above(tile)
+            || crate::map_func::World::new(self.s).bridge_above(tile2)
+        {
             self.error(out, self.a.strings.demolish_bridge);
             return;
         }
@@ -369,7 +371,7 @@ impl World<'_> {
             };
         }
         for (part, t) in [tile, lower, upper].into_iter().enumerate() {
-            if (self.s.bridge_above)(t)
+            if crate::map_func::World::new(self.s).bridge_above(t)
                 && self.bridge_height(t)
                     < (self.s.tile_max_z)(t) + get_lock_part_minimal_bridge_height(part)
             {
@@ -424,7 +426,8 @@ impl World<'_> {
         (self.c.amount)(out, crate::company::price(64));
     }
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
-        let dir = get_inclined_slope_direction((self.s.tile_slope)(tile));
+        let dir =
+            get_inclined_slope_direction(crate::map_func::World::new(self.s).tile_slope(tile));
         if dir == INVALID_DIAGDIR {
             self.error(out, self.a.strings.sloped_wrong);
             return;
@@ -513,7 +516,7 @@ impl World<'_> {
             crate::tilearea::TileIterator::create(self.map, size, end, start, diagonal, check);
         while iter.tile() != INVALID_TILE {
             let tile = iter.tile();
-            let slope = (self.s.tile_slope)(tile);
+            let slope = crate::map_func::World::new(self.s).tile_slope(tile);
             if slope != 0 && (wc.0 != 2 || !is_inclined_slope(slope)) {
                 self.error(out, self.a.strings.flat);
                 return;
@@ -546,7 +549,13 @@ impl World<'_> {
                                 self.desert(tile);
                             }
                         }
-                        0 if (self.s.tile_height)(tile) == 0 => (self.water.make_sea)(tile),
+                        0 if crate::tile_map::tile_height_in(
+                            &crate::map_func::World::new(self.s),
+                            tile,
+                        ) == 0 =>
+                        {
+                            (self.water.make_sea)(tile);
+                        }
                         _ => {
                             let owner = (self.s.current_company)();
                             (self.a.restoration.make_canal)(tile, owner, self.random());
@@ -609,7 +618,7 @@ impl World<'_> {
                 self.expense(out, price);
             }
             1 => {
-                let slope = (self.s.tile_slope)(tile);
+                let slope = crate::map_func::World::new(self.s).tile_slope(tile);
                 self.cost(ret).no_vehicle(self.cmd, tile);
                 if self.take_failure(out, ret) {
                     return;

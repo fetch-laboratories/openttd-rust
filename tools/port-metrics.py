@@ -28,6 +28,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
+import vcs
 from code_lines import (
     RUST_EXPORT,
     Comment,
@@ -131,9 +132,7 @@ Guard = tuple[str | None, bool]
 
 
 def git(*args: str) -> str:
-    return subprocess.check_output(
-        ["git", *args], cwd=ROOT, text=True, errors="replace"
-    )
+    return vcs.git(*args, cwd=ROOT, errors="replace")
 
 
 def classify(text: str) -> list[str]:

@@ -137,7 +137,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.vehicles = &GetRustVehicleServices(),
 		.occupancy = GetRustOccupancyCommands(),
 		.environment = &GetRustEnvironmentServices(),
-		.rail_map = &GetRustRailMapServices(),
 		.aircraft = &GetRustAircraftLeaves(),
 		.road = &GetRustRoadLeaves(),
 		.age = RustVehicleRead<int32_t, RustVehicleAgeValue>,

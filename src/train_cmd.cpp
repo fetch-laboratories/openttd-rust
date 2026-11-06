@@ -1014,7 +1014,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.hide_fill = TrainHideFill,
 		.invalidate_grf = TrainVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
 		.is_bridge = TrainIsBridge,
-		.is_crossing = TrainSharedMap<uint64_t, &OpenTTDSharedServices::is_level_crossing>,
+		.is_crossing = OpenTTDLegacyMapQuery<uint64_t, MapSvcIsLevelCrossing, OpenTTDTrainHandle, uint32_t>,
 		.is_depot = OpenTTDLegacyMapQuery<uint64_t, RustRailDepotTile, OpenTTDTrainHandle, uint32_t>,
 		.is_plain_rail = OpenTTDLegacyMapQuery<uint64_t, RustPlainRailTile, OpenTTDTrainHandle, uint32_t>,
 		.is_station = OpenTTDLegacyMapQuery<uint64_t, RustIsRailStation, OpenTTDTrainHandle, uint32_t>,

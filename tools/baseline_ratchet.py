@@ -1,0 +1,50 @@
+"""Shared shrinking-baseline CLI for source scanners."""
+
+import argparse
+from collections.abc import Callable, Iterable
+from pathlib import Path
+
+from vcs import git
+
+
+def main(
+    description: str | None,
+    root: Path,
+    baseline_path: str,
+    folders: Iterable[str],
+    suffixes: set[str],
+    violations: Callable[[dict[str, str]], set[str]],
+    *,
+    new_label: str,
+    summary: str,
+) -> int:
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("--base-ref", default="origin/rust-migration")
+    args = parser.parse_args()
+    files = {
+        str(p.relative_to(root)): p.read_text()
+        for folder in folders
+        for p in (root / folder).rglob("*")
+        if p.is_file() and p.suffix in suffixes
+    }
+    hits = violations(files)
+    baseline = set((root / baseline_path).read_text().splitlines())
+    tracked = git(
+        "ls-tree", "--name-only", args.base_ref, baseline_path, cwd=root
+    ).strip()
+    previous = (
+        set(git("show", f"{args.base_ref}:{baseline_path}", cwd=root).splitlines())
+        if tracked
+        else baseline
+    )
+    errors = [
+        (new_label, hits - baseline),
+        ("remove retired", baseline - hits),
+        ("baseline cannot grow", baseline - previous),
+    ]
+    for label, names in errors:
+        for name in sorted(names):
+            print(f"{label}: {name}")
+    count = sum(len(names) for _, names in errors)
+    print(f"{summary.format(count=len(hits))}; {count} errors")
+    return int(count > 0)
