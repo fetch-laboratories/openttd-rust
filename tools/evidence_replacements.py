@@ -179,7 +179,7 @@ def run_rust(check: str, root: Path = ROOT) -> None:
             "cargo",
             "test",
             "--manifest-path",
-            str(root / "rust/Cargo.toml"),
+            str(root / "Cargo.toml"),
             "--locked",
             "-p",
             "openttd-kernels",
