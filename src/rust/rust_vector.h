@@ -14,6 +14,7 @@ struct RustVector {
 	bool empty() const { return this->count == 0; }
 	const T *begin() const { return this->items; }
 	const T *end() const { return this->items + this->count; }
+	T &operator[](size_t index) { return const_cast<T &>(this->items[index]); }
 	const T &operator[](size_t index) const { return this->items[index]; }
 	operator std::span<const T>() const { return {this->items, this->count}; }
 };

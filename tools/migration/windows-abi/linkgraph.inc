@@ -1,31 +1,47 @@
 #pragma once
-#include "rust/linkgraph_ffi.h"
-
-static uint8_t OPENTTD_RUST_CALL LinkGraphAbort(const void *context) noexcept
-{
-	auto *state = static_cast<const std::array<uint32_t, 2> *>(context);
-	return (*state)[0];
-}
+#include "rust/linkgraph_schedule_ffi.h"
+#include "rust/newgrf_vehicle_ffi.h"
 
 static void LinkGraphJob()
 {
-	std::array<OpenTTDLinkGraphNode, 2> nodes{{{10, 0, 12, 1, 1, 0, 1}, {0, 1, 24, 4, 1, 1, 0}}};
-	OpenTTDLinkGraphEdge edge{20, 0, 1};
-	OpenTTDLinkGraphSettings settings{2, 100, 100, 80, 1, 1, 127, 127, 30};
-	std::array<uint32_t, 2> context{0, 0};
-	auto *owner = openttd_rust_linkgraph_run(nodes.data(), nodes.size(), &edge, 1, &settings, &context, LinkGraphAbort);
-	size_t count = 0;
-	const auto *shares = openttd_rust_linkgraph_shares(owner, &count);
-	CHECK(count == 2 && shares[0].node == 0 && shares[1].node == 1);
-	CHECK(shares[0].origin == 12 && shares[0].via == 24 && shares[0].cumulative == 10 && shares[0].unrestricted == 10);
-	CHECK(shares[1].origin == 12 && shares[1].via == 24 && shares[1].cumulative == 10 && shares[1].unrestricted == 10);
-	CHECK(openttd_rust_linkgraph_edges(owner)[0] == 10);
-	openttd_rust_linkgraph_destroy(owner);
-	context[0] = 1;
-	owner = openttd_rust_linkgraph_run(nodes.data(), nodes.size(), &edge, 1, &settings, &context, LinkGraphAbort);
-	openttd_rust_linkgraph_shares(owner, &count);
-	CHECK(count == 0 && openttd_rust_linkgraph_edges(owner)[0] == 0);
-	openttd_rust_linkgraph_destroy(owner);
-	std::printf("linkgraph owned snapshot/result and cdecl abort callback passed\n");
+	static const OpenTTDVehicleResolverServices resolver{
+		.cargo_classes = [](uint8_t cargo) noexcept -> uint16_t { CHECK(cargo == 0); return 1; },
+	};
+	static const OpenTTDVehicleServices vehicle{
+		.newgrf = []() noexcept { return &resolver; },
+	};
+	static const OpenTTDSharedServices shared{
+		.map_max_x = []() noexcept -> uint32_t { return 127; },
+		.map_max_y = []() noexcept -> uint32_t { return 127; },
+	};
+	static const OpenTTDScheduleServices services{.shared = &shared, .vehicle = &vehicle};
+	auto *graph = openttd_rust_live_graph_new(0);
+	graph->last_compression = 0;
+	openttd_rust_live_graph_init(graph, 2);
+	graph->nodes[0].supply = 10; graph->nodes[0].station = 12; graph->nodes[0].xy = 129;
+	graph->nodes[1].demand = 1; graph->nodes[1].station = 24; graph->nodes[1].xy = 132;
+	auto *edge = openttd_rust_live_node_append_edge(graph, 0);
+	edge->capacity = 20; edge->dest_node = 1;
+	OpenTTDLinkGraphJobSettings settings{60, 4, 1, 1, 1, 1, 2, 100, 100, 80};
+	auto *job = openttd_rust_linkgraph_job_new(graph, 42, &settings);
+	job->join_date = 59;
+	openttd_rust_schedule_run(&services, job);
+	CHECK(job->completed.load(std::memory_order_acquire) && job->nodes.size() == 2);
+	for (const auto &node : job->nodes) {
+		auto origin = openttd_rust_flow_map_at(node.flows, 12, 1);
+		CHECK(origin.found != 0);
+		auto share = openttd_rust_flow_share(origin.flow, 0, 0);
+		CHECK(share.found != 0 && share.station == 24 && share.cumulative == 10);
+		CHECK(openttd_rust_flow_read(origin.flow, 1, 0) == 10);
+	}
+	CHECK(job->edge_flows[0] == 10);
+	openttd_rust_linkgraph_job_delete(job);
+	job = openttd_rust_linkgraph_job_new(graph, 42, &settings);
+	job->aborted.store(true, std::memory_order_release);
+	openttd_rust_schedule_run(&services, job);
+	CHECK(!job->completed.load(std::memory_order_acquire) && job->nodes.empty());
+	openttd_rust_linkgraph_job_delete(job);
+	openttd_rust_live_graph_delete(graph);
+	std::printf("linkgraph private job snapshot/results and pre-start cancellation passed\n");
 }
 ABI_PROBE(LinkGraphJob);

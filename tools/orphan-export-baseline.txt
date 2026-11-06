@@ -18,7 +18,6 @@ no production user | openttd_rust_house_tile_loop
 no production user | openttd_rust_industry_location_check
 no production user | openttd_rust_industry_shape_check
 no production user | openttd_rust_industry_tile_animate
-no production user | openttd_rust_linkgraph_run
 no production user | openttd_rust_list_token
 no production user | openttd_rust_map_read_probe
 no production user | openttd_rust_object_restore_first

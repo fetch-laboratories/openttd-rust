@@ -12,6 +12,7 @@
 #include <optional>
 #include <vector>
 #include "session-fixture.hpp"
+#include "rust/pool_ffi.h"
 #define NOT_REACHED() std::abort()
 static std::vector<std::array<int, 3>> trace;
 using Date = TimerGameEconomy::Date;
@@ -31,37 +32,44 @@ struct PerformanceMeasurer {
 	~PerformanceMeasurer() { trace.push_back({9, 2, 0}); }
 	static void SetInactive(int) { trace.push_back({9, 0, 0}); }
 };
-static std::array<LinkGraph *, 4> graphs;
-static std::array<LinkGraphJob *, 4> jobs;
-static std::array<int, 2> QueueSizes();
+// One canonical slot set per fixture pool, consumed by both the pinned shell model
+// and the production typed record view. No parallel shell/record directories.
+static std::array<RustPoolSlot, 4> graph_slots{}, job_slots{};
+static const RustPoolDescriptor graph_descriptor{.slots = {graph_slots.data(), graph_slots.size(), 0}, .first_unused = graph_slots.size()};
+static const RustPoolDescriptor job_descriptor{.slots = {job_slots.data(), job_slots.size(), 0}, .first_unused = job_slots.size()};
+static const RustPoolDescriptor *const graph_pool = &graph_descriptor, *const job_pool = &job_descriptor;
 static void Recycle();
 class LinkGraph {
 public:
 	uint16_t index, size, tag; int32_t date = 100, node_date = 90;
 	OpenTTDLiveGraph *owner = nullptr;
-	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0); *openttd_rust_live_graph_date(this->owner) = this->date; openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) *openttd_rust_live_node_fields(this->owner, i).last_update = this->node_date; } }
-	~LinkGraph() { if (this->owner) openttd_rust_live_graph_delete(this->owner); }
+	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0); this->owner->shell = this; this->owner->last_compression = this->date; openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) this->owner->nodes[i].last_update = this->node_date; } graph_slots[this->index] = {this, this->owner}; }
+	~LinkGraph() { if (graph_slots[this->index].shell == this) graph_slots[this->index] = {}; if (this->owner) openttd_rust_live_graph_delete(this->owner); }
 	uint16_t Size() const { return this->size; }
-	static LinkGraph *Get(uint16_t id) { return graphs[id]; }
-	static bool IsValidID(uint16_t id) { return graphs[id] != nullptr; }
-	static std::vector<LinkGraph *> Iterate() { std::vector<LinkGraph *> out; for (auto *g : graphs) if (g != nullptr) out.push_back(g); return out; }
+	static LinkGraph *Get(uint16_t id) { return static_cast<LinkGraph *>(graph_slots[id].shell); }
+	static bool IsValidID(uint16_t id) { return graph_slots[id].shell != nullptr; }
+	static std::vector<LinkGraph *> Iterate() { std::vector<LinkGraph *> out; for (const auto &slot : graph_slots) if (slot.shell != nullptr) out.push_back(static_cast<LinkGraph *>(slot.shell)); return out; }
 	void ShiftDates(Date interval) { this->date += interval.base(); this->node_date += interval.base(); }
 };
 static bool recycle;
 class LinkGraphJob {
 public:
 	uint16_t index, graph;
-	bool due = false, completed = false;
-	explicit LinkGraphJob(const LinkGraph &g) : index(0), graph(g.index) { while (jobs[this->index] != nullptr) ++this->index; jobs[this->index] = this; trace.push_back({2, this->index, g.tag}); }
-	~LinkGraphJob() { trace.push_back({3, this->index, this->graph}); jobs[this->index] = nullptr; if (recycle) Recycle(); }
+	bool due = false, completed = false, aborted = false;
+	int32_t join_date = INT32_MAX;
+	OpenTTDLinkGraphJobRecord *record = nullptr;
+	explicit LinkGraphJob(const LinkGraph &g) : index(0), graph(g.index) { while (job_slots[this->index].shell != nullptr) ++this->index; if (candidate) { OpenTTDLinkGraphJobSettings settings{}; this->record = openttd_rust_linkgraph_job_new(g.owner, g.index, &settings); this->record->shell = this; this->record->join_date = this->join_date; } job_slots[this->index] = {this, this->record}; trace.push_back({2, this->index, g.tag}); }
+	~LinkGraphJob() { trace.push_back({3, this->index, this->graph}); job_slots[this->index] = {}; if (this->record) openttd_rust_linkgraph_job_delete(this->record); if (recycle) Recycle(); }
 	static bool CanAllocateItem() { return true; }
-	static std::vector<LinkGraphJob *> Iterate() { std::vector<LinkGraphJob *> out; for (auto *j : jobs) if (j != nullptr) out.push_back(j); return out; }
-	void SpawnThread() { trace.push_back({4, this->index, 0}); this->completed = true; }
-	void AbortJob() { auto sizes = QueueSizes(); trace.push_back({6, sizes[0], sizes[1]}); }
-	void ShiftJoinDate(Date interval) { trace.push_back({10, this->index, interval.base()}); }
-	bool IsScheduledToBeJoined() const { trace.push_back({11, this->index, this->due}); return this->due; }
-	bool IsJobCompleted() const { trace.push_back({12, this->index, this->completed}); return this->completed; }
+	static std::vector<LinkGraphJob *> Iterate() { std::vector<LinkGraphJob *> out; for (const auto &slot : job_slots) if (slot.shell != nullptr) out.push_back(static_cast<LinkGraphJob *>(slot.shell)); return out; }
+	void SpawnThread() { trace.push_back({4, this->index, 0}); this->SetCompleted(true); }
+	void AbortJob() { this->aborted = true; }
+	void ShiftJoinDate(Date interval) { this->join_date += interval.base(); }
+	bool IsScheduledToBeJoined() const { return this->due; }
+	bool IsJobCompleted() const { return this->completed; }
 	uint16_t LinkGraphIndex() const { return this->graph; }
+	void SetDue(bool value) { if (candidate) this->record->join_date = value ? 0 : INT32_MAX; else { this->due = value; this->join_date = value ? 0 : INT32_MAX; } }
+	void SetCompleted(bool value) { if (candidate) this->record->completed.store(value, std::memory_order_release); else this->completed = value; }
 };
 namespace reference {
 using LinkGraphID = uint16_t;
@@ -86,47 +94,34 @@ extern "C" void openttd_test_schedule_pause_observer(void (*)(bool));
 static void ObservePause(bool paused) { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused); }
 static const OpenTTDSharedServices fixture_shared{};
 static const OpenTTDScheduleServices services{
-	.shared = &fixture_shared,
-	.graph_owner = [](LinkGraph *g) noexcept { return g->owner; },
-	.assert_graph = [](const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
-	.can_allocate = []() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.allocation_failure = []() noexcept { NOT_REACHED(); },
-	.new_job = [](const LinkGraph *g) noexcept { return new LinkGraphJob(*g); },
-	.spawn = [](LinkGraphJob *j) noexcept { j->SpawnThread(); },
-	.due = [](const LinkGraphJob *j) noexcept { return j->IsScheduledToBeJoined(); },
-	.completed = [](const LinkGraphJob *j) noexcept { return j->IsJobCompleted(); },
-	.graph_index = [](const LinkGraphJob *j) noexcept { return j->LinkGraphIndex(); },
-	.destroy_job = [](LinkGraphJob *j) noexcept { delete j; },
-	.graph_valid = [](uint16_t id) noexcept { return LinkGraph::IsValidID(id); },
-	.graph_get = [](uint16_t id) noexcept { return LinkGraph::Get(id); },
-	.abort_job = [](LinkGraphJob *j) noexcept { j->AbortJob(); },
-	.next_graph = [](uint32_t *from) noexcept -> LinkGraph * { while (*from < graphs.size()) { auto *g = graphs[(*from)++]; if (g != nullptr) return g; } return nullptr; },
-	.next_job = [](uint32_t *from) noexcept -> LinkGraphJob * { while (*from < jobs.size()) { auto *j = jobs[(*from)++]; if (j != nullptr) return j; } return nullptr; },
-	.shift_job = [](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(Date{interval}); },
+	.assert_graph = [](const OpenTTDLiveGraph *g) noexcept { assert(g->shell == LinkGraph::Get(g->shell->index)); },
 	.begin_measurement = [](void *p, bool client) noexcept { if (client) static_cast<std::optional<PerformanceMeasurer> *>(p)->emplace(PFE_GL_LINKGRAPH); else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH); },
+	.can_allocate = []() noexcept { return LinkGraphJob::CanAllocateItem(); },
+	.destroy_job = [](OpenTTDLinkGraphJobRecord *j) noexcept { delete j->shell; },
+	.graph_pool = &graph_pool,
+	.job_pool = &job_pool,
+	.new_job = [](const OpenTTDLiveGraph *g) noexcept { return (new LinkGraphJob(*g->shell))->record; },
+	.shared = &fixture_shared,
+	.start_thread = [](OpenTTDLinkGraphJobRecord *j) noexcept { j->shell->SpawnThread(); return true; },
 };
 static auto &ref = reference::LinkGraphSchedule::instance;
 static void Import(std::initializer_list<LinkGraph *> schedule, std::initializer_list<LinkGraphJob *> running)
 {
-	if (candidate) { OpenTTDScheduleQueues q{schedule.begin(), schedule.size(), running.begin(), running.size()}; openttd_rust_schedule_import(&q); }
+	if (candidate) { std::vector<OpenTTDLiveGraph *> graphs; for (auto *g : schedule) graphs.push_back(g->owner); std::vector<OpenTTDLinkGraphJobRecord *> jobs; for (auto *j : running) jobs.push_back(j->record); OpenTTDScheduleQueues q{graphs.data(), graphs.size(), jobs.data(), jobs.size()}; openttd_rust_schedule_import(&q); }
 	else { ref.schedule = schedule; ref.running = running; }
-}
-static std::array<int, 2> QueueSizes()
-{
-	if (!candidate) return {static_cast<int>(ref.schedule.size()), static_cast<int>(ref.running.size())};
-	OpenTTDScheduleQueues q; openttd_rust_schedule_export(&q); return {static_cast<int>(q.schedule_len), static_cast<int>(q.running_len)};
 }
 static void Capture()
 {
 	std::vector<LinkGraph *> schedule(ref.schedule.begin(), ref.schedule.end());
 	std::vector<LinkGraphJob *> running(ref.running.begin(), ref.running.end());
-	if (candidate) { OpenTTDScheduleQueues q; openttd_rust_schedule_export(&q); schedule.clear(); running.clear(); if (q.schedule_len) schedule.assign(q.schedule, q.schedule + q.schedule_len); if (q.running_len) running.assign(q.running, q.running + q.running_len); }
+	if (candidate) { OpenTTDScheduleQueues q; openttd_rust_schedule_export(&q); schedule.clear(); running.clear(); for (size_t i = 0; i < q.schedule_len; ++i) schedule.push_back(q.schedule[i]->shell); for (size_t i = 0; i < q.running_len; ++i) running.push_back(q.running[i]->shell); }
 	trace.push_back({20, static_cast<int>(schedule.size()), static_cast<int>(running.size())});
 	for (auto *g : schedule) trace.push_back({21, g->tag, 0});
 	for (auto *j : running) trace.push_back({22, j->index, j->graph});
 }
-static void Queue(LinkGraph *g) { if (candidate) openttd_rust_schedule_queue(&services, g); else ref.Queue(g); }
-static void Recycle() { static std::optional<LinkGraph> replacement; replacement.emplace(1, 2, 19); graphs[1] = &*replacement; Queue(graphs[1]); Queue(graphs[1]); }
+static void Queue(LinkGraph *g) { if (candidate) openttd_rust_schedule_queue(&services, g->owner); else ref.Queue(g); }
+static void Recycle() { static std::optional<LinkGraph> replacement; replacement.emplace(1, 2, 19); Queue(&*replacement); Queue(&*replacement); }
 static void Tick(int date, int fract, bool client = false)
 {
 	TimerGameEconomy::date = TimerGameEconomy::Date{date}; TimerGameEconomy::date_fract = fract; _networking = client;
@@ -147,7 +142,7 @@ static void Pause(int bits, bool load = false)
 	if (candidate) {
 		SessionFixture fixture;
 		fixture.services.schedule = &services;
-		if (load) { _pause_mode = {}; openttd_rust_schedule_after_load(&services); fixture_pause_mode.bits = _pause_mode.Test(PauseMode::LinkGraph) ? 1 : 0; }
+		if (load) { _pause_mode = {}; openttd_rust_schedule_after_load(); fixture_pause_mode.bits = _pause_mode.Test(PauseMode::LinkGraph) ? 1 : 0; }
 		else {
 			fixture.finance.networking = []() noexcept { return false; };
 			fixture.world.modal = []() noexcept { return true; };
@@ -163,23 +158,24 @@ static void Pause(int bits, bool load = false)
 static auto Run(bool rust)
 {
 	candidate = rust; if (rust) openttd_test_schedule_pause_observer(&ObservePause);
-	trace.clear(); graphs.fill(nullptr); jobs.fill(nullptr); recycle = false; Import({}, {}); Pause(0); Pause(1); Pause(0, true);
-	LinkGraph small{0, 1, 10}, large{1, 2, 11}, unqueued{2, 3, 12}; graphs = {&small, &large, &unqueued, nullptr};
+	trace.clear(); graph_slots.fill({}); job_slots.fill({}); recycle = false; Import({}, {}); Pause(0); Pause(1); Pause(0, true);
+	LinkGraph small{0, 1, 10}, large{1, 2, 11}, unqueued{2, 3, 12};
 	Tick(0, 21); Import({&small}, {}); Tick(0, 21); Capture(); Import({}, {});
 	Queue(&small); Queue(&small); Queue(&large); Tick(0, 20); Tick(0, 21); Capture(); // Duplicate first pointer ends rotation early.
-	if (candidate) openttd_rust_schedule_dequeue(&small); else ref.Dequeue(&small);
+	if (candidate) openttd_rust_schedule_dequeue(small.owner); else ref.Dequeue(&small);
 	Tick(0, 21); Capture(); // Synchronous spawn/failure fallback completes before insertion.
-	auto *first = jobs[0]; auto *second = new LinkGraphJob(large); second->due = true; Import({&small}, {first, second});
+	auto *first = static_cast<LinkGraphJob *>(job_slots[0].shell); auto *second = new LinkGraphJob(large); second->SetDue(true); Import({&small}, {first, second});
 	Pause(0); Pause(1); Pause(0, true); Tick(1, 21); Capture(); // Only the not-due front is observed; no completed read.
-	first->due = true; first->completed = false; Pause(0); Pause(1); Pause(0, true); Pause(2);
-	first->completed = true; Pause(1); Pause(0); Tick(1, 21, true); Capture();
+	first->SetDue(true); first->SetCompleted(false); Pause(0); Pause(1); Pause(0, true); Pause(2);
+	first->SetCompleted(true); Pause(1); Pause(0); Tick(1, 21, true); Capture();
 	Import({&small}, {second}); recycle = true; Tick(1, 21); recycle = false; Capture(); // Destruction recycles graph ID and queues duplicates.
 	auto *listed = new LinkGraphJob(small); auto *unlisted = new LinkGraphJob(unqueued); Import({&small}, {listed});
-	if (candidate) { openttd_rust_schedule_spawn_all(&services); openttd_rust_schedule_shift(&services, -17); openttd_rust_schedule_clear(&services); }
+	if (candidate) { openttd_rust_schedule_spawn_all(&services); openttd_rust_schedule_shift(&services, -17); openttd_rust_schedule_clear(); }
 	else { ref.SpawnAll(); ref.ShiftDates(Date{-17}); ref.Clear(); }
-	for (auto *g : LinkGraph::Iterate()) { trace.push_back({30, g->tag, candidate ? *openttd_rust_live_graph_date(g->owner) : g->date}); trace.push_back({31, g->tag, candidate ? *openttd_rust_live_node_fields(g->owner, 0).last_update : g->node_date}); }
-	Capture(); assert(jobs[listed->index] == listed && jobs[unlisted->index] == unlisted); // Clear must not delete.
-	auto result = trace; for (auto *j : jobs) delete j; Import({}, {});
+	for (auto *g : LinkGraph::Iterate()) { trace.push_back({30, g->tag, candidate ? g->owner->last_compression : g->date}); trace.push_back({31, g->tag, candidate ? g->owner->nodes[0].last_update : g->node_date}); }
+	for (auto *j : LinkGraphJob::Iterate()) { trace.push_back({32, j->index, candidate ? j->record->join_date : j->join_date}); trace.push_back({33, j->index, candidate ? j->record->aborted.load(std::memory_order_acquire) : j->aborted}); }
+	Capture(); assert(job_slots[listed->index].shell == listed && job_slots[unlisted->index].shell == unlisted); // Clear must not delete.
+	auto result = trace; for (auto *j : LinkGraphJob::Iterate()) delete j; Import({}, {});
 	if (rust) openttd_test_schedule_pause_observer(nullptr);
 	return result;
 }
