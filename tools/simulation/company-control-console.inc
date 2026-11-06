@@ -1,5 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file company-control-console.inc Native context, errors, notification order and saved keys. */
+#include "pool-record-fixture.hpp"
 #include "company_cmd.h"
 #include "vehicle-record-fixture.hpp"
 #include "network/network_type.h"
@@ -72,7 +73,7 @@ static void CompanyControlProbe()
 	for (CompanyID observer : {CompanyID(0), COMPANY_SPECTATOR}) {
 		_local_company = observer;
 		for (Owner owner : {CompanyID(0), CompanyID(1), OWNER_NONE, OWNER_TOWN}) {
-			auto cost = CheckOwnership(owner, town->xy);
+			auto cost = CheckOwnership(owner, FIXTURE_POOL_RECORD(town).xy);
 			if (cost.Succeeded() != (owner == 0) || (!cost.Succeeded() && cost.GetErrorMessage() != STR_ERROR_OWNED_BY)) FixtureAbort(__LINE__);
 			if (cost.GetErrorOwner() != (observer == 0 && owner != 0 && owner != OWNER_TOWN ? owner : INVALID_OWNER)) FixtureAbort(__LINE__);
 			fmt::print(stderr, "COMPANY-CONTROL ownership {} {} {} {} {} {}\n", observer.base(), owner.base(), cost.Succeeded(), cost.GetErrorMessage(), cost.GetErrorOwner().base(), cost.GetEncodedMessage().GetDecodedString());

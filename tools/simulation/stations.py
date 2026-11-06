@@ -442,6 +442,7 @@ COMMAND_SOURCE = r"""
 #include "station_cmd.cpp"
 #include "console_internal.h"
 #include "vehicle-record-fixture.hpp"
+#include "pool-record-fixture.hpp"
 // TYPE_RESERVE_FIXTURE
 #include "clear_map.h"
 #include "order_cmd.h"
@@ -951,7 +952,7 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 	CatchmentSetting("station.modified_catchment", 1); CatchmentDump("modified");
 	/* An oil rig station replaces industry land; neutral serving in both directions. */
 	StationNeed(Industry::CanAllocateItem(), __LINE__);
-	Industry *rig = new Industry(); rig->location = TileArea(tile(20, 20), 1, 1); rig->town = *Town::Iterate().begin(); rig->type = 5;
+	Industry *rig = new Industry(); FIXTURE_POOL_RECORD(rig).location = TileArea(tile(20, 20), 1, 1); FIXTURE_POOL_RECORD(rig).town = *Town::Iterate().begin(); FIXTURE_POOL_RECORD(rig).type = 5;
 	MakeIndustry(tile(20, 20), rig->index, 0, 0, WaterClass::Sea);
 	StationCost("catchment-rig-neighbour", Command<CMD_BUILD_RAIL_STATION>::Do(exec, tile(20, 17), RAILTYPE_RAIL, AXIS_X, 1, 1, STAT_CLASS_DFLT, 0, NEW_STATION, true));
 	CatchmentDump("rig-before");
@@ -960,7 +961,7 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 	CatchmentSetting("station.serve_neutral_industries", 0); CatchmentDump("rig-neutral");
 	CatchmentCargo("rig-neutral", tile(20, 20), 1, 1, 4);
 	CatchmentSetting("station.serve_neutral_industries", 1); CatchmentDump("rig-serve-again");
-	DeleteOilRig(tile(20, 20)); StationNeed(rig->neutral_station == nullptr, __LINE__); delete rig;
+	DeleteOilRig(tile(20, 20)); StationNeed(FIXTURE_POOL_RECORD(rig).neutral_station == nullptr, __LINE__); delete rig;
 	CatchmentDump("rig-removed");
 	/* A hole in the platform, then an edge, then the remaining tiles. */
 	StationCost("catchment-hole", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, tile(8, 6), tile(8, 6), true));
@@ -1314,11 +1315,11 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationCost("dock-remove-test", Command<CMD_LANDSCAPE_CLEAR>::Do(test, tile(3, 16)));
 		StationCost("dock-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(exec, tile(3, 16)));
 		StationNeed(Industry::CanAllocateItem(), __LINE__);
-		Industry *industry = new Industry(); industry->location = TileArea(tile(20, 20), 1, 1); industry->town = *Town::Iterate().begin(); industry->type = 5;
+		Industry *industry = new Industry(); FIXTURE_POOL_RECORD(industry).location = TileArea(tile(20, 20), 1, 1); FIXTURE_POOL_RECORD(industry).town = *Town::Iterate().begin(); FIXTURE_POOL_RECORD(industry).type = 5;
 		MakeIndustry(tile(20, 20), industry->index, 0, 0, WaterClass::Sea);
 		BuildOilRig(tile(20, 20)); StationNeed(IsOilRig(tile(20, 20)), __LINE__);
-		fmt::print(stderr, "STCMD oilrig {}\n", industry->neutral_station != nullptr);
-		DeleteOilRig(tile(20, 20)); StationNeed(industry->neutral_station == nullptr, __LINE__); delete industry;
+		fmt::print(stderr, "STCMD oilrig {}\n", FIXTURE_POOL_RECORD(industry).neutral_station != nullptr);
+		DeleteOilRig(tile(20, 20)); StationNeed(FIXTURE_POOL_RECORD(industry).neutral_station == nullptr, __LINE__); delete industry;
 		ChangeTileOwner(tile(1, 1), company->index, company->index);
 		fmt::print(stderr, "STCMD complete\n");
 		if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);

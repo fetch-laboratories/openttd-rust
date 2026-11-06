@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-lifecycle-console.hpp Station naming, waypoint ground and destruction fixtures. */
 #ifdef WITH_RUST
+#include "pool-record-fixture.hpp"
 #include "tests/station_spatial_fixture.hpp"
 #endif
 #include "vehicle-record-fixture.hpp"
@@ -57,7 +58,7 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	build(at(22, 2), "forest", STR_SV_STNAME_FOREST);
 	woods_name.Restore(); _settings_game.game_creation.landscape = LandscapeType::Temperate;
 	StationNeed(Industry::CanAllocateItem(), __LINE__);
-	Industry *ind = new Industry(); ind->location = TileArea(at(12, 12), 2, 1); ind->town = ClosestTownFromTile(at(12, 12), UINT_MAX); ind->type = 0;
+	Industry *ind = new Industry(); FIXTURE_POOL_RECORD(ind).location = TileArea(at(12, 12), 2, 1); FIXTURE_POOL_RECORD(ind).town = ClosestTownFromTile(at(12, 12), UINT_MAX); FIXTURE_POOL_RECORD(ind).type = 0;
 	ind->produced.resize(1); ind->produced[0].cargo = GetCargoTypeByLabel(CT_COAL);
 	MakeIndustry(at(12, 12), ind->index, 0, 0, WaterClass::Invalid); MakeIndustry(at(13, 12), ind->index, 0, 0, WaterClass::Invalid);
 	auto *spec = const_cast<IndustrySpec *>(GetIndustrySpec(0));
@@ -76,11 +77,11 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	for (Station *st : aliases) delete st;
 	station_name.Restore(); life.Restore();
 	StationNeed(Industry::CanAllocateItem(), __LINE__);
-	Industry *rig = new Industry(); rig->location = TileArea(at(24, 24), 1, 2); rig->town = ClosestTownFromTile(at(24, 24), UINT_MAX); rig->type = 5;
-	MakeIndustry(rig->location.tile, rig->index, GFX_OILRIG_1, 0, WaterClass::Sea);
-	MakeIndustry(at(24, 25), rig->index, GFX_OILRIG_1, 0, WaterClass::Sea); BuildOilRig(rig->location.tile);
-	StationNeed(rig->neutral_station != nullptr && rig->neutral_station->string_id == STR_SV_STNAME_OILFIELD && rig->neutral_station->indtype == IT_INVALID, __LINE__); rig->neutral_station->name = "Owner562 oilrig";
-	fmt::print(stderr, "STCMD owner562-name oilrig {} {} {}\n", rig->neutral_station->index.base(), rig->neutral_station->string_id, rig->neutral_station->indtype);
+	Industry *rig = new Industry(); FIXTURE_POOL_RECORD(rig).location = TileArea(at(24, 24), 1, 2); FIXTURE_POOL_RECORD(rig).town = ClosestTownFromTile(at(24, 24), UINT_MAX); FIXTURE_POOL_RECORD(rig).type = 5;
+	MakeIndustry(FIXTURE_POOL_RECORD(rig).location.tile, rig->index, GFX_OILRIG_1, 0, WaterClass::Sea);
+	MakeIndustry(at(24, 25), rig->index, GFX_OILRIG_1, 0, WaterClass::Sea); BuildOilRig(FIXTURE_POOL_RECORD(rig).location.tile);
+	StationNeed(FIXTURE_POOL_RECORD(rig).neutral_station != nullptr && FIXTURE_POOL_RECORD(rig).neutral_station->string_id == STR_SV_STNAME_OILFIELD && FIXTURE_POOL_RECORD(rig).neutral_station->indtype == IT_INVALID, __LINE__); FIXTURE_POOL_RECORD(rig).neutral_station->name = "Owner562 oilrig";
+	fmt::print(stderr, "STCMD owner562-name oilrig {} {} {}\n", FIXTURE_POOL_RECORD(rig).neutral_station->index.base(), FIXTURE_POOL_RECORD(rig).neutral_station->string_id, FIXTURE_POOL_RECORD(rig).neutral_station->indtype);
 	/* Exhaust every default suffix using real station records, including forest aliasing. */
 	for (Town *town : Town::Iterate()) for (StringID name = STR_SV_STNAME; name < STR_SV_STNAME_FALLBACK; ++name) {
 		Station *st = Station562New(origin, "Owner562 seed"); st->town = town; st->string_id = name; seeds.push_back(st);

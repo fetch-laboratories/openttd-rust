@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-spatial-console.hpp Unsorted station observations and actual query consumers. */
 #ifdef WITH_RUST
+#include "pool-record-fixture.hpp"
 #include "tests/station_spatial_fixture.hpp"
 #else
 #include "station602-town-original.hpp"
@@ -321,16 +322,16 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 		fmt::print(stderr, "\n");
 	}
 	Town *town = seeds.front()->town;
-	Backup<TileIndex> location(town->xy, origin);
-	Backup<std::array<uint32_t, NUM_HOUSE_ZONES>> radii(town->cache.squared_town_zone_radius); town->cache.squared_town_zone_radius.fill(1000);
+	Backup<TileIndex> location(FIXTURE_POOL_RECORD(town).xy, origin);
+	Backup<std::array<uint32_t, NUM_HOUSE_ZONES>> radii(FIXTURE_TOWN_CACHE(town).squared_town_zone_radius); FIXTURE_TOWN_CACHE(town).squared_town_zone_radius.fill(1000);
 	for (int16_t initial : {INT16_MIN, -1000, 999, INT16_MAX}) {
-		town->ratings[_current_company] = initial;
+		FIXTURE_POOL_RECORD(town).ratings[_current_company] = initial;
 #ifdef WITH_RUST
 		auto active = openttd_test_town_stations(&GetRustTownServices(), &GetRustSharedServices(), town->index.base());
 #else
 		auto active = CountActiveStations(town); UpdateTownRating(town);
 #endif
-		fmt::print(stderr, "STCMD spatial602-town {} {} {}\n", initial, active, town->ratings[_current_company]);
+		fmt::print(stderr, "STCMD spatial602-town {} {} {}\n", initial, active, FIXTURE_POOL_RECORD(town).ratings[_current_company]);
 	}
 	location.Restore(); radii.Restore();
 	if (!reload) {
