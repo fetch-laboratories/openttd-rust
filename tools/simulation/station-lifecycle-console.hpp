@@ -155,7 +155,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { vehicle = v; break; }
 		StationNeed(vehicle != nullptr && vehicle->cargo_payment == nullptr && LinkGraph::CanAllocateItem(2) && CargoPacket::CanAllocateItem(2), __LINE__);
 		vehicle->current_order.MakeLoading(false); vehicle->current_order.SetLoadType(OrderLoadType::NoLoad); vehicle->current_order.SetUnloadType(OrderUnloadType::NoUnload);
-		FIXTURE_SET(vehicle, LastStationVisited, last_station_visited, victim->index); vehicle->last_loading_station = victim->index; victim->loading_vehicles.push_back(vehicle);
+		FIXTURE_SET(vehicle, LastStationVisited, last_station_visited, victim->index); vehicle->last_loading_station = victim->index; FIXTURE_LOADING(victim).push_back(vehicle);
 		for (CargoType cargo : {0, 1}) {
 			LinkGraph *graph = new LinkGraph(cargo); FIXTURE_VSET(FIXTURE_GOODS(victim, cargo), LinkGraph, link_graph, graph->index); FIXTURE_VFIELD(FIXTURE_GOODS(victim, cargo), node) = graph->AddNode(victim);
 			if (cargo == 0) {
@@ -169,11 +169,11 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 		FIXTURE_GOODS(victim, 0).GetOrCreateData().cargo.Append(new CargoPacket(victim->index, 11, Source{FIXTURE_FIELD(victim, town)->index, SourceType::Town}), survivor->index);
 	} else {
 		for (Station *st : Station::Iterate()) { if (st->name == "Owner562 victim") victim = st; if (st->name == "Owner562 survivor") survivor = st; }
-		StationNeed(victim != nullptr && survivor != nullptr && !victim->loading_vehicles.empty(), __LINE__);
-		vehicle = RoadVehicle::From(victim->loading_vehicles.front());
+		StationNeed(victim != nullptr && survivor != nullptr && !FIXTURE_LOADING(victim).empty(), __LINE__);
+		vehicle = RoadVehicle::From(FIXTURE_LOADING(victim).front());
 	}
 	StationNeed(FIXTURE_GOODS(victim, 0).AvailableCount() == 11 && FIXTURE_GOODS(survivor, 0).AvailableCount() == 5, __LINE__);
-	fmt::print(stderr, "STCMD owner562-delete before {} {} {}\n", FIXTURE_GOODS(victim, 0).AvailableCount(), FIXTURE_GOODS(survivor, 0).AvailableCount(), victim->loading_vehicles.size());
+	fmt::print(stderr, "STCMD owner562-delete before {} {} {}\n", FIXTURE_GOODS(victim, 0).AvailableCount(), FIXTURE_GOODS(survivor, 0).AvailableCount(), FIXTURE_LOADING(victim).size());
 	if (!stage) {
 		StationID id = victim->index; LinkGraphID empty = FIXTURE_VGET(FIXTURE_GOODS(victim, 1), LinkGraph, link_graph); delete victim;
 		StationNeed(!Station::IsValidID(id) && !LinkGraph::IsValidID(empty), __LINE__);

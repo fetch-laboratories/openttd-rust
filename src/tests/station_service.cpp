@@ -369,8 +369,8 @@ TEST_CASE("Station service - loading save staging retains partial and nested eff
 	queue.push_back(b);
 	nested.push_back(b);
 	{
-		RustStationLoadingQueueSaveScope save(&queue, false);
-		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(queue));
+		RustStationLoadingQueueSaveScope save(owner.get(), false);
+		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(owner.get()));
 		CHECK(*list == std::list<void *>{a, b});
 		list->clear();
 	}
@@ -378,8 +378,8 @@ TEST_CASE("Station service - loading save staging retains partial and nested eff
 	/* SlRefList clears storage and appends the next default entry before
 	 * reading its reference. A failure therefore retains that null entry. */
 	try {
-		RustStationLoadingQueueSaveScope load(&queue, true);
-		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(queue));
+		RustStationLoadingQueueSaveScope load(owner.get(), true);
+		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(owner.get()));
 		list->clear();
 		list->push_back(a);
 		list->emplace_back();
@@ -389,18 +389,18 @@ TEST_CASE("Station service - loading save staging retains partial and nested eff
 	/* A later nested error keeps each fixed prefix and restores the outer
 	 * descriptor's context before it unwinds. */
 	try {
-		RustStationLoadingQueueSaveScope fix(&queue, true);
-		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(queue));
+		RustStationLoadingQueueSaveScope fix(owner.get(), true);
+		auto *list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(owner.get()));
 		list->front() = b;
 		try {
-			RustStationLoadingQueueSaveScope inner(&nested, true);
-			auto *inner_list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(nested));
+			RustStationLoadingQueueSaveScope inner(nested_owner.get(), true);
+			auto *inner_list = static_cast<std::list<void *> *>(RustStationLoadingQueueSaveScope::Address(nested_owner.get()));
 			inner_list->front() = a;
-			CHECK(RustStationLoadingQueueSaveScope::Address(queue) == list);
+			CHECK(RustStationLoadingQueueSaveScope::Address(owner.get()) == list);
 			throw 2;
 		} catch (int) {}
 		CHECK(nested.front() == a);
-		CHECK(RustStationLoadingQueueSaveScope::Address(queue) == list);
+		CHECK(RustStationLoadingQueueSaveScope::Address(owner.get()) == list);
 		throw 3;
 	} catch (int) {}
 	CHECK(std::vector<Vehicle *>(queue.begin(), queue.end()) == std::vector<Vehicle *>{b, nullptr});
@@ -428,7 +428,7 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	CHECK(st->Record().delete_ctr == 0);
 	CHECK(st->GetGoods(63).Record().rating == 175);
 	CHECK(st->GetGoods(63).Record().amount_fract == 0);
-	CHECK(st->loading_vehicles.empty());
+	CHECK(st->LoadingVehicles().empty());
 	CHECK(st->Record().time_since_load == 255);
 	auto *indexed = new (StationID(17)) Station(TileIndex(2));
 	CHECK(indexed->index == StationID(17));

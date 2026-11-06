@@ -450,7 +450,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     }
     let visits = unsafe { &*s.catchment.visits };
     loop {
-        let front = unsafe { crate::station_service::openttd_rust_station_queue_first(state) };
+        let front =
+            unsafe { crate::station_service::openttd_rust_station_queue_first(state.cast()) };
         if front.is_null() {
             break;
         }

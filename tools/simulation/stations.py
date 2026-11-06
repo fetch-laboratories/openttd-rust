@@ -831,14 +831,15 @@ static void StationGraphs()
 static void CatchmentDump(const char *label)
 {
 	for (const Station *st : Station::Iterate()) {
-		const TileArea &area = st->catchment_tiles;
+		const auto &catchment = FIXTURE_CATCHMENT(st);
+		const TileArea &area = catchment;
 		uint64_t hash = 0; uint count = 0;
 		if (area.w != 0 && area.h != 0) {
-			BitmapTileIterator it(st->catchment_tiles);
+			BitmapTileIterator it(catchment);
 			for (TileIndex t = it; t != INVALID_TILE; t = ++it) { hash = hash * 1000003 + t.base(); ++count; }
 		}
 		fmt::print(stderr, "STCMD catchment {} station {} rect {} {} {} {} empty {} radius {} area {} {} {} tiles {} {}", label, st->index.base(), FIXTURE_FIELD(st, rect).left, FIXTURE_FIELD(st, rect).top, FIXTURE_FIELD(st, rect).right, FIXTURE_FIELD(st, rect).bottom, FIXTURE_RECT(st).IsEmpty(), st->GetCatchmentRadius(), area.tile.base(), area.w, area.h, count, hash);
-		for (const auto &entry : st->industries_near) fmt::print(stderr, " ind {}:{}", entry.industry->index.base(), entry.distance);
+		for (const auto &entry : FIXTURE_INDUSTRIES_NEAR(st)) fmt::print(stderr, " ind {}:{}", entry.industry->index.base(), entry.distance);
 		fmt::print(stderr, "\n");
 	}
 	for (const Town *t : Town::Iterate()) {
@@ -941,7 +942,7 @@ static void StationCatchmentFixture(TileIndex origin, const DoCommandFlags &test
 		const Station *st = Station::Get(station);
 		bool industry_near = false, delivers = false;
 		for (const Station *s : built->stations_near) industry_near |= s == st;
-		for (const auto &entry : st->industries_near) delivers |= entry.industry == built;
+		for (const auto &entry : FIXTURE_INDUSTRIES_NEAR(st)) delivers |= entry.industry == built;
 		StationNeed(industry_near && delivers, __LINE__);
 	}
 	CatchmentDump("industry");

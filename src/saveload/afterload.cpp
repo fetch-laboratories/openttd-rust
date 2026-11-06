@@ -1682,7 +1682,7 @@ bool AfterLoadGame()
 			if ((v->GetType() != VEH_TRAIN || Train::From(v)->IsFrontEngine()) &&  // for all locs
 					!v->GetVehStatus().Any({VehState::Stopped, VehState::Crashed}) && // not stopped or crashed
 					v->current_order.IsType(OT_LOADING)) {         // loading
-				Station::Get(v->GetLastStationVisited())->loading_vehicles.push_back(v);
+				Station::Get(v->GetLastStationVisited())->LoadingVehicles().push_back(v);
 
 				/* The loading finished flag is *only* set when actually completely
 				 * finished. Because the vehicle is loading, it is not finished. */
@@ -1693,10 +1693,10 @@ bool AfterLoadGame()
 		/* For some reason non-loading vehicles could be in the station's loading vehicle list */
 
 		for (Station *st : Station::Iterate()) {
-			for (auto iter = st->loading_vehicles.begin(); iter != st->loading_vehicles.end(); /* nothing */) {
+			for (auto iter = st->LoadingVehicles().begin(); iter != st->LoadingVehicles().end(); /* nothing */) {
 				Vehicle *v = *iter;
 				if (!v->current_order.IsType(OT_LOADING)) {
-					iter = st->loading_vehicles.erase(iter);
+					iter = st->LoadingVehicles().erase(iter);
 				} else {
 					++iter;
 				}
@@ -2251,7 +2251,7 @@ bool AfterLoadGame()
 		 * add cargopayment for the vehicles that don't have it.
 		 */
 		for (Station *st : Station::Iterate()) {
-			for (Vehicle *v : st->loading_vehicles) {
+			for (Vehicle *v : st->LoadingVehicles()) {
 				/* There are always as many CargoPayments as Vehicles. We need to make the
 				 * assert() in Pool::GetNew() happy by calling CanAllocateItem(). */
 				static_assert(CargoPaymentPool::MAX_SIZE == VehiclePool::MAX_SIZE);

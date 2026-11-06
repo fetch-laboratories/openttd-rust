@@ -21,15 +21,16 @@
 class RustStationLoadingQueueSaveScope {
 	inline static RustStationLoadingQueueSaveScope *current = nullptr;
 	RustStationLoadingQueueSaveScope *previous;
-	RustStationLoadingQueue *queue;
+	OpenTTDStationRecord *record;
+	RustStationLoadingQueue queue;
 	std::list<void *> vehicles;
 	bool write;
 	bool accessed = false;
 
 public:
-	RustStationLoadingQueueSaveScope(RustStationLoadingQueue *queue, bool write) : previous(current), queue(queue), write(write)
+	RustStationLoadingQueueSaveScope(OpenTTDStationRecord *record, bool write) : previous(current), record(record), queue(record), write(write)
 	{
-		if (queue != nullptr) for (Vehicle *vehicle : *queue) this->vehicles.push_back(vehicle);
+		if (record != nullptr) for (Vehicle *vehicle : this->queue) this->vehicles.push_back(vehicle);
 		current = this;
 	}
 	RustStationLoadingQueueSaveScope(const RustStationLoadingQueueSaveScope &) = delete;
@@ -37,17 +38,17 @@ public:
 	~RustStationLoadingQueueSaveScope()
 	{
 		if (this->write && this->accessed) {
-			this->queue->clear();
-			for (void *vehicle : this->vehicles) this->queue->push_back(static_cast<Vehicle *>(vehicle));
+			this->queue.clear();
+			for (void *vehicle : this->vehicles) this->queue.push_back(static_cast<Vehicle *>(vehicle));
 		}
 		current = this->previous;
 	}
 
-	static void *Address(RustStationLoadingQueue &queue)
+	static void *Address(OpenTTDStationRecord *record)
 	{
 		/* Every descriptor access is enclosed by a station SlObject scope. */
 		auto *scope = current;
-		while (scope->queue != &queue) scope = scope->previous;
+		while (scope->record != record) scope = scope->previous;
 		scope->accessed = true;
 		return &scope->vehicles;
 	}

@@ -902,7 +902,10 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
     cancel_reservation(v, INVALID_STATION, st.native, s);
     // SAFETY: the live station's queue owner; the vehicle shell is its key.
     unsafe {
-        crate::station_service::openttd_rust_station_queue_remove(st.state, v.shell().cast());
+        crate::station_service::openttd_rust_station_queue_remove(
+            st.state.cast(),
+            v.shell().cast(),
+        );
     }
 
     (s.hide_filling)(v);

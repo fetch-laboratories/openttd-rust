@@ -3652,11 +3652,12 @@ void MarkCatchmentTilesDirty()
 	}
 
 	if (_viewport_highlight_station != nullptr) {
-		if (static_cast<const TileArea &>(_viewport_highlight_station->catchment_tiles).tile == INVALID_TILE) {
+		auto catchment = _viewport_highlight_station->GetCatchmentTiles();
+		if (static_cast<const TileArea &>(catchment).tile == INVALID_TILE) {
 			MarkWholeScreenDirty();
 			_viewport_highlight_station = nullptr;
 		} else {
-			BitmapTileIterator it(_viewport_highlight_station->catchment_tiles);
+			BitmapTileIterator it(catchment);
 			for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) {
 				MarkTileDirtyByTile(tile);
 			}

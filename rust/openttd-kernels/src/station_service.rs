@@ -155,14 +155,18 @@ unsafe fn queue_relink(state: *mut Service) {
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_queue_size(state: *const Service) -> usize {
+pub unsafe extern "C" fn openttd_rust_station_queue_size(
+    state: *const crate::station_record::StationRecord,
+) -> usize {
+    let state = state.cast::<Service>();
     unsafe { (*state).queue.len() }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_push(
-    state: *mut Service,
+    state: *mut crate::station_record::StationRecord,
     vehicle: *mut c_void,
 ) {
+    let state = state.cast::<Service>();
     let entry = Box::into_raw(Box::new(QueueEntry {
         vehicle,
         next: std::ptr::null_mut(),
@@ -176,9 +180,10 @@ pub unsafe extern "C" fn openttd_rust_station_queue_push(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_remove(
-    state: *mut Service,
+    state: *mut crate::station_record::StationRecord,
     vehicle: *mut c_void,
 ) {
+    let state = state.cast::<Service>();
     unsafe {
         (*state).queue.retain(|&entry| {
             if (&raw const (*entry).vehicle).read() == vehicle {
@@ -192,7 +197,10 @@ pub unsafe extern "C" fn openttd_rust_station_queue_remove(
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_queue_clear(state: *mut Service) {
+pub unsafe extern "C" fn openttd_rust_station_queue_clear(
+    state: *mut crate::station_record::StationRecord,
+) {
+    let state = state.cast::<Service>();
     for entry in unsafe { (*state).queue.drain(..) } {
         unsafe {
             drop(Box::from_raw(entry));
@@ -201,8 +209,9 @@ pub unsafe extern "C" fn openttd_rust_station_queue_clear(state: *mut Service) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_first(
-    state: *const Service,
+    state: *const crate::station_record::StationRecord,
 ) -> *mut QueueEntry {
+    let state = state.cast::<Service>();
     unsafe {
         (*state)
             .queue
@@ -214,7 +223,7 @@ pub unsafe extern "C" fn openttd_rust_station_queue_first(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_next(
-    _state: *const Service,
+    _state: *const crate::station_record::StationRecord,
     entry: *const QueueEntry,
 ) -> *mut QueueEntry {
     unsafe { (&raw const (*entry).next).read().cast() }
@@ -225,9 +234,10 @@ pub unsafe extern "C" fn openttd_rust_station_queue_value(entry: *const QueueEnt
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_queue_erase_node(
-    state: *mut Service,
+    state: *mut crate::station_record::StationRecord,
     entry: *mut QueueEntry,
 ) -> *mut QueueEntry {
+    let state = state.cast::<Service>();
     let successor = unsafe { (&raw const (*entry).next).read().cast() };
     // Original erase requires a live iterator from this owner; no new rejection
     // or fatal path is introduced for an input outside that precondition.
@@ -955,7 +965,7 @@ unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, l: &
         }
     }
     let state = crate::station_record::service_of(st.cast());
-    let mut node = unsafe { openttd_rust_station_queue_first(state) };
+    let mut node = unsafe { openttd_rust_station_queue_first(state.cast()) };
     while !node.is_null() {
         let mut current =
             NonNull::new(unsafe { openttd_rust_station_queue_value(node) }).map(|shell| unsafe {
@@ -975,7 +985,7 @@ unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, l: &
             }
             current = vehicle.next();
         }
-        node = unsafe { openttd_rust_station_queue_next(state, node) };
+        node = unsafe { openttd_rust_station_queue_next(state.cast(), node) };
     }
 }
 #[unsafe(no_mangle)]
@@ -1510,7 +1520,7 @@ fn refit_vehicle(
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     let st = w.station(front.last_station());
     unsafe {
-        openttd_rust_station_queue_push(st.state, front.shell().cast());
+        openttd_rust_station_queue_push(st.state.cast(), front.shell().cast());
     }
     (l.set_loading_finished)(front, false);
     (l.set_load_ticks)(front, 1);
@@ -1875,7 +1885,7 @@ pub(crate) unsafe fn load_station(
 ) {
     // C++ supplies the queue owner directly: no callback precedes the empty
     // queue check, and the queue station is not the vehicles' loading station.
-    let node = unsafe { openttd_rust_station_queue_first(state) };
+    let node = unsafe { openttd_rust_station_queue_first(state.cast()) };
     if node.is_null() {
         return;
     }
@@ -1913,12 +1923,12 @@ unsafe fn load_station_queue(
                 last = Some(v);
             }
         }
-        node = unsafe { openttd_rust_station_queue_next(state, node) };
+        node = unsafe { openttd_rust_station_queue_next(state.cast(), node) };
     }
     if last.is_none() {
         return;
     }
-    node = unsafe { openttd_rust_station_queue_first(state) };
+    node = unsafe { openttd_rust_station_queue_first(state.cast()) };
     while !node.is_null() {
         let v =
             unsafe { VehicleRef::from_shell(openttd_rust_station_queue_value(node), &*l.vehicle) };
@@ -1930,7 +1940,7 @@ unsafe fn load_station_queue(
         if Some(v) == last {
             break;
         }
-        node = unsafe { openttd_rust_station_queue_next(state, node) };
+        node = unsafe { openttd_rust_station_queue_next(state.cast(), node) };
     }
     (l.flush_delivery)();
 }

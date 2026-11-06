@@ -617,7 +617,7 @@ void Vehicle::PreDestructor()
 
 	if (Station::IsValidID(this->GetLastStationVisited())) {
 		Station *st = Station::Get(this->GetLastStationVisited());
-		st->loading_vehicles.remove(this);
+		st->LoadingVehicles().remove(this);
 
 		HideFillingPercent(&this->fill_percent_te_id);
 		this->CancelReservation(StationID::Invalid(), st);

@@ -135,7 +135,7 @@ ScriptTileList_StationCoverage::ScriptTileList_StationCoverage(StationID station
 {
 	if (!ScriptStation::IsValidStation(station_id)) return;
 
-	const BitmapTileArea &ta = ::Station::Get(station_id)->catchment_tiles;
+	const BitmapTileArea &ta = ::Station::Get(station_id)->GetCatchmentTiles();
 	if (static_cast<const TileArea &>(ta).tile == INVALID_TILE) return;
 
 	BitmapTileIterator it(ta);

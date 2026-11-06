@@ -203,10 +203,10 @@ void UpdateOldAircraft()
 
 	/* Clear aircraft from loading vehicles, if we bumped them into the air. */
 	for (Station *st : Station::Iterate()) {
-		for (auto iter = st->loading_vehicles.begin(); iter != st->loading_vehicles.end(); /* nothing */) {
+		for (auto iter = st->LoadingVehicles().begin(); iter != st->LoadingVehicles().end(); /* nothing */) {
 			Vehicle *v = *iter;
 			if (v->GetType() == VEH_AIRCRAFT && !v->current_order.IsType(OT_LOADING)) {
-				iter = st->loading_vehicles.erase(iter);
+				iter = st->LoadingVehicles().erase(iter);
 				delete v->cargo_payment;
 			} else {
 				++iter;

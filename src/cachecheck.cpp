@@ -176,7 +176,7 @@ void CheckCaches()
 	for (Industry *ind : Industry::Iterate()) old_industry_stations_near.push_back(copy_stations(ind->stations_near));
 
 	std::vector<IndustriesNear> old_station_industries_near;
-	for (Station *st : Station::Iterate()) old_station_industries_near.push_back(copy_industries(st->industries_near));
+	for (Station *st : Station::Iterate()) old_station_industries_near.push_back(copy_industries(st->IndustriesNear()));
 
 	for (Station *st : Station::Iterate()) {
 		for (GoodsEntry ge : st->Goods()) {
@@ -213,7 +213,7 @@ void CheckCaches()
 	/* Check industries_near */
 	i = 0;
 	for (Station *st : Station::Iterate()) {
-		if (copy_industries(st->industries_near) != old_station_industries_near[i]) {
+		if (copy_industries(st->IndustriesNear()) != old_station_industries_near[i]) {
 			Debug(desync, 2, "warning: station industries near mismatch: station {}", st->index);
 		}
 		i++;

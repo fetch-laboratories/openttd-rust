@@ -29,7 +29,7 @@
 static SaveLoad StationLoadingVehicles(SaveLoadVersion from, SaveLoadVersion to)
 {
 	return {"loading_vehicles", SL_REFLIST, REF_VEHICLE, 0, from, to, [](void *object, size_t) -> void * {
-		return RustStationLoadingQueueSaveScope::Address(static_cast<Station *>(object)->loading_vehicles);
+		return RustStationLoadingQueueSaveScope::Address(&static_cast<Station *>(object)->Record());
 	}, 0, nullptr};
 }
 
@@ -524,7 +524,7 @@ struct STNSChunkHandler : ChunkHandler {
 			Station *st = new (StationID(index)) Station();
 
 			_waiting_acceptance = 0;
-			RustStationLoadingQueueSaveScope loading(&st->loading_vehicles, true);
+			RustStationLoadingQueueSaveScope loading(&st->Record(), true);
 			SlObject(st, slt);
 		}
 	}
@@ -537,7 +537,7 @@ struct STNSChunkHandler : ChunkHandler {
 		if (!IsSavegameVersionBefore(SLV_123)) return;
 
 		for (Station *st : Station::Iterate()) {
-			RustStationLoadingQueueSaveScope loading(&st->loading_vehicles, true);
+			RustStationLoadingQueueSaveScope loading(&st->Record(), true);
 			SlObject(st, _old_station_desc);
 		}
 	}
@@ -710,7 +710,7 @@ struct STNNChunkHandler : ChunkHandler {
 		/* Write the stations */
 		for (BaseStation *st : BaseStation::Iterate()) {
 			SlSetArrayIndex(st->index);
-			RustStationLoadingQueueSaveScope loading(st->GetFacilities().Test(StationFacility::Waypoint) ? nullptr : &static_cast<Station *>(st)->loading_vehicles, false);
+			RustStationLoadingQueueSaveScope loading(st->GetFacilities().Test(StationFacility::Waypoint) ? nullptr : &static_cast<Station *>(st)->Record(), false);
 			SlObject(st, _station_desc);
 		}
 	}
@@ -727,7 +727,7 @@ struct STNNChunkHandler : ChunkHandler {
 			bool waypoint = static_cast<StationFacilities>(SlReadByte()).Test(StationFacility::Waypoint);
 
 			BaseStation *bst = waypoint ? (BaseStation *)new (StationID(index)) Waypoint() : new (StationID(index)) Station();
-			RustStationLoadingQueueSaveScope loading(waypoint ? nullptr : &static_cast<Station *>(bst)->loading_vehicles, true);
+			RustStationLoadingQueueSaveScope loading(waypoint ? nullptr : &static_cast<Station *>(bst)->Record(), true);
 			SlObject(bst, slt);
 		}
 	}
@@ -740,7 +740,7 @@ struct STNNChunkHandler : ChunkHandler {
 		if (IsSavegameVersionBefore(SLV_123)) return;
 
 		for (BaseStation *bst : BaseStation::Iterate()) {
-			RustStationLoadingQueueSaveScope loading(bst->GetFacilities().Test(StationFacility::Waypoint) ? nullptr : &static_cast<Station *>(bst)->loading_vehicles, true);
+			RustStationLoadingQueueSaveScope loading(bst->GetFacilities().Test(StationFacility::Waypoint) ? nullptr : &static_cast<Station *>(bst)->Record(), true);
 			SlObject(bst, _station_desc);
 		}
 	}
