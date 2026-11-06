@@ -179,6 +179,19 @@ pub(crate) fn tick(
         join_next(s);
     }
 }
+/// Observer installed by `linkgraph-schedule-reference.cpp`; null posts as before.
+#[cfg(feature = "native-test-support")]
+pub(crate) static PAUSE_OBSERVER: GameState<Option<extern "C" fn(bool)>> = GameState::new(None);
+/// `Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused)`, the scheduler's only pause post.
+fn post_pause(s: &Services, paused: bool) {
+    // The game-free scheduler fixture records this post in place of the command chain it lacks.
+    #[cfg(feature = "native-test-support")]
+    if let Some(observer) = unsafe { *PAUSE_OBSERVER.get() } {
+        observer(paused);
+        return;
+    }
+    crate::command_post::pause(s.shared, crate::openttd::PauseMode::LINK_GRAPH, paused);
+}
 pub(crate) fn pause(
     s: &Services,
     shared: &crate::services::Services,
@@ -187,7 +200,7 @@ pub(crate) fn pause(
 ) {
     if paused {
         if !unfinished(s) {
-            crate::command_post::pause(s.shared, crate::openttd::PauseMode::LINK_GRAPH, false);
+            post_pause(s, false);
         }
     } else if unpaused {
         if crate::timer_game_common::economy_fraction() != SPAWN_JOIN_TICK - 2 {
@@ -196,7 +209,7 @@ pub(crate) fn pause(
         let interval =
             i32::from(unsafe { shared.settings().recalc_interval.read() }) / SECONDS_PER_DAY;
         if crate::timer_game_common::economy_date().0 % interval == interval / 2 && unfinished(s) {
-            crate::command_post::pause(s.shared, crate::openttd::PauseMode::LINK_GRAPH, true);
+            post_pause(s, true);
             witness::hit(witness::SCHEDULE_PAUSE);
         }
     }

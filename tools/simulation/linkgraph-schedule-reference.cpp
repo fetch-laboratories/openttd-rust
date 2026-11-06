@@ -81,7 +81,12 @@ LinkGraphSchedule LinkGraphSchedule::instance;
 #undef _settings_game
 #undef _pause_mode
 }
+/* The scheduler posts its pause through the command chain, which this game-free fixture lacks. */
+extern "C" void openttd_test_schedule_pause_observer(void (*)(bool));
+static void ObservePause(bool paused) { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused); }
+static const OpenTTDSharedServices fixture_shared{};
 static const OpenTTDScheduleServices services{
+	.shared = &fixture_shared,
 	.graph_owner = [](LinkGraph *g) noexcept { return g->owner; },
 	.assert_graph = [](const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
 	.can_allocate = []() noexcept { return LinkGraphJob::CanAllocateItem(); },
@@ -98,7 +103,6 @@ static const OpenTTDScheduleServices services{
 	.next_graph = [](uint32_t *from) noexcept -> LinkGraph * { while (*from < graphs.size()) { auto *g = graphs[(*from)++]; if (g != nullptr) return g; } return nullptr; },
 	.next_job = [](uint32_t *from) noexcept -> LinkGraphJob * { while (*from < jobs.size()) { auto *j = jobs[(*from)++]; if (j != nullptr) return j; } return nullptr; },
 	.shift_job = [](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(Date{interval}); },
-	.post_pause = [](PauseMode mode, bool paused) noexcept { Command<CMD_PAUSE>::Post(mode, paused); },
 	.begin_measurement = [](void *p, bool client) noexcept { if (client) static_cast<std::optional<PerformanceMeasurer> *>(p)->emplace(PFE_GL_LINKGRAPH); else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH); },
 };
 static auto &ref = reference::LinkGraphSchedule::instance;
@@ -158,7 +162,8 @@ static void Pause(int bits, bool load = false)
 }
 static auto Run(bool rust)
 {
-	candidate = rust; trace.clear(); graphs.fill(nullptr); jobs.fill(nullptr); recycle = false; Import({}, {}); Pause(0); Pause(1); Pause(0, true);
+	candidate = rust; if (rust) openttd_test_schedule_pause_observer(&ObservePause);
+	trace.clear(); graphs.fill(nullptr); jobs.fill(nullptr); recycle = false; Import({}, {}); Pause(0); Pause(1); Pause(0, true);
 	LinkGraph small{0, 1, 10}, large{1, 2, 11}, unqueued{2, 3, 12}; graphs = {&small, &large, &unqueued, nullptr};
 	Tick(0, 21); Import({&small}, {}); Tick(0, 21); Capture(); Import({}, {});
 	Queue(&small); Queue(&small); Queue(&large); Tick(0, 20); Tick(0, 21); Capture(); // Duplicate first pointer ends rotation early.
@@ -174,7 +179,9 @@ static auto Run(bool rust)
 	else { ref.SpawnAll(); ref.ShiftDates(Date{-17}); ref.Clear(); }
 	for (auto *g : LinkGraph::Iterate()) { trace.push_back({30, g->tag, candidate ? *openttd_rust_live_graph_date(g->owner) : g->date}); trace.push_back({31, g->tag, candidate ? *openttd_rust_live_node_fields(g->owner, 0).last_update : g->node_date}); }
 	Capture(); assert(jobs[listed->index] == listed && jobs[unlisted->index] == unlisted); // Clear must not delete.
-	auto result = trace; for (auto *j : jobs) delete j; Import({}, {}); return result;
+	auto result = trace; for (auto *j : jobs) delete j; Import({}, {});
+	if (rust) openttd_test_schedule_pause_observer(nullptr);
+	return result;
 }
 int main()
 {
