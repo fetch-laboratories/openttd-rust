@@ -1037,8 +1037,8 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                 let mut updated = false;
                 if auto {
                     let mut vehicles = Vec::new();
-                    let from_id = (l.graphs.station_id)(from);
-                    let to_id = (l.graphs.station_id)(to);
+                    let from_id = crate::station_record::id(from).0;
+                    let to_id = crate::station_record::id(to).0;
                     let order_count = (l.order_pool_size)();
                     for id in 0..order_count {
                         // OrderList pool IDs are bounded by their u16 representation.
@@ -1103,7 +1103,7 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                     remove.push(crate::station_record::read(to.cast(), |r| {
                         r.goods[usize::from(cargo)].node
                     }));
-                    let to_id = (l.graphs.station_id)(to);
+                    let to_id = crate::station_record::id(to).0;
                     let goods = crate::station_record::goods(from, cargo);
                     let flows = unsafe { crate::station_record::existing_flows(goods) };
                     if !flows.is_null() {
@@ -1111,7 +1111,7 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                         unsafe { (*flows).deleted(to_id) };
                     }
                     unsafe {
-                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), l);
+                        reroute(from, cargo, to_id, crate::station_record::id(from).0, l);
                     }
                 }
             } else {
@@ -1120,7 +1120,7 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                 if unrestricted != INVALID_DATE && date.wrapping_sub(unrestricted) > timeout {
                     crate::witness::hit(crate::witness::STATION_STALE_RESTRICT);
                     unsafe { &mut *owner }.nodes[usize::from(node)].edges[index].restrict();
-                    let to_id = (l.graphs.station_id)(to);
+                    let to_id = crate::station_record::id(to).0;
                     let goods = crate::station_record::goods(from, cargo);
                     let flows = unsafe { crate::station_record::existing_flows(goods) };
                     if !flows.is_null() {
@@ -1130,7 +1130,7 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                         };
                     }
                     unsafe {
-                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), l);
+                        reroute(from, cargo, to_id, crate::station_record::id(from).0, l);
                     }
                 } else {
                     let restricted = unsafe { &*owner }.nodes[usize::from(node)].edges[index]
@@ -1631,7 +1631,7 @@ unsafe fn load_vehicle(
             let tile = front.tile();
             let shared = unsafe { &*w.shared };
             (shared.tile_type)(tile) != crate::vehicle::MP_STATION
-                || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
+                || (shared.station_index)(tile) != crate::station_record::id(st.base).0
         } {
             (l.set_loading_finished)(front, true);
             (l.set_load_ticks)(front, 1);

@@ -415,7 +415,6 @@ pub struct Services {
     pub assertions: bool,
     pub pool: *const *const crate::pool::PoolDescriptor,
     pub shared: *const crate::services::Services,
-    pub station_id: extern "C" fn(*const crate::station::BaseStation) -> u16,
     pub index: extern "C" fn(*const Graph) -> LinkGraphID,
     pub delete_graph: extern "C" fn(*mut Graph),
     pub available: extern "C" fn() -> bool,
@@ -616,7 +615,7 @@ pub(crate) unsafe fn station_supply(
             let graph = (services.allocate)(cargo);
             crate::linkgraph_schedule::openttd_rust_schedule_queue(schedule, graph);
             unsafe {
-                join(graph, (services.station_id)(station), services);
+                join(graph, crate::station_record::id(station).0, services);
             }
             graph
         } else {
@@ -639,7 +638,7 @@ pub(crate) unsafe fn station_supply(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, pool, shared, station_id, index, delete_graph, available, allocate, };
+        assertions, pool, shared, index, delete_graph, available, allocate, };
 }
 
 #[unsafe(no_mangle)]

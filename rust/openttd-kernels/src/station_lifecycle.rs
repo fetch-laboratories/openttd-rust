@@ -164,7 +164,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         if other.is_null() {
             break;
         }
-        from = u32::from((s.catchment.id)(other).0) + 1;
+        from = u32::from(crate::station_record::id(other).0) + 1;
         if other == st || crate::station_record::station_town(other) != town {
             continue;
         }
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         };
         crate::vehicle::visits::leave_station(vehicle, visits);
     }
-    let id = (s.catchment.id)(st);
+    let id = crate::station_record::id(st);
     unsafe {
         crate::aircraft::invalidate_target(c.aircraft, id.0);
     }
@@ -570,7 +570,7 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
         if st.is_null() {
             break;
         }
-        from = u32::from((s.catchment.id)(st).0) + 1;
+        from = u32::from(crate::station_record::id(st).0) + 1;
         if crate::station_record::owner_company(st.cast()) == owner
             && crate::station_record::facilities(st.cast()) & FACILITY_AIRPORT != 0
         {

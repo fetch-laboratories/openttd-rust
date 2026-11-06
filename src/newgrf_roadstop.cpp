@@ -337,7 +337,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.spec_cargo = RustRoadStopCargoTriggers,
 		.spec_triggers = RustRoadStopSpecTriggers,
-		.station_id = RustBaseStationID<BaseStation>,
 		.town_tile = OpenTTDTownTile,
 	};
 	return services;

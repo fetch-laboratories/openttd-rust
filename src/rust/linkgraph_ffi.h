@@ -57,7 +57,6 @@ struct OpenTTDLiveGraphServices {
 	/* Canonical member address: load at game entry, after construction and before teardown. */
 	const RustPoolDescriptor *const *pool;
 	const OpenTTDSharedServices *shared;
-	uint16_t (*station_id)(const OpenTTDBaseStation *) noexcept;
 	uint16_t (*index)(const OpenTTDLiveGraph *) noexcept;
 	void (*delete_graph)(OpenTTDLiveGraph *) noexcept;
 	bool (*available)() noexcept;

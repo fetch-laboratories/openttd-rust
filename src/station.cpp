@@ -53,6 +53,7 @@ StationPool _station_pool("Station");
 StationRecordOwner::StationRecordOwner(BaseStation *shell, TileIndex xy) : record(openttd_rust_station_record_new(shell, xy.base(), this->OffsetIn(shell)))
 {
 	const auto index = shell->index.base();
+	this->record->id = index;
 	_station_pool.BindRecord(index, shell, this->record);
 }
 
@@ -188,7 +189,6 @@ const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcep
 		.town = &GetRustTownServices(),
 		.station = &GetRustStationServices(),
 		.visits = &GetRustVehicleVisits(),
-		.id = RustBaseStationID<BaseStation>,
 		.modified_catchment = RustModifiedCatchment,
 		.spread = RustStationSpread,
 		.industry_by_id = RustIndustryByID<uint16_t>,

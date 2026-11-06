@@ -471,6 +471,7 @@ TEST_CASE("Station records - last owner release retains aliases and published po
 		const auto expected = found->second;
 		/* The shell's C++ lifetime has ended: compare its identity, never call it. */
 		CHECK(record->shell == expected.shell);
+		CHECK(record->id == expected.id);
 		CHECK(BaseStation::GetIfValid(StationID(expected.id)) == expected.shell);
 		CHECK(record->xy == expected.xy);
 		CHECK(BaseStation::CleaningPool() == probe.cleaning);

@@ -16,7 +16,7 @@
 #![allow(unsafe_code)]
 
 use crate::company_type::CompanyID;
-use crate::station_type::BaseStation;
+use crate::station_type::{BaseStation, StationID};
 use crate::tile_type::TileIndex;
 
 /// Opaque native `Town`.
@@ -171,6 +171,8 @@ crate::abi::shared_records! {
         pub cached_name: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
         pub catchment_tiles: crate::bitmap_type::BitmapTileArea,
         pub industries_near: crate::station::IndustryList,
+        /// Published at the existing indexed bind; invalid before binding.
+        pub id: StationID,
     }
     /// The fields of one `RoadStop` shell.
     "OpenTTDRoadStopState" ["station"] => pub struct RoadStopRecord {
@@ -248,6 +250,24 @@ pub(crate) fn read<T>(shell: *const BaseStation, f: impl FnOnce(&StationRecord) 
 #[inline]
 pub(crate) fn xy(shell: *const BaseStation) -> u32 {
     read(shell, |r| r.xy.0)
+}
+
+/// The live owner's already-published pool identity, including during destruction.
+#[inline]
+pub(crate) fn id(shell: *const BaseStation) -> StationID {
+    read(shell, |r| r.id)
+}
+
+/// `Station::TileBelongsToAirport`, retaining the source predicate order.
+pub(crate) fn airport_member(
+    shell: *const BaseStation,
+    tile: u32,
+    s: &crate::services::Services,
+) -> bool {
+    let world = crate::map_func::World::new(s);
+    world.kind(tile) == crate::tile_type::MP_STATION
+        && crate::station_map::is_airport(tile, s)
+        && world.station_index(tile) == id(shell)
 }
 
 /// `BaseStation::owner` of a live shell, as its company byte.
@@ -830,6 +850,7 @@ impl StationRecord {
             cached_name: crate::industrytype::NativeVec::new(),
             catchment_tiles: crate::bitmap_type::BitmapTileArea::default(),
             industries_near: crate::station::IndustryList::default(),
+            id: StationID(crate::station_type::INVALID_STATION),
         }
     }
 }

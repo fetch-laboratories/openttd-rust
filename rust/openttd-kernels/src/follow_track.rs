@@ -530,8 +530,9 @@ pub(crate) fn platform_length_full(
 ) -> u32 {
     if w.types.assertions() {
         // SAFETY: The immutable table and resolved station outlive this scan.
-        let stations = unsafe { &*(w.shared.station_catchment)() };
-        w.check(w.rail_station(tile) && w.station_index(tile) == (stations.id)(station));
+        w.check(
+            w.rail_station(tile) && w.station_index(tile) == crate::station_record::id(station),
+        );
     }
     let delta = w.dimensions.offs_by_axis(w.station_axis(tile));
     let mut t = tile;

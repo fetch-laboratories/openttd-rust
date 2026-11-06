@@ -184,7 +184,7 @@ pub(crate) fn increase_stats(
                 graph = (l.graphs.allocate)(cargo);
                 linkgraph_schedule::openttd_rust_schedule_queue(s.schedule, graph);
                 unsafe {
-                    live::join(graph, (l.graphs.station_id)(st2), l.graphs);
+                    live::join(graph, crate::station_record::id(st2).0, l.graphs);
                 }
             } else {
                 witness::hit(witness::VISITS_GRAPH_FAILURE);
@@ -195,14 +195,14 @@ pub(crate) fn increase_stats(
         }
         if !graph.is_null() {
             unsafe {
-                live::join(graph, (l.graphs.station_id)(st), l.graphs);
+                live::join(graph, crate::station_record::id(st).0, l.graphs);
             }
         }
     } else if second_id == INVALID_LINK_GRAPH {
         graph = l.graphs.get(crate::linkgraph_type::LinkGraphID(first_id));
         witness::hit(witness::VISITS_GRAPH_JOIN);
         unsafe {
-            live::join(graph, (l.graphs.station_id)(st2), l.graphs);
+            live::join(graph, crate::station_record::id(st2).0, l.graphs);
         }
     } else {
         graph = l.graphs.get(crate::linkgraph_type::LinkGraphID(first_id));
@@ -457,7 +457,7 @@ impl Refresher {
         let st = s.station_if_valid(cur_order.destination);
         if st.is_null()
             || next_station == INVALID_STATION
-            || next_station == (s.links.graphs.station_id)(st)
+            || next_station == crate::station_record::id(st).0
         {
             return;
         }
@@ -505,7 +505,7 @@ impl Refresher {
             // transported, unless the wait already exceeds the whole order list.
             if self.full_loading
                 && !list.is_null()
-                && (s.links.graphs.station_id)(st) == self.prediction.last_station
+                && crate::station_record::id(st).0 == self.prediction.last_station
                 && o.total(list) > o.time(v)
             {
                 let total = o.total(list);

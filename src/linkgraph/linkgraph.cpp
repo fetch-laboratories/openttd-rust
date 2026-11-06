@@ -9,8 +9,14 @@
 
 #include "../stdafx.h"
 #include "linkgraph.h"
+#include "../station_base.h"
 
 #include "../safeguards.h"
 
 /* Initialize the link-graph-pool */
 LinkGraphPool _link_graph_pool("LinkGraph");
+
+NodeID LinkGraph::AddNode(const ::Station *st)
+{
+	return openttd_rust_live_graph_add_station(this->owner, st->Record().id, &GetRustLiveGraphServices());
+}

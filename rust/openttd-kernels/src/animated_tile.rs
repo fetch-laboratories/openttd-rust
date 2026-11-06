@@ -62,7 +62,6 @@ pub struct Services {
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
     pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
     pub airport_spec_triggers: extern "C" fn(*const AirportSpec) -> u8,
-    pub airport_belongs: extern "C" fn(*const Station, u32) -> bool,
 }
 static REGISTRY: GameState<*const Services> = GameState::new(std::ptr::null());
 /// Install the immutable native table at `InitializeAnimatedTiles`, before play.
@@ -478,7 +477,7 @@ pub extern "C" fn openttd_rust_trigger_airport_abi(st: *mut Station, trigger: u8
     let mut ret = true;
     let mut random = a.shared().random();
     area.tiles(a.shared().map()).for_each(|t| {
-        if !(a.airport_belongs)(st, t) {
+        if !crate::station_record::airport_member(st.cast(), t, a.shared()) {
             return;
         }
         let spec = crate::newgrf_airport::tile_spec_by_tile(t, unsafe { &*a.airport_runtime });
@@ -523,7 +522,6 @@ crate::abi::layouts! {
         rail_spec_triggers,
         road_spec_triggers,
         airport_spec_triggers,
-        airport_belongs,
     };
     "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };

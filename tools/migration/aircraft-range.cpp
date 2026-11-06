@@ -148,6 +148,7 @@ int main()
 		Fixture f; stations = {{{0}, {destination}}}; valid = {{(validity & 1) != 0, (validity & 2) != 0}};
 		for (size_t i = 0; i < station_records.size(); ++i) {
 			auto &record = *station_records[i].record;
+			record.id = static_cast<uint16_t>(i);
 			record.xy = record.airport.area.tile = stations[i].airport.tile;
 			record.airport.area.w = record.airport.area.h = 7;
 			record.airport.rotation = 0;

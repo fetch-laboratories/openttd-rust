@@ -369,7 +369,6 @@ pub struct CatchmentServices {
     pub station: *const crate::station_service::World,
     /// `MoveGoodsToStation`'s vehicle visit services.
     pub visits: *const crate::vehicle::visits::Services,
-    pub id: extern "C" fn(*mut BaseStation) -> StationID,
     pub modified_catchment: extern "C" fn() -> bool,
     pub spread: extern "C" fn() -> u8,
     pub industry_by_id: extern "C" fn(IndustryID) -> *mut ShellHandle,
@@ -588,7 +587,7 @@ pub(crate) fn remove_from_all_nearby_lists(st: *mut BaseStation, state: *mut Ser
             flat_insert(&mut industries, c.industry_index(tile));
         }
     }
-    let id = (c.c.id)(st);
+    let id = crate::station_record::id(st);
     for town in towns {
         let owner = (c.s.town_owner_by_id)(u32::from(town));
         // SAFETY: Live town owner; immediate mutation.
@@ -658,7 +657,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
                 );
             });
             (*list).clear();
-            (*list).insert(st, (c.c.id)(st));
+            (*list).insert(st, crate::station_record::id(st));
             (*state).record.industries_near.insert(IndustryListEntry {
                 distance: 0,
                 industry,
@@ -684,7 +683,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
         c.map.tile_xy(bounds.left as u32, bounds.top as u32),
         c.map.tile_xy(bounds.right as u32, bounds.bottom as u32),
     );
-    let id = (c.c.id)(st);
+    let id = crate::station_record::id(st);
     for tile in ta.tiles(c.map) {
         if (c.s.tile_type)(tile) != MP_STATION || c.station_index(tile) != id {
             continue;
@@ -747,7 +746,10 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
     let mut st = crate::station_record::next_station_shell(c.s, 0);
     while !st.is_null() {
         recompute_catchment(st, true, c);
-        st = crate::station_record::next_station_shell(c.s, u32::from((c.c.id)(st).0) + 1);
+        st = crate::station_record::next_station_shell(
+            c.s,
+            u32::from(crate::station_record::id(st).0) + 1,
+        );
     }
 }
 
@@ -1117,7 +1119,6 @@ crate::abi::layouts! {
         town,
         station,
         visits,
-        id,
         modified_catchment,
         spread,
         industry_by_id,

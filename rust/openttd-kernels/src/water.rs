@@ -47,7 +47,6 @@ pub struct WaterServices {
     pub region_context: extern "C" fn() -> crate::water_regions::Context,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub airport_tile: extern "C" fn(u32) -> bool,
-    pub airport_member: unsafe extern "C" fn(*const crate::station::Station, u32) -> bool,
     pub airport_z: extern "C" fn(*const std::ffi::c_void) -> i32,
     pub crash: extern "C" fn(VehicleRef) -> u32,
     pub ai_event: extern "C" fn(VehicleRef, u32),
@@ -441,8 +440,8 @@ impl<'a> World<'a> {
             for y in 0..u32::from(area.h) {
                 for x in 0..u32::from(area.w) {
                     let target = area.tile.0.wrapping_add(y * self.size_x).wrapping_add(x);
-                    // SAFETY: Flood/crash callbacks cannot delete this live station or reset pools.
-                    if unsafe { (self.w.airport_member)(st.cast(), target) } {
+                    // Flood/crash callbacks cannot delete this live station or reset pools.
+                    if crate::station_record::airport_member(st, target, self.s) {
                         crate::ground::hit(crate::ground::Witness::AirportMember);
                         self.vehicles_on_tile(target, 0);
                     }
@@ -778,7 +777,6 @@ crate::abi::layouts! {
         region_context,
         remove_rail,
         airport_tile,
-        airport_member,
         airport_z,
         crash,
         ai_event,
@@ -821,7 +819,6 @@ pub(crate) fn fixture() -> WaterServices {
         region_context: unused_region_context,
         remove_rail: unused3,
         airport_tile: unused1,
-        airport_member: unused2,
         airport_z: unused1,
         crash: unused1,
         ai_event: unused2,

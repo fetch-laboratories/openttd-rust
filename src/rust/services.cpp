@@ -704,7 +704,6 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 #endif
 		.pool = &_link_graph_pool.descriptor,
 		.shared = &_rust_shared_services,
-		.station_id = RustBaseStationID<const BaseStation>,
 		.index = RustLinkGraphIndex,
 		.delete_graph = LiveGraphDelete,
 		.available = RustLinkGraphAvailable,

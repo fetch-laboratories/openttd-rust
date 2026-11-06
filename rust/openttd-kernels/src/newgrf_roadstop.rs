@@ -64,7 +64,6 @@ pub struct Services {
     pub shared: *const Shared,
     pub spec_cargo: unsafe extern "C" fn(*const RoadSpec) -> u64,
     pub spec_triggers: unsafe extern "C" fn(*const RoadSpec) -> SpecTriggers,
-    pub station_id: unsafe extern "C" fn(*mut BaseStation) -> u16,
     pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
 }
 impl Services {
@@ -255,7 +254,7 @@ unsafe fn variable(
                 (shared.nearby_tile)(parameter as u8, c.tile)
             };
             return if crate::map_func::World::new(shared).any_road_stop_tile(tile)
-                && (shared.station_index)(tile) == unsafe { (s.station_id)(c.station) }
+                && (shared.station_index)(tile) == crate::station_record::id(c.station).0
             {
                 u32::from(crate::station_storage::roadstop_value(
                     c.station, tile, true,
@@ -307,8 +306,9 @@ unsafe fn variable(
             }
             let mut res = (u32::from((shared.station_gfx)(tile)) << 12)
                 | (u32::from((shared.station_gfx)(c.tile) != (shared.station_gfx)(tile)) << 11)
-                | (u32::from((shared.station_index)(tile) == unsafe { (s.station_id)(c.station) })
-                    << 10);
+                | (u32::from(
+                    (shared.station_index)(tile) == crate::station_record::id(c.station).0,
+                ) << 10);
             let kind = (shared.station_type)(tile).0;
             if kind == STATION_TRUCK {
                 res |= 1 << 16;
@@ -728,7 +728,7 @@ crate::abi::layouts! {
     "OpenTTDRoadStopResolverState" ["station_service"] => State { station, spec, root, town_scope, tile, roadtype, kind => type, view, cargo, };
     "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { base_scope, by_tile, company, custom, group, group_cargo, group_count, index, make_town, resolve_callback, resolve_reseed, shared, spec_cargo, spec_triggers, station_id, town_tile, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { base_scope, by_tile, company, custom, group, group_cargo, group_count, index, make_town, resolve_callback, resolve_reseed, shared, spec_cargo, spec_triggers, town_tile, };
 }
 
 /// Class index limit from `newgrf_roadstop.h`.

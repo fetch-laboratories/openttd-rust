@@ -882,6 +882,7 @@ mod tests {
                 let mut record = Box::new(crate::station_record::StationRecord::new(
                     std::ptr::null_mut(), crate::tile_type::TileIndex(0),
                 ));
+                record.id = crate::station_type::StationID(100 + node as u16);
                 record.goods[0].link_graph = 42;
                 record.goods[0].node = node as u16;
                 record
@@ -923,7 +924,6 @@ mod tests {
             assertions: true,
             pool: std::ptr::null(),
             shared: std::ptr::null(),
-            station_id: unused!((*const crate::station::BaseStation) -> u16),
             index: unused!((*const crate::linkgraph::live::Graph) -> crate::linkgraph_type::LinkGraphID),
             delete_graph: unused!((*mut crate::linkgraph::live::Graph)),
             available: unused!(() -> bool),

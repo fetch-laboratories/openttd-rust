@@ -33,6 +33,7 @@ static void AircraftDirectBoundary()
 	auto &p = aircraft_probe;
 	AircraftTestStation station;
 	p.station = &station;
+	station.record->id = 7;
 	station.record->airport.area = {7, 8, 8};
 	station.record->airport.rotation = 0;
 	station.record->airport.blocks = UINT64_MAX;
@@ -50,7 +51,8 @@ static void AircraftDirectBoundary()
 	p.shared_services.station_pool = []() noexcept -> const RustPoolDescriptor * {
 		static std::array<RustPoolSlot, 8> slots;
 		static RustPoolDescriptor pool{};
-		slots.fill({reinterpret_cast<BaseStation *>(aircraft_probe.station), aircraft_probe.station->record});
+		slots.fill({});
+		slots[7] = {reinterpret_cast<BaseStation *>(aircraft_probe.station), aircraft_probe.station->record};
 		pool.slots = {slots.data(), slots.size(), 0};
 		pool.first_unused = slots.size();
 		return &pool;
@@ -154,6 +156,7 @@ static void AircraftPhaseBoundary()
 	p = {};
 	AircraftTestStation station;
 	p.station = &station;
+	station.record->id = 7;
 	station.record->airport.area = {7, 8, 8};
 	station.record->airport.rotation = 0;
 	station.record->airport.blocks = UINT64_MAX;
@@ -170,7 +173,8 @@ static void AircraftPhaseBoundary()
 	p.shared_services.station_pool = []() noexcept -> const RustPoolDescriptor * {
 		static std::array<RustPoolSlot, 8> slots;
 		static RustPoolDescriptor pool{};
-		slots.fill({reinterpret_cast<BaseStation *>(aircraft_probe.station), aircraft_probe.station->record});
+		slots.fill({});
+		slots[7] = {reinterpret_cast<BaseStation *>(aircraft_probe.station), aircraft_probe.station->record};
 		pool.slots = {slots.data(), slots.size(), 0};
 		pool.first_unused = slots.size();
 		return &pool;

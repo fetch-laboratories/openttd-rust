@@ -46,7 +46,6 @@ struct OpenTTDAnimationServices {
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);
 	uint16_t (*road_spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_triggers);
 	uint8_t (*airport_spec_triggers)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec_triggers);
-	bool (*airport_belongs)(const Station *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_belongs);
 };
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept;

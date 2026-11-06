@@ -148,7 +148,7 @@ public:
 		return openttd_rust_live_graph_monthly(this->owner, base);
 	}
 
-	NodeID AddNode(const ::Station *st) { return openttd_rust_live_graph_add_station(this->owner, GetRustLiveGraphServices().station_id(st), &GetRustLiveGraphServices()); }
+	NodeID AddNode(const ::Station *st);
 	void RemoveNode(NodeID id) { assert(id < this->Size()); openttd_rust_live_graph_remove(this->owner, id, &GetRustLiveGraphServices()); }
 
 protected:

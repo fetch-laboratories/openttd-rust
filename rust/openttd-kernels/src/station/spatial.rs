@@ -3,12 +3,9 @@
 //! readers and radius visitors cannot mutate this index; no tree borrow spans
 //! presentation reentry from the qualified native `BaseStation::MoveSign`.
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-use super::{BaseStation, CatchmentServices};
+use super::BaseStation;
 use crate::{game_state::GameState, kdtree::Kdtree, services::Services, station_type::StationID};
 static TREE: GameState<Kdtree<StationID>> = GameState::new(Kdtree::new());
-fn table(s: &Services) -> &CatchmentServices {
-    unsafe { &*(s.station_catchment)() }
-}
 fn coordinate(s: &Services, map: crate::map_func::Map, id: StationID, dim: usize) -> u16 {
     let tile = crate::raw_field::read_field!(crate::station_record::get_record(s, id), xy).0;
     if dim == 0 {
@@ -18,14 +15,13 @@ fn coordinate(s: &Services, map: crate::map_func::Map, id: StationID, dim: usize
     }
 }
 pub(crate) fn rebuild(s: &Services) {
-    let c = table(s);
     let map = s.map();
     let mut st = crate::station_record::next_station_shell(s, 0);
     let ids = std::iter::from_fn(|| {
         if st.is_null() {
             return None;
         }
-        let id = (c.id)(st);
+        let id = crate::station_record::id(st);
         st = crate::station_record::next_station_shell(s, u32::from(id.0) + 1);
         Some(id)
     });
@@ -36,11 +32,10 @@ pub(crate) fn rebuild(s: &Services) {
     }
 }
 pub(crate) fn insert(s: &Services, st: *mut BaseStation) {
-    let c = table(s);
     let map = s.map();
     unsafe {
         (*TREE.get()).insert(
-            (c.id)(st),
+            crate::station_record::id(st),
             &|id, dim| coordinate(s, map, id, dim),
             &|keys| crate::kdtree::native_split(s, keys),
         );
@@ -91,7 +86,6 @@ pub(crate) fn radius(
 }
 pub(crate) fn move_sign(s: &Services, st: *mut BaseStation, tile: u32) {
     let commands = unsafe { &*(s.station_commands)() };
-    let c = table(s);
     if !crate::station_record::is_station(st.cast()) {
         (commands.waypoint_move_sign)(st, tile);
         return;
@@ -99,7 +93,7 @@ pub(crate) fn move_sign(s: &Services, st: *mut BaseStation, tile: u32) {
     if crate::station_record::xy(st.cast()) == tile {
         return;
     }
-    remove(s, (c.id)(st));
+    remove(s, crate::station_record::id(st));
     (commands.base_move_sign)(st, tile);
     insert(s, st);
 }

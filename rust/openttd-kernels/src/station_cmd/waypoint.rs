@@ -422,7 +422,7 @@ impl Ctx<'_> {
             (self.s.waypoint_default_name)(wp);
         }
         (self.s.virtual_coord)(wp);
-        let id = (self.links().graphs.station_id)(wp);
+        let id = crate::station_record::id(wp).0;
         let mut tile = start;
         for i in 0..count {
             let gfx = (self.s.waypoint_layout_gfx)(layout, i == 0);
@@ -623,7 +623,7 @@ impl Ctx<'_> {
             (self.s.waypoint_default_name)(wp);
         }
         (self.s.virtual_coord)(wp);
-        let id = (self.links().graphs.station_id)(wp);
+        let id = crate::station_record::id(wp).0;
         for tile in area.tiles(self.map()) {
             let road = if self.may_have_road(tile) {
                 self.road_type(tile, false)
@@ -744,7 +744,7 @@ impl Ctx<'_> {
         }
         (self.s.make_buoy)(
             tile,
-            (self.links().graphs.station_id)(wp),
+            crate::station_record::id(wp).0,
             crate::services::WaterClass(crate::map_func::World::new(self.shared).water_class(tile)),
         );
         self.check_docking(tile);
@@ -770,7 +770,7 @@ impl Ctx<'_> {
         }
         let wp = self.world().get((self.shared.station_index)(tile));
         if self.in_orders(
-            (self.links().graphs.station_id)(wp),
+            crate::station_record::id(wp).0,
             false,
             (self.shared.current_company)(),
         ) {

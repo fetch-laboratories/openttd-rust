@@ -343,7 +343,7 @@ impl<'a> Ctx<'a> {
     /// `st->rect.AfterRemoveTile(st, tile)`.
     fn after_remove_tile(&self, st: *mut BaseStation, tile: u32) {
         let c = self.catchment();
-        let id = (c.c.id)(st);
+        let id = crate::station_record::id(st);
         let r = Self::rect(st);
         // SAFETY: Local copy; no borrow spans the map scans.
         let mut rect = unsafe { *r };
@@ -353,7 +353,7 @@ impl<'a> Ctx<'a> {
     /// `st->rect.AfterRemoveRect(st, area)`.
     fn after_remove_rect(&self, st: *mut BaseStation, area: TileArea) {
         let c = self.catchment();
-        let id = (c.c.id)(st);
+        let id = crate::station_record::id(st);
         let r = Self::rect(st);
         // SAFETY: Local copy; no borrow spans the map scans.
         let mut rect = unsafe { *r };
@@ -808,7 +808,7 @@ unsafe extern "C" fn deleted_visit(context: *mut std::ffi::c_void, st: *mut Base
         search.best = st;
     } else if distance == search.threshold
         && !search.best.is_null()
-        && (c.links().graphs.station_id)(st) < (c.links().graphs.station_id)(search.best)
+        && crate::station_record::id(st).0 < crate::station_record::id(search.best).0
     {
         search.best = st;
     }
@@ -967,7 +967,7 @@ impl Ctx<'_> {
         id
     }
     fn shrink(&self, st: *mut BaseStation, mut area: TileArea, kind: u8) -> TileArea {
-        let id = (self.links().graphs.station_id)(st);
+        let id = crate::station_record::id(st).0;
         let kind = if kind == 0 && !crate::station_record::is_station(st.cast()) {
             7
         } else {
@@ -1543,7 +1543,7 @@ impl Ctx<'_> {
             unsafe { (*record).cached_anim_triggers |= triggers };
         }
         let owner = crate::station_record::owner_company(st.cast());
-        let id = (self.links().graphs.station_id)(st);
+        let id = crate::station_record::id(st).0;
         for i in 0..tracks {
             let track_tile = tile.wrapping_add(u32::from(i).wrapping_mul(track_delta));
             for j in 0..length {
@@ -1928,7 +1928,7 @@ impl Ctx<'_> {
         }
         let area = self.s.rail_area(st);
         cost.set(0);
-        let id = (self.links().graphs.station_id)(st);
+        let id = crate::station_record::id(st).0;
         let kind = if waypoint { 7 } else { 0 };
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != MP_STATION
@@ -2475,7 +2475,7 @@ impl Ctx<'_> {
             });
             self.before_add_tile(ret, st, tile, 1);
             let owner = crate::station_record::owner_company(st.cast());
-            let id = (self.links().graphs.station_id)(st);
+            let id = crate::station_record::id(st).0;
             if drive {
                 if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
                     self.road_infrastructure(
@@ -2983,7 +2983,7 @@ impl Ctx<'_> {
     ) -> (*const crate::services::TownHandle, u32) {
         let area = Self::area(crate::station_record::airport_area(st));
         let rotation = crate::station_record::read(st.cast(), |r| r.airport.rotation);
-        let id = (self.links().graphs.station_id)(st);
+        let id = crate::station_record::id(st).0;
         self.nearest_town(
             crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
             rotation,
@@ -3157,7 +3157,7 @@ impl Ctx<'_> {
         crate::station_record::set_airport_details(st, airport, layout, rotation);
         self.before_add_rect(ret, st, area, 1);
         let owner = crate::station_record::owner_company(st.cast());
-        let id = (self.links().graphs.station_id)(st);
+        let id = crate::station_record::id(st).0;
         for t in self.airport_tiles(spec, layout, tile) {
             (self.s.make_airport)(t.tile, owner, id, t.gfx, 3);
             (self.s.set_random_bits)(
@@ -3197,7 +3197,7 @@ impl Ctx<'_> {
             }
         }
         cost.set(0);
-        let id = (self.links().graphs.station_id)(st);
+        let id = crate::station_record::id(st).0;
         let mut from = 0;
         while let Some(v) = (self.shared.vehicle_next)(from) {
             let identity = (self.s.aircraft_vehicle)(v);
@@ -3579,13 +3579,7 @@ impl Ctx<'_> {
                 (self.s.water_infrastructure)(owner, 1);
             }
             (self.s.station_infrastructure)(owner, 2);
-            (self.s.make_dock)(
-                tile,
-                owner,
-                (self.links().graphs.station_id)(st),
-                dir,
-                water,
-            );
+            (self.s.make_dock)(tile, owner, crate::station_record::id(st).0, dir, water);
             self.update_docking(st);
             self.tiles_changed(st, true, 5);
         }
@@ -3669,7 +3663,7 @@ impl Ctx<'_> {
             self.tiles_changed(st, false, 5);
             self.clear_docking_neighbours(land);
             self.clear_docking_neighbours(water);
-            let id = (self.links().graphs.station_id)(st);
+            let id = crate::station_record::id(st).0;
             let mut from = 0;
             while let Some(v) = (self.shared.vehicle_next)(from) {
                 let identity = (self.s.aircraft_vehicle)(v);
@@ -3741,7 +3735,7 @@ impl Ctx<'_> {
         crate::animated_tile::openttd_rust_animation_delete(tile, false);
         (self.s.make_oilrig)(
             tile,
-            (self.links().graphs.station_id)(st),
+            crate::station_record::id(st).0,
             crate::map_func::World::new(self.shared).water_class(tile),
         );
         crate::station_record::set_station_owner(st, 0x10);

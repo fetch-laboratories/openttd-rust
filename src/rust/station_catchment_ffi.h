@@ -35,7 +35,6 @@ struct OpenTTDStationCatchmentServices {
 	const OpenTTDTownLeaves *town;
 	const OpenTTDStationServices *station;
 	const OpenTTDVehicleVisits *visits;
-	uint16_t (*id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	bool (*modified_catchment)() noexcept OPENTTD_SERVICE_DEFAULT(modified_catchment);
 	uint8_t (*spread)() noexcept OPENTTD_SERVICE_DEFAULT(spread);
 	Industry *(*industry_by_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_by_id);
@@ -100,8 +99,8 @@ public:
 	{
 		const auto &view = this->View();
 		const OpenTTDStationListEntry *last = view.end();
-		const OpenTTDStationListEntry *at = std::lower_bound(view.begin(), last, st->index.base(), [](const OpenTTDStationListEntry &e, uint16_t id) { return e.id < id; });
-		return (at != last && at->id == st->index.base()) ? const_iterator(at) : const_iterator(last);
+		const OpenTTDStationListEntry *at = std::lower_bound(view.begin(), last, st->Record().id, [](const OpenTTDStationListEntry &e, uint16_t id) { return e.id < id; });
+		return (at != last && at->id == st->Record().id) ? const_iterator(at) : const_iterator(last);
 	}
 };
 

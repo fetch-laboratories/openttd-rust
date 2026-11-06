@@ -48,7 +48,6 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_spec_triggers = RustStationAnimationTriggers,
 		.road_spec_triggers = RustRoadStopAnimationTriggers,
 		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept { return s->animation.triggers.base(); },
-		.airport_belongs = RustStationAirportMember,
 	};
 	return services;
 }

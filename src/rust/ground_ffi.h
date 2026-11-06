@@ -125,7 +125,6 @@ struct OpenTTDWaterGroundServices {
 	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
-	bool (*airport_member)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_member);
 	int32_t (*airport_z)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_z);
 	uint32_t (*crash)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(crash);
 	void (*ai_event)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ai_event);

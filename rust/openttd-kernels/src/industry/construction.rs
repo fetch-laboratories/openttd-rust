@@ -111,7 +111,7 @@ fn populate(
         // The neutral station is used and other nearby stations are ignored.
         // SAFETY: Live owners; immediate mutations.
         unsafe {
-            (*super::stations_near(owner)).insert(neutral, (cc.c.id)(neutral));
+            (*super::stations_near(owner)).insert(neutral, crate::station_record::id(neutral));
             crate::station::set_neutral_industry(
                 crate::station_record::service_of(neutral.cast()),
                 shell,

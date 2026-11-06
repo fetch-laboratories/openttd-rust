@@ -56,7 +56,6 @@ pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
-    station_id: extern "C" fn(*const BaseStation) -> u16,
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
     pub(crate) engine_id: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u16,
@@ -78,7 +77,6 @@ pub struct Services {
     min_year: extern "C" fn(*const AirportSpec) -> i32,
     max_year: extern "C" fn(*const AirportSpec) -> i32,
     tile_spec: extern "C" fn(u8) -> *const TileSpec,
-    belongs: extern "C" fn(*const BaseStation, u32) -> bool,
     tile_random: extern "C" fn(u32) -> u8,
     frame: extern "C" fn(u32) -> u8,
     base_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
@@ -567,7 +565,7 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
     }
 }
 fn id_at_offset(tile: u32, st: *mut BaseStation, grfid: u32, s: &Services) -> u32 {
-    if !(s.belongs)(st, tile) {
+    if !crate::station_record::airport_member(st, tile, s.shared()) {
         return 0xffff;
     }
     let gfx = crate::station_map::get_airport_gfx(tile, s.shared(), s);
@@ -636,7 +634,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
             };
             let same = (s.shared().tile_type)(tile) == crate::tile_type::MP_STATION
                 && crate::station_map::is_airport(tile, s.shared())
-                && (s.shared().station_index)(tile) == (s.station_id)(c.station);
+                && (s.shared().station_index)(tile) == crate::station_record::id(c.station).0;
             (s.shared().nearby_tile_information)(
                 tile,
                 (s.shared().resolver_grf_version)(resolver) >= 8,
@@ -644,7 +642,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
         }
         0x61 => {
             let tile = (s.shared().nearby_tile)(parameter as u8, c.tile);
-            if (s.belongs)(c.station, tile) {
+            if crate::station_record::airport_member(c.station, tile, s.shared()) {
                 u32::from((s.frame)(tile))
             } else {
                 u32::MAX
@@ -735,7 +733,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, station_id, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, depots, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, depots, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, tile_spec, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]
