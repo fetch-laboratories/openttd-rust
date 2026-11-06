@@ -159,7 +159,6 @@ pub struct MovementVehicle {
 pub struct MovementServices {
     pub shared: *const Services,
     pub orders: *const crate::orders::Leaves,
-    pub rail_map: *const crate::services::RailMapServices,
     pub train: *const crate::train::Leaves,
     pub vehicle: *const crate::vehicle::VehicleServices,
     pub tunnel_bridge: *const crate::tunnelbridge_cmd::TunnelBridgeServices,
@@ -1514,7 +1513,6 @@ crate::abi::layouts! {
     "OpenTTDMovementServices" ["landscape"] => MovementServices {
         shared,
         orders,
-        rail_map,
         train,
         vehicle,
         tunnel_bridge,

@@ -74,9 +74,7 @@ static void Disasters()
 	costs.error = [](OpenTTDCommandCost *p, uint32_t error) noexcept { CHECK(error == 0x87654321); _disaster_cost_calls.push_back(3); *reinterpret_cast<uint32_t *>(p) = error; };
 	costs.success = [](const OpenTTDCommandCost *p) noexcept { _disaster_cost_calls.push_back(4); return *reinterpret_cast<const uint32_t *>(p) == 0; };
 	const OpenTTDOccupancyCommands commands{.vehicles = &vehicles, .max_pixel_z = [](uint32_t tile) noexcept { CHECK(tile == 0); _disaster_cost_calls.push_back(2); return 0; }, .costs = &costs, .vehicle_error = 0x87654321};
-	OpenTTDRailMapServices rail_map{};
 	services.occupancy = &commands;
-	services.rail_map = &rail_map;
 	services.disasters_enabled = []() noexcept { return true; };
 	services.next_industry = [](uint32_t from) noexcept -> OpenTTDDisasterIndustryTarget {
 		return from <= 7 ? OpenTTDDisasterIndustryTarget{.industry = _disaster_probe, .id = 7, .kind = 0} : OpenTTDDisasterIndustryTarget{.industry = nullptr, .id = 0xFFFF, .kind = IT_INVALID};

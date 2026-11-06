@@ -47,7 +47,6 @@ struct OpenTTDDisasterServices {
 	const OpenTTDVehicleServices * vehicles;
 	const OpenTTDOccupancyCommands * occupancy;
 	const OpenTTDEnvironmentServices * environment;
-	const OpenTTDRailMapServices * rail_map;
 	const OpenTTDAircraftLeaves * aircraft;
 	const OpenTTDRoadLeaves * road;
 	int32_t (OPENTTD_RUST_CALL *age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);

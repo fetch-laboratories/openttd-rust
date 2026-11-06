@@ -28,7 +28,6 @@ struct OpenTTDMovementVehicle { OpenTTDTrainHandle train; OpenTTDRoadState *road
 struct OpenTTDMovementServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDOrdersLeaves *orders;
-	const OpenTTDRailMapServices *rail_map;
 	const OpenTTDTrainServices *train;
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDTunnelBridgeServices *tunnel_bridge;

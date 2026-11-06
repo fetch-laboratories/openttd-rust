@@ -1305,7 +1305,6 @@ pub(crate) mod tests {
         crate::movement::MovementServices {
             shared: unused(),
             orders: unused(),
-            rail_map: unused(),
             train: unused(),
             vehicle: unused(),
             tunnel_bridge: unused(),

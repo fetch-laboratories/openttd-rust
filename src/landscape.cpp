@@ -796,7 +796,6 @@ bool CheckAbi_landscape()
 const OpenTTDMovementServices _rust_movement_services{
 	.shared = &GetRustSharedServices(),
 	.orders = &GetRustOrdersLeaves(),
-	.rail_map = &GetRustRailMapServices(),
 	.train = &GetTrainServices(),
 	.vehicle = &GetRustVehicleServices(),
 	.tunnel_bridge = &GetRustTunnelBridgeServices(),

@@ -45,7 +45,7 @@ static uint32_t Ship_tile_type(uint32_t tile) noexcept { return GetRustSharedSer
 
 static uint32_t Ship_water_class(uint32_t tile) noexcept { return to_underlying(GetEffectiveWaterClass(TileIndex(tile))); }
 
-static uint32_t Ship_lock_dir(uint32_t tile) noexcept { return GetInclinedSlopeDirection(GetTileSlope(TileIndex(tile))); }
+static uint32_t Ship_lock_dir(uint32_t tile) noexcept { return GetInclinedSlopeDirection(static_cast<Slope>(GetRustSharedServices().tile_slope(tile))); }
 
 static uint32_t Ship_tile_min_z(uint32_t tile) noexcept { return GetRustSharedServices().tile_z(tile); }
 
