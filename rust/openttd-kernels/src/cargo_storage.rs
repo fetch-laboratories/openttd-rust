@@ -8,7 +8,9 @@
 //! Cargo packet fields, ordered lists, metadata and cargo actions; pool allocation and
 //! identity stay native. Payment can call getters, so every raw owner access is short. Save
 //! import stores unresolved shell handles without dereferencing them; the pointer contract is
-//! in `cargo_storage_ffi.h`.
+//! in `cargo_storage_ffi.h`. Packet field addresses stay stable until destruction; native
+//! aliases and Rust accesses are serialized by the game-state mutex. Map reads use the shared
+//! game-loop/command interval: these synchronous coordinate operations cannot reset or yield.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,
@@ -29,20 +31,40 @@ pub struct Source {
     pub(crate) id: u16,
     pub(crate) source_type: u8,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Packet {
-    pub(crate) feeder_share: i64,
-    pub(crate) source_xy: u32,
-    pub(crate) count: u16,
-    pub(crate) periods_in_transit: u16,
-    pub(crate) first_station: u16,
-    pub(crate) next_hop: u16,
-    pub(crate) source_id: u16,
-    pub(crate) travelled_x: i16,
-    pub(crate) travelled_y: i16,
-    pub(crate) source_type: u8,
-    pub(crate) in_vehicle: u8,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Canonical packet allocation, shared in place with native readers and CAPA.
+    #[derive(Clone, Copy)]
+    "OpenTTDCargoPacket" ["cargo_storage"] => pub struct Packet {
+        pub feeder_share: i64,
+        pub source_xy: u32,
+        pub count: u16,
+        pub periods_in_transit: u16,
+        pub first_station: u16,
+        pub next_hop: u16,
+        pub source_id: u16,
+        pub travelled_x: i16,
+        pub travelled_y: i16,
+        pub source_type: u8,
+        pub in_vehicle: u8,
+    }
+}
+impl Default for Packet {
+    fn default() -> Self {
+        Self {
+            feeder_share: 0,
+            source_xy: crate::tile_type::INVALID_TILE,
+            count: 0,
+            periods_in_transit: 0,
+            first_station: INVALID,
+            next_hop: INVALID,
+            source_id: INVALID,
+            travelled_x: 0,
+            travelled_y: 0,
+            source_type: 0,
+            in_vehicle: 0,
+        }
+    }
 }
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -60,7 +82,6 @@ pub struct Services {
     pub(crate) create: extern "C" fn(*const Packet) -> *mut c_void,
     pub(crate) packet: extern "C" fn(*mut c_void) -> *mut Packet,
     pub(crate) destroy: extern "C" fn(*mut c_void),
-    pub(crate) coordinate: extern "C" fn(u32, u8) -> u32,
     pub(crate) pay: extern "C" fn(*mut c_void, u8, u8, *const c_void, u32, u32) -> i64,
     pub(crate) origin: extern "C" fn(*mut c_void, u16, u32, u8),
     pub(crate) flow_map: extern "C" fn(*const c_void) -> *mut crate::cargo_flow::FlowMap,
@@ -86,7 +107,7 @@ struct Ends {
     last: usize,
 }
 pub struct List {
-    fields: Fields,
+    pub(crate) fields: Fields,
     // Slots never move relative to their indices. Reuse happens only after erase,
     // when no source iterator can still refer to that node. Traversal follows
     // links, never arena allocation order; same-list insertion keeps existing
@@ -153,14 +174,19 @@ unsafe fn reduce(p: *mut Packet, amount: u32) {
     }
 }
 unsafe fn tile(p: *mut Packet, s: Services, at: u32, loading: bool) {
-    let x = (s.coordinate)(at, 0) as i16;
-    let y = (s.coordinate)(at, 1) as i16;
+    // Delay setting the origin until first pickup: creation at a station does
+    // not yet tell us the tile at which the cargo will be picked up.
+    let world = crate::map_func::World::new(unsafe { &*s.shared });
+    let x = world.dimensions.tile_x(at) as i16;
+    let y = world.dimensions.tile_y(at) as i16;
     unsafe {
         if loading {
             if (*p).source_xy == u32::MAX {
                 (*p).source_xy = at;
             }
             (*p).in_vehicle = 1;
+            // Add the known loading tile now; subtract the unloading tile later
+            // to obtain the vector of travel inside a vehicle.
             (*p).travelled_x = (*p).travelled_x.wrapping_add(x);
             (*p).travelled_y = (*p).travelled_y.wrapping_add(y);
         } else {
@@ -179,19 +205,6 @@ crate::abi::layouts! {
         id,
         source_type => type,
     };
-    "OpenTTDCargoPacketFields" ["probe"] => Packet {
-        feeder_share,
-        source_xy,
-        count,
-        periods_in_transit,
-        first_station,
-        next_hop,
-        source_id,
-        travelled_x,
-        travelled_y,
-        source_type,
-        in_vehicle,
-    };
     "OpenTTDCargoListFields" ["probe"] => Fields {
         cargo_periods_in_transit,
         feeder_share,
@@ -204,7 +217,6 @@ crate::abi::layouts! {
         create,
         packet,
         destroy,
-        coordinate,
         pay,
         origin,
         flow_map,
@@ -495,7 +507,7 @@ fn choose(p: Packet, via: u16, station: u16, accepted: bool, next: NextHops) -> 
         TRANSFER
     }
 }
-unsafe fn reassign(
+pub(crate) unsafe fn reassign(
     list: *mut List,
     services: Services,
     from: usize,
@@ -545,35 +557,16 @@ unsafe fn reassign(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_packet_new(p: *const Packet) -> *mut Packet {
-    Box::into_raw(Box::new(unsafe { read(p) }))
+    Box::into_raw(Box::new(if p.is_null() {
+        Packet::default()
+    } else {
+        unsafe { read(p) }
+    }))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_packet_destroy(p: *mut Packet) {
     unsafe {
         drop(Box::from_raw(p));
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_packet_export(p: *const Packet, out: *mut Packet) {
-    unsafe {
-        out.write(read(p));
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_packet_import(p: *mut Packet, input: *const Packet) {
-    unsafe {
-        p.write(read(input));
-    }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_cargo_packet_set(p: *mut Packet, field: u8, value: u32) {
-    unsafe {
-        match field {
-            0 => (*p).next_hop = value as u16,
-            1 => (*p).first_station = value as u16,
-            2 => (*p).source_id = value as u16,
-            _ => unreachable!(),
-        }
     }
 }
 #[unsafe(no_mangle)]
@@ -605,13 +598,18 @@ pub unsafe extern "C" fn openttd_rust_cargo_packet_distance(
 ) -> u32 {
     let p = unsafe { read(p) };
     let s = unsafe { *s };
-    let x = (s.coordinate)(at, 0);
-    let y = (s.coordinate)(at, 1);
+    let world = crate::map_func::World::new(unsafe { &*s.shared });
+    let x = world.dimensions.tile_x(at);
+    let y = world.dimensions.tile_y(at);
+    // Distance is requested while the cargo is still inside the vehicle.
+    // Finish the travel vector locally without changing the packet.
     let dx = p.travelled_x.wrapping_sub(x as i16);
     let dy = p.travelled_y.wrapping_sub(y as i16);
     let travelled = i32::from(dx).unsigned_abs() + i32::from(dy).unsigned_abs();
-    let direct =
-        (s.coordinate)(p.source_xy, 0).abs_diff(x) + (s.coordinate)(p.source_xy, 1).abs_diff(y);
+    // Free movement within a station must not increase payment. Cap vehicle
+    // travel at the direct source-to-destination distance to avoid overpayment
+    // on routes with large transfer stations or long detours.
+    let direct = world.dimensions.distance_manhattan(p.source_xy, at);
     travelled.min(direct)
 }
 #[unsafe(no_mangle)]
@@ -1725,9 +1723,6 @@ mod tests {
             drop(Box::from_raw(shell.cast::<Packet>()));
         }
     }
-    extern "C" fn coordinate(tile: u32, axis: u8) -> u32 {
-        if axis == 0 { tile & 255 } else { tile >> 8 }
-    }
     extern "C" fn pay(
         _: *mut c_void,
         final_delivery: u8,
@@ -1779,12 +1774,20 @@ mod tests {
         })
     }
     fn services() -> Services {
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 256 * 256,
+                assertions: true,
+            },
+            8,
+        );
         Services {
             can_allocate,
             create,
             packet: owner,
             destroy,
-            coordinate,
             pay,
             origin,
             flow_map,
@@ -1815,6 +1818,49 @@ mod tests {
         let service = services();
         unsafe {
             openttd_rust_cargo_list_destroy(list, &raw const service);
+        }
+    }
+
+    #[test]
+    fn canonical_packet_defaults_and_rectangular_map_coordinates() {
+        let service = services();
+        crate::map_func::fixture::set(
+            crate::map_func::TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 512 * 256,
+                assertions: true,
+            },
+            9,
+        );
+        unsafe {
+            let packet = openttd_rust_cargo_packet_new(std::ptr::null());
+            assert_eq!((*packet).source_xy, u32::MAX);
+            assert_eq!((*packet).first_station, INVALID);
+            assert_eq!((*packet).next_hop, INVALID);
+            assert_eq!((*packet).source_id, INVALID);
+            assert_eq!((*packet).count, 0);
+            assert_eq!((*packet).periods_in_transit, 0);
+            assert_eq!((*packet).feeder_share, 0);
+            assert_eq!((*packet).source_type, 0);
+            assert_eq!((*packet).in_vehicle, 0);
+            assert_eq!(((*packet).travelled_x, (*packet).travelled_y), (0, 0));
+            // A station transfer covers (20, 20) without travel in a vehicle.
+            tile(packet, service, 5 + 10 * 512, true);
+            tile(packet, service, 20 + 30 * 512, false);
+            tile(packet, service, 40 + 50 * 512, true);
+            assert_eq!((*packet).source_xy, 5 + 10 * 512);
+            assert_eq!(((*packet).travelled_x, (*packet).travelled_y), (25, 30));
+            assert_eq!(
+                openttd_rust_cargo_packet_distance(packet, &raw const service, 100 + 100 * 512),
+                145
+            );
+            // Paid distance cannot exceed the direct source-to-destination distance.
+            assert_eq!(
+                openttd_rust_cargo_packet_distance(packet, &raw const service, 5 + 10 * 512),
+                0
+            );
+            openttd_rust_cargo_packet_destroy(packet);
         }
     }
 
