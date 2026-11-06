@@ -120,7 +120,6 @@ static inline const OpenTTDTownAuthorityServices town_protocol_authority{
 	.council_tolerance = nullptr,
 	.bulldozer = nullptr,
 	.authority_distance = nullptr,
-	.town_index = [](const OpenTTDTownHandle *) noexcept -> uint16_t { return 0; },
 	.refusal = 0,
 };
 /* Services reached by the house tile-loop rebuild and CmdPlaceHouse; unused callbacks abort. */

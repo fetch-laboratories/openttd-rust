@@ -44,7 +44,6 @@ pub struct ResolverServices {
     pub clean_gfx: unsafe extern "C" fn(u32) -> u16,
     pub nearby: unsafe extern "C" fn(u8, u32, bool) -> u32,
     pub water_distance: unsafe extern "C" fn(u32, bool) -> u32,
-    pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub founder_info: unsafe extern "C" fn(u8) -> FounderInfo,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
     pub storage: *const crate::newgrf_storage::Services,
@@ -231,11 +230,12 @@ fn unavailable(
     u32::MAX
 }
 fn town_tile(town: *const TownHandle, s: &ResolverServices) -> u32 {
-    let owner = (s.shared().town_owner)(town.cast());
+    let id = crate::town::TownId((s.shared().town_id)(town.cast()));
+    let owner = unsafe { crate::town::pool(s.shared()).record(id) };
     unsafe { crate::town::position(owner) }
 }
 fn town_id(town: *const TownHandle, s: &ResolverServices) -> u32 {
-    u32::from(unsafe { (s.town_id)(town.cast()) })
+    u32::from((s.shared().town_id)(town.cast()))
 }
 fn variable(
     c: &ResolverContext,
@@ -858,7 +858,6 @@ crate::abi::layouts! {
         clean_gfx,
         nearby,
         water_distance,
-        town_id,
         founder_info,
         callback_id,
         storage,

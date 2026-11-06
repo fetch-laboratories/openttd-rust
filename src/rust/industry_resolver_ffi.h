@@ -30,7 +30,6 @@ struct OpenTTDIndustryResolverServices {
 	uint16_t (*clean_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clean_gfx);
 	uint32_t (*nearby)(uint8_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
 	uint32_t (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);
-	uint16_t (*town_id)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_id);
 	OpenTTDIndustryFounderInfo (*founder_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(founder_info);
 	uint16_t (*callback_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(callback_id);
 	const OpenTTDStorageServices *storage;

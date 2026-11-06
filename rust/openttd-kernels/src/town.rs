@@ -313,7 +313,9 @@ pub(crate) unsafe fn radius_from_shell(
     town: *const crate::services::TownHandle,
     tile: u32,
 ) -> u8 {
-    unsafe { get_radius_group((s.town_owner)(town), tile, s.map()) }
+    let id = TownId((s.town_id)(town));
+    let owner = unsafe { pool(s).record(id) };
+    unsafe { get_radius_group(owner, tile, s.map()) }
 }
 /// Copied canonical road-work policy inputs; no owner reference spans a service.
 /// SAFETY: Caller supplies a live, serialized owner.
@@ -687,7 +689,6 @@ pub struct AuthorityServices {
     pub council_tolerance: extern "C" fn() -> u8,
     pub bulldozer: extern "C" fn() -> bool,
     pub authority_distance: extern "C" fn() -> u8,
-    pub town_index: extern "C" fn(*const crate::services::TownHandle) -> u16,
     pub refusal: u32,
 }
 
@@ -752,11 +753,12 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
     }
     let needed = [[16, 144], [64, 208], [112, 400], [-1000, -1000]]
         [usize::from((a.council_tolerance)())][usize::from(kind)];
-    let owner = (s.town_owner)(town);
+    let id = TownId((s.town_id)(town));
+    let owner = unsafe { pool(s).record(id) };
     // SAFETY: Live owner, valid company; scratch/native rating access ends here.
     let rating = unsafe { openttd_rust_town_rating(owner, town as usize, company) };
     if rating < needed {
-        (c.error_param)(result, a.refusal, u64::from((a.town_index)(town)));
+        (c.error_param)(result, a.refusal, u64::from(id.0));
     } else {
         (c.zero)(result);
     }
@@ -2519,7 +2521,6 @@ crate::abi::layouts! {
         council_tolerance,
         bulldozer,
         authority_distance,
-        town_index,
         refusal,
     };
     "OpenTTDTownRef" ["probe"] => TownRef {

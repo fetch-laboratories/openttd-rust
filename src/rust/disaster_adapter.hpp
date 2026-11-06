@@ -180,7 +180,6 @@ const OpenTTDDisasterServices &DisasterServices() noexcept
 		.update_signals = RustUpdateSignals,
 		.disasters_enabled = RustDisastersEnabled,
 		.can_allocate = RustVehicleCanAllocate,
-		.town_index = RustTownAuthorityIndex,
 	};
 	return services;
 }

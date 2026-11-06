@@ -147,7 +147,6 @@ constexpr uint32_t STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS = 19;
 struct CommandCost { bool ok = true; uint32_t error = 0; uint64_t parameter = 0; };
 static CommandCost CommandCostWithParam(uint32_t error, uint64_t parameter) { return {false, error, parameter}; }
 static Town *authority_town;
-static OpenTTDTownState *authority_owner;
 static uint32_t authority_closest_calls;
 static Town *ClosestTownFromTile(TileIndex tile, uint32_t threshold)
 {
@@ -354,7 +353,6 @@ static void CompareAuthority()
 {
 	Town town;
 	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(nullptr), openttd_rust_town_destroy);
-	authority_owner = owner.get();
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	shared.current_company = +[]() noexcept { return _current_company; };
 	shared.company_valid = +[](uint8_t id) noexcept { return Company::IsValidID(id); };
@@ -377,12 +375,11 @@ static void CompareAuthority()
 	};
 	const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
 	shared.town_pool = &town_descriptor_ptr;
-	shared.town_owner = +[](const OpenTTDTownHandle *) noexcept { return authority_owner; };
+	shared.town_id = +[](const OpenTTDTownHandle *t) noexcept { return static_cast<uint16_t>(reinterpret_cast<const Town *>(t)->index); };
 	const OpenTTDTownAuthorityServices a{
 		.council_tolerance = +[]() noexcept { return _settings_game.difficulty.town_council_tolerance; },
 		.bulldozer = +[]() noexcept { return _cheats.magic_bulldozer.value; },
 		.authority_distance = +[]() noexcept { return _settings_game.economy.dist_local_authority; },
-		.town_index = +[](const OpenTTDTownHandle *t) noexcept { return static_cast<uint16_t>(reinterpret_cast<const Town *>(t)->index); },
 		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};
 	OpenTTDCommandCostServices costs{

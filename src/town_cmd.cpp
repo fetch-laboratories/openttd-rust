@@ -916,7 +916,7 @@ const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
 		.council_tolerance = RustTownCouncilTolerance, .bulldozer = []() noexcept { return _cheats.magic_bulldozer.value; },
-		.authority_distance = RustTownAuthorityDistance, .town_index = RustTownAuthorityIndex,
+		.authority_distance = RustTownAuthorityDistance,
 		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};
 	return services;

@@ -318,15 +318,10 @@ static uint8_t SharedNextCompany(uint8_t from) noexcept
 	return static_cast<uint8_t>(RustNextCompanyID(from));
 }
 
-static OpenTTDTownState *SharedTownOwner(const OpenTTDTownHandle *town) noexcept
-{
-	return reinterpret_cast<const Town *>(town)->growth_owner.get();
-}
-
 OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 {
 	Town *t = OpenTTDTownShellByID(id);
-	return {.shell = t, .state = SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(t)), .id = static_cast<uint16_t>(id)};
+	return {.shell = t, .state = static_cast<OpenTTDTownState *>(_town_pool.descriptor->slots[id].record), .id = static_cast<uint16_t>(id)};
 }
 
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
@@ -505,7 +500,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_valid = Shared_tile_valid,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
-	.town_owner = SharedTownOwner,
+	.town_id = RustTownAuthorityIndex,
 	.train_trackdir = SharedTrainTrackdir,
 	.tram_type = SharedTramType,
 	.tropic_zone = SharedTropicZone,

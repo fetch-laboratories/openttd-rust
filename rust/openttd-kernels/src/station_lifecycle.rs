@@ -228,7 +228,9 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
     {
         return n.mines;
     }
-    let town_tile = unsafe { crate::town::position((s.shared.town_owner)(town)) };
+    let id = crate::town::TownId((s.shared.town_id)(town));
+    let owner = unsafe { crate::town::pool(s.shared).record(id) };
+    let town_tile = unsafe { crate::town::position(owner) };
     if map.distance_max(tile, town_tile) < 8 {
         if info.available(n.base, s) {
             return n.base;

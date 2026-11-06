@@ -90,7 +90,6 @@ struct OpenTTDDisasterServices {
 	void (OPENTTD_RUST_CALL *update_signals)() noexcept OPENTTD_SERVICE_DEFAULT(update_signals);
 	bool (OPENTTD_RUST_CALL *disasters_enabled)() noexcept OPENTTD_SERVICE_DEFAULT(disasters_enabled);
 	bool (OPENTTD_RUST_CALL *can_allocate)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
-	uint16_t (OPENTTD_RUST_CALL *town_index)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
 };
 /* Tables are immutable and live through each synchronous entry and reentry.
  * Shell/owner accesses end before callbacks, especially deletion. No exception

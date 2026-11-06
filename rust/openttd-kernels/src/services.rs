@@ -449,8 +449,8 @@ pub struct Services {
     pub tile_z: extern "C" fn(u32) -> i32,
     /// Original native `town_index` map observation.
     pub town_index: extern "C" fn(u32) -> u16,
-    /// Resolve the single Rust owner of a live native town shell.
-    pub town_owner: extern "C" fn(*const TownHandle) -> *mut crate::town::State,
+    /// Original pool index of a live native town shell.
+    pub town_id: extern "C" fn(*const TownHandle) -> u16,
     /// Original train track direction, computed lazily at the consuming branch.
     pub train_trackdir: unsafe extern "C" fn(*const Train) -> Trackdir,
     /// Original tram road type (including `INVALID_ROADTYPE`).
@@ -830,7 +830,7 @@ crate::abi::layouts! {
         tile_valid,
         tile_z,
         town_index,
-        town_owner,
+        town_id,
         train_trackdir,
         tram_type,
         tropic_zone,
@@ -1138,7 +1138,7 @@ pub fn fixture(
         tile_valid: flag,
         tile_z: height,
         town_index: index,
-        town_owner: unused_town_owner,
+        town_id: unused_town_id,
         train_trackdir: fixture_train_trackdir,
         tram_type: fixture_tram_type,
         tropic_zone: byte,
@@ -1186,8 +1186,8 @@ pub(crate) extern "C" fn unused_next_company(_: u8) -> u8 {
 }
 
 #[cfg(test)]
-pub(crate) extern "C" fn unused_town_owner(_: *const TownHandle) -> *mut crate::town::State {
-    std::ptr::null_mut()
+pub(crate) extern "C" fn unused_town_id(_: *const TownHandle) -> u16 {
+    u16::MAX
 }
 
 #[cfg(test)]

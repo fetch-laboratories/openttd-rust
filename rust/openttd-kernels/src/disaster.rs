@@ -192,7 +192,6 @@ pub struct Services {
     pub update_signals: extern "C" fn(),
     pub disasters_enabled: extern "C" fn() -> bool,
     pub can_allocate: extern "C" fn(usize) -> bool,
-    pub town_index: extern "C" fn(*const crate::services::TownHandle) -> u16,
 }
 struct World<'a> {
     s: &'a Services,
@@ -728,7 +727,7 @@ impl<'a> World<'a> {
                 from = target.id + 1;
             }
             let town = crate::town::spatial::closest(self.shared, Self::dest(v), u32::MAX);
-            (self.s.big_ufo_news)(Self::tile(v), (self.s.town_index)(town));
+            (self.s.big_ufo_news)(Self::tile(v), (self.shared.town_id)(town));
             if !(self.s.can_allocate)(2) {
                 return self.delete(v);
             }
@@ -1276,7 +1275,7 @@ crate::abi::layouts! {
     "OpenTTDDisasterIndustryTarget" ["probe"] => IndustryTarget { industry, id, kind, };
     "OpenTTDDisasterIndustryLocation" ["probe"] => IndustryLocation { tile, town, };
     "OpenTTDDisasterStationTarget" ["probe"] => StationTarget { next, tile, airport_type, };
-    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, town_index, };
+    "OpenTTDDisasterServices" ["probe"] => Services { shared, vehicles, occupancy, environment, aircraft, road, age, write_age, write_sprite, write_first_sprite, owner, update_delta, toward, create, resolve, next_disaster, next_road, road_target, road_disaster, write_road_disaster, next_vehicle, next_train, road_count, human, next_station, next_industry, industry, industry_location, industry_tile, industry_index, industry_belongs, reset_industry_tile, airport_tile, airport_blocks, zeppelin_crashed, zeppelin_cleared, road_crashed, zeppelin_news, small_ufo_news, airplane_news, helicopter_news, big_ufo_news, coal_news, clear, update_signals, disasters_enabled, can_allocate, };
 }
 
 #[cfg(test)]

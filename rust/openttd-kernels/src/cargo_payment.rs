@@ -223,7 +223,8 @@ fn deliver(
     unsafe { crate::company::record_delivery(finances, cargo, accepted) };
     let effect = crate::cargo_registry::town_acceptance(cargo);
     let town = (s.station_town)(native);
-    let town = (subsidies.shared().town_owner)(town);
+    let id = crate::town::TownId((subsidies.shared().town_id)(town));
+    let town = unsafe { crate::town::pool(subsidies.shared()).record(id) };
     unsafe { crate::town::record_delivery(town, effect, accepted) };
     let mut profit = income(s, accepted, distance, periods, cargo);
     crate::cargomonitor::add_delivery(

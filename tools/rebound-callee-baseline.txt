@@ -276,9 +276,6 @@ rebound | RustSubsidyServices | src/industry_cmd.cpp | subsidies
 rebound | RustSubsidyServices | src/rust/company_adapter.cpp | subsidies
 rebound | RustTileRailType | src/rust/vehicle_effect_services.hpp | tile_rail
 rebound | RustTileRailType | src/rust/vehicle_services_newgrf.h | tile_railtype
-rebound | RustTownAuthorityIndex | src/newgrf_industries.cpp | town_id
-rebound | RustTownAuthorityIndex | src/rust/disaster_adapter.hpp | town_index
-rebound | RustTownAuthorityIndex | src/town_cmd.cpp | town_index
 rebound | RustTrainLimit | src/rust/engine_adapter.hpp | train_limit
 rebound | RustTrainLimit | src/rust/rail_construction_services.hpp | train_limit
 rebound | RustTrainPathBackoffInterval | src/train_cmd.cpp | backoff

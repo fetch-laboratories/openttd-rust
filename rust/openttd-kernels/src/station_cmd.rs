@@ -2812,8 +2812,7 @@ impl Ctx<'_> {
             success = true;
             if flags & 1 != 0 && (types[0] != 63 || types[1] != 63) {
                 let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
-                let authority = unsafe { &*self.s.authority };
-                let town = (authority.town_index)(town);
+                let town = (self.shared.town_id)(town);
                 (self.rail().make_road)(
                     tile,
                     crate::rail_cmd::CrossingRoad {
@@ -3025,7 +3024,8 @@ impl Ctx<'_> {
         }
     }
     fn noise_pointer(&self, town: *const crate::services::TownHandle) -> *mut u16 {
-        let owner = (self.shared.town_owner)(town);
+        let id = crate::town::TownId((self.shared.town_id)(town));
+        let owner = unsafe { crate::town::pool(self.shared).record(id) };
         let fields = crate::town::record(owner);
         unsafe { &raw mut (*fields).noise_reached }
     }
@@ -3133,7 +3133,7 @@ impl Ctx<'_> {
             }
         }
         if message != 0 {
-            (self.cost.error_param)(cost.0, message, u64::from((authority.town_index)(refused)));
+            (self.cost.error_param)(cost.0, message, u64::from((self.shared.town_id)(refused)));
             return;
         }
         let mut st = self.join(

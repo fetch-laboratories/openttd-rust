@@ -36,7 +36,6 @@ struct OpenTTDTownAuthorityServices {
 	uint8_t (*council_tolerance)() noexcept OPENTTD_SERVICE_DEFAULT(council_tolerance);
 	bool (*bulldozer)() noexcept OPENTTD_SERVICE_DEFAULT(bulldozer);
 	uint8_t (*authority_distance)() noexcept OPENTTD_SERVICE_DEFAULT(authority_distance);
-	uint16_t (*town_index)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
 	uint32_t refusal;
 };
 struct OpenTTDTownLeaves {
