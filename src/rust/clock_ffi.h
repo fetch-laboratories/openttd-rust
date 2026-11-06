@@ -14,6 +14,7 @@ struct OpenTTDNativeClockTimer;
 struct OpenTTDConsoleException;
 struct OpenTTDVehicle;
 struct OpenTTDLiveGraph;
+struct RustPoolDescriptor;
 class LinkGraph;
 using OpenTTDClockPeriod = TimerGameCalendar::TPeriod;
 using OpenTTDEconomyClockPeriod = TimerGameEconomy::TPeriod;
@@ -23,8 +24,7 @@ struct OpenTTDClockServices {
 	bool (*using_wallclock_units)(bool) noexcept OPENTTD_SERVICE_DEFAULT(using_wallclock_units);
 	uint32_t (*vehicle_id)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_id);
 	void (*vehicle_shift_dates)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_shift_dates);
-	LinkGraph *(*next_graph)(uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(next_graph);
-	OpenTTDLiveGraph *(*graph_owner)(LinkGraph *) noexcept OPENTTD_SERVICE_DEFAULT(graph_owner);
+	const RustPoolDescriptor *const *graph_pool;
 };
 struct OpenTTDIndustryBuilder;
 struct OpenTTDIndustryServices;

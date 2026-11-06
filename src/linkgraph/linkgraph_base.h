@@ -14,10 +14,10 @@
 #include "linkgraphschedule.h"
 
 typedef LinkGraph::BaseNode Node;
-typedef LinkGraph::BaseEdge Edge;
+typedef OpenTTDLiveEdge Edge;
 
 typedef const LinkGraph::BaseNode ConstNode;
-typedef const LinkGraph::BaseEdge ConstEdge;
+typedef const OpenTTDLiveEdge ConstEdge;
 
 
 #endif /* LINKGRAPH_BASE_H */
