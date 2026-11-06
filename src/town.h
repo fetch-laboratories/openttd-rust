@@ -155,7 +155,7 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 		return it->history[LAST_MONTH].PctTransported();
 	}
 
-	RustStationList<Station> StationsNear() const { return RustStationList<Station>(const_cast<OpenTTDStationList *>(&this->Record().stations_near)); }
+	RustStationList<Station> StationsNear() const { return RustStationList<Station>(&this->Record().stations_near); }
 
 	bool show_zone = false; ///< NOSAVE: mark town to show the local authority zone in the viewports
 

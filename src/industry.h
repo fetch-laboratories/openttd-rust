@@ -290,7 +290,7 @@ inline Industry::ProducedCargoes &Industry::Produced() { return this->Record().p
 inline const Industry::ProducedCargoes &Industry::Produced() const { return this->Record().produced; }
 inline Industry::AcceptedCargoes &Industry::Accepted() { return this->Record().accepted; }
 inline const Industry::AcceptedCargoes &Industry::Accepted() const { return this->Record().accepted; }
-inline RustStationList<Station> Industry::StationsNear() const { return RustStationList<Station>(const_cast<OpenTTDStationList *>(&this->Record().stations_near)); }
+inline RustStationList<Station> Industry::StationsNear() const { return RustStationList<Station>(&this->Record().stations_near); }
 inline Industry::Industry(TileIndex tile) { this->Record().location = TileArea(tile, 0, 0); }
 inline Industry::Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { this->Record().location = TileArea(INVALID_TILE, 0, 0); }
 
