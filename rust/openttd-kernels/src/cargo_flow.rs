@@ -936,6 +936,7 @@ mod tests {
         ));
         shared.station_pool = station_pool;
         let world = crate::station_service::World {
+            cargo: std::ptr::null(),
             company: std::ptr::null(),
             graphs,
             station_exclusivity: unused!((*mut crate::station::BaseStation) -> crate::station_service::StationExclusivity),
@@ -963,14 +964,6 @@ mod tests {
             station_list_invalidation: unused!((*mut crate::station::BaseStation, i32)),
             waiting_redraw: unused!((*mut crate::station::BaseStation)),
             cargo_registry: std::ptr::null(),
-            with_truncation: unused!((
-                *mut crate::station::BaseStation,
-                u8,
-                u32,
-                *mut c_void,
-                crate::station_service::Scope
-            )),
-            truncate_next: unused!((*mut c_void) -> crate::station_service::TruncatedSource),
             shared: &raw const *shared,
         };
         let links = crate::station_service::Links {

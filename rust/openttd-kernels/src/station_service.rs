@@ -301,13 +301,8 @@ pub struct OrderDestination {
     pub(crate) kind: crate::vehicle::OrderType,
 }
 #[repr(C)]
-pub struct TruncatedSource {
-    pub(crate) amount: u32,
-    pub(crate) source: u16,
-    pub(crate) present: bool,
-}
-#[repr(C)]
 pub struct World {
+    pub(crate) cargo: *const crate::cargo_storage::Services,
     pub(crate) company: *const crate::company::Services,
     pub(crate) graphs: &'static live::Services,
     pub(crate) station_exclusivity: extern "C" fn(*mut BaseStation) -> StationExclusivity,
@@ -330,8 +325,6 @@ pub struct World {
 
     pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) cargo_registry: *const crate::cargo_registry::Services,
-    pub(crate) with_truncation: extern "C" fn(*mut BaseStation, u8, u32, *mut c_void, Scope),
-    pub(crate) truncate_next: extern "C" fn(*mut c_void) -> TruncatedSource,
     pub(crate) shared: *const crate::services::Services,
 }
 impl World {
@@ -469,25 +462,40 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance_mask(state: *mut Servic
     unsafe { acceptance_mask(state) }
 }
 unsafe fn truncate(st: *mut BaseStation, cargo: u8, amount: u32, w: &World) {
-    let mut body = |map| {
-        loop {
-            let observed = (w.truncate_next)(map);
-            if !observed.present {
-                break;
-            }
-            let source_st = w.get(observed.source);
-            if source_st.is_null() {
-                continue;
-            }
-            let ge = unsafe { cp(crate::station_record::service_of(source_st.cast()), cargo) };
-            unsafe {
-                (&raw mut (*ge).max_waiting_cargo)
-                    .write((*ge).max_waiting_cargo.max(observed.amount));
-            }
+    let list = crate::station_record::existing_cargo(st, cargo);
+    if list.is_null() {
+        return;
+    }
+    let mut amounts = std::collections::BTreeMap::<u16, u32>::new();
+    unsafe {
+        crate::cargo_storage::truncate_station_with(
+            list,
+            *w.cargo,
+            amount,
+            Some(|source, amount, remove| {
+                let value = amounts.entry(source).or_default();
+                *value = if remove {
+                    value.wrapping_sub(amount)
+                } else {
+                    value.wrapping_add(amount)
+                };
+            }),
+        );
+    }
+    for (source, amount) in amounts {
+        // Original TruncateCargo uses Station::GetIfValid, including its type filter.
+        let source_record = crate::station_record::get_station_record_if_valid(
+            w.shared(),
+            crate::station_type::StationID(source),
+        );
+        if source_record.is_null() {
+            continue;
         }
-    };
-    let (context, callback) = scope_context(&mut body);
-    (w.with_truncation)(st, cargo, amount, context, callback);
+        let ge = unsafe { &raw mut (*source_record).goods[usize::from(cargo)] };
+        unsafe {
+            (&raw mut (*ge).max_waiting_cargo).write((*ge).max_waiting_cargo.max(amount));
+        }
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_acceptance(
@@ -2007,11 +2015,6 @@ crate::abi::layouts! {
         destination,
         kind,
     };
-    "OpenTTDTruncatedSource" ["probe"] => TruncatedSource {
-        amount,
-        source,
-        present,
-    };
     "OpenTTDLoadingControl" ["probe"] => LoadingControl {
         ticks,
         unload_type,
@@ -2028,6 +2031,7 @@ crate::abi::layouts! {
         unloading,
     };
     "OpenTTDStationServices" ["probe"] => World {
+        cargo,
         company,
         graphs,
         station_exclusivity,
@@ -2047,8 +2051,6 @@ crate::abi::layouts! {
         station_list_invalidation,
         waiting_redraw,
         cargo_registry,
-        with_truncation,
-        truncate_next,
         shared,
     };
     "OpenTTDStationLinks" ["probe"] => Links {

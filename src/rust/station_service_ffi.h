@@ -67,11 +67,6 @@ struct OpenTTDOrderDestination {
 	uint16_t destination;
 	OrderType kind;
 };
-struct OpenTTDTruncatedSource {
-	uint32_t amount;
-	uint16_t source;
-	bool present;
-};
 /* Station lookup identities and canonical owner, resolved together before
  * next-station discovery. No borrowed station fields cross a callback. */
 struct OpenTTDLoadingStation {
@@ -81,6 +76,7 @@ struct OpenTTDLoadingStation {
 };
 struct OpenTTDCompanyServices;
 struct OpenTTDStationServices {
+	const OpenTTDCargoStorageServices *cargo;
 	const OpenTTDCompanyServices *company;
 	const OpenTTDLiveGraphServices *graphs;
 	OpenTTDStationExclusivity (*station_exclusivity)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_exclusivity);
@@ -102,8 +98,6 @@ struct OpenTTDStationServices {
 
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
 	const OpenTTDCargoRegistryServices *cargo_registry;
-	void (*with_truncation)(OpenTTDBaseStation *, uint8_t, uint32_t, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_truncation);
-	OpenTTDTruncatedSource (*truncate_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(truncate_next);
 	const OpenTTDSharedServices *shared;
 };
 

@@ -1200,11 +1200,37 @@ unsafe fn walk(
         n = next;
     }
 }
+/// Native callers retain their original optional `StationCargoAmountMap` output.
+/// # Safety
+/// The serialized list, service table and optional native output are live for the call.
 pub(crate) unsafe fn truncate_station(
     l: *mut List,
     s: Services,
     max_move: u32,
     origins: *mut c_void,
+) -> u32 {
+    let output = |source, amount, remove| (s.origin)(origins, source, amount, u8::from(remove));
+    unsafe {
+        truncate_station_with(
+            l,
+            s,
+            max_move,
+            if origins.is_null() {
+                None
+            } else {
+                Some(output)
+            },
+        )
+    }
+}
+/// Source truncation traversal; output deltas commit at their original packet observations.
+/// # Safety
+/// The list remains live across callbacks; no list/packet reference spans an output or deletion.
+pub(crate) unsafe fn truncate_station_with(
+    l: *mut List,
+    s: Services,
+    max_move: u32,
+    mut origins: Option<impl FnMut(u16, u32, bool)>,
 ) -> u32 {
     let max_move = max_move.min(unsafe { fields(l) }.count);
     let previous = unsafe { fields(l) }.count;
@@ -1218,8 +1244,10 @@ pub(crate) unsafe fn truncate_station(
             if previous > max_move
                 && unsafe { &*s.shared }.random_range(previous) < previous - max_move
             {
-                if !origins.is_null() && loop_count == 0 {
-                    (s.origin)(origins, p.first_station, u32::from(p.count), 0);
+                if loop_count == 0
+                    && let Some(output) = origins.as_mut()
+                {
+                    output(p.first_station, u32::from(p.count), false);
                 }
                 continue;
             }
@@ -1233,25 +1261,26 @@ pub(crate) unsafe fn truncate_station(
                     moved = moved.wrapping_add(diff);
                 }
                 if loop_count > 0 {
-                    if !origins.is_null() {
-                        (s.origin)(origins, p.first_station, diff, 1);
+                    if let Some(output) = origins.as_mut() {
+                        output(p.first_station, diff, true);
                     }
                     return moved;
                 }
-                if !origins.is_null() {
-                    (s.origin)(
-                        origins,
+                if let Some(output) = origins.as_mut() {
+                    output(
                         p.first_station,
                         u32::from(unsafe { packet(s, current.shell) }.count),
-                        0,
+                        false,
                     );
                 }
             } else {
                 unsafe {
                     erase(l, current.token);
                 }
-                if !origins.is_null() && loop_count > 0 {
-                    (s.origin)(origins, p.first_station, u32::from(p.count), 1);
+                if loop_count > 0
+                    && let Some(output) = origins.as_mut()
+                {
+                    output(p.first_station, u32::from(p.count), true);
                 }
                 moved = moved.wrapping_add(u32::from(p.count));
                 unsafe {

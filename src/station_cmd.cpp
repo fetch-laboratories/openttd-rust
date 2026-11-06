@@ -257,11 +257,8 @@ CargoArray GetAcceptanceAroundTiles(TileIndex center_tile, int w, int h, int rad
 	return acceptance;
 }
 
-struct RustStationTruncation {
-	StationCargoAmountMap amounts;
-	StationCargoAmountMap::iterator iterator;
-};
 static const OpenTTDStationServices _rust_station_services = {
+	.cargo = CargoStorageServices(),
 	.company = &GetRustCompanyServices(),
 	.graphs = &GetRustLiveGraphServices(),
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
@@ -320,19 +317,6 @@ static const OpenTTDStationServices _rust_station_services = {
 		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);
 	},
 	.cargo_registry = &GetRustCargoRegistryServices(),
-	.with_truncation = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount, void *context, OpenTTDStationScope body) noexcept {
-		RustStationTruncation result;
-		GoodsEntry ge = static_cast<Station *>(handle)->GetGoods(cargo);
-		if (ge.HasData()) ge.GetData().cargo.Truncate(amount, &result.amounts);
-		result.iterator = result.amounts.begin();
-		body(context, &result);
-	},
-	.truncate_next = [](void *handle) noexcept -> OpenTTDTruncatedSource {
-		auto *result = static_cast<RustStationTruncation *>(handle);
-		if (result->iterator == result->amounts.end()) return {0, 0, false};
-		const auto &[source, amount] = *result->iterator++;
-		return {amount, source.base(), true};
-	},
 	.shared = &GetRustSharedServices(),
 };
 static const OpenTTDStationLinks _rust_station_links = {
