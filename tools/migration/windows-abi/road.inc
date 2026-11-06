@@ -79,7 +79,7 @@ static void RoadBoundary()
 	RoadTestTables t(&services);
 	road_abi_engine->info.cargo_age_period = road_abi_new_engine->info.cargo_age_period = 0;
 	road_abi_engine->bindings.grf_prop.grffile = road_abi_new_engine->bindings.grf_prop.grffile = reinterpret_cast<const GRFFile *>(&road_abi_grf);
-	t.shared.grf_file_version = [](const void *file) noexcept -> uint8_t { CHECK(file == &road_abi_grf); return 8; };
+	t.shared.grf_file_version = [](const GRFFile *file) noexcept -> uint8_t { CHECK(file == reinterpret_cast<const GRFFile *>(&road_abi_grf)); return 8; };
 	road_abi_engine->vehicle_info.road.visual_effect = road_abi_new_engine->vehicle_info.road.visual_effect = 0x40;
 	t.vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * {
 		return road_abi_probe->engine_replaced ? road_abi_new_engine : road_abi_engine;

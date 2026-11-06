@@ -36,7 +36,7 @@ static void VehicleMaintenanceBoundary()
 	openttd_rust_engine_construct(engine_record, &engine_defaults, VEH_ROAD, UINT16_MAX);
 	engine_record->vehicle_info.road.cost_factor = 53;
 	engine_record->reliability = 0x9876;
-	engine_record->company_avail = CompanyMask{1};
+	engine_record->company_avail.Set(CompanyID{0});
 	auto &base = tables.vehicle;
 	base.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine_record; };
 	base.maintenance = &maintenance;
