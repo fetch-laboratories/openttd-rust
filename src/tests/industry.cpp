@@ -515,7 +515,6 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	static const OpenTTDMovementServices movement{};
 	shared.movement = &movement;
 	shared.tile_type = [](uint32_t tile) noexcept -> uint8_t { CHECK(tile == 123); CHECK(reinterpret_cast<OpenTTDIndustryRecord *>(active_owner)->random == 0); trace.push_back(2); return MP_CLEAR; };
-	shared.town_count = []() noexcept -> size_t { return 0; };
 	transaction.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept {
 		active_owner = owner;
 		trace.push_back(1);

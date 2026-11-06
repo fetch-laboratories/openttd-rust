@@ -450,7 +450,7 @@ impl<'a> Commands<'a> {
                 MP_HOUSE => (self.shared.town_index)(tile) == t.id.0,
                 MP_INDUSTRY => self.industry_town(tile) == t.shell,
                 MP_OBJECT => {
-                    if (self.shared.town_count)() == 1 {
+                    if crate::town::count(self.shared) == 1 {
                         true
                     } else {
                         let object = unsafe { (self.object_query().by_tile)(tile) };

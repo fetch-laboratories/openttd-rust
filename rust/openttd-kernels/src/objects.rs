@@ -991,7 +991,7 @@ impl<'a> World<'a> {
                 out.error(self.s.strings.too_many);
                 return;
             }
-            if (self.shared.town_count)() == 0 {
+            if crate::town::count(self.shared) == 0 {
                 out.error(self.s.strings.no_town);
                 return;
             }

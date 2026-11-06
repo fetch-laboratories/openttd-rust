@@ -752,7 +752,7 @@ pub(crate) fn recompute_catchment(st: *mut BaseStation, no_clear_nearby_lists: b
 }
 /// `Station::RecomputeCatchmentForAll`: towns, then industries, then stations in pool order.
 pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
-    let mut town = (c.s.town_next_id)(0);
+    let mut town = crate::town::next_id(c.s, 0);
     while town != u32::MAX {
         // The native iterator widens a live uint16 TownID to this u32 ABI.
         #[allow(clippy::cast_possible_truncation)]
@@ -761,7 +761,7 @@ pub(crate) fn recompute_catchment_for_all(c: &Ctx<'_>) {
         unsafe {
             (*crate::town::stations_near(crate::town::pool(c.s).record(id))).clear();
         };
-        town = (c.s.town_next_id)(town + 1);
+        town = crate::town::next_id(c.s, town + 1);
     }
     let mut industry = (c.c.next_industry)(0);
     while !industry.is_null() {

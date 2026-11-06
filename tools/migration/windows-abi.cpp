@@ -146,13 +146,11 @@ static void Calls()
 		shared.map = &map.statics;
 		shared.map_max_y = []() noexcept -> uint32_t { return 63; };
 		reinterpret_cast<OpenTTDTownRecord *>(owner)->xy = TileIndex{2080};
-		shared.town_count = []() noexcept -> size_t { return 1; };
-		shared.town_next_id = [](uint32_t from) noexcept -> uint32_t { return from == 0 ? UINT16_MAX - 1 : UINT32_MAX; };
 		/* Preserve the sparse boundary ID while coordinates read canonical slots.
 		 * The borrowed descriptor points at the same isolated owner as the callbacks. */
 		std::vector<RustPoolSlot> town_slots(UINT16_MAX);
-		town_slots[UINT16_MAX - 1].record = owner;
-		const RustPoolDescriptor town_descriptor{
+		town_slots[UINT16_MAX - 1] = {.shell = reinterpret_cast<Town *>(uintptr_t{1}), .record = owner};
+		RustPoolDescriptor town_descriptor{
 			.slots = {town_slots.data(), town_slots.size(), 0}, .used_bitmap = {},
 			.first_free = 0, .first_unused = UINT16_MAX, .items = 1, .checked = 0,
 			.cleaning = false, .alloc_cache = nullptr,
@@ -165,8 +163,7 @@ static void Calls()
 		openttd_rust_town_found(&founding, nullptr, &frame, &frame.names, cost, 2080, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
 		CHECK(error == 0x87654321); openttd_rust_town_rename(&founding, cost, UINT16_MAX, {nullptr, 0}, false);
 		CHECK(error == UINT16_MAX);
-		shared.town_count = []() noexcept -> size_t { return 0; };
-		shared.town_next_id = [](uint32_t) noexcept -> uint32_t { return UINT32_MAX; };
+		town_slots[UINT16_MAX - 1].shell = nullptr; town_descriptor.items = 0;
 		openttd_rust_town_rebuild_index(&shared);
 		openttd_rust_town_destroy(owner);
 	}

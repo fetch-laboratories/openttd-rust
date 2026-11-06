@@ -399,7 +399,6 @@ static uint8_t SharedPlaneCrashes() noexcept { return RustPlaneCrashes(); }
 static bool SharedServiceAtHelipad() noexcept { return RustServiceAtHelipad(); }
 static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 
-static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
 {
@@ -494,8 +493,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.storage_discard = RustStorageDiscard,
 
 	.tile_animation_set_frame = OpenTTDSetAnimationFrame,
-	.town_next_id = OpenTTDNextTownID,
-	.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(OpenTTDTownShellByID(id)); },
 	.town_pool = &_town_pool.descriptor,
 	.industry_pool = &_industry_pool.descriptor,
 	.utf8_length = RustUtf8Length,
@@ -518,7 +515,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.update_level_crossing = SharedUpdateLevelCrossing,
 	.recession = SharedRecession,
 	.tick_counter = openttd_orders_tick_counter,
-	.town_count = SharedTownCount,
 
 	.apply_foundation = RustApplyFoundation,
 	.clear_ground = OpenTTDClearGround,

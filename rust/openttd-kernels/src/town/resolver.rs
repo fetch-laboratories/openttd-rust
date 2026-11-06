@@ -117,13 +117,7 @@ unsafe fn initialize_counts(owner: *mut State, specs: usize, classes: usize) {
     owner.id_counts.resize(specs, 0);
     owner.class_counts.resize(classes, 0);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_counts_init(
-    l: &Leaves,
-    s: &Services,
-    owner: *mut State,
-    specs: usize,
-) {
+pub(crate) unsafe fn counts_init(s: &Services, owner: *mut State, specs: usize) {
     let classes = unsafe { (*CLASSES.get()).len() };
     if !owner.is_null() {
         unsafe { initialize_counts(owner, specs, classes) };
@@ -136,11 +130,11 @@ pub unsafe extern "C" fn openttd_rust_house_counts_init(
         counts.ids.resize(specs, 0);
         counts.classes.resize(classes, 0);
     };
-    let mut id = (l.next_town)(0);
+    let mut id = super::next_id(s, 0);
     while id != u32::MAX {
         let owner = unsafe { super::pool(s).record(crate::town_type::TownId(id as u16)) };
         unsafe { initialize_counts(owner, specs, classes) };
-        id = (l.next_town)(id + 1);
+        id = super::next_id(s, id + 1);
     }
 }
 /// `GetNumHouses`: direct canonical counts; all four clamps precede packing.
@@ -673,7 +667,10 @@ pub(super) unsafe fn allow_construction(
     house: u16,
     initial_random: u8,
 ) -> bool {
-    let town = (unsafe { &*services().shared }.town_by_id)(u32::from(town));
+    let town = super::shell(
+        unsafe { &*services().shared },
+        crate::town_type::TownId(town),
+    );
     let args = CallbackArgs {
         town,
         watched: 0,
@@ -692,8 +689,10 @@ pub(super) unsafe fn allow_construction(
 }
 pub(crate) unsafe fn foundation(tile: u32, house: u16) -> u16 {
     let s = services();
-    let town =
-        (unsafe { &*s.shared }.town_by_id)(u32::from((unsafe { &*s.shared }.town_index)(tile)));
+    let town = super::shell(
+        unsafe { &*s.shared },
+        crate::town_type::TownId((unsafe { &*s.shared }.town_index)(tile)),
+    );
     unsafe {
         callback(
             CBID_HOUSE_DRAW_FOUNDATIONS.0,

@@ -425,10 +425,6 @@ pub struct Services {
 
     /// Canonical shared `tile_animation_set_frame` service.
     pub tile_animation_set_frame: extern "C" fn(u32, u8),
-    /// Canonical shared `town_next_id` service.
-    pub town_next_id: extern "C" fn(u32) -> u32,
-    /// Canonical native town shell resolver.
-    pub town_by_id: extern "C" fn(u32) -> *mut TownHandle,
     /// Address of the town facade's stable canonical slot descriptor pointer.
     pub town_pool: *const *const crate::pool::PoolDescriptor,
     /// Address of the industry facade's stable canonical slot descriptor pointer.
@@ -473,8 +469,6 @@ pub struct Services {
     pub recession: extern "C" fn() -> bool,
     /// Global game tick counter.
     pub tick_counter: extern "C" fn() -> u64,
-    /// Number of towns in the pool.
-    pub town_count: extern "C" fn() -> usize,
     /// `ApplyFoundationToSlope`, returning the height added and the modified slope.
     pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     /// `GetClearGround`.
@@ -824,8 +818,6 @@ crate::abi::layouts! {
         storage_discard,
 
         tile_animation_set_frame,
-        town_next_id,
-        town_by_id,
         town_pool,
         industry_pool,
         utf8_length,
@@ -848,7 +840,6 @@ crate::abi::layouts! {
         update_level_crossing,
         recession,
         tick_counter,
-        town_count,
         apply_foundation,
         clear_ground,
         has_water_class,
@@ -896,6 +887,22 @@ crate::abi::layouts! {
     };
 }
 
+// Immutable empty canonical pool for standalone fixtures that previously had zero count.
+#[cfg(test)]
+static EMPTY_TOWN_POOL: crate::game_state::GameState<crate::pool::PoolDescriptor> =
+    crate::game_state::GameState::new(crate::pool::PoolDescriptor {
+        slots: crate::industrytype::NativeVec::new(),
+        used_bitmap: crate::industrytype::NativeVec::new(),
+        first_free: 0,
+        first_unused: 0,
+        items: 0,
+        checked: 0,
+        cleaning: false,
+        alloc_cache: std::ptr::null_mut(),
+    });
+#[cfg(test)]
+static EMPTY_TOWN_POOL_PTR: crate::game_state::GameState<*const crate::pool::PoolDescriptor> =
+    crate::game_state::GameState::new(EMPTY_TOWN_POOL.get());
 /// Standalone test table: map predicates return zero and writes do nothing.
 #[cfg(test)]
 #[must_use]
@@ -948,9 +955,6 @@ pub fn fixture(
         false
     }
     extern "C" fn word0() -> u32 {
-        0
-    }
-    extern "C" fn count0() -> usize {
         0
     }
     extern "C" fn tick0() -> u64 {
@@ -1122,9 +1126,7 @@ pub fn fixture(
         storage_discard: fixture_storage_discard,
 
         tile_animation_set_frame: zone,
-        town_next_id: word,
-        town_by_id: fixture_town_by_id,
-        town_pool: std::ptr::null(),
+        town_pool: EMPTY_TOWN_POOL_PTR.get(),
         industry_pool: std::ptr::null(),
         utf8_length: unused_utf8_length,
         vehicle_next: unused_vehicle_next,
@@ -1146,7 +1148,6 @@ pub fn fixture(
         update_level_crossing: fixture_crossing_update,
         recession: flag0,
         tick_counter: tick0,
-        town_count: count0,
         apply_foundation,
         clear_ground,
         has_water_class: flag,
@@ -1513,11 +1514,6 @@ extern "C" fn fixture_road_commands() -> *const crate::road_cmd::RoadCommandServ
 #[cfg(test)]
 extern "C" fn fixture_type_availability() -> *const crate::type_availability::Services {
     std::process::abort()
-}
-
-#[cfg(test)]
-extern "C" fn fixture_town_by_id(_: u32) -> *mut TownHandle {
-    panic!("unused town shell")
 }
 
 #[cfg(test)]

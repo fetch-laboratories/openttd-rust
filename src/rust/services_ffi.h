@@ -13,7 +13,7 @@
 #include "../tile_storage_type.h"
 #include "../newgrf_badge_type.h"
 #include "service_defaults.hpp"
-struct RustPoolDescriptor;
+#include "pool_ffi.h"
 #include <cstdint>
 #include <cstddef>
 #include <memory>
@@ -165,8 +165,6 @@ struct OpenTTDSharedServices {
 	void (*storage_discard)(void *) noexcept OPENTTD_SERVICE_DEFAULT(storage_discard);
 
 	void (*tile_animation_set_frame)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_set_frame);
-	uint32_t (*town_next_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_next_id);
-	OpenTTDTownHandle *(*town_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_by_id);
 	const RustPoolDescriptor *const *town_pool;
 	const RustPoolDescriptor *const *industry_pool;
 	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
@@ -189,7 +187,6 @@ struct OpenTTDSharedServices {
 	void (*update_level_crossing)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_level_crossing);
 	bool (*recession)() noexcept OPENTTD_SERVICE_DEFAULT(recession);
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
-	size_t (*town_count)() noexcept OPENTTD_SERVICE_DEFAULT(town_count);
 
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
@@ -297,6 +294,8 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept = OpenTTDAbortService<uint32_t (*)(int32_t, int32_t, uint32_t *) noexcept>::Call) noexcept
 {
 	static const uint8_t snow_line_height = 0;
+	static const RustPoolDescriptor empty_town_pool{};
+	static const RustPoolDescriptor *const empty_town_pool_ptr = &empty_town_pool;
 	return {
 		.clear_square_services = {},
 		.context = context,
@@ -305,11 +304,10 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
 		.snow_line_support = { .height = &snow_line_height },
-		.town_pool = nullptr,
+		.town_pool = &empty_town_pool_ptr,
 		.industry_pool = nullptr,
 		.recession = OpenTTDFixtureMapService<bool>,
 		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
-		.town_count = OpenTTDFixtureMapService<size_t>,
 	};
 }
 #endif /* RUST_SERVICES_FFI_H */

@@ -187,6 +187,25 @@ pub(crate) fn pool(
     // SAFETY: Startup initializes the native facade before serialized game entries.
     unsafe { crate::pool::TypedPool::from_descriptor(*s.town_pool) }
 }
+/// Canonical pool count, copied before any effect can allocate or free a town.
+pub(crate) fn count(s: &Services) -> usize {
+    unsafe { (**s.town_pool).items }
+}
+/// Native iterator's widened end sentinel and live-extent search.
+pub(crate) fn next_id(s: &Services, from: u32) -> u32 {
+    unsafe { pool(s).next_index(from as usize, u32::MAX as usize) as u32 }
+}
+/// `Town::Get`: preserve its native extent assertion, then load the shell once.
+pub(crate) fn shell(s: &Services, id: TownId) -> *mut crate::town_type::TownHandle {
+    unsafe {
+        let view = *s.town_pool;
+        let index = usize::from(id.0);
+        if index >= (*view).first_unused {
+            (crate::movement::table(s).native_assert)(false);
+        }
+        (*(*view).slots.as_mut_ptr().add(index)).shell.cast()
+    }
+}
 /// SAFETY: Live serialized town owner and original cargo acceptance effect.
 pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
     unsafe {
@@ -766,7 +785,6 @@ pub struct Leaves {
     pub population_changed: extern "C" fn(u32),
     pub house_count: extern "C" fn() -> u32,
     pub road_type_error: extern "C" fn(i32),
-    pub next_town: extern "C" fn(u32) -> u32,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
     pub assert_clear_house: extern "C" fn(bool),
@@ -1941,7 +1959,7 @@ impl Engine<'_> {
         // their shell. No owner reference spans any construction callback.
         let shell = *self.house_shell.get_or_init(|| {
             // SAFETY: Static house table referenced by the town leaves.
-            (self.services.town_by_id)(town)
+            shell(self.services, TownId(town as u16))
         });
         let town_ref = TownRef {
             shell,
@@ -2128,7 +2146,7 @@ impl Engine<'_> {
     }
     fn tick_all(mut self) {
         if !(self.leaves.environment.editor)() {
-            let mut id = (self.leaves.next_town)(0);
+            let mut id = next_id(self.services, 0);
             while id != u32::MAX {
                 // Each town starts with an empty map/shell cache, as the previous
                 // per-town engine did, without copying that engine each tick.
@@ -2136,7 +2154,7 @@ impl Engine<'_> {
                 self.house_shell.take();
                 self.owner = unsafe { pool(self.services).record(TownId(id as u16)) };
                 self.tick(id);
-                id = (self.leaves.next_town)(id + 1);
+                id = next_id(self.services, id + 1);
             }
         }
     }
@@ -2357,14 +2375,14 @@ pub(crate) unsafe fn openttd_rust_town_monthly_all(
     month: u8,
 ) {
     let engine = engine(leaves, services);
-    let mut town = (engine.leaves.next_town)(0);
+    let mut town = next_id(engine.services, 0);
     while town != u32::MAX {
         let owner = engine.clone().bind(town);
         owner.monthly_statistics(month);
         owner.update_growth(town);
         owner.update_rating(town);
         (owner.leaves.dirty_town)(town);
-        town = (engine.leaves.next_town)(town + 1);
+        town = next_id(engine.services, town + 1);
     }
 }
 /// Native fixture observes the real station-count and monthly-rating consumers.
@@ -2571,7 +2589,6 @@ crate::abi::layouts! {
         population_changed,
         house_count,
         road_type_error,
-        next_town,
         build_bridge,
         build_tunnel,
         assert_clear_house,

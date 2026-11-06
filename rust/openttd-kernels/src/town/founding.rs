@@ -277,8 +277,7 @@ impl<'a> Founding<'a> {
         }
         // SAFETY: Fresh canonical owner; no count view exists yet.
         unsafe {
-            super::resolver::openttd_rust_house_counts_init(
-                self.leaves,
+            super::resolver::counts_init(
                 self.shared,
                 town.state,
                 (self.leaves.house_count)() as usize,
@@ -683,7 +682,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate_abi(
         }
         .is_some();
     if !success
-        && observed!((f.shared.town_count)()) == 0
+        && observed!(crate::town::count(f.shared)) == 0
         && !observed!((f.leaves.environment.editor)())
     {
         observed!((f.s.no_town_error)());

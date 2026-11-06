@@ -198,10 +198,10 @@ impl Services {
         self.distance_tiles(self.position(a), self.position(b))
     }
     fn rebuild(&self) {
-        let mut id = (self.shared().town_next_id)(0);
+        let mut id = crate::town::next_id(self.shared(), 0);
         while id != u32::MAX {
             unsafe { *self.source_flags(Source::town(id as u16)) = 0 };
-            id = (self.shared().town_next_id)(id + 1);
+            id = crate::town::next_id(self.shared(), id + 1);
         }
         let mut from = 0;
         while let Some(entry) = industry::next(self.industry(), from) {

@@ -17,13 +17,13 @@ fn coordinate(s: &Services, map: crate::map_func::Map, id: TownId, dim: usize) -
 }
 pub(crate) fn rebuild(s: &Services) {
     let map = s.map();
-    let mut id = (s.town_next_id)(0);
+    let mut id = crate::town::next_id(s, 0);
     let ids = std::iter::from_fn(|| {
         if id == u32::MAX {
             return None;
         }
         let town = TownId(id as u16);
-        id = (s.town_next_id)(id + 1);
+        id = crate::town::next_id(s, id + 1);
         Some(town)
     });
     unsafe {
@@ -70,13 +70,13 @@ pub(crate) fn calc_closest(
     tile: u32,
     threshold: u32,
 ) -> *const crate::services::TownHandle {
-    if (s.town_count)() == 0 {
+    if crate::town::count(s) == 0 {
         return ptr::null();
     }
     let id = nearest(s, tile);
     let xy = unsafe { super::position(super::pool(s).record(id)) };
     if s.map().distance_manhattan(tile, xy) < threshold {
-        (s.town_by_id)(u32::from(id.0))
+        super::shell(s, id)
     } else {
         ptr::null()
     }
@@ -99,25 +99,25 @@ pub(crate) fn closest(
                     if (s.clear_square_services.generating_world)() {
                         return calc_closest(s, tile, threshold);
                     }
-                    world.check((s.town_count)() == 0);
+                    world.check(crate::town::count(s) == 0);
                     return ptr::null();
                 }
-                world.check((s.town_next_id)(u32::from(id)) == u32::from(id));
-                let town = (s.town_by_id)(u32::from(id));
+                world.check(crate::town::next_id(s, u32::from(id)) == u32::from(id));
+                let town = super::shell(s, TownId(id));
                 let xy = unsafe { super::position((s.town_owner)(town)) };
                 if world.dimensions.distance_manhattan(tile, xy) >= threshold {
                     return ptr::null();
                 }
                 return town;
             }
-            (s.town_by_id)(u32::from((s.town_index)(tile)))
+            super::shell(s, TownId((s.town_index)(tile)))
         }
-        MP_HOUSE => (s.town_by_id)(u32::from((s.town_index)(tile))),
+        MP_HOUSE => super::shell(s, TownId((s.town_index)(tile))),
         _ => calc_closest(s, tile, threshold),
     }
 }
 pub(crate) fn random(s: &Services) -> TownRef {
-    let count = (s.town_count)();
+    let count = crate::town::count(s);
     if count == 0 {
         return TownRef {
             shell: ptr::null_mut(),
@@ -126,13 +126,13 @@ pub(crate) fn random(s: &Services) -> TownRef {
         };
     }
     let mut num = s.random_range(u32::from(count as u16));
-    let mut id = (s.town_next_id)(0);
+    let mut id = crate::town::next_id(s, 0);
     while num != 0 {
         num -= 1;
-        id = (s.town_next_id)(id + 1);
+        id = crate::town::next_id(s, id + 1);
     }
     TownRef {
-        shell: (s.town_by_id)(id),
+        shell: super::shell(s, TownId(id as u16)),
         state: unsafe { super::pool(s).record(TownId(id as u16)) },
         id: TownId(id as u16),
     }

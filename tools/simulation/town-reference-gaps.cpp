@@ -192,7 +192,6 @@ static bool Candidate()
 	const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
 	services.town_pool = &town_descriptor_ptr;
 	AutoRestoreBackup<decltype(GetRustClockState().calendar_date)> calendar_date_scope(GetRustClockState().calendar_date, decltype(GetRustClockState().calendar_date){0});
-	services.town_by_id = [](uint32_t id) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(ResolveShell(id)); };
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
 	services.tile_slope = Read_tile_slope; services.tile_z = Read_tile_z; services.road_bits = Read_road_bits;
 	services.tunnel_transport = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeTransportType(id)); };
@@ -368,9 +367,16 @@ static void CompareAuthority()
 	shared.tile_type = +[](uint32_t tile) noexcept -> uint8_t { assert(tile == 129); authority_closest_calls++; return authority_town == nullptr ? 0 : MP_HOUSE; };
 	const OpenTTDFixtureMap map{6};
 	shared.map = &map.statics;
-	shared.town_count = +[]() noexcept -> size_t { return 0; };
 	shared.town_index = +[](uint32_t) noexcept -> uint16_t { return 17; };
-	shared.town_by_id = +[](uint32_t) noexcept { return reinterpret_cast<OpenTTDTownHandle *>(authority_town); };
+	std::array<RustPoolSlot, 18> town_slots{};
+	town_slots[17].record = owner.get();
+	RustPoolDescriptor town_descriptor{
+		.slots = {town_slots.data(), town_slots.size(), 0}, .used_bitmap = {},
+		.first_free = 0, .first_unused = town_slots.size(), .items = 0, .checked = 0,
+		.cleaning = false, .alloc_cache = nullptr,
+	};
+	const RustPoolDescriptor *town_descriptor_ptr = &town_descriptor;
+	shared.town_pool = &town_descriptor_ptr;
 	shared.town_owner = +[](const OpenTTDTownHandle *) noexcept { return authority_owner; };
 	const OpenTTDTownAuthorityServices a{
 		.council_tolerance = +[]() noexcept { return _settings_game.difficulty.town_council_tolerance; },
@@ -401,6 +407,7 @@ static void CompareAuthority()
 			for (int16_t rating : {-32768, -1001, -1000, -999, -201, -200, -199, 15, 16, 17, 63, 64, 65, 111, 112, 113, 143, 144, 145, 207, 208, 209, 399, 400, 401, 32767}) for (bool testing : {false, true}) {
 				_current_company = company; _settings_game.difficulty.town_council_tolerance = council;
 				_cheats.magic_bulldozer.value = cheat; authority_town = absent ? nullptr : &town;
+				town_slots[17].shell = authority_town; town_descriptor.items = absent ? 0 : 1;
 				town.ratings.fill(rating); auto *state = TownProtocolRecordOf(owner.get()); state->ratings.fill(rating);
 				Flags flags; if (no_test) flags.Set(DoCommandFlag::NoTestTownRating);
 				if (testing) {

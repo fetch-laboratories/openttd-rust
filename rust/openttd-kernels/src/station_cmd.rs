@@ -3329,7 +3329,7 @@ pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const Com
     let c = unsafe { Ctx::new(s) };
     let mut from = 0;
     loop {
-        let id = (c.shared.town_next_id)(from);
+        let id = crate::town::next_id(c.shared, from);
         if id == u32::MAX {
             break;
         }

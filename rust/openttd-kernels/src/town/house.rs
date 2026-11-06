@@ -975,7 +975,7 @@ impl<'a> House<'a> {
             (c.error)(result, INVALID_STRING_ID);
             return;
         }
-        if (self.s.town_count)() == 0 {
+        if crate::town::count(self.s) == 0 {
             (c.error)(result, self.h.errors.no_town);
             return;
         }
@@ -1234,18 +1234,17 @@ impl<'a> House<'a> {
             .wrapping_mul((self.s.map_max_y)().wrapping_add(1))
     }
     fn towns(&self, mut visit: impl FnMut(*mut State)) {
-        let mut town = (self.l.next_town)(0);
+        let mut town = super::next_id(self.s, 0);
         while town != u32::MAX {
             visit(unsafe { super::pool(self.s).record(crate::town_type::TownId(town as u16)) });
-            town = (self.l.next_town)(town.wrapping_add(1));
+            town = super::next_id(self.s, town.wrapping_add(1));
         }
     }
     /// `RebuildTownCaches`: canonical counts, population and houses in map order.
     fn rebuild_caches(&self) {
         // SAFETY: Rebuild entry is serialized; no native count view survives reset.
         unsafe {
-            super::resolver::openttd_rust_house_counts_init(
-                self.l,
+            super::resolver::counts_init(
                 self.s,
                 std::ptr::null_mut(),
                 (self.l.house_count)() as usize,
