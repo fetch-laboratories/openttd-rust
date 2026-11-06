@@ -556,7 +556,7 @@ static void FinaliseBadges()
 		AddBadgeToSpecs(file.housespec, GSF_HOUSES, *badge);
 		if (openttd_rust_industry_file_badge(&file, false, badge->index)) badge->features.Set(GSF_INDUSTRIES);
 		if (openttd_rust_industry_file_badge(&file, true, badge->index)) badge->features.Set(GSF_INDUSTRYTILES);
-		if (openttd_rust_object_file_badge(const_cast<RustObjectFileSpecs *>(&file.objectspec), badge->index)) badge->features.Set(GSF_OBJECTS);
+		if (openttd_rust_object_file_badge(const_cast<RustObjectFileSpecs *>(&file.objectspec), badge->index.base())) badge->features.Set(GSF_OBJECTS);
 		AddBadgeToSpecs(file.airportspec, GSF_AIRPORTS, *badge);
 		AddBadgeToSpecs(file.airtspec, GSF_AIRPORTTILES, *badge);
 		AddBadgeToSpecs(file.roadstops, GSF_ROADSTOPS, *badge);
