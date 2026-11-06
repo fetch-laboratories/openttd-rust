@@ -451,6 +451,28 @@ pub unsafe extern "C" fn openttd_test_station_rail_area(
     crate::newgrf_station::rail_tile_area(unsafe { &*s }, st, tile, area)
 }
 
+/// Rust slot iteration over the canonical station pool, for the native traversal
+/// test: each visit receives the shell, its record owner and its index.
+///
+/// # Safety
+/// `s` is the live shared table; the visitor may mutate the station pool.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_for_each(
+    s: *const Services,
+    context: *mut std::ffi::c_void,
+    visit: extern "C" fn(
+        *mut std::ffi::c_void,
+        *const crate::station::Station,
+        *mut crate::station_service::Service,
+        u16,
+    ),
+) {
+    // SAFETY: The caller supplies the live shared table.
+    crate::station_record::for_each_station(unsafe { &*s }, |shell, owner, id| {
+        visit(context, shell, owner, id);
+    });
+}
+
 /// Fixed build/mutation observations against the original native template.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_test_station_tree_sequence(

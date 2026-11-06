@@ -410,11 +410,9 @@ static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
-static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t)) noexcept
+static OpenTTDStationPool SharedStationPool() noexcept
 {
-	for (Station *st : Station::Iterate()) {
-		visit(context, RustStation(st), RustStationServiceOwner(st), RustBaseStationID(st));
-	}
+	return {.slots = _station_pool.data.data(), .slots_len = _station_pool.data.size(), .first_unused = &_station_pool.first_unused};
 }
 
 /** Stateless STL permutation primitive; storage and tree control flow belong to Rust. */
@@ -549,7 +547,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_fence = RustSetFieldFence,
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
-	.for_each_station = SharedForEachStation,
+	.station_pool = SharedStationPool,
 	.road_stop_type = SharedRoadStopType,
 	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 	.nearby_tile = RustSignedNearbyTile,

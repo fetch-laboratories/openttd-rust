@@ -8,6 +8,7 @@
 #include "../rust/road_stop_ffi.h"
 extern "C" {
 void openttd_test_station_tree_sequence(const OpenTTDSharedServices *, void *, void (*)(void *, uint32_t, uint16_t));
+void openttd_test_station_for_each(const OpenTTDSharedServices *, void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t));
 void openttd_test_station_insert(const OpenTTDSharedServices *, BaseStation *);
 void openttd_test_station_move_sign(const OpenTTDSharedServices *, BaseStation *, uint32_t);
 void openttd_test_station_radius(const OpenTTDSharedServices *, uint32_t, uint32_t, void *, void (*)(void *, BaseStation *));

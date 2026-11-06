@@ -86,7 +86,7 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 			if (id == 0) delete Station::Get(StationID(id));
 			if (id != 2) return;
 			std::vector<uint16_t> nested;
-			GetRustSharedServices().for_each_station(&nested, [](void *context, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t next) {
+			openttd_test_station_for_each(&GetRustSharedServices(), &nested, [](void *context, const OpenTTDStation *, OpenTTDStationRecord *, uint16_t next) {
 				static_cast<std::vector<uint16_t> *>(context)->push_back(next);
 			});
 			CHECK(nested == std::vector<uint16_t>{2, 4, 5});
@@ -99,7 +99,7 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 			Create(growth); // Relocates the pool's slot array during the callback.
 		};
 		if (shared) {
-			GetRustSharedServices().for_each_station(&Visit, [](void *context, const OpenTTDStation *shell, OpenTTDStationRecord *owner, uint16_t id) {
+			openttd_test_station_for_each(&GetRustSharedServices(), &Visit, [](void *context, const OpenTTDStation *shell, OpenTTDStationRecord *owner, uint16_t id) {
 				CHECK(shell == reinterpret_cast<const OpenTTDStation *>(Station::Get(StationID(id))));
 				CHECK(owner == &Station::Get(StationID(id))->Record());
 				(*static_cast<decltype(Visit) *>(context))(id);

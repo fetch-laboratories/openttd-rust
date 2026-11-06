@@ -508,10 +508,8 @@ pub struct Services {
     pub tree_ground: extern "C" fn(u32) -> TreeGround,
     /// Immutable water table, resolved lazily to avoid native static-init cycles.
     pub water_services: extern "C" fn() -> *const crate::water::WaterServices,
-    /// `for (Station *st : Station::Iterate())`, visiting each station with its
-    /// canonical service owner and index. Visits may reenter but never add or
-    /// delete a station.
-    pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
+    /// The canonical station pool's live slot descriptor, for Rust slot iteration.
+    pub station_pool: extern "C" fn() -> crate::station_record::StationPool,
     /// `GetRoadStopType`.
     pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
     /// Native road stop shells and their vehicle reads.
@@ -552,12 +550,6 @@ pub struct Services {
     pub not_reached: extern "C" fn(),
 }
 /// Station visitor: context, station, its service owner and its index.
-pub type StationVisitor = unsafe extern "C" fn(
-    *mut c_void,
-    *const crate::station::Station,
-    *mut crate::station_service::Service,
-    u16,
-);
 /// `GetFoundationSlope` result: height and slope after the tile's foundation.
 #[repr(C)]
 pub struct FoundationSlope {
@@ -605,26 +597,16 @@ impl Services {
     pub fn random_range(&self, limit: u32) -> u32 {
         crate::random_func::scale_to_limit(self.random(), limit)
     }
-    /// Visit every station in pool order. No owner reference spans a visit.
-    #[allow(unsafe_code)]
+    /// `for (Station *st : Station::Iterate())` over the canonical pool, visiting each
+    /// station shell with its record owner and index. Visits may reenter, delete or
+    /// allocate stations; the cursor rereads the live extent and slot after each visit.
     pub(crate) fn for_each_station<
         F: FnMut(*const crate::station::Station, *mut crate::station_service::Service, u16),
     >(
         &self,
-        mut visit: F,
+        visit: F,
     ) {
-        unsafe extern "C" fn invoke<
-            F: FnMut(*const crate::station::Station, *mut crate::station_service::Service, u16),
-        >(
-            context: *mut c_void,
-            station: *const crate::station::Station,
-            service: *mut crate::station_service::Service,
-            id: u16,
-        ) {
-            // SAFETY: The service borrows this unique closure only during the call.
-            unsafe { (&mut *context.cast::<F>())(station, service, id) }
-        }
-        (self.for_each_station)(std::ptr::from_mut(&mut visit).cast(), invoke::<F>);
+        crate::station_record::for_each_station(self, visit);
     }
 }
 crate::abi::layouts! {
@@ -910,7 +892,7 @@ crate::abi::layouts! {
         set_fence,
         tree_ground,
         water_services,
-        for_each_station,
+        station_pool,
         road_stop_type,
         road_stops,
         nearby_tile,
@@ -1205,7 +1187,7 @@ pub fn fixture(
         set_fence,
         tree_ground,
         water_services: fixture_water_services,
-        for_each_station: fixture_stations,
+        station_pool: fixture_station_pool,
         road_stop_type: fixture_road_stop_type,
         road_stops: fixture_road_stops,
     }
@@ -1615,7 +1597,13 @@ extern "C" fn unused_vehicle_next(_: u32) -> Option<crate::vehicle::VehicleRef> 
 }
 
 #[cfg(test)]
-extern "C" fn fixture_stations(_: *mut c_void, _: StationVisitor) {}
+extern "C" fn fixture_station_pool() -> crate::station_record::StationPool {
+    crate::station_record::StationPool {
+        slots: std::ptr::null(),
+        slots_len: 0,
+        first_unused: &0,
+    }
+}
 #[cfg(test)]
 extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
     panic!("unexpected water service access");
