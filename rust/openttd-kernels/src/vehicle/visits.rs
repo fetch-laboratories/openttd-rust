@@ -1130,7 +1130,7 @@ fn depot_refit(v: VehicleRef, cargo: u8, s: &Services) {
             witness::hit(witness::VISITS_DEPOT_REFIT);
             let cost = (base.cost.money)(costs.out);
             if cost != 0 {
-                (l.subtract_profit)(v, cost.wrapping_shl(8));
+                v.subtract_profit(cost.wrapping_shl(8));
                 (s.cost_animation)(v, cost);
             }
         }

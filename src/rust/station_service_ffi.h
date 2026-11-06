@@ -178,7 +178,6 @@ struct OpenTTDStationLoading {
 	void (*set_cargo_unloading)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_unloading);
 	void (*set_loading_finished)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_finished);
 	void (*set_stop)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_stop);
-	void (*subtract_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_profit);
 	void (*unknown_load_result)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_load_result);
 	void (*vehicle_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);
 	bool (*indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(indicator);

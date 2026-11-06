@@ -512,6 +512,10 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn write_profit_this_year(self, value: i64) {
         crate::raw_field::write_field!(self.0.as_ptr(), profit_this_year, value);
     }
+    /// `Money` subtraction saturates, including fixed-point running/refit costs.
+    pub(crate) fn subtract_profit(self, cost: i64) {
+        self.write_profit_this_year(self.profit_this_year().saturating_sub(cost));
+    }
     pub(crate) fn profit_last_year(self) -> i64 {
         crate::raw_field::read_field!(self.0.as_ptr(), profit_last_year)
     }

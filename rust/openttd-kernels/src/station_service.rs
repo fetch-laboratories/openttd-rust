@@ -1246,7 +1246,6 @@ pub struct Loading {
     pub(crate) set_cargo_unloading: extern "C" fn(VehicleRef, bool),
     pub(crate) set_loading_finished: extern "C" fn(VehicleRef, bool),
     pub(crate) set_stop: extern "C" fn(VehicleRef, bool),
-    pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
     pub(crate) unknown_load_result: extern "C" fn(VehicleRef, u16),
     pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
     pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
@@ -1495,7 +1494,7 @@ fn refit_vehicle(
         let cost = refit.cost().money();
         let succeeded = refit.cost().ok();
         if succeeded {
-            (l.subtract_profit)(v.first(), cost.wrapping_shl(8));
+            v.first().subtract_profit(cost.wrapping_shl(8));
         }
     }
     let do_reserve = auto || (l.full_load_order)(v.first());
@@ -2116,7 +2115,6 @@ crate::abi::layouts! {
         set_cargo_unloading,
         set_loading_finished,
         set_stop,
-        subtract_profit,
         unknown_load_result,
         vehicle_dirty,
         indicator,
