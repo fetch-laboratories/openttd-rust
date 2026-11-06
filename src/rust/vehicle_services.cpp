@@ -287,22 +287,22 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
  * transition, traversal and decision policy lives in vehicle/maintenance.rs. */
 static OpenTTDCalendarDate MaintenanceDate(TimerGameCalendar::Date date) noexcept { return {date.base()}; }
 static OpenTTDEconomyDate MaintenanceDate(TimerGameEconomy::Date date) noexcept { return {date.base()}; }
-static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplacement(OpenTTDVehicle *handle, const Company *company) noexcept
+static OpenTTDVehicleMaintenanceReplacement OPENTTD_RUST_CALL MaintenanceReplacement(OpenTTDVehicle *handle, const Company *company, uint16_t current_engine) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
 	bool when_old = false;
-	EngineID engine = EngineReplacementForCompany(company, v->GetEngineType(), v->group_id, &when_old);
+	EngineID engine = EngineReplacementForCompany(company, EngineID{current_engine}, v->group_id, &when_old);
 	return {.engine = engine.base(), .when_old = when_old};
 }
-static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(VehicleOf(handle)->GetOwner()); }
-static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(handle))).Test(EngineMiscFlag::NoBreakdownSmoke); }
+static bool OPENTTD_RUST_CALL MaintenanceReplacementAvailable(uint8_t owner, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(CompanyID{owner}); }
+static bool OPENTTD_RUST_CALL MaintenanceSmokeDisabled(uint16_t engine) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustEngineByID(engine))).Test(EngineMiscFlag::NoBreakdownSmoke); }
 static void OPENTTD_RUST_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_RUST_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
-static bool OPENTTD_RUST_CALL MaintenanceEngineAvailableAny(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->GetEngine()->company_avail.Any(); }
-static bool OPENTTD_RUST_CALL MaintenanceReplacementActive(OpenTTDVehicle *handle, const Company *company) noexcept
+static bool OPENTTD_RUST_CALL MaintenanceEngineAvailableAny(uint16_t engine) noexcept { return Engine::Get(EngineID{engine})->company_avail.Any(); }
+static bool OPENTTD_RUST_CALL MaintenanceReplacementActive(OpenTTDVehicle *handle, const Company *company, uint16_t engine) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return EngineHasReplacementForCompany(company, v->GetEngineType(), v->group_id);
+	return EngineHasReplacementForCompany(company, EngineID{engine}, v->group_id);
 }
 static void OPENTTD_RUST_CALL MaintenanceOldNews(OpenTTDVehicle *handle, StringID message) noexcept
 {

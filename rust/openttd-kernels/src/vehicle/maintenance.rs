@@ -35,14 +35,14 @@ pub struct Services {
     pub transaction: *const fleet::transactions::Services,
     pub group: *const fleet::GroupServices,
     pub company: *const crate::company_identity::Services,
-    pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Replacement,
-    pub replacement_available: extern "C" fn(VehicleRef, u16) -> bool,
-    pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
+    pub replacement: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany, u16) -> Replacement,
+    pub replacement_available: extern "C" fn(u8, u16) -> bool,
+    pub smoke_disabled: extern "C" fn(u16) -> bool,
     pub mark_dirty: extern "C" fn(VehicleRef),
     pub view_dirty: extern "C" fn(VehicleRef),
     pub details_dirty: extern "C" fn(VehicleRef),
-    pub engine_available_any: extern "C" fn(VehicleRef) -> bool,
-    pub replacement_active: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> bool,
+    pub engine_available_any: extern "C" fn(u16) -> bool,
+    pub replacement_active: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany, u16) -> bool,
     pub old_news: extern "C" fn(VehicleRef, u32),
     pub reached_min_age: extern "C" fn(VehicleRef),
     pub max_calendar_date: CalendarDate,
@@ -224,9 +224,9 @@ unsafe fn replacement_needed<const C: bool>(
 ) -> bool {
     let s = unsafe { &*base.maintenance };
     // SAFETY: needs_service retains the live native owner through this decision.
-    let replacement = unsafe { svc!(C, s.replacement, v, company) };
+    let replacement = unsafe { svc!(C, s.replacement, v, company, v.engine_id()) };
     if replacement.engine == crate::engine_type::INVALID_ENGINE
-        || !svc!(C, s.replacement_available, v, replacement.engine)
+        || !svc!(C, s.replacement_available, v.owner(), replacement.engine)
     {
         return false;
     }
@@ -393,7 +393,7 @@ unsafe fn breakdown_state<const C: bool>(
                     };
                     svc!(C, base.play_sound, v, sound);
                 }
-                if (v).status() & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v) {
+                if (v).status() & VS_HIDDEN == 0 && !svc!(C, s.smoke_disabled, v.engine_id()) {
                     let smoke = crate::effect::openttd_rust_effect_create_rel(
                         v.0.as_ptr(),
                         4,
@@ -519,11 +519,11 @@ unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     let companies = unsafe { &*s.company };
     let company = (companies.company)(crate::company_type::CompanyID(v.owner()));
     let renewal = read_field!((companies.settings)(company), engine_renew);
-    if renewal && svc!(C, s.engine_available_any, v) {
+    if renewal && svc!(C, s.engine_available_any, v.engine_id()) {
         return;
     }
     // Engine availability only reads; the Company is still the original live owner.
-    if unsafe { svc!(C, s.replacement_active, v, company) } {
+    if unsafe { svc!(C, s.replacement_active, v, company, v.engine_id()) } {
         return;
     }
     let news = if difference == s.before_zero.0 {

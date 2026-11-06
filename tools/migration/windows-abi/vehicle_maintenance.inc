@@ -124,8 +124,8 @@ static void VehicleMaintenanceBoundary()
 	GetRustClockState().economy_date = TimerGameEconomy::Date{100};
 	breakdowns = 0;
 	record.date_of_last_service = 0; consist.service_interval = 1; record.reliability = 0;
-	maintenance.replacement = [](OpenTTDVehicle *, const Company *) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
-	maintenance.replacement_available = [](OpenTTDVehicle *, uint16_t) noexcept { return true; };
+	maintenance.replacement = [](OpenTTDVehicle *, const Company *, uint16_t) noexcept -> OpenTTDVehicleMaintenanceReplacement { return {.engine = 1, .when_old = false}; };
+	maintenance.replacement_available = [](uint8_t, uint16_t) noexcept { return true; };
 	const int64_t original_price = openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD];
 	openttd_rust_economy_prices()[PR_BUILD_VEHICLE_ROAD] = 25600;
 	for (uint16_t value : {uint16_t{CALLBACK_FAILED}, uint16_t{17}}) {

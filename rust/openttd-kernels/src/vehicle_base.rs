@@ -765,6 +765,9 @@ impl crate::vehicle::VehicleRef {
     pub(crate) fn write_owner(self, value: u8) {
         crate::raw_field::write_field!(self.0.as_ptr(), owner, CompanyID(value));
     }
+    pub(crate) fn write_colourmap(self, value: u32) {
+        crate::raw_field::write_field!(self.0.as_ptr(), colourmap, value);
+    }
     pub(crate) fn write_last_station(self, value: u16) {
         crate::raw_field::write_field!(self.0.as_ptr(), last_station_visited, StationID(value));
     }

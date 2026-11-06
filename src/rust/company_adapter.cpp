@@ -311,14 +311,6 @@ static void Co_reset_service_interval(uint32_t id, int32_t interval, bool percen
 {
 	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, VehicleID(id), interval, false, percent);
 }
-/** Owner write and its cache invalidation, consecutive in the original. */
-static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
-{
-	Vehicle *v = Vehicle::Get(id);
-	RustVehicleSetOwner(RustVehicle(v), owner);
-	v->Record().colourmap = PAL_NONE;
-	RustVehicleInvalidateNewGRFCache(v);
-}
 static void Co_remove_engine_replacements(uint8_t id) noexcept { RemoveAllEngineReplacementForCompany(Company::Get(id)); }
 static uint32_t Co_group_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Group>(owner, from, [](const Group *g) { return g->owner; }); }
 static void Co_delete_group(uint32_t id) noexcept { delete Group::Get(id); }
@@ -437,7 +429,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.vehicle_group_flags = Co_vehicle_group_flags,
 		.delete_vehicle = Co_delete_vehicle, .count_group_engine = Co_count_group_engine,
 		.count_group_vehicle = Co_count_group_vehicle, .reset_service_interval = Co_reset_service_interval,
-		.set_vehicle_owner = Co_set_vehicle_owner,
 		.remove_engine_replacements = Co_remove_engine_replacements, .group_next_owned = Co_group_next_owned,
 		.delete_group = Co_delete_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,

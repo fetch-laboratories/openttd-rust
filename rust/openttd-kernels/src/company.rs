@@ -296,7 +296,6 @@ pub struct Services {
     pub count_group_engine: extern "C" fn(u32, i32),
     pub count_group_vehicle: extern "C" fn(u32, i32),
     pub reset_service_interval: extern "C" fn(u32, i32, bool),
-    pub set_vehicle_owner: extern "C" fn(u32, u8),
     pub remove_engine_replacements: extern "C" fn(u8),
     pub group_next_owned: extern "C" fn(u8, u32) -> u32,
     pub delete_group: extern "C" fn(u32),
@@ -1331,7 +1330,19 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
             let percent = read_field!(defaults, servint_ispercent);
             (s.reset_service_interval)(v, interval, percent);
         }
-        (s.set_vehicle_owner)(v, new);
+        let record = vehicle_record(s, v);
+        record.write_owner(new);
+        record.write_colourmap(crate::sprites::PAL_NONE);
+        let vehicles = (s.settings)().transactions.groups.vehicles;
+        // SAFETY: The current owned vehicle survives its source cache invalidation;
+        // no record field reference spans the callback into its native cache.
+        unsafe {
+            crate::newgrf_vehicle::openttd_rust_vehicle_grf_invalidate(
+                &*(vehicles.newgrf)(),
+                record.0.as_ptr(),
+                false,
+            );
+        }
         let g = (s.vehicle_group_flags)(v);
         if g.engine_countable {
             (s.count_group_engine)(v, 1);
@@ -2293,7 +2304,6 @@ crate::abi::layouts! {
         count_group_engine,
         count_group_vehicle,
         reset_service_interval,
-        set_vehicle_owner,
         remove_engine_replacements,
         group_next_owned,
         delete_group,

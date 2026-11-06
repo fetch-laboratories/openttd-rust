@@ -162,7 +162,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_RUST_CALL *count_group_engine)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_engine);
 	void (OPENTTD_RUST_CALL *count_group_vehicle)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(count_group_vehicle);
 	void (OPENTTD_RUST_CALL *reset_service_interval)(uint32_t, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(reset_service_interval);
-	void (OPENTTD_RUST_CALL *set_vehicle_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_vehicle_owner);
 	void (OPENTTD_RUST_CALL *remove_engine_replacements)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_engine_replacements);
 	uint32_t (OPENTTD_RUST_CALL *group_next_owned)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(group_next_owned);
 	void (OPENTTD_RUST_CALL *delete_group)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_group);
