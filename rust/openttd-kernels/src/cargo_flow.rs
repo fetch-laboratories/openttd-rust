@@ -1045,8 +1045,8 @@ mod tests {
                 // The sole annotated edge targets invalid station 102.
                 live_graph: snapshot,
                 context: (&raw mut world).cast(),
-                stations: &stations,
-                links: &links,
+                stations: &raw const stations,
+                links: &raw const links,
                 data_is_empty,
                 live_flows: live_map,
                 reroute,
