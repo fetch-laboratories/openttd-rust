@@ -11,6 +11,8 @@
 
 #ifdef WITH_RUST
 #define FIXTURE_SCOPE_VEHICLE(scope) ((scope).GetVehicle())
+#define FIXTURE_NAME(st) ((st)->GetName())
+#define FIXTURE_SET_NAME(st, value) ((st)->SetName(value))
 #define FIXTURE_FIELD(v, field) ((v)->Record().field)
 #define FIXTURE_CACHE(v, field) ((v)->Record().field)
 #define FIXTURE_GET(v, Name, field) ((v)->Get##Name())
@@ -40,6 +42,8 @@ constexpr auto FixtureRaw(T value)
 }
 #else
 #define FIXTURE_SCOPE_VEHICLE(scope) ((scope).v)
+#define FIXTURE_NAME(st) ((st)->name)
+#define FIXTURE_SET_NAME(st, value) ((st)->name = (value))
 #define FIXTURE_FIELD(v, field) ((v)->field)
 #define FIXTURE_CACHE(v, field) ((v)->vcache.field)
 #define FIXTURE_GET(v, Name, field) ((v)->field)

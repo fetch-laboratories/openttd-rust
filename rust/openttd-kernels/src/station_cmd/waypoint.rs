@@ -88,16 +88,18 @@ impl Ctx<'_> {
             }
             for index in 0..self.world().pool_size() {
                 let candidate = self.waypoint(index as u16);
-                if !candidate.is_null() && (self.s.name_equals)(candidate, text, length) {
+                if !candidate.is_null()
+                    && crate::station_storage::name_equals(candidate, text, length)
+                {
                     return out.error(self.s.strings.name_unique);
                 }
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
             if length == 0 {
-                (self.s.clear_name)(st);
+                crate::station_storage::clear_name(st, false);
             } else {
-                (self.s.set_name)(st, text, length);
+                crate::station_storage::set_name(st, text, length);
             }
             (self.s.virtual_coord)(st);
         }

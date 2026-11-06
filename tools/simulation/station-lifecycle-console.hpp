@@ -28,7 +28,7 @@ static Station *Station562New(TileIndex tile, const std::string &label)
 	_station_kdtree.Insert(st->index);
 #endif
 
-	FIXTURE_FIELD(st, town) = ClosestTownFromTile(tile, UINT_MAX); FIXTURE_SET(st, Owner, owner, _current_company); st->name = label;
+	FIXTURE_FIELD(st, town) = ClosestTownFromTile(tile, UINT_MAX); FIXTURE_SET(st, Owner, owner, _current_company); FIXTURE_SET_NAME(st, label);
 	return st;
 }
 static void Station562Names(TileIndex origin, DoCommandFlags exec)
@@ -41,7 +41,7 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	auto at = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
 	auto build = [exec](TileIndex tile, const char *label, StringID expected, IndustryType industry = IT_INVALID) {
 		StationNeed(Command<CMD_BUILD_RAIL_STATION>::Do(exec, tile, RAILTYPE_RAIL, AXIS_X, 1, 1, STAT_CLASS_DFLT, 0, NEW_STATION, true).Succeeded(), __LINE__);
-		Station *st = Station::GetByTile(tile); st->name = std::string("Owner562 ") + label;
+		Station *st = Station::GetByTile(tile); FIXTURE_SET_NAME(st, std::string("Owner562 ") + label);
 		StationNeed(FIXTURE_FIELD(st, string_id) == expected && FIXTURE_FIELD(st, indtype) == industry, __LINE__);
 		fmt::print(stderr, "STCMD owner562-name {} {} {} {}\n", label, st->index.base(), FIXTURE_FIELD(st, string_id), FIXTURE_FIELD(st, indtype));
 		return st;
@@ -79,7 +79,7 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	Industry *rig = new Industry(); rig->location = TileArea(at(24, 24), 1, 2); rig->town = ClosestTownFromTile(at(24, 24), UINT_MAX); rig->type = 5;
 	MakeIndustry(rig->location.tile, rig->index, GFX_OILRIG_1, 0, WaterClass::Sea);
 	MakeIndustry(at(24, 25), rig->index, GFX_OILRIG_1, 0, WaterClass::Sea); BuildOilRig(rig->location.tile);
-	StationNeed(rig->neutral_station != nullptr && FIXTURE_FIELD(rig->neutral_station, string_id) == STR_SV_STNAME_OILFIELD && FIXTURE_FIELD(rig->neutral_station, indtype) == IT_INVALID, __LINE__); rig->neutral_station->name = "Owner562 oilrig";
+	StationNeed(rig->neutral_station != nullptr && FIXTURE_FIELD(rig->neutral_station, string_id) == STR_SV_STNAME_OILFIELD && FIXTURE_FIELD(rig->neutral_station, indtype) == IT_INVALID, __LINE__); FIXTURE_SET_NAME(rig->neutral_station, "Owner562 oilrig");
 	fmt::print(stderr, "STCMD owner562-name oilrig {} {} {}\n", rig->neutral_station->index.base(), FIXTURE_FIELD(rig->neutral_station, string_id), FIXTURE_FIELD(rig->neutral_station, indtype));
 	/* Exhaust every default suffix using real station records, including forest aliasing. */
 	for (Town *town : Town::Iterate()) for (StringID name = STR_SV_STNAME; name < STR_SV_STNAME_FALLBACK; ++name) {
@@ -123,9 +123,9 @@ static void Station562Waypoints(TileIndex tile, DoCommandFlags exec, bool arctic
 	if (!reload) {
 		StationNeed(Command<CMD_BUILD_ROAD>::Do(exec, tile, ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()).Succeeded(), __LINE__);
 		StationNeed(Command<CMD_BUILD_ROAD_WAYPOINT>::Do(exec, tile, AXIS_X, 1, 1, ROADSTOP_CLASS_WAYP, 0, NEW_STATION, true).Succeeded(), __LINE__);
-		Waypoint::GetByTile(tile)->name = "Owner562 waypoint";
+		FIXTURE_SET_NAME(Waypoint::GetByTile(tile), "Owner562 waypoint");
 	} else {
-		for (Waypoint *wp : Waypoint::Iterate()) if (wp->name == "Owner562 waypoint") tile = FIXTURE_GET(wp, XY, xy);
+		for (Waypoint *wp : Waypoint::Iterate()) if (FIXTURE_NAME(wp) == "Owner562 waypoint") tile = FIXTURE_GET(wp, XY, xy);
 		StationNeed(tile != INVALID_TILE && IsRoadWaypointTile(tile), __LINE__);
 	}
 	_settings_game.game_creation.landscape = arctic ? LandscapeType::Arctic : LandscapeType::Tropic;
@@ -168,7 +168,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 		}
 		FIXTURE_GOODS(victim, 0).GetOrCreateData().cargo.Append(new CargoPacket(victim->index, 11, Source{FIXTURE_FIELD(victim, town)->index, SourceType::Town}), survivor->index);
 	} else {
-		for (Station *st : Station::Iterate()) { if (st->name == "Owner562 victim") victim = st; if (st->name == "Owner562 survivor") survivor = st; }
+		for (Station *st : Station::Iterate()) { if (FIXTURE_NAME(st) == "Owner562 victim") victim = st; if (FIXTURE_NAME(st) == "Owner562 survivor") survivor = st; }
 		StationNeed(victim != nullptr && survivor != nullptr && !FIXTURE_LOADING(victim).empty(), __LINE__);
 		vehicle = RoadVehicle::From(FIXTURE_LOADING(victim).front());
 	}
@@ -188,9 +188,9 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 static void Station562InspectNames()
 {
 	uint found = 0;
-	for (Station *st : Station::Iterate()) if (st->name.starts_with("Owner562 ")) {
-		StationNeed(st->name != "Owner562 seed", __LINE__); ++found;
-		fmt::print(stderr, "STCMD owner562-name reloaded {} {} {} {}\n", st->name, st->index.base(), FIXTURE_FIELD(st, string_id), FIXTURE_FIELD(st, indtype));
+	for (Station *st : Station::Iterate()) if (FIXTURE_NAME(st).starts_with("Owner562 ")) {
+		StationNeed(FIXTURE_NAME(st) != "Owner562 seed", __LINE__); ++found;
+		fmt::print(stderr, "STCMD owner562-name reloaded {} {} {} {}\n", FIXTURE_NAME(st), st->index.base(), FIXTURE_FIELD(st, string_id), FIXTURE_FIELD(st, indtype));
 	}
 	StationNeed(found == 8, __LINE__); Station562Rng("names-reloaded");
 }
@@ -204,7 +204,7 @@ static void Station634Visit(TileIndex origin, bool reload)
 			auto *st = new (StationID(id)) Station(origin);
 			FIXTURE_SET(st, Owner, owner, OWNER_NONE);
 			FIXTURE_FIELD(st, town) = ClosestTownFromTile(origin, UINT_MAX);
-			st->name = name;
+			FIXTURE_SET_NAME(st, name);
 #ifdef WITH_RUST
 			openttd_test_station_insert(&GetRustSharedServices(), st);
 #else
@@ -215,7 +215,7 @@ static void Station634Visit(TileIndex origin, bool reload)
 		auto *wp = new (StationID(base + 1)) Waypoint(origin);
 		FIXTURE_SET(wp, Owner, owner, OWNER_NONE);
 		FIXTURE_FIELD(wp, town) = ClosestTownFromTile(origin, UINT_MAX);
-		wp->name = "Owner634 waypoint";
+		FIXTURE_SET_NAME(wp, "Owner634 waypoint");
 		std::vector<uint32_t> trace;
 		uint32_t growth = UINT32_MAX;
 		auto Visit = [&](uint16_t id) {
@@ -244,8 +244,8 @@ static void Station634Visit(TileIndex origin, bool reload)
 		fmt::print(stderr, "STCMD owner634-visit mutation 1 1 1 1\n");
 	}
 	uint stations = 0, waypoints = 0;
-	for (Station *st : Station::Iterate()) if (st->name.starts_with("Owner634 ")) ++stations;
-	for (Waypoint *wp : Waypoint::Iterate()) if (wp->name == "Owner634 waypoint") ++waypoints;
+	for (Station *st : Station::Iterate()) if (FIXTURE_NAME(st).starts_with("Owner634 ")) ++stations;
+	for (Waypoint *wp : Waypoint::Iterate()) if (FIXTURE_NAME(wp) == "Owner634 waypoint") ++waypoints;
 	StationNeed(stations == 5 && waypoints == 1, __LINE__);
 	fmt::print(stderr, "STCMD owner634-visit state {} {}\n", stations, waypoints);
 	Station562Rng("visit634");

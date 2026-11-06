@@ -31,5 +31,6 @@ void openttd_rust_station_roadstop_data_reserve(OpenTTDStationRecord *, size_t c
 OpenTTDRoadStopTileData *openttd_rust_station_roadstop_data_append(OpenTTDStationRecord *);
 void openttd_rust_station_specs_reserve(OpenTTDStationRecord *, uint8_t road, size_t count);
 void *openttd_rust_station_specs_append(OpenTTDStationRecord *, uint8_t road);
+void openttd_rust_station_name_set(OpenTTDStationRecord *, uint8_t cached, const uint8_t *text, size_t length);
 }
 #endif /* RUST_STATION_RECORD_FFI_H */

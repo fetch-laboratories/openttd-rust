@@ -76,7 +76,7 @@ void MoveBuoysToWaypoints()
 		TileIndex xy       = st->GetXY();
 		Town *town         = st->Record().town;
 		StringID string_id = st->Record().string_id;
-		std::string name   = st->name;
+		std::string name{st->GetName()};
 		TimerGameCalendar::Date build_date = st->GetBuildDate();
 		/* TTDPatch could use "buoys with rail station" for rail waypoints */
 		bool train         = st->GetTrainStation().tile != INVALID_TILE;
@@ -91,7 +91,7 @@ void MoveBuoysToWaypoints()
 		Waypoint *wp   = new (index) Waypoint(xy);
 		wp->Record().town       = town;
 		wp->Record().string_id  = train ? STR_SV_STNAME_WAYPOINT : STR_SV_STNAME_BUOY;
-		wp->name       = std::move(name);
+		wp->SetName(name);
 		wp->Record().delete_ctr = 0; // Just reset delete counter for once.
 		wp->SetBuildDate(build_date);
 		wp->SetOwner(train ? GetTileOwner(xy) : OWNER_NONE);
@@ -473,6 +473,17 @@ public:
 	}
 };
 
+/** Call-scoped std::string for the unchanged codec. The load scope publishes
+ * partial string changes even on ordinary exceptions and restores nested staging. */
+struct StationNameSaveScope {
+	static inline std::string current;
+	std::string previous;
+	BaseStation *station;
+	bool loading;
+	StationNameSaveScope(BaseStation *station, bool loading) : previous(std::move(current)), station(station), loading(loading) { current = station->GetName(); }
+	~StationNameSaveScope() { if (this->loading) this->station->SetName(current); current = std::move(this->previous); }
+};
+
 static const SaveLoad _old_station_desc[] = {
 	SLE_CONDVARNAME(Station, Record().xy, "xy", SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6),
 	SLE_CONDVARNAME(Station, Record().xy, "xy", SLE_UINT32, SLV_6, SL_MAX_VERSION),
@@ -485,7 +496,7 @@ static const SaveLoad _old_station_desc[] = {
 	SLE_CONDVARNAME(Station, Record().train_station.h, "train_station.h", SLE_FILE_U8 | SLE_VAR_U16, SLV_2, SL_MAX_VERSION),
 
 	    SLE_VARNAME(Station, Record().string_id, "string_id", SLE_STRINGID),
-	SLE_CONDSSTR(Station, name,                      SLE_STR | SLF_ALLOW_CONTROL, SLV_84, SL_MAX_VERSION),
+	SLEG_CONDSSTR("name", StationNameSaveScope::current, SLE_STR | SLF_ALLOW_CONTROL, SLV_84, SL_MAX_VERSION),
 	SLE_CONDVARNAME(Station, Record().indtype, "indtype", SLE_UINT8, SLV_103, SL_MAX_VERSION),
 	SLE_CONDVARNAME(Station, Record().had_vehicle_of_type, "had_vehicle_of_type", SLE_FILE_U16 | SLE_VAR_U8, SL_MIN_VERSION, SLV_122),
 	SLE_CONDVARNAME(Station, Record().had_vehicle_of_type, "had_vehicle_of_type", SLE_UINT8, SLV_122, SL_MAX_VERSION),
@@ -536,6 +547,7 @@ struct STNSChunkHandler : ChunkHandler {
 
 			_waiting_acceptance = 0;
 			RustStationLoadingQueueSaveScope loading(&st->Record(), true);
+			StationNameSaveScope name(st, true);
 			SlObject(st, slt);
 		}
 	}
@@ -587,7 +599,7 @@ public:
 		    SLE_VARNAME(BaseStation, Record().xy, "xy", SLE_UINT32),
 		    SLE_GENERAL_NAME(SL_REF, "town", BaseStation, Record().town, REF_TOWN, 0, SL_MIN_VERSION, SL_MAX_VERSION, 0),
 		    SLE_VARNAME(BaseStation, Record().string_id, "string_id", SLE_STRINGID),
-		   SLE_SSTR(BaseStation, name,                   SLE_STR | SLF_ALLOW_CONTROL),
+		  SLEG_SSTR("name", StationNameSaveScope::current, SLE_STR | SLF_ALLOW_CONTROL),
 		    SLE_VARNAME(BaseStation, Record().delete_ctr, "delete_ctr", SLE_UINT8),
 		    SLE_VARNAME(BaseStation, Record().owner, "owner", SLE_UINT8),
 		    SLE_VARNAME(BaseStation, Record().facilities, "facilities", SLE_UINT8),
@@ -607,6 +619,7 @@ public:
 
 	void Load(BaseStation *bst) const override
 	{
+		StationNameSaveScope name(bst, true);
 		SlObject(bst, this->GetLoadDescription());
 	}
 
@@ -732,6 +745,7 @@ struct STNNChunkHandler : ChunkHandler {
 		/* Write the stations */
 		for (BaseStation *st : BaseStation::Iterate()) {
 			SlSetArrayIndex(st->index);
+			StationNameSaveScope name(st, false);
 			RustStationLoadingQueueSaveScope loading(st->GetFacilities().Test(StationFacility::Waypoint) ? nullptr : &static_cast<Station *>(st)->Record(), false);
 			SlObject(st, _station_desc);
 		}

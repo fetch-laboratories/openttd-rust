@@ -674,9 +674,9 @@ bool AfterLoadGame()
 		}
 
 		for (Station *st : Station::Iterate()) {
-			st->name = CopyFromOldName(st->Record().string_id);
+			st->SetName(CopyFromOldName(st->Record().string_id));
 			/* generating new name would be too much work for little effect, use the station name fallback */
-			if (!st->name.empty()) st->Record().string_id = STR_SV_STNAME_FALLBACK;
+			if (!st->GetName().empty()) st->Record().string_id = STR_SV_STNAME_FALLBACK;
 		}
 
 		for (Town *t : Town::Iterate()) {
@@ -2579,11 +2579,11 @@ bool AfterLoadGame()
 		 * highest possible number to get them numbered in the
 		 * order they have in the pool. */
 		for (Waypoint *wp : Waypoint::Iterate()) {
-			if (!wp->name.empty()) wp->Record().town_cn = UINT16_MAX;
+			if (!wp->GetName().empty()) wp->Record().town_cn = UINT16_MAX;
 		}
 
 		for (Waypoint *wp : Waypoint::Iterate()) {
-			if (!wp->name.empty()) MakeDefaultName(wp);
+			if (!wp->GetName().empty()) MakeDefaultName(wp);
 		}
 	}
 

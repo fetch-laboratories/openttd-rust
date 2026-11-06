@@ -173,7 +173,7 @@ static void Station602Rail(TileIndex tile, DoCommandFlags exec)
 	for (Axis axis : {AXIS_X, AXIS_Y}) {
 		TileIndex start = tile + TileDiffXY(8 * axis, 0);
 		StationNeed(Command<CMD_BUILD_RAIL_STATION>::Do(exec, start, RAILTYPE_RAIL, axis, 2, 3, STAT_CLASS_DFLT, 0, NEW_STATION, true).Succeeded(), __LINE__);
-		Station *st = Station::GetByTile(start); st->name = fmt::format("Spatial602 rail {}", axis);
+		Station *st = Station::GetByTile(start); FIXTURE_SET_NAME(st, fmt::format("Spatial602 rail {}", axis));
 		TileIndex middle = start + TileOffsByAxis(axis);
 		for (bool incompatible : {false, true}) {
 			SetStationTileBlocked(start + 2 * TileOffsByAxis(axis), incompatible);
@@ -264,7 +264,7 @@ extern "C" void __wrap__Z16SndPlayVehicleFxtPK7Vehicle(SoundID sound, const Vehi
 static void Station602Crash(bool reload)
 {
 	if (reload) {
-		Station *st = nullptr; for (Station *s : Station::Iterate()) if (s->name == "Spatial602 crash") st = s;
+		Station *st = nullptr; for (Station *s : Station::Iterate()) if (FIXTURE_NAME(s) == "Spatial602 crash") st = s;
 		fmt::print(stderr, "STCMD spatial602-crash-reload-state {} {} {}\n", st != nullptr, st == nullptr ? -1 : FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating), FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed));
 		StationNeed(st != nullptr && FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating) == 40 && FIXTURE_GET(RoadVehicle::Get(VehicleID(21)), VehStatus, vehstatus).Test(VehState::Crashed), __LINE__);
 		fmt::print(stderr, "STCMD spatial602-crash-reload {}\n", FIXTURE_VFIELD(FIXTURE_GOODS(st, 0), rating)); return;
@@ -308,7 +308,7 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 			seeds.push_back(st);
 		}
 	} else {
-		for (Station *st : Station::Iterate()) if (st->name == "Spatial602 seed") seeds.push_back(st);
+		for (Station *st : Station::Iterate()) if (FIXTURE_NAME(st) == "Spatial602 seed") seeds.push_back(st);
 		StationNeed(!seeds.empty(), __LINE__); origin = FIXTURE_GET(seeds.front(), XY, xy);
 	}
 	Station602Rebuild();
@@ -365,7 +365,7 @@ static void Station602Fixture(TileIndex origin, DoCommandFlags exec, bool reload
 	}
 	if (reload) for (Axis axis : {AXIS_X, AXIS_Y}) {
 		Station *found = nullptr;
-		for (Station *st : Station::Iterate()) if (st->name == fmt::format("Spatial602 rail {}", axis)) found = st;
+		for (Station *st : Station::Iterate()) if (FIXTURE_NAME(st) == fmt::format("Spatial602 rail {}", axis)) found = st;
 		StationNeed(found != nullptr, __LINE__); Station602Triggers(found, axis);
 	}
 	Station602Crash(reload);

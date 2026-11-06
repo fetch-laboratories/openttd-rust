@@ -10,6 +10,52 @@ use crate::station_record::{RoadStopTileData, StationRecord, record_of};
 use crate::station_type::BaseStation;
 use crate::tile_type::TileIndex;
 
+/// Custom and resolved names are arbitrary bytes, matching native `std::string`.
+/// Native views end before rename, cache replacement or owner destruction.
+fn name_slot(record: *mut StationRecord, cached: bool) -> *mut NativeVec<u8> {
+    if cached {
+        unsafe { &raw mut (*record).cached_name }
+    } else {
+        unsafe { &raw mut (*record).name }
+    }
+}
+
+pub(crate) fn name_equals(shell: *const BaseStation, text: *const u8, length: usize) -> bool {
+    let name = unsafe { &(*record_of(shell)).name };
+    !name.is_empty() && name.as_slice() == unsafe { crate::utf8::borrow(text, length) }
+}
+
+fn set_name_bytes(record: *mut StationRecord, cached: bool, text: *const u8, length: usize) {
+    // Copy first: the input may be a view into this owner's previous name.
+    let bytes = unsafe { crate::utf8::borrow(text, length) }.to_vec();
+    unsafe { *name_slot(record, cached) = NativeVec::from_vec(bytes) };
+}
+
+pub(crate) fn set_name(shell: *const BaseStation, text: *const u8, length: usize) {
+    set_name_bytes(unsafe { record_of(shell) }, false, text, length);
+}
+
+pub(crate) fn clear_name(shell: *const BaseStation, cached: bool) {
+    unsafe { (*name_slot(record_of(shell), cached)).resize(0, 0) };
+}
+
+/// # Safety
+/// Serialized live record and readable input bytes. Input may alias the old
+/// name; no byte view survives this call. `cached` selects the resolved cache.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_name_set(
+    record: *mut StationRecord,
+    cached: u8,
+    text: *const u8,
+    length: usize,
+) {
+    if length == 0 {
+        unsafe { (*name_slot(record, cached != 0)).resize(0, 0) };
+    } else {
+        set_name_bytes(record, cached != 0, text, length);
+    }
+}
+
 macro_rules! spec_storage {
     ($module:ident, $field:ident, $row:ident, $spec:ident) => {
         pub(crate) mod $module {

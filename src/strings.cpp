@@ -1673,8 +1673,8 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 					if (use_cache) { // Use cached version if first call
 						AutoRestoreBackup cache_backup(use_cache, false);
 						builder += st->GetCachedName();
-					} else if (!st->name.empty()) {
-						auto tmp_params = MakeParameters(st->name);
+					} else if (!st->GetName().empty()) {
+						auto tmp_params = MakeParameters(st->GetName());
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else {
 						StringID string_id = st->Record().string_id;
@@ -1719,8 +1719,8 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 					Waypoint *wp = Waypoint::GetIfValid(args.GetNextParameter<StationID>());
 					if (wp == nullptr) break;
 
-					if (!wp->name.empty()) {
-						auto tmp_params = MakeParameters(wp->name);
+					if (!wp->GetName().empty()) {
+						auto tmp_params = MakeParameters(wp->GetName());
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else {
 						auto tmp_params = MakeParameters(wp->Record().town->index, wp->Record().town_cn + 1);

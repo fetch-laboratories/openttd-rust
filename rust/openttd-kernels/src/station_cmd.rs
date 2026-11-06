@@ -188,8 +188,6 @@ pub struct CommandServicesTable {
     pub new_station: extern "C" fn(u32) -> *mut BaseStation,
     pub lifecycle: *const crate::station_lifecycle::Services,
     pub have_rating: extern "C" fn(*mut BaseStation, u8),
-    pub name_equals: extern "C" fn(*mut BaseStation, *const u8, usize) -> bool,
-    pub set_name: extern "C" fn(*mut BaseStation, *const u8, usize),
     pub closed_widget: extern "C" fn(*mut BaseStation),
     pub distant_join: extern "C" fn() -> bool,
     pub rail_association: *const crate::station_association::Services,
@@ -278,8 +276,6 @@ pub struct CommandServicesTable {
     pub autoslope_axis: extern "C" fn(u32, i32, u8, u8) -> bool,
     pub station_list_classes_invalidate: extern "C" fn(),
     // Waypoint command leaves; canonical shells and shared map services.
-    pub clear_cached_name: extern "C" fn(*mut BaseStation),
-    pub clear_name: extern "C" fn(*mut BaseStation),
     pub make_buoy: extern "C" fn(u32, u16, crate::services::WaterClass),
     pub make_rail_waypoint: extern "C" fn(u32, u8, u16, u8, u8, crate::services::RailType),
     pub new_waypoint: extern "C" fn(u32) -> *mut BaseStation,
@@ -911,17 +907,19 @@ impl Ctx<'_> {
             }
             for index in 0..self.world().pool_size() {
                 let candidate = self.full_station(index as u16);
-                if !candidate.is_null() && (self.s.name_equals)(candidate, text, length) {
+                if !candidate.is_null()
+                    && crate::station_storage::name_equals(candidate, text, length)
+                {
                     return out.error(self.s.strings.name_unique);
                 }
             }
         }
         if flags & 1 != 0 {
-            (self.s.clear_cached_name)(st);
+            crate::station_storage::clear_name(st, true);
             if length == 0 {
-                (self.s.clear_name)(st);
+                crate::station_storage::clear_name(st, false);
             } else {
-                (self.s.set_name)(st, text, length);
+                crate::station_storage::set_name(st, text, length);
             }
             (self.s.virtual_coord)(st);
             (self.world().station_list_invalidation)(st, 1);
@@ -4270,8 +4268,6 @@ crate::abi::layouts! {
         new_station,
         lifecycle,
         have_rating,
-        name_equals,
-        set_name,
         closed_widget,
         distant_join,
         rail_association,
@@ -4355,8 +4351,6 @@ crate::abi::layouts! {
         industry_area,
         autoslope_axis,
         station_list_classes_invalidate,
-        clear_cached_name,
-        clear_name,
         make_buoy,
         make_rail_waypoint,
         new_waypoint,

@@ -106,9 +106,6 @@ inline void RustStationStationViewInvalidate(BaseStation *st, int32_t data) noex
 inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete Station::From(st)->Record().airport.psa; }
 inline BaseStation *RustIndustryNeutralBaseStation(Industry *industry) noexcept { return RustIndustryNeutralStation(industry); }
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->GetOwner(), data); }
-inline void RustStationClearName(BaseStation *st) noexcept { st->name.clear(); }
-inline void RustStationClearCachedName(BaseStation *st) noexcept { st->cached_name.clear(); }
-inline void RustStationSetName(BaseStation *st, const uint8_t *text, size_t length) noexcept { st->name.assign(reinterpret_cast<const char *>(text), length); }
 inline bool RustWaypointAvailable() noexcept { return Waypoint::CanAllocateItem(); }
 inline void RustWaypointDefaultName(BaseStation *st) noexcept { MakeDefaultName(Waypoint::From(st)); }
 inline void RustWaypointViewInvalidate(BaseStation *st) noexcept { InvalidateWindowData(WC_WAYPOINT_VIEW, st->index); }

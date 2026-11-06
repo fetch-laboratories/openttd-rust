@@ -118,7 +118,7 @@ void MoveWaypointsToBaseStations()
 		Waypoint *new_wp = new Waypoint(t);
 		new_wp->Record().town       = wp.town;
 		new_wp->Record().town_cn    = wp.town_cn;
-		new_wp->name       = wp.name;
+		new_wp->SetName(wp.name);
 		new_wp->Record().delete_ctr = 0; // Just reset delete counter for once.
 		new_wp->SetBuildDate(wp.build_date);
 		new_wp->SetOwner(wp.owner);

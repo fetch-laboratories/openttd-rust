@@ -29,7 +29,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	ats->animation.triggers.Set(AirportAnimationTrigger::Built); ats->animation.speed = 0; ats->animation.frames = 8;
 	ats->callback_mask.Set({AirportTileCallbackMask::AnimationSpeed, AirportTileCallbackMask::AnimationNextFrame});
 	Station *st = nullptr;
-	if (reloaded) { for (Station *s : Station::Iterate()) if (s->name == "Airport resolver") st = s; StationNeed(st != nullptr, __LINE__); }
+	if (reloaded) { for (Station *s : Station::Iterate()) if (FIXTURE_NAME(s) == "Airport resolver") st = s; StationNeed(st != nullptr, __LINE__); }
 	else {
 		auto check = [&](const char *label, DoCommandFlags flags, TileIndex tile, uint8_t layout, bool success) { auto cost = Command<CMD_BUILD_AIRPORT>::Do(flags, tile, AT_SMALL, layout, NEW_STATION, true); StationCost(label, cost); StationNeed(cost.Succeeded() == success, __LINE__); };
 		TileIndex tile = origin + TileDiffXY(3, 3);
@@ -51,7 +51,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		 * retained airport whose storage is saved and reloaded. */
 		ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
 		check("airport-build-test", test, tile, 0, true); check("airport-build", exec, tile, 0, true);
-		st = Station::GetByTile(tile); st->name = "Airport resolver";
+		st = Station::GetByTile(tile); FIXTURE_SET_NAME(st, "Airport resolver");
 		StationNeed(FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa) != nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(st), psa)->GetValue(7) == 0x418, __LINE__);
 	}
 	TileIndex tile = FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(st)) + ToTileIndexDiff(spec->layouts[0].tiles.front().ti);
@@ -268,7 +268,7 @@ static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		auto build = [&](DoCommandFlags flags, TileIndex t) { return Command<CMD_BUILD_AIRPORT>::Do(flags, t, type, 0, NEW_STATION, true); };
 		auto price = build(test, at); StationCost("airport-def-test", price); auto cost = build(exec, at); StationCost("airport-def-exec", cost);
 		StationNeed(price.Succeeded() && cost.Succeeded() && price.GetCost() == cost.GetCost(), __LINE__);
-		station = Station::GetByTile(at); station->name = "Airport definitions";
+		station = Station::GetByTile(at); FIXTURE_SET_NAME(station, "Airport definitions");
 		StationNeed(build(exec, destination).Succeeded(), __LINE__); auto *other = Station::GetByTile(destination);
 		EngineID engine = EngineID::Invalid();
 		for (const Engine *e : Engine::IterateType(VEH_AIRCRAFT)) if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_AIRCRAFT, _current_company) && e->VehInfo<AircraftVehicleInfo>().subtype & AIR_CTOL) engine = e->index;
@@ -279,7 +279,7 @@ static void AirportDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		for (StationID target : {other->index, station->index}) { Order order; order.MakeGoToStation(target); order.SetStopLocation(OrderStopLocation::FarEnd); StationNeed(Command<CMD_INSERT_ORDER>::Do(exec, vehicle, VehicleOrderID(plane->GetNumOrders()), order).Succeeded(), __LINE__); }
 		StationNeed(Command<CMD_START_STOP_VEHICLE>::Do(exec, vehicle, false).Succeeded(), __LINE__);
 	}
-	else for (Station *st : Station::Iterate()) if (st->name == "Airport definitions") station = st;
+	else for (Station *st : Station::Iterate()) if (FIXTURE_NAME(st) == "Airport definitions") station = st;
 	StationNeed(station != nullptr && FIXTURE_VFIELD(FIXTURE_AIRPORT(station), type) == type && FIXTURE_AIRPORT(station).GetSpec() == spec, __LINE__);
 	TileIndex at = FIXTURE_AIRPORT_TILE(FIXTURE_AIRPORT(station)); StationNeed(GetAirportGfx(at) == gfx, __LINE__);
 	AirportTileResolverObject callback(tile_spec, at, station, CBID_AIRPTILE_ANIMATION_TRIGGER);

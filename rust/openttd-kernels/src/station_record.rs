@@ -167,6 +167,8 @@ crate::abi::shared_records! {
         pub custom_roadstop_tile_data: crate::industrytype::NativeVec<RoadStopTileData> => "RustVector<OpenTTDRoadStopTileData>",
         pub roadstop_speclist: crate::industrytype::NativeVec<RoadSpecMapping> => "RustVector<OpenTTDRoadStopSpecMapping>",
         pub speclist: crate::industrytype::NativeVec<RailSpecMapping> => "RustVector<OpenTTDStationSpecMapping>",
+        pub name: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
+        pub cached_name: crate::industrytype::NativeVec<u8> => "RustVector<uint8_t>",
     }
     /// The fields of one `RoadStop` shell.
     "OpenTTDRoadStopState" ["station"] => pub struct RoadStopRecord {
@@ -791,6 +793,8 @@ impl StationRecord {
             custom_roadstop_tile_data: crate::industrytype::NativeVec::new(),
             roadstop_speclist: crate::industrytype::NativeVec::new(),
             speclist: crate::industrytype::NativeVec::new(),
+            name: crate::industrytype::NativeVec::new(),
+            cached_name: crate::industrytype::NativeVec::new(),
         }
     }
 }

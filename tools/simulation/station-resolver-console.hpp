@@ -8,13 +8,13 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 {
 	Station *st = nullptr; Waypoint *wp = nullptr;
 	if (reloaded) {
-		for (Station *candidate : Station::Iterate()) if (candidate->name == "Resolver station") st = candidate;
-		for (Waypoint *candidate : Waypoint::Iterate()) if (candidate->name == "Resolver waypoint") wp = candidate;
+		for (Station *candidate : Station::Iterate()) if (FIXTURE_NAME(candidate) == "Resolver station") st = candidate;
+		for (Waypoint *candidate : Waypoint::Iterate()) if (FIXTURE_NAME(candidate) == "Resolver waypoint") wp = candidate;
 		StationNeed(st != nullptr && wp != nullptr, __LINE__);
 	} else {
 		TileIndex tile = origin + TileDiffXY(2, 2), waytile = origin + TileDiffXY(6, 6);
 		StationNeed(Command<CMD_BUILD_RAIL_STATION>::Do(exec, tile, RAILTYPE_RAIL, AXIS_X, 2, 3, STAT_CLASS_DFLT, 0, NEW_STATION, true).Succeeded(), __LINE__);
-		st = Station::GetByTile(tile); st->name = "Resolver station";
+		st = Station::GetByTile(tile); FIXTURE_SET_NAME(st, "Resolver station");
 		_settings_game.station.station_spread = 32;
 		StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, origin + TileDiffXY(8, 2), 1, 1, RoadStopType::Truck, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
 		StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, origin + TileDiffXY(10, 2), 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, st->index, true).Succeeded(), __LINE__);
@@ -22,7 +22,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 
 		StationNeed(Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, waytile, RAILTYPE_RAIL, TRACK_X, false).Succeeded(), __LINE__);
 		StationNeed(Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, waytile, AXIS_X, 1, 1, STAT_CLASS_WAYP, 0, StationID::Invalid(), false).Succeeded(), __LINE__);
-		wp = Waypoint::GetByTile(waytile); wp->name = "Resolver waypoint";
+		wp = Waypoint::GetByTile(waytile); FIXTURE_SET_NAME(wp, "Resolver waypoint");
 		StationNeed(CargoPacket::CanAllocateItem(2), __LINE__);
 		FIXTURE_GOODS(st, 0).GetOrCreateData().cargo.Append(new CargoPacket(4133, 5, st->index, tile, 0), StationID::Invalid());
 		FIXTURE_GOODS(st, 1).GetOrCreateData().cargo.Append(new CargoPacket(9, 13, st->index, tile, 0), StationID::Invalid());
@@ -277,7 +277,7 @@ static void StationDefinitionMissing()
 {
 	uint count = 0;
 	for (BaseStation *st : BaseStation::Iterate()) {
-		if (!st->name.starts_with("Definitions ")) continue;
+		if (!FIXTURE_NAME(st).starts_with("Definitions ")) continue;
 		for (const auto &slot : FixtureSpecList<StationSpec>(st)) if (slot.grfid != 0) {
 			StationNeed(slot.spec == nullptr && slot.grfid == StationDefinitionID(), __LINE__);
 			fmt::print(stderr, "STCMD definitions-identity missing-rail {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
@@ -287,7 +287,7 @@ static void StationDefinitionMissing()
 			fmt::print(stderr, "STCMD definitions-identity missing-road {} {} {}\n", st->index.base(), slot.grfid, slot.localidx);
 		}
 		StationNeed(FIXTURE_GET(st, CachedAnimTriggers, cached_anim_triggers).None() && FIXTURE_FIELD(st, cached_cargo_triggers) == 0 && FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
-		if (st->name == "Definitions station") {
+		if (FIXTURE_NAME(st) == "Definitions station") {
 			StationSpec spec{};
 			auto next = AllocateSpecToStation(&spec, st);
 			StationNeed(next.has_value() && *next == 3, __LINE__);
@@ -347,7 +347,7 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		auto build = [&](DoCommandFlags flags, TileIndex tile, const StationSpec *spec, StationID join) { return Command<CMD_BUILD_RAIL_STATION>::Do(flags, tile, RAILTYPE_RAIL, AXIS_X, 1, 2, spec->class_index, spec->index, join, true); };
 		auto price = checked("definition-rail-test", build(test, at(2, 2), rail, NEW_STATION));
 		StationNeed(price == checked("definition-rail-exec", build(exec, at(2, 2), rail, NEW_STATION)), __LINE__);
-		station = Station::GetByTile(at(2, 2)); station->name = "Definitions station";
+		station = Station::GetByTile(at(2, 2)); FIXTURE_SET_NAME(station, "Definitions station");
 		checked("definition-second", build(exec, at(2, 3), extra, station->index));
 		checked("definition-same-new-slot", build(exec, at(2, 4), rail, station->index));
 		StationNeed(GetCustomStationSpecIndex(at(2, 4)) == 3, __LINE__);
@@ -359,22 +359,22 @@ static void StationDefinitionFixture(TileIndex origin, DoCommandFlags test, DoCo
 		checked("definition-way-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, at(8, 2), RAILTYPE_RAIL, TRACK_X, false));
 		auto build_way = [&](DoCommandFlags flags) { return Command<CMD_BUILD_RAIL_WAYPOINT>::Do(flags, at(8, 2), AXIS_X, 1, 1, way->class_index, way->index, NEW_STATION, true); };
 		price = checked("definition-way-test", build_way(test)); StationNeed(price == checked("definition-way-exec", build_way(exec)), __LINE__);
-		waypoint = Waypoint::GetByTile(at(8, 2)); waypoint->name = "Definitions waypoint";
+		waypoint = Waypoint::GetByTile(at(8, 2)); FIXTURE_SET_NAME(waypoint, "Definitions waypoint");
 		auto build_stop = [&](DoCommandFlags flags) { return Command<CMD_BUILD_ROAD_STOP>::Do(flags, at(12, 2), 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, road->class_index, road->index, NEW_STATION, true); };
 		price = checked("definition-road-test", build_stop(test)); StationNeed(price == checked("definition-road-exec", build_stop(exec)), __LINE__);
-		stop = Station::GetByTile(at(12, 2)); stop->name = "Definitions stop";
+		stop = Station::GetByTile(at(12, 2)); FIXTURE_SET_NAME(stop, "Definitions stop");
 		checked("definition-road-track", Command<CMD_BUILD_ROAD>::Do(exec, at(16, 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
 		auto build_roadway = [&](DoCommandFlags flags) { return Command<CMD_BUILD_ROAD_WAYPOINT>::Do(flags, at(16, 2), AXIS_X, 1, 1, roadway->class_index, roadway->index, NEW_STATION, true); };
 		price = checked("definition-roadway-test", build_roadway(test)); StationNeed(price == checked("definition-roadway-exec", build_roadway(exec)), __LINE__);
-		roadpoint = Waypoint::GetByTile(at(16, 2)); roadpoint->name = "Definitions roadpoint";
+		roadpoint = Waypoint::GetByTile(at(16, 2)); FIXTURE_SET_NAME(roadpoint, "Definitions roadpoint");
 	} else {
 		for (Station *st : Station::Iterate()) {
-			if (st->name == "Definitions station") station = st;
-			if (st->name == "Definitions stop") stop = st;
+			if (FIXTURE_NAME(st) == "Definitions station") station = st;
+			if (FIXTURE_NAME(st) == "Definitions stop") stop = st;
 		}
 		for (Waypoint *wp : Waypoint::Iterate()) {
-			if (wp->name == "Definitions waypoint") waypoint = wp;
-			if (wp->name == "Definitions roadpoint") roadpoint = wp;
+			if (FIXTURE_NAME(wp) == "Definitions waypoint") waypoint = wp;
+			if (FIXTURE_NAME(wp) == "Definitions roadpoint") roadpoint = wp;
 		}
 	}
 	StationNeed(station != nullptr && stop != nullptr && waypoint != nullptr && roadpoint != nullptr, __LINE__);

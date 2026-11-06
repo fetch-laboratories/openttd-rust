@@ -70,11 +70,6 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	StationRecordOwner record_owner; ///< Shared record beside the shell; see station_record_ffi.h.
 	TrackedViewportSign sign{}; ///< NOSAVE: Dimensions of sign
 
-	std::string name{}; ///< Custom name
-	mutable std::string cached_name; ///< NOSAVE: Cache of the resolved name of the station, if not using a custom name
-
-
-
 	/* The shared record holds xy, string_id, town, owner, facilities, build_date,
 	 * random_bits, the waiting and cached triggers, train_station, rect, delete_ctr
 	 * and the Station and Waypoint fields. Raw scalars are accessed through
@@ -134,11 +129,20 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	 */
 	virtual void UpdateVirtCoord() = 0;
 
-	inline const std::string &GetCachedName() const
+	/** Borrowed name bytes; views end before rename, cache replacement or destruction. */
+	inline std::string_view GetName() const
 	{
-		if (!this->name.empty()) return this->name;
-		if (this->cached_name.empty()) this->FillCachedName();
-		return this->cached_name;
+		const auto &bytes = this->Record().name;
+		return {reinterpret_cast<const char *>(bytes.items), bytes.size()};
+	}
+	inline void SetName(std::string_view name) { openttd_rust_station_name_set(&this->Record(), 0, reinterpret_cast<const uint8_t *>(name.data()), name.size()); }
+	inline void SetCachedName(std::string_view name) const { openttd_rust_station_name_set(this->record_owner.record, 1, reinterpret_cast<const uint8_t *>(name.data()), name.size()); }
+	inline std::string_view GetCachedName() const
+	{
+		if (!this->GetName().empty()) return this->GetName();
+		if (this->Record().cached_name.empty()) this->FillCachedName();
+		const auto &bytes = this->Record().cached_name;
+		return {reinterpret_cast<const char *>(bytes.items), bytes.size()};
 	}
 
 	virtual void MoveSign(TileIndex new_xy)

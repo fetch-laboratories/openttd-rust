@@ -660,7 +660,7 @@ static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags te
 	auto remove = [&](TileIndex t) { return waypoint ? Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, t, t) : Command<CMD_REMOVE_ROAD_STOP>::Do(exec, t, 1, 1, RoadStopType::Bus, false); };
 	StationNeed(build(test, f.indices[0], 2, NEW_STATION).Succeeded() && !IsAnyRoadStopTile(tile), __LINE__);
 	StationNeed(build(exec, f.indices[0], 2, NEW_STATION).Succeeded(), __LINE__);
-	BaseStation *st = BaseStation::GetByTile(tile); StationID id = st->index; st->name = waypoint ? "Owner410 waypoint" : "Owner410 stop";
+	BaseStation *st = BaseStation::GetByTile(tile); StationID id = st->index; FIXTURE_SET_NAME(st, waypoint ? "Owner410 waypoint" : "Owner410 stop");
 	StationNeed(FixtureSpecList<RoadStopSpec>(st).size() == 2 && GetCustomRoadStopSpecIndex(tile) == 1 && GetCustomRoadStopSpecIndex(tile + step) == 1, __LINE__);
 	AssignSpecToRoadStop(nullptr, st, 0); DeallocateSpecFromRoadStop(st, 0);
 	SetCustomRoadStopSpecIndex(tile, 63); StationNeed(GetRoadStopSpec(tile) == nullptr, __LINE__); SetCustomRoadStopSpecIndex(tile, 1);
@@ -689,7 +689,7 @@ static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags te
 static void StationRoadResolverReload(bool waypoint)
 {
 	BaseStation *st = nullptr;
-	for (BaseStation *candidate : BaseStation::Iterate()) if (candidate->name == (waypoint ? "Owner410 waypoint" : "Owner410 stop")) st = candidate;
+	for (BaseStation *candidate : BaseStation::Iterate()) if (FIXTURE_NAME(candidate) == (waypoint ? "Owner410 waypoint" : "Owner410 stop")) st = candidate;
 	StationNeed(st != nullptr && FixtureSpecList<RoadStopSpec>(st).size() == 2, __LINE__);
 	StationNeed(FixtureSpecRow<RoadStopSpec>(st, 1).spec == nullptr && FixtureSpecRow<RoadStopSpec>(st, 1).grfid == (waypoint ? 0x41000002U : 0x41000001U), __LINE__);
 	StationNeed(FIXTURE_GET(st, CachedRoadStopAnimTriggers, cached_roadstop_anim_triggers).None() && FIXTURE_FIELD(st, cached_roadstop_cargo_triggers) == 0, __LINE__);
@@ -736,7 +736,7 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 		for (uint i = 0; i < 3; ++i) check("wp-remove", Command<CMD_REMOVE_FROM_RAIL_WAYPOINT>::Do(exec, rail + i * step, rail + i * step, true));
 		check("wp-remove-distant", Command<CMD_REMOVE_FROM_RAIL_WAYPOINT>::Do(exec, distant, distant, true));
 		check("wp-reuse", build(exec, rail, width, height, StationID::Invalid(), false));
-		StationNeed(GetStationIndex(rail) == id && Waypoint::Get(id)->name == name, __LINE__);
+		StationNeed(GetStationIndex(rail) == id && FIXTURE_NAME(Waypoint::Get(id)) == name, __LINE__);
 		for (uint i = 0; i < 3; ++i) check("wp-road", Command<CMD_BUILD_ROAD>::Do(exec, road + i * step, axis == AXIS_X ? ROAD_X : ROAD_Y, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
 		auto build_road = [&](DoCommandFlags f, TileIndex t, uint8_t w, uint8_t h, StationID join, bool adjacent) { return Command<CMD_BUILD_ROAD_WAYPOINT>::Do(f, t, axis, w, h, ROADSTOP_CLASS_WAYP, 0, join, adjacent); };
 		check("wp-road-test", build_road(test, road, width, height, NEW_STATION, true));
@@ -1065,7 +1065,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	if (args[1] == "waypoints-inspect") {
 		StationRoadResolverReload(true);
 		uint found = 0;
-		for (Waypoint *wp : Waypoint::Iterate()) if (wp->name.starts_with("Migration ")) { ++found; StationCost("wp-reload-name", Command<CMD_RENAME_WAYPOINT>::Do(test, wp->index, wp->name)); }
+		for (Waypoint *wp : Waypoint::Iterate()) if (FIXTURE_NAME(wp).starts_with("Migration ")) { ++found; StationCost("wp-reload-name", Command<CMD_RENAME_WAYPOINT>::Do(test, wp->index, std::string{FIXTURE_NAME(wp)})); }
 		StationNeed(found == 4, __LINE__); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
 	}
 	if (args[1] == "road-stops-inspect") {
@@ -1075,7 +1075,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	if (args[1] == "catchment-inspect") { StationCatchmentInspect(exec); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 	if (args[1] == "inspect") {
 		Station *found = nullptr;
-		for (Station *st : Station::Iterate()) if (st->name == "Migration station") found = st;
+		for (Station *st : Station::Iterate()) if (FIXTURE_NAME(st) == "Migration station") found = st;
 		StationNeed(found != nullptr, __LINE__);
 		StationCost("reload-name", Command<CMD_RENAME_STATION>::Do(exec, found->index, "Reloaded station"));
 		UpdateStationDockingTiles(found);

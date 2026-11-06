@@ -374,7 +374,10 @@ template <class T>
 void MakeDefaultName(T *obj)
 {
 	/* We only want to set names if it hasn't been set before, or when we're calling from afterload. */
-	assert(obj->name.empty() || DefaultNameNumber(obj) == UINT16_MAX);
+	assert(([obj] {
+		if constexpr (requires { obj->GetName(); }) return obj->GetName().empty();
+		else return obj->name.empty();
+	}()) || DefaultNameNumber(obj) == UINT16_MAX);
 
 	DefaultNameTown(obj) = ClosestTownFromTile(DefaultNameTile(obj), UINT_MAX);
 
