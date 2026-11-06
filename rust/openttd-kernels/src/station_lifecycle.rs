@@ -388,11 +388,11 @@ pub(crate) unsafe fn tile_loop(
                 crate::station_map::toggle_road_waypoint_snow(m, tile).unwrap();
                 (s.shared.mark_dirty)(tile);
             }
-            let town = crate::town::spatial::closest(s.shared, tile, u32::MAX);
-            let zone = if town.is_null() {
+            let town = crate::town::spatial::closest_ref(s.shared, tile, u32::MAX);
+            let zone = if town.shell.is_null() {
                 0
             } else {
-                unsafe { crate::town::get_radius_group((s.shared.town_owner)(town), tile, map) }
+                unsafe { crate::town::get_radius_group(town.state, tile, map) }
             };
             let new = if zone != 0 {
                 ROADSIDE_PAVED

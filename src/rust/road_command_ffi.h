@@ -28,7 +28,6 @@ struct OpenTTDRoadConversionScratch {
 	OpenTTDCommandCost *error, *ret;
 };
 struct OpenTTDRoadNearestTownTile { bool road, depot, town_owned; };
-struct OpenTTDRoadTownEdge { uint32_t tile, radius; };
 struct OpenTTDRoadWorksEffect { uint32_t id, tile; };
 struct OpenTTDRoadCommandStrings { uint32_t no_road, no_tram, junction, remove_road, no_suitable_road, no_suitable_tram, authority; };
 struct OpenTTDGroundPhysicsServices;
@@ -40,8 +39,6 @@ struct OpenTTDRoadCommandServices {
 	const OpenTTDTownAuthorityServices *authority;
 	OpenTTDRoadCommandStrings strings;
 	OpenTTDRoadNearestTownTile (*nearest_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearest_tile);
-	bool (*town_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(town_valid);
-	OpenTTDRoadTownEdge (*town_edge)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_edge);
 	void (*set_town)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
 	bool (*extra_dynamite)() noexcept OPENTTD_SERVICE_DEFAULT(extra_dynamite);
 	bool (*depot_slope)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_slope);

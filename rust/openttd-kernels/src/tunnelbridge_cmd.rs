@@ -211,24 +211,16 @@ impl<'a> World<'a> {
             );
         }
     }
-    fn rating(&self, town: *const TownHandle, flags: u16, delta: i32, minimum: i32) {
-        // SAFETY: shell identity is source-live. The rating owner ends access
-        // before its native invalidation callbacks; no caller owner is borrowed.
+    fn rating(&self, town: crate::town::TownRef, flags: u16, delta: i32, minimum: i32) {
+        // SAFETY: The copied slot identity remains live through this synchronous entry;
+        // the rating owner ends its read before native invalidation callbacks.
         unsafe {
             crate::town::openttd_rust_town_change_rating(
                 self.road.town,
                 self.r.shared,
-                if town.is_null() {
-                    std::ptr::null_mut()
-                } else {
-                    (self.s.town_owner)(town)
-                },
-                if town.is_null() {
-                    u32::from(u16::MAX)
-                } else {
-                    u32::from((self.authority.town_index)(town))
-                },
-                town as usize,
+                town.state,
+                u32::from(town.id.0),
+                town.shell as usize,
                 (self.s.current_company)(),
                 delta,
                 minimum,
@@ -254,12 +246,11 @@ impl<'a> World<'a> {
     }
     fn deity_owner(&self, tile: u32) -> u8 {
         w::hit(w::TB_DEITY);
-        let town = crate::town::spatial::calc_closest(self.s, tile, u32::MAX);
-        if town.is_null() {
+        let town = crate::town::spatial::calc_closest_ref(self.s, tile, u32::MAX);
+        if town.shell.is_null() {
             return OWNER_NONE;
         }
-        let edge = (self.road.town_edge)(town);
-        if self.map.distance_square(tile, edge.tile) > edge.radius {
+        if !unsafe { crate::town::within_edge(town.state, tile, self.map) } {
             OWNER_NONE
         } else {
             OWNER_TOWN
@@ -504,15 +495,15 @@ impl<'a> World<'a> {
                     return cost.error(self.a.strings.already_built);
                 }
                 if (self.s.tile_owner)(start) == OWNER_TOWN && !self.editor() {
-                    let town = crate::town::spatial::closest(self.s, start, u32::MAX);
-                    if town.is_null() {
+                    let town = crate::town::spatial::closest_ref(self.s, start, u32::MAX);
+                    if town.shell.is_null() {
                         return Self::error(cost);
                     }
                     if (self.a.speed)(bridge_type) < (self.a.speed)((self.a.bridge_type)(start)) {
                         return (self.c.error_param)(
                             cost.0,
                             self.a.strings.authority,
-                            u64::from((self.authority.town_index)(town)),
+                            u64::from(town.id.0),
                         );
                     }
                     self.rating(town, flags, RATING_TUNNEL_BRIDGE_UP_STEP, RATING_MAXIMUM);
@@ -1063,10 +1054,10 @@ impl<'a> World<'a> {
             return cost.take(ret);
         }
         END_TILE.store(end, Ordering::Relaxed);
-        let mut town = std::ptr::null();
+        let mut town = crate::town::TownRef::NONE;
         if (self.s.tile_owner)(tile) == OWNER_TOWN && !self.editor() {
-            town = crate::town::spatial::closest(self.s, tile, u32::MAX);
-            self.rating_check(ret, town, flags);
+            town = crate::town::spatial::closest_ref(self.s, tile, u32::MAX);
+            self.rating_check(ret, town.shell, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -1157,10 +1148,10 @@ impl<'a> World<'a> {
         }
         let direction = (self.s.tunnel_bridge_direction)(tile);
         let delta = self.map.offs_by_diag_dir(direction);
-        let mut town = std::ptr::null();
+        let mut town = crate::town::TownRef::NONE;
         if (self.s.tile_owner)(tile) == OWNER_TOWN && !self.editor() {
-            town = crate::town::spatial::closest(self.s, tile, u32::MAX);
-            self.rating_check(ret, town, flags);
+            town = crate::town::spatial::closest_ref(self.s, tile, u32::MAX);
+            self.rating_check(ret, town.shell, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }

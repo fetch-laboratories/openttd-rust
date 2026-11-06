@@ -219,8 +219,8 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
     if (s.name_id)(c) != s.strings.unnamed || (s.last_build)(c).0 == 0 {
         return;
     }
-    let t = crate::town::spatial::closest(s.shared, (s.last_build)(c).0, u32::MAX);
-    let town = (s.shared.town_owner)(t);
+    let t = crate::town::spatial::closest_ref(s.shared, (s.last_build)(c).0, u32::MAX);
+    let town = t.state;
     let simulation = crate::town::record(town);
     let mut slot = NameStorage::new();
     let mut names = Names::new(s, &mut slot);
@@ -264,7 +264,7 @@ pub(crate) fn generate_name(s: &Services, c: *mut OpenTTDCompany) {
     (s.shared.screen_dirty)();
     (s.company_renamed)(c, names.slot);
     if (s.is_ai)(c) {
-        (s.launch_news)(c, t.cast_mut());
+        (s.launch_news)(c, t.shell);
     }
 }
 pub(crate) fn generate_president(s: &Services, c: *mut OpenTTDCompany) {

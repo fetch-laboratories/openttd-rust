@@ -8,7 +8,6 @@ struct Goal; struct StoryPage; struct StoryPageElement; struct LeagueTableElemen
 struct OpenTTDCompanyServices;
 struct OpenTTDOrdersLeaves;
 struct OpenTTDSubsidyServices;
-struct OpenTTDRoadCommandServices;
 /** Records and strings stay in native pools. Pointers address their live fields;
  * no pointer or borrow survives destruction, pool cleanup or a reentrant callback.
  * Commands hold the game-state mutex. Events enqueue without entering the VM. */
@@ -58,7 +57,6 @@ struct OpenTTDObjectivesServices {
 	uint16_t (*entry_allocate)(uint8_t, int64_t, uint8_t, const EncodedString *, const EncodedString *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry_allocate);
 	const OpenTTDOrdersLeaves *orders;
 	const OpenTTDSubsidyServices *subsidy;
-	const OpenTTDRoadCommandServices *road_commands;
 	bool (*vehicle_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_valid);
 	bool (*text_empty)(const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_empty);
 	void (*text_assign)(EncodedString *, const EncodedString *) noexcept OPENTTD_SERVICE_DEFAULT(text_assign);

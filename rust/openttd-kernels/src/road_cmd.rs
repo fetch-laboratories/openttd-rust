@@ -94,12 +94,6 @@ pub struct NearestTownTile {
     pub depot: bool,
     pub town_owned: bool,
 }
-/// Fields read together only in the deity town-boundary branch.
-#[repr(C)]
-pub struct TownEdge {
-    pub tile: u32,
-    pub radius: u32,
-}
 /// Fields needed to advance the original ascending effect iterator.
 #[repr(C)]
 pub struct WorksEffect {
@@ -142,11 +136,7 @@ pub struct RoadCommandServices {
     pub authority: *const crate::town::AuthorityServices,
     /// Native `strings` service.
     pub strings: Strings,
-    /// Native `town_valid` service.
     pub nearest_tile: extern "C" fn(u32) -> NearestTownTile,
-    pub town_valid: extern "C" fn(u16) -> bool,
-    /// Native `town_edge` service.
-    pub town_edge: extern "C" fn(*const TownHandle) -> TownEdge,
     /// Native `set_town` service.
     pub set_town: extern "C" fn(u32, u16),
     /// Native `extra_dynamite` service.
@@ -383,13 +373,8 @@ impl<'a> Ctx<'a> {
     }
 
     fn update_town(&self, tile: u32) {
-        let town = crate::town::spatial::calc_closest(self.shared, tile, u32::MAX);
-        let id = if town.is_null() {
-            INVALID_TOWN
-        } else {
-            (self.authority.town_index)(town)
-        };
-        (self.s.set_town)(tile, id);
+        let town = crate::town::spatial::calc_closest_ref(self.shared, tile, u32::MAX);
+        (self.s.set_town)(tile, town.id.0);
     }
     fn rating(&self, c: Cost<'_>, town: *const TownHandle, flags: u16, kind: u8) {
         // SAFETY: live native town identity (or null), immutable tables and stack cost.
@@ -432,12 +417,12 @@ impl<'a> Ctx<'a> {
         if !town_check || (self.authority.bulldozer)() {
             return;
         }
-        let town = crate::town::spatial::closest(self.shared, tile, u32::MAX);
-        if town.is_null() {
+        let town = crate::town::spatial::closest_ref(self.shared, tile, u32::MAX);
+        if town.shell.is_null() {
             return;
         }
         w::hit(w::ROAD_COMMANDS_TOWN_REMOVE);
-        self.rating(c, town, flags, 0);
+        self.rating(c, town.shell, flags, 0);
         if !c.ok() {
             return;
         }
@@ -453,11 +438,7 @@ impl<'a> Ctx<'a> {
         let mut decrease = RATING_ROAD_DOWN_STEP_EDGE;
         if neighbours & neighbours.wrapping_sub(1) != 0 && neighbours & remove != 0 {
             if !(self.s.extra_dynamite)() {
-                (self.costs.error_param)(
-                    c.0,
-                    self.s.strings.authority,
-                    u64::from((self.authority.town_index)(town)),
-                );
+                (self.costs.error_param)(c.0, self.s.strings.authority, u64::from(town.id.0));
                 return;
             }
             decrease = RATING_ROAD_DOWN_STEP_INNER;
@@ -467,9 +448,9 @@ impl<'a> Ctx<'a> {
             crate::town::openttd_rust_town_change_rating(
                 self.s.town,
                 self.r.shared,
-                (self.shared.town_owner)(town),
-                u32::from((self.authority.town_index)(town)),
-                town as usize,
+                town.state,
+                u32::from(town.id.0),
+                town.shell as usize,
                 company,
                 decrease,
                 RATING_ROAD_MINIMUM,
@@ -813,28 +794,30 @@ impl<'a> Ctx<'a> {
         let mut existing = 0;
         let mut other = 0;
         if ((self.shared.company_valid)(company) && town_id != INVALID_TOWN)
-            || (company == OWNER_TOWN && !(self.s.town_valid)(town_id))
+            || (company == OWNER_TOWN
+                && unsafe {
+                    crate::town::pool(self.shared)
+                        .shell(crate::town::TownId(town_id))
+                        .is_null()
+                })
             || (company == OWNER_DEITY && town_id != INVALID_TOWN)
         {
             cost.error(INVALID_STRING_ID);
             return;
         }
         if company != OWNER_TOWN {
-            let town = crate::town::spatial::calc_closest(self.shared, tile, u32::MAX);
-            town_id = if town.is_null() {
+            let town = crate::town::spatial::calc_closest_ref(self.shared, tile, u32::MAX);
+            town_id = if town.shell.is_null() {
                 INVALID_TOWN
             } else {
-                (self.authority.town_index)(town)
+                town.id.0
             };
             if company == OWNER_DEITY {
                 company = OWNER_TOWN;
-                if town.is_null() {
+                if town.shell.is_null()
+                    || !unsafe { crate::town::within_edge(town.state, tile, self.map) }
+                {
                     company = OWNER_NONE;
-                } else {
-                    let edge = (self.s.town_edge)(town);
-                    if self.map.distance_square(tile, edge.tile) > edge.radius {
-                        company = OWNER_NONE;
-                    }
                 }
             }
         }
@@ -2350,8 +2333,6 @@ crate::abi::layouts! {
         authority,
         strings,
         nearest_tile,
-        town_valid,
-        town_edge,
         set_town,
         extra_dynamite,
         depot_slope,
@@ -2370,10 +2351,6 @@ crate::abi::layouts! {
         frame,
         error,
         ret,
-    };
-    "OpenTTDRoadTownEdge" ["probe"] => TownEdge {
-        tile,
-        radius,
     };
     "OpenTTDRoadWorksEffect" ["probe"] => WorksEffect {
         id,

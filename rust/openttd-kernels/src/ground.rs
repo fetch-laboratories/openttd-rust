@@ -684,12 +684,12 @@ pub(crate) unsafe fn road_tile_loop(
     if (s.is_road_depot)(tile) {
         return;
     }
-    let town = crate::town::spatial::closest(s, tile, u32::MAX);
+    let town = crate::town::spatial::closest_ref(s, tile, u32::MAX);
     let side = (r.roadside)(tile).0;
     if side < 6 {
         let mut zone = 0;
-        if !town.is_null() {
-            let owner = (s.town_owner)(town);
+        if !town.shell.is_null() {
+            let owner = town.state;
             // SAFETY: The shared town owner belongs to the live closest-town shell.
             // Only copied inputs survive the following native services.
             let (months, group, distance) =

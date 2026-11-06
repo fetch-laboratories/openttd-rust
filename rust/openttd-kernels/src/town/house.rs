@@ -1051,15 +1051,10 @@ impl<'a> House<'a> {
                     }
                 }
             }
-            let town = crate::town::spatial::closest(self.s, tile, u32::MAX);
-            let id = u32::from((self.authority().town_index)(town));
+            let town = crate::town::spatial::closest_ref(self.s, tile, u32::MAX);
+            let id = u32::from(town.id.0);
             let completed = (self.h.place_houses)() == 2;
             let random = self.s.random() & 0xFF;
-            let town = TownRef {
-                shell: town.cast_mut(),
-                state: (self.s.town_owner)(town),
-                id: super::TownId(id as u16),
-            };
             self.engine(town)
                 .build_house(id, tile, u32::from(house), random, completed, protected);
         }

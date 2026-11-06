@@ -92,7 +92,6 @@ pub struct Services {
     ) -> LeagueTableElementID,
     pub orders: *const crate::orders::Leaves,
     pub subsidy: *const crate::subsidy::Services,
-    pub road_commands: *const crate::road_cmd::RoadCommandServices,
     pub vehicle_valid: extern "C" fn(VehicleID) -> bool,
     pub text_empty: unsafe extern "C" fn(*const EncodedString) -> bool,
     pub text_assign: unsafe extern "C" fn(*mut EncodedString, *const EncodedString),
@@ -118,7 +117,7 @@ impl Services {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStoryState" ["probe"] => StoryState { page_next_sort, element_next_sort };
-    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, table_can_allocate, table_allocate, entry_allocate, orders, subsidy, road_commands, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
+    "OpenTTDObjectivesServices" ["probe"] => Services { shared, company, goal, goal_company, goal_type, goal_dst, goal_text, goal_progress, goal_completed, goal_count, goal_can_allocate, page, page_company, page_title, page_date, page_count, page_can_allocate, element, element_page, element_type, element_text, element_referenced_id, element_destroy, element_count, element_can_allocate, entry, entry_company, entry_table, entry_rating, entry_text, entry_score, entry_link_type, entry_link_target, entry_destroy, entry_can_allocate, goal_allocate, page_allocate, element_allocate, element_next, element_id, table_can_allocate, table_allocate, entry_allocate, orders, subsidy, vehicle_valid, text_empty, text_assign, window_data, window_classes, window_close, question_show, story_show, question_event, push_event, tile_event, vehicle_event };
 }
 
 // Native loader aliases and Rust control share one process-wide allocation. Accesses
@@ -156,7 +155,9 @@ impl Services {
         })
     }
     fn town_valid(&self, id: u32) -> bool {
-        u16::try_from(id).is_ok_and(|id| unsafe { ((*self.road_commands).town_valid)(id) })
+        u16::try_from(id).is_ok_and(|id| unsafe {
+            (*self.subsidy).valid_source(crate::source_type::Source::town(id))
+        })
     }
     fn tile_valid(&self, tile: TileIndex) -> bool {
         // Command/lifecycle execution holds the mutex and cannot reset or yield the map.

@@ -10,7 +10,7 @@
 use super::{
     Builder, ConstructionRequest, ConstructionServices, GenerationServices, Industry, IndustryCost,
     IndustryCostServices, LayoutHandle, LifecycleServices, Services, ShellHandle, SpecHandle,
-    TilePolicyServices, TileServices, TownHandle,
+    TilePolicyServices, TileServices,
 };
 use crate::industrytype;
 use std::{ffi::c_void, ptr};
@@ -244,13 +244,13 @@ impl Engine<'_> {
         }
         self.success()
     }
-    fn find_town(&self, tile: u32, kind: u8) -> Option<*const TownHandle> {
-        let town = crate::town::spatial::closest(unsafe { &*self.s.shared }, tile, u32::MAX);
+    fn find_town(&self, tile: u32, kind: u8) -> Option<crate::town::TownRef> {
+        let town = crate::town::spatial::closest_ref(unsafe { &*self.s.shared }, tile, u32::MAX);
         if !unsafe { (self.x.multiple_per_town)() } {
             for n in 0..self.registry_count(kind) {
                 let id = crate::industry_type::IndustryID(self.registry_id(kind, n));
                 let owner = unsafe { super::pool(self.s.shared()).record(id) };
-                if unsafe { (*owner).record.town.cast_const() } == town {
+                if unsafe { (*owner).record.town.cast_const() } == town.shell.cast_const().cast() {
                     self.fail(self.e.one_per_town);
                     return None;
                 }
@@ -259,18 +259,16 @@ impl Engine<'_> {
         self.success();
         Some(town)
     }
-    fn allowed(&self, tile: u32, kind: u8, town: *const TownHandle) -> bool {
-        let owner = std::cell::OnceCell::new();
-        let owner = || *owner.get_or_init(|| (self.s.shared().town_owner)(town.cast()));
+    fn allowed(&self, tile: u32, kind: u8, town: crate::town::TownRef) -> bool {
         let spec = industrytype::industry(u16::from(kind));
         if unsafe { (*spec).behaviour } & 8 != 0
-            && unsafe { crate::town::population(owner()) } < 1200
+            && unsafe { crate::town::population(town.state) } < 1200
         {
             return self.fail(self.e.population);
         }
         let spec = industrytype::industry(u16::from(kind));
         if unsafe { (*spec).behaviour } & 32 != 0
-            && self.distance(unsafe { crate::town::position(owner()) }, tile) > 9
+            && self.distance(unsafe { crate::town::position(town.state) }, tile) > 9
         {
             return self.fail(self.e.near_town);
         }
@@ -643,7 +641,7 @@ impl Engine<'_> {
             }
             let request = ConstructionRequest {
                 layout,
-                town,
+                town: town.shell,
                 layout_index,
                 tile,
                 size_x: self.map().size_x,

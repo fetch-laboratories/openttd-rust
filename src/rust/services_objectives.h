@@ -6,7 +6,7 @@
 #include "company_adapter.h"
 #include "presentation_services.h"
 #include "orders_ffi.h"
-#include "road_command_ffi.h"
+#include "subsidy_ffi.h"
 #include "../goal_base.h"
 #include "../story_base.h"
 #include "../league_base.h"
@@ -119,7 +119,6 @@ inline const OpenTTDObjectivesServices &GetRustObjectivesServices() noexcept
 		.entry_allocate = RustObjectives_entry_allocate,
 		.orders = &GetRustOrdersLeaves(),
 		.subsidy = &GetRustSubsidyServices(),
-		.road_commands = &GetRustRoadCommandServices(),
 		.vehicle_valid = RustObjectives_vehicle_valid,
 		.text_empty = RustObjectives_text_empty,
 		.text_assign = RustObjectives_text_assign,

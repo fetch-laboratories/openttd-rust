@@ -3,7 +3,6 @@
 //! load rebuilds. Coordinates load live records directly from canonical town slots.
 use super::TownRef;
 use crate::{game_state::GameState, kdtree::Kdtree, services::Services, town_type::TownId};
-use std::ptr;
 static TREE: GameState<Kdtree<TownId>> = GameState::new(Kdtree::new());
 
 fn coordinate(s: &Services, map: crate::map_func::Map, id: TownId, dim: usize) -> u16 {
@@ -65,65 +64,67 @@ pub(crate) fn close(s: &Services, tile: u32, distance: u32) -> bool {
     let xy = unsafe { super::position(super::pool(s).record(id)) };
     s.map().distance_manhattan(tile, xy) < distance
 }
+pub(crate) fn calc_closest_ref(s: &Services, tile: u32, threshold: u32) -> TownRef {
+    if crate::town::count(s) == 0 {
+        return TownRef::NONE;
+    }
+    let id = nearest(s, tile);
+    let xy = unsafe { super::position(super::pool(s).record(id)) };
+    if s.map().distance_manhattan(tile, xy) < threshold {
+        super::reference(s, id)
+    } else {
+        TownRef::NONE
+    }
+}
+pub(crate) fn closest_ref(s: &Services, tile: u32, threshold: u32) -> TownRef {
+    use crate::tile_type::{MP_HOUSE, MP_ROAD};
+    let world = crate::map_func::World::new(s);
+    match world.kind(tile) {
+        MP_ROAD => {
+            if world.road_depot(tile) {
+                return calc_closest_ref(s, tile, threshold);
+            }
+            if !crate::road_map::has_town_owned_road(&world, tile) {
+                let id = (s.town_index)(tile);
+                if id == TownId::INVALID.0 {
+                    if (s.clear_square_services.generating_world)() {
+                        return calc_closest_ref(s, tile, threshold);
+                    }
+                    world.check(crate::town::count(s) == 0);
+                    return TownRef::NONE;
+                }
+                world.check(crate::town::next_id(s, u32::from(id)) == u32::from(id));
+                let town = super::reference(s, TownId(id));
+                let xy = unsafe { super::position(town.state) };
+                if world.dimensions.distance_manhattan(tile, xy) >= threshold {
+                    return TownRef::NONE;
+                }
+                return town;
+            }
+            super::reference(s, TownId((s.town_index)(tile)))
+        }
+        MP_HOUSE => super::reference(s, TownId((s.town_index)(tile))),
+        _ => calc_closest_ref(s, tile, threshold),
+    }
+}
 pub(crate) fn calc_closest(
     s: &Services,
     tile: u32,
     threshold: u32,
 ) -> *const crate::services::TownHandle {
-    if crate::town::count(s) == 0 {
-        return ptr::null();
-    }
-    let id = nearest(s, tile);
-    let xy = unsafe { super::position(super::pool(s).record(id)) };
-    if s.map().distance_manhattan(tile, xy) < threshold {
-        super::shell(s, id)
-    } else {
-        ptr::null()
-    }
+    calc_closest_ref(s, tile, threshold).shell
 }
 pub(crate) fn closest(
     s: &Services,
     tile: u32,
     threshold: u32,
 ) -> *const crate::services::TownHandle {
-    use crate::tile_type::{MP_HOUSE, MP_ROAD};
-    let world = crate::map_func::World::new(s);
-    match world.kind(tile) {
-        MP_ROAD => {
-            if world.road_depot(tile) {
-                return calc_closest(s, tile, threshold);
-            }
-            if !crate::road_map::has_town_owned_road(&world, tile) {
-                let id = (s.town_index)(tile);
-                if id == TownId::INVALID.0 {
-                    if (s.clear_square_services.generating_world)() {
-                        return calc_closest(s, tile, threshold);
-                    }
-                    world.check(crate::town::count(s) == 0);
-                    return ptr::null();
-                }
-                world.check(crate::town::next_id(s, u32::from(id)) == u32::from(id));
-                let town = super::shell(s, TownId(id));
-                let xy = unsafe { super::position((s.town_owner)(town)) };
-                if world.dimensions.distance_manhattan(tile, xy) >= threshold {
-                    return ptr::null();
-                }
-                return town;
-            }
-            super::shell(s, TownId((s.town_index)(tile)))
-        }
-        MP_HOUSE => super::shell(s, TownId((s.town_index)(tile))),
-        _ => calc_closest(s, tile, threshold),
-    }
+    closest_ref(s, tile, threshold).shell
 }
 pub(crate) fn random(s: &Services) -> TownRef {
     let count = crate::town::count(s);
     if count == 0 {
-        return TownRef {
-            shell: ptr::null_mut(),
-            state: ptr::null_mut(),
-            id: TownId::INVALID,
-        };
+        return TownRef::NONE;
     }
     let mut num = s.random_range(u32::from(count as u16));
     let mut id = crate::town::next_id(s, 0);
@@ -131,11 +132,7 @@ pub(crate) fn random(s: &Services) -> TownRef {
         num -= 1;
         id = crate::town::next_id(s, id + 1);
     }
-    TownRef {
-        shell: super::shell(s, TownId(id as u16)),
-        state: unsafe { super::pool(s).record(TownId(id as u16)) },
-        id: TownId(id as u16),
-    }
+    super::reference(s, TownId(id as u16))
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_rebuild_index(s: *const Services) {

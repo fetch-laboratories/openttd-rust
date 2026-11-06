@@ -48,6 +48,13 @@ pub struct TownRef {
     pub state: *mut State,
     pub id: TownId,
 }
+impl TownRef {
+    pub(crate) const NONE: Self = Self {
+        shell: std::ptr::null_mut(),
+        state: std::ptr::null_mut(),
+        id: TownId::INVALID,
+    };
+}
 use crate::game_state::GameState;
 use crate::raw_field::{read_field, write_field};
 use std::{cell::OnceCell, ffi::c_void};
@@ -201,16 +208,25 @@ pub(crate) fn count(s: &Services) -> usize {
 pub(crate) fn next_id(s: &Services, from: u32) -> u32 {
     unsafe { pool(s).next_index(from as usize, u32::MAX as usize) as u32 }
 }
-/// `Town::Get`: preserve its native extent assertion, then load the shell once.
-pub(crate) fn shell(s: &Services, id: TownId) -> *mut crate::town_type::TownHandle {
+/// `Town::Get`: preserve its native extent assertion before one canonical slot load.
+/// This copied identity contains no borrow; it is invalidated by actual owner deletion.
+pub(crate) fn reference(s: &Services, id: TownId) -> TownRef {
     unsafe {
         let view = *s.town_pool;
         let index = usize::from(id.0);
         if index >= (*view).first_unused {
             (crate::movement::table(s).native_assert)(false);
         }
-        (*(*view).slots.as_mut_ptr().add(index)).shell.cast()
+        let slot = *(*view).slots.as_mut_ptr().add(index);
+        TownRef {
+            shell: slot.shell.cast(),
+            state: slot.record.cast(),
+            id,
+        }
     }
+}
+pub(crate) fn shell(s: &Services, id: TownId) -> *mut crate::town_type::TownHandle {
+    reference(s, id).shell
 }
 /// SAFETY: Live serialized town owner and original cargo acceptance effect.
 pub(crate) unsafe fn record_delivery(owner: *mut State, effect: u8, amount: u32) {
@@ -241,6 +257,17 @@ unsafe fn supplied_history(state: *const State, cargo: u8, period: u8) -> Option
 pub(crate) unsafe fn position(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
     unsafe { (*state).record.xy }
+}
+/// Source deity road/tunnel boundary check against `HouseZone::TownEdge` (zero).
+/// SAFETY: The canonical owner is live and serialized; no borrow escapes this read.
+pub(crate) unsafe fn within_edge(
+    state: *const State,
+    tile: u32,
+    map: crate::map_func::Map,
+) -> bool {
+    let xy = unsafe { (*state).record.xy };
+    let radius = unsafe { (*state).record.squared_town_zone_radius[0] };
+    map.distance_square(tile, xy) <= radius
 }
 /// Read only the canonical population at the original observation point.
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
@@ -686,18 +713,18 @@ pub unsafe extern "C" fn openttd_rust_town_authority_station(
         (c.zero)(result);
         return;
     }
-    let town = crate::town::spatial::closest(s, tile, u32::from((a.authority_distance)()));
-    if town.is_null() {
+    let town = crate::town::spatial::closest_ref(s, tile, u32::from((a.authority_distance)()));
+    if town.shell.is_null() {
         (c.zero)(result);
         return;
     }
-    let owner = (s.town_owner)(town);
+    let owner = town.state;
     // SAFETY: Live single owner and valid company; immediate copy ends here.
     let rating = unsafe { (*owner).record.ratings[usize::from(company)] };
     if rating > -200 {
         (c.zero)(result);
     } else {
-        (c.error_param)(result, a.refusal, u64::from((a.town_index)(town)));
+        (c.error_param)(result, a.refusal, u64::from(town.id.0));
     }
 }
 

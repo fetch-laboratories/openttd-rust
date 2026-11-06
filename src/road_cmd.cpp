@@ -1022,11 +1022,6 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 			bool depot = road && IsRoadDepot(tile);
 			return {.road = road, .depot = depot, .town_owned = road && !depot && HasTownOwnedRoad(tile)};
 		},
-		.town_valid = [](uint16_t town) noexcept { return Town::IsValidID(TownID(town)); },
-		.town_edge = [](const OpenTTDTownHandle *handle) noexcept -> OpenTTDRoadTownEdge {
-			const Town *town = reinterpret_cast<const Town *>(handle);
-			return {.tile = town->Record().xy.base(), .radius = town->Record().squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
-		},
 		.set_town = RustSetTownIndex,
 
 		.extra_dynamite = RustExtraDynamite,

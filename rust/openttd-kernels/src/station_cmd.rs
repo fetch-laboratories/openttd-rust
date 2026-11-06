@@ -2979,9 +2979,8 @@ impl Ctx<'_> {
         let min_y = self.map().tile_y(origin);
         let max_x = min_x + u32::from(width) - 1;
         let max_y = min_y + u32::from(height) - 1;
-        let mut nearest = std::ptr::null();
+        let mut nearest = crate::town::TownRef::NONE;
         let mut distance = u32::MAX - 1;
-        let authority = unsafe { &*self.s.authority };
         for tile in tiles {
             let x = self.map().tile_x(tile);
             let y = self.map().tile_y(tile);
@@ -2989,14 +2988,14 @@ impl Ctx<'_> {
                 continue;
             }
             let town =
-                crate::town::spatial::calc_closest(self.shared, tile, distance.wrapping_add(1));
-            if town.is_null() {
+                crate::town::spatial::calc_closest_ref(self.shared, tile, distance.wrapping_add(1));
+            if town.shell.is_null() {
                 continue;
             }
-            let owner = (self.shared.town_owner)(town);
+            let owner = town.state;
             let xy = unsafe { crate::town::position(owner) };
             let dist = self.map().tile_x(xy).abs_diff(x) + self.map().tile_y(xy).abs_diff(y);
-            if dist == distance && (authority.town_index)(town) < (authority.town_index)(nearest) {
+            if dist == distance && town.id < nearest.id {
                 nearest = town;
             }
             if dist < distance {
@@ -3004,7 +3003,7 @@ impl Ctx<'_> {
                 distance = dist;
             }
         }
-        (nearest, distance)
+        (nearest.shell, distance)
     }
     fn nearest_existing_airport(
         &self,

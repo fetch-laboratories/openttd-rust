@@ -553,8 +553,8 @@ fn tile_variable(
         }
         0x41 => (s.shared().terrain_type)(c.tile),
         0x42 => {
-            let town = crate::town::spatial::closest(s.shared(), c.tile, u32::MAX);
-            u32::from(unsafe { crate::town::radius_from_shell(s.shared(), town.cast(), c.tile) })
+            let town = crate::town::spatial::closest_ref(s.shared(), c.tile, u32::MAX);
+            u32::from(unsafe { crate::town::get_radius_group(town.state, c.tile, s.map()) })
         }
         0x43 => relative_position(c.tile, unsafe { (*c.owner).record.location.tile }, s.map()),
         0x44 => {
