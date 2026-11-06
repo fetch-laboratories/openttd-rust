@@ -14,12 +14,8 @@ use crate::map_func::World;
 use crate::script_host::Services;
 use crate::script_tile::{ERR_PRECONDITION_FAILED, enforce, valid, world};
 use crate::tile_type::{MP_STATION, MP_WATER};
+use crate::water_map::{WATER_TILE_DEPOT, WATER_TILE_LOCK};
 
-/// `WaterTileType::Lock` and `WaterTileType::Depot`.
-const WATER_TILE_LOCK: u8 = 2;
-const WATER_TILE_DEPOT: u8 = 3;
-/// `StationType::Buoy`.
-const STATION_BUOY: u8 = 6;
 /// The refused result of the byte-valued command entries.
 const REFUSED: u8 = 0xFF;
 
@@ -33,11 +29,6 @@ fn water_tile_type(w: &World<'_>, tile: u32) -> u8 {
     w.asserted(|m| crate::water_map::get_water_tile_type(m, tile))
 }
 
-fn station_type(w: &World<'_>, tile: u32) -> u8 {
-    w.asserted(|m| crate::station_map::get_station_type(m, crate::tile_type::TileIndex(tile)))
-        .0
-}
-
 fn water_depot_tile(s: &Services, tile: u32) -> bool {
     on_type(s, tile, MP_WATER, |w| {
         water_tile_type(w, tile) == WATER_TILE_DEPOT
@@ -46,13 +37,13 @@ fn water_depot_tile(s: &Services, tile: u32) -> bool {
 
 fn dock_tile(s: &Services, tile: u32) -> bool {
     on_type(s, tile, MP_STATION, |w| {
-        station_type(w, tile) == crate::station_type::STATION_DOCK
+        w.asserted(|m| crate::station_map::is_dock(m, crate::tile_type::TileIndex(tile)))
     })
 }
 
 fn buoy_tile(s: &Services, tile: u32) -> bool {
     on_type(s, tile, MP_STATION, |w| {
-        station_type(w, tile) == STATION_BUOY
+        w.asserted(|m| crate::station_map::is_buoy(m, crate::tile_type::TileIndex(tile)))
     })
 }
 
@@ -65,9 +56,7 @@ fn lock_tile(s: &Services, tile: u32) -> bool {
 /// `IsCanal`: `IsWater(t) && GetWaterClass(t) == WaterClass::Canal`.
 fn canal_tile(s: &Services, tile: u32) -> bool {
     on_type(s, tile, MP_WATER, |w| {
-        w.asserted(|m| crate::water_map::is_water(m, tile))
-            && w.asserted(|m| crate::water_map::get_water_class(m, tile))
-                == crate::water_type::WATER_CLASS_CANAL.0
+        w.asserted(|m| crate::water_map::is_canal(m, tile))
     })
 }
 

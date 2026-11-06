@@ -124,6 +124,7 @@ mod script_rail;
 mod script_road;
 mod script_tile;
 mod script_tunnelbridge;
+mod script_vehicle;
 pub mod services;
 mod ship_control;
 mod signal;
