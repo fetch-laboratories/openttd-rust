@@ -308,7 +308,6 @@ pub struct Leaves {
     pub order_free: extern "C" fn(Handle),
     pub order_max_speed: extern "C" fn(Handle) -> u64,
     pub other_end: extern "C" fn(Handle, u32) -> u64,
-    pub pay_running: extern "C" fn(Handle, i64),
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
     pub railveh_wagon: extern "C" fn(Handle) -> u64,
     pub rail_tilt: extern "C" fn(Handle) -> u64,
@@ -2516,9 +2515,10 @@ impl Game<'_> {
             if running != 0 {
                 let cost = self.running_cost(id).saturating_mul(i64::from(running))
                     / ((self.leaves.cost_divisor)(id) as i64);
-                // `running_ticks = 0` precedes the company payment; nothing between observes it.
+                id.vehicle().subtract_profit(cost);
                 (id).vehicle().write_running(0);
-                (self.leaves.pay_running)(id, (cost as u64) as i64);
+                self.vs()
+                    .pay_running(id.vehicle(), cost, crate::economy_type::EXPENSES_TRAIN_RUN);
                 (self.leaves.running_windows)(id);
             }
         }
@@ -2999,7 +2999,6 @@ crate::abi::layouts! {
         order_free,
         order_max_speed,
         other_end,
-        pay_running,
         pow_wag_power,
         railveh_wagon,
         rail_tilt,

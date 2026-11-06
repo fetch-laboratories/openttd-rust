@@ -206,7 +206,6 @@ pub struct Leaves {
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
     pub delete_range_news: unsafe extern "C" fn(Vehicle),
     pub service_order: unsafe extern "C" fn(Vehicle, u16),
-    pub subtract_cost: unsafe extern "C" fn(Vehicle, i64),
     pub dirty_lists: unsafe extern "C" fn(Vehicle),
     pub next_stopping_station: unsafe extern "C" fn(Vehicle) -> u16,
     pub remove_depot_orders: unsafe extern "C" fn(u16),
@@ -561,7 +560,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         dummy_order(self; vehicle: Vehicle) -> () => (self.vs.make_dummy)(vehicle.base());
         check_orders(self; vehicle: Vehicle) -> () => (self.vs.check_orders_only)(vehicle.base());
         running_cost(self; vehicle: Vehicle) -> i64 => unsafe { self.vs.running_cost(vehicle.base()) };
-        subtract_cost(self; vehicle: Vehicle, cost: i64) -> () => unsafe { (self.leaves.subtract_cost)(vehicle, cost) };
         dirty_lists(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.dirty_lists)(vehicle) };
         remove_depot_orders(self; station_id: i64) -> () => unsafe { (self.leaves.remove_depot_orders)(station_id as u16) };
         assert_flying(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.assert_flying)(vehicle) };
@@ -1967,10 +1965,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let divisor = YEAR_TICKS;
         // Money's saturating multiplication is provided by the shared Money service.
         let cost = cost.saturating_mul(ticks) / divisor;
-        id.base()
-            .write_profit_this_year(id.base().profit_this_year().saturating_sub(cost));
+        id.base().subtract_profit(cost);
         self.set_running_ticks(id, 0);
-        self.subtract_cost(id, cost);
+        self.vs
+            .pay_running(id.base(), cost, crate::economy_type::EXPENSES_AIRCRAFT_RUN);
         self.dirty_lists(id);
     }
     fn nearest_hangar(&self, id: Vehicle) -> u32 {
@@ -2514,7 +2512,6 @@ crate::abi::layouts! {
         destination_too_far,
         delete_range_news,
         service_order,
-        subtract_cost,
         dirty_lists,
         next_stopping_station,
         remove_depot_orders,

@@ -199,7 +199,6 @@ pub struct Leaves {
     pub ships_dirty: extern "C" fn(),
     pub check_orders: extern "C" fn(u32),
     pub cost_divisor: extern "C" fn() -> u32,
-    pub pay_running: extern "C" fn(u32, i64),
     pub speed_default: extern "C" fn(u32) -> u32,
     pub age_default: extern "C" fn(u32) -> u32,
     pub speed_frac: extern "C" fn(u32, bool) -> u32,
@@ -965,10 +964,10 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     if ticks != 0 {
         let cost = unsafe { game.vs().running_cost(vehicle) };
         let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
-        let profit = vehicle.profit_this_year().saturating_sub(cost);
-        vehicle.write_profit_this_year(profit);
+        vehicle.subtract_profit(cost);
         game.vehicle().write_running(0);
-        (game.leaves.pay_running)(id, cost);
+        game.vs()
+            .pay_running(vehicle, cost, crate::economy_type::EXPENSES_SHIP_RUN);
         // SAFETY: The base table names its immutable maintenance table.
         (unsafe { &*game.vs().maintenance }.details_dirty)(vehicle);
         (game.leaves.ships_dirty)();
@@ -1197,7 +1196,6 @@ crate::abi::layouts! {
         ships_dirty,
         check_orders,
         cost_divisor,
-        pay_running,
         speed_default,
         age_default,
         speed_frac,

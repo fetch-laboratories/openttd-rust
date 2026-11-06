@@ -699,7 +699,13 @@ fn subtract(f: &FinanceServices, p: *mut Finances, id: u8, cost: i64, expense: u
     }
     (f.invalidate_company_windows)(id);
 }
-fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i64, expense: usize) {
+pub(crate) fn subtract_fraction(
+    f: &FinanceServices,
+    p: *mut Finances,
+    id: u8,
+    mut cost: i64,
+    expense: usize,
+) {
     let old = read_field!(p, fraction);
     let next = old.wrapping_sub(cost as u8);
     write_field!(p, fraction, next);

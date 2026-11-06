@@ -120,12 +120,6 @@ static void Ship_check_orders(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicl
 
 static uint32_t Ship_cost_divisor() noexcept { return CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS; }
 
-static void Ship_pay_running(uint32_t id, int64_t amount) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	CommandCost cost(EXPENSES_SHIP_RUN, Money(amount));
-	SubtractMoneyFromCompanyFract(v->GetOwner(), cost);
-}
 
 static uint32_t Ship_speed_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ShipVehInfo(v->GetEngineType())->max_speed; }
 
@@ -291,7 +285,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.depot_invalidate = Ship_depot_invalidate, .ships_dirty = Ship_ships_dirty,
 		.check_orders = Ship_check_orders,
 		.cost_divisor = Ship_cost_divisor,
-		.pay_running = Ship_pay_running, .speed_default = Ship_speed_default,
+		.speed_default = Ship_speed_default,
 		.age_default = Ship_age_default, .speed_frac = Ship_speed_frac,
 		.cache_invalidate = Ship_cache_invalidate,
 		.capabilities = &GetRustEngineCapabilitiesServices(), .sprite_direction = Ship_sprite_direction,

@@ -215,10 +215,6 @@ static void OPENTTD_RUST_CALL Aircraft_service_order(OpenTTDAircraftVehicle vehi
 
 
 
-static void OPENTTD_RUST_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle vehicle, int64_t cost) noexcept
-{
-	SubtractMoneyFromCompanyFract(VehicleOf(vehicle.handle)->GetOwner(), CommandCost(EXPENSES_AIRCRAFT_RUN, Money{cost}));
-}
 
 static void OPENTTD_RUST_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicle) noexcept
 {
@@ -369,7 +365,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.destination_too_far = Aircraft_destination_too_far,
 	.delete_range_news = Aircraft_delete_range_news,
 	.service_order = Aircraft_service_order,
-	.subtract_cost = Aircraft_subtract_cost,
 	.dirty_lists = Aircraft_dirty_lists,
 	.next_stopping_station = Aircraft_next_stopping_station,
 	.remove_depot_orders = Aircraft_remove_depot_orders,

@@ -201,6 +201,26 @@ impl VehicleServices {
         // SAFETY: production entries use immutable process-lifetime service tables.
         unsafe { &*(*self.maintenance).company }
     }
+    /// Fractional running costs use the existing command/Company finance owner.
+    pub(crate) fn pay_running(&self, v: VehicleRef, cost: i64, expense: u8) {
+        // SAFETY: These immutable tables are the same live registry path used by
+        // maintenance. No vehicle or Company field borrow spans a callback.
+        let maintenance = unsafe { &*self.maintenance };
+        let commands = unsafe { &*(*maintenance.transaction).commands };
+        let owner = v.owner();
+        let finances = (commands.finance.company_finances)(owner);
+        if self.assertions {
+            // Preserve the strict Company::Get precondition of the native tail.
+            crate::movement::native_assert(unsafe { &*maintenance.shared }, !finances.is_null());
+        }
+        crate::company::subtract_fraction(
+            commands.finance,
+            finances,
+            owner,
+            cost,
+            usize::from(expense),
+        );
+    }
     /// `Vehicle::SetNext` for legacy native shell contexts.
     ///
     /// # Safety

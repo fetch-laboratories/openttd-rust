@@ -390,7 +390,7 @@ pub struct Leaves {
     pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
     pub default_max_speed: extern "C" fn(u16) -> u16,
     pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
-    pub pay_running: extern "C" fn(VehicleRef, i64),
+    pub running_windows: extern "C" fn(VehicleRef),
 }
 
 /// A consist part: live vehicle handle and its live Rust owner.
@@ -2168,10 +2168,11 @@ impl Game<'_> {
             return;
         }
         let cost = self.running_cost(v).saturating_mul(i64::from(running)) / YEAR_TICKS;
-        let profit = v.v.profit_this_year().saturating_sub(cost);
-        v.v.write_profit_this_year(profit);
+        v.v.subtract_profit(cost);
         v.v.write_running(0);
-        service!(self.l.pay_running)(v.v, cost);
+        self.vs
+            .pay_running(v.v, cost, crate::economy_type::EXPENSES_ROADVEH_RUN);
+        service!(self.l.running_windows)(v.v);
     }
     /// `CmdTurnRoadVeh` after the ownership checks.
     fn turn(&self, v: Part, execute: bool) -> bool {
@@ -2534,7 +2535,7 @@ crate::abi::layouts! {
         shorten_factor,
         default_max_speed,
         cargo_age_default,
-        pay_running,
+        running_windows,
         depot_exit_dirty,
     };
 }

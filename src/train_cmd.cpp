@@ -1028,7 +1028,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.order_free = TrainOrderFree,
 		.order_max_speed = TrainVehicleRead<uint64_t, RustVehicleOrderMaxSpeed>,
 		.other_end = OpenTTDLegacyMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
-		.pay_running = TrainPayRunning,
 		.pow_wag_power = TrainPowWagPower,
 		.railveh_wagon = TrainRailvehWagon,
 		.rail_tilt = TrainRailTilt,

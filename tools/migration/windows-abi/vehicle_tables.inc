@@ -79,7 +79,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, shorten_factor);
 		VEHICLE_UNUSED(leaves, default_max_speed);
 		VEHICLE_UNUSED(leaves, cargo_age_default);
-		VEHICLE_UNUSED(leaves, pay_running);
+		VEHICLE_UNUSED(leaves, running_windows);
 		leaves.vehicle = &vehicle;
 		leaves.ground = &ground;
 		leaves.shared = &shared;

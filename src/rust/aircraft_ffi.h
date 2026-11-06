@@ -88,7 +88,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_RUST_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);
 	void (OPENTTD_RUST_CALL *delete_range_news)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(delete_range_news);
 	void (OPENTTD_RUST_CALL *service_order)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_order);
-	void (OPENTTD_RUST_CALL *subtract_cost)(OpenTTDAircraftVehicle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_cost);
 	void (OPENTTD_RUST_CALL *dirty_lists)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_lists);
 	uint16_t (OPENTTD_RUST_CALL *next_stopping_station)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(next_stopping_station);
 	void (OPENTTD_RUST_CALL *remove_depot_orders)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_depot_orders);

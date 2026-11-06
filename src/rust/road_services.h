@@ -97,14 +97,9 @@ static uint16_t OPENTTD_RUST_CALL RoadSvcDefaultMaxSpeed(uint16_t engine) noexce
 
 
 /** The running cost tail of `RoadVehicle::OnNewEconomyDay`. */
-static void OPENTTD_RUST_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t amount) noexcept
+static void OPENTTD_RUST_CALL RoadSvcRunningWindows(OpenTTDVehicle *v) noexcept
 {
-	RoadVehicle *u = RoadOf(v);
-	CommandCost cost(EXPENSES_ROADVEH_RUN, Money(amount));
-
-	SubtractMoneyFromCompanyFract(u->GetOwner(), cost);
-
-	RustVehicleDetailsDirty(RustVehicle(u));
+	RustVehicleDetailsDirty(v);
 	SetWindowClassesDirty(WC_ROADVEH_LIST);
 }
 
@@ -133,7 +128,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.shorten_factor = RoadSvcShortenFactor,
 	.default_max_speed = RoadSvcDefaultMaxSpeed,
 	.cargo_age_default = RustVehicleEngineRead<uint16_t, RustEngineCargoAge>,
-	.pay_running = RoadSvcPayRunning,
+	.running_windows = RoadSvcRunningWindows,
 };
 
 static const OpenTTDRoadLeaves &GetRoadLeaves()

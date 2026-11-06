@@ -68,7 +68,7 @@ static void ShipBoundary()
 		.depot_invalidate = ShipProbeUnused<void, uint32_t>, .ships_dirty = ShipProbeUnused<void>,
 		.check_orders = ShipProbeUnused<void, uint32_t>,
 		.cost_divisor = ShipProbeUnused<uint32_t>,
-		.pay_running = ShipProbeUnused<void, uint32_t, int64_t>, .speed_default = ShipProbeUnused<uint32_t, uint32_t>,
+		.speed_default = ShipProbeUnused<uint32_t, uint32_t>,
 		.age_default = ShipProbeUnused<uint32_t, uint32_t>, .speed_frac = ShipProbeUnused<uint32_t, uint32_t, bool>,
 		.cache_invalidate = ShipProbeUnused<void, uint32_t>,
 		.capabilities = &capabilities, .sprite_direction = ShipProbeUnused<void, uint32_t>,

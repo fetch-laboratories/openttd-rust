@@ -56,6 +56,7 @@
 #include "../news_func.h"
 #include "../strings_func.h"
 #include "../table/strings.h"
+static_assert(EXPENSES_TRAIN_RUN == 2 && EXPENSES_ROADVEH_RUN == 3 && EXPENSES_AIRCRAFT_RUN == 4 && EXPENSES_SHIP_RUN == 5);
 OpenTTDAircraftState *RustVehicleAircraftOwner(const Vehicle *v) noexcept { return Aircraft::From(v)->rust_state.get(); }
 OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept { return Ship::From(v)->GetRustState(); }
 
