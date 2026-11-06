@@ -5,7 +5,7 @@ Readers: Root and user-invoked skills that spawn agents.
 ## Roles and models
 
 - Root (`gpt-6.1-sol`, xhigh) orchestrates and delegates heavily, selects components, integrates and spot-checks delegated diffs.
-- In Codex, aim for nine agents: root and eight subagents. `.codex/config.toml` sets root to `gpt-6.1-sol` xhigh and spawned agents to `gpt-6.1-sol` high by default, with at most eight spawned threads. Respect a lower host limit.
+- Use the host's available subagent slots; the repository imposes no lower subagent cap (user, 2026-11-06). Codex's per-session limit is 12 subagents plus root and cannot be removed. Existing sessions and worktrees may retain a lower configuration; respect the actual host limit. The main checkout's uncommitted `.codex/config.toml` change belongs to the user and remains untouched. Agent slots and the six unintegrated component branches in [integration](workflow.md#integration) are different limits: reviews, planning and measurements need no new component branch.
 - Specify model and effort on every spawn. Each subagent uses less effort than root's xhigh.
 - Use `gpt-6.1-sol` for most implementation and analysis and all independent review. Use high effort unless a clearly bounded task justifies lower.
 - Use `gpt-6-luna` at low or medium effort for bounded mechanical work.
@@ -15,12 +15,13 @@ Readers: Root and user-invoked skills that spawn agents.
 
 - Spawn a fresh agent named for each task; its name is its attribution. Do not reassign a finished agent to unrelated work. Close it when its task ends.
 - Each review round, including re-review, gets a fresh reviewer who reads the PR's earlier attributed review reports.
+- Follow the host's orchestration rules: use native agents for compatible shared-checkout work completed in the same turn; use T3 delegation for background work, another provider or an isolated checkout. T3 creates and binds isolated checkouts. Follow its completion notifications and returned next action; do not poll a running delegate.
 - At the host slot limit, root works its own queue (integration, spot-checking fix commits, roadmap) until a slot frees. Do not archive threads or edit host databases to free slots.
-- A long-job brief links the [background rule](../AGENTS.md#every-agent). Root never runs a child's jobs for it. When a child ends its turn on a running job without naming its session or task ID, root checks at once that the job exists and resumes the child if it does not. A job's exit does not always resume a T3-delegated Codex child (11-02: four stalls of up to 2 h 15 min, about 6 agent-hours, on the slot the work order ranked first). At each of its own wakes, root checks every child idle on a named job: if no process remains in the child's worktree and the child has not reported, root resumes it to read or rerun the job. A subagent waiting only on CI or another task reports and stops.
+- A long-job brief links the [background rule](../AGENTS.md#every-agent). Root never runs a child's jobs for it. A child names its job ID and uses the host's background-completion mechanism before ending its turn. At each independent wake, root handles completed results and checks jobs of children already known to be idle on them. If a job ended without waking its child, use the host's supported resume action; do not poll a running delegate or duplicate its work. This recovery remains necessary: four missed resumes cost about six agent-hours on 11-02. A child that reports a running job without an ID has not established a resumable handoff; correct it immediately. A subagent waiting only on CI or another task reports and stops.
 
 ## Claude Code root
 
-- In Claude Code, keep at most five subagents: six agents including root. The Codex limit does not apply.
+- Claude Code uses its actual host limit under [roles and models](#roles-and-models); the former five-subagent repository cap is lifted.
 - A user-directed session outside Codex names its exact model and host-reported effort. When it runs root, retain the same structure with its host's models: subagents at lower effort than root and a fresh reviewer per round.
 - Claude Code root uses its host's models for implementation and planning, and `gpt-6.1-sol` high through T3 `delegate_task` for independent review, so reviewer and implementer differ in model family.
 - Opus handles implementation, fixes and code-touching follow-ups; Sonnet handles only non-code work such as runs, measurements and tracker edits (user, 2026-10-27). Opus writes code at medium effort; use high for judgment such as planning, speed attribution and hard fidelity analysis (user, 2026-10-30).
