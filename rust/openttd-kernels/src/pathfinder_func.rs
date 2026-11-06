@@ -16,26 +16,35 @@ use crate::transport_type::TRANSPORT_ROAD;
 
 #[inline]
 pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool) -> u16 {
-    let mut bits = track_status_to_trackdir_bits(movement.track_status(
+    let map = crate::map_func::World::new(movement.shared());
+    road_trackdirs_in_world(movement, &map, tile, tram)
+}
+#[allow(clippy::inline_always)]
+#[inline(always)]
+pub(crate) fn road_trackdirs_in_world(
+    movement: &MovementServices,
+    map: &crate::map_func::World<'_>,
+    tile: u32,
+    tram: bool,
+) -> u16 {
+    let mut bits = track_status_to_trackdir_bits(movement.track_status_in_world(
+        map,
         tile,
         TRANSPORT_ROAD,
         u32::from(tram),
         INVALID_DIAGDIR,
     ));
-    if tram && bits == 0 {
-        let map = crate::map_func::World::new(movement.shared());
-        if map.is_normal_road_tile(tile) {
-            let road = map.road_bits(tile, true);
-            bits = match road {
-                crate::road_type::ROAD_NE | crate::road_type::ROAD_SW => {
-                    TRACKDIR_BIT_X_NE | TRACKDIR_BIT_X_SW
-                }
-                crate::road_type::ROAD_NW | crate::road_type::ROAD_SE => {
-                    TRACKDIR_BIT_Y_NW | TRACKDIR_BIT_Y_SE
-                }
-                _ => bits,
-            };
-        }
+    if tram && bits == 0 && map.is_normal_road_tile(tile) {
+        let road = map.road_bits(tile, true);
+        bits = match road {
+            crate::road_type::ROAD_NE | crate::road_type::ROAD_SW => {
+                TRACKDIR_BIT_X_NE | TRACKDIR_BIT_X_SW
+            }
+            crate::road_type::ROAD_NW | crate::road_type::ROAD_SE => {
+                TRACKDIR_BIT_Y_NW | TRACKDIR_BIT_Y_SE
+            }
+            _ => bits,
+        };
     }
     bits
 }
