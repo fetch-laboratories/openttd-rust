@@ -80,8 +80,9 @@ static void Station562Names(TileIndex origin, DoCommandFlags exec)
 	Industry *rig = new Industry(); FIXTURE_POOL_RECORD(rig).location = TileArea(at(24, 24), 1, 2); FIXTURE_POOL_RECORD(rig).town = ClosestTownFromTile(at(24, 24), UINT_MAX); FIXTURE_POOL_RECORD(rig).type = 5;
 	MakeIndustry(FIXTURE_POOL_RECORD(rig).location.tile, rig->index, GFX_OILRIG_1, 0, WaterClass::Sea);
 	MakeIndustry(at(24, 25), rig->index, GFX_OILRIG_1, 0, WaterClass::Sea); BuildOilRig(FIXTURE_POOL_RECORD(rig).location.tile);
-	StationNeed(FIXTURE_POOL_RECORD(rig).neutral_station != nullptr && FIXTURE_POOL_RECORD(rig).neutral_station->string_id == STR_SV_STNAME_OILFIELD && FIXTURE_POOL_RECORD(rig).neutral_station->indtype == IT_INVALID, __LINE__); FIXTURE_POOL_RECORD(rig).neutral_station->name = "Owner562 oilrig";
-	fmt::print(stderr, "STCMD owner562-name oilrig {} {} {}\n", FIXTURE_POOL_RECORD(rig).neutral_station->index.base(), FIXTURE_POOL_RECORD(rig).neutral_station->string_id, FIXTURE_POOL_RECORD(rig).neutral_station->indtype);
+	Station *neutral = static_cast<Station *>(FIXTURE_POOL_RECORD(rig).neutral_station);
+	StationNeed(neutral != nullptr && neutral->string_id == STR_SV_STNAME_OILFIELD && neutral->indtype == IT_INVALID, __LINE__); neutral->name = "Owner562 oilrig";
+	fmt::print(stderr, "STCMD owner562-name oilrig {} {} {}\n", neutral->index.base(), neutral->string_id, neutral->indtype);
 	/* Exhaust every default suffix using real station records, including forest aliasing. */
 	for (Town *town : Town::Iterate()) for (StringID name = STR_SV_STNAME; name < STR_SV_STNAME_FALLBACK; ++name) {
 		Station *st = Station562New(origin, "Owner562 seed"); st->town = town; st->string_id = name; seeds.push_back(st);
