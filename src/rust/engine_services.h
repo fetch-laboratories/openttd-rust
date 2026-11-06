@@ -29,7 +29,6 @@ inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return Engi
 
 inline uint16_t RustEngineID(const OpenTTDEngine *e) noexcept { return EngineOf(e)->index.base(); }
 inline uint64_t RustEngineRailTypes(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railtypes.base(); }
-inline uint64_t RustEngineRailTypes(const OpenTTDEngine *e) noexcept { return RustEngineRailTypes(EngineOf(e)); }
 /** Reserve a unit number and assign the returned native ID to the shell. */
 inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->unitnumber = RustCompanyUseVehicleUnit(v->GetOwner(), v->GetType(), unit); }
 inline void RustVehicleUseCurrentUnit(void *shell) noexcept
