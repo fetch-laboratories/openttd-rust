@@ -985,7 +985,7 @@ struct RefitWindow : public Window {
 				break;
 
 			case WID_VR_INFO:
-				size.width = this->Record().information_width + padding.height;
+				size.width = this->information_width + padding.height;
 				break;
 		}
 	}
@@ -1155,8 +1155,8 @@ struct RefitWindow : public Window {
 					}
 				}
 
-				if (this->Record().information_width < max_width) {
-					this->Record().information_width = max_width;
+				if (this->information_width < max_width) {
+					this->information_width = max_width;
 					this->ReInit();
 				}
 				[[fallthrough]];
