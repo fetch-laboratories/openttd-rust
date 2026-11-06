@@ -30,8 +30,6 @@ forwarded | src/townname.cpp | utf8_length = GetRustSharedServices().utf8_length
 rebound | Engine_next | src/rust/engine_adapter.hpp | next
 rebound | Engine_next | src/rust/engine_adapter.hpp | next | 2
 rebound | Engine_next | src/rust/engine_loading_services.hpp | next
-rebound | Engine_powered_roadtypes | src/rust/engine_adapter.hpp | powered_roadtypes
-rebound | Engine_powered_roadtypes | src/rust/vehicle_build_services.hpp | powered_roadtypes
 rebound | GetRustAircraftVehicle | src/rust/station_command_services.hpp | aircraft_vehicle
 rebound | GetRustAircraftVehicle | src/rust/vehicle_refit_services.hpp | aircraft_handle
 rebound | GetRustSignalContext | src/train_cmd.cpp | signal_context

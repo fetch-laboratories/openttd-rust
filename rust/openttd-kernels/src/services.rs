@@ -283,6 +283,8 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Native `GetAllCompatibleRailTypes`, including empty and all-bit masks.
+    pub all_compatible_railtypes: extern "C" fn(u64) -> u64,
     /// Typed Rust post lifecycles and native argument codecs.
     pub command_post: extern "C" fn() -> &'static crate::command_post::Services,
     /// Complete synchronous movement owner; immutable process-lifetime table.
@@ -363,6 +365,8 @@ pub struct Services {
     pub plane_crashes: extern "C" fn() -> u8,
     /// Shared live plane speed observation.
     pub plane_speed: extern "C" fn() -> u8,
+    /// Native `RoadTypeInfo` powered mask, retaining `GetRoadTypeInfo`'s assertion.
+    pub powered_roadtypes: extern "C" fn(RoadType) -> u64,
     /// One shared game Random draw, including debug logging.
     pub random: extern "C" fn(*mut c_void) -> u32,
     /// Original `GetAnyRoadBits`, parameterized by `RoadTramType`.
@@ -757,6 +761,7 @@ crate::abi::layouts! {
         generating_world,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        all_compatible_railtypes,
         command_post,
         movement,
         set_tile_owner,
@@ -797,6 +802,7 @@ crate::abi::layouts! {
         other_tunnel_end,
         plane_crashes,
         plane_speed,
+        powered_roadtypes,
         random,
         road_bits,
         road_cost_multiplier,
@@ -1020,6 +1026,12 @@ pub fn fixture(
     extern "C" fn unexpected_file(_: *const c_void) -> *const c_void {
         std::process::abort()
     }
+    extern "C" fn unexpected_compatible(_: u64) -> u64 {
+        unreachable!()
+    }
+    extern "C" fn unexpected_powered(_: RoadType) -> u64 {
+        unreachable!()
+    }
     extern "C" fn unexpected_post() -> &'static crate::command_post::Services {
         std::process::abort()
     }
@@ -1033,6 +1045,7 @@ pub fn fixture(
     }
     Services {
         copyable_badges: unexpected_copyable,
+        all_compatible_railtypes: unexpected_compatible,
         command_post: unexpected_post,
         grf_file_version: unexpected_version,
         grf_cargo_map: unexpected_cargo_map,
@@ -1096,6 +1109,7 @@ pub fn fixture(
         other_tunnel_end: word,
         plane_crashes: zero_byte,
         plane_speed: zero_byte,
+        powered_roadtypes: unexpected_powered,
         random,
         road_bits: bits,
         road_cost_multiplier: unused_road_cost_multiplier,

@@ -55,8 +55,6 @@ pub struct Services {
     pub(crate) engine_valid: unsafe extern "C" fn(u16) -> bool,
     pub(crate) company_valid: unsafe extern "C" fn(u8) -> bool,
     pub(crate) engine_buildable: unsafe extern "C" fn(u16, u8, u8) -> bool,
-    pub(crate) rail_compatible: unsafe extern "C" fn(u16) -> u64,
-    pub(crate) road_powered: unsafe extern "C" fn(u16) -> u64,
     pub(crate) wagon: unsafe extern "C" fn(u16) -> bool,
     pub(crate) tram: unsafe extern "C" fn(u16) -> bool,
     pub(crate) plane: unsafe extern "C" fn(u16) -> u8,
@@ -353,7 +351,13 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
     }
     match kind {
         0 => {
-            if unsafe { (w.rail_compatible)(from) & (w.rail_compatible)(to) } == 0 {
+            if {
+                crate::vehicle::EngineRef::of((w.capabilities.engine)(from))
+                    .compatible_railtypes(w.capabilities.shared)
+                    & crate::vehicle::EngineRef::of((w.capabilities.engine)(to))
+                        .compatible_railtypes(w.capabilities.shared)
+            } == 0
+            {
                 return false;
             }
             if unsafe { (w.wagon)(from) != (w.wagon)(to) } {
@@ -361,7 +365,13 @@ unsafe fn valid(w: &Services, gw: &GroupServices, from: u16, to: u16, company: u
             }
         }
         1 => {
-            if unsafe { (w.road_powered)(from) & (w.road_powered)(to) } == 0 {
+            if {
+                crate::vehicle::EngineRef::of((w.capabilities.engine)(from))
+                    .powered_roadtypes(w.capabilities.shared)
+                    & crate::vehicle::EngineRef::of((w.capabilities.engine)(to))
+                        .powered_roadtypes(w.capabilities.shared)
+            } == 0
+            {
                 return false;
             }
             if unsafe { (w.tram)(from) != (w.tram)(to) } {
@@ -1281,8 +1291,6 @@ crate::abi::layouts! {
         engine_valid,
         company_valid,
         engine_buildable,
-        rail_compatible,
-        road_powered,
         wagon,
         tram,
         plane,

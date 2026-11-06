@@ -96,6 +96,7 @@ struct OpenTTDMovementServices;
 struct GRFFile;
 struct OpenTTDCommandPostServices;
 struct OpenTTDSharedServices {
+	uint64_t (*all_compatible_railtypes)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible_railtypes);
 	const OpenTTDCommandPostServices &(*command_post)() noexcept OPENTTD_SERVICE_DEFAULT(command_post);
 	const OpenTTDMovementServices *movement = nullptr;
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
@@ -136,6 +137,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*other_tunnel_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_end);
 	uint8_t (*plane_crashes)() noexcept OPENTTD_SERVICE_DEFAULT(plane_crashes);
 	uint8_t (*plane_speed)() noexcept OPENTTD_SERVICE_DEFAULT(plane_speed);
+	uint64_t (*powered_roadtypes)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(powered_roadtypes);
 	uint32_t (*random)(void *) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	uint8_t (*road_bits)(uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(road_bits);
 	uint16_t (*road_cost_multiplier)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_cost_multiplier);

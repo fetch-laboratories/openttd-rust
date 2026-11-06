@@ -425,6 +425,7 @@ static size_t RustKdtreePartition(OpenTTDKdtreeKey *keys, size_t count) noexcept
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.all_compatible_railtypes = RustAllCompatibleRailTypes,
 	.command_post = GetRustCommandPostServices,
 	.movement = &_rust_movement_services,
 	.set_tile_owner = RustSetTileOwner,
@@ -469,6 +470,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.other_tunnel_end = RustOtherTunnelBridgeEnd,
 	.plane_crashes = SharedPlaneCrashes,
 	.plane_speed = SharedPlaneSpeed,
+	.powered_roadtypes = RustRoadTypePoweredRoadTypes,
 	.random = SharedRandom,
 	.road_bits = Shared_road_bits,
 	.road_cost_multiplier = RustRoadCostMultiplier,

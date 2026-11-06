@@ -88,8 +88,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.engine_valid = FleetTransaction_engine_valid,
 	.company_valid = FleetTransaction_company_valid,
 	.engine_buildable = FleetTransaction_engine_buildable,
-	.rail_compatible = FleetTransaction_rail_compatible,
-	.road_powered = FleetTransaction_road_powered,
 	.wagon = FleetTransaction_wagon,
 	.tram = RustIndexedEngineRead<bool, RustEngineIsTram>,
 	.plane = FleetTransaction_plane,

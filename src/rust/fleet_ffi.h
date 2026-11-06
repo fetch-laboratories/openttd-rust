@@ -108,8 +108,6 @@ struct OpenTTDFleetTransactionServices {
 	bool (*engine_valid)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(engine_valid);
 	bool (*company_valid)(uint8_t id) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	bool (*engine_buildable)(uint16_t id, uint8_t type, uint8_t company) noexcept OPENTTD_SERVICE_DEFAULT(engine_buildable);
-	uint64_t (*rail_compatible)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(rail_compatible);
-	uint64_t (*road_powered)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(road_powered);
 	bool (*wagon)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(wagon);
 	bool (*tram)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(tram);
 	uint8_t (*plane)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(plane);

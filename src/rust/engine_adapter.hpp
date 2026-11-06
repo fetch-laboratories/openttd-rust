@@ -134,8 +134,6 @@ const OpenTTDEngineServices &EngineServices() noexcept
 		.vehicle_cargo = Engine_vehicle_cargo,
 		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.company_valid = GetRustSharedServices().company_valid,
-		.compatible_railtypes = Engine_compatible_railtypes,
-		.powered_roadtypes = Engine_powered_roadtypes,
 		.company_railtypes = RustCompanyRailTypes,
 		.company_roadtypes = RustCompanyRoadTypes,
 		.company_engine_count = Engine_company_engine_count,

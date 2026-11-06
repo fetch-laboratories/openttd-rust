@@ -150,6 +150,12 @@ impl EngineRef {
     pub(crate) fn wagon_weight(self) -> u8 {
         read_field!(Lifecycle::rail(self.0.as_ptr()), pow_wag_weight)
     }
+    pub(crate) fn compatible_railtypes(self, shared: &crate::services::Services) -> u64 {
+        (shared.all_compatible_railtypes)(self.railtypes())
+    }
+    pub(crate) fn powered_roadtypes(self, shared: &crate::services::Services) -> u64 {
+        (shared.powered_roadtypes)(crate::services::RoadType(self.roadtype()))
+    }
     pub(crate) fn ground(self) -> bool {
         matches!(self.kind(), VehicleType::TRAIN | VehicleType::ROAD)
     }

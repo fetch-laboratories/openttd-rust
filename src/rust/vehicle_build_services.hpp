@@ -122,7 +122,6 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 {
 	static const OpenTTDVehicleConstructServices services{
 		.articulated = &GetRustVehicleArticulatedServices(),
-		.powered_roadtypes = Engine_powered_roadtypes,
 		.new_road = VehicleConstructNewRoad, .road_front = VehicleConstructRoadFront,
 		.station = OpenTTDStationByTile, .hangar_tile = VehicleConstructHangar,
 		.new_aircraft = VehicleConstructNewAircraft,

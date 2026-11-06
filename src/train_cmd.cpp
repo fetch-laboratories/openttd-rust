@@ -1110,7 +1110,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 {
 	static const OpenTTDTrainReservationLeaves services{
 		.read_num_orders = TrainVehicleRead<uint8_t, RustVehicleNumOrders>,
-		.all_compat = TrainReservationAllCompat,
 		.backoff = RustTrainPathBackoffInterval,
 		.bits_track = TrainReservationBitsTrack,
 		.blocking = OpenTTDLegacyContextMapQuery<uint64_t, RustOnewaySignalBlocking, OpenTTDTrainHandle, uint32_t, uint8_t>,

@@ -224,8 +224,6 @@ pub struct Services {
     pub vehicle_cargo: unsafe extern "C" fn(*mut OpenTTDVehicle) -> VehicleCargo,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub company_valid: unsafe extern "C" fn(u8) -> bool,
-    pub compatible_railtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
-    pub powered_roadtypes: unsafe extern "C" fn(*const OpenTTDEngine) -> u64,
     pub company_railtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_roadtypes: unsafe extern "C" fn(u8) -> u64,
     pub company_engine_count: unsafe extern "C" fn(u8, u16) -> c_uint,
@@ -956,14 +954,16 @@ unsafe fn buildable(s: &Services, e: EngineRef, kind: VehicleType, company: u8) 
     if company != OWNER_DEITY {
         if kind == VehicleType::TRAIN
             && unsafe {
-                call!(s, compatible_railtypes, e.shell) & call!(s, company_railtypes, company)
+                crate::vehicle::EngineRef::of(e.shell).compatible_railtypes(&*s.shared)
+                    & call!(s, company_railtypes, company)
             } == 0
         {
             return false;
         }
         if kind == VehicleType::ROAD
             && unsafe {
-                call!(s, powered_roadtypes, e.shell) & call!(s, company_roadtypes, company)
+                crate::vehicle::EngineRef::of(e.shell).powered_roadtypes(&*s.shared)
+                    & call!(s, company_roadtypes, company)
             } == 0
         {
             return false;
@@ -1220,8 +1220,6 @@ crate::abi::layouts! {
         vehicle_cargo,
         capabilities,
         company_valid,
-        compatible_railtypes,
-        powered_roadtypes,
         company_railtypes,
         company_roadtypes,
         company_engine_count,
