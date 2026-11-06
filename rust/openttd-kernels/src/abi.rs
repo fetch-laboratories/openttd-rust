@@ -34,7 +34,9 @@ pub(crate) use layouts;
 /// declaration from this field list; the layout lists size, alignment, then each
 /// field's offset and size. Field types are primitives, transparent newtypes of
 /// primitives, fixed arrays of those, same-group shared records, extern-C callback pointers, or raw pointers
-/// (`c_void` targets stay `void *`). A fixed array, nested or not, becomes a C array
+/// (`c_void` targets stay `void *`). Callback fields use the includer's
+/// `OPENTTD_RUST_CALL` from `call_ffi.h`, just as quoted native types are declared
+/// by their owning header. A fixed array, nested or not, becomes a C array
 /// suffix whose bound is the dimension's last path segment (`T name[N]`).
 /// Opaque pointer fields use `=> class` to match a native class; `=> struct` and
 /// untagged opaque pointers declare native structs. `=> "Type"` names a native

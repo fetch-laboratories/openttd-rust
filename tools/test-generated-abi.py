@@ -76,14 +76,18 @@ class GeneratedAbiTests(unittest.TestCase):
                 GENERATOR["record_header"]("ops", GENERATOR["shared_records"](root))
             ))
             source = root / "ops.cpp"
-            source.write_text(
+            body = (
                 '#include "ops.h"\n#include <type_traits>\n'
                 'using Allocate = void *(OPENTTD_RUST_CALL *)(void *, std::size_t) noexcept;\n'
                 'using Destroy = void (OPENTTD_RUST_CALL *)(void *, void *) noexcept;\n'
                 'static_assert(std::is_same_v<decltype(Ops::allocate), Allocate>);\n'
                 'static_assert(std::is_same_v<decltype(Ops::destroy), Destroy>);\n'
             )
-            subprocess.run(["c++", "-std=c++20", "-fsyntax-only", "-I", str(ROOT / "src/rust"), str(source)], check=True)
+            # Production and standalone fixtures use different source include roots.
+            for include_root, header in [("src/rust", "call_ffi.h"), ("src", "rust/call_ffi.h")]:
+                with self.subTest(include_root=include_root):
+                    source.write_text(f'#include "{header}"\n' + body)
+                    subprocess.run(["c++", "-std=c++20", "-fsyntax-only", "-I", str(ROOT / include_root), str(source)], check=True)
 
     def test_each_layout_and_visitor_lists_exactly_its_declared_fields(self) -> None:
         fragments = GENERATOR["generate"]()

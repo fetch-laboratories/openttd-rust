@@ -2,6 +2,7 @@
 /** @file pool_ffi.h Canonical Rust pool operations used by native pool facades. */
 #ifndef RUST_POOL_FFI_H
 #define RUST_POOL_FFI_H
+#include "call_ffi.h"
 #include "rust_vector.h"
 #include "abi-record-pool.h"
 struct RustPoolCore;
