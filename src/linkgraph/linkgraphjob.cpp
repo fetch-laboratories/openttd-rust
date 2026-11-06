@@ -21,8 +21,8 @@
 /* Initialize the link-graph-job-pool */
 LinkGraphJobPool _link_graph_job_pool("LinkGraphJob");
 
-LinkGraphJob::LinkGraphJob() : record(openttd_rust_linkgraph_job_new(nullptr, LinkGraphID::Invalid().base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; _link_graph_job_pool.BindRecordIfOwned(this, this->record); }
-LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgraph_job_new(orig.RustState(), orig.index.base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; _link_graph_job_pool.BindRecordIfOwned(this, this->record); }
+LinkGraphJob::LinkGraphJob() : record(openttd_rust_linkgraph_job_new(nullptr, LinkGraphID::Invalid().base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; _link_graph_job_pool.BindRecord(this->index.base(), this, this->record); }
+LinkGraphJob::LinkGraphJob(const LinkGraph &orig) : record(openttd_rust_linkgraph_job_new(orig.RustState(), orig.index.base(), reinterpret_cast<const OpenTTDLinkGraphJobSettings *>(&_settings_game.linkgraph))) { this->record->shell = this; _link_graph_job_pool.BindRecord(this->index.base(), this, this->record); }
 
 /** Start the native worker; Rust executes the synchronous failure fallback. */
 bool LinkGraphJob::StartThread()
@@ -103,7 +103,7 @@ LinkGraphJob::~LinkGraphJob()
 		auto services = CargoFlowServices(&context);
 		openttd_rust_flow_apply(&services);
 	}
-	_link_graph_job_pool.RetireUnboundRecord(this->record);
+	_link_graph_job_pool.RetireRecord(this->index.base(), this, this->record);
 	openttd_rust_linkgraph_job_delete(this->record);
 }
 

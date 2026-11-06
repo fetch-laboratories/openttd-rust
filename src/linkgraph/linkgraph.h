@@ -92,10 +92,10 @@ public:
 		return openttd_rust_live_graph_scale(val, target_age.base(), orig_age.base());
 	}
 
-	LinkGraph() : owner(openttd_rust_live_graph_new_empty()) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
-	LinkGraph(CargoType cargo) : owner(openttd_rust_live_graph_new(cargo)) { this->owner->shell = this; _link_graph_pool.BindRecordIfOwned(this, this->owner); }
+	LinkGraph() : owner(openttd_rust_live_graph_new_empty()) { this->owner->shell = this; _link_graph_pool.BindRecord(this->index.base(), this, this->owner); }
+	LinkGraph(CargoType cargo) : owner(openttd_rust_live_graph_new(cargo)) { this->owner->shell = this; _link_graph_pool.BindRecord(this->index.base(), this, this->owner); }
 	LinkGraph(const LinkGraph &) = delete;
-	~LinkGraph() { _link_graph_pool.RetireUnboundRecord(this->owner); openttd_rust_live_graph_delete(this->owner); }
+	~LinkGraph() { _link_graph_pool.RetireRecord(this->index.base(), this, this->owner); openttd_rust_live_graph_delete(this->owner); }
 	LinkGraph &operator=(const LinkGraph &) = delete;
 	void Init(uint size) { assert(this->Size() == 0); openttd_rust_live_graph_init(this->owner, size); }
 	void ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_live_graph_shift(this->owner, interval.base()); }
