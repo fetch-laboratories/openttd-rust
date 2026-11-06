@@ -178,12 +178,12 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	}
 	FIXTURE_POOL_RECORD(town).ratings[0] = old_rating; FIXTURE_POOL_RECORD(town).received = old_received; FIXTURE_TOWN_CACHE(town).population = old_population;
 	HouseResolverObject future(first, tile, town, CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, true);
-	const size_t psa_count = town->psa_list.size(); future.GetScope(VSG_SCOPE_PARENT)->StorePSA(0, 409);
-	require(psa_count == town->psa_list.size());
+	const size_t psa_count = FIXTURE_POOL_RECORD(town).psa_list.size(); future.GetScope(VSG_SCOPE_PARENT)->StorePSA(0, 409);
+	require(psa_count == FIXTURE_POOL_RECORD(town).psa_list.size());
 	program.var_scope = VSG_SCOPE_PARENT;
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 409}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 3}};
 	HouseSpec::Get(first)->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, &program);
-	require(GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, first, town, tile, {}, true) == 7 && psa_count == town->psa_list.size());
+	require(GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, first, town, tile, {}, true) == 7 && psa_count == FIXTURE_POOL_RECORD(town).psa_list.size());
 	TownResolverObject null_town(&grf, nullptr, true); bool available = true;
 	require(null_town.GetScope()->GetVariable(0x41, 0, available) == UINT32_MAX && !available);
 	fmt::print(stderr, "HOUSE_RESOLVER parent-readonly-null true\n");
