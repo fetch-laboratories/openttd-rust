@@ -10,6 +10,7 @@ scenario as `SPEED_PASS` rows for instructions.py.
 import argparse
 import json
 import os
+import re
 import signal
 import statistics
 import sys
@@ -102,7 +103,8 @@ def prepare(out: Path, profile: Path | None, migration: ModuleType) -> int:
         profile=str(profile.resolve()) if profile else None,
         profile_sha256=instructions.digest(profile.read_bytes()) if profile else None,
     )
-    _, identities = prepare_inputs(out, binaries, builds, env)
+    details: dict[str, dict[str, instructions.IdentityDetails]] = {}
+    _, identities = prepare_inputs(out, binaries, builds, env, details)
     if profile and any(
         records[name][role]["identity"] != identity[role]
         for name, identity in identities.items()
@@ -110,6 +112,7 @@ def prepare(out: Path, profile: Path | None, migration: ModuleType) -> int:
     ):
         sys.exit(f"frozen runtimes differ from {profile}")
     manifest["runtime_identities"] = identities
+    manifest["identity_details"] = details
     manifest["identities"] = {
         name: identity["candidate"]["compatible"]
         for name, identity in identities.items()
@@ -128,6 +131,21 @@ def prepare(out: Path, profile: Path | None, migration: ModuleType) -> int:
                 "Callgrind tool/core and scenario inputs before profiling. "
                 "A real input change requires a quiet speed pass."
             )
+            print("  Anchor component details unavailable; mismatch cause is unknown.")
+            for role, fields in details.get(name, {}).items():
+                tool, version, dispatcher, hashes = fields["tool"]
+                print(
+                    f"  {role}: tool={tool}, reported version={version}, sha256={dispatcher}"
+                )
+                for path, sha in zip(fields["tool_files"], hashes, strict=True):
+                    print(f"    selected {path}: sha256={sha}")
+                for line in fields["configuration"].splitlines():
+                    if re.match(
+                        r"(?:CMAKE_.*(?:COMPILER|FLAGS)|CMAKE_BUILD_TYPE|OPTION_|"
+                        r"RUST_|CARGO_|compiler=|cargo=|target=)",
+                        line,
+                    ):
+                        print(f"    {line}")
     proved = "matching the profile" if profile else "without a profile"
     print(f"Prepared {len(identities)} scenarios {proved}, no games: {out}")
     return 0
@@ -138,6 +156,7 @@ def prepare_inputs(
     binaries: dict[str, Path],
     builds: dict[str, Path],
     env: dict[str, str],
+    details: dict[str, dict[str, instructions.IdentityDetails]] | None = None,
 ) -> tuple[list[core.Scenario], dict[str, dict[str, Any]]]:
     """Resolve the exact profiled inputs without running any preparation game."""
     scenarios: list[core.Scenario] = []
@@ -154,6 +173,8 @@ def prepare_inputs(
         for scenario in speed_scenarios():
             name = scenario["name"]
             identity: dict[str, Any] = {}
+            if details is not None:
+                details[name] = {}
             scenario = core.prepare_scenario(
                 scenario, binaries, builds, out, 0, env, cast(core.Result, {})
             )
@@ -169,6 +190,9 @@ def prepare_inputs(
                 )
                 folder = out / name / "plain" / role
                 core.prepare_run_dir(setup, builds[role], folder)
+                role_details = cast(instructions.IdentityDetails, {})
+                if details is not None:
+                    details[name][role] = role_details
                 identity[role] = instructions.prepare(
                     setup,
                     [],
@@ -177,6 +201,7 @@ def prepare_inputs(
                     folder,
                     dict(env),
                     role == "reference",
+                    **({"details": role_details} if details is not None else {}),
                 )[1]["identity"]
             # instructions.finish combines the candidate identity the same way.
             identity["candidate"]["compatible"] = instructions.digest(

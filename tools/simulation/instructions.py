@@ -91,6 +91,16 @@ class SpeedBudget(TypedDict):
     near_ceiling: bool
 
 
+class IdentityDetails(TypedDict):
+    configuration: str
+    machine: str
+    tool: tuple[str, str, str, list[str]]
+    tool_files: list[str]
+    libraries: str
+    inputs: dict[str, Any]
+    scenario: dict[str, Any]
+
+
 def speed_budget(
     name: str,
     ratio: float | None,
@@ -258,6 +268,7 @@ def identity(
     env: Mapping[str, str],
     valgrind: Path,
     reference: bool = True,
+    details: IdentityDetails | None = None,
 ) -> dict[str, Any]:
     """Compatibility excludes candidate code; full measurement identity retains it."""
     from .core import RUNTIME_DIRECTORIES
@@ -275,9 +286,9 @@ def identity(
     resolved: dict[str, Any] = dict(scenario)
     if "save" in resolved:
         resolved["save"] = digest(Path(resolved["save"]).read_bytes())
-    libraries = subprocess.check_output(["ldd", str(binary)], env=env, text=True)
+    linked = subprocess.check_output(["ldd", str(binary)], env=env, text=True)
     inputs["libraries"] = [
-        digest(Path(p).read_bytes()) for p in re.findall(r"(/\S+) \(", libraries)
+        digest(Path(p).read_bytes()) for p in re.findall(r"(/\S+) \(", linked)
     ]
     metadata = json.loads((build / "instruction-build.json").read_text())
     executable = digest(binary.read_bytes())
@@ -302,6 +313,18 @@ def identity(
         digest(valgrind.read_bytes()),
         [digest(p.read_bytes()) for group in tools for p in group],
     )
+    if details is not None:
+        # Diagnostics stay outside the opaque identity/cache contract, including
+        # reference identities embedded in historical candidate anchor hashes.
+        details.update(
+            configuration=settings,
+            machine=platform.machine(),
+            tool=tool,
+            tool_files=[str(p) for group in tools for p in group],
+            libraries=linked,
+            inputs=inputs,
+            scenario=resolved,
+        )
     policy = "64x64/serial/witness-off/v1"
     # Entry names differ because Rust owns the candidate bodies. Normalize that
     # spelling in compatibility identity so existing quiet-pass anchors and the
@@ -322,6 +345,7 @@ def prepare(
     folder: Path,
     env: dict[str, str],
     reference: bool,
+    details: IdentityDetails | None = None,
 ) -> tuple[list[str], dict[str, Any]]:
     import migration
 
@@ -341,7 +365,9 @@ def prepare(
             )
         )
     env.pop("OPENTTD_WITNESS", None)
-    measurement = identity(scenario, binary, build, folder, env, valgrind, reference)
+    measurement = identity(
+        scenario, binary, build, folder, env, valgrind, reference, details
+    )
     key = digest(measurement)
     cache = migration.COMMON_LOCAL / "instruction-cache" / f"{key}.json"
     cached = json.loads(cache.read_text()) if reference and cache.exists() else None

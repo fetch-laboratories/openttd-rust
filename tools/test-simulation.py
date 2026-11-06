@@ -1291,12 +1291,16 @@ class InstructionSpeedTests(unittest.TestCase):
             env = {"VALGRIND_LIB": str(tools)}
             scenario = cast(simulate.Scenario, dict(kind="generate", ticks=1))
 
-            def measured(text: str, reference: bool = False) -> dict[str, Any]:
+            def measured(
+                text: str,
+                reference: bool = False,
+                details: ir.IdentityDetails | None = None,
+            ) -> dict[str, Any]:
                 metadata.write_text(
                     json.dumps(dict(settings=text, executable=ir.digest(b"game")))
                 )
                 return ir.identity(
-                    scenario, binary, build, run, env, valgrind, reference
+                    scenario, binary, build, run, env, valgrind, reference, details
                 )
 
             def output(command: list[str], **kwargs: object) -> str:
@@ -1304,6 +1308,21 @@ class InstructionSpeedTests(unittest.TestCase):
 
             with patch.object(ir.subprocess, "check_output", side_effect=output):
                 anchored = measured(settings)
+                details = cast(ir.IdentityDetails, {})
+                self.assertEqual(measured(settings, details=details), anchored)
+                self.assertEqual(details["tool"][:2], (str(valgrind), "tool-v1"))
+                self.assertEqual(
+                    details["tool_files"],
+                    [
+                        str(tools / name)
+                        for name in ("callgrind-test", "vgpreload_core-test.so")
+                    ],
+                )
+                self.assertEqual(details["configuration"], settings)
+                changed = cast(ir.IdentityDetails, {})
+                measured(settings.replace("-O2", "-O3"), details=changed)
+                self.assertIn("CMAKE_CXX_FLAGS:STRING=-O3", changed["configuration"])
+                self.assertNotEqual(changed["configuration"], details["configuration"])
                 self.assertEqual(
                     measured(settings, True)["compatible"], anchored["compatible"]
                 )
@@ -1405,6 +1424,19 @@ class SpeedPassTests(unittest.TestCase):
 
         name = "play-test"
         identities = {name: {"candidate": {"compatible": "current"}}}
+        fields = cast(
+            ir.IdentityDetails,
+            dict(
+                configuration="CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++\nCMAKE_CXX_FLAGS:STRING=-O3\n",
+                tool=(
+                    "/selected/valgrind",
+                    "valgrind-3.22",
+                    "dispatcher-hash",
+                    ["core-hash"],
+                ),
+                tool_files=["/selected/vgpreload_core-test.so"],
+            ),
+        )
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)
 
@@ -1414,6 +1446,16 @@ class SpeedPassTests(unittest.TestCase):
                 target.mkdir()
                 (target / "instruction-build.json").write_text("{}")
 
+            def prepare_inputs(
+                out: Path,
+                binaries: dict[str, Path],
+                builds: dict[str, Path],
+                env: dict[str, str],
+                details: dict[str, dict[str, ir.IdentityDetails]],
+            ) -> tuple[list[simulate.Scenario], dict[str, dict[str, Any]]]:
+                details[name] = {"candidate": fields}
+                return [], identities
+
             with (
                 patch.object(migration, "git", side_effect=["head", ""]),
                 patch.object(
@@ -1421,7 +1463,7 @@ class SpeedPassTests(unittest.TestCase):
                 ),
                 patch.object(speed.core, "copy_runtime", side_effect=copy_runtime),
                 patch.object(speed.core, "adapter_modules", return_value=[]),
-                patch.object(speed, "prepare_inputs", return_value=([], identities)),
+                patch.object(speed, "prepare_inputs", side_effect=prepare_inputs),
                 patch.object(
                     ir,
                     "SPEED_ANCHORS",
@@ -1434,6 +1476,21 @@ class SpeedPassTests(unittest.TestCase):
             game.assert_not_called()
             self.assertIn("current current, anchor anchor", printed.getvalue())
             self.assertIn("before profiling", printed.getvalue())
+            for diagnostic in (
+                "mismatch cause is unknown",
+                "/selected/valgrind",
+                "reported version=valgrind-3.22",
+                "/selected/vgpreload_core-test.so: sha256=core-hash",
+                "CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/g++",
+                "CMAKE_CXX_FLAGS:STRING=-O3",
+            ):
+                self.assertIn(diagnostic, printed.getvalue())
+            self.assertEqual(
+                json.loads((out / "manifest.json").read_text())["identity_details"][
+                    name
+                ]["candidate"]["configuration"],
+                fields["configuration"],
+            )
             self.assertEqual(
                 json.loads((out / "manifest.json").read_text())["runtime_identities"],
                 identities,
@@ -1657,8 +1714,11 @@ class SpeedPassTests(unittest.TestCase):
             folder: Path,
             env: dict[str, str],
             reference: bool,
+            details: ir.IdentityDetails | None = None,
         ) -> tuple[list[str], dict[str, Any]]:
             calls.append((binary, reference))
+            if details is not None:
+                details["configuration"] = binary
             identity: dict[str, Any] = {"compatible": binary, "executable": binary}
             if not reference:
                 identity["entries"] = ["candidate"]
@@ -1666,6 +1726,7 @@ class SpeedPassTests(unittest.TestCase):
 
         scenario = {"name": "play-a", "kind": "play"}
         roles = cast(dict[str, Path], {role: role for role in speed.ROLES})
+        diagnostics: dict[str, dict[str, ir.IdentityDetails]] = {}
         with (
             tempfile.TemporaryDirectory() as directory,
             patch.object(speed, "speed_scenarios", return_value=[scenario]),
@@ -1675,7 +1736,19 @@ class SpeedPassTests(unittest.TestCase):
             patch.object(speed.instructions, "prepare", side_effect=prepare),
         ):
             _, identities = speed.prepare_inputs(Path(directory), roles, roles, {})
-        self.assertEqual(sorted(calls), [("candidate", False), ("reference", True)])
+            _, diagnosed = speed.prepare_inputs(
+                Path(directory), roles, roles, {}, diagnostics
+            )
+        self.assertEqual(diagnosed, identities)
+        self.assertEqual(
+            diagnostics["play-a"]["candidate"]["configuration"], "candidate"
+        )
+        self.assertEqual(
+            diagnostics["play-a"]["reference"]["configuration"], "reference"
+        )
+        self.assertEqual(
+            sorted(calls), [("candidate", False)] * 2 + [("reference", True)] * 2
+        )
         self.assertNotIn("entries", identities["play-a"]["reference"])
         self.assertEqual(identities["play-a"]["candidate"]["entries"], ["candidate"])
 
