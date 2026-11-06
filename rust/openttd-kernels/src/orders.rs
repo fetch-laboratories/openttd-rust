@@ -57,17 +57,21 @@ pub struct Order {
     pub travel: u16,
     pub speed: u16,
 }
-#[repr(C)]
-pub struct Consist {
-    pub time: i32,
-    pub lateness: i32,
-    pub start: u64,
-    pub last_departure: u64,
-    pub next_departure: u64,
-    pub round_trip: i32,
-    pub real: u8,
-    pub implicit: u8,
-    pub flags: u16,
+crate::abi::shared_records! {
+    fn abi_record;
+    /// Canonical timetable, order-index and service-interval state of a consist.
+    "OpenTTDConsistState" ["consist"] => pub struct Consist {
+        pub time: i32,
+        pub lateness: i32,
+        pub start: u64,
+        pub last_departure: u64,
+        pub next_departure: u64,
+        pub round_trip: i32,
+        pub real: u8,
+        pub implicit: u8,
+        pub flags: u16,
+        pub service_interval: u16,
+    }
 }
 #[repr(C)]
 pub struct VehicleOrders {
@@ -286,6 +290,7 @@ pub extern "C" fn openttd_rust_consist_new() -> *mut Consist {
         real: 0,
         implicit: 0,
         flags: 0,
+        service_interval: 0,
     }))
 }
 #[unsafe(no_mangle)]
@@ -4629,17 +4634,6 @@ crate::abi::layouts! {
         wait => wait_time,
         travel => travel_time,
         speed => max_speed,
-    };
-    "OpenTTDConsistState" ["probe"] => Consist {
-        time => current_order_time,
-        lateness => lateness_counter,
-        start => timetable_start,
-        last_departure,
-        next_departure,
-        round_trip => round_trip_time,
-        real => real_index,
-        implicit => implicit_index,
-        flags => vehicle_flags,
     };
     "OpenTTDVehicleOrderState" ["probe"] => VehicleOrders {
         current,

@@ -138,20 +138,25 @@ TEST_CASE("Base consist copies preserve values with independent aliases")
 {
 	BaseConsist original;
 	original.name = "copy";
+	original.SetServiceInterval(139);
 	original.round_trip_time = 4200;
 	original.depot_unbunching_last_departure = 1700;
 	original.cur_real_order_index = 23;
 	original.vehicle_flags.Set(VehicleFlag::LoadingFinished);
 	BaseConsist copied(original);
 	CHECK(copied.round_trip_time == 4200);
+	CHECK(copied.GetServiceInterval() == 139);
 	CHECK(copied.depot_unbunching_last_departure == 1700);
 	CHECK(copied.cur_real_order_index == 23);
 	CHECK(copied.vehicle_flags == original.vehicle_flags);
 	CHECK(&copied.round_trip_time != &original.round_trip_time);
 	copied.round_trip_time = 1;
+	copied.SetServiceInterval(7);
+	CHECK(original.GetServiceInterval() == 139);
 	CHECK(original.round_trip_time == 4200);
 	copied = original;
 	CHECK(copied.round_trip_time == 4200);
+	CHECK(copied.GetServiceInterval() == 139);
 }
 TEST_CASE("Order list owners retire and reconstruct at a reused pool index")
 {

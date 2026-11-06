@@ -98,7 +98,7 @@ static void ShipBoundary()
 		.vehicle = &ship_vehicle
 	};
 	ship_probe = {};
-	ship_probe.consist.current_order_time = -1;
+	ship_probe.consist.time = -1;
 	ship_probe.record.consist = &ship_probe.consist;
 	ship_probe.record.shell = reinterpret_cast<OpenTTDVehicleShell *>(&ship_probe);
 	ship_probe.owner = state.get();
@@ -115,7 +115,7 @@ static void ShipBoundary()
 	ship_vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * {
 		/* Counter/time writes precede the first order operation after breakdown. */
 		if (ship_probe.stage == 0) {
-			CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.current_order_time == 0);
+			CHECK(ship_probe.record.tick_counter == 0 && ship_probe.record.running_ticks == 0 && ship_probe.consist.time == 0);
 			CHECK(ship_probe.record.breakdown_ctr == 0 && ship_probe.record.vehstatus == 0);
 			++ship_probe.stage;
 		}

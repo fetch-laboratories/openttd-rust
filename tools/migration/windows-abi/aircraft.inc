@@ -95,7 +95,7 @@ static void AircraftDirectBoundary()
 		}
 	};
 	CHECK(openttd_test_aircraft_event(&leaves, p.vehicle, true));
-	CHECK(p.order_owner->consist.real_index == 1 && p.order_owner->consist.implicit_index == 1);
+	CHECK(p.order_owner->consist.real == 1 && p.order_owner->consist.implicit == 1);
 	leaves.station = [](uint16_t) noexcept -> const OpenTTDStation * { CHECK(aircraft_probe.live); return reinterpret_cast<const OpenTTDStation *>(&aircraft_probe); };
 	leaves.airport_tile = [](const OpenTTDStation *) noexcept { return uint32_t{7}; };
 	AircraftTestAirportServices().fta = [](const AirportSpec *) noexcept -> const AirportFTAClass * { return reinterpret_cast<const AirportFTAClass *>(&aircraft_probe); };
@@ -154,7 +154,7 @@ static void AircraftPhaseBoundary()
 	p.vehicle = {&p.record, state.get(), 17};
 
 	p.record.tick_counter = 7;
-	p.consist.current_order_time = 40;
+	p.consist.time = 40;
 	p.shadow.next = &p.rotor; p.rotor.type = 3; p.rotor.subtype = 6; p.rotor.vehstatus = 1;
 	p.rotor.shell = reinterpret_cast<OpenTTDVehicleShell *>(&p.rotor);
 	p.record.aircraft = p.shadow.aircraft = p.rotor.aircraft = state.get();
@@ -171,7 +171,7 @@ static void AircraftPhaseBoundary()
 	v.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	v.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_kind; };
 	CHECK(openttd_rust_aircraft_tick(&leaves, p.vehicle));
-	CHECK(p.record.tick_counter == 8 && p.record.running_ticks == 1 && p.orders == 2 && p.consist.current_order_time == 41);
+	CHECK(p.record.tick_counter == 8 && p.record.running_ticks == 1 && p.orders == 2 && p.consist.time == 41);
 
 	/* A speed change dirties the native widget before direction/progress are
 	 * read. Their mutation yields exactly one move; a stale snapshot yields none. */

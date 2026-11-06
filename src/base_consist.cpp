@@ -27,7 +27,7 @@ BaseConsist &BaseConsist::operator=(const BaseConsist &src)
 	this->depot_unbunching_last_departure = src.depot_unbunching_last_departure;
 	this->depot_unbunching_next_departure = src.depot_unbunching_next_departure;
 	this->round_trip_time = src.round_trip_time;
-	this->service_interval = src.service_interval;
+	this->SetServiceInterval(src.GetServiceInterval());
 	this->cur_real_order_index = src.cur_real_order_index;
 	this->cur_implicit_order_index = src.cur_implicit_order_index;
 	this->vehicle_flags = src.vehicle_flags;
@@ -45,7 +45,7 @@ void BaseConsist::CopyConsistPropertiesFrom(const BaseConsist *src)
 	this->name = src->name;
 
 	openttd_rust_consist_copy(this->rust_orders.get(), src->rust_orders.get());
-	this->service_interval = src->service_interval;
+	this->SetServiceInterval(src->GetServiceInterval());
 }
 
 /**

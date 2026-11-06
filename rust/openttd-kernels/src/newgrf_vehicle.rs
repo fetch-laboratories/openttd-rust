@@ -129,7 +129,6 @@ pub struct Services {
     old_order: unsafe extern "C" fn(V) -> u16,
     num_orders: unsafe extern "C" fn(V) -> u8,
     real_order: unsafe extern "C" fn(V) -> u8,
-    service_interval: unsafe extern "C" fn(V) -> u16,
     vehicle_flags: unsafe extern "C" fn(V) -> u16,
     target_airport: unsafe extern "C" fn(V) -> *const crate::station::Station,
     airport_ttd_type: unsafe extern "C" fn(
@@ -1343,7 +1342,7 @@ unsafe fn variable(
                 return high(ticks);
             }
             0x92 | 0x93 => return high(service_date(handle(v).date_of_last_service_newgrf().0)),
-            0x94 | 0x95 => return high(u32::from((s.service_interval)(v))),
+            0x94 | 0x95 => return high(u32::from(handle(v).service_interval())),
             0x96 => return u32::from((h).last_station()),
             0x97 => return u32::from((h).tick()),
             0x98 | 0x99 => {
@@ -1671,7 +1670,7 @@ crate::abi::layouts! {
         cargo_classes, cargo_bitnum, valid_company, livery, company_info,
         overrides, override_at, override_engine, spritegroup, resolve_callback, resolve_random, order, cargo_owner,
         real_count, real_at,
-        engine_by_id, default_cargo, engine_flags, cargo_info, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, service_interval, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
+        engine_by_id, default_cargo, engine_flags, cargo_info, primary, train_services, road_acceleration, order_max_speed, id, old_order, num_orders, real_order, vehicle_flags, target_airport, airport_ttd_type, moving_flags, roadtype, tile_roadtype, tile_railtype, rail_catenary, road_catenary, compatible_rail, powered_rail, powered_single_rail, badge_count, badge_at, engine_has_badge, engine_badge, rail_badge, road_badge, ship_owner, aircraft_leaves, ground, cargo_services
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };
     "OpenTTDVehicleScopeState" ["vehicle_resolver"] => Scope { v, self_type, rotor_in_gui };

@@ -429,6 +429,10 @@ impl crate::vehicle::VehicleRef {
         // SAFETY: The native Order lifetime begins during Vehicle construction.
         unsafe { std::ptr::addr_of_mut!((*orders).current).cast() }
     }
+    pub(crate) fn service_interval(self) -> u16 {
+        let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
+        crate::raw_field::read_field!(consist, service_interval)
+    }
     pub(crate) fn order_time(self) -> i32 {
         let consist = crate::raw_field::read_field!(self.0.as_ptr(), consist);
         crate::raw_field::read_field!(consist, time)

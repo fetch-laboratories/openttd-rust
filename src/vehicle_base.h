@@ -789,10 +789,6 @@ public:
 	void UpdatePositionAndViewport();
 	bool MarkAllViewportsDirty() const;
 
-	inline uint16_t GetServiceInterval() const { return this->service_interval; }
-
-	inline void SetServiceInterval(uint16_t interval) { this->service_interval = interval; }
-
 	inline bool ServiceIntervalIsCustom() const { return this->vehicle_flags.Test(VehicleFlag::ServiceIntervalIsCustom); }
 
 	inline bool ServiceIntervalIsPercent() const { return this->vehicle_flags.Test(VehicleFlag::ServiceIntervalIsPercent); }

@@ -36,7 +36,7 @@ struct RoadAbiProbe {
 	bool hidden_viewport_tail = false;
 	OpenTTDConsistState consist{};
 	OpenTTDVehicleOrderState orders{};
-	int32_t &order_time = consist.current_order_time;
+	int32_t &order_time = consist.time;
 };
 static RoadAbiProbe *road_abi_probe;
 static OpenTTDVehicle road_abi_second{}, road_abi_hidden{};

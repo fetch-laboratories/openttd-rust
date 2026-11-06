@@ -9,6 +9,7 @@
 #ifndef RUST_ORDERS_FFI_H
 #define RUST_ORDERS_FFI_H
 #include "service_defaults.hpp"
+#include "abi-record-consist.h"
 
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
 struct OrderList;
@@ -20,13 +21,6 @@ struct OpenTTDOrderFields {
 	uint16_t destination;
 	uint8_t refit_cargo;
 	uint16_t wait_time, travel_time, max_speed;
-};
-struct OpenTTDConsistState {
-	int32_t current_order_time, lateness_counter;
-	uint64_t timetable_start, last_departure, next_departure;
-	int32_t round_trip_time;
-	uint8_t real_index, implicit_index;
-	uint16_t vehicle_flags;
 };
 struct OpenTTDVehicleOrderState {
 	OpenTTDOrderFields current;

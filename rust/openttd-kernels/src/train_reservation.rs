@@ -1401,6 +1401,7 @@ pub(crate) mod tests {
                     real: 254,
                     implicit: 0,
                     flags: 0,
+                    service_interval: 0,
                 },
                 orders: crate::orders::VehicleOrders {
                     current: std::mem::MaybeUninit::new(crate::orders::Order {

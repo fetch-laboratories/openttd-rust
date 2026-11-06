@@ -35,19 +35,22 @@ struct BaseConsist {
 	std::string name{}; ///< Name of vehicle
 
 	std::unique_ptr<OpenTTDConsistState, decltype(&openttd_rust_consist_delete)> rust_orders{openttd_rust_consist_new(), openttd_rust_consist_delete};
-	TimerGameTick::Ticks &current_order_time = this->rust_orders->current_order_time;
-	TimerGameTick::Ticks &lateness_counter = this->rust_orders->lateness_counter;
-	TimerGameTick::TickCounter &timetable_start = this->rust_orders->timetable_start;
+	TimerGameTick::Ticks &current_order_time = this->rust_orders->time;
+	TimerGameTick::Ticks &lateness_counter = this->rust_orders->lateness;
+	TimerGameTick::TickCounter &timetable_start = this->rust_orders->start;
 	TimerGameTick::TickCounter &depot_unbunching_last_departure = this->rust_orders->last_departure;
 	TimerGameTick::TickCounter &depot_unbunching_next_departure = this->rust_orders->next_departure;
-	TimerGameTick::Ticks &round_trip_time = this->rust_orders->round_trip_time;
+	TimerGameTick::Ticks &round_trip_time = this->rust_orders->round_trip;
 
-	uint16_t service_interval = 0; ///< The interval for (automatic) servicing; either in days or %.
+	OpenTTDConsistState &ConsistRecord() { return *this->rust_orders; }
+	const OpenTTDConsistState &ConsistRecord() const { return *this->rust_orders; }
+	uint16_t GetServiceInterval() const { return this->ConsistRecord().service_interval; }
+	void SetServiceInterval(uint16_t interval) { this->ConsistRecord().service_interval = interval; }
 
-	VehicleOrderID &cur_real_order_index = this->rust_orders->real_index;
-	VehicleOrderID &cur_implicit_order_index = this->rust_orders->implicit_index;
+	VehicleOrderID &cur_real_order_index = this->rust_orders->real;
+	VehicleOrderID &cur_implicit_order_index = this->rust_orders->implicit;
 	/* EnumBitSet is a C++ class: begin its typed lifetime in Rust-owned storage. */
-	VehicleFlags &vehicle_flags = *new (std::addressof(this->rust_orders->vehicle_flags)) VehicleFlags{};
+	VehicleFlags &vehicle_flags = *new (std::addressof(this->rust_orders->flags)) VehicleFlags{};
 
 	BaseConsist() = default;
 	BaseConsist(const BaseConsist &src) : BaseConsist() { *this = src; }

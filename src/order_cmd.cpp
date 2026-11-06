@@ -431,7 +431,7 @@ extern "C" void openttd_orders_dirty_vehicle_windows(void *ctx) noexcept
 
 extern "C" void openttd_orders_capture_backup_metadata(void *ctx, void *source_context) noexcept
 {
-	{ OrderBackup *backup = static_cast<OrderBackup *>(ctx); const Vehicle *source = static_cast<const Vehicle *>(source_context); backup->name = source->name; backup->service_interval = source->service_interval;  }
+	{ OrderBackup *backup = static_cast<OrderBackup *>(ctx); const Vehicle *source = static_cast<const Vehicle *>(source_context); backup->name = source->name; backup->SetServiceInterval(source->GetServiceInterval());  }
 }
 
 extern "C" void openttd_orders_clear_backup_name(void *ctx) noexcept
@@ -441,7 +441,7 @@ extern "C" void openttd_orders_clear_backup_name(void *ctx) noexcept
 
 extern "C" void openttd_orders_restore_backup_metadata(void *ctx, void *backup_context) noexcept
 {
-	{ Vehicle *vehicle = static_cast<Vehicle *>(ctx); const OrderBackup *backup = static_cast<const OrderBackup *>(backup_context); vehicle->name = backup->name; vehicle->service_interval = backup->service_interval;  }
+	{ Vehicle *vehicle = static_cast<Vehicle *>(ctx); const OrderBackup *backup = static_cast<const OrderBackup *>(backup_context); vehicle->name = backup->name; vehicle->SetServiceInterval(backup->GetServiceInterval());  }
 }
 
 extern "C" void openttd_orders_order_news(void *ctx, uint32_t message) noexcept

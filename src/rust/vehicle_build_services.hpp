@@ -166,7 +166,7 @@ static void VehicleCloneCopyService(void *source, void *destination) noexcept
 {
 	const Vehicle *v = static_cast<Vehicle *>(source);
 	Vehicle *w = static_cast<Vehicle *>(destination);
-	w->service_interval = v->service_interval;
+	w->SetServiceInterval(v->GetServiceInterval());
 	w->SetServiceIntervalIsCustom(v->ServiceIntervalIsCustom());
 	RustVehicleSetServiceIntervalIsPercent(w, v->ServiceIntervalIsPercent());
 }
