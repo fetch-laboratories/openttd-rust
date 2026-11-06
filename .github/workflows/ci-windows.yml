@@ -199,8 +199,10 @@ jobs:
         fi
         if [ "${{ steps.build.outcome }}" = success ]; then
           # vcpkg's package ABI is the SHA-256 of the installed vcpkg_abi_info.txt.
-          sha256sum build/vcpkg_installed/*/share/*/vcpkg_abi_info.txt | cut -d' ' -f1 | sort -u > "$temp/vcpkg-abis.txt"
           missing=0
+          if ! sha256sum build/vcpkg_installed/*/share/*/vcpkg_abi_info.txt | cut -d' ' -f1 | sort -u > "$temp/vcpkg-abis.txt"; then
+            missing=1
+          fi
           while read -r abi; do
             [ -f "$cache/${abi:0:2}/$abi.zip" ] || { echo "No archive for ABI $abi"; missing=1; }
           done < "$temp/vcpkg-abis.txt"
