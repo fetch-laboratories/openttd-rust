@@ -96,7 +96,6 @@ struct OpenTTDStationCommandServices {
 	OpenTTDByteSpan (*rail_layout)(const StationSpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_layout);
 	bool (*rail_boolean)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_boolean);
 	void (*rail_callback_error)(const StationSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_callback_error);
-	void (*rail_triggers)(BaseStation *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_triggers);
 	bool (*reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved);
 	Train *(*last_train)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(last_train);
 	const OpenTTDTrainServices *train;
@@ -124,7 +123,6 @@ struct OpenTTDStationCommandServices {
 	bool (*stops_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(stops_available);
 	const OpenTTDRoadStopResolverServices *roadstop_resolver;
 	bool (*road_boolean)(const RoadStopSpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_boolean);
-	void (*road_triggers)(BaseStation *, const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
 	OpenTTDRoadStopState *(*new_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_stop);
 	void (*make_drive_stop)(uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_drive_stop);
 	void (*make_bay_stop)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_bay_stop);

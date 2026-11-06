@@ -93,8 +93,6 @@ inline void RustSetRailStationReservation(uint32_t tile, bool reserved) noexcept
 inline bool RustCompatibleStationTiles(uint32_t a, uint32_t b) noexcept { return IsCompatibleTrainStationTile(TileIndex{a}, TileIndex{b}); }
 inline bool RustStationStationAvailable() noexcept { return Station::CanAllocateItem(); }
 inline void RustStationHaveRating(BaseStation *st, uint8_t owner) noexcept { OpenTTDBaseStationTown(st)->have_ratings.Set(CompanyID(owner)); }
-inline void RustStationRailTriggers(BaseStation *st, const StationSpec *spec) noexcept { st->SetCachedAnimTriggers(st->GetCachedAnimTriggers().Set(spec->animation.triggers)); }
-inline void RustStationRoadTriggers(BaseStation *st, const RoadStopSpec *spec) noexcept { st->SetCachedRoadStopAnimTriggers(st->GetCachedRoadStopAnimTriggers().Set(spec->animation.triggers)); }
 inline void RustStationStationViewInvalidate(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_VIEW, st->index, data); }
 inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete Station::From(st)->Record().airport.psa; }
 inline BaseStation *RustIndustryNeutralBaseStation(Industry *industry) noexcept { return RustIndustryNeutralStation(industry); }

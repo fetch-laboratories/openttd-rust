@@ -195,7 +195,6 @@ pub struct CommandServicesTable {
     pub rail_layout: extern "C" fn(*const RailSpec, u16) -> crate::services::ByteSpan,
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
-    pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
@@ -224,7 +223,6 @@ pub struct CommandServicesTable {
     pub stops_available: extern "C" fn(usize) -> bool,
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub road_boolean: extern "C" fn(*const RoadSpec, u16) -> bool,
-    pub road_triggers: extern "C" fn(*mut BaseStation, *const RoadSpec),
     pub new_stop: extern "C" fn(u32) -> *mut StopState,
     pub make_drive_stop: extern "C" fn(u32, u8, u8, u8, u16, u8, u8, u8, u8),
     pub make_bay_stop: extern "C" fn(u32, u8, u16, u8, u8, u8, u8),
@@ -621,6 +619,13 @@ pub unsafe extern "C" fn openttd_rust_station_build_above(
 }
 
 impl Ctx<'_> {
+    fn cache_roadstop_triggers(st: *mut BaseStation, spec: *const RoadSpec) {
+        let triggers = (crate::animated_tile::services().road_spec_triggers)(spec);
+        // SAFETY: The live station record is accessed only after the pure spec read.
+        let record = unsafe { crate::station_record::record_of(st) };
+        // SAFETY: No record reference survives this source cache publication.
+        unsafe { (*record).cached_roadstop_anim_triggers |= triggers };
+    }
     fn world(&self) -> &World {
         unsafe { &*self.s.station }
     }
@@ -1531,7 +1536,11 @@ impl Ctx<'_> {
         );
         crate::station_association::assign(self.s.rail_association, spec, st, specindex.value);
         if !spec.is_null() {
-            (self.s.rail_triggers)(st, spec);
+            let triggers = (crate::animated_tile::services().rail_spec_triggers)(spec);
+            // SAFETY: The live station record is accessed only after the pure spec read.
+            let record = unsafe { crate::station_record::record_of(st) };
+            // SAFETY: No record reference survives this source cache publication.
+            unsafe { (*record).cached_anim_triggers |= triggers };
         }
         let owner = crate::station_record::owner_company(st.cast());
         let id = (self.links().graphs.station_id)(st);
@@ -2445,7 +2454,7 @@ impl Ctx<'_> {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), false);
             }
             if !spec.is_null() {
-                (self.s.road_triggers)(st, spec);
+                Self::cache_roadstop_triggers(st, spec);
             }
             let stop = (self.s.new_stop)(tile);
             let head = crate::road_stop::head(st, truck);
@@ -4274,7 +4283,6 @@ crate::abi::layouts! {
         rail_layout,
         rail_boolean,
         rail_callback_error,
-        rail_triggers,
         reserved,
         last_train,
         train,
@@ -4301,7 +4309,6 @@ crate::abi::layouts! {
         stops_available,
         roadstop_resolver,
         road_boolean,
-        road_triggers,
         new_stop,
         make_drive_stop,
         make_bay_stop,

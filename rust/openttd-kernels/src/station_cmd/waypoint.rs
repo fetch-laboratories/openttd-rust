@@ -613,7 +613,7 @@ impl Ctx<'_> {
             );
         }
         if !spec.is_null() {
-            (self.s.road_triggers)(wp, spec);
+            Self::cache_roadstop_triggers(wp, spec);
         }
         Self::reset_delete_counter(wp);
         crate::station_record::set_facility_bits(wp, FACILITY_BUS | FACILITY_TRUCK);
