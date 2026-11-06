@@ -33,7 +33,7 @@ Integrate finished work first, then start ready work.
 - Follow [selection](../../planning.md#selection), [integration](../../workflow.md#integration) and [team](../../team.md#spawning).
 - Use [team's host orchestration rules](../../team.md#spawning) for native or T3 agents and isolated checkouts.
 - Run long jobs in the background and end the turn ([AGENTS.md](../../../AGENTS.md#every-agent)).
-- At each independent wake, handle completed child results and recover missed resumes of children already known to be idle on named jobs ([team](../../team.md#spawning)).
+- At each independent wake, handle completed child results and recover missed resumes of children already known to be idle on named jobs ([team](../../team.md#spawning)). If other agents are held for a quiet measurement, resolve that job and release the hold before waiting for its report. A peripheral host-action failure does not end the assignment.
 
 Done when finished work is handled and free slots have ready work.
 
