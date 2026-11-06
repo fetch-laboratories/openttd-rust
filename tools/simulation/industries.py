@@ -487,9 +487,10 @@ def prepare(
             )
             core.findings(result)["industry_closing"] = closing
             core.findings(result)["industry_survivors"] = survivors
-            core.findings(result)["industry_closure_start_date"] = core.rows(
-                before, "DATE"
-            )[0]["economy_date"]
+            clock = core.rows(before, "DATE")[0]
+            core.findings(result)["industry_closure_start_month"] = (
+                clock["economy_date"] - clock["days_since_last_month"]
+            )
         console.append("setting difficulty.industry_density 0")
     if mode == "builder":
         changes["IBLD"] = {0: {"wanted_inds": 200 << 16}}
@@ -765,16 +766,17 @@ def check(
         if kind == "closure":
             closing = cast("list[int]", core.findings(result)["industry_closing"])
             survivors = cast("list[int]", core.findings(result)["industry_survivors"])
-            # The load snapshot precedes monthly work. Select by clock advance,
-            # independently of whether either deletion or history update occurred.
-            start = core.findings(result)["industry_closure_start_date"]
+            # Select the first later economy month independently of whether
+            # either deletion or history update occurred.
+            start = core.findings(result)["industry_closure_start_month"]
             for index, chunks in enumerate(saved):
-                date = core.rows(chunks, "DATE")[0]["economy_date"]
-                if date > start:
+                clock = core.rows(chunks, "DATE")[0]
+                date = clock["economy_date"]
+                if date - clock["days_since_last_month"] > start:
                     sample = rows[index]
                     break
             else:
-                raise RuntimeError("closure run has no post-load checkpoint")
+                raise RuntimeError("closure run has no later-month checkpoint")
             facts["closure_checkpoint_date"] = date
             histories = [
                 sample.get(index, {}).get("valid_history", 0) for index in survivors
