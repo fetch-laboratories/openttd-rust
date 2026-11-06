@@ -50,7 +50,9 @@ pub(crate) fn roadstop_value(shell: *const BaseStation, tile: u32, animation: bo
 /// Source `SetRoadStopTileData`: a missing tile is inserted even for zero;
 /// unchanged values return false and retain the element order.
 pub(crate) fn set(record: *mut StationRecord, tile: u32, value: u8, animation: bool) -> bool {
-    edit(record, |data| {
+    #[cfg(feature = "native-test-support")]
+    crate::native_test_support::station_tile_data_observe(true, animation, false);
+    let changed = edit(record, |data| {
         for entry in &mut *data {
             if entry.tile.0 == tile {
                 let field = if animation {
@@ -71,7 +73,10 @@ pub(crate) fn set(record: *mut StationRecord, tile: u32, value: u8, animation: b
             animation_frame: if animation { value } else { 0 },
         });
         value != 0
-    })
+    });
+    #[cfg(feature = "native-test-support")]
+    crate::native_test_support::station_tile_data_observe(false, animation, changed);
+    changed
 }
 
 pub(crate) fn roadstop_set(

@@ -42,18 +42,29 @@ static void AnimationClearRoadData(BaseStation *st)
 	st->custom_roadstop_tile_data.clear();
 #endif
 }
+static void AnimationAppendRoadData(BaseStation *st, TileIndex tile, uint8_t random, uint8_t frame)
+{
+#ifdef WITH_RUST
+	*openttd_rust_station_roadstop_data_append(&st->Record()) = {tile.base(), random, frame};
+#else
+	st->custom_roadstop_tile_data.push_back({tile, random, frame});
+#endif
+}
 struct AnimationRoadDataScope {
 	BaseStation *station;
 	std::vector<RoadStopTileData> saved;
 	explicit AnimationRoadDataScope(BaseStation *station) : station(station), saved(AnimationRoadTiles(station).begin(), AnimationRoadTiles(station).end()) {}
 	~AnimationRoadDataScope()
 	{
+#ifdef WITH_RUST
 		AnimationClearRoadData(this->station);
+		openttd_rust_station_roadstop_data_reserve(&this->station->Record(), this->saved.size());
 		for (const auto &entry : this->saved) {
-			auto tile = AnimationRoadTile(entry);
-			this->station->SetRoadStopRandomBits(tile, entry.random_bits);
-			this->station->SetRoadStopAnimationFrame(tile, entry.animation_frame);
+			AnimationAppendRoadData(this->station, AnimationRoadTile(entry), entry.random_bits, entry.animation_frame);
 		}
+#else
+		this->station->custom_roadstop_tile_data = this->saved;
+#endif
 	}
 };
 static std::vector<TileIndex> AnimationQueue()
@@ -101,6 +112,18 @@ extern "C" void __wrap__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12Tile
 	__real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(f, s, t);
 	AnimationTrace("sound-exit");
 }
+#ifdef WITH_RUST
+extern "C" void openttd_test_station_tile_data_observer(void (*)(bool, bool, bool));
+struct AnimationTileDataObserver {
+	static void Observe(bool enter, bool animation, bool changed)
+	{
+		AnimationTrace(enter ? (animation ? "setter-enter" : "random-enter") : (changed ? "setter-changed" : "setter-unchanged"));
+	}
+	AnimationTileDataObserver() { openttd_test_station_tile_data_observer(Observe); }
+	~AnimationTileDataObserver() { openttd_test_station_tile_data_observer(nullptr); }
+};
+static AnimationTileDataObserver _animation_tile_data_observer;
+#else
 extern "C" bool __real__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(BaseStation *, TileIndex, uint8_t, bool);
 extern "C" bool __wrap__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(BaseStation *s, TileIndex t, uint8_t f, bool a)
 {
@@ -109,6 +132,7 @@ extern "C" bool __wrap__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7Typed
 	AnimationTrace(changed ? "setter-changed" : "setter-unchanged");
 	return changed;
 }
+#endif
 static void (*landscape_dirty_observer)(TileIndex) = nullptr;
 extern "C" void __real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex, int, int);
 extern "C" void __wrap__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex t, int b, int h)
@@ -290,7 +314,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		AnimationRoadDataScope data(st);
 		if constexpr (std::is_same_v<Spec, RoadStopSpec>) {
 			AnimationClearRoadData(st);
-			for (auto it = members.rbegin(); it != members.rend(); ++it) st->SetRoadStopRandomBits(*it, 19);
+			for (auto it = members.rbegin(); it != members.rend(); ++it) AnimationAppendRoadData(st, *it, 19, 0);
 		}
 		for (bool trigger : {false, true}) for (bool ambient : {false, true}) for (uint16_t result : {0xFFFF, 0x1FD, 0x1FE, 0x1FF, 0x103, 0x107, 0x8003}) {
 			AutoRestoreBackup<bool> sound(_settings_client.sound.ambient, ambient);

@@ -53,7 +53,13 @@ def adapter(build: Path, folder: Path, env: dict[str, str]) -> Path:
             "_Z31IncreaseGeneratingWorldProgress16GenWorldProgress",
             *(() if rust else ("_Z29GenerateWorldSetAbortCallbackPFvvE",)),
             "_Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE",
-            "_ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb",
+            *(
+                ()
+                if rust
+                else (
+                    "_ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb",
+                )
+            ),
             "_Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii",
             "_Z26ErrorUnknownCallbackResultjtt",
             "_Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE",

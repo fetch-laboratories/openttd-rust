@@ -38,6 +38,29 @@ pub unsafe extern "C" fn openttd_test_station_record_release_probe(
     unsafe { *STATION_RELEASE_PROBE.get() = (context, probe) };
 }
 
+type StationTileDataObserver = extern "C" fn(bool, bool, bool);
+static STATION_TILE_DATA_OBSERVER: crate::game_state::GameState<Option<StationTileDataObserver>> =
+    crate::game_state::GameState::new(None);
+
+/// Native animation traces observe the production setter before and after its
+/// mutation, matching the reference wrapper. Copy the observer before reentry.
+pub(crate) fn station_tile_data_observe(enter: bool, animation: bool, changed: bool) {
+    let observer = unsafe { *STATION_TILE_DATA_OBSERVER.get() };
+    if let Some(observer) = observer {
+        observer(enter, animation, changed);
+    }
+}
+
+/// # Safety
+/// Install/reset under the game-state mutex or at startup. The observer remains
+/// live until reset and only reads state; it cannot mutate or destroy an owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_station_tile_data_observer(
+    observer: Option<StationTileDataObserver>,
+) {
+    unsafe { *STATION_TILE_DATA_OBSERVER.get() = observer };
+}
+
 /// Compare production industry removal arithmetic with native `Money` operators.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_test_industry_removal_cost(multiplier: u32) -> i64 {
