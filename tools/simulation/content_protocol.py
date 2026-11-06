@@ -455,7 +455,8 @@ def prepare(
             httpd.server_close()
             server.close()
         traces[role] = observe(run, server, mirror)
-        (folder / role / "protocol-trace.json").write_text(
+        # Successful scenario directories are removed by the shared runner.
+        (out / f"{NAME}-{role}-trace.json").write_text(
             json.dumps(traces[role], indent=2) + "\n"
         )
         missing = [marker for marker in REQUIRED if marker not in traces[role]]
