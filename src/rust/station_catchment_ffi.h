@@ -9,6 +9,7 @@
 #ifndef RUST_STATION_CATCHMENT_FFI_H
 #define RUST_STATION_CATCHMENT_FFI_H
 #include "service_defaults.hpp"
+#include "linkgraph_ffi.h"
 #include <cstdint>
 #include <cstddef>
 struct BaseStation;
@@ -23,14 +24,11 @@ struct OpenTTDVehicleVisits;
 #include "station_record_ffi.h"
 struct OpenTTDIndustry;
 struct OpenTTDTownState;
-struct OpenTTDStationList;
 
-/** One StationList member, ordered by station ID. */
-struct OpenTTDStationListEntry { BaseStation *station; uint16_t id; };
+
 /** One IndustryList member, ordered by distance and industry ID. */
 struct OpenTTDIndustryListEntry { uint32_t distance; Industry *industry; uint16_t id; };
 /** Borrowed ordered members, valid until the list next changes. */
-struct OpenTTDStationListView { const OpenTTDStationListEntry *data; size_t size; };
 struct OpenTTDIndustryListView { const OpenTTDIndustryListEntry *data; size_t size; };
 
 /* Serialized by the game-state mutex. Every leaf is a direct synchronous noexcept
@@ -56,7 +54,6 @@ struct OpenTTDStationCatchmentServices {
 const OpenTTDStationCatchmentServices &GetRustStationCatchmentServices() noexcept;
 
 extern "C" {
-OpenTTDStationListView openttd_rust_station_list_view(const OpenTTDStationList *);
 OpenTTDIndustryListView openttd_rust_station_industries_near(OpenTTDStationRecord *);
 struct OpenTTDBitmapTileArea *openttd_rust_station_catchment_tiles(OpenTTDStationRecord *);
 OpenTTDStationList *openttd_rust_town_stations_near(OpenTTDTownState *);
@@ -82,8 +79,8 @@ void openttd_rust_station_acceptance_around(uint32_t, int32_t, int32_t, int32_t,
  */
 template <class TStation>
 class RustStationList {
-	OpenTTDStationList *list;
-	OpenTTDStationListView View() const { return openttd_rust_station_list_view(this->list); }
+	const OpenTTDStationList *list;
+	const RustVector<OpenTTDStationListEntry> &View() const { return this->list->entries; }
 public:
 	class const_iterator {
 		const OpenTTDStationListEntry *entry;
@@ -100,19 +97,19 @@ public:
 		bool operator==(const const_iterator &other) const = default;
 		uint16_t Id() const { return this->entry->id; }
 	};
-	explicit RustStationList(OpenTTDStationList *list) : list(list) {}
+	explicit RustStationList(const OpenTTDStationList *list) : list(list) {}
 	RustStationList(const RustStationList &) = delete;
 	RustStationList &operator=(const RustStationList &) = delete;
-	const_iterator begin() const { return const_iterator(this->View().data); }
-	const_iterator end() const { auto view = this->View(); return const_iterator(view.data + view.size); }
-	size_t size() const { return this->View().size; }
+	const_iterator begin() const { return const_iterator(this->View().begin()); }
+	const_iterator end() const { return const_iterator(this->View().end()); }
+	size_t size() const { return this->View().size(); }
 	bool empty() const { return this->size() == 0; }
 	/** Ordered-set lookup by the StationCompare key. */
 	const_iterator find(const TStation *st) const
 	{
-		auto view = this->View();
-		const OpenTTDStationListEntry *last = view.data + view.size;
-		const OpenTTDStationListEntry *at = std::lower_bound(view.data, last, st->index.base(), [](const OpenTTDStationListEntry &e, uint16_t id) { return e.id < id; });
+		const auto &view = this->View();
+		const OpenTTDStationListEntry *last = view.end();
+		const OpenTTDStationListEntry *at = std::lower_bound(view.begin(), last, st->index.base(), [](const OpenTTDStationListEntry &e, uint16_t id) { return e.id < id; });
 		return (at != last && at->id == st->index.base()) ? const_iterator(at) : const_iterator(last);
 	}
 };
