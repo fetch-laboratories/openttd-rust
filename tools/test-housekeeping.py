@@ -530,6 +530,7 @@ class HousekeepingTests(unittest.TestCase):
         local.symlink_to(storage / "local", target_is_directory=True)
         for reference in (
             "`.local/simulation/20260102T000000Z-2`",
+            "Retained profiles under `.local/simulation/`:\n  - older profile, `20260102T000000Z-2`;",
             str(older),
             str(profile),
             str(older.resolve()),

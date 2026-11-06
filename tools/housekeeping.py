@@ -533,6 +533,10 @@ def plan_local(local: Path, now: float, references: str = "") -> list[Item]:
         name = entry.name
         if name in OUTPUT and entry.is_dir():
             for run in sorted(entry.iterdir()):
+                if re.search(
+                    r"(?<![\w.-])" + re.escape(run.name) + r"(?![\w.-])", references
+                ):
+                    keep.setdefault(run, "named by roadmap or open issue/PR")
                 if run in keep:
                     items.append(Item(run, False, keep[run]))
                 elif (run / "report.json").exists():
