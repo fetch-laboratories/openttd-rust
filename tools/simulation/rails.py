@@ -3,7 +3,6 @@
 import hashlib
 import json
 import re
-import shutil
 import struct
 import subprocess
 from collections.abc import Mapping
@@ -152,10 +151,11 @@ def uses_ai(scenario: Scenario) -> bool:
 
 def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
-        ai = run_dir / "ai/rails"
-        shutil.copytree(scenario["scenario_ai"], ai)
-        (ai / "parameters.nut").write_text(
-            f'RAIL_ACTION <- "{scenario["rail_control"]}";\n'
+        core.install_ai(
+            scenario,
+            run_dir,
+            "rails",
+            f'RAIL_ACTION <- "{scenario["rail_control"]}";\n',
         )
 
 

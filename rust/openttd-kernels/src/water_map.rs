@@ -97,6 +97,35 @@ pub(crate) fn is_canal(m: &TileTypeAccess, tile: u32) -> Option<bool> {
     Some(is_water(m, tile)? && get_water_class(m, tile)? == crate::water_type::WATER_CLASS_CANAL.0)
 }
 
+impl crate::map_func::World<'_> {
+    /// `GetWaterTileType`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn water_tile_type(&self, t: u32) -> u8 {
+        self.asserted(|m| get_water_tile_type(m, t))
+    }
+    /// `GetWaterClass`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn water_class(&self, t: u32) -> u8 {
+        self.asserted(|m| get_water_class(m, t))
+    }
+    /// `IsSea`.
+    pub(crate) fn is_sea(&self, t: u32) -> bool {
+        self.asserted(|m| is_sea(m, t))
+    }
+    /// `GetLockDirection`, with its `IsLock` assertion.
+    pub(crate) fn lock_direction(&self, t: u32) -> u8 {
+        self.check(self.water_tile_type(t) == WATER_TILE_LOCK);
+        Self::byte(self.types.m5(t)) & 3
+    }
+    /// `GetShipDepotAxis`, with its `IsShipDepotTile` assertion.
+    pub(crate) fn ship_depot_axis(&self, t: u32) -> u8 {
+        self.check(self.kind(t) == MP_WATER && self.water_tile_type(t) == WATER_TILE_DEPOT);
+        (Self::byte(self.types.m5(t)) >> 1) & 1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{get_water_class, has_tile_water_class};

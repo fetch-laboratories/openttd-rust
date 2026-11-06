@@ -32,6 +32,8 @@
 #include "../rust/command_services.h"
 #include "../heightmap.h"
 #include "../road_type.h"
+#include "../road_map.h"
+#include "../water_map.h"
 #include "../station_type.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "landscape_protocol.hpp"
@@ -125,7 +127,40 @@ TEST_CASE("Session tile fixtures restore storage mode across nested entries")
 	CHECK(fixture.Run());
 }
 extern "C" uint8_t openttd_rust_shared_tile_type(const OpenTTDMapStatics *, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
-extern "C" uint8_t openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept);
+struct MapLeafOracle {
+	uint32_t slope;
+	int32_t z;
+	uint32_t water_class;
+	uint32_t coast;
+	uint32_t non_flooding;
+	uint32_t normal_road;
+	uint32_t directions;
+	uint32_t works;
+	uint32_t road_bits;
+	uint32_t tram_bits;
+	uint32_t has_road;
+	uint32_t has_tram;
+};
+static void ObserveMapLeaves(uint32_t index, MapLeafOracle *out) noexcept
+{
+	TileIndex tile{index};
+	*out = {};
+	auto [slope, z] = GetTileSlopeZ(tile);
+	out->slope = slope; out->z = z;
+	if (IsTileType(tile, MP_WATER)) {
+		out->water_class = to_underlying(GetWaterClass(tile));
+		out->coast = IsCoast(tile); out->non_flooding = IsNonFloodingWaterTile(tile);
+	}
+	out->normal_road = IsNormalRoadTile(tile);
+	if (out->normal_road) {
+		out->directions = GetDisallowedRoadDirections(tile); out->works = HasRoadWorks(tile);
+		out->road_bits = GetRoadBits(tile, RTT_ROAD); out->tram_bits = GetRoadBits(tile, RTT_TRAM);
+	}
+	if (MayHaveRoad(tile)) {
+		out->has_road = HasTileRoadType(tile, RTT_ROAD); out->has_tram = HasTileRoadType(tile, RTT_TRAM);
+	}
+}
+extern "C" uint8_t openttd_rust_map_read_probe(const OpenTTDMapStatics *, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t, void (*)(uint32_t) noexcept, void (*)(uint32_t, MapLeafOracle *) noexcept);
 TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 {
 	for (const uint size : {64U, 128U}) {
@@ -141,10 +176,10 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 					t.m4() = value; t.m5() = kind == MP_ROAD ? value & 63 : value; t.m6() = value;
 					t.m8() = value * 257;
 					SetTileHeight(tile, value);
-					CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
+					CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
 					auto unchecked = statics;
 					unchecked.assertions = false;
-					CHECK(openttd_rust_map_read_probe(&unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}));
+					CHECK(openttd_rust_map_read_probe(&unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), [](uint32_t) noexcept {}, ObserveMapLeaves));
 				}
 			}
 		}
@@ -176,7 +211,7 @@ TEST_CASE("Rust movement map context rereads native mutations within an entry")
 							Tile t{TileIndex{index}};
 							t.type() = MP_CLEAR << 4;
 						};
-						CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields));
+						CHECK(openttd_rust_map_read_probe(&statics, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base(), change_type ? +mutate_type : +mutate_fields, ObserveMapLeaves));
 					}
 				}
 			}

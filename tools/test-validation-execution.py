@@ -11,11 +11,12 @@ import sys
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from typing import IO, cast
 from unittest.mock import patch
 
-from simulation import core
+from simulation import configuration, core, game
 from validation_execution import file_lock, run_logged
 
 import migration
@@ -247,8 +248,14 @@ class RuntimeTests(unittest.TestCase):
     def test_direct_game_call_initializes_clone_lock(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with (
-                patch.object(migration, "COMMON_LOCAL", Path(directory)),
-                patch.object(core, "GAME_LOCK", None),
+                patch.object(
+                    configuration,
+                    "_current",
+                    replace(
+                        configuration.configuration(), common_local=Path(directory)
+                    ),
+                ),
+                patch.object(game, "GAME_LOCK", None),
             ):
                 with core.game_slot():
                     self.assertTrue((Path(directory) / "simulation-game.lock").exists())
@@ -258,8 +265,8 @@ class RuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             lock = Path(directory) / "simulation-game.lock"
             script = (
-                "from simulation import core; from pathlib import Path; import sys\n"
-                "core.GAME_LOCK = Path(sys.argv[1])\n"
+                "from simulation import core, game, configuration; from pathlib import Path; import sys\n"
+                "game.GAME_LOCK = Path(sys.argv[1])\n"
                 "with core.game_slot(): print('entered', flush=True)\n"
             )
             with file_lock(lock, shared=True, label="ordinary game"):

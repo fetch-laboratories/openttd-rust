@@ -251,7 +251,7 @@ use crate::rail_map::RAIL_TILE_DEPOT;
 use crate::rail_map::RAIL_TILE_NORMAL;
 use crate::rail_map::RAIL_TILE_SIGNALS;
 
-const SIGTYPE_BLOCK: u8 = 0;
+use crate::signal_type::SIGTYPE_BLOCK;
 const SIGTYPE_ENTRY: u8 = 1;
 const SIGTYPE_EXIT: u8 = 2;
 const SIGTYPE_LAST: u8 = 5;
@@ -386,7 +386,7 @@ impl<'a> Ctx<'a> {
     }
     /// The native uint query contains only the four signal-presence bits.
     fn present_signals(&self, tile: u32) -> u8 {
-        (self.rail.present_signals)(tile) as u8
+        std::ffi::c_uint::from(crate::map_func::World::new(self.shared).present_signals(tile)) as u8
     }
     fn has_track(&self, tile: u32, track: u8) -> bool {
         crate::track_func::has_track(self.tracks(tile), track, |ok| {
@@ -401,7 +401,10 @@ impl<'a> Ctx<'a> {
         crate::pbs::Pbs::acquire(self.shared).reserved(tile)
     }
     fn signal_type(&self, tile: u32, track: u8) -> u8 {
-        (self.rail.signal_type)(tile, track).0
+        crate::services::SignalType(
+            crate::map_func::World::new(self.shared).signal_type(tile, track),
+        )
+        .0
     }
     /// Direct signal-buffer context over this entry's immutable tables.
     fn signals(&self) -> crate::signal::Context {
@@ -485,7 +488,7 @@ impl<'a> Ctx<'a> {
             cost.error(INVALID_STRING_ID);
             return;
         }
-        let tileh = (self.shared.tile_slope)(tile);
+        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
         let trackbit = 1_u8 << track;
         let strings = &self.s.strings;
         let mut fall_through = false;
@@ -499,7 +502,13 @@ impl<'a> Ctx<'a> {
                     w::hit(w::RAIL_CMD_BUILD_NOT_PLAIN);
                     return crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
                 }
-                if !(self.s.compatible_rail)((self.rail.rail_type)(tile).0, railtype) {
+                if !(self.s.compatible_rail)(
+                    crate::services::RailType(
+                        crate::map_func::World::new(self.shared).rail_type(tile),
+                    )
+                    .0,
+                    railtype,
+                ) {
                     return cost.error(strings.impossible_combination);
                 }
                 // CheckTrackCombination, then EnsureNoTrainOnTrack.
@@ -519,7 +528,9 @@ impl<'a> Ctx<'a> {
                     return cost.take(ret);
                 }
                 cost.add_money(ret.money());
-                if (self.rail.has_signals)(tile) && tracks_overlap(self.tracks(tile) | trackbit) {
+                if crate::map_func::World::new(self.shared).has_signals(tile)
+                    && tracks_overlap(self.tracks(tile) | trackbit)
+                {
                     if !auto_remove_signals {
                         return cost.error(strings.remove_signals_first);
                     }
@@ -534,7 +545,10 @@ impl<'a> Ctx<'a> {
                         }
                     }
                 }
-                let current = (self.rail.rail_type)(tile).0;
+                let current = crate::services::RailType(
+                    crate::map_func::World::new(self.shared).rail_type(tile),
+                )
+                .0;
                 if current != railtype && !(self.s.powered_rail)(railtype, current) {
                     if (self.s.powered_rail)(current, railtype) {
                         w::hit(w::RAIL_CMD_BUILD_CONVERT);
@@ -555,13 +569,19 @@ impl<'a> Ctx<'a> {
                     let owner = (self.shared.tile_owner)(tile);
                     self.rail_infra(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
                         pieces(bits).wrapping_neg(),
                     );
                     let owner = (self.shared.tile_owner)(tile);
                     self.rail_infra(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
                         pieces(bits | trackbit),
                     );
                     (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
@@ -582,11 +602,13 @@ impl<'a> Ctx<'a> {
                     return cost.take(ret);
                 }
                 let mut built = false;
-                if (self.shared.is_normal_road_tile)(tile) {
-                    if (self.shared.has_road_works)(tile) {
+                if crate::map_func::World::new(self.shared).is_normal_road_tile(tile) {
+                    if crate::map_func::World::new(self.shared).has_road_works(tile) {
                         return cost.error(strings.road_works);
                     }
-                    if (self.shared.disallowed_road_directions)(tile) != 0 {
+                    if crate::map_func::World::new(self.shared).disallowed_road_directions(tile)
+                        != 0
+                    {
                         return cost.error(strings.oneway_road);
                     }
                     if (self.s.rail_no_crossings)(railtype) {
@@ -603,8 +625,8 @@ impl<'a> Ctx<'a> {
                     let road = NormalRoad {
                         road_type,
                         tram_type,
-                        road_bits: (self.shared.normal_road_bits)(tile, 0).0,
-                        tram_bits: (self.shared.normal_road_bits)(tile, 1).0,
+                        road_bits: crate::map_func::World::new(self.shared).road_bits(tile, false),
+                        tram_bits: crate::map_func::World::new(self.shared).road_bits(tile, true),
                     };
                     let bits = road.road_bits | road.tram_bits;
                     if (track == TRACK_X && bits & ROAD_X == 0)
@@ -620,8 +642,11 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 if !built {
-                    if (self.shared.is_level_crossing)(tile)
-                        && (self.rail.crossing_rail_bits)(tile).0 == trackbit
+                    if crate::map_func::World::new(self.shared).level_crossing_tile(tile)
+                        && crate::services::TrackBits(
+                            crate::map_func::World::new(self.shared).crossing_rail_bits(tile),
+                        )
+                        .0 == trackbit
                     {
                         return cost.error(strings.already_built);
                     }
@@ -684,8 +709,8 @@ impl<'a> Ctx<'a> {
         track: u8,
         road: NormalRoad,
     ) -> Option<()> {
-        let road_owner = (self.shared.road_owner)(tile);
-        let tram_owner = (self.shared.tram_owner)(tile);
+        let road_owner = crate::map_func::World::new(self.shared).road_owner(tile, false);
+        let tram_owner = crate::map_func::World::new(self.shared).road_owner(tile, true);
         if (self.shared.company_valid)(tram_owner) && road.tram_bits.is_power_of_two() {
             ret.ownership(self.command, tram_owner, 0);
             if !ret.ok() {
@@ -732,7 +757,13 @@ impl<'a> Ctx<'a> {
                 town,
             );
             (self.shared.update_level_crossing)(tile, false);
-            (self.s.mark_crossings)(tile, (self.rail.crossing_road_axis)(tile).0);
+            (self.s.mark_crossings)(
+                tile,
+                crate::services::Axis(
+                    crate::map_func::World::new(self.shared).crossing_road_axis(tile),
+                )
+                .0,
+            );
             self.rail_infra(self.current(), railtype, LEVELCROSSING_TRACKBIT_FACTOR);
             (self.command.infrastructure_dirty)(self.current());
             if new_road > 0 && (self.shared.company_valid)(road_owner) {
@@ -760,8 +791,11 @@ impl<'a> Ctx<'a> {
         let no_track = self.s.strings.no_track;
         match self.tile_type(tile) {
             MP_ROAD => {
-                if !(self.shared.is_level_crossing)(tile)
-                    || (self.rail.crossing_rail_bits)(tile).0 != trackbit
+                if !crate::map_func::World::new(self.shared).level_crossing_tile(tile)
+                    || crate::services::TrackBits(
+                        crate::map_func::World::new(self.shared).crossing_rail_bits(tile),
+                    )
+                    .0 != trackbit
                 {
                     return cost.error(no_track);
                 }
@@ -777,10 +811,21 @@ impl<'a> Ctx<'a> {
                         return cost.take(ret);
                     }
                 }
-                cost.add_money((self.s.rail_clear_cost)((self.rail.rail_type)(tile).0));
+                cost.add_money((self.s.rail_clear_cost)(
+                    crate::services::RailType(
+                        crate::map_func::World::new(self.shared).rail_type(tile),
+                    )
+                    .0,
+                ));
                 if flags & DoCommandFlag::EXECUTE != 0 {
                     w::hit(w::RAIL_CMD_REMOVE_CROSSING);
-                    (self.s.crossing_removed)(tile, (self.rail.crossing_road_axis)(tile).0);
+                    (self.s.crossing_removed)(
+                        tile,
+                        crate::services::Axis(
+                            crate::map_func::World::new(self.shared).crossing_road_axis(tile),
+                        )
+                        .0,
+                    );
                     if self.reserved(tile) & trackbit != 0 {
                         v = crate::pbs::Pbs::acquire(self.shared)
                             .train_for(tile, track)
@@ -793,7 +838,10 @@ impl<'a> Ctx<'a> {
                     owner = (self.shared.tile_owner)(tile);
                     self.rail_infra(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
                         LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg(),
                     );
                     (self.command.infrastructure_dirty)(owner);
@@ -802,8 +850,9 @@ impl<'a> Ctx<'a> {
                         road_type: (self.shared.road_type)(tile),
                         tram_type: (self.shared.tram_type)(tile).0,
                         town: (self.shared.town_index)(tile),
-                        road_owner: (self.shared.road_owner)(tile),
-                        tram_owner: (self.shared.tram_owner)(tile),
+                        road_owner: crate::map_func::World::new(self.shared)
+                            .road_owner(tile, false),
+                        tram_owner: crate::map_func::World::new(self.shared).road_owner(tile, true),
                     };
                     (self.s.make_road)(tile, road);
                     (self.s.close_inspect)(tile);
@@ -830,7 +879,12 @@ impl<'a> Ctx<'a> {
                 if present == BIT_X | BIT_Y {
                     crossing = true;
                 }
-                cost.add_money((self.s.rail_clear_cost)((self.rail.rail_type)(tile).0));
+                cost.add_money((self.s.rail_clear_cost)(
+                    crate::services::RailType(
+                        crate::map_func::World::new(self.shared).rail_type(tile),
+                    )
+                    .0,
+                ));
                 if self.has_signal(tile, track) {
                     w::hit(w::RAIL_CMD_REMOVE_SIGNAL_CHARGE);
                     unsafe { (self.s.remove_signal)(ret.0, flags, tile, track) };
@@ -850,14 +904,24 @@ impl<'a> Ctx<'a> {
                     owner = (self.shared.tile_owner)(tile);
                     self.rail_infra(
                         owner,
-                        (self.rail.rail_type)(tile).0,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
                         pieces(present).wrapping_neg(),
                     );
                     present ^= trackbit;
-                    self.rail_infra(owner, (self.rail.rail_type)(tile).0, pieces(present));
+                    self.rail_infra(
+                        owner,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
+                        pieces(present),
+                    );
                     (self.command.infrastructure_dirty)(owner);
                     if present == 0 {
-                        let tileh = (self.shared.tile_slope)(tile);
+                        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
                         if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                             && is_slope_with_one_corner_raised(tileh)
                         {
@@ -1030,7 +1094,7 @@ impl<'a> Ctx<'a> {
         if !crate::rail::val_param_rail_type(self.shared, railtype) || dir >= 4 {
             return cost.error(INVALID_STRING_ID);
         }
-        let tileh = (self.shared.tile_slope)(tile);
+        let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
         cost.set(0);
         if tileh != SLOPE_FLAT {
             const INCLINED: [u8; 4] = [12, 6, 3, 9];
@@ -1047,14 +1111,23 @@ impl<'a> Ctx<'a> {
         }
         let mut rotate = false;
         if self.tile_type(tile) == MP_RAILWAY
-            && (self.rail.is_rail_depot)(tile)
-            && railtype == (self.rail.rail_type)(tile).0
+            && crate::map_func::World::new(self.shared).is_rail_depot(tile)
+            && railtype
+                == crate::services::RailType(
+                    crate::map_func::World::new(self.shared).rail_type(tile),
+                )
+                .0
         {
             ret.tile_ownership(self.command, tile);
             if !ret.ok() {
                 return cost.take(ret);
             }
-            if dir == (self.rail.rail_depot_direction)(tile).0 {
+            if dir
+                == crate::services::DiagDirection(
+                    crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+                )
+                .0
+            {
                 return cost.zero();
             }
             ret.no_vehicle(self.command, tile);
@@ -1069,7 +1142,7 @@ impl<'a> Ctx<'a> {
             if !cost.ok() {
                 return;
             }
-            if (self.shared.bridge_above)(tile) {
+            if crate::map_func::World::new(self.shared).bridge_above(tile) {
                 return cost.error(self.s.strings.demolish_bridge);
             }
             if !(self.s.depot_available)() {
@@ -1169,7 +1242,7 @@ impl<'a> Ctx<'a> {
                 unsafe { (self.shared.free_train_reservation)(v) };
             }
         }
-        if !(self.rail.has_signals)(tile) {
+        if !crate::map_func::World::new(self.shared).has_signals(tile) {
             (self.rail.set_has_signals)(tile, true);
             (self.rail.set_signal_states)(tile, 0xF);
             (self.rail.set_present_signals)(tile, 0);
@@ -1245,7 +1318,9 @@ impl<'a> Ctx<'a> {
                 ret.no_vehicle(self.command, tile);
                 ret.ok()
             };
-            let states = (self.rail.signal_states)(tile);
+            let states = std::ffi::c_uint::from(
+                crate::map_func::World::new(self.shared).signal_states(tile),
+            );
             let value = (states & !mask) | (if reserved { u32::MAX } else { 0 } & mask);
             (self.rail.set_signal_states)(tile, value as u8);
         }
@@ -1314,7 +1389,7 @@ impl<'a> Ctx<'a> {
         }
         match self.tile_type(*tile) {
             MP_RAILWAY => {
-                if (self.rail.is_rail_depot)(*tile) {
+                if crate::map_func::World::new(self.shared).is_rail_depot(*tile) {
                     return false;
                 }
                 if !remove && self.has_signal(*tile, *trackdir & 7) {
@@ -1322,12 +1397,12 @@ impl<'a> Ctx<'a> {
                 }
             }
             MP_ROAD => {
-                if !(self.shared.is_level_crossing)(*tile) {
+                if !crate::map_func::World::new(self.shared).level_crossing_tile(*tile) {
                     return false;
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (self.shared.tunnel_transport)(*tile) != 0 {
+                if crate::map_func::World::new(self.shared).tunnel_bridge_transport(*tile) != 0 {
                     return false;
                 }
                 if (self.shared.tunnel_bridge_direction)(*tile)
@@ -1591,7 +1666,8 @@ impl<'a> Ctx<'a> {
                 let mut td = track;
                 let mut i = 0;
                 while v.is_null() && i < 2 {
-                    if (self.rail.has_signal_trackdir)(tile, td ^ 8) {
+                    if crate::map_func::World::new(self.shared).has_signal_on_trackdir(tile, td ^ 8)
+                    {
                         let next = self
                             .map
                             .add_diag(tile, crate::track_func::trackdir_to_exitdir(td));
@@ -1715,12 +1791,12 @@ impl<'a> Ctx<'a> {
         match tt {
             MP_RAILWAY => {}
             MP_STATION => {
-                if !(self.rail.has_station_rail)(tile) {
+                if !crate::map_func::World::new(self.shared).station_has_rail(tile) {
                     return false;
                 }
             }
             MP_ROAD => {
-                if !(self.shared.is_level_crossing)(tile) {
+                if !crate::map_func::World::new(self.shared).level_crossing_tile(tile) {
                     return false;
                 }
                 if (self.s.rail_no_crossings)(totype) {
@@ -1729,13 +1805,14 @@ impl<'a> Ctx<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (self.shared.tunnel_transport)(tile) != 0 {
+                if crate::map_func::World::new(self.shared).tunnel_bridge_transport(tile) != 0 {
                     return false;
                 }
             }
             _ => return false,
         }
-        let kind = (self.rail.rail_type)(tile).0;
+        let kind =
+            crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile)).0;
         if kind == totype
             || (unsafe { self.shared.settings().disable_elrails.read() }
                 && totype == RAILTYPE_RAIL
@@ -1774,13 +1851,16 @@ impl<'a> Ctx<'a> {
                         affected_len += 1;
                     }
                 }
-                if !(self.rail.is_rail_station)(tile) || !(self.rail.station_blocked)(tile) {
+                if !crate::map_func::World::new(self.shared).rail_station(tile)
+                    || !crate::map_func::World::new(self.shared).station_blocked(tile)
+                {
                     let owner = (self.shared.tile_owner)(tile);
-                    let mut num = if (self.shared.is_level_crossing)(tile) {
-                        LEVELCROSSING_TRACKBIT_FACTOR
-                    } else {
-                        1
-                    };
+                    let mut num =
+                        if crate::map_func::World::new(self.shared).level_crossing_tile(tile) {
+                            LEVELCROSSING_TRACKBIT_FACTOR
+                        } else {
+                            1
+                        };
                     if (self.shared.is_plain_rail)(tile) {
                         num = pieces(self.tracks(tile));
                     }
@@ -1795,10 +1875,17 @@ impl<'a> Ctx<'a> {
         }
         match tt {
             MP_RAILWAY => {
-                if (self.rail.rail_tile_type)(tile).0 == RAIL_TILE_DEPOT {
+                if crate::services::RailTileType(
+                    crate::map_func::World::new(self.shared).rail_tile_type(tile),
+                )
+                .0 == RAIL_TILE_DEPOT
+                {
                     if execute {
                         w::hit(w::RAIL_CMD_CONVERT_DEPOT);
-                        let dir = (self.rail.rail_depot_direction)(tile).0;
+                        let dir = crate::services::DiagDirection(
+                            crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+                        )
+                        .0;
                         (self.s.layout_changed)(tile, dir & 1);
                         (self.s.depot_windows)(tile);
                     }
@@ -1834,7 +1921,13 @@ impl<'a> Ctx<'a> {
                 {
                     return false;
                 }
-                if !(self.s.compatible_rail)((self.rail.rail_type)(tile).0, totype) {
+                if !(self.s.compatible_rail)(
+                    crate::services::RailType(
+                        crate::map_func::World::new(self.shared).rail_type(tile),
+                    )
+                    .0,
+                    totype,
+                ) {
                     ret.wormhole_free(self.command, tile, endtile);
                     if !ret.ok() {
                         error.take(ret);
@@ -1855,7 +1948,14 @@ impl<'a> Ctx<'a> {
                         .wrapping_add(2)
                         .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
                     let owner = (self.shared.tile_owner)(tile);
-                    self.rail_infra(owner, (self.rail.rail_type)(tile).0, num.wrapping_neg());
+                    self.rail_infra(
+                        owner,
+                        crate::services::RailType(
+                            crate::map_func::World::new(self.shared).rail_type(tile),
+                        )
+                        .0,
+                        num.wrapping_neg(),
+                    );
                     self.rail_infra(owner, totype, num);
                     (self.command.infrastructure_dirty)(owner);
                     (self.rail.set_rail_type)(tile, totype);
@@ -1880,11 +1980,18 @@ impl<'a> Ctx<'a> {
                 if execute {
                     w::hit(w::RAIL_CMD_CONVERT_STATION_CROSSING);
                     let track = if tt == MP_STATION {
-                        (self.rail.station_track)(tile).0
+                        crate::services::Track(
+                            crate::map_func::World::new(self.shared).station_track(tile),
+                        )
+                        .0
                     } else {
-                        crate::ground::crossing_rail_track(tile, self.rail, |ok| {
-                            crate::movement::native_assert(self.shared, ok);
-                        })
+                        crate::ground::crossing_rail_track(
+                            tile,
+                            &crate::map_func::World::new(self.shared),
+                            |ok| {
+                                crate::movement::native_assert(self.shared, ok);
+                            },
+                        )
                         .0
                     };
                     (self.s.layout_changed)(tile, track);
@@ -1926,7 +2033,10 @@ impl<'a> Ctx<'a> {
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
             w::hit(w::RAIL_CMD_CLEAR_DEPOT);
-            let dir = (self.rail.rail_depot_direction)(tile).0;
+            let dir = crate::services::DiagDirection(
+                crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+            )
+            .0;
             let owner = (self.shared.tile_owner)(tile);
             let mut v: *mut Train = std::ptr::null_mut();
             if (self.rail.depot_reserved)(tile) {
@@ -1938,7 +2048,12 @@ impl<'a> Ctx<'a> {
                     unsafe { (self.shared.free_train_reservation)(v) };
                 }
             }
-            self.rail_infra(owner, (self.rail.rail_type)(tile).0, 1_u32.wrapping_neg());
+            self.rail_infra(
+                owner,
+                crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile))
+                    .0,
+                1_u32.wrapping_neg(),
+            );
             (self.command.infrastructure_dirty)(owner);
             (self.s.delete_depot)(tile);
             crate::ground::clear_square(tile, self.shared);
@@ -1964,10 +2079,14 @@ impl<'a> Ctx<'a> {
                 self.s.strings.demolish_building
             });
         }
-        match (self.rail.rail_tile_type)(tile).0 {
+        match crate::services::RailTileType(
+            crate::map_func::World::new(self.shared).rail_tile_type(tile),
+        )
+        .0
+        {
             RAIL_TILE_SIGNALS | RAIL_TILE_NORMAL => {
                 w::hit(w::RAIL_CMD_CLEAR_RAIL);
-                let tileh = (self.shared.tile_slope)(tile);
+                let tileh = crate::map_func::World::new(self.shared).tile_slope(tile);
                 let water_ground = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                     && is_slope_with_one_corner_raised(tileh);
                 let mut tracks = self.tracks(tile);
@@ -2020,10 +2139,11 @@ impl<'a> Ctx<'a> {
         } else {
             1
         };
-        let railtype = (self.rail.rail_type)(tile).0;
+        let railtype =
+            crate::services::RailType(crate::map_func::World::new(self.shared).rail_type(tile)).0;
         self.rail_infra(old_owner, railtype, num.wrapping_neg());
         self.rail_infra(new_owner, railtype, num);
-        if (self.rail.has_signals)(tile) {
+        if crate::map_func::World::new(self.shared).has_signals(tile) {
             let signals = self.present_signals(tile).count_ones();
             (self.s.signal_infrastructure)(old_owner, signals.wrapping_neg());
             (self.s.signal_infrastructure)(new_owner, signals);
@@ -2100,7 +2220,7 @@ impl<'a> Ctx<'a> {
 
     /// `TerraformTile_Track`.
     fn terraform(&self, cost: Cost<'_>, flags: u16, tile: u32, z_new: i32, tileh_new: u8) {
-        let tileh_old = (self.shared.tile_slope)(tile);
+        let tileh_old = crate::map_func::World::new(self.shared).tile_slope(tile);
         let z_old = (self.shared.tile_z)(tile);
         if (self.shared.is_plain_rail)(tile) {
             let bits = self.tracks(tile);
@@ -2152,7 +2272,10 @@ impl<'a> Ctx<'a> {
                 tile,
                 z_new,
                 tileh_new,
-                (self.rail.rail_depot_direction)(tile).0,
+                crate::services::DiagDirection(
+                    crate::map_func::World::new(self.shared).rail_depot_dir(tile),
+                )
+                .0,
             )
         {
             w::hit(w::RAIL_CMD_TERRAFORM_DEPOT);

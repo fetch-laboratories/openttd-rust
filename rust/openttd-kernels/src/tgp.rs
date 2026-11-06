@@ -663,6 +663,8 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
     if input.freeform != 0 {
         world.void_top_edges();
     }
+    // No progress callback runs inside this loop, so one map view spans it.
+    let view = crate::map_func::World::new(world.s);
     for y in 0..sy {
         for x in 0..sx {
             let height = {
@@ -671,7 +673,7 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
                 i32::from(g.get(x, y) >> 4).clamp(0, max)
             };
             let tile = world.map.tile_xy(x as u32, y as u32);
-            tgen_set_tile_height(world, tile, height);
+            tgen_set_tile_height(world, &view, tile, height);
         }
     }
     abort();
@@ -680,9 +682,14 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
 }
 
 /// `tgp.cpp::TgenSetTileHeight`.
-fn tgen_set_tile_height(world: &crate::landscape_generation::World<'_>, tile: u32, height: i32) {
-    (world.a.set_height)(tile, height.cast_unsigned());
-    if (world.a.inner_tile)(tile) {
+fn tgen_set_tile_height(
+    world: &crate::landscape_generation::World<'_>,
+    view: &crate::map_func::World<'_>,
+    tile: u32,
+    height: i32,
+) {
+    crate::tile_map::set_tile_height(view, tile, height.cast_unsigned());
+    if crate::tile_map::is_inner_tile(view, tile, world.freeform_edges()) {
         (world.clear.make_clear)(
             tile,
             crate::services::ClearGroundType(crate::clear_map::CLEAR_GRASS),

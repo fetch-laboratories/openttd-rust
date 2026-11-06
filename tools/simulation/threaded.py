@@ -140,6 +140,8 @@ def run_game(
     run_dir = run_dir.parents[2] / "native" / run_dir.relative_to(run_dir.parents[2])
     args, env = prepare(scenario, build, run_dir, env, desync)
     command = [str(binary), *args]
+    if migration.TSAN:
+        command = thread_sanitizer.command(command)
     started = time.monotonic()
     (run_dir / "stdout.log").write_bytes(b"")
     with core.game_slot():
@@ -164,6 +166,9 @@ def run_game(
         }
     )
     if migration.TSAN:
+        thread_sanitizer.check_started(
+            (run_dir / "stderr.log").read_text(errors="replace")
+        )
         found = thread_sanitizer.findings(
             run_dir,
             (migration.REFERENCE.resolve(), core.ROOT),

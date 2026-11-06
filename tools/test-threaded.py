@@ -7,9 +7,10 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
-from simulation import core, sanitizers, thread_sanitizer, threaded
+from simulation import core, game, sanitizers, thread_sanitizer, threaded
 
 import migration
 
@@ -271,12 +272,13 @@ class ThreadedTests(unittest.TestCase):
                 run = root / f"run-{locked}"
                 run.mkdir()
                 executed = subprocess.run(
-                    [str(executable)],
+                    thread_sanitizer.command([str(executable)]),
                     env=os.environ | thread_sanitizer.environment(run),
                     capture_output=True,
                     timeout=20,
                 )
                 self.assertEqual(executed.returncode, 0, executed.stderr)
+                thread_sanitizer.check_started(executed.stderr.decode())
                 found = thread_sanitizer.findings(run, (root,), ())
                 self.assertEqual(bool(found.reports), not locked)
                 if not locked:
@@ -287,6 +289,44 @@ class ThreadedTests(unittest.TestCase):
                             for key in found.reports
                         )
                     )
+
+    def test_aborted_tsan_start_fails_the_run(self) -> None:
+        # GCC 13's TSan prints this and exits 0 under `exitcode=0`, writing no report.
+        fatal = "FATAL: ThreadSanitizer: unexpected memory mapping 0x5aab-0x5aac"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / "openttd"
+            binary.write_text(f"#!/bin/sh\necho '{fatal}' >&2\n")
+            binary.chmod(0o755)
+            build = root / "reference-runtime"
+
+            def prepare(
+                scenario: threaded.Scenario,
+                build: Path,
+                run: Path,
+                env: dict[str, str],
+                desync: bool,
+            ) -> tuple[list[str], dict[str, str]]:
+                run.mkdir(parents=True)
+                return [], env | thread_sanitizer.environment(run)
+
+            scenario = cast(threaded.Scenario, {"name": "aborted"})
+            with (
+                patch.object(migration, "TSAN", True),
+                patch.object(game, "GAME_LOCK", root / "game.lock"),
+                patch.object(threaded, "prepare", prepare),
+                self.assertRaisesRegex(RuntimeError, f"TSan aborted the run: {fatal}"),
+            ):
+                threaded.run_game(
+                    scenario,
+                    binary,
+                    build,
+                    root / "a/b/c/run",
+                    20,
+                    dict(os.environ),
+                    False,
+                    reports={"reference": sanitizers.Findings()},
+                )
 
     def test_missing_save_and_wrong_runtime_markers_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

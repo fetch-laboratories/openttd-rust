@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Reject Rust exports/declarations without production C++ users (#564)."""
 
-import argparse
 import re
-import subprocess
 from pathlib import Path
 
+import baseline_ratchet
 from code_lines import RUST_EXPORT, without_comments
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,40 +45,17 @@ def violations(files: dict[str, str]) -> set[str]:
     }
 
 
-def git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True)
-
-
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-ref", default="origin/rust-migration")
-    args = parser.parse_args()
-    files = {
-        str(p.relative_to(ROOT)): p.read_text()
-        for folder in ("src", "rust")
-        for p in (ROOT / folder).rglob("*")
-        if p.is_file() and p.suffix in {".cpp", ".h", ".hpp", ".inc", ".rs"}
-    }
-    hits = violations(files)
-    baseline = set((ROOT / BASELINE).read_text().splitlines())
-    tracked = git("ls-tree", "--name-only", args.base_ref, BASELINE).strip()
-    previous = (
-        set(git("show", f"{args.base_ref}:{BASELINE}").splitlines())
-        if tracked
-        else baseline
+    return baseline_ratchet.main(
+        __doc__,
+        ROOT,
+        BASELINE,
+        ("src", "rust"),
+        {".cpp", ".h", ".hpp", ".inc", ".rs"},
+        violations,
+        new_label="new orphan",
+        summary="Orphan exports: {count} baselined violations",
     )
-    errors = [
-        ("new orphan", hits - baseline),
-        ("remove retired", baseline - hits),
-        ("baseline cannot grow", baseline - previous),
-    ]
-    for label, names in errors:
-        for name in sorted(names):
-            print(f"{label}: {name}")
-    print(
-        f"Orphan exports: {len(hits)} baselined violations; {sum(len(v) for _, v in errors)} errors"
-    )
-    return int(any(names for _, names in errors))
 
 
 if __name__ == "__main__":

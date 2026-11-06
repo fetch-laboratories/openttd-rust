@@ -207,7 +207,8 @@ unsafe fn variable(
             return if c.tile == INVALID_TILE {
                 0
             } else {
-                (u32::from((shared.tile_slope)(c.tile)) << 8) | (shared.terrain_type)(c.tile)
+                (u32::from(crate::map_func::World::new(shared).tile_slope(c.tile)) << 8)
+                    | (shared.terrain_type)(c.tile)
             };
         }
         0x43 | 0x44 => {
@@ -284,7 +285,7 @@ unsafe fn variable(
             } else {
                 (shared.nearby_tile)(parameter as u8, c.tile)
             };
-            return if (shared.is_any_road_stop)(tile)
+            return if crate::map_func::World::new(shared).any_road_stop_tile(tile)
                 && (shared.station_index)(tile) == unsafe { (s.station_id)(c.station) }
             {
                 u32::from(unsafe { (s.frame)(c.station, tile) })
@@ -311,7 +312,7 @@ unsafe fn variable(
                 return u32::MAX;
             }
             let tile = (shared.nearby_tile)(parameter as u8, c.tile);
-            if !(shared.is_any_road_stop)(tile) {
+            if !crate::map_func::World::new(shared).any_road_stop_tile(tile) {
                 return u32::MAX;
             }
             if variable == 0x6a {

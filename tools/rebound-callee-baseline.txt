@@ -5,16 +5,12 @@ forwarded | src/industry_cmd.cpp | magic_bulldozer = GetRustTownAuthorityService
 forwarded | src/industry_cmd.cpp | serve_neutral = GetRustSharedServices().station_serve_neutral
 forwarded | src/industry_cmd.cpp | set_frame = GetRustSharedServices().tile_animation_set_frame
 forwarded | src/landscape.cpp | exchange_generating = GetRustTownFoundingServices().exchange_generating
-forwarded | src/landscape.cpp | lock_direction = GetRustWaterCommandServices().lock_direction
 forwarded | src/landscape.cpp | owned_land = GetRustRailGroundServices().owned_land
-forwarded | src/landscape.cpp | tile_flat = GetRustTownFoundingServices().flat
-forwarded | src/landscape.cpp | water_type = GetRustWaterCommandServices().water_type
 forwarded | src/newgrf_airport.cpp | engine_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
 forwarded | src/object_cmd.cpp | bulldozer = GetRustTownAuthorityServices().bulldozer
 forwarded | src/object_cmd.cpp | industry_tiles = GetRustIndustryLoopServices().tiles
 forwarded | src/object_cmd.cpp | scale_size_1d = GetRustIndustryLoopServices().generation->scale_by_size_1d
 forwarded | src/object_cmd.cpp | set_owner = GetRustSharedServices().set_tile_owner
-forwarded | src/object_cmd.cpp | water_class = GetRustClearServices().water_class
 forwarded | src/rust/company_identity_adapter.cpp | aircraft_subtype = GetRustEngineCapabilitiesServices().aircraft_subtype
 forwarded | src/rust/company_identity_adapter.cpp | cargo_classes = GetRustEngineCapabilitiesServices().cargo_classes
 forwarded | src/rust/company_identity_adapter.cpp | engine = GetRustEngineCapabilitiesServices().engine
@@ -59,8 +55,6 @@ rebound | IndustryCommandDeity | src/industry_cmd.cpp | deity | 2
 rebound | LiveGraphOwner | src/linkgraph/linkgraphschedule.cpp | graph_owner
 rebound | LiveGraphOwner | src/rust/services.cpp | owner
 rebound | LiveGraphOwner | src/timer/timer_game_common.cpp | graph_owner
-rebound | MapSvcRoadIsLevelCrossing | src/landscape.cpp | road_crossing
-rebound | MapSvcRoadIsLevelCrossing | src/pbs.cpp | is_crossing
 rebound | OpenTTDAnimationFrame | src/industry_cmd.cpp | frame
 rebound | OpenTTDAnimationFrame | src/newgrf_airport.cpp | frame
 rebound | OpenTTDCargoSpecValid | src/station_cmd.cpp | cargo_valid
@@ -186,10 +180,6 @@ rebound | RustIndustryTileIndex | src/rust/disaster_adapter.hpp | industry_index
 rebound | RustIsLocalCompany | src/economy.cpp | local_company
 rebound | RustIsLocalCompany | src/rust/fleet_transaction_services.hpp | local
 rebound | RustIsLocalCompany | src/town_cmd.cpp | local_company
-rebound | RustIsRailStation | src/rust/services.cpp | is_rail_station
-rebound | RustIsRailStation | src/rust/vehicle_effect_services.hpp | station
-rebound | RustIsTunnel | src/landscape.cpp | is_tunnel
-rebound | RustIsTunnel | src/tunnelbridge_cmd.cpp | is_tunnel
 rebound | RustLinkGraphGet | src/linkgraph/linkgraphschedule.cpp | graph_get
 rebound | RustLinkGraphGet | src/rust/services.cpp | get
 rebound | RustLinkGraphNext | src/linkgraph/linkgraphschedule.cpp | next_graph
@@ -215,8 +205,6 @@ rebound | RustRailPoweredMask | src/rust/vehicle_effect_services.hpp | powered
 rebound | RustRailPoweredMask | src/rust/vehicle_services_newgrf.h | powered_rail
 rebound | RustRailStationAxis | src/newgrf_station.cpp | axis
 rebound | RustRailStationAxis | src/rust/station_command_services.hpp | rail_axis
-rebound | RustRailType | src/rust/ground_vehicle_services.cpp | rail_type
-rebound | RustRailType | src/rust/services.cpp | rail_type
 rebound | RustRealLoaded | src/newgrf_station.cpp | loaded
 rebound | RustRealLoaded | src/rust/newgrf_spritegroup_services.cpp | loaded
 rebound | RustRealLoadedCount | src/newgrf_station.cpp | loaded_count
@@ -249,8 +237,6 @@ rebound | RustSetCurrentCompanyID | src/rust/company_adapter.cpp | set_current_c
 rebound | RustSetCurrentCompanyID | src/rust/fleet_pending_services.hpp | set_current
 rebound | RustSetRailStationReservation | src/pbs.cpp | set_station
 rebound | RustSetRailStationReservation | src/rust/station_command_services.hpp | set_rail_station_reservation
-rebound | RustSetTileHeight | src/landscape.cpp | set_height
-rebound | RustSetTileHeight | src/landscape.cpp | set_height | 2
 rebound | RustSetTunnelBridgeReservation | src/pbs.cpp | set_wormhole
 rebound | RustSetTunnelBridgeReservation | src/tunnelbridge_cmd.cpp | set_reservation
 rebound | RustSpecGRFVersion8 | src/newgrf_airporttiles.cpp | version8
@@ -349,18 +335,12 @@ rebound | RustVehicleUpdateDelta | src/effectvehicle.cpp | delta
 rebound | RustVehicleUpdateDelta | src/rust/aircraft_adapter.hpp | update_delta
 rebound | RustVehicleUpdateDelta | src/rust/disaster_adapter.hpp | update_delta
 rebound | RustVehicleUpdateDelta | src/train_cmd.cpp | update_delta
-rebound | RustWaterClass | src/clear_cmd.cpp | water_class
-rebound | RustWaterClass | src/newgrf_generic.cpp | water_class
 rebound | SharedIsDepotTile | src/rust/vehicle_effect_services.hpp | depot
 rebound | SharedIsDepotTile | src/vehicle_cmd.cpp | is_depot
 rebound | Shared_bay_stop_direction | src/rust/road_services.h | bay_direction
 rebound | Shared_bay_stop_direction | src/rust/services.cpp | bay_stop_direction
-rebound | Shared_disallowed_road_directions | src/rust/road_services.h | disallowed_directions
-rebound | Shared_disallowed_road_directions | src/rust/services.cpp | disallowed_road_directions
 rebound | Shared_is_bay_stop | src/rust/road_services.h | is_bay_stop
 rebound | Shared_is_bay_stop | src/rust/services.cpp | is_bay_stop
-rebound | Shared_is_drive_through_stop | src/rust/road_services.h | is_drive_through
-rebound | Shared_is_drive_through_stop | src/rust/services.cpp | is_drive_through_stop
 rebound | Shared_is_road_depot | src/rust/road_services.h | is_road_depot_tile
 rebound | Shared_is_road_depot | src/rust/services.cpp | is_road_depot
 rebound | Shared_road_depot_direction | src/rust/road_services.h | depot_direction

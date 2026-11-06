@@ -19,7 +19,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 import time
 from collections.abc import Callable, Generator, Sequence
@@ -29,6 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
 
+import vcs
 from validation_execution import run_logged
 
 # One exclusive clone-wide lock: a deep run and a speed pass's timed collection never overlap.
@@ -116,7 +116,7 @@ class Result:
 
 
 def git(root: Path, *arguments: str) -> str:
-    return subprocess.check_output(["git", *arguments], cwd=root, text=True).strip()
+    return vcs.git(*arguments, cwd=root).strip()
 
 
 @contextmanager

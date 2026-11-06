@@ -526,13 +526,18 @@ pub unsafe extern "C" fn openttd_rust_rail_saved_convert(
     for tile in crate::map_func::Map::iterate(count) {
         let convert = match (s.tile_type)(tile) {
             MP_RAILWAY => true,
-            MP_ROAD => (s.is_level_crossing)(tile),
-            MP_STATION => (map.has_station_rail)(tile),
-            MP_TUNNELBRIDGE => (s.tunnel_transport)(tile) == TRANSPORT_RAIL,
+            MP_ROAD => crate::map_func::World::new(s).level_crossing_tile(tile),
+            MP_STATION => crate::map_func::World::new(s).station_has_rail(tile),
+            MP_TUNNELBRIDGE => {
+                crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_RAIL
+            }
             _ => false,
         };
         if convert {
-            (map.set_rail_type)(tile, conversion[usize::from((map.rail_type)(tile).0)]);
+            (map.set_rail_type)(
+                tile,
+                conversion[usize::from(crate::map_func::World::new(s).rail_type(tile))],
+            );
         }
     }
 }
@@ -570,8 +575,10 @@ pub unsafe extern "C" fn openttd_rust_road_saved_convert(
     for tile in crate::map_func::Map::iterate(count) {
         let convert = match (s.tile_type)(tile) {
             MP_ROAD => true,
-            MP_STATION => (s.is_any_road_stop)(tile),
-            MP_TUNNELBRIDGE => (s.tunnel_transport)(tile) == TRANSPORT_ROAD,
+            MP_STATION => crate::map_func::World::new(s).any_road_stop_tile(tile),
+            MP_TUNNELBRIDGE => {
+                crate::map_func::World::new(s).tunnel_bridge_transport(tile) == TRANSPORT_ROAD
+            }
             _ => false,
         };
         if !convert {

@@ -34,11 +34,12 @@ def uses_ai(scenario: Scenario) -> bool | str | None:
 
 def install(scenario: Scenario, run_dir: Path) -> None:
     if uses_ai(scenario):
-        ai = run_dir / "ai/road-crossing"
-        shutil.copytree(scenario["scenario_ai"], ai)
-        (ai / "parameters.nut").write_text(
+        ai = core.install_ai(
+            scenario,
+            run_dir,
+            "road-crossing",
             f'ROAD_SETUP <- "{scenario.get("road_setup", "crossing")}";\n'
-            f"ROAD_FLOOD <- {str(scenario.get('roads') == 'flooding').lower()};\n"
+            f"ROAD_FLOOD <- {str(scenario.get('roads') == 'flooding').lower()};\n",
         )
         if scenario.get("road_setup"):
             shutil.copy2(ai / "setup.nut", ai / "main.nut")
@@ -970,7 +971,6 @@ if __name__ == "__main__":
         raise SystemExit(f"retain or remove previous preparation first: {out}")
     out.mkdir(parents=True)
     migration.COMMON_LOCAL.mkdir(parents=True, exist_ok=True)
-    core.GAME_LOCK = migration.COMMON_LOCAL / "simulation-game.lock"
     prepare_crossing(migration, out, operation)
 
 

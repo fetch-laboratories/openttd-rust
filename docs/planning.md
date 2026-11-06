@@ -4,7 +4,7 @@ Readers: Root and agents selecting or planning work.
 
 ## Goal and phases
 
-- Distance to the goal is the C++ still compiled by the fork's builds, original plus glue.
+- The destination is OpenTTD as a Rust program: every original C++ line retired, the game behaving as the original does, and root's agents getting there on their own. Distance includes remaining original and fork C++ in game, tools and tests, including generated code. Distinguish candidate dependencies from reference-only adapters, but keep all fork-authored C++ visible until retirement; only the separate pinned original is outside that inventory. [Metric scope](rust-migration.md#shared-code-checks-and-port-metrics) records the current limits.
 - The roadmap sizes these overlapping phases with exit criteria (user, 2026-10-28):
   1. Port simulation logic: map generation, landscape and tile loops, towns, industries, vehicles, cargo, economy, link graph, pathfinding and commands that change them.
   2. Move simulation storage: every pool, then the map.
@@ -13,7 +13,8 @@ Readers: Root and agents selecting or planning work.
   5. Port the GUI, simulation drawing and platform backends.
   6. Replace or port vendored libraries in `src/3rdparty`.
 - Plan no phase beyond the next; decide nothing about later phases unless it affects the current or next phase (user, 2026-10-28).
-- A phase exits once its remaining bodies belong to later owners that move their data or callers. A facade's signature and braces retire with its callers, so they never hold a phase open.
+- A phase exits when its ownership is complete and every remaining body, shell, facade and generated declaration has a named later owner or consumer phase that removes it. Phase 2 includes pool allocation and lifetime machinery and map allocation, as well as records ([storage ports](porting.md#storage-ports)). Recount and place the remainder at each phase exit; an estimate or a forwarding facade is not completed ownership. Plan the newly adjacent phase then, before the ready queue runs dry.
+- The final exit has no later owner: retire remaining fork C++ sources, generated declarations and native glue, and remove C++ compilation/link targets from the candidate game, tools and tests. Port needed evidence to Rust or the harness while preserving its observations; calling a fork-authored adapter reference-only does not exempt it. Keep the pinned original unchanged as the separate oracle.
 - The first issue of each of phases 3 to 6 names the evidence for what the harness cannot see, such as network packets or script API results.
 - Replace a vendored library with a maintained Rust crate when it reproduces observed behavior; otherwise port it (user, 2026-10-28).
 - Decide Squirrel when phase 6 reaches it; deviation from the original may then be acceptable, so do not plan a Squirrel port (user, 2026-10-28).
@@ -26,7 +27,7 @@ Readers: Root and agents selecting or planning work.
 - Estimate and decide every owner's cost by compiled C++ removed, not original lines retired. A consumer line rewritten to reach moved data counts as one original line retired and one glue line added, so it moves neither. Phase 2 owners also count crossings removed and services deleted.
 - Size each owner to repay its fixed issue, review and exact-head Full cost. Fold an item too small for that into an owner of the same phase that shares its files or data, rather than queueing it alone.
 - Keep one roadmap work order for ports, maintenance, testing and housekeeping. Upstream unit-test coverage alone does not select a component; never fall back to utility kernels or `deferred-improvement` issues.
-- Select concurrent owners with disjoint unintegrated services. An owner needing a service another draft is building starts after that service integrates.
+- Select concurrent owners with disjoint state changes. A genuine data or lifetime dependency waits for its owning port. Shared accessors follow [integration](workflow.md#integration): the first integrating PR supplies the definition, or root extracts a shared service needed by multiple drafts into its own PR. Other consumers adopt that integrated definition without parallel copies; an accessor alone does not park a whole owner behind an unrelated draft.
 
 ## Issue placement and deferral
 
