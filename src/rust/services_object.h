@@ -20,5 +20,4 @@ inline const ObjectSpec *RustObjectSpecByTile(uint32_t tile) noexcept { return O
 inline uint16_t RustObjectSpecFlags(const ObjectSpec *spec) noexcept { return spec->flags.base(); }
 inline uint8_t RustObjectViews(const ObjectSpec *spec) noexcept { return spec->views; }
 inline uint8_t RustObjectSpecCallbacks(const ObjectSpec *spec) noexcept { return spec->callback_mask.base(); }
-inline void OpenTTDSetObjectTown(Object *object, Town *town) noexcept { object->town = town; }
 #endif /* RUST_SERVICES_OBJECT_H */

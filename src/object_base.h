@@ -10,31 +10,36 @@
 #ifndef OBJECT_BASE_H
 #define OBJECT_BASE_H
 
-#include "core/pool_type.hpp"
+#include "rust/pool.hpp"
 #include "object_type.h"
 #include "tilearea_type.h"
 #include "town_type.h"
 #include "timer/timer_game_calendar.h"
 #include "rust/object_ffi.h"
 
-using ObjectPool = Pool<Object, ObjectID, 64>;
+using ObjectPool = RustPool<Object, ObjectID, 64>;
 extern ObjectPool _object_pool;
 
-/** An object, such as transmitter, on the map. */
-struct Object : ObjectPool::PoolItem<&_object_pool> {
-	ObjectType type = INVALID_OBJECT_TYPE; ///< Type of the object
-	Town *town = nullptr; ///< Town the object is built in
-	TileArea location{INVALID_TILE, 0, 0}; ///< Location of the object
-	TimerGameCalendar::Date build_date{}; ///< Date of construction
-	uint8_t colour = 0; ///< Colour of the object, for display purpose
-	uint8_t view = 0; ///< The view setting for this object
+#include "abi-record-object_type.h"
+extern "C" {
+RustPoolCore *OPENTTD_RUST_CALL openttd_rust_object_pool_bind(RustPoolCore *);
+OpenTTDObjectRecord *OPENTTD_RUST_CALL openttd_rust_object_record_new(Object *, uint32_t);
+void OPENTTD_RUST_CALL openttd_rust_object_record_delete(OpenTTDObjectRecord *);
+}
 
-	/** Make sure the object isn't zeroed. */
-	Object() {}
-	Object(ObjectType type, Town *town, TileArea location, TimerGameCalendar::Date build_date, uint8_t view) :
-		type(type), town(town), location(location), build_date(build_date), view(view) {}
-	/** Make sure the right destructor is called as well! */
-	~Object() {}
+/** Native shell for inline drawing/script/chunk consumers of the Rust record. */
+struct Object : ObjectPool::PoolItem<&_object_pool> {
+	struct RecordDeleter {
+		void operator()(OpenTTDObjectRecord *record) const
+		{
+			_object_pool.RetireRecord(record->index.base(), record->shell, record);
+			openttd_rust_object_record_delete(record);
+		}
+	};
+	std::unique_ptr<OpenTTDObjectRecord, RecordDeleter> record{openttd_rust_object_record_new(this, this->index.base())};
+	OpenTTDObjectRecord &Record() { return *this->record; }
+	const OpenTTDObjectRecord &Record() const { return *this->record; }
+	Object() { _object_pool.BindRecord(this->index.base(), this, this->record.get()); }
 
 	static Object *GetByTile(TileIndex tile);
 
@@ -77,7 +82,6 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 		openttd_rust_object_counts_reset();
 	}
 
-protected:
 };
 
 /** Native scratch clients query the first intersecting area. */

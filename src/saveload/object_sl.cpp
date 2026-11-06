@@ -19,14 +19,14 @@
 #include "../safeguards.h"
 
 static const SaveLoad _object_desc[] = {
-	    SLE_VAR(Object, location.tile,              SLE_UINT32),
-	    SLE_VAR(Object, location.w,                 SLE_FILE_U8 | SLE_VAR_U16),
-	    SLE_VAR(Object, location.h,                 SLE_FILE_U8 | SLE_VAR_U16),
-	    SLE_REF(Object, town,                       REF_TOWN),
-	    SLE_VAR(Object, build_date,                 SLE_UINT32),
-	SLE_CONDVAR(Object, colour,                     SLE_UINT8,                  SLV_148, SL_MAX_VERSION),
-	SLE_CONDVAR(Object, view,                       SLE_UINT8,                  SLV_155, SL_MAX_VERSION),
-	SLE_CONDVAR(Object, type,                       SLE_UINT16,                 SLV_186, SL_MAX_VERSION),
+	    SLE_VARNAME(Object, Record().location.tile, "location.tile",              SLE_UINT32),
+	    SLE_VARNAME(Object, Record().location.w, "location.w",                 SLE_FILE_U8 | SLE_VAR_U16),
+	    SLE_VARNAME(Object, Record().location.h, "location.h",                 SLE_FILE_U8 | SLE_VAR_U16),
+	    SLE_GENERAL_NAME(SL_REF, "town", Object, Record().town, REF_TOWN, 0, SL_MIN_VERSION, SL_MAX_VERSION, 0),
+	    SLE_VARNAME(Object, Record().build_date, "build_date",                 SLE_UINT32),
+	SLE_CONDVARNAME(Object, Record().colour, "colour",                     SLE_UINT8,                  SLV_148, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Object, Record().view, "view",                       SLE_UINT8,                  SLV_155, SL_MAX_VERSION),
+	SLE_CONDVARNAME(Object, Record().type, "type",                       SLE_UINT16,                 SLV_186, SL_MAX_VERSION),
 };
 
 struct OBJSChunkHandler : ChunkHandler {
@@ -58,7 +58,7 @@ struct OBJSChunkHandler : ChunkHandler {
 	{
 		for (Object *o : Object::Iterate()) {
 			SlObject(o, _object_desc);
-			if (IsSavegameVersionBefore(SLV_148) && !IsTileType(o->location.tile, MP_OBJECT)) {
+			if (IsSavegameVersionBefore(SLV_148) && !IsTileType(o->Record().location.tile, MP_OBJECT)) {
 				/* Due to a small bug stale objects could remain. */
 				delete o;
 			}

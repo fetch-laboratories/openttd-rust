@@ -11,7 +11,7 @@ struct OpenTTDAirportResolverServices;
 struct HouseSpec; struct Town; struct IndustryTileSpec; struct Industry;
 struct StationSpec; struct BaseStation;
 struct OpenTTDRoadStopResolverServices; struct AirportTileSpec; struct Station;
-struct ObjectSpec; struct Object; struct RoadStopSpec;
+struct ObjectSpec; struct OpenTTDObjectRecord; struct RoadStopSpec;
 struct OpenTTDAnimationInfo { uint8_t speed, frames; bool looping, speed_callback, next_callback, random, enabled; };
 extern "C" OpenTTDAnimationInfo openttd_rust_industry_tile_animation_info(const IndustryTileSpec *) noexcept;
 template <typename Spec, typename Obj> struct OpenTTDAnimationEntry { const Spec *spec; Obj *object; };
@@ -19,12 +19,12 @@ template <typename Spec, typename Obj> struct OpenTTDAnimationEntry { const Spec
 using OpenTTDHouseAnimation = OpenTTDAnimationBinding<HouseSpec, Town, uint64_t>;
 using OpenTTDIndustryAnimation = OpenTTDAnimationBinding<IndustryTileSpec, Industry, int32_t>;
 using OpenTTDStationAnimation = OpenTTDAnimationBinding<StationSpec, BaseStation, int32_t>;
-using OpenTTDObjectAnimation = OpenTTDAnimationBinding<ObjectSpec, Object, int32_t>;
+using OpenTTDObjectAnimation = OpenTTDAnimationBinding<ObjectSpec, OpenTTDObjectRecord, int32_t>;
 using OpenTTDRoadStopAnimation = OpenTTDAnimationBinding<RoadStopSpec, BaseStation, int32_t>;
 using OpenTTDHouseAnimationEntry = OpenTTDAnimationEntry<HouseSpec, Town>;
 using OpenTTDIndustryAnimationEntry = OpenTTDAnimationEntry<IndustryTileSpec, Industry>;
 using OpenTTDStationAnimationEntry = OpenTTDAnimationEntry<StationSpec, BaseStation>;
-using OpenTTDObjectAnimationEntry = OpenTTDAnimationEntry<ObjectSpec, Object>;
+using OpenTTDObjectAnimationEntry = OpenTTDAnimationEntry<ObjectSpec, OpenTTDObjectRecord>;
 using OpenTTDRoadStopAnimationEntry = OpenTTDAnimationEntry<RoadStopSpec, BaseStation>;
 struct OpenTTDAnimationArea { uint32_t tile; uint16_t width, height; };
 struct OpenTTDAnimationServices {

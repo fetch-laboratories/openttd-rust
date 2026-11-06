@@ -6,7 +6,7 @@ use super::{Engine, State, TownId, TownRef, engine};
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN};
 use crate::economy_type::PR_TOWN_ACTION;
-use crate::objects::{Object, ObjectServices, QueryServices};
+use crate::objects::{ObjectServices, QueryServices};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Map, Services, TownHandle};
 use crate::slope_func::is_steep_slope;
 use crate::station::BaseStation;
@@ -61,7 +61,6 @@ pub struct CommandServices {
     pub bribe_error: extern "C" fn(),
     pub next_waypoint: extern "C" fn(u32) -> Relation,
     pub next_industry: extern "C" fn(u32) -> Relation,
-    pub set_object_town: extern "C" fn(*mut Object, *mut TownHandle),
     pub industry_town_by_tile: extern "C" fn(u32) -> *mut TownHandle,
     pub remove_town_sign: extern "C" fn(*mut TownHandle),
     pub delete_town: extern "C" fn(*mut TownHandle),
@@ -221,7 +220,7 @@ impl<'a> Commands<'a> {
         buttons
     }
     fn statue(&self, t: TownRef, out: *mut CommandCost, flags: u16) -> bool {
-        if !unsafe { (self.objects().can_allocate)() } {
+        if !unsafe { crate::objects::can_allocate() } {
             (self.cost.error)(out, self.s.too_many_objects);
             return false;
         }
@@ -458,15 +457,17 @@ impl<'a> Commands<'a> {
                     if (self.shared.town_count)() == 1 {
                         true
                     } else {
-                        let object = unsafe { (self.object_query().by_tile)(tile) };
-                        if unsafe { (self.object_query().town)(object) } == t.shell {
-                            if unsafe { (self.object_query().kind)(object) }
-                                == crate::object_type::OBJECT_STATUE
-                            {
+                        let object = unsafe {
+                            crate::objects::by_tile(self.shared, self.object_query(), tile)
+                        };
+                        if unsafe { (*object).town } == t.shell {
+                            if unsafe { (*object).r#type } == crate::object_type::OBJECT_STATUE {
                                 true
                             } else {
                                 if flags & DoCommandFlag::EXECUTE != 0 {
-                                    (self.s.set_object_town)(object, std::ptr::null_mut());
+                                    unsafe {
+                                        (*object).town = std::ptr::null();
+                                    }
                                     w::hit(w::TOWN_COMMAND_OBJECT_DETACH);
                                 }
                                 false
@@ -788,12 +789,12 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
         from = 0;
         loop {
             // SAFETY: Pool iteration returns a live object or null; no Rust borrow spans it.
-            let o = unsafe { (c.objects().next)(from) };
-            if o.object.is_null() {
+            let o = unsafe { crate::objects::next_record(from) };
+            if o.is_null() {
                 break;
             }
-            from = o.id.wrapping_add(1);
-            assert!(unsafe { (c.object_query().town)(o.object) } != t.shell);
+            from = unsafe { (*o).index.0 }.wrapping_add(1);
+            assert!(unsafe { (*o).town } != t.shell);
         }
         for tile in 0..c.map_size() {
             match (c.shared.tile_type)(tile) {
@@ -835,18 +836,20 @@ pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
     let mut from = 0;
     loop {
         // SAFETY: Pool iteration returns a live object or null; no Rust borrow spans it.
-        let o = unsafe { (c.objects().next)(from) };
-        if o.object.is_null() {
+        let o = unsafe { crate::objects::next_record(from) };
+        if o.is_null() {
             break;
         }
-        from = o.id.wrapping_add(1);
-        if unsafe { (c.object_query().town)(o.object) }.is_null() {
+        from = unsafe { (*o).index.0 }.wrapping_add(1);
+        if unsafe { (*o).town }.is_null() {
             let town = crate::town::spatial::calc_closest(
                 c.shared,
-                unsafe { (c.object_query().north)(o.object) },
+                unsafe { (*o).location.tile },
                 u32::MAX,
             );
-            (s.set_object_town)(o.object, town.cast_mut());
+            unsafe {
+                (*o).town = town;
+            }
             w::hit(w::TOWN_COMMAND_OBJECT_REHOME);
         }
     }
@@ -890,7 +893,6 @@ crate::abi::layouts! {
         bribe_error,
         next_waypoint,
         next_industry,
-        set_object_town,
         industry_town_by_tile,
         remove_town_sign,
         delete_town,

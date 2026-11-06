@@ -10,6 +10,7 @@
 #define TESTS_LANDSCAPE_PROTOCOL_HPP
 #include "../../tools/simulation/session-fixture.hpp"
 #include "fixture_map.hpp"
+#include "../../tools/simulation/object-loop-fixture.hpp"
 #include "../tile_cmd.h"
 #include "../rust/landscape_loop_ffi.h"
 #include "../rust/station_lifecycle_ffi.h"
@@ -38,10 +39,10 @@ template<uint8_t Kind> static void Visit(uint32_t tile_index) noexcept
 	calls++;
 	expected_tile = (expected_tile >> 1) ^ ((0U - (expected_tile & 1U)) & 0xD8FU);
 }
-static OpenTTDObjectLoopPolicy ProbeObjectPolicy(uint32_t tile) noexcept
+static uint32_t ProbeObjectIndex(uint32_t tile) noexcept
 {
 	Visit<10>(tile);
-	return {nullptr, nullptr, 0, 0, 0};
+	return 0;
 }
 static bool ProbeObjectOnWater(uint32_t) noexcept { return false; }
 template<typename Check> void Run(Check check)
@@ -54,6 +55,7 @@ template<typename Check> void Run(Check check)
 	auto shared = OpenTTDSharedServices{};
 	shared.map = &callbacks.statics;
 	shared.tile_type = Type;
+	shared.assert_condition = [](bool valid) noexcept { if (!valid) std::abort(); };
 	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
 	/* The Rust station loop's first native call is GetByTile. */
 	OpenTTDRoadStopResolverServices roadstops{};
@@ -65,7 +67,11 @@ template<typename Check> void Run(Check check)
 	auto objects = OpenTTDObjectServices{};
 	objects.shared = &shared;
 	objects.industry_tiles = &object_tiles;
-	objects.loop_policy = ProbeObjectPolicy;
+	ObjectLoopFixture object_record;
+	const OpenTTDObjectQueryServices query{.index = ProbeObjectIndex};
+	objects.query = &query;
+	objects.spec = [](uint16_t) noexcept -> const ObjectSpec * { return nullptr; };
+	objects.flags = [](const ObjectSpec *) noexcept -> uint16_t { return 0; };
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
 		.trees = nullptr,

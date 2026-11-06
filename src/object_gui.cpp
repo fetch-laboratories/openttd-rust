@@ -108,8 +108,8 @@ public:
 	void FillUsedItems(std::set<PickerItem> &items) override
 	{
 		for (const Object *o : Object::Iterate()) {
-			if (GetTileOwner(o->location.tile) != _current_company) continue;
-			const ObjectSpec *spec = ObjectSpec::Get(o->type);
+			if (GetTileOwner(o->Record().location.tile) != _current_company) continue;
+			const ObjectSpec *spec = ObjectSpec::Get(o->Record().type);
 			if (spec == nullptr || spec->class_index == INVALID_OBJECT_CLASS || !spec->IsEverAvailable()) continue;
 			items.insert(GetPickerItem(spec));
 		}

@@ -271,7 +271,7 @@ static void InitializeWindowsAndCaches()
 
 	/* Count number of objects per type */
 	for (Object *o : Object::Iterate()) {
-		Object::IncTypeCount(o->type);
+		Object::IncTypeCount(o->Record().type);
 	}
 
 	/* Identify owners of persistent storage arrays */
@@ -2162,11 +2162,11 @@ bool AfterLoadGame()
 					}
 
 					Object *o = new Object();
-					o->location.tile = (TileIndex)t;
-					o->location.w    = size;
-					o->location.h    = size;
-					o->build_date    = TimerGameCalendar::date;
-					o->town          = type == OBJECT_STATUE ? Town::Get(t.m2()) : CalcClosestTownFromTile(t, UINT_MAX);
+					o->Record().location.tile = (TileIndex)t;
+					o->Record().location.w    = size;
+					o->Record().location.h    = size;
+					o->Record().build_date    = TimerGameCalendar::date;
+					o->Record().town          = type == OBJECT_STATUE ? Town::Get(t.m2()) : CalcClosestTownFromTile(t, UINT_MAX);
 					t.m2() = o->index.base();
 					Object::IncTypeCount(type);
 				} else {
@@ -2561,8 +2561,8 @@ bool AfterLoadGame()
 	/* Add (random) colour to all objects. */
 	if (IsSavegameVersionBefore(SLV_148)) {
 		for (Object *o : Object::Iterate()) {
-			Owner owner = GetTileOwner(o->location.tile);
-			o->colour = (owner == OWNER_NONE) ? static_cast<Colours>(GB(Random(), 0, 4)) : Company::Get(owner)->livery[0].colour1;
+			Owner owner = GetTileOwner(o->Record().location.tile);
+			o->Record().colour = (owner == OWNER_NONE) ? static_cast<Colours>(GB(Random(), 0, 4)) : Company::Get(owner)->livery[0].colour1;
 		}
 	}
 
@@ -2993,7 +2993,7 @@ bool AfterLoadGame()
 		for (auto t : Map::Iterate()) {
 			if (IsTileType(t, MP_OBJECT)) {
 				Object *o = Object::Get(t.m2());
-				o->type = t.m5();
+				o->Record().type = t.m5();
 				t.m5() = 0; // zero upper bits of (now bigger) ObjectID
 			}
 		}

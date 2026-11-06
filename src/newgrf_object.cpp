@@ -221,7 +221,7 @@ uint32_t ObjectResolverObject::GetDebugID() const
  */
 uint16_t GetObjectCallback(CallbackID callback, uint32_t param1, uint32_t param2, const ObjectSpec *spec, Object *o, TileIndex tile, std::span<int32_t> regs100, uint8_t view)
 {
-	return openttd_rust_object_callback(&GetRustObjectServices(), callback, param1, param2, spec, o, tile.base(), regs100.data(), regs100.size(), view);
+	return openttd_rust_object_callback(&GetRustObjectServices(), callback, param1, param2, spec, o == nullptr ? nullptr : &o->Record(), tile.base(), regs100.data(), regs100.size(), view);
 }
 
 /**
@@ -232,7 +232,7 @@ uint16_t GetObjectCallback(CallbackID callback, uint32_t param1, uint32_t param2
  */
 static void DrawTileLayout(const TileInfo *ti, const DrawTileSpriteSpan &dts, const ObjectSpec *spec)
 {
-	PaletteID palette = (spec->flags.Test(ObjectFlag::Uses2CC) ? SPR_2CCMAP_BASE : PALETTE_RECOLOUR_START) + Object::GetByTile(ti->tile)->colour;
+	PaletteID palette = (spec->flags.Test(ObjectFlag::Uses2CC) ? SPR_2CCMAP_BASE : PALETTE_RECOLOUR_START) + Object::GetByTile(ti->tile)->Record().colour;
 
 	SpriteID image = dts.ground.sprite;
 	PaletteID pal = dts.ground.pal;
@@ -312,8 +312,8 @@ void DrawNewObjectTileInGUI(int x, int y, const ObjectSpec *spec, uint8_t view)
 /** Helper class for animation control. */
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 {
-	static const auto binding = MakeRustAnimationBindingDirect<ObjectSpec, Object, int>(
-		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = RustObjectSpecByTile(t); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, RustObjectByTile(t)}; },
+	static const auto binding = MakeRustAnimationBindingDirect<ObjectSpec, OpenTTDObjectRecord, int>(
+		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = RustObjectSpecByTile(t); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, &RustObjectByTile(t)->Record()}; },
 		[](const ObjectSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(ObjectCallbackMask::AnimationSpeed), s->callback_mask.Test(ObjectCallbackMask::AnimationNextFrame), s->flags.Test(ObjectFlag::AnimRandomBits), true}; },
 		openttd_rust_object_animation_callback);
 	return binding;
@@ -338,7 +338,7 @@ void AnimateNewObjectTile(TileIndex tile)
  */
 bool TriggerObjectTileAnimation(Object *o, TileIndex tile, ObjectAnimationTrigger trigger, const ObjectSpec *spec)
 {
-	return openttd_rust_object_trigger_tile(&GetRustObjectServices(), o, tile.base(), trigger, spec);
+	return openttd_rust_object_trigger_tile(&GetRustObjectServices(), &o->Record(), tile.base(), trigger, spec);
 }
 
 /**
@@ -349,7 +349,7 @@ bool TriggerObjectTileAnimation(Object *o, TileIndex tile, ObjectAnimationTrigge
  */
 bool TriggerObjectAnimation(Object *o, ObjectAnimationTrigger trigger, const ObjectSpec *spec)
 {
-	return openttd_rust_object_trigger(&GetRustObjectServices(), o, trigger, spec);
+	return openttd_rust_object_trigger(&GetRustObjectServices(), &o->Record(), trigger, spec);
 }
 
 const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
@@ -357,16 +357,8 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 	static const OpenTTDObjectQueryServices services{
 		.random_bits = [](uint32_t t) noexcept { return GetObjectRandomBits(TileIndex(t)); },
 		.index = [](uint32_t t) noexcept { return GetObjectIndex(TileIndex(t)).base(); },
-		.by_tile = RustObjectByTile,
-		.definition = [](Object *o) noexcept -> OpenTTDObjectDefinition { const auto *s = ObjectSpec::Get(o->type); return {s->grf_prop.grfid, s->grf_prop.local_id, o->view, s->grf_prop.HasGrfFile()}; },
-		.object_index = [](Object *o) noexcept { return o->index.base(); },
-		.kind = [](Object *o) noexcept { return o->type; },
-		.north = [](Object *o) noexcept { return o->location.tile.base(); },
-		.town = [](Object *o) noexcept -> const Town * { return o->town; },
+		.definition = [](const ObjectSpec *s) noexcept -> OpenTTDObjectDefinition { return {s->grf_prop.grfid, s->grf_prop.local_id, s->grf_prop.HasGrfFile()}; },
 		.town_tile = OpenTTDTownTile,
-		.date = [](Object *o) noexcept { return o->build_date.base(); },
-		.colour = [](Object *o) noexcept { return o->colour; },
-		.view = [](Object *o) noexcept { return o->view; },
 		.version8 = RustResolverGRFVersion8,
 		.override_id = [](uint16_t id, uint32_t grfid) noexcept { return _object_mngr.GetID(id, grfid); },
 		.manhattan = OpenTTDDistanceManhattan,
@@ -389,7 +381,7 @@ const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
 		.town_scope = RustResolverTownScope<ObjectResolverObject>,
 		.base_scope = RustResolverBaseScope,
 		.evaluate = [](const OpenTTDObjectScope *context, uint16_t callback, uint32_t param1, uint32_t param2, int32_t *regs, size_t count) noexcept -> uint16_t {
-			ObjectResolverObject ro(context->spec, context->object, TileIndex{context->tile}, context->view, static_cast<CallbackID>(callback), param1, param2);
+			ObjectResolverObject ro(context->spec, context->object == nullptr ? nullptr : context->object->shell, TileIndex{context->tile}, context->view, static_cast<CallbackID>(callback), param1, param2);
 			return ro.ResolveCallback({regs, count});
 		},
 	};

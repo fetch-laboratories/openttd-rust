@@ -8,6 +8,7 @@
 /** @file objects-console.cpp Identical inputs to unchanged original and Rust-backed bodies. */
 #include "saveload/saveload.cpp" // Unchanged native reader/dispatcher; relink replaces this object.
 #include "genworld.h"
+#include "vehicle-record-fixture.hpp"
 void ObjectProbeSetProgress(GenWorldProgress, uint);
 void ObjectProbeIncreaseProgress(GenWorldProgress);
 #define SetGeneratingWorldProgress ObjectProbeSetProgress
@@ -98,10 +99,10 @@ struct ObjectClearOrderGroup : SpriteGroup {
 };
 static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 {
-	Backup<ObjectSpec> backup(*spec); Backup<TileArea> location(o->location);
+	Backup<ObjectSpec> backup(*spec); Backup<TileArea> location(FIXTURE_FIELD(o, location));
 	GRFFile file; file.grf_version = 8; file.grfid = 0x12345678;
 	spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 17;
-	ObjectResolverObject live(spec, o, o->location.tile), empty(spec, nullptr, o->location.tile, 3), invalid(spec, nullptr, INVALID_TILE, 2);
+	ObjectResolverObject live(spec, o, FIXTURE_FIELD(o, location).tile), empty(spec, nullptr, FIXTURE_FIELD(o, location).tile, 3), invalid(spec, nullptr, INVALID_TILE, 2);
 	for (auto *r : {&live, &empty, &invalid}) for (bool incoming : {false, true}) {
 		for (uint8_t var : {0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x60,0x61,0x62,0x63,0x64,0x7A,0xFF}) {
 			bool available = incoming; uint32_t value = r->object_scope.GetVariable(var, 0, available);
@@ -109,17 +110,17 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 		}
 		fmt::print(stderr, "OBJECT random {}\n", r->object_scope.GetRandomBits());
 	}
-	for (TileIndex t : {o->location.tile + 1, INVALID_TILE}) {
+	for (TileIndex t : {FIXTURE_FIELD(o, location).tile + 1, INVALID_TILE}) {
 		ObjectResolverObject other(spec, o, t);
 		for (uint8_t var : {0x40,0x42,0x47,0x48,0x64}) { bool a = true; fmt::print(stderr, "OBJECT query-live-tile {} {} {}\n", t.base(), var, other.object_scope.GetVariable(var, 0, a)); }
 	}
-	Backup<EntityIDMapping> mapping(_object_mngr.mappings[o->type]);
+	Backup<EntityIDMapping> mapping(_object_mngr.mappings[FIXTURE_FIELD(o, type)]);
 	Backup<EntityIDMapping> lighthouse_mapping(_object_mngr.mappings[OBJECT_LIGHTHOUSE]);
-	_object_mngr.mappings[o->type] = {file.grfid, 17, o->type};
+	_object_mngr.mappings[FIXTURE_FIELD(o, type)] = {file.grfid, 17, FIXTURE_FIELD(o, type)};
 	_object_mngr.mappings[OBJECT_LIGHTHOUSE] = {file.grfid + 1, 17, OBJECT_LIGHTHOUSE};
 	for (uint32_t grfid : {0U, UINT32_MAX, file.grfid, file.grfid + 1, 0x87654321U}) {
 		live.SetRegister(0x100, grfid); bool available = false;
-		fmt::print(stderr, "OBJECT query-count {} {}\n", grfid, live.object_scope.GetVariable(0x64, grfid == 0 ? o->type : 17, available));
+		fmt::print(stderr, "OBJECT query-count {} {}\n", grfid, live.object_scope.GetVariable(0x64, grfid == 0 ? FIXTURE_FIELD(o, type) : 17, available));
 	}
 	bool same = true;
 	for (uint32_t p : {0U, 1U, 0xFFU, 0x101U}) for (uint8_t var : {0x60,0x61,0x62,0x63}) {
@@ -134,13 +135,13 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 	SpriteGroup::CanAllocateItem();
 	auto *group = new ObjectPolicyGroup(); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, group);
 	Randomizer expected = _random; expected.Next(); spec->animation.triggers = {};
-	same &= !TriggerObjectTileAnimation(o, o->location.tile, ObjectAnimationTrigger::Built, spec);
+	same &= !TriggerObjectTileAnimation(o, FIXTURE_FIELD(o, location).tile, ObjectAnimationTrigger::Built, spec);
 	same &= std::ranges::equal(_random.state, expected.state);
 	same &= !TriggerObjectAnimation(o, ObjectAnimationTrigger::Built, spec) && std::ranges::equal(_random.state, expected.state);
 	group->refresh = false; group->trigger = 1; group->expected = _random; group->word = group->expected.Next(); spec->animation.triggers = {ObjectAnimationTrigger::TileLoop};
-	same &= TriggerObjectTileAnimation(o, o->location.tile, ObjectAnimationTrigger::TileLoop, spec) && group->calls == 1 && group->equal && std::ranges::equal(_random.state, group->expected.state);
+	same &= TriggerObjectTileAnimation(o, FIXTURE_FIELD(o, location).tile, ObjectAnimationTrigger::TileLoop, spec) && group->calls == 1 && group->equal && std::ranges::equal(_random.state, group->expected.state);
 	group->refresh = true; group->trigger = 0;
-	o->location.w = o->location.h = 2;
+	FIXTURE_FIELD(o, location).w = FIXTURE_FIELD(o, location).h = 2;
 	for (bool disable : {false, true}) {
 		group->calls = 0; group->disable = disable; group->expected = _random; group->word = group->expected.Next();
 		spec->animation.triggers = {ObjectAnimationTrigger::Built};
@@ -155,7 +156,7 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 	group->expected = _random;
 	group->expected.Next(); // The inactive single-tile TileLoop trigger still draws.
 	group->word = group->expected.Next();
-	Loop(o->location.tile);
+	Loop(FIXTURE_FIELD(o, location).tile);
 	same &= group->calls == 4 && group->equal && std::ranges::equal(_random.state, group->expected.state);
 
 	delete group;
@@ -204,7 +205,7 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	auto tested = Command<CMD_BUILD_OBJECT>::Do({}, tile, kind, 3); Result("invocation-test", tested); ObjectNeed(tested.Succeeded(), __LINE__);
 	auto built = Command<CMD_BUILD_OBJECT>::Do(DoCommandFlag::Execute, tile, kind, 3); Result("invocation-build", built); ObjectNeed(built.Succeeded(), __LINE__);
 	Object *object = Object::GetByTile(tile);
-	ObjectNeed(object->colour == 0xA4, __LINE__);
+	ObjectNeed(FIXTURE_FIELD(object, colour) == 0xA4, __LINE__);
 	ObjectNeed(GetObjectCallback(CBID_OBJECT_COLOUR, 0, 0, spec, object, tile) == 0xA4 + (GetObjectRandomBits(tile) & 1), __LINE__);
 	std::array<int32_t, 5> regs{};
 	auto callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, 0x12345678, 0x87654321, spec, nullptr, tile, regs, 2);
@@ -218,7 +219,7 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	ObjectResolverObject missing(spec, object, tile), missing_purchase(spec, nullptr, INVALID_TILE);
 	regs.fill(0x1234); ObjectNeed(missing.ResolveCallback(regs) == CALLBACK_FAILED && missing_purchase.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == 0x1234, __LINE__);
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
-	fmt::print(stderr, "OBJECT invocation-roots {} {} {}\n", reloaded, callback, object->colour);
+	fmt::print(stderr, "OBJECT invocation-roots {} {} {}\n", reloaded, callback, FIXTURE_FIELD(object, colour));
 	/* The procedure reenters self queries; the parent program enters the Rust
 	 * town persistent storage and preserves readonly construction semantics. */
 	auto *parent = program(VSG_SCOPE_PARENT, slope);
@@ -226,11 +227,11 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, parent); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, parent);
 	ObjectResolverObject writable(spec, object, tile), readonly(spec, nullptr, tile);
 	ObjectNeed(writable.ResolveCallback(regs) == 0x400 && regs[1] == 0x430, __LINE__);
-	auto *town = object->town; auto *cached = writable.GetScope(VSG_SCOPE_PARENT);
-	object->town = nullptr; ObjectNeed(writable.GetScope(VSG_SCOPE_PARENT) == cached && writable.ResolveCallback(regs) == 0x400, __LINE__);
+	auto *town = FIXTURE_FIELD(object, town); auto *cached = writable.GetScope(VSG_SCOPE_PARENT);
+	FIXTURE_FIELD(object, town) = nullptr; ObjectNeed(writable.GetScope(VSG_SCOPE_PARENT) == cached && writable.ResolveCallback(regs) == 0x400, __LINE__);
 	ObjectResolverObject retry(spec, object, tile);
 	ObjectNeed(retry.GetScope(VSG_SCOPE_PARENT, 239) == retry.ResolverObject::GetScope(VSG_SCOPE_PARENT, 239) && retry.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
-	object->town = town; ObjectNeed(retry.ResolveCallback(regs) == 0x400 && regs[1] == 0x430, __LINE__);
+	FIXTURE_FIELD(object, town) = town; ObjectNeed(retry.ResolveCallback(regs) == 0x400 && regs[1] == 0x430, __LINE__);
 	parent->adjusts[2].and_mask = 0x431; ObjectNeed(readonly.ResolveCallback(regs) == 0x400 && regs[1] == 0x430, __LINE__);
 	ObjectNeed(writable.GetScope(VSG_SCOPE_RELATIVE, 127) == writable.ResolverObject::GetScope(VSG_SCOPE_RELATIVE, 127), __LINE__);
 	fmt::print(stderr, "OBJECT invocation-parent {} {}\n", town->index.base(), regs[1]);
@@ -289,13 +290,13 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 	if (args[1] == "inspect") {
 		AnimationReloadObservation();
 		TileIndex invocation_tile = INVALID_TILE;
-		for (const Object *o : Object::Iterate()) if (o->type == OBJECT_TRANSMITTER) { invocation_tile = o->location.tile; break; }
+		for (const Object *o : Object::Iterate()) if (FIXTURE_FIELD(o, type) == OBJECT_TRANSMITTER) { invocation_tile = FIXTURE_FIELD(o, location).tile; break; }
 		ObjectNeed(invocation_tile != INVALID_TILE, __LINE__);
 		Backup<bool> bulldozer(_cheats.magic_bulldozer.value, true);
 		ObjectNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, invocation_tile).Succeeded(), __LINE__);
 		bulldozer.Restore(); ObjectInvocationProbe(invocation_tile, true);
 		std::array<uint16_t, NUM_OBJECTS> counts{};
-		for (const Object *o : Object::Iterate()) counts[o->type]++;
+		for (const Object *o : Object::Iterate()) counts[FIXTURE_FIELD(o, type)]++;
 		bool equal = true;
 		for (ObjectType type = 0; type < NUM_OBJECTS; type++) equal &= counts[type] == Object::GetTypeCount(type);
 		fmt::print(stderr, "OBJECT afterload-counts {}\n", equal);
@@ -321,7 +322,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 	if (args[1] == "gaps") {
 		auto before = Object::GetTypeCount(63999);
 		for (uint i = 0; i < 65536; i++) Object::IncTypeCount(63999);
-		Object::CanAllocateItem(); Object *discarded = new Object(); discarded->type = 63999; delete discarded;
+		Object::CanAllocateItem(); Object *discarded = new Object(); FIXTURE_FIELD(discarded, type) = 63999; delete discarded;
 		fmt::print(stderr, "OBJECT count-wrap {}\n", Object::GetTypeCount(63999) == before);
 		for (uint i = 0; i < 65536; i++) Object::DecTypeCount(63999);
 		Backup<bool> bulldozer(_cheats.magic_bulldozer.value, true);
@@ -346,7 +347,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 			ClearBridgeMiddle(tile);
 		}
 		Result("colour", build(OBJECT_TRANSMITTER, tile));
-		fmt::print(stderr, "OBJECT callback-colour {}\n", Object::GetByTile(tile)->colour == 0xA5);
+		fmt::print(stderr, "OBJECT callback-colour {}\n", FIXTURE_FIELD(Object::GetByTile(tile), colour) == 0xA5);
 		ObjectPolicyProbe(Object::GetByTile(tile), spec);
 		AnimationBindingsProbe();
 		backup.Restore(); delete clear_group;

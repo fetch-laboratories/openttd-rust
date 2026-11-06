@@ -420,7 +420,7 @@ static const NIVariable _niv_objects[] = {
 
 class NIHObject : public NIHelper {
 	bool IsInspectable(uint index) const override        { return ObjectSpec::GetByTile(TileIndex{index})->grf_prop.HasGrfFile(); }
-	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Object::GetByTile(TileIndex{index})->town->index); }
+	uint GetParent(uint index) const override            { return GetInspectWindowNumber(GSF_FAKE_TOWNS, Object::GetByTile(TileIndex{index})->Record().town->index); }
 	const void *GetInstance(uint index)const override    { return Object::GetByTile(TileIndex{index}); }
 	const void *GetSpec(uint index) const override       { return ObjectSpec::GetByTile(TileIndex{index}); }
 	std::string GetName(uint index) const override       { return GetString(STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT, STR_NEWGRF_INSPECT_CAPTION_OBJECT_AT_OBJECT, INVALID_STRING_ID, index); }

@@ -26,6 +26,7 @@
 #include "rust/landscape_loop_ffi.h"
 
 #include "session-fixture.hpp"
+#include "object-loop-fixture.hpp"
 
 [[noreturn]] void NOT_REACHED(const std::source_location) { std::abort(); }
 
@@ -108,15 +109,16 @@ static TileIndex _cur_tileloop_tile;
 
 static uint32_t Random(void *) noexcept { std::abort(); }
 static uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
-static OpenTTDObjectLoopPolicy ReferenceObjectPolicy(uint32_t tile) noexcept
+static uint32_t ReferenceObjectIndex(uint32_t tile) noexcept
 {
 	Object(tile);
-	return {nullptr, nullptr, 0, 0, 0};
+	return 0;
 }
 static bool ReferenceObjectOnWater(uint32_t) noexcept { return false; }
 static OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 static const OpenTTDIndustryTileServices object_tiles{.on_water = ReferenceObjectOnWater};
-static const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .loop_policy = ReferenceObjectPolicy};
+static const OpenTTDObjectQueryServices object_query{.index = ReferenceObjectIndex};
+static const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .spec = [](uint16_t) noexcept -> const ObjectSpec * { return nullptr; }, .flags = [](const ObjectSpec *) noexcept -> uint16_t { return 0; }, .query = &object_query};
 /* The Rust station loop's first native call is GetByTile; StationType::End then selects no arm. */
 static const OpenTTDRoadStopResolverServices roadstops{.by_tile = [](uint32_t tile) noexcept -> BaseStation * { LandscapeStationLoop(tile); return nullptr; }};
 static const OpenTTDStationLifecycleServices station{.shared = &shared, .roadstop = &roadstops};
@@ -204,6 +206,8 @@ static void MovementGap()
 void Main()
 {
 	MovementGap();
+	ObjectLoopFixture object_record;
+	shared.assert_condition = [](bool valid) noexcept { if (!valid) std::abort(); };
 	shared.tile_type = Type;
 	shared.station_type = [](uint32_t) noexcept { return StationType::End; };
 	unsigned cases = 0;

@@ -15,7 +15,7 @@
 #include "newgrf_town.h"
 #include "economy_func.h"
 #include "timer/timer_game_calendar.h"
-#include "object_type.h"
+#include "object_base.h"
 #include "newgrf_animation_type.h"
 #include "newgrf_badge_type.h"
 #include "newgrf_class.h"
@@ -124,7 +124,7 @@ struct ObjectScopeResolver : public ScopeResolver {
 	 */
 	ObjectScopeResolver(ResolverObject &ro, Object *obj, const ObjectSpec *spec, TileIndex tile, uint8_t view = 0)
 		: ScopeResolver(ro)
-		, context(openttd_rust_object_scope_init(obj, spec, tile.base(), view))
+		, context(openttd_rust_object_scope_init(obj == nullptr ? nullptr : &obj->Record(), spec, tile.base(), view))
 	{
 	}
 

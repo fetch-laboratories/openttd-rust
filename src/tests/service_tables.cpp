@@ -9,6 +9,7 @@
 #include "../depot_base.h"
 #include "../signs_base.h"
 #include "../goal_base.h"
+#include "../object_base.h"
 #include "../story_base.h"
 #include "../league_base.h"
 #include "../newgrf_text_type.h"
@@ -126,4 +127,5 @@ TEST_CASE("Rust ABI - canonical objective records")
 #include "abi-layout-goal_type.inc"
 #include "abi-layout-story_type.inc"
 #include "abi-layout-league_type.inc"
+#include "abi-layout-object_type.inc"
 }

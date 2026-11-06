@@ -44,7 +44,6 @@ struct OpenTTDTownCommandServices {
 	void (*bribe_error)() noexcept OPENTTD_SERVICE_DEFAULT(bribe_error);
 	OpenTTDTownPoolRelation (*next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);
 	OpenTTDTownPoolRelation (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
-	void (*set_object_town)(Object *, Town *) noexcept OPENTTD_SERVICE_DEFAULT(set_object_town);
 	Town *(*industry_town_by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_town_by_tile);
 	void (*remove_town_sign)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(remove_town_sign);
 	void (*delete_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(delete_town);

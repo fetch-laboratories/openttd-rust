@@ -26,7 +26,6 @@
 #include "object.h"
 #include "cargopacket.h"
 #include "core/random_func.hpp"
-#include "core/pool_func.hpp"
 #include "object_map.h"
 #include "object_base.h"
 #include "newgrf_config.h"
@@ -62,7 +61,7 @@
 #include "safeguards.h"
 
 ObjectPool _object_pool("Object");
-INSTANTIATE_POOL_METHODS(Object)
+[[maybe_unused]] static const auto _object_pool_binding = openttd_rust_object_pool_bind(_object_pool.owner);
 
 /**
  * Get the object associated with a tile.
@@ -83,7 +82,7 @@ INSTANTIATE_POOL_METHODS(Object)
 ObjectType GetObjectType(Tile t)
 {
 	assert(IsTileType(t, MP_OBJECT));
-	return Object::GetByTile(t)->type;
+	return Object::GetByTile(t)->Record().type;
 }
 
 /** Initialize/reset the objects. */
@@ -193,7 +192,7 @@ static void DrawTile_Object(TileInfo *ti)
 		PaletteID palette = to == OWNER_NONE ? PAL_NONE : GetCompanyPalette(to);
 
 		if (type == OBJECT_HQ) {
-			TileIndex diff = ti->tile - Object::GetByTile(ti->tile)->location.tile;
+			TileIndex diff = ti->tile - Object::GetByTile(ti->tile)->Record().location.tile;
 			dts = &_object_hq[GetCompanyHQSize(ti->tile) << 2 | TileY(diff) << 1 | TileX(diff)];
 		} else {
 			dts = &_objects[type];
@@ -248,7 +247,7 @@ static void GetTileDesc_Object(TileIndex tile, TileDesc &td)
 	const ObjectSpec *spec = ObjectSpec::GetByTile(tile);
 	td.str = spec->name;
 	td.owner[0] = GetTileOwner(tile);
-	td.build_date = Object::GetByTile(tile)->build_date;
+	td.build_date = Object::GetByTile(tile)->Record().build_date;
 
 	if (spec->grf_prop.HasGrfFile()) {
 		td.grf = GetGRFConfig(spec->grf_prop.grfid)->GetName();
@@ -334,32 +333,23 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.spec_count = []() noexcept -> size_t { return ObjectSpec::Count(); },
 		.spec = [](uint16_t type) noexcept -> const ObjectSpec * { return ObjectSpec::Get(type); },
 		.callbacks = RustObjectSpecCallbacks,
-		.colour_policy = [](Object *o) noexcept -> OpenTTDObjectPolicy { const ObjectSpec *spec = RustObjectSpecByTile(o->location.tile.base()); return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec)}; },
 		.flags = RustObjectSpecFlags,
 		.footprint = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectFootprint { return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec), spec->size}; },
 		.clearance = [](uint32_t tile) noexcept -> OpenTTDObjectClearance { const ObjectSpec *spec = RustObjectSpecByTile(tile); return {RustObjectSpecFlags(spec), spec->height}; },
 		.area_shape = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAreaShape { return {RustObjectViews(spec), spec->size}; },
 		.admission = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAdmission { return {RustObjectViews(spec), spec->height}; },
 		.generation = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectGeneration { return {RustObjectSpecFlags(spec), spec->generate_amount, RustObjectViews(spec)}; },
-		.can_allocate = []() noexcept -> bool { return Object::CanAllocateItem(); },
-		.allocate = [](uint16_t type, const Town *town, OpenTTDObjectArea area, uint8_t view) noexcept -> OpenTTDObjectAllocation { Object *o = new Object(type, const_cast<Town *>(town), TileArea(TileIndex(area.tile), area.width, area.height), TimerGameCalendar::date, view); return {o, o->index.base()}; },
-		.object_type = [](uint32_t tile) noexcept { return GetObjectType(TileIndex(tile)); },
-		.loop_policy = [](uint32_t tile) noexcept -> OpenTTDObjectLoopPolicy { Object *o = RustObjectByTile(tile); const auto kind = o->type; const ObjectSpec *spec = RustObjectSpecByTile(tile); const auto flags = RustObjectSpecFlags(spec); return {spec, o, ObjectFlags{flags}.Test(ObjectFlag::Animation) ? o->location.tile.base() : 0, flags, kind}; },
-		.identity = [](uint32_t tile) noexcept -> OpenTTDObjectIdentity { Object *o = RustObjectByTile(tile); return {o, {o->location.tile.base(), o->location.w, o->location.h}, o->type}; },
-		.location = [](Object *o) noexcept -> OpenTTDObjectArea { const auto &a = o->location; return {a.tile.base(), a.w, a.h}; },
-		.next = [](uint32_t from) noexcept -> OpenTTDObjectNext { for (Object *o : Object::Iterate(from)) return {o, o->index.base(), o->location.tile.base()}; return {nullptr, UINT32_MAX, 0}; },
-		.set_colour = [](Object *o, uint8_t colour) noexcept -> void { o->colour = colour; },
+		.allocate = []() noexcept -> OpenTTDObjectRecord * { return (new Object())->record.get(); },
 		.recolour = RustObjectRecolour,
 		.colour_error = RustFixedSpecCallbackError<CBID_OBJECT_COLOUR, ObjectSpec>,
 		.make = [](uint32_t tile, uint8_t owner, uint32_t id, WaterClass water, uint32_t random) noexcept -> void { MakeObject(TileIndex(tile), Owner(owner), ObjectID(id), water, random); },
-		.delete_object = [](Object *o) noexcept -> void { delete o; },
+		.delete_object = [](OpenTTDObjectRecord *o) noexcept -> void { delete o->shell; },
 		.query = &GetRustObjectQueryServices(),
 		.resolver = &GetObjectResolverServices(),
 		.slope_error = RustLocationCallbackError<ObjectSpec, ObjectSpec, OpenTTDObjectSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 		.build_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->build_cost_multiplier, RustGRFPriceShift(RustSpecGRFFile(spec), PR_BUILD_OBJECT)}; },
 		.clear_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->clear_cost_multiplier, RustGRFPriceShift(RustSpecGRFFile(spec), PR_CLEAR_OBJECT)}; },
 		.set_hq = [](uint8_t owner, uint32_t tile) noexcept -> void { Company::Get(CompanyID(owner))->location_of_HQ = TileIndex(tile); SetWindowDirty(WC_COMPANY, owner); },
-		.statue_town = [](Object *o) noexcept -> OpenTTDTownRef { Town *t = o->town; return {t, t->growth_owner.get(), t->index.base()}; },
 		.close_inspect = RustCloseInspect<GSF_OBJECTS, uint32_t>,
 		.progress_set = [](OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept -> bool { return RunGenerationProgress(frame, [total] { RustSetGeneratingWorldProgress(GWP_OBJECT, total); }); },
 		.progress_increase = [](OpenTTDObjectGenerationFrame *frame) noexcept -> bool { return RunGenerationProgress(frame, [] { RustIncreaseGeneratingWorldProgress(GWP_OBJECT); }); },
