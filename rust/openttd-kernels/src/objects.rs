@@ -468,9 +468,6 @@ impl<'a> World<'a> {
             }
         }
     }
-    unsafe fn next_object(&self, from: u32) -> *mut Object {
-        unsafe { next_record(from) }
-    }
     unsafe fn statue_town(&self, object: *mut Object) -> crate::town::TownRef {
         unsafe {
             let shell = (*object).town;
@@ -520,7 +517,7 @@ impl<'a> World<'a> {
         // SAFETY: Typed iteration resolves each live canonical record; callbacks retain no borrow.
         unsafe {
             loop {
-                let o = self.next_object(from);
+                let o = next_record(from);
                 if o.is_null() {
                     break;
                 }
@@ -1493,7 +1490,7 @@ impl World<'_> {
         unsafe {
             let mut from = 0;
             loop {
-                let object = self.next_object(from);
+                let object = next_record(from);
                 if object.is_null() {
                     break;
                 }
