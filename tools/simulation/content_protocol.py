@@ -388,6 +388,8 @@ def observe(run: Run, server: ContentServer, mirror: list[str]) -> list[str]:
 REQUIRED = (
     "CONTENT event connect true",
     "CONTENT event complete 120",
+    "get /files/s120.tar.gz",
+    "get /files/stall/s123.tar.gz",
     "CONTENT event complete 121",
     "CONTENT event complete 122",
     "CONTENT event complete 125",
@@ -443,6 +445,8 @@ def prepare(
                     "OTTD_CONTENT_MIRROR_URI": address + "/mirror",
                 },
                 False,
+                # The original HTTP queue requires its native HttpThread worker.
+                native_threads=True,
             )
         finally:
             httpd.shutdown()

@@ -1,7 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file content_protocol-console.cpp Content client steps, callbacks and state against a local server. */
 #include "stdafx.h"
+#include "3rdparty/fmt/ranges.h"
 #include "console_internal.h"
+#include "core/string_consumer.hpp"
 #include "network/network_content.h"
 #include "network/network_func.h"
 #include "timer/timer_manager.h"
