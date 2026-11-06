@@ -45,8 +45,6 @@ struct OpenTTDAnimationServices {
 	AnimatedTileState (*state)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(state);
 	void (*set_state)(uint32_t, AnimatedTileState) noexcept OPENTTD_SERVICE_DEFAULT(set_state);
 	const HouseSpec *(*house_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_spec);
-	uint8_t (*road_frame)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_frame);
-	bool (*set_road_frame)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_frame);
 	bool (*rail_belongs)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_belongs);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
 	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
@@ -54,8 +52,6 @@ struct OpenTTDAnimationServices {
 	uint16_t (*road_spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_triggers);
 	uint8_t (*airport_spec_triggers)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec_triggers);
 	bool (*airport_belongs)(const Station *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_belongs);
-	size_t (*road_count)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
-	uint32_t (*road_tile)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tile);
 };
 const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept;

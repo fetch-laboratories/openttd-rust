@@ -235,11 +235,11 @@ impl<O> Frame<O> for TileFrame {
 }
 pub struct RoadFrame;
 impl Frame<BaseStation> for RoadFrame {
-    fn get(a: &Services, o: *mut BaseStation, t: u32) -> u8 {
-        (a.road_frame)(o, t)
+    fn get(_a: &Services, o: *mut BaseStation, t: u32) -> u8 {
+        crate::station_storage::roadstop_value(o, t, true)
     }
-    fn set(a: &Services, o: *mut BaseStation, t: u32, f: u8) -> bool {
-        (a.set_road_frame)(o, t, f)
+    fn set(_a: &Services, o: *mut BaseStation, t: u32, f: u8) -> bool {
+        crate::station_storage::roadstop_set(o, t, f, true)
     }
 }
 fn sound<S, O, E: Callback<S, O>>(

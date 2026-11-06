@@ -95,35 +95,6 @@ void BaseStation::PostDestructor(size_t)
 	InvalidateWindowData(WC_SELECT_STATION, 0, 0);
 }
 
-bool BaseStation::SetRoadStopTileData(TileIndex tile, uint8_t data, bool animation)
-{
-	for (RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
-		if (tile_data.tile == tile) {
-			uint8_t &v = animation ? tile_data.animation_frame : tile_data.random_bits;
-			if (v == data) return false;
-			v = data;
-			return true;
-		}
-	}
-	RoadStopTileData tile_data;
-	tile_data.tile = tile;
-	tile_data.animation_frame = animation ? data : 0;
-	tile_data.random_bits = animation ? 0 : data;
-	this->custom_roadstop_tile_data.push_back(tile_data);
-	return data != 0;
-}
-
-void BaseStation::RemoveRoadStopTileData(TileIndex tile)
-{
-	for (RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
-		if (tile_data.tile == tile) {
-			tile_data = this->custom_roadstop_tile_data.back();
-			this->custom_roadstop_tile_data.pop_back();
-			return;
-		}
-	}
-}
-
 /**
  * Called when new facility is built on the station. If it is the first facility
  * it initializes also 'xy' and 'random_bits' members

@@ -147,6 +147,7 @@ mod station_lifecycle;
 mod station_map;
 mod station_record;
 mod station_service;
+mod station_storage;
 mod station_type;
 mod string_func;
 mod string_type;

@@ -237,7 +237,6 @@ pub struct CommandServicesTable {
     pub set_custom_road_index: extern "C" fn(u32, u8),
     pub custom_road_index: extern "C" fn(u32) -> u32,
 
-    pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
     pub road_vehicle_owner: extern "C" fn(crate::vehicle::VehicleRef) -> *mut crate::road::State,
     pub order_station_location: extern "C" fn(crate::vehicle::VehicleRef, u16) -> u32,
@@ -2524,13 +2523,12 @@ impl Ctx<'_> {
             (self.s.station_infrastructure)(owner, 1);
             (self.s.set_custom_road_index)(tile, specindex.value);
             if !spec.is_null() {
-                unsafe {
-                    ((*self.s.roadstop_resolver).set_tile_random)(
-                        st,
-                        tile,
-                        ((self.shared.random)(self.shared.context) & 255) as u8,
-                    );
-                }
+                crate::station_storage::roadstop_set(
+                    st,
+                    tile,
+                    ((self.shared.random)(self.shared.context) & 255) as u8,
+                    false,
+                );
                 crate::animated_tile::openttd_rust_trigger_roadstop(
                     st,
                     tile,
@@ -2687,7 +2685,7 @@ impl Ctx<'_> {
             if !waypoint && replacement < 0 {
                 self.tiles_changed(st, false, if truck { 2 } else { 3 });
             }
-            (self.s.remove_stop_tile_data)(st, tile);
+            crate::station_storage::roadstop_remove(st, tile);
             if specindex as i32 != replacement {
                 unsafe {
                     crate::newgrf_roadstop::openttd_rust_roadstop_deallocate(
@@ -4325,7 +4323,6 @@ crate::abi::layouts! {
         delete_stop,
         set_custom_road_index,
         custom_road_index,
-        remove_stop_tile_data,
         close_stop_inspect,
         road_vehicle_owner,
         order_station_location,

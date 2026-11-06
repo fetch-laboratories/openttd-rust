@@ -693,9 +693,7 @@ impl Ctx<'_> {
             );
             (self.s.set_custom_road_index)(tile, specindex.value);
             if !spec.is_null() {
-                unsafe {
-                    ((*self.s.roadstop_resolver).set_tile_random)(wp, tile, 0);
-                }
+                crate::station_storage::roadstop_set(wp, tile, 0, false);
             }
             (self.s.station_infrastructure)(owner, 1);
             (self.shared.mark_dirty)(tile);

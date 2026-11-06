@@ -18,6 +18,44 @@
 #else
 extern std::vector<TileIndex> _animated_tiles;
 #endif
+static const auto &AnimationRoadTiles(const BaseStation *st)
+{
+#ifdef WITH_RUST
+	return st->RoadStopTiles();
+#else
+	return st->custom_roadstop_tile_data;
+#endif
+}
+static TileIndex AnimationRoadTile(const RoadStopTileData &entry)
+{
+#ifdef WITH_RUST
+	return TileIndex(entry.tile);
+#else
+	return entry.tile;
+#endif
+}
+static void AnimationClearRoadData(BaseStation *st)
+{
+#ifdef WITH_RUST
+	st->ClearRoadStopTileData();
+#else
+	st->custom_roadstop_tile_data.clear();
+#endif
+}
+struct AnimationRoadDataScope {
+	BaseStation *station;
+	std::vector<RoadStopTileData> saved;
+	explicit AnimationRoadDataScope(BaseStation *station) : station(station), saved(AnimationRoadTiles(station).begin(), AnimationRoadTiles(station).end()) {}
+	~AnimationRoadDataScope()
+	{
+		AnimationClearRoadData(this->station);
+		for (const auto &entry : this->saved) {
+			auto tile = AnimationRoadTile(entry);
+			this->station->SetRoadStopRandomBits(tile, entry.random_bits);
+			this->station->SetRoadStopAnimationFrame(tile, entry.animation_frame);
+		}
+	}
+};
 static std::vector<TileIndex> AnimationQueue()
 {
 #ifdef WITH_RUST
@@ -48,7 +86,7 @@ static void AnimationTrace(std::string_view event)
 	auto *st = BaseStation::GetByTile(animation_tile);
 	fmt::print(stderr, "OBJECT animation-trace {} {} {} {} {}", animation_case, animation_sequence++, event, animation_road ? st->GetRoadStopAnimationFrame(animation_tile) : GetAnimationFrame(animation_tile), to_underlying(GetAnimatedTileState(animation_tile)));
 	for (auto t : AnimationQueue()) fmt::print(stderr, " q{}", t.base());
-	for (const auto &r : st->custom_roadstop_tile_data) fmt::print(stderr, " r{}:{}:{}", r.tile.base(), r.random_bits, r.animation_frame);
+	for (const auto &r : AnimationRoadTiles(st)) fmt::print(stderr, " r{}:{}:{}", AnimationRoadTile(r).base(), r.random_bits, r.animation_frame);
 	fmt::print(stderr, "\n");
 }
 static uint generic_sound_calls = 0;
@@ -249,10 +287,10 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		struct CachedRestore { decltype(set_cached) &set; StationAnimationTriggers value; ~CachedRestore() { this->set(this->value); } } restore_cached{set_cached, get_cached()};
 		StationAnimationTriggers cached = get_cached();
 		Backup<StationAnimationTriggers> old_cached(cached);
-		Backup<std::vector<RoadStopTileData>> data(st->custom_roadstop_tile_data);
+		AnimationRoadDataScope data(st);
 		if constexpr (std::is_same_v<Spec, RoadStopSpec>) {
-			st->custom_roadstop_tile_data.clear();
-			for (auto it = members.rbegin(); it != members.rend(); ++it) st->custom_roadstop_tile_data.push_back({*it, 19, 0});
+			AnimationClearRoadData(st);
+			for (auto it = members.rbegin(); it != members.rend(); ++it) st->SetRoadStopRandomBits(*it, 19);
 		}
 		for (bool trigger : {false, true}) for (bool ambient : {false, true}) for (uint16_t result : {0xFFFF, 0x1FD, 0x1FE, 0x1FF, 0x103, 0x107, 0x8003}) {
 			AutoRestoreBackup<bool> sound(_settings_client.sound.ambient, ambient);
@@ -382,7 +420,7 @@ static void AnimationReloadObservation()
 	const auto queue = AnimationQueue(); if (queue.empty()) std::abort();
 	fmt::print(stderr, "OBJECT animation-reload {} {} {}", queue.size(), _random.state[0], _random.state[1]);
 	for (auto t : queue) fmt::print(stderr, " {}:{}:{}", t.base(), GetAnimationFrame(t), to_underlying(GetAnimatedTileState(t)));
-	for (const auto *st : BaseStation::Iterate()) for (const auto &data : st->custom_roadstop_tile_data) fmt::print(stderr, " r{}:{}:{}:{}", st->index.base(), data.tile.base(), data.random_bits, data.animation_frame);
+	for (const auto *st : BaseStation::Iterate()) for (const auto &data : AnimationRoadTiles(st)) fmt::print(stderr, " r{}:{}:{}:{}", st->index.base(), AnimationRoadTile(data).base(), data.random_bits, data.animation_frame);
 	fmt::print(stderr, "\n");
 }
 static void AnimationBindingsProbe()
@@ -402,16 +440,16 @@ static void AnimationBindingsProbe()
 	AnimationBindingProbe("airport", tiles[3], a, AirportTileCallbackMask::AnimationSpeed, AirportTileCallbackMask::AnimationNextFrame, AnimateAirportTile, frame(tiles[3]), [a](bool bits) { AssignBit(a->animation_special_flags, 0, bits); });
 	auto *rs = BaseStation::GetByTile(tiles[4]); RoadStopSpec road{};
 	Backup<std::vector<SpecMapping<RoadStopSpec>>> road_specs(rs->roadstop_speclist);
-	Backup<std::vector<RoadStopTileData>> road_data(rs->custom_roadstop_tile_data);
+	AnimationRoadDataScope road_data(rs);
 	const auto road_index = GetCustomRoadStopSpecIndex(tiles[4]); rs->roadstop_speclist.resize(2); rs->roadstop_speclist[1].spec = &road; SetCustomRoadStopSpecIndex(tiles[4], 1);
 	AnimationBindingProbe("roadstop", tiles[4], &road, RoadStopCallbackMask::AnimationSpeed, RoadStopCallbackMask::AnimationNextFrame, AnimateRoadStopTile, [rs, t = tiles[4]](int value) { if (value >= 0) rs->SetRoadStopAnimationFrame(t, value); return rs->GetRoadStopAnimationFrame(t); }, [&road](bool bits) { road.flags.Set(RoadStopSpecFlag::Cb141RandomBits, bits); });
 	const auto zero_queue = AnimationQueue(); const auto zero_state = GetAnimatedTileState(tiles[4]);
-	rs->custom_roadstop_tile_data.clear();
+	AnimationClearRoadData(rs);
 	fmt::print(stderr, "OBJECT animation-road-zero {}", rs->GetRoadStopAnimationFrame(tiles[4]));
 	road.animation.frames = 0; road.animation.speed = 0; road.callback_mask.Reset();
 	SetAnimatedTileState(tiles[4], AnimatedTileState::None); AddAnimatedTile(tiles[4], false);
 	AnimateRoadStopTile(tiles[4]);
-	fmt::print(stderr, " {} {} {}\n", rs->custom_roadstop_tile_data.size(), rs->GetRoadStopAnimationFrame(tiles[4]), GetAnimatedTileState(tiles[4]) == AnimatedTileState::Deleted);
+	fmt::print(stderr, " {} {} {}\n", AnimationRoadTiles(rs).size(), rs->GetRoadStopAnimationFrame(tiles[4]), GetAnimatedTileState(tiles[4]) == AnimatedTileState::Deleted);
 	RestoreAnimationQueue(zero_queue); SetAnimatedTileState(tiles[4], zero_state);
 	SetCustomRoadStopSpecIndex(tiles[4], road_index);
 	auto *o = const_cast<ObjectSpec *>(ObjectSpec::GetByTile(tiles[5]));

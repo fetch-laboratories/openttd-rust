@@ -55,6 +55,13 @@ crate::abi::shared_records! {
         pub right: i32,
         pub bottom: i32,
     }
+    /// One custom road-stop tile's random and animation state.
+    #[derive(Clone, Copy)]
+    "OpenTTDRoadStopTileData" ["station"] => pub struct RoadStopTileData {
+        pub tile: TileIndex,
+        pub random_bits: u8,
+        pub animation_frame: u8,
+    }
     /// Optional station cargo and flow owners. Native views borrow these pointers
     /// only until clear/destruction; no facade owns either allocation.
     "OpenTTDStationGoodsData" ["station"] => pub struct StationGoodsData {
@@ -143,6 +150,7 @@ crate::abi::shared_records! {
         pub time_since_load: u8,
         pub time_since_unload: u8,
         pub last_vehicle_type: u8,
+        pub custom_roadstop_tile_data: crate::industrytype::NativeVec<RoadStopTileData> => "RustVector<OpenTTDRoadStopTileData>",
     }
     /// The fields of one `RoadStop` shell.
     "OpenTTDRoadStopState" ["station"] => pub struct RoadStopRecord {
@@ -764,6 +772,7 @@ impl StationRecord {
             time_since_load: 255,
             time_since_unload: 255,
             last_vehicle_type: 255,
+            custom_roadstop_tile_data: crate::industrytype::NativeVec::new(),
         }
     }
 }

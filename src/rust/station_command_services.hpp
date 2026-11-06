@@ -145,7 +145,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.delete_stop = [](RoadStop *stop) noexcept { delete stop; },
 		.set_custom_road_index = [](uint32_t tile, uint8_t index) noexcept { SetCustomRoadStopSpecIndex(TileIndex{tile}, index); },
 		.custom_road_index = RustCustomRoadStopIndex,
-		.remove_stop_tile_data = [](BaseStation *st, uint32_t tile) noexcept { st->RemoveRoadStopTileData(TileIndex{tile}); },
 		.close_stop_inspect = RustRoadStopCloseInspect,
 		.road_vehicle_owner = [](OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); },
 		.order_station_location = RustVehicleOrderStationLocation,

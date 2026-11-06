@@ -59,8 +59,6 @@ pub struct Services {
     pub state: extern "C" fn(u32) -> AnimatedTileState,
     pub set_state: extern "C" fn(u32, AnimatedTileState),
     pub house_spec: extern "C" fn(u16) -> *const HouseSpec,
-    pub road_frame: extern "C" fn(*mut BaseStation, u32) -> u8,
-    pub set_road_frame: extern "C" fn(*mut BaseStation, u32, u8) -> bool,
     pub rail_belongs: extern "C" fn(*mut BaseStation, u32) -> bool,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub industry_object: extern "C" fn(u32) -> *mut IndustryShell,
@@ -68,8 +66,6 @@ pub struct Services {
     pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
     pub airport_spec_triggers: extern "C" fn(*const AirportSpec) -> u8,
     pub airport_belongs: extern "C" fn(*const Station, u32) -> bool,
-    pub road_count: extern "C" fn(*mut BaseStation) -> usize,
-    pub road_tile: extern "C" fn(*mut BaseStation, usize) -> u32,
 }
 static REGISTRY: GameState<*const Services> = GameState::new(std::ptr::null());
 /// Install the immutable native table at `InitializeAnimatedTiles`, before play.
@@ -427,8 +423,8 @@ pub extern "C" fn openttd_rust_trigger_roadstop(
         trigger,
         SAT_NEW_CARGO | SAT_CARGO_TAKEN | SAT_ACCEPTANCE_TICK
     ) {
-        for i in 0..(a.road_count)(st) {
-            process((a.road_tile)(st, i));
+        for i in 0..crate::station_storage::roadstop_count(st) {
+            process(crate::station_storage::roadstop_tile(st, i));
         }
     } else {
         process(tile);
@@ -527,8 +523,6 @@ crate::abi::layouts! {
         state,
         set_state,
         house_spec,
-        road_frame,
-        set_road_frame,
         rail_belongs,
         rail_spec,
         industry_object,
@@ -536,8 +530,6 @@ crate::abi::layouts! {
         road_spec_triggers,
         airport_spec_triggers,
         airport_belongs,
-        road_count,
-        road_tile,
     };
     "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };

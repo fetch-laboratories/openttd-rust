@@ -3,6 +3,7 @@
 #ifndef RUST_STATION_RECORD_FFI_H
 #define RUST_STATION_RECORD_FFI_H
 #include "call_ffi.h"
+#include "rust_vector.h"
 #include "abi-record-station.h"
 /** Call-scoped view of the station pool's slot array for Rust slot iteration.
  * Growth relocates slots but never lowers first_unused. */
@@ -23,5 +24,10 @@ void OPENTTD_RUST_CALL openttd_rust_station_record_delete(OpenTTDStationRecord *
 OpenTTDStationGoodsData *openttd_rust_station_goods_data_ensure(OpenTTDGoodsEntry *);
 uint8_t openttd_rust_station_goods_data_is_empty(const OpenTTDStationGoodsData *);
 void openttd_rust_station_goods_data_clear(OpenTTDGoodsEntry *, const struct OpenTTDCargoStorageServices *);
+uint8_t openttd_rust_station_roadstop_data_set(OpenTTDStationRecord *, uint32_t tile, uint8_t value, uint8_t animation);
+void openttd_rust_station_roadstop_data_remove(OpenTTDStationRecord *, uint32_t tile);
+void openttd_rust_station_roadstop_data_clear(OpenTTDStationRecord *);
+void openttd_rust_station_roadstop_data_reserve(OpenTTDStationRecord *, size_t count);
+OpenTTDRoadStopTileData *openttd_rust_station_roadstop_data_append(OpenTTDStationRecord *);
 }
 #endif /* RUST_STATION_RECORD_FFI_H */

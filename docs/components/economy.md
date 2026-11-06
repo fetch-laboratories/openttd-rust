@@ -98,7 +98,7 @@
 ## Station naming, tile loop and lifecycle (#562)
 
 - Rust owns: `station_lifecycle.rs` default naming and suffix/industry-name exclusion, station tile loops (called directly by the tile scheduler with its map descriptor), destructor ordering, facility addition and airport maintenance; it shares the station service owner and calls the Rust queue, aircraft, order, link-graph, flow, cargo and catchment owners directly. Station map fields use the shared map descriptor; industry-map lookups preserve the original helper assertions and pool operations.
-- C++ keeps: pool shells, unmoved record fields, the road-stop tile-data vector with `SetRoadStopTileData` and `RemoveRoadStopTileData`, native member destruction, spatial indices, news and windows. The native destructor is one Rust call followed by ordinary member destruction; each destructor owner access ends before a callback.
+- C++ keeps: pool shells, unmoved record fields, native member destruction, spatial indices, news and windows. The native destructor is one Rust call followed by ordinary member destruction; each destructor owner access ends before a callback.
 - Limits: `GetPlatformLength` remains with #560.
 - PRs: #568.
 
@@ -115,3 +115,10 @@
 - C++ keeps: company shells and pool operations, current/local context and settings storage, key Add/Remove containers, encoded owner formatting, presentation and nested service commands.
 - Limits: Actual network packets, client/admin delivery, GUI rendering and terminating assertion paths remain outside the bounded native/reload evidence (#156). Interactive RNG is carried explicitly across reload because the save omits it.
 - PRs: #611.
+
+## Shared station records and custom road-stop data (#634)
+
+- Rust owns: shared station, goods, airport and road-stop records beside their shells; the canonical optional station goods cargo/flow attachment; custom road-stop tile data and its set/remove policy. The existing Rust vector layout supplies native views, with no stored field references or owner-pointer facade members in station shells. Cargo data detaches before flow-then-cargo destruction; custom tile loading publishes each default row before its native field reads.
+- C++ keeps: station/road-stop/packet/payment pool allocation and bookkeeping, names/cached names and spec-reference vectors, native presentation and remaining shell consumers. Save adapters keep field names, widths, version gates and fixups. Shared-record routing does not complete pool ownership.
+- Checks: station command/road-stop/reload and animation scenarios, existing station ABI/lifecycle fixtures and the drawing workload. The native final-owner fixture observes record validity through Station/BaseStation member destruction and must retire with that boundary; saved worlds and Rust tests cannot observe that C++ lifetime point.
+- PR: #700.

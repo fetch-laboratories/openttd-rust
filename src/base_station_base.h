@@ -29,11 +29,7 @@ struct SpecMapping {
 	uint16_t localidx = 0; ///< Local ID within GRF of this custom spec.
 };
 
-struct RoadStopTileData {
-	TileIndex tile = INVALID_TILE;
-	uint8_t random_bits = 0;
-	uint8_t animation_frame = 0;
-};
+using RoadStopTileData = OpenTTDRoadStopTileData;
 
 /** StationRect - used to track station spread out rectangle - cheaper than scanning whole map.
  * A view over the rectangle in the shared station record. */
@@ -82,7 +78,6 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 	std::vector<SpecMapping<StationSpec>> speclist{}; ///< List of rail station specs of this station.
 	std::vector<SpecMapping<RoadStopSpec>> roadstop_speclist{}; ///< List of road stop specs of this station
 
-	std::vector<RoadStopTileData> custom_roadstop_tile_data{}; ///< List of custom road stop tile data
 
 	/* The shared record holds xy, string_id, town, owner, facilities, build_date,
 	 * random_bits, the waiting and cached triggers, train_station, rect, delete_ctr
@@ -187,27 +182,25 @@ struct BaseStation : StationPool::PoolItem<&_station_pool> {
 
 	inline uint8_t GetRoadStopRandomBits(TileIndex tile) const
 	{
-		for (const RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
-			if (tile_data.tile == tile) return tile_data.random_bits;
+		for (const RoadStopTileData &tile_data : this->RoadStopTiles()) {
+			if (tile_data.tile == tile.base()) return tile_data.random_bits;
 		}
 		return 0;
 	}
 
 	inline uint8_t GetRoadStopAnimationFrame(TileIndex tile) const
 	{
-		for (const RoadStopTileData &tile_data : this->custom_roadstop_tile_data) {
-			if (tile_data.tile == tile) return tile_data.animation_frame;
+		for (const RoadStopTileData &tile_data : this->RoadStopTiles()) {
+			if (tile_data.tile == tile.base()) return tile_data.animation_frame;
 		}
 		return 0;
 	}
 
-private:
-	bool SetRoadStopTileData(TileIndex tile, uint8_t data, bool animation);
-
-public:
-	inline void SetRoadStopRandomBits(TileIndex tile, uint8_t random_bits) { this->SetRoadStopTileData(tile, random_bits, false); }
-	inline bool SetRoadStopAnimationFrame(TileIndex tile, uint8_t frame) { return this->SetRoadStopTileData(tile, frame, true); }
-	void RemoveRoadStopTileData(TileIndex tile);
+	inline const RustVector<RoadStopTileData> &RoadStopTiles() const { return this->Record().custom_roadstop_tile_data; }
+	inline void SetRoadStopRandomBits(TileIndex tile, uint8_t bits) { openttd_rust_station_roadstop_data_set(&this->Record(), tile.base(), bits, 0); }
+	inline bool SetRoadStopAnimationFrame(TileIndex tile, uint8_t frame) { return openttd_rust_station_roadstop_data_set(&this->Record(), tile.base(), frame, 1) != 0; }
+	inline void RemoveRoadStopTileData(TileIndex tile) { openttd_rust_station_roadstop_data_remove(&this->Record(), tile.base()); }
+	inline void ClearRoadStopTileData() { openttd_rust_station_roadstop_data_clear(&this->Record()); }
 
 	static void PostDestructor(size_t index);
 

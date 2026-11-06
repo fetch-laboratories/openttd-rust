@@ -225,12 +225,6 @@ rebound | RustResolverTownScope | src/newgrf_object.cpp | town_scope
 rebound | RustResolverTownScope | src/newgrf_station.cpp | town_scope
 rebound | RustRoadAccelerationModel | src/rust/vehicle_refit_services.hpp | road_acceleration
 rebound | RustRoadAccelerationModel | src/rust/vehicle_services_newgrf.h | road_acceleration
-rebound | RustRoadStopAnimationFrame | src/animated_tile.cpp | road_frame
-rebound | RustRoadStopAnimationFrame | src/newgrf_roadstop.cpp | frame
-rebound | RustRoadStopDataTile | src/animated_tile.cpp | road_tile
-rebound | RustRoadStopDataTile | src/newgrf_roadstop.cpp | tile
-rebound | RustRoadStopTileDataCount | src/animated_tile.cpp | road_count
-rebound | RustRoadStopTileDataCount | src/newgrf_roadstop.cpp | tile_count
 rebound | RustSelectedHangarTile | src/newgrf_airport.cpp | hangar_tile
 rebound | RustSelectedHangarTile | src/rust/station_command_services.hpp | hangar_tile
 rebound | RustSetCurrentCompanyID | src/rust/company_adapter.cpp | set_current_company

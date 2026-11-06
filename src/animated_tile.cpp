@@ -44,8 +44,6 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.state = [](uint32_t t) noexcept { return GetAnimatedTileState(TileIndex{t}); },
 		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
 		.house_spec = RustHouseSpec,
-		.road_frame = RustRoadStopAnimationFrame,
-		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
 		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
 		.rail_spec = RustAnimationRailSpec,
 		.industry_object = RustIndustryByTile,
@@ -53,8 +51,6 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.road_spec_triggers = RustRoadStopAnimationTriggers,
 		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept { return s->animation.triggers.base(); },
 		.airport_belongs = RustStationAirportMember,
-		.road_count = RustRoadStopTileDataCount,
-		.road_tile = RustRoadStopDataTile,
 	};
 	return services;
 }

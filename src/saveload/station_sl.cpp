@@ -543,7 +543,7 @@ struct STNSChunkHandler : ChunkHandler {
 	}
 };
 
-class SlRoadStopTileData : public VectorSaveLoadHandler<SlRoadStopTileData, BaseStation, RoadStopTileData> {
+class SlRoadStopTileData : public DefaultSaveLoadHandler<SlRoadStopTileData, BaseStation> {
 public:
 	static inline const SaveLoad description[] = {
 	    SLE_VAR(RoadStopTileData, tile,            SLE_UINT32),
@@ -552,7 +552,18 @@ public:
 	};
 	static inline const SaveLoadCompatTable compat_description = {};
 
-	std::vector<RoadStopTileData> &GetVector(BaseStation *bst) const override { return bst->custom_roadstop_tile_data; }
+	void Save(BaseStation *bst) const override
+	{
+		const auto &data = bst->RoadStopTiles();
+		SlSetStructListLength(data.size());
+		for (const auto &item : data) SlObject(const_cast<RoadStopTileData *>(&item), this->GetDescription());
+	}
+	void Load(BaseStation *bst) const override
+	{
+		size_t count = SlGetStructListLength(UINT32_MAX);
+		openttd_rust_station_roadstop_data_reserve(&bst->Record(), count);
+		while (count-- > 0) SlObject(openttd_rust_station_roadstop_data_append(&bst->Record()), this->GetLoadDescription());
+	}
 };
 
 /**

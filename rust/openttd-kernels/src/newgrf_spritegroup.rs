@@ -470,7 +470,6 @@ impl<'a> Invocation<'a> {
                 9 => crate::newgrf_roadstop::openttd_rust_roadstop_random(
                     scope.binding.data.roadstop,
                     false,
-                    self.s.roadstop,
                 ),
                 10 => crate::town::resolver::openttd_rust_house_random(
                     &*self.s.house,
@@ -509,7 +508,6 @@ impl<'a> Invocation<'a> {
                 9 => crate::newgrf_roadstop::openttd_rust_roadstop_random(
                     scope.binding.data.roadstop,
                     true,
-                    self.s.roadstop,
                 ),
                 10 => crate::town::resolver::openttd_rust_house_random(
                     &*self.s.house,

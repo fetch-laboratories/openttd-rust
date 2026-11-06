@@ -51,12 +51,12 @@ template class NewGRFClass<RoadStopSpec, RoadStopClassID, ROADSTOP_CLASS_MAX>;
 
 uint32_t RoadStopScopeResolver::GetRandomBits() const
 {
-	return openttd_rust_roadstop_random(&this->state, false, &GetRoadStopResolverServices());
+	return openttd_rust_roadstop_random(&this->state, false);
 }
 
 uint32_t RoadStopScopeResolver::GetRandomTriggers() const
 {
-	return openttd_rust_roadstop_random(&this->state, true, &GetRoadStopResolverServices());
+	return openttd_rust_roadstop_random(&this->state, true);
 }
 
 uint32_t RoadStopScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
@@ -329,7 +329,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.clear = RustRoadStopSpecClear,
 		.company = RustCompanyInfo,
 		.custom = RustCustomRoadStopSpecIndex,
-		.frame = RustRoadStopAnimationFrame,
 		.group = RustSpecCargoSpriteGroup<RoadStopSpec>,
 		.group_cargo = RustSpecCargoGroupCargo<RoadStopSpec>,
 		.group_count = RustSpecCargoGroupCount<RoadStopSpec>,
@@ -339,7 +338,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.resolve_callback = [](const OpenTTDRoadStopResolverState *state, uint16_t cb, uint32_t p1, uint32_t p2, int32_t *regs, size_t size) noexcept { RoadStopResolverObject object(*state, static_cast<CallbackID>(cb), p1, p2); return object.ResolveCallback({regs, size}); },
 		.resolve_reseed = [](const OpenTTDRoadStopResolverState *state, uint8_t waiting) noexcept -> OpenTTDRoadStopReseed { RoadStopResolverObject object(*state); object.SetWaitingRandomTriggers(StationRandomTriggers(waiting)); object.ResolveRerandomisation(); return {object.GetReseedSum(), object.GetUsedRandomTriggers().base()}; },
 		.set_slot = RustRoadStopSetSpecSlot,
-		.set_tile_random = RustRoadStopSetRandomBits,
 		.shared = &GetRustSharedServices(),
 		.slot_grfid = RustRoadStopSlotGRFID,
 		.slot_key = RustRoadStopSlotKey,
@@ -349,9 +347,6 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.spec_count = RustRoadStopSpecCount,
 		.spec_triggers = RustRoadStopSpecTriggers,
 		.station_id = RustBaseStationID<BaseStation>,
-		.tile = RustRoadStopDataTile,
-		.tile_count = RustRoadStopTileDataCount,
-		.tile_random = RustRoadStopRandomBits,
 		.town_tile = OpenTTDTownTile,
 	};
 	return services;
