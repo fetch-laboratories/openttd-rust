@@ -21,10 +21,11 @@
 #include "timer/timer_game_calendar.h"
 #include "timer/timer_game_economy.h"
 #	include "rust/industry_adapter.hpp"
+#include "rust/pool.hpp"
 #	include "rust/station_catchment_ffi.h"
 
 
-typedef Pool<Industry, IndustryID, 64> IndustryPool;
+using IndustryPool = RustPool<Industry, IndustryID, 64>;
 extern IndustryPool _industry_pool;
 
 static const TimerGameEconomy::Year PROCESSING_INDUSTRY_ABANDONMENT_YEARS{5}; ///< If a processing industry doesn't produce for this many consecutive economy years, it may close.
@@ -108,7 +109,12 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 
 	using ProducedCargoes = RustIndustryVector<ProducedCargo, true>;
 	using AcceptedCargoes = RustIndustryVector<AcceptedCargo, false>;
-	RustIndustryOwner production_owner{openttd_rust_industry_new(this), openttd_rust_industry_destroy};
+	RustIndustryOwner production_owner{[this] {
+		auto *owner = openttd_rust_industry_new(this);
+		/* An owned stack shell has no initialized pool index at this point. */
+		_industry_pool.BindRecordIfOwned(this, owner);
+		return owner;
+	}(), RustIndustryDeleteOwned};
 	/** The shared record: the canonical owner's first member, at its address. */
 	inline OpenTTDIndustryRecord &Record() { return *reinterpret_cast<OpenTTDIndustryRecord *>(this->production_owner.get()); }
 	inline const OpenTTDIndustryRecord &Record() const { return *reinterpret_cast<const OpenTTDIndustryRecord *>(this->production_owner.get()); }
@@ -130,7 +136,8 @@ struct Industry : IndustryPool::PoolItem<&_industry_pool> {
 
 
 	Industry(TileIndex tile = INVALID_TILE) { this->Record().location = TileArea(tile, 0, 0); }
-	/** Synchronous resolver shell; its Rust stack owner outlives this shell. */
+	/** Synchronous resolver shell; its Rust stack owner outlives this shell.
+	 * It neither publishes nor retires that borrowed caller-owned record. */
 	explicit Industry(OpenTTDIndustry *borrowed) : production_owner(borrowed, [](OpenTTDIndustry *) {}) { this->Record().location = TileArea(INVALID_TILE, 0, 0); }
 	~Industry();
 

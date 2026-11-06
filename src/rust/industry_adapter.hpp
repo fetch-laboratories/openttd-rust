@@ -11,6 +11,8 @@
 #include "industry_ffi.h"
 #include <memory>
 #include <iterator>
+/** Retire only a natively owned record; borrowed shells keep their no-op deleter. */
+void RustIndustryDeleteOwned(OpenTTDIndustry *owner);
 using RustIndustryOwner = std::unique_ptr<OpenTTDIndustry, decltype(&openttd_rust_industry_destroy)>;
 using RustIndustryBuilderOwner = std::unique_ptr<OpenTTDIndustryBuilder, decltype(&openttd_rust_industry_builder_destroy)>;
 /** Optional history is allocated and freed by the Rust accepted slot. */

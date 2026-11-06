@@ -243,7 +243,12 @@ TEST_CASE("NewGRF - industry mapping is shared across serialized threads")
 }
 TEST_CASE("Industry - canonical allocation and history lifetime")
 {
-	RustIndustryOwner owner(openttd_rust_industry_new(nullptr), openttd_rust_industry_destroy);
+	REQUIRE(Industry::GetNumItems() == 0);
+	auto *shell = new (IndustryID{17}) Industry();
+	auto &owner = shell->production_owner;
+	const auto *descriptor = _industry_pool.descriptor;
+	CHECK(descriptor->slots[17].shell == shell);
+	CHECK(descriptor->slots[17].record == owner.get());
 	RustIndustryVector<Industry::AcceptedCargo, false> accepted(owner.get());
 	RustIndustryVector<Industry::ProducedCargo, true> produced(owner.get());
 	accepted.emplace_back().waiting = 65535;
@@ -264,6 +269,38 @@ TEST_CASE("Industry - canonical allocation and history lifetime")
 	accepted.clear();
 	CHECK(accepted.empty());
 	CHECK(accepted.emplace_back().history == nullptr);
+	{
+		Industry temporary;
+		temporary.index = shell->index; // A copied live ID must not publish or retire another owner's record.
+		temporary.Record().random = 0xABCD;
+		CHECK(descriptor->slots[17].record == owner.get());
+		CHECK(temporary.production_owner.get() != owner.get());
+	}
+	CHECK(descriptor->slots[17].record == owner.get());
+	CHECK(descriptor->items == 1);
+	delete shell;
+	CHECK(descriptor->slots[17].shell == nullptr);
+	CHECK(descriptor->slots[17].record == nullptr);
+	CHECK(descriptor->first_unused == 18);
+	REQUIRE(Industry::CanAllocateItem());
+	shell = new Industry();
+	CHECK(shell->index == IndustryID{0});
+	shell->Record().random = 0xFFFF;
+	delete shell;
+	REQUIRE(Industry::CanAllocateItem());
+	shell = new Industry();
+	CHECK(shell->index == IndustryID{0});
+	CHECK(shell->Record().random == 0);
+	CHECK(shell->accepted.empty());
+	CHECK(descriptor->slots[0].record == shell->production_owner.get());
+	_industry_pool.CleanPool();
+	CHECK(descriptor->slots.empty());
+	CHECK(descriptor->used_bitmap.empty());
+	CHECK(descriptor->items == 0);
+	CHECK(descriptor->first_free == 0);
+	CHECK(descriptor->first_unused == 0);
+	CHECK(descriptor->checked == 0);
+	CHECK_FALSE(descriptor->cleaning);
 }
 TEST_CASE("Industry - construction owner and ascending type registry")
 {
@@ -462,6 +499,8 @@ static OpenTTDIndustryLocationResult Observe(Industry *shell)
 TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 {
 	using namespace IndustryTemporaryFixture;
+	REQUIRE(Industry::GetNumItems() == 0);
+	auto *sibling = new (IndustryID{17}) Industry();
 	auto shared = GetRustSharedServices();
 	OpenTTDIndustryServices production{};
 	production.shared = &shared;
@@ -486,10 +525,13 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	transaction.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept {
 		active_owner = owner;
 		trace.push_back(1);
+		const auto sibling_slot = _industry_pool.descriptor->slots[17];
 		{ Industry shell(owner); shell.index = IndustryID::Invalid(); visit(context, &shell); }
 		trace.push_back(5);
 		/* The owner still lives after the actual native destructor returns. */
 		CHECK(reinterpret_cast<OpenTTDIndustryRecord *>(owner)->location.w == 0);
+		CHECK(_industry_pool.descriptor->slots[17].shell == sibling_slot.shell);
+		CHECK(_industry_pool.descriptor->slots[17].record == sibling_slot.record);
 		active_owner = nullptr;
 	};
 	transaction.resolve_location = [](Industry *shell, uint32_t tile, uint8_t kind, uint32_t seed, uint8_t creation) noexcept -> OpenTTDIndustryLocationResult { CHECK(tile == 123); CHECK(kind == 7); CHECK(seed == 0x12345678); CHECK(creation == 2); CHECK(shell->Record().selected_layout == 2); return Observe(shell); };
@@ -530,6 +572,9 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 		shared.map = &map.statics;
 	}
 	CHECK(Industry::GetNumItems() == pool_count);
+	delete sibling;
+	CHECK(_industry_pool.descriptor->slots[17].record == nullptr);
+	_industry_pool.CleanPool();
 }
 
 #include "../newgrf_storage.h"
