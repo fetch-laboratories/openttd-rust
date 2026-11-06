@@ -18,6 +18,7 @@
     clippy::struct_excessive_bools,
     clippy::fn_params_excessive_bools
 )]
+pub(crate) mod bindings;
 pub(crate) mod records;
 use crate::industrytype::NativeVec;
 use crate::raw_field::{read_field, write_field};
@@ -51,6 +52,13 @@ crate::abi::shared_records! {
         pub original_image_index: u8,
         pub r#type: VehicleType => "VehicleType",
         pub list_position: u16,
+        pub bindings: bindings::Bindings,
+    }
+}
+impl Drop for Lifecycle {
+    fn drop(&mut self) {
+        // Native binding members are destroyed before the lifecycle/name owner.
+        drop(std::mem::take(&mut self.bindings));
     }
 }
 impl Lifecycle {
@@ -114,6 +122,7 @@ impl Default for Lifecycle {
             original_image_index: 0,
             r#type: VehicleType(crate::vehicle_type::VEH_INVALID),
             list_position: 0,
+            bindings: bindings::Bindings::default(),
         }
     }
 }

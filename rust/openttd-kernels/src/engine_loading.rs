@@ -240,9 +240,6 @@ pub struct Services {
     resolve: extern "C" fn(u16) -> EngineRef,
     pub(crate) dynamic: extern "C" fn() -> bool,
     pub(crate) find_file: extern "C" fn(u32) -> *mut c_void,
-    engine_file: extern "C" fn(E) -> File,
-    has_file: extern "C" fn(E) -> bool,
-    set_file: extern "C" fn(E, File),
     mapping_log: extern "C" fn(u32, u32, bool),
     can_allocate: extern "C" fn() -> bool,
     pool_size: extern "C" fn() -> usize,
@@ -267,8 +264,6 @@ pub struct Services {
     set_variant: extern "C" fn(E, u16),
     invalid_string: extern "C" fn(E),
     engine_climate: extern "C" fn(E) -> bool,
-    rail_badges: extern "C" fn(E, u8),
-    road_badges: extern "C" fn(E),
     rail_kind: extern "C" fn(E) -> RailVehicleTypes,
     use_livery: extern "C" fn(u8),
     variant_flags: extern "C" fn(E),
@@ -337,8 +332,10 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
         let id = unsafe { openttd_rust_engine_mapping_get(kind, local, scope) };
         if id != INVALID_ENGINE {
             let engine = (s.resolve)(id);
-            if !(s.has_file)(engine.shell) {
-                (s.set_file)(engine.shell, file);
+            if crate::raw_field::read_field!(engine.shell, bindings.grf_prop.grffile).is_null() {
+                unsafe {
+                    crate::engine::bindings::set_grf(&*s.shared, engine.shell, file);
+                }
             }
             return engine.shell;
         }
@@ -346,8 +343,10 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
     let id = unsafe { openttd_rust_engine_mapping_use(kind, local, scope, static_access) };
     if id != INVALID_ENGINE {
         let engine = (s.resolve)(id);
-        if !(s.has_file)(engine.shell) {
-            (s.set_file)(engine.shell, file);
+        if crate::raw_field::read_field!(engine.shell, bindings.grf_prop.grffile).is_null() {
+            unsafe {
+                crate::engine::bindings::set_grf(&*s.shared, engine.shell, file);
+            }
             grf_msg!(
                 5,
                 "Replaced engine at index {} for GRFID {:x}, type {}, index {}",
@@ -368,7 +367,9 @@ pub unsafe extern "C" fn openttd_rust_engine_definition(
     }
     let size = (s.pool_size)();
     let engine = (s.construct)(kind, local);
-    (s.set_file)(engine.shell, file);
+    unsafe {
+        crate::engine::bindings::set_grf(&*s.shared, engine.shell, file);
+    }
     unsafe {
         openttd_rust_engine_mapping_set(
             kind,
@@ -445,9 +446,6 @@ crate::abi::layouts! {
         resolve,
         dynamic,
         find_file,
-        engine_file,
-        has_file,
-        set_file,
         mapping_log,
         can_allocate,
         pool_size,
@@ -472,8 +470,6 @@ crate::abi::layouts! {
         set_variant,
         invalid_string,
         engine_climate,
-        rail_badges,
-        road_badges,
         rail_kind,
         use_livery,
         variant_flags,
@@ -699,7 +695,7 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
             & !exclude;
         (s.set_refit)(e.shell, input.mask);
         let file = if default_file.is_null() {
-            (s.engine_file)(e.shell)
+            unsafe { (*e.shell).bindings.grf_prop.grffile }
         } else {
             default_file
         };
@@ -762,7 +758,7 @@ pub(crate) unsafe fn openttd_rust_engine_calculate_refits(s: &Services) {
         }
         if !is_valid_cargo_type(input.cargo) && input.mask != 0 {
             let file = if default_file.is_null() {
-                (s.engine_file)(e.shell)
+                unsafe { (*e.shell).bindings.grf_prop.grffile }
             } else {
                 default_file
             };
@@ -837,7 +833,7 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
             break;
         }
         from = u32::from(e.id) + 1;
-        if (s.engine_file)(e.shell).is_null() {
+        if unsafe { (*e.shell).bindings.grf_prop.grffile }.is_null() {
             let invalid = unsafe {
                 (&*MAPPINGS.get())[usize::from(e.kind.0)]
                     .iter()
@@ -853,7 +849,12 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
         let variant = (s.variant)(e.shell);
         if variant != INVALID_ENGINE {
             let id = unsafe {
-                openttd_rust_engine_new_id(s, (s.engine_file)(e.shell), e.kind.0, variant)
+                openttd_rust_engine_new_id(
+                    s,
+                    (*e.shell).bindings.grf_prop.grffile,
+                    e.kind.0,
+                    variant,
+                )
             };
             (s.set_variant)(e.shell, id);
         }
@@ -865,11 +866,26 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
                 let railtypes = (s.railtypes)(e.shell);
                 for rt in 0_u8..64 {
                     if railtypes & (1_u64 << rt) != 0 {
-                        (s.rail_badges)(e.shell, rt);
+                        unsafe {
+                            crate::engine::bindings::append_copyable_badges(
+                                &*s.shared,
+                                e.shell,
+                                ((*s.resolver).rail_badge)(crate::services::RailType(rt)),
+                                crate::newgrf::GSF_TRAINS,
+                            );
+                        }
                     }
                 }
             }
-            VEH_ROAD => (s.road_badges)(e.shell),
+            VEH_ROAD => unsafe {
+                let rt = (*OpenTTDEngine::road(e.shell)).roadtype;
+                crate::engine::bindings::append_copyable_badges(
+                    &*s.shared,
+                    e.shell,
+                    ((*s.resolver).road_badge)(crate::services::RoadType(rt)),
+                    crate::newgrf::GSF_ROADVEHICLES,
+                );
+            },
             _ => (),
         }
         if e.kind.0 != VEH_TRAIN || (s.rail_kind)(e.shell) != RailVehicleTypes::WAGON {
@@ -916,8 +932,10 @@ pub(crate) unsafe fn openttd_rust_engine_finalise(s: &Services) {
             grf_msg!(
                 1,
                 "FinaliseEngineArray: Variant of engine {:x} in '{}' loops back on itself",
-                (shared.engine_local_id)(e.shell),
-                Bytes(unsafe { (shared.grf_file_name)((s.engine_file)(e.shell).cast()).bytes() })
+                crate::raw_field::read_field!(e.shell, bindings.grf_prop.local_id),
+                Bytes(unsafe {
+                    (shared.grf_file_name)((*e.shell).bindings.grf_prop.grffile.cast()).bytes()
+                })
             );
             break;
         }
@@ -944,7 +962,7 @@ pub(crate) unsafe fn openttd_rust_engine_bind_types(s: &Services) {
             (s.set_road_speed)(e.shell, u16::from(speed) * 4);
         }
         let tram = (s.is_tram)(e.shell);
-        let file = (s.engine_file)(e.shell);
+        let file = unsafe { (*e.shell).bindings.grf_prop.grffile };
         if file.is_null() || unsafe { (*fields).roadtramtype == 0 } {
             (s.set_roadtype)(e.shell, if tram { ROADTYPE_TRAM } else { ROADTYPE_ROAD });
             continue;
@@ -1062,6 +1080,33 @@ pub(crate) unsafe fn openttd_rust_vehicle_order_commit(s: &Services) {
     }
     unsafe { &mut *LIST_ORDER_CHANGES.get() }.clear();
     unsafe { &mut *LIST_ORDER_CHANGES.get() }.shrink_to_fit();
+}
+
+/// Native badge owner consumes the feature mask immediately; only pure pool lookup
+/// occurs between ordered appends, and no record view survives that lookup.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_engine_file_badge(
+    s: &Services,
+    file: File,
+    badge: u32,
+) -> u32 {
+    let mut features = 0;
+    let mut from = 0;
+    loop {
+        let e = (s.next)(from);
+        if e.shell.is_null() {
+            break;
+        }
+        from = u32::from(e.id) + 1;
+        if crate::raw_field::read_field!(e.shell, bindings.grf_prop.grffile) != file {
+            continue;
+        }
+        unsafe {
+            (*e.shell.cast_mut()).bindings.badges.push(badge);
+        }
+        features |= 1 << e.kind.0;
+    }
+    features
 }
 
 #[cfg(test)]

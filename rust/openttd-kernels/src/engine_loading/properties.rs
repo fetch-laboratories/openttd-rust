@@ -21,9 +21,7 @@ use crate::engine_type::{
     AIR_CTOL, AIR_HELI, EC_DIESEL, EC_ELECTRIC, EC_MAGLEV, EC_MONORAIL, EC_STEAM, VE_DEFAULT,
     VE_DISABLE_EFFECT, VE_TYPE_COUNT, VE_TYPE_START,
 };
-use crate::newgrf_bytereader::{
-    BadgeList, ByteReader, ReadError, Reader, Services as ReaderServices,
-};
+use crate::newgrf_bytereader::{ByteReader, ReadError, Reader, Services as ReaderServices};
 use crate::newgrf_internal::{CIR_INVALID_ID, CIR_SUCCESS, CIR_UNKNOWN};
 use crate::newgrf_properties::{
     PROP_AIRCRAFT_CARGO_AGE_PERIOD, PROP_AIRCRAFT_COST_FACTOR, PROP_AIRCRAFT_MAIL_CAPACITY,
@@ -45,7 +43,6 @@ use crate::vehicle_func::CUSTOM_VEHICLE_SPRITENUM;
 pub struct Properties {
     loading: *const Services,
     id: extern "C" fn(E) -> u16,
-    badges: extern "C" fn(E) -> *mut BadgeList,
     sound: extern "C" fn(File, u16) -> u16,
     train_image_valid: extern "C" fn(u8) -> bool,
     road_image_valid: extern "C" fn(u8) -> bool,
@@ -55,7 +52,7 @@ pub struct Properties {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDVehicleProperties" ["engine_loading"] => Properties { loading, id, badges, sound, train_image_valid, road_image_valid, ship_image_valid, aircraft_image_valid, uses_2cc };
+    "OpenTTDVehicleProperties" ["engine_loading"] => Properties { loading, id, sound, train_image_valid, road_image_valid, ship_image_valid, aircraft_image_valid, uses_2cc };
 }
 
 fn common(_s: &Properties, e: E, prop: i32, r: &mut Reader<'_>) -> Result<i32, ReadError> {
@@ -463,7 +460,8 @@ unsafe fn train(
             (*temp(id)).fields.cargo_allowed_required = r.word()?;
         },
         0x33 => unsafe {
-            r.badges(VEH_TRAIN, (s.badges)(e))?;
+            let badges = r.badge_ids(VEH_TRAIN)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         0x34 => {
             let count = r.byte()?;
@@ -574,7 +572,8 @@ unsafe fn road(
             (*temp(id)).fields.cargo_allowed_required = r.word()?;
         },
         0x2a => unsafe {
-            r.badges(VEH_ROAD, (s.badges)(e))?;
+            let badges = r.badge_ids(VEH_ROAD)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         _ => return common(s, e, prop, r),
     }
@@ -650,7 +649,8 @@ unsafe fn ship(
             (*temp(id)).fields.cargo_allowed_required = r.word()?;
         },
         0x26 => unsafe {
-            r.badges(VEH_SHIP, (s.badges)(e))?;
+            let badges = r.badge_ids(VEH_SHIP)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         _ => return common(s, e, prop, r),
     }
@@ -745,7 +745,8 @@ unsafe fn aircraft(
             (*temp(id)).fields.cargo_allowed_required = r.word()?;
         },
         0x24 => unsafe {
-            r.badges(VEH_AIRCRAFT, (s.badges)(e))?;
+            let badges = r.badge_ids(VEH_AIRCRAFT)?;
+            (*e.cast_mut()).bindings.badges = crate::industrytype::NativeVec::from_vec(badges);
         },
         _ => return common(s, e, prop, r),
     }
@@ -830,7 +831,6 @@ pub(super) unsafe fn partial_read_tests() {
     let services = Properties {
         loading: std::ptr::null(),
         id: unused1,
-        badges: unused1,
         sound: unused2,
         train_image_valid: unused1,
         road_image_valid: unused1,

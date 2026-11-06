@@ -18,9 +18,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.resolve = Engine_resolve_strict,
 		.dynamic = RustDynamicEngines,
 		.find_file = RustGRFFileByID,
-		.engine_file = RustEngineGRF,
-		.has_file = RustEngineHasGRF,
-		.set_file = RustEngineSetGRFFile,
 		.mapping_log = [](uint32_t source, uint32_t target, bool loaded) noexcept {
 			if (loaded) GrfMsg(5, "Mapping from GRFID {:x} to {:x}", std::byteswap(source), std::byteswap(target));
 			else GrfMsg(5, "Tried mapping from GRFID {:x} to {:x} but target is not loaded", std::byteswap(source), std::byteswap(target));
@@ -49,8 +46,6 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.set_variant = RustSetEngineVariant,
 		.invalid_string = RustSetEngineInvalidString,
 		.engine_climate = static_cast<bool (*)(const OpenTTDEngine *) noexcept>(RustEngineClimate),
-		.rail_badges = [](const OpenTTDEngine *shell, RailType rt) noexcept { AppendCopyableBadgeList(const_cast<Engine *>(EngineOf(shell))->badges, GetRailTypeInfo(rt)->badges, GSF_TRAINS); },
-		.road_badges = [](const OpenTTDEngine *shell) noexcept { auto *e = const_cast<Engine *>(EngineOf(shell)); AppendCopyableBadgeList(e->badges, GetRoadTypeInfo(RustEngineRoadType(e))->badges, GSF_ROADVEHICLES); },
 		.rail_kind = Engine_rail_kind,
 		.use_livery = [](LiveryScheme scheme) noexcept { SetBit(_loaded_newgrf_features.used_liveries, scheme); },
 		.variant_flags = [](const OpenTTDEngine *shell) noexcept { const_cast<Engine *>(EngineOf(shell))->display_flags.Set({EngineDisplayFlag::HasVariants, EngineDisplayFlag::IsFolded}); },
@@ -67,7 +62,7 @@ const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept
 		.reload = []() noexcept { ReloadNewGRFData(); },
 		.default_counts = []() noexcept { return _engine_counts; },
 		.set_position = RustSetEngineListPosition,
-		.order_source = [](const OpenTTDEngine *shell, uint16_t target) noexcept { const Engine *e = EngineOf(shell); OpenTTDEngineOrderSource source{.local = RustSpecLocalID(e), .type = VEH_INVALID, .grfid = 0}; if (source.local != target) { source.type = RustEngineType(shell); source.grfid = RustSpecGRFID(e); } return source; },
+		.order_source = [](const OpenTTDEngine *shell, uint16_t target) noexcept { const Engine *e = EngineOf(shell); OpenTTDEngineOrderSource source{.local = e->Record().bindings.grf_prop.local_id, .type = VEH_INVALID, .grfid = 0}; if (source.local != target) { source.type = RustEngineType(shell); source.grfid = e->Record().bindings.grf_prop.grfid; } return source; },
 		.order_sort = RustVehicleOrderSort,
 		.order_count = []() noexcept -> size_t { return Engine::GetNumItems(); },
 	};

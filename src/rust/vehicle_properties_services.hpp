@@ -9,7 +9,6 @@ const OpenTTDVehicleProperties &GetRustVehicleProperties() noexcept
 	static const OpenTTDVehicleProperties services{
 		.loading = &GetRustEngineLoadingServices(),
 		.id = RustEngineID,
-		.badges = RustEngineBadges,
 		.sound = [](const GRFFile *file, uint16_t sound) noexcept { return GetNewGRFSoundID(file, sound); },
 		.train_image_valid = IsValidNewGRFImageIndex<VEH_TRAIN>,
 		.road_image_valid = IsValidNewGRFImageIndex<VEH_ROAD>,

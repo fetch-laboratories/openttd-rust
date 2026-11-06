@@ -932,7 +932,7 @@ int DrawVehiclePurchaseInfo(int left, int right, int y, EngineID engine_number, 
 
 	if (refittable) y = ShowRefitOptionsList(left, right, y, engine_number);
 
-	y = DrawBadgeNameList({left, y, right, INT16_MAX}, e->badges, static_cast<GrfSpecFeature>(GSF_TRAINS + e->Record().type));
+	y = DrawBadgeNameList({left, y, right, INT16_MAX}, e->Record().bindings.badges, static_cast<GrfSpecFeature>(GSF_TRAINS + e->Record().type));
 
 	/* Additional text from NewGRF */
 	y = ShowAdditionalText(left, right, y, engine_number);
@@ -950,7 +950,7 @@ int DrawVehiclePurchaseInfo(int left, int right, int y, EngineID engine_number, 
 
 static void DrawEngineBadgeColumn(const Rect &r, int column_group, const GUIBadgeClasses &badge_classes, const Engine *e, PaletteID remap)
 {
-	DrawBadgeColumn(r, column_group, badge_classes, e->badges, static_cast<GrfSpecFeature>(GSF_TRAINS + e->Record().type), e->Record().info.base_intro, remap);
+	DrawBadgeColumn(r, column_group, badge_classes, e->Record().bindings.badges, static_cast<GrfSpecFeature>(GSF_TRAINS + e->Record().type), e->Record().info.base_intro, remap);
 }
 
 /**
@@ -1402,10 +1402,10 @@ struct BuildVehicleWindow : Window {
 			/* Filter now! So num_engines and num_wagons is valid */
 			if (!FilterSingleEngine(eid)) continue;
 
-			if (!bdf.Filter(e->badges)) continue;
+			if (!bdf.Filter(e->Record().bindings.badges)) continue;
 
 			/* Filter by name or NewGRF extra text */
-			if (!FilterByText(e) && !btf.Filter(e->badges)) continue;
+			if (!FilterByText(e) && !btf.Filter(e->Record().bindings.badges)) continue;
 
 			list.emplace_back(eid, e->Record().info.variant_id, e->display_flags, 0);
 
@@ -1461,10 +1461,10 @@ struct BuildVehicleWindow : Window {
 			EngineID eid = e->index;
 			if (!IsEngineBuildable(eid, VEH_ROAD, _local_company)) continue;
 			if (this->filter.roadtype != INVALID_ROADTYPE && !HasPowerOnRoad(e->VehInfo<RoadVehicleInfo>().roadtype, this->filter.roadtype)) continue;
-			if (!bdf.Filter(e->badges)) continue;
+			if (!bdf.Filter(e->Record().bindings.badges)) continue;
 
 			/* Filter by name or NewGRF extra text */
-			if (!FilterByText(e) && !btf.Filter(e->badges)) continue;
+			if (!FilterByText(e) && !btf.Filter(e->Record().bindings.badges)) continue;
 
 			this->eng_list.emplace_back(eid, e->Record().info.variant_id, e->display_flags, 0);
 
@@ -1486,10 +1486,10 @@ struct BuildVehicleWindow : Window {
 			if (!this->show_hidden_engines && e->IsVariantHidden(_local_company)) continue;
 			EngineID eid = e->index;
 			if (!IsEngineBuildable(eid, VEH_SHIP, _local_company)) continue;
-			if (!bdf.Filter(e->badges)) continue;
+			if (!bdf.Filter(e->Record().bindings.badges)) continue;
 
 			/* Filter by name or NewGRF extra text */
-			if (!FilterByText(e) && !btf.Filter(e->badges)) continue;
+			if (!FilterByText(e) && !btf.Filter(e->Record().bindings.badges)) continue;
 
 			this->eng_list.emplace_back(eid, e->Record().info.variant_id, e->display_flags, 0);
 
@@ -1520,10 +1520,10 @@ struct BuildVehicleWindow : Window {
 			if (!IsEngineBuildable(eid, VEH_AIRCRAFT, _local_company)) continue;
 			/* First VEH_END window_numbers are fake to allow a window open for all different types at once */
 			if (!this->listview_mode && !CanVehicleUseStation(eid, st)) continue;
-			if (!bdf.Filter(e->badges)) continue;
+			if (!bdf.Filter(e->Record().bindings.badges)) continue;
 
 			/* Filter by name or NewGRF extra text */
-			if (!FilterByText(e) && !btf.Filter(e->badges)) continue;
+			if (!FilterByText(e) && !btf.Filter(e->Record().bindings.badges)) continue;
 
 			this->eng_list.emplace_back(eid, e->Record().info.variant_id, e->display_flags, 0);
 

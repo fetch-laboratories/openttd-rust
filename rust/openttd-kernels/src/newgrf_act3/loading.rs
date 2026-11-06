@@ -48,7 +48,6 @@ unsafe fn vehicle_map(
     mut count: u8,
 ) -> Result<(), ReadBounds> {
     unsafe {
-        let bindings = &*s.bindings;
         let override_wagon = count & 0x80 != 0;
         if override_wagon {
             count &= 0x7f;
@@ -79,7 +78,7 @@ unsafe fn vehicle_map(
                 return Ok(());
             }
             let id = EngineID(((*(*s.engine).resolver).capabilities.id)(engine));
-            engines.push(id);
+            engines.push((id, engine));
             if !override_wagon {
                 remember_last(usize::from(i), id);
             }
@@ -99,16 +98,19 @@ unsafe fn vehicle_map(
             if !crate::cargo_type::is_valid_cargo_type(cargo) {
                 continue;
             }
-            for (i, engine) in engines.iter().enumerate() {
+            for (i, (engine, record)) in engines.iter().enumerate() {
                 grf_msg!(7, "VehicleMapSpriteGroup: [{i}] Engine {}...", engine.0);
                 if override_wagon {
-                    let (last, len) = {
-                        let last = &mut *LAST_ENGINES.get();
-                        (last.as_mut_ptr(), last.len())
-                    };
-                    (bindings.wagon_override)(engine.0, cargo, group(id), last, len);
+                    let last = (&*LAST_ENGINES.get()).clone();
+                    crate::engine::bindings::set_wagon_override(
+                        s.shared(),
+                        *record,
+                        cargo,
+                        group(id),
+                        &last,
+                    );
                 } else {
-                    (bindings.custom_engine_sprites)(engine.0, cargo, group(id));
+                    crate::engine::bindings::set_custom_sprites(*record, *engine, cargo, group(id));
                 }
             }
         }
@@ -117,16 +119,19 @@ unsafe fn vehicle_map(
             return Ok(());
         }
         grf_msg!(8, "-- Default group id 0x{id:04X}");
-        for engine in engines {
+        for (engine, record) in engines {
             if override_wagon {
-                let (last, len) = {
-                    let last = &mut *LAST_ENGINES.get();
-                    (last.as_mut_ptr(), last.len())
-                };
-                (bindings.wagon_override)(engine.0, SG_DEFAULT, group(id), last, len);
+                let last = (&*LAST_ENGINES.get()).clone();
+                crate::engine::bindings::set_wagon_override(
+                    s.shared(),
+                    record,
+                    SG_DEFAULT,
+                    group(id),
+                    &last,
+                );
             } else {
-                (bindings.custom_engine_sprites)(engine.0, SG_DEFAULT, group(id));
-                (bindings.engine_grf)(engine.0, file);
+                crate::engine::bindings::set_custom_sprites(record, engine, SG_DEFAULT, group(id));
+                crate::engine::bindings::set_grf(s.shared(), record, file);
             }
         }
         Ok(())

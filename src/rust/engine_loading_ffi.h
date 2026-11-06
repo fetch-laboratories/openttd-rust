@@ -25,9 +25,6 @@ struct OpenTTDEngineLoadingServices {
 	OpenTTDEngineRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	bool (*dynamic)() noexcept OPENTTD_SERVICE_DEFAULT(dynamic);
 	GRFFile *(*find_file)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_file);
-	const GRFFile *(*engine_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_file);
-	bool (*has_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_file);
-	void (*set_file)(const OpenTTDEngine *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_file);
 	void (*mapping_log)(uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(mapping_log);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	size_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
@@ -52,8 +49,6 @@ struct OpenTTDEngineLoadingServices {
 	void (*set_variant)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_variant);
 	void (*invalid_string)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(invalid_string);
 	bool (*engine_climate)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_climate);
-	void (*rail_badges)(const OpenTTDEngine *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_badges);
-	void (*road_badges)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_badges);
 	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	void (*use_livery)(LiveryScheme) noexcept OPENTTD_SERVICE_DEFAULT(use_livery);
 	void (*variant_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(variant_flags);
@@ -73,6 +68,7 @@ struct OpenTTDEngineLoadingServices {
 const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept;
 void RustVehicleOrderSort(uint16_t *, size_t) noexcept;
 extern "C" {
+uint32_t openttd_rust_engine_file_badge(const OpenTTDEngineLoadingServices *, const GRFFile *, BadgeID);
 uint8_t openttd_rust_engine_reset_config_abi(const OpenTTDEngineLoadingServices *);
 extern "C++" inline bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *a0) { return openttd_rust_engine_reset_config_abi(a0) != 0; }
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);

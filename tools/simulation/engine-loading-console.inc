@@ -113,11 +113,11 @@ static void RuntimeInspect()
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *e = LoadingEngine(1, type, 500);
 		Backup<EngineInfo> info(EngineFields(e).info);
-		Backup<CargoGRFFileProps> props(e->grf_prop);
+		FixtureEngineBackup<FixtureEngineGRFProps> props(EngineBindings(e).grf_prop);
 		GRFFile file; file.grfid = 0x613A0003; file.grf_version = 8;
-		e->grf_prop.grffile = nullptr;
+		EngineBindings(e).grf_prop.grffile = nullptr;
 		LoadingRequire(e->GetGRFID() == 0, "runtime-null-grf");
-		e->grf_prop.grffile = &file; e->grf_prop.grfid = 0xBAD;
+		EngineBindings(e).grf_prop.grffile = &file; EngineBindings(e).grf_prop.grfid = 0xBAD;
 		LoadingRequire(e->GetGRFID() == file.grfid, "runtime-action3-grf");
 		EngineFields(e).info.climates = {}; LoadingRequire(!e->IsEnabled(), "runtime-climate");
 		EngineFields(e).info.climates.Set(); EngineFields(e).info.string_id = STR_NEWGRF_INVALID_ENGINE;
@@ -126,7 +126,7 @@ static void RuntimeInspect()
 		if (!SpriteGroup::CanAllocateItem(2)) FixtureAbort(__LINE__);
 		auto value = std::make_unique<CallbackResultSpriteGroup>(32767);
 		auto observer = std::make_unique<RuntimeObserver>(); observer->result = value.get();
-		e->grf_prop.spritegroups.clear(); e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
+		FixtureClearEngineSprites(e); FixtureSetEngineSprite(e, CargoGRFFileProps::SG_DEFAULT, observer.get());
 		auto inspect = [&](auto &spec, Price build, Price running, PropertyID cost_prop, PropertyID run_prop) {
 			Backup<std::remove_reference_t<decltype(spec)>> saved(spec);
 			spec.cost_factor = 53; spec.running_cost = 29;
@@ -231,13 +231,13 @@ static void PropertiesReadFailures()
 	for (VehicleType type = VEH_BEGIN; type != VEH_COMPANY_END; type++) {
 		Engine *e = LoadingEngine(1, type, 500), *next = LoadingEngine(1, type, 501);
 		const auto old_mask = EngineFields(e).info.callback_mask, next_mask = EngineFields(next).info.callback_mask;
-		const auto old_badges = e->badges; e->badges = {old_badge};
+		FixtureEngineBackup<decltype(EngineBindings(e).badges)> old_badges(EngineBindings(e).badges); FixtureSetEngineBadges(e, std::vector<BadgeID>{old_badge});
 		const std::array<uint8_t, 1> one{0xa5};
 		const int mask = std::array{0x1e, 0x17, 0x12, 0x14}[type], badges = std::array{0x33, 0x2a, 0x26, 0x24}[type];
 		LoadingRequire(failed(type, 502, mask, one) == 0 && EngineFields(e).info.callback_mask.base() == 0x2a5 && EngineFields(next).info.callback_mask == next_mask, "properties-partial-range");
 		const std::array<uint8_t, 5> partial_badges{2, 0, 0, 0, 0};
-		LoadingRequire(failed(type, 501, badges, partial_badges) == 1 && e->badges == std::vector<BadgeID>{old_badge} && GetBadge(new_badge)->features.Test(static_cast<GrfSpecFeature>(type)), "properties-partial-badges");
-		e->badges = old_badges; EngineFields(e).info.callback_mask = old_mask;
+		LoadingRequire(failed(type, 501, badges, partial_badges) == 1 && EngineBindings(e).badges == std::vector<BadgeID>{old_badge} && GetBadge(new_badge)->features.Test(static_cast<GrfSpecFeature>(type)), "properties-partial-badges");
+		old_badges.Restore(); EngineFields(e).info.callback_mask = old_mask;
 		const std::array<uint8_t, 3> order{0xff, 0xf6, 1};
 		const int order_prop = std::array{0x1a, 0x20, 0x1b, 0x1b}[type];
 		LoadingRequire(failed(type, 502, order_prop, order) == 0, "properties-partial-order");

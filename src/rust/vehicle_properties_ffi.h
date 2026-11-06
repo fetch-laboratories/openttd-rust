@@ -7,7 +7,6 @@
 struct OpenTTDVehicleProperties {
 	const OpenTTDEngineLoadingServices *loading;
 	uint16_t (*id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(id);
-	std::vector<BadgeID> * (*badges)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	SoundID (*sound)(const GRFFile *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 	bool (*train_image_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_image_valid);
 	bool (*road_image_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_image_valid);

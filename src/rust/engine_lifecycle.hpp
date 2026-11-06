@@ -11,6 +11,9 @@
 #include "byte_span_ffi.h"
 #include "../engine_type.h"
 #include "../vehicle_type.h"
+#include "../newgrf_badge_type.h"
+struct SpriteGroup;
+struct GRFFile;
 #include <utility>
 #include "rust_vector.h"
 #include "abi-record-engine.h"

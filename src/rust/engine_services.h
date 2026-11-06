@@ -20,7 +20,6 @@
 #include "../table/strings.h"
 #include "services_cargo.h"
 inline OpenTTDNewGRFCargoLabel RustEngineCargoLabel(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().info.cargo_label; }
-inline uint16_t RustEngineLocalID(const OpenTTDEngine *e) noexcept { return EngineOf(e)->grf_prop.local_id; }
 inline uint16_t RustEngineCallbackMask(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().info.callback_mask.base(); }
 inline uint8_t RustEngineMiscFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().info.misc_flags.base(); }
 inline bool RustEngineIsTram(const OpenTTDEngine *e) noexcept { return EngineMiscFlags{RustEngineMiscFlags(e)}.Test(EngineMiscFlag::RoadIsTram); }
@@ -55,8 +54,7 @@ inline uint16_t RustEngineAircraftRange(const OpenTTDEngine *e) noexcept { retur
 inline uint8_t RustEngineDefaultCargo(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetDefaultCargoType(); }
 inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().type; }
 inline bool RustEngineExclusivePreview(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().flags.Test(EngineFlag::ExclusivePreview); }
-inline void RustEngineSetGRFFile(const OpenTTDEngine *shell, const GRFFile *file) noexcept { RustSpecSetGRFFile(const_cast<Engine *>(EngineOf(shell)), file); }
-inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return RustSpecHasGRFFile(EngineOf(e)); }
+inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return e->bindings.grf_prop.grffile != nullptr; }
 inline uint8_t RustEngineRefitCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->Record().info.refit_cost; }
 inline int32_t RustEnginePriceShift(const OpenTTDEngine *e, uint32_t price) noexcept { return RustGRFPriceShift(RustEngineGRF(e), price); }
 inline uint16_t RustEngineVariant(const Engine *e) noexcept { return e->Record().info.variant_id.base(); }
@@ -150,7 +148,6 @@ inline uint16_t RustRailEngineWeight(const RailVehicleInfo *info) noexcept { ret
 inline uint16_t RustEngineTrainPower(const OpenTTDEngine *e) noexcept { return RustRailEnginePower(&EngineOf(e)->VehInfo<RailVehicleInfo>()); }
 inline uint16_t RustEngineTrainWeight(const OpenTTDEngine *e) noexcept { return RustRailEngineWeight(&EngineOf(e)->VehInfo<RailVehicleInfo>()); }
 inline EngineClass RustEngineTrainClass(const OpenTTDEngine *e) noexcept { return static_cast<EngineClass>(RustRailEngineClass(&EngineOf(e)->VehInfo<RailVehicleInfo>())); }
-inline std::vector<BadgeID> *RustEngineBadges(const OpenTTDEngine *e) noexcept { return &const_cast<Engine *>(EngineOf(e))->badges; }
 inline uint16_t RustGroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RustRailEnginePower(RailVehInfo(v->GetEngineType())) : RoadVehInfo(v->GetEngineType())->power; }
 inline uint16_t RustGroundEngineWeight(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RustRailEngineWeight(RailVehInfo(v->GetEngineType())) : RoadVehInfo(v->GetEngineType())->weight; }
 inline uint8_t RustGroundEngineTE(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->GetType() == VEH_TRAIN ? RailVehInfo(v->GetEngineType())->tractive_effort : RoadVehInfo(v->GetEngineType())->tractive_effort; }

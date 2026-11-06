@@ -21,9 +21,11 @@
 #include "snow_line_ffi.h"
 
 enum class LandscapeType : uint8_t;
+enum GrfSpecFeature : uint8_t;
 enum class StationType : uint8_t;
 struct OpenTTDStationService;
 struct OpenTTDNewGRFSpecs;
+struct OpenTTDBadgeSpan;
 struct ResolverObject;
 struct NetworkClientInfo;
 enum class RoadStopType : uint8_t;
@@ -206,13 +208,13 @@ struct OpenTTDSharedServices {
 	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
 	const uint8_t *(*string_data)(const void *, size_t *) noexcept OPENTTD_SERVICE_DEFAULT(string_data);
 	uint32_t (*terrain_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain_type);
+	size_t (*copyable_badges)(OpenTTDBadgeSpan, OpenTTDBadgeSpan, GrfSpecFeature, BadgeID *) noexcept OPENTTD_SERVICE_DEFAULT(copyable_badges);
 	uint8_t (*grf_file_version)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_version);
 	uint8_t (*grf_cargo_map)(const GRFFile *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_cargo_map);
 	bool (*grf_boolean_callback)(const GRFFile *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_boolean_callback);
 	GRFFile *(*grf_file_at_or_null)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_at_or_null);
 	uint32_t (*grf_file_id)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_id);
 	OpenTTDByteSpan (*grf_file_name)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(grf_file_name);
-	uint16_t (*engine_local_id)(const struct OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_local_id);
 	uint32_t (*grf_parameter)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(grf_parameter);
 	const OpenTTDNewGRFSpecs *newgrf_specs = nullptr;
 	const GRFFile *(*resolver_grf_file)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_grf_file);

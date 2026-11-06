@@ -143,10 +143,6 @@ rebound | RustEngineDefaultCargo | src/rust/engine_capabilities_services.hpp | d
 rebound | RustEngineDefaultCargo | src/rust/vehicle_articulated_services.hpp | default_cargo
 rebound | RustEngineDefaultCargo | src/rust/vehicle_build_services.hpp | default_cargo
 rebound | RustEngineDefaultCargo | src/rust/vehicle_services_newgrf.h | default_cargo
-rebound | RustEngineGRF | src/rust/engine_capabilities_services.hpp | grf
-rebound | RustEngineGRF | src/rust/engine_loading_services.hpp | engine_file
-rebound | RustEngineHasGRF | src/rust/engine_loading_services.hpp | has_file
-rebound | RustEngineHasGRF | src/rust/vehicle_refit_services.hpp | has_grf
 rebound | RustEngineID | src/newgrf_airport.cpp | engine_id
 rebound | RustEngineID | src/rust/engine_adapter.hpp | engine_id
 rebound | RustEngineID | src/rust/engine_capabilities_services.hpp | id

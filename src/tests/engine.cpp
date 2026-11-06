@@ -264,12 +264,12 @@ TEST_CASE("Engine runtime observes live specs and original property and price ki
 	}) {
 		Engine e(c.type, 0); e.index = EngineID{123};
 		GRFFile file; file.grfid = 0x613A0003;
-		e.grf_prop.grfid = 0xBAD;
-		e.grf_prop.grffile = &file;
+		e.Record().bindings.grf_prop.grfid = 0xBAD;
+		e.Record().bindings.grf_prop.grffile = &file;
 		CHECK(e.GetGRFID() == file.grfid);
-		e.grf_prop.grffile = nullptr;
+		e.Record().bindings.grf_prop.grffile = nullptr;
 		CHECK(e.GetGRFID() == 0);
-		e.grf_prop.grffile = &file;
+		e.Record().bindings.grf_prop.grffile = &file;
 		if (c.type == VEH_TRAIN) { auto &i = e.VehInfo<RailVehicleInfo>(); i.railveh_type = RAILVEH_SINGLEHEAD; i.running_cost_class = c.running; i.cost_factor = 53; i.running_cost = 29; }
 		if (c.type == VEH_ROAD) { auto &i = e.VehInfo<RoadVehicleInfo>(); i.running_cost_class = c.running; i.cost_factor = 53; i.running_cost = 29; }
 		if (c.type == VEH_SHIP) { auto &i = e.VehInfo<ShipVehicleInfo>(); i.cost_factor = 53; i.running_cost = 29; }

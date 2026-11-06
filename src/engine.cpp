@@ -77,8 +77,6 @@ static_assert(lengthof(_orig_rail_vehicle_info) + lengthof(_orig_road_vehicle_in
 
 Engine::Engine(VehicleType type, uint16_t local_id)
 {
-	this->Record().type = type;
-	this->grf_prop.local_id = local_id;
 	static const OpenTTDEngineDefaults defaults{
 		.info = _orig_engine_info,
 		.rail = _orig_rail_vehicle_info,

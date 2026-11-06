@@ -18,12 +18,6 @@
 #include "timer/timer_game_calendar.h"
 #include "rust/engine_lifecycle.hpp"
 
-struct WagonOverride {
-	std::vector<EngineID> engines;
-	CargoType cargo;
-	const SpriteGroup *group;
-};
-
 /** Flags used client-side in the purchase/autorenew engine list. */
 enum class EngineDisplayFlag : uint8_t {
 	HasVariants, ///< Set if engine has variants.
@@ -47,15 +41,10 @@ public:
 	EngineDisplayFlags display_flags{}; ///< NOSAVE client-side-only display flags for build engine list.
 	EngineID display_last_variant = EngineID::Invalid(); ///< NOSAVE client-side-only last variant selected.
 
-	/* NewGRF related data */
-	CargoGRFFileProps grf_prop{}; ///< Link to NewGRF
-	std::vector<WagonOverride> overrides{};
-	std::vector<BadgeID> badges{};
 
 	Engine() {}
 	Engine(Engine &&other) noexcept
-		: rust_lifecycle(std::move(other.rust_lifecycle)), display_flags(other.display_flags), display_last_variant(other.display_last_variant),
-		  grf_prop(std::move(other.grf_prop)), overrides(std::move(other.overrides)), badges(std::move(other.badges))
+		: rust_lifecycle(std::move(other.rust_lifecycle)), display_flags(other.display_flags), display_last_variant(other.display_last_variant)
 	{
 		this->Record().shell = this;
 	}
@@ -148,7 +137,7 @@ public:
 	 */
 	const GRFFile *GetGRF() const
 	{
-		return this->grf_prop.grffile;
+		return this->Record().bindings.grf_prop.grffile;
 	}
 
 	uint32_t GetGRFID() const;

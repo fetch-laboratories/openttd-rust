@@ -233,6 +233,7 @@ pub unsafe extern "C" fn openttd_rust_engine_construct(
     // SAFETY: unique live constructor owner and borrowed original tables.
     let record = unsafe { &mut *record };
     record.r#type = kind;
+    record.bindings.grf_prop.local_id = local;
     record.list_position = local;
     record.preview_company = 255;
     if usize::from(local) >= usize::from(tables.counts[index]) {
