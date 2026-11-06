@@ -501,7 +501,16 @@ mod tests {
     fn failed_world_preconditions_assert_then_read_raw_bits() {
         use crate::slope_func::{SLOPE_E, SLOPE_S, SLOPE_STEEP, SLOPE_W};
         let (base, extended) = tiles();
-        let height_cases: [(&str, Read, [i32; 2], u32); 3] = [
+        let height_cases: [(&str, Read, [i32; 2], u32); 4] = [
+            (
+                "GetTileSlopeZ",
+                |w, t| {
+                    let (slope, z) = w.tile_slope_z(t);
+                    [slope.into(), z]
+                },
+                [(SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_STEEP).into(), 3],
+                2,
+            ),
             (
                 "GetTilePixelSlope",
                 |w, t| {
