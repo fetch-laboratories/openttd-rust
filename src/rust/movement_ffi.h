@@ -36,7 +36,6 @@ struct OpenTTDMovementServices {
 	RoadTramType (*road_kind)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
 	const OpenTTDRoadLeaves *road_vehicle;
 	OpenTTDMovementVehicle (*resolve)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
-	uint8_t (*train_engine_class)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_engine_class);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);
 	uint32_t (*add_by_diag_dir)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_by_diag_dir);

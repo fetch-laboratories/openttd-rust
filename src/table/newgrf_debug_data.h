@@ -24,7 +24,7 @@
 
 /*** NewGRF Vehicles ***/
 
-#define NICV(cb_id, bit) NIC(cb_id, Engine, info.callback_mask, bit)
+#define NICV(cb_id, bit) NIC(cb_id, Engine, Record().info.callback_mask, bit)
 static const NICallback _nic_vehicles[] = {
 	NICV(CBID_VEHICLE_VISUAL_EFFECT,         VehicleCallbackMask::VisualEffect),
 	NICV(CBID_VEHICLE_LENGTH,                VehicleCallbackMask::Length),
@@ -72,7 +72,7 @@ class NIHVehicle : public NIHelper {
 	const void *GetSpec(uint index) const override       { return Vehicle::Get(index)->GetEngine(); }
 	std::string GetName(uint index) const override       { return GetString(STR_VEHICLE_NAME, index); }
 	uint32_t GetGRFID(uint index) const override                   { return Vehicle::Get(index)->GetGRFID(); }
-	std::span<const BadgeID> GetBadges(uint index) const override { return Vehicle::Get(index)->GetEngine()->badges; }
+	std::span<const BadgeID> GetBadges(uint index) const override { return Vehicle::Get(index)->GetEngine()->Record().bindings.badges; }
 
 	uint Resolve(uint index, uint var, uint param, bool &avail) const override
 	{

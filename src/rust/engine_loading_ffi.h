@@ -8,10 +8,7 @@
 #include "../road_type.h"
 #include "newgrf_vehicle_ffi.h"
 #include "newgrf_global_ffi.h"
-struct OpenTTDEngineOrderSource { uint16_t local; VehicleType type; uint32_t grfid; };
 struct OpenTTDEngineLoadingVehicle { uint32_t id; VehicleType type; };
-struct OpenTTDEngineRefitInputs { CargoTypes mask; CargoType cargo; bool custom; };
-struct OpenTTDEngineTrainCargo { uint8_t capacity; RailVehicleTypes kind; };
 struct OpenTTDEngineCargoClass { uint16_t classes; CargoType cargo; };
 struct OpenTTDEngineMappingView { const EngineIDMapping *data; size_t size; };
 /** Native leaves do not throw. Load/reset excludes resolution; native error frames
@@ -25,9 +22,6 @@ struct OpenTTDEngineLoadingServices {
 	OpenTTDEngineRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	bool (*dynamic)() noexcept OPENTTD_SERVICE_DEFAULT(dynamic);
 	GRFFile *(*find_file)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_file);
-	const GRFFile *(*engine_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_file);
-	bool (*has_file)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(has_file);
-	void (*set_file)(const OpenTTDEngine *, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(set_file);
 	void (*mapping_log)(uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(mapping_log);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	size_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
@@ -35,44 +29,23 @@ struct OpenTTDEngineLoadingServices {
 	void (*construct_at)(VehicleType, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(construct_at);
 	void (*close_previews)() noexcept OPENTTD_SERVICE_DEFAULT(close_previews);
 	void (*clean_pool)() noexcept OPENTTD_SERVICE_DEFAULT(clean_pool);
-	uint64_t (*railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(railtypes);
-	OpenTTDEngineRefitInputs (*refit_inputs)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_inputs);
-	OpenTTDNewGRFCargoLabel (*cargo_label)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_label);
-	OpenTTDEngineTrainCargo (*train_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo);
-	void (*set_cargo)(const OpenTTDEngine *, CargoType) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo);
-	void (*set_refit)(const OpenTTDEngine *, CargoTypes) noexcept OPENTTD_SERVICE_DEFAULT(set_refit);
-	void (*disable)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(disable);
-	bool (*old_refittable)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(old_refittable);
-	void (*set_old_refittable)(const OpenTTDEngine *, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_old_refittable);
 	OpenTTDEngineCargoClass (*cargo_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_next);
 	size_t (*cargo_list_size)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_list_size);
 	void (*unknown_refit)(uint32_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_refit);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
-	uint16_t (*variant)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(variant);
-	void (*set_variant)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_variant);
-	void (*invalid_string)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(invalid_string);
-	bool (*engine_climate)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_climate);
-	void (*rail_badges)(const OpenTTDEngine *, RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_badges);
-	void (*road_badges)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_badges);
-	RailVehicleTypes (*rail_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail_kind);
 	void (*use_livery)(LiveryScheme) noexcept OPENTTD_SERVICE_DEFAULT(use_livery);
 	void (*variant_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(variant_flags);
-	bool (*is_tram)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(is_tram);
-	void (*set_road_speed)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_speed);
-	void (*set_roadtype)(const OpenTTDEngine *, RoadType) noexcept OPENTTD_SERVICE_DEFAULT(set_roadtype);
-	void (*set_railtypes)(const OpenTTDEngine *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_railtypes);
 	void (*override_log)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_log);
 	OpenTTDEngineLoadingVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	void (*reload)() noexcept OPENTTD_SERVICE_DEFAULT(reload);
 	const uint8_t *(*default_counts)() noexcept OPENTTD_SERVICE_DEFAULT(default_counts);
-	void (*set_position)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_position);
-	OpenTTDEngineOrderSource (*order_source)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_source);
 	void (*order_sort)(uint16_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(order_sort);
 	size_t (*order_count)() noexcept OPENTTD_SERVICE_DEFAULT(order_count);
 };
 const OpenTTDEngineLoadingServices &GetRustEngineLoadingServices() noexcept;
 void RustVehicleOrderSort(uint16_t *, size_t) noexcept;
 extern "C" {
+uint32_t openttd_rust_engine_file_badge(const OpenTTDEngineLoadingServices *, const GRFFile *, BadgeID);
 uint8_t openttd_rust_engine_reset_config_abi(const OpenTTDEngineLoadingServices *);
 extern "C++" inline bool openttd_rust_engine_reset_config(const OpenTTDEngineLoadingServices *a0) { return openttd_rust_engine_reset_config_abi(a0) != 0; }
 const GRFFile *openttd_rust_engine_current_override(const OpenTTDEngineLoadingServices *, const GRFFile *);

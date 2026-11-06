@@ -246,7 +246,6 @@ pub struct Leaves {
     pub bridge_speed: extern "C" fn(Handle, u32) -> u64,
     pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub capacity_error: extern "C" fn(Handle),
-    pub cargo_age_default: extern "C" fn(Handle) -> u64,
     pub check_next: extern "C" fn(Handle),
     pub check_orders: extern "C" fn(Handle),
     pub check_reverse: extern "C" fn(Handle) -> u64,
@@ -263,7 +262,6 @@ pub struct Leaves {
     pub crossing_road_axis: extern "C" fn(Handle, u32) -> u64,
     pub crossing_sound: extern "C" fn(Handle, u32),
     pub curve_advantage: extern "C" fn(Handle) -> u64,
-    pub curve_mod_default: extern "C" fn(Handle) -> i16,
     pub day_ticks: extern "C" fn(Handle) -> u64,
     pub delete_vehicle: extern "C" fn(Handle),
     pub depot_dir: extern "C" fn(Handle, u32) -> u64,
@@ -278,10 +276,8 @@ pub struct Leaves {
     pub dirty_tile: extern "C" fn(Handle, u32),
     pub dir_diag: extern "C" fn(Handle, u8) -> u64,
     pub disconnect: extern "C" fn(Handle),
-    pub engine_power: extern "C" fn(Handle) -> u64,
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
     pub first_track: extern "C" fn(Handle, u8) -> u64,
-    pub grf_version: extern "C" fn(Handle) -> u64,
     pub has_depot_res: extern "C" fn(Handle, u32) -> u64,
     pub has_signal: extern "C" fn(Handle, u32, u8) -> u64,
     pub has_signals: extern "C" fn(Handle, u32) -> u64,
@@ -296,8 +292,6 @@ pub struct Leaves {
     pub is_station_any: extern "C" fn(Handle, u32) -> u64,
     pub leave_sound: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
-    pub length_callback: extern "C" fn(Handle) -> u64,
-    pub length_default: extern "C" fn(Handle) -> u64,
     pub local_company: extern "C" fn(Handle) -> u64,
     pub lost_warn: extern "C" fn(Handle) -> u64,
     pub map_size: extern "C" fn(Handle) -> u64,
@@ -311,16 +305,11 @@ pub struct Leaves {
     pub other_end: extern "C" fn(Handle, u32) -> u64,
     pub pay_running: extern "C" fn(Handle, i64),
     pub pbs_signal_type: extern "C" fn(Handle) -> u64,
-    pub pow_wag_power: extern "C" fn(Handle) -> u64,
-    pub railveh_wagon: extern "C" fn(Handle) -> u64,
-    pub rail_tilt: extern "C" fn(Handle) -> u64,
     pub rail_type: extern "C" fn(Handle, u32) -> u64,
-    pub rail_types: extern "C" fn(Handle) -> u64,
     pub reserve_paths: extern "C" fn() -> bool,
     pub reserve_under: extern "C" fn(Handle),
     pub reset_unbunch: extern "C" fn(Handle),
     pub reverse_at_signals: extern "C" fn(Handle) -> u64,
-    pub reverse_single_blocked: extern "C" fn(Handle) -> u64,
     pub reverse_windows: extern "C" fn(Handle),
     pub running_windows: extern "C" fn(Handle),
     pub servint: extern "C" fn(Handle) -> u64,
@@ -334,7 +323,6 @@ pub struct Leaves {
     pub signal_type: extern "C" fn(Handle, u32, u8) -> u64,
     pub sigseg_full: extern "C" fn(Handle) -> u64,
     pub sigseg_pbs: extern "C" fn(Handle) -> u64,
-    pub speed_default: extern "C" fn(Handle) -> u64,
     pub start_stop_dirty: extern "C" fn(Handle),
     pub station: extern "C" fn(Handle, u32) -> u64,
     pub station_axis: extern "C" fn(Handle, u32) -> u64,
@@ -360,7 +348,6 @@ pub struct Leaves {
     pub truncate_cargo: extern "C" fn(Handle, u32),
     pub tunnel_dir: extern "C" fn(Handle, u32) -> u64,
     pub update_delta: extern "C" fn(Handle),
-    pub user_default: extern "C" fn(Handle) -> u64,
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
     pub visit_type: extern "C" fn(Handle, u16) -> u64,
@@ -400,6 +387,9 @@ impl<'a> Game<'a> {
     fn vs(&self) -> &VehicleServices {
         // SAFETY: The native table names the immutable process-wide base table.
         unsafe { &*self.leaves.vehicle }
+    }
+    fn engine(&self, id: Handle) -> crate::vehicle::EngineRef {
+        (self.vs().engine)(id.vehicle())
     }
     /// Run one `vehicle::maintenance` entry on this entry's shell.
     /// # Safety
@@ -506,11 +496,11 @@ impl Game<'_> {
                 first_engine,
                 (u64::from(if u == id { u16::MAX } else { first_engine })) as u16
             );
-            u.set_railtypes((self.leaves.rail_types)(u));
+            u.set_railtypes(self.engine(u).railtypes());
             if part_engine_part != 0 {
                 first_engine = part_engine;
             }
-            u.set_user_def_data((self.leaves.user_default)(u));
+            u.set_user_def_data(u64::from(self.engine(u).train_user_data()));
             (self.leaves.invalidate_grf)(id);
             (self.leaves.invalidate_grf)(u);
             u = (u).next();
@@ -528,7 +518,7 @@ impl Game<'_> {
         }
         u = id;
         while u != Handle::NONE {
-            if (self.leaves.rail_tilt)(u) == 0 {
+            if self.engine(u).misc() & crate::engine_type::RAIL_TILTS == 0 {
                 tilt = false;
             }
             // SAFETY: the current shell survives property evaluation; no owner borrow is held.
@@ -537,20 +527,24 @@ impl Game<'_> {
                     self.vs(),
                     u.vehicle(),
                     crate::newgrf_properties::PROP_TRAIN_CURVE_SPEED_MOD,
-                    i32::from((self.leaves.curve_mod_default)(u)),
+                    i32::from(self.engine(u).train_curve_mod()),
                 )
             } as i16);
             // SAFETY: live serialized shell; evaluation retains no owner reference.
             unsafe { crate::newgrf_vehicle::cache_override(self.vs(), u.vehicle()) };
             (self.leaves.write_colourmap)(u, 0);
             crate::vehicle_effect::openttd_rust_visual_update(u.vehicle(), true);
-            let powered = (self.leaves.pow_wag_power)(id) != 0
-                && (self.leaves.railveh_wagon)(u) != 0
+            let powered = self.engine(id).wagon_power() != 0
+                && self.engine(u).rail_kind() == crate::vehicle::RailVehicleTypes::WAGON
                 && (self.leaves.wagon_override)(u) != 0
                 && (u).vehicle().visual_effect() & 0x80 == 0;
             u.set_flag(3, powered);
             if (u).articulated() == 0 {
-                if (self.leaves.engine_power)(u) > 0 {
+                if u64::from(
+                    self.engine(u)
+                        .ground_power(crate::vehicle::VehicleType(u.vehicle().vehicle_type())),
+                ) > 0
+                {
                     id.set_compatible_railtypes(
                         id.get_compatible_railtypes()
                             | (self.leaves.all_powered)(u, u.get_railtypes()),
@@ -560,13 +554,14 @@ impl Game<'_> {
                     u.set_railtypes(u.get_railtypes() | 1);
                     u.set_compatible_railtypes(u.get_compatible_railtypes() | 1);
                 }
-                if ((self.leaves.railveh_wagon)(u) == 0 || (self.leaves.wagon_speed_limits)(u) != 0)
+                if (self.engine(u).rail_kind() != crate::vehicle::RailVehicleTypes::WAGON
+                    || (self.leaves.wagon_speed_limits)(u) != 0)
                     && (self.leaves.wagon_override)(u) == 0
                 {
                     let speed = self.property(
                         u,
                         u32::from(crate::newgrf_properties::PROP_TRAIN_SPEED),
-                        (self.leaves.speed_default)(u),
+                        u64::from(self.engine(u).train_speed()),
                     ) as u16;
                     if speed != 0 {
                         max_speed = max_speed.min(speed);
@@ -602,11 +597,11 @@ impl Game<'_> {
                 (self.property(
                     u,
                     u32::from(crate::newgrf_properties::PROP_TRAIN_CARGO_AGE_PERIOD),
-                    (self.leaves.cargo_age_default)(u),
+                    u64::from(self.engine(u).cargo_age()),
                 )) as u16
             );
             let mut length = u16::MAX;
-            if (self.leaves.grf_version)(u) >= 8 {
+            if self.engine(u).grf_version(self.services) >= 8 {
                 length = self.property(
                     u,
                     u32::from(crate::newgrf_properties::PROP_TRAIN_SHORTEN_FACTOR),
@@ -620,7 +615,7 @@ impl Game<'_> {
                         length,
                     );
                 }
-            } else if (self.leaves.length_callback)(u) != 0 {
+            } else if self.engine(u).callbacks() & crate::newgrf_callbacks::VEHICLE_LENGTH != 0 {
                 length = (self.vs().callback)(
                     (self.vs().newgrf)(),
                     u.vehicle(),
@@ -628,7 +623,7 @@ impl Game<'_> {
                 );
             }
             if length == u16::MAX {
-                length = (self.leaves.length_default)(u) as u16;
+                length = u16::from(self.engine(u).train_shorten());
             }
             length = 8 - length.min(7);
             if allowed & 1 != 0 {
@@ -880,11 +875,12 @@ impl Game<'_> {
         let mut u = id;
         loop {
             let e = (vs.engine)(u.vehicle()).0.as_ptr();
-            if (cap.train_price)(e) != crate::economy_type::INVALID_PRICE {
+            if crate::vehicle::EngineRef::of(e).train_price() != crate::economy_type::INVALID_PRICE
+            {
                 let mut factor = self.property(
                     u,
                     u32::from(crate::newgrf_properties::PROP_TRAIN_RUNNING_COST_FACTOR),
-                    u64::from((cap.train_running)(e)),
+                    u64::from(crate::vehicle::EngineRef::of(e).train_running()),
                 ) as u32;
                 if factor != 0 {
                     if (u).multiheaded() != 0 {
@@ -893,7 +889,7 @@ impl Game<'_> {
                     cost = cost.saturating_add(crate::engine_capabilities::price(
                         cap,
                         e,
-                        u32::from((cap.train_price)(e)),
+                        u32::from(crate::vehicle::EngineRef::of(e).train_price()),
                         factor,
                         0,
                     ));
@@ -2547,7 +2543,9 @@ impl Game<'_> {
     }
     fn reverse_command(&self, id: Handle, execute: bool, single: bool) -> u8 {
         if single {
-            if (id).multiheaded() != 0 || (self.leaves.reverse_single_blocked)(id) != 0 {
+            if (id).multiheaded() != 0
+                || self.engine(id).callbacks() & crate::newgrf_callbacks::VEHICLE_ARTIC_ENGINE != 0
+            {
                 return 1;
             }
             let first = (id).first();
@@ -2929,7 +2927,6 @@ crate::abi::layouts! {
         bridge_speed,
         capabilities,
         capacity_error,
-        cargo_age_default,
         check_next,
         check_orders,
         check_reverse,
@@ -2946,7 +2943,6 @@ crate::abi::layouts! {
         crossing_road_axis,
         crossing_sound,
         curve_advantage,
-        curve_mod_default,
         day_ticks,
         delete_vehicle,
         depot_dir,
@@ -2961,10 +2957,8 @@ crate::abi::layouts! {
         dirty_tile,
         dir_diag,
         disconnect,
-        engine_power,
         find_depot,
         first_track,
-        grf_version,
         has_depot_res,
         has_signal,
         has_signals,
@@ -2979,8 +2973,6 @@ crate::abi::layouts! {
         is_station_any,
         leave_sound,
         leave_unbunch,
-        length_callback,
-        length_default,
         local_company,
         lost_warn,
         map_size,
@@ -2994,16 +2986,11 @@ crate::abi::layouts! {
         other_end,
         pay_running,
         pbs_signal_type,
-        pow_wag_power,
-        railveh_wagon,
-        rail_tilt,
         rail_type,
-        rail_types,
         reserve_paths,
         reserve_under,
         reset_unbunch,
         reverse_at_signals,
-        reverse_single_blocked,
         reverse_windows,
         running_windows,
         servint,
@@ -3017,7 +3004,6 @@ crate::abi::layouts! {
         signal_type,
         sigseg_full,
         sigseg_pbs,
-        speed_default,
         start_stop_dirty,
         station,
         station_axis,
@@ -3043,7 +3029,6 @@ crate::abi::layouts! {
         truncate_cargo,
         tunnel_dir,
         update_delta,
-        user_default,
         veh_exit_dir,
         viewport,
         visit_type,

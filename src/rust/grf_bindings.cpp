@@ -24,14 +24,10 @@ const OpenTTDGrfBindingServices &GetRustGrfBindingServices() noexcept
 		.badge_name = [](GRFFile *file, uint16_t id) noexcept -> StringID * { auto it = file->badge_map.find(id); return it == file->badge_map.end() ? nullptr : &GetBadge(it->second)->name; },
 		.canal_bind = [](uint8_t id, const GRFFile *file, const SpriteGroup *group) noexcept { _water_feature[id].grffile = file; _water_feature[id].group = group; },
 		.cargo_bind = [](uint8_t id, const GRFFile *file, const SpriteGroup *group) noexcept { auto *cargo = CargoSpec::Get(id); cargo->grffile = file; cargo->group = group; },
-		.custom_engine_sprites = [](uint16_t engine, uint8_t cargo, const SpriteGroup *group) noexcept { SetCustomEngineSprites(EngineID{engine}, cargo, group); },
-		.engine_grf = [](uint16_t engine, const GRFFile *file) noexcept { SetEngineGRF(EngineID{engine}, file); },
-		.engine_string = RustEngineString,
 		.mark_feature = [](GRFFile *file, GrfSpecFeature feature) noexcept { file->grf_features.Set(feature); },
 		.object_specs = [](GRFFile *file) noexcept -> RustVector<ObjectSpec *> * { return &file->objectspec; },
 		.rail_bind = [](RailType type, uint8_t cid, const GRFFile *file, const SpriteGroup *group) noexcept { extern RailTypeInfo _railtypes[RAILTYPE_END]; _railtypes[type].grffile[cid] = file; _railtypes[type].group[cid] = group; },
 		.road_bind = [](RoadType type, uint8_t cid, const GRFFile *file, const SpriteGroup *group) noexcept { extern RoadTypeInfo _roadtypes[ROADTYPE_END]; _roadtypes[type].grffile[cid] = file; _roadtypes[type].group[cid] = group; },
-		.wagon_override = [](uint16_t engine, uint8_t cargo, const SpriteGroup *group, EngineID *engines, size_t count) noexcept { SetWagonOverrideSprites(EngineID{engine}, cargo, group, {engines, count}); },
 	};
 	return services;
 }

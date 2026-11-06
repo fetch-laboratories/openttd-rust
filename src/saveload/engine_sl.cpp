@@ -17,35 +17,34 @@
 #include "../string_func.h"
 
 #include "../safeguards.h"
-/** Only the opaque Rust name needs native string decoding. Scalar descriptors
- * address canonical aliases directly, including partial writes on load failure. */
+/** Name decoding retains its native error frame; scalars address the canonical record. */
 static std::string _engine_name;
 struct EngineNameScope {
 	Engine *engine;
-	EngineNameScope(Engine *e) : engine(e) { _engine_name = e->name.View(); }
-	~EngineNameScope() { this->engine->name = _engine_name; }
+	EngineNameScope(Engine *e) : engine(e) { _engine_name = e->Name(); }
+	~EngineNameScope() { this->engine->SetName(_engine_name); }
 };
 
 static const SaveLoad _engine_desc[] = {
-	 SLE_CONDVAR(Engine, intro_date,          SLE_FILE_U16 | SLE_VAR_I32,  SL_MIN_VERSION,  SLV_31),
-	 SLE_CONDVAR(Engine, intro_date,          SLE_INT32,                  SLV_31, SL_MAX_VERSION),
-	 SLE_CONDVAR(Engine, age,                 SLE_FILE_U16 | SLE_VAR_I32,  SL_MIN_VERSION,  SLV_31),
-	 SLE_CONDVAR(Engine, age,                 SLE_INT32,                  SLV_31, SL_MAX_VERSION),
-	     SLE_VAR(Engine, reliability,         SLE_UINT16),
-	     SLE_VAR(Engine, reliability_spd_dec, SLE_UINT16),
-	     SLE_VAR(Engine, reliability_start,   SLE_UINT16),
-	     SLE_VAR(Engine, reliability_max,     SLE_UINT16),
-	     SLE_VAR(Engine, reliability_final,   SLE_UINT16),
-	     SLE_VAR(Engine, duration_phase_1,    SLE_UINT16),
-	     SLE_VAR(Engine, duration_phase_2,    SLE_UINT16),
-	     SLE_VAR(Engine, duration_phase_3,    SLE_UINT16),
-	     SLE_VAR(Engine, flags,               SLE_UINT8),
-	 SLE_CONDVAR(Engine, preview_asked,       SLE_UINT16,                SLV_179, SL_MAX_VERSION),
-	 SLE_CONDVAR(Engine, preview_company,     SLE_UINT8,                 SLV_179, SL_MAX_VERSION),
-	     SLE_VAR(Engine, preview_wait,        SLE_UINT8),
-	 SLE_CONDVAR(Engine, company_avail,       SLE_FILE_U8  | SLE_VAR_U16,  SL_MIN_VERSION, SLV_104),
-	 SLE_CONDVAR(Engine, company_avail,       SLE_UINT16,                SLV_104, SL_MAX_VERSION),
-	 SLE_CONDVAR(Engine, company_hidden,      SLE_UINT16,                SLV_193, SL_MAX_VERSION),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, intro_date,          SLE_FILE_U16 | SLE_VAR_I32,  SL_MIN_VERSION,  SLV_31),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, intro_date,          SLE_INT32,                  SLV_31, SL_MAX_VERSION),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, age,                 SLE_FILE_U16 | SLE_VAR_I32,  SL_MIN_VERSION,  SLV_31),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, age,                 SLE_INT32,                  SLV_31, SL_MAX_VERSION),
+	     SLE_VAR(OpenTTDEngineLifecycle, reliability,         SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, reliability_spd_dec, SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, reliability_start,   SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, reliability_max,     SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, reliability_final,   SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, duration_phase_1,    SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, duration_phase_2,    SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, duration_phase_3,    SLE_UINT16),
+	     SLE_VAR(OpenTTDEngineLifecycle, flags,               SLE_UINT8),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, preview_asked,       SLE_UINT16,                SLV_179, SL_MAX_VERSION),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, preview_company,     SLE_UINT8,                 SLV_179, SL_MAX_VERSION),
+	     SLE_VAR(OpenTTDEngineLifecycle, preview_wait,        SLE_UINT8),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, company_avail,       SLE_FILE_U8  | SLE_VAR_U16,  SL_MIN_VERSION, SLV_104),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, company_avail,       SLE_UINT16,                SLV_104, SL_MAX_VERSION),
+	 SLE_CONDVAR(OpenTTDEngineLifecycle, company_hidden,      SLE_UINT16,                SLV_193, SL_MAX_VERSION),
 	SLEG_CONDSSTR("name", _engine_name, SLE_STR, SLV_84, SL_MAX_VERSION),
 };
 
@@ -71,8 +70,8 @@ struct ENGNChunkHandler : ChunkHandler {
 
 		for (Engine *e : Engine::Iterate()) {
 			SlSetArrayIndex(e->index);
-			_engine_name = e->name.View();
-			SlObject(e, _engine_desc);
+			_engine_name = e->Name();
+			SlObject(&e->Record(), _engine_desc);
 		}
 	}
 
@@ -88,15 +87,15 @@ struct ENGNChunkHandler : ChunkHandler {
 			Engine *e = GetTempDataEngine(static_cast<EngineID>(index));
 			{
 				EngineNameScope name(e);
-				SlObject(e, slt);
+				SlObject(&e->Record(), slt);
 			}
 
 			if (IsSavegameVersionBefore(SLV_179)) {
 				/* preview_company_rank was replaced with preview_company and preview_asked.
 				 * Just cancel any previews. */
-				e->flags.Reset(EngineFlag{2}); // ENGINE_OFFER_WINDOW_OPEN
-				e->preview_company = CompanyID::Invalid();
-				e->preview_asked.Set();
+				e->Record().flags.Reset(EngineFlag{2}); // ENGINE_OFFER_WINDOW_OPEN
+				e->Record().preview_company = CompanyID::Invalid();
+				e->Record().preview_asked.Set();
 			}
 		}
 	}
@@ -111,23 +110,23 @@ void CopyTempEngineData()
 		if (e->index >= _temp_engine.size()) break;
 
 		const Engine *se = GetTempDataEngine(e->index);
-		e->intro_date          = se->intro_date;
-		e->age                 = se->age;
-		e->reliability         = se->reliability;
-		e->reliability_spd_dec = se->reliability_spd_dec;
-		e->reliability_start   = se->reliability_start;
-		e->reliability_max     = se->reliability_max;
-		e->reliability_final   = se->reliability_final;
-		e->duration_phase_1    = se->duration_phase_1;
-		e->duration_phase_2    = se->duration_phase_2;
-		e->duration_phase_3    = se->duration_phase_3;
-		e->flags               = se->flags;
-		e->preview_asked       = se->preview_asked;
-		e->preview_company     = se->preview_company;
-		e->preview_wait        = se->preview_wait;
-		e->company_avail       = se->company_avail;
-		e->company_hidden      = se->company_hidden;
-		e->name                = se->name;
+		e->Record().intro_date          = se->Record().intro_date;
+		e->Record().age                 = se->Record().age;
+		e->Record().reliability         = se->Record().reliability;
+		e->Record().reliability_spd_dec = se->Record().reliability_spd_dec;
+		e->Record().reliability_start   = se->Record().reliability_start;
+		e->Record().reliability_max     = se->Record().reliability_max;
+		e->Record().reliability_final   = se->Record().reliability_final;
+		e->Record().duration_phase_1    = se->Record().duration_phase_1;
+		e->Record().duration_phase_2    = se->Record().duration_phase_2;
+		e->Record().duration_phase_3    = se->Record().duration_phase_3;
+		e->Record().flags               = se->Record().flags;
+		e->Record().preview_asked       = se->Record().preview_asked;
+		e->Record().preview_company     = se->Record().preview_company;
+		e->Record().preview_wait        = se->Record().preview_wait;
+		e->Record().company_avail       = se->Record().company_avail;
+		e->Record().company_hidden      = se->Record().company_hidden;
+		e->SetName(se->Name());
 	}
 
 	ResetTempEngineData();
@@ -153,7 +152,7 @@ struct ENGSChunkHandler : ChunkHandler {
 		/* Copy each string into the temporary engine array. */
 		for (EngineID engine = EngineID::Begin(); engine < std::size(names); ++engine) {
 			Engine *e = GetTempDataEngine(engine);
-			e->name = CopyFromOldName(names[engine]);
+			e->SetName(CopyFromOldName(names[engine]));
 		}
 	}
 };

@@ -72,10 +72,14 @@ static void AircraftDirectBoundary()
 	static OpenTTDVehicleResolverServices resolver{};
 	resolver.capabilities = &capabilities;
 	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
-	vehicle.engine = [](OpenTTDVehicle *) noexcept { return reinterpret_cast<const OpenTTDEngine *>(&aircraft_probe); };
+	static OpenTTDEngine *engine_record;
+	engine_record = openttd_rust_engine_new();
+	const OpenTTDEngineDefaults defaults{};
+	openttd_rust_engine_construct(engine_record, &defaults, VEH_AIRCRAFT, UINT16_MAX);
+	engine_record->vehicle_info.aircraft.max_range = 41;
+	engine_record->info.cargo_age_period = 71;
+	vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * { return engine_record; };
 	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property == 0x0C) { CHECK(fallback == 0); return int32_t{200}; } CHECK((property == 0x1C && fallback == 71) || (property == 0x1F && fallback == 41)); return fallback; };
-	leaves.cargo_age_default = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{71}; };
-	capabilities.aircraft_range = [](const OpenTTDEngine *) noexcept { return uint16_t{41}; };
 	p.record.subtype = 2;
 	p.vehicle = {&p.record, openttd_rust_aircraft_state_new(), 17};
 	p.record.aircraft = p.shadow.aircraft = p.vehicle.state;
@@ -134,6 +138,8 @@ static void AircraftDirectBoundary()
 	CHECK(openttd_rust_aircraft_flight_level(&leaves, disaster, &disaster_flags, false) == 1 && disaster_flags == 4);
 	CHECK(openttd_rust_aircraft_flight_level(&leaves, disaster, &disaster_flags, true) == 2 && disaster_flags == 4);
 	std::printf("aircraft direct nested mutation, live block release/deletion and disaster flight identity passed\n");
+	vehicle.engine = nullptr;
+	openttd_rust_engine_destroy(std::exchange(engine_record, nullptr));
 }
 /* Concrete gaps: native callbacks can replace order fields/rotor counters and
  * direction/progress after the pre-speed observation. This probe forbids stale

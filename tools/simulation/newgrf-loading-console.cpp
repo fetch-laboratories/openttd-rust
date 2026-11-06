@@ -2,6 +2,7 @@
 /** @file newgrf-loading-console.cpp Production loading from deterministic on-disk GRFs. */
 #include "stdafx.h"
 #include "vehicle-record-fixture.hpp"
+#include "engine-record-fixture.hpp"
 #include "console_internal.h"
 #include "newgrf/newgrf_act2.cpp"
 #include "newgrf_text.cpp"
@@ -153,10 +154,10 @@ static void GrfBindings(const char *phase)
 	cargo_groups(4, file->stations[0].get()); cargo_groups(20, file->roadstops[0].get());
 	for (uint16_t local : {0, 1, 2, 3, 27}) {
 		const Engine *engine = Engine::Get(GetNewEngineID(file, VEH_TRAIN, local));
-		const auto &p = engine->grf_prop;
-		fmt::print(stderr, "LOADING binding {} engine {} {} {:08X} {} {} {}\n", phase, local, engine->index, p.grfid, BindingResult(p.GetSpriteGroup(passengers)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT)), BindingResult(p.GetSpriteGroup(CargoGRFFileProps::SG_PURCHASE)));
-		for (uint i = 0; i < engine->overrides.size(); i++) {
-			const auto &override = engine->overrides[i];
+		const auto &p = EngineBindings(engine).grf_prop;
+		fmt::print(stderr, "LOADING binding {} engine {} {} {:08X} {} {} {}\n", phase, local, engine->index, p.grfid, BindingResult(FixtureEngineSprite(engine, passengers)), BindingResult(FixtureEngineSprite(engine, CargoGRFFileProps::SG_DEFAULT)), BindingResult(FixtureEngineSprite(engine, CargoGRFFileProps::SG_PURCHASE)));
+		for (uint i = 0; i < EngineBindings(engine).overrides.size(); i++) {
+			const auto &override = EngineBindings(engine).overrides[i];
 			std::string ids;
 			for (EngineID id : override.engines) ids += fmt::format("{},", id.base());
 			fmt::print(stderr, "LOADING binding {} override {} {} {} {} {}\n", phase, local, i, override.cargo, BindingResult(override.group), ids);
@@ -354,7 +355,7 @@ static void Inspect(bool reload)
 	Require(GetGRFConfig(ID("E471"))->status == GCS_ACTIVATED && GetFileByGRFID(ID("E471"))->param.empty(), "skip-after-action8");
 	GRFConfig *graph_broken = GetGRFConfig(ID("B485"));
 	Require(graph_broken != nullptr && graph_broken->status == GCS_DISABLED && graph_broken->errors.size() == 1 && graph_broken->errors.front().message == STR_NEWGRF_ERROR_READ_BOUNDS, "action2-file-truncated");
-	const auto *graph = dynamic_cast<const DeterministicSpriteGroup *>(Engine::Get(id)->grf_prop.GetSpriteGroup(CargoGRFFileProps::SG_DEFAULT));
+	const auto *graph = dynamic_cast<const DeterministicSpriteGroup *>(FixtureEngineSprite(Engine::Get(id), CargoGRFFileProps::SG_DEFAULT));
 	Require(graph != nullptr && std::ranges::any_of(graph->ranges, [](const auto &r) { return r.low == 21 && r.high == 32 && dynamic_cast<const DeterministicSpriteGroup *>(r.result.group) != nullptr; }), "action2-file-graph");
 	const auto &range = *std::ranges::find_if(graph->ranges, [](const auto &r) { return r.low == 21; });
 	const auto *subroutine = dynamic_cast<const DeterministicSpriteGroup *>(range.result.group);

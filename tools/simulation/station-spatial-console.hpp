@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file station-spatial-console.hpp Unsorted station observations and actual query consumers. */
 #ifdef WITH_RUST
+#include "engine-record-fixture.hpp"
 #include "tests/station_spatial_fixture.hpp"
 #else
 #include "station602-town-original.hpp"
@@ -69,7 +70,7 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	StationNeed(Command<CMD_BUILD_ROAD_DEPOT>::Do(exec, depot, ROADTYPE_ROAD, DIAGDIR_NE).Succeeded(), __LINE__);
 	EngineID engine = EngineID::Invalid();
 	for (const Engine *e : Engine::IterateType(VEH_ROAD)) {
-		if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_ROAD, _current_company) && e->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_ROAD && !e->info.callback_mask.Test(VehicleCallbackMask::ArticEngine)) engine = e->index;
+		if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_ROAD, _current_company) && e->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_ROAD && !EngineFields(e).info.callback_mask.Test(VehicleCallbackMask::ArticEngine)) engine = e->index;
 	}
 	StationNeed(engine != EngineID::Invalid(), __LINE__);
 	auto build = [&] {

@@ -24,8 +24,6 @@ struct OpenTTDAirportResolverServices {
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 	const OpenTTDEngine *(*engine_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_if_valid);
 	uint16_t (*engine_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
-	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
-	uint8_t (*engine_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_subtype);
 	uint8_t (*fta_flags)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(fta_flags);
 	bool (*has_hangar)(const BaseStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(has_hangar);
 	uint32_t (*hangar_tile)(const BaseStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);

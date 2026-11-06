@@ -54,7 +54,7 @@ int32_t ScriptEventEnginePreview::GetCapacity()
 {
 	if (!this->IsEngineValid()) return -1;
 	const Engine *e = ::Engine::Get(this->engine);
-	switch (e->type) {
+	switch (e->Record().type) {
 		case VEH_ROAD:
 		case VEH_TRAIN: {
 			CargoArray capacities = GetCapacityOfArticulatedParts(this->engine);
@@ -77,7 +77,7 @@ int32_t ScriptEventEnginePreview::GetMaxSpeed()
 	if (!this->IsEngineValid()) return -1;
 	const Engine *e = ::Engine::Get(this->engine);
 	int32_t max_speed = e->GetDisplayMaxSpeed(); // km-ish/h
-	if (e->type == VEH_AIRCRAFT) max_speed /= _settings_game.vehicle.plane_speed;
+	if (e->Record().type == VEH_AIRCRAFT) max_speed /= _settings_game.vehicle.plane_speed;
 	return max_speed;
 }
 
@@ -96,7 +96,7 @@ Money ScriptEventEnginePreview::GetRunningCost()
 int32_t ScriptEventEnginePreview::GetVehicleType()
 {
 	if (!this->IsEngineValid()) return ScriptVehicle::VT_INVALID;
-	switch (::Engine::Get(this->engine)->type) {
+	switch (::Engine::Get(this->engine)->Record().type) {
 		case VEH_ROAD:     return ScriptVehicle::VT_ROAD;
 		case VEH_TRAIN:    return ScriptVehicle::VT_RAIL;
 		case VEH_SHIP:     return ScriptVehicle::VT_WATER;

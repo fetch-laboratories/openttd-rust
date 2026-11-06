@@ -323,11 +323,6 @@ extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
 	return v->GetOwner() == _local_company;
 }
 
-extern "C" uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return (RustAircraftInfoSubtype(AircraftVehInfo(EngineID(RustVehicleEngineID(v)))) & AIR_FAST) != 0;
-}
 
 
 extern "C" uint64_t openttd_orders_no_jet_crash() noexcept
@@ -559,7 +554,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.unique_backup_name = openttd_orders_unique_backup_name,
 	.review_setting = openttd_orders_review_setting,
 	.local_owner = openttd_orders_local_owner,
-	.fast_aircraft = openttd_orders_fast_aircraft,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
 	.station_commands = &GetRustStationCommandServices(),

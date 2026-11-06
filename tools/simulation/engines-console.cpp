@@ -7,6 +7,7 @@
 
 /** @file engines-console.cpp Identical typed lifecycle inputs for both game bodies. */
 #include "stdafx.h"
+#include "engine-record-fixture.hpp"
 #include "vehicle-record-fixture.hpp"
 #include "console_internal.h"
 #include "command_func.h"
@@ -44,7 +45,7 @@ static uint8_t &BlockPreview(Company *c)
 static std::string_view Name(const Engine *e)
 {
 #ifdef WITH_RUST
-	return e->name.View();
+	return e->Name();
 #else
 	return e->name;
 #endif
@@ -68,7 +69,7 @@ static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	if (args[1].starts_with("runtime-invalid-")) {
-		Engine *e = *Engine::Iterate().begin(); e->type = VEH_INVALID;
+		Engine *e = *Engine::Iterate().begin(); EngineFields(e).type = VEH_INVALID;
 		fmt::print(stderr, "ENGINE runtime-fatal {}\n", args[1]); std::fflush(stderr);
 		if (args[1] == "runtime-invalid-cost") (void)e->GetCost();
 		else if (args[1] == "runtime-invalid-running") (void)e->GetRunningCost();
@@ -93,91 +94,91 @@ static bool EnginesScenario(std::span<std::string_view> args)
 	Engine *variant = UnusedEngine(e->index);
 	if (args[1] == "inspect") {
 		bool found = false;
-		for (Engine *loaded : Engine::Iterate()) if (Name(loaded) == "Migration engine") found = loaded->company_hidden.Test(c->index) && loaded->company_avail.Test(c->index);
+		for (Engine *loaded : Engine::Iterate()) if (Name(loaded) == "Migration engine") found = EngineFields(loaded).company_hidden.Test(c->index) && EngineFields(loaded).company_avail.Test(c->index);
 		fmt::print(stderr, "ENGINE reloaded {}\n", found);
 	} else if (args[1] == "commands") {
-		e->company_avail.Set(c->index);
-		e->flags.Set(EngineFlag::Available);
+		EngineFields(e).company_avail.Set(c->index);
+		EngineFields(e).flags.Set(EngineFlag::Available);
 		bool special_bits = true;
-		for (uint8_t id : {16, 17, 32, 33, 48, 49, 63}) special_bits &= !IsEngineBuildable(e->index, e->type, CompanyID{id});
+		for (uint8_t id : {16, 17, 32, 33, 48, 49, 63}) special_bits &= !IsEngineBuildable(e->index, EngineFields(e).type, CompanyID{id});
 		fmt::print(stderr, "ENGINE company-bits {}\n", special_bits);
-		e->company_hidden.Set(c->index);
+		EngineFields(e).company_hidden.Set(c->index);
 		ClearEnginesHiddenFlagOfCompany(CompanyID{16});
-		fmt::print(stderr, "ENGINE clear-special {}\n", e->company_hidden.Test(c->index));
-		e->company_hidden.Reset(c->index);
+		fmt::print(stderr, "ENGINE clear-special {}\n", EngineFields(e).company_hidden.Test(c->index));
+		EngineFields(e).company_hidden.Reset(c->index);
 		Cost("rename-test", Command<CMD_RENAME_ENGINE>::Do({}, e->index, "Migration engine"));
 		Cost("rename", Command<CMD_RENAME_ENGINE>::Do(DoCommandFlag::Execute, e->index, "Migration engine"));
 		Cost("duplicate", Command<CMD_RENAME_ENGINE>::Do(DoCommandFlag::Execute, variant->index, "Migration engine"));
 		Cost("hide-test", Command<CMD_SET_VEHICLE_VISIBILITY>::Do({}, e->index, true));
 		Cost("hide", Command<CMD_SET_VEHICLE_VISIBILITY>::Do(DoCommandFlag::Execute, e->index, true));
-		fmt::print(stderr, "ENGINE hidden {}\n", e->company_hidden.Test(c->index));
+		fmt::print(stderr, "ENGINE hidden {}\n", EngineFields(e).company_hidden.Test(c->index));
 		Cost("show", Command<CMD_SET_VEHICLE_VISIBILITY>::Do(DoCommandFlag::Execute, e->index, false));
 		company.Change(OWNER_DEITY);
 		Cost("disable-test", Command<CMD_ENGINE_CTRL>::Do({}, e->index, c->index, false));
 		Cost("disable", Command<CMD_ENGINE_CTRL>::Do(DoCommandFlag::Execute, e->index, c->index, false));
-		fmt::print(stderr, "ENGINE disabled {}\n", !e->company_avail.Test(c->index));
+		fmt::print(stderr, "ENGINE disabled {}\n", !EngineFields(e).company_avail.Test(c->index));
 		Cost("enable", Command<CMD_ENGINE_CTRL>::Do(DoCommandFlag::Execute, e->index, c->index, true));
 		company.Change(c->index);
 		Cost("reload-hide", Command<CMD_SET_VEHICLE_VISIBILITY>::Do(DoCommandFlag::Execute, e->index, true));
 		if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	} else if (args[1] == "preview") {
 		/* Input specs attach a joined variant; stock saves contain no NewGRF. */
-		variant->info.variant_id = e->index;
-		variant->info.extra_flags.Set(ExtraEngineFlag::JoinPreview);
-		for (Engine *other : Engine::Iterate()) other->flags.Reset(EngineFlag::ExclusivePreview);
+		EngineFields(variant).info.variant_id = e->index;
+		EngineFields(variant).info.extra_flags.Set(ExtraEngineFlag::JoinPreview);
+		for (Engine *other : Engine::Iterate()) EngineFields(other).flags.Reset(EngineFlag::ExclusivePreview);
 		for (Company *other : Company::Iterate()) BlockPreview(other) = 0;
-		e->flags = EngineFlag::ExclusivePreview;
-		e->company_avail = {};
-		e->preview_asked = {};
-		e->preview_company = CompanyID::Invalid();
-		variant->company_avail = {};
+		EngineFields(e).flags = EngineFlag::ExclusivePreview;
+		EngineFields(e).company_avail = {};
+		EngineFields(e).preview_asked = {};
+		EngineFields(e).preview_company = CompanyID::Invalid();
+		EngineFields(variant).company_avail = {};
 		TimerGameCalendar::SetDate(TimerGameCalendar::date, 73);
 		FixtureClockElapsed<TimerGameCalendar>();
-		fmt::print(stderr, "ENGINE offered {} {}\n", e->preview_company == c->index, e->preview_wait == 20);
+		fmt::print(stderr, "ENGINE offered {} {}\n", EngineFields(e).preview_company == c->index, EngineFields(e).preview_wait == 20);
 		Cost("accept-test", Command<CMD_WANT_ENGINE_PREVIEW>::Do({}, e->index));
 		Cost("accept", Command<CMD_WANT_ENGINE_PREVIEW>::Do(DoCommandFlag::Execute, e->index));
-		fmt::print(stderr, "ENGINE joined {} {}\n", e->company_avail.Test(c->index), variant->company_avail.Test(c->index));
-		e->intro_date = TimerGameCalendar::date - 365;
+		fmt::print(stderr, "ENGINE joined {} {}\n", EngineFields(e).company_avail.Test(c->index), EngineFields(variant).company_avail.Test(c->index));
+		EngineFields(e).intro_date = TimerGameCalendar::date - 365;
 		CalendarEnginesMonthlyLoop();
-		fmt::print(stderr, "ENGINE penalty {} {}\n", BlockPreview(c) == 20, e->flags.Test(EngineFlag::Available));
+		fmt::print(stderr, "ENGINE penalty {} {}\n", BlockPreview(c) == 20, EngineFields(e).flags.Test(EngineFlag::Available));
 	} else if (args[1] == "reliability") {
 		_settings_game.vehicle.never_expire_vehicles = false;
 		/* Exercise the native Calendar::Year domain beyond byte-sized NewGRF inputs. */
-		e->info.base_life = TimerGameCalendar::Year{511};
+		EngineFields(e).info.base_life = TimerGameCalendar::Year{511};
 		StartupOneEngine(e, TimerGameCalendar::ConvertDateToYMD(TimerGameCalendar::date), 0);
-		fmt::print(stderr, "ENGINE startup-life {}\n", e->duration_phase_2 > 5000);
-		e->age = 60;
-		e->duration_phase_1 = 10;
-		e->duration_phase_2 = 20;
-		e->duration_phase_3 = 10;
-		e->reliability_final = 123;
-		e->company_avail.Set();
+		fmt::print(stderr, "ENGINE startup-life {}\n", EngineFields(e).duration_phase_2 > 5000);
+		EngineFields(e).age = 60;
+		EngineFields(e).duration_phase_1 = 10;
+		EngineFields(e).duration_phase_2 = 20;
+		EngineFields(e).duration_phase_3 = 10;
+		EngineFields(e).reliability_final = 123;
+		EngineFields(e).company_avail.Set();
 		variant->display_last_variant = e->index;
 		CalcEngineReliability(e, false);
-		fmt::print(stderr, "ENGINE retired {} {} {}\n", e->company_avail.None(), e->reliability == 123, variant->display_last_variant == EngineID::Invalid());
+		fmt::print(stderr, "ENGINE retired {} {} {}\n", EngineFields(e).company_avail.None(), EngineFields(e).reliability == 123, variant->display_last_variant == EngineID::Invalid());
 		_settings_game.vehicle.never_expire_vehicles = true;
-		e->company_avail.Set();
-		e->reliability_max = 345;
+		EngineFields(e).company_avail.Set();
+		EngineFields(e).reliability_max = 345;
 		CalcEngineReliability(e, false);
-		fmt::print(stderr, "ENGINE never-expire {} {}\n", e->company_avail.Any(), e->reliability == 345);
-		variant->info.variant_id = e->index;
-		variant->info.extra_flags.Set(ExtraEngineFlag::SyncReliability);
-		variant->duration_phase_1 = e->duration_phase_1;
-		variant->duration_phase_2 = e->duration_phase_2;
-		variant->duration_phase_3 = e->duration_phase_3;
-		variant->reliability_max = e->reliability_max;
+		fmt::print(stderr, "ENGINE never-expire {} {}\n", EngineFields(e).company_avail.Any(), EngineFields(e).reliability == 345);
+		EngineFields(variant).info.variant_id = e->index;
+		EngineFields(variant).info.extra_flags.Set(ExtraEngineFlag::SyncReliability);
+		EngineFields(variant).duration_phase_1 = EngineFields(e).duration_phase_1;
+		EngineFields(variant).duration_phase_2 = EngineFields(e).duration_phase_2;
+		EngineFields(variant).duration_phase_3 = EngineFields(e).duration_phase_3;
+		EngineFields(variant).reliability_max = EngineFields(e).reliability_max;
 		CalcEngineReliability(variant, true);
-		fmt::print(stderr, "ENGINE synced {}\n", variant->reliability == e->reliability);
+		fmt::print(stderr, "ENGINE synced {}\n", EngineFields(variant).reliability == EngineFields(e).reliability);
 		/* Declared zero-life/1980 specs keep the original default cutoff at 2050. */
 		for (Engine *other : Engine::Iterate()) {
-			other->info.lifelength = TimerGameCalendar::Year{0};
-			other->info.base_intro = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{1980}, 0, 1);
+			EngineFields(other).info.lifelength = TimerGameCalendar::Year{0};
+			EngineFields(other).info.base_intro = TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{1980}, 0, 1);
 		}
 		SetYearEngineAgingStops();
 		TimerGameCalendar::SetDate(TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{2050}, 0, 1), 0);
-		int32_t age = e->age;
+		int32_t age = EngineFields(e).age;
 		CalendarEnginesMonthlyLoop();
-		fmt::print(stderr, "ENGINE cutoff {}\n", e->age == age);
+		fmt::print(stderr, "ENGINE cutoff {}\n", EngineFields(e).age == age);
 	} else {
 		FixtureAbort(__LINE__);
 	}
