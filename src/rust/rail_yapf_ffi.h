@@ -41,7 +41,6 @@ struct OpenTTDRailStep {
 	uint8_t action, td, found, reverse, value, target_td, target_okay;
 };
 struct OpenTTDRailLeaves {
-	bool (*waypoint_single)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_single);
 	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	uint32_t (*closest_station)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_station);
 	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept OPENTTD_SERVICE_DEFAULT(output);

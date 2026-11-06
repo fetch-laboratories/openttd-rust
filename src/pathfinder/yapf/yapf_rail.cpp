@@ -135,7 +135,7 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 	}
 }
 static const OpenTTDRailLeaves _rail_leaves{
-	.waypoint_single = RustWaypointSingleTile, .tile = RailTile,
+	.tile = RailTile,
 	.closest_station = RailClosestStation,
 	.output = RailOutput, .debug = RailDebug,
 };

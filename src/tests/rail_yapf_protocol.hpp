@@ -96,7 +96,7 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	input.settings.slope = 50; input.settings.lookahead = !cache;
 	input.map_x = 128; input.reserve = reserve;
 	input.kind = kind;
-	const OpenTTDRailLeaves leaves{.waypoint_single = [](uint16_t) noexcept { return true; }, .tile = Tile, .closest_station = Closest, .output = Output, .debug = Debug};
+	const OpenTTDRailLeaves leaves{.tile = Tile, .closest_station = Closest, .output = Output, .debug = Debug};
 	std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)> owner{openttd_rust_rail_new(&input, &leaves), openttd_rust_rail_destroy};
 	return openttd_rust_rail_step(owner.get());
 }

@@ -26,8 +26,6 @@ using OpenTTDObjectAnimationEntry = OpenTTDAnimationEntry<ObjectSpec, Object>;
 using OpenTTDRoadStopAnimationEntry = OpenTTDAnimationEntry<RoadStopSpec, BaseStation>;
 struct OpenTTDAnimationServices {
 	const OpenTTDSharedServices *shared;
-	BaseStation *(*station_base)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_base);
-	Station *(*as_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(as_station);
 	const OpenTTDRoadStopResolverServices *roadstop_resolver;
 	const OpenTTDTownLeaves *town;
 	const OpenTTDIndustryServices *industries;

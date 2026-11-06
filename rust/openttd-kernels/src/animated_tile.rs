@@ -42,8 +42,6 @@ pub struct AirportSpec {
 #[repr(C)]
 pub struct Services {
     pub shared: *const Shared,
-    pub station_base: extern "C" fn(u16) -> *mut BaseStation,
-    pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
     pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub town: *const Leaves,
     pub industries: *const Industries,
@@ -505,8 +503,6 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAnimationServices" ["probe"] => Services {
         shared,
-        station_base,
-        as_station,
         roadstop_resolver,
         town,
         industries,
@@ -541,10 +537,9 @@ crate::abi::layouts! {
     "OpenTTDRoadStopAnimationEntry" ["probe"] => Entry<RoadSpec, BaseStation> { spec, object };
 }
 
-/// Native station lookup keeps the source's strict `Station::Get` operation and
-/// performs its `BaseStation` conversion before crossing the boundary.
+/// Original unchecked `Station::Get`: retain index/hole rules without a type filter.
 pub(crate) fn station_base(id: u16) -> *mut BaseStation {
-    (services().station_base)(id)
+    crate::station_record::station_get(services().shared(), id)
 }
 pub(crate) fn rail_event(st: *mut BaseStation, tile: u32, trigger: u8, random_trigger: u8) {
     crate::newgrf_station::openttd_rust_station_randomisation(
@@ -578,7 +573,11 @@ pub(crate) fn cargo_event(
     let tile = crate::station_record::xy(st.cast());
     crate::newgrf_station::openttd_rust_station_randomisation(st, tile, random_trigger, cargo);
     openttd_rust_trigger_station(st, tile, trigger, cargo);
-    openttd_rust_trigger_airport_abi((a.as_station)(st), airport_trigger, cargo);
+    openttd_rust_trigger_airport_abi(
+        crate::station_record::as_station(st),
+        airport_trigger,
+        cargo,
+    );
     unsafe {
         crate::newgrf_roadstop::openttd_rust_roadstop_randomise(
             st,
@@ -591,16 +590,19 @@ pub(crate) fn cargo_event(
     openttd_rust_trigger_roadstop(st, tile, trigger, cargo);
 }
 pub(crate) fn acceptance(st: *mut BaseStation) {
-    let a = services();
     let tile = crate::station_record::xy(st.cast());
     openttd_rust_trigger_station(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     openttd_rust_trigger_roadstop(st, tile, SAT_ACCEPTANCE_TICK, INVALID_CARGO);
     if crate::station_record::is_station(st.cast()) {
-        openttd_rust_trigger_airport_abi((a.as_station)(st), AAT_ACCEPTANCE_TICK, INVALID_CARGO);
+        openttd_rust_trigger_airport_abi(
+            crate::station_record::as_station(st),
+            AAT_ACCEPTANCE_TICK,
+            INVALID_CARGO,
+        );
     }
 }
 pub(crate) fn airport_built(st: *mut BaseStation, tile: u32) {
-    openttd_rust_trigger_airport_tile_abi((services().as_station)(st), tile, AAT_BUILT);
+    openttd_rust_trigger_airport_tile_abi(crate::station_record::as_station(st), tile, AAT_BUILT);
 }
 
 /// Borrow the immutable road-stop leaf table installed before animation/gameplay.

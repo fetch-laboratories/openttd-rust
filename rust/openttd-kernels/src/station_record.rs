@@ -275,6 +275,14 @@ pub(crate) fn station_get(s: &crate::services::Services, id: u16) -> *mut BaseSt
     shell(record)
 }
 
+/// `Station::From`, retaining its original specialization assertion.
+/// The caller supplies a live `BaseStation` shell; no alias spans the assertion.
+#[inline]
+pub(crate) fn as_station(shell: *mut BaseStation) -> *mut crate::station::Station {
+    crate::services_assert::check(is_station(shell));
+    shell.cast()
+}
+
 /// `BaseStation::GetIfValid`: keep index/hole validity without a type filter.
 pub(crate) fn station_get_if_valid(s: &crate::services::Services, id: u16) -> *mut BaseStation {
     let record = get_record_if_valid(s, crate::station_type::StationID(id));

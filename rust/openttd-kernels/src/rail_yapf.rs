@@ -132,12 +132,7 @@ struct TrainFacts {
     complex_waypoint: u8,
 }
 impl TrainFacts {
-    fn read(
-        v: crate::vehicle::VehicleRef,
-        input: &Input,
-        leaves: &Leaves,
-        pbs: crate::pbs::Pbs<'_>,
-    ) -> Self {
+    fn read(v: crate::vehicle::VehicleRef, input: &Input, pbs: crate::pbs::Pbs<'_>) -> Self {
         use crate::raw_field::read_field;
         let rear = v.last();
         let head = crate::train::Handle::from_record(v.0.as_ptr());
@@ -166,7 +161,18 @@ impl TrainFacts {
         );
         let complex_waypoint = u8::from(
             v.current_order().kind() == OT_GOTO_WAYPOINT
-                && !(leaves.waypoint_single)(v.current_order().destination),
+                && !{
+                    let record = crate::station_record::get_record(
+                        pbs.shared(),
+                        crate::station_type::StationID(v.current_order().destination),
+                    );
+                    // Original Waypoint::Get is unchecked; IsSingleTile tests Train first.
+                    unsafe {
+                        (*record).facilities & crate::station_type::FACILITY_TRAIN != 0
+                            && (*record).train_station.w == 1
+                            && (*record).train_station.h == 1
+                    }
+                },
         );
         Self {
             compatible,
@@ -224,7 +230,6 @@ pub struct Step {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub waypoint_single: extern "C" fn(u16) -> bool,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
@@ -430,7 +435,7 @@ impl Search {
         let vehicle = crate::vehicle::VehicleRef::of(input.vehicle.cast_mut());
         let shared = unsafe { &*input.shared };
         let pbs = crate::pbs::Pbs::acquire(shared);
-        let train = TrainFacts::read(vehicle, &input, &leaves, pbs);
+        let train = TrainFacts::read(vehicle, &input, pbs);
         Self {
             input,
             vehicle,
@@ -1864,7 +1869,6 @@ crate::abi::layouts! {
         oneway,
     };
     "OpenTTDRailLeaves" ["probe"] => Leaves {
-        waypoint_single,
         tile,
         closest_station,
         output,

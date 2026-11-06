@@ -1724,9 +1724,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 let point = (id.base().x(), id.base().y());
                 let tile = self.tile_virt(i64::from(point.0), i64::from(point.1));
                 crate::animated_tile::openttd_rust_trigger_airport_tile_abi(
-                    (crate::animated_tile::services().as_station)(
-                        crate::animated_tile::station_base(self.target(id)),
-                    ),
+                    crate::station_record::as_station(crate::animated_tile::station_base(
+                        self.target(id),
+                    )),
                     tile,
                     crate::station_type::AAT_AIRPLANE_TOUCHDOWN,
                 );
