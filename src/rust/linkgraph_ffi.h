@@ -98,8 +98,6 @@ struct OpenTTDLiveGraphServices {
 	void (*attach)(uint16_t, uint8_t, uint16_t, uint16_t) noexcept;
 	void (*set_node)(uint16_t, uint8_t, uint16_t) noexcept;
 	void (*delete_graph)(OpenTTDLinkGraph *) noexcept;
-	uint16_t (*graph_id)(OpenTTDBaseStation *, uint8_t) noexcept;
-	uint16_t (*node)(OpenTTDBaseStation *, uint8_t) noexcept;
 	bool (*available)() noexcept;
 	OpenTTDLinkGraph *(*allocate)(uint8_t) noexcept;
 };

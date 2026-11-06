@@ -46,8 +46,6 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.road_frame = RustRoadStopAnimationFrame,
 		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
 		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
-		.station_triggers = RustStationHasAnimationTrigger,
-		.road_triggers = RustRoadStopHasAnimationTrigger,
 		.rail_spec = RustAnimationRailSpec,
 		.industry_object = RustIndustryByTile,
 		.rail_spec_triggers = RustStationAnimationTriggers,

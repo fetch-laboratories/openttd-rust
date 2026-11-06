@@ -207,6 +207,14 @@ pub(crate) fn service_of(shell: *const BaseStation) -> *mut crate::station_servi
     unsafe { record_of(shell).cast() }
 }
 
+/// Read from the record of a live station shell; the borrow ends with `f`, before
+/// any callback. `shell` is a live native station shell of the serialized game state.
+#[inline]
+pub(crate) fn read<T>(shell: *const BaseStation, f: impl FnOnce(&StationRecord) -> T) -> T {
+    // SAFETY: Live record; the shared borrow lasts only for the immediate read.
+    f(unsafe { &*record_of(shell) })
+}
+
 /// `BaseStation::owner` of a live shell, as its company byte.
 /// `shell` is a live native station shell of the serialized game state.
 #[inline]

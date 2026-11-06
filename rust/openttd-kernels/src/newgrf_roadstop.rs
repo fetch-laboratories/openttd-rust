@@ -60,9 +60,7 @@ pub struct Reseed {
 pub struct Services {
     pub rebind: unsafe extern "C" fn(*mut BaseStation, usize, *const RoadSpec),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
-    pub build_date: unsafe extern "C" fn(*const BaseStation) -> i32,
     pub by_tile: unsafe extern "C" fn(u32) -> *mut BaseStation,
-    pub cached_cargo: unsafe extern "C" fn(*const BaseStation) -> u64,
     pub clear: unsafe extern "C" fn(*mut BaseStation) -> (),
     pub company: unsafe extern "C" fn(u8, *const c_void) -> u32,
     pub custom: unsafe extern "C" fn(u32) -> bool,
@@ -72,7 +70,6 @@ pub struct Services {
     pub group_count: unsafe extern "C" fn(*const RoadSpec) -> usize,
     pub index: unsafe extern "C" fn(u32) -> u32,
     pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
-    pub random_bits: unsafe extern "C" fn(*const BaseStation) -> u16,
     pub resize: unsafe extern "C" fn(*mut BaseStation, usize) -> (),
     pub resolve_callback: unsafe extern "C" fn(*const State, u16, u32, u32, *mut i32, usize) -> u16,
     pub resolve_reseed: unsafe extern "C" fn(*const State, u8) -> Reseed,
@@ -93,9 +90,7 @@ pub struct Services {
     pub tile: unsafe extern "C" fn(*mut BaseStation, usize) -> u32,
     pub tile_count: unsafe extern "C" fn(*mut BaseStation) -> usize,
     pub tile_random: unsafe extern "C" fn(*const BaseStation, u32) -> u8,
-    pub town: unsafe extern "C" fn(*const BaseStation) -> *mut TownHandle,
     pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
-    pub waiting: unsafe extern "C" fn(*const BaseStation) -> u8,
 }
 impl Services {
     fn shared(&self) -> &Shared {
@@ -162,7 +157,7 @@ unsafe fn town(c: State, s: &Services) -> *mut TownHandle {
     if c.station.is_null() {
         crate::town::spatial::closest(s.shared(), c.tile, u32::MAX).cast_mut()
     } else {
-        unsafe { (s.town)(c.station) }
+        crate::station_record::read(c.station.cast(), |r| r.town.cast())
     }
 }
 unsafe fn town_scope(c: *mut State, ro: *mut c_void, s: &Services) -> *mut c_void {
@@ -363,7 +358,7 @@ unsafe fn variable(
             let date = if c.station.is_null() {
                 crate::timer_game_common::calendar_date().0
             } else {
-                unsafe { (s.build_date)(c.station) }
+                crate::station_record::read(c.station.cast(), |r| r.build_date)
             };
             return date
                 .wrapping_sub(crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR)
@@ -417,9 +412,13 @@ pub unsafe extern "C" fn openttd_rust_roadstop_random(
         return 0;
     }
     if triggers {
-        return u32::from(unsafe { (s.waiting)(c.station) });
+        return u32::from(crate::station_record::read(c.station.cast(), |r| {
+            r.waiting_random_triggers
+        }));
     }
-    let mut bits = u32::from(unsafe { (s.random_bits)(c.station) });
+    let mut bits = u32::from(crate::station_record::read(c.station.cast(), |r| {
+        r.random_bits
+    }));
     if c.tile != INVALID_TILE && crate::station_record::is_station(c.station.cast()) {
         bits |= u32::from(unsafe { (s.tile_random)(c.station, c.tile) }) << 16;
     }
@@ -679,11 +678,12 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
     s: *const Services,
 ) {
     let s = unsafe { &*s };
-    let cached = unsafe { (s.cached_cargo)(st) };
+    let cached = crate::station_record::read(st.cast(), |r| r.cached_roadstop_cargo_triggers);
     if cached == 0 || (cargo < NUM_CARGO && cached & (1u64 << cargo) == 0) {
         return;
     }
-    let waiting = unsafe { (s.waiting)(st) } | (1 << trigger);
+    let waiting =
+        crate::station_record::read(st.cast(), |r| r.waiting_random_triggers) | (1 << trigger);
     unsafe {
         (s.set_waiting)(st, waiting);
     }
@@ -715,7 +715,12 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
             (s.shared().station_gfx)(tile),
             s,
         );
-        let reseed = unsafe { (s.resolve_reseed)(&raw const c, (s.waiting)(st)) };
+        let reseed = unsafe {
+            (s.resolve_reseed)(
+                &raw const c,
+                crate::station_record::read(st.cast(), |r| r.waiting_random_triggers),
+            )
+        };
         used |= reseed.used;
         if reseed.reseed != 0 {
             whole_reseed |= reseed.reseed;
@@ -736,10 +741,14 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
         process(tile);
     }
     unsafe {
-        (s.set_waiting)(st, (s.waiting)(st) & !used);
+        (s.set_waiting)(
+            st,
+            crate::station_record::read(st.cast(), |r| r.waiting_random_triggers) & !used,
+        );
     }
     if whole_reseed & 0xffff != 0 {
-        let bits = u32::from(unsafe { (s.random_bits)(st) }) & !whole_reseed;
+        let bits =
+            u32::from(crate::station_record::read(st.cast(), |r| r.random_bits)) & !whole_reseed;
         unsafe {
             (s.set_random_bits)(st, bits as u16);
         }
@@ -756,7 +765,7 @@ crate::abi::layouts! {
     "OpenTTDRoadStopSpecVacancy" ["station_service"] => SpecVacancy { spec, grfid, };
     "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, base_scope, build_date, by_tile, cached_cargo, clear, company, custom, frame, group, group_cargo, group_count, index, make_town, random_bits, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_triggers, station_id, tile, tile_count, tile_random, town, town_tile, waiting, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { rebind, base_scope, by_tile, clear, company, custom, frame, group, group_cargo, group_count, index, make_town, resize, resolve_callback, resolve_reseed, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_triggers, station_id, tile, tile_count, tile_random, town_tile, };
 }
 
 /// Class index limit from `newgrf_roadstop.h`.

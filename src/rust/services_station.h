@@ -69,7 +69,6 @@ inline void RustRoadStopRebindSpec(BaseStation *st, size_t index, const RoadStop
 inline void RustRoadStopSetSpecSlot(BaseStation *st, uint8_t index, const RoadStopSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { RustRoadStopRebindSpec(st, index, spec); auto &slot = st->roadstop_speclist[index]; slot.grfid = grfid; slot.localidx = local_id; }
 inline bool RustCustomRoadStopSpecIndex(uint32_t tile) noexcept { return IsCustomRoadStopSpecIndex(TileIndex(tile)); }
 inline uint32_t RustCustomRoadStopIndex(uint32_t tile) noexcept { return GetCustomRoadStopSpecIndex(TileIndex(tile)); }
-inline CargoTypes RustRoadStopCachedCargo(const BaseStation *st) noexcept { return st->Record().cached_roadstop_cargo_triggers; }
 inline void RustRoadStopSetCachedTriggers(BaseStation *st, uint16_t animation, CargoTypes cargo) noexcept { st->SetCachedRoadStopAnimTriggers(StationAnimationTriggers(animation)); st->Record().cached_roadstop_cargo_triggers = cargo; }
 inline CargoTypes RustRoadStopCargoTriggers(const RoadStopSpec *spec) noexcept { return spec->cargo_triggers; }
 inline uint16_t RustRoadStopAnimationTriggers(const RoadStopSpec *spec) noexcept { return spec->animation.triggers.base(); }
@@ -89,8 +88,6 @@ inline uint16_t RustAirportMovingFlags(const AirportMovingData *moving) noexcept
 template <class Handle> inline Handle RustStationGet(uint16_t id) noexcept { return Station::Get(StationID{id}); }
 inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }
 inline bool RustStationAirportMember(const Station *st, uint32_t tile) noexcept { return st->TileBelongsToAirport(TileIndex{tile}); }
-inline bool RustStationHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->GetCachedAnimTriggers().Test(static_cast<StationAnimationTrigger>(trigger)); }
-inline bool RustRoadStopHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->GetCachedRoadStopAnimTriggers().Test(static_cast<StationAnimationTrigger>(trigger)); }
 inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }
 inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); }
 inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
@@ -128,7 +125,6 @@ inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { re
 inline uint32_t RustStationTrainTile(const BaseStation *s) noexcept { return s->GetTrainStation().tile.base(); }
 inline uint32_t RustStationShipTile(const BaseStation *s) noexcept { return Station::From(s)->GetShipStation().tile.base(); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->GetAirport().GetTile().base(); }
-inline uint8_t RustStationAirportLayout(const BaseStation *st) noexcept { return Station::From(st)->GetAirport().Record().layout; }
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->GetAirport().Record().type; }
 inline Direction RustStationAirportRotation(const BaseStation *s) noexcept { return Station::From(s)->GetAirport().GetRotation(); }
 inline uint32_t RustStationLocation(const BaseStation *s) noexcept { return s->GetXY().base(); }
@@ -158,8 +154,6 @@ inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { retur
 inline BaseStation *RustIndustryNeutralBaseStation(Industry *industry) noexcept { return RustIndustryNeutralStation(industry); }
 inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept { st->SetOwner(Owner(owner)); }
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->SetFacilities(StationFacilities(facilities)); }
-template <typename TStation>
-inline int32_t RustStationBuildDate(TStation *st) noexcept { return st->GetBuildDate().base(); }
 inline void RustStationSetBuildDate(BaseStation *st, int32_t date) noexcept { st->SetBuildDate(TimerGameCalendar::Date(date)); }
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->GetOwner(), data); }
 inline void RustStationClearName(BaseStation *st) noexcept { st->name.clear(); }
@@ -216,16 +210,10 @@ inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustA
 inline bool RustMovementRailStation(uint32_t tile) noexcept { return IsRailStation(TileIndex{tile}); }
 inline bool RustStationBuoy(uint32_t tile) noexcept { return IsBuoy(TileIndex{tile}); }
 inline uint8_t RustStationTileRandomBits(uint32_t tile) noexcept { return GetStationTileRandomBits(TileIndex{tile}); }
-template <typename TStation>
-inline uint16_t RustStationRandomBits(TStation *st) noexcept { return st->Record().random_bits; }
-template <typename TStation>
-inline uint8_t RustStationWaitingTriggers(TStation *st) noexcept { return st->GetWaitingRandomTriggers().base(); }
 inline void RustStationSetWaitingTriggers(BaseStation *station, uint8_t triggers) noexcept { station->SetWaitingRandomTriggers(StationRandomTriggers(triggers)); }
 inline void RustStationSetRandomBits(BaseStation *station, uint16_t bits) noexcept { station->Record().random_bits = bits; }
-inline uint64_t RustStationCachedCargoTriggers(BaseStation *station) noexcept { return station->Record().cached_cargo_triggers; }
 inline bool RustStationSignValid(BaseStation *st) noexcept { return st->sign.kdtree_valid; }
 inline void RustStationListClassesInvalidate() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); }
-inline uint8_t RustStationIndustryType(BaseStation *st) noexcept { return Station::From(st)->Record().indtype; }
 inline void RustStationSetIndustryType(BaseStation *st, uint8_t type) noexcept { Station::From(st)->Record().indtype = type; }
 inline uint16_t RustAirportSpecMaintenance(const AirportSpec *spec) noexcept { return spec->maintenance_cost; }
 inline const OpenTTDGoodsEntry *RustStationGoodsEntry(BaseStation *st, uint8_t cargo) noexcept { return &Station::From(st)->Record().goods[cargo]; }

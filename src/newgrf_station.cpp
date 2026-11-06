@@ -70,11 +70,8 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.axis = RustRailStationAxis,
 		.tile_add = RustTileAdd,
 		.tile_random = RustStationTileRandomBits,
-		.station_random = RustStationRandomBits<BaseStation>,
-		.waiting = RustStationWaitingTriggers<BaseStation>,
 		.set_waiting = RustStationSetWaitingTriggers,
 		.set_random = RustStationSetRandomBits,
-		.cached_cargo = RustStationCachedCargoTriggers,
 		.spec_cargo = RustStationCargoTriggers,
 		.resolve_random = [](const StationSpec *s, BaseStation *st, uint32_t t, uint8_t waiting) noexcept {
 			StationResolverObject object(s, st, TileIndex{t}, CBID_RANDOM_TRIGGER, 0);
@@ -86,7 +83,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.company = RustCompanyInfo,
 		.nearby_station = RustNearbyStationTile,
 
-		.build_date = RustStationBuildDate<BaseStation>,
 		.airport_ttd_type = RustAirportTTDType,
 		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto key = RustStationSlotKey(st, i); return OpenTTDStationSpecIdentity{key.grfid, key.local_id}; },
 		/* Only shared native ScopeResolver frames are materialized here; Rust

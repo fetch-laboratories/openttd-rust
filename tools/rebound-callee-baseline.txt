@@ -272,9 +272,6 @@ rebound | RustStationAirportType | src/rust/station_command_services.hpp | airpo
 rebound | RustStationAirportType | src/town_cmd.cpp | airport_type
 rebound | RustStationAssociatedIndustry | src/rust/station_command_services.hpp | associated_industry
 rebound | RustStationAssociatedIndustry | src/station.cpp | associated_industry
-rebound | RustStationBuildDate | src/newgrf_airport.cpp | build_date
-rebound | RustStationBuildDate | src/newgrf_roadstop.cpp | build_date
-rebound | RustStationBuildDate | src/newgrf_station.cpp | build_date
 rebound | RustStationGet | src/animated_tile.cpp | station_base
 rebound | RustStationGet | src/newgrf_airport.cpp | get_station
 rebound | RustStationGet | src/subsidy.cpp | station
@@ -282,9 +279,6 @@ rebound | RustStationLocation | src/animated_tile.cpp | location
 rebound | RustStationLocation | src/rust/station_command_services.hpp | location
 rebound | RustStationLocation | src/station.cpp | location
 rebound | RustStationLocation | src/vehicle.cpp | location
-rebound | RustStationRandomBits | src/newgrf_airport.cpp | random
-rebound | RustStationRandomBits | src/newgrf_roadstop.cpp | random_bits
-rebound | RustStationRandomBits | src/newgrf_station.cpp | station_random
 rebound | RustStationSetRandomBits | src/newgrf_roadstop.cpp | set_random_bits
 rebound | RustStationSetRandomBits | src/newgrf_station.cpp | set_random
 rebound | RustStationSetWaitingTriggers | src/newgrf_roadstop.cpp | set_waiting
@@ -298,8 +292,6 @@ rebound | RustStationTileFlagCount | src/rust/station_command_services.hpp | til
 rebound | RustStationTileFlagCount | src/rust/station_definitions.cpp | station_tileflags_size
 rebound | RustStationTileRandomBits | src/newgrf_airport.cpp | tile_random
 rebound | RustStationTileRandomBits | src/newgrf_station.cpp | tile_random
-rebound | RustStationWaitingTriggers | src/newgrf_roadstop.cpp | waiting
-rebound | RustStationWaitingTriggers | src/newgrf_station.cpp | waiting
 rebound | RustSubsidyServices | src/economy.cpp | subsidies
 rebound | RustSubsidyServices | src/industry_cmd.cpp | subsidies
 rebound | RustSubsidyServices | src/rust/company_adapter.cpp | subsidies

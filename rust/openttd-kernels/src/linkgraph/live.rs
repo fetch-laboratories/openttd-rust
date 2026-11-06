@@ -502,8 +502,6 @@ pub struct Services {
     pub attach: extern "C" fn(u16, u8, u16, u16),
     pub set_node: extern "C" fn(u16, u8, u16),
     pub delete_graph: extern "C" fn(*mut super::NativeGraph),
-    pub graph_id: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
-    pub node: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
     pub available: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8) -> *mut super::NativeGraph,
 }
@@ -646,7 +644,9 @@ pub(crate) fn station_graph(
     cargo: u8,
     services: &Services,
 ) -> *mut super::NativeGraph {
-    (services.get_if_valid)((services.graph_id)(station, cargo))
+    (services.get_if_valid)(crate::station_record::read(station.cast(), |r| {
+        r.goods[usize::from(cargo)].link_graph
+    }))
 }
 pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
     let native = (services.access)(graph);
@@ -668,7 +668,8 @@ pub(crate) unsafe fn station_demand(
     let graph = station_graph(station, cargo, services);
     if !graph.is_null() {
         let owner = unsafe { resolve(graph, services) };
-        let node = (services.node)(station, cargo);
+        let node =
+            crate::station_record::read(station.cast(), |r| r.goods[usize::from(cargo)].node);
         unsafe { &mut *owner }.nodes[usize::from(node)].set_demand(demand);
     }
 }
@@ -679,7 +680,8 @@ pub(crate) unsafe fn station_supply(
     services: &Services,
     schedule: &crate::linkgraph_schedule::Services,
 ) {
-    let id = (services.graph_id)(station, cargo);
+    let id =
+        crate::station_record::read(station.cast(), |r| r.goods[usize::from(cargo)].link_graph);
     let graph = if id == INVALID_LINK_GRAPH {
         if (services.available)() {
             let graph = (services.allocate)(cargo);
@@ -698,7 +700,8 @@ pub(crate) unsafe fn station_supply(
     if !graph.is_null() {
         let owner = unsafe { resolve(graph, services) };
         let date = crate::timer_game_common::economy_date().0;
-        let node = (services.node)(station, cargo);
+        let node =
+            crate::station_record::read(station.cast(), |r| r.goods[usize::from(cargo)].node);
         let n = &mut unsafe { &mut *owner }.nodes[usize::from(node)];
         n.update_supply(supply, date);
     }
@@ -715,7 +718,18 @@ crate::abi::layouts! {
     "OpenTTDLiveGraphAccess" ["station_service"] => Access { owner, index, };
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, get, get_if_valid, station_id, owner, access, station, attach, set_node, delete_graph, graph_id, node, available, allocate, };
+        assertions,
+        get,
+        get_if_valid,
+        station_id,
+        owner,
+        access,
+        station,
+        attach,
+        set_node,
+        delete_graph,
+        available,
+        allocate, };
 }
 
 #[unsafe(no_mangle)]

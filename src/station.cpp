@@ -251,7 +251,6 @@ const OpenTTDStationLifecycleServices &GetRustStationLifecycleServices() noexcep
 			.upper = STR_SV_STNAME_UPPER, .lower = STR_SV_STNAME_LOWER, .fallback = STR_SV_STNAME_FALLBACK,
 			.undefined = STR_UNDEFINED, .null = STR_NULL,
 		},
-		.industry_type = RustStationIndustryType,
 		.set_industry_type = RustStationSetIndustryType,
 		.industry_generation = &GetIndustryGenerationServices(),
 		.spec_name = RustIndustrySpecStationName,

@@ -49,8 +49,6 @@ struct OpenTTDAnimationServices {
 	uint8_t (*road_frame)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_frame);
 	bool (*set_road_frame)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_frame);
 	bool (*rail_belongs)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_belongs);
-	bool (*station_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_triggers);
-	bool (*road_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
 	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);

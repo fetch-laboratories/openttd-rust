@@ -30,18 +30,14 @@ struct OpenTTDStationResolverServices {
 	Axis (*axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(axis);
 	uint32_t (*tile_add)(uint32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add);
 	uint8_t (*tile_random)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_random);
-	uint16_t (*station_random)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_random);
-	uint8_t (*waiting)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);
 	void (*set_waiting)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_waiting);
 	void (*set_random)(BaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_random);
-	uint64_t (*cached_cargo)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(cached_cargo);
 	uint64_t (*spec_cargo)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_cargo);
 	OpenTTDStationReseed (*resolve_random)(const StationSpec *, BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_random);
 	uint16_t (*resolve_callback)(uint16_t, uint32_t, uint32_t, const StationSpec *, BaseStation *, uint32_t, uint8_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
 
 	uint32_t (*company)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company);
 	uint32_t (*nearby_station)(uint8_t, uint32_t, Axis) noexcept OPENTTD_SERVICE_DEFAULT(nearby_station);
-	int32_t (*build_date)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
 	OpenTTDStationSpecIdentity (*identity)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	TownScopeResolver *(*town_scope)(StationResolverObject *, const Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(town_scope);

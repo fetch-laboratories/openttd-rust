@@ -56,7 +56,6 @@ pub struct Services {
     pub shared: &'static Shared,
     pub catchment: &'static crate::station::CatchmentServices,
     names: Names,
-    pub industry_type: extern "C" fn(*mut BaseStation) -> u8,
     pub set_industry_type: extern "C" fn(*mut BaseStation, u8),
     pub industry_generation: *const crate::industry::GenerationServices,
     pub spec_name: extern "C" fn(*const IndustrySpec) -> u32,
@@ -179,7 +178,7 @@ pub(crate) fn generate_name(st: *mut BaseStation, tile: u32, class: u8, s: &Serv
         if other == st || (s.commands().station_town)(other) != town {
             continue;
         }
-        let kind = (s.industry_type)(other);
+        let kind = crate::station_record::read(other.cast(), |r| r.indtype);
         if kind != IT_INVALID {
             info.industries[usize::from(kind)] = true;
             let name = (s.spec_name)(s.spec(kind));
@@ -470,7 +469,9 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
     let graphs = w.graphs;
     let storage = links.storage();
     for cargo in 0..NUM_CARGO {
-        let graph = (graphs.get_if_valid)((graphs.graph_id)(st, cargo));
+        let graph = (graphs.get_if_valid)(crate::station_record::read(st.cast(), |r| {
+            r.goods[usize::from(cargo)].link_graph
+        }));
         if graph.is_null() {
             continue;
         }
@@ -485,7 +486,8 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
                 unsafe {
                     crate::cargo_flow::openttd_rust_flow_map_erase(flows, id.0);
                 }
-                let destination = (graphs.node)(st, cargo);
+                let destination =
+                    crate::station_record::read(st.cast(), |r| r.goods[usize::from(cargo)].node);
                 let edge_live = unsafe { &*owner }.nodes[usize::from(node)]
                     .edge(destination)
                     .is_some_and(|e| e.last_update() != crate::timer_game_common::INVALID_DATE);
@@ -503,7 +505,7 @@ pub unsafe extern "C" fn openttd_rust_station_destruct(s: &Services, st: *mut Ba
         unsafe {
             crate::linkgraph::live::openttd_rust_live_graph_remove(
                 graph,
-                (graphs.node)(st, cargo),
+                crate::station_record::read(st.cast(), |r| r.goods[usize::from(cargo)].node),
                 graphs,
             );
         }
@@ -594,5 +596,5 @@ pub(crate) fn airport_maintenance(s: &Services, owner: u8) -> i64 {
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDStationNames" ["probe"] => Names { base, central, airport, oilfield, docks, heliport, mines, lakeside, woods, forest, valley, heights, north, south, east, west, transfer, halt, exchange, annexe, sidings, branch, upper, lower, fallback, undefined, null };
-    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, industry_type, set_industry_type, industry_generation, spec_name, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
+    "OpenTTDStationLifecycleServices" ["probe"] => Services { shared, catchment, names, set_industry_type, industry_generation, spec_name, roadstop, cleaning_pool, close_view, delete_news, sign_valid, remove_sign, last_loading, airport_maintenance, maintenance_price };
 }

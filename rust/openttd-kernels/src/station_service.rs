@@ -1001,7 +1001,9 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
         if graph.is_null() {
             continue;
         }
-        let node = u32::from((l.graphs.node)(from, cargo)) as u16;
+        let node = u32::from(crate::station_record::read(from.cast(), |r| {
+            r.goods[usize::from(cargo)].node
+        })) as u16;
         let mut remove = Vec::new();
         let owner = unsafe { live::resolve(graph, l.graphs) };
         let count = unsafe { &*owner }.nodes[usize::from(node)].edges.len();
@@ -1081,7 +1083,9 @@ unsafe fn stale(from: *mut BaseStation, l: &Links, visits: &Visits) {
                 }
                 if !updated {
                     crate::witness::hit(crate::witness::STATION_STALE_REMOVE);
-                    remove.push((l.graphs.node)(edge.destination, cargo));
+                    remove.push(crate::station_record::read(edge.destination.cast(), |r| {
+                        r.goods[usize::from(cargo)].node
+                    }));
                     let to_id = (l.graphs.station_id)(edge.destination);
                     (l.delete_flows)(from, cargo, to_id);
                     unsafe {

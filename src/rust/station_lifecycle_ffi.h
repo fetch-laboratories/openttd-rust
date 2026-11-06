@@ -23,7 +23,6 @@ struct OpenTTDStationLifecycleServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationCatchmentServices *catchment;
 	OpenTTDStationNames names;
-	uint8_t (*industry_type)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(industry_type);
 	void (*set_industry_type)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_industry_type);
 	const OpenTTDIndustryGenerationServices *industry_generation;
 	uint32_t (*spec_name)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_name);

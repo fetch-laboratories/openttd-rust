@@ -75,9 +75,6 @@ pub struct Services {
     base_spec: extern "C" fn(u16) -> *const AirportSpec,
     min_year: extern "C" fn(*const AirportSpec) -> i32,
     max_year: extern "C" fn(*const AirportSpec) -> i32,
-    station_layout: extern "C" fn(*const BaseStation) -> u8,
-    random: extern "C" fn(*mut BaseStation) -> u16,
-    build_date: extern "C" fn(*mut BaseStation) -> i32,
     tile_spec: extern "C" fn(u8) -> *const TileSpec,
     belongs: extern "C" fn(*const BaseStation, u32) -> bool,
     tile_random: extern "C" fn(u32) -> u8,
@@ -264,7 +261,10 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_init(
         (ptr::null(), 0)
     } else {
         let spec = get((s.commands().airport_type)(tile.station), s);
-        (spec, (s.station_layout)(tile.station))
+        (
+            spec,
+            crate::station_record::read(tile.station.cast(), |r| r.airport.layout),
+        )
     };
     unsafe {
         (&raw mut (*parent).spec).write(spec);
@@ -376,7 +376,7 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
             }
         }
         0xf0 => u32::from(crate::station_record::facilities(c.station.cast())),
-        0xfa => (s.build_date)(c.station)
+        0xfa => crate::station_record::read(c.station.cast(), |r| r.build_date)
             .wrapping_sub(crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR)
             .clamp(0, 65535) as u32,
         _ => unsafe {
@@ -501,7 +501,9 @@ pub unsafe extern "C" fn openttd_rust_airport_random(
     let station = if c.station.is_null() {
         0
     } else {
-        u32::from((s.random)(c.station))
+        u32::from(crate::station_record::read(c.station.cast(), |r| {
+            r.random_bits
+        }))
     };
     station
         | if tile && c.tile != INVALID_TILE {
@@ -553,7 +555,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, station_layout, random, build_date, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, catchment, base_spec, min_year, max_year, tile_spec, belongs, tile_random, frame, base_scope, town_scope, evaluate_tile, };
 }
 
 #[unsafe(no_mangle)]

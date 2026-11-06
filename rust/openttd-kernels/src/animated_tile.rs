@@ -64,8 +64,6 @@ pub struct Services {
     pub road_frame: extern "C" fn(*mut BaseStation, u32) -> u8,
     pub set_road_frame: extern "C" fn(*mut BaseStation, u32, u8) -> bool,
     pub rail_belongs: extern "C" fn(*mut BaseStation, u32) -> bool,
-    pub station_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
-    pub road_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub industry_object: extern "C" fn(u32) -> *mut IndustryShell,
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
@@ -356,7 +354,7 @@ pub extern "C" fn openttd_rust_trigger_station(
     cargo: u8,
 ) {
     let a = services();
-    if !(a.station_triggers)(st, trigger) {
+    if !crate::station_record::read(st.cast(), |r| r.cached_anim_triggers & (1 << trigger) != 0) {
         return;
     }
     let random = a.shared().random() as u16;
@@ -400,7 +398,9 @@ pub extern "C" fn openttd_rust_trigger_roadstop(
     cargo: u8,
 ) {
     let a = services();
-    if !(a.road_triggers)(st, trigger) {
+    if !crate::station_record::read(st.cast(), |r| {
+        r.cached_roadstop_anim_triggers & (1 << trigger) != 0
+    }) {
         return;
     }
     let random = a.shared().random() as u16;
@@ -534,8 +534,6 @@ crate::abi::layouts! {
         road_frame,
         set_road_frame,
         rail_belongs,
-        station_triggers,
-        road_triggers,
         rail_spec,
         industry_object,
         rail_spec_triggers,

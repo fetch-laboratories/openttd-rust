@@ -120,11 +120,8 @@ pub struct Services {
     axis: extern "C" fn(u32) -> crate::services::Axis,
     tile_add: extern "C" fn(u32, i32) -> u32,
     tile_random: extern "C" fn(u32) -> u8,
-    station_random: extern "C" fn(*mut BaseStation) -> u16,
-    waiting: extern "C" fn(*mut BaseStation) -> u8,
     set_waiting: extern "C" fn(*mut BaseStation, u8),
     set_random: extern "C" fn(*mut BaseStation, u16),
-    cached_cargo: extern "C" fn(*mut BaseStation) -> u64,
     spec_cargo: extern "C" fn(*const RailSpec) -> u64,
     resolve_random: extern "C" fn(*const RailSpec, *mut BaseStation, u32, u8) -> Reseed,
     resolve_callback: extern "C" fn(
@@ -140,7 +137,6 @@ pub struct Services {
     ) -> u16,
     company: extern "C" fn(u8, *const c_void) -> u32,
     nearby_station: extern "C" fn(u8, u32, crate::services::Axis) -> u32,
-    build_date: extern "C" fn(*mut BaseStation) -> i32,
     airport_ttd_type: extern "C" fn(
         *const crate::station_cmd::AirportSpec,
     ) -> crate::newgrf_airport::TtdpAirportType,
@@ -782,7 +778,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         0x84 => (native.commands().string_id)(st),
         0x86 => 0,
         0xf0 => u32::from(crate::station_record::facilities(st.cast())),
-        0xfa => build_date((native.build_date)(st)),
+        0xfa => build_date(crate::station_record::read(st.cast(), |r| r.build_date)),
         _ => unsafe {
             openttd_rust_station_base_variable(st, file, variable, parameter as u8, available)
         },
@@ -847,7 +843,7 @@ pub unsafe extern "C" fn openttd_rust_station_random_bits(state: *const State) -
     (if st.is_null() {
         0
     } else {
-        u32::from((native.station_random)(st))
+        u32::from(crate::station_record::read(st.cast(), |r| r.random_bits))
     }) | if tile == crate::tile_type::INVALID_TILE {
         0
     } else {
@@ -860,7 +856,9 @@ pub unsafe extern "C" fn openttd_rust_station_random_triggers(state: *const Stat
     if st.is_null() {
         0
     } else {
-        u32::from((services().waiting)(st))
+        u32::from(crate::station_record::read(st.cast(), |r| {
+            r.waiting_random_triggers
+        }))
     }
 }
 /// Canonical existing-goods count used by other feature root selectors.
@@ -881,7 +879,7 @@ pub extern "C" fn openttd_rust_station_randomisation(
     cargo: u8,
 ) {
     let native = services();
-    let mask = (native.cached_cargo)(st);
+    let mask = crate::station_record::read(st.cast(), |r| r.cached_cargo_triggers);
     if mask == 0 || is_valid_cargo_type(cargo) && mask & 1_u64.wrapping_shl(u32::from(cargo)) == 0 {
         return;
     }
@@ -892,7 +890,8 @@ pub extern "C" fn openttd_rust_station_randomisation(
     };
     (native.set_waiting)(
         st,
-        (native.waiting)(st) | (1_u8.wrapping_shl(u32::from(trigger))),
+        crate::station_record::read(st.cast(), |r| r.waiting_random_triggers)
+            | (1_u8.wrapping_shl(u32::from(trigger))),
     );
     let a = crate::animated_tile::services();
     let area = rail_tile_area(
@@ -923,7 +922,12 @@ pub extern "C" fn openttd_rust_station_randomisation(
                 continue;
             }
             if !is_valid_cargo_type(cargo) || triggers & 1_u64.wrapping_shl(u32::from(cargo)) != 0 {
-                let r = (native.resolve_random)(spec, st, t, (native.waiting)(st));
+                let r = (native.resolve_random)(
+                    spec,
+                    st,
+                    t,
+                    crate::station_record::read(st.cast(), |r| r.waiting_random_triggers),
+                );
                 used |= r.used;
                 if r.reseed != 0 {
                     whole |= r.reseed;
@@ -936,13 +940,22 @@ pub extern "C" fn openttd_rust_station_randomisation(
             }
         }
     }
-    (native.set_waiting)(st, (native.waiting)(st) & !used);
+    (native.set_waiting)(
+        st,
+        crate::station_record::read(st.cast(), |r| r.waiting_random_triggers) & !used,
+    );
     if whole & 0xffff != 0 {
         // The native compound assignments publish the cleared station bits
         // before Random, then read the live bits again for the final OR.
-        (native.set_random)(st, (u32::from((native.station_random)(st)) & !whole) as u16);
+        (native.set_random)(
+            st,
+            (u32::from(crate::station_record::read(st.cast(), |r| r.random_bits)) & !whole) as u16,
+        );
         let random = native.shared().random() & whole;
-        (native.set_random)(st, (u32::from((native.station_random)(st)) | random) as u16);
+        (native.set_random)(
+            st,
+            (u32::from(crate::station_record::read(st.cast(), |r| r.random_bits)) | random) as u16,
+        );
     }
 }
 #[unsafe(no_mangle)]
@@ -1018,9 +1031,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverSpec" ["station_service"] => Spec { threshold, divide };
  "OpenTTDStationSlopeResult" ["station_service"] => SlopeResult { callback, registers };
  "OpenTTDStationResolverServices" ["station_service"] => Services {
- shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
- loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, company, nearby_station, build_date, airport_ttd_type, identity, town_scope, default_scope, slope_error
+ shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count, loading, loaded, axis, tile_add, tile_random, set_waiting, set_random, spec_cargo, resolve_random, resolve_callback, company, nearby_station, airport_ttd_type, identity, town_scope, default_scope, slope_error
  };
 }
 
