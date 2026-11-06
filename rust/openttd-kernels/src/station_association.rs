@@ -97,9 +97,7 @@ pub(crate) fn cache(native: *const Services, st: *mut BaseStation) {
         anim |= triggers.animation;
         cargo |= triggers.cargo;
     }
-    unsafe {
-        crate::station_record::set_cached_triggers(st, anim, cargo);
-    }
+    crate::station_record::set_cached_triggers(st, anim, cargo);
 }
 pub(crate) fn assign(
     native: *const Services,

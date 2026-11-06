@@ -310,9 +310,7 @@ pub(crate) fn add_facility(st: *mut BaseStation, facility: u8, tile: u32, s: &Se
     let c = s.commands();
     if crate::station_record::facilities(st.cast()) == 0 {
         crate::station::spatial::move_sign(s.shared, st, tile);
-        unsafe {
-            ((*s.roadstop).set_random_bits)(st, (s.shared.random)(std::ptr::null_mut()) as u16);
-        }
+        crate::station_record::set_random_bits(st, (s.shared.random)(std::ptr::null_mut()) as u16);
     }
     crate::station_record::set_facility_bits(st, 1 << facility);
     crate::station_record::set_station_owner(st, (s.shared.current_company)());

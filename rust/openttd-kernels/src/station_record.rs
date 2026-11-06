@@ -297,7 +297,7 @@ pub(crate) unsafe fn goods_data_ensure(goods: *mut GoodsRecord) -> *mut StationG
     data
 }
 
-/// Existing data only; NewGRF observations must not allocate an empty list.
+/// Existing data only; `NewGRF` observations must not allocate an empty list.
 #[inline]
 pub(crate) fn existing_cargo(
     shell: *const BaseStation,

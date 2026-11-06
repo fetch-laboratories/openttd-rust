@@ -19,7 +19,6 @@
 use crate::company_type::CompanyID;
 use crate::industry_type::{Industry as ShellHandle, IndustryID};
 use crate::source_type::Source;
-use crate::station_type::Station;
 use crate::station_type::StationID;
 use crate::vehicle_type::OpenTTDVehicle;
 

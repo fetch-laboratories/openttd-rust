@@ -578,9 +578,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_cache(st: *mut BaseStation, s: *c
     let s = unsafe { &*s };
     let mut animation = 0;
     let mut cargo = 0;
-    unsafe {
-        crate::station_record::set_cached_roadstop_triggers(st, 0, 0);
-    }
+    crate::station_record::set_cached_roadstop_triggers(st, 0, 0);
     for i in 0..unsafe { (s.spec_count)(st) } {
         let spec = unsafe { (s.slot_spec)(st, i) };
         if spec.is_null() {
@@ -589,9 +587,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_cache(st: *mut BaseStation, s: *c
         let triggers = unsafe { (s.spec_triggers)(spec) };
         animation |= triggers.animation;
         cargo |= triggers.cargo;
-        unsafe {
-            crate::station_record::set_cached_roadstop_triggers(st, animation, cargo);
-        }
+        crate::station_record::set_cached_roadstop_triggers(st, animation, cargo);
     }
 }
 #[unsafe(no_mangle)]
@@ -681,9 +677,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
     }
     let waiting =
         crate::station_record::read(st.cast(), |r| r.waiting_random_triggers) | (1 << trigger);
-    unsafe {
-        crate::station_record::set_waiting_triggers(st, waiting);
-    }
+    crate::station_record::set_waiting_triggers(st, waiting);
     let empty_mask = if trigger == SRT_CARGO_TAKEN {
         crate::newgrf_station::openttd_rust_station_empty_mask(st)
     } else {
@@ -737,21 +731,15 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
     } else {
         process(tile);
     }
-    unsafe {
-        crate::station_record::set_waiting_triggers(
-            st,
-            crate::station_record::read(st.cast(), |r| r.waiting_random_triggers) & !used,
-        );
-    }
+    crate::station_record::set_waiting_triggers(
+        st,
+        crate::station_record::read(st.cast(), |r| r.waiting_random_triggers) & !used,
+    );
     if whole_reseed & 0xffff != 0 {
         let bits =
             u32::from(crate::station_record::read(st.cast(), |r| r.random_bits)) & !whole_reseed;
-        unsafe {
-            crate::station_record::set_random_bits(st, bits as u16);
-        }
-        unsafe {
-            crate::station_record::set_random_bits(st, (bits | (s.random() & whole_reseed)) as u16);
-        }
+        crate::station_record::set_random_bits(st, bits as u16);
+        crate::station_record::set_random_bits(st, (bits | (s.random() & whole_reseed)) as u16);
     }
 }
 
