@@ -5,7 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Object lifecycle owner; native pools, specs, map and save records remain canonical.
+//! Object instance records, pool access and lifecycle policy. Coupled specification
+//! payloads and native map/save frames retain their existing owners.
 //! Export contract: tables and native cost, frame and array storage are live for the
 //! synchronous call, arguments meet the original's tile and ID preconditions, and calls are
 //! serialized with reset, save and load. No native pointer is retained, services reenter only
@@ -199,7 +200,7 @@ static OBJECT_POOL: GameState<*mut crate::pool::PoolCore> = GameState::new(ptr::
 pub unsafe extern "C" fn openttd_rust_object_pool_bind(
     pool: *mut crate::pool::PoolCore,
 ) -> *mut crate::pool::PoolCore {
-    unsafe { OBJECT_POOL.exchange(pool) }
+    unsafe { ptr::replace(OBJECT_POOL.get(), pool) }
 }
 pub(crate) unsafe fn pool()
 -> crate::pool::TypedPool<crate::object_type::ObjectID, Object, crate::object_type::ObjectShell> {
