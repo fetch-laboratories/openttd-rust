@@ -115,7 +115,7 @@ impl FixedData<256> for PersistentStorageRecord {
     }
 }
 /// One allocation. Generated fixed data is the repr(C) prefix; backup and the
-/// actual native BasePersistentStorageArray registry identity remain private.
+/// actual native `BasePersistentStorageArray` registry identity remain private.
 #[repr(C)]
 pub struct Payload<R: FixedData<N>, const N: usize> {
     record: R,
