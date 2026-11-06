@@ -21,69 +21,13 @@
 #include "../../safeguards.h"
 
 
-/* static */ bool ScriptMarine::IsWaterDepotTile(TileIndex tile)
-{
-	if (!::IsValidTile(tile)) return false;
-
-	return ::IsTileType(tile, MP_WATER) && ::GetWaterTileType(tile) == WaterTileType::Depot;
-}
-
-/* static */ bool ScriptMarine::IsDockTile(TileIndex tile)
-{
-	if (!::IsValidTile(tile)) return false;
-
-	return ::IsTileType(tile, MP_STATION) && ::IsDock(tile);
-}
-
-/* static */ bool ScriptMarine::IsBuoyTile(TileIndex tile)
-{
-	if (!::IsValidTile(tile)) return false;
-
-	return ::IsTileType(tile, MP_STATION) && ::IsBuoy(tile);
-}
-
-/* static */ bool ScriptMarine::IsLockTile(TileIndex tile)
-{
-	if (!::IsValidTile(tile)) return false;
-
-	return ::IsTileType(tile, MP_WATER) && ::GetWaterTileType(tile) == WaterTileType::Lock;
-}
-
-/* static */ bool ScriptMarine::IsCanalTile(TileIndex tile)
-{
-	if (!::IsValidTile(tile)) return false;
-
-	return ::IsTileType(tile, MP_WATER) && ::IsCanal(tile);
-}
-
-/* static */ bool ScriptMarine::AreWaterTilesConnected(TileIndex t1, TileIndex t2)
-{
-	if (!::IsValidTile(t1)) return false;
-	if (!::IsValidTile(t2)) return false;
-
-	/* Tiles not neighbouring */
-	if (::DistanceManhattan(t1, t2) != 1) return false;
-
-	DiagDirection to_other_tile = ::DiagdirBetweenTiles(t2, t1);
-
-	/* Determine the reachable tracks from the shared edge */
-	TrackBits gtts1 = ::TrackStatusToTrackBits(::GetTileTrackStatus(t1, TRANSPORT_WATER, 0, ReverseDiagDir(to_other_tile))) & ::DiagdirReachesTracks(to_other_tile);
-	if (gtts1 == TRACK_BIT_NONE) return false;
-
-	to_other_tile = ReverseDiagDir(to_other_tile);
-	TrackBits gtts2 = ::TrackStatusToTrackBits(::GetTileTrackStatus(t2, TRANSPORT_WATER, 0, ReverseDiagDir(to_other_tile))) & ::DiagdirReachesTracks(to_other_tile);
-
-	return gtts2 != TRACK_BIT_NONE;
-}
-
 /* static */ bool ScriptMarine::BuildWaterDepot(TileIndex tile, TileIndex front)
 {
 	EnforceCompanyModeValid(false);
-	EnforcePrecondition(false, ::IsValidTile(tile));
-	EnforcePrecondition(false, ::IsValidTile(front));
-	EnforcePrecondition(false, (::TileX(front) == ::TileX(tile)) != (::TileY(front) == ::TileY(tile)));
+	uint8_t axis = openttd_rust_script_marine_water_depot(&GetRustScriptHostServices(), tile.base(), front.base());
+	if (axis == INVALID_AXIS) return false;
 
-	return ScriptObject::Command<CMD_BUILD_SHIP_DEPOT>::Do(tile, ::TileX(front) == ::TileX(tile) ? AXIS_Y : AXIS_X);
+	return ScriptObject::Command<CMD_BUILD_SHIP_DEPOT>::Do(tile, static_cast<Axis>(axis));
 }
 
 /* static */ bool ScriptMarine::BuildDock(TileIndex tile, StationID station_id)
@@ -162,16 +106,4 @@
 	EnforcePrecondition(false, IsCanalTile(tile));
 
 	return ScriptObject::Command<CMD_LANDSCAPE_CLEAR>::Do(tile);
-}
-
-/* static */ Money ScriptMarine::GetBuildCost(BuildType build_type)
-{
-	switch (build_type) {
-		case BT_DOCK:  return ::GetPrice(PR_BUILD_STATION_DOCK, 1, nullptr);
-		case BT_DEPOT: return ::GetPrice(PR_BUILD_DEPOT_SHIP, 1, nullptr);
-		case BT_BUOY:  return ::GetPrice(PR_BUILD_WAYPOINT_BUOY, 1, nullptr);
-		case BT_LOCK:  return ::GetPrice(PR_BUILD_LOCK, 1, nullptr);
-		case BT_CANAL: return ::GetPrice(PR_BUILD_CANAL, 1, nullptr);
-		default: return -1;
-	}
 }

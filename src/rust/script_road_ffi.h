@@ -13,6 +13,7 @@
 #include "call_ffi.h"
 #include "../tile_type.h"
 struct OpenTTDScriptHostServices;
+struct OpenTTDScriptList;
 extern "C" {
 int64_t OPENTTD_RUST_CALL openttd_rust_script_road_build_cost(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_script_road_max_speed(const OpenTTDScriptHostServices *, uint32_t);
@@ -40,5 +41,6 @@ uint8_t OPENTTD_RUST_CALL openttd_rust_script_road_convert(const OpenTTDScriptHo
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_road_remove(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_road_station_tiles(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_road_remove_depot(const OpenTTDScriptHostServices *, uint32_t);
+void OPENTTD_RUST_CALL openttd_rust_script_road_type_list(const OpenTTDScriptHostServices *, OpenTTDScriptList *, uint32_t);
 }
 #endif /* OPENTTD_RUST_SCRIPT_ROAD_FFI_H */

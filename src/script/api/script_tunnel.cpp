@@ -18,35 +18,6 @@
 
 #include "../../safeguards.h"
 
-/* static */ bool ScriptTunnel::IsTunnelTile(TileIndex tile)
-{
-	if (!::IsValidTile(tile)) return false;
-	return ::IsTunnelTile(tile);
-}
-
-/* static */ TileIndex ScriptTunnel::GetOtherTunnelEnd(TileIndex tile)
-{
-	if (!::IsValidTile(tile)) return INVALID_TILE;
-
-	/* If it's a tunnel already, take the easy way out! */
-	if (IsTunnelTile(tile)) return ::GetOtherTunnelEnd(tile);
-
-	auto [start_tileh, start_z] = ::GetTileSlopeZ(tile);
-	DiagDirection direction = ::GetInclinedSlopeDirection(start_tileh);
-	if (direction == INVALID_DIAGDIR) return INVALID_TILE;
-
-	TileIndexDiff delta = ::TileOffsByDiagDir(direction);
-	int end_z;
-	do {
-		tile += delta;
-		if (!::IsValidTile(tile)) return INVALID_TILE;
-
-		std::tie(std::ignore, end_z) = ::GetTileSlopeZ(tile);
-	} while (start_z != end_z);
-
-	return tile;
-}
-
 /**
  * Helper function to connect a just built tunnel to nearby roads.
  * @param instance The script instance we have to built the road for.
@@ -82,11 +53,7 @@ static void _DoCommandReturnBuildTunnel1(class ScriptInstance &instance)
 /* static */ bool ScriptTunnel::BuildTunnel(ScriptVehicle::VehicleType vehicle_type, TileIndex start)
 {
 	EnforceDeityOrCompanyModeValid(false);
-	EnforcePrecondition(false, ::IsValidTile(start));
-	EnforcePrecondition(false, vehicle_type == ScriptVehicle::VT_RAIL || vehicle_type == ScriptVehicle::VT_ROAD);
-	EnforcePrecondition(false, vehicle_type != ScriptVehicle::VT_RAIL || ScriptRail::IsRailTypeAvailable(ScriptRail::GetCurrentRailType()));
-	EnforcePrecondition(false, vehicle_type != ScriptVehicle::VT_ROAD || ScriptRoad::IsRoadTypeAvailable(ScriptRoad::GetCurrentRoadType()));
-	EnforcePrecondition(false, ScriptCompanyMode::IsValid() || vehicle_type == ScriptVehicle::VT_ROAD);
+	if (!openttd_rust_script_tunnel_build(&GetRustScriptHostServices(), static_cast<uint32_t>(vehicle_type), start.base())) return false;
 
 	if (vehicle_type == ScriptVehicle::VT_RAIL) {
 		/* For rail we do nothing special */
@@ -104,11 +71,9 @@ static void _DoCommandReturnBuildTunnel1(class ScriptInstance &instance)
 	/* Build the piece of road on the 'start' side of the tunnel */
 	TileIndex end(ScriptObject::GetCallbackVariable(0));
 	TileIndex start{ScriptTunnel::GetOtherTunnelEnd(end)};
+	auto piece = openttd_rust_script_tunnelbridge_road_piece(&GetRustScriptHostServices(), end.base(), start.base(), 1);
 
-	DiagDirection dir_1 = ::DiagdirBetweenTiles(end, start);
-	DiagDirection dir_2 = ::ReverseDiagDir(dir_1);
-
-	return ScriptObject::Command<CMD_BUILD_ROAD>::Do(&::_DoCommandReturnBuildTunnel2, start + ::TileOffsByDiagDir(dir_1), ::DiagDirToRoadBits(dir_2), ScriptRoad::GetRoadType(), DRD_NONE, TownID::Invalid());
+	return ScriptObject::Command<CMD_BUILD_ROAD>::Do(&::_DoCommandReturnBuildTunnel2, TileIndex(piece.tile), static_cast<RoadBits>(piece.bits), ScriptRoad::GetRoadType(), DRD_NONE, TownID::Invalid());
 }
 
 /* static */ bool ScriptTunnel::_BuildTunnelRoad2()
@@ -118,11 +83,9 @@ static void _DoCommandReturnBuildTunnel1(class ScriptInstance &instance)
 	/* Build the piece of road on the 'end' side of the tunnel */
 	TileIndex end(ScriptObject::GetCallbackVariable(0));
 	TileIndex start{ScriptTunnel::GetOtherTunnelEnd(end)};
+	auto piece = openttd_rust_script_tunnelbridge_road_piece(&GetRustScriptHostServices(), end.base(), start.base(), 0);
 
-	DiagDirection dir_1 = ::DiagdirBetweenTiles(end, start);
-	DiagDirection dir_2 = ::ReverseDiagDir(dir_1);
-
-	return ScriptObject::Command<CMD_BUILD_ROAD>::Do(end + ::TileOffsByDiagDir(dir_2), ::DiagDirToRoadBits(dir_1), ScriptRoad::GetRoadType(), DRD_NONE, TownID::Invalid());
+	return ScriptObject::Command<CMD_BUILD_ROAD>::Do(TileIndex(piece.tile), static_cast<RoadBits>(piece.bits), ScriptRoad::GetRoadType(), DRD_NONE, TownID::Invalid());
 }
 
 /* static */ bool ScriptTunnel::RemoveTunnel(TileIndex tile)

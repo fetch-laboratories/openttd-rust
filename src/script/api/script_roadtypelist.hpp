@@ -23,7 +23,7 @@ public:
 	/**
 	 * @param rtts Bitmask of road/tram types to list.
 	 */
-	ScriptRoadTypeList(ScriptRoad::RoadTramTypes rtts);
+	ScriptRoadTypeList(ScriptRoad::RoadTramTypes rtts) { openttd_rust_script_road_type_list(&GetRustScriptHostServices(), this->GetRustListOwner(), static_cast<uint32_t>(rtts)); }
 };
 
 #endif /* SCRIPT_ROADTYPELIST_HPP */

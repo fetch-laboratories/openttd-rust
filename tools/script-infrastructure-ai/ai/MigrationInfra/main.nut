@@ -1,13 +1,21 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 ApiAccounting <- AIAccounting;
+ApiBridge <- AIBridge;
+ApiBridgeList <- AIBridgeList;
+ApiBridgeList_Length <- AIBridgeList_Length;
 ApiController <- AIController;
 ApiError <- AIError;
 ApiMap <- AIMap;
+ApiMarine <- AIMarine;
 ApiRail <- AIRail;
+ApiRailTypeList <- AIRailTypeList;
 ApiRoad <- AIRoad;
+ApiRoadTypeList <- AIRoadTypeList;
 ApiStation <- AIStation;
 ApiTestMode <- AITestMode;
 ApiTile <- AITile;
+ApiTileList <- AITileList;
+ApiTunnel <- AITunnel;
 require("probe.nut");
 
 class MigrationInfra extends AIController {
