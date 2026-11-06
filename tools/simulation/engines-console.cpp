@@ -125,7 +125,7 @@ static bool EnginesScenario(std::span<std::string_view> args)
 		/* Input specs attach a joined variant; stock saves contain no NewGRF. */
 		EngineFields(variant).info.variant_id = e->index;
 		EngineFields(variant).info.extra_flags.Set(ExtraEngineFlag::JoinPreview);
-		for (Engine *other : Engine::Iterate()) other->flags.Reset(EngineFlag::ExclusivePreview);
+		for (Engine *other : Engine::Iterate()) EngineFields(other).flags.Reset(EngineFlag::ExclusivePreview);
 		for (Company *other : Company::Iterate()) BlockPreview(other) = 0;
 		EngineFields(e).flags = EngineFlag::ExclusivePreview;
 		EngineFields(e).company_avail = {};
