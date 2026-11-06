@@ -4,51 +4,52 @@ Root selects here; `AGENTS.md` and the docs in its routing table define process.
 this roadmap over conflicting issues; it is the current state of umbrella issue
 #3. Update it in place; `/steer` prunes it. Evidence stays in PRs.
 
-## Where the fork stands (2026-11-05, stocktake 83)
+## Where the fork stands (2026-11-06, stocktake 86)
 
 Agent: /root | Model: claude-opus-5-5 | Reasoning effort: xhigh.
 
-- Code is `c9de8d52ca` (integration 83). Since stocktake 80, three integrations landed:
-  - #690 (81) batches #684 (#507's fifty-year same-NewGRF save, closing #507) with #688 and #689 (#501 typing batches 5 and 6).
-  - #636 (82) is #570's shared vehicle records with direct Rust Tick; #570 closed.
-  - #691 (83) is #666's tile, map, rail and road script APIs.
-
-  No rollback is recorded. Integration 80's platform cadence passed (run 42087493081). macOS ran on `CI_MACOS_HEAVY` after two hosted-capacity cancellations, and the variable is deleted. The next cadence follows integration 85.
-- `python3 tools/port-metrics.py --whole-fork` at `c9de8d52ca`, with changes against stocktake 80 at `a2e417114b`:
-  - Retired: 59,125 of 284,355 original code lines (20.79%, **+1,706**).
-  - Compiled original plus glue: **258,888** (91.04%, **-2,668**). #636 removed 1,952, almost twice its checkpoint-2 measure of -1,014, because the reviews deleted more routes. #691 removed 716, inside #666's 650 to 950 estimate for the whole issue.
-  - Glue: 33,658 (-962). Exports 1,494 (+48: #636 -20, #691 +68). Callback slots **3,523** (-337).
-  - Rust: 131,863 (+1,615). Tooling: 57,427 (+1,081).
+- Code is `ef51e41b80` (integration 86). Since stocktake 83, three integrations landed:
+  - #696 (84): #501 typing batches 7 and 8.
+  - #697 (85): #666's second PR (bridge, tunnel, marine and list script APIs); #666 closed with its remainder assigned.
+  - #701 (86): #699's per-commit Windows vcpkg cache; bootstrap Full, with `CI_ON_DEMAND` unset 01:00Z to 01:18Z.
+- **Integrations are stopped.** Integration 85's platform cadence (run 42141025218) failed its annotation checks on Linux, Windows and macOS: `-Wunused-parameter` at `src/rust/vehicle_services.cpp:190`, from #636. `VehicleRecordAssertNext`'s only statement is an `assert`. The fix is PR #702, `[[maybe_unused]]`, with no behavior change, now in Full. #702 merges, then the cadence reruns. Only after it is green do #692 and #628 merge.
+- `python3 tools/port-metrics.py --whole-fork` at `ef51e41b80`, with changes against stocktake 83 at `c9de8d52ca`:
+  - Retired: 59,333 of 284,355 original code lines (20.87%, +208).
+  - Compiled original plus glue: **258,758** (91.00%, **-130**, all from #697).
+  - Glue: 33,736 (+78). Exports 1,509 (+15). Callback slots 3,523 (unchanged).
+  - Rust: 132,295 (+432). Tooling: 57,988 (+561).
   - Simulation-source retirement: 41,081 of 61,148 (67.18%).
-- Retired code by phase-associated source bucket, phases 1 to 6: 38,213 / 2,868 / 10,064 / 5,326 / 337 / 2,317, or 59,125 in all. These accounting buckets do not reassign drawing, headers or data to owners; the **Phases** definitions and exit criteria remain in force.
-- Baselines: 376 rebound-callee rows (-34), 120 shared-accessor rows (-16) and 43 orphan exports (-5), all from #636.
-- **Speed.** The merged-tip profile at integration 82 (`2e6958801e`, report `.local/simulation/20261105T215010Z-1842682`) found all 7 scenarios equal. #636's direct Rust Tick cut play-save candidate Ir by 3.9% to 4.9%, so every play-save projection sits at its anchor, the formula's floor. TGP rose again.
+- Retired code by phase-associated source bucket, phases 1 to 6: 38,213 / 2,868 / 10,272 / 5,326 / 337 / 2,317, or 59,333 in all. The **Phases** definitions and exit criteria remain in force.
+- Baselines: 376 rebound-callee rows, 120 shared-accessor rows and 43 orphan exports (unchanged).
+- **Speed.** The merged-tip profile at integration 85 (`7fd398da1f`, report `.local/simulation/20261106T010514Z-2542270`) found all 7 scenarios equal. Play-save candidate Ir is now 4.3% to 5.3% below the anchors.
+  - **TGP:** 2,829,532,773 Ir, projection **1.206883x** against the 1.235x band. That is +4.03% against the anchor, but only +0.71% since the integration-82 profile, so the trigger is not met.
+  - **#698's TGP regression:** #698 (#565 item 2) measured +25.7M Ir over base, a slope-path inlining regression, and is repairing it before review, against a base-or-lower target. A single-scenario base profile is at `.local/simulation/20261106T004411Z-2474065`.
 
-| Scenario | Anchor ratio | Candidate Ir at `27de6f8c18` | Candidate Ir at `2e6958801e` | Projection | Change vs anchor |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| TGP | 1.160107x | 2,773,615,856 | 2,819,307,093 | 1.198329x | +3.29% |
-| Opus | 1.345115x | 28,611,669,801 | 27,380,883,235 | 1.345115x | 0.00% (Ir -4.3%) |
-| Grok | 1.346652x | 27,178,405,243 | 26,113,430,594 | 1.346652x | 0.00% (Ir -3.9%) |
-| P1996 | 1.352194x | 4,744,876,185 | 4,517,945,710 | 1.352193x | 0.00% (Ir -4.8%) |
-| P2000 | 1.444531x | 7,834,343,043 | 7,451,081,511 | 1.444531x | 0.00% (Ir -4.9%) |
-| P2016 | 1.382593x | 14,200,776,421 | 13,630,714,787 | 1.382593x | 0.00% (Ir -4.0%) |
-| Drawing | 1.004635x | 2,154,533,064 | 2,154,342,152 | 1.004635x | 0.00% |
+| Scenario | Anchor ratio | Candidate Ir at `7fd398da1f` | Projection |
+| --- | ---: | ---: | ---: |
+| TGP | 1.160107x | 2,829,532,773 | 1.206883x |
+| Opus | 1.345115x | 27,104,173,493 | 1.345115x (Ir -5.3%) |
+| Grok | 1.346652x | 25,835,584,034 | 1.346652x (Ir -4.9%) |
+| P1996 | 1.352194x | 4,498,538,863 | 1.352193x (Ir -5.2%) |
+| P2000 | 1.444531x | 7,427,017,102 | 1.444531x (Ir -5.2%) |
+| P2016 | 1.382593x | 13,584,077,535 | 1.382593x (Ir -4.3%) |
+| Drawing | 1.004635x | 2,154,532,194 | 1.004635x |
 
-- TGP's Ir is +1.65% over its anchor: +1.33% by integration 80, then +0.32% with #636. The projection is 1.198x, below the 1.235x generation band. Since the previous tip (integration 80) it rose 0.63%, so the policy's 3%-since-previous-tip trigger is not met. The cumulative rise passed 3% against the anchor, though, so root is attributing it anyway: `/root/attribute-tgp-ir-rise` reports per function and per PR on #275 (#647, #655, #679 and #636 are the candidates).
-- Coverage: unchanged. #156 adds #691's four unreached script behaviors. #503 still has 119 unfinished original traces. No coverage run or deep check was performed.
-- Unintegrated components: **four**, under the six-branch limit:
-  - #628 (network protocol), fixing a CI-found harness console and merging #636;
-  - #692 (#653, industry and tile specs), being finished for review;
-  - #696 (#501 typing batches 7 and 8), in Full;
-  - #666's second PR, starting.
-- `ty` over all of `tools/` without the include list reports 212 diagnostics on base. #696 brings that to 2, leaving `test-generated-abi.py`, the last #501 file (it waits for #628 and #692), and an unresolvable `yaml` import in `test-ci.py` in that configuration.
-- Issue placement: 37 open. #686 (the user's merge-latency measurement) and #693 (the multiplayer late-sync flake) are placed below; zero unplaced remain. #513's first-accepted-improvement trigger is unmet.
-- **Process lesson.** Two Full runs in a row failed on scenarios no review had run:
-  - #636's `track-follower`: the follower probe passed vehicle shells where Rust expects records.
-  - #628's commands console: it read the moved command queue.
-
-  Reviews pick scenarios by name prefix, and harness consoles compile only when their scenario runs. From now on, root briefs for PRs that change the Rust/C++ boundary (moved records, deleted services, changed signatures) require a CI `native` profile run (`python3 tools/ci.py request PR --profile native`) before review and Full. That profile is the full migration comparison and simulation shards, about 10 to 20 minutes. Running 481 scenarios locally at `--jobs 3` takes more than 4 hours here, and #628's local attempt hit the 2-hour background limit at 214 scenarios.
-- Host: unchanged. #678 (TSan startup aborts) and #693 remain tools maintenance.
+- Coverage: unchanged. #156 gained #697's four unreached script behaviors. No coverage run or deep check was performed.
+- Unintegrated components, five in all, under the six-branch limit:
+  - #628 (network protocol), in Full;
+  - #692 (#653, industry specs), in Full;
+  - #700 (#634, station records), at checkpoint 1;
+  - #698 (#565 item 2);
+  - #702 (cadence fix), in Full.
+- **Ordering:** #628 and #692 conflict in `abi.rs` and `generate-abi.py`. #692 merges first; #628 then resolves the conflict, gets a scoped review of the resolution, and runs Full.
+- `ty` over all of `tools/` reports 2 diagnostics:
+  - `test-generated-abi.py`, the last #501 file, which waits for #628 and #692;
+  - `test-ci.py`'s `yaml` import, under that configuration only.
+- Issue placement: 36 open, zero unplaced. #686 has root's disposition and a user policy question on the slot limit. #513's trigger is unmet.
+- **Process lessons:**
+  - **Full simulation set:** briefs now require the CI `native` profile, not a local full set. 481 scenarios at `--jobs 3` take more than 4 hours here. `ci.py wait` takes the request file `ci.py request` prints.
+  - **Merge order:** before merging a ready PR, root checks every PR with a passing Full and merges them in an order that forces no extra Fulls. Integration 85 forced #692's rerun because root merged #697 first.
 
 ## Phases
 
@@ -360,6 +361,9 @@ Rust / tooling / original C++ retired / net glue.
 | 81 | #507's fifty-year same-NewGRF save / #684; #501 typing batches 5 and 6 / #688, #689; batched as #690 with root's combined-typing fix | `7c067ad699` | 0 / tooling only / 0 / 0; #507 closed |
 | 82 | #570 shared vehicle movement and consist records with direct Rust Tick / #636 | `2e6958801e` | compiled C++ **-1,952** (261,556 to 259,604); callback slots 3,860 to 3,524; exports 1,446 to 1,426; rebound rows 410 to 376, shared-accessor 136 to 120, orphan exports 48 to 43; original retired +760 |
 | 83 | #666 tile, map, rail and road script APIs (first PR) / #691 | `c9de8d52ca` | compiled C++ **-716** (259,604 to 258,888); exports +68, callback slots -1; original retired +946 |
+| 84 | #501 typing batches 7 and 8 / #694, #695; batched as #696 | `6e686c2b9e` | 0 / tooling only / 0 / 0 |
+| 85 | #666 bridge, tunnel, marine and list script APIs (second PR) / #697 | `7fd398da1f` | compiled C++ **-130** (258,888 to 258,758); exports +15; #666 closed |
+| 86 | #699 per-commit Windows vcpkg binary cache / #701 (workflow change; bootstrap Full) | `ef51e41b80` | 0 / CI only / 0 / 0 |
 
 ## Work order
 
@@ -369,22 +373,33 @@ of an open branch comes first. A lower rank can run while a higher one waits.
 Scopes live in issues; per-PR changes live in each PR's steering comment.
 
 1. **Finish the open branches in readiness order.** Children check `.local/deep.lock.holders` before a native build, link or game, and pass `--jobs 3`. Rebuild an open PR's worktree only when its work resumes, after pulling it to the PR head. Briefs for PRs that change the Rust/C++ boundary require a CI `native` profile run before review and Full (stocktake 83's process lesson), not a local full set.
-   - **#574 / #628.** Scoped review accepted, then Full failed: the commands console read the moved command queue.
-     - `/root/fix-628-commands-console` reads the queue through a test-support-only entry and merges #636.
-     - It then runs the full default simulation set.
-     - A fresh scoped review covers the console fix and the #636 merge, then Full.
+   - **Integrations are stopped until integration 85's cadence is green.**
+     1. #702 (the `-Wunused-parameter` fix) merges.
+     2. The cadence reruns.
+     3. Then #692 and #628 merge, in that order.
+   - **#653 / #692**: reviewed, with four fixes. After root's MSVC pragma fix and base update it is in Full; it merges first.
+   - **#574 / #628.** All four CI-found harness fixes are scoped-reviewed: the wait-queue console, the #636 merge, the scheduler pause observer and the revision identity. It is in Full.
+     - After #692 merges, #628 resolves their `abi.rs`/`generate-abi.py` conflict, gets a scoped review of the resolution, then Full.
      - #667 and #668 wait for #628.
-   - **#653 / #692.** Checkpoint 1 accepted at -211, below the -270 to -400 estimate, because the typed C++ readers keep their fields. The remainder projects to about -250 to -270. `/root/industry-653-specs` finishes the PR body and marks it ready; then one review and Full.
-   - **#666, second PR**: bridge, tunnel, marine, infrastructure and the lists, projected -260 to -330. `/root/script-666-infrastructure` starts it from integration 83 and stops at one checkpoint.
+   - **#634 / #700** (station records): checkpoint 1 waits on native CI after the collector-validation fix. Its checkpoint 2 deletes about 110 station-field slots.
+   - **#565 item 2 / #698**:
+     - A.4 and A.5 (the #199 copies and #691's map-leaf callback overlaps) are under way;
+     - the TGP slope-path inlining regression is repaired in the PR, targeting TGP Ir at or below base;
+     - the tree settings cache (B.2) stays uncached, for fidelity.
+   - **#666**: closed after #691 (83) and #697 (85). The remainder is assigned:
+     - `ScriptInfrastructure` to the companies/groups owner;
+     - station tile lists to #634;
+     - industry tile lists to #635.
 2. **Type checking first (user, 2026-11-05).** Typing takes each slot an integration frees, ahead of the harness batch and new owners.
-   - Batches 1 to 6 integrated (#677, #680, #681, #682, #688, #689). Batches 7 and 8 are reviewed and batched as #696.
+   - Batches 1 to 8 integrated (#677, #680, #681, #682, #688, #689, #694 and #695 as #696).
    - Only `tools/test-generated-abi.py` then remains. It converts after #628 and #692 integrate, because both edit it.
    - Done when the ANN ignore list is empty and `ty.toml` covers all of `tools/`.
    - **#673's consolidation PR** follows typing. Inventory, scenario digests and comparison results must stay identical. It is the only harness refactor; no broader rewrite.
 3. **Maintenance and measurement.**
-   - **#686 (the user's request):** measure where time goes between a ready PR and its merge, including Windows x64's share of Full. `/root/measure-686-merge-latency` reports per-PR timelines, buckets and a ranked recommendation. Policy changes stay with root and the user. A table-rebuilding script under `tools/` goes to a coding agent only if the report recommends one.
-   - **TGP Ir attribution:** `/root/attribute-tgp-ir-rise` reports on #275. A repair batch follows if candidates credit at least 1% of TGP loop Ir.
-   - **#565 item 2** with #168's unfinished world-generation leaves, now that #570 has integrated:
+   - **#686 (the user's request):** measured; root's disposition is on the issue. The largest buckets were idle root time (29%) and waiting for root to arrange reviews (18%). The policy question of raising the five-child limit, or exempting Codex reviewers from it, is the user's.
+   - **#699**: integrated as #701 (86). Evidence comes from the first requested Windows run after the post-merge push, which must restore all 12 packages; root then closes #699.
+   - **TGP Ir attribution**: done on #275. The `tile_loop::run` gate repair went into #698. The vehicle record↔shell hops (0.44% to 0.51%) went to #656.
+   - **#565 item 2** (#698, work order item 1) with #168's unfinished world-generation leaves:
      - remove map fallbacks;
      - remove the remaining rail, crossing, depot, stop, water and tunnel leaves;
      - remove `tile_slope_z` and the per-tile world-generation services;
@@ -421,8 +436,8 @@ Scopes live in issues; per-PR changes live in each PR's steering comment.
 6. **#503 coverage continuation last:** first the bounded clock-preparation and sanitized native-test-support build fixes, then the 119 unfinished traces with provenance checks. Do not recollect merely to fill a slot. Deep execution remains user-only.
 
 Recurring:
-- After every second integration (next after 85), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip in the background ([speed](speed.md#instruction-projections)).
-- Run the platform cadence after every fifth integration; the next is after 85. A failure stops integrations. After two hosted-capacity macOS cancellations, use `CI_MACOS_HEAVY` as documented, and delete it afterwards.
+- After every second integration (next after 88), take stock under `/start-development` step 4, including the compiled-C++ rate and the baseline sizes. Profile the merged tip in the background ([speed](speed.md#instruction-projections)).
+- Run the platform cadence after every fifth integration; the next is after 90. A failure stops integrations: integration 85's is red, with the fix in #702. After two hosted-capacity macOS cancellations, use `CI_MACOS_HEAVY` as documented, and delete it afterwards.
 - This host's first quiet pass integrated with #676 (77). Further passes follow the [speed policy](speed.md#policy) triggers.
 - Deep checks run only on the user's request (user, 2026-10-31).
 - Preserve anchors, raw traces, frozen runtimes and failed outputs.
@@ -432,30 +447,32 @@ Excluded, with return conditions reconsidered on 2026-11-05; neither trigger is 
 - #12, #26, #41, #67, #71 and #83 are behavior improvements deferred until near-full reproduction under #513's original-default setting policy. #513 needs implementation when the first such improvement is accepted.
 - #650 (offline vendoring of crates.io dependencies) is a `deferred-improvement`, reconsidered after near-full reproduction or when the fork publishes release source packages.
 
-## Resume checkpoint (2026-11-05, stocktake 83)
+## Resume checkpoint (2026-11-06, stocktake 86)
 
-Root runs in Claude Code (`claude-opus-5-5`, xhigh). Code is `c9de8d52ca` (integration 83, #691), and `CI_ON_DEMAND` is `true`. `CI_MACOS_HEAVY` is unset. The next platform cadence and stocktake follow integration 85.
+Root runs in Claude Code (`claude-opus-5-5`, xhigh). Code is `ef51e41b80` (integration 86, #701), and `CI_ON_DEMAND` is `true`.
 
-The main checkout is on `rust-migration` and clean, with the integration-82 profile recorded. Root's docs commits use `.local/worktrees/root-docs-72`. Phase 2's next owners (#634, #635) wait for root's beside-or-inside placement decision, made from the integration-82 profile and the #566 drawing workload (work order item 4).
+**Integrations are stopped:** integration 85's platform cadence (run 42141025218) is red. The order is:
+1. merge #702;
+2. rerun `gh workflow run ci-build.yml --ref rust-migration`;
+3. when it is green, merge #692, then #628 after its conflict resolution.
+
+The next stocktake follows integration 88.
+
+The main checkout is on `rust-migration` and clean. Root's docs commits use `.local/worktrees/root-docs-72`.
 
 | Issue / PR | Head | Next action on resume | Checkout |
 | --- | --- | --- | --- |
-| #574 / #628 network protocol | `f8e393b9cb` | `/root/fix-628-commands-console`: full default simulation set on the #636-merged tree. Then a fresh scoped review of the console fix and merge, then Full. | its T3 worktree |
-| #653 / #692 industry specs | `0b4a612fda` | `/root/industry-653-specs` finishes the PR body and marks it ready. Then one review and Full. | its T3 worktree |
-| #501 / #696 typing batches 7 and 8 | `814778abdd` | Full is running. Merge it when green. | `.local/worktrees/integrate-694-695` |
-| #666 second PR | not yet opened | `/root/script-666-infrastructure` converts the remaining families to one checkpoint. | new T3 worktree |
-| #686 merge latency | analysis | `/root/measure-686-merge-latency` reports on #686. | shared |
-| TGP Ir attribution | analysis | `/root/attribute-tgp-ir-rise` reports on #275. | shared |
+| Cadence fix / #702 | see PR | Full is running. Merge it, rerun the cadence, and wait for green. | none |
+| #653 / #692 industry specs | `0080a174be` | Full is running. Merge it after the cadence is green. | its T3 worktree |
+| #574 / #628 network protocol | `be2e457629` | Full is running. After #692 merges: resolve `abi.rs`/`generate-abi.py`, get a scoped review of the resolution, then Full. | T3 worktree (`/root/fix-628-commands-console`) |
+| #634 / #700 station records | `bf8a08ff54` | `/root/station-634-records`: native CI, then the checkpoint 1 report and root's cost decision. | its T3 worktree |
+| #565 / #698 map leaves | `88688e5610`+ | `/root/map-565-item2`: A.4/A.5 and the slope repair, then report. | its T3 worktree |
+| #699 evidence | integrated (86) | Record the first requested Windows run's restore count and times, then close #699. | none |
 
 Preserve the following:
 - `t3-3b491ddb`, with five dirty files;
-- `t3-431c84b4`, with #565's 58 dirty files;
+- `t3-431c84b4`, with #565's earlier 58 dirty files;
 - `t3-d78d5f8b`, the native-fixture evidence;
 - the locked `.local/worktrees/profile-after68-664`;
-- the unchanged pinned original and the retained profiles:
-  - profile 64's run, `.local/simulation/20261102T135838Z-2198633`;
-  - the anchor-head profile, `.local/simulation/20261105T091320Z-509137`;
-  - the integration 80 and 82 profiles.
-
-  Housekeeping lists the first two for removal.
+- the unchanged pinned original and the retained profiles: profile 64's run, the anchor-head profile `20261105T091320Z-509137`, the integration 80, 82 and 85 profiles, and the base TGP profile `20261106T004411Z-2474065`;
 - this host's speed-pass bundle and anchors under `.local/speed-pass/`.

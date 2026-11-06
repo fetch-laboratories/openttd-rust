@@ -1,13 +1,21 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 ApiAccounting <- GSAccounting;
+ApiBridge <- GSBridge;
+ApiBridgeList <- GSBridgeList;
+ApiBridgeList_Length <- GSBridgeList_Length;
 ApiController <- GSController;
 ApiError <- GSError;
 ApiMap <- GSMap;
+ApiMarine <- GSMarine;
 ApiRail <- GSRail;
+ApiRailTypeList <- GSRailTypeList;
 ApiRoad <- GSRoad;
+ApiRoadTypeList <- GSRoadTypeList;
 ApiStation <- GSStation;
 ApiTestMode <- GSTestMode;
 ApiTile <- GSTile;
+ApiTileList <- GSTileList;
+ApiTunnel <- GSTunnel;
 require("probe.nut");
 
 class MigrationInfraGS extends GSController {

@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include "call_ffi.h"
 struct OpenTTDScriptHostServices;
+struct OpenTTDScriptList;
 extern "C" {
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_map_is_valid_tile(const OpenTTDScriptHostServices *, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_script_map_size(const OpenTTDScriptHostServices *);
@@ -49,5 +50,7 @@ int32_t OPENTTD_RUST_CALL openttd_rust_script_tile_owner(const OpenTTDScriptHost
 uint8_t OPENTTD_RUST_CALL openttd_rust_script_tile_has_transport_type(const OpenTTDScriptHostServices *, uint32_t, uint32_t);
 int64_t OPENTTD_RUST_CALL openttd_rust_script_tile_build_cost(uint32_t);
 uint32_t OPENTTD_RUST_CALL openttd_rust_script_tile_plant_tree_rectangle(const OpenTTDScriptHostServices *, uint32_t, int64_t, int64_t);
+void OPENTTD_RUST_CALL openttd_rust_script_tile_list_rectangle(const OpenTTDScriptHostServices *, OpenTTDScriptList *, uint32_t, uint32_t, uint8_t);
+void OPENTTD_RUST_CALL openttd_rust_script_tile_list_tile(const OpenTTDScriptHostServices *, OpenTTDScriptList *, uint32_t, uint8_t);
 }
 #endif /* OPENTTD_RUST_SCRIPT_TILE_FFI_H */
