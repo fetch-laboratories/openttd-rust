@@ -75,15 +75,28 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
 #define CHECK(condition) do { if (!(condition)) { std::fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #condition); std::abort(); } } while (0)
 
+static std::vector<std::string_view> &UncheckedLayouts()
+{
+	static std::vector<std::string_view> names{
+#include "abi-required-layouts.inc"
+	};
+	return names;
+}
+
 /* The one table of Rust ABI layouts for FFI types; native game structure lists stay in their tests. */
 static void Layout(const char *name, std::initializer_list<size_t> values)
 {
 	CHECK(AbiLayoutMismatch(name, values) == -1);
+	auto &pending = UncheckedLayouts();
+	auto item = std::find(pending.begin(), pending.end(), name);
+	CHECK(item != pending.end());
+	pending.erase(item);
 	std::printf("layout %s", name);
 	for (size_t value : values) std::printf(" %zu", value);
 	std::printf("\n");
@@ -91,23 +104,7 @@ static void Layout(const char *name, std::initializer_list<size_t> values)
 
 static void Layouts()
 {
-#include "abi-layout-probe.inc"
-#include "abi-layout-packet.inc"
-#include "abi-layout-record_test.inc"
-#include "abi-layout-grf_loading.inc"
-#include "abi-layout-act2.inc"
-#include "abi-layout-linkgraph_schedule.inc"
-#include "abi-layout-scheduler.inc"
-#include "abi-layout-maintenance.inc"
-#include "abi-layout-landscape.inc"
-#include "abi-layout-genworld.inc"
-#include "abi-layout-session.inc"
-#include "abi-layout-settings.inc"
-#include "abi-layout-script.inc"
-#include "abi-layout-vehicle.inc"
-#include "abi-layout-ground.inc"
-#include "abi-layout-train_state.inc"
-#include "abi-layout-content.inc"
+#include "abi-layouts.inc"
 
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::value), uint32_t>);
@@ -510,6 +507,8 @@ int main()
 {
 	Layouts();
 	for (void (*probe)() : AbiProbes()) probe();
+	for (auto name : UncheckedLayouts()) std::fprintf(stderr, "missing ABI layout: %s\n", name.data());
+	CHECK(UncheckedLayouts().empty());
 
 	/* Opaque owner, native size_t, immutable byte borrow and complete UTF-8 output. */
 	auto *townname = openttd_rust_townname_generate(1, UINT32_MAX);

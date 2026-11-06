@@ -350,6 +350,31 @@ def generate(root: Path = ROOT) -> dict[str, str]:
     output["abi-probes.inc"] = [
         f'#include "windows-abi/{path.name}"' for path in probes
     ]
+    # Some groups need component-local native declarations or warning scope.
+    # Keep those checks in their existing probes; register every other group in
+    # Layouts(), including groups introduced by future shared records.
+    component_layouts = {
+        name
+        for path in probes
+        for name in re.findall(
+            r'^\s*#include "(abi-layout-[^"\n]+\.inc)"', path.read_text(), re.M
+        )
+    }
+    output["abi-layouts.inc"] = [
+        f'#include "{name}"'
+        for name in sorted(output)
+        if name.startswith("abi-layout-") and name not in component_layouts
+    ]
+    # The native consumer removes each name only after its Layout check passes.
+    # A skipped probe, conditional include or duplicate cannot hide a missing
+    # schema-declared check.
+    output["abi-required-layouts.inc"] = [
+        f'"{name}",'
+        for name in sorted(
+            [record.cpp for entries in shared.values() for record in entries]
+            + [record.cpp for record in records]
+        )
+    ]
     return {name: "\n".join(lines) + "\n" for name, lines in output.items()}
 
 
