@@ -66,7 +66,7 @@ pub unsafe extern "C" fn openttd_rust_network_map_writer_drop(writer: *mut MapWr
 }
 
 /// # Safety
-/// The caller holds the writer mutex, has handled a null client with SlError, and supplies
+/// The caller holds the writer mutex, has handled a null client with `SlError`, and supplies
 /// `size` live bytes (null is permitted when empty). Services follow the packet contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_network_map_write(
@@ -140,12 +140,15 @@ pub unsafe extern "C" fn openttd_rust_network_map_finish(
             PACKET_SERVER_MAP_SIZE,
             crate::network_config::COMPAT_MTU,
         );
-        size.send_bytes(&((*writer).total_size as u32).to_le_bytes());
+        #[allow(clippy::cast_possible_truncation)] // PacketWriter narrows its native-size total.
+        let total = (*writer).total_size as u32;
+        size.send_bytes(&total.to_le_bytes());
         (*writer).packets.insert(0, size);
     }
 }
 
 impl MapReader {
+    #[allow(clippy::cast_possible_truncation)] // The join-progress field is a native uint32_t.
     pub(crate) fn append(&mut self, bytes: &[u8], check: extern "C" fn(bool)) -> u32 {
         check(self.read_bytes == 0);
         self.buffer.edit(|buffer| buffer.extend_from_slice(bytes));
@@ -221,7 +224,7 @@ mod tests {
             vec![17, 65534],
         ] {
             let total: usize = chunks.iter().sum();
-            let bytes: Vec<u8> = (0..total).map(|i| i as u8).collect();
+            let bytes: Vec<u8> = (0..=u8::MAX).cycle().take(total).collect();
             let mut writer = MapWriter::new(null_mut(), null_mut());
             let mut offset = 0;
             for &size in &chunks {
@@ -237,12 +240,12 @@ mod tests {
                 offset += size;
             }
             unsafe {
-                openttd_rust_network_map_finish(&raw mut writer, packet::test_services(), check)
+                openttd_rust_network_map_finish(&raw mut writer, packet::test_services(), check);
             };
             let packets = writer.packets.as_slice();
             let wire = |p: &State| unsafe { std::slice::from_raw_parts(p.data, p.size) };
             let mut size_packet = vec![0, 0, PACKET_SERVER_MAP_SIZE];
-            size_packet.extend_from_slice(&(total as u32).to_le_bytes());
+            size_packet.extend_from_slice(&u32::try_from(total).unwrap().to_le_bytes());
             assert_eq!(wire(&packets[0]), size_packet);
             assert_eq!(
                 wire(packets.last().unwrap()),
