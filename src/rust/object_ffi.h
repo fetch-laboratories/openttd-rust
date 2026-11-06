@@ -12,7 +12,6 @@
 #include <cstdint>
 #include <array>
 struct OpenTTDObjectHiddenArea { size_t index; uint32_t first_tile; };
-struct OpenTTDObjectPrice { uint32_t factor; int32_t shift; };
 #include "services_ffi.h"
 #include "object_resolver_ffi.h"
 #include "command_services_ffi.h"
@@ -32,29 +31,21 @@ enum class WaterClass : uint8_t;
 enum class ObjectAnimationTrigger : uint8_t;
 struct OpenTTDObjectGenerationFrame;
 struct OpenTTDObjectArea { uint32_t tile; uint16_t width, height; };
-struct OpenTTDObjectFootprint { uint16_t flags; uint8_t callbacks, size; };
-struct OpenTTDObjectClearance { uint16_t flags; uint8_t height; };
-struct OpenTTDObjectAdmission { uint8_t views, height; };
-struct OpenTTDObjectAreaShape { uint8_t views, size; };
-struct OpenTTDObjectGeneration { uint16_t flags; uint8_t amount, views; };
 struct OpenTTDObjectSlopeResult { uint16_t callback; std::array<int32_t, 16> registers; uint8_t version; };
 struct OpenTTDObjectStrings {
 	uint32_t too_many, no_town, edge_sub, water, edge, on_water, bridge, flat;
 	uint32_t own, built, limit, hq, object;
+	uint32_t transmitter, lighthouse, statue, land, headquarters;
 };
 enum class HouseZone : uint8_t;
 struct ResolverObject;
-struct OpenTTDObjectDefinition { uint32_t grfid; uint16_t local_id; bool has_file; };
 struct OpenTTDObjectQueryServices {
 	uint8_t (*random_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	uint32_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
-	OpenTTDObjectDefinition (*definition)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(definition);
 	uint32_t (*town_tile)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
 	bool (*version8)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version8);
-	uint16_t (*override_id)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_id);
 	uint32_t (*manhattan)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(manhattan);
 	uint32_t (*square)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(square);
-	uint16_t (*triggers)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(triggers);
 
 };
 const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept;
@@ -68,15 +59,6 @@ struct OpenTTDObjectServices {
 	const OpenTTDTownFoundingServices *founding;
 	const OpenTTDIndustryTileServices *industry_tiles;
 	OpenTTDObjectStrings strings;
-	size_t (*spec_count)() noexcept OPENTTD_SERVICE_DEFAULT(spec_count);
-	const ObjectSpec * (*spec)(uint16_t type) noexcept OPENTTD_SERVICE_DEFAULT(spec);
-	uint8_t (*callbacks)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(callbacks);
-	uint16_t (*flags)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(flags);
-	OpenTTDObjectFootprint (*footprint)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(footprint);
-	OpenTTDObjectClearance (*clearance)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(clearance);
-	OpenTTDObjectAreaShape (*area_shape)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(area_shape);
-	OpenTTDObjectAdmission (*admission)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(admission);
-	OpenTTDObjectGeneration (*generation)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(generation);
 	OpenTTDObjectRecord *(*allocate)() noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	uint8_t (*recolour)(uint8_t owner, bool two) noexcept OPENTTD_SERVICE_DEFAULT(recolour);
 	void (*colour_error)(const ObjectSpec *spec, uint16_t result) noexcept OPENTTD_SERVICE_DEFAULT(colour_error);
@@ -84,9 +66,8 @@ struct OpenTTDObjectServices {
 	void (*delete_object)(OpenTTDObjectRecord *o) noexcept OPENTTD_SERVICE_DEFAULT(delete_object);
 	const OpenTTDObjectQueryServices *query;
 	const OpenTTDObjectResolverServices *resolver;
+	int32_t (*price_shift)(const GRFFile *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price_shift);
 	void (*slope_error)(OpenTTDCommandCost *out, const OpenTTDObjectSlopeResult *result, const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);
-	OpenTTDObjectPrice (*build_price)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(build_price);
-	OpenTTDObjectPrice (*clear_price)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(clear_price);
 	void (*set_hq)(uint8_t owner, uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(set_hq);
 	void (*close_inspect)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
 	bool (*progress_set)(OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_set);

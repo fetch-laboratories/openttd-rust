@@ -345,29 +345,6 @@ static void FinaliseCanals()
 
 
 /**
- * Add all new objects to the object array. Object properties can be set at any
- * time in the GRF file, so we can only add an object spec to the object array
- * after the file has finished loading.
- */
-static void FinaliseObjectsArray()
-{
-	for (auto &file : _grf_files) {
-		for (auto &objectspec : file.objectspec) {
-			if (objectspec != nullptr && objectspec->grf_prop.HasGrfFile() && objectspec->IsEnabled()) {
-				_object_mngr.SetEntitySpec(std::move(*objectspec));
-			}
-		}
-
-		/* Won't be used again */
-		file.objectspec.clear();
-		file.objectspec.shrink_to_fit();
-	}
-
-	ObjectSpec::BindToClasses();
-}
-
-
-/**
  * Load a particular NewGRF.
  * @param config     The configuration of the to be loaded NewGRF.
  * @param stage      The loading stage of the NewGRF.
@@ -579,7 +556,7 @@ static void FinaliseBadges()
 		AddBadgeToSpecs(file.housespec, GSF_HOUSES, *badge);
 		if (openttd_rust_industry_file_badge(&file, false, badge->index)) badge->features.Set(GSF_INDUSTRIES);
 		if (openttd_rust_industry_file_badge(&file, true, badge->index)) badge->features.Set(GSF_INDUSTRYTILES);
-		AddBadgeToSpecs(file.objectspec, GSF_OBJECTS, *badge);
+		if (openttd_rust_object_file_badge(const_cast<RustObjectFileSpecs *>(&file.objectspec), badge->index)) badge->features.Set(GSF_OBJECTS);
 		AddBadgeToSpecs(file.airportspec, GSF_AIRPORTS, *badge);
 		AddBadgeToSpecs(file.airtspec, GSF_AIRPORTTILES, *badge);
 		AddBadgeToSpecs(file.roadstops, GSF_ROADSTOPS, *badge);

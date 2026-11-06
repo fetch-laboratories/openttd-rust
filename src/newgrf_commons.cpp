@@ -207,35 +207,9 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
 
 
 
-/**
- * Method to install the new object data in its proper slot
- * The slot assignment is internal of this method, since it requires
- * checking what is available
- * @param spec ObjectSpec that comes from the grf decoding process
- */
-void ObjectOverrideManager::SetEntitySpec(ObjectSpec &&spec)
+ObjectOverrideManager::ObjectOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) : OverrideManagerBase(offset, maximum, invalid)
 {
-	/* First step : We need to find if this object is already specified in the savegame data. */
-	ObjectType type = this->GetID(spec.grf_prop.local_id, spec.grf_prop.grfid);
-
-	if (type == this->invalid_id) {
-		/* Not found.
-		 * Or it has already been overridden, so you've lost your place.
-		 * Or it is a simple substitute.
-		 * We need to find a free available slot */
-		type = this->AddEntityID(spec.grf_prop.local_id, spec.grf_prop.grfid, OBJECT_TRANSMITTER);
-	}
-
-	if (type == this->invalid_id) {
-		GrfMsg(1, "Object.SetEntitySpec: Too many objects allocated. Ignoring.");
-		return;
-	}
-
-	extern std::vector<ObjectSpec> _object_specs;
-
-	/* Now that we know we can use the given id, copy the spec to its final destination. */
-	if (type >= _object_specs.size()) _object_specs.resize(type + 1);
-	_object_specs[type] = std::move(spec);
+	if (this == &_object_mngr) openttd_rust_object_register_manager(this->rust_owner);
 }
 
 /**

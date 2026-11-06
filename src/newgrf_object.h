@@ -43,7 +43,6 @@ using ObjectFlags = EnumBitSet<ObjectFlag, uint16_t>;
 
 static const uint8_t OBJECT_SIZE_1X1 = 0x11; ///< The value of a NewGRF's size property when the object is 1x1 tiles: low nibble for X, high nibble for Y.
 
-void ResetObjects();
 
 /** Class IDs for objects. */
 enum ObjectClassID : uint16_t {
@@ -58,24 +57,14 @@ DECLARE_INCREMENT_DECREMENT_OPERATORS(ObjectClassID)
  * @note If you change this struct, adopt the initialization of
  * default objects in table/object_land.h
  */
-struct ObjectSpec : NewGRFSpecBase<ObjectClassID> {
-	StandardGRFFileProps grf_prop; ///< Properties related the the grf file
-	/* Animation speed default differs from other features */
-	AnimationInfo<ObjectAnimationTriggers> animation{0, AnimationStatus::NoAnimation, 0, {}};  ///< Information about the animation.
-	StringID name;                ///< The name for this object.
-
-	LandscapeTypes climate; ///< In which climates is this object available?
-	uint8_t size;                   ///< The size of this objects; low nibble for X, high nibble for Y.
-	uint8_t build_cost_multiplier;  ///< Build cost multiplier per tile.
-	uint8_t clear_cost_multiplier;  ///< Clear cost multiplier per tile.
-	TimerGameCalendar::Date introduction_date; ///< From when can this object be built.
-	TimerGameCalendar::Date end_of_life_date;  ///< When can't this object be built anymore.
-	ObjectFlags flags;            ///< Flags/settings related to the object.
-	ObjectCallbackMasks callback_mask;         ///< Bitmask of requested/allowed callbacks.
-	uint8_t height;                 ///< The height of this structure, in heightlevels; max MAX_TILE_HEIGHT.
-	uint8_t views;                  ///< The number of views.
-	uint8_t generate_amount;        ///< Number of objects which are attempted to be generated per 256^2 map during world generation.
-	std::vector<BadgeID> badges;
+#include "rust/rust_vector.h"
+#include "abi-record-object_spec.h"
+#include "rust/object_spec_ffi.h"
+struct ObjectSpec : OpenTTDObjectSpecRecord {
+	ObjectSpec() { openttd_rust_object_spec_init(this); }
+	ObjectSpec(const ObjectSpec &other) { openttd_rust_object_spec_clone(this, &other); }
+	ObjectSpec &operator=(const ObjectSpec &other) { openttd_rust_object_spec_assign(this, &other); return *this; }
+	~ObjectSpec() { openttd_rust_object_spec_drop(this); }
 
 	/**
 	 * Test if this object is enabled.
@@ -103,12 +92,11 @@ struct ObjectSpec : NewGRFSpecBase<ObjectClassID> {
 	bool IsAvailable() const;
 	uint Index() const;
 
-	static const std::vector<ObjectSpec> &Specs();
+	static std::span<const ObjectSpec> Specs();
 	static size_t Count();
 	static const ObjectSpec *Get(ObjectType index);
 	static const ObjectSpec *GetByTile(TileIndex tile);
 
-	static void BindToClasses();
 };
 
 /** Object scope resolver. */

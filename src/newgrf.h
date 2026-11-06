@@ -17,6 +17,7 @@
 #include "newgrf_badge_type.h"
 #include "newgrf_callbacks.h"
 #include "newgrf_text_type.h"
+#include "rust/object_spec_ffi.h"
 
 /**
  * List of different canal 'features'.
@@ -114,7 +115,7 @@ struct GRFFile {
 
 	std::vector<std::unique_ptr<struct StationSpec>> stations;
 	std::vector<std::unique_ptr<struct HouseSpec>> housespec;
-	std::vector<std::unique_ptr<struct ObjectSpec>> objectspec;
+	RustObjectFileSpecs objectspec;
 	std::vector<std::unique_ptr<struct AirportSpec>> airportspec;
 	std::vector<std::unique_ptr<struct AirportTileSpec>> airtspec;
 	std::vector<std::unique_ptr<struct RoadStopSpec>> roadstops;

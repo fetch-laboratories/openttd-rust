@@ -49,10 +49,10 @@ impl<S, O> Clone for Entry<S, O> {
 #[repr(C)]
 pub struct Binding<S, O, E: Callback<S, O>> {
     pub entry: E::NativeEntry,
-    pub info: extern "C" fn(*const S) -> Info,
+    pub info: E::NativeInfo,
     pub callback: E::Native,
     pub sound: extern "C" fn(*const S, u8, u32),
-    pub version8: extern "C" fn(*const S) -> bool,
+    pub version8: E::NativeVersion,
     pub speed_error: extern "C" fn(*const S, u16, u16),
 }
 
@@ -60,6 +60,10 @@ pub struct Binding<S, O, E: Callback<S, O>> {
 pub trait Callback<S, O>: Sized {
     type Native;
     type NativeEntry;
+    type NativeInfo;
+    type NativeVersion;
+    fn info(a: &Services, b: &Binding<S, O, Self>, spec: *const S) -> Info;
+    fn version8(a: &Services, b: &Binding<S, O, Self>, spec: *const S) -> bool;
     fn entry(a: &Services, b: &Binding<S, O, Self>, tile: u32) -> Entry<S, O>;
     fn resolve(
         a: &Services,
@@ -77,6 +81,14 @@ macro_rules! native_callback {
     ($e:ty) => {
         impl<S, O> Callback<S, O> for $e {
             type NativeEntry = extern "C" fn(u32) -> Entry<S, O>;
+            type NativeInfo = extern "C" fn(*const S) -> Info;
+            type NativeVersion = extern "C" fn(*const S) -> bool;
+            fn info(_: &Services, b: &Binding<S, O, Self>, spec: *const S) -> Info {
+                (b.info)(spec)
+            }
+            fn version8(_: &Services, b: &Binding<S, O, Self>, spec: *const S) -> bool {
+                (b.version8)(spec)
+            }
             fn entry(_: &Services, b: &Binding<S, O, Self>, tile: u32) -> Entry<S, O> {
                 (b.entry)(tile)
             }
@@ -104,6 +116,22 @@ pub struct AirportExtra;
 impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for AirportExtra {
     type Native = ();
     type NativeEntry = ();
+    type NativeInfo = extern "C" fn(*const crate::animated_tile::AirportSpec) -> Info;
+    type NativeVersion = extern "C" fn(*const crate::animated_tile::AirportSpec) -> bool;
+    fn info(
+        _: &Services,
+        b: &Binding<crate::animated_tile::AirportSpec, crate::station::Station, Self>,
+        spec: *const crate::animated_tile::AirportSpec,
+    ) -> Info {
+        (b.info)(spec)
+    }
+    fn version8(
+        _: &Services,
+        b: &Binding<crate::animated_tile::AirportSpec, crate::station::Station, Self>,
+        spec: *const crate::animated_tile::AirportSpec,
+    ) -> bool {
+        (b.version8)(spec)
+    }
     fn entry(
         a: &Services,
         _: &Binding<crate::animated_tile::AirportSpec, crate::station::Station, Self>,
@@ -130,6 +158,59 @@ impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for Ai
         crate::newgrf_airport::tile_callback(cb, p1, p2, spec, object, tile, unsafe {
             &*a.airport_runtime
         })
+    }
+}
+
+#[derive(Default)]
+pub struct ObjectExtra;
+impl Callback<crate::objects::Spec, crate::objects::Object> for ObjectExtra {
+    type Native = ();
+    type NativeEntry = ();
+    type NativeInfo = ();
+    type NativeVersion = ();
+    fn entry(
+        _: &Services,
+        _: &Binding<crate::objects::Spec, crate::objects::Object, Self>,
+        tile: u32,
+    ) -> Entry<crate::objects::Spec, crate::objects::Object> {
+        unsafe { crate::objects::animation_entry(tile) }
+    }
+    fn info(
+        _: &Services,
+        _: &Binding<crate::objects::Spec, crate::objects::Object, Self>,
+        spec: *const crate::objects::Spec,
+    ) -> Info {
+        let spec = unsafe { &*spec };
+        Info {
+            speed: spec.animation.speed,
+            frames: spec.animation.frames,
+            looping: spec.animation.status == 1,
+            speed_callback: spec.callback_mask & 4 != 0,
+            next_callback: spec.callback_mask & 2 != 0,
+            random: spec.flags & (1 << 12) != 0,
+            enabled: true,
+        }
+    }
+    fn version8(
+        a: &Services,
+        _: &Binding<crate::objects::Spec, crate::objects::Object, Self>,
+        spec: *const crate::objects::Spec,
+    ) -> bool {
+        let file = unsafe { (*spec).grf_prop.grffile };
+        !file.is_null() && (a.shared().grf_file_version)(file) >= 8
+    }
+    fn resolve(
+        _: &Services,
+        _: &Binding<crate::objects::Spec, crate::objects::Object, Self>,
+        cb: u16,
+        p1: u32,
+        p2: u32,
+        spec: *const crate::objects::Spec,
+        object: *mut crate::objects::Object,
+        tile: u32,
+        _: Self,
+    ) -> u16 {
+        unsafe { crate::objects::animation_callback(cb, p1, p2, spec, object, tile) }
     }
 }
 
@@ -202,7 +283,7 @@ feature!(
     Object,
     crate::objects::Spec,
     crate::objects::Object,
-    i32,
+    ObjectExtra,
     TileFrame,
     CBID_OBJECT_ANIMATION_SPEED,
     CBID_OBJECT_ANIMATION_NEXT_FRAME
@@ -260,7 +341,7 @@ pub fn animate<F: Feature>(
     e: Entry<F::Spec, F::Owner>,
     tile: u32,
 ) {
-    let info = (b.info)(e.spec);
+    let info = F::Extra::info(a, b, e.spec);
     if !info.enabled {
         return;
     }
@@ -278,7 +359,7 @@ pub fn animate<F: Feature>(
             F::Extra::default(),
         );
         if cb != CALLBACK_FAILED {
-            if cb >= 0x100 && (b.version8)(e.spec) {
+            if cb >= 0x100 && F::Extra::version8(a, b, e.spec) {
                 (b.speed_error)(e.spec, F::SPEED.0, cb);
             }
             speed = (cb as u8).min(16);

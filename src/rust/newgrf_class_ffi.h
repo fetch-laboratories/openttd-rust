@@ -22,13 +22,21 @@ template <typename T> struct OpenTTDGRFClassServices {
 	StringID empty;
 	bool insert_empty;
 };
+struct OpenTTDObjectClassServices {
+	const OpenTTDObjectServices *object;
+	const OpenTTDGRFClassDefault *defaults;
+	size_t default_count;
+	uint16_t maximum;
+	StringID empty;
+	bool insert_empty;
+};
 extern "C" uint16_t openttd_rust_station_layout_key(uint8_t, uint8_t);
 extern "C" uint8_t openttd_rust_is_waypoint_class_abi(uint32_t);
 extern "C++" inline bool openttd_rust_is_waypoint_class(uint32_t a0) { return openttd_rust_is_waypoint_class_abi(a0) != 0; }
 using OpenTTDStationClassServices = OpenTTDGRFClassServices<StationSpec>;
 using OpenTTDRoadStopClassServices = OpenTTDGRFClassServices<RoadStopSpec>;
 using OpenTTDAirportClassServices = OpenTTDGRFClassServices<AirportSpec>;
-using OpenTTDObjectClassServices = OpenTTDGRFClassServices<ObjectSpec>;
+template <> struct OpenTTDGRFClassServices<ObjectSpec> : OpenTTDObjectClassServices {};
 template <typename T> struct RustGRFClassOps;
 extern "C" {
 void openttd_rust_station_class_reset(const OpenTTDGRFClassServices<StationSpec> *);

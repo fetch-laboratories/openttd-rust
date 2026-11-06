@@ -8,16 +8,20 @@
 #include "../newgrf_sound.h"
 /* Configuration is immutable during synchronous Action2 evaluation: resolvers
  * mutate PSA/owner state, not specs. Keep live GRF-version reads branch-local. */
+template <typename Binding, typename Spec>
+Binding RustAnimationPresentationBinding() noexcept
+{
+	return {.sound = RustSpecPlayTileSound<Spec>, .speed_error = RustSpecCallbackError<Spec, Spec>};
+}
 template <typename Spec, typename Obj, typename Extra>
 OpenTTDAnimationBinding<Spec, Obj, Extra> MakeRustAnimationBindingDirect(
 	OpenTTDAnimationEntry<Spec, Obj> (*entry)(uint32_t) noexcept,
 	OpenTTDAnimationInfo (*info)(const Spec *) noexcept,
 	uint16_t (*callback)(uint16_t, uint32_t, uint32_t, const Spec *, Obj *, uint32_t, Extra) noexcept) noexcept
 {
-	return {.entry = entry, .info = info, .callback = callback,
-		.sound = RustSpecPlayTileSound<Spec>,
-		.version8 = RustSpecGRFVersion8<Spec>,
-		.speed_error = RustSpecCallbackError<Spec, Spec>};
+	const auto presentation = RustAnimationPresentationBinding<OpenTTDAnimationBinding<Spec, Obj, Extra>, Spec>();
+	return {.entry = entry, .info = info, .callback = callback, .sound = presentation.sound,
+		.version8 = RustSpecGRFVersion8<Spec>, .speed_error = presentation.speed_error};
 }
 template <typename Spec, typename Obj, typename Extra,
 	uint16_t (*Callback)(CallbackID, uint32_t, uint32_t, const Spec *, Obj *, TileIndex, Extra)>

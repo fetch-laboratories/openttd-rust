@@ -106,7 +106,7 @@ pub unsafe extern "C" fn openttd_rust_grf_set_size(feature: u8, set: u32) -> u32
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_md5, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, config_filename, config_palette, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, error_after_translated_file, load_after, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, reset_objects, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, finalise_objects, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match, null_error, undefined };
+    "OpenTTDGrfLoadingServices" ["grf_loading"] => Services { clocks, finance, global, cargo, engine, houses, industry, airports, types, action2, text, bindings, stations, engine_range, config_md5, config_id, config_status, config_flags, set_status, set_flag, set_config_id, set_file_info, config_version, config_filename, config_palette, param_count, set_parameter, find_config, file_for_config, error, error_name, error_property, error_after_translated_file, load_after, read_byte, read_word, read_dword, read_block, position, seek, skip, container_version, sprite_offsets, skip_sprite_data, open_cached, open_temporary, scan_name, scan_info, set_pitch, set_width, set_rail_cost, set_misc, safe_change_info, reserve_change_info, feature_change_info, skip_act1, new_sprite_set, skip_act5, graphics_new, skip_act_a, sprite_replace, grf_load_error, grf_comment, skip_act11, grf_sound, skip_act12, load_font_glyph, static_grf_info, gradual_loading, signal_side, freight_trains, wagon_speed_limits, improved_load, inflation, starting_year, plane_speed, read_bounds, unexpected_sprite, multiple_action8, grm_failed, static_desync, list_property_too_long, invalid_id, force_disabled, colourmap_sprite, slopes_sprite, shore_sprite, generic, clock, set_clock, config_at, exists, init_file, too_many, clear_errors, reset_badges, reset_bridges, reset_prices, reset_currencies, object_classes, station_classes, airport_classes, roadstop_classes, reset_water_features, reset_faces, reset_files, reset_loaded_features, initialize_sounds, clean_spritegroups, finalise_strings, finalise_badges, finalise_canals, sort_industries, industry_legend, linkstats_legend, activate_shore, activate_tram_depot, aging_stops, finalise_prices, baseset_dir, newgrf_dir, assert_override_size, assert_file_match, null_error, undefined };
     "OpenTTDGrfEngineRange" ["grf_loading"] => EngineRange { offset, count };
     "OpenTTDGrfClock" ["grf_loading"] => Clock { ticks, display };
     "OpenTTDGrfExecution" ["grf_loading"] => Execution {
@@ -217,8 +217,7 @@ pub struct Services {
     reset_bridges: unsafe extern "C" fn(),
     reset_prices: unsafe extern "C" fn(),
     reset_currencies: unsafe extern "C" fn(),
-    object_classes: *const crate::newgrf_class::Services<crate::objects::Spec>,
-    reset_objects: unsafe extern "C" fn(),
+    object_classes: *const crate::newgrf_class::ObjectServices,
     station_classes: *const crate::newgrf_class::Services<crate::station_cmd::RailSpec>,
     airport_classes: *const crate::newgrf_class::Services<crate::station_cmd::AirportSpec>,
     roadstop_classes: *const crate::newgrf_class::Services<crate::station_cmd::RoadSpec>,
@@ -231,7 +230,6 @@ pub struct Services {
     finalise_strings: unsafe extern "C" fn(),
     finalise_badges: unsafe extern "C" fn(),
     finalise_canals: unsafe extern "C" fn(),
-    finalise_objects: unsafe extern "C" fn(),
     sort_industries: unsafe extern "C" fn(),
     industry_legend: unsafe extern "C" fn(),
     linkstats_legend: unsafe extern "C" fn(),
@@ -1492,7 +1490,8 @@ pub unsafe extern "C" fn openttd_rust_grf_reset(s: &Services) {
         crate::house_definition::reset(&*s.houses);
         crate::industry::definitions::reset(s.shared().settings().climate.read(), &*s.industry);
         crate::newgrf_class::object::reset(s.object_classes);
-        (s.reset_objects)();
+        crate::objects::bind_services((*s.object_classes).object);
+        crate::object_spec::reset(&*(*s.object_classes).object);
         crate::newgrf_class::station::reset(s.station_classes);
         crate::newgrf_class::airport::reset(s.airport_classes);
         crate::airport_definitions::reset(s.airports);
@@ -1538,7 +1537,7 @@ unsafe fn after_load(s: &Services) {
         (s.finalise_canals)();
         crate::house_definition::finalise(&*s.houses);
         crate::industry::definitions::finalise(&*s.industry);
-        (s.finalise_objects)();
+        crate::object_spec::finalise(s);
         crate::cargo_registry::openttd_rust_cargo_sort(s.cargo);
         (s.sort_industries)();
         (s.industry_legend)();

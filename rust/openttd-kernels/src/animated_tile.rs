@@ -57,7 +57,7 @@ pub struct Services {
     pub station: *const Binding<RailSpec, BaseStation, i32>,
     pub airport: *const Binding<AirportSpec, Station, crate::newgrf_animation_base::AirportExtra>,
     pub airport_runtime: *const crate::newgrf_airport::Services,
-    pub object: *const Binding<ObjectSpec, Object, i32>,
+    pub object: *const Binding<ObjectSpec, Object, crate::newgrf_animation_base::ObjectExtra>,
     pub roadstop: *const Binding<RoadSpec, BaseStation, i32>,
     pub state: extern "C" fn(u32) -> AnimatedTileState,
     pub set_state: extern "C" fn(u32, AnimatedTileState),
@@ -346,7 +346,7 @@ pub(crate) unsafe fn object_change(
         CBID_OBJECT_ANIMATION_TRIGGER.0,
         random,
         trigger,
-        0,
+        crate::newgrf_animation_base::ObjectExtra,
     );
 }
 #[unsafe(no_mangle)]
@@ -548,7 +548,7 @@ crate::abi::layouts! {
     "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, crate::newgrf_animation_base::AirportExtra> { info, sound, version8, speed_error };
-    "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, i32> { entry, info, callback, sound, version8, speed_error };
+    "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, crate::newgrf_animation_base::ObjectExtra> { sound, speed_error };
     "OpenTTDRoadStopAnimation" ["probe"] => Binding<RoadSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDHouseAnimationEntry" ["probe"] => Entry<HouseSpec, TownHandle> { spec, object };
     "OpenTTDIndustryAnimationEntry" ["probe"] => Entry<IndustrySpec, IndustryShell> { spec, object };

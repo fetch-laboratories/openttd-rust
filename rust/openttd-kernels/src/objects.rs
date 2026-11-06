@@ -161,13 +161,6 @@ use crate::services::{
 };
 use std::ptr;
 
-#[repr(C)]
-pub struct Price {
-    pub factor: u32,
-    /// The spec GRF's `price_base_multipliers[price]`, zero without a GRF file.
-    pub shift: i32,
-}
-
 /// Native `ObjectAnimationTrigger : uint8_t` carrier.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -178,10 +171,7 @@ impl AnimationTrigger {
     const TILE_LOOP_NORTH: Self = Self(2);
 }
 
-#[repr(C)]
-pub struct Spec {
-    _private: [u8; 0],
-}
+pub use crate::object_spec::Spec;
 crate::abi::shared_records! {
     fn abi_record;
     "OpenTTDObjectRecord" ["object_type"] => pub struct Object {
@@ -301,6 +291,11 @@ pub struct Strings {
     pub limit: u32,
     pub hq: u32,
     pub object: u32,
+    pub transmitter: u32,
+    pub lighthouse: u32,
+    pub statue: u32,
+    pub land: u32,
+    pub headquarters: u32,
 }
 #[repr(C)]
 pub struct ObjectServices {
@@ -313,15 +308,6 @@ pub struct ObjectServices {
     pub founding: *const crate::town::founding::FoundingServices,
     pub industry_tiles: *const crate::industry::TileServices,
     pub strings: Strings,
-    pub spec_count: unsafe extern "C" fn() -> usize,
-    pub spec: unsafe extern "C" fn(u16) -> *const Spec,
-    pub callbacks: unsafe extern "C" fn(*const Spec) -> u8,
-    pub flags: unsafe extern "C" fn(*const Spec) -> u16,
-    pub footprint: unsafe extern "C" fn(*const Spec) -> Footprint,
-    pub clearance: unsafe extern "C" fn(u32) -> Clearance,
-    pub area_shape: unsafe extern "C" fn(*const Spec) -> AreaShape,
-    pub admission: unsafe extern "C" fn(*const Spec) -> Admission,
-    pub generation: unsafe extern "C" fn(*const Spec) -> Generation,
     pub allocate: unsafe extern "C" fn() -> *mut Object,
     pub recolour: unsafe extern "C" fn(u8, bool) -> u8,
     pub colour_error: unsafe extern "C" fn(*const Spec, u16) -> (),
@@ -329,9 +315,8 @@ pub struct ObjectServices {
     pub delete_object: unsafe extern "C" fn(*mut Object) -> (),
     pub query: *const QueryServices,
     pub resolver: *const ResolverServices,
+    pub price_shift: unsafe extern "C" fn(*const std::ffi::c_void, u32) -> i32,
     pub slope_error: unsafe extern "C" fn(*mut CommandCost, *const SlopeResult, *const Spec) -> (),
-    pub build_price: unsafe extern "C" fn(*const Spec) -> Price,
-    pub clear_price: unsafe extern "C" fn(*const Spec) -> Price,
     pub set_hq: unsafe extern "C" fn(u8, u32) -> (),
     pub close_inspect: unsafe extern "C" fn(u32) -> (),
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
@@ -373,22 +358,13 @@ pub struct Resolver {
     _private: [u8; 0],
 }
 #[repr(C)]
-pub struct Definition {
-    pub grfid: u32,
-    pub local_id: u16,
-    pub has_file: bool,
-}
-#[repr(C)]
 pub struct QueryServices {
     pub random_bits: unsafe extern "C" fn(u32) -> u8,
     pub index: unsafe extern "C" fn(u32) -> u32,
-    pub definition: unsafe extern "C" fn(*const Spec) -> Definition,
     pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
     pub version8: unsafe extern "C" fn(*const Resolver) -> bool,
-    pub override_id: unsafe extern "C" fn(u16, u32) -> u16,
     pub manhattan: unsafe extern "C" fn(u32, u32) -> u32,
     pub square: unsafe extern "C" fn(u32, u32) -> u32,
-    pub triggers: unsafe extern "C" fn(*const Spec) -> u16,
 }
 
 pub(crate) unsafe fn by_tile(shared: &Services, query: &QueryServices, tile: u32) -> *mut Object {
@@ -493,8 +469,8 @@ impl<'a> World<'a> {
         }
         // SAFETY: object tile owns a live native object and specification.
         let object = unsafe { self.object_at(tile) };
-        let d = unsafe { (self.query().definition)((self.s.spec)((*object).r#type)) };
-        if d.has_file && d.grfid == grfid {
+        let d = unsafe { (*crate::object_spec::get((*object).r#type)).grf_prop };
+        if !d.grffile.is_null() && d.grfid == grfid {
             u32::from(d.local_id) | u32::from(unsafe { (*object).view }) << 16
         } else {
             0xfffe
@@ -531,13 +507,12 @@ impl<'a> World<'a> {
         best
     }
     fn count_distance(&self, local_id: u8, grfid: u32, tile: u32, current: *mut Object) -> u32 {
-        let q = self.query();
-        // SAFETY: resolver and override manager are native and remain live.
+        // SAFETY: serialized entry pins the canonical override manager.
         let kind = unsafe {
             match crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) as u32 {
                 0 => u16::from(local_id),
-                u32::MAX => (q.override_id)(u16::from(local_id), grfid),
-                other => (q.override_id)(u16::from(local_id), other),
+                u32::MAX => crate::object_spec::definition_id(u16::from(local_id), grfid),
+                other => crate::object_spec::definition_id(u16::from(local_id), other),
             }
         };
         if kind >= 64000 {
@@ -572,7 +547,7 @@ impl<'a> World<'a> {
                     0x44 => return u32::from((self.shared.current_company)()),
                     0x48 => return u32::from(view),
                     0x7a => {
-                        return (self.shared.specs().object().badges)(spec).resolve(
+                        return (*spec).badges.badge_view().resolve(
                             self.shared,
                             ro.cast(),
                             parameter,
@@ -639,11 +614,10 @@ impl<'a> World<'a> {
                     tile,
                     obj,
                 ),
-                0x7a => (self.shared.specs().object().badges)(spec).resolve(
-                    self.shared,
-                    ro.cast(),
-                    parameter,
-                ),
+                0x7a => (*spec)
+                    .badges
+                    .badge_view()
+                    .resolve(self.shared, ro.cast(), parameter),
                 _ => Self::unhandled(variable, available),
             }
         }
@@ -664,7 +638,7 @@ impl<'a> World<'a> {
         // SAFETY: only immutable service tables are borrowed across the callback.
         // Native object/spec pointers are opaque; no owner-state borrow survives it.
         unsafe {
-            if (self.query().triggers)(spec) & (1_u16 << trigger.0) == 0 {
+            if (*spec).animation.triggers & (1_u16 << trigger.0) == 0 {
                 return false;
             }
             crate::animated_tile::object_change(spec, obj, tile, random, u32::from(trigger.0));
@@ -685,7 +659,7 @@ impl<'a> World<'a> {
         // SAFETY: native spec and object are live; original area is captured before
         // callbacks and no borrow into either record crosses a callback.
         unsafe {
-            if (self.query().triggers)(spec) & (1_u16 << trigger.0) == 0 {
+            if (*spec).animation.triggers & (1_u16 << trigger.0) == 0 {
                 return false;
             }
             let mut ret = true;
@@ -740,13 +714,21 @@ impl<'a> World<'a> {
     }
     /// Original `ObjectSpec::GetBuildCost`; native storage supplies its factors.
     unsafe fn get_build_cost(&self, spec: *const Spec) -> i64 {
-        let price = unsafe { (self.s.build_price)(spec) };
-        get_price(PR_BUILD_OBJECT, price.factor, price.shift, 0)
+        get_price(
+            PR_BUILD_OBJECT,
+            u32::from(unsafe { (*spec).build_cost_multiplier }),
+            unsafe { (self.s.price_shift)((*spec).grf_prop.grffile, PR_BUILD_OBJECT) },
+            0,
+        )
     }
     /// Original `ObjectSpec::GetClearCost`; native storage supplies its factors.
     unsafe fn get_clear_cost(&self, spec: *const Spec) -> i64 {
-        let price = unsafe { (self.s.clear_price)(spec) };
-        get_price(PR_CLEAR_OBJECT, price.factor, price.shift, 0)
+        get_price(
+            PR_CLEAR_OBJECT,
+            u32::from(unsafe { (*spec).clear_cost_multiplier }),
+            unsafe { (self.s.price_shift)((*spec).grf_prop.grffile, PR_CLEAR_OBJECT) },
+            0,
+        )
     }
     fn current(&self) -> u8 {
         (self.shared.current_company)()
@@ -769,8 +751,12 @@ impl<'a> World<'a> {
     }
     fn build(&self, kind: u16, tile: u32, owner: u8, town: *const TownHandle, view: u8) {
         unsafe {
-            let spec = (self.s.spec)(kind);
-            let shape = (self.s.footprint)(spec);
+            let spec = crate::object_spec::get(kind);
+            let shape = Footprint {
+                flags: (*spec).flags,
+                callbacks: (*spec).callback_mask,
+                size: (*spec).size,
+            };
             let area = Self::footprint(tile, shape, view);
             let town = if town.is_null() {
                 crate::town::spatial::calc_closest(self.shared, tile, u32::MAX)
@@ -907,8 +893,8 @@ impl<'a> World<'a> {
     fn clear(&self, out: Cost<'_>, tmp: Cost<'_>, tile: u32, flags: u16) {
         unsafe {
             let object = self.identity(tile);
-            let spec = (self.s.spec)(object.kind);
-            let flags_spec = (self.s.flags)(spec);
+            let spec = crate::object_spec::get(object.kind);
+            let flags_spec = (*spec).flags;
             let price = self
                 .get_clear_cost(spec)
                 .saturating_mul(i64::from(object.area.w))
@@ -1014,12 +1000,15 @@ impl<'a> World<'a> {
     ) {
         unsafe {
             out.set(0);
-            if usize::from(kind) >= (self.s.spec_count)() {
+            if usize::from(kind) >= crate::object_spec::count() {
                 out.error(INVALID_STRING_ID);
                 return;
             }
-            let spec = (self.s.spec)(kind);
-            let admission = (self.s.admission)(spec);
+            let spec = crate::object_spec::get(kind);
+            let admission = Admission {
+                views: (*spec).views,
+                height: (*spec).height,
+            };
             if (self.s.normal)() && !available(self.s, spec) && !((*self.s.town).generating_world)()
             {
                 out.error(INVALID_STRING_ID);
@@ -1031,7 +1020,11 @@ impl<'a> World<'a> {
                 out.error(INVALID_STRING_ID);
                 return;
             }
-            let shape = (self.s.footprint)(spec);
+            let shape = Footprint {
+                flags: (*spec).flags,
+                callbacks: (*spec).callback_mask,
+                size: (*spec).size,
+            };
             if shape.flags & SCENEDIT != 0
                 && ((!((*self.s.town).generating_world)()
                     && !((*self.s.town).environment.editor)())
@@ -1156,9 +1149,7 @@ impl<'a> World<'a> {
                         if result.callback != CALLBACK_FAILED {
                             let r = resolver_services(self.s);
                             result.version =
-                                ((*r.shared).grf_file_version)(
-                                    ((*r.shared).specs().object().file)(spec),
-                                );
+                                ((*r.shared).grf_file_version)((*spec).grf_prop.grffile);
                         }
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
@@ -1331,12 +1322,17 @@ impl World<'_> {
     ) {
         unsafe {
             let map_y = (self.shared.map_max_y)() + 1;
-            if start >= self.map.size_x() * map_y || usize::from(kind) >= (self.s.spec_count)() {
+            if start >= self.map.size_x() * map_y
+                || usize::from(kind) >= crate::object_spec::count()
+            {
                 out.error(INVALID_STRING_ID);
                 return;
             }
-            let spec = (self.s.spec)(kind);
-            let shape = (self.s.area_shape)(spec);
+            let spec = crate::object_spec::get(kind);
+            let shape = AreaShape {
+                views: (*spec).views,
+                size: (*spec).size,
+            };
             if view >= shape.views || shape.size != OBJECT_SIZE_1X1 {
                 out.error(INVALID_STRING_ID);
                 return;
@@ -1404,8 +1400,8 @@ impl World<'_> {
                     && !is_steep_slope(slope)
                     && (self.shared.tile_max_z)(tile) == z + get_slope_max_z(slope)
                 {
-                    let spec = (self.s.spec)(kind);
-                    let callbacks = (self.s.callbacks)(spec);
+                    let spec = crate::object_spec::get(kind);
+                    let callbacks = (*spec).callback_mask;
                     if if callbacks & 32 != 0 {
                         {
                             let result = self.callback(
@@ -1421,7 +1417,7 @@ impl World<'_> {
                             );
                             result == CALLBACK_FAILED
                                 || !(self.shared.grf_boolean_callback)(
-                                    (self.shared.specs().object().file)(spec),
+                                    (*spec).grf_prop.grffile,
                                     CBID_OBJECT_AUTOSLOPE,
                                     result,
                                 )
@@ -1441,7 +1437,10 @@ impl World<'_> {
     fn build_above(&self, out: Cost<'_>, tile: u32, flags: u16, height: i32) {
         crate::witness::hit(crate::witness::OBJECT_BUILD_ABOVE);
         unsafe {
-            let clearance = (self.s.clearance)(tile);
+            let clearance = Clearance {
+                flags: (*crate::object_spec::get(self.object_kind(tile))).flags,
+                height: (*crate::object_spec::get(self.object_kind(tile))).height,
+            };
             if clearance.flags & UNDER_BRIDGE != 0
                 && (self.shared.tile_max_z)(tile) + i32::from(clearance.height) <= height
             {
@@ -1500,11 +1499,11 @@ impl World<'_> {
                     continue;
                 }
                 // Original policy resolves the spec by the object's tile, not cached type.
-                let spec = (self.s.spec)(self.object_kind(tile));
-                if (self.s.callbacks)(spec) & 8 != 0 {
+                let spec = crate::object_spec::get(self.object_kind(tile));
+                if (*spec).callback_mask & 8 != 0 {
                     continue;
                 }
-                let flags = (self.s.flags)(spec);
+                let flags = (*spec).flags;
                 (*object).colour = (self.s.recolour)(company, flags & TWO_CC != 0);
             }
         }
@@ -1550,8 +1549,8 @@ impl World<'_> {
         unsafe {
             let object = self.object_at(tile);
             let kind = (*object).r#type;
-            let spec = (self.s.spec)(kind);
-            let flags = (self.s.flags)(spec);
+            let spec = crate::object_spec::get(kind);
+            let flags = (*spec).flags;
             let north = if flags & ANIMATION != 0 {
                 (*object).location.tile
             } else {
@@ -1719,7 +1718,7 @@ impl World<'_> {
         aux: Cost<'_>,
     ) -> bool {
         unsafe {
-            if !(self.s.progress_set)(frame, (self.s.spec_count)() as u32) {
+            if !(self.s.progress_set)(frame, crate::object_spec::count() as u32) {
                 return false;
             }
             let maxx = (self.shared.map_max_x)();
@@ -1743,9 +1742,13 @@ impl World<'_> {
                     }
                 }
             }
-            for kind in 0..(self.s.spec_count)() {
-                let spec = (self.s.spec)(kind as u16);
-                let generation = (self.s.generation)(spec);
+            for kind in 0..crate::object_spec::count() {
+                let spec = crate::object_spec::get(kind as u16);
+                let generation = Generation {
+                    flags: (*spec).flags,
+                    amount: (*spec).generate_amount,
+                    views: (*spec).views,
+                };
                 if !was_available(self.s, spec) || generation.amount == 0 {
                     continue;
                 }
@@ -1917,33 +1920,15 @@ pub struct ObjectScope {
     pub view: u8,
 }
 #[repr(C)]
-pub struct Eligibility {
-    pub flags: u16,
-    pub climate: u8,
-    pub views: u8,
-}
-#[repr(C)]
-pub struct Lifetime {
-    pub introduction: i32,
-    pub end: i32,
-}
-#[repr(C)]
 pub struct ResolverServices {
     pub shared: *const crate::services::Services,
-    pub views: unsafe extern "C" fn(*const Spec) -> u8,
-    pub eligibility: unsafe extern "C" fn(*const Spec) -> Eligibility,
-    pub introduction: unsafe extern "C" fn(*const Spec) -> i32,
-    pub lifetime: unsafe extern "C" fn(*const Spec) -> Lifetime,
     pub town_scope:
         unsafe extern "C" fn(*mut Resolver, *const TownHandle, bool) -> *mut std::ffi::c_void,
     pub base_scope: unsafe extern "C" fn(*mut Resolver, u8, u8) -> *mut std::ffi::c_void,
     pub evaluate: unsafe extern "C" fn(*const ObjectScope, u16, u32, u32, *mut i32, usize) -> u16,
 }
 static INVOCATIONS: GameState<*const ObjectServices> = GameState::new(ptr::null());
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_services_exchange(
-    s: *const ObjectServices,
-) -> *const ObjectServices {
+pub(crate) unsafe fn bind_services(s: *const ObjectServices) -> *const ObjectServices {
     INVOCATIONS.exchange(s)
 }
 fn invocation_services<'a>() -> &'a ObjectServices {
@@ -1964,7 +1949,6 @@ pub extern "C" fn openttd_rust_object_scope_init(
 ) -> ObjectScope {
     ObjectScope {
         object,
-        spec,
         parent: ptr::null(),
         tile,
         view,
@@ -1972,35 +1956,19 @@ pub extern "C" fn openttd_rust_object_scope_init(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_file(spec: *const Spec) -> *const std::ffi::c_void {
-    unsafe {
-        ((*resolver_services(invocation_services()).shared)
-            .specs()
-            .object()
-            .file)(spec)
-    }
+    unsafe { (*spec).grf_prop.grffile }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_root(
     context: *const ObjectScope,
 ) -> *const std::ffi::c_void {
     let ObjectScope { object, spec, .. } = unsafe { *context };
-    unsafe {
-        ((*resolver_services(invocation_services()).shared)
-            .specs()
-            .object()
-            .standard()
-            .sprite_group)(spec, !object.is_null())
-    }
+    unsafe { (*spec).grf_prop.sprite_group(!object.is_null()) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_debug_id(context: *const ObjectScope) -> u32 {
     let spec = unsafe { (*context).spec };
-    unsafe {
-        u32::from(((*resolver_services(invocation_services()).shared)
-            .specs()
-            .object()
-            .local_id)(spec))
-    }
+    unsafe { u32::from((*spec).grf_prop.local_id) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_object_feature() -> u8 {
@@ -2081,15 +2049,13 @@ pub unsafe extern "C" fn openttd_rust_object_callback(
         )
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_animation_callback(
+pub(crate) unsafe fn animation_callback(
     callback: u16,
     param1: u32,
     param2: u32,
     spec: *const Spec,
     object: *mut Object,
     tile: u32,
-    _extra: i32,
 ) -> u16 {
     unsafe {
         openttd_rust_object_callback(
@@ -2109,14 +2075,14 @@ pub unsafe extern "C" fn openttd_rust_object_animation_callback(
 fn is_enabled(views: u8) -> bool {
     views > 0
 }
-fn enabled(s: &ObjectServices, spec: *const Spec) -> bool {
-    is_enabled(unsafe { (resolver_services(s).views)(spec) })
+fn enabled(_s: &ObjectServices, spec: *const Spec) -> bool {
+    unsafe { (*spec).enabled() }
 }
 fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
-    let policy = unsafe { (resolver_services(s).eligibility)(spec) };
-    is_enabled(policy.views)
-        && policy.climate & (1 << (unsafe { &*s.town }.climate)()) != 0
-        && policy.flags
+    let (flags, climate, views) = unsafe { ((*spec).flags, (*spec).climate, (*spec).views) };
+    is_enabled(views)
+        && climate & (1 << (unsafe { &*s.town }.climate)()) != 0
+        && flags
             & if !(unsafe { &*s.town }.environment.editor)()
                 && !(unsafe { &*s.town }.generating_world)()
             {
@@ -2128,16 +2094,14 @@ fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
 }
 fn was_available(s: &ObjectServices, spec: *const Spec) -> bool {
     ever_available(s, spec)
-        && crate::timer_game_common::calendar_date().0
-            > unsafe { (resolver_services(s).introduction)(spec) }
+        && crate::timer_game_common::calendar_date().0 > unsafe { (*spec).introduction_date }
 }
 fn available(s: &ObjectServices, spec: *const Spec) -> bool {
     if !was_available(s, spec) {
         return false;
     }
-    let dates = unsafe { (resolver_services(s).lifetime)(spec) };
-    crate::timer_game_common::calendar_date().0 < dates.end
-        || dates.end < dates.introduction.wrapping_add(365)
+    let (introduction, end) = unsafe { ((*spec).introduction_date, (*spec).end_of_life_date) };
+    crate::timer_game_common::calendar_date().0 < end || end < introduction.wrapping_add(365)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_enabled_abi(
@@ -2457,36 +2421,10 @@ crate::abi::layouts! {
         index,
         first_tile,
     };
-    "OpenTTDObjectPrice" ["landscape"] => Price {
-        factor,
-        shift,
-    };
     "OpenTTDObjectArea" ["landscape"] => TileArea {
         tile,
         w => width,
         h => height,
-    };
-    "OpenTTDObjectFootprint" ["landscape"] => Footprint {
-        flags,
-        callbacks,
-        size,
-    };
-    "OpenTTDObjectClearance" ["landscape"] => Clearance {
-        flags,
-        height,
-    };
-    "OpenTTDObjectAdmission" ["landscape"] => Admission {
-        views,
-        height,
-    };
-    "OpenTTDObjectAreaShape" ["landscape"] => AreaShape {
-        views,
-        size,
-    };
-    "OpenTTDObjectGeneration" ["landscape"] => Generation {
-        flags,
-        amount,
-        views,
     };
     "OpenTTDObjectSlopeResult" ["landscape"] => SlopeResult {
         callback,
@@ -2507,26 +2445,20 @@ crate::abi::layouts! {
         limit,
         hq,
         object,
-    };
-    "OpenTTDObjectDefinition" ["landscape"] => Definition {
-        grfid,
-        local_id,
-        has_file,
+        transmitter, lighthouse, statue, land, headquarters,
     };
     "OpenTTDObjectQueryServices" ["landscape"] => QueryServices {
         random_bits,
         index,
-        definition,
+
         town_tile,
         version8,
-        override_id,
+
         manhattan,
         square,
-        triggers,    };
+    };
     "OpenTTDObjectScope" ["landscape"] => ObjectScope { object, spec, parent, tile, view };
-    "OpenTTDObjectEligibility" ["landscape"] => Eligibility { flags, climate, views };
-    "OpenTTDObjectLifetime" ["landscape"] => Lifetime { introduction, end };
-    "OpenTTDObjectResolverServices" ["landscape"] => ResolverServices { shared, views, eligibility, introduction, lifetime, town_scope, base_scope, evaluate };
+    "OpenTTDObjectResolverServices" ["landscape"] => ResolverServices { shared, town_scope, base_scope, evaluate };
     "OpenTTDObjectServices" ["landscape"] => ObjectServices {
         shared,
         cost,
@@ -2537,15 +2469,6 @@ crate::abi::layouts! {
         founding,
         industry_tiles,
         strings,
-        spec_count,
-        spec,
-        callbacks,
-        flags,
-        footprint,
-        clearance,
-        area_shape,
-        admission,
-        generation,
         allocate,
         recolour,
         colour_error,
@@ -2553,9 +2476,8 @@ crate::abi::layouts! {
         delete_object,
         query,
         resolver,
+        price_shift,
         slope_error,
-        build_price,
-        clear_price,
         set_hq,
         close_inspect,
         progress_set,
@@ -2613,5 +2535,24 @@ mod tests {
         assert_eq!(openttd_rust_object_areas_find(76, 6), usize::MAX);
         clear_areas();
         openttd_rust_object_counts_reset();
+    }
+}
+
+pub(crate) unsafe fn animation_entry(
+    tile: u32,
+) -> crate::newgrf_animation_base::Entry<Spec, Object> {
+    unsafe {
+        let s = invocation_services();
+        let world = World::new::<false>(s);
+        let object = world.object_at(tile);
+        let spec = crate::object_spec::get((*object).r#type);
+        if (*spec).flags & ANIMATION == 0 {
+            crate::newgrf_animation_base::Entry {
+                spec: ptr::null(),
+                object: ptr::null_mut(),
+            }
+        } else {
+            crate::newgrf_animation_base::Entry { spec, object }
+        }
     }
 }

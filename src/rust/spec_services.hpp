@@ -81,7 +81,6 @@ static constexpr OpenTTDNewGRFSpecs _rust_newgrf_specs{
 	.airport = &_rust_spec_services<AirportSpec, uint8_t>,
 	.airport_tile = &_rust_spec_services<AirportTileSpec, uint8_t>,
 	.house = &_rust_spec_services<HouseSpec, uint8_t>,
-	.object = &_rust_spec_services<ObjectSpec, uint16_t>,
 	.road_stop = &_rust_spec_services<RoadStopSpec, uint16_t>,
 	.station = &_rust_spec_services<StationSpec, uint16_t>,
 };

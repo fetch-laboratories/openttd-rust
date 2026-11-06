@@ -280,10 +280,7 @@ class ObjectOverrideManager : public OverrideManagerBase {
 protected:
 	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
-	ObjectOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
-			OverrideManagerBase(offset, maximum, invalid) {}
-
-	void SetEntitySpec(ObjectSpec &&spec);
+	ObjectOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid);
 };
 
 extern HouseOverrideManager _house_mngr;

@@ -149,7 +149,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*reset_prices)() noexcept OPENTTD_SERVICE_DEFAULT(reset_prices);
 	void (*reset_currencies)() noexcept OPENTTD_SERVICE_DEFAULT(reset_currencies);
 	const OpenTTDObjectClassServices *object_classes;
-	void (*reset_objects)() noexcept OPENTTD_SERVICE_DEFAULT(reset_objects);
 	const OpenTTDStationClassServices *station_classes;
 	const OpenTTDAirportClassServices *airport_classes;
 	const OpenTTDRoadStopClassServices *roadstop_classes;
@@ -162,7 +161,6 @@ struct OpenTTDGrfLoadingServices {
 	void (*finalise_strings)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_strings);
 	void (*finalise_badges)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_badges);
 	void (*finalise_canals)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_canals);
-	void (*finalise_objects)() noexcept OPENTTD_SERVICE_DEFAULT(finalise_objects);
 	void (*sort_industries)() noexcept OPENTTD_SERVICE_DEFAULT(sort_industries);
 	void (*industry_legend)() noexcept OPENTTD_SERVICE_DEFAULT(industry_legend);
 	void (*linkstats_legend)() noexcept OPENTTD_SERVICE_DEFAULT(linkstats_legend);

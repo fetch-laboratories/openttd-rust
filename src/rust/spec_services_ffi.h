@@ -51,7 +51,6 @@ template <typename Spec, typename Triggers> struct OpenTTDSpecServices {
 using OpenTTDAirportSpecServices = OpenTTDSpecServices<AirportSpec, uint8_t>;
 using OpenTTDAirportTileSpecServices = OpenTTDSpecServices<AirportTileSpec, uint8_t>;
 using OpenTTDHouseSpecServices = OpenTTDSpecServices<HouseSpec, uint8_t>;
-using OpenTTDObjectSpecServices = OpenTTDSpecServices<ObjectSpec, uint16_t>;
 using OpenTTDRoadStopSpecServices = OpenTTDSpecServices<RoadStopSpec, uint16_t>;
 using OpenTTDStationSpecServices = OpenTTDSpecServices<StationSpec, uint16_t>;
 using OpenTTDAirportTileSpecAnimation = OpenTTDSpecAnimationServices<AirportTileSpec, uint8_t>;
@@ -60,7 +59,6 @@ using OpenTTDStationSpecAnimation = OpenTTDSpecAnimationServices<StationSpec, ui
 using OpenTTDAirportSpecStandard = OpenTTDStandardSpecServices<AirportSpec>;
 using OpenTTDAirportTileSpecStandard = OpenTTDStandardSpecServices<AirportTileSpec>;
 using OpenTTDHouseSpecStandard = OpenTTDStandardSpecServices<HouseSpec>;
-using OpenTTDObjectSpecStandard = OpenTTDStandardSpecServices<ObjectSpec>;
 using OpenTTDAirportSpecSubstitute = OpenTTDSubstituteSpecServices<AirportSpec>;
 using OpenTTDAirportTileSpecSubstitute = OpenTTDSubstituteSpecServices<AirportTileSpec>;
 using OpenTTDHouseSpecSubstitute = OpenTTDSubstituteSpecServices<HouseSpec>;
@@ -68,7 +66,6 @@ struct OpenTTDNewGRFSpecs {
 	const OpenTTDAirportSpecServices *airport;
 	const OpenTTDAirportTileSpecServices *airport_tile;
 	const OpenTTDHouseSpecServices *house;
-	const OpenTTDObjectSpecServices *object;
 	const OpenTTDRoadStopSpecServices *road_stop;
 	const OpenTTDStationSpecServices *station;
 };

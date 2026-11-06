@@ -167,14 +167,24 @@ static void ObjectNeed(bool value, int line)
 	if (!value) { fmt::print(stderr, "OBJECT invocation-failed {}\n", line); std::abort(); }
 }
 /** Actual deterministic/procedure/randomized Action2, reconstructed after load. */
+#ifdef WITH_RUST
+extern "C" void openttd_test_object_spec_append(const OpenTTDObjectSpecRecord *);
+extern "C" void openttd_test_object_specs_truncate(size_t);
+#endif
 static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 {
 	Backup<Randomizer> interactive(_interactive_random); _interactive_random.SetSeed(0x430);
 	const Randomizer interactive_before = _interactive_random;
+#ifdef WITH_RUST
+	const auto saved_count = ObjectSpec::Count(); const ObjectType kind = saved_count;
+	ObjectSpec fixture = *ObjectSpec::Get(OBJECT_TRANSMITTER); openttd_test_object_spec_append(&fixture);
+	ObjectSpec *spec = const_cast<ObjectSpec *>(ObjectSpec::Get(kind));
+#else
 	extern std::vector<ObjectSpec> _object_specs;
 	const auto saved_count = _object_specs.size(); const ObjectType kind = saved_count;
 	ObjectSpec fixture = *ObjectSpec::Get(OBJECT_TRANSMITTER); _object_specs.push_back(fixture);
 	ObjectSpec *spec = &_object_specs.back();
+#endif
 	std::array<uint8_t, 4> heights{}; uint corner = 0;
 	for (TileIndex t : TileArea(tile, 2, 2)) { heights[corner++] = TileHeight(t); SetTileHeight(t, 4); }
 	GRFFile file; file.grfid = 0x43004300; file.grf_version = 8;
@@ -270,7 +280,11 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	}
 	/* Leave a real object in the save with transient groups/specs detached. The
 	 * inspect path repeats this installation after native load, never serializes it. */
+#ifdef WITH_RUST
+	openttd_test_object_specs_truncate(saved_count);
+#else
 	_object_specs.resize(saved_count);
+#endif
 	ObjectNeed(Object::CanAllocateItem(), __LINE__); BuildObject(OBJECT_TRANSMITTER, tile, _current_company);
 	corner = 0; for (TileIndex t : TileArea(tile, 2, 2)) SetTileHeight(t, heights[corner++]);
 	for (auto *group : groups) delete group;

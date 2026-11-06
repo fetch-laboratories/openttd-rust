@@ -85,7 +85,8 @@ pub struct BindingServices {
     pub(crate) engine_string:
         unsafe extern "C" fn(*const crate::engine_type::OpenTTDEngine) -> *mut u32,
     pub(crate) mark_feature: unsafe extern "C" fn(*mut c_void, u8),
-    pub(crate) object_spec: unsafe extern "C" fn(*mut c_void, u16) -> *mut crate::objects::Spec,
+    pub(crate) object_specs:
+        unsafe extern "C" fn(*mut c_void) -> *mut crate::object_spec::FileSpecs,
     pub(crate) rail_bind: unsafe extern "C" fn(u8, u8, *const c_void, *const c_void),
     pub(crate) road_bind: unsafe extern "C" fn(u8, u8, *const c_void, *const c_void),
     pub(crate) wagon_override:
@@ -93,7 +94,7 @@ pub struct BindingServices {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGrfBindingServices" ["grf_loading"] => BindingServices { badge_bind, badge_name, canal_bind, cargo_bind, custom_engine_sprites, engine_grf, engine_string, mark_feature, object_spec, rail_bind, road_bind, wagon_override };
+    "OpenTTDGrfBindingServices" ["grf_loading"] => BindingServices { badge_bind, badge_name, canal_bind, cargo_bind, custom_engine_sprites, engine_grf, engine_string, mark_feature, object_specs, rail_bind, road_bind, wagon_override };
 }
 
 pub(crate) unsafe fn feature_new_name(

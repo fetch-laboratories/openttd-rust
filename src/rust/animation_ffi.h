@@ -19,7 +19,6 @@ template <typename Spec, typename Obj> struct OpenTTDAnimationEntry { const Spec
 using OpenTTDHouseAnimation = OpenTTDAnimationBinding<HouseSpec, Town, uint64_t>;
 using OpenTTDIndustryAnimation = OpenTTDAnimationBinding<IndustryTileSpec, Industry, int32_t>;
 using OpenTTDStationAnimation = OpenTTDAnimationBinding<StationSpec, BaseStation, int32_t>;
-using OpenTTDObjectAnimation = OpenTTDAnimationBinding<ObjectSpec, OpenTTDObjectRecord, int32_t>;
 using OpenTTDRoadStopAnimation = OpenTTDAnimationBinding<RoadStopSpec, BaseStation, int32_t>;
 using OpenTTDHouseAnimationEntry = OpenTTDAnimationEntry<HouseSpec, Town>;
 using OpenTTDIndustryAnimationEntry = OpenTTDAnimationEntry<IndustryTileSpec, Industry>;

@@ -69,8 +69,6 @@ template<typename Check> void Run(Check check)
 	ObjectLoopFixture object_record;
 	const OpenTTDObjectQueryServices query{.index = ProbeObjectIndex};
 	objects.query = &query;
-	objects.spec = [](uint16_t) noexcept -> const ObjectSpec * { return nullptr; };
-	objects.flags = [](const ObjectSpec *) noexcept -> uint16_t { return 0; };
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
 		.trees = nullptr,

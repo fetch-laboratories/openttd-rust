@@ -122,6 +122,7 @@ static void Layouts()
 #include "abi-layout-league_type.inc"
 #include "abi-layout-storage.inc"
 #include "abi-layout-object_type.inc"
+#include "abi-layout-object_spec.inc"
 
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::value), uint32_t>);

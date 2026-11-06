@@ -28,7 +28,7 @@ const OpenTTDGrfBindingServices &GetRustGrfBindingServices() noexcept
 		.engine_grf = [](uint16_t engine, const GRFFile *file) noexcept { SetEngineGRF(EngineID{engine}, file); },
 		.engine_string = RustEngineString,
 		.mark_feature = [](GRFFile *file, GrfSpecFeature feature) noexcept { file->grf_features.Set(feature); },
-		.object_spec = [](GRFFile *file, uint16_t id) noexcept -> ObjectSpec * { return id < file->objectspec.size() ? file->objectspec[id].get() : nullptr; },
+		.object_specs = [](GRFFile *file) noexcept -> RustVector<ObjectSpec *> * { return &file->objectspec; },
 		.rail_bind = [](RailType type, uint8_t cid, const GRFFile *file, const SpriteGroup *group) noexcept { extern RailTypeInfo _railtypes[RAILTYPE_END]; _railtypes[type].grffile[cid] = file; _railtypes[type].group[cid] = group; },
 		.road_bind = [](RoadType type, uint8_t cid, const GRFFile *file, const SpriteGroup *group) noexcept { extern RoadTypeInfo _roadtypes[ROADTYPE_END]; _roadtypes[type].grffile[cid] = file; _roadtypes[type].group[cid] = group; },
 		.wagon_override = [](uint16_t engine, uint8_t cargo, const SpriteGroup *group, EngineID *engines, size_t count) noexcept { SetWagonOverrideSprites(EngineID{engine}, cargo, group, {engines, count}); },

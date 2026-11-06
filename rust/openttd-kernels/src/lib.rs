@@ -98,6 +98,7 @@ mod newgrf_storage;
 mod newgrf_text;
 mod newgrf_townname;
 mod node_hash;
+mod object_spec;
 mod object_type;
 mod objects;
 mod openttd;

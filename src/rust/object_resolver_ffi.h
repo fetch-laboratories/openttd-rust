@@ -27,14 +27,8 @@ struct OpenTTDObjectScope {
 	uint32_t tile;
 	uint8_t view;
 };
-struct OpenTTDObjectEligibility { uint16_t flags; uint8_t climate, views; };
-struct OpenTTDObjectLifetime { int32_t introduction, end; };
 struct OpenTTDObjectResolverServices {
 	const OpenTTDSharedServices *shared;
-	uint8_t (*views)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(views);
-	OpenTTDObjectEligibility (*eligibility)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(eligibility);
-	int32_t (*introduction)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(introduction);
-	OpenTTDObjectLifetime (*lifetime)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(lifetime);
 	TownScopeResolver *(*town_scope)(ObjectResolverObject *, const Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(town_scope);
 	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
 	uint16_t (*evaluate)(const OpenTTDObjectScope *, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate);
@@ -42,7 +36,6 @@ struct OpenTTDObjectResolverServices {
 const OpenTTDObjectServices &GetRustObjectServices() noexcept;
 const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept;
 extern "C" {
-const OpenTTDObjectServices *openttd_rust_object_services_exchange(const OpenTTDObjectServices *);
 OpenTTDObjectScope openttd_rust_object_scope_init(OpenTTDObjectRecord *, const ObjectSpec *, uint32_t, uint8_t);
 const GRFFile *openttd_rust_object_file(const ObjectSpec *);
 const SpriteGroup *openttd_rust_object_root(const OpenTTDObjectScope *);
@@ -50,7 +43,6 @@ uint32_t openttd_rust_object_debug_id(const OpenTTDObjectScope *);
 uint8_t openttd_rust_object_feature();
 ScopeResolver *openttd_rust_object_scope(OpenTTDObjectScope *, ObjectResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 uint16_t openttd_rust_object_callback(const OpenTTDObjectServices *, uint16_t, uint32_t, uint32_t, const ObjectSpec *, OpenTTDObjectRecord *, uint32_t, int32_t *, size_t, uint8_t);
-uint16_t openttd_rust_object_animation_callback(uint16_t, uint32_t, uint32_t, const ObjectSpec *, OpenTTDObjectRecord *, uint32_t, int32_t) noexcept;
 uint8_t openttd_rust_object_enabled_abi(const OpenTTDObjectServices *, const ObjectSpec *);
 extern "C++" inline bool openttd_rust_object_enabled(const OpenTTDObjectServices *a0, const ObjectSpec *a1) { return openttd_rust_object_enabled_abi(a0, a1) != 0; }
 uint8_t openttd_rust_object_ever_available_abi(const OpenTTDObjectServices *, const ObjectSpec *);

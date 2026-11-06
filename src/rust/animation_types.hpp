@@ -11,6 +11,10 @@ template <typename Spec, typename Obj, typename Extra> struct OpenTTDAnimationBi
 	void (*speed_error)(const Spec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_error);
 };
 
+struct OpenTTDObjectAnimation {
+	void (*sound)(const ObjectSpec *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
+	void (*speed_error)(const ObjectSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_error);
+};
 struct OpenTTDAirportAnimation {
 	OpenTTDAnimationInfo (*info)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(info);
 	void (*sound)(const AirportTileSpec *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);

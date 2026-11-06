@@ -9,11 +9,11 @@
 //! table per spec type, reached through `Services::newgrf_specs`. Specs stay
 //! native and live for each synchronous call; every table is process-lifetime.
 #![allow(unsafe_code)]
+use crate::animated_tile::AirportSpec as AirportTileSpec;
 use crate::house::HouseSpec;
 use crate::newgrf_bytereader::BadgeList;
 use crate::newgrf_commons::SubstituteSpecIdentity;
 use crate::station_cmd::{AirportSpec, RailSpec, RoadSpec};
-use crate::{animated_tile::AirportSpec as AirportTileSpec, objects::Spec as ObjectSpec};
 use std::ffi::c_void;
 
 crate::abi::shared_records! {
@@ -132,7 +132,6 @@ pub struct Specs {
     airport: *const SpecServices<AirportSpec, u8>,
     airport_tile: *const SpecServices<AirportTileSpec, u8>,
     house: *const SpecServices<HouseSpec, u8>,
-    object: *const SpecServices<ObjectSpec, u16>,
     road_stop: *const SpecServices<RoadSpec, u16>,
     station: *const SpecServices<RailSpec, u16>,
 }
@@ -154,18 +153,16 @@ spec_tables! {
     airport: AirportSpec, u8;
     airport_tile: AirportTileSpec, u8;
     house: HouseSpec, u8;
-    object: ObjectSpec, u16;
     road_stop: RoadSpec, u16;
     station: RailSpec, u16;
 }
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDNewGRFSpecs" ["probe"] => Specs { airport, airport_tile, house, object, road_stop, station };
+    "OpenTTDNewGRFSpecs" ["probe"] => Specs { airport, airport_tile, house, road_stop, station };
     "OpenTTDAirportSpecServices" ["probe"] => SpecServices<AirportSpec, u8> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
     "OpenTTDAirportTileSpecServices" ["probe"] => SpecServices<AirportTileSpec, u8> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
     "OpenTTDHouseSpecServices" ["probe"] => SpecServices<HouseSpec, u8> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
-    "OpenTTDObjectSpecServices" ["probe"] => SpecServices<ObjectSpec, u16> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
     "OpenTTDRoadStopSpecServices" ["probe"] => SpecServices<RoadSpec, u16> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
     "OpenTTDStationSpecServices" ["probe"] => SpecServices<RailSpec, u16> { animation, badge_list, badges, cargo_map, file, grfid, has_file, local_id, name, set_file, set_local_id, standard, substitute };
     "OpenTTDAirportTileSpecAnimation" ["probe"] => AnimationServices<AirportTileSpec, u8> { frames, speed, status, triggers };
@@ -174,7 +171,6 @@ crate::abi::layouts! {
     "OpenTTDAirportSpecStandard" ["probe"] => StandardServices<AirportSpec> { has_sprite_groups, set_sprite_group, sprite_group };
     "OpenTTDAirportTileSpecStandard" ["probe"] => StandardServices<AirportTileSpec> { has_sprite_groups, set_sprite_group, sprite_group };
     "OpenTTDHouseSpecStandard" ["probe"] => StandardServices<HouseSpec> { has_sprite_groups, set_sprite_group, sprite_group };
-    "OpenTTDObjectSpecStandard" ["probe"] => StandardServices<ObjectSpec> { has_sprite_groups, set_sprite_group, sprite_group };
     "OpenTTDAirportSpecSubstitute" ["probe"] => SubstituteServices<AirportSpec> { enabled, identity, override_id, set_enabled, set_override, substitute };
     "OpenTTDAirportTileSpecSubstitute" ["probe"] => SubstituteServices<AirportTileSpec> { enabled, identity, override_id, set_enabled, set_override, substitute };
     "OpenTTDHouseSpecSubstitute" ["probe"] => SubstituteServices<HouseSpec> { enabled, identity, override_id, set_enabled, set_override, substitute };

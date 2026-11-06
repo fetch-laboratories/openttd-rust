@@ -40,19 +40,13 @@
 /** The override manager for our objects. */
 ObjectOverrideManager _object_mngr(NEW_OBJECT_OFFSET, NUM_OBJECTS, INVALID_OBJECT_TYPE);
 
-extern const ObjectSpec _original_objects[NEW_OBJECT_OFFSET];
-/** All the object specifications. */
-std::vector<ObjectSpec> _object_specs;
-
-const std::vector<ObjectSpec> &ObjectSpec::Specs()
+std::span<const ObjectSpec> ObjectSpec::Specs()
 {
-	return _object_specs;
+	const auto *specs = openttd_rust_object_specs();
+	return {reinterpret_cast<const ObjectSpec *>(specs->items), specs->size()};
 }
 
-size_t ObjectSpec::Count()
-{
-	return _object_specs.size();
-}
+size_t ObjectSpec::Count() { return openttd_rust_object_spec_count(); }
 
 /**
  * Get the specification associated with a specific ObjectType.
@@ -61,12 +55,8 @@ size_t ObjectSpec::Count()
  */
 /* static */ const ObjectSpec *ObjectSpec::Get(ObjectType index)
 {
-	/* Empty object if index is out of range -- this might happen if NewGRFs are changed. */
-	static ObjectSpec empty = {};
-
 	assert(index < NUM_OBJECTS);
-	if (index >= _object_specs.size()) return &empty;
-	return &_object_specs[index];
+	return static_cast<const ObjectSpec *>(openttd_rust_object_spec_get(index));
 }
 
 /**
@@ -112,39 +102,7 @@ bool ObjectSpec::IsAvailable() const
  */
 uint ObjectSpec::Index() const
 {
-	return this - _object_specs.data();
-}
-
-/**
- * Tie all ObjectSpecs to their class.
- */
-/* static */ void ObjectSpec::BindToClasses()
-{
-	for (auto &spec : _object_specs) {
-		if (spec.IsEnabled() && spec.class_index != INVALID_OBJECT_CLASS) {
-			ObjectClass::Assign(&spec);
-		}
-	}
-}
-
-/** This function initialize the spec arrays of objects. */
-void ResetObjects()
-{
-	openttd_rust_object_services_exchange(&GetRustObjectServices());
-	/* Clean the pool. */
-	_object_specs.clear();
-
-	/* And add our originals. */
-	_object_specs.reserve(lengthof(_original_objects));
-
-	for (uint16_t i = 0; i < lengthof(_original_objects); i++) {
-		ObjectSpec &spec = _object_specs.emplace_back(_original_objects[i]);
-		spec.grf_prop.local_id = i;
-	}
-
-	/* Set class for originals. */
-	_object_specs[OBJECT_LIGHTHOUSE].class_index = ObjectClass::Allocate('LTHS');
-	_object_specs[OBJECT_TRANSMITTER].class_index = ObjectClass::Allocate('TRNS');
+	return this - ObjectSpec::Specs().data();
 }
 
 template <>
@@ -312,10 +270,7 @@ void DrawNewObjectTileInGUI(int x, int y, const ObjectSpec *spec, uint8_t view)
 /** Helper class for animation control. */
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 {
-	static const auto binding = MakeRustAnimationBindingDirect<ObjectSpec, OpenTTDObjectRecord, int>(
-		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = RustObjectSpecByTile(t); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, &RustObjectByTile(t)->Record()}; },
-		[](const ObjectSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(ObjectCallbackMask::AnimationSpeed), s->callback_mask.Test(ObjectCallbackMask::AnimationNextFrame), s->flags.Test(ObjectFlag::AnimRandomBits), true}; },
-		openttd_rust_object_animation_callback);
+	static const auto binding = RustAnimationPresentationBinding<OpenTTDObjectAnimation, ObjectSpec>();
 	return binding;
 }
 
@@ -357,13 +312,10 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 	static const OpenTTDObjectQueryServices services{
 		.random_bits = [](uint32_t t) noexcept { return GetObjectRandomBits(TileIndex(t)); },
 		.index = [](uint32_t t) noexcept { return GetObjectIndex(TileIndex(t)).base(); },
-		.definition = [](const ObjectSpec *s) noexcept -> OpenTTDObjectDefinition { return {s->grf_prop.grfid, s->grf_prop.local_id, s->grf_prop.HasGrfFile()}; },
 		.town_tile = OpenTTDTownTile,
 		.version8 = RustResolverGRFVersion8,
-		.override_id = [](uint16_t id, uint32_t grfid) noexcept { return _object_mngr.GetID(id, grfid); },
 		.manhattan = OpenTTDDistanceManhattan,
 		.square = OpenTTDDistanceSquare,
-		.triggers = [](const ObjectSpec *s) noexcept { return s->animation.triggers.base(); },
 
 	};
 	return services;
@@ -374,10 +326,6 @@ const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
 	static_assert(GSF_OBJECTS == 0x0F && VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1 && CBID_OBJECT_LAND_SLOPE_CHECK == 0x157 && CBID_OBJECT_COLOUR == 0x15B);
 	static const OpenTTDObjectResolverServices services{
 		.shared = &GetRustSharedServices(),
-		.views = RustObjectViews,
-		.eligibility = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectEligibility { return {RustObjectSpecFlags(spec), spec->climate.base(), RustObjectViews(spec)}; },
-		.introduction = [](const ObjectSpec *spec) noexcept -> int32_t { return spec->introduction_date.base(); },
-		.lifetime = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectLifetime { return {spec->introduction_date.base(), spec->end_of_life_date.base()}; },
 		.town_scope = RustResolverTownScope<ObjectResolverObject>,
 		.base_scope = RustResolverBaseScope,
 		.evaluate = [](const OpenTTDObjectScope *context, uint16_t callback, uint32_t param1, uint32_t param2, int32_t *regs, size_t count) noexcept -> uint16_t {

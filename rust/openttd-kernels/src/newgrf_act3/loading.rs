@@ -250,13 +250,23 @@ unsafe fn map_binding(
                 };
                 bind_standard(specs.airport_tile(), spec, local, cargo, group);
             }
-            GSF_OBJECTS => bind_standard(
-                specs.object(),
-                (bindings.object_spec)(file, local),
-                local,
-                cargo,
-                group,
-            ),
+            GSF_OBJECTS => {
+                let spec = crate::object_spec::file_spec((bindings.object_specs)(file), local);
+                if spec.is_null() {
+                    grf_msg!(1, "MapSpriteGroup: {local} undefined, skipping.");
+                } else if cargo.is_some() {
+                    (*spec).grf_prop.spritegroups[1] = group;
+                } else {
+                    (*spec).grf_prop.spritegroups[0] = group;
+                    (*spec).grf_prop.grffile = file;
+                    (*spec).grf_prop.grfid = if file.is_null() {
+                        0
+                    } else {
+                        (s.shared().grf_file_id)(file)
+                    };
+                    (*spec).grf_prop.local_id = local;
+                }
+            }
             GSF_STATIONS => {
                 if let Some(cargo) = cargo {
                     crate::station_definitions::station_map_specific(

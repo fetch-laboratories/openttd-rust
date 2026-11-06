@@ -118,7 +118,7 @@ static bool ReferenceObjectOnWater(uint32_t) noexcept { return false; }
 static OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 static const OpenTTDIndustryTileServices object_tiles{.on_water = ReferenceObjectOnWater};
 static const OpenTTDObjectQueryServices object_query{.index = ReferenceObjectIndex};
-static const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .spec = [](uint16_t) noexcept -> const ObjectSpec * { return nullptr; }, .flags = [](const ObjectSpec *) noexcept -> uint16_t { return 0; }, .query = &object_query};
+static const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .query = &object_query};
 /* The Rust station loop's first native call is GetByTile; StationType::End then selects no arm. */
 static const OpenTTDRoadStopResolverServices roadstops{.by_tile = [](uint32_t tile) noexcept -> BaseStation * { LandscapeStationLoop(tile); return nullptr; }};
 static const OpenTTDStationLifecycleServices station{.shared = &shared, .roadstop = &roadstops};

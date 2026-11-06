@@ -666,3 +666,19 @@ pub extern "C" fn openttd_test_schedule_pause_observer(observer: Option<extern "
     // SAFETY: Serialized like every game-state slot; no borrow outlives the write.
     unsafe { *crate::linkgraph_schedule::PAUSE_OBSERVER.get() = observer };
 }
+
+/// Append the independent native Action2 fixture definition to the actual global owner.
+/// # Safety
+/// The source is live for this serialized call; copy before the global vector grows.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_object_spec_append(source: *const crate::objects::Spec) {
+    let copy = unsafe { (*source).clone() };
+    unsafe { (*crate::object_spec::SPECS.get()).push(copy) };
+}
+/// Restore the original global definition count after the native invocation fixture.
+/// # Safety
+/// The native fixture has finished all accesses to appended elements.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_test_object_specs_truncate(size: usize) {
+    unsafe { (*crate::object_spec::SPECS.get()).edit(|v| v.truncate(size)) };
+}
