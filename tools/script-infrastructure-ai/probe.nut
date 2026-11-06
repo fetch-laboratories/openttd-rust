@@ -391,6 +391,9 @@ function ProbeLists(who) {
 		foreach (length in [-1, 0, 1, 2, 3, 5, 100, 1000]) text += "," + ApiBridge.GetPrice(bt, length);
 	}
 	Record(who, "bridge.specs", text);
+	text = "";
+	foreach (bt in [-1, 0, 1, 2, 3, 4, 5, 255, 256, 0x100000001]) text += " " + bt + ":" + ApiMarine.GetBuildCost(bt);
+	Record(who, "marine.costs", text);
 	Record(who, "list.bridge", ListText(ApiBridgeList()));
 	foreach (length in [-1, 0, 1, 2, 3, 4, 5, 10, 100, 0x100000000]) Record(who, "list.bridge-length " + length, ListText(ApiBridgeList_Length(length)));
 	Record(who, "list.railtype", ListText(ApiRailTypeList()) + " " + ApiError.GetLastErrorString());

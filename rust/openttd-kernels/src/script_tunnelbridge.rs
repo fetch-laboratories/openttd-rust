@@ -18,7 +18,6 @@ use crate::script_tile::{ERR_PRECONDITION_FAILED, company_mode_valid, enforce, v
 use crate::script_vehicle::{VT_RAIL, VT_ROAD, VT_WATER};
 use crate::tunnelbridge_cmd::TunnelBridgeServices;
 
-
 /// `ScriptBridge::IsValidBridge`: `bridge_type < MAX_BRIDGES` and the type is
 /// available by the current calendar year.
 fn valid_bridge(tb: &TunnelBridgeServices, bridge_type: u32) -> bool {
