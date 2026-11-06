@@ -1349,7 +1349,6 @@ pub(crate) mod tests {
             destroy: unused(),
             set_dest_tile: unused(),
             engine: unused(),
-            engine_for_length: unused(),
             order_type: unused(),
             order_destination: unused(),
             order_nonstop: unused(),

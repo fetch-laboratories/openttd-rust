@@ -156,6 +156,46 @@ impl EngineRef {
     pub(crate) fn powered_roadtypes(self, shared: &crate::services::Services) -> u64 {
         (shared.powered_roadtypes)(crate::services::RoadType(self.roadtype()))
     }
+    pub(crate) fn cargo_age(self) -> u16 {
+        read_field!(self.0.as_ptr(), info.cargo_age_period)
+    }
+    pub(crate) fn train_curve_mod(self) -> i16 {
+        read_field!(Lifecycle::rail(self.0.as_ptr()), curve_speed_mod)
+    }
+    pub(crate) fn train_user_data(self) -> u8 {
+        read_field!(Lifecycle::rail(self.0.as_ptr()), user_def_data)
+    }
+    pub(crate) fn train_shorten(self) -> u8 {
+        read_field!(Lifecycle::rail(self.0.as_ptr()), shorten_factor)
+    }
+    pub(crate) fn train_speed(self) -> u16 {
+        read_field!(Lifecycle::rail(self.0.as_ptr()), max_speed)
+    }
+    pub(crate) fn road_shorten(self) -> u8 {
+        read_field!(Lifecycle::road(self.0.as_ptr()), shorten_factor)
+    }
+    pub(crate) fn road_speed(self) -> u16 {
+        read_field!(Lifecycle::road(self.0.as_ptr()), max_speed)
+    }
+    pub(crate) fn aircraft_speed(self) -> u16 {
+        read_field!(Lifecycle::aircraft(self.0.as_ptr()), max_speed)
+    }
+    pub(crate) fn aircraft_sound(self) -> u16 {
+        read_field!(Lifecycle::aircraft(self.0.as_ptr()), sfx)
+    }
+    pub(crate) fn ship_speed(self) -> u16 {
+        read_field!(Lifecycle::ship(self.0.as_ptr()), max_speed)
+    }
+    pub(crate) fn ship_speed_fraction(self, sea: bool) -> u8 {
+        if sea {
+            read_field!(Lifecycle::ship(self.0.as_ptr()), ocean_speed_frac)
+        } else {
+            read_field!(Lifecycle::ship(self.0.as_ptr()), canal_speed_frac)
+        }
+    }
+    pub(crate) fn exclusive_preview(self) -> bool {
+        self.flags() & super::EXCLUSIVE != 0
+    }
     pub(crate) fn ground(self) -> bool {
         matches!(self.kind(), VehicleType::TRAIN | VehicleType::ROAD)
     }

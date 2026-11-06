@@ -387,9 +387,6 @@ pub struct Leaves {
     /// The road stop arrival randomisation and animation triggers.
     pub depot_exit_dirty: extern "C" fn(VehicleRef),
     pub crash_news: extern "C" fn(VehicleRef, u32),
-    pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
-    pub default_max_speed: extern "C" fn(u16) -> u16,
-    pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
     pub pay_running: extern "C" fn(VehicleRef, i64),
 }
 
@@ -1124,9 +1121,9 @@ impl Game<'_> {
                 (v.v).engine_id()
             };
             crate::raw_field::write_field!(u.ground_cache(), first_engine, first_engine);
-            let engine = service!(self.vs.engine_for_length)(u);
+            let engine = service!(self.vs.engine)(u);
             let mut length = VEHICLE_LENGTH;
-            let mut factor = if engine.grf_version >= 8 {
+            let mut factor = if engine.grf_version(self.ss) >= 8 {
                 let value = service!(self.vs.property)(
                     (self.vs.newgrf)(),
                     u,
@@ -1135,14 +1132,14 @@ impl Game<'_> {
                 ) as u16;
                 if value != CALLBACK_FAILED && value >= u16::from(VEHICLE_LENGTH) {
                     self.vs
-                        .unknown_callback_result(engine.engine, CBID_VEHICLE_LENGTH, value);
+                        .unknown_callback_result(engine, CBID_VEHICLE_LENGTH, value);
                 }
                 value
             } else {
                 service!(self.vs.callback)((self.vs.newgrf)(), u, CBID_VEHICLE_LENGTH)
             };
             if factor == CALLBACK_FAILED {
-                factor = u16::from(service!(self.l.shorten_factor)(engine.engine));
+                factor = u16::from(engine.road_shorten());
             }
             if factor != 0 {
                 length -= factor.min(u16::from(VEHICLE_LENGTH - 1)) as u8;
@@ -1156,7 +1153,7 @@ impl Game<'_> {
             crate::raw_field::write_field!(u.ground_cache(), cached_veh_length, length);
             crate::raw_field::write_field!(v.v.ground_cache(), cached_total_length, total);
             crate::vehicle_effect::openttd_rust_visual_update(u, true);
-            let period = service!(self.l.cargo_age_default)(u);
+            let period = service!(self.vs.engine)(u).cargo_age();
             let age = service!(self.vs.property)(
                 (self.vs.newgrf)(),
                 u,
@@ -1173,7 +1170,7 @@ impl Game<'_> {
         (v.v).write_max_speed(if speed != 0 {
             speed.wrapping_mul(4)
         } else {
-            u32::from(service!(self.l.default_max_speed)(v.v.engine_id()))
+            u32::from(service!(self.vs.engine)(v.v).road_speed())
         } as u16);
     }
     /// `RoadFindPathToDest`.
@@ -2534,9 +2531,6 @@ crate::abi::layouts! {
         arrival_news,
 
         crash_news,
-        shorten_factor,
-        default_max_speed,
-        cargo_age_default,
         pay_running,
         depot_exit_dirty,
     };

@@ -85,3 +85,6 @@ pub const AIR_FAST: u8 = 2;
 
 /// `EngineMiscFlag::AutoRefit`.
 pub const AUTO_REFIT: u8 = 1 << 4;
+
+/// `EngineMiscFlag::RailTilts`.
+pub const RAIL_TILTS: u8 = 1;

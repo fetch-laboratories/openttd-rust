@@ -77,6 +77,9 @@ static void RoadBoundary()
 	effect_test_world = &world;
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
 	RoadTestTables t(&services);
+	road_abi_engine->info.cargo_age_period = road_abi_new_engine->info.cargo_age_period = 0;
+	road_abi_engine->bindings.grf_prop.grffile = road_abi_new_engine->bindings.grf_prop.grffile = reinterpret_cast<const GRFFile *>(&road_abi_grf);
+	t.shared.grf_file_version = [](const void *file) noexcept -> uint8_t { CHECK(file == &road_abi_grf); return 8; };
 	road_abi_engine->vehicle_info.road.visual_effect = road_abi_new_engine->vehicle_info.road.visual_effect = 0x40;
 	t.vehicle.engine = [](OpenTTDVehicle *) noexcept -> const OpenTTDEngine * {
 		return road_abi_probe->engine_replaced ? road_abi_new_engine : road_abi_engine;
@@ -126,15 +129,6 @@ static void RoadBoundary()
 
 
 	t.leaves.is_bay_stop = [](uint32_t) noexcept { return false; };
-	t.vehicle.engine_for_length = [](OpenTTDVehicle *) noexcept -> OpenTTDEngineForLength {
-		auto &p = *road_abi_probe;
-		CHECK(p.cache_properties == p.cargo_ages);
-		return {.engine = p.engine_replaced ? road_abi_new_engine : road_abi_engine, .grf_version = 8};
-	};
-	t.leaves.shorten_factor = [](const OpenTTDEngine *e) noexcept -> uint8_t {
-		CHECK(road_abi_probe->fallback_cache && e == road_abi_engine && road_abi_probe->cache_properties == 1);
-		return 2; // Read through the engine captured before the property callback.
-	};
 	t.vehicle.length_changed = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->length_changes; };
 	static OpenTTDEngineCapabilitiesServices capabilities{};
 	static OpenTTDVehicleResolverServices resolver{};
@@ -144,16 +138,16 @@ static void RoadBoundary()
 	resolver.cache = [](OpenTTDVehicle *) noexcept { return &grf_cache; };
 	capabilities.loading = []() noexcept -> const OpenTTDEngineLoadingServices * { return &loading; };
 	loading.unknown_refit = [](uint32_t grfid, uint16_t callback, uint16_t result) noexcept { CHECK(grfid == 0 && callback == 0x11 && result == 9); };
-	t.leaves.default_max_speed = [](uint16_t) noexcept -> uint16_t {
-		CHECK(road_abi_probe->fallback_cache && road_abi_probe->cache_properties == 3);
-		return 99;
-	};
 	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return &resolver; };
 	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t fallback) noexcept -> int32_t {
 		auto &p = *road_abi_probe;
-		if (property == 0x22) return fallback;
+		if (property == 0x22) { CHECK(fallback == 0); ++p.cargo_ages; return fallback; }
+		if (property == 0x23) CHECK(p.cache_properties == p.cargo_ages);
 		++p.cache_properties;
 		if (p.fallback_cache) {
+			/* A late read must use the captured Engine for length, then the replaced Engine for speed. */
+			if (property == 0x23 && u == RoadAbiHandle()) { CHECK(p.cache_properties == 1); road_abi_engine->vehicle_info.road.shorten_factor = 2; }
+			if (property == 0x15) { CHECK(p.cache_properties == 3); road_abi_new_engine->vehicle_info.road.max_speed = 99; }
 			p.engine_replaced = true;
 			RoadAbiHandle()->engine_type = 9;
 			return property == 0x23 ? (u == RoadAbiHandle() ? 0xFFFF : 9) : 0;
@@ -166,7 +160,6 @@ static void RoadBoundary()
 		openttd_rust_road_path_push(p.state, {10, 10815});
 		return property == 0x23 ? 0 : property == 0x15 ? 20 : fallback;
 	};
-	t.leaves.cargo_age_default = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->cargo_ages; return uint16_t{0}; };
 	openttd_rust_road_update_cache(v, probe.state, false, &t.leaves);
 	CHECK(road_abi_vehicle.cached_max_speed == 80);
 	CHECK(probe.ground.state->cache.cached_veh_length == 8 && probe.ground.state->cache.cached_total_length == 8 && probe.ground.state->cache.first_engine == UINT16_MAX);
@@ -424,7 +417,6 @@ static void RoadBoundary()
 	openttd_rust_effect_destroy(emission_owner);
 	std::printf("road_native_typed_reentry_path_and_owner_destruction passed\n");
 	t.vehicle.engine = nullptr;
-	t.vehicle.engine_for_length = nullptr;
 	openttd_rust_engine_destroy(std::exchange(road_abi_new_engine, nullptr));
 	openttd_rust_engine_destroy(std::exchange(road_abi_engine, nullptr));
 }

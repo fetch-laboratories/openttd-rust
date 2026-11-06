@@ -19,6 +19,9 @@
 #include "services_landscape.h"
 #include "settings_services.h"
 
+static_assert(to_underlying(VehicleCallbackMask::Length) == 1);
+static_assert(to_underlying(EngineMiscFlag::RailTilts) == 0);
+
 template <typename Result, auto Read>
 static Result TrainVehicleRead(OpenTTDTrainHandle id) noexcept
 {
@@ -76,11 +79,6 @@ static void TrainCapacityError(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	RustVehicleShowNewGRFError(v->GetEngineType(), STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_CAPACITY, GRFBug::VehCapacity, true);
-}
-static uint64_t TrainCargoAgeDefault(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustEngineCargoAge(RustVehicleGetEngine(RustVehicle(v)));
 }
 static void TrainCheckNext(OpenTTDTrainHandle id) noexcept
 {
@@ -148,11 +146,6 @@ static uint64_t TrainCurveAdvantage(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	return GetRailTypeInfo(RustRailType(v->GetTile().base()))->curve_speed;
 }
-static int16_t TrainCurveModDefault(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RailVehInfo(v->GetEngineType())->curve_speed_mod;
-}
 static uint64_t TrainDayTicks(OpenTTDTrainHandle) noexcept
 {
 	return Ticks::DAY_TICKS;
@@ -199,11 +192,6 @@ static void TrainDisconnect(OpenTTDTrainHandle) noexcept
 {
 	FatalError("Disconnecting train");
 }
-static uint64_t TrainEnginePower(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustGroundEnginePower(RustVehicle(v));
-}
 static OpenTTDTrainDepot TrainFindDepot(OpenTTDTrainHandle id, int32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
@@ -212,11 +200,6 @@ static OpenTTDTrainDepot TrainFindDepot(OpenTTDTrainHandle id, int32_t a) noexce
 static uint64_t TrainFirstTrack(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return FindFirstTrack(static_cast<TrackBits>(a));
-}
-static uint64_t TrainGrfVersion(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v))));
 }
 
 static void TrainHideFill(OpenTTDTrainHandle id) noexcept
@@ -243,16 +226,6 @@ static void TrainLeaveUnbunch(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
 	v->LeaveUnbunchingDepot();
-}
-static uint64_t TrainLengthCallback(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return VehicleCallbackMasks(RustEngineCallbackMask(RustVehicleGetEngine(RustVehicle(v)))).Test(VehicleCallbackMask::Length);
-}
-static uint64_t TrainLengthDefault(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RailVehInfo(v->GetEngineType())->shorten_factor;
 }
 static uint64_t TrainLocalCompany(OpenTTDTrainHandle) noexcept
 {
@@ -296,28 +269,8 @@ static uint64_t TrainPbsSignalType(OpenTTDTrainHandle) noexcept
 {
 	return SIGTYPE_PBS;
 }
-static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustEngineWagonPower(v->GetEngineType().base());
-}
 
 
-static uint64_t TrainRailvehWagon(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustEngineRailKind(Engine::Get(v->GetEngineType())) == RAILVEH_WAGON;
-}
-static uint64_t TrainRailTilt(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(RustVehicle(v)))).Test(EngineMiscFlag::RailTilts);
-}
-static uint64_t TrainRailTypes(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustEngineRailTypes(Engine::Get(v->GetEngineType()));
-}
 static void TrainReserveUnder(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
@@ -331,11 +284,6 @@ static void TrainResetUnbunch(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainReverseAtSignals(OpenTTDTrainHandle) noexcept
 {
 	return _settings_game.pf.reverse_at_signals;
-}
-static uint64_t TrainReverseSingleBlocked(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RustEngineHasArticulatedCallback(v->GetEngineType().base());
 }
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
@@ -365,11 +313,6 @@ static uint64_t TrainSigsegFull(OpenTTDTrainHandle) noexcept
 static uint64_t TrainSigsegPbs(OpenTTDTrainHandle) noexcept
 {
 	return SIGSEG_PBS;
-}
-static uint64_t TrainSpeedDefault(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RailVehInfo(v->GetEngineType())->max_speed;
 }
 static void TrainStartStopDirty(OpenTTDTrainHandle id) noexcept
 {
@@ -443,11 +386,6 @@ static void TrainTruncateCargo(OpenTTDTrainHandle id, uint32_t a) noexcept
 }
 
 
-static uint64_t TrainUserDefault(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(VehicleFromRecord(id.record));
-	return RailVehInfo(v->GetEngineType())->user_def_data;
-}
 static uint64_t TrainVehExitDir(OpenTTDTrainHandle, uint8_t a, uint8_t b) noexcept
 {
 	return VehicleExitDir(static_cast<Direction>(a), static_cast<TrackBits>(b));

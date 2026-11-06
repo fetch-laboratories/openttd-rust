@@ -100,3 +100,6 @@ pub const VEHICLE_CUSTOM_REFIT: u16 = 1 << 9;
 
 /// `VehicleCallbackMask::VisualEffect`.
 pub const VEHICLE_VISUAL_EFFECT: u16 = 1;
+
+/// `VehicleCallbackMask::Length`.
+pub const VEHICLE_LENGTH: u16 = 1 << 1;
