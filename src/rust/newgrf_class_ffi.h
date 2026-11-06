@@ -115,7 +115,7 @@ template <> struct RustGRFClassOps<AirportSpec> {
 	static constexpr auto by_grf = openttd_rust_airport_class_by_grf;
 };
 extern "C" {
-void openttd_rust_object_class_reset(const OpenTTDGRFClassServices<ObjectSpec> *);
+void openttd_rust_object_class_reset(const OpenTTDObjectClassServices *);
 uint16_t openttd_rust_object_class_allocate(uint32_t, uint16_t, uint32_t);
 void openttd_rust_object_class_assign(ObjectSpec *);
 void * openttd_rust_object_class_classes();
