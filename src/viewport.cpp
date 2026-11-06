@@ -2510,7 +2510,7 @@ bool HandleViewportClicked(const Viewport &vp, int x, int y)
 	bool result = CheckClickOnLandscape(vp, x, y);
 
 	if (v != nullptr) {
-		Debug(misc, 2, "Vehicle {} (index {}) at {}", v->unitnumber, v->index, fmt::ptr(v));
+		Debug(misc, 2, "Vehicle {} (index {}) at {}", v->Record().unitnumber, v->index, fmt::ptr(v));
 		if (IsCompanyBuildableVehicleType(v)) {
 			v = v->First();
 			if (_ctrl_pressed && v->GetOwner() == _local_company) {

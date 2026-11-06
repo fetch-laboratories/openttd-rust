@@ -44,7 +44,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 	for (Vehicle *v : Vehicle::Iterate()) if (FIXTURE_GET(v, Type, type) == VEH_ROAD && v->GetNumOrders() != 0) { vehicle = v; break; }
 	IndustryPolicyRequire(vehicle != nullptr);
 	Backup<CompanyID> local(_local_company);
-	Backup<CargoType> cargo(vehicle->cargo_type);
+	Backup<CargoType> cargo(FIXTURE_FIELD(vehicle, cargo_type));
 	Backup<Order> order(*vehicle->GetOrder(0));
 	_settings_game.economy.type = ET_SMOOTH;
 	_random.SetSeed(0x601); _interactive_random.SetSeed(0x60100001);
@@ -64,7 +64,7 @@ static bool IndustryPolicy(std::span<std::string_view> args)
 		}
 		IndustryPolicyRequire(ind != nullptr);
 		ind->ctlflags.Set(IndustryControlFlag::NoClosure);
-		vehicle->cargo_type = ind->produced[0].cargo;
+		FIXTURE_FIELD(vehicle, cargo_type) = ind->produced[0].cargo;
 		if (outcome != 0) vehicle->GetOrder(0)->MakeGoToStation((*ind->stations_near.begin())->index);
 		std::vector<std::pair<Vehicle *, OrderList *>> original_orders;
 		OrderList *wide = nullptr;

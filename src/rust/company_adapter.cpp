@@ -326,7 +326,7 @@ static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
 {
 	Vehicle *v = Vehicle::Get(id);
 	RustVehicleSetOwner(RustVehicle(v), owner);
-	v->colourmap = PAL_NONE;
+	v->Record().colourmap = PAL_NONE;
 	RustVehicleInvalidateNewGRFCache(v);
 }
 static void Co_remove_engine_replacements(uint8_t id) noexcept { RemoveAllEngineReplacementForCompany(Company::Get(id)); }

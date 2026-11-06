@@ -116,7 +116,7 @@ enum HelicopterRotorStates : uint8_t {
 
 void Aircraft::GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const
 {
-	uint8_t spritenum = this->spritenum;
+	uint8_t spritenum = this->Record().spritenum;
 
 	if (IsCustomVehicleSpriteNum(spritenum)) {
 		GetCustomVehicleSprite(this, direction, image_type, result);
@@ -134,7 +134,7 @@ void GetRotorImage(const Aircraft *v, EngineImageType image_type, VehicleSpriteS
 	assert(v->Record().subtype == AIR_HELICOPTER);
 
 	const Aircraft *w = v->Next()->Next();
-	if (IsCustomVehicleSpriteNum(v->spritenum)) {
+	if (IsCustomVehicleSpriteNum(v->Record().spritenum)) {
 		GetCustomRotorSprite(v, image_type, result);
 		if (result->IsValid()) return;
 	}
@@ -213,7 +213,7 @@ Money Aircraft::GetRunningCost() const
 
 void Aircraft::MarkDirty()
 {
-	this->colourmap = PAL_NONE;
+	this->Record().colourmap = PAL_NONE;
 	this->UpdateViewport(true, false);
 	if (this->Record().subtype == AIR_HELICOPTER) {
 		GetRotorImage(this, EIT_ON_MAP, &this->Next()->Next()->sprite_cache.sprite_seq);

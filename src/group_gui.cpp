@@ -655,7 +655,7 @@ public:
 
 					this_year += v->GetDisplayProfitThisYear();
 					last_year += v->GetDisplayProfitLastYear();
-					occupancy += v->trip_occupancy;
+					occupancy += v->Record().trip_occupancy;
 				}
 
 				Rect tr = r.Shrink(WidgetDimensions::scaled.framerect);

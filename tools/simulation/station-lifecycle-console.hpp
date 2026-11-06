@@ -152,7 +152,7 @@ static void Station562Delete(TileIndex origin, bool reload, bool stage)
 	if (!reload) {
 		victim = Station562New(origin, "Owner562 victim"); survivor = Station562New(origin + TileDiffXY(4, 0), "Owner562 survivor");
 		victim->UpdateVirtCoord(); survivor->UpdateVirtCoord();
-		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { vehicle = v; break; }
+		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && FIXTURE_FIELD(v, cargo_type) == 0 && !v->IsInDepot()) { vehicle = v; break; }
 		StationNeed(vehicle != nullptr && vehicle->cargo_payment == nullptr && LinkGraph::CanAllocateItem(2) && CargoPacket::CanAllocateItem(2), __LINE__);
 		vehicle->current_order.MakeLoading(false); vehicle->current_order.SetLoadType(OrderLoadType::NoLoad); vehicle->current_order.SetUnloadType(OrderUnloadType::NoUnload);
 		FIXTURE_SET(vehicle, LastStationVisited, last_station_visited, victim->index); vehicle->last_loading_station = victim->index; victim->loading_vehicles.push_back(vehicle);

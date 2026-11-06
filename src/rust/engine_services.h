@@ -186,7 +186,7 @@ inline OpenTTDEngineRoadAvailability RustEngineRoadAvailability(const OpenTTDEng
 }
 inline uint64_t RustEngineCompatibleRailTypes(const Engine *e) noexcept { return RustAllCompatibleRailTypes(RustEngineRailTypes(RustEngine(e))); }
 /** Reserve a unit number and assign the returned native ID to the shell. */
-inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->unitnumber = RustCompanyUseVehicleUnit(v->GetOwner(), v->GetType(), unit); }
+inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->Record().unitnumber = RustCompanyUseVehicleUnit(v->GetOwner(), v->GetType(), unit); }
 inline void RustVehicleUseCurrentUnit(void *shell) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);

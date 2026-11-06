@@ -1740,10 +1740,10 @@ static void FormatString(StringBuilder &builder, std::string_view str_arg, Strin
 						GetStringWithArgs(builder, STR_JUST_RAW_STRING, tmp_params);
 					} else if (v->group_id != DEFAULT_GROUP) {
 						/* The vehicle has no name, but is member of a group, so print group name */
-						auto tmp_params = MakeParameters(v->group_id, v->unitnumber);
+						auto tmp_params = MakeParameters(v->group_id, v->Record().unitnumber);
 						GetStringWithArgs(builder, STR_FORMAT_GROUP_VEHICLE_NAME, tmp_params);
 					} else {
-						auto tmp_params = MakeParameters(v->unitnumber);
+						auto tmp_params = MakeParameters(v->Record().unitnumber);
 
 						StringID string_id;
 						switch (v->GetType()) {

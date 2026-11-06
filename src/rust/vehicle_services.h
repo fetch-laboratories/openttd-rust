@@ -50,12 +50,12 @@ inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return Vehicle::FromReco
 inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return Vehicle::FromRecord(v); }
 
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine.base(); }
-inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
+inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->Record().random_bits = bits; }
 inline uint16_t RustVehicleLastLoadingStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_loading_station.base(); }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->GetLastStationVisited().base(); }
-inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
+inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Record().load_unload_ticks; }
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
-inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
+inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->Record().last_loading_tick = tick; }
 inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->GetTile()); }
 inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
 inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
@@ -74,7 +74,7 @@ inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)
 inline void RustVehicleHideFilling(OpenTTDVehicle *v) noexcept { HideFillingPercent(&VehicleOf(v)->fill_percent_te_id); }
 inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, id); }
 inline void RustVehicleVisitInvalidateView(OpenTTDVehicle *v) noexcept { RustVehicleInvalidateView(VehicleOf(v)->index); }
-inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->trip_occupancy = occupancy; }
+inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->Record().trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
 inline void RustVehicleShowNewGRFError(EngineID engine, StringID first, StringID second, GRFBug bug, bool critical) noexcept { ShowNewGrfVehicleError(engine, first, second, bug, critical); }
 
@@ -104,7 +104,7 @@ inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcep
 inline void RustVehicleSetServiceIntervalIsPercent(Vehicle *v, bool percent) noexcept { v->SetServiceIntervalIsPercent(percent); }
 inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->Record().subtype = subtype; }
 inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
-inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
+inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->Record().unitnumber; }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }
@@ -115,8 +115,8 @@ inline OrderUnloadType RustVehicleOrderUnloadType(const Vehicle *v) noexcept { r
 inline OrderLoadType RustVehicleOrderLoadType(const Vehicle *v) noexcept { return v->current_order.GetLoadType(); }
 inline TimerGameCalendar::Date RustVehicleCalendarService(const Vehicle *v) noexcept { return v->date_of_last_service_newgrf; }
 inline TimerGameCalendar::Year RustVehicleBuildYear(const Vehicle *v) noexcept { return v->build_year; }
-inline uint8_t RustVehicleSprite(const Vehicle *v) noexcept { return v->spritenum; }
-inline void RustWriteVehicleSprite(Vehicle *v, uint8_t sprite) noexcept { v->spritenum = sprite; }
+inline uint8_t RustVehicleSprite(const Vehicle *v) noexcept { return v->Record().spritenum; }
+inline void RustWriteVehicleSprite(Vehicle *v, uint8_t sprite) noexcept { v->Record().spritenum = sprite; }
 inline void RustVehicleFlipImage(Vehicle *v) noexcept { RustWriteVehicleSprite(v, RustVehicleSprite(v) + 1); }
 inline SpriteID RustVehicleFirstSprite(const Vehicle *v) noexcept { return v->sprite_cache.sprite_seq.seq[0].sprite; }
 inline void RustWriteVehicleFirstSprite(Vehicle *v, SpriteID sprite) noexcept { v->sprite_cache.sprite_seq.seq[0].sprite = sprite; }
@@ -262,8 +262,8 @@ static void RustIndexedVehicleWrite(uint32_t id, Value value) noexcept { Write(V
 
 /** Base vehicle cargo and articulated fields shared by loading and link refresh. */
 inline bool RustVehicleUsesWagonOverride(const Vehicle *v) noexcept { return UsesWagonOverride(v); }
-inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->cargo_subtype; }
-inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->cargo_type; }
+inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->Record().cargo_subtype; }
+inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->Record().cargo_type; }
 inline void RustVehicleDetachPayment(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->cargo_payment = nullptr; }
 
 inline const GRFFile *RustEngineGRF(const Engine *engine) noexcept { return RustEngineGRF(RustEngine(engine)); }

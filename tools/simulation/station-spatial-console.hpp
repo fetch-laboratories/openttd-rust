@@ -77,10 +77,10 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 		StationNeed(cost.Succeeded() && RoadVehicle::Get(id)->Next() == nullptr, __LINE__); return RoadVehicle::Get(id);
 	};
 	RoadVehicle *v = build(), *part = build();
-	auto cargo_before = v->cargo_type; auto compatible_before = v->compatible_roadtypes;
+	auto cargo_before = FIXTURE_FIELD(v, cargo_type); auto compatible_before = v->compatible_roadtypes;
 	auto part_subtype = FIXTURE_FIELD(part, subtype);
 	for (CargoType cargo : {CargoType{0}, CargoType{1}}) {
-		v->cargo_type = cargo;
+		FIXTURE_FIELD(v, cargo_type) = cargo;
 		for (bool incompatible : {false, true}) {
 			v->compatible_roadtypes = incompatible ? RoadTypes{} : RoadTypes{ROADTYPE_ROAD};
 			RoadStop *first = Station602Primary(st, v), *next = first == nullptr ? nullptr : Station602Next(first, v);
@@ -88,7 +88,7 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 			StationNeed((first == nullptr) == incompatible, __LINE__);
 		}
 	}
-	v->cargo_type = 0; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
+	FIXTURE_FIELD(v, cargo_type) = 0; v->compatible_roadtypes = RoadTypes{ROADTYPE_ROAD};
 	RoadStop *bay = st->bus_stops; auto status = bay->status; bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free); bay->status.Reset(RoadStop::RoadStopStatusFlag::Bay1Free); bay->status.Set(RoadStop::RoadStopStatusFlag::EntryBusy);
 	StationNeed(Station602Primary(st, v) == bay, __LINE__);
 	FIXTURE_FIELD(part, subtype) = 0; part->SetArticulatedPart(); v->SetNext(part);
@@ -96,7 +96,7 @@ static void Station602Stops(TileIndex tile, DoCommandFlags exec)
 	StationNeed(drive != nullptr && IsDriveThroughStopTile(drive->xy) && Station602Next(drive, v) == nullptr, __LINE__);
 	fmt::print(stderr, "STCMD spatial602-stop occupied-articulated {} {}\n", bay->index.base(), drive->index.base());
 	v->SetNext(nullptr); FIXTURE_FIELD(part, subtype) = part_subtype; bay->status = status;
-	v->cargo_type = cargo_before; v->compatible_roadtypes = compatible_before;
+	FIXTURE_FIELD(v, cargo_type) = cargo_before; v->compatible_roadtypes = compatible_before;
 	for (RoadVehicle *vehicle : {part, v}) StationNeed(Command<CMD_SELL_VEHICLE>::Do(exec, vehicle->index, false, false, INVALID_CLIENT_ID).Succeeded(), __LINE__);
 	StationNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(exec, depot).Succeeded(), __LINE__);
 }
@@ -284,7 +284,7 @@ static void Station602Crash(bool reload)
 	st->goods[0].status.Set(GoodsEntry::State::Acceptance); st->goods[0].rating = 200;
 	Backup<bool> sound(_settings_client.sound.disaster, true);
 	uint passengers = 0;
-	for (RoadVehicle *part = bus; part != nullptr; part = part->Next()) if (IsCargoInClass(part->cargo_type, CargoClass::Passengers)) passengers += part->cargo.TotalCount();
+	for (RoadVehicle *part = bus; part != nullptr; part = part->Next()) if (IsCargoInClass(FIXTURE_FIELD(part, cargo_type), CargoClass::Passengers)) passengers += part->cargo.TotalCount();
 	StationNeed(bus->IsFrontEngine() && bus->Next() == nullptr && passengers == 20, __LINE__);
 	/* Original Vehicle::Crash samples all passengers once; RoadVehicle adds its driver. */
 	_station602_crash_rng = _random; _station602_crash_victims = _station602_crash_rng.Next(passengers + 1) + 1;

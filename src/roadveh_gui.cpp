@@ -39,10 +39,10 @@ void DrawRoadVehDetails(const Vehicle *v, const Rect &r)
 		std::array<StringID, NUM_CARGO> subtype_text{};
 
 		for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
-			max_cargo[u->cargo_type] += u->Record().cargo_cap;
+			max_cargo[u->Record().cargo_type] += u->Record().cargo_cap;
 			if (u->Record().cargo_cap > 0) {
 				StringID text = GetCargoSubtypeText(u);
-				if (text != STR_EMPTY) subtype_text[u->cargo_type] = text;
+				if (text != STR_EMPTY) subtype_text[u->Record().cargo_type] = text;
 			}
 		}
 
@@ -74,7 +74,7 @@ void DrawRoadVehDetails(const Vehicle *v, const Rect &r)
 
 			std::string str;
 			if (u->cargo.StoredCount() > 0) {
-				str = GetString(STR_VEHICLE_DETAILS_CARGO_FROM, u->cargo_type, u->cargo.StoredCount(), u->cargo.GetFirstStation());
+				str = GetString(STR_VEHICLE_DETAILS_CARGO_FROM, u->Record().cargo_type, u->cargo.StoredCount(), u->cargo.GetFirstStation());
 				feeder_share += u->cargo.GetFeederShare();
 			} else {
 				str = GetString(STR_VEHICLE_DETAILS_CARGO_EMPTY);
@@ -84,12 +84,12 @@ void DrawRoadVehDetails(const Vehicle *v, const Rect &r)
 		}
 		y += WidgetDimensions::scaled.vsep_normal;
 	} else {
-		DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->cargo_type, v->Record().cargo_cap, GetCargoSubtypeText(v)));
+		DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->Record().cargo_type, v->Record().cargo_cap, GetCargoSubtypeText(v)));
 		y += GetCharacterHeight(FS_NORMAL) + WidgetDimensions::scaled.vsep_normal;
 
 		std::string str;
 		if (v->cargo.StoredCount() > 0) {
-			str = GetString(STR_VEHICLE_DETAILS_CARGO_FROM, v->cargo_type, v->cargo.StoredCount(), v->cargo.GetFirstStation());
+			str = GetString(STR_VEHICLE_DETAILS_CARGO_FROM, v->Record().cargo_type, v->cargo.StoredCount(), v->cargo.GetFirstStation());
 			feeder_share += v->cargo.GetFeederShare();
 		} else {
 			str = GetString(STR_VEHICLE_DETAILS_CARGO_EMPTY);

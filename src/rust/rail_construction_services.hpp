@@ -34,8 +34,8 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	v->SetFreeWagon();
 	RustVehicleInvalidateDepot(v);
 
-	v->cargo_type = RustEngineDefaultCargo(engine);
-	assert(IsValidCargoType(v->cargo_type));
+	v->Record().cargo_type = RustEngineDefaultCargo(engine);
+	assert(IsValidCargoType(v->Record().cargo_type));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
 	v->Record().refit_cap = 0;
 
@@ -67,8 +67,8 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->SetTrack(TRACK_BIT_DEPOT);
 	RustWriteVehicleStatus(v, {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette});
 	RustWriteVehicleSprite(v, rvi->image_index);
-	v->cargo_type = RustEngineDefaultCargo(engine);
-	assert(IsValidCargoType(v->cargo_type));
+	v->Record().cargo_type = RustEngineDefaultCargo(engine);
+	assert(IsValidCargoType(v->Record().cargo_type));
 	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
 	v->Record().refit_cap = 0;
 	v->SetLastStationVisited(StationID::Invalid());
@@ -112,8 +112,8 @@ static void *RailNewRear(void *front) noexcept
 	RustWriteVehicleStatus(u, v->GetVehStatus());
 	u->SetVehStatus(u->GetVehStatus().Reset(VehState::Stopped));
 	RustWriteVehicleSprite(u, RustVehicleSprite(v) + 1);
-	u->cargo_type = v->cargo_type;
-	u->cargo_subtype = v->cargo_subtype;
+	u->Record().cargo_type = v->Record().cargo_type;
+	u->Record().cargo_subtype = v->Record().cargo_subtype;
 	u->Record().cargo_cap = v->Record().cargo_cap;
 	u->Record().refit_cap = v->Record().refit_cap;
 	u->SetRailTypes(RailTypes{RustTrainRailTypes(v)});

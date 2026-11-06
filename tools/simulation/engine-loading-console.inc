@@ -283,20 +283,20 @@ static void LoadingBuild(uint16_t local = 300)
 		fmt::print(stderr, "ENGINE loading-build {} {} {} {} {} {}\n", type, id, engine->index, cost.GetCost(), capacity, mail_capacity);
 		const CargoType mail = GetCargoTypeByLabel(CT_MAIL), passengers = GetCargoTypeByLabel(CT_PASSENGERS);
 		SaveRandomSeeds(&before);
-		const auto original = Vehicle::Get(id)->cargo_type;
+		const auto original = FIXTURE_FIELD(Vehicle::Get(id), cargo_type);
 		auto excluded = Command<CMD_REFIT_VEHICLE>::Do({}, id, passengers, 0, false, false, 0);
 		auto refused = Command<CMD_REFIT_VEHICLE>::Do({}, id, NUM_CARGO, 0, false, false, 0);
 		auto refit_test = Command<CMD_REFIT_VEHICLE>::Do({}, id, mail, 0, false, false, 0);
 		SaveRandomSeeds(&after);
-		LoadingRequire(std::get<0>(refused).Failed() && std::get<0>(excluded).Succeeded() && std::get<1>(excluded) == 0 && std::get<0>(refit_test).Succeeded() && Vehicle::Get(id)->cargo_type == original && TypeSameRng(before, after), "refit-tests");
+		LoadingRequire(std::get<0>(refused).Failed() && std::get<0>(excluded).Succeeded() && std::get<1>(excluded) == 0 && std::get<0>(refit_test).Succeeded() && FIXTURE_FIELD(Vehicle::Get(id), cargo_type) == original && TypeSameRng(before, after), "refit-tests");
 		auto refit = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, id, mail, 0, false, false, 0);
-		LoadingRequire(std::get<0>(refit).Succeeded() && std::get<0>(refit).GetCost() == std::get<0>(refit_test).GetCost() && std::get<1>(refit) == std::get<1>(refit_test) && Vehicle::Get(id)->cargo_type == mail, "refit-execute");
+		LoadingRequire(std::get<0>(refit).Succeeded() && std::get<0>(refit).GetCost() == std::get<0>(refit_test).GetCost() && std::get<1>(refit) == std::get<1>(refit_test) && FIXTURE_FIELD(Vehicle::Get(id), cargo_type) == mail, "refit-execute");
 		fmt::print(stderr, "ENGINE loading-refit {} {} {} {} {}\n", type, id, std::get<0>(refit).GetCost(), std::get<1>(refit), FIXTURE_FIELD(Vehicle::Get(id), cargo_cap));
 		if (local == 500) {
 			bool orders = false;
 			for (const Vehicle *source : Vehicle::Iterate()) {
 				if (source->index == id || FIXTURE_GET(source, Type, type) != type || FIXTURE_GET(source, Owner, owner) != company->index || !source->IsPrimaryVehicle() || source->GetNumOrders() == 0) continue;
-				if (type == VEH_ROAD && (source->cargo_type == passengers) != (Vehicle::Get(id)->cargo_type == passengers)) continue;
+				if (type == VEH_ROAD && (FIXTURE_FIELD(source, cargo_type) == passengers) != (FIXTURE_FIELD(Vehicle::Get(id), cargo_type) == passengers)) continue;
 				if (Command<CMD_CLONE_ORDER>::Do({}, CO_COPY, id, source->index).Failed()) continue;
 				orders = Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_COPY, id, source->index).Succeeded();
 				break;
@@ -347,8 +347,8 @@ static bool LoadingScenario(std::span<std::string_view> args)
 			uint count = 0;
 			for (const Vehicle *v : Vehicle::Iterate()) {
 				if (FIXTURE_GET(v, Type, type) != type || !v->IsPrimaryVehicle() || FIXTURE_GET(v, EngineType, engine_type) != LoadingEngine(1, type, local)->index) continue;
-				LoadingRequire(v->cargo_type == GetCargoTypeByLabel(CT_MAIL) && FIXTURE_FIELD(v, cargo_cap) > 0, "reloaded-vehicle");
-				fmt::print(stderr, "ENGINE loading-vehicle {} {} {} {} {}\n", type, v->index, FIXTURE_GET(v, EngineType, engine_type), v->cargo_type, FIXTURE_FIELD(v, cargo_cap));
+				LoadingRequire(FIXTURE_FIELD(v, cargo_type) == GetCargoTypeByLabel(CT_MAIL) && FIXTURE_FIELD(v, cargo_cap) > 0, "reloaded-vehicle");
+				fmt::print(stderr, "ENGINE loading-vehicle {} {} {} {} {}\n", type, v->index, FIXTURE_GET(v, EngineType, engine_type), FIXTURE_FIELD(v, cargo_type), FIXTURE_FIELD(v, cargo_cap));
 				if (properties) {
 					moving += !v->IsInDepot() && FIXTURE_FIELD(v, cur_speed) != 0;
 					fmt::print(stderr, "ENGINE properties-movement {} {} {} {} {}\n", type, FIXTURE_GET(v, Tile, tile), FIXTURE_FIELD(v, x_pos), FIXTURE_FIELD(v, y_pos), FIXTURE_FIELD(v, cur_speed));

@@ -62,7 +62,7 @@ void ConnectMultiheadedTrains()
 					if (!u->IsEngine()) {
 						/* we got a rear car without a front car. We will convert it to a front one */
 						u->SetEngine();
-						u->spritenum--;
+						u->Record().spritenum--;
 					}
 
 					/* Find a matching back part */
@@ -75,7 +75,7 @@ void ConnectMultiheadedTrains()
 							/* we found a car to partner with this engine. Now we will make sure it face the right way */
 							if (w->IsEngine()) {
 								w->ClearEngine();
-								w->spritenum++;
+								w->Record().spritenum++;
 							}
 							break;
 						}
@@ -139,7 +139,7 @@ void ConvertOldMultiheadToNew()
 							u->SetWagon();
 							break;
 						}
-						if (rvi->railveh_type == RAILVEH_MULTIHEAD && rvi->image_index == u->spritenum - 1) {
+						if (rvi->railveh_type == RAILVEH_MULTIHEAD && rvi->image_index == u->Record().spritenum - 1) {
 							/* rear end of a multiheaded engine */
 							u->SetMultiheaded();
 							break;
@@ -355,7 +355,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 			for (Vehicle *v : Vehicle::Iterate()) {
 				if (!v->IsPrimaryVehicle() && v->GetType() != VEH_DISASTER) {
 					v->current_order.Free();
-					v->unitnumber = 0;
+					v->Record().unitnumber = 0;
 				}
 			}
 		}
@@ -425,7 +425,7 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 	for (Vehicle *v : Vehicle::Iterate()) {
 		assert(v->First() != nullptr);
 
-		v->trip_occupancy = CalcPercentVehicleFilled(v, nullptr);
+		v->Record().trip_occupancy = CalcPercentVehicleFilled(v, nullptr);
 
 		switch (v->GetType()) {
 			case VEH_TRAIN: {
@@ -537,8 +537,8 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 			default: break;
 		}
 
-		if (part_of_load && v->unitnumber != 0) {
-			Company::Get(v->GetOwner())->freeunits[v->GetType()].UseID(v->unitnumber);
+		if (part_of_load && v->Record().unitnumber != 0) {
+			Company::Get(v->GetOwner())->freeunits[v->GetType()].UseID(v->Record().unitnumber);
 		}
 
 		v->UpdateDeltaXY();
@@ -668,8 +668,8 @@ public:
 		    SLE_GENERAL_NAME(SL_REF, "next", Vehicle, Record().next, REF_VEHICLE_RECORD_OLD, 0, SL_MIN_VERSION, SL_MAX_VERSION, 0),
 		SLE_CONDVAR(Vehicle, name,                  SLE_NAME,                     SL_MIN_VERSION,  SLV_84),
 		SLE_CONDSSTR(Vehicle, name,                  SLE_STR | SLF_ALLOW_CONTROL,  SLV_84, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, unitnumber,            SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_8),
-		SLE_CONDVAR(Vehicle, unitnumber,            SLE_UINT16,                   SLV_8, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().unitnumber, "unitnumber",            SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_8),
+		SLE_CONDVARNAME(Vehicle, Record().unitnumber, "unitnumber",            SLE_UINT16,                   SLV_8, SL_MAX_VERSION),
 		    SLE_CONDVARNAME(Vehicle, Record().owner, "owner", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 		SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_FILE_U16 | SLE_VAR_U32,   SL_MIN_VERSION,   SLV_6),
 		SLE_CONDVARNAME(Vehicle, Record().tile, "tile", SLE_UINT32,                   SLV_6, SL_MAX_VERSION),
@@ -684,7 +684,7 @@ public:
 		SLE_CONDVARNAME(Vehicle, Record().z_pos, "z_pos", SLE_INT32,                  SLV_164, SL_MAX_VERSION),
 		    SLE_CONDVARNAME(Vehicle, Record().direction, "direction", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 
-		    SLE_VAR(Vehicle, spritenum,             SLE_UINT8),
+		    SLE_CONDVARNAME(Vehicle, Record().spritenum, "spritenum", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
 		    SLE_CONDVARNAME(Vehicle, Record().engine_type, "engine_type", SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION),
 		    SLE_CONDVARNAME(Vehicle, Record().cur_speed, "cur_speed", SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION),
 		    SLE_CONDVARNAME(Vehicle, Record().subspeed, "subspeed", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
@@ -697,8 +697,8 @@ public:
 		SLE_CONDVARNAME(Vehicle, Record().last_station_visited, "last_station_visited", SLE_UINT16,                   SLV_5, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, last_loading_station,  SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
 
-		    SLE_VAR(Vehicle, cargo_type,            SLE_UINT8),
-		SLE_CONDVAR(Vehicle, cargo_subtype,         SLE_UINT8,                   SLV_35, SL_MAX_VERSION),
+		    SLE_CONDVARNAME(Vehicle, Record().cargo_type, "cargo_type", SLE_UINT8, SL_MIN_VERSION, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().cargo_subtype, "cargo_subtype",         SLE_UINT8,                   SLV_35, SL_MAX_VERSION),
 		SLEG_CONDVAR("cargo_days", _cargo_periods,  SLE_UINT8,                    SL_MIN_VERSION,  SLV_68),
 		SLEG_CONDVAR("cargo_source", _cargo_source, SLE_FILE_U8  | SLE_VAR_U16,   SL_MIN_VERSION,   SLV_7),
 		SLEG_CONDVAR("cargo_source", _cargo_source, SLE_UINT16,                   SLV_7,  SLV_68),
@@ -762,7 +762,7 @@ public:
 		SLE_CONDVAR(Vehicle, build_year,            SLE_FILE_U8 | SLE_VAR_I32,    SL_MIN_VERSION,  SLV_31),
 		SLE_CONDVAR(Vehicle, build_year,            SLE_INT32,                   SLV_31, SL_MAX_VERSION),
 
-		    SLE_VAR(Vehicle, load_unload_ticks,     SLE_UINT16),
+		    SLE_CONDVARNAME(Vehicle, Record().load_unload_ticks, "load_unload_ticks", SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION),
 		SLEG_CONDVAR("cargo_paid_for", _cargo_paid_for, SLE_UINT16,              SLV_45, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, vehicle_flags,         SLE_FILE_U8 | SLE_VAR_U16,   SLV_40, SLV_180),
 		SLE_CONDVAR(Vehicle, vehicle_flags,         SLE_UINT16,                 SLV_180, SL_MAX_VERSION),
@@ -776,8 +776,8 @@ public:
 		SLE_CONDVAR(Vehicle, value,                 SLE_FILE_I32 | SLE_VAR_I64,   SL_MIN_VERSION,  SLV_65),
 		SLE_CONDVAR(Vehicle, value,                 SLE_INT64,                   SLV_65, SL_MAX_VERSION),
 
-		SLE_CONDVAR(Vehicle, random_bits,           SLE_FILE_U8 | SLE_VAR_U16,    SLV_2, SLV_EXTEND_VEHICLE_RANDOM),
-		SLE_CONDVAR(Vehicle, random_bits,           SLE_UINT16,                   SLV_EXTEND_VEHICLE_RANDOM, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().random_bits, "random_bits",           SLE_FILE_U8 | SLE_VAR_U16,    SLV_2, SLV_EXTEND_VEHICLE_RANDOM),
+		SLE_CONDVARNAME(Vehicle, Record().random_bits, "random_bits",           SLE_UINT16,                   SLV_EXTEND_VEHICLE_RANDOM, SL_MAX_VERSION),
 		SLE_CONDVARNAME(Vehicle, waiting_random_triggers, "waiting_triggers", SLE_UINT8, SLV_2, SL_MAX_VERSION),
 
 		SLE_CONDREF(Vehicle, next_shared,           REF_VEHICLE,                  SLV_2, SL_MAX_VERSION),
@@ -785,7 +785,7 @@ public:
 
 		SLE_CONDVAR(Vehicle, current_order_time,    SLE_FILE_U32 | SLE_VAR_I32,  SLV_67, SLV_TIMETABLE_TICKS_TYPE),
 		SLE_CONDVAR(Vehicle, current_order_time,    SLE_INT32,                   SLV_TIMETABLE_TICKS_TYPE, SL_MAX_VERSION),
-		SLE_CONDVAR(Vehicle, last_loading_tick,     SLE_UINT64,                   SLV_LAST_LOADING_TICK, SL_MAX_VERSION),
+		SLE_CONDVARNAME(Vehicle, Record().last_loading_tick, "last_loading_tick",     SLE_UINT64,                   SLV_LAST_LOADING_TICK, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, lateness_counter,      SLE_INT32,                   SLV_67, SL_MAX_VERSION),
 
 		SLE_CONDVAR(Vehicle, depot_unbunching_last_departure, SLE_UINT64,        SLV_DEPOT_UNBUNCHING, SL_MAX_VERSION),
@@ -1067,7 +1067,7 @@ public:
 		    SLEG_VAR("animation_state", EffectVehicleAnimationScope::State(), SLE_UINT16),
 		    SLEG_VAR("animation_substate", EffectVehicleAnimationScope::Substate(), SLE_UINT8),
 
-		 SLE_CONDVAR(Vehicle, spritenum,             SLE_UINT8,                    SLV_2, SL_MAX_VERSION),
+		 SLE_CONDVARNAME(Vehicle, Record().spritenum, "spritenum",             SLE_UINT8,                    SLV_2, SL_MAX_VERSION),
 	};
 	static inline const SaveLoadCompatTable compat_description = _vehicle_effect_sl_compat;
 

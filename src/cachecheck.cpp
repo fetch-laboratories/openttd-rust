@@ -118,23 +118,23 @@ void CheckCaches()
 		for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
 			FillNewGRFVehicleCache(u);
 			if (grf_cache[length] != u->grf_cache) {
-				Debug(desync, 2, "warning: newgrf cache mismatch: type {}, vehicle {}, company {}, unit number {}, wagon {}", v->GetType(), v->index, v->GetOwner(), v->unitnumber, length);
+				Debug(desync, 2, "warning: newgrf cache mismatch: type {}, vehicle {}, company {}, unit number {}, wagon {}", v->GetType(), v->index, v->GetOwner(), v->Record().unitnumber, length);
 			}
 			if (veh_cache[length] != vehicle_cache(u)) {
-				Debug(desync, 2, "warning: vehicle cache mismatch: type {}, vehicle {}, company {}, unit number {}, wagon {}", v->GetType(), v->index, v->GetOwner(), v->unitnumber, length);
+				Debug(desync, 2, "warning: vehicle cache mismatch: type {}, vehicle {}, company {}, unit number {}, wagon {}", v->GetType(), v->index, v->GetOwner(), v->Record().unitnumber, length);
 			}
 			switch (u->GetType()) {
 				case VEH_TRAIN:
 					if (openttd_rust_ground_cache_equal(&gro_cache[length], &Train::From(u)->gcache) == 0) {
-						Debug(desync, 2, "warning: train ground vehicle cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->unitnumber, length);
+						Debug(desync, 2, "warning: train ground vehicle cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->Record().unitnumber, length);
 					}
 					if (tra_cache[length] != Train::From(u)->CopyTrainCache()) {
-						Debug(desync, 2, "warning: train cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->unitnumber, length);
+						Debug(desync, 2, "warning: train cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->Record().unitnumber, length);
 					}
 					break;
 				case VEH_ROAD:
 					if (openttd_rust_ground_cache_equal(&gro_cache[length], &RoadVehicle::From(u)->gcache) == 0) {
-						Debug(desync, 2, "warning: road vehicle ground vehicle cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->unitnumber, length);
+						Debug(desync, 2, "warning: road vehicle ground vehicle cache mismatch: vehicle {}, company {}, unit number {}, wagon {}", v->index, v->GetOwner(), v->Record().unitnumber, length);
 					}
 					break;
 				default:

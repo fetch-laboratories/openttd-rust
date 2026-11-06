@@ -2415,11 +2415,11 @@ bool AfterLoadGame()
 	/* Wait counter and load/unload ticks got split. */
 	if (IsSavegameVersionBefore(SLV_136)) {
 		for (Aircraft *a : Aircraft::Iterate()) {
-			a->turn_counter = a->current_order.IsType(OT_LOADING) ? 0 : a->load_unload_ticks;
+			a->turn_counter = a->current_order.IsType(OT_LOADING) ? 0 : a->Record().load_unload_ticks;
 		}
 
 		for (Train *t : Train::Iterate()) {
-			t->SetWaitCounter(t->current_order.IsType(OT_LOADING) ? 0 : t->load_unload_ticks);
+			t->SetWaitCounter(t->current_order.IsType(OT_LOADING) ? 0 : t->Record().load_unload_ticks);
 		}
 	}
 
@@ -3235,7 +3235,7 @@ bool AfterLoadGame()
 	/* Use current order time to approximate last loading time */
 	if (IsSavegameVersionBefore(SLV_LAST_LOADING_TICK)) {
 		for (Vehicle *v : Vehicle::Iterate()) {
-			v->last_loading_tick = std::max(TimerGameTick::counter, static_cast<uint64_t>(v->current_order_time)) - v->current_order_time;
+			v->Record().last_loading_tick = std::max(TimerGameTick::counter, static_cast<uint64_t>(v->current_order_time)) - v->current_order_time;
 		}
 	}
 

@@ -132,7 +132,7 @@ void GetShipSpriteSize(EngineID engine, uint &width, uint &height, int &xoffs, i
 
 void Ship::GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const
 {
-	uint8_t spritenum = this->spritenum;
+	uint8_t spritenum = this->Record().spritenum;
 
 	if (image_type == EIT_ON_MAP) direction = this->GetRotation();
 
@@ -180,7 +180,7 @@ Trackdir Ship::GetVehicleTrackdir() const
 
 void Ship::MarkDirty()
 {
-	this->colourmap = PAL_NONE;
+	this->Record().colourmap = PAL_NONE;
 	this->UpdateViewport(true, false);
 	this->UpdateCache();
 }

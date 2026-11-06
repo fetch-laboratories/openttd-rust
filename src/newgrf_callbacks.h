@@ -44,7 +44,7 @@ enum CallbackID : uint16_t {
 	CBID_STATION_DRAW_TILE_LAYOUT        = 0x14,
 
 	/**
-	 * Refit capacity, the passed vehicle needs to have its ->cargo_type set to
+	 * Refit capacity, the passed vehicle needs to have its ->Record().cargo_type set to
 	 * the cargo we are refitting to, returns the new cargo capacity.
 	 */
 	CBID_VEHICLE_REFIT_CAPACITY          = 0x15, // 15 bit callback

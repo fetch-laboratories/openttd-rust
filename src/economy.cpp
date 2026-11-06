@@ -337,7 +337,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.part = [](OpenTTDVehicle *handle) noexcept -> OpenTTDLoadingPart {
 		Vehicle *v = VehicleOf(handle);
 		return {
-			.cargo = v->cargo_type,
+			.cargo = v->Record().cargo_type,
 			.unloading = v->vehicle_flags.Test(VehicleFlag::CargoUnloading),
 		};
 	},
@@ -362,7 +362,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.cargo_capacity = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoCapacity {
 		Vehicle *v = VehicleOf(handle);
-		return {RustVehicleCargoOwner(v), v->cargo_type};
+		return {RustVehicleCargoOwner(v), v->Record().cargo_type};
 	},
 	.cargo_type = RustVehicleCargoType,
 	.stored_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
@@ -390,14 +390,14 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.load_unload_ticks = RustVehicleLoadUnloadTicks,
 	.cargo_multiplier = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
 		Vehicle *v = VehicleOf(handle);
-		return CargoSpec::Get(v->cargo_type)->multiplier;
+		return CargoSpec::Get(v->Record().cargo_type)->multiplier;
 	},
 	.full_load_order = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->current_order.IsFullLoadOrder();
 	},
 	.passenger_cargo = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle);
-		return IsCargoInClass(v->cargo_type, CargoClass::Passengers);
+		return IsCargoInClass(v->Record().cargo_type, CargoClass::Passengers);
 	},
 	.station_length_penalty = []() noexcept -> bool {
 		return _settings_game.order.station_length_loading_penalty;
@@ -425,7 +425,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.set_load_ticks = [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
-		front->load_unload_ticks = value;
+		front->Record().load_unload_ticks = value;
 	},
 	.subtract_profit = [](OpenTTDVehicle *handle, int64_t value) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
@@ -462,33 +462,33 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.stage = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint8_t unload, void *next_stations, OpenTTDNativeCargoPayment *payment) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry &ge = st->goods[v->Record().cargo_type];
 		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
-		v->cargo.Stage(ge.status.Test(GoodsEntry::State::Acceptance), st->index, next, static_cast<OrderUnloadType>(unload), &ge, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
+		v->cargo.Stage(ge.status.Test(GoodsEntry::State::Acceptance), st->index, next, static_cast<OrderUnloadType>(unload), &ge, v->Record().cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
 	},
 	.return_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry &ge = st->goods[v->Record().cargo_type];
 		v->cargo.Return(amount, &ge.GetOrCreateData().cargo, StationID::Invalid(), v->GetCargoTile());
 	},
 	.unload_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, OpenTTDNativeCargoPayment *payment) noexcept -> uint32_t {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
-		return v->cargo.Unload(amount, &ge.GetOrCreateData().cargo, v->cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
+		GoodsEntry &ge = st->goods[v->Record().cargo_type];
+		return v->cargo.Unload(amount, &ge.GetOrCreateData().cargo, v->Record().cargo_type, static_cast<CargoPayment *>(payment), v->GetCargoTile());
 	},
 	.load_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, void *next_stations) noexcept -> uint32_t {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry &ge = st->goods[v->Record().cargo_type];
 		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
 		return ge.GetOrCreateData().cargo.Load(amount, &v->cargo, next, v->GetCargoTile());
 	},
 	.reserve_cargo = [](OpenTTDStation *station, OpenTTDVehicle *vehicle, uint32_t amount, void *next_stations) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		GoodsEntry &ge = st->goods[v->cargo_type];
+		GoodsEntry &ge = st->goods[v->Record().cargo_type];
 		std::span<const StationID> next = *static_cast<std::vector<StationID> *>(next_stations);
 		ge.GetOrCreateData().cargo.Reserve(amount, &v->cargo, next, v->GetCargoTile());
 	},

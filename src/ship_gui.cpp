@@ -43,7 +43,7 @@ void DrawShipImage(const Vehicle *v, const Rect &r, VehicleID selection, EngineI
 	int y = ScaleSpriteTrad(-1) + CentreBounds(r.top, r.bottom, 0);
 
 	seq.Draw(x, y, GetVehiclePalette(v), false);
-	if (v->Record().cargo_cap > 0) DrawCargoIconOverlay(x, y, v->cargo_type);
+	if (v->Record().cargo_cap > 0) DrawCargoIconOverlay(x, y, v->Record().cargo_type);
 
 	if (v->index == selection) {
 		x += x_offs;
@@ -66,11 +66,11 @@ void DrawShipDetails(const Vehicle *v, const Rect &r)
 	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_BUILT_VALUE, PackEngineNameDParam(v->GetEngineType(), EngineNameContext::VehicleDetails), v->build_year, v->value));
 	y += GetCharacterHeight(FS_NORMAL);
 
-	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->cargo_type, v->Record().cargo_cap, GetCargoSubtypeText(v)));
+	DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->Record().cargo_type, v->Record().cargo_cap, GetCargoSubtypeText(v)));
 	y += GetCharacterHeight(FS_NORMAL) + WidgetDimensions::scaled.vsep_normal;
 
 	if (v->cargo.StoredCount() > 0) {
-		DrawString(r.left, r.right, y, GetString(STR_VEHICLE_DETAILS_CARGO_FROM, v->cargo_type, v->cargo.StoredCount(), v->cargo.GetFirstStation()));
+		DrawString(r.left, r.right, y, GetString(STR_VEHICLE_DETAILS_CARGO_FROM, v->Record().cargo_type, v->cargo.StoredCount(), v->cargo.GetFirstStation()));
 	} else {
 		DrawString(r.left, r.right, y, STR_VEHICLE_DETAILS_CARGO_EMPTY);
 	}

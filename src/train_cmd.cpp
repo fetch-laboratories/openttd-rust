@@ -217,7 +217,7 @@ static SpriteID GetDefaultTrainSprite(uint8_t spritenum, Direction direction)
  */
 void Train::GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const
 {
-	uint8_t spritenum = this->spritenum;
+	uint8_t spritenum = this->Record().spritenum;
 
 	if (this->GetTrainFlags().Test(VehicleRailFlag::Flipped)) direction = ReverseDir(direction);
 

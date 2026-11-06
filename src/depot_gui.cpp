@@ -389,7 +389,7 @@ struct DepotWindow : Window {
 			Rect flag = r.WithWidth(this->flag_size.width, rtl).WithHeight(this->flag_size.height).Translate(0, diff_y);
 			DrawSpriteIgnorePadding((v->GetVehStatus().Test(VehState::Stopped)) ? SPR_FLAG_VEH_STOPPED : SPR_FLAG_VEH_RUNNING, PAL_NONE, flag, SA_CENTER);
 
-			DrawString(text, GetString(STR_JUST_COMMA, v->unitnumber), (v->max_age - CalendarTime::DAYS_IN_LEAP_YEAR) >= v->age ? TC_BLACK : TC_RED);
+			DrawString(text, GetString(STR_JUST_COMMA, v->Record().unitnumber), (v->max_age - CalendarTime::DAYS_IN_LEAP_YEAR) >= v->age ? TC_BLACK : TC_RED);
 		}
 	}
 
@@ -890,9 +890,9 @@ struct DepotWindow : Window {
 		/* loop through vehicle chain and collect cargoes */
 		uint num = 0;
 		for (const Vehicle *w = v; w != nullptr; w = w->Next()) {
-			if (w->Record().cargo_cap > 0 && w->cargo_type < NUM_CARGO) {
-				capacity[w->cargo_type] += w->Record().cargo_cap;
-				loaded  [w->cargo_type] += w->cargo.StoredCount();
+			if (w->Record().cargo_cap > 0 && w->Record().cargo_type < NUM_CARGO) {
+				capacity[w->Record().cargo_type] += w->Record().cargo_cap;
+				loaded  [w->Record().cargo_type] += w->cargo.StoredCount();
 			}
 
 			if (w->GetType() == VEH_TRAIN && !w->HasArticulatedPart()) {

@@ -53,7 +53,7 @@ static void ReservedDeparture()
 	for (Vehicle *u : Vehicle::Iterate()) {
 		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING) || FIXTURE_FIELD(u, cargo_cap) < u->cargo.TotalCount() + 7) continue;
 		Station *st = Station::Get(FIXTURE_GET(u, LastStationVisited, last_station_visited));
-		auto &cargo = st->goods[u->cargo_type].GetOrCreateData().cargo;
+		auto &cargo = st->goods[FIXTURE_FIELD(u, cargo_type)].GetOrCreateData().cargo;
 		if (!CargoPacket::CanAllocateItem()) std::abort();
 		cargo.Append(new CargoPacket(7, 3, st->index, st->xy, Money(133)), StationID::Invalid());
 		const std::array<StationID, 1> next{StationID::Invalid()};

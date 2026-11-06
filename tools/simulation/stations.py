@@ -996,7 +996,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	Company *company = *Company::Iterate().begin();
 	RoadVehicle *bus = nullptr;
 	if (args[1] == "removed-destination") {
-		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { bus = v; break; }
+		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && FIXTURE_FIELD(v, cargo_type) == 0 && !v->IsInDepot()) { bus = v; break; }
 		StationNeed(bus != nullptr, __LINE__);
 		company = Company::Get(FIXTURE_GET(bus, Owner, owner));
 	}

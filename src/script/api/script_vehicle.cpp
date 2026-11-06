@@ -297,7 +297,7 @@
 {
 	if (!IsPrimaryVehicle(vehicle_id)) return -1;
 
-	return ::Vehicle::Get(vehicle_id)->unitnumber;
+	return ::Vehicle::Get(vehicle_id)->Record().unitnumber;
 }
 
 /* static */ std::optional<std::string> ScriptVehicle::GetName(VehicleID vehicle_id)
@@ -419,7 +419,7 @@
 
 	uint32_t amount = 0;
 	for (const Vehicle *v = ::Vehicle::Get(vehicle_id); v != nullptr; v = v->Next()) {
-		if (v->cargo_type == cargo) amount += v->Record().cargo_cap;
+		if (v->Record().cargo_type == cargo) amount += v->Record().cargo_cap;
 	}
 
 	return amount;
@@ -432,7 +432,7 @@
 
 	uint32_t amount = 0;
 	for (const Vehicle *v = ::Vehicle::Get(vehicle_id); v != nullptr; v = v->Next()) {
-		if (v->cargo_type == cargo) amount += v->cargo.StoredCount();
+		if (v->Record().cargo_type == cargo) amount += v->cargo.StoredCount();
 	}
 
 	return amount;

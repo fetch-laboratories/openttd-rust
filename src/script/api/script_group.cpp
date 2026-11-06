@@ -211,7 +211,7 @@
 		if (v->group_id != group_id) continue;
 		if (!v->IsPrimaryVehicle()) continue;
 
-		occupancy += v->trip_occupancy;
+		occupancy += v->Record().trip_occupancy;
 		vehicle_count++;
 	}
 

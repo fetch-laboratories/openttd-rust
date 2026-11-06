@@ -55,7 +55,7 @@ static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_ser
 static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 {
 	if (result.rounds == 0 || _debug_yapf_level < 3) return;
-	RustYapfDebug('r', result.found, v->unitnumber, result.rounds, result.open, result.closed, 0.0f,
+	RustYapfDebug('r', result.found, v->Record().unitnumber, result.rounds, result.open, result.closed, 0.0f,
 		result.found ? result.cost : -1, result.found ? result.distance : -1);
 }
 

@@ -24,7 +24,7 @@ static bool FleetGroup_countable(void *shell) noexcept { auto *v = static_cast<V
 static void * FleetGroup_first_shared(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->FirstShared(); }
 static void * FleetGroup_next_shared(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->NextShared(); }
 static void FleetGroup_set_membership(void *shell, uint16_t id) noexcept { static_cast<Vehicle *>(shell)->group_id = GroupID(id); }
-static void FleetGroup_invalidate_cache(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); v->colourmap = PAL_NONE; RustVehicleInvalidateNewGRFCache(v); }
+static void FleetGroup_invalidate_cache(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); v->Record().colourmap = PAL_NONE; RustVehicleInvalidateNewGRFCache(v); }
 static void FleetGroup_viewport(void *shell) noexcept { static_cast<Vehicle *>(shell)->UpdateViewport(true); }
 static void * FleetGroup_stats(uint8_t company, uint16_t id, uint8_t type) noexcept { return GroupStatistics::Get(CompanyID(company), GroupID(id), static_cast<VehicleType>(type)).state.state; }
 static void * FleetGroup_head(uint8_t company) noexcept { return Company::Get(CompanyID(company))->renewal_head.state; }

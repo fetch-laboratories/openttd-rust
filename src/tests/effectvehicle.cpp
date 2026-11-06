@@ -210,7 +210,7 @@ TEST_CASE("Effect vehicles - all factory variants and relative terrain coordinat
 		CHECK(v->GetAnimationState() == 0);
 		CHECK(v->GetAnimationSubstate() == 0);
 		CHECK(v->GetTile() == TileIndex{});
-		CHECK(v->spritenum == 0);
+		CHECK(v->Record().spritenum == 0);
 		auto *relative = CreateEffectVehicleRel(v, -4, 5, -6, EV_ELECTRIC_SPARK);
 		REQUIRE(relative != nullptr);
 		CHECK((relative->Record().x_pos == 36 && relative->Record().y_pos == 55 && relative->Record().z_pos == 54));

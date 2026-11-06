@@ -175,10 +175,10 @@ void FixOldVehicles(LoadgameState &ls)
 		}
 
 		/* For some reason we need to correct for this */
-		switch (v->spritenum) {
+		switch (v->Record().spritenum) {
 			case 0xfd: break;
-			case 0xff: v->spritenum = 0xfe; break;
-			default:   v->spritenum >>= 1; break;
+			case 0xff: v->Record().spritenum = 0xfe; break;
+			default:   v->Record().spritenum >>= 1; break;
 		}
 
 		/* Vehicle-subtype is different in TTD(Patch) */
@@ -1208,7 +1208,7 @@ static const OldChunks vehicle_chunk[] = {
 	OCL_NULL ( 1 ), ///< num_orders, now calculated
 	OCL_SVAR(  OC_UINT8, Vehicle, cur_implicit_order_index ),
 	OCL_SVAR(   OC_TILE, Vehicle, Record().dest_tile ),
-	OCL_SVAR( OC_UINT16, Vehicle, load_unload_ticks ),
+	OCL_SVAR( OC_UINT16, Vehicle, Record().load_unload_ticks ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, date_of_last_service ),
 	OCL_SVAR( OC_UINT16, Vehicle, service_interval ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().last_station_visited ),
@@ -1237,7 +1237,7 @@ static const OldChunks vehicle_chunk[] = {
 	OCL_SVAR(  OC_UINT8, Vehicle, Record().acceleration ),
 	OCL_SVAR(  OC_UINT8, Vehicle, Record().progress ),
 
-	OCL_SVAR(  OC_UINT8, Vehicle, cargo_type ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().cargo_type ),
 	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, Record().cargo_cap ),
 	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().cargo_cap ),
 	OCL_VAR ( OC_TTD | OC_UINT16, 1, &_cargo_count ),
@@ -1250,12 +1250,12 @@ static const OldChunks vehicle_chunk[] = {
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, age ),
 	OCL_SVAR( OC_FILE_U16 | OC_VAR_U32, Vehicle, max_age ),
 	OCL_SVAR( OC_FILE_U8 | OC_VAR_I32, Vehicle, build_year ),
-	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, unitnumber ),
+	OCL_SVAR( OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().unitnumber ),
 
 	OCL_SVAR( OC_TTD | OC_UINT16, Vehicle, Record().engine_type ),
 	OCL_SVAR( OC_TTO | OC_FILE_U8 | OC_VAR_U16, Vehicle, Record().engine_type ),
 
-	OCL_SVAR(  OC_UINT8, Vehicle, spritenum ),
+	OCL_SVAR(  OC_UINT8, Vehicle, Record().spritenum ),
 	OCL_SVAR(  OC_UINT8, Vehicle, Record().day_counter ),
 
 	OCL_SVAR(  OC_UINT8, Vehicle, breakdowns_since_last_service ),
@@ -1339,24 +1339,24 @@ bool LoadOldVehicle(LoadgameState &ls, int num)
 						 48,  52,  54,  66,  68,  70,  72,  74,  76,  78,  80,  82,  84,  86, 120, 122,
 						124, 126, 128, 130, 132, 134, 136, 138, 140
 					};
-					if (v->spritenum / 2 >= lengthof(spriteset_rail)) return false;
-					v->spritenum = spriteset_rail[v->spritenum / 2]; // adjust railway sprite set offset
+					if (v->Record().spritenum / 2 >= lengthof(spriteset_rail)) return false;
+					v->Record().spritenum = spriteset_rail[v->Record().spritenum / 2]; // adjust railway sprite set offset
 					break;
 				}
 
 				case VEH_ROAD:
-					if (v->spritenum >= 22) v->spritenum += 12;
+					if (v->Record().spritenum >= 22) v->Record().spritenum += 12;
 					break;
 
 				case VEH_SHIP:
-					v->spritenum += 2;
+					v->Record().spritenum += 2;
 
-					switch (v->spritenum) {
+					switch (v->Record().spritenum) {
 						case 2: // oil tanker && cargo type != oil
-							if (v->cargo_type != 3) v->spritenum = 0; // make it a coal/goods ship
+							if (v->Record().cargo_type != 3) v->Record().spritenum = 0; // make it a coal/goods ship
 							break;
 						case 4: // passenger ship && cargo type == mail
-							if (v->cargo_type == 2) v->spritenum = 0; // make it a mail ship
+							if (v->Record().cargo_type == 2) v->Record().spritenum = 0; // make it a mail ship
 							break;
 						default:
 							break;

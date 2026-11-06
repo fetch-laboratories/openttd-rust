@@ -90,7 +90,7 @@ static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcep
 static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return {.loading_tick = v->last_loading_tick, .last_loading = RustVehicleLastLoadingStation(handle), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
+	return {.loading_tick = v->Record().last_loading_tick, .last_loading = RustVehicleLastLoadingStation(handle), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
 }
 static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 {
@@ -310,7 +310,7 @@ uint Vehicle::Crash(bool)
 	/* crash all wagons, and count passengers */
 	for (Vehicle *v = this; v != nullptr; v = v->Next()) {
 		/* We do not transfer reserver cargo back, so TotalCount() instead of StoredCount() */
-		if (IsCargoInClass(v->cargo_type, CargoClass::Passengers)) pass += v->cargo.TotalCount();
+		if (IsCargoInClass(v->Record().cargo_type, CargoClass::Passengers)) pass += v->cargo.TotalCount();
 		v->SetVehStatus(v->GetVehStatus().Set(VehState::Crashed));
 		v->MarkAllViewportsDirty();
 	}
@@ -387,7 +387,7 @@ Vehicle::Vehicle(VehicleType type) : BaseVehicle(type)
 	this->sprite_cache.old_coord.left = INVALID_COORD;
 	this->group_id           = DEFAULT_GROUP;
 	this->fill_percent_te_id = INVALID_TE_ID;
-	this->colourmap          = PAL_NONE;
+	this->Record().colourmap          = PAL_NONE;
 	this->last_loading_station = StationID::Invalid();
 }
 
@@ -472,7 +472,7 @@ void ResetVehicleHash()
 
 void ResetVehicleColourMap()
 {
-	for (Vehicle *v : Vehicle::Iterate()) { v->colourmap = PAL_NONE; }
+	for (Vehicle *v : Vehicle::Iterate()) { v->Record().colourmap = PAL_NONE; }
 }
 
 /**
@@ -635,7 +635,7 @@ void Vehicle::PreDestructor()
 		DeleteGroupHighlightOfVehicle(this);
 	}
 
-	Company::Get(this->GetOwner())->freeunits[this->GetType()].ReleaseID(this->unitnumber);
+	Company::Get(this->GetOwner())->freeunits[this->GetType()].ReleaseID(this->Record().unitnumber);
 
 	if (this->GetType() == VEH_AIRCRAFT && this->IsPrimaryVehicle()) {
 		Aircraft *a = Aircraft::From(this);
@@ -1298,7 +1298,7 @@ const Livery *GetEngineLivery(EngineID engine_type, CompanyID company, EngineID 
 
 static PaletteID GetEngineColourMap(EngineID engine_type, CompanyID company, EngineID parent_engine_type, const Vehicle *v)
 {
-	PaletteID map = (v != nullptr) ? v->colourmap : PAL_NONE;
+	PaletteID map = (v != nullptr) ? v->Record().colourmap : PAL_NONE;
 
 	/* Return cached value if any */
 	if (map != PAL_NONE) return map;
@@ -1316,7 +1316,7 @@ static PaletteID GetEngineColourMap(EngineID engine_type, CompanyID company, Eng
 			 * map else it's returned as-is. */
 			if (!HasBit(callback, 14)) {
 				/* Update cache */
-				if (v != nullptr) const_cast<Vehicle *>(v)->colourmap = map;
+				if (v != nullptr) const_cast<Vehicle *>(v)->Record().colourmap = map;
 				return map;
 			}
 		}
@@ -1335,7 +1335,7 @@ static PaletteID GetEngineColourMap(EngineID engine_type, CompanyID company, Eng
 	if (twocc) map += livery->colour2 * 16;
 
 	/* Update cache */
-	if (v != nullptr) const_cast<Vehicle *>(v)->colourmap = map;
+	if (v != nullptr) const_cast<Vehicle *>(v)->Record().colourmap = map;
 	return map;
 }
 
@@ -1404,8 +1404,8 @@ void Vehicle::LeaveStation()
  */
 void Vehicle::ReleaseUnitNumber()
 {
-	Company::Get(this->GetOwner())->freeunits[this->GetType()].ReleaseID(this->unitnumber);
-	this->unitnumber = 0;
+	Company::Get(this->GetOwner())->freeunits[this->GetType()].ReleaseID(this->Record().unitnumber);
+	this->Record().unitnumber = 0;
 }
 
 /**

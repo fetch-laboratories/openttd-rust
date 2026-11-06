@@ -244,7 +244,6 @@ public:
 	friend void Ptrs_VEHS();
 
 
-
 	/* The shared record holds tile, dest_tile, x/y/z_pos, direction, owner, engine_type,
 	 * cur_speed, subspeed, acceleration, motion_counter, progress, last_station_visited,
 	 * cargo_cap, refit_cap, cargo_age_counter, day/tick counters, running_ticks,
@@ -277,7 +276,6 @@ public:
 	Vehicle *hash_viewport_next = nullptr; ///< NOSAVE: Next vehicle in the visual location hash.
 	Vehicle **hash_viewport_prev = nullptr; ///< NOSAVE: Previous vehicle in the visual location hash.
 
-	SpriteID colourmap{}; ///< NOSAVE: cached colour mapping
 
 	/* Related to age and service time */
 	TimerGameCalendar::Year build_year{}; ///< Year the vehicle has been built.
@@ -293,30 +291,17 @@ public:
 	uint8_t breakdown_chance = 0; ///< Current chance of breakdowns.
 
 
-	/**
-	 * currently displayed sprite index
-	 * 0xfd == custom sprite, 0xfe == custom second head sprite
-	 * 0xff == reserved for another custom sprite
-	 */
-	uint8_t spritenum = 0;
 	SpriteBounds bounds{}; ///< Bounding box of vehicle.
 
 	TextEffectID fill_percent_te_id = INVALID_TE_ID; ///< a text-effect id to a loading indicator object
-	UnitID unitnumber{}; ///< unit number, for display purposes only
 
 
 	VehicleRandomTriggers waiting_random_triggers; ///< Triggers to be yet matched before rerandomizing the random bits.
-	uint16_t random_bits = 0; ///< Bits used for randomized variational spritegroups.
 
 	StationID last_loading_station = StationID::Invalid(); ///< Last station the vehicle has stopped at and could possibly leave from with any cargo loaded.
-	TimerGameTick::TickCounter last_loading_tick{}; ///< Last TimerGameTick::counter tick that the vehicle has stopped at a station and could possibly leave with any cargo loaded.
 
 	VehicleCargoList cargo{}; ///< The cargo this vehicle is carrying
-	CargoType cargo_type{}; ///< type of cargo this vehicle is carrying
-	uint8_t cargo_subtype = 0; ///< Used for livery refits (NewGRF variations)
-	int8_t trip_occupancy = 0; ///< NOSAVE: Occupancy of vehicle of the current trip (updated after leaving a station).
 
-	uint16_t load_unload_ticks = 0; ///< Ticks to wait before starting next cycle.
 
 	/* Order construction also starts DestinationID's lifetime and all original
 	 * defaults, before controllers or loaders can obtain the facade reference. */
@@ -748,7 +733,7 @@ public:
 		this->CopyConsistPropertiesFrom(src);
 
 		this->ReleaseUnitNumber();
-		this->unitnumber = src->unitnumber;
+		this->Record().unitnumber = src->Record().unitnumber;
 
 		this->current_order = src->current_order;
 		this->StoreDestTile(src->GetDestTile());
@@ -756,7 +741,7 @@ public:
 		this->profit_this_year = src->profit_this_year;
 		this->profit_last_year = src->profit_last_year;
 
-		src->unitnumber = 0;
+		src->Record().unitnumber = 0;
 	}
 
 

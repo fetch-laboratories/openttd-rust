@@ -74,7 +74,7 @@ static OpenTTDShipYapfInput ShipInput(const Ship *v, bool blocked = false)
 	}
 	return {Map::SizeX(), Map::SizeY(), v->GetTile().base(), v->GetDestTile().base(), static_cast<int32_t>(_settings_game.pf.yapf.ship_curve90_penalty),
 		static_cast<int32_t>(_settings_game.pf.yapf.ship_curve45_penalty), svi->max_speed,
-		0, static_cast<uint16_t>(reverse_dirs), static_cast<uint8_t>(v->GetVehicleTrackdir()), svi->ocean_speed_frac, svi->canal_speed_frac, static_cast<uint8_t>(station), v->unitnumber};
+		0, static_cast<uint16_t>(reverse_dirs), static_cast<uint8_t>(v->GetVehicleTrackdir()), svi->ocean_speed_frac, svi->canal_speed_frac, static_cast<uint8_t>(station), v->Record().unitnumber};
 }
 static std::vector<uint32_t> ShipOrigins(const Ship *v)
 {

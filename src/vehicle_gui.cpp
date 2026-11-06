@@ -210,7 +210,7 @@ uint GetUnitNumberDigits(VehicleList &vehicles)
 {
 	uint unitnumber = 0;
 	for (const Vehicle *v : vehicles) {
-		unitnumber = std::max<uint>(unitnumber, v->unitnumber);
+		unitnumber = std::max<uint>(unitnumber, v->Record().unitnumber);
 	}
 
 	return CountDigitsForAllocatingSpace(unitnumber);
@@ -229,7 +229,7 @@ void BaseVehicleListWindow::BuildVehicleList()
 	CargoTypes used = 0;
 	for (const Vehicle *v : this->vehicles) {
 		for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
-			if (u->Record().cargo_cap > 0) SetBit(used, u->cargo_type);
+			if (u->Record().cargo_cap > 0) SetBit(used, u->Record().cargo_type);
 		}
 	}
 	this->used_cargoes = used;
@@ -239,7 +239,7 @@ void BaseVehicleListWindow::BuildVehicleList()
 		for (auto it = this->vehicles.begin(); it != this->vehicles.end(); ++it) {
 			this->vehgroups.emplace_back(it, it + 1);
 
-			max_unitnumber = std::max<uint>(max_unitnumber, (*it)->unitnumber);
+			max_unitnumber = std::max<uint>(max_unitnumber, (*it)->Record().unitnumber);
 		}
 		this->unitnumber_digits = CountDigitsForAllocatingSpace(max_unitnumber);
 	} else {
@@ -293,7 +293,7 @@ static bool CargoFilterSingle(const Vehicle *v, const CargoType cargo_type)
 		bool have_capacity = false;
 		for (const Vehicle *w = v; w != nullptr; w = w->Next()) {
 			if (w->Record().cargo_cap > 0) {
-				if (IsCargoInClass(w->cargo_type, CargoClass::Passengers)) {
+				if (IsCargoInClass(w->Record().cargo_type, CargoClass::Passengers)) {
 					return false;
 				} else {
 					have_capacity = true;
@@ -303,7 +303,7 @@ static bool CargoFilterSingle(const Vehicle *v, const CargoType cargo_type)
 		return have_capacity;
 	} else {
 		for (const Vehicle *w = v; w != nullptr; w = w->Next()) {
-			if (w->Record().cargo_cap > 0 && w->cargo_type == cargo_type) {
+			if (w->Record().cargo_cap > 0 && w->Record().cargo_type == cargo_type) {
 				return true;
 			}
 		}
@@ -349,9 +349,9 @@ bool ShowCargoIconOverlay()
 void AddCargoIconOverlay(std::vector<CargoIconOverlay> &overlays, int x, int width, const Vehicle *v)
 {
 	bool rtl = _current_text_dir == TD_RTL;
-	if (!v->IsArticulatedPart() || v->cargo_type != v->Previous()->cargo_type) {
+	if (!v->IsArticulatedPart() || v->Record().cargo_type != v->Previous()->Record().cargo_type) {
 		/* Add new overlay slot. */
-		overlays.emplace_back(rtl ? x - width : x, rtl ? x : x + width, v->cargo_type, v->Record().cargo_cap);
+		overlays.emplace_back(rtl ? x - width : x, rtl ? x : x + width, v->Record().cargo_type, v->Record().cargo_cap);
 	} else {
 		/* This is an articulated part with the same cargo type, adjust left or right of last overlay slot. */
 		if (rtl) {
@@ -618,17 +618,17 @@ uint8_t GetBestFittingSubType(Vehicle *v_from, Vehicle *v_for, CargoType dest_ca
 		for (Vehicle *v = v_for; v != nullptr; v = v->HasArticulatedPart() ? v->GetNextArticulatedPart() : nullptr) {
 			const Engine *e = v->GetEngine();
 			if (!e->CanCarryCargo() || !e->info.callback_mask.Test(VehicleCallbackMask::CargoSuffix)) continue;
-			if (!HasBit(e->info.refit_mask, dest_cargo_type) && v->cargo_type != dest_cargo_type) continue;
+			if (!HasBit(e->info.refit_mask, dest_cargo_type) && v->Record().cargo_type != dest_cargo_type) continue;
 
-			CargoType old_cargo_type = v->cargo_type;
-			uint8_t old_cargo_subtype = v->cargo_subtype;
+			CargoType old_cargo_type = v->Record().cargo_type;
+			uint8_t old_cargo_subtype = v->Record().cargo_subtype;
 
 			/* Set the 'destination' cargo */
-			v->cargo_type = dest_cargo_type;
+			v->Record().cargo_type = dest_cargo_type;
 
 			/* Cycle through the refits */
 			for (uint refit_cyc = 0; refit_cyc < MAX_REFIT_CYCLE; refit_cyc++) {
-				v->cargo_subtype = refit_cyc;
+				v->Record().cargo_subtype = refit_cyc;
 
 				/* Make sure we don't pick up anything cached. */
 				v->First()->InvalidateNewGRFCache();
@@ -646,8 +646,8 @@ uint8_t GetBestFittingSubType(Vehicle *v_from, Vehicle *v_for, CargoType dest_ca
 			}
 
 			/* Reset the vehicle's cargo type */
-			v->cargo_type    = old_cargo_type;
-			v->cargo_subtype = old_cargo_subtype;
+			v->Record().cargo_type    = old_cargo_type;
+			v->Record().cargo_subtype = old_cargo_subtype;
 
 			/* Make sure we don't taint the vehicle. */
 			v->First()->InvalidateNewGRFCache();
@@ -806,13 +806,13 @@ struct RefitWindow : public Window {
 				if (this->order == INVALID_VEH_ORDER_ID && callback_mask.Test(VehicleCallbackMask::CargoSuffix)) {
 					/* Make a note of the original cargo type. It has to be
 					 * changed to test the cargo & subtype... */
-					CargoType temp_cargo = v->cargo_type;
-					uint8_t temp_subtype  = v->cargo_subtype;
+					CargoType temp_cargo = v->Record().cargo_type;
+					uint8_t temp_subtype  = v->Record().cargo_subtype;
 
-					v->cargo_type = cargo_type;
+					v->Record().cargo_type = cargo_type;
 
 					for (uint refit_cyc = 0; refit_cyc < MAX_REFIT_CYCLE; refit_cyc++) {
-						v->cargo_subtype = refit_cyc;
+						v->Record().cargo_subtype = refit_cyc;
 
 						/* Make sure we don't pick up anything cached. */
 						v->First()->InvalidateNewGRFCache();
@@ -851,8 +851,8 @@ struct RefitWindow : public Window {
 					}
 
 					/* Reset the vehicle's cargo type */
-					v->cargo_type    = temp_cargo;
-					v->cargo_subtype = temp_subtype;
+					v->Record().cargo_type    = temp_cargo;
+					v->Record().cargo_subtype = temp_subtype;
 
 					/* And make sure we haven't tainted the cache */
 					v->First()->InvalidateNewGRFCache();
@@ -1434,7 +1434,7 @@ static bool VehicleGroupAverageProfitLastYearSorter(const GUIVehicleGroup &a, co
 /** Sort vehicles by their number */
 static bool VehicleNumberSorter(const Vehicle * const &a, const Vehicle * const &b)
 {
-	return a->unitnumber < b->unitnumber;
+	return a->Record().unitnumber < b->Record().unitnumber;
 }
 
 /** Sort vehicles by their name */
@@ -1484,8 +1484,8 @@ static bool VehicleCargoSorter(const Vehicle * const &a, const Vehicle * const &
 	CargoArray diff{};
 
 	/* Append the cargo of the connected waggons */
-	for (v = a; v != nullptr; v = v->Next()) diff[v->cargo_type] += v->Record().cargo_cap;
-	for (v = b; v != nullptr; v = v->Next()) diff[v->cargo_type] -= v->Record().cargo_cap;
+	for (v = a; v != nullptr; v = v->Next()) diff[v->Record().cargo_type] += v->Record().cargo_cap;
+	for (v = b; v != nullptr; v = v->Next()) diff[v->Record().cargo_type] -= v->Record().cargo_cap;
 
 	int r = 0;
 	for (uint d : diff) {
@@ -1799,7 +1799,7 @@ void BaseVehicleListWindow::DrawVehicleListItems(VehicleID selected_vehicle, int
 					for (auto u = v; u != nullptr; u = u->Next()) {
 						if (u->Record().cargo_cap == 0) continue;
 
-						SetBit(vehicle_cargoes, u->cargo_type);
+						SetBit(vehicle_cargoes, u->Record().cargo_type);
 					}
 
 					if (!v->name.empty()) {
@@ -1833,7 +1833,7 @@ void BaseVehicleListWindow::DrawVehicleListItems(VehicleID selected_vehicle, int
 					tc = (v->age > v->max_age - CalendarTime::DAYS_IN_LEAP_YEAR) ? TC_RED : TC_BLACK;
 				}
 
-				DrawString(ir.left, ir.right, ir.top + WidgetDimensions::scaled.framerect.top, GetString(STR_JUST_COMMA, v->unitnumber), tc);
+				DrawString(ir.left, ir.right, ir.top + WidgetDimensions::scaled.framerect.top, GetString(STR_JUST_COMMA, v->Record().unitnumber), tc);
 				break;
 			}
 

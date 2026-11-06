@@ -37,9 +37,9 @@ void DrawAircraftDetails(const Aircraft *v, const Rect &r)
 			y += GetCharacterHeight(FS_NORMAL);
 
 			if (u->Next()->Record().cargo_cap != 0) {
-				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY_CAPACITY, u->cargo_type, u->Record().cargo_cap, u->Next()->cargo_type, u->Next()->Record().cargo_cap, GetCargoSubtypeText(u)));
+				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY_CAPACITY, u->Record().cargo_type, u->Record().cargo_cap, u->Next()->Record().cargo_type, u->Next()->Record().cargo_cap, GetCargoSubtypeText(u)));
 			} else {
-				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, u->cargo_type, u->Record().cargo_cap, GetCargoSubtypeText(u)));
+				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, u->Record().cargo_type, u->Record().cargo_cap, GetCargoSubtypeText(u)));
 			}
 			y += GetCharacterHeight(FS_NORMAL) + WidgetDimensions::scaled.vsep_normal;
 		}
@@ -49,7 +49,7 @@ void DrawAircraftDetails(const Aircraft *v, const Rect &r)
 
 			if (cargo_count != 0) {
 				/* Cargo names (fix pluralness) */
-				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_DETAILS_CARGO_FROM, u->cargo_type, cargo_count, u->cargo.GetFirstStation()));
+				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_DETAILS_CARGO_FROM, u->Record().cargo_type, cargo_count, u->cargo.GetFirstStation()));
 				y += GetCharacterHeight(FS_NORMAL);
 				feeder_share += u->cargo.GetFeederShare();
 			}
@@ -93,11 +93,11 @@ void DrawAircraftImage(const Vehicle *v, const Rect &r, VehicleID selection, Eng
 	const Vehicle *u = v->Next();
 	assert(u != nullptr);
 	int dx = 0;
-	if (u->Record().cargo_cap > 0 && u->cargo_type != v->cargo_type) {
+	if (u->Record().cargo_cap > 0 && u->Record().cargo_type != v->Record().cargo_type) {
 		dx = GetLargestCargoIconSize().width / 2;
-		DrawCargoIconOverlay(x + dx, y, u->cargo_type);
+		DrawCargoIconOverlay(x + dx, y, u->Record().cargo_type);
 	}
-	if (v->Record().cargo_cap > 0) DrawCargoIconOverlay(x - dx, y, v->cargo_type);
+	if (v->Record().cargo_cap > 0) DrawCargoIconOverlay(x - dx, y, v->Record().cargo_type);
 
 	if (helicopter) {
 		const Aircraft *a = Aircraft::From(v);

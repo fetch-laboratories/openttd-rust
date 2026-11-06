@@ -93,7 +93,7 @@ bool IsValidImageIndex<VEH_ROAD>(uint8_t image_index)
 bool RoadVehicle::IsBus() const
 {
 	assert(this->IsFrontEngine());
-	return IsCargoInClass(this->cargo_type, CargoClass::Passengers);
+	return IsCargoInClass(this->Record().cargo_type, CargoClass::Passengers);
 }
 
 /**
@@ -130,7 +130,7 @@ static void GetRoadVehIcon(EngineID engine, EngineImageType image_type, VehicleS
 
 void RoadVehicle::GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const
 {
-	uint8_t spritenum = this->spritenum;
+	uint8_t spritenum = this->Record().spritenum;
 
 	if (IsCustomVehicleSpriteNum(spritenum)) {
 		if (spritenum == CUSTOM_VEHICLE_SPRITENUM_REVERSED) direction = ReverseDir(direction);
@@ -253,7 +253,7 @@ CommandCost CmdTurnRoadVeh(DoCommandFlags flags, VehicleID veh_id)
 void RoadVehicle::MarkDirty()
 {
 	for (RoadVehicle *v = this; v != nullptr; v = v->Next()) {
-		v->colourmap = PAL_NONE;
+		v->Record().colourmap = PAL_NONE;
 		v->UpdateViewport(true, false);
 	}
 	this->CargoChanged();
