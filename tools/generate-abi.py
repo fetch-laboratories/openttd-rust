@@ -209,7 +209,7 @@ def record_header(group: str, entries: list[SharedRecord]) -> list[str]:
         "#include <cstdint>",
     ]
     if any("(OPENTTD_RUST_CALL *)" in field.cpp_type for record in entries for field in record.fields):
-        lines.append('#include "rust/call_ffi.h"')
+        lines.append('#include "call_ffi.h"')
     lines += [f"{tag} {name};" for name, tag in sorted(opaque.items())]
     lines += [f"struct {name};" for name in sorted(defined)]
     records = {record.cpp: record for record in entries}
