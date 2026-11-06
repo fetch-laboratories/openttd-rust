@@ -49,3 +49,11 @@
 - Checks: `script-host-generated` and `script-host-reload` simulation scenarios.
 - Limits: The network command path and branches listed on #156 remain source-compared.
 - PRs: #651.
+
+## Content metadata, dependencies and download control
+
+- Rust owns: Content metadata and dependency/request bookkeeping, packet dispatch, request/cancel/completion decisions and download-state transitions. Network frame and content owners use one shared TCP clock and prepared-packet enqueue operation.
+- C++ keeps: Native facades, GUI callbacks and formatting, socket/connect, HTTP, file, scanner and decompression operations. These leaves retain their platform and presentation owners.
+- Checks: The controlled local content-protocol scenario observes packets, dependencies, malformed-input decisions, cancellation and TCP/HTTP completion without the live content service; native fixtures exercise the shared TCP operations.
+- Limits: Original equal-key ordering and null-parent preconditions, normalized stream/callback ordering and arbitrary threaded completion schedules remain on #156. These observations do not establish whole-network equivalence.
+- PRs: #706.

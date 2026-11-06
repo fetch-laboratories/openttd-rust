@@ -14,6 +14,7 @@
 #include "string_base.h"
 #include "core/utf8.hpp"
 #include "core/string_inplace.hpp"
+#include "rust/string_services.h"
 
 #	include "rust/byte_strings_ffi.h"
 #	include "rust/string_validation_ffi.h"
@@ -44,6 +45,12 @@
 
 #include "safeguards.h"
 
+
+/** Bind native string storage before ordinary game/tool entries. */
+static const bool _rust_string_append_bound = [] {
+	openttd_rust_string_append_bind(RustStringAppend);
+	return true;
+}();
 
 static_assert(CHAR_BIT == 8 && sizeof(int) == sizeof(int32_t));
 

@@ -108,6 +108,7 @@ static void Layouts()
 #include "abi-layout-ground.inc"
 #include "abi-layout-train_state.inc"
 #include "abi-layout-station.inc"
+#include "abi-layout-content.inc"
 
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::tag), uint8_t>);
 	static_assert(std::is_same_v<decltype(OpenTTDAbiRecordFixture::value), uint32_t>);

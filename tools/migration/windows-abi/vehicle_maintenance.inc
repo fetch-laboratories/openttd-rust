@@ -139,18 +139,19 @@ static void VehicleSchedulerBoundary()
 	CHECK(*address == 128);
 	/* Opaque shells are never dereferenced: this target tests the pointer/size_t
 	 * call ABI; the game target compares real pool mutations to PoolIterator. */
-	static Vehicle *slots[5];
+	static RustPoolSlot slots[5];
 	static size_t live;
 	static size_t size;
 	std::array<uint8_t, 2> opaque{};
-	slots[0] = reinterpret_cast<Vehicle *>(&opaque[0]);
-	slots[1] = nullptr;
-	slots[2] = reinterpret_cast<Vehicle *>(&opaque[1]);
-	slots[3] = slots[4] = nullptr;
+	slots[0].shell = &opaque[0];
+	slots[1] = {};
+	slots[2].shell = &opaque[1];
+	slots[3] = slots[4] = {};
 	live = size = 2;
 	static OpenTTDVehicle records[2]{};
 	OpenTTDVehicleServices base{};
-	base.record_from_shell = [](void *shell) noexcept { return shell == slots[0] ? &records[0] : &records[1]; };
+	slots[0].record = &records[0];
+	slots[2].record = &records[1];
 	OpenTTDVehicleSchedulerServices services{};
 	services.vehicle = &base;
 	services.pool = []() noexcept { return OpenTTDVehiclePoolCursor{.slots = slots, .slots_len = size, .first_unused = &live}; };

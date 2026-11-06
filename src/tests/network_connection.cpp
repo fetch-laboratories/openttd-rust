@@ -46,7 +46,7 @@ static uint8_t ReceiveFixturePacket(const OpenTTDSessionServices &session, OpenT
 	network.packet = &Packet::Services();
 	if (network.command == nullptr) network.command = &GetRustNetworkCommandServices();
 	if (network.dispatch == nullptr) network.dispatch = &GetRustNetworkDispatchServices();
-	network.now = []() noexcept -> int64_t { return 0; };
+	tcp.now = []() noexcept -> int64_t { return 0; };
 	openttd_rust_network_receive_packets(&session, &network, &game, &frame, &frame.network_actions);
 	return openttd_rust_network_actions_result(&frame.network_actions);
 }
@@ -171,7 +171,7 @@ TEST_CASE("Network map save - native actions preserve nested waits and close tai
 	packet_services.has_quit = [](const NetworkSocketHandler *) noexcept { return false; };
 	network.packet = &packet_services;
 	/* SendWait is observed at its enqueue; no other step records an event in between. */
-	network.packet_enqueue = [](void *socket, OpenTTDPacketState *state) noexcept { Packet packet(*state); if (packet.GetPacketType() == PACKET_SERVER_WAIT) MapEvent(7, socket); };
+	tcp.packet_enqueue = [](NetworkTCPSocketHandler *socket, OpenTTDPacketState *state) noexcept { Packet packet(*state); if (packet.GetPacketType() == PACKET_SERVER_WAIT) MapEvent(7, socket); };
 	OpenTTDSessionFrame frame;
 	CHECK(openttd_rust_network_server_close(&connection, &network, &map_clients[0].record, NETWORK_RECV_STATUS_CLIENT_QUIT, &frame.network_actions) == NETWORK_RECV_STATUS_CLIENT_QUIT);
 	CHECK(on == 4);
@@ -320,7 +320,7 @@ TEST_CASE("Network game receive - encrypted dispatch preserves consumption and n
 		network.connection = &connection;
 		network.dispatch = &dispatch;
 		network.tcp = &tcp;
-		network.now = []() noexcept -> int64_t { return 321; };
+		tcp.now = []() noexcept -> int64_t { return 321; };
 		network.query_close = [](void *, uint8_t result) noexcept { dispatch_closes++; return result; };
 		auto &game = static_cast<OpenTTDNetworkGameSocket &>(receiver);
 		game.status = test.status;
